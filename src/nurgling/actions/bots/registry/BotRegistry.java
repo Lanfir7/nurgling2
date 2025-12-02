@@ -36,6 +36,17 @@ public class BotRegistry {
                 "attacknearcurs",
                 false
         ));
+        bots.add(new BotDescriptor(
+                "hearthfire",
+                BotDescriptor.BotType.UTILS,
+                "Travel to Hearthfire",
+                "Travel to Hearthfire",
+                true,
+                false,
+                TravelToHearthFire.class,
+                "test49",
+                false
+        ));
 
         // RESOURCES
         bots.add(new BotDescriptor("choper", BotDescriptor.BotType.RESOURCES, "Chopper", "Chops trees.", false, true, Chopper.class, "choper", false));
@@ -51,6 +62,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("plant_trees", BotDescriptor.BotType.RESOURCES, "Plant Trees", "Plants trees in selected area with configurable spacing.", false, true, PlantTrees.class, "treePlanter", false));
         bots.add(new BotDescriptor("blueprint_tree_planter", BotDescriptor.BotType.RESOURCES, "Blueprint Tree Planter", "Plants trees based on TreeGarden blueprint.", false, true, BlueprintTreePlanter.class, "treegardener", false));
         bots.add(new BotDescriptor("boughbee", BotDescriptor.BotType.RESOURCES, "Beehive Smoker", "Smokes out wild beehives and collects honey. Automatically reacts to dangerous animals and unknown players.", false, true, BoughBee.class, "boughpyre", false));
+        bots.add(new BotDescriptor("forager", BotDescriptor.BotType.RESOURCES, "Forager", "Follows a recorded path and performs configured actions on objects. Automatically reacts to dangerous animals and unknown players.", true, true, Forager.class, "forager", false));
 
         // PRODUCTIONS
         bots.add(new BotDescriptor("smelter", BotDescriptor.BotType.PRODUCTIONS, "Smelter", "Smelts ore.", true, true, SmelterAction.class, "smelter", true));

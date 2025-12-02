@@ -154,12 +154,16 @@ public class NUtils
     public static double getStamina()
     {
         IMeter.Meter stam = getGameUI().getmeter ( "stam", 0 );
+        if(stam == null)
+            return -1;
         return stam.a;
     }
 
     public static double getEnergy()
     {
         IMeter.Meter stam = getGameUI().getmeter ( "nrj", 0 );
+        if(stam == null)
+            return -1;
         return stam.a;
     }
 
@@ -496,6 +500,12 @@ public class NUtils
     public static Coord2d gridOffset(Coord2d c) {
         Coord gridUnit = toGridUnit(c);
         return new Coord2d(c.x - gridUnit.x, c.y - gridUnit.y);
+    }
+
+    /** a coordinate (0-100,0-100) within a 100x100 map grid **/
+    public static Coord gridOffset2(Coord2d c) {
+        Coord gridUnit = toGridUnit(c);
+        return new Coord((int) ((c.x - gridUnit.x)/11d), (int) ((c.y - gridUnit.y)/11d));
     }
 
     public static void startBuild(Window window) {

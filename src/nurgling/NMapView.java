@@ -12,6 +12,8 @@ import haven.BuddyWnd;
 import nurgling.actions.QuickActionBot;
 import nurgling.actions.bots.ScenarioRunner;
 import nurgling.areas.*;
+import nurgling.conf.QuickActionPreset;
+import nurgling.widgets.options.QuickActions;
 import nurgling.overlays.*;
 import nurgling.overlays.map.*;
 import nurgling.routes.Route;
@@ -114,9 +116,12 @@ public class NMapView extends MapView
         return routeGraphManager;
     }
 
-    public Coord3f gobPathLastClick;
-    private int gobPathStoppedFrames = 0;
 
+    // Destination point for path line (set by click)
+    public Coord3f clickDestination = null;
+    // Counter for frames when player stopped moving (for delayed line clearing)
+    private int pathLineStoppedFrames = 0;
+    
     // Track if overlays have been initialized to avoid repeated initialization checks
     private boolean overlaysInitialized = false;
 
@@ -193,36 +198,47 @@ public class NMapView extends MapView
             }
         }
         
-        // Draw path line from player to last click point
+        // Draw path line from player to click destination
         if((Boolean)NConfig.get(NConfig.Key.showPathLine)) {
             try {
                 Gob player = player();
-                if (player != null && gobPathLastClick != null) {
-                    // Check if player is still moving
+                if (player != null && clickDestination != null) {
+                    // Check if player is actually moving (not just has Moving attribute)
                     Moving m = player.getattr(Moving.class);
+                    boolean isMoving = false;
                     if (m != null && (m instanceof LinMove || m instanceof Following)) {
-                        // Player is moving - draw line and reset counter
-                        gobPathStoppedFrames = 0;
+                        // Check actual movement speed
+                        double speed = m.getv();
+                        isMoving = speed > 0.01; // Consider moving if speed > threshold
+                    }
+                    
+                    if (isMoving) {
+                        // Player is moving - draw line to click destination and reset counter
+                        pathLineStoppedFrames = 0;
                         Coord playerc = screenxf(player.getc()).round2();
-                        Coord clickc = screenxf(gobPathLastClick).round2();
-                        if (playerc != null && clickc != null) {
+                        Coord destc = screenxf(clickDestination).round2();
+                        if (playerc != null && destc != null) {
+                            // Draw black outline
                             g.chcolor(java.awt.Color.BLACK);
-                            g.line(playerc, clickc, 4);
-                            g.chcolor(java.awt.Color.WHITE);
-                            g.line(playerc, clickc, 2);
+                            g.line(playerc, destc, 6);
+                            // Draw bright yellow core
+                            g.chcolor(java.awt.Color.YELLOW);
+                            g.line(playerc, destc, 4);
+                            // Reset color
                             g.chcolor();
                         }
                     } else {
                         // Player not moving - count frames (delay for direction changes)
-                        gobPathStoppedFrames++;
-                        if (gobPathStoppedFrames > 10) {
-                            // Player stopped for more than 10 frames - clear path line
-                            gobPathLastClick = null;
-                            gobPathStoppedFrames = 0;
+                        pathLineStoppedFrames++;
+                        if (pathLineStoppedFrames > 10) {
+                            // Player stopped for more than 10 frames - clear destination
+                            clickDestination = null;
+                            pathLineStoppedFrames = 0;
                         }
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                // Silently ignore errors
             }
         }
     }
@@ -794,6 +810,13 @@ public class NMapView extends MapView
                         Thread.sleep(BOT_DELAY_MS);
                         NConfig.botmod = null;
                         NUtils.getUI().core.addTask(new WaitForMapLoadNoCoord(NUtils.getGameUI()));
+
+                        // Switch to System chat for autorunner
+                        ChatUI.Channel systemChat = NUtils.getGameUI().chat.findSystemChat();
+                        if (systemChat != null) {
+                            NUtils.getGameUI().chat.select(systemChat, false);
+                        }
+
                         ScenarioRunner runner = new ScenarioRunner(scenario);
                         runner.run(NUtils.getGameUI());
 
@@ -989,6 +1012,15 @@ public class NMapView extends MapView
         if(ev.code == 16) {
             shiftPressed = true;
         }
+        
+        // Check preset keybindings first
+        QuickActionPreset matchedPreset = findMatchingPreset(ev);
+        if (matchedPreset != null) {
+            runQuickActionForPreset(matchedPreset, false, false);
+            return true;
+        }
+        
+        // Fallback to legacy keybindings
         if(kb_quickaction.key().match(ev) || kb_quickignaction.key().match(ev) || kb_mousequickaction.key().match(ev)) {
             Thread t;
             (t = new Thread(new Runnable()
@@ -1123,6 +1155,51 @@ public class NMapView extends MapView
         }
 
         return super.keydown(ev);
+    }
+
+    /**
+     * Find a preset that matches the given key event
+     */
+    @SuppressWarnings("unchecked")
+    private QuickActionPreset findMatchingPreset(KeyDownEvent ev) {
+        try {
+            Object presetsObj = NConfig.get(NConfig.Key.q_presets);
+            if (presetsObj instanceof ArrayList) {
+                ArrayList<?> presetsList = (ArrayList<?>) presetsObj;
+                for (Object obj : presetsList) {
+                    QuickActionPreset preset = null;
+                    if (obj instanceof QuickActionPreset) {
+                        preset = (QuickActionPreset) obj;
+                    } else if (obj instanceof HashMap) {
+                        preset = new QuickActionPreset((HashMap<String, Object>) obj);
+                    }
+                    
+                    if (preset != null && preset.keybind != null && !preset.keybind.isEmpty()) {
+                        KeyMatch km = KeyMatch.restore(preset.keybind);
+                        if (km != null && km.match(ev)) {
+                            return preset;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore errors in preset matching
+        }
+        return null;
+    }
+
+    /**
+     * Run quick action with patterns from the specified preset
+     */
+    private void runQuickActionForPreset(QuickActionPreset preset, boolean ignorePattern, boolean useMouse) {
+        Thread t = new Thread(() -> {
+            try {
+                new QuickActionBot(ignorePattern, useMouse, preset).run(NUtils.getGameUI());
+            } catch (InterruptedException e) {
+                NUtils.getGameUI().msg("quick action error: STOPPED");
+            }
+        }, "quick action - " + preset.name);
+        t.start();
     }
 
     public class NSelector extends Selector
@@ -1415,35 +1492,108 @@ public class NMapView extends MapView
     void checkTempMarks() {
         if ((Boolean) NConfig.get(NConfig.Key.tempmark)) {
             final Coord2d cmap = new Coord2d(cmaps);
-            if (NUtils.player() != null) {
+            if (NUtils.player() != null && ui.gui.mmap != null && ui.gui.mmap.sessloc != null) {
                 Coord2d pl = NUtils.player().rc;
                 final List<NMiniMap.TempMark> marks = new ArrayList<>(tempMarkList);
                 long currenttime = System.currentTimeMillis();
                 for (NMiniMap.TempMark cm : marks) {
                     Gob g = Finder.findGob(cm.id);
+                    
+                    // Check if mark position is inside player's visible area
+                    boolean markIsInPlayerVisibleArea = ((NMiniMap) ui.gui.mmap).checktemp(cm, pl);
+                    
                     if (g == null) {
-
-                        if (currenttime - cm.start > (Integer) NConfig.get(NConfig.Key.temsmarktime) * 1000 * 60) {
+                        // Object is no longer in game (disappeared/left server's view)
+                        
+                        // If this is the FIRST tick where object is gone
+                        if (cm.objectExists) {
+                            cm.objectExists = false;
+                            cm.disappearedAt = currenttime;
+                            cm.lastupdate = currenttime;
+                            
+                            // Check if object is CURRENTLY in inner zone relative to player
+                            // (not the saved value, because player might have moved!)
+                            boolean currentlyInInnerZone = ((NMiniMap) ui.gui.mmap).isInInnerZone(cm.gc);
+                            
+                            // If object is inside inner zone (~71 tiles) - it was collected/killed
+                            // If object is outside inner zone - it left the area (player moved away or object moved)
+                            if (currentlyInInnerZone) {
+                                tempMarkList.remove(cm);
+                                continue;
+                            }
+                            
+                            // Object is outside inner zone - keep the mark
+                            // Record if player is currently near the mark (to detect when they leave and return)
+                            cm.wasInsideVisibleArea = markIsInPlayerVisibleArea;
+                            continue;
+                        }
+                        
+                        // Calculate age since disappearance
+                        long ageSinceDisappeared = currenttime - cm.disappearedAt;
+                        
+                        // Remove if mark is too old (exceeded temsmarktime minutes since disappearance)
+                        int temsmarktime = (Integer) NConfig.get(NConfig.Key.temsmarktime);
+                        if (ageSinceDisappeared > temsmarktime * 1000L * 60L) {
                             tempMarkList.remove(cm);
-                        } else {
-                            if(currenttime - cm.lastupdate > 1000) {
-                                cm.lastupdate = currenttime;
-                                if (!cm.rc.isect(pl.sub(cmap.mul((Integer) NConfig.get(NConfig.Key.temsmarkdist)).mul(tilesz)), pl.add(cmap.mul((Integer) NConfig.get(NConfig.Key.temsmarkdist)).mul(tilesz)))) {
+                            continue;
+                        }
+                        
+                        // Throttle distance/visibility checks to once per second
+                        if (currenttime - cm.lastupdate > 1000) {
+                            cm.lastupdate = currenttime;
+                            
+                            // Remove if mark is too far from player (exceeded temsmarkdist)
+                            // temsmarkdist is in "mega grids" - each unit = 100 tiles
+                            // So temsmarkdist=4 means 400 tiles square around player
+                            int temsmarkdist = (Integer) NConfig.get(NConfig.Key.temsmarkdist);
+                            int maxDistTiles = temsmarkdist * 100; // Convert to tiles
+                            
+                            // Get player position in global tile coords (same system as cm.gc)
+                            Coord playerGC = pl.floor(tilesz).add(ui.gui.mmap.sessloc.tc);
+                            
+                            // Calculate square around player
+                            Coord playerUL = playerGC.sub(maxDistTiles, maxDistTiles);
+                            Coord playerBR = playerGC.add(maxDistTiles, maxDistTiles);
+                            
+                            // Check if mark is outside this square
+                            if (cm.gc.x < playerUL.x || cm.gc.x > playerBR.x ||
+                                cm.gc.y < playerUL.y || cm.gc.y > playerBR.y) {
+                                tempMarkList.remove(cm);
+                                continue;
+                            }
+                            
+                            // Track player position relative to mark to detect "return"
+                            if (markIsInPlayerVisibleArea) {
+                                // Player is near the mark
+                                if (!cm.wasInsideVisibleArea) {
+                                    // Player RETURNED to mark location (was away, now near)
+                                    // Remove mark - player can see object is not there
                                     tempMarkList.remove(cm);
-                                } else {
-                                    if (((NMiniMap) ui.gui.mmap).checktemp(cm, pl)) {
-                                        tempMarkList.remove(cm);
-                                    }
+                                    continue;
                                 }
+                                // Player was already near - keep tracking
+                            } else {
+                                // Player moved away from mark location
+                                cm.wasInsideVisibleArea = false;
                             }
                         }
                     } else {
-                        cm.start = currenttime;
-                        cm.lastupdate = cm.start;
+                        // Object exists in game - mark it as existing and update coordinates
+                        cm.objectExists = true;
+                        cm.disappearedAt = 0;
                         cm.rc = g.rc;
                         cm.gc = g.rc.floor(tilesz).add(ui.gui.mmap.sessloc.tc);
                         
-                        // Update buddy color if it has changed
+                        // Always update timestamp while object exists and is being tracked
+                        cm.start = currenttime;
+                        cm.lastupdate = cm.start;
+                        
+                        // Check if object is in inner zone (~71 tiles)
+                        // wasInsideVisibleArea = true means "in inner zone" while object exists
+                        boolean inInnerZone = ((NMiniMap) ui.gui.mmap).isInInnerZone(cm.gc);
+                        cm.wasInsideVisibleArea = inInnerZone;
+                        
+                        // Update buddy color
                         haven.res.ui.obj.buddy.Buddy buddy = g.getattr(haven.res.ui.obj.buddy.Buddy.class);
                         if(buddy != null && buddy.buddy() != null && buddy.buddy().group >= 0 && buddy.buddy().group < BuddyWnd.gc.length) {
                             cm.buddyColor = BuddyWnd.gc[buddy.buddy().group];

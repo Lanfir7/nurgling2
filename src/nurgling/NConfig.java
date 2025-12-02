@@ -3,6 +3,7 @@ package nurgling;
 import haven.*;
 import nurgling.areas.*;
 import nurgling.conf.*;
+import nurgling.conf.QuickActionPreset;
 import nurgling.profiles.ProfileManager;
 import nurgling.routes.Route;
 import nurgling.scenarios.Scenario;
@@ -61,6 +62,7 @@ public class NConfig
         sheepsprop,
         pigsprop,
         discordNotification,
+        discordWebhookUrl,
         showGrid,
         showView,
         disableWinAnim,
@@ -75,6 +77,8 @@ public class NConfig
         q_range,
         q_visitor,
         q_door,
+        q_presets,
+        q_current_preset,
         petals,
         singlePetal,
         asenable,
@@ -141,7 +145,9 @@ public class NConfig
         autoHearthOnUnknown,
         autoLogoutOnUnknown,
         alwaysObfuscate,
-        boughbeeprop
+        boughbeeprop,
+        foragerprop,
+        buttonStyle
     }
 
     public enum BBDisplayMode
@@ -191,6 +197,7 @@ public class NConfig
         conf.put(Key.invert_hor, false);
         conf.put(Key.invert_ver, false);
         conf.put(Key.show_drag_menu, true);
+        conf.put(Key.discordWebhookUrl, "");
         conf.put(Key.showGrid, false);
         conf.put(Key.showView, false);
         conf.put(Key.disableWinAnim, true);
@@ -205,6 +212,7 @@ public class NConfig
         conf.put(Key.q_visitor, false);
         conf.put(Key.q_door, true);
         conf.put(Key.q_range, 2);
+        conf.put(Key.q_current_preset, "Default");
         conf.put(Key.singlePetal, false);
         conf.put(Key.asenable, true);
         conf.put(Key.autoMapper, false);
@@ -284,6 +292,11 @@ public class NConfig
         qpattern.add(res3);
         conf.put(Key.q_pattern, qpattern);
 
+        // Quick Action Presets
+        ArrayList<QuickActionPreset> qpresets = new ArrayList<>();
+        qpresets.add(QuickActionPreset.createDefault());
+        conf.put(Key.q_presets, qpresets);
+
         ArrayList<HashMap<String, Object>> petal = new ArrayList<>();
         HashMap<String, Object> pres1 = new HashMap<>();
         pres1.put("type", "NPetal");
@@ -340,6 +353,7 @@ public class NConfig
         conf.put(Key.uiOpacity, 1.0f);  // Default to fully opaque
         conf.put(Key.useSolidBackground, false);  // Default to texture mode
         conf.put(Key.windowBackgroundColor, new java.awt.Color(32, 32, 32));  // Default dark gray
+        conf.put(Key.buttonStyle, "tbtn");  // Default button style
 
         // Pickling settings
         conf.put(Key.picklingBeetroots, true);
@@ -641,6 +655,9 @@ public class NConfig
                             case "NBoughBeeProp":
                                 res.add(new NBoughBeeProp(obj));
                                 break;
+                            case "NForagerProp":
+                                res.add(new NForagerProp(obj));
+                                break;
                             case "NBlueprintPlanterProp":
                                 res.add(new NBlueprintPlanterProp(obj));
                                 break;
@@ -673,6 +690,9 @@ public class NConfig
                                 break;
                             case "NCarrierProp":
                                 res.add(new NCarrierProp(obj));
+                                break;
+                            case "QuickActionPreset":
+                                res.add(new QuickActionPreset(obj));
                                 break;
 
                             default:

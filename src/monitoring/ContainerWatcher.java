@@ -20,16 +20,26 @@ public class ContainerWatcher  implements Runnable {
     @Override
     public void run() {
         try {
-            // Раньше здесь использовался блокирующий NTask, который ждал,
-            // пока заполнится hash и gcoord. Это блокировало поток пула БД
-            // и мешало выполнению других задач (в том числе RecipeHashFetcher).
-            // Сейчас просто проверяем значения и, если данных нет, пропускаем запись.
-            if (parentGob == null || parentGob.ngob == null ||
-                    parentGob.ngob.hash == null || parentGob.ngob.gcoord == null) {
-                // Недостаточно данных для записи контейнера – просто выходим
+            // Wait for hash and gcoord with limited timeout (200 ticks default)
+            NTask waitTask = new NTask() {
+                @Override
+                public boolean check() {
+                    return parentGob.ngob.hash!=null && parentGob.ngob.gcoord!=null;
+                }
+            };
+            NUtils.addTask(waitTask);
+            
+            // Check if task timed out (critical exit)
+            if (waitTask.criticalExit) {
+                System.err.println("ContainerWatcher: Timeout waiting for hash and gcoord for gob " + parentGob.id);
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    rollbackException.printStackTrace();
+                }
                 return;
             }
-
+            
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
             preparedStatement.setString(1, parentGob.ngob.hash);
             preparedStatement.setLong(2, parentGob.ngob.grid_id);

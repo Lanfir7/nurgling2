@@ -45,36 +45,113 @@ public class NMiniMap extends MiniMap {
         super(file);
     }
 
+    /**
+     * Check if a TempMark is inside the player's visible area (81 tile zone).
+     * Uses the same calculation as explored area and drawtempmarks for consistency.
+     * 
+     * @param cm the TempMark to check
+     * @param pl player position (unused, kept for compatibility)
+     * @return true if the mark is inside the visible area (should be removed), false otherwise
+     */
     public boolean checktemp(TempMark cm, Coord2d pl) {
-        if(dloc!=null) {
-            Coord rc = p2c(pl.floor(sgridsz).sub(4, 4).mul(sgridsz).add(22, 22));
-            int dataLevel = getDataLevel();
-            float scaleFactor = getScaleFactor();
-            float zmult = (float)(1 << dataLevel) / scaleFactor;
-            Coord viewsz = VIEW_SZ.div(zmult).sub(22, 22);
-            Coord gc = p2c(cm.gc.sub(sessloc.tc).mul(tilesz));
-            if (gc.isect(rc, viewsz)) {
-                return true;
-            }
+        return isInVisibleArea(cm.gc);
+    }
+    
+    /**
+     * Check if a tile coordinate (in global grid coords with session offset) is inside 
+     * the player's 81-tile visible area.
+     * 
+     * @param gc the global grid coordinate to check (tile coords + sessloc.tc)
+     * @return true if inside visible area, false otherwise
+     */
+    public boolean isInVisibleArea(Coord gc) {
+        if(sessloc == null || dloc == null) {
+            return false;
         }
-        return false;
+        
+        Gob player = NUtils.player();
+        if(player == null) {
+            return false;
+        }
+        
+        // Calculate visible area boundaries (same as explored area and drawtempmarks)
+        // This is the 81-tile visibility zone around the player
+        Coord ul = player.rc.floor(sgridsz).sub(4, 4).mul(sgridsz).floor(tilesz).add(sessloc.tc);
+        Coord unscaledViewSize = _sgridsz.mul(9).div(tilesz.floor());
+        Coord br = ul.add(unscaledViewSize).add(1, 1);
+        
+        // Check if the coordinate is inside the visible area
+        return gc.x >= ul.x && gc.x < br.x &&
+               gc.y >= ul.y && gc.y < br.y;
+    }
+    
+    /**
+     * Check if a tile coordinate is inside the inner zone (~71 tiles).
+     * Objects that disappear inside this zone were likely collected/killed,
+     * not just leaving the server's visible area.
+     * 
+     * @param gc the global grid coordinate to check (tile coords + sessloc.tc)
+     * @return true if inside inner zone, false otherwise
+     */
+    public boolean isInInnerZone(Coord gc) {
+        if(sessloc == null || dloc == null) {
+            return false;
+        }
+        
+        Gob player = NUtils.player();
+        if(player == null) {
+            return false;
+        }
+        
+        // Calculate inner zone boundaries (~71 tiles instead of 81)
+        // This is 5 tiles smaller on each side than the full visible area
+        // 81 - 10 = 71 tiles
+        Coord ul = player.rc.floor(sgridsz).sub(4, 4).mul(sgridsz).floor(tilesz).add(sessloc.tc);
+        Coord unscaledViewSize = _sgridsz.mul(9).div(tilesz.floor());
+        Coord br = ul.add(unscaledViewSize).add(1, 1);
+        
+        // Shrink the area by 5 tiles on each side
+        Coord innerUl = ul.add(5, 5);
+        Coord innerBr = br.sub(5, 5);
+        
+        // Check if the coordinate is inside the inner zone
+        return gc.x >= innerUl.x && gc.x < innerBr.x &&
+               gc.y >= innerUl.y && gc.y < innerBr.y;
+    }
+    
+    /**
+     * Check if a world coordinate (rc) is inside the player's 81-tile visible area.
+     * 
+     * @param rc the world coordinate to check
+     * @return true if inside visible area, false otherwise
+     */
+    public boolean isWorldCoordInVisibleArea(Coord2d rc) {
+        if(sessloc == null) {
+            return false;
+        }
+        Coord gc = rc.floor(tilesz).add(sessloc.tc);
+        return isInVisibleArea(gc);
     }
 
     public static class TempMark {
         public String name;
-        public long start;
+        public long start;          // Time when the mark was "fixed" (object left visible area or disappeared)
         public long lastupdate;
+        public long disappearedAt;  // Time when object disappeared from game (0 if still visible)
         public final long id;
         public Coord2d rc;
         public Coord gc;
         public TexI icon;
         public Color buddyColor;
+        public boolean wasInsideVisibleArea;  // Track if object was inside visible area on last check
+        public boolean objectExists;          // Track if object exists in game
 
         public MiniMap.Location loc;
 
         public TempMark(String name, MiniMap.Location loc, long id, Coord2d rc, Coord gc, BufferedImage icon) {
             start = System.currentTimeMillis();
             lastupdate = start;
+            disappearedAt = 0;
             this.name = name;
             this.id = id;
             this.rc = rc;
@@ -82,11 +159,14 @@ public class NMiniMap extends MiniMap {
             this.icon = new TexI(icon);
             this.loc = loc;
             this.buddyColor = null;
+            this.wasInsideVisibleArea = true;  // Assume object starts inside visible area
+            this.objectExists = true;          // Object exists when mark is created
         }
         
         public TempMark(String name, MiniMap.Location loc, long id, Coord2d rc, Coord gc, BufferedImage icon, Color buddyColor) {
             start = System.currentTimeMillis();
             lastupdate = start;
+            disappearedAt = 0;
             this.name = name;
             this.id = id;
             this.rc = rc;
@@ -94,6 +174,8 @@ public class NMiniMap extends MiniMap {
             this.icon = new TexI(icon);
             this.loc = loc;
             this.buddyColor = buddyColor;
+            this.wasInsideVisibleArea = true;  // Assume object starts inside visible area
+            this.objectExists = true;          // Object exists when mark is created
         }
     }
 
@@ -131,9 +213,85 @@ public class NMiniMap extends MiniMap {
         drawFishLocations(g);
         drawTreeLocations(g);
         drawQueuedWaypoints(g);  // Draw waypoint visualization
+        drawForagerRecordingPath(g);  // Draw forager path being recorded
         drawMarkerLine(g);       // Draw line to selected marker
     }
 
+    // Draw forager path being recorded or loaded
+    protected void drawForagerRecordingPath(GOut g) {
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null || sessloc == null || dloc == null) return;
+        
+        // Find the Forager window
+        nurgling.widgets.bots.Forager foragerWnd = null;
+        for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
+            if(wdg instanceof nurgling.widgets.bots.Forager) {
+                foragerWnd = (nurgling.widgets.bots.Forager) wdg;
+                break;
+            }
+        }
+        
+        if(foragerWnd == null) {
+            return;
+        }
+        
+        // Get current path (either recording or loaded)
+        nurgling.routes.ForagerPath recordingPath = foragerWnd.getCurrentLoadedPath();
+        if(recordingPath == null || recordingPath.waypoints.isEmpty()) {
+            return;
+        }
+        
+        Coord hsz = sz.div(2);
+        
+        // Draw lines connecting waypoints
+        g.chcolor(0, 255, 0, 200); // Green color for recording path
+        Coord prevC = null;
+        
+        for(nurgling.routes.ForagerWaypoint waypoint : recordingPath.waypoints) {
+            // Only draw waypoints in current segment
+            if(waypoint.seg != sessloc.seg.id) {
+                continue;
+            }
+            
+            // Convert tile coordinates to screen coordinates
+            Coord waypointC = waypoint.tc.sub(dloc.tc).div(scalef()).add(hsz);
+            
+            // Only draw if within bounds
+            if(waypointC.x >= 0 && waypointC.x < sz.x && waypointC.y >= 0 && waypointC.y < sz.y) {
+                if(prevC != null && prevC.x >= 0 && prevC.x < sz.x && prevC.y >= 0 && prevC.y < sz.y) {
+                    g.line(prevC, waypointC, 2);
+                }
+            }
+            prevC = waypointC;
+        }
+        
+        // Draw markers at each waypoint
+        int num = 1;
+        for(nurgling.routes.ForagerWaypoint waypoint : recordingPath.waypoints) {
+            // Only draw waypoints in current segment
+            if(waypoint.seg != sessloc.seg.id) continue;
+            
+            // Convert tile coordinates to screen coordinates
+            Coord c = waypoint.tc.sub(dloc.tc).div(scalef()).add(hsz);
+            
+            // Only draw if within bounds
+            if(c.x >= 0 && c.x < sz.x && c.y >= 0 && c.y < sz.y) {
+                // Draw yellow circle
+                g.chcolor(255, 255, 0, 220); // Yellow marker
+                int radius = UI.scale(6); // Larger radius
+                g.fellipse(c, new Coord(radius, radius));
+                
+                // Draw black number
+                g.chcolor(0, 0, 0, 255); // Black text
+                Text numText = Text.render(String.valueOf(num));
+                g.aimage(numText.tex(), c, 0.5, 0.5);
+                numText.dispose();
+            }
+            num++;
+        }
+        g.chcolor();
+    }
+    
     // Draw queued waypoints visualization
     protected void drawQueuedWaypoints(GOut g) {
         NGameUI gui = NUtils.getGameUI();
@@ -567,8 +725,16 @@ public class NMiniMap extends MiniMap {
         
         Area next = Area.sized(centerGrid.sub(gridsNeeded.div(2)), gridsNeeded);
         
-        // Detect data level changes
+        // Detect data level changes and segment changes
         boolean dataLevelChanged = (dataLevel != currentDataLevel);
+        boolean segmentChanged = (loc.seg != dseg);
+        
+        // If segment changed (teleport), clear all caches
+        if(segmentChanged) {
+            currentLevelCache = null;
+            previousLevelCache = null;
+            nextLevelCache = null;
+        }
         
         if(dataLevelChanged) {
             // Shift cache: current becomes previous, next becomes current (if available)
@@ -606,8 +772,8 @@ public class NMiniMap extends MiniMap {
         if(needsUpdate) {
             DisplayGrid[] nd = new DisplayGrid[next.rsz()];
             
-            // Try to reuse grids from cache
-            if(currentLevelCache != null && !dataLevelChanged && currentLevelCache.dgext != null) {
+            // Try to reuse grids from cache only if segment hasn't changed
+            if(currentLevelCache != null && !dataLevelChanged && !segmentChanged && currentLevelCache.dgext != null) {
                 for(Coord c : currentLevelCache.dgext) {
                     if(next.contains(c))
                         nd[next.ri(c)] = currentLevelCache.display[currentLevelCache.dgext.ri(c)];
@@ -695,30 +861,39 @@ public class NMiniMap extends MiniMap {
     private void drawtempmarks(GOut g) {
         if((Boolean)NConfig.get(NConfig.Key.tempmark)) {
             Gob player = NUtils.player();
-            if (player != null) {
-                int dataLevel = getDataLevel();
-                float scaleFactor = getScaleFactor();
-                double zmult = (double)((1 << dataLevel) / scaleFactor);
-                Coord rc = p2c(player.rc.floor(sgridsz).sub(4, 4).mul(sgridsz));
-                Coord viewsz = VIEW_SZ.div(zmult);
+            if (player != null && sessloc != null && dloc != null) {
+                // Calculate visible area boundaries (same as explored area calculation)
+                Coord ul = player.rc.floor(sgridsz).sub(4, 4).mul(sgridsz).floor(tilesz).add(sessloc.tc);
+                Coord unscaledViewSize = _sgridsz.mul(9).div(tilesz.floor());
+                Coord br = ul.add(unscaledViewSize).add(1, 1);
 
                 synchronized (((NMapView)ui.gui.map).tempMarkList)
                 {
                 for (TempMark cm : ((NMapView)ui.gui.map).tempMarkList) {
                     if (cm.loc!=null && ui.gui.mmap.curloc.seg.id == cm.loc.seg.id) {
-                        if (cm.icon != null) {
-                            if (!cm.gc.equals(Coord.z)) {
+                        if (cm.icon != null && !cm.gc.equals(Coord.z)) {
+                            // Check if mark is outside the 81-tile visible area
+                            boolean isOutsideVisibleArea = 
+                                cm.gc.x < ul.x || cm.gc.x >= br.x ||
+                                cm.gc.y < ul.y || cm.gc.y >= br.y;
+                            
+                            // Draw icon if:
+                            // 1. Mark is outside visible area, OR
+                            // 2. Object no longer exists in game (disappeared)
+                            // This ensures we show the mark for objects that left the zone
+                            Gob gob = nurgling.tools.Finder.findGob(cm.id);
+                            boolean objectDisappeared = (gob == null);
+                            
+                            if (isOutsideVisibleArea || objectDisappeared) {
                                 Coord gc = p2c(cm.gc.sub(sessloc.tc).mul(tilesz));
-
                                 int dsz = Math.max(cm.icon.sz().y, cm.icon.sz().x);
-                                if (!gc.isect(rc, viewsz)) {
-                                    // Apply buddy color if available
-                                    if(cm.buddyColor != null) {
-                                        g.chcolor(cm.buddyColor.getRed(), cm.buddyColor.getGreen(), cm.buddyColor.getBlue(), 255);
-                                    }
-                                    g.aimage(cm.icon, gc, 0.5, 0.5, UI.scale(18 * cm.icon.sz().x / dsz, 18 * cm.icon.sz().y / dsz));
-                                    g.chcolor();
+                                
+                                // Apply buddy color if available
+                                if(cm.buddyColor != null) {
+                                    g.chcolor(cm.buddyColor.getRed(), cm.buddyColor.getGreen(), cm.buddyColor.getBlue(), 255);
                                 }
+                                g.aimage(cm.icon, gc, 0.5, 0.5, UI.scale(18 * cm.icon.sz().x / dsz, 18 * cm.icon.sz().y / dsz));
+                                g.chcolor();
                             }
                         }
                     }
@@ -1401,6 +1576,26 @@ public class NMiniMap extends MiniMap {
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
+        // Handle left-click for forager path recording - prevent player movement
+        if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
+            NGameUI gui = NUtils.getGameUI();
+            if(gui != null) {
+                // Find the Forager window
+                nurgling.widgets.bots.Forager foragerWnd = null;
+                for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
+                    if(wdg instanceof nurgling.widgets.bots.Forager) {
+                        foragerWnd = (nurgling.widgets.bots.Forager) wdg;
+                        break;
+                    }
+                }
+                
+                // If recording, consume the event to prevent player movement
+                if(foragerWnd != null && foragerWnd.isRecording()) {
+                    return true; // Consume mousedown to prevent movement
+                }
+            }
+        }
+        
         // Check for right-click on fish location
         if(ev.b == 3 && dloc != null) { // Button 3 is right-clicked
             Coord tc = ev.c.sub(sz.div(2)).mul(scalef()).add(dloc.tc);
@@ -1415,6 +1610,37 @@ public class NMiniMap extends MiniMap {
 
     @Override
     public boolean mouseup(MouseUpEvent ev) {
+        // Handle left-click for forager path recording (without modifiers)
+        if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
+            NGameUI gui = NUtils.getGameUI();
+            if(gui != null) {
+                // Find the Forager window
+                nurgling.widgets.bots.Forager foragerWnd = null;
+                for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
+                    if(wdg instanceof nurgling.widgets.bots.Forager) {
+                        foragerWnd = (nurgling.widgets.bots.Forager) wdg;
+                        break;
+                    }
+                }
+                
+                if(foragerWnd != null && foragerWnd.isRecording()) {
+                    try {
+                        // Get the MiniMap.Location at clicked position
+                        MiniMap.Location clickLoc = xlate(ev.c);
+                        
+                        if(clickLoc != null && sessloc != null && clickLoc.seg.id == sessloc.seg.id) {
+                            // Create ForagerWaypoint from MiniMap.Location
+                            nurgling.routes.ForagerWaypoint wp = new nurgling.routes.ForagerWaypoint(clickLoc);
+                            foragerWnd.addWaypointToRecording(wp);
+                        }
+                    } catch(Loading e) {
+                        // Grid not loaded, ignore
+                    }
+                    return true; // Consume the event
+                }
+            }
+        }
+        
         // Handle right-click release on ANY marker - draw line to it
         if(ev.b == 3 && dloc != null && sessloc != null && display != null && dgext != null) {
             Coord hsz = sz.div(2);

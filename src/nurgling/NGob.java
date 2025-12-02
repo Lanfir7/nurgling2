@@ -202,6 +202,130 @@ public class NGob
         }
         return null;
     }
+    
+    /**
+     * Try to create a temporary mark for the gob immediately.
+     * This is called both immediately when GobIcon is set and from delayed tasks.
+     * Will skip if mark already exists for this gob.
+     */
+    private void tryCreateTempMark(GobIcon icon, Gob gob)
+    {
+        try {
+            if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null || NUtils.getGameUI().mmap == null) {
+                return;
+            }
+            if (NUtils.getGameUI().mmap.sessloc == null || NUtils.getGameUI().mmap.iconconf == null) {
+                return;
+            }
+            if (!icon.res.isReady() || icon.icon() == null) {
+                return;
+            }
+            
+            // Skip player icons that don't have buddy info yet
+            if (icon.icon() instanceof haven.res.gfx.hud.mmap.plo.Player) {
+                if (gob.getattr(Buddy.class) != null && gob.getattr(Buddy.class).buddy() == null) {
+                    return;
+                }
+            }
+            
+            BufferedImage iconres = setTex(icon);
+            if (iconres == null) {
+                return;
+            }
+            
+            // Get buddy color if available
+            Color buddyColor = null;
+            haven.res.ui.obj.buddy.Buddy buddy = gob.getattr(haven.res.ui.obj.buddy.Buddy.class);
+            if (buddy != null && buddy.buddy() != null && buddy.buddy().group >= 0 && buddy.buddy().group < BuddyWnd.gc.length) {
+                buddyColor = BuddyWnd.gc[buddy.buddy().group];
+            }
+            
+            synchronized (((NMapView) NUtils.getGameUI().map).tempMarkList)
+            {
+                // Check if mark already exists
+                if (((NMapView) NUtils.getGameUI().map).tempMarkList.stream().noneMatch(m -> m.id == gob.id))
+                {
+                    ((NMapView) NUtils.getGameUI().map).tempMarkList.add(
+                        new NMiniMap.TempMark(name, NUtils.getGameUI().mmap.sessloc, gob.id, 
+                            gob.rc, gob.rc.floor(tilesz).add(NUtils.getGameUI().mmap.sessloc.tc), 
+                            iconres, buddyColor));
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore errors
+        }
+    }
+    
+    /**
+     * Try to create a temporary mark when object is being removed.
+     * This handles objects that appeared during loading when sessloc wasn't ready.
+     * Only creates mark if object is outside inner zone (71 tiles) - meaning player moved away.
+     */
+    private void tryCreateTempMarkOnRemoval()
+    {
+        try {
+            if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null || NUtils.getGameUI().mmap == null) {
+                return;
+            }
+            if (NUtils.getGameUI().mmap.sessloc == null || NUtils.getGameUI().mmap.iconconf == null) {
+                return;
+            }
+            
+            // Check if mark already exists
+            synchronized (((NMapView) NUtils.getGameUI().map).tempMarkList) {
+                if (((NMapView) NUtils.getGameUI().map).tempMarkList.stream().anyMatch(m -> m.id == parent.id)) {
+                    return; // Mark already exists
+                }
+            }
+            
+            // Get GobIcon
+            GobIcon icon = parent.getattr(GobIcon.class);
+            if (icon == null || !icon.res.isReady() || icon.icon() == null) {
+                return;
+            }
+            
+            // Skip player icons
+            if (icon.icon() instanceof haven.res.gfx.hud.mmap.plo.Player) {
+                return;
+            }
+            
+            BufferedImage iconres = setTex(icon);
+            if (iconres == null) {
+                return; // Icon not enabled in settings
+            }
+            
+            // Calculate object position in global tile coords
+            Coord gc = parent.rc.floor(tilesz).add(NUtils.getGameUI().mmap.sessloc.tc);
+            
+            // Check if object is in inner zone (71 tiles) - if yes, it was collected, no mark needed
+            if (((NMiniMap) NUtils.getGameUI().mmap).isInInnerZone(gc)) {
+                return; // Object is close to player - was collected/killed
+            }
+            
+            // Object is outside inner zone - player moved away, create mark
+            // Get buddy color if available
+            Color buddyColor = null;
+            haven.res.ui.obj.buddy.Buddy buddy = parent.getattr(haven.res.ui.obj.buddy.Buddy.class);
+            if (buddy != null && buddy.buddy() != null && buddy.buddy().group >= 0 && buddy.buddy().group < BuddyWnd.gc.length) {
+                buddyColor = BuddyWnd.gc[buddy.buddy().group];
+            }
+            
+            synchronized (((NMapView) NUtils.getGameUI().map).tempMarkList) {
+                // Double-check mark doesn't exist
+                if (((NMapView) NUtils.getGameUI().map).tempMarkList.stream().noneMatch(m -> m.id == parent.id)) {
+                    NMiniMap.TempMark mark = new NMiniMap.TempMark(name, NUtils.getGameUI().mmap.sessloc, parent.id,
+                            parent.rc, gc, iconres, buddyColor);
+                    mark.objectExists = false; // Object is already gone
+                    mark.disappearedAt = System.currentTimeMillis();
+                    // Check if player is currently near the mark
+                    mark.wasInsideVisibleArea = ((NMiniMap) NUtils.getGameUI().mmap).checktemp(mark, NUtils.player().rc);
+                    ((NMapView) NUtils.getGameUI().map).tempMarkList.add(mark);
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore errors
+        }
+    }
 
     /**
      * Processes attribute changes for the gob. Optimized for performance when handling large batches.
@@ -212,11 +336,33 @@ public class NGob
      */
     public void checkattr(GAttrib a, long id, GAttrib prev)
     {
-
-        // Early exit for null attributes
-        if (a == null && !(prev instanceof Moving))
+        // When object is being removed (a == null), try to process pending GobIcon tasks
+        // This ensures temp marks are created even for fast-disappearing objects
+        if (a == null)
         {
-            return;
+            // Try to create temp mark NOW if it doesn't exist yet
+            // This handles objects that appeared during loading (no sessloc at that time)
+            tryCreateTempMarkOnRemoval();
+            
+            // Process any pending GobIcon-related delayed tasks before object disappears
+            if (!delayedOverlayTasks.isEmpty()) {
+                Iterator<DelayedOverlayTask> it = delayedOverlayTasks.iterator();
+                while (it.hasNext()) {
+                    DelayedOverlayTask task = it.next();
+                    try {
+                        if (task.condition.test(parent)) {
+                            task.action.accept(parent);
+                        }
+                    } catch (Exception e) {
+                        // Ignore errors during cleanup
+                    }
+                    it.remove();
+                }
+            }
+            
+            if (!(prev instanceof Moving)) {
+                return;
+            }
         }
 
         if(a instanceof GlobEffector)
@@ -254,6 +400,11 @@ public class NGob
 
         if (a instanceof GobIcon)
         {
+            // Try to create temp mark immediately if conditions are met
+            // This prevents marks from being lost when objects disappear quickly
+            tryCreateTempMark((GobIcon) a, parent);
+            
+            // Also add to delayed tasks as backup (for ring overlay and retry if immediate creation failed)
             delayedOverlayTasks.add(new DelayedOverlayTask(
                     gob ->
                     {
@@ -261,24 +412,8 @@ public class NGob
                     },
                     gob ->
                     {
-                        BufferedImage iconres = setTex((GobIcon) a);
-                        if (iconres != null && NUtils.getGameUI().mmap.sessloc != null)
-                        {
-                            // Get buddy color if available
-                            Color buddyColor = null;
-                            haven.res.ui.obj.buddy.Buddy buddy = gob.getattr(haven.res.ui.obj.buddy.Buddy.class);
-                            if(buddy != null && buddy.buddy() != null && buddy.buddy().group >= 0 && buddy.buddy().group < BuddyWnd.gc.length) {
-                                buddyColor = BuddyWnd.gc[buddy.buddy().group];
-                            }
-
-                            synchronized (((NMapView) NUtils.getGameUI().map).tempMarkList)
-                            {
-                                if (((NMapView) NUtils.getGameUI().map).tempMarkList.stream().noneMatch(m -> m.id == parent.id))
-                                {
-                                    ((NMapView) NUtils.getGameUI().map).tempMarkList.add(new NMiniMap.TempMark(name, NUtils.getGameUI().mmap.sessloc, parent.id, parent.rc, parent.rc.floor(tilesz).add(NUtils.getGameUI().mmap.sessloc.tc), iconres, buddyColor));
-                                }
-                            }
-                        }
+                        // Try creating temp mark again (will skip if already exists)
+                        tryCreateTempMark((GobIcon) a, gob);
                         
                         // Add ring overlay if enabled in settings
                         if (nurgling.overlays.NGobIconRing.shouldShowRing(gob))
@@ -700,6 +835,8 @@ public class NGob
                         Coord coord = (parent.rc.sub(g.ul.mul(Coord2d.of(11, 11)))).floor(posres);
                         hashInput.append(name).append(g.id).append(coord.toString());
                         hash = NUtils.calculateSHA256(hashInput.toString());
+                        grid_id = g.id;
+                        gcoord = coord;
                         parent.setattr(new NGlobalSearch(parent));
                     }
                 }
@@ -801,7 +938,7 @@ public class NGob
         {
             int maskValue = customMask ? mask() : (int) getModelAttribute();
             MaterialFactory.Status status = MaterialFactory.getStatus(name, maskValue);
-
+            
             if (status == MaterialFactory.Status.NOTDEFINED) {
                 return null;
             }
@@ -820,6 +957,7 @@ public class NGob
     }
 
     HashMap<MaterialFactory.Status, Materials> altMats = new HashMap<>();
+    private Integer cachedMask = null; // Cache mask value for dframe/barrel to avoid race condition
 
 
     public void addol(Gob.Overlay ol)
@@ -829,19 +967,28 @@ public class NGob
             {
                 if (ol.spr instanceof StaticSprite)
                 {
+                    // Calculate and cache the mask value immediately
+                    cachedMask = calculateMask();
+                    
                     altMats.clear();
-                    MaterialFactory.clearCache(name);
-                    
                     customMask = true;
-                    
                     parent.delattr(Materials.class);
                     
+                    // Try sync recreation first, defer if textures not ready
                     Drawable dr = parent.getattr(Drawable.class);
                     if (dr instanceof ResDrawable) {
+                        ResDrawable rd = (ResDrawable) dr;
                         parent.delattr(Drawable.class);
-                        parent.glob.loader.defer(() -> {
-                            parent.setattr(new ResDrawable(parent, ((ResDrawable) dr).res, ((ResDrawable) dr).sdt, false));
-                        }, null);
+                        
+                        try {
+                            // Try sync recreation
+                            parent.setattr(new ResDrawable(parent, rd.res, rd.sdt, false));
+                        } catch (Exception e) {
+                            // Texture not ready, defer it
+                            parent.glob.loader.defer(() -> {
+                                parent.setattr(new ResDrawable(parent, rd.res, rd.sdt, false));
+                            }, null);
+                        }
                     }
                 }
             }
@@ -866,25 +1013,45 @@ public class NGob
             {
                 if (ol.spr instanceof StaticSprite)
                 {
+                    // Check if there are other StaticSprite overlays remaining
+                    boolean hasOtherStaticSprites = false;
+                    for (Gob.Overlay other : parent.ols) {
+                        if (other != ol && other.spr instanceof StaticSprite) {
+                            hasOtherStaticSprites = true;
+                            break;
+                        }
+                    }
+                    
+                    // Update cache based on remaining overlays
+                    if (!hasOtherStaticSprites) {
+                        cachedMask = 0; // Set to FREE
+                    }
+                    
                     altMats.clear();
-                    MaterialFactory.clearCache(name);
-                    
                     customMask = true;
-                    
                     parent.delattr(Materials.class);
                     
+                    // Try sync recreation first, defer if textures not ready
                     Drawable dr = parent.getattr(Drawable.class);
                     if (dr instanceof ResDrawable) {
+                        ResDrawable rd = (ResDrawable) dr;
                         parent.delattr(Drawable.class);
-                        parent.glob.loader.defer(() -> {
-                            parent.setattr(new ResDrawable(parent, ((ResDrawable) dr).res, ((ResDrawable) dr).sdt, false));
-                        }, null);
+                        
+                        try {
+                            // Try sync recreation
+                            parent.setattr(new ResDrawable(parent, rd.res, rd.sdt, false));
+                        } catch (Exception e) {
+                            // Texture not ready, defer it
+                            parent.glob.loader.defer(() -> {
+                                parent.setattr(new ResDrawable(parent, rd.res, rd.sdt, false));
+                            }, null);
+                        }
                     }
                 }
             }
     }
 
-    public int mask()
+    private int calculateMask()
     {
         if (name.equals("gfx/terobjs/dframe"))
         {
@@ -892,12 +1059,69 @@ public class NGob
             {
                 if (ol.spr instanceof StaticSprite)
                 {
-                    if (!NParser.isIt(ol, new NAlias("-blood", "-fishraw", "-windweed")) || NParser.isIt(ol, new NAlias("-windweed-dry")))
-                    {
-                        return 2;
-                    } else
+                    // Check if item is blood/fishraw/windweed (but not dry windweed)
+                    if (NParser.isIt(ol, new NAlias("-blood", "-fishraw", "-windweed")) && !NParser.isIt(ol, new NAlias("-windweed-dry")))
                     {
                         return 1;
+                    } else
+                    {
+                        return 2;
+                    }
+                }
+            }
+            return 0;
+        } else if (name.equals("gfx/terobjs/barrel"))
+        {
+            for (Gob.Overlay ol : parent.ols)
+            {
+                if (ol.spr instanceof StaticSprite)
+                {
+                    return 4;
+                }
+            }
+            return 0;
+        } else if (name.equals("gfx/terobjs/cheeserack"))
+        {
+            int counter = 0;
+            for (Gob.Overlay ol : parent.ols)
+            {
+                if (ol.spr instanceof Equed)
+                {
+                    counter++;
+                }
+            }
+            if (counter == 3)
+                return 2;
+            else if (counter != 0)
+                return 1;
+            return 0;
+        }
+        return -1;
+    }
+
+    public int mask()
+    {
+        if (name.equals("gfx/terobjs/dframe") || name.equals("gfx/terobjs/barrel"))
+        {
+            // Use cached mask if available to avoid race condition
+            if (cachedMask != null) {
+                return cachedMask;
+            }
+        }
+        
+        if (name.equals("gfx/terobjs/dframe"))
+        {
+            for (Gob.Overlay ol : parent.ols)
+            {
+                if (ol.spr instanceof StaticSprite)
+                {
+                    // Check if item is blood/fishraw/windweed (but not dry windweed)
+                    if (NParser.isIt(ol, new NAlias("-blood", "-fishraw", "-windweed")) && !NParser.isIt(ol, new NAlias("-windweed-dry")))
+                    {
+                        return 1;
+                    } else
+                    {
+                        return 2;
                     }
                 }
             }
