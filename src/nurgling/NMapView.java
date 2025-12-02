@@ -1286,6 +1286,14 @@ public class NMapView extends MapView
             if(area.name.equals(name))
             {
                 area.inWork = true;
+                
+                // Удаляем зону из БД
+                try {
+                    nurgling.areas.db.AreaDBManager.getInstance().deleteArea(area.id);
+                } catch (Exception e) {
+                    System.err.println("Failed to delete area from database: " + e.getMessage());
+                }
+                
                 glob.map.areas.remove(area.id);
                 Gob dummy = dummys.get(area.gid);
                 if(dummy != null) {

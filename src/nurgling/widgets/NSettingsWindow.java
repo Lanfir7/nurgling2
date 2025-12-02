@@ -78,6 +78,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem("Navigation", navigation = new Navigation(), container));
         general.addChild(new SettingsItem("Quality of life", qol = new QoL(), container));
         general.addChild(new SettingsItem("Database", new DatabaseSettings(), container));
+        general.addChild(new SettingsItem("SyncServer", new SyncServerSettings(), container));
         general.addChild(new SettingsItem("Auto Mapper", new AutoMapper(), container));
         general.addChild(new SettingsItem("Auto Selection", as = new AutoSelection(), container));
         general.addChild(new SettingsItem("Quick Actions", qa = new QuickActions(), container));

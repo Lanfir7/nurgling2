@@ -92,6 +92,7 @@ public class NConfig
         worldexplorerprop,
         questNotified, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, ndbenable, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, simplecrops,
+        syncServerEnabled, syncServerUrl, syncZoneSync, syncIntervalMinutes,
         temsmarktime, exploredAreaEnable, player_box, player_fov, temsmarkdist, tempmark, gridbox, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         shortCupboards,
         shortWalls,
@@ -230,6 +231,10 @@ public class NConfig
         conf.put(Key.serverNode, "");
         conf.put(Key.serverPass, "");
         conf.put(Key.serverUser, "");
+        conf.put(Key.syncServerEnabled, false);
+        conf.put(Key.syncServerUrl, "");
+        conf.put(Key.syncZoneSync, "");
+        conf.put(Key.syncIntervalMinutes, 5);
         conf.put(Key.exploredAreaEnable, false);
         conf.put(Key.player_box, false);
         conf.put(Key.player_fov, false);
@@ -838,23 +843,36 @@ public class NConfig
     {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
         {
-            JSONObject main = new JSONObject();
-            JSONArray jareas = new JSONArray();
-            for(NArea area : ((NMapView)NUtils.getGameUI().map).glob.map.areas.values())
-            {
-                jareas.put(area.toJson());
-            }
-            main.put("areas",jareas);
-            try
-            {
-                FileWriter f = new FileWriter(customPath==null?getAreasPath():customPath,StandardCharsets.UTF_8);
-                main.write(f);
-                f.close();
+            Collection<NArea> areasToSave = ((NMapView)NUtils.getGameUI().map).glob.map.areas.values();
+            
+            // Сохраняем через AreaDBManager (БД + JSON резервная копия)
+            try {
+                nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
+                areaManager.saveAllAreas(areasToSave);
                 current.isAreasUpd = false;
+            } catch (Exception e) {
+                System.err.println("Failed to save areas via AreaDBManager: " + e.getMessage());
+                e.printStackTrace();
             }
-            catch (IOException e)
-            {
-                throw new RuntimeException(e);
+            
+            // Также сохраняем в JSON файл для совместимости (если указан customPath)
+            if (customPath != null) {
+                try {
+                    JSONObject main = new JSONObject();
+                    JSONArray jareas = new JSONArray();
+                    for(NArea area : areasToSave)
+                    {
+                        jareas.put(area.toJson());
+                    }
+                    main.put("areas",jareas);
+                    FileWriter f = new FileWriter(customPath, StandardCharsets.UTF_8);
+                    main.write(f);
+                    f.close();
+                }
+                catch (IOException e)
+                {
+                    System.err.println("Failed to save areas to custom JSON path: " + e.getMessage());
+                }
             }
         }
     }

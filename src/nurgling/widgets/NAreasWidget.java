@@ -571,13 +571,25 @@ public class NAreasWidget extends Window
                                     {
                                         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
                                         {
+                                            // Удаляем зону из БД
+                                            try {
+                                                nurgling.areas.db.AreaDBManager.getInstance().deleteArea(key);
+                                            } catch (Exception e) {
+                                                System.err.println("Failed to delete area from database: " + e.getMessage());
+                                            }
+                                            
                                             NOverlay nol = NUtils.getGameUI().map.nols.get(key);
-                                            nol.remove();
+                                            if(nol != null) {
+                                                nol.remove();
+                                            }
                                             NUtils.getGameUI().map.nols.remove(key);
-                                            Gob dummy = ((NMapView) NUtils.getGameUI().map).dummys.get(((NMapView) NUtils.getGameUI().map).glob.map.areas.get(key).gid);
-                                            if(dummy!=null) {
-                                                NUtils.getGameUI().map.glob.oc.remove(dummy);
-                                                ((NMapView) NUtils.getGameUI().map).dummys.remove(dummy.id);
+                                            NArea area = ((NMapView) NUtils.getGameUI().map).glob.map.areas.get(key);
+                                            if(area != null) {
+                                                Gob dummy = ((NMapView) NUtils.getGameUI().map).dummys.get(area.gid);
+                                                if(dummy!=null) {
+                                                    NUtils.getGameUI().map.glob.oc.remove(dummy);
+                                                    ((NMapView) NUtils.getGameUI().map).dummys.remove(dummy.id);
+                                                }
                                             }
                                             ((NMapView) NUtils.getGameUI().map).glob.map.areas.remove(key);
 

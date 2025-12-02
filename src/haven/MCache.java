@@ -121,28 +121,67 @@ public class MCache implements MapSource {
 	public void loadAreasIfNeeded() {
 		if (areasLoaded) return;
 
-		// Get the appropriate areas path based on current profile
-		String areasPath = getAreasPath();
-
-		if(new File(areasPath).exists())
-		{
-			StringBuilder contentBuilder = new StringBuilder();
-			try (Stream<String> stream = Files.lines(Paths.get(areasPath), StandardCharsets.UTF_8))
-			{
-				stream.forEach(s -> contentBuilder.append(s).append("\n"));
+		// Используем AreaDBManager для загрузки зон (БД или JSON fallback)
+		try {
+			nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
+			
+			// Пробуем загрузить из БД/JSON
+			Map<Integer, NArea> loadedAreas = areaManager.loadAllAreas();
+			
+			if (loadedAreas.isEmpty()) {
+				// Если зон нет, пробуем мигрировать из JSON в БД
+				areaManager.migrateFromJSON();
+				loadedAreas = areaManager.loadAllAreas();
 			}
-			catch (IOException ignore)
-			{
+			
+			// Загружаем зоны в карту
+			for (Map.Entry<Integer, NArea> entry : loadedAreas.entrySet()) {
+				areas.put(entry.getKey(), entry.getValue());
 			}
+			
+			// Инициализируем синхронизацию с сервером (если включена в настройках)
+			try {
+				boolean syncEnabled = (Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.syncServerEnabled);
+				if (syncEnabled) {
+					String serverUrl = (String) nurgling.NConfig.get(nurgling.NConfig.Key.syncServerUrl);
+					String zoneSync = (String) nurgling.NConfig.get(nurgling.NConfig.Key.syncZoneSync);
+					if (serverUrl != null && !serverUrl.isEmpty() && 
+					    zoneSync != null && !zoneSync.isEmpty()) {
+						areaManager.initializeSync(serverUrl, zoneSync);
+						System.out.println("MCache: Zone synchronization initialized: " + serverUrl + ", zone_sync: " + zoneSync);
+					}
+				}
+			} catch (Exception syncEx) {
+				System.err.println("MCache: Failed to initialize zone synchronization: " + syncEx.getMessage());
+			}
+		} catch (Exception e) {
+			// Fallback на старый способ загрузки из JSON
+			System.err.println("Failed to load areas from AreaDBManager, falling back to JSON: " + e.getMessage());
+			e.printStackTrace();
+			
+			// Get the appropriate areas path based on current profile
+			String areasPath = getAreasPath();
 
-			if (!contentBuilder.toString().isEmpty())
+			if(new File(areasPath).exists())
 			{
-				JSONObject main = new JSONObject(contentBuilder.toString());
-				JSONArray array = (JSONArray) main.get("areas");
-				for (int i = 0; i < array.length(); i++)
+				StringBuilder contentBuilder = new StringBuilder();
+				try (Stream<String> stream = Files.lines(Paths.get(areasPath), StandardCharsets.UTF_8))
 				{
-					NArea a = new NArea((JSONObject) array.get(i));
-					areas.put(a.id, a);
+					stream.forEach(s -> contentBuilder.append(s).append("\n"));
+				}
+				catch (IOException ignore)
+				{
+				}
+
+				if (!contentBuilder.toString().isEmpty())
+				{
+					JSONObject main = new JSONObject(contentBuilder.toString());
+					JSONArray array = (JSONArray) main.get("areas");
+					for (int i = 0; i < array.length(); i++)
+					{
+						NArea a = new NArea((JSONObject) array.get(i));
+						areas.put(a.id, a);
+					}
 				}
 			}
 		}

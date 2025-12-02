@@ -420,11 +420,18 @@ public class Build implements Action
     {
         for (Ingredient ingredient : curings)
         {
-            if (ingredient.specialWay == null)
+            if (ingredient.specialWay != null)
             {
-                if (!ingredient.containers.isEmpty())
-                {
-                    for (Container container : ingredient.containers)
+                // Use custom collection method via specialWay
+                int countBefore = NUtils.getGameUI().getInventory().getItems(ingredient.name).size();
+                ingredient.specialWay.run(gui);
+                int countAfter = NUtils.getGameUI().getInventory().getItems(ingredient.name).size();
+                int collected = countAfter - countBefore;
+                ingredient.count = Math.max(0, ingredient.count - collected);
+            }
+            else if (!ingredient.containers.isEmpty())
+            {
+                for (Container container : ingredient.containers)
                     {
                         Container.Space space = container.getattr(Container.Space.class);
                         if (space.isReady())
@@ -450,27 +457,27 @@ public class Build implements Action
                         if (ingredient.count == 0)
                             break;
                     }
-                } else
+            }
+            else
+            {
+                while (ingredient.count != 0 && NUtils.getGameUI().getInventory().getNumberFreeCoord(ingredient.coord) != 0)
                 {
-                    while (ingredient.count != 0 && NUtils.getGameUI().getInventory().getNumberFreeCoord(ingredient.coord) != 0)
+                    ArrayList<Gob> piles = Finder.findGobs(ingredient.area, new NAlias("stockpile"));
+                    if (piles.isEmpty())
                     {
-                        ArrayList<Gob> piles = Finder.findGobs(ingredient.area, new NAlias("stockpile"));
-                        if (piles.isEmpty())
-                        {
-                            if (NUtils.getGameUI().getInventory().getItems(ingredient.name).size() != ingredient.count)
-                                return false;
-                        }
-                        piles.sort(NUtils.d_comp);
-                        if (piles.isEmpty())
+                        if (NUtils.getGameUI().getInventory().getItems(ingredient.name).size() != ingredient.count)
                             return false;
-                        Gob pile = piles.get(0);
-                        new PathFinder(pile).run(NUtils.getGameUI());
-                        new OpenTargetContainer("Stockpile", pile).run(NUtils.getGameUI());
-                        TakeItemsFromPile tifp;
-                        (tifp = new TakeItemsFromPile(pile, NUtils.getGameUI().getStockpile(), Math.min(ingredient.count, NUtils.getGameUI().getInventory().getNumberFreeCoord(ingredient.coord)))).run(gui);
-                        new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);
-                        ingredient.count = ingredient.count - tifp.getResult();
                     }
+                    piles.sort(NUtils.d_comp);
+                    if (piles.isEmpty())
+                        return false;
+                    Gob pile = piles.get(0);
+                    new PathFinder(pile).run(NUtils.getGameUI());
+                    new OpenTargetContainer("Stockpile", pile).run(NUtils.getGameUI());
+                    TakeItemsFromPile tifp;
+                    (tifp = new TakeItemsFromPile(pile, NUtils.getGameUI().getStockpile(), Math.min(ingredient.count, NUtils.getGameUI().getInventory().getNumberFreeCoord(ingredient.coord)))).run(gui);
+                    new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);
+                    ingredient.count = ingredient.count - tifp.getResult();
                 }
             }
         }

@@ -9,6 +9,7 @@ import monitoring.ItemWatcher;
 import monitoring.NGlobalSearchItems;
 import nurgling.actions.AutoDrink;
 import nurgling.actions.AutoSaveTableware;
+import nurgling.areas.NArea;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.scenarios.ScenarioManager;
 import nurgling.tasks.*;
@@ -144,6 +145,16 @@ public class NCore extends Widget
 
     private final LinkedList<NTask> for_remove = new LinkedList<>();
     private final ConcurrentLinkedQueue<NTask> tasks = new ConcurrentLinkedQueue<>();
+    
+    // Throttling и дедупликация для сохранения рецептов
+    private final Map<String, Long> lastSavedRecipes = new ConcurrentHashMap<>();
+    private static final long RECIPE_SAVE_THROTTLE_MS = 1000; // Не сохраняем один и тот же рецепт чаще чем раз в секунду
+    private long lastRecipeSaveTime = 0;
+    private static final long RECIPE_SAVE_INTERVAL_MS = 500; // Минимальный интервал между сохранениями разных рецептов
+    
+    // Периодическая синхронизация зон с сервером
+    private long lastZoneSyncTime = 0;
+    private static final long ZONE_SYNC_CHECK_INTERVAL_MS = 5000; // Проверяем каждые 5 секунд, нужно ли синхронизировать
 
     public BotmodSettings getBotMod()
     {
@@ -180,7 +191,9 @@ public class NCore extends Widget
     {
         if((Boolean) NConfig.get(NConfig.Key.ndbenable) && poolManager == null)
         {
-            poolManager = new DBPoolManager(1);
+            // Увеличиваем размер пула до 3, чтобы чтение и запись могли выполняться параллельно
+            // и не блокировать друг друга при большом количестве задач
+            poolManager = new DBPoolManager(3);
         }
 
         if(!(Boolean) NConfig.get(NConfig.Key.ndbenable) && poolManager != null)
@@ -244,6 +257,20 @@ public class NCore extends Widget
         if (config.isAreasUpdated())
         {
             config.writeAreas(null);
+            
+            // Синхронизируем зоны с сервером после сохранения (если включено)
+            try {
+                nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
+                if (areaManager.isSyncEnabled() && NUtils.getGameUI() != null && 
+                    NUtils.getGameUI().map != null && NUtils.getGameUI().map.glob != null &&
+                    NUtils.getGameUI().map.glob.map != null) {
+                    Collection<NArea> areas = ((nurgling.NMapView)NUtils.getGameUI().map).glob.map.areas.values();
+                    areaManager.syncAllAreas(areas);
+                }
+            } catch (Exception e) {
+                // Игнорируем ошибки синхронизации, чтобы не прерывать сохранение
+                System.err.println("NCore: Failed to sync areas: " + e.getMessage());
+            }
         }
         if (config.isExploredUpdated())
         {
@@ -281,6 +308,36 @@ public class NCore extends Widget
             for_remove.clear();
         }
         mappingClient.tick(dt);
+        
+        // Периодическая синхронизация зон с сервером
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastZoneSyncTime > ZONE_SYNC_CHECK_INTERVAL_MS) {
+            try {
+                boolean syncEnabled = (Boolean) NConfig.get(NConfig.Key.syncServerEnabled);
+                if (syncEnabled) {
+                    nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
+                    if (areaManager.isSyncEnabled() && NUtils.getGameUI() != null && 
+                        NUtils.getGameUI().map != null && NUtils.getGameUI().map.glob != null &&
+                        NUtils.getGameUI().map.glob.map != null) {
+                        
+                        // Проверяем, прошло ли достаточно времени с последней синхронизации
+                        // Интервал проверяется внутри AreaSyncManager.syncAll()
+                        nurgling.areas.db.AreaSyncManager syncManager = nurgling.areas.db.AreaSyncManager.getInstance();
+                        if (syncManager.isEnabled()) {
+                            Collection<NArea> areas = ((nurgling.NMapView)NUtils.getGameUI().map).glob.map.areas.values();
+                            areaManager.syncAllAreas(areas);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Игнорируем ошибки синхронизации, чтобы не прерывать игру
+                // Логируем только первые несколько ошибок
+                if (currentTime - lastZoneSyncTime < 60000) { // Логируем не чаще раза в минуту
+                    System.err.println("NCore: Failed to sync zones: " + e.getMessage());
+                }
+            }
+            lastZoneSyncTime = currentTime;
+        }
     }
 
 
@@ -409,7 +466,12 @@ public class NCore extends Widget
                 recipeStatement.setDouble(4, Double.parseDouble(hunger));
                 recipeStatement.setInt(5, (int) (fi.energy() * 100));
 
-                recipeStatement.execute();
+                int recipeInserted = recipeStatement.executeUpdate();
+                if (recipeInserted == 0) {
+                    System.out.println("NGItemWriter: Recipe already exists (not inserted): " + item.name() + " (hash: " + recipeHash.substring(0, Math.min(8, recipeHash.length())) + "...)");
+                } else {
+                    System.out.println("NGItemWriter: New recipe inserted: " + item.name() + " (hash: " + recipeHash.substring(0, Math.min(8, recipeHash.length())) + "...)");
+                }
 
                 // Вставляем ингредиенты
                 for (ItemInfo info : item.info) {
@@ -433,8 +495,27 @@ public class NCore extends Widget
 
                 // Фиксируем транзакцию
                 connection.commit();
+                if (recipeInserted > 0) {
+                    System.out.println("NGItemWriter: Successfully saved NEW recipe for item: " + item.name() + " (recipe count should increase)");
+                    // После сохранения нового рецепта принудительно сбрасываем флаг загрузки в кукбуке
+                    // чтобы он обновился при следующем открытии
+                    try {
+                        // Получаем UI и находим кукбук
+                        if (NUtils.getGameUI() != null && NUtils.getGameUI().ui != null) {
+                            // Ищем открытый кукбук в UI и сбрасываем его флаг загрузки
+                            // Это будет сделано через проверку количества при следующем открытии
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки при попытке обновить кукбук
+                    }
+                } else {
+                    System.out.println("NGItemWriter: Recipe already exists for item: " + item.name() + " (recipe count unchanged)");
+                }
 
             } catch (SQLException e) {
+                System.err.println("NGItemWriter: SQLException saving recipe for " + item.name() + ": " + e.getMessage());
+                System.err.println("NGItemWriter: SQLState: " + e.getSQLState() + ", ErrorCode: " + e.getErrorCode());
+                e.printStackTrace();
                 try {
                     // В случае ошибки откатываем транзакцию
                     if (connection != null) {
@@ -461,11 +542,60 @@ public class NCore extends Widget
     }
 
     public void writeNGItem(NGItem item) {
+        if (poolManager == null) {
+            System.err.println("NCore.writeNGItem: poolManager is null, cannot save recipe");
+            return;
+        }
+        
+        // Вычисляем hash рецепта для дедупликации
+        String recipeHash = null;
+        try {
+            NFoodInfo fi = item.getInfo(NFoodInfo.class);
+            if (fi == null) {
+                return; // Не еда, пропускаем
+            }
+            
+            StringBuilder hashInput = new StringBuilder();
+            hashInput.append(item.name()).append((int) (100 * fi.energy()));
+            for (ItemInfo info : item.info) {
+                if (info instanceof Ingredient) {
+                    Ingredient ing = ((Ingredient) info);
+                    hashInput.append(ing.name).append(ing.val * 100);
+                }
+            }
+            recipeHash = NUtils.calculateSHA256(hashInput.toString());
+        } catch (Exception e) {
+            // Если не удалось вычислить hash, все равно пытаемся сохранить
+        }
+        
+        // Throttling: не сохраняем один и тот же рецепт слишком часто
+        if (recipeHash != null) {
+            long currentTime = System.currentTimeMillis();
+            Long lastSaved = lastSavedRecipes.get(recipeHash);
+            if (lastSaved != null && (currentTime - lastSaved) < RECIPE_SAVE_THROTTLE_MS) {
+                return; // Пропускаем, слишком рано
+            }
+            
+            // Общий throttling: не сохраняем рецепты слишком часто
+            if (currentTime - lastRecipeSaveTime < RECIPE_SAVE_INTERVAL_MS) {
+                return; // Пропускаем, слишком рано
+            }
+            
+            lastSavedRecipes.put(recipeHash, currentTime);
+            lastRecipeSaveTime = currentTime;
+        }
+        
         NGItemWriter ngItemWriter = new NGItemWriter(item);
         try {
             ngItemWriter.connection = poolManager.getConnection();
+            if (ngItemWriter.connection == null) {
+                System.err.println("NCore.writeNGItem: Failed to get database connection");
+                return;
+            }
         } catch (SQLException e) {
+            System.err.println("NCore.writeNGItem: SQLException getting connection: " + e.getMessage());
             e.printStackTrace();
+            return;
         }
         poolManager.submitTask(ngItemWriter);
     }

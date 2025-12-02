@@ -22,6 +22,39 @@ public class DBMigrationManager {
         
         if (versionTableExists) {
             currentVersion = getCurrentVersion();
+            
+            // Исправление: если версия > 1, но это БД кукбука (не БД зон),
+            // значит были миграции зон, которые теперь удалены.
+            // Нужно удалить записи версий 2 и 3 из schema_version
+            if (currentVersion > 1) {
+                System.out.println("DBMigrationManager: Found version " + currentVersion + 
+                                 " in cookbook database. Removing zone migration versions (2, 3) as they are now in separate Areas.db");
+                try (Statement stmt = connection.createStatement()) {
+                    stmt.executeUpdate("DELETE FROM schema_version WHERE version IN (2, 3)");
+                    connection.commit();
+                    currentVersion = getCurrentVersion(); // Обновляем текущую версию
+                    System.out.println("DBMigrationManager: Cleaned up zone migration versions. Current version is now: " + currentVersion);
+                    
+                    // Если после очистки версия стала 0, но таблица favorite_recipes существует,
+                    // значит миграция 1 была выполнена, но версия не записана. Добавляем версию 1.
+                    if (currentVersion == 0) {
+                        try {
+                            stmt.executeQuery("SELECT 1 FROM favorite_recipes LIMIT 1").close();
+                            // Таблица существует, значит миграция 1 была выполнена
+                            updateVersion(1);
+                            connection.commit();
+                            currentVersion = 1;
+                            System.out.println("DBMigrationManager: Added missing version 1 to schema_version (favorite_recipes table exists)");
+                        } catch (SQLException e) {
+                            // Таблица не существует, миграция 1 выполнится ниже
+                            connection.rollback();
+                        }
+                    }
+                } catch (SQLException e) {
+                    connection.rollback();
+                    System.err.println("DBMigrationManager: Warning: Failed to clean up zone migration versions: " + e.getMessage());
+                }
+            }
         }
         
         List<Migration> migrations = getMigrations();
@@ -224,6 +257,9 @@ public class DBMigrationManager {
                 stmt.close();
             }
         });
+        
+        // Миграции для зон (миграции 2 и 3) теперь находятся в AreasDBMigrationManager
+        // и выполняются только для БД зон (Areas.db), а не для БД кукбука
         
         return migrations;
     }

@@ -22,7 +22,17 @@ public class RecipeHashFetcher implements Runnable {
     }
 
     public void run() {
+        Statement stmt = null;
+        ResultSet rs = null;
         try {
+            // Проверяем прерывание перед началом
+            if (Thread.currentThread().isInterrupted()) {
+                System.out.println("RecipeHashFetcher: Task was cancelled before starting");
+                ready.set(true);
+                return;
+            }
+            
+            System.out.println("RecipeHashFetcher: Starting to fetch recipes from database");
             String query;
             if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
                 query = "SELECT " +
@@ -48,26 +58,49 @@ public class RecipeHashFetcher implements Runnable {
                         "WHERE " + extractWhereClause(sql);
             }
 
-            Statement stmt = connection.createStatement();
-            ResultSet rs = stmt.executeQuery(query);
+            System.out.println("RecipeHashFetcher: Executing query: " + query.substring(0, Math.min(100, query.length())) + "...");
+            
+            // Проверяем, не закрыто ли соединение
+            if (connection.isClosed()) {
+                System.err.println("RecipeHashFetcher: Connection is closed!");
+                ready.set(true);
+                return;
+            }
+            
+            stmt = connection.createStatement();
+            // Устанавливаем таймаут для запроса (10 секунд вместо 30)
+            stmt.setQueryTimeout(10);
+            long startTime = System.currentTimeMillis();
+            ResultSet resultSet = stmt.executeQuery(query);
+            rs = resultSet;
+            long queryTime = System.currentTimeMillis() - startTime;
+            System.out.println("RecipeHashFetcher: Query executed in " + queryTime + "ms");
 
             Map<String, Recipe> recipeMap = new HashMap<>();
+            int rowCount = 0;
 
-            while (rs.next()) {
-                String hash = rs.getString("recipe_hash");
+            while (resultSet.next()) {
+                // Проверяем прерывание в цикле обработки результатов
+                if (Thread.currentThread().isInterrupted()) {
+                    System.out.println("RecipeHashFetcher: Task was cancelled during result processing");
+                    break;
+                }
+                
+                rowCount++;
+                String hash = resultSet.getString("recipe_hash");
 
                 Recipe recipe = recipeMap.computeIfAbsent(hash, k -> {
                     try {
                         Recipe r = new Recipe(
                                 hash,
-                                rs.getString("item_name"),
-                                rs.getString("resource_name"),
-                                rs.getDouble("hunger"),
-                                rs.getInt("energy"),
+                                resultSet.getString("item_name"),
+                                resultSet.getString("resource_name"),
+                                resultSet.getDouble("hunger"),
+                                resultSet.getInt("energy"),
                                 new HashMap<>(), // Ingredients
                                 new HashMap<>()   // FEPS
                         );
-                        r.setFavorite(rs.getBoolean("is_favorite"));
+                        r.setFavorite(resultSet.getBoolean("is_favorite"));
                         return r;
                     } catch (SQLException e) {
                         throw new RuntimeException(e);
@@ -75,31 +108,61 @@ public class RecipeHashFetcher implements Runnable {
                 });
 
                 // Добавляем FEP если есть
-                String fepName = rs.getString("fep_name");
+                String fepName = resultSet.getString("fep_name");
                 if (fepName != null && !recipe.getFeps().containsKey(fepName)) {
                     recipe.getFeps().put(fepName,
                             new Recipe.Fep(
-                                    rs.getDouble("fep_value"),
-                                    rs.getDouble("fep_weight")
+                                    resultSet.getDouble("fep_value"),
+                                    resultSet.getDouble("fep_weight")
                             ));
                 }
 
                 // Добавляем ингредиент если есть
-                String ingName = rs.getString("ing_name");
+                String ingName = resultSet.getString("ing_name");
                 if (ingName != null && !recipe.getIngredients().containsKey(ingName)) {
                     recipe.getIngredients().put(
                             ingName,
-                            rs.getDouble("ing_percentage")
+                            resultSet.getDouble("ing_percentage")
                     );
                 }
             }
-
+            
             recipes = new ArrayList<>(recipeMap.values());
+            System.out.println("RecipeHashFetcher: Successfully fetched " + recipes.size() + " recipes from database (processed " + rowCount + " rows)");
         } catch (SQLException e) {
-            System.err.println("Error fetching recipes:");
-            e.printStackTrace();
+            // Проверяем, не было ли прерывания
+            if (Thread.currentThread().isInterrupted()) {
+                System.out.println("RecipeHashFetcher: Task was cancelled (SQLException during interrupt)");
+            } else {
+                System.err.println("RecipeHashFetcher: SQLException fetching recipes: " + e.getMessage());
+                System.err.println("RecipeHashFetcher: SQLState: " + e.getSQLState() + ", ErrorCode: " + e.getErrorCode());
+                e.printStackTrace();
+            }
+        } catch (Exception e) {
+            if (Thread.currentThread().isInterrupted()) {
+                System.out.println("RecipeHashFetcher: Task was cancelled (Exception during interrupt)");
+            } else {
+                System.err.println("RecipeHashFetcher: Unexpected error: " + e.getMessage());
+                e.printStackTrace();
+            }
         } finally {
+            // Закрываем ресурсы
+            try {
+                if (rs != null) {
+                    rs.close();
+                }
+            } catch (SQLException e) {
+                System.err.println("RecipeHashFetcher: Error closing ResultSet: " + e.getMessage());
+            }
+            try {
+                if (stmt != null) {
+                    stmt.close();
+                }
+            } catch (SQLException e) {
+                System.err.println("RecipeHashFetcher: Error closing Statement: " + e.getMessage());
+            }
             ready.set(true);
+            System.out.println("RecipeHashFetcher: Marked as ready");
         }
     }
 

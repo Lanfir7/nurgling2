@@ -13,3 +13,14 @@ CLAUDE.md
 .agent-os
 __pycache__/
 *.pyc
+ИНСТРУКЦИЯ_ПО_СБОРКЕ.md
+ИНСТРУКЦИЯ_ДЛЯ_CURSOR.md
+БЫСТРЫЙ_СТАРТ.md
+setup-ant-path.ps1
+setup-ant-path.bat
+run.bat
+build.ps1
+build.bat
+.vscode/tasks.json
+.vscode/settings.json
+/.vscode

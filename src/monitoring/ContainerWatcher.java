@@ -20,12 +20,16 @@ public class ContainerWatcher  implements Runnable {
     @Override
     public void run() {
         try {
-            NUtils.addTask(new NTask() {
-                @Override
-                public boolean check() {
-                    return parentGob.ngob.hash!=null && parentGob.ngob.gcoord!=null;
-                }
-            });
+            // Раньше здесь использовался блокирующий NTask, который ждал,
+            // пока заполнится hash и gcoord. Это блокировало поток пула БД
+            // и мешало выполнению других задач (в том числе RecipeHashFetcher).
+            // Сейчас просто проверяем значения и, если данных нет, пропускаем запись.
+            if (parentGob == null || parentGob.ngob == null ||
+                    parentGob.ngob.hash == null || parentGob.ngob.gcoord == null) {
+                // Недостаточно данных для записи контейнера – просто выходим
+                return;
+            }
+
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
             preparedStatement.setString(1, parentGob.ngob.hash);
             preparedStatement.setLong(2, parentGob.ngob.grid_id);
@@ -34,7 +38,7 @@ public class ContainerWatcher  implements Runnable {
             preparedStatement.executeUpdate();
             connection.commit();
         } catch (SQLException e) {
-            if (e.getSQLState()!=null && !e.getSQLState().equals("23505")) {  // Код ошибки для нарушения уникальности
+            if (e.getSQLState() != null && !e.getSQLState().equals("23505")) {  // Код ошибки для нарушения уникальности
                 e.printStackTrace();
             }
             try {
@@ -42,9 +46,6 @@ public class ContainerWatcher  implements Runnable {
             } catch (SQLException rollbackException) {
                 rollbackException.printStackTrace();
             }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
         }
-
     }
 }
