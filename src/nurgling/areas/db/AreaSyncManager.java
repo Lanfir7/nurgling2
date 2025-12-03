@@ -441,6 +441,9 @@ public class AreaSyncManager {
                 // Зона существует локально - разрешаем конфликт
                 if (resolveConflict(localZone, serverZone, dbManager)) {
                     merged++;
+                    // ВАЖНО: После merge нужно обновить зону в glob.map.areas,
+                    // чтобы виджет увидел изменения (например, новое имя)
+                    updateZoneInMemory(localZone.id, localZone);
                 } else {
                     skipped++;
                 }
@@ -787,6 +790,7 @@ public class AreaSyncManager {
             }
             
             // Обновляем glob.map.areas (краткая блокировка)
+            List<Integer> newZoneIds = new ArrayList<>();
             synchronized (mapView.glob.map.areas) {
                 // Добавляем/обновляем зоны из БД
                 for (Map.Entry<Integer, nurgling.areas.NArea> entry : dbAreas.entrySet()) {
@@ -797,6 +801,7 @@ public class AreaSyncManager {
                     if (existingArea == null) {
                         // Новая зона - добавляем в память
                         mapView.glob.map.areas.put(areaId, dbArea);
+                        newZoneIds.add(areaId);
                         System.out.println("AreaSyncManager: Added zone " + areaId + " (" + dbArea.name + ") to memory");
                     } else {
                         // Существующая зона - обновляем данные
@@ -814,6 +819,23 @@ public class AreaSyncManager {
                 for (Integer areaId : toRemove) {
                     mapView.glob.map.areas.remove(areaId);
                     System.out.println("AreaSyncManager: Removed zone " + areaId + " from memory");
+                }
+            }
+            
+            // ВАЖНО: Для новых зон выполняем те же действия, что и при создании через UI
+            // Это обеспечивает правильное отображение и подключение к графу маршрутов
+            for (Integer newZoneId : newZoneIds) {
+                nurgling.areas.NArea newZone = mapView.glob.map.areas.get(newZoneId);
+                if (newZone != null) {
+                    // Создаем визуальное отображение (как в addArea)
+                    synchronized (mapView.nols) {
+                        mapView.createAreaLabel(newZoneId);
+                    }
+                    
+                    // Подключаем к графу маршрутов (как в addArea)
+                    mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(newZone);
+                    
+                    System.out.println("AreaSyncManager: Initialized zone " + newZoneId + " (" + newZone.name + ") - created label and connected to route graph");
                 }
             }
             
@@ -1000,13 +1022,4 @@ public class AreaSyncManager {
             
             // Удаляем из areas widget
             if (nurgling.NUtils.getGameUI().areas != null) {
-                nurgling.NUtils.getGameUI().areas.removeArea(areaId);
-            }
-            
-            // Удаляем из glob.map.areas
-            mapView.glob.map.areas.remove(areaId);
-            
-            System.out.println("AreaSyncManager: Removed zone " + areaId + " from visual display");
-        }
-    }
-}
+                nurgling.NUtils.getGame
