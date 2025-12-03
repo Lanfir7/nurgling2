@@ -209,7 +209,7 @@ public class NConfig
         conf.put(Key.showView, false);
         conf.put(Key.disableWinAnim, true);
         conf.put(Key.disableMenugridKeys, false);
-        conf.put(Key.baseurl, " https://raw.githubusercontent.com/Lanfir7/nurgling2-lanfir/master/release/ver");
+        conf.put(Key.baseurl, " https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ver");
         conf.put(Key.miningol, true);
         conf.put(Key.crime, false);
         conf.put(Key.tracking, false);
