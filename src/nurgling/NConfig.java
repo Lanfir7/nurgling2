@@ -144,6 +144,7 @@ public class NConfig
         tickAction,
         autoHearthOnUnknown,
         autoLogoutOnUnknown,
+        alarmDelayFrames,
         alwaysObfuscate,
         boughbeeprop,
         foragerprop,
@@ -389,6 +390,7 @@ public class NConfig
         // Safety settings - auto hearth/logout on unknown players
         conf.put(Key.autoHearthOnUnknown, false);
         conf.put(Key.autoLogoutOnUnknown, false);
+        conf.put(Key.alarmDelayFrames, 20);  // Delay before unknown player triggers alarm
         
         // Auth obfuscation - bypass firewall blocks
         conf.put(Key.alwaysObfuscate, false);
@@ -563,6 +565,13 @@ public class NConfig
      */
     public String getExploredPath() {
         return getProfileAwarePath("explored.nurgling.json");
+    }
+
+    /**
+     * Gets the dynamic path for session explored configuration file
+     */
+    public String getSessionExploredPath() {
+        return getProfileAwarePath("session_explored.nurgling.json");
     }
 
     /**
