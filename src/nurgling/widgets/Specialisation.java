@@ -172,6 +172,12 @@ public class Specialisation extends Window
         specialisation.add(new SpecialisationItem(SpecName.waterForTrees.toString(),"Water for Trees",Resource.loadsimg("nurgling/categories/twater")));
         specialisation.add(new SpecialisationItem(SpecName.soilForTrees.toString(),"Soil for Trees",Resource.loadsimg("nurgling/categories/tsoil")));
 
+        // Garden pot filling
+        specialisation.add(new SpecialisationItem(SpecName.plantingGardenPots.toString(),"Planting Garden Pots",Resource.loadsimg("nurgling/categories/gardenpotplanted")));
+        
+        // Building resources
+        specialisation.add(new SpecialisationItem(SpecName.boardsForBuild.toString(),"Boards for build",Resource.loadsimg("nurgling/categories/block")));
+
         specialisation.sort(new Comparator<SpecialisationItem>() {
             @Override
             public int compare(SpecialisationItem o1, SpecialisationItem o2) {
