@@ -198,7 +198,9 @@ public class NAreasWidget extends Window
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
         {
             NOverlay nol = NUtils.getGameUI().map.nols.get(id);
-            nol.remove();
+            if (nol != null) {
+                nol.remove();
+            }
             NUtils.getGameUI().map.nols.remove(id);
         }
         showPath(currentPath);

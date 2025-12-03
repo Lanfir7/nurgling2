@@ -261,10 +261,33 @@ public class NMapView extends MapView
 
     public void createAreaLabel(Integer id) {
         NArea area = glob.map.areas.get(id);
+        if (area == null) {
+            return; // Зона не найдена
+        }
+        
+        // ВАЖНО: Проверяем, не создан ли уже dummy для этой зоны
+        if (area.gid != Long.MIN_VALUE && dummys.containsKey(area.gid)) {
+            // Dummy уже существует, проверяем overlay
+            Gob existingDummy = dummys.get(area.gid);
+            if (existingDummy != null && existingDummy.findol(NAreaLabel.class) != null) {
+                // Overlay уже существует, не создаем заново
+                return;
+            }
+        }
+        
         Pair<Coord2d,Coord2d> space = area.getRCArea();
 
         if(space!=null)
         {
+            // Удаляем старый dummy если он есть
+            if (area.gid != Long.MIN_VALUE && dummys.containsKey(area.gid)) {
+                Gob oldDummy = dummys.get(area.gid);
+                if (oldDummy != null && glob.oc.getgob(oldDummy.id) != null) {
+                    glob.oc.remove(oldDummy);
+                }
+                dummys.remove(area.gid);
+            }
+            
             Coord2d pos = (space.a.add(space.b)).div(2);
 
             OCache.Virtual dummy = glob.oc.new Virtual(pos, 0);
@@ -1426,7 +1449,22 @@ public class NMapView extends MapView
 
     public void changeAreaName(Integer id, String new_name)
     {
-        glob.map.areas.get(id).name = new_name;
+        NArea area = glob.map.areas.get(id);
+        if (area == null) {
+            System.err.println("NMapView: Cannot change name for zone " + id + " - zone not found in glob.map.areas");
+            return;
+        }
+        
+        area.name = new_name;
+        
+        // ВАЖНО: Сохраняем изменение в БД
+        try {
+            nurgling.areas.db.AreaDBManager.getInstance().saveArea(area);
+        } catch (Exception e) {
+            System.err.println("NMapView: Failed to save area name change to database: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
         NConfig.needAreasUpdate();
     }
 

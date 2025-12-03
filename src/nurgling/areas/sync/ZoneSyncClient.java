@@ -124,16 +124,19 @@ public class ZoneSyncClient {
             area.zoneSync = this.zoneSync;
         }
         
-        // Обновляем last_updated с учетом смещения времени сервера
-        // Если смещение еще не вычислено, используем локальное время
-        // Сервер все равно установит свое время и вернет его в ответе
-        long clientTime = System.currentTimeMillis();
-        if (timeOffset != null) {
-            // Используем серверное время (приблизительно)
-            area.lastUpdated = clientTime + timeOffset;
-        } else {
-            area.lastUpdated = clientTime;
+        // ВАЖНО: Используем оригинальное lastUpdated зоны, а не текущее время
+        // Это сохраняет оригинальную дату создания/изменения зоны
+        // Если lastUpdated не установлен, используем текущее время
+        if (area.lastUpdated == 0) {
+            long clientTime = System.currentTimeMillis();
+            if (timeOffset != null) {
+                // Используем серверное время (приблизительно)
+                area.lastUpdated = clientTime + timeOffset;
+            } else {
+                area.lastUpdated = clientTime;
+            }
         }
+        // Если lastUpdated уже установлен, используем его (не перезаписываем)
         
         JSONObject zoneJson = areaToServerJson(area);
         
@@ -396,7 +399,12 @@ public class ZoneSyncClient {
      */
     private NArea serverJsonToArea(JSONObject json) {
         try {
+            // Получаем имя зоны (может содержать русские символы)
+            // JSONObject.getString() правильно обрабатывает UTF-8
             NArea area = new NArea(json.getString("name"));
+            
+            // Устанавливаем флаг синхронизации, чтобы сохранить оригинальное время
+            area.synced = true;
             
             // UUID
             if (json.has("uuid")) {
@@ -408,7 +416,7 @@ public class ZoneSyncClient {
                 area.zoneSync = json.getString("zone_sync");
             }
             
-            // Last updated
+            // Last updated - ВАЖНО: сохраняем оригинальное время с сервера
             if (json.has("last_updated")) {
                 String timeStr = json.getString("last_updated");
                 Instant instant = Instant.parse(timeStr);
@@ -431,16 +439,43 @@ public class ZoneSyncClient {
                 );
             }
             
-            // Space
+            // Space - ВАЖНО: парсим координаты и размеры зоны
             if (json.has("space") && json.get("space") instanceof JSONArray) {
-                // Парсим space из JSON (пока не используется, будет загружено из БД при необходимости)
-                @SuppressWarnings("unused")
                 JSONArray spaceArray = json.getJSONArray("space");
                 if (area.space == null) {
                     area.space = new NArea.Space();
                 }
-                // Space будет загружено из БД при необходимости
-                // Здесь мы только сохраняем данные для последующей загрузки
+                if (area.space.space == null) {
+                    area.space.space = new java.util.HashMap<>();
+                }
+                
+                // Парсим каждый элемент space из JSON
+                for (int i = 0; i < spaceArray.length(); i++) {
+                    JSONObject spaceObj = spaceArray.getJSONObject(i);
+                    long gridId = spaceObj.getLong("grid_id");
+                    int beginX = spaceObj.getInt("begin_x");
+                    int beginY = spaceObj.getInt("begin_y");
+                    int endX = spaceObj.getInt("end_x");
+                    int endY = spaceObj.getInt("end_y");
+                    
+                    // Создаем Coord для ul (верхний левый) и br (нижний правый)
+                    haven.Coord begin = new haven.Coord(beginX, beginY);
+                    haven.Coord end = new haven.Coord(endX, endY);
+                    
+                    // Создаем VArea с координатами (используем конструктор Area(begin, end))
+                    NArea.VArea vArea = new NArea.VArea(new haven.Area(begin, end));
+                    area.space.space.put(gridId, vArea);
+                    // grids_id - это final ArrayList, используем add() для добавления элементов
+                    area.grids_id.add(gridId);
+                }
+            }
+            
+            // Deleted flag - ВАЖНО: проверяем, удалена ли зона на сервере
+            if (json.has("deleted") && json.getBoolean("deleted")) {
+                // Зона удалена на сервере - возвращаем null, чтобы пропустить её
+                System.out.println("ZoneSyncClient: Zone " + (json.has("uuid") ? json.getString("uuid") : "unknown") + 
+                                 " is deleted on server, skipping");
+                return null;
             }
             
             // Spec

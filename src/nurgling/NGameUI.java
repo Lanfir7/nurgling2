@@ -181,6 +181,10 @@ public class NGameUI extends GameUI
         // Load areas now that genus is available
         if (map != null && map.glob != null && map.glob.map != null) {
             map.glob.map.loadAreasIfNeeded();
+            // ВАЖНО: Создаем визуальное отображение для загруженных зон
+            if (map instanceof NMapView) {
+                ((NMapView) map).initDummys();
+            }
         }
 
         super.attached();

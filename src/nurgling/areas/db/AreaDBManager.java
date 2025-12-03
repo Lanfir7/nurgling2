@@ -89,6 +89,17 @@ public class AreaDBManager {
     }
     
     /**
+     * Возвращает poolManager для работы с БД (для синхронизации)
+     */
+    public nurgling.areas.storage.DatabaseConnectionManager getPoolManager() {
+        initialize();
+        if (useDB && areasPoolManager != null) {
+            return areasPoolManager;
+        }
+        return null;
+    }
+    
+    /**
      * Загружает все зоны
      */
     public Map<Integer, NArea> loadAllAreas() {
@@ -287,6 +298,14 @@ public class AreaDBManager {
             // Получаем зону перед удалением для синхронизации
             NArea area = getActiveStorage().getArea(areaId);
             
+            // ВАЖНО: Обновляем lastUpdated в объекте зоны перед удалением,
+            // чтобы синхронизация увидела изменение
+            if (area != null) {
+                area.lastUpdated = System.currentTimeMillis();
+                System.out.println("AreaDBManager: Zone " + areaId + " (" + (area.name != null ? area.name : "unknown") + 
+                                 ") - updating lastUpdated to: " + area.lastUpdated + " before deletion");
+            }
+            
             getActiveStorage().deleteArea(areaId);
             
             // Также удаляем из резервной копии
@@ -300,7 +319,18 @@ public class AreaDBManager {
             
             // Синхронизируем удаление с сервером (если включено)
             if (syncManager != null && syncManager.isEnabled() && area != null) {
-                syncManager.deleteZone(area);
+                if (area.uuid != null && !area.uuid.isEmpty()) {
+                    System.out.println("AreaDBManager: Syncing deletion of zone " + areaId + " (" + 
+                                     (area.name != null ? area.name : "unknown") + ") to server (UUID: " + area.uuid + ")");
+                    syncManager.deleteZone(area);
+                } else {
+                    System.err.println("AreaDBManager: WARNING - Cannot sync deletion of zone " + areaId + 
+                                     " (" + (area.name != null ? area.name : "unknown") + "): UUID is null or empty");
+                }
+            } else if (syncManager == null || !syncManager.isEnabled()) {
+                System.out.println("AreaDBManager: Zone synchronization is disabled, skipping server deletion");
+            } else if (area == null) {
+                System.out.println("AreaDBManager: WARNING - Zone " + areaId + " not found, cannot sync deletion");
             }
             
             System.out.println("AreaDBManager: Deleted area " + areaId);

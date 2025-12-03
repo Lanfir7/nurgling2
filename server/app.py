@@ -61,7 +61,9 @@ def create_app():
             return jsonify({"error": "zone_sync is required"}), 400
 
         updated_after = request.args.get("updated_after")
-        q = Zone.query.filter_by(zone_sync=zone_sync)
+        # ВАЖНО: По умолчанию не возвращаем удаленные зоны
+        # Клиент должен явно запросить их, если нужно
+        q = Zone.query.filter_by(zone_sync=zone_sync, deleted=False)
 
         if updated_after:
             try:
@@ -149,8 +151,18 @@ def create_app():
                 ), 200
 
             # Принимаем изменение от клиента
-            # Используем серверное время для last_updated, чтобы избежать проблем с рассинхронизацией времени
-            server_time = datetime.now(timezone.utc)
+            # ВАЖНО: Используем время клиента, если оно новее серверного
+            # Это сохраняет оригинальную дату создания зоны
+            # Но не позволяем времени быть в будущем (защита от проблем с синхронизацией времени)
+            current_server_time = datetime.now(timezone.utc)
+            if client_ts > server_ts:
+                # Клиент новее - используем время клиента, но не в будущем
+                # Используем минимум из времени клиента и текущего времени сервера
+                zone_time = min(client_ts, current_server_time)
+            else:
+                # Это не должно произойти из-за проверки выше, но на всякий случай
+                zone_time = current_server_time
+            
             zone.name = name
             zone.path = data.get("path")
             zone.color = data.get("color") or {}
@@ -159,10 +171,21 @@ def create_app():
             zone.in_zone = data.get("in") or []
             zone.out_zone = data.get("out") or []
             zone.deleted = bool(data.get("deleted", False))
-            zone.last_updated = server_time  # Используем серверное время
+            # ВАЖНО: Сохраняем время клиента, а не текущее время сервера
+            zone.last_updated = zone_time
         else:
             # Создаём новую зону
-            server_time = datetime.now(timezone.utc)
+            # ВАЖНО: Для новых зон используем время клиента, если оно предоставлено
+            # Это сохраняет оригинальную дату создания зоны
+            if client_ts_str:
+                try:
+                    # Используем время клиента, но не позволяем ему быть в будущем
+                    server_time = min(client_ts, datetime.now(timezone.utc))
+                except:
+                    server_time = datetime.now(timezone.utc)
+            else:
+                server_time = datetime.now(timezone.utc)
+            
             zone = Zone(
                 uuid=ext_uuid,
                 name=name,
@@ -173,7 +196,7 @@ def create_app():
                 in_zone=data.get("in") or [],
                 out_zone=data.get("out") or [],
                 deleted=bool(data.get("deleted", False)),
-                last_updated=server_time,  # Используем серверное время
+                last_updated=server_time,  # Используем время клиента для новых зон
                 zone_sync=zone_sync,
             )
             db.session.add(zone)

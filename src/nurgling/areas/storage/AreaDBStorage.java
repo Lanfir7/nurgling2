@@ -42,7 +42,7 @@ public class AreaDBStorage implements AreaStorage {
             
             // Загружаем основные данные зон
             String sql = "SELECT id, global_id, name, path, color_r, color_g, color_b, color_a, " +
-                        "hide, sync_status, sync_version, zone_sync, updated_at FROM areas WHERE deleted = FALSE";
+                        "hide, sync_status, sync_version, zone_sync, updated_at, last_sync_at FROM areas WHERE deleted = FALSE";
             
             try (PreparedStatement stmt = conn.prepareStatement(sql);
                  ResultSet rs = stmt.executeQuery()) {
@@ -70,6 +70,19 @@ public class AreaDBStorage implements AreaStorage {
                     java.sql.Timestamp updatedAt = rs.getTimestamp("updated_at");
                     if (updatedAt != null) {
                         area.lastUpdated = updatedAt.getTime();
+                        // Логируем для отладки (только для первых нескольких зон, чтобы не засорять логи)
+                        if (areas.size() < 5) {
+                            System.out.println("AreaDBStorage: Loaded zone " + area.id + " (" + area.name + ") - lastUpdated: " + area.lastUpdated);
+                        }
+                    } else {
+                        System.out.println("AreaDBStorage: WARNING - Zone " + area.id + " (" + area.name + ") has NULL updated_at");
+                    }
+                    
+                    // Загружаем last_sync_at (если есть) - используется для синхронизации
+                    java.sql.Timestamp lastSyncAt = rs.getTimestamp("last_sync_at");
+                    if (lastSyncAt != null) {
+                        // Устанавливаем флаг синхронизации
+                        area.synced = true;
                     }
                     
                     int r = rs.getInt("color_r");
@@ -85,7 +98,7 @@ public class AreaDBStorage implements AreaStorage {
                         area.space = new NArea.Space();
                     }
                     
-                    // Загружаем пространственные данные
+                    // ВАЖНО: Загружаем пространственные данные (координаты зоны)
                     loadAreaSpaces(conn, area);
                     
                     // Загружаем входы
@@ -119,12 +132,20 @@ public class AreaDBStorage implements AreaStorage {
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, area.id);
             try (ResultSet rs = stmt.executeQuery()) {
+                int spaceCount = 0;
                 while (rs.next()) {
                     long gridId = rs.getLong("grid_id");
                     Coord begin = new Coord(rs.getInt("begin_x"), rs.getInt("begin_y"));
                     Coord end = new Coord(rs.getInt("end_x"), rs.getInt("end_y"));
                     area.space.space.put(gridId, new NArea.VArea(new Area(begin, end)));
                     area.grids_id.add(gridId);
+                    spaceCount++;
+                }
+                // Логируем для отладки
+                if (spaceCount > 0) {
+                    System.out.println("AreaDBStorage: Loaded " + spaceCount + " space entries for zone " + area.id + " (" + area.name + ")");
+                } else {
+                    System.out.println("AreaDBStorage: WARNING - Zone " + area.id + " (" + area.name + ") has no space coordinates in database");
                 }
             }
         }
@@ -460,8 +481,25 @@ public class AreaDBStorage implements AreaStorage {
             }
         }
         
-        String sql = "INSERT INTO areas (id, global_id, name, path, color_r, color_g, color_b, color_a, hide, " +
-                    "sync_status, sync_version, zone_sync, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 1, ?, CURRENT_TIMESTAMP)";
+        // Устанавливаем last_updated если не установлен
+        if (area.lastUpdated == 0) {
+            area.lastUpdated = System.currentTimeMillis();
+        }
+        
+        // Используем оригинальное lastUpdated из зоны (если есть), иначе CURRENT_TIMESTAMP
+        // Это важно для сохранения оригинальной даты при загрузке зон с сервера
+        String sql;
+        boolean useOriginalTimestamp = area.lastUpdated > 0 && area.synced;
+        
+        if (useOriginalTimestamp) {
+            // Используем оригинальное время из сервера
+            sql = "INSERT INTO areas (id, global_id, name, path, color_r, color_g, color_b, color_a, hide, " +
+                  "sync_status, sync_version, zone_sync, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 1, ?, ?)";
+        } else {
+            // Используем текущее время для новых локальных зон
+            sql = "INSERT INTO areas (id, global_id, name, path, color_r, color_g, color_b, color_a, hide, " +
+                  "sync_status, sync_version, zone_sync, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 1, ?, CURRENT_TIMESTAMP)";
+        }
         
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, area.id);
@@ -474,6 +512,11 @@ public class AreaDBStorage implements AreaStorage {
             stmt.setInt(8, area.color.getAlpha());
             stmt.setBoolean(9, area.hide);
             stmt.setString(10, area.zoneSync != null && !area.zoneSync.isEmpty() ? area.zoneSync : null);
+            if (useOriginalTimestamp) {
+                // Устанавливаем оригинальное время из сервера
+                java.sql.Timestamp timestamp = new java.sql.Timestamp(area.lastUpdated);
+                stmt.setTimestamp(11, timestamp);
+            }
             stmt.executeUpdate();
         }
         
@@ -488,6 +531,13 @@ public class AreaDBStorage implements AreaStorage {
         // Загружаем текущую версию зоны из БД для сравнения
         NArea dbArea = loadAreaForComparison(conn, area.id);
         boolean hasChanges = dbArea == null || hasAreaChanged(dbArea, area);
+        
+        // Логируем для отладки
+        if (hasChanges) {
+            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - changes detected, will update lastUpdated");
+        } else {
+            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - no changes detected");
+        }
         
         // Если у зоны нет UUID, генерируем его (для старых зон)
         if (area.uuid == null || area.uuid.isEmpty()) {
@@ -519,11 +569,25 @@ public class AreaDBStorage implements AreaStorage {
             System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") changed, updating lastUpdated to: " + area.lastUpdated);
         }
         
-        String sql = hasChanges 
-            ? "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
-              "color_a = ?, hide = ?, zone_sync = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-            : "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
-              "color_a = ?, hide = ?, zone_sync = ? WHERE id = ?";
+        // Если зона синхронизирована с сервером и имеет оригинальное lastUpdated,
+        // используем его вместо CURRENT_TIMESTAMP (только если зона не изменена)
+        boolean useOriginalTimestamp = area.synced && area.lastUpdated > 0 && !hasChanges;
+        
+        String sql;
+        if (hasChanges) {
+            // Зона изменена локально - используем явное значение lastUpdated, которое мы установили
+            // Это гарантирует, что в БД будет сохранено правильное время
+            sql = "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
+                  "color_a = ?, hide = ?, zone_sync = ?, updated_at = ? WHERE id = ?";
+        } else if (useOriginalTimestamp) {
+            // Зона синхронизирована с сервером и не изменена - сохраняем оригинальное время
+            sql = "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
+                  "color_a = ?, hide = ?, zone_sync = ?, updated_at = ? WHERE id = ?";
+        } else {
+            // Зона не изменена и не синхронизирована - не обновляем updated_at
+            sql = "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
+                  "color_a = ?, hide = ?, zone_sync = ? WHERE id = ?";
+        }
         
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             int paramIndex = 1;
@@ -536,27 +600,38 @@ public class AreaDBStorage implements AreaStorage {
             stmt.setInt(paramIndex++, area.color.getAlpha());
             stmt.setBoolean(paramIndex++, area.hide);
             stmt.setString(paramIndex++, area.zoneSync != null && !area.zoneSync.isEmpty() ? area.zoneSync : null);
+            if (hasChanges) {
+                // Устанавливаем явное значение lastUpdated, которое мы установили при изменении
+                java.sql.Timestamp timestamp = new java.sql.Timestamp(area.lastUpdated);
+                stmt.setTimestamp(paramIndex++, timestamp);
+            } else if (useOriginalTimestamp) {
+                // Устанавливаем оригинальное время из сервера
+                java.sql.Timestamp timestamp = new java.sql.Timestamp(area.lastUpdated);
+                stmt.setTimestamp(paramIndex++, timestamp);
+            }
             stmt.setInt(paramIndex++, area.id);
             stmt.executeUpdate();
         }
         
-        // Если зона изменилась, загружаем актуальное значение updated_at из БД
-        // НО: если мы только что установили lastUpdated, используем его, а не значение из БД
-        // (так как БД может вернуть старое значение из-за задержки)
+        // Если зона изменилась, проверяем, что updated_at действительно обновился в БД
         if (hasChanges) {
             long savedLastUpdated = area.lastUpdated; // Сохраняем значение, которое мы установили
-            try (PreparedStatement stmt = conn.prepareStatement("SELECT updated_at FROM areas WHERE id = ?")) {
-                stmt.setInt(1, area.id);
-                try (ResultSet rs = stmt.executeQuery()) {
+            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - saved with lastUpdated: " + savedLastUpdated);
+            
+            // Проверяем, что updated_at действительно обновился в БД
+            try (PreparedStatement checkStmt = conn.prepareStatement("SELECT updated_at FROM areas WHERE id = ?")) {
+                checkStmt.setInt(1, area.id);
+                try (ResultSet rs = checkStmt.executeQuery()) {
                     if (rs.next()) {
                         java.sql.Timestamp updatedAt = rs.getTimestamp("updated_at");
                         if (updatedAt != null) {
                             long dbLastUpdated = updatedAt.getTime();
-                            // Используем большее значение (наше или из БД)
-                            // Это гарантирует, что lastUpdated будет актуальным
+                            // Используем большее значение для надежности
                             area.lastUpdated = Math.max(savedLastUpdated, dbLastUpdated);
-                            System.out.println("AreaDBStorage: Zone " + area.id + " - savedLastUpdated: " + savedLastUpdated + 
-                                             ", dbLastUpdated: " + dbLastUpdated + ", using: " + area.lastUpdated);
+                            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - verified: saved=" + savedLastUpdated + 
+                                             ", db=" + dbLastUpdated + ", using=" + area.lastUpdated);
+                        } else {
+                            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - WARNING: updated_at is NULL in DB!");
                         }
                     }
                 }
@@ -904,10 +979,22 @@ public class AreaDBStorage implements AreaStorage {
         Connection conn = null;
         try {
             conn = poolManager.getConnection();
-            String sql = "UPDATE areas SET deleted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+            
+            // ВАЖНО: Обновляем lastUpdated перед удалением, чтобы синхронизация увидела изменение
+            long currentTime = System.currentTimeMillis();
+            java.sql.Timestamp timestamp = new java.sql.Timestamp(currentTime);
+            
+            String sql = "UPDATE areas SET deleted = TRUE, updated_at = ? WHERE id = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, areaId);
-                stmt.executeUpdate();
+                stmt.setTimestamp(1, timestamp);
+                stmt.setInt(2, areaId);
+                int rowsUpdated = stmt.executeUpdate();
+                
+                if (rowsUpdated > 0) {
+                    System.out.println("AreaDBStorage: Zone " + areaId + " deleted, updated_at set to: " + currentTime);
+                } else {
+                    System.out.println("AreaDBStorage: WARNING - Zone " + areaId + " not found for deletion");
+                }
             }
             conn.commit();
         } catch (SQLException e) {
@@ -930,7 +1017,8 @@ public class AreaDBStorage implements AreaStorage {
         
         try {
             Connection conn = poolManager.getConnection();
-            String sql = "SELECT id, name, path, color_r, color_g, color_b, color_a, hide " +
+            // ВАЖНО: Загружаем также global_id (UUID) и zone_sync для синхронизации
+            String sql = "SELECT id, global_id, name, path, color_r, color_g, color_b, color_a, hide, zone_sync, updated_at " +
                         "FROM areas WHERE id = ? AND deleted = FALSE";
             
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -941,6 +1029,30 @@ public class AreaDBStorage implements AreaStorage {
                         area.id = areaId;
                         area.path = rs.getString("path");
                         if (rs.wasNull()) area.path = "";
+                        
+                        // Загружаем UUID (global_id)
+                        String globalId = rs.getString("global_id");
+                        if (globalId != null && !globalId.isEmpty()) {
+                            area.uuid = globalId;
+                        } else {
+                            System.out.println("AreaDBStorage: WARNING - Zone " + areaId + " has no UUID in database");
+                        }
+                        
+                        // Загружаем zone_sync
+                        String zoneSync = rs.getString("zone_sync");
+                        if (zoneSync != null && !zoneSync.isEmpty()) {
+                            area.zoneSync = zoneSync;
+                        }
+                        
+                        // Загружаем last_updated
+                        java.sql.Timestamp updatedAt = rs.getTimestamp("updated_at");
+                        if (updatedAt != null) {
+                            area.lastUpdated = updatedAt.getTime();
+                        }
+                        
+                        System.out.println("AreaDBStorage: Loaded zone " + areaId + " (" + area.name + ") - UUID: " + 
+                                         (area.uuid != null ? area.uuid : "null") + ", zone_sync: " + 
+                                         (area.zoneSync != null ? area.zoneSync : "null"));
                         
                         int r = rs.getInt("color_r");
                         int g = rs.getInt("color_g");

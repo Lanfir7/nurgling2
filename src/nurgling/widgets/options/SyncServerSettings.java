@@ -25,7 +25,7 @@ public class SyncServerSettings extends Panel {
     private boolean enabled;
     private String serverUrl;
     private String zoneSync;
-    private int syncIntervalMinutes; // 1-20 минут
+    private int syncIntervalSeconds; // 5 секунд - 20 минут (5-1200 секунд)
 
     public SyncServerSettings() {
         super("");
@@ -58,19 +58,20 @@ public class SyncServerSettings extends Panel {
         // Ползунок для интервала синхронизации
         syncIntervalLabel = add(new Label("Sync Interval:"), new Coord(margin, y));
         
-        // Создаем слайдер (1-20 минут)
-        syncIntervalSlider = add(new HSlider(sliderWidth, 1, 20, 5) {
+        // Создаем слайдер (5-1200 секунд, т.е. от 5 сек до 20 минут)
+        // Значение по умолчанию: 300 секунд (5 минут)
+        syncIntervalSlider = add(new HSlider(sliderWidth, 5, 1200, 300) {
             @Override
             public void changed() {
                 super.changed();
-                syncIntervalMinutes = this.val;
+                syncIntervalSeconds = this.val;
                 updateIntervalLabel();
             }
             
             @Override
             public void fchanged() {
                 super.fchanged();
-                syncIntervalMinutes = this.val;
+                syncIntervalSeconds = this.val;
                 updateIntervalLabel();
             }
         }, new Coord(entryX, y));
@@ -85,7 +86,19 @@ public class SyncServerSettings extends Panel {
 
     private void updateIntervalLabel() {
         if (intervalValueLabel != null) {
-            intervalValueLabel.settext(syncIntervalMinutes + " min");
+            String text;
+            if (syncIntervalSeconds < 60) {
+                text = syncIntervalSeconds + " sec";
+            } else {
+                int minutes = syncIntervalSeconds / 60;
+                int remainingSeconds = syncIntervalSeconds % 60;
+                if (remainingSeconds == 0) {
+                    text = minutes + " min";
+                } else {
+                    text = minutes + " min " + remainingSeconds + " sec";
+                }
+            }
+            intervalValueLabel.settext(text);
         }
     }
 
@@ -97,23 +110,24 @@ public class SyncServerSettings extends Panel {
         serverUrl = asString(NConfig.get(NConfig.Key.syncServerUrl));
         zoneSync = asString(NConfig.get(NConfig.Key.syncZoneSync));
         
-        // Загружаем интервал синхронизации (по умолчанию 5 минут)
+        // Загружаем интервал синхронизации (по умолчанию 300 секунд = 5 минут)
         Object intervalObj = NConfig.get(NConfig.Key.syncIntervalMinutes);
         if (intervalObj instanceof Integer) {
-            syncIntervalMinutes = (Integer) intervalObj;
+            syncIntervalSeconds = (Integer) intervalObj;
         } else if (intervalObj instanceof Number) {
-            syncIntervalMinutes = ((Number) intervalObj).intValue();
+            syncIntervalSeconds = ((Number) intervalObj).intValue();
         } else {
-            syncIntervalMinutes = 5; // По умолчанию 5 минут
+            syncIntervalSeconds = 300; // По умолчанию 300 секунд (5 минут)
         }
         
-        // Ограничиваем значение диапазоном 1-20
-        if (syncIntervalMinutes < 1) syncIntervalMinutes = 1;
-        if (syncIntervalMinutes > 20) syncIntervalMinutes = 20;
+        // Все значения хранятся в секундах (начиная с новой версии)
+        // Ограничиваем значение диапазоном 5-1200 секунд
+        if (syncIntervalSeconds < 5) syncIntervalSeconds = 5;
+        if (syncIntervalSeconds > 1200) syncIntervalSeconds = 1200;
 
         serverUrlEntry.settext(serverUrl);
         zoneSyncEntry.settext(zoneSync);
-        syncIntervalSlider.val = syncIntervalMinutes;
+        syncIntervalSlider.val = syncIntervalSeconds;
         updateIntervalLabel();
 
         updateWidgetsVisibility();
@@ -124,12 +138,14 @@ public class SyncServerSettings extends Panel {
         enabled = enableCheckbox.a;
         serverUrl = serverUrlEntry.text().trim();
         zoneSync = zoneSyncEntry.text().trim();
-        syncIntervalMinutes = syncIntervalSlider.val;
+        syncIntervalSeconds = syncIntervalSlider.val;
+
+        System.out.println("SyncServerSettings: Saving sync interval: " + syncIntervalSeconds + " seconds");
 
         NConfig.set(NConfig.Key.syncServerEnabled, enabled);
         NConfig.set(NConfig.Key.syncServerUrl, serverUrl);
         NConfig.set(NConfig.Key.syncZoneSync, zoneSync);
-        NConfig.set(NConfig.Key.syncIntervalMinutes, syncIntervalMinutes);
+        NConfig.set(NConfig.Key.syncIntervalMinutes, syncIntervalSeconds);
 
         // Инициализируем синхронизацию если включена
         if (enabled && !serverUrl.isEmpty() && !zoneSync.isEmpty()) {

@@ -242,7 +242,7 @@ public class NConfig
         conf.put(Key.syncServerEnabled, false);
         conf.put(Key.syncServerUrl, "");
         conf.put(Key.syncZoneSync, "");
-        conf.put(Key.syncIntervalMinutes, 5);
+        conf.put(Key.syncIntervalMinutes, 300); // 300 секунд = 5 минут (по умолчанию)
         conf.put(Key.exploredAreaEnable, false);
         conf.put(Key.player_box, false);
         conf.put(Key.player_fov, false);

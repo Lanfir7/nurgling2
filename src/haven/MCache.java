@@ -155,35 +155,13 @@ public class MCache implements MapSource {
 				System.err.println("MCache: Failed to initialize zone synchronization: " + syncEx.getMessage());
 			}
 		} catch (Exception e) {
-			// Fallback на старый способ загрузки из JSON
-			System.err.println("Failed to load areas from AreaDBManager, falling back to JSON: " + e.getMessage());
+			// ВАЖНО: БД должна быть основным источником, JSON только для миграции
+			// НЕ загружаем из JSON автоматически, чтобы избежать конфликтов с БД
+			System.err.println("CRITICAL: Failed to load areas from AreaDBManager: " + e.getMessage());
+			System.err.println("Areas will not be loaded. Please check database connection.");
 			e.printStackTrace();
-			
-			// Get the appropriate areas path based on current profile
-			String areasPath = getAreasPath();
-
-			if(new File(areasPath).exists())
-			{
-				StringBuilder contentBuilder = new StringBuilder();
-				try (Stream<String> stream = Files.lines(Paths.get(areasPath), StandardCharsets.UTF_8))
-				{
-					stream.forEach(s -> contentBuilder.append(s).append("\n"));
-				}
-				catch (IOException ignore)
-				{
-				}
-
-				if (!contentBuilder.toString().isEmpty())
-				{
-					JSONObject main = new JSONObject(contentBuilder.toString());
-					JSONArray array = (JSONArray) main.get("areas");
-					for (int i = 0; i < array.length(); i++)
-					{
-						NArea a = new NArea((JSONObject) array.get(i));
-						areas.put(a.id, a);
-					}
-				}
-			}
+			// Зоны не будут загружены, если БД недоступна
+			// Это предотвращает использование устаревших данных из JSON
 		}
 		areasLoaded = true;
 	}
