@@ -1403,14 +1403,26 @@ public class NMapView extends MapView
                     System.err.println("Failed to delete area from database: " + e.getMessage());
                 }
                 
+                // ВАЖНО: Сохраняем данные зоны перед удалением из памяти
+                final long areaGid = area.gid;
+                final int areaId = area.id;
+                
+                // Удаляем из памяти
                 glob.map.areas.remove(area.id);
-                Gob dummy = dummys.get(area.gid);
-                if(dummy != null) {
-                    glob.oc.remove(dummy);
-                    dummys.remove(area.gid);
+                
+                // Удаляем dummy (используем сохраненные данные)
+                if(areaGid != Long.MIN_VALUE) {
+                    Gob dummy = dummys.get(areaGid);
+                    if(dummy != null) {
+                        glob.oc.remove(dummy);
+                        dummys.remove(areaGid);
+                    }
                 }
-                NUtils.getGameUI().areas.removeArea(area.id);
+                
+                // Удаляем из виджета зон (он удалит overlay)
+                NUtils.getGameUI().areas.removeArea(areaId);
 
+                // Удаляем из route graph
                 routeGraphManager.getGraph().deleteAreaFromRoutePoints(area.id);
 
                 break;

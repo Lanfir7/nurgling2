@@ -70,10 +70,7 @@ public class AreaDBStorage implements AreaStorage {
                     java.sql.Timestamp updatedAt = rs.getTimestamp("updated_at");
                     if (updatedAt != null) {
                         area.lastUpdated = updatedAt.getTime();
-                        // Логируем для отладки (только для первых нескольких зон, чтобы не засорять логи)
-                        if (areas.size() < 5) {
-                            System.out.println("AreaDBStorage: Loaded zone " + area.id + " (" + area.name + ") - lastUpdated: " + area.lastUpdated);
-                        }
+                        
                     } else {
                         System.out.println("AreaDBStorage: WARNING - Zone " + area.id + " (" + area.name + ") has NULL updated_at");
                     }
@@ -141,12 +138,7 @@ public class AreaDBStorage implements AreaStorage {
                     area.grids_id.add(gridId);
                     spaceCount++;
                 }
-                // Логируем для отладки
-                if (spaceCount > 0) {
-                    System.out.println("AreaDBStorage: Loaded " + spaceCount + " space entries for zone " + area.id + " (" + area.name + ")");
-                } else {
-                    System.out.println("AreaDBStorage: WARNING - Zone " + area.id + " (" + area.name + ") has no space coordinates in database");
-                }
+                
             }
         }
     }
@@ -532,12 +524,7 @@ public class AreaDBStorage implements AreaStorage {
         NArea dbArea = loadAreaForComparison(conn, area.id);
         boolean hasChanges = dbArea == null || hasAreaChanged(dbArea, area);
         
-        // Логируем для отладки
-        if (hasChanges) {
-            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - changes detected, will update lastUpdated");
-        } else {
-            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - no changes detected");
-        }
+        
         
         // Если у зоны нет UUID, генерируем его (для старых зон)
         if (area.uuid == null || area.uuid.isEmpty()) {

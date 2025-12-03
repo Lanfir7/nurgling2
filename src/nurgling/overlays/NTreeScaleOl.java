@@ -74,7 +74,7 @@ public class NTreeScaleOl extends NObjectTexLabel {
                 return;
             }
             
-            System.err.println("Tree Finder: Checking tree with growth " + growthPercent + "%");
+            //System.err.println("Tree Finder: Checking tree with growth " + growthPercent + "%");
             
             // Get tree name and resource for location ID generation
             String treeResource = gob.ngob.name;
@@ -158,11 +158,11 @@ public class NTreeScaleOl extends NObjectTexLabel {
                 Object showNotificationMinGrowthObj = NConfig.get(NConfig.Key.treeFinderShowNotificationMinGrowth);
                 int showNotificationMinGrowth = (showNotificationMinGrowthObj instanceof Integer) ? (Integer) showNotificationMinGrowthObj : 100;
                 
-                System.err.println("Tree Finder: showNotification=" + showNotification + ", notificationShown=" + notificationShown + ", growthPercent=" + growthPercent + ", minGrowth=" + showNotificationMinGrowth);
+                //System.err.println("Tree Finder: showNotification=" + showNotification + ", notificationShown=" + notificationShown + ", growthPercent=" + growthPercent + ", minGrowth=" + showNotificationMinGrowth);
                 
                 if (growthPercent >= showNotificationMinGrowth) {
                     try {
-                        System.err.println("Tree Finder: Showing notification for " + treeName + " (" + growthPercent + "%)");
+                        //System.err.println("Tree Finder: Showing notification for " + treeName + " (" + growthPercent + "%)");
                         // Show popup notification window instead of chat message
                         TreeFinderNotificationWindow notifWindow = new TreeFinderNotificationWindow(treeName, (int)growthPercent, showNotificationMinGrowth);
                         gui.add(notifWindow, new Coord(UI.scale(200), UI.scale(200)));
@@ -170,19 +170,19 @@ public class NTreeScaleOl extends NObjectTexLabel {
                         notifWindow.raise();
                         // Mark notification as shown for this location
                         checkedTreeIds.add(notificationKey);
-                        System.err.println("Tree Finder: Notification shown and marked");
+                        //System.err.println("Tree Finder: Notification shown and marked");
                     } catch (Exception e) {
                         System.err.println("Error showing notification: " + e.getMessage());
                         e.printStackTrace();
                     }
                 } else {
-                    System.err.println("Tree Finder: Growth " + growthPercent + "% is below threshold " + showNotificationMinGrowth + "%");
+                    //System.err.println("Tree Finder: Growth " + growthPercent + "% is below threshold " + showNotificationMinGrowth + "%");
                 }
             } else {
                 if (showNotification == null || !showNotification) {
-                    System.err.println("Tree Finder: Notifications disabled");
+                    //System.err.println("Tree Finder: Notifications disabled");
                 } else if (notificationShown) {
-                    System.err.println("Tree Finder: Notification already shown for this location");
+                    //System.err.println("Tree Finder: Notification already shown for this location");
                 }
             }
             

@@ -3,6 +3,7 @@
 /local-boot.properties
 /build.properties
 /out
+/srcOLD
 /resources/compiled
 /.idea
 nurgling2.iml

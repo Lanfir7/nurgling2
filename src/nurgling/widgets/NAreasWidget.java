@@ -197,11 +197,16 @@ public class NAreasWidget extends Window
     {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
         {
-            NOverlay nol = NUtils.getGameUI().map.nols.get(id);
-            if (nol != null) {
-                nol.remove();
+            nurgling.NMapView mapView = (nurgling.NMapView) NUtils.getGameUI().map;
+            
+            // Удаляем overlay (как в старом коде - просто удаляем без проверки на null)
+            synchronized (mapView.nols) {
+                nurgling.overlays.map.NOverlay nol = mapView.nols.get(id);
+                if (nol != null) {
+                    nol.remove();
+                }
+                mapView.nols.remove(id);
             }
-            NUtils.getGameUI().map.nols.remove(id);
         }
         showPath(currentPath);
     }
