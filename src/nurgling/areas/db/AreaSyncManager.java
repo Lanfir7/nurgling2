@@ -238,9 +238,9 @@ public class AreaSyncManager {
         // Теперь отправляем локальные изменения (push)
         pushLocalChanges(freshAreas, dbManager);
         
-        // ВАЖНО: Обновляем визуальное отображение зон в игре после синхронизации
-        // Это нужно для того, чтобы удаленные зоны исчезли, а новые/обновленные зоны появились
-        refreshVisualZones();
+        // ВАЖНО: Обновляем glob.map.areas и виджет зон после синхронизации
+        // Делаем это безопасно, без длительной блокировки UI потока
+        updateAreasInMemory();
         
         lastSyncTime = System.currentTimeMillis();
         System.out.println("AreaSyncManager: Sync completed");
@@ -482,8 +482,9 @@ public class AreaSyncManager {
                         uuidToAreaId.remove(localZone.uuid);
                         deleted++;
                         
-                        // ВАЖНО: Обновляем визуальное отображение зон в игре
-                        updateVisualZone(localZone.id);
+                        // ВАЖНО: НЕ вызываем updateVisualZone() из фонового потока,
+                        // так как это может блокировать UI поток и вызвать зависание игры.
+                        // Визуальное обновление будет выполнено автоматически при следующем обращении к зонам в UI потоке.
                     } catch (Exception e) {
                         System.err.println("AreaSyncManager: Failed to delete zone " + localZone.id + 
                                          " that was deleted on server: " + e.getMessage());
@@ -763,6 +764,75 @@ public class AreaSyncManager {
     }
     
     /**
+     * Обновляет зоны в памяти (glob.map.areas) и виджет после синхронизации
+     * Выполняется безопасно, без длительной блокировки UI потока
+     */
+    private void updateAreasInMemory() {
+        try {
+            // Проверяем, что игра запущена
+            if (nurgling.NUtils.getGameUI() == null || nurgling.NUtils.getGameUI().map == null) {
+                return;
+            }
+            
+            nurgling.NMapView mapView = (nurgling.NMapView) nurgling.NUtils.getGameUI().map;
+            
+            // Загружаем актуальные зоны из БД
+            Map<Integer, nurgling.areas.NArea> dbAreas = new HashMap<>();
+            try {
+                nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
+                dbAreas = areaManager.loadAllAreas();
+            } catch (Exception e) {
+                System.err.println("AreaSyncManager: Failed to load areas for memory update: " + e.getMessage());
+                return;
+            }
+            
+            // Обновляем glob.map.areas (краткая блокировка)
+            synchronized (mapView.glob.map.areas) {
+                // Добавляем/обновляем зоны из БД
+                for (Map.Entry<Integer, nurgling.areas.NArea> entry : dbAreas.entrySet()) {
+                    Integer areaId = entry.getKey();
+                    nurgling.areas.NArea dbArea = entry.getValue();
+                    
+                    nurgling.areas.NArea existingArea = mapView.glob.map.areas.get(areaId);
+                    if (existingArea == null) {
+                        // Новая зона - добавляем в память
+                        mapView.glob.map.areas.put(areaId, dbArea);
+                        System.out.println("AreaSyncManager: Added zone " + areaId + " (" + dbArea.name + ") to memory");
+                    } else {
+                        // Существующая зона - обновляем данные
+                        updateAreaData(existingArea, dbArea);
+                    }
+                }
+                
+                // Удаляем зоны, которых нет в БД
+                Set<Integer> toRemove = new HashSet<>();
+                for (Integer areaId : mapView.glob.map.areas.keySet()) {
+                    if (!dbAreas.containsKey(areaId)) {
+                        toRemove.add(areaId);
+                    }
+                }
+                for (Integer areaId : toRemove) {
+                    mapView.glob.map.areas.remove(areaId);
+                    System.out.println("AreaSyncManager: Removed zone " + areaId + " from memory");
+                }
+            }
+            
+            // Обновляем виджет зон, если он открыт
+            if (nurgling.NUtils.getGameUI().areas != null) {
+                nurgling.NConfig.needAreasUpdate();
+                // Обновляем список зон в виджете, если он видим
+                if (nurgling.NUtils.getGameUI().areas.visible()) {
+                    nurgling.NUtils.getGameUI().areas.showPath(nurgling.NUtils.getGameUI().areas.currentPath);
+                }
+            }
+            
+        } catch (Exception e) {
+            System.err.println("AreaSyncManager: Failed to update areas in memory: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
      * Обновляет визуальное отображение зон в игре после синхронизации
      */
     private void refreshVisualZones() {
@@ -808,19 +878,24 @@ public class AreaSyncManager {
                     if (existingArea == null) {
                         // Новая зона - добавляем
                         mapView.glob.map.areas.put(areaId, dbArea);
-                        mapView.createAreaLabel(areaId);
+                        // Создаем overlay синхронизированно
+                        synchronized (mapView.nols) {
+                            mapView.createAreaLabel(areaId);
+                        }
                         System.out.println("AreaSyncManager: Added zone " + areaId + " (" + dbArea.name + ") to visual display");
                     } else {
                         // Существующая зона - обновляем данные
                         updateAreaData(existingArea, dbArea);
                         
                         // Пересоздаем overlay если нужно
-                        nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);
-                        if (nol != null) {
-                            nol.remove();
-                            mapView.nols.remove(areaId);
+                        synchronized (mapView.nols) {
+                            nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);
+                            if (nol != null) {
+                                nol.remove();
+                                mapView.nols.remove(areaId);
+                            }
+                            mapView.createAreaLabel(areaId);
                         }
-                        mapView.createAreaLabel(areaId);
                         
                         System.out.println("AreaSyncManager: Updated zone " + areaId + " (" + dbArea.name + ") in visual display");
                     }
@@ -905,11 +980,13 @@ public class AreaSyncManager {
     private void removeVisualZone(nurgling.NMapView mapView, int areaId) {
         nurgling.areas.NArea area = mapView.glob.map.areas.get(areaId);
         if (area != null) {
-            // Удаляем overlay
-            nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);
-            if (nol != null) {
-                nol.remove();
-                mapView.nols.remove(areaId);
+            // Удаляем overlay (синхронизируем доступ к nols)
+            synchronized (mapView.nols) {
+                nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);
+                if (nol != null) {
+                    nol.remove();
+                    mapView.nols.remove(areaId);
+                }
             }
             
             // Удаляем dummy

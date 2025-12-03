@@ -216,7 +216,7 @@
     <copy todir="bin/" file="etc/sqlite-jdbc-3.49.1.0.jar" />
   </target>
 
-  <target name="pre-release" depends="build-env, jar, extlib/jogl">
+  <target name="pre-release" depends="build-env, jar, extlib/jogl, extlib/lwjgl-gl, extlib/steamworks, res-jar, resources">
     <copy todir="release" failonerror="false" quiet="true">
       <file name="lib/ext/builtin-res.jar" />
       <file name="lib/ext/hafen-res.jar" />

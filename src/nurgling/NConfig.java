@@ -148,7 +148,13 @@ public class NConfig
         alwaysObfuscate,
         boughbeeprop,
         foragerprop,
-        buttonStyle
+        buttonStyle,
+        treeFinderEnabled,
+        treeFinderSaveToMap,
+        treeFinderSaveToMapMinGrowth,
+        treeFinderShowNotification,
+        treeFinderShowNotificationMinGrowth,
+        treeFinderNotificationAutoCloseTime
     }
 
     public enum BBDisplayMode
@@ -203,7 +209,7 @@ public class NConfig
         conf.put(Key.showView, false);
         conf.put(Key.disableWinAnim, true);
         conf.put(Key.disableMenugridKeys, false);
-        conf.put(Key.baseurl, " https://raw.githubusercontent.com/Katodiy/nurgling-release/master/ver");
+        conf.put(Key.baseurl, " https://raw.githubusercontent.com/Lanfir7/nurgling2-lanfir/master/release/ver");
         conf.put(Key.miningol, true);
         conf.put(Key.crime, false);
         conf.put(Key.tracking, false);
@@ -394,6 +400,14 @@ public class NConfig
         
         // Auth obfuscation - bypass firewall blocks
         conf.put(Key.alwaysObfuscate, false);
+        
+        // Tree Finder settings
+        conf.put(Key.treeFinderEnabled, false);
+        conf.put(Key.treeFinderSaveToMap, true);
+        conf.put(Key.treeFinderSaveToMapMinGrowth, 100);  // Default 100%
+        conf.put(Key.treeFinderShowNotification, true);
+        conf.put(Key.treeFinderShowNotificationMinGrowth, 100);  // Default 100%
+        conf.put(Key.treeFinderNotificationAutoCloseTime, 30);  // Default 30 seconds
     }
 
 

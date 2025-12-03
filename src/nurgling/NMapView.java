@@ -296,6 +296,11 @@ public class NMapView extends MapView
             dummy.addcustomol(new NAreaLabel(dummy, area));
             dummys.put(dummy.id, dummy);
             glob.oc.add(dummy);
+            
+            // ВАЖНО: Создаем overlay синхронизированно, чтобы избежать ConcurrentModificationException
+            synchronized (nols) {
+                addCustomOverlay(id);
+            }
         }
     }
 
@@ -859,8 +864,12 @@ public class NMapView extends MapView
     protected void oltick()
     {
         super.oltick();
-        for(NOverlay ol : nols.values())
-            ol.tick();
+        // ВАЖНО: Создаем копию коллекции для безопасной итерации,
+        // так как nols может изменяться из фонового потока синхронизации
+        synchronized (nols) {
+            for(NOverlay ol : new ArrayList<>(nols.values()))
+                ol.tick();
+        }
     }
 
     public void toggleol(String tag, boolean a)

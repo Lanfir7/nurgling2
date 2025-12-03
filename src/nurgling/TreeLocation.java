@@ -15,13 +15,19 @@ public class TreeLocation {
     private final String treeResource;    // e.g., "gfx/terobjs/trees/oak"
     private final long timestamp;         // When it was saved
     private final int quantity;           // Number of nearby trees/bushes of the same type
+    private final int growthPercent;      // Growth percentage (0-300+)
 
     public TreeLocation(long segmentId, Coord tileCoords, String treeName, String treeResource, int quantity) {
+        this(segmentId, tileCoords, treeName, treeResource, quantity, 0);
+    }
+
+    public TreeLocation(long segmentId, Coord tileCoords, String treeName, String treeResource, int quantity, int growthPercent) {
         this.segmentId = segmentId;
         this.tileCoords = tileCoords;
         this.treeName = treeName;
         this.treeResource = treeResource;
         this.quantity = quantity;
+        this.growthPercent = growthPercent;
         this.timestamp = System.currentTimeMillis();
         this.locationId = generateLocationId(segmentId, tileCoords, treeName);
     }
@@ -34,9 +40,10 @@ public class TreeLocation {
         this.treeResource = json.getString("treeResource");
         this.timestamp = json.getLong("timestamp");
         this.quantity = json.optInt("quantity", 1);  // Default to 1 for backward compatibility
+        this.growthPercent = json.optInt("growthPercent", 0);  // Default to 0 for backward compatibility
     }
 
-    private static String generateLocationId(long segmentId, Coord tileCoords, String treeName) {
+    public static String generateLocationId(long segmentId, Coord tileCoords, String treeName) {
         return String.format("tree_%d_%d_%d_%s", segmentId, tileCoords.x, tileCoords.y,
                            treeName.replaceAll("[^a-zA-Z0-9]", "_"));
     }
@@ -51,6 +58,7 @@ public class TreeLocation {
         json.put("treeResource", treeResource);
         json.put("timestamp", timestamp);
         json.put("quantity", quantity);
+        json.put("growthPercent", growthPercent);
         return json;
     }
 
@@ -62,4 +70,5 @@ public class TreeLocation {
     public String getTreeResource() { return treeResource; }
     public long getTimestamp() { return timestamp; }
     public int getQuantity() { return quantity; }
+    public int getGrowthPercent() { return growthPercent; }
 }

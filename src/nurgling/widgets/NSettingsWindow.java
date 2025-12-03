@@ -86,6 +86,7 @@ public class NSettingsWindow extends Widget {
 
         SettingsCategory gameenvironment = new SettingsCategory("Game environment", new Panel("Game environment"), container);
         gameenvironment.addChild(new SettingsItem("World",world = new World(), container));
+        gameenvironment.addChild(new SettingsItem("Tree Finder", new TreeFinder(), container));
         gameenvironment.addChild(new SettingsItem("Animal rings", new NRingSettings(), container));
 
         SettingsCategory scenarios = new SettingsCategory("Autorunner", new Panel("Autorunner scenarios"), container);

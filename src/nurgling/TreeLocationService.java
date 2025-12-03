@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
@@ -80,6 +81,13 @@ public class TreeLocationService implements ProfileAwareService {
      * Save a tree/bush location from a tree or bush gob on the map
      */
     public void saveTreeLocation(Gob treeGob) {
+        saveTreeLocation(treeGob, 0);
+    }
+
+    /**
+     * Save a tree/bush location from a tree or bush gob on the map with growth percentage
+     */
+    public void saveTreeLocation(Gob treeGob, int growthPercent) {
         try {
             if (gui.map == null) return;
 
@@ -99,7 +107,23 @@ public class TreeLocationService implements ProfileAwareService {
             MCache.Grid grid = mcache.getgrid(gridCoord);
 
             MapFile mapFile = gui.mmap.file;
-            MapFile.GridInfo info = mapFile.gridinfo.get(grid.id);
+            // ВАЖНО: Получаем read lock перед доступом к gridinfo с таймаутом
+            MapFile.GridInfo info = null;
+            boolean lockAcquired = false;
+            try {
+                lockAcquired = mapFile.lock.readLock().tryLock(100, TimeUnit.MILLISECONDS);
+                if (!lockAcquired) {
+                    return; // Не можем получить блокировку в течение 100ms, пропускаем сохранение
+                }
+                info = mapFile.gridinfo.get(grid.id);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return; // Прервано, пропускаем сохранение
+            } finally {
+                if (lockAcquired) {
+                    mapFile.lock.readLock().unlock();
+                }
+            }
             if (info == null) return;
 
             long segmentId = info.seg;
@@ -107,15 +131,33 @@ public class TreeLocationService implements ProfileAwareService {
             // Calculate segment-relative coordinate (same as SMarker creation in MiniMap.java:773)
             Coord segmentCoord = tc.add(info.sc.sub(grid.gc).mul(MCache.cmaps));
 
+            // ВАЖНО: Проверяем, не сохранено ли уже это дерево, чтобы избежать повторного сохранения
+            // Это особенно важно после сбора семян, когда дерево "пересоздается"
+            lock.readLock().lock();
+            try {
+                String locationId = TreeLocation.generateLocationId(segmentId, segmentCoord, treeName);
+                if (treeLocations.containsKey(locationId)) {
+                    return; // Дерево уже сохранено, не сохраняем повторно
+                }
+            } finally {
+                lock.readLock().unlock();
+            }
+
             // Count nearby trees/bushes of the same type
             int quantity = countNearbyTrees(treeGob, treeResource);
 
             lock.writeLock().lock();
             try {
-                TreeLocation location = new TreeLocation(segmentId, segmentCoord, treeName, treeResource, quantity);
+                // Повторная проверка после получения write lock (double-check pattern)
+                String locationId = TreeLocation.generateLocationId(segmentId, segmentCoord, treeName);
+                if (treeLocations.containsKey(locationId)) {
+                    return; // Дерево уже сохранено другим потоком
+                }
+                
+                TreeLocation location = new TreeLocation(segmentId, segmentCoord, treeName, treeResource, quantity, growthPercent);
                 treeLocations.put(location.getLocationId(), location);
                 saveTreeLocations();
-                gui.msg("Saved " + treeName + " location (quantity: " + quantity + ")", java.awt.Color.GREEN);
+                // Removed chat message to avoid spam - notification window is used instead
             } finally {
                 lock.writeLock().unlock();
             }
@@ -123,6 +165,60 @@ public class TreeLocationService implements ProfileAwareService {
         } catch (Exception e) {
             System.err.println("Error saving tree location: " + e);
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Check if a tree location already exists at the given coordinates
+     */
+    public boolean treeLocationExists(Gob treeGob) {
+        try {
+            if (gui.map == null) return false;
+
+            String res = treeGob.ngob.name;
+            if (res == null || (!res.startsWith("gfx/terobjs/trees/") && !res.startsWith("gfx/terobjs/bushes/"))) {
+                return false;
+            }
+
+            String treeName = getTreeName(res);
+
+            MCache mcache = gui.map.glob.map;
+            Coord tc = treeGob.rc.floor(MCache.tilesz);
+            Coord gridCoord = tc.div(MCache.cmaps);
+            MCache.Grid grid = mcache.getgrid(gridCoord);
+
+            MapFile mapFile = gui.mmap.file;
+            // ВАЖНО: Получаем read lock перед доступом к gridinfo с таймаутом
+            MapFile.GridInfo info = null;
+            boolean lockAcquired = false;
+            try {
+                lockAcquired = mapFile.lock.readLock().tryLock(100, TimeUnit.MILLISECONDS);
+                if (!lockAcquired) {
+                    return false; // Не можем получить блокировку в течение 100ms, считаем что дерево не сохранено
+                }
+                info = mapFile.gridinfo.get(grid.id);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false; // Прервано, считаем что дерево не сохранено
+            } finally {
+                if (lockAcquired) {
+                    mapFile.lock.readLock().unlock();
+                }
+            }
+            if (info == null) return false;
+
+            long segmentId = info.seg;
+            Coord segmentCoord = tc.add(info.sc.sub(grid.gc).mul(MCache.cmaps));
+
+            lock.readLock().lock();
+            try {
+                String locationId = TreeLocation.generateLocationId(segmentId, segmentCoord, treeName);
+                return treeLocations.containsKey(locationId);
+            } finally {
+                lock.readLock().unlock();
+            }
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -141,7 +237,7 @@ public class TreeLocationService implements ProfileAwareService {
      * e.g., "gfx/terobjs/trees/oak" -> "Oak Tree"
      * e.g., "gfx/terobjs/bushes/arrowwood" -> "Arrowwood Bush"
      */
-    private String getTreeName(String resourcePath) {
+    public String getTreeName(String resourcePath) {
         boolean isTree = resourcePath.startsWith("gfx/terobjs/trees/");
         boolean isBush = resourcePath.startsWith("gfx/terobjs/bushes/");
 

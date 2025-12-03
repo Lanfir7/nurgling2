@@ -1521,6 +1521,28 @@ public class NMiniMap extends MiniMap {
                     int targetSize = UI.scale(18);
                     g.aimage(tex, screenPos, 0.5, 0.5, UI.scale(targetSize * tex.sz().x / dsz, targetSize * tex.sz().y / dsz));
 
+                    // Draw tree name and growth percentage if growth > 0
+                    int growthPercent = treeLoc.getGrowthPercent();
+                    if (growthPercent > 0) {
+                        String labelText =  growthPercent + "%";
+                        
+                        // Create text with border (similar to resource timers)
+                        Text.Furnace labelFurnace = new PUtils.BlurFurn(
+                            new Text.Foundry(Text.dfont, UI.scale(9), Color.WHITE).aa(true),
+                            2, 1, Color.BLACK
+                        );
+                        Text labelDisplay = labelFurnace.render(labelText);
+                        
+                        // Position text below the tree icon
+                        Coord textPos = screenPos.add(-labelDisplay.sz().x / 2, targetSize / 2 + UI.scale(5));
+                        
+                        // Only draw text if it fits on screen
+                        if (textPos.x >= 0 && textPos.x + labelDisplay.sz().x <= sz.x &&
+                            textPos.y >= 0 && textPos.y + labelDisplay.sz().y <= sz.y) {
+                            g.image(labelDisplay.tex(), textPos);
+                        }
+                    }
+
                 } catch (Exception e) {
                     // Fallback: draw green circle if icon fails
                     g.chcolor(34, 139, 34, 255);
@@ -1699,10 +1721,14 @@ public class NMiniMap extends MiniMap {
                         String locationId = loc.getLocationId();
                         TreeLocationDetailsWindow existingWnd = gui.openTreeDetailWindows.get(locationId);
 
-                        if(existingWnd != null && existingWnd.visible()) {
+                        if(existingWnd != null && existingWnd.visible() && existingWnd.parent != null) {
                             // Window already exists and is visible, just raise it
                             existingWnd.raise();
                         } else {
+                            // Remove stale reference if window was closed
+                            if(existingWnd != null && (existingWnd.parent == null || !existingWnd.visible())) {
+                                gui.openTreeDetailWindows.remove(locationId);
+                            }
                             // Create new window and track it
                             TreeLocationDetailsWindow detailsWnd = new TreeLocationDetailsWindow(loc, gui);
                             gui.add(detailsWnd, new Coord(100, 100));
@@ -1731,10 +1757,14 @@ public class NMiniMap extends MiniMap {
                         String locationId = loc.getLocationId();
                         FishLocationDetailsWindow existingWnd = gui.openFishDetailWindows.get(locationId);
 
-                        if(existingWnd != null && existingWnd.visible()) {
+                        if(existingWnd != null && existingWnd.visible() && existingWnd.parent != null) {
                             // Window already exists and is visible, just raise it
                             existingWnd.raise();
                         } else {
+                            // Remove stale reference if window was closed
+                            if(existingWnd != null && (existingWnd.parent == null || !existingWnd.visible())) {
+                                gui.openFishDetailWindows.remove(locationId);
+                            }
                             // Create new window and track it
                             FishLocationDetailsWindow detailsWnd = new FishLocationDetailsWindow(loc, gui);
                             gui.add(detailsWnd, new Coord(100, 100));

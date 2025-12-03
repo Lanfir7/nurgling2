@@ -444,7 +444,11 @@ public class NGob
     {
         if (name != null && parent.getattr(TreeScale.class) != null)
         {
-            parent.addcustomol(new NTreeScaleOl(parent));
+            // Check if overlay already exists to avoid duplicate creation
+            if (parent.findol(nurgling.overlays.NTreeScaleOl.class) == null) {
+                parent.addcustomol(new NTreeScaleOl(parent));
+            }
+            // Note: Tree Finder check is done in NTreeScaleOl constructor to avoid duplicate calls
         }
     }
     
