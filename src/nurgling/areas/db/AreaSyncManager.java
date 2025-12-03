@@ -523,17 +523,45 @@ public class AreaSyncManager {
         // Правило: принимаем более новую версию
         if (server.lastUpdated > local.lastUpdated) {
             // Сервер новее - обновляем локальную зону
+            System.out.println("AreaSyncManager: Server zone is newer. Merging zone " + local.id + 
+                             " (local name: " + local.name + ", server name: " + server.name + 
+                             ", local lastUpdated: " + local.lastUpdated + ", server lastUpdated: " + server.lastUpdated + ")");
+            
+            // Сохраняем оригинальное lastUpdated с сервера перед merge
+            long serverLastUpdated = server.lastUpdated;
+            String serverName = server.name; // Сохраняем новое имя с сервера
+            
             mergeZoneData(local, server);
+            
+            // ВАЖНО: После merge устанавливаем synced = false, чтобы saveArea() правильно определил изменения
+            // Это гарантирует, что hasAreaChanged() обнаружит изменения и обновит имя в БД
+            local.synced = false;
+            
             try {
+                // Сохраняем зону в БД - это обновит имя и другие поля
+                // saveArea() установит lastUpdated = System.currentTimeMillis() при hasChanges=true
                 dbManager.saveArea(local);
+                
+                // ВАЖНО: Восстанавливаем server.lastUpdated после сохранения,
+                // так как saveArea() установил System.currentTimeMillis() при hasChanges=true
+                // Но мы хотим сохранить время с сервера для правильной синхронизации
+                local.lastUpdated = serverLastUpdated;
+                local.synced = true;
+                
+                // ВАЖНО: Обновляем имя и updated_at в БД напрямую, чтобы гарантировать,
+                // что имя сохранится даже если saveArea() не обновил его
+                updateAreaNameAndTimestamp(local.id, serverName, serverLastUpdated, dbManager);
+                
                 syncedZones.put(local.uuid, local.lastUpdated);
                 
                 // Сохраняем last_sync_at в БД
                 updateLastSyncAt(local.uuid, local.lastUpdated, dbManager);
                 
+                System.out.println("AreaSyncManager: Successfully merged zone " + local.id + " (new name: " + local.name + ", lastUpdated: " + local.lastUpdated + ")");
                 return true;
             } catch (Exception e) {
                 System.err.println("AreaSyncManager: Failed to merge zone: " + e.getMessage());
+                e.printStackTrace();
                 return false;
             }
         } else if (local.lastUpdated > server.lastUpdated) {
@@ -736,6 +764,39 @@ public class AreaSyncManager {
     }
     
     /**
+     * Обновляет имя и updated_at для зоны в БД напрямую
+     */
+    private void updateAreaNameAndTimestamp(int areaId, String name, long timestamp, AreaDBManager dbManager) {
+        try {
+            nurgling.areas.storage.DatabaseConnectionManager poolManager = dbManager.getPoolManager();
+            java.sql.Connection conn = poolManager.getConnection();
+            if (conn != null) {
+                try {
+                    String sql = "UPDATE areas SET name = ?, updated_at = ? WHERE id = ?";
+                    try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        stmt.setString(1, name);
+                        java.sql.Timestamp ts = new java.sql.Timestamp(timestamp);
+                        stmt.setTimestamp(2, ts);
+                        stmt.setInt(3, areaId);
+                        int rowsUpdated = stmt.executeUpdate();
+                        if (rowsUpdated > 0) {
+                            System.out.println("AreaSyncManager: Updated zone " + areaId + " name to '" + name + "' and timestamp to " + timestamp + " in DB");
+                        } else {
+                            System.err.println("AreaSyncManager: WARNING - Zone " + areaId + " not found for name/timestamp update");
+                        }
+                    }
+                    conn.commit();
+                } finally {
+                    conn.close();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("AreaSyncManager: Failed to update name and timestamp for zone " + areaId + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
      * Обновляет last_sync_at в БД для зоны после успешной синхронизации
      */
     private void updateLastSyncAt(String uuid, long syncTime, AreaDBManager dbManager) {
@@ -763,6 +824,42 @@ public class AreaSyncManager {
         } catch (Exception e) {
             // Не критично, просто логируем
             System.err.println("AreaSyncManager: Failed to update last_sync_at for zone " + uuid + ": " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Обновляет одну зону в памяти (glob.map.areas) после merge
+     */
+    private void updateZoneInMemory(int areaId, NArea updatedArea) {
+        try {
+            if (nurgling.NUtils.getGameUI() == null || nurgling.NUtils.getGameUI().map == null) {
+                return;
+            }
+            
+            nurgling.NMapView mapView = (nurgling.NMapView) nurgling.NUtils.getGameUI().map;
+            
+            synchronized (mapView.glob.map.areas) {
+                nurgling.areas.NArea existingArea = mapView.glob.map.areas.get(areaId);
+                if (existingArea != null) {
+                    // Обновляем данные существующей зоны
+                    updateAreaData(existingArea, updatedArea);
+                    System.out.println("AreaSyncManager: Updated zone " + areaId + " (" + updatedArea.name + ") in memory after merge");
+                } else {
+                    // Зона не найдена в памяти - добавляем
+                    mapView.glob.map.areas.put(areaId, updatedArea);
+                    System.out.println("AreaSyncManager: Added zone " + areaId + " (" + updatedArea.name + ") to memory after merge");
+                }
+            }
+            
+            // Обновляем виджет зон, если он открыт
+            if (nurgling.NUtils.getGameUI().areas != null && nurgling.NUtils.getGameUI().areas.visible()) {
+                nurgling.NConfig.needAreasUpdate();
+                nurgling.NUtils.getGameUI().areas.showPath(nurgling.NUtils.getGameUI().areas.currentPath);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("AreaSyncManager: Failed to update zone in memory: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
@@ -1022,4 +1119,13 @@ public class AreaSyncManager {
             
             // Удаляем из areas widget
             if (nurgling.NUtils.getGameUI().areas != null) {
-                nurgling.NUtils.getGame
+                nurgling.NUtils.getGameUI().areas.removeArea(areaId);
+            }
+            
+            // Удаляем из glob.map.areas
+            mapView.glob.map.areas.remove(areaId);
+            
+            System.out.println("AreaSyncManager: Removed zone " + areaId + " from visual display");
+        }
+    }
+}
