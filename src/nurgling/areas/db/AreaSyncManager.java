@@ -406,6 +406,15 @@ public class AreaSyncManager {
         
         // Создаем множество UUID зон, полученных с сервера
         Set<String> serverUuids = new HashSet<>();
+        // ВАЖНО: Отслеживаем созданные ID в текущей синхронизации,
+        // чтобы не присваивать одинаковые ID нескольким новым зонам
+        Set<Integer> createdIds = new HashSet<>();
+        int maxExistingId = 0;
+        for (NArea area : localAreas) {
+            if (area.id > maxExistingId) {
+                maxExistingId = area.id;
+            }
+        }
         
         for (NArea serverZone : serverZones) {
             // Пропускаем зоны без UUID (уже отфильтровано в serverJsonToArea)
@@ -421,15 +430,45 @@ public class AreaSyncManager {
             
             if (localZone == null) {
                 // Новая зона с сервера - создаем локально
-                // Нужно найти свободный ID
-                int newId = findNextAvailableId(localAreas);
-                serverZone.id = newId;
+                // ВАЖНО: Находим свободный ID, учитывая уже созданные зоны в этой синхронизации
+                int newId = maxExistingId + 1;
+                // Проверяем, не занят ли ID
+                boolean idExists = createdIds.contains(newId);
+                if (!idExists) {
+                    for (NArea area : localAreas) {
+                        if (area.id == newId) {
+                            idExists = true;
+                            break;
+                        }
+                    }
+                }
+                while (idExists) {
+                    newId++;
+                    idExists = createdIds.contains(newId);
+                    if (!idExists) {
+                        for (NArea area : localAreas) {
+                            if (area.id == newId) {
+                                idExists = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                final int finalNewId = newId; // Делаем final для использования в лямбде
+                serverZone.id = finalNewId;
+                createdIds.add(finalNewId);
+                if (finalNewId > maxExistingId) {
+                    maxExistingId = finalNewId;
+                }
                 serverZone.synced = true;
                 
                 try {
                     dbManager.saveArea(serverZone);
                     uuidToAreaId.put(serverZone.uuid, serverZone.id);
                     syncedZones.put(serverZone.uuid, serverZone.lastUpdated);
+                    
+                    // ВАЖНО: Добавляем созданную зону в localAreas, чтобы следующие зоны учитывали её ID
+                    localAreas.add(serverZone);
                     
                     // Сохраняем last_sync_at в БД
                     updateLastSyncAt(serverZone.uuid, serverZone.lastUpdated, dbManager);

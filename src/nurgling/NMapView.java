@@ -298,8 +298,11 @@ public class NMapView extends MapView
             glob.oc.add(dummy);
             
             // ВАЖНО: Создаем overlay синхронизированно, чтобы избежать ConcurrentModificationException
+            // Проверяем, не создан ли уже overlay для этой зоны
             synchronized (nols) {
-                addCustomOverlay(id);
+                if (!nols.containsKey(id)) {
+                    addCustomOverlay(id);
+                }
             }
         }
     }
