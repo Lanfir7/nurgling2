@@ -24,3 +24,5 @@ build.bat
 .vscode/tasks.json
 .vscode/settings.json
 /.vscode
+Areas.db
+Areas.db-wal

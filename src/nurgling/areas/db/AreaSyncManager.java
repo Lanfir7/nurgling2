@@ -463,12 +463,14 @@ public class AreaSyncManager {
                 serverZone.synced = true;
                 
                 try {
-                    dbManager.saveArea(serverZone);
+                    // ВАЖНО: Используем saveAreaNoThrottle, чтобы гарантировать сохранение,
+                    // даже если есть throttling
+                    dbManager.saveAreaNoThrottle(serverZone);
                     uuidToAreaId.put(serverZone.uuid, serverZone.id);
                     syncedZones.put(serverZone.uuid, serverZone.lastUpdated);
                     
-                    // ВАЖНО: Добавляем созданную зону в localAreas, чтобы следующие зоны учитывали её ID
-                    localAreas.add(serverZone);
+                    // ВАЖНО: НЕ добавляем в localAreas, так как это может быть неизменяемая коллекция
+                    // Вместо этого используем createdIds для отслеживания созданных ID
                     
                     // Сохраняем last_sync_at в БД
                     updateLastSyncAt(serverZone.uuid, serverZone.lastUpdated, dbManager);
@@ -478,8 +480,16 @@ public class AreaSyncManager {
                                      (serverZone.name != null ? serverZone.name : "unknown") + 
                                      ") from server (UUID: " + serverZone.uuid + ")");
                 } catch (Exception e) {
-                    System.err.println("AreaSyncManager: Failed to create zone from server: " + e.getMessage());
+                    System.err.println("AreaSyncManager: Failed to create zone from server (UUID: " + 
+                                     (serverZone.uuid != null ? serverZone.uuid : "unknown") + 
+                                     ", attempted ID: " + finalNewId + "): " + e.getMessage());
                     e.printStackTrace();
+                    // ВАЖНО: Продолжаем обработку остальных зон, даже если одна не создалась
+                    // Освобождаем ID, чтобы он мог быть использован снова
+                    createdIds.remove(finalNewId);
+                    skipped++;
+                    // Продолжаем цикл для следующей зоны
+                    continue;
                 }
             } else {
                 // Зона существует локально - разрешаем конфликт
