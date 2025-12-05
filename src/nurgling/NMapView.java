@@ -416,6 +416,13 @@ public class NMapView extends MapView
 
             // For simple inspect, only show gob and tile
             if (simpleInspect && !debugMode) {
+                // Show tree/bush name first if available
+                String nameValue = ttip.get("name");
+                if (nameValue != null && !nameValue.isEmpty()) {
+                    BufferedImage name = RichText.render(String.format("$col[128,128,255]{%s}:", "Name"), 0).img;
+                    imgs.add(name);
+                    imgs.add(RichText.render(nameValue, 0).img);
+                }
                 String gobValue = ttip.get("gob");
                 if (gobValue != null && !gobValue.isEmpty()) {
                     BufferedImage gob = RichText.render(String.format("$col[128,128,255]{%s}:", "Gob"), 0).img;
@@ -564,7 +571,22 @@ public class NMapView extends MapView
                 if (inf != null) {
                     Gob gob = Gob.from(inf.ci);
                     if (gob != null && gob.ngob.name != null) {
-                        ttip.put("gob", gob.ngob.name);
+                        String resourceName = gob.ngob.name;
+                        ttip.put("gob", resourceName);
+                        
+                        // Check if it's a tree or bush and add friendly name
+                        if (resourceName.startsWith("gfx/terobjs/trees/") || resourceName.startsWith("gfx/terobjs/bushes/")) {
+                            // Exclude logs and stumps
+                            if (!resourceName.contains("log") && !resourceName.contains("stump") && !resourceName.contains("trunk")) {
+                                NGameUI gui = NUtils.getGameUI();
+                                if (gui != null && gui.treeLocationService != null) {
+                                    String treeName = gui.treeLocationService.getTreeName(resourceName);
+                                    if (treeName != null && !treeName.equals("Unknown")) {
+                                        ttip.put("name", treeName);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 

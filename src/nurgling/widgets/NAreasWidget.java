@@ -452,6 +452,18 @@ public class NAreasWidget extends Window
                 return true;
             }
             else if (ev.b == 1) {
+                // SHIFT + ЛКМ - автоматическое переименование зоны
+                if (ui.modshift && area != null && !isDir) {
+                    String newName = getAutoNameForZone(area);
+                    if (newName != null && !newName.isEmpty()) {
+                        ((NMapView)NUtils.getGameUI().map).changeAreaName(area.id, newName);
+                        // Обновляем текст в виджете
+                        text.settext(newName);
+                        NConfig.needAreasUpdate();
+                        return true;
+                    }
+                }
+                
                 if (!isDir)
                     if(area != null)
                     {
@@ -466,6 +478,52 @@ public class NAreasWidget extends Window
                     showPath(currentPath + "/" + text.text());
             }
             return super.mousedown(ev);
+        }
+        
+        /**
+         * Получает автоматическое название для зоны из INPUT, OUTPUT или специализации
+         * Приоритет: INPUT > OUTPUT > специализация
+         */
+        private String getAutoNameForZone(NArea area) {
+            // 1. Проверяем INPUT (jin)
+            if (area.jin != null && area.jin.length() > 0) {
+                try {
+                    JSONObject firstInput = area.jin.getJSONObject(0);
+                    if (firstInput.has("name")) {
+                        String name = firstInput.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            return name;
+                        }
+                    }
+                } catch (Exception e) {
+                    // Игнорируем ошибки парсинга
+                }
+            }
+            
+            // 2. Проверяем OUTPUT (jout)
+            if (area.jout != null && area.jout.length() > 0) {
+                try {
+                    JSONObject firstOutput = area.jout.getJSONObject(0);
+                    if (firstOutput.has("name")) {
+                        String name = firstOutput.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            return name;
+                        }
+                    }
+                } catch (Exception e) {
+                    // Игнорируем ошибки парсинга
+                }
+            }
+            
+            // 3. Проверяем специализацию (spec)
+            if (area.spec != null && !area.spec.isEmpty()) {
+                NArea.Specialisation firstSpec = area.spec.get(0);
+                if (firstSpec != null && firstSpec.name != null && !firstSpec.name.isEmpty()) {
+                    return firstSpec.name;
+                }
+            }
+            
+            return null; // Не найдено подходящее название
         }
 
 
