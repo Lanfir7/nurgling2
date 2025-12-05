@@ -603,8 +603,9 @@ public class AreaSyncManager {
             
             try {
                 // Сохраняем зону в БД - это обновит ВСЕ поля (имя, цвет, координаты, специализации)
+                // ВАЖНО: сохраняем без троттлинга, чтобы не пропустить изменения с сервера
                 // saveArea() установит lastUpdated = System.currentTimeMillis() при hasChanges=true
-                dbManager.saveArea(local);
+                dbManager.saveAreaNoThrottle(local);
                 System.out.println("AreaSyncManager: Saved zone " + local.id + " to DB with all fields (name, color, space, spec, etc.)");
                 
                 // ВАЖНО: Восстанавливаем server.lastUpdated после сохранения,

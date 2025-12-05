@@ -35,6 +35,28 @@ public class AreaDBManager {
         // Инициализация будет выполнена при первом использовании
     }
     
+    /**
+     * Сохраняет зону без троттлинга (используется при получении обновлений с сервера),
+     * чтобы не пропускать изменения, пришедшие извне.
+     */
+    public void saveAreaNoThrottle(NArea area) {
+        try {
+            getActiveStorage().saveArea(area);
+
+            // Обновляем счетчики сохранений, чтобы внутренняя логика оставалась консистентной
+            long now = System.currentTimeMillis();
+            lastSaveTime = now;
+            lastSavedAreas.put(area.id, now);
+
+            // При получении с сервера не инициируем обратную отправку (push) —
+            // иначе можем вызвать ненужный круговой трафик.
+        } catch (AreaStorage.StorageException e) {
+            if (!e.getMessage().contains("locked") && !e.getMessage().contains("BUSY")) {
+                System.err.println("AreaDBManager: Failed to save (no throttle) area " + area.id + ": " + e.getMessage());
+            }
+        }
+    }
+    
     public static synchronized AreaDBManager getInstance() {
         if (instance == null) {
             instance = new AreaDBManager();
