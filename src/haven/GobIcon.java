@@ -28,7 +28,6 @@ package haven;
 
 import nurgling.NStyle;
 import nurgling.NUtils;
-import nurgling.tools.NParser;
 
 import java.util.*;
 import java.util.function.*;
@@ -370,12 +369,23 @@ public class GobIcon extends GAttrib {
 	public Setting get(Icon icon) {
 		Setting.ID sid = new Setting.ID(icon.res.name, icon.id());
 		Resource.Saved sres;
-		if(!settings.containsKey(sid) && icon.owner instanceof Gob && (sres = NStyle.iconMap.get(((Gob)icon.owner).ngob.name))!=null) {
-			Setting set = new Setting(icon, new ResID(sres, new byte[0]));
+		Setting set = settings.get(sid);
+		if(set == null && icon.owner instanceof Gob && (sres = NStyle.iconMap.get(((Gob)icon.owner).ngob.name))!=null) {
+			set = new Setting(icon, new ResID(sres, new byte[0]));
 			set.icon = icon;
 			settings.put(sid, set);
 		}
-		return(settings.get(sid));
+		// Устанавливаем звук по умолчанию для агрессивных животных, если звук еще не установлен
+		if(set != null && isAggressiveAnimal(icon.res.name) && set.filens == null && set.resns == null) {
+			Path defaultSound = getDefaultSoundForAnimal(icon.res.name);
+			if(defaultSound != null) {
+				set.filens = defaultSound;
+				// Включаем оповещение по умолчанию для агрессивных животных
+				set.notify = true;
+				dsave();
+			}
+		}
+		return(set);
 	}
 
 	public static class ResID {
@@ -449,10 +459,28 @@ public class GobIcon extends GAttrib {
 				merge(set, prev);
 			    else
 				advbuf.add(icon);
+			    // Устанавливаем звук по умолчанию для агрессивных животных, если звук еще не установлен
+			    if(isAggressiveAnimal(icon.res.name) && set.filens == null && set.resns == null) {
+				Path defaultSound = getDefaultSoundForAnimal(icon.res.name);
+				if(defaultSound != null) {
+				    set.filens = defaultSound;
+				    // Включаем оповещение по умолчанию для агрессивных животных
+				    set.notify = true;
+				}
+			    }
 			    nset.put(set.id, set);
 			} else if(prev.icon == null) {
 			    // Update icon if prev version matches but icon wasn't loaded yet
 			    prev.icon = icon;
+			    // Устанавливаем звук по умолчанию для агрессивных животных, если звук еще не установлен
+			    if(isAggressiveAnimal(icon.res.name) && prev.filens == null && prev.resns == null) {
+				Path defaultSound = getDefaultSoundForAnimal(icon.res.name);
+				if(defaultSound != null) {
+				    prev.filens = defaultSound;
+				    // Включаем оповещение по умолчанию для агрессивных животных
+				    prev.notify = true;
+				}
+			    }
 			}
 		    }
 		    Collection<Setting> sets = resolve.remove(r);
@@ -465,6 +493,15 @@ public class GobIcon extends GAttrib {
 				Icon loadedIcon = iconMap.get(conf.id);
 				if(set.icon == null && loadedIcon != null)
 				    set.icon = loadedIcon;
+				// Устанавливаем звук по умолчанию для агрессивных животных, если звук еще не установлен
+				if(set.icon != null && isAggressiveAnimal(set.icon.res.name) && set.filens == null && set.resns == null) {
+				    Path defaultSound = getDefaultSoundForAnimal(set.icon.res.name);
+				    if(defaultSound != null) {
+					set.filens = defaultSound;
+					// Включаем оповещение по умолчанию для агрессивных животных
+					set.notify = true;
+				    }
+				}
 			    }
 			}
 		    }
@@ -719,6 +756,74 @@ public class GobIcon extends GAttrib {
 	}
     }
 
+    // Маппинг агрессивных животных на звуки из AlarmSounds
+    private static final Map<String, String> aggressiveAnimalSounds = new HashMap<>();
+    static {
+	aggressiveAnimalSounds.put("gfx/kritter/bear/bear", "ND_Bear.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/boar/boar", "ND_Boar.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/wolf/wolf", "ND_Wolf.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/badger/badger", "ND_Badger.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/wolverine/wolverine", "ND_Wolverine.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/adder/adder", "ND_Snake.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/lynx/lynx", "ND_Lynx.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/mammoth/mammoth", "ND_Mammoth.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/moose/moose", "ND_Moose.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/troll/troll", "ND_Troll.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/walrus/walrus", "ND_Walrus.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/orca/orca", "ND_Orca.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/eagle/eagle", "ND_Eagle.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/eagleowl/eagleowl", "ND_EagleOwl.wav");
+	aggressiveAnimalSounds.put("gfx/kritter/greyseal/greyseal", "ND_GreySeal.wav");
+    }
+
+    // Получение пути к папке AlarmSounds
+    private static Path getAlarmSoundsPath() {
+	try {
+	    // Сначала пробуем найти рядом с базой кеша
+	    if(ResCache.global instanceof HashDirCache) {
+		Path base = ((HashDirCache)ResCache.global).base;
+		Path alarmSounds = base.resolve("..").resolve("AlarmSounds").normalize();
+		if(Files.exists(alarmSounds) && Files.isDirectory(alarmSounds))
+		    return(alarmSounds);
+	    }
+	    // Пробуем найти в корне проекта (для разработки)
+	    Path currentDir = Utils.path(System.getProperty("user.dir"));
+	    Path alarmSounds = currentDir.resolve("AlarmSounds");
+	    if(Files.exists(alarmSounds) && Files.isDirectory(alarmSounds))
+		return(alarmSounds);
+	    // Пробуем найти в AppData/Haven and Hearth
+	    String appdata = System.getenv("APPDATA");
+	    if(appdata != null) {
+		Path appdataPath = Utils.path(appdata);
+		Path alarmSoundsAppdata = appdataPath.resolve("Haven and Hearth").resolve("AlarmSounds");
+		if(Files.exists(alarmSoundsAppdata) && Files.isDirectory(alarmSoundsAppdata))
+		    return(alarmSoundsAppdata);
+	    }
+	} catch(Exception e) {
+	    // Игнорируем ошибки
+	}
+	return(null);
+    }
+
+    // Получение звука по умолчанию для агрессивного животного
+    private static Path getDefaultSoundForAnimal(String resName) {
+	String soundFile = aggressiveAnimalSounds.get(resName);
+	if(soundFile == null)
+	    return(null);
+	Path alarmSoundsPath = getAlarmSoundsPath();
+	if(alarmSoundsPath == null)
+	    return(null);
+	Path soundPath = alarmSoundsPath.resolve(soundFile);
+	if(Files.exists(soundPath) && Files.isRegularFile(soundPath))
+	    return(soundPath);
+	return(null);
+    }
+
+    // Проверка, является ли ресурс агрессивным животным
+    private static boolean isAggressiveAnimal(String resName) {
+	return(aggressiveAnimalSounds.containsKey(resName));
+    }
+
     public static class SettingsWindow extends Window {
 	public final Settings conf;
 	private final PackCont.LinPack cont;
@@ -905,6 +1010,24 @@ public class GobIcon extends GAttrib {
 		    items.add(NotificationSetting.nil);
 		    for(NotificationSetting notif : NotificationSetting.builtin)
 			items.add(notif);
+		    // Добавляем звуки из AlarmSounds
+		    Path alarmSoundsPath = getAlarmSoundsPath();
+		    if(alarmSoundsPath != null && Files.exists(alarmSoundsPath) && Files.isDirectory(alarmSoundsPath)) {
+			try {
+			    Files.list(alarmSoundsPath)
+				.filter(p -> Files.isRegularFile(p) && p.getFileName().toString().toLowerCase().endsWith(".wav"))
+				.sorted((a, b) -> a.getFileName().toString().compareToIgnoreCase(b.getFileName().toString()))
+				.forEach(p -> {
+				    String fileName = p.getFileName().toString();
+				    // Пропускаем файлы, которые уже добавлены как текущий выбор
+				    if(conf.filens == null || !conf.filens.equals(p)) {
+					items.add(new NotificationSetting(fileName.substring(0, fileName.length() - 4), p));
+				    }
+				});
+			} catch(IOException e) {
+			    // Игнорируем ошибки чтения папки
+			}
+		    }
 		    if(conf.filens != null)
 			items.add(new NotificationSetting(conf.filens));
 		    items.add(NotificationSetting.other);
