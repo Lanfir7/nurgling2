@@ -16,11 +16,11 @@ public class StackSupporter {
     static {
         // Custom stack sizes for items that differ from their category defaults
         customStackSizes.put("Earthworm", 5);
-        customStackSizes.put("Itsy Bitsy Spider", 4);
-        customStackSizes.put("Cave Moth", 4);
         customStackSizes.put("Bog Turtle Shell", 1);
         customStackSizes.put("Wolf's Claw", 4);
         customStackSizes.put("Clove of Garlic", 5);
+        customStackSizes.put("Stinging Nettle", 4);
+        customStackSizes.put("Yarrow", 4);
         HashSet<String> size3 = new HashSet<>();
         size3.add("Tuber");
         size3.add("Onion");
@@ -37,7 +37,6 @@ public class StackSupporter {
         size3.add("Flour");
         size3.add("Giant Ant");
         size3.add("Royal Ant");
-        size3.add("Bug");
         size3.add("Fishline");
         size3.add("Sweetener");
         size3.add("Thatching Material");
@@ -91,6 +90,8 @@ public class StackSupporter {
         size4.add("Seed of Tree or Bush");
         size4.add("Decent-sized Conifer Cone");
         size4.add("Tree Bough");
+        size4.add("Forageable");
+        size4.add("Bug");
 
         catSize.put(size4,4);
 
@@ -164,7 +165,7 @@ public class StackSupporter {
         return false;
     }
 
-    public static int getMaxStackSize(String name)
+    public static int getFullStackSize(String name)
     {
         // Check custom stack sizes first
         if(customStackSizes.containsKey(name))
@@ -228,7 +229,7 @@ public class StackSupporter {
 
         // Check if stacking is globally enabled AND item is stackable in this inventory
         if (((NInventory) NUtils.getGameUI().maininv).bundle.a && isStackable(inventory, itemName)) {
-            int maxStackSize = getMaxStackSize(itemName);
+            int maxStackSize = getFullStackSize(itemName);
             int maxCapacity = freeSlots * maxStackSize;
             return Math.min(targetCount, maxCapacity);
         }

@@ -12,6 +12,7 @@ public class Chopper extends Window implements Checkable {
     CheckBox ngrowth = null;
     CheckBox stumps = null;
     CheckBox bushes = null;
+    CheckBox checkWounds = null;
 
     UsingTools usingTools = null;
     UsingTools usingSovels = null;
@@ -19,10 +20,12 @@ public class Chopper extends Window implements Checkable {
     public Chopper() {
         super(new Coord(200,200), "Chopper");
         NChopperProp startprop = NChopperProp.get(NUtils.getUI().sessInfo);
+        if (startprop == null) startprop = new NChopperProp("", "");
+        final NChopperProp finalStartprop = startprop;
         prev = add(new Label("Chopper Settings:"));
         prev = add(stumps = new CheckBox("Uproot stumps"){
             {
-                a = startprop.stumps;
+                a = finalStartprop.stumps;
             }
             @Override
             public void set(boolean a) {
@@ -37,7 +40,7 @@ public class Chopper extends Window implements Checkable {
 
         prev = add(bushes = new CheckBox("Сut down bushes"){
             {
-                a = startprop.bushes;
+                a = finalStartprop.bushes;
             }
             @Override
             public void set(boolean a) {
@@ -50,7 +53,7 @@ public class Chopper extends Window implements Checkable {
         prev = add(ngrowth = new CheckBox("Ignore the growth")
         {
             {
-                a = startprop.ngrowth;
+                a = finalStartprop.ngrowth;
             }
             @Override
             public void set(boolean a) {
@@ -62,7 +65,7 @@ public class Chopper extends Window implements Checkable {
         prev = add(autorefill = new CheckBox("Auto refill water-containers")
         {
             {
-                a = startprop.autorefill;
+                a = finalStartprop.autorefill;
             }
             @Override
             public void set(boolean a) {
@@ -74,7 +77,19 @@ public class Chopper extends Window implements Checkable {
         prev = add(autoeat = new CheckBox("Eat from inventory")
         {
             {
-                a = startprop.autoeat;
+                a = finalStartprop.autoeat;
+            }
+            @Override
+            public void set(boolean a) {
+                super.set(a);
+            }
+
+        }, prev.pos("bl").add(UI.scale(0,5)));
+
+        prev = add(checkWounds = new CheckBox("Stop on Scrapes & Cuts (dmg >= 4)")
+        {
+            {
+                a = finalStartprop.checkWounds;
             }
             @Override
             public void set(boolean a) {
@@ -84,11 +99,11 @@ public class Chopper extends Window implements Checkable {
         }, prev.pos("bl").add(UI.scale(0,5)));
 
         prev = add(usingTools = new UsingTools(UsingTools.Tools.axes), prev.pos("bl").add(UI.scale(0,5)));
-        if(startprop.tool!=null)
+        if(finalStartprop.tool!=null)
         {
             for(UsingTools.Tool tl : UsingTools.Tools.axes)
             {
-                if (tl.name.equals(startprop.tool)) {
+                if (tl.name.equals(finalStartprop.tool)) {
                     usingTools.s = tl;
                     break;
                 }
@@ -97,17 +112,17 @@ public class Chopper extends Window implements Checkable {
         }
 
         add(usingSovels = new UsingTools(UsingTools.Tools.shovels, false), usingTools.pos("ur").add(UI.scale(10,usingTools.l.sz.y)));
-        if(startprop.shovel!=null)
+        if(finalStartprop.shovel!=null)
         {
             for(UsingTools.Tool tl : UsingTools.Tools.shovels)
             {
-                if (tl.name.equals(startprop.shovel)) {
+                if (tl.name.equals(finalStartprop.shovel)) {
                     usingSovels.s = tl;
                     break;
                 }
             }
         }
-        if(!startprop.stumps)
+        if(!finalStartprop.stumps)
         {
             usingSovels.hide();
         }
@@ -117,16 +132,19 @@ public class Chopper extends Window implements Checkable {
             public void click() {
                 super.click();
                 prop = NChopperProp.get(NUtils.getUI().sessInfo);
-                prop.autoeat = autoeat.a;
-                prop.autorefill = autorefill.a;
-                prop.stumps = stumps.a;
-                prop.ngrowth = ngrowth.a;
-                prop.bushes = bushes.a;
-                if(usingTools.s!=null)
-                    prop.tool = usingTools.s.name;
-                if(prop.stumps && usingSovels.s!=null)
-                    prop.shovel = usingSovels.s.name;
-                NChopperProp.set(prop);
+                if (prop != null) {
+                    prop.autoeat = autoeat.a;
+                    prop.autorefill = autorefill.a;
+                    prop.stumps = stumps.a;
+                    prop.ngrowth = ngrowth.a;
+                    prop.bushes = bushes.a;
+                    prop.checkWounds = checkWounds.a;
+                    if(usingTools.s!=null)
+                        prop.tool = usingTools.s.name;
+                    if(prop.stumps && usingSovels.s!=null)
+                        prop.shovel = usingSovels.s.name;
+                    NChopperProp.set(prop);
+                }
                 isReady = true;
             }
         }, prev.pos("bl").add(UI.scale(0,5)));

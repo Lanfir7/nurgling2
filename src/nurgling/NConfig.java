@@ -86,6 +86,7 @@ public class NConfig
         endpoint,
         automaptrack,
         unloadgreen,
+        sendOverlays,
         showInventoryNums,
         hidecredo,
         autoDrink,
@@ -97,7 +98,7 @@ public class NConfig
         questNotified, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, ndbenable, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, simplecrops,
         syncServerEnabled, syncServerUrl, syncZoneSync, syncIntervalMinutes,
-        temsmarktime, exploredAreaEnable, player_box, player_fov, temsmarkdist, tempmark, gridbox, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
+        temsmarktime, exploredAreaEnable, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         shortCupboards,
         shortWalls,
         decalsOnTop,
@@ -135,6 +136,7 @@ public class NConfig
         disableTileSmoothing,
         disableTileTransitions,
         disableCloudShadows,
+        darkenDeepOcean,
         disableDrugEffects,
         simpleInspect,
         showSpeedometer,
@@ -154,7 +156,11 @@ public class NConfig
         treeFinderSaveToMapMinGrowth,
         treeFinderShowNotification,
         treeFinderShowNotificationMinGrowth,
-        treeFinderNotificationAutoCloseTime
+        treeFinderNotificationAutoCloseTime,
+        showQuestGiverNames,
+        showThingwallNames,
+        showPartyMemberNames,
+        trackingVectors
     }
 
     public enum BBDisplayMode
@@ -225,6 +231,7 @@ public class NConfig
         conf.put(Key.autoMapper, false);
         conf.put(Key.automaptrack, false);
         conf.put(Key.unloadgreen, false);
+        conf.put(Key.sendOverlays, false);
         conf.put(Key.showInventoryNums, true);
         conf.put(Key.autoDrink, false);
         conf.put(Key.autoSaveTableware, true);
@@ -255,6 +262,7 @@ public class NConfig
         conf.put(Key.player_fov, false);
         conf.put(Key.gridbox, false);
         conf.put(Key.tempmark, false);
+        conf.put(Key.tempmarkIgnoreDist, false);
         conf.put(Key.temsmarkdist, 4);
         conf.put(Key.temsmarktime, 3);
         conf.put(Key.fonts, new FontSettings());
@@ -349,6 +357,9 @@ public class NConfig
         arearadprop.add(new NAreaRad("gfx/kritter/walrus/walrus", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/orca/orca", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/wolverine/wolverine", 100));
+        arearadprop.add(new NAreaRad("gfx/kritter/eagleowl/eagleowl", 100));
+        arearadprop.add(new NAreaRad("gfx/kritter/goldeneagle/goldeneagle", 100));
+        arearadprop.add(new NAreaRad("gfx/kritter/goat/goat", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/troll/troll", 200));
         conf.put(Key.animalrad, arearadprop);
 
@@ -386,6 +397,7 @@ public class NConfig
         conf.put(Key.disableTileSmoothing, false);
         conf.put(Key.disableTileTransitions, false);
         conf.put(Key.disableCloudShadows, false);
+        conf.put(Key.darkenDeepOcean, false);
         conf.put(Key.disableDrugEffects, true);  // Default to disabled for better performance
         
         // Parasite bot settings
@@ -408,6 +420,14 @@ public class NConfig
         conf.put(Key.treeFinderShowNotification, true);
         conf.put(Key.treeFinderShowNotificationMinGrowth, 100);  // Default 100%
         conf.put(Key.treeFinderNotificationAutoCloseTime, 30);  // Default 30 seconds
+        
+        // Map marker name display settings
+        conf.put(Key.showQuestGiverNames, true);
+        conf.put(Key.showThingwallNames, true);
+        conf.put(Key.showPartyMemberNames, true);
+        
+        // Map tracking vectors
+        conf.put(Key.trackingVectors, false);
     }
 
 

@@ -90,9 +90,6 @@ public class BotRegistry {
 
         bots.add(new BotDescriptor("pickling", BotDescriptor.BotType.PRODUCTIONS, "Pickling Bot", "Complete automated pickling system. Manages brine levels, fills jars with fresh vegetables, extracts ready pickled items, and maintains continuous production cycle.", true, true, PicklingBot.class, "pickle", true));
 
-        // Garden pot filling
-        bots.add(new BotDescriptor("gardenpot_filler", BotDescriptor.BotType.PRODUCTIONS, "Garden Pot Filler", "Fills garden pots with soil and water for planting.", true, true, GardenPotFiller.class, "gardenpot", false));
-
         // BATTLE
         bots.add(new BotDescriptor("reagro", BotDescriptor.BotType.BATTLE, "Reagro", "Reagros enemies.", true, true, Reagro.class, "reagro", false));
         bots.add(new BotDescriptor("attacknearcurs", BotDescriptor.BotType.BATTLE, "Aggro Near Cursor", "Aggros near cursor.", true, true, AggroNearCurs.class, "attacknearcurs", false));
@@ -143,6 +140,8 @@ public class BotRegistry {
         bots.add(new BotDescriptor("compostbin", BotDescriptor.BotType.FARMING, "Compost Bin", "Pull mulch out of compost bins.", true, true, CompostBinUnloader.class, "compostbin", false));
         bots.add(new BotDescriptor("curdingtub", BotDescriptor.BotType.FARMING, "Unload curding Tubs", "Pull curd out of curding tubs.", true, true, CurdingTubUnloader.class, "cheese_empty", false));
         bots.add(new BotDescriptor("cheese", BotDescriptor.BotType.FARMING, "Cheese Production Bot", "Process cheese orders.", true, true, CheeseProductionBot.class, "cheese", false));
+        // Garden pot farming (harvest, fill, plant cycle)
+        bots.add(new BotDescriptor("gardenpot_farmer", BotDescriptor.BotType.FARMING, "Garden Pot Farmer", "Complete garden pot farming cycle: harvests ready plants, fills with soil/water, and plants new items.", true, true, GardenPotFarmer.class, "gardenpot", false));
 
         // FARMING QUALITY
         bots.add(new BotDescriptor("turnipq", BotDescriptor.BotType.FARMING_QUALITY, "Turnip Farmer Quality", "Automatically harvests and replants turnips in X*Y cell patches.", true, true, TurnipsFarmerQ.class, "turnipq", false));
@@ -214,7 +213,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("test1", BotDescriptor.BotType.TOOLS, "Test 1", "Debug test 1.", false, true, TESTMapv4.class, "test1", false));
         bots.add(new BotDescriptor("test2", BotDescriptor.BotType.TOOLS, "Show Active Tasks", "Shows all active tasks in NCore.", false, true, TESTShowActiveTasks.class, "test2", false));
         bots.add(new BotDescriptor("test4", BotDescriptor.BotType.TOOLS, "Test 4", "Debug test 4.", false, true, TESTbranchinvtransferpacks.class, "test4", false));
-        bots.add(new BotDescriptor("test5", BotDescriptor.BotType.TOOLS, "Test 5", "Debug test 5.", false, true, TESTfreeStockpilesAndTransfer.class, "test5", false));
+//        bots.add(new BotDescriptor("test5", BotDescriptor.BotType.TOOLS, "Test 5", "Auxiliary deferred callback iterator for async reference validation.", false, true, TESTAuxIterProc.class, "test5", false));
         bots.add(new BotDescriptor("test7", BotDescriptor.BotType.TOOLS, "Test 7", "Debug test 7.", false, true, TESTselectfloweraction.class, "test7", false));
         bots.add(new BotDescriptor("test8", BotDescriptor.BotType.TOOLS, "Test 8", "Debug test 8.", false, true, TESTpf.class, "test8", false));
         bots.add(new BotDescriptor("test9", BotDescriptor.BotType.TOOLS, "Test 9", "Debug test 9.", false, true, TESTAvalaible.class, "test9", false));

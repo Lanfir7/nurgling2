@@ -1370,13 +1370,13 @@ public class VSpec {
         ArrayList<JSONObject> berries = new ArrayList<>();
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-blackberrybush\",\"name\":\"Blackberry Seed\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-blackcurrant\",\"name\":\"Blackcurrant Seed\"}"));
-        berries.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/blueberry\",\"name\":\"Blueberry\"}"));
+        berries.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/blueberry\",\"name\":\"Blueberries\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/candleberry\",\"name\":\"Candleberry\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/cherry\",\"name\":\"Cherry\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-dogrose\",\"name\":\"Dog Rose Seed\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-elderberrybush\",\"name\":\"Elderberry Seed\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-gooseberrybush\",\"name\":\"Gooseberry Seed\"}"));
-        berries.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/lingon\",\"name\":\"Lingonberry\"}"));
+        berries.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/lingon\",\"name\":\"Lingonberries\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/mulberry\",\"name\":\"Mulberry\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-raspberrybush\",\"name\":\"Raspberry Seed\"}"));
         berries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-redcurrant\",\"name\":\"Redcurrant Seed\"}"));
@@ -1426,6 +1426,13 @@ public class VSpec {
         fruits.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-sandthorn-yester\",\"name\":\"Yesteryear's Seaberry Seed\"}"));
         fruits.add(new JSONObject("{\"static\":\"gfx/invobjs/sorbapple-yester\",\"name\":\"Yesteryear's Sorb Apple Seed\"}"));
         categories.put("Fruit", fruits);
+
+        ArrayList<JSONObject> forageble = new ArrayList<>();
+        forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/blueberry\",\"name\":\"Blueberries\"}"));
+        forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/lingon\",\"name\":\"Lingonberries\"}"));
+        forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/rustroot\",\"name\":\"Rustroot\"}"));
+        forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/stingingnettle\",\"name\":\"Stinging Nettle\"}"));
+        categories.put("Forageable", forageble);
 
         ArrayList<JSONObject> fruitOrBerry = new ArrayList<>();
         fruitOrBerry.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-blackberrybush\",\"name\":\"Blackberry Seed\"}"));
@@ -2621,8 +2628,8 @@ public class VSpec {
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/plum-yester\",\"name\":\"Yesteryear's Plum\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/quince-yester\",\"name\":\"Yesteryear's Quince\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/apple-yester\",\"name\":\"Yesteryear's Red Apple\"}"));
-        seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/crabapple\",\"name\":\"Crabapple\"}"));
-        seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/crabapple-yester\",\"name\":\"Yesteryear's Crabapple\"}"));
+        seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-crabappletree\",\"name\":\"Crabapple\"}"));
+        seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-crabappletree-yester\",\"name\":\"Yesteryear's Crabapple\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/cork\",\"name\":\"Cork\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/applecore\",\"name\":\"Red Apple Core\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-maple\",\"name\":\"Maple Samara\"}"));
@@ -2873,30 +2880,34 @@ public class VSpec {
 
     public static void checkLpExplorer(Gob clickedGob, String name) {
         if(clickedGob!=null) {
-            if (clickedGob.ngob.name != null && object.containsKey(clickedGob.ngob.name)) {
-                if (object.get(clickedGob.ngob.name).contains(name)) {
-                    boolean objectExists = NUtils.getGameUI().getCharInfo().IsLpExplorerContains(clickedGob.ngob.name);
+            if (NUtils.getGameUI() != null && NUtils.getGameUI().getCharInfo() != null) {
+                if (clickedGob.ngob.name != null && object.containsKey(clickedGob.ngob.name)) {
+                    if (object.get(clickedGob.ngob.name).contains(name)) {
+                        boolean objectExists = NUtils.getGameUI().getCharInfo().IsLpExplorerContains(clickedGob.ngob.name);
 
-                    if (!objectExists) {
-                        NUtils.getGameUI().getCharInfo().LpExplorerAdd(clickedGob.ngob.name,name);
-                        NUtils.getGameUI().getCharInfo().newLpExplorer = true;
+                        if (!objectExists) {
+                            NUtils.getGameUI().getCharInfo().LpExplorerAdd(clickedGob.ngob.name,name);
+                            NUtils.getGameUI().getCharInfo().newLpExplorer = true;
 
-                    } else {
-                        int currentSize = NUtils.getGameUI().getCharInfo().LpExplorerGetSize(clickedGob.ngob.name);
-                        int totalSize = object.get(clickedGob.ngob.name).size();
-                        boolean productExists = NUtils.getGameUI().getCharInfo().IsLpExplorerContains(clickedGob.ngob.name, name);
-                        
+                        } else {
+                            int currentSize = NUtils.getGameUI().getCharInfo().LpExplorerGetSize(clickedGob.ngob.name);
+                            int totalSize = object.get(clickedGob.ngob.name).size();
+                            boolean productExists = NUtils.getGameUI().getCharInfo().IsLpExplorerContains(clickedGob.ngob.name, name);
+                            
 
-                        if (currentSize != totalSize) {
-                            if (object.get(clickedGob.ngob.name).contains(name) && !productExists) {
-                                NUtils.getGameUI().getCharInfo().LpExplorerAdd(clickedGob.ngob.name,name);
-                                NUtils.getGameUI().getCharInfo().newLpExplorer = true;
+                            if (currentSize != totalSize) {
+                                if (object.get(clickedGob.ngob.name).contains(name) && !productExists) {
+                                    NUtils.getGameUI().getCharInfo().LpExplorerAdd(clickedGob.ngob.name,name);
+                                    NUtils.getGameUI().getCharInfo().newLpExplorer = true;
+                                }
                             }
                         }
                     }
                 }
             }
-            NUtils.getGameUI().map.clickedGob = null;
+            if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+                NUtils.getGameUI().map.clickedGob = null;
+            }
         }
     }
 

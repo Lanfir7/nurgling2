@@ -21,6 +21,8 @@ public class NChopperProp implements JConf
     public boolean ngrowth = false;
     public boolean stumps = false;
     public boolean bushes = false;
+    public boolean checkWounds = false;
+    public int woundDamageThreshold = 4;
 
     public NChopperProp(String username, String chrid) {
         this.username = username;
@@ -45,6 +47,10 @@ public class NChopperProp implements JConf
             stumps = (Boolean) values.get("stumps");
         if (values.get("bushes") != null)
             bushes = (Boolean) values.get("bushes");
+        if (values.get("checkWounds") != null)
+            checkWounds = (Boolean) values.get("checkWounds");
+        if (values.get("woundDamageThreshold") != null)
+            woundDamageThreshold = ((Number) values.get("woundDamageThreshold")).intValue();
     }
 
     public static void set(NChopperProp prop)
@@ -91,21 +97,26 @@ public class NChopperProp implements JConf
         jchopper.put("ngrowth", ngrowth);
         jchopper.put("stumps", stumps);
         jchopper.put("bushes", bushes);
+        jchopper.put("checkWounds", checkWounds);
+        jchopper.put("woundDamageThreshold", woundDamageThreshold);
         return jchopper;
     }
 
     public static NChopperProp get(NUI.NSessInfo sessInfo)
     {
+        if (sessInfo == null || NUtils.getGameUI() == null || NUtils.getGameUI().getCharInfo() == null)
+            return null;
+        String chrid = NUtils.getGameUI().getCharInfo().chrid;
         ArrayList<NChopperProp> chopProps = ((ArrayList<NChopperProp>) NConfig.get(NConfig.Key.chopperprop));
         if (chopProps == null)
             chopProps = new ArrayList<>();
         for (NChopperProp prop : chopProps)
         {
-            if (prop.username.equals(sessInfo.username) && prop.chrid.equals(sessInfo.characterInfo.chrid))
+            if (prop.username.equals(sessInfo.username) && prop.chrid.equals(chrid))
             {
                 return prop;
             }
         }
-        return new NChopperProp(sessInfo.username, sessInfo.characterInfo.chrid);
+        return new NChopperProp(sessInfo.username, chrid);
     }
 }

@@ -46,6 +46,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public GobIcon.Settings iconconf;
     public MiniMap mmap;
     public Fightview fv;
+    private NDraggableWidget fightBuffsInfoWdg;
+    private NDraggableWidget fightActionsWdg;
     final protected List<Widget> meters = new LinkedList<Widget>();
 	public Speedget speedget = null;
     private Text lastmsg;
@@ -632,8 +634,17 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	} else if(place == "fsess") {
 	    NFightsess fsess = (NFightsess)child;
 	    add(fsess);
-	    add(new NDraggableWidget(fsess.buffsAndInfo, "FightBuffsInfo", fsess.buffsAndInfo.sz.add(NDraggableWidget.delta)));
-	    add(new NDraggableWidget(fsess.actionsWidget, "FightActions", fsess.actionsWidget.sz.add(NDraggableWidget.delta)));
+	    // Destroy old widgets if they exist to ensure only one instance
+	    if(fightBuffsInfoWdg != null) {
+	        fightBuffsInfoWdg.destroy();
+	        fightBuffsInfoWdg = null;
+	    }
+	    if(fightActionsWdg != null) {
+	        fightActionsWdg.destroy();
+	        fightActionsWdg = null;
+	    }
+	    fightBuffsInfoWdg = add(new NDraggableWidget(fsess.buffsAndInfo, "FightBuffsInfo", fsess.buffsAndInfo.sz.add(NDraggableWidget.delta)));
+	    fightActionsWdg = add(new NDraggableWidget(fsess.actionsWidget, "FightActions", fsess.actionsWidget.sz.add(NDraggableWidget.delta)));
 	} else if(place == "inv") {
 	    invwnd = new Hidewnd(Coord.z, "Inventory") {
 		    public void cresize(Widget ch) {
@@ -1348,6 +1359,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public static final KeyBinding kb_hide = KeyBinding.get("ui-toggle", KeyMatch.nil);
     public static final KeyBinding kb_logout = KeyBinding.get("logout", KeyMatch.nil);
     public static final KeyBinding kb_switchchr = KeyBinding.get("logout-cs", KeyMatch.nil);
+    public static final KeyBinding kb_instantLogout = KeyBinding.get("instantLogoutKB", KeyMatch.forchar('L', KeyMatch.C));
     public boolean globtype(GlobKeyEvent ev) {
 	if(ev.c == ':') {
 	    entercmd();
@@ -1363,6 +1375,9 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    return(true);
 	} else if(kb_switchchr.key().match(ev)) {
 	    act("lo", "cs");
+	    return(true);
+	} else if(kb_instantLogout.key().match(ev)) {
+	    ui.sess.close();
 	    return(true);
 	} else if((ev.c == 27) && (map != null) && !map.hasfocus) {
 	    setfocus(map);

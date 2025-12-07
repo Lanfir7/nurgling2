@@ -1,14 +1,12 @@
 package nurgling.widgets;
 
 import haven.*;
-import nurgling.NConfig;
-import nurgling.NMapView;
-import nurgling.NUtils;
-import nurgling.LocalizedResourceTimer;
-import nurgling.NGameUI;
+import haven.res.ui.obj.buddy.Buddy;
+import nurgling.*;
 import nurgling.overlays.map.MinimapClaimRenderer;
 import nurgling.overlays.map.MinimapExploredAreaRenderer;
 import nurgling.tools.ExploredArea;
+import nurgling.tools.NParser;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -16,7 +14,8 @@ import java.awt.image.BufferedImage;
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
 
-public class NMiniMap extends MiniMap {
+public class
+NMiniMap extends MiniMap {
     public static final Coord _sgridsz = new Coord(100, 100);
     public static final Coord VIEW_SZ = UI.scale(_sgridsz.mul(9).div(tilesz.floor()));
     public static final Color VIEW_EXPLORED_COLOR = new Color(255, 255, 0, 144); // Yellow semi-transparent for explored area (120 + 20% of 120 = 144)
@@ -207,7 +206,6 @@ public class NMiniMap extends MiniMap {
             drawicons(g);
         drawparty(g);
 
-
         drawtempmarks(g);
         drawterrainname(g);
         drawResourceTimers(g);
@@ -216,6 +214,41 @@ public class NMiniMap extends MiniMap {
         drawQueuedWaypoints(g);  // Draw waypoint visualization
         drawForagerRecordingPath(g);  // Draw forager path being recorded
         drawMarkerLine(g);       // Draw line to selected marker
+    }
+
+    @Override
+    public void drawparty(GOut g) {
+        for(Party.Member m : ui.sess.glob.party.memb.values()) {
+            try {
+                Coord2d ppc = m.getc();
+                if(ppc == null)
+                    continue;
+                Coord p2cppc = p2c(ppc);
+                g.chcolor(m.col.getRed(), m.col.getGreen(), m.col.getBlue(), 255);
+                g.rotimage(plp, p2cppc, plp.sz().div(2), -m.geta() - (Math.PI / 2));
+                g.chcolor();
+                
+                // Draw party member names on minimap
+                if((Boolean)NConfig.get(NConfig.Key.showPartyMemberNames)) {
+                    String name = null;
+                    if(NGameUI.gobIdToKinName.containsKey(m.gobid)) {
+                        name = NGameUI.gobIdToKinName.get(m.gobid);
+                    } else if(m.getgob() != null) {
+                        Buddy buddyInfo = m.getgob().getattr(Buddy.class);
+                        if(buddyInfo != null) {
+                            name = buddyInfo.rnm;
+                            if(name != null && !NGameUI.gobIdToKinName.containsKey(m.gobid)) {
+                                NGameUI.gobIdToKinName.put(m.gobid, name);
+                            }
+                        }
+                    }
+                    if(name != null && !name.isEmpty()) {
+                        Text nameText = NStyle.meter.render(name);
+                        g.aimage(nameText.tex(), p2cppc.add(0, -UI.scale(15)), 0.5, 0.5);
+                    }
+                }
+            } catch(Loading l) {}
+        }
     }
 
     // Draw forager path being recorded or loaded
@@ -452,9 +485,9 @@ public class NMiniMap extends MiniMap {
 
                     // Clip the vector line to map bounds
                     Coord2d[] clipped = clipLineToRect(new Coord2d(originScreenPos), new Coord2d(farScreenPos), new Coord2d(sz));
-                    if(clipped != null) {
+                    if(clipped != null && vector.color != null) {
                         // Draw the ray from origin toward far point
-                        g.chcolor(100, 150, 255, 200); // Blue color for directional vectors
+                        g.chcolor(vector.color.getRed(), vector.color.getGreen(), vector.color.getBlue(), vector.color.getAlpha());
                         g.line(clipped[0].floor(), clipped[1].floor(), 2);
                         g.chcolor();
                     }
@@ -1061,20 +1094,39 @@ public class NMiniMap extends MiniMap {
             }
         } catch(Loading l) {
         }
+        // Call overlay hook with size for correct scaling
+        drawgridOverlays(g, ul, disp, size);
+    }
+    
+    /**
+     * Hook method for subclasses to add overlay rendering.
+     * Called after base grid image is drawn.
+     * @param g Graphics context
+     * @param ul Upper-left screen coordinate
+     * @param disp Display grid data
+     * @param size Calculated size for rendering (matches grid scaling)
+     */
+    protected void drawgridOverlays(GOut g, Coord ul, DisplayGrid disp, Coord size) {
+        // Default: no overlays. Subclasses (like MapWnd.View) can override.
     }
     
     // Compatibility method for old code paths
     public void drawgrid(GOut g, Coord ul, DisplayGrid disp) {
+        float scaleFactor = getScaleFactor();
+        Coord imgsz = null;
         try {
             Tex img = disp.img();
             if(img != null) {
-                float scaleFactor = getScaleFactor();
                 // Use double precision and round to avoid gaps between tiles
                 Coord2d imgsizDouble = new Coord2d(UI.scale(img.sz())).mul(scaleFactor);
-                Coord imgsz = new Coord((int)Math.round(imgsizDouble.x), (int)Math.round(imgsizDouble.y));
+                imgsz = new Coord((int)Math.round(imgsizDouble.x), (int)Math.round(imgsizDouble.y));
                 g.image(img, ul, imgsz);
             }
         } catch(Loading l) {
+        }
+        // Call overlay hook with calculated size
+        if(imgsz != null) {
+            drawgridOverlays(g, ul, disp, imgsz);
         }
     }
 
@@ -1114,7 +1166,24 @@ public class NMiniMap extends MiniMap {
                     }
                 }
 
-                mark.draw(g, mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz));
+                Coord markPos = mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz);
+                mark.draw(g, markPos);
+                
+                // Draw name for quest giver markers (bush/bumling)
+                if(mark.m instanceof MapFile.SMarker) {
+                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
+                    if((Boolean)NConfig.get(NConfig.Key.showQuestGiverNames) && NParser.checkName(sm.res.name, "small/bush", "small/bumling", "gianttoad") && mark.m.nm != null && !mark.m.nm.isEmpty()) {
+                        Text nameText = NStyle.meter.render(mark.m.nm);
+                        Coord textPos = markPos.add(0, UI.scale(10));
+                        g.aimage(nameText.tex(), textPos, 0.5, 0);
+                    }
+
+                    if((Boolean)NConfig.get(NConfig.Key.showThingwallNames) && NParser.checkName(sm.res.name, "thingwall") && mark.m.nm != null && !mark.m.nm.isEmpty()) {
+                        Text nameText = NStyle.gmeter.render(mark.m.nm);
+                        Coord textPos = markPos.add(0, UI.scale(10));
+                        g.aimage(nameText.tex(), textPos, 0.5, 0);
+                    }
+                }
             }
         }
     }

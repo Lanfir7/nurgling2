@@ -42,6 +42,7 @@ public class NMapView extends MapView
     public static final KeyBinding kb_togglebb = KeyBinding.get("togglebb",  KeyMatch.forcode(KeyEvent.VK_N, KeyMatch.C));
     public static final KeyBinding kb_cyclebbmode = KeyBinding.get("cyclebbmode",  KeyMatch.forcode(KeyEvent.VK_N, KeyMatch.C | KeyMatch.S));
     public static final KeyBinding kb_togglenature = KeyBinding.get("togglenature",  KeyMatch.forcode(KeyEvent.VK_H, KeyMatch.C));
+    public static final KeyBinding kb_cleardmg = KeyBinding.get("cleardmg", KeyMatch.forcode(KeyEvent.VK_D, KeyMatch.C | KeyMatch.S));
     public static final int MINING_OVERLAY = - 1;
     public NGlobalCoord lastGC = null;
 
@@ -135,7 +136,8 @@ public class NMapView extends MapView
     private boolean overlaysInitialized = false;
 
     // Directional vectors for triangulation (fixed position, not following player)
-    public java.util.List<nurgling.tools.DirectionalVector> directionalVectors = new java.util.ArrayList<>();
+    // Using CopyOnWriteArrayList for thread safety - render thread iterates while game thread modifies
+    public java.util.List<nurgling.tools.DirectionalVector> directionalVectors = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     // Marker line system (lines to selected marker icon - follows player)
     public MiniMap.DisplayMarker selectedMarker = null;
@@ -1209,6 +1211,12 @@ public class NMapView extends MapView
             }
             NUtils.getGameUI().msg("Bounding Box Mode: " + displayMsg);
         }
+        if(kb_cleardmg.key().match(ev))
+        {
+            NDMGOverlay.clearAll();
+            NUtils.getGameUI().msg("Damage overlays cleared");
+            return true;
+        }
         if(kb_togglenature.key().match(ev)) {
             boolean val = (Boolean) NConfig.get(NConfig.Key.hideNature);
             NConfig.set(NConfig.Key.hideNature, !val);
@@ -1652,24 +1660,30 @@ public class NMapView extends MapView
                         if (currenttime - cm.lastupdate > 1000) {
                             cm.lastupdate = currenttime;
                             
+                            // Check if distance checking is disabled (for caves/houses)
+                            boolean ignoreDist = (Boolean) NConfig.get(NConfig.Key.tempmarkIgnoreDist);
+                            
                             // Remove if mark is too far from player (exceeded temsmarkdist)
-                            // temsmarkdist is in "mega grids" - each unit = 100 tiles
-                            // So temsmarkdist=4 means 400 tiles square around player
-                            int temsmarkdist = (Integer) NConfig.get(NConfig.Key.temsmarkdist);
-                            int maxDistTiles = temsmarkdist * 100; // Convert to tiles
-                            
-                            // Get player position in global tile coords (same system as cm.gc)
-                            Coord playerGC = pl.floor(tilesz).add(ui.gui.mmap.sessloc.tc);
-                            
-                            // Calculate square around player
-                            Coord playerUL = playerGC.sub(maxDistTiles, maxDistTiles);
-                            Coord playerBR = playerGC.add(maxDistTiles, maxDistTiles);
-                            
-                            // Check if mark is outside this square
-                            if (cm.gc.x < playerUL.x || cm.gc.x > playerBR.x ||
-                                cm.gc.y < playerUL.y || cm.gc.y > playerBR.y) {
-                                tempMarkList.remove(cm);
-                                continue;
+                            // Skip this check if ignoreDist is enabled
+                            if (!ignoreDist) {
+                                // temsmarkdist is in "mega grids" - each unit = 100 tiles
+                                // So temsmarkdist=4 means 400 tiles square around player
+                                int temsmarkdist = (Integer) NConfig.get(NConfig.Key.temsmarkdist);
+                                int maxDistTiles = temsmarkdist * 100; // Convert to tiles
+                                
+                                // Get player position in global tile coords (same system as cm.gc)
+                                Coord playerGC = pl.floor(tilesz).add(ui.gui.mmap.sessloc.tc);
+                                
+                                // Calculate square around player
+                                Coord playerUL = playerGC.sub(maxDistTiles, maxDistTiles);
+                                Coord playerBR = playerGC.add(maxDistTiles, maxDistTiles);
+                                
+                                // Check if mark is outside this square
+                                if (cm.gc.x < playerUL.x || cm.gc.x > playerBR.x ||
+                                    cm.gc.y < playerUL.y || cm.gc.y > playerBR.y) {
+                                    tempMarkList.remove(cm);
+                                    continue;
+                                }
                             }
                             
                             // Track player position relative to mark to detect "return"

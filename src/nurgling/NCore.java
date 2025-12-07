@@ -542,56 +542,9 @@ public class NCore extends Widget
     }
 
     public void writeNGItem(NGItem item) {
-        if (poolManager == null) {
-            System.err.println("NCore.writeNGItem: poolManager is null, cannot save recipe");
-            return;
-        }
-        
-        // Вычисляем hash рецепта для дедупликации
-        String recipeHash = null;
-        try {
-            NFoodInfo fi = item.getInfo(NFoodInfo.class);
-            if (fi == null) {
-                return; // Не еда, пропускаем
-            }
-            
-            StringBuilder hashInput = new StringBuilder();
-            hashInput.append(item.name()).append((int) (100 * fi.energy()));
-            for (ItemInfo info : item.info) {
-                if (info instanceof Ingredient) {
-                    Ingredient ing = ((Ingredient) info);
-                    hashInput.append(ing.name).append(ing.val * 100);
-                }
-            }
-            recipeHash = NUtils.calculateSHA256(hashInput.toString());
-        } catch (Exception e) {
-            // Если не удалось вычислить hash, все равно пытаемся сохранить
-        }
-        
-        // Throttling: не сохраняем один и тот же рецепт слишком часто
-        if (recipeHash != null) {
-            long currentTime = System.currentTimeMillis();
-            Long lastSaved = lastSavedRecipes.get(recipeHash);
-            if (lastSaved != null && (currentTime - lastSaved) < RECIPE_SAVE_THROTTLE_MS) {
-                return; // Пропускаем, слишком рано
-            }
-            
-            // Общий throttling: не сохраняем рецепты слишком часто
-            if (currentTime - lastRecipeSaveTime < RECIPE_SAVE_INTERVAL_MS) {
-                return; // Пропускаем, слишком рано
-            }
-            
-            lastSavedRecipes.put(recipeHash, currentTime);
-            lastRecipeSaveTime = currentTime;
-        }
-        
         NGItemWriter ngItemWriter = new NGItemWriter(item);
         try {
             ngItemWriter.connection = poolManager.getConnection();
-            if (ngItemWriter.connection == null) {
-                System.err.println("NCore.writeNGItem: Failed to get database connection");
-                return;
-            }
         } catch (SQLException e) {
             System.err.println("NCore.writeNGItem: SQLException getting connection: " + e.getMessage());
             e.printStackTrace();
@@ -602,10 +555,13 @@ public class NCore extends Widget
 
     public void writeContainerInfo(Gob gob)
     {
-        if(gob!=null) {
+        if(gob!=null && poolManager != null && poolManager.isConnectionReady()) {
             ContainerWatcher cw = new ContainerWatcher(gob);
             try {
                 cw.connection = poolManager.getConnection();
+                if (cw.connection == null) {
+                    return; // Connection not available
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
                 return;
@@ -615,28 +571,38 @@ public class NCore extends Widget
     }
 
     public void writeItemInfoForContainer(ArrayList<ItemWatcher.ItemInfo> iis) {
-
+        if (poolManager == null || !poolManager.isConnectionReady()) {
+            return; // Database not ready
+        }
         ItemWatcher itemWatcher = new ItemWatcher(iis);
         try {
             itemWatcher.connection = poolManager.getConnection();
+            if (itemWatcher.connection == null) {
+                return;
+            }
         } catch (SQLException e) {
             e.printStackTrace();
+            return;
         }
         poolManager.submitTask(itemWatcher);
-
     }
 
     final ArrayList<String> targetGobs = new ArrayList<>();
 
     public void searchContainer(NSearchItem item) {
-
+        if (poolManager == null || !poolManager.isConnectionReady()) {
+            return; // Database not ready
+        }
         NGlobalSearchItems gsi = new NGlobalSearchItems(item);
         try {
             gsi.connection = poolManager.getConnection();
+            if (gsi.connection == null) {
+                return;
+            }
         } catch (SQLException e) {
             e.printStackTrace();
+            return;
         }
         poolManager.submitTask(gsi);
-
     }
 }

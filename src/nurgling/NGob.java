@@ -901,11 +901,14 @@ public class NGob
             {
                 if (name != null && name.startsWith("gfx/terobjs"))
                 {
-                    if (VSpec.object.containsKey(name))
-                        if (VSpec.object.get(name).size() != NUtils.getGameUI().getCharInfo().LpExplorerGetSize(name))
-                        {
-                            parent.addcustomol(new NLPassistant(parent));
-                        }
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().getCharInfo() != null)
+                    {
+                        if (VSpec.object.containsKey(name))
+                            if (VSpec.object.get(name).size() != NUtils.getGameUI().getCharInfo().LpExplorerGetSize(name))
+                            {
+                                parent.addcustomol(new NLPassistant(parent));
+                            }
+                    }
                 }
             }
         }
@@ -973,7 +976,7 @@ public class NGob
         if (name != null)
             if (name.equals("gfx/terobjs/dframe") || name.equals("gfx/terobjs/barrel"))
             {
-                if (ol.spr instanceof StaticSprite)
+                if (ol.spr != null && ol.spr.res != null)
                 {
                     // Calculate and cache the mask value immediately
                     cachedMask = calculateMask();
@@ -1009,8 +1012,34 @@ public class NGob
                 if (res.name.equals("gfx/fx/dowse"))
                 {
                     NProspecting.overlay(parent, ol);
+                    // Also add vectors directly (overlay only adds if QUALITIES not empty)
+                    tryAddTrackingVectors(parent, ol);
+                }
+                // Also handle tracking overlays - check for any overlay with a1/a2 fields
+                else if (res.name.contains("track"))
+                {
+                    // Try to extract a1/a2 and add vectors even without quality
+                    tryAddTrackingVectors(parent, ol);
                 }
             }
+        }
+    }
+
+    /**
+     * Attempts to add tracking vectors for any overlay that has a1/a2 angle fields.
+     * Used for tracking effects that don't go through the NProspecting system.
+     */
+    private void tryAddTrackingVectors(Gob gob, Gob.Overlay ol) {
+        try {
+            double a1 = NProspecting.getFieldValueDouble(ol.spr, "a1");
+            double a2 = NProspecting.getFieldValueDouble(ol.spr, "a2");
+
+            // Only add if we got valid angles
+            if (a1 != 0 || a2 != 0) {
+                NProspecting.addConeVectors(gob, a1, a2);
+            }
+        } catch (Exception e) {
+            // Silently ignore - overlay doesn't have the expected fields
         }
     }
 
@@ -1019,19 +1048,19 @@ public class NGob
         if (name != null)
             if (name.equals("gfx/terobjs/dframe") || name.equals("gfx/terobjs/barrel"))
             {
-                if (ol.spr instanceof StaticSprite)
+                if (ol.spr != null && ol.spr.res != null)
                 {
-                    // Check if there are other StaticSprite overlays remaining
-                    boolean hasOtherStaticSprites = false;
+                    // Check if there are other sprite overlays remaining
+                    boolean hasOtherSpriteOverlays = false;
                     for (Gob.Overlay other : parent.ols) {
-                        if (other != ol && other.spr instanceof StaticSprite) {
-                            hasOtherStaticSprites = true;
+                        if (other != ol && other.spr != null && other.spr.res != null) {
+                            hasOtherSpriteOverlays = true;
                             break;
                         }
                     }
                     
                     // Update cache based on remaining overlays
-                    if (!hasOtherStaticSprites) {
+                    if (!hasOtherSpriteOverlays) {
                         cachedMask = 0; // Set to FREE
                     }
                     
@@ -1065,7 +1094,7 @@ public class NGob
         {
             for (Gob.Overlay ol : parent.ols)
             {
-                if (ol.spr instanceof StaticSprite)
+                if (ol.spr != null && ol.spr.res != null)
                 {
                     // Check if item is blood/fishraw/windweed (but not dry windweed)
                     if (NParser.isIt(ol, new NAlias("-blood", "-fishraw", "-windweed")) && !NParser.isIt(ol, new NAlias("-windweed-dry")))
@@ -1082,7 +1111,7 @@ public class NGob
         {
             for (Gob.Overlay ol : parent.ols)
             {
-                if (ol.spr instanceof StaticSprite)
+                if (ol.spr != null && ol.spr.res != null)
                 {
                     return 4;
                 }
@@ -1121,7 +1150,7 @@ public class NGob
         {
             for (Gob.Overlay ol : parent.ols)
             {
-                if (ol.spr instanceof StaticSprite)
+                if (ol.spr != null && ol.spr.res != null)
                 {
                     // Check if item is blood/fishraw/windweed (but not dry windweed)
                     if (NParser.isIt(ol, new NAlias("-blood", "-fishraw", "-windweed")) && !NParser.isIt(ol, new NAlias("-windweed-dry")))
@@ -1138,7 +1167,7 @@ public class NGob
         {
             for (Gob.Overlay ol : parent.ols)
             {
-                if (ol.spr instanceof StaticSprite)
+                if (ol.spr != null && ol.spr.res != null)
                 {
                     return 4;
                 }

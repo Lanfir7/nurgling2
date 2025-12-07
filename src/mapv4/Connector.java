@@ -2,6 +2,7 @@ package mapv4;
 
 import haven.Coord;
 import haven.MCache;
+import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.Action;
@@ -43,10 +44,42 @@ public class Connector implements Action {
         while (!parent.done.get()) {
             JSONObject msg = msgs.poll(1, TimeUnit.SECONDS);
             if(msg != null) {
-                sendMsgWithRetry(msg);
+                String header = (String) msg.get("header");
+                // Optional features - try once, don't disable automapper on failure
+                if (header.equals("OVERLAY")) {
+                    sendOptionalMsg(msg);
+                } else {
+                    sendMsgWithRetry(msg);
+                }
             }
         }
         return Results.SUCCESS();
+    }
+
+    private void sendOptionalMsg(JSONObject msg) {
+        try {
+            String urlString = (String) msg.get("url");
+            final HttpURLConnection connection =
+                    (HttpURLConnection) URI.create(urlString).toURL().openConnection();
+            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(READ_TIMEOUT_MS);
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
+            connection.setDoOutput(true);
+            try (DataOutputStream out = new DataOutputStream(connection.getOutputStream())) {
+                final String json = msg.get("data").toString();
+                out.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+            int respCode = connection.getResponseCode();
+            connection.disconnect();
+
+            // 404 means endpoint not supported - disable for session
+            if (respCode == 404) {
+                parent.setOverlayUnsupported();
+            }
+        } catch (Exception ignored) {
+            // Network error - silently ignore, will retry on next grid
+        }
     }
 
 
@@ -99,12 +132,15 @@ public class Connector implements Action {
             connection.setReadTimeout(READ_TIMEOUT_MS);
             
             String reqMethod = (String) msg.get("reqMethod");
+            String header = (String) msg.get("header");
+            
             if (reqMethod.equals("POST")) {
                 connection.setRequestMethod(reqMethod);
                 connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
                 connection.setDoOutput(true);
+                final String json = msg.get("data").toString();
+                
                 try (DataOutputStream out = new DataOutputStream(connection.getOutputStream())) {
-                    final String json = msg.get("data").toString();
                     out.write(json.getBytes(StandardCharsets.UTF_8));
                 }
             } else {
@@ -113,7 +149,7 @@ public class Connector implements Action {
             
             respCode = connection.getResponseCode();
             if (respCode == 200) {
-                if (((String) msg.get("header")).equals("GRIDREQ")) {
+                if (header.equals("GRIDREQ")) {
                     try (DataInputStream dio = new DataInputStream(connection.getInputStream())) {
                         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
                         byte[] data = new byte[1024];
@@ -135,8 +171,26 @@ public class Connector implements Action {
                                 parent.requestor.prepGrid(reqs.getString(i), g);
                             }
                         }
+
+                        // Trigger overlay upload for all loaded grids (3x3 around player)
+                        if ((Boolean) NConfig.get(NConfig.Key.sendOverlays) && parent.isOverlaySupported()) {
+                            String[][] allGridIds = (String[][]) ((JSONObject) msg.get("data")).get("grids");
+                            for (int row = 0; row < 3; row++) {
+                                for (int col = 0; col < 3; col++) {
+                                    try {
+                                        Long gid = Long.valueOf(allGridIds[row][col]);
+                                        MCache.Grid g = NUtils.getGameUI().map.glob.map.findGrid(gid);
+                                        if (g != null && g.ols != null && g.ols.length > 0) {
+                                            parent.requestor.sendOverlayUpdate(gid, g);
+                                        }
+                                    } catch (NumberFormatException ignored) {
+                                        // Invalid grid ID, skip
+                                    }
+                                }
+                            }
+                        }
                     }
-                } else if (((String) msg.get("header")).equals("LOCATE")) {
+                } else if (header.equals("LOCATE")) {
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
                         String resp = reader.lines().collect(Collectors.joining());
                         String[] parts = resp.split(";");
