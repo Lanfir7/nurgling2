@@ -5,6 +5,7 @@ import nurgling.GhostAlpha;
 import nurgling.NGameUI;
 import nurgling.NGob;
 import nurgling.NISBox;
+import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.overlays.BuildGhostPreview;
 import nurgling.tasks.*;
@@ -161,7 +162,18 @@ public class Build implements Action
                     hitBox = cmd.customHitBox;
                 }
 
-                pos = Finder.getFreePlace(area, hitBox, rotationAngle);
+                // Check if grid mode is active
+                boolean gridMode = false;
+                if (NUtils.getGameUI().map != null) {
+                    NMapView mapView = (NMapView) NUtils.getGameUI().map;
+                    gridMode = mapView.getGridMode();
+                }
+                
+                if (gridMode) {
+                    pos = Finder.getFreePlaceGrid(area, hitBox, rotationAngle);
+                } else {
+                    pos = Finder.getFreePlace(area, hitBox, rotationAngle);
+                }
             }
 
             if (pos == null)
@@ -409,7 +421,18 @@ public class Build implements Action
             } else
             {
                 // When not using ghosts, find next free place
-                pos = Finder.getFreePlace(area, hitBox, rotationAngle);
+                // Check if grid mode is active
+                boolean gridMode = false;
+                if (NUtils.getGameUI().map != null) {
+                    NMapView mapView = (NMapView) NUtils.getGameUI().map;
+                    gridMode = mapView.getGridMode();
+                }
+                
+                if (gridMode) {
+                    pos = Finder.getFreePlaceGrid(area, hitBox, rotationAngle);
+                } else {
+                    pos = Finder.getFreePlace(area, hitBox, rotationAngle);
+                }
             }
         }
         while (pos != null);

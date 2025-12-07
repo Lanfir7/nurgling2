@@ -97,8 +97,17 @@ public class NMapView extends MapView
     public NArea.Space areaSpace = null;
     public Pair<Coord, Coord> currentSelectionCoords = null;  // Current selection coords during dragging
     public boolean rotationRequested = false;  // Flag to request rotation during area selection
+    public boolean gridMode = false;  // Grid mode: place objects at tile centers
+    public boolean gridModeRequested = false;  // Flag to request grid mode toggle during area selection
     public Gob selectedGob = null;
     public static boolean isRecordingRoutePoint = false;
+    
+    /**
+     * Get grid mode state
+     */
+    public boolean getGridMode() {
+        return gridMode;
+    }
 
     public HashMap<Long, Gob> dummys = new HashMap<>();
     public HashMap<Long, Gob> routeDummys = new HashMap<>();
@@ -1107,6 +1116,23 @@ public class NMapView extends MapView
         // Handle R key for rotation during area selection
         if(ev.code == 82 && isAreaSelectionMode.get()) {  // R key
             rotationRequested = true;
+            return true;
+        }
+        
+        // Handle C key for grid mode toggle during area selection
+        if(ev.code == 67 && isAreaSelectionMode.get()) {  // C key
+            gridMode = !gridMode;
+            gridModeRequested = true;
+            
+            // Update ghost preview if it exists
+            Gob player = NUtils.player();
+            if (player != null) {
+                BuildGhostPreview ghostPreview = player.getattr(BuildGhostPreview.class);
+                if (ghostPreview != null) {
+                    ghostPreview.setGridMode(gridMode);
+                }
+            }
+            
             return true;
         }
         

@@ -559,6 +559,92 @@ public class Finder
         }
         return pos;
     }
+    
+    /**
+     * Get free place in grid mode: place objects at tile centers
+     * Only works if hitbox fits in a single tile (1x1 or smaller)
+     */
+    public static Coord2d getFreePlaceGrid(Pair<Coord2d,Coord2d> area, NHitBox hitBox, double angle) {
+        Coord2d pos = null;
+
+        ArrayList<NHitBoxD> significantGobs = new ArrayList<> ();
+        NHitBoxD chekerOfArea = new NHitBoxD(area.a, area.b);
+
+        // Check area size with rotated hitbox dimensions
+        NHitBoxD temporalGobBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
+        Coord2d rotatedUL = temporalGobBox.getCircumscribedUL();
+        Coord2d rotatedBR = temporalGobBox.getCircumscribedBR();
+        Coord hitboxSize = rotatedBR.sub(rotatedUL).floor();
+        
+        // Grid mode only works if hitbox fits in a single tile
+        if (hitboxSize.x > MCache.tilesz.x || hitboxSize.y > MCache.tilesz.y) {
+            // Fallback to normal mode if hitbox is too large
+            return getFreePlace(area, hitBox, angle);
+        }
+
+        synchronized ( NUtils.getGameUI().ui.sess.glob.oc ) {
+            for ( Gob gob : NUtils.getGameUI().ui.sess.glob.oc ) {
+                if (!(gob instanceof OCache.Virtual || gob.attr.isEmpty() || gob.getClass().getName().contains("GlobEffector"))) {
+                    // Skip ghost gobs from preview (they have GhostAlpha)
+                    if (gob.getattr(GhostAlpha.class) != null) {
+                        continue;
+                    }
+                    
+                    NHitBox effectiveHitBox = gob.ngob.hitBox;
+
+                    // If gob has no hitbox, check if there's a custom hitbox defined for it
+                    if (effectiveHitBox == null && gob.ngob.name != null) {
+                        effectiveHitBox = NHitBox.findCustom(gob.ngob.name);
+                    }
+
+                    if(effectiveHitBox != null && gob.getattr(Following.class)==null  && gob.id!= NUtils.player().id){
+                        NHitBoxD gobBox = new NHitBoxD(effectiveHitBox.begin, effectiveHitBox.end, gob.rc, gob.a);
+                        if (gobBox.intersects(chekerOfArea,true))
+                            significantGobs.add(gobBox);
+                    }
+                }
+            }
+        }
+
+        // Calculate tile bounds
+        Coord tileBegin = area.a.floor(MCache.tilesz);
+        Coord tileEnd = area.b.sub(1, 1).floor(MCache.tilesz);
+        
+        // Iterate through tiles
+        for (int tx = tileBegin.x; tx <= tileEnd.x; tx++) {
+            for (int ty = tileBegin.y; ty <= tileEnd.y; ty++) {
+                // Calculate tile center position
+                Coord2d tileCenter = new Coord2d(
+                    tx * MCache.tilesz.x + MCache.tilesz.x / 2.0,
+                    ty * MCache.tilesz.y + MCache.tilesz.y / 2.0
+                );
+                
+                // Check if tile center is within area
+                if (tileCenter.x < area.a.x || tileCenter.x >= area.b.x ||
+                    tileCenter.y < area.a.y || tileCenter.y >= area.b.y) {
+                    continue;
+                }
+                
+                // Create test box at tile center
+                NHitBoxD testGobBox = new NHitBoxD(hitBox.begin, hitBox.end, tileCenter, angle);
+                
+                // Check collisions with obstacles
+                boolean passed = true;
+                for ( NHitBoxD significantHitbox : significantGobs ) {
+                    if(significantHitbox.intersects(testGobBox,false)) {
+                        passed = false;
+                        break;
+                    }
+                }
+                
+                if(passed) {
+                    return Coord2d.of(testGobBox.rc.x, testGobBox.rc.y);
+                }
+            }
+        }
+        
+        return pos;
+    }
 
 
 //    public static Coord2d getFreePlace (

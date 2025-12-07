@@ -22,6 +22,7 @@ public class BuildGhostPreview extends GAttrib {
     private List<Gob> ghostGobs = new ArrayList<>();
     private Glob glob;
     private double rotationAngle = 0.0;  // Rotation angle in radians
+    private boolean gridMode = false;  // Grid mode: place objects at tile centers
 
     public BuildGhostPreview(Gob owner, Pair<Coord2d, Coord2d> area, NHitBox hitBox, Indir<Resource> resource) {
         this(owner, area, hitBox, resource, 0, Message.nil);
@@ -45,6 +46,26 @@ public class BuildGhostPreview extends GAttrib {
     }
 
     /**
+     * Set grid mode (place objects at tile centers)
+     */
+    public void setGridMode(boolean gridMode) {
+        if (this.gridMode != gridMode) {
+            this.gridMode = gridMode;
+            // Recalculate positions when grid mode changes
+            if (area != null && buildingHitBox != null && buildingResource != null) {
+                calculateGhostPositions();
+            }
+        }
+    }
+    
+    /**
+     * Get grid mode state
+     */
+    public boolean getGridMode() {
+        return gridMode;
+    }
+
+    /**
      * Calculate all valid building positions using the same logic as Finder.getFreePlace()
      */
     private void calculateGhostPositions() {
@@ -61,6 +82,87 @@ public class BuildGhostPreview extends GAttrib {
         // Track placed buildings to avoid showing overlaps
         ArrayList<NHitBoxD> placedBuildings = new ArrayList<>();
 
+        if (gridMode) {
+            // Grid mode: place objects at tile centers
+            calculateGhostPositionsGrid(obstacles, placedBuildings);
+        } else {
+            // Normal mode: pixel-by-pixel search (tight packing)
+            calculateGhostPositionsNormal(obstacles, placedBuildings);
+        }
+    }
+    
+    /**
+     * Calculate positions in grid mode (tile centers)
+     */
+    private void calculateGhostPositionsGrid(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
+        // Get rotated hitbox dimensions
+        NHitBoxD tempBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, Coord2d.of(0), rotationAngle);
+        Coord2d rotatedUL = tempBox.getCircumscribedUL();
+        Coord2d rotatedBR = tempBox.getCircumscribedBR();
+        Coord hitboxSize = rotatedBR.sub(rotatedUL).floor();
+        
+        // Calculate tile bounds
+        Coord tileBegin = area.a.floor(MCache.tilesz);
+        Coord tileEnd = area.b.sub(1, 1).floor(MCache.tilesz);
+        
+        // Iterate through tiles
+        for (int tx = tileBegin.x; tx <= tileEnd.x; tx++) {
+            for (int ty = tileBegin.y; ty <= tileEnd.y; ty++) {
+                // Check if hitbox fits in this tile (must be <= 1x1 tile)
+                if (hitboxSize.x > MCache.tilesz.x || hitboxSize.y > MCache.tilesz.y) {
+                    continue; // Hitbox too large for single tile
+                }
+                
+                // Calculate tile center position
+                Coord2d tileCenter = new Coord2d(
+                    tx * MCache.tilesz.x + MCache.tilesz.x / 2.0,
+                    ty * MCache.tilesz.y + MCache.tilesz.y / 2.0
+                );
+                
+                // Check if tile center is within area
+                if (tileCenter.x < area.a.x || tileCenter.x >= area.b.x ||
+                    tileCenter.y < area.a.y || tileCenter.y >= area.b.y) {
+                    continue;
+                }
+                
+                // Create test box at tile center
+                NHitBoxD testBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, tileCenter, rotationAngle);
+                
+                // Check collisions with obstacles AND already-placed buildings
+                boolean passed = true;
+                
+                for (NHitBoxD obstacle : obstacles) {
+                    if (obstacle.intersects(testBox, false)) {
+                        passed = false;
+                        break;
+                    }
+                }
+                
+                if (passed) {
+                    for (NHitBoxD placed : placedBuildings) {
+                        if (placed.intersects(testBox, false)) {
+                            passed = false;
+                            break;
+                        }
+                    }
+                }
+                
+                if (passed) {
+                    // This position is valid - create a ghost Gob
+                    Coord2d worldPos = new Coord2d(testBox.rc.x, testBox.rc.y);
+                    createGhostGob(worldPos);
+                    
+                    // Add this building to placed list so we don't overlap it
+                    placedBuildings.add(new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, tileCenter, rotationAngle));
+                }
+            }
+        }
+    }
+    
+    /**
+     * Calculate positions in normal mode (tight packing)
+     */
+    private void calculateGhostPositionsNormal(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
         Coord inchMax = area.b.sub(area.a).floor();
         Coord margin = buildingHitBox.end.sub(buildingHitBox.begin).floor(2, 2);
 
@@ -68,7 +170,7 @@ public class BuildGhostPreview extends GAttrib {
         for (int i = margin.x; i <= inchMax.x - margin.x; i++) {
             for (int j = margin.y; j <= inchMax.y - margin.y; j++) {
                 Coord2d testPos = area.a.add(i, j);
-                NHitBoxD testBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, 0);
+                NHitBoxD testBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, rotationAngle);
 
                 // Check collisions with obstacles AND already-placed buildings
                 boolean passed = true;
@@ -95,7 +197,7 @@ public class BuildGhostPreview extends GAttrib {
                     createGhostGob(worldPos);
 
                     // Add this building to placed list so we don't overlap it
-                    placedBuildings.add(new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, 0));
+                    placedBuildings.add(new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, rotationAngle));
                 }
             }
         }
@@ -158,9 +260,21 @@ public class BuildGhostPreview extends GAttrib {
                 for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
                     if (!(gob instanceof OCache.Virtual || gob.attr.isEmpty() ||
                           gob.getClass().getName().contains("GlobEffector"))) {
-                        if (gob.ngob.hitBox != null && gob.getattr(Following.class) == null &&
+                        // Skip ghost gobs from preview (they have GhostAlpha)
+                        if (gob.getattr(GhostAlpha.class) != null) {
+                            continue;
+                        }
+                        
+                        NHitBox effectiveHitBox = gob.ngob.hitBox;
+
+                        // If gob has no hitbox, check if there's a custom hitbox defined for it
+                        if (effectiveHitBox == null && gob.ngob.name != null) {
+                            effectiveHitBox = NHitBox.findCustom(gob.ngob.name);
+                        }
+                        
+                        if (effectiveHitBox != null && gob.getattr(Following.class) == null &&
                             gob.id != NUtils.player().id) {
-                            NHitBoxD gobBox = new NHitBoxD(gob);
+                            NHitBoxD gobBox = new NHitBoxD(effectiveHitBox.begin, effectiveHitBox.end, gob.rc, gob.a);
                             if (gobBox.intersects(areaBox, true)) {
                                 obstacles.add(gobBox);
                             }

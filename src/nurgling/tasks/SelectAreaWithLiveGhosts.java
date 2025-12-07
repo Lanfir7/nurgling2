@@ -43,6 +43,14 @@ public class SelectAreaWithLiveGhosts extends NTask {
                         ghostPreview.updateRotation(rotationCount, currentHitBox);
                     }
                 }
+                
+                // Check for grid mode toggle (C)
+                if (checkGridModeToggle()) {
+                    // Grid mode is already toggled in NMapView, just update preview
+                    if (ghostPreview != null) {
+                        ghostPreview.setGridMode(mapView.getGridMode());
+                    }
+                }
             }
 
             // Update ghost preview if area is being selected IN PROGRESS
@@ -55,6 +63,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
                         player = NUtils.player();
                         if (player != null) {
                             ghostPreview = new BuildGhostPreview(player, currentArea, currentHitBox, buildingResource, rotationCount, spriteData);
+                            ghostPreview.setGridMode(mapView.getGridMode());
                             player.setattr(ghostPreview);
                         }
                     } else if (ghostPreview != null) {
@@ -71,6 +80,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
                     player = NUtils.player();
                 if (player != null && currentArea != null) {
                         ghostPreview = new BuildGhostPreview(player, currentArea, currentHitBox, buildingResource, rotationCount, spriteData);
+                        ghostPreview.setGridMode(mapView.getGridMode());
                         player.setattr(ghostPreview);
                     }
                 } else if (ghostPreview != null && currentArea != null) {
@@ -96,6 +106,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
                     } else {
                         // Create new preview with final area
                         ghostPreview = new BuildGhostPreview(player, finalArea, currentHitBox, buildingResource, rotationCount, spriteData);
+                        ghostPreview.setGridMode(mapView.getGridMode());
                         player.setattr(ghostPreview);
                     }
                 }
@@ -118,6 +129,15 @@ public class SelectAreaWithLiveGhosts extends NTask {
         NMapView mapView = (NMapView) NUtils.getGameUI().map;
         if (mapView.rotationRequested) {
             mapView.rotationRequested = false;  // Reset flag
+            return true;
+        }
+        return false;
+    }
+    
+    private boolean checkGridModeToggle() {
+        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        if (mapView.gridModeRequested) {
+            mapView.gridModeRequested = false;  // Reset flag
             return true;
         }
         return false;
