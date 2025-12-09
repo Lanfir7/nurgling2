@@ -21,6 +21,7 @@ public class StackSupporter {
         customStackSizes.put("Clove of Garlic", 5);
         customStackSizes.put("Stinging Nettle", 4);
         customStackSizes.put("Yarrow", 4);
+        customStackSizes.put("Royal Toadstool", 4);
         HashSet<String> size3 = new HashSet<>();
         size3.add("Tuber");
         size3.add("Onion");
@@ -136,8 +137,10 @@ public class StackSupporter {
         catExceptions.add("Silkworm");
         catExceptions.add("Female Silkmoth");
         catExceptions.add("Male Silkmoth");
+        catExceptions.add("Clean Squirrel Carcass");
+        catExceptions.add("Clean Rabbit Carcass");
     }
-    private static final NAlias unstackableContainers = new NAlias("Smith's Smelter", "Ore Smelter", "Herbalist Table", "Tub", "Oven", "Steelbox", "Frame", "Kiln", "Smoke Shed");
+    private static final NAlias unstackableContainers = new NAlias("Smith's Smelter", "Ore Smelter", "Herbalist Table", "Tub", "Oven", "Steelbox", "Frame", "Kiln", "Smoke Shed", "Stack furnace");
     public static boolean isStackable(NInventory inv, String name)
     {
         Window win = inv.getparent(Window.class);

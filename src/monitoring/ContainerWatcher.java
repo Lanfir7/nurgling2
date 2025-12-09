@@ -1,6 +1,7 @@
 package monitoring;
 
 import haven.Gob;
+import nurgling.NConfig;
 import nurgling.NInventory;
 import nurgling.NUtils;
 import nurgling.tasks.NTask;
