@@ -214,14 +214,14 @@ public class Connector implements Action {
         }
         lastErrorTime = currentTime;
         
-        if (consecutiveErrors <= 3) {
-            String errorMsg = "Map Server error (attempt " + (attempt + 1) + "/" + MAX_RETRY_ATTEMPTS + ")";
-            if (e instanceof SocketTimeoutException) {
-                errorMsg += ": timeout";
-            } else if (e instanceof IOException) {
-                errorMsg += ": connection failed";
-            }
-            NUtils.getGameUI().error(errorMsg);
-        }
+        // if (consecutiveErrors <= 3) {
+        //     String errorMsg = "Map Server error (attempt " + (attempt + 1) + "/" + MAX_RETRY_ATTEMPTS + ")";
+        //     if (e instanceof SocketTimeoutException) {
+        //         errorMsg += ": timeout";
+        //     } else if (e instanceof IOException) {
+        //         errorMsg += ": connection failed";
+        //     }
+        //     NUtils.getGameUI().error(errorMsg);
+        // }
     }
 }

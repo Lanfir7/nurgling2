@@ -19,6 +19,11 @@ import nurgling.widgets.LocalizedResourceTimersWindow;
 import nurgling.widgets.LocalizedResourceTimerDialog;
 import nurgling.widgets.StudyDeskPlannerWidget;
 import nurgling.widgets.FishingWindowExtension;
+import haven.MapFile;
+import haven.MiniMap;
+import haven.MCache;
+import static haven.MCache.tilesz;
+import static haven.MCache.cmaps;
 
 import java.awt.event.KeyEvent;
 import java.util.*;
@@ -999,10 +1004,12 @@ public class NGameUI extends GameUI
 
 
     public boolean msg(UI.Notice msg) {
-        if (msg.message().contains("Quality")) {
+        String message = msg.message();
+        
+        if (message.contains("Quality")) {
             if(map.clickedGob!=null)
             {
-                Matcher m = Pattern.compile("Quality: (\\d+)").matcher(msg.message());
+                Matcher m = Pattern.compile("Quality: (\\d+)").matcher(message);
                 if(m.matches()) {
                     try {
                         map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, Integer.parseInt(m.group(1))));
@@ -1013,7 +1020,129 @@ public class NGameUI extends GameUI
                 }
             }
         }
+        
+        // Handle resource refill time messages (e.g., "Will refill in 10 hours" or "Will refill in 2 days")
+        if (map.clickedGob != null && localizedResourceTimerService != null) {
+            Matcher refillMatcher = Pattern.compile(".*[Ww]ill refill in (\\d+)\\s*(day|days|hour|hours|minute|minutes|second|seconds|hr|hrs|min|mins|sec|secs)").matcher(message);
+            if (refillMatcher.find()) {
+                try {
+                    int timeValue = Integer.parseInt(refillMatcher.group(1));
+                    String timeUnit = refillMatcher.group(2).toLowerCase();
+                    
+                    // Convert to milliseconds
+                    long durationMs = 0;
+                    if (timeUnit.startsWith("day")) {
+                        // Convert days to hours: 1 day = 24 hours
+                        durationMs = timeValue * 24L * 60L * 60L * 1000L;
+                    } else if (timeUnit.startsWith("hour") || timeUnit.startsWith("hr")) {
+                        durationMs = timeValue * 60L * 60L * 1000L;
+                    } else if (timeUnit.startsWith("minute") || timeUnit.startsWith("min")) {
+                        durationMs = timeValue * 60L * 1000L;
+                    } else if (timeUnit.startsWith("second") || timeUnit.startsWith("sec")) {
+                        durationMs = timeValue * 1000L;
+                    }
+                    
+                    if (durationMs > 0) {
+                        Gob gob = map.clickedGob.gob;
+                        MapFile.SMarker marker = findOrCreateMarker(gob);
+                        if (marker != null && localizedResourceTimerService.isTimerSupportedResource(marker.res.name)) {
+                            String resourceName = marker.nm != null ? marker.nm : marker.res.name;
+                            localizedResourceTimerService.createTimer(
+                                marker.seg,
+                                marker.tc,
+                                resourceName,
+                                marker.res.name,
+                                durationMs,
+                                resourceName
+                            );
+                            // Clear clickedGob after processing
+                            map.clickedGob = null;
+                        }
+                    }
+                } catch (Exception e) {
+                    // Silently ignore errors
+                }
+            }
+        }
+        
         return super.msg(msg);
+    }
+    
+    /**
+     * Find or create a map marker for the given Gob
+     */
+    private MapFile.SMarker findOrCreateMarker(Gob gob) {
+        if (gob == null || gob.ngob == null || gob.ngob.name == null) {
+            return null;
+        }
+        
+        // First, try to get existing marker from MarkerID attribute
+        MiniMap.MarkerID markerId = gob.getattr(MiniMap.MarkerID.class);
+        if (markerId != null && markerId.mark instanceof MapFile.SMarker) {
+            return (MapFile.SMarker) markerId.mark;
+        }
+        
+        // If no marker exists, try to find or create one
+        if (mapfile == null || mapfile.file == null) {
+            return null;
+        }
+        
+        try {
+            Coord tc = gob.rc.floor(tilesz);
+            MCache.Grid obg = map.glob.map.getgrid(tc.div(cmaps));
+            
+            if (!mapfile.file.lock.writeLock().tryLock()) {
+                return null;
+            }
+            
+            try {
+                MapFile.GridInfo info = mapfile.file.gridinfo.get(obg.id);
+                if (info == null) {
+                    return null;
+                }
+                
+                Coord sc = tc.add(info.sc.sub(obg.gc).mul(cmaps));
+                
+                // Try to find existing marker
+                MapFile.SMarker marker = mapfile.file.smarker(gob.ngob.name, info.seg, sc);
+                
+                if (marker == null) {
+                    // Create new marker - use version 0 as default, will be updated when resource loads
+                    int resVer = 0;
+                    String displayName = gob.ngob.name;
+                    
+                    try {
+                        Indir<Resource> resIndir = Resource.remote().load(gob.ngob.name);
+                        Resource res = resIndir.get();
+                        resVer = res.ver;
+                        Resource.Tooltip tt = res.layer(Resource.Tooltip.class);
+                        if (tt != null) {
+                            displayName = tt.t;
+                        }
+                    } catch (Loading e) {
+                        // Resource not loaded yet, use default values
+                    } catch (Exception e) {
+                        // Ignore errors, use default values
+                    }
+                    
+                    marker = new MapFile.SMarker(info.seg, sc, displayName, 0, 
+                        new Resource.Saved(Resource.remote(), gob.ngob.name, resVer));
+                    mapfile.file.add(marker);
+                }
+                
+                // Set MarkerID attribute on gob
+                synchronized (gob) {
+                    gob.setattr(new MiniMap.MarkerID(gob, marker));
+                }
+                
+                return marker;
+            } finally {
+                mapfile.file.lock.writeLock().unlock();
+            }
+        } catch (Exception e) {
+            // Silently ignore errors
+            return null;
+        }
     }
 
     @Override
