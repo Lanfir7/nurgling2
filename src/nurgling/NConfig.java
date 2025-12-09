@@ -630,6 +630,13 @@ public class NConfig
     }
 
     /**
+     * Gets the dynamic path for prospecting locations configuration file
+     */
+    public String getProspectingLocationsPath() {
+        return getProfileAwarePath("prospecting_locations.nurgling.json");
+    }
+
+    /**
      * Gets the dynamic path for resource timers configuration file
      */
     public String getResourceTimersPath() {

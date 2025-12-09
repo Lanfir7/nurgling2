@@ -50,9 +50,9 @@ public class NBotsMenu extends Widget
             NLayout layout = layouts.get(groupType);
             if (layout == null) continue;
             if (bot.clazz == CatchBugsAround.class) {
-                layout.elements.add(new NToggleNButton(bot.iconPath, bot.instantiate(Map.of()), bot.disStacks));
+                layout.elements.add(new NToggleNButton(bot, bot.instantiate(Map.of()), bot.disStacks));
             } else {
-                layout.elements.add(new NButton(bot.iconPath, bot.instantiate(Map.of()), bot.disStacks));
+                layout.elements.add(new NButton(bot, bot.instantiate(Map.of()), bot.disStacks));
             }
         }
 
@@ -215,20 +215,57 @@ public class NBotsMenu extends Widget
     public class NButton
     {
         public final IButton btn;
+        public final BotDescriptor descriptor;
         public String path;
         public boolean disStacks;
-        NButton(String path, Action action) {
-            this.path = path;
-            Resource res = Resource.remote().loadwait(dir_path + path + "/u");
-            btn = new IButton(Resource.loadsimg(dir_path + path + "/u"), Resource.loadsimg(dir_path + path + "/d"), Resource.loadsimg(dir_path + path + "/h")) {
+        NButton(BotDescriptor descriptor, Action action) {
+            this.descriptor = descriptor;
+            this.path = descriptor.id;
+            String iconPath = descriptor.iconPath;
+            Resource res = null;
+            try {
+                res = Resource.remote().loadwait(dir_path + iconPath + "/u");
+            } catch (Exception e) {
+                // Если иконка не найдена, используем дефолтную иконку "back"
+                iconPath = "back";
+                try {
+                    res = Resource.remote().loadwait(dir_path + iconPath + "/u");
+                } catch (Exception e2) {
+                    // Если и дефолтная не найдена, создаем пустую
+                    res = null;
+                }
+            }
+            final String finalPath = iconPath;
+            final Resource finalRes = res;
+            btn = new IButton(Resource.loadsimg(dir_path + finalPath + "/u"), Resource.loadsimg(dir_path + finalPath + "/d"), Resource.loadsimg(dir_path + finalPath + "/h")) {
                 TexI rtip;
 
                 @Override
                 public Object tooltip(Coord c, Widget prev) {
-                    if (rtip == null && res.layers(Resource.Tooltip.class) != null) {
+                    // Для prospect_mine создаем tooltip с названием и описанием
+                    if (descriptor != null && "prospect_mine".equals(descriptor.id)) {
+                        List<ItemInfo> info = new ArrayList<>();
+                        if (descriptor.displayName != null && !descriptor.displayName.isEmpty()) {
+                            info.add(new ItemInfo.Tip(null) {
+                                @Override
+                                public BufferedImage tipimg() {
+                                    return Text.render(descriptor.displayName).img;
+                                }
+                            });
+                        }
+                        if (descriptor.description != null && !descriptor.description.isEmpty()) {
+                            info.add(new ItemInfo.Pagina(null, descriptor.description));
+                        }
+                        BufferedImage img = ItemInfo.longtip(info);
+                        if (img != null) {
+                            return new TexI(img);
+                        }
+                    }
+                    // Для остальных ботов сначала проверяем tooltip из ресурса
+                    if (rtip == null && finalRes != null && finalRes.layers(Resource.Tooltip.class) != null) {
                         List<ItemInfo> info = new ArrayList<>();
                         int count = 0;
-                        for (Resource.Tooltip tt : res.layers(Resource.Tooltip.class)) {
+                        for (Resource.Tooltip tt : finalRes.layers(Resource.Tooltip.class)) {
                             if(count == 0)
                             {
                                 info.add(new ItemInfo.Tip(null) {
@@ -246,6 +283,10 @@ public class NBotsMenu extends Widget
                         BufferedImage img = ItemInfo.longtip(info);
                         if(img!=null)
                             rtip = new TexI(img);
+                    }
+                    // Fallback: если нет tooltip в ресурсе, используем описание из descriptor
+                    if (rtip == null && descriptor != null && descriptor.description != null && !descriptor.description.isEmpty()) {
+                        rtip = new TexI(Text.render(descriptor.description).img);
                     }
                     return (rtip);
                 }
@@ -270,20 +311,23 @@ public class NBotsMenu extends Widget
                             new Runnable() {
                                 @Override
                                 public void run() {
-                                    start(path, action);
+                                    start(NButton.this.path, action);
                                 }
                             });
 
         }
 
-        NButton(String path, Action action, Boolean disStacks)
+        NButton(BotDescriptor descriptor, Action action, Boolean disStacks)
         {
-            this(path, action);
+            this(descriptor, action);
             this.disStacks = disStacks;
         }
 
         private NButton()
         {
+            this.descriptor = null;
+            this.path = "back";
+            this.disStacks = false;
             btn = new IButton(Resource.loadsimg(dir_path + "back" + "/u"), Resource.loadsimg(dir_path +  "back" + "/d"), Resource.loadsimg(dir_path +  "back" + "/h")){
                 @Override
                 public void click() {
@@ -374,8 +418,8 @@ public class NBotsMenu extends Widget
         private boolean active = false;
         private Thread thread;
 
-        NToggleNButton(String path, Action action, boolean disStacks) {
-            super(path, action, disStacks);
+        NToggleNButton(BotDescriptor descriptor, Action action, boolean disStacks) {
+            super(descriptor, action, disStacks);
 
             btn.action(new Runnable() {
                 @Override

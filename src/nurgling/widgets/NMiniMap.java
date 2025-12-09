@@ -31,10 +31,14 @@ NMiniMap extends MiniMap {
 
     // Cache for tree icon textures to avoid reloading every frame
     private final java.util.HashMap<String, TexI> treeIconCache = new java.util.HashMap<>();
+    
+    // Cache for prospecting icon textures to avoid reloading every frame
+    private final java.util.HashMap<String, TexI> prospectingIconCache = new java.util.HashMap<>();
 
     // Visibility flags for tree and fish icons
     public boolean showTreeIcons = true;
     public boolean showFishIcons = true;
+    public boolean showProspectingIcons = true;
 
     private static final Coord2d sgridsz = new Coord2d(new Coord(100,100));
     public NMiniMap(Coord sz, MapFile file) {
@@ -211,6 +215,7 @@ NMiniMap extends MiniMap {
         drawResourceTimers(g);
         drawFishLocations(g);
         drawTreeLocations(g);
+        drawProspectingLocations(g);
         drawQueuedWaypoints(g);  // Draw waypoint visualization
         drawForagerRecordingPath(g);  // Draw forager path being recorded
         drawMarkerLine(g);       // Draw line to selected marker
@@ -1278,6 +1283,52 @@ NMiniMap extends MiniMap {
                 }
             }
 
+            // Check for prospecting location tooltip (check in screen space)
+            if(gui != null && gui.prospectingLocationService != null && showProspectingIcons) {
+                // Check if markers are hidden (respect "Hide Markers" button)
+                MapWnd mapwnd = gui.mapfile;
+                boolean markersHidden = (mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall));
+
+                if(!markersHidden) {
+                    // Get marker search pattern from NMapWnd if we're inside one
+                    String markerSearchPattern = null;
+                    Widget parentWidget = this.parent;
+                    while(parentWidget != null) {
+                        if(parentWidget instanceof NMapWnd) {
+                            markerSearchPattern = ((NMapWnd) parentWidget).markerSearchPattern;
+                            break;
+                        }
+                        parentWidget = parentWidget.parent;
+                    }
+
+                    java.util.List<nurgling.ProspectingLocation> locations = gui.prospectingLocationService.getProspectingLocationsForSegment(sessloc.seg.id);
+                    int threshold = UI.scale(10); // Screen pixels
+
+                    for(nurgling.ProspectingLocation loc : locations) {
+                        // Apply marker search pattern filter
+                        if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
+                            String resourceType = loc.getResourceType();
+                            if(resourceType == null) {
+                                continue; // Skip prospecting locations with no type when searching
+                            }
+                            // Show only resources that contain the marker search pattern (case-insensitive)
+                            if(!resourceType.toLowerCase().contains(markerSearchPattern.toLowerCase())) {
+                                continue; // Skip resources that don't match
+                            }
+                        }
+
+                        // Convert segment-relative coordinates to screen coordinates (same as drawing)
+                        Coord screenPos = loc.getTileCoords().sub(dloc.tc).div(scalef()).add(hsz);
+
+                        if(c.dist(screenPos) < threshold) {
+                            // Tooltip with resource type
+                            String resourceType = loc.getResourceType();
+                            return Text.render(resourceType != null ? resourceType : "Unknown");
+                        }
+                    }
+                }
+            }
+
             Coord tc = c.sub(sz.div(2)).mul(scalef()).add(dloc.tc);
             DisplayMarker mark = markerat(tc);
             if(mark != null) {
@@ -1622,6 +1673,206 @@ NMiniMap extends MiniMap {
         }
     }
 
+    /**
+     * Преобразует название ресурса проспектинга в путь к иконке
+     */
+    private String getProspectingIconPath(String resourceType) {
+        if (resourceType == null) return null;
+        
+        String lower = resourceType.toLowerCase().trim();
+        
+        // Специальные случаи
+        if (lower.contains("water")) {
+            return "gfx/terobjs/map/cavepuddle"; // Используем иконку воды из пещеры
+        } else if (lower.contains("void") || lower.contains("empty")) {
+            return null; // Пустота - используем fallback
+        }
+        
+        // Специальные случаи преобразования названий
+        String resourceName = lower;
+        if (lower.equals("rock salt") || lower.equals("rocksalt")) {
+            resourceName = "halite"; // Rock Salt использует иконку halite
+        }
+        
+        // Нормализуем название: убираем пробелы (например, "lead glance" -> "leadglance")
+        String normalized = resourceName.replaceAll("\\s+", "");
+        
+        // Для камней и руд пробуем gfx/invobjs/[нормализованное название]
+        return "gfx/invobjs/" + normalized;
+    }
+    
+    /**
+     * Пытается загрузить иконку проспектинга из различных возможных путей
+     */
+    private TexI tryLoadProspectingIcon(String resourceType) {
+        if (resourceType == null) return null;
+        
+        String lower = resourceType.toLowerCase().trim();
+        
+        // Специальные случаи преобразования названий
+        String resourceName = lower;
+        if (lower.equals("rock salt") || lower.equals("rocksalt")) {
+            resourceName = "halite"; // Rock Salt использует иконку halite
+        }
+        
+        // Нормализуем название: убираем пробелы (например, "lead glance" -> "leadglance")
+        String normalized = resourceName.replaceAll("\\s+", "");
+        
+        // Список возможных путей к иконке (пробуем и с пробелами, и без)
+        String[] possiblePaths = {
+            "gfx/invobjs/" + normalized,  // Сначала пробуем нормализованное (без пробелов)
+            "gfx/invobjs/" + resourceName,      // Затем с оригинальным названием
+            "gfx/invobjs/ore-" + normalized,
+            "gfx/invobjs/ore-" + resourceName,
+            "gfx/invobjs/stone-" + normalized,
+            "gfx/invobjs/stone-" + resourceName,
+            "gfx/tiles/rocks/" + normalized,
+            "gfx/tiles/rocks/" + resourceName,
+            "gfx/terobjs/bumblings/" + normalized,
+            "gfx/terobjs/bumblings/" + resourceName
+        };
+        
+        // Пробуем загрузить из каждого пути
+        for (String path : possiblePaths) {
+            TexI cached = prospectingIconCache.get(path);
+            if (cached != null) {
+                return cached;
+            }
+            
+            try {
+                Resource iconRes = Resource.remote().loadwait(path);
+                BufferedImage icon = iconRes.layer(Resource.imgc).img;
+                TexI tex = new TexI(icon);
+                prospectingIconCache.put(path, tex);
+                return tex;
+            } catch (Exception e) {
+                // Пробуем следующий путь
+                continue;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Рисует fallback иконку (цветной круг) если не удалось загрузить иконку ресурса
+     */
+    private void drawFallbackProspectingIcon(GOut g, Coord screenPos, String resourceType) {
+        Color iconColor;
+        if(resourceType != null && resourceType.toLowerCase().contains("water")) {
+            iconColor = new Color(64, 164, 223); // Синий для воды
+        } else if(resourceType != null && (resourceType.toLowerCase().contains("void") || resourceType.toLowerCase().contains("empty"))) {
+            iconColor = new Color(128, 128, 128); // Серый для пустоты
+        } else if(resourceType != null && resourceType.toLowerCase().contains("ore")) {
+            iconColor = new Color(255, 200, 0); // Золотой для руды
+        } else {
+            iconColor = new Color(139, 137, 137); // Серый для камня
+        }
+        
+        int iconSize = UI.scale(12);
+        g.chcolor(iconColor);
+        g.fellipse(screenPos, new Coord(iconSize, iconSize));
+        g.chcolor();
+    }
+
+    private void drawProspectingLocations(GOut g) {
+        if(sessloc == null || dloc == null) return;
+
+        // Check if prospecting icons are hidden by checkbox
+        if(!showProspectingIcons) return;
+
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null || gui.prospectingLocationService == null) return;
+
+        // Check if markers are hidden (respect "Hide Markers" button)
+        MapWnd mapwnd = gui.mapfile;
+        if(mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall)) {
+            return; // Don't draw prospecting locations when markers are hidden
+        }
+
+        // Get marker search pattern from NMapWnd if we're inside one
+        String markerSearchPattern = null;
+        Widget parentWidget = this.parent;
+        while(parentWidget != null) {
+            if(parentWidget instanceof NMapWnd) {
+                markerSearchPattern = ((NMapWnd) parentWidget).markerSearchPattern;
+                break;
+            }
+            parentWidget = parentWidget.parent;
+        }
+
+        // Use sessloc.seg.id like waypoints and markers do
+        java.util.List<nurgling.ProspectingLocation> prospectingLocations = gui.prospectingLocationService.getProspectingLocationsForSegment(sessloc.seg.id);
+
+        Coord hsz = sz.div(2);
+
+        for(nurgling.ProspectingLocation prospectingLoc : prospectingLocations) {
+            // Apply marker search pattern filter to resource types
+            if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
+                String resourceType = prospectingLoc.getResourceType();
+                if(resourceType == null) {
+                    continue; // Hide prospecting locations with no type when searching
+                }
+                // Show only resources that contain the marker search pattern (case-insensitive)
+                if(!resourceType.toLowerCase().contains(markerSearchPattern.toLowerCase())) {
+                    continue; // Hide resources that don't match
+                }
+            }
+
+            // Convert segment-relative coordinates to screen coordinates
+            Coord screenPos = prospectingLoc.getTileCoords().sub(dloc.tc).div(scalef()).add(hsz);
+
+            // Only draw if on screen
+            if(screenPos.x >= 0 && screenPos.x <= sz.x &&
+               screenPos.y >= 0 && screenPos.y <= sz.y) {
+
+                try {
+                    String resourceType = prospectingLoc.getResourceType();
+                    
+                    // Получаем путь к иконке ресурса
+                    String iconResourcePath = getProspectingIconPath(resourceType);
+                    TexI tex = null;
+                    
+                    if (iconResourcePath != null) {
+                        tex = prospectingIconCache.get(iconResourcePath);
+                        
+                        // Load and cache if not already cached
+                        if(tex == null) {
+                            try {
+                                Resource iconRes = Resource.remote().loadwait(iconResourcePath);
+                                BufferedImage icon = iconRes.layer(Resource.imgc).img;
+                                tex = new TexI(icon);
+                                prospectingIconCache.put(iconResourcePath, tex);
+                            } catch (Exception e) {
+                                // Если не удалось загрузить первый путь, пробуем другие варианты
+                                tex = tryLoadProspectingIcon(resourceType);
+                            }
+                        }
+                    } else {
+                        // Пробуем загрузить иконку напрямую по названию
+                        tex = tryLoadProspectingIcon(resourceType);
+                    }
+                    
+                    if(tex != null) {
+                        // Draw scaled icon (same size as tree icons)
+                        int dsz = Math.max(tex.sz().y, tex.sz().x);
+                        int targetSize = UI.scale(18);
+                        g.aimage(tex, screenPos, 0.5, 0.5, UI.scale(targetSize * tex.sz().x / dsz, targetSize * tex.sz().y / dsz));
+                    } else {
+                        // Fallback: draw colored circle if icon fails
+                        drawFallbackProspectingIcon(g, screenPos, resourceType);
+                    }
+
+                } catch (Exception e) {
+                    // Fallback: draw gray circle if icon fails
+                    g.chcolor(128, 128, 128, 255);
+                    g.fellipse(screenPos, new Coord(UI.scale(6), UI.scale(6)));
+                    g.chcolor();
+                }
+            }
+        }
+    }
+
     private nurgling.FishLocation fishLocationAt(Coord tc) {
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.fishLocationService == null || dloc == null) return null;
@@ -1697,6 +1948,71 @@ NMiniMap extends MiniMap {
                 return true;
             }
         }
+        
+        // Check for right-click on prospecting location
+        if(ev.b == 3 && dloc != null && sessloc != null && showProspectingIcons) {
+            NGameUI gui = NUtils.getGameUI();
+            if(gui != null && gui.prospectingLocationService != null) {
+                // Check for prospecting location at click position (in screen space)
+                java.util.List<nurgling.ProspectingLocation> locations = gui.prospectingLocationService.getProspectingLocationsForSegment(sessloc.seg.id);
+                int threshold = UI.scale(10);
+                Coord hsz = sz.div(2);
+
+                for(nurgling.ProspectingLocation loc : locations) {
+                    Coord screenPos = loc.getTileCoords().sub(dloc.tc).div(scalef()).add(hsz);
+
+                    if(ev.c.dist(screenPos) < threshold) {
+                        // Show flower menu with delete option at global coordinates
+                        final String locationId = loc.getLocationId();
+                        final String resourceType = loc.getResourceType();
+                        
+                        // Convert widget-relative coordinates to global screen coordinates
+                        // Same approach as RoutesWidget
+                        Widget par = parent;
+                        Coord pos = ev.c;
+                        while (par != null && !(par instanceof GameUI)) {
+                            pos = pos.add(par.c);
+                            par = par.parent;
+                        }
+                        
+                        NFlowerMenu menu = new NFlowerMenu(new String[]{"Delete"}) {
+                            @Override
+                            public boolean mousedown(MouseDownEvent ev) {
+                                if(super.mousedown(ev))
+                                    nchoose(null);
+                                return true;
+                            }
+
+                            public void destroy() {
+                                super.destroy();
+                            }
+
+                            @Override
+                            public void nchoose(NPetal option) {
+                                if(option != null && option.name.equals("Delete")) {
+                                    NGameUI gui = NUtils.getGameUI();
+                                    if(gui != null && gui.prospectingLocationService != null) {
+                                        boolean removed = gui.prospectingLocationService.removeProspectingLocation(locationId);
+                                        if(removed) {
+                                            gui.msg("Удален маркер: " + (resourceType != null ? resourceType : "Unknown"), java.awt.Color.YELLOW);
+                                        }
+                                    }
+                                    // Close menu without sending to server
+                                    uimsg("cancel");
+                                    return;
+                                }
+                                super.nchoose(option);
+                            }
+                        };
+                        
+                        // Add menu to root UI, same as RoutesWidget
+                        ui.root.add(menu, pos.add(UI.scale(25, 38)));
+                        return true; // Consume event to prevent further processing
+                    }
+                }
+            }
+        }
+        
         return super.mousedown(ev);
     }
 
@@ -1844,6 +2160,7 @@ NMiniMap extends MiniMap {
                 }
             }
         }
+
         return super.mouseup(ev);
     }
 

@@ -15,6 +15,7 @@ public class NMapWnd extends MapWnd {
     MapToggleButton treeBtn;
     MapToggleButton fishBtn;
     MapToggleButton oresBtn;
+    MapToggleButton prospectBtn;
     TextEntry markerSearchField;
     private static final int btnw = UI.scale(95);
 
@@ -51,17 +52,23 @@ public class NMapWnd extends MapWnd {
         oresBtn.a = false; // Always show as unpressed (no toggle state)
         oresBtn.click(this::openOresSearch); // Left click opens window
         
-        // Fish button (middle)
+        // Fish button
         btnPos = btnPos.sub(oresBtn.sz.x + btnSpacing, 0);
         fishBtn = add(new MapToggleButton("fish", "Toggle fish icons (Right-click: Fish Search)", this::openFishSearch), btnPos);
         fishBtn.a = getFishIconsState(); // Set initial state
         fishBtn.changed(val -> setFishIconsState(val));
         
-        // Tree button (leftmost)
+        // Tree button
         btnPos = btnPos.sub(fishBtn.sz.x + btnSpacing, 0);
         treeBtn = add(new MapToggleButton("tree", "Toggle tree icons (Right-click: Tree Search)", this::openTreeSearch), btnPos);
         treeBtn.a = getTreeIconsState(); // Set initial state
         treeBtn.changed(val -> setTreeIconsState(val));
+        
+        // Prospect button (leftmost) - uses same icon as tree
+        btnPos = btnPos.sub(treeBtn.sz.x + btnSpacing, 0);
+        prospectBtn = add(new MapToggleButton("tree", "Toggle prospecting icons (Right-click: Prospecting Search)", this::openProspectingSearch), btnPos);
+        prospectBtn.a = getProspectingIconsState(); // Set initial state
+        prospectBtn.changed(val -> setProspectingIconsState(val));
         
         // Add marker search field at bottom-right (no label, no button)
         add(markerSearchField = new TextEntry(UI.scale(200), "") {
@@ -110,6 +117,21 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showFishIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showFishIcons = val;
+    }
+
+    private boolean getProspectingIconsState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            return ((NMiniMap) gui.mmap).showProspectingIcons;
+        return true;
+    }
+
+    private void setProspectingIconsState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            ((NMiniMap) gui.mmap).showProspectingIcons = val;
+        if(view instanceof NMiniMap)
+            ((NMiniMap) view).showProspectingIcons = val;
     }
 
     private void openTreeSearch() {
@@ -166,6 +188,24 @@ public class NMapWnd extends MapWnd {
         }
     }
 
+    private void openProspectingSearch() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null) {
+            if(gui.prospectingSearchWindow != null) {
+                if(gui.prospectingSearchWindow.visible()) {
+                    gui.prospectingSearchWindow.hide();
+                } else {
+                    gui.prospectingSearchWindow.show();
+                    gui.prospectingSearchWindow.raise();
+                }
+            } else {
+                gui.prospectingSearchWindow = new ProspectingSearchWindow(gui);
+                gui.add(gui.prospectingSearchWindow, new Coord(100, 100));
+                gui.prospectingSearchWindow.show();
+            }
+        }
+    }
+
     public long playerSegmentId() {
         MiniMap.Location sessloc = view.sessloc;
         if(sessloc == null) {return 0;}
@@ -194,7 +234,7 @@ public class NMapWnd extends MapWnd {
         super.resize(sz);
         
         // Position buttons in top-right corner (15px right, 10px down from original position)
-        if(oresBtn != null && fishBtn != null && treeBtn != null) {
+        if(oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null) {
             int btnSpacing = UI.scale(5);
             Coord btnPos = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
             
@@ -203,6 +243,8 @@ public class NMapWnd extends MapWnd {
             fishBtn.c = btnPos;
             btnPos = btnPos.sub(fishBtn.sz.x + btnSpacing, 0);
             treeBtn.c = btnPos;
+            btnPos = btnPos.sub(treeBtn.sz.x + btnSpacing, 0);
+            prospectBtn.c = btnPos;
         }
         
         // Keep marker search field at bottom-right
