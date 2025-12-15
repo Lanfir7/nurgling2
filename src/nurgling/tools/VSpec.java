@@ -1241,6 +1241,7 @@ public class VSpec {
         strings.add(new JSONObject("{\"static\":\"gfx/invobjs/reedtwine\",\"name\":\"Reed Twine\"}"));
         strings.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/toadflax\",\"name\":\"Toadflax\"}"));
         strings.add(new JSONObject("{\"static\":\"gfx/invobjs/trollhair\",\"name\":\"Troll Hair\"}"));
+        strings.add(new JSONObject("{\"static\":\"gfx/invobjs/grasstwine\",\"name\":\"Grass Twine\"}"));
         categories.put("String", strings);
 
         ArrayList<JSONObject> salads = new ArrayList<>();
@@ -1289,7 +1290,7 @@ public class VSpec {
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-chicken\",\"name\":\"Chicken Egg\"}"));
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-magpie\",\"name\":\"Magpie Egg\"}"));
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-rockdove\",\"name\":\"Rock Dove Egg\"}"));
-        eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-woodgrouse\",\"name\":\"Wood Grouse Egg\"}"));
+        eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-woodgrouse\",\"name\":\"Woodgrouse Egg\"}"));
 //        eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/pickledegg\",\"name\":\"Pickled Egg\"}"));
         categories.put("Egg", eggs);
 
@@ -1438,6 +1439,7 @@ public class VSpec {
         forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/lingon\",\"name\":\"Lingonberries\"}"));
         forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/rustroot\",\"name\":\"Rustroot\"}"));
         forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/stingingnettle\",\"name\":\"Stinging Nettle\"}"));
+        forageble.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/windweed\",\"name\":\"Wild Windsown Weed\"}"));
         categories.put("Forageable", forageble);
 
         ArrayList<JSONObject> fruitOrBerry = new ArrayList<>();
@@ -1489,6 +1491,7 @@ public class VSpec {
 
         ArrayList<JSONObject> flours = new ArrayList<>();
         flours.add(new JSONObject("{\"static\":\"gfx/invobjs/flour-barleyflour\",\"name\":\"Barley Flour\"}"));
+        flours.add(new JSONObject("{\"static\":\"gfx/invobjs/flour-cerealflour\",\"name\":\"Corn Grass Flour\"}"));
         flours.add(new JSONObject("{\"static\":\"gfx/invobjs/flour-milletflour\",\"name\":\"Millet Flour\"}"));
         flours.add(new JSONObject("{\"static\":\"gfx/invobjs/flour-wheatflour\",\"name\":\"Wheat Flour\"}"));
         categories.put("Flour", flours);
@@ -1654,6 +1657,7 @@ public class VSpec {
         treeBoughs.add(new JSONObject("{\"static\":\"gfx/invobjs/bough-spruce\",\"name\":\"Spruce Bough\"}"));
         treeBoughs.add(new JSONObject("{\"static\":\"gfx/invobjs/bough-sweetgum\",\"name\":\"Sweetgum Bough\"}"));
         treeBoughs.add(new JSONObject("{\"static\":\"gfx/invobjs/bough-yew\",\"name\":\"Yew Bough\"}"));
+        treeBoughs.add(new JSONObject("{\"static\":\"gfx/invobjs/bough-beech\",\"name\":\"Beech Bough\"}"));
         categories.put("Tree Bough", treeBoughs);
 
         ArrayList<JSONObject> thatchingMaterials = new ArrayList<>();
@@ -1732,6 +1736,7 @@ public class VSpec {
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/woodgrouse-m-cleaned\",\"name\":\"Cleaned Wood Grouse Cock\"}"));
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/woodgrouse-f-cleaned\",\"name\":\"Cleaned Wood Grouse Hen\"}"));
         categories.put("Clean Animal Carcass", cleanCarcasses);
+
 
         ArrayList<JSONObject> baits = new ArrayList<>();
         baits.addAll(giantAntItems);
@@ -2061,12 +2066,13 @@ public class VSpec {
         categories.put("Fine Feather", fineFeathers);
 
         ArrayList<JSONObject> finerPlantFibres = new ArrayList<>();
-        finerPlantFibres.add(new JSONObject("{\"static\":\"gfx/invobjs/flaxfibre\",\"name\":\"Flax Fibre\"}"));
-        finerPlantFibres.add(new JSONObject("{\"static\":\"gfx/invobjs/hempfibre\",\"name\":\"Hemp Fibre\"}"));
+        finerPlantFibres.add(new JSONObject("{\"static\":\"gfx/invobjs/flaxfibre\",\"name\":\"Flax Fibres\"}"));
+        finerPlantFibres.add(new JSONObject("{\"static\":\"gfx/invobjs/hempfibre\",\"name\":\"Hemp Fibres\"}"));
         categories.put("Finer Plant Fibre", finerPlantFibres);
 
         ArrayList<JSONObject> soil = new ArrayList<>();
         soil.add(new JSONObject("{\"static\":\"gfx/invobjs/soil\",\"name\":\"Soil\"}"));
+        soil.add(new JSONObject("{\"static\":\"gfx/invobjs/earthworm\",\"name\":\"Earthworm\"}"));
         categories.put("Soil", soil);
 
         ArrayList<JSONObject> silkcocoon = new ArrayList<>();
@@ -2276,6 +2282,7 @@ public class VSpec {
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/wildhorsehide-blood\",\"name\":\"Fresh Wildhorse Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/wolfhide-blood\",\"name\":\"Fresh Wolf Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/wolverinehide-blood\",\"name\":\"Fresh Wolverine Hide\"}"));
+        hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/foxhide-blood\",\"name\":\"Fresh Fox Hide\"}"));
         categories.put("Hide Fresh", hidesFresh);
 
         ArrayList<JSONObject> preparedAnimalHides = new ArrayList<>();
@@ -2833,7 +2840,40 @@ public class VSpec {
         cheeses.add(new JSONObject("{\"static\":\"gfx/invobjs/curd-sheep\",\"name\":\"Sheep's Curd\"}"));
         categories.put("Cheese", cheeses);
 
+        ArrayList<JSONObject> curio = new ArrayList<>();
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/poppycapss\",\"name\":\"Poppycaps\"}"));
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/batwings\",\"name\":\"Bat Wings\"}"));
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/royaltoadstool\",\"name\":\"Royal Toadstool\"}"));
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/tapeworm\",\"name\":\"Disgusting Tapeworm\"}"));
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/glowshrooms\",\"name\":\"Glowshroom\"}"));
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/squirrelhair\",\"name\":\"Tuft of Squirrel's Finest Hair\"}"));
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/ghostpipes\",\"name\":\"Ghostpipe\"}"));
+        curio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/cattailhead\",\"name\":\"Cattail Head\"}"));
+        categories.put("Curiosities", curio);
 
+        ArrayList<JSONObject> Misc = new ArrayList<>();
+        Misc.add(new JSONObject("{\"static\":\"gfx/invobjs/standinggrass\",\"name\":\"Standing Grass\"}"));
+        Misc.add(new JSONObject("{\"static\":\"gfx/invobjs/leather\",\"name\":\"Leather\"}"));
+        Misc.add(new JSONObject("{\"static\":\"gfx/invobjs/forestlizard\",\"name\":\"Forest Lizard\"}"));
+        Misc.add(new JSONObject("{\"static\":\"gfx/invobjs/frog\",\"name\":\"Frog\"}"));
+        categories.put("Miscellaneous", Misc);
+
+        ArrayList<JSONObject> Bark = new ArrayList<>();
+        Bark.add(new JSONObject("{\"static\":\"gfx/invobjs/bark-birch\",\"name\":\"Birch Bark\"}"));
+        Bark.add(new JSONObject("{\"static\":\"gfx/invobjs/bark\",\"name\":\"Treebark\"}"));
+        Bark.add(new JSONObject("{\"static\":\"gfx/invobjs/bark-willow\",\"name\":\"Willow Bark\"}"));
+        Bark.add(new JSONObject("{\"static\":\"gfx/invobjs/toughbark\",\"name\":\"Tough Bark\"}"));
+        categories.put("Bark", Bark);
+
+        ArrayList<JSONObject> Shellfish = new ArrayList<>();
+        Shellfish.add(new JSONObject("{\"static\":\"gfx/invobjs/bayshrimp\",\"name\":\"Bay Shrimp\"}"));
+        Shellfish.add(new JSONObject("{\"static\":\"gfx/invobjs/lobster\",\"name\":\"Lobster\"}"));
+        categories.put("Shellfish", Shellfish);
+
+        ArrayList<JSONObject> intandent = new ArrayList<>();
+        intandent.add(new JSONObject("{\"static\":\"gfx/invobjs/intestines\",\"name\":\"Intestines\"}"));
+        intandent.add(new JSONObject("{\"static\":\"gfx/invobjs/entrails\",\"name\":\"Entrails\"}"));
+        categories.put("Intestines and entrails", intandent);
     }
 
     public static NAlias getNamesInCategory(String categoryName) {

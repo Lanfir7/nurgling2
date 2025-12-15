@@ -42,6 +42,9 @@ public class QoL extends Panel {
     private CheckBox disableDrugEffects;
     private CheckBox simpleInspect;
     private CheckBox alwaysObfuscate;
+    private CheckBox randomAreaColor;
+    private CheckBox treeScaleDisableZoomHide;
+    private TextEntry treeScaleMinThresholdEntry;
 
     private Dropbox<String> preferredSpeedDropbox;
     private Dropbox<String> preferredHorseSpeedDropbox;
@@ -118,6 +121,11 @@ public class QoL extends Panel {
         leftPrev = shortCupboards = leftColumn.add(new CheckBox("Short cupboards"), leftPrev.pos("bl").adds(0, 5));
         leftPrev = shortWalls = leftColumn.add(new CheckBox("Short mine walls"), leftPrev.pos("bl").adds(0, 5));
         leftPrev = decalsOnTop = leftColumn.add(new CheckBox("Cupboard decals on top"), leftPrev.pos("bl").adds(0, 5));
+
+        leftPrev = leftColumn.add(new Label("● Tree Growth Display"), leftPrev.pos("bl").adds(0, 15));
+        leftPrev = treeScaleDisableZoomHide = leftColumn.add(new CheckBox("Always show tree growth % (disable zoom hide)"), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = leftColumn.add(new Label("Min tree growth % to display:"), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = treeScaleMinThresholdEntry = leftColumn.add(new TextEntry.NumberValue(50, "0"), leftPrev.pos("bl").adds(0, 5));
 
         leftPrev = leftColumn.add(new Label("● Network"), leftPrev.pos("bl").adds(0, 15));
         leftPrev = alwaysObfuscate = leftColumn.add(new CheckBox("Always use obfuscation (bypass RF firewall)"), leftPrev.pos("bl").adds(0, 5));
@@ -208,6 +216,7 @@ public class QoL extends Panel {
         rightPrev = disableMenugridKeys = rightColumn.add(new CheckBox("Disable menugrid keys"), rightPrev.pos("bl").adds(0, 5));
         rightPrev = verboseCal = rightColumn.add(new CheckBox("Verbose calendar"), rightPrev.pos("bl").adds(0, 5));
         rightPrev = disableDrugEffects = rightColumn.add(new CheckBox("Disable drug/alcohol visual effects"), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = randomAreaColor = rightColumn.add(new CheckBox("Random color for new areas"), rightPrev.pos("bl").adds(0, 5));
 
         rightPrev = rightColumn.add(new Label("● Debug & Development"), rightPrev.pos("bl").adds(0, 15));
         rightPrev = debug = rightColumn.add(new CheckBox("DEBUG"), rightPrev.pos("bl").adds(0, 5));
@@ -277,6 +286,11 @@ public class QoL extends Panel {
         showRealmOverlays.a = getBool(NConfig.Key.minimapRealmol);
         disableDrugEffects.a = getBool(NConfig.Key.disableDrugEffects);
         alwaysObfuscate.a = getBool(NConfig.Key.alwaysObfuscate);
+        randomAreaColor.a = getBool(NConfig.Key.randomAreaColor);
+        treeScaleDisableZoomHide.a = getBool(NConfig.Key.treeScaleDisableZoomHide);
+        
+        Object minThreshold = NConfig.get(NConfig.Key.treeScaleMinThreshold);
+        treeScaleMinThresholdEntry.settext(minThreshold == null ? "0" : minThreshold.toString());
 
         // Load preferred movement speed
         Object speedPref = NConfig.get(NConfig.Key.preferredMovementSpeed);
@@ -440,6 +454,11 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.verboseCal, verboseCal.a);
         NConfig.set(NConfig.Key.disableDrugEffects, disableDrugEffects.a);
         NConfig.set(NConfig.Key.alwaysObfuscate, alwaysObfuscate.a);
+        NConfig.set(NConfig.Key.randomAreaColor, randomAreaColor.a);
+        NConfig.set(NConfig.Key.treeScaleDisableZoomHide, treeScaleDisableZoomHide.a);
+        
+        int minThreshold = parseIntOrDefault(treeScaleMinThresholdEntry.text(), 0);
+        NConfig.set(NConfig.Key.treeScaleMinThreshold, minThreshold);
 
         // Save minimap overlay settings (separate from 3D ground overlays)
         NConfig.set(NConfig.Key.minimapClaimol, showPersonalClaims.a);

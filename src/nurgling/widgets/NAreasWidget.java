@@ -104,11 +104,9 @@ public class NAreasWidget extends Window
                         return;
                     if(fc.getSelectedFile()!=null)
                     {
-                        NUtils.getUI().core.config.mergeAreas(fc.getSelectedFile());
+                        // Show import strategy dialog
+                        NImportStrategyDialog.showDialog(fc.getSelectedFile());
                     }
-                    NAreasWidget.this.hide();
-                    NAreasWidget.this.show();
-                    NConfig.needAreasUpdate();
                 });
             }
         },showCat.pos("ur").adds(UI.scale(25,0)));
@@ -568,7 +566,7 @@ public class NAreasWidget extends Window
                             }
                             else if (option.name.equals("Select area space"))
                             {
-                                ((NMapView)NUtils.getGameUI().map).changeArea(AreaItem.this.text.text());
+                                ((NMapView)NUtils.getGameUI().map).changeArea(area.id);
                             }
                             else if (option.name.equals("Set color"))
                             {

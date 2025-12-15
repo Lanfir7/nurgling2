@@ -17,6 +17,8 @@ import nurgling.cookbook.Recipe;
 import nurgling.cookbook.connection.RecipeHashFetcher;
 import nurgling.cookbook.connection.RecipeLoader;
 
+import nurgling.DBPoolManager;
+
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
@@ -27,6 +29,8 @@ import java.util.List;
 import java.util.concurrent.Future;
 
 import static haven.CharWnd.ifnd;
+
+// Utility imports for layered image creation
 
 public class NCookBook extends Window {
 
@@ -89,21 +93,12 @@ public class NCookBook extends Window {
                 boolean res = super.keydown(e);
                 if(e.code==10)
                 {
-                    try {
-                        if (ui.core.poolManager == null || !ui.core.poolManager.isConnectionReady()) {
-                            return res; // Database not ready
-                        }
-                        java.sql.Connection conn = ui.core.poolManager.getConnection();
-                        if (conn == null) {
-                            return res;
-                        }
-                        rhf = new RecipeHashFetcher(conn, searchF.text());
-                        ui.core.poolManager.submitTask(rhf);
-                        disable();
-                    }catch (SQLException err)
-                    {
-                        err.printStackTrace();
+                    if (ui.core.poolManager == null || !ui.core.poolManager.isConnectionReady()) {
+                        return res; // Database not ready
                     }
+                    rhf = new RecipeHashFetcher(ui.core.poolManager, searchF.text());
+                    ui.core.poolManager.submitTask(rhf);
+                    disable();
                 }
                 return res;
             }
@@ -562,44 +557,11 @@ public class NCookBook extends Window {
                 if (!recipesLoaded) {
                     System.out.println("NCookBook.show: Creating new RecipeHashFetcher task");
                     
-                    // Получаем соединение к БД с повторными попытками
-                    java.sql.Connection conn = null;
-                    int retries = 3;
-                    for (int i = 0; i < retries; i++) {
-                        try {
-                            if (favoriteManager == null) {
-                                favoriteManager = new FavoriteRecipeManager(ui.core.poolManager.getConnection());
-                            }
-                            conn = ui.core.poolManager.getConnection();
-                            if (conn != null && !conn.isClosed()) {
-                                break;
-                            }
-                            if (conn != null && conn.isClosed()) {
-                                System.out.println("NCookBook.show: Connection is closed, reconnecting... (attempt " + (i+1) + ")");
-                                ui.core.poolManager.reconnect();
-                                conn = ui.core.poolManager.getConnection();
-                                if (conn != null && !conn.isClosed()) {
-                                    break;
-                                }
-                            }
-                        } catch (SQLException e) {
-                            System.err.println("NCookBook.show: SQLException getting connection (attempt " + (i+1) + "): " + e.getMessage());
-                            if (i < retries - 1) {
-                                try {
-                                    Thread.sleep(100); // Небольшая задержка перед повторной попыткой
-                                } catch (InterruptedException ie) {
-                                    Thread.currentThread().interrupt();
-                                }
-                            }
-                        }
+                    if (favoriteManager == null) {
+                        favoriteManager = new FavoriteRecipeManager(ui.core.poolManager);
                     }
-                    
-                    if (conn == null || conn.isClosed()) {
-                        System.err.println("NCookBook.show: Failed to get database connection after " + retries + " attempts");
-                        return super.show(show);
-                    }
-                    
-                    rhf = new RecipeHashFetcher(conn, RecipeHashFetcher.genFep(currentSortType, currentSortDesc));
+                    rhf = new RecipeHashFetcher(ui.core.poolManager,
+                            RecipeHashFetcher.genFep(currentSortType, currentSortDesc));
                     rhfFuture = ui.core.poolManager.submitTask(rhf);
                     if (rhfFuture == null) {
                         System.err.println("NCookBook.show: Failed to submit RecipeHashFetcher task (queue full?)");
@@ -676,11 +638,65 @@ public class NCookBook extends Window {
         private static int y_pos = 20;
         private String recName;
 
+        /**
+         * Create recipe icon, handling layered sprites (meat, fish, etc.)
+         * Resource names with '+' separator indicate layered sprites.
+         */
+        private static TexI createRecipeIcon(Recipe recipe) {
+            String resourceName = recipe.getResourceName();
+            try {
+                if (resourceName != null && resourceName.contains("+")) {
+                    // Layered sprite - combine multiple images
+                    String[] layers = resourceName.split("\\+");
+                    BufferedImage combined = null;
+                    Graphics2D g = null;
+                    
+                    for (String layer : layers) {
+                        try {
+                            Resource res = Resource.remote().loadwait(layer.trim());
+                            Resource.Image imgLayer = res.layer(Resource.imgc);
+                            if (imgLayer != null) {
+                                BufferedImage layerImg = imgLayer.scaled();
+                                if (combined == null) {
+                                    // Initialize with first layer size
+                                    combined = new BufferedImage(
+                                        layerImg.getWidth(), 
+                                        layerImg.getHeight(), 
+                                        BufferedImage.TYPE_INT_ARGB
+                                    );
+                                    g = combined.createGraphics();
+                                }
+                                // Draw layer with offset
+                                g.drawImage(layerImg, imgLayer.o.x, imgLayer.o.y, null);
+                            }
+                        } catch (Exception e) {
+                            // Skip failed layer
+                        }
+                    }
+                    
+                    if (g != null) {
+                        g.dispose();
+                    }
+                    
+                    if (combined != null) {
+                        return new TexI(combined);
+                    }
+                }
+                
+                // Standard single-layer sprite
+                return new TexI(Resource.remote().loadwait(resourceName).layer(Resource.imgc).img);
+                
+            } catch (Exception e) {
+                // Fallback: return empty/default icon
+                return new TexI(new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB));
+            }
+        }
+
         public RecieptItem(Recipe recipe) {
             this.recipe = recipe;
             recName = recipe.getName();
             this.text = add(new Label(recName),UI.scale(45,y_pos));
-            icon = new TexI(Resource.remote().loadwait(recipe.getResourceName()).layer(Resource.imgc).img);
+            icon = createRecipeIcon(recipe);
             BufferedImage bi = new BufferedImage(x_shift, UI.scale(60), BufferedImage.TYPE_INT_ARGB);
             Graphics2D graphics = bi.createGraphics();
             int len = UI.scale(120);
@@ -725,8 +741,9 @@ public class NCookBook extends Window {
             }
             weightscale = new TexI(wi);
             StringBuilder str = new StringBuilder();
-            for(String ing: recipe.getIngredients().keySet()) {
-                str.append(ing).append(": ").append(Utils.odformat2(recipe.getIngredients().get(ing),2)).append("%").append("\040");
+            for(String ingName: recipe.getIngredients().keySet()) {
+                Recipe.IngredientInfo ingInfo = recipe.getIngredients().get(ingName);
+                str.append(ingName).append(": ").append(Utils.odformat2(ingInfo.percentage,2)).append("%").append("\040");
             }
             ing = new TexI(ingfnd.render(str.toString(), UI.scale(250)).img);
 

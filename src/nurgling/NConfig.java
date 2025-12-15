@@ -26,6 +26,7 @@ public class NConfig
     {
         vilol, claimol, realmol,
         minimapVilol, minimapClaimol, minimapRealmol,
+        selectedWorld,
         showVarity,
         autoFlower,
         autoSplitter,
@@ -160,7 +161,16 @@ public class NConfig
         showQuestGiverNames,
         showThingwallNames,
         showPartyMemberNames,
-        trackingVectors
+        trackingVectors,
+        randomAreaColor,
+        treeScaleDisableZoomHide,
+        treeScaleMinThreshold,
+        itemQualityOverlay,
+        stackQualityOverlay,
+        amountOverlay,
+        studyInfoOverlay,
+        progressOverlay,
+        volumeOverlay
     }
 
     public enum BBDisplayMode
@@ -191,6 +201,7 @@ public class NConfig
         conf.put(Key.minimapVilol, false);
         conf.put(Key.minimapClaimol, false);
         conf.put(Key.minimapRealmol, false);
+        conf.put(Key.selectedWorld, null);
         conf.put(Key.showVarity, false);
         conf.put(Key.autoFlower, false);
         conf.put(Key.autoSplitter, false);
@@ -428,6 +439,45 @@ public class NConfig
         
         // Map tracking vectors
         conf.put(Key.trackingVectors, false);
+        
+        // Random area color on creation
+        conf.put(Key.randomAreaColor, false);
+        
+        // Tree scale overlay settings
+        conf.put(Key.treeScaleDisableZoomHide, false);  // If true, always show full label (don't hide on zoom out)
+        conf.put(Key.treeScaleMinThreshold, 0);  // Minimum growth % to display tree scale (0 = show all)
+        
+        // Item quality overlay settings
+        conf.put(Key.itemQualityOverlay, new ItemQualityOverlaySettings());
+        // Stack quality overlay settings
+        ItemQualityOverlaySettings stackDefaults = new ItemQualityOverlaySettings();
+        stackDefaults.corner = ItemQualityOverlaySettings.Corner.TOP_LEFT;
+        conf.put(Key.stackQualityOverlay, stackDefaults);
+        // Amount overlay settings
+        ItemQualityOverlaySettings amountDefaults = new ItemQualityOverlaySettings();
+        amountDefaults.corner = ItemQualityOverlaySettings.Corner.BOTTOM_RIGHT;
+        amountDefaults.useThresholds = false;
+        conf.put(Key.amountOverlay, amountDefaults);
+        // Study info overlay settings
+        ItemQualityOverlaySettings studyDefaults = new ItemQualityOverlaySettings();
+        studyDefaults.corner = ItemQualityOverlaySettings.Corner.BOTTOM_LEFT;
+        studyDefaults.useThresholds = false;
+        studyDefaults.defaultColor = new java.awt.Color(255, 255, 50);
+        conf.put(Key.studyInfoOverlay, studyDefaults);
+        // Progress/meter overlay settings
+        ItemQualityOverlaySettings progressDefaults = new ItemQualityOverlaySettings();
+        progressDefaults.corner = ItemQualityOverlaySettings.Corner.BOTTOM_LEFT;
+        progressDefaults.useThresholds = false;
+        progressDefaults.defaultColor = new java.awt.Color(234, 164, 101);
+        progressDefaults.showBackground = true;
+        conf.put(Key.progressOverlay, progressDefaults);
+        // Volume overlay settings (CustomName - kg/l)
+        ItemQualityOverlaySettings volumeDefaults = new ItemQualityOverlaySettings();
+        volumeDefaults.corner = ItemQualityOverlaySettings.Corner.TOP_LEFT;
+        volumeDefaults.useThresholds = false;
+        volumeDefaults.defaultColor = new java.awt.Color(65, 255, 115);
+        volumeDefaults.showBackground = true;
+        conf.put(Key.volumeOverlay, volumeDefaults);
     }
 
 
@@ -628,6 +678,14 @@ public class NConfig
     public String getTreeLocationsPath() {
         return getProfileAwarePath("tree_locations.nurgling.json");
     }
+    
+    /**
+     * Gets the dynamic path for labeled marks configuration file
+     * (water/soil quality marks from Checker bots)
+     */
+    public String getLabeledMarksPath() {
+        return getProfileAwarePath("labeled_marks.nurgling.json");
+    }
 
     /**
      * Gets the dynamic path for prospecting locations configuration file
@@ -795,6 +853,9 @@ public class NConfig
                                 case "FontSettings":
                                     conf.put(Key.fonts, new FontSettings(hobj));
                                     break;
+                                case "ItemQualityOverlaySettings":
+                                    conf.put(Key.valueOf(entry.getKey()), new ItemQualityOverlaySettings(hobj));
+                                    break;
                                 case "Color":
                                     try {
                                         int red = ((Number) hobj.get("red")).intValue();
@@ -953,21 +1014,24 @@ public class NConfig
         {
             try
             {
-                FileWriter f = new FileWriter(customPath==null?getExploredPath():customPath,StandardCharsets.UTF_8);
-                ((NCornerMiniMap)NUtils.getGameUI().mmap).exploredArea.toJson().write(f);
-                f.close();
-                current.isExploredUpd = false;
+                String filePath = customPath == null ? getExploredPath() : customPath;
+                // Merge with existing data on disk to prevent data loss when multiple clients run
+                ((NCornerMiniMap)NUtils.getGameUI().mmap).exploredArea.mergeAndSaveToFile(filePath);
+                this.isExploredUpd = false;
             }
-            catch (IOException e)
+            catch (Exception e)
             {
-                throw new RuntimeException(e);
+                // Log error but don't crash
+                System.err.println("Error saving explored area: " + e.getMessage());
             }
         }
     }
 
 
+    /**
+     * Merge areas - duplicate strategy (rename conflicts with "Other_" prefix)
+     */
     public void mergeAreas(File file) {
-
         StringBuilder contentBuilder = new StringBuilder();
         try (Stream<String> stream = Files.lines(Paths.get(file.getAbsolutePath()), StandardCharsets.UTF_8))
         {
@@ -993,6 +1057,113 @@ public class NConfig
                 }
                 a.id = id;
                 ((NMapView) NUtils.getGameUI().map).glob.map.areas.put(a.id, a);
+            }
+        }
+    }
+    
+    /**
+     * Replace areas - full replace strategy (delete all old, add new)
+     */
+    public void replaceAreas(File file) {
+        StringBuilder contentBuilder = new StringBuilder();
+        try (Stream<String> stream = Files.lines(Paths.get(file.getAbsolutePath()), StandardCharsets.UTF_8))
+        {
+            stream.forEach(s -> contentBuilder.append(s).append("\n"));
+        }
+        catch (IOException ignore)
+        {
+        }
+
+        if (!contentBuilder.toString().isEmpty()) {
+            // Remove all existing areas and their overlays
+            NMapView mapView = (NMapView) NUtils.getGameUI().map;
+            synchronized (mapView.glob.map.areas) {
+                // Remove overlays for all areas
+                for (Integer areaId : new java.util.ArrayList<>(mapView.glob.map.areas.keySet())) {
+                    if (mapView.nols.containsKey(areaId)) {
+                        mapView.nols.get(areaId).remove();
+                        mapView.nols.remove(areaId);
+                    }
+                    NArea area = mapView.glob.map.areas.get(areaId);
+                    if (area != null) {
+                        Gob dummy = mapView.dummys.get(area.gid);
+                        if (dummy != null) {
+                            mapView.glob.oc.remove(dummy);
+                            mapView.dummys.remove(area.gid);
+                        }
+                    }
+                }
+                // Clear all areas
+                mapView.glob.map.areas.clear();
+            }
+            
+            // Add new areas from file
+            JSONObject main = new JSONObject(contentBuilder.toString());
+            JSONArray array = (JSONArray) main.get("areas");
+            for (int i = 0; i < array.length(); i++) {
+                NArea a = new NArea((JSONObject) array.get(i));
+                a.id = i + 1;
+                ((NMapView) NUtils.getGameUI().map).glob.map.areas.put(a.id, a);
+            }
+        }
+    }
+    
+    /**
+     * Overwrite areas - replace areas with same name, add new ones
+     */
+    public void overwriteAreas(File file) {
+        StringBuilder contentBuilder = new StringBuilder();
+        try (Stream<String> stream = Files.lines(Paths.get(file.getAbsolutePath()), StandardCharsets.UTF_8))
+        {
+            stream.forEach(s -> contentBuilder.append(s).append("\n"));
+        }
+        catch (IOException ignore)
+        {
+        }
+
+        if (!contentBuilder.toString().isEmpty()) {
+            NMapView mapView = (NMapView) NUtils.getGameUI().map;
+            JSONObject main = new JSONObject(contentBuilder.toString());
+            JSONArray array = (JSONArray) main.get("areas");
+            
+            for (int i = 0; i < array.length(); i++) {
+                NArea newArea = new NArea((JSONObject) array.get(i));
+                
+                // Find existing area with same name
+                NArea existingArea = null;
+                for (NArea area : mapView.glob.map.areas.values()) {
+                    if (area.name.equals(newArea.name)) {
+                        existingArea = area;
+                        break;
+                    }
+                }
+                
+                if (existingArea != null) {
+                    // Remove old area's overlays
+                    if (mapView.nols.containsKey(existingArea.id)) {
+                        mapView.nols.get(existingArea.id).remove();
+                        mapView.nols.remove(existingArea.id);
+                    }
+                    Gob dummy = mapView.dummys.get(existingArea.gid);
+                    if (dummy != null) {
+                        mapView.glob.oc.remove(dummy);
+                        mapView.dummys.remove(existingArea.gid);
+                    }
+                    
+                    // Replace with new area using same id
+                    newArea.id = existingArea.id;
+                    mapView.glob.map.areas.put(newArea.id, newArea);
+                } else {
+                    // Add as new area with new id
+                    int maxId = 0;
+                    for (NArea area : mapView.glob.map.areas.values()) {
+                        if (area.id > maxId) {
+                            maxId = area.id;
+                        }
+                    }
+                    newArea.id = maxId + 1;
+                    mapView.glob.map.areas.put(newArea.id, newArea);
+                }
             }
         }
     }

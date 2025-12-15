@@ -1,6 +1,7 @@
 package nurgling;
 
 import haven.*;
+import haven.res.lib.itemtex.ItemTex;
 import haven.res.ui.tt.ingred.Ingredient;
 import haven.resutil.FoodInfo;
 import mapv4.NMappingClient;
@@ -14,6 +15,8 @@ import nurgling.iteminfo.NFoodInfo;
 import nurgling.scenarios.ScenarioManager;
 import nurgling.tasks.*;
 import nurgling.tools.NSearchItem;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -400,14 +403,14 @@ public class NCore extends Widget
 
 
     public static class NGItemWriter implements Runnable {
-        NGItem item;
-        java.sql.Connection connection;
+        private final NGItem item;
+        private final DBPoolManager poolManager;
 
-        public NGItemWriter(NGItem item) {
+        public NGItemWriter(NGItem item, DBPoolManager poolManager) {
             this.item = item;
+            this.poolManager = poolManager;
         }
 
-        // Заменяем константы на методы, генерирующие SQL в зависимости от СУБД
         private String getInsertRecipeSQL() {
             if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
                 return "INSERT INTO recipes (recipe_hash, item_name, resource_name, hunger, energy) VALUES (?, ?, ?, ?, ?) ON CONFLICT(recipe_hash) DO NOTHING";
@@ -418,9 +421,9 @@ public class NCore extends Widget
 
         private String getInsertIngredientSQL() {
             if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
-                return "INSERT INTO ingredients (recipe_hash, name, percentage) VALUES (?, ?, ?) ON CONFLICT(recipe_hash, name) DO NOTHING";
+                return "INSERT INTO ingredients (recipe_hash, name, percentage, resource_name) VALUES (?, ?, ?, ?) ON CONFLICT(recipe_hash, name) DO NOTHING";
             } else { // SQLite
-                return "INSERT OR IGNORE INTO ingredients (recipe_hash, name, percentage) VALUES (?, ?, ?)";
+                return "INSERT OR IGNORE INTO ingredients (recipe_hash, name, percentage, resource_name) VALUES (?, ?, ?, ?)";
             }
         }
 
@@ -434,35 +437,74 @@ public class NCore extends Widget
 
         @Override
         public void run() {
-            // Проверяем, активирована ли какая-либо СУБД
             if (!(Boolean) NConfig.get(NConfig.Key.postgres) && !(Boolean) NConfig.get(NConfig.Key.sqlite)) {
                 return;
             }
 
+            java.sql.Connection conn = null;
             try {
-                // Создаем prepared statements с правильными SQL-запросами
-                PreparedStatement recipeStatement = connection.prepareStatement(getInsertRecipeSQL());
-                PreparedStatement ingredientStatement = connection.prepareStatement(getInsertIngredientSQL());
-                PreparedStatement fepsStatement = connection.prepareStatement(getInsertFepsSQL());
+                conn = poolManager.getConnection();
+                if (conn == null) {
+                    return;
+                }
+
+                PreparedStatement recipeStatement = conn.prepareStatement(getInsertRecipeSQL());
+                PreparedStatement ingredientStatement = conn.prepareStatement(getInsertIngredientSQL());
+                PreparedStatement fepsStatement = conn.prepareStatement(getInsertFepsSQL());
 
                 NFoodInfo fi = item.getInfo(NFoodInfo.class);
                 String hunger = Utils.odformat2(2 * fi.glut / (1 + Math.sqrt(item.quality / 10)) * 1000, 2);
+                
+                // Get composite resource name from item sprite FIRST (needed for hash)
+                String resourceName = item.getres().name;
+                try {
+                    GSprite spr = item.spr;
+                    if (spr != null) {
+                        JSONObject saved = ItemTex.save(spr);
+                        if (saved != null) {
+                            if (saved.has("layer")) {
+                                JSONArray layers = saved.getJSONArray("layer");
+                                StringBuilder sb = new StringBuilder();
+                                for (int i = 0; i < layers.length(); i++) {
+                                    if (i > 0) sb.append("+");
+                                    sb.append(layers.getString(i));
+                                }
+                                resourceName = sb.toString();
+                            } else if (saved.has("static")) {
+                                resourceName = saved.getString("static");
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // Fallback to base resource name
+                }
+                
+                // Build hash including composite resource name for unique identification
                 StringBuilder hashInput = new StringBuilder();
                 hashInput.append(item.name).append((int) (100 * fi.energy()));
+                hashInput.append(resourceName); // Include composite resource in hash
 
                 for (ItemInfo info : item.info) {
                     if (info instanceof Ingredient) {
                         Ingredient ing = ((Ingredient) info);
-                        hashInput.append(ing.name).append(ing.val * 100);
+                        // Use resName if available (for unique identification of meats, fish, etc.)
+                        // Fall back to name if resName is null
+                        if (ing.resName != null) {
+                            hashInput.append(ing.resName);
+                        } else {
+                            hashInput.append(ing.name);
+                        }
+                        if (ing.val != null) {
+                            hashInput.append(ing.val * 100);
+                        }
                     }
                 }
 
                 String recipeHash = NUtils.calculateSHA256(hashInput.toString());
 
-                // Устанавливаем параметры для запроса рецепта
                 recipeStatement.setString(1, recipeHash);
                 recipeStatement.setString(2, item.name());
-                recipeStatement.setString(3, item.getres().name);
+                recipeStatement.setString(3, resourceName);
                 recipeStatement.setDouble(4, Double.parseDouble(hunger));
                 recipeStatement.setInt(5, (int) (fi.energy() * 100));
 
@@ -473,18 +515,18 @@ public class NCore extends Widget
                     System.out.println("NGItemWriter: New recipe inserted: " + item.name() + " (hash: " + recipeHash.substring(0, Math.min(8, recipeHash.length())) + "...)");
                 }
 
-                // Вставляем ингредиенты
                 for (ItemInfo info : item.info) {
                     if (info instanceof Ingredient) {
+                        Ingredient ing = (Ingredient) info;
                         ingredientStatement.setString(1, recipeHash);
-                        ingredientStatement.setString(2, ((Ingredient) info).name);
-                        ingredientStatement.setDouble(3, ((Ingredient) info).val * 100);
+                        ingredientStatement.setString(2, ing.name);
+                        ingredientStatement.setDouble(3, ing.val != null ? ing.val * 100 : 0);
+                        ingredientStatement.setString(4, ing.resName); // Store composite resource name for layered sprites
                         ingredientStatement.executeUpdate();
                     }
                 }
 
                 double multiplier = Math.sqrt(item.quality / 10.0);
-                // Вставляем эффекты (FEPS)
                 for (FoodInfo.Event ef : fi.evs) {
                     fepsStatement.setString(1, recipeHash);
                     fepsStatement.setString(2, ef.ev.nm);
@@ -494,7 +536,7 @@ public class NCore extends Widget
                 }
 
                 // Фиксируем транзакцию
-                connection.commit();
+                conn.commit();
                 if (recipeInserted > 0) {
                     System.out.println("NGItemWriter: Successfully saved NEW recipe for item: " + item.name() + " (recipe count should increase)");
                     // После сохранения нового рецепта принудительно сбрасываем флаг загрузки в кукбуке
@@ -518,72 +560,52 @@ public class NCore extends Widget
                 e.printStackTrace();
                 try {
                     // В случае ошибки откатываем транзакцию
-                    if (connection != null) {
-                        connection.rollback();
+                    if (conn != null) {
+                        conn.rollback();
                     }
                 } catch (SQLException ex) {
-                    ex.printStackTrace();
+                    // ignore rollback error
                 }
 
-                // Для PostgreSQL проверяем код ошибки нарушения уникальности
+                // Ignore unique constraint violations
+                boolean isUniqueViolation = false;
                 if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
-                    if (!e.getSQLState().equals("23505")) {
-                        e.printStackTrace();
-                    }
+                    isUniqueViolation = e.getSQLState() != null && e.getSQLState().equals("23505");
+                } else if ((Boolean) NConfig.get(NConfig.Key.sqlite)) {
+                    isUniqueViolation = e.getMessage() != null && e.getMessage().contains("UNIQUE constraint");
                 }
-                // Для SQLite просто игнорируем ошибки уникальности (благодаря INSERT OR IGNORE)
-                else if ((Boolean) NConfig.get(NConfig.Key.sqlite)) {
-                    if (!e.getMessage().contains("UNIQUE constraint")) {
-                        e.printStackTrace();
-                    }
+                
+                if (!isUniqueViolation) {
+                    e.printStackTrace();
+                }
+            } finally {
+                if (conn != null) {
+                    poolManager.returnConnection(conn);
                 }
             }
         }
     }
 
     public void writeNGItem(NGItem item) {
-        NGItemWriter ngItemWriter = new NGItemWriter(item);
-        try {
-            ngItemWriter.connection = poolManager.getConnection();
-        } catch (SQLException e) {
-            System.err.println("NCore.writeNGItem: SQLException getting connection: " + e.getMessage());
-            e.printStackTrace();
+        if (poolManager == null) {
             return;
         }
+        NGItemWriter ngItemWriter = new NGItemWriter(item, poolManager);
         poolManager.submitTask(ngItemWriter);
     }
 
-    public void writeContainerInfo(Gob gob)
-    {
-        if(gob!=null && poolManager != null && poolManager.isConnectionReady()) {
-            ContainerWatcher cw = new ContainerWatcher(gob);
-            try {
-                cw.connection = poolManager.getConnection();
-                if (cw.connection == null) {
-                    return; // Connection not available
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return;
-            }
+    public void writeContainerInfo(Gob gob) {
+        if (gob != null && poolManager != null && poolManager.isConnectionReady()) {
+            ContainerWatcher cw = new ContainerWatcher(gob, poolManager);
             poolManager.submitTask(cw);
         }
     }
 
     public void writeItemInfoForContainer(ArrayList<ItemWatcher.ItemInfo> iis) {
         if (poolManager == null || !poolManager.isConnectionReady()) {
-            return; // Database not ready
-        }
-        ItemWatcher itemWatcher = new ItemWatcher(iis);
-        try {
-            itemWatcher.connection = poolManager.getConnection();
-            if (itemWatcher.connection == null) {
-                return;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
             return;
         }
+        ItemWatcher itemWatcher = new ItemWatcher(iis, poolManager);
         poolManager.submitTask(itemWatcher);
     }
 
@@ -591,18 +613,9 @@ public class NCore extends Widget
 
     public void searchContainer(NSearchItem item) {
         if (poolManager == null || !poolManager.isConnectionReady()) {
-            return; // Database not ready
-        }
-        NGlobalSearchItems gsi = new NGlobalSearchItems(item);
-        try {
-            gsi.connection = poolManager.getConnection();
-            if (gsi.connection == null) {
-                return;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
             return;
         }
+        NGlobalSearchItems gsi = new NGlobalSearchItems(item, poolManager);
         poolManager.submitTask(gsi);
     }
 }

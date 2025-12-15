@@ -1,5 +1,6 @@
 package nurgling.cookbook.connection;
 
+import nurgling.DBPoolManager;
 import nurgling.NConfig;
 import nurgling.cookbook.Recipe;
 
@@ -8,24 +9,37 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RecipeLoader implements Runnable {
-    private final Connection connection;
+    private final DBPoolManager poolManager;
     private final ArrayList<String> recipeHashes;
     private final ArrayList<Recipe> recipes = new ArrayList<>();
     public AtomicBoolean ready = new AtomicBoolean(false);
-    public RecipeLoader(Connection connection, ArrayList<String> recipeHashes) {
-        this.connection = connection;
+
+    public RecipeLoader(DBPoolManager poolManager, ArrayList<String> recipeHashes) {
+        this.poolManager = poolManager;
         this.recipeHashes = recipeHashes;
     }
 
     @Override
     public void run() {
-        if (recipeHashes.isEmpty()) return;
-        HashMap<String,Recipe> res = new HashMap<>();
+        if (recipeHashes.isEmpty()) {
+            ready.set(true);
+            return;
+        }
+
+        HashMap<String, Recipe> res = new HashMap<>();
+        Connection conn = null;
+
         try {
+            conn = poolManager.getConnection();
+            if (conn == null) {
+                System.err.println("RecipeLoader: Unable to get database connection");
+                return;
+            }
+
             String sql;
             if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
                 sql = "SELECT r.recipe_hash, r.item_name, r.resource_name, r.hunger, r.energy, " +
-                        "i.name AS ingredient_name, i.percentage, " +
+                        "i.name AS ingredient_name, i.percentage, i.resource_name AS ing_resource, " +
                         "f.name AS fep_name, f.value AS fep_value, f.weight as fep_weight " +
                         "FROM recipes r " +
                         "LEFT JOIN ingredients i ON r.recipe_hash = i.recipe_hash " +
@@ -33,7 +47,7 @@ public class RecipeLoader implements Runnable {
                         "WHERE r.recipe_hash = ANY(?)";
             } else { // SQLite
                 sql = "SELECT r.recipe_hash, r.item_name, r.resource_name, r.hunger, r.energy, " +
-                        "i.name AS ingredient_name, i.percentage, " +
+                        "i.name AS ingredient_name, i.percentage, i.resource_name AS ing_resource, " +
                         "f.name AS fep_name, f.value AS fep_value, f.weight as fep_weight " +
                         "FROM recipes r " +
                         "LEFT JOIN ingredients i ON r.recipe_hash = i.recipe_hash " +
@@ -41,9 +55,9 @@ public class RecipeLoader implements Runnable {
                         "WHERE r.recipe_hash IN (" + String.join(",", Collections.nCopies(recipeHashes.size(), "?")) + ")";
             }
 
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
-                    Array sqlArray = connection.createArrayOf("varchar", recipeHashes.toArray(new String[0]));
+                    Array sqlArray = conn.createArrayOf("varchar", recipeHashes.toArray(new String[0]));
                     stmt.setArray(1, sqlArray);
                 } else { // SQLite
                     for (int i = 0; i < recipeHashes.size(); i++) {
@@ -73,9 +87,10 @@ public class RecipeLoader implements Runnable {
 
                     String ingredientName = rs.getString("ingredient_name");
                     if (!rs.wasNull() && ingredientName != null) {
+                        String ingResource = rs.getString("ing_resource");
                         recipe.getIngredients().put(
                                 ingredientName,
-                                rs.getDouble("percentage")
+                                new Recipe.IngredientInfo(rs.getDouble("percentage"), ingResource)
                         );
                     }
 
@@ -83,22 +98,30 @@ public class RecipeLoader implements Runnable {
                     if (!rs.wasNull() && fepName != null) {
                         recipe.getFeps().put(
                                 fepName,
-                                new Recipe.Fep(rs.getDouble("fep_value"),rs.getDouble("fep_weight"))
+                                new Recipe.Fep(rs.getDouble("fep_value"), rs.getDouble("fep_weight"))
                         );
                     }
                 }
             }
+
+            conn.commit();
         } catch (SQLException e) {
             System.err.println("Error loading recipes:");
             e.printStackTrace();
-        }
-        finally
-        {
-            for(String hash: recipeHashes)
-            {
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ignore) {
+                }
+            }
+        } finally {
+            for (String hash : recipeHashes) {
                 recipes.add(res.get(hash));
             }
             ready.set(true);
+            if (conn != null) {
+                poolManager.returnConnection(conn);
+            }
         }
     }
 

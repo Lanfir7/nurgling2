@@ -1,5 +1,6 @@
 package nurgling.cookbook.connection;
 
+import nurgling.DBPoolManager;
 import nurgling.NConfig;
 import nurgling.cookbook.Recipe;
 
@@ -10,18 +11,19 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class RecipeHashFetcher implements Runnable {
-    private final Connection connection;
-    private ArrayList<Recipe> recipes;  // Теперь храним сразу рецепты
+    private final DBPoolManager poolManager;
+    private ArrayList<Recipe> recipes;
     public AtomicBoolean ready = new AtomicBoolean(false);
     private String sql;
 
-    public RecipeHashFetcher(Connection connection, String sql) {
-        this.connection = connection;
+    public RecipeHashFetcher(DBPoolManager poolManager, String sql) {
+        this.poolManager = poolManager;
         this.recipes = new ArrayList<>();
         this.sql = sql;
     }
 
     public void run() {
+        Connection conn = null;
         Statement stmt = null;
         ResultSet rs = null;
         try {
@@ -33,12 +35,18 @@ public class RecipeHashFetcher implements Runnable {
             }
             
             System.out.println("RecipeHashFetcher: Starting to fetch recipes from database");
+            
+            conn = poolManager.getConnection();
+            if (conn == null) {
+                System.err.println("RecipeHashFetcher: Unable to get database connection");
+                return;
+            }
             String query;
             if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
                 query = "SELECT " +
                         "r.recipe_hash, r.item_name, r.resource_name, r.hunger, r.energy, " +
                         "f.name as fep_name, f.value as fep_value, f.weight as fep_weight, " +
-                        "i.name as ing_name, i.percentage as ing_percentage, " +
+                        "i.name as ing_name, i.percentage as ing_percentage, i.resource_name as ing_resource, " +
                         "CASE WHEN fav.recipe_hash IS NOT NULL THEN TRUE ELSE FALSE END as is_favorite " +
                         "FROM recipes r " +
                         "LEFT JOIN feps f ON r.recipe_hash = f.recipe_hash " +
@@ -49,7 +57,7 @@ public class RecipeHashFetcher implements Runnable {
                 query = "SELECT " +
                         "r.recipe_hash, r.item_name, r.resource_name, r.hunger, r.energy, " +
                         "f.name as fep_name, f.value as fep_value, f.weight as fep_weight, " +
-                        "i.name as ing_name, i.percentage as ing_percentage, " +
+                        "i.name as ing_name, i.percentage as ing_percentage, i.resource_name as ing_resource, " +
                         "CASE WHEN fav.recipe_hash IS NOT NULL THEN 1 ELSE 0 END as is_favorite " +
                         "FROM recipes r " +
                         "LEFT JOIN feps f ON r.recipe_hash = f.recipe_hash " +
@@ -61,13 +69,13 @@ public class RecipeHashFetcher implements Runnable {
             System.out.println("RecipeHashFetcher: Executing query: " + query.substring(0, Math.min(100, query.length())) + "...");
             
             // Проверяем, не закрыто ли соединение
-            if (connection.isClosed()) {
+            if (conn.isClosed()) {
                 System.err.println("RecipeHashFetcher: Connection is closed!");
                 ready.set(true);
                 return;
             }
             
-            stmt = connection.createStatement();
+            stmt = conn.createStatement();
             // Устанавливаем таймаут для запроса (10 секунд вместо 30)
             stmt.setQueryTimeout(10);
             long startTime = System.currentTimeMillis();
@@ -79,7 +87,7 @@ public class RecipeHashFetcher implements Runnable {
             Map<String, Recipe> recipeMap = new HashMap<>();
             int rowCount = 0;
 
-            while (resultSet.next()) {
+            while (rs.next()) {
                 // Проверяем прерывание в цикле обработки результатов
                 if (Thread.currentThread().isInterrupted()) {
                     System.out.println("RecipeHashFetcher: Task was cancelled during result processing");
@@ -87,20 +95,20 @@ public class RecipeHashFetcher implements Runnable {
                 }
                 
                 rowCount++;
-                String hash = resultSet.getString("recipe_hash");
+                String hash = rs.getString("recipe_hash");
 
                 Recipe recipe = recipeMap.computeIfAbsent(hash, k -> {
                     try {
                         Recipe r = new Recipe(
                                 hash,
-                                resultSet.getString("item_name"),
-                                resultSet.getString("resource_name"),
-                                resultSet.getDouble("hunger"),
-                                resultSet.getInt("energy"),
+                                rs.getString("item_name"),
+                                rs.getString("resource_name"),
+                                rs.getDouble("hunger"),
+                                rs.getInt("energy"),
                                 new HashMap<>(), // Ingredients
                                 new HashMap<>()   // FEPS
                         );
-                        r.setFavorite(resultSet.getBoolean("is_favorite"));
+                        r.setFavorite(rs.getBoolean("is_favorite"));
                         return r;
                     } catch (SQLException e) {
                         throw new RuntimeException(e);
@@ -108,27 +116,29 @@ public class RecipeHashFetcher implements Runnable {
                 });
 
                 // Добавляем FEP если есть
-                String fepName = resultSet.getString("fep_name");
+                String fepName = rs.getString("fep_name");
                 if (fepName != null && !recipe.getFeps().containsKey(fepName)) {
                     recipe.getFeps().put(fepName,
                             new Recipe.Fep(
-                                    resultSet.getDouble("fep_value"),
-                                    resultSet.getDouble("fep_weight")
+                                    rs.getDouble("fep_value"),
+                                    rs.getDouble("fep_weight")
                             ));
                 }
 
                 // Добавляем ингредиент если есть
-                String ingName = resultSet.getString("ing_name");
+                String ingName = rs.getString("ing_name");
                 if (ingName != null && !recipe.getIngredients().containsKey(ingName)) {
+                    String ingResource = rs.getString("ing_resource");
                     recipe.getIngredients().put(
                             ingName,
-                            resultSet.getDouble("ing_percentage")
+                            new Recipe.IngredientInfo(rs.getDouble("ing_percentage"), ingResource)
                     );
                 }
             }
             
             recipes = new ArrayList<>(recipeMap.values());
             System.out.println("RecipeHashFetcher: Successfully fetched " + recipes.size() + " recipes from database (processed " + rowCount + " rows)");
+            conn.commit();
         } catch (SQLException e) {
             // Проверяем, не было ли прерывания
             if (Thread.currentThread().isInterrupted()) {
@@ -137,6 +147,12 @@ public class RecipeHashFetcher implements Runnable {
                 System.err.println("RecipeHashFetcher: SQLException fetching recipes: " + e.getMessage());
                 System.err.println("RecipeHashFetcher: SQLState: " + e.getSQLState() + ", ErrorCode: " + e.getErrorCode());
                 e.printStackTrace();
+            }
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ignore) {
+                }
             }
         } catch (Exception e) {
             if (Thread.currentThread().isInterrupted()) {
@@ -163,6 +179,9 @@ public class RecipeHashFetcher implements Runnable {
             }
             ready.set(true);
             System.out.println("RecipeHashFetcher: Marked as ready");
+            if (conn != null) {
+                poolManager.returnConnection(conn);
+            }
         }
     }
 
@@ -171,15 +190,12 @@ public class RecipeHashFetcher implements Runnable {
             inputSql = inputSql.replace("ILIKE", "LIKE");
         }
 
-        // Если строка уже содержит SQL-ключевые слова (старый формат)
         if (inputSql.toLowerCase().contains("where") ||
                 inputSql.toLowerCase().contains("join") ||
                 inputSql.toLowerCase().contains("order by")) {
-            return ((Boolean) NConfig.get(NConfig.Key.sqlite))?extractWhereFromSql(inputSql).replace("ILIKE", "LIKE"):extractWhereFromSql(inputSql);
-        }
-        // Если строка использует новый фильтрующий синтаксис
-        else {
-            return ((Boolean) NConfig.get(NConfig.Key.sqlite))?parseFilterSyntax(inputSql).replace("ILIKE", "LIKE"):parseFilterSyntax(inputSql);
+            return ((Boolean) NConfig.get(NConfig.Key.sqlite)) ? extractWhereFromSql(inputSql).replace("ILIKE", "LIKE") : extractWhereFromSql(inputSql);
+        } else {
+            return ((Boolean) NConfig.get(NConfig.Key.sqlite)) ? parseFilterSyntax(inputSql).replace("ILIKE", "LIKE") : parseFilterSyntax(inputSql);
         }
     }
 
@@ -209,7 +225,6 @@ public class RecipeHashFetcher implements Runnable {
             if (part.isEmpty()) continue;
 
             try {
-                // Обработка фильтров по имени
                 if (part.startsWith("name:")) {
                     String value = part.substring(5).trim();
                     boolean exact = value.startsWith("\"") && value.endsWith("\"");
@@ -225,11 +240,9 @@ public class RecipeHashFetcher implements Runnable {
                                 "r.item_name NOT ILIKE '%" + escapeSql(value) + "%'" :
                                 "r.item_name ILIKE '%" + escapeSql(value) + "%'");
                     }
-                }
-                // Обработка фильтров по ингредиентам
-                else if (part.startsWith("from:") || part.startsWith("-from:")) {
+                } else if (part.startsWith("from:") || part.startsWith("-from:")) {
                     boolean exclude = part.startsWith("-from:");
-                    String value = part.substring(exclude?6:5).trim();
+                    String value = part.substring(exclude ? 6 : 5).trim();
                     boolean exact = value.startsWith("\"") && value.endsWith("\"");
 
                     if (exact) {
@@ -242,9 +255,7 @@ public class RecipeHashFetcher implements Runnable {
                                 "NOT EXISTS (SELECT 1 FROM ingredients i WHERE i.recipe_hash = r.recipe_hash AND i.name ILIKE '%" + escapeSql(value) + "%')" :
                                 "EXISTS (SELECT 1 FROM ingredients i WHERE i.recipe_hash = r.recipe_hash AND i.name ILIKE '%" + escapeSql(value) + "%')");
                     }
-                }
-                // Обработка фильтров по FEP
-                else if (part.matches("(str|agi|con|int|dex|per|wil|psy|cha)(2?)\\s*([<>]=?|=)\\s*(\\d+)(%?)")) {
+                } else if (part.matches("(str|agi|con|int|dex|per|wil|psy|cha)(2?)\\s*([<>]=?|=)\\s*(\\d+)(%?)")) {
                     Matcher m = Pattern.compile("(str|agi|con|int|dex|per|wil|psy|cha)(2?)\\s*([<>]=?|=)\\s*(\\d+)(%?)").matcher(part);
                     if (m.find()) {
                         String fepType = mapFepType(m.group(1));
@@ -281,16 +292,26 @@ public class RecipeHashFetcher implements Runnable {
 
     private String mapFepType(String shortType) {
         switch (shortType) {
-            case "str": return "Strength";
-            case "agi": return "Agility";
-            case "con": return "Constitution";
-            case "int": return "Intelligence";
-            case "dex": return "Dexterity";
-            case "per": return "Perception";
-            case "wil": return "Will";
-            case "psy": return "Psyche";
-            case "cha": return "Charisma";
-            default: return shortType;
+            case "str":
+                return "Strength";
+            case "agi":
+                return "Agility";
+            case "con":
+                return "Constitution";
+            case "int":
+                return "Intelligence";
+            case "dex":
+                return "Dexterity";
+            case "per":
+                return "Perception";
+            case "wil":
+                return "Will";
+            case "psy":
+                return "Psyche";
+            case "cha":
+                return "Charisma";
+            default:
+                return shortType;
         }
     }
 
