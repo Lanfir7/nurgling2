@@ -572,9 +572,8 @@ public class NCookBook extends Window {
                 } else {
                     System.out.println("NCookBook.show: Recipes already loaded, skipping task creation");
                 }
-            }catch (SQLException e)
-            {
-                System.err.println("NCookBook.show: SQLException: " + e.getMessage());
+            } catch (Exception e) {
+                System.err.println("NCookBook.show: Exception: " + e.getMessage());
                 e.printStackTrace();
             }
 

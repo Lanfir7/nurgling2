@@ -70,6 +70,7 @@ public class NGameUI extends GameUI
     public ProspectingLocationService prospectingLocationService;
     public ProspectingSearchWindow prospectingSearchWindow = null;
     public TerrainSearchWindow terrainSearchWindow = null;
+    public LabeledMarkService labeledMarkService;
     public StudyDeskPlannerWidget studyDeskPlanner = null;
     public NDraggableWidget studyReportWidget = null;
     
@@ -154,6 +155,7 @@ public class NGameUI extends GameUI
         fishLocationService = new FishLocationService(this, genus);
         treeLocationService = new TreeLocationService(this, genus);
         prospectingLocationService = new ProspectingLocationService(this, genus);
+        labeledMarkService = new LabeledMarkService(this, genus);
         // These widgets depend on areas which is created in GameUI constructor
         // Position NEditFolderName relative to areas widget
         add(nefn = new NEditFolderName(areas), new Coord(sz.x/2 - nefn.sz.x/2, sz.y/2 - nefn.sz.y/2));

@@ -244,6 +244,9 @@
     <copy todir="release/" file="etc/run_updater.bat" />
     <copy todir="release/" file="etc/run_updater8.bat" />
     <copy todir="release/" file="etc/nurgling_launcher.jar" />
+    <copy todir="release/AlarmSounds" failonerror="false" quiet="true">
+      <fileset dir="AlarmSounds" />
+    </copy>
   </target>
 
   <target name="steam-release" depends="build-env, jar, extlib/jogl">

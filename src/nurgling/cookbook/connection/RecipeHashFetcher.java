@@ -96,23 +96,26 @@ public class RecipeHashFetcher implements Runnable {
                 
                 rowCount++;
                 String hash = rs.getString("recipe_hash");
+                
+                // Извлекаем значения из ResultSet перед лямбда-выражением (должны быть effectively final)
+                final String itemName = rs.getString("item_name");
+                final String resourceName = rs.getString("resource_name");
+                final double hunger = rs.getDouble("hunger");
+                final int energy = rs.getInt("energy");
+                final boolean isFavorite = rs.getBoolean("is_favorite");
 
                 Recipe recipe = recipeMap.computeIfAbsent(hash, k -> {
-                    try {
-                        Recipe r = new Recipe(
-                                hash,
-                                rs.getString("item_name"),
-                                rs.getString("resource_name"),
-                                rs.getDouble("hunger"),
-                                rs.getInt("energy"),
-                                new HashMap<>(), // Ingredients
-                                new HashMap<>()   // FEPS
-                        );
-                        r.setFavorite(rs.getBoolean("is_favorite"));
-                        return r;
-                    } catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
+                    Recipe r = new Recipe(
+                            hash,
+                            itemName,
+                            resourceName,
+                            hunger,
+                            energy,
+                            new HashMap<>(), // Ingredients
+                            new HashMap<>()   // FEPS
+                    );
+                    r.setFavorite(isFavorite);
+                    return r;
                 });
 
                 // Добавляем FEP если есть

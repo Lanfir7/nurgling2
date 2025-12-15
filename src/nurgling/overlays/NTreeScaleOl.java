@@ -1,6 +1,7 @@
 package nurgling.overlays;
 
 import haven.*;
+import haven.render.Pipe;
 import haven.res.lib.tree.TreeScale;
 import nurgling.NConfig;
 import nurgling.tools.NAlias;

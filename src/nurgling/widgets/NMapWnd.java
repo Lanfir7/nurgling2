@@ -195,7 +195,6 @@ public class NMapWnd extends MapWnd {
         }
     }
 
-<<<<<<< HEAD
     private void openProspectingSearch() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null) {
