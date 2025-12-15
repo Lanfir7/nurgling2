@@ -122,7 +122,8 @@
   </target>
 
   <target name="jar" depends="hafen-client, buildinfo, lib-classes">
-    <jar destfile="build/hafen.jar" update="true">
+    <delete file="build/hafen.jar" failonerror="false" />
+    <jar destfile="build/hafen.jar">
       <fileset dir="build/classes" />
       <fileset dir="build/classes-lib" />
       <manifest>
@@ -173,6 +174,9 @@
       <fileset dir="lib/ext/lwjgl"><include name="*.jar" /></fileset>
       <fileset dir="lib/ext/steamworks"><include name="*.jar" /></fileset>
     </copy>
+    <copy file="etc/json-java.jar" tofile="bin/json-java.jar" />
+    <copy file="etc/postgresql-42.7.5.jar" tofile="bin/postgresql-42.7.5.jar" />
+    <copy file="etc/sqlite-jdbc-3.49.1.0.jar" tofile="bin/sqlite-jdbc-3.49.1.0.jar" />
     <copy file="etc/ansgar-config.properties" tofile="bin/haven-config.properties" />
     <chmod file="bin/hafen.jar" perm="a+x" />
   </target>

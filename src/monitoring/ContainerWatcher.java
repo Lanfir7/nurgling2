@@ -28,7 +28,12 @@ public class ContainerWatcher  implements Runnable {
                     return parentGob.ngob.hash!=null && parentGob.ngob.gcoord!=null;
                 }
             };
-            NUtils.addTask(waitTask);
+            try {
+                NUtils.addTask(waitTask);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
             
             // Check if task timed out (critical exit)
             if (waitTask.criticalExit) {
