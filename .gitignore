@@ -24,6 +24,8 @@ build.bat
 .vscode/tasks.json
 .vscode/settings.json
 /.vscode
+/HerSRC
+/OldSRC
 Areas.db
 Areas.db-wal
 AlarmSounds/AlarmSounds.7z

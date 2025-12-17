@@ -52,6 +52,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("choper", BotDescriptor.BotType.RESOURCES, "Chopper", "Chops trees.", false, true, Chopper.class, "choper", false));
         bots.add(new BotDescriptor("prospect_mine", BotDescriptor.BotType.RESOURCES, "Prospector", "Prospects a mine and saves a marker at your position. Проспектит шахту и ставит маркер на карте.", false, true, ProspectMine.class, "clay", false));
         bots.add(new BotDescriptor("chipper", BotDescriptor.BotType.RESOURCES, "Chipper", "Chips stuff.", false, true, Chipper.class, "chipper", true));
+        bots.add(new BotDescriptor("masterminer", BotDescriptor.BotType.RESOURCES, "МастерМайнер", "Майнинг с выбросом камня по реальному качеству в стене (новая формула с дебафом инструмента).", false, true, MasterMiner.class, "masterminer", false));
         bots.add(new BotDescriptor("pblocks", BotDescriptor.BotType.RESOURCES, "Prepare Blocks", "Prepares blocks.", false, true, PrepareBlocks.class, "pblocks", false));
         bots.add(new BotDescriptor("pboards", BotDescriptor.BotType.RESOURCES, "Prepare Boards", "Prepares boards.", false, true, PrepareBoards.class, "pboards", false));
         bots.add(new BotDescriptor("clay", BotDescriptor.BotType.RESOURCES, "Clay Digger", "Digs clay.", false, true, ClayDigger.class, "clay", true));

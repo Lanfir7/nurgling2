@@ -171,7 +171,8 @@ public class NConfig
         amountOverlay,
         studyInfoOverlay,
         progressOverlay,
-        volumeOverlay
+        volumeOverlay,
+        masterminerprop
     }
 
     public enum BBDisplayMode
@@ -779,6 +780,9 @@ public class NConfig
                             case "NChipperProp":
                                 res.add(new NChipperProp(obj));
                                 break;
+                            case "NMasterMinerProp":
+                                res.add(new NMasterMinerProp(obj));
+                                break;
                             case "NPrepBProp":
                                 res.add(new NPrepBlocksProp(obj));
                                 break;
@@ -826,6 +830,37 @@ public class NConfig
         return new ArrayList<>();
     }
 
+    /**
+     * Совместимый аналог {@code JSONObject#toMap()} для старых версий org.json.
+     * Возвращает структуру из HashMap/ArrayList/примитивов.
+     */
+    private static Map<String, Object> toMapCompat(JSONObject obj) {
+        HashMap<String, Object> out = new HashMap<>();
+        for (Iterator<String> it = obj.keys(); it.hasNext(); ) {
+            String k = it.next();
+            Object v = obj.get(k);
+            out.put(k, fromJsonCompat(v));
+        }
+        return out;
+    }
+
+    private static ArrayList<Object> toListCompat(JSONArray arr) {
+        ArrayList<Object> out = new ArrayList<>();
+        for (int i = 0; i < arr.length(); i++) {
+            out.add(fromJsonCompat(arr.get(i)));
+        }
+        return out;
+    }
+
+    private static Object fromJsonCompat(Object v) {
+        if (v instanceof JSONObject) {
+            return toMapCompat((JSONObject) v);
+        } else if (v instanceof JSONArray) {
+            return toListCompat((JSONArray) v);
+        }
+        return v;
+    }
+
     @SuppressWarnings("unchecked")
     public void read() {
         current = this;
@@ -842,7 +877,7 @@ public class NConfig
         if (!contentBuilder.toString().isEmpty())
         {
             JSONObject main = new JSONObject(contentBuilder.toString());
-            Map<String, Object> map = main.toMap();
+            Map<String, Object> map = toMapCompat(main);
             for (Map.Entry<String, Object> entry : map.entrySet())
             {
                 try {
