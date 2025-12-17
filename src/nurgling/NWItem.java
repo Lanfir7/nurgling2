@@ -1,10 +1,8 @@
 package nurgling;
 
 import haven.*;
-import haven.res.lib.itemtex.*;
 import nurgling.iteminfo.NSearchable;
 import nurgling.tools.NSearchItem;
-import org.json.*;
 
 public class NWItem extends WItem
 {
@@ -122,6 +120,18 @@ public class NWItem extends WItem
     @Override
     public boolean mousedown(MouseDownEvent ev)
     {
+        // Shift+LMB while a Stockpile window is open: transfer all same items (including stacks)
+        // to behave like stockpile quick-transfer for non-stacked items.
+        if (ev.b == 1 && ui.modshift && !ui.modmeta) {
+            if (parent instanceof NInventory) {
+                NGameUI gui = NUtils.getGameUI();
+                if (gui != null && gui.getStockpile() != null) {
+                    wdgmsg("transfer-same", item, false);
+                    return true;
+                }
+            }
+        }
+
         // Alt+Shift+Click: transfer all same items sorted by quality
         // Right-click (button 3): ascending order (lowest quality first)
         // Left-click (button 1): descending order (highest quality first)

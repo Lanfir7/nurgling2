@@ -15,7 +15,6 @@ import nurgling.widgets.NSearchWidget;
 import java.util.Map;
 import java.util.HashMap;
 
-import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
@@ -1397,7 +1396,12 @@ public class NInventory extends Inventory
     @Override
     public void wdgmsg(Widget sender, String msg, Object... args) {
         if (msg.equals("transfer-same")) {
-            process(getSame((NGItem) args[0], (Boolean) args[1]), "transfer");
+            boolean ascending = (Boolean) args[1];
+            if (isStockpileOpen()) {
+                startTransferSameToStockpileTask((NGItem) args[0], ascending);
+            } else {
+                process(getSame((NGItem) args[0], ascending), "transfer");
+            }
         }
         else if (msg.equals("drop-same")) {
             process(getSame((NGItem) args[0], (Boolean) args[1]), "drop");
@@ -1414,13 +1418,132 @@ public class NInventory extends Inventory
         }
     }
 
+    private volatile boolean transferSameToStockpileRunning = false;
+
+    private void startTransferSameToStockpileTask(NGItem ref, boolean ascending) {
+        if (transferSameToStockpileRunning)
+            return;
+        transferSameToStockpileRunning = true;
+        final List<NGItem> tops = getSame(ref, ascending);
+
+        new Thread(() -> {
+            try {
+                NUtils.getUI().core.addTask(new TransferSameToStockpileTask(this, tops));
+            } catch (InterruptedException ignored) {
+            } finally {
+                transferSameToStockpileRunning = false;
+            }
+        }, "transfer-same-stockpile").start();
+    }
+
+    private static class TransferSameToStockpileTask extends nurgling.tasks.NTask {
+        private final List<NGItem> tops;
+        private int idx = 0;
+
+        private NGItem lastStack = null;
+        private int lastStackSize = -1;
+        private int stall = 0;
+
+        private static final int MAX_STALL_TICKS = 30; // ~0.5s @60fps; prevents infinite loops when stockpile full
+
+        private TransferSameToStockpileTask(NInventory inv, List<NGItem> tops) {
+            this.tops = (tops == null) ? Collections.emptyList() : tops;
+            this.maxCounter = 20000; // allow long transfers; still bounded
+        }
+
+        @Override
+        public boolean check() {
+            NGameUI gui = NUtils.getGameUI();
+            if (gui == null || gui.getStockpile() == null)
+                return true;
+
+            // stop if stockpile is full (best-effort)
+            try {
+                if (gui.getStockpile().calcFreeSpace() <= 0)
+                    return true;
+            } catch (Exception ignored) { }
+
+            // Find next actionable item; skip already empty stacks
+            while (idx < tops.size()) {
+                NGItem top = tops.get(idx);
+                if (top == null) {
+                    idx++;
+                    continue;
+                }
+
+                // If it's a stack, transfer one unit per tick from its contents.
+                if (top.contents instanceof ItemStack) {
+                    ItemStack st = (ItemStack) top.contents;
+                    int sz = st.order.size();
+                    if (sz <= 0) {
+                        idx++;
+                        continue;
+                    }
+
+                    if (top == lastStack && sz == lastStackSize) {
+                        stall++;
+                        if (stall > MAX_STALL_TICKS)
+                            return true;
+                    } else {
+                        stall = 0;
+                        lastStack = top;
+                        lastStackSize = sz;
+                    }
+
+                    // One transfer per tick to avoid UI/network flooding
+                    try {
+                        st.order.get(0).wdgmsg("transfer", Coord.z);
+                    } catch (Exception ignored) { }
+                    return false;
+                } else {
+                    // Non-stack: transfer it and move on.
+                    try {
+                        top.wdgmsg("transfer", Coord.z);
+                    } catch (Exception ignored) { }
+                    idx++;
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    private boolean isStockpileOpen() {
+        NGameUI gui = NUtils.getGameUI();
+        return (gui != null && gui.getStockpile() != null);
+    }
+
+    private static String resname(GItem item) {
+        try {
+            Resource res = item.resource();
+            return (res == null) ? null : res.name;
+        } catch (Loading l) {
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean sameType(NGItem a, NGItem b) {
+        if (a == null || b == null)
+            return false;
+        String ra = resname(a);
+        String rb = resname(b);
+        if (ra != null && rb != null)
+            return ra.equals(rb);
+        String na = a.name();
+        String nb = b.name();
+        if (na == null || nb == null)
+            return false;
+        // Fallback: tolerate "..., stack of" naming and other tooltip variations
+        return NParser.checkName(na, nb) || NParser.checkName(nb, na);
+    }
+
     private List<NGItem> getSame(NGItem item, Boolean ascending)
     {
         List<NGItem> items = new ArrayList<>();
         if (item != null && item.name() != null)
         {
-            // Only collect direct children of inventory, don't expand stacks
-            // (expanding stacks would break them apart during transfer)
             for (Widget wdg = lchild; wdg != null; wdg = wdg.prev)
             {
                 if (wdg.visible && wdg instanceof NWItem)
@@ -1433,10 +1556,8 @@ public class NInventory extends Inventory
                     }
                     else
                     {
-                        if (NParser.checkName(item.name(), ((NGItem) wItem.item).name()))
-                        {
+                        if (sameType(item, (NGItem) wItem.item))
                             items.add((NGItem) wItem.item);
-                        }
                     }
                 }
             }

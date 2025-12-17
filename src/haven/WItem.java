@@ -27,13 +27,9 @@
 package haven;
 
 import java.util.*;
-import java.util.function.*;
 import haven.render.*;
-import java.awt.Color;
-import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import haven.ItemInfo.AttrCache;
-import static haven.ItemInfo.find;
 import static haven.Inventory.sqsz;
 import nurgling.*;
 

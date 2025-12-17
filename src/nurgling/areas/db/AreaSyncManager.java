@@ -674,6 +674,9 @@ public class AreaSyncManager {
         if (server.space != null && server.space.space != null && !server.space.space.isEmpty()) {
             local.space = server.space;
         }
+        // ВАЖНО: grids_id должен соответствовать space.space, иначе MCache#getnolcut может попытаться
+        // построить меш для grid_id, которого нет в space (и упадёт в NOverlay.makenol).
+        local.syncGridIdsFromSpace();
         
         // Обновляем специализации
         if (server.spec != null && !server.spec.isEmpty()) {
@@ -1211,6 +1214,8 @@ public class AreaSyncManager {
         // Обновляем space если изменился
         if (fromDB.space != null && fromDB.space.space != null) {
             existing.space = fromDB.space;
+            // ВАЖНО: поддерживаем grids_id консистентным со space
+            existing.syncGridIdsFromSpace();
         }
         
         // Обновляем spec, jin, jout если изменились

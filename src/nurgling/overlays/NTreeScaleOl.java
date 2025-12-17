@@ -8,7 +8,6 @@ import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 import nurgling.NGameUI;
 import nurgling.NUtils;
-import nurgling.NConfig;
 import nurgling.TreeLocation;
 import nurgling.widgets.TreeFinderNotificationWindow;
 
@@ -37,7 +36,8 @@ public class NTreeScaleOl extends NObjectTexLabel {
     public NTreeScaleOl(Gob target) {
         super(target);
         gob = (Gob) target;
-        pos = new Coord3f(0, 0, 3);
+        // Raise above tree harvest icons overlay
+        pos = new Coord3f(0, 0, -4);
         TreeScale ts = gob.getattr(TreeScale.class);
         long scale = 0;
         if (NParser.checkName(gob.ngob.name, new NAlias("bushes"))) {

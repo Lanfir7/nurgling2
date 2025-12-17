@@ -30,8 +30,14 @@ public class NOverlay extends MapView.MapRaster
 
     public NOverlay(Integer id) {
         super(NUtils.getGameUI().map.glob.map, NUtils.getGameUI().map.view);
-        if(id>=0)
-            bc = NUtils.getArea(id).color;
+        if(id >= 0) {
+            NArea a = NUtils.getArea(id);
+            bc = (a != null && a.color != null) ? a.color : new Color(194, 194, 65, 56);
+        } else {
+            // Для кастомных оверлеев цвет обычно задаётся в наследниках,
+            // но на всякий случай оставим дефолт.
+            bc = new Color(194, 194, 65, 56);
+        }
         this.id = id;
     }
 
@@ -85,8 +91,19 @@ public class NOverlay extends MapView.MapRaster
         }
         Coord t = new Coord();
         Buf buf = new Buf();
-        NArea.VArea space = NUtils.getArea(id).space.space.get(grid_id);
+        NArea a = NUtils.getArea(id);
+        if (a == null || a.space == null || a.space.space == null) {
+            return null;
+        }
+        NArea.VArea space = a.space.space.get(grid_id);
+        if (space == null || space.area == null) {
+            // Зона не содержит текущий grid_id (или данные обновляются/удалены) — просто ничего не рисуем.
+            return null;
+        }
         Area curArea = space.area.xl(grid_ul);
+        if (curArea == null) {
+            return null;
+        }
         for(t.y = 0; t.y < mm.sz.y; t.y++) {
             for(t.x = 0; t.x < mm.sz.x; t.x++) {
                 Coord gc = t.add(mm.ul);
@@ -137,9 +154,22 @@ public class NOverlay extends MapView.MapRaster
         Area a = Area.sized(mm.ul, mm.sz);
 
         Buf buf = new Buf();
-        NArea.VArea space = NUtils.getArea(id).space.space.get(grid_id);
+        NArea areaObj = NUtils.getArea(id);
+        if (areaObj == null || areaObj.space == null || areaObj.space.space == null) {
+            return null;
+        }
+        NArea.VArea space = areaObj.space.space.get(grid_id);
+        if (space == null || space.area == null) {
+            return null;
+        }
         Area curArea = space.area.xl(grid_ul);
-        Area fullarea = NUtils.getArea(id).getArea();
+        if (curArea == null) {
+            return null;
+        }
+        Area fullarea = areaObj.getArea();
+        if (fullarea == null) {
+            return null;
+        }
         for(Coord t : a) {
             if(curArea.contains(t))
             {

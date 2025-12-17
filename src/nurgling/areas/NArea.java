@@ -300,6 +300,22 @@ public class NArea
     public ArrayList<Specialisation> spec = new ArrayList<>();
     public boolean inWork = false;
 
+    /**
+     * Приводит {@link #grids_id} в соответствие с ключами {@link #space}.
+     * ВАЖНО: grids_id используется в рендеринге оверлея (MCache#getnolcut),
+     * поэтому при замене/мердже space обязательно синхронизировать список,
+     * иначе возможны NPE при построении меша (space для grid_id отсутствует).
+     */
+    public void syncGridIdsFromSpace() {
+        grids_id.clear();
+        if (space == null || space.space == null || space.space.isEmpty()) {
+            return;
+        }
+        ArrayList<Long> ids = new ArrayList<>(space.space.keySet());
+        Collections.sort(ids);
+        grids_id.addAll(ids);
+    }
+
     public Area getArea()
     {
         if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null) {
