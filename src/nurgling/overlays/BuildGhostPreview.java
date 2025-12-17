@@ -1,13 +1,11 @@
 package nurgling.overlays;
 
 import haven.*;
-import haven.render.*;
 import nurgling.GhostAlpha;
 import nurgling.NHitBox;
 import nurgling.NUtils;
 import nurgling.pf.NHitBoxD;
 
-import java.awt.Color;
 import java.util.*;
 
 /**
@@ -164,7 +162,12 @@ public class BuildGhostPreview extends GAttrib {
      */
     private void calculateGhostPositionsNormal(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
         Coord inchMax = area.b.sub(area.a).floor();
-        Coord margin = buildingHitBox.end.sub(buildingHitBox.begin).floor(2, 2);
+        
+        // Match Finder.getFreePlace() margin calculation: use rotated circumscribed dimensions.
+        NHitBoxD tempBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, Coord2d.of(0), rotationAngle);
+        Coord2d rotatedUL = tempBox.getCircumscribedUL();
+        Coord2d rotatedBR = tempBox.getCircumscribedBR();
+        Coord margin = rotatedBR.sub(rotatedUL).floor(2, 2);
 
         // Simulate Finder.getFreePlace() behavior: pixel-by-pixel search
         for (int i = margin.x; i <= inchMax.x - margin.x; i++) {

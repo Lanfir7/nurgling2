@@ -516,6 +516,9 @@ public class NGob
                 checkTempRing();
             }
 
+            // Tree/bush harvest overlay (leaf/seed/fruit) reacts to sdt updates via ResDrawable.$cres -> checkattr
+            updateTreeHarvestOverlay(drawable);
+
             if (drawable.getres().getLayers() != null)
             {
                 if (drawable instanceof ResDrawable && ((ResDrawable) drawable).spr instanceof Consobj)
@@ -754,6 +757,56 @@ public class NGob
                     parent.addcustomol(new nurgling.overlays.NTroughRadius(parent));
                 }
             }
+        }
+    }
+
+    /**
+     * Adds/removes tree harvest overlay depending on config and current sdt state.
+     * Called from processDrawable() which is triggered on ResDrawable updates (including sdt changes).
+     */
+    private void updateTreeHarvestOverlay(Drawable drawable) {
+        try {
+            Gob.Overlay ol = parent.findol(NTreeHarvestOl.class);
+
+            // Only for trees/bushes
+            if (name == null || !NTreeHarvestOl.isTreeOrBushRes(name)) {
+                if (ol != null) ol.remove(true);
+                return;
+            }
+
+            // Respect "hide nature" mode (in this client it hides nature objects when false)
+            boolean showNature = Boolean.TRUE.equals(NConfig.get(NConfig.Key.hideNature));
+            if (!showNature) {
+                if (ol != null) ol.remove(true);
+                return;
+            }
+
+            boolean enabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.treeHarvestOverlay));
+            if (!enabled) {
+                if (ol != null) ol.remove(true);
+                return;
+            }
+
+            if (!(drawable instanceof ResDrawable)) {
+                if (ol != null) ol.remove(true);
+                return;
+            }
+
+            // Only show when there is something to display (ready + has icons)
+            TexI label = NTreeHarvestOl.computeLabel(parent);
+            if (label == null) {
+                if (ol != null) ol.remove(true);
+                return;
+            }
+
+            if (ol == null) {
+                parent.addcustomol(new NTreeHarvestOl(parent));
+            } else if (ol.spr instanceof NTreeHarvestOl) {
+                ((NTreeHarvestOl) ol.spr).refresh();
+            }
+        } catch (Loading l) {
+            // still loading, ignore
+        } catch (Exception ignored) {
         }
     }
 

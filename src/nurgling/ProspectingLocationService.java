@@ -137,6 +137,9 @@ public class ProspectingLocationService implements ProfileAwareService {
                 ProspectingLocation location = new ProspectingLocation(segmentId, segmentCoord, resourceType);
                 prospectingLocations.put(location.getLocationId(), location);
                 saveProspectingLocations();
+                
+                // Создаем маркер на карте с иконкой Wine Glance (только для проспектинга)
+                createProspectingMarker(mapFile, segmentId, segmentCoord, resourceType);
             } finally {
                 lock.writeLock().unlock();
             }
@@ -248,6 +251,90 @@ public class ProspectingLocationService implements ProfileAwareService {
             }
         } catch (IOException e) {
             System.err.println("Failed to save prospecting locations: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Создает маркер на карте для проспектинга с иконкой Wine Glance
+     */
+    private void createProspectingMarker(MapFile mapFile, long segmentId, Coord segmentCoord, String resourceType) {
+        try {
+            // Используем уникальное имя маркера на основе координат и типа ресурса
+            String markerName = resourceType != null ? resourceType : "Prospecting";
+            String markerResourceName = "gfx/invobjs/wineglance"; // Wine Glance иконка (одна иконка, не cuprite)
+            
+            // Пытаемся получить write lock для создания маркера
+            boolean lockAcquired = false;
+            try {
+                lockAcquired = mapFile.lock.writeLock().tryLock(500, TimeUnit.MILLISECONDS);
+                if (!lockAcquired) {
+                    return; // Не можем получить блокировку
+                }
+                
+                // Проверяем, не существует ли уже маркер проспектинга на этой позиции
+                // Используем уникальное имя ресурса для маркеров проспектинга
+                MapFile.SMarker existingProspectingMarker = mapFile.smarker(markerResourceName, segmentId, segmentCoord);
+                if (existingProspectingMarker != null) {
+                    return; // Маркер проспектинга уже существует на этой позиции
+                }
+                
+                // Также проверяем, нет ли уже обычного маркера камня на этой позиции
+                // Если есть маркер камня, не создаем маркер проспектинга, чтобы не дублировать
+                boolean hasStoneMarker = false;
+                for (MapFile.Marker mark : mapFile.markers) {
+                    if (mark.seg == segmentId && mark.tc.equals(segmentCoord)) {
+                        // Проверяем, что это не маркер проспектинга
+                        if (mark instanceof MapFile.SMarker) {
+                            MapFile.SMarker sm = (MapFile.SMarker) mark;
+                            // Если это маркер камня (не wineglance), пропускаем создание
+                            if (!sm.res.name.equals(markerResourceName)) {
+                                hasStoneMarker = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (hasStoneMarker) {
+                    return; // Уже есть маркер камня на этой позиции, не создаем дубликат
+                }
+                
+                // Загружаем ресурс иконки
+                try {
+                    Indir<Resource> resIndir = Resource.remote().load(markerResourceName);
+                    Resource res = resIndir.get();
+                    int resVer = res.ver;
+                    
+                    // Создаем маркер с иконкой Wine Glance
+                    MapFile.SMarker marker = new MapFile.SMarker(
+                        segmentId, 
+                        segmentCoord, 
+                        markerName, 
+                        0, 
+                        new Resource.Saved(Resource.remote(), markerResourceName, resVer)
+                    );
+                    
+                    mapFile.add(marker);
+                } catch (Loading e) {
+                    // Ресурс еще не загружен, создаем маркер с версией 0
+                    MapFile.SMarker marker = new MapFile.SMarker(
+                        segmentId, 
+                        segmentCoord, 
+                        markerName, 
+                        0, 
+                        new Resource.Saved(Resource.remote(), markerResourceName, 0)
+                    );
+                    mapFile.add(marker);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                if (lockAcquired) {
+                    mapFile.lock.writeLock().unlock();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error creating prospecting marker: " + e);
+            e.printStackTrace();
         }
     }
 

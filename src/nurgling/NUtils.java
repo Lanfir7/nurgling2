@@ -530,6 +530,67 @@ public class NUtils
         return false;
     }
 
+    /**
+     * Re-evaluates and (re)applies tree harvest overlays for currently loaded gobs.
+     * Used when toggling the feature from UI.
+     */
+    public static void refreshTreeHarvestOverlays() {
+        NGameUI gui = getGameUI();
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null)
+            return;
+
+        boolean enabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.treeHarvestOverlay));
+        // When natural objects are hidden in this client, trees/bushes themselves are hidden;
+        // ensure overlays are also removed.
+        boolean showNature = Boolean.TRUE.equals(NConfig.get(NConfig.Key.hideNature));
+
+        ArrayList<Gob> snapshot = new ArrayList<>();
+        try {
+            synchronized (gui.ui.sess.glob.oc) {
+                for (Gob gob : gui.ui.sess.glob.oc) {
+                    snapshot.add(gob);
+                }
+            }
+        } catch (Exception e) {
+            return;
+        }
+
+        for (Gob gob : snapshot) {
+            if (gob == null) continue;
+            try {
+                synchronized (gob) {
+                    Gob.Overlay ol = gob.findol(nurgling.overlays.NTreeHarvestOl.class);
+
+                    if (!enabled || !showNature) {
+                        if (ol != null) ol.remove(true);
+                        continue;
+                    }
+
+                    if (gob.ngob == null || gob.ngob.name == null || !nurgling.overlays.NTreeHarvestOl.isTreeOrBushRes(gob.ngob.name)) {
+                        if (ol != null) ol.remove(true);
+                        continue;
+                    }
+
+                    // Create/refresh only when there is something to show
+                    TexI label = nurgling.overlays.NTreeHarvestOl.computeLabel(gob);
+                    if (label == null) {
+                        if (ol != null) ol.remove(true);
+                        continue;
+                    }
+
+                    if (ol == null) {
+                        gob.addcustomol(new nurgling.overlays.NTreeHarvestOl(gob));
+                    } else if (ol.spr instanceof nurgling.overlays.NTreeHarvestOl) {
+                        ((nurgling.overlays.NTreeHarvestOl) ol.spr).refresh();
+                    }
+                }
+            } catch (Loading l) {
+                // Ignore objects still loading
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     public static Coord2d findMountain(Pair<Coord2d, Coord2d> rcArea)
     {
         Coord2d pos = new Coord2d ( rcArea.a.x, rcArea.a.y );

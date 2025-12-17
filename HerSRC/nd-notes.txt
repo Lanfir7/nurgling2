@@ -1,0 +1,27 @@
+//*********************************************************************************************************************************************************************//
+//*********************************************************************************************************************************************************************//
+
+java -cp bin/hafen.jar haven.Resource get-code res/path/here
+
+// Terminal Command used to fetch resource code from loftar's server. Also used to update the fetched resource by overwriting it directly (haha FUN)
+// (See next terminal command for checking for updates)
+
+//*********************************************************************************************************************************************************************//
+//*********************************************************************************************************************************************************************//
+
+java -cp bin/hafen.jar haven.Resource find-updates
+
+// Terminal command used to check if fetched resources have been updated on loftar's server. Only checks for version differences, doesn't actually update them.
+// Requires the client to be built (it uses the Resource class)
+
+//*********************************************************************************************************************************************************************//
+//*********************************************************************************************************************************************************************//
+
+java -cp bin/hafen.jar haven.SteamWorkshop upload bin 
+
+// Terminal command used to upload the bin folder to the workshop. 
+// Depends on the workshop-client.properties file, and other crap (See "Add client to Steam Workshop" commit).
+// Loftar's forum thread explaining how this crap works: https://www.havenandhearth.com/forum/viewtopic.php?f=49&t=76318
+
+//*********************************************************************************************************************************************************************//
+//*********************************************************************************************************************************************************************//

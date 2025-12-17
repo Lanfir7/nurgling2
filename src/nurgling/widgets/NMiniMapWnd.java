@@ -87,7 +87,8 @@ public class NMiniMapWnd extends Widget{
     public static final IBox pbox = Window.wbox;
     public static final KeyBinding kb_eye = KeyBinding.get("ol-eye", KeyMatch.nil);
     public static final KeyBinding kb_grid = KeyBinding.get("ol-mgrid", KeyMatch.nil);
-    public static final KeyBinding kb_path = KeyBinding.get("ol-mgrid", KeyMatch.nil);
+    public static final KeyBinding kb_path = KeyBinding.get("ol-mpath", KeyMatch.nil);
+    public static final KeyBinding kb_treeharv = KeyBinding.get("ol-treeharv", KeyMatch.nil);
     public static final KeyBinding kb_hidenature = KeyBinding.get("ol-hidenature", KeyMatch.nil);
     public static final KeyBinding kb_minesup = KeyBinding.get("ol-minesup", KeyMatch.nil);
     final Coord marg = UI.scale(new Coord(5,5));
@@ -205,6 +206,16 @@ public class NMiniMapWnd extends Widget{
             }
         });
         buttons.add(timer);
+
+        // Tree harvest overlay toggle (leaf/seed/fruit) - uses existing 'path' button art
+        ACheckBox treeharv = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/path", kb_treeharv, "Tree harvest overlay (leaf/seed/fruit)");
+        treeharv.changed(a -> {
+            NConfig.set(NConfig.Key.treeHarvestOverlay, a);
+            NConfig.needUpdate();
+            NUtils.refreshTreeHarvestOverlays();
+        });
+        treeharv.a = (Boolean) NConfig.get(NConfig.Key.treeHarvestOverlay);
+        buttons.add(treeharv);
 
         // Layout buttons with wrapping
         layoutButtons(buttons);

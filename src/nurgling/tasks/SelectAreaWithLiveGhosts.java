@@ -36,7 +36,17 @@ public class SelectAreaWithLiveGhosts extends NTask {
                 // Check if R key was pressed (key code 82)
                 if (mapView.ui.modflags() == 0 && checkRotationKey()) {
                     rotationCount = (rotationCount + 1) % 4;
-                    currentHitBox = getRotatedHitBox();
+                    /*
+                     * IMPORTANT:
+                     * Do NOT rotate the hitbox itself here.
+                     *
+                     * Placement and collision in this codebase (Finder.getFreePlace / NHitBoxD)
+                     * expect the ORIGINAL (unrotated) hitbox + a rotation ANGLE.
+                     *
+                     * Rotating the hitbox AND passing rotationAngle would effectively apply rotation twice,
+                     * which leads to incorrect spacing in some directions (e.g. drying frames after pressing R).
+                     */
+                    currentHitBox = originalHitBox;
                     
                     // Update rotation for existing ghosts
                     if (ghostPreview != null) {
@@ -143,14 +153,6 @@ public class SelectAreaWithLiveGhosts extends NTask {
         return false;
     }
     
-    private NHitBox getRotatedHitBox() {
-        NHitBox box = originalHitBox;
-        for (int i = 0; i < rotationCount; i++) {
-            box = box.rotate();
-        }
-        return box;
-    }
-
     /**
      * Get current selection area from active Selector (during selection process)
      */
