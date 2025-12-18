@@ -39,6 +39,8 @@ NMiniMap extends MiniMap {
     public boolean showTreeIcons = true;
     public boolean showFishIcons = true;
     public boolean showProspectingIcons = true;
+    public boolean showQuarryartzIcons = true;
+    public boolean showOreSpotIcons = true; // Видимость маркеров спотов руд
 
     private static final Coord2d sgridsz = new Coord2d(new Coord(100,100));
     public NMiniMap(Coord sz, MapFile file) {
@@ -952,35 +954,47 @@ NMiniMap extends MiniMap {
      */
     private void drawLabeledMarks(GOut g) {
         if(sessloc == null || dloc == null) return;
-        
+
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.labeledMarkService == null) return;
-        
+
         java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(dloc.seg.id);
-        
+
         Coord hsz = sz.div(2);
-        
+
         for(LabeledMinimapMark mark : marks) {
+            // Пропускаем метки квариарца, если они скрыты
+            if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) {
+                continue;
+            }
+            
+            // Пропускаем метки спотов руд, если они скрыты
+            if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) {
+                continue;
+            }
+            
             // Calculate screen position
             Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
-            
+
             // Only draw if on screen
             if(screenPos.x >= 0 && screenPos.x <= sz.x &&
                screenPos.y >= 0 && screenPos.y <= sz.y) {
-                
+
                 // Draw icon if available
                 TexI iconTex = mark.getIconTex();
                 if(iconTex != null) {
                     int dsz = Math.max(iconTex.sz().y, iconTex.sz().x);
                     int targetSize = UI.scale(18);
-                    g.aimage(iconTex, screenPos, 0.5, 0.5, 
+                    g.aimage(iconTex, screenPos, 0.5, 0.5,
                         UI.scale(targetSize * iconTex.sz().x / dsz, targetSize * iconTex.sz().y / dsz));
                 }
-                
+
                 // Draw label under the icon (like quest giver names)
+                // Для квариарца поднимаем подпись выше и используем меньший шрифт
                 Text labelText = mark.getLabelText();
                 if(labelText != null) {
-                    Coord textPos = screenPos.add(0, UI.scale(10));
+                    int offsetY = "Quarryartz".equals(mark.resourceType) ? UI.scale(6) : UI.scale(10);
+                    Coord textPos = screenPos.add(0, offsetY);
                     g.aimage(labelText.tex(), textPos, 0.5, 0);
                 }
             }
@@ -1020,9 +1034,9 @@ NMiniMap extends MiniMap {
         } else {
             // Zoom in - multiply by 1.0526 (inverse of 0.95, ~5.3% increase)
             targetScale *= 1.0526f;
-            // Limit maximum scale to 4x
-            if(targetScale > 4.0f)
-                targetScale = 4.0f;
+            // Limit maximum scale to 8x (увеличено для большего приближения)
+            if(targetScale > 8.0f)
+                targetScale = 8.0f;
         }
         
         // Update zoomlevel for compatibility with base class
@@ -1937,21 +1951,50 @@ NMiniMap extends MiniMap {
      * Find a labeled minimap mark at the given screen coordinate.
      * Used for right-click deletion of water/soil quality marks.
      */
+    /**
+     * Проверяет, является ли маркер маркером спота руды
+     */
+    private boolean isOreSpotMark(String resourceType) {
+        if (resourceType == null) return false;
+        // Список руд для системы спотов
+        String[] oreTypes = {
+            "Black Ore", "Bloodstone", "Cassiterite", "Chalcopyrite", "Cinnabar",
+            "Direvein", "Galena", "Heavy Earth", "Horn Silver", "Iron Ochre",
+            "Lead Glance", "Leaf Ore", "Malachite", "Meteorite", "Peacock Ore",
+            "Schrifterz", "Silvershine", "Wine Glance"
+        };
+        for (String ore : oreTypes) {
+            if (ore.equals(resourceType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     private LabeledMinimapMark labeledMarkAt(Coord screenCoord) {
         if(dloc == null || sessloc == null) return null;
-        
+
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.labeledMarkService == null) return null;
-        
+
         java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(dloc.seg.id);
-        
+
         Coord hsz = sz.div(2);
         int threshold = UI.scale(12); // Click radius
-        
+
         for(LabeledMinimapMark mark : marks) {
+            // Пропускаем метки квариарца, если они скрыты
+            if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) {
+                continue;
+            }
+            // Пропускаем метки руд (споты), если они скрыты
+            if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) {
+                continue;
+            }
+            
             // Calculate screen position for this mark
             Coord markScreenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
-            
+
             // Check if click is within threshold
             if(screenCoord.dist(markScreenPos) < threshold) {
                 return mark;
@@ -1991,6 +2034,132 @@ NMiniMap extends MiniMap {
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
+        // Handle Alt+left-click on Quarryartz labeled mark - show overlay (prevent player movement)
+        if(ev.b == 1 && ui.modmeta && dloc != null && sessloc != null) {
+            LabeledMinimapMark labeledMark = labeledMarkAt(ev.c);
+            if(labeledMark != null && "Quarryartz".equals(labeledMark.resourceType)) {
+                NGameUI gui = NUtils.getGameUI();
+                if(gui != null && gui.map != null) {
+                    try {
+                        // Проверяем, что метка в том же сегменте, что и текущая сессия
+                        if(gui.mmap == null || gui.mmap.sessloc == null || 
+                           labeledMark.segmentId != gui.mmap.sessloc.seg.id) {
+                            gui.msg("Метка находится в другой области карты", java.awt.Color.YELLOW);
+                            return true;
+                        }
+                        
+                        // Правильно вычисляем мировые координаты из координат тайла
+                        // Используем ту же формулу, что и в MiniMap.mvclick для Ctrl+ЛКМ
+                        // Формула: tileCoords.sub(sessloc.tc).mul(tilesz).add(tilesz.div(2))
+                        Coord2d tileWorldPos = labeledMark.tileCoords.sub(gui.mmap.sessloc.tc)
+                            .mul(MCache.tilesz).add(MCache.tilesz.div(2));
+                        
+                        // Парсим качество из метки (формат "q101")
+                        double quality = 0;
+                        try {
+                            if(labeledMark.label != null && labeledMark.label.startsWith("q")) {
+                                quality = Double.parseDouble(labeledMark.label.substring(1).trim());
+                            }
+                        } catch (Exception e) {
+                            // Игнорируем ошибки парсинга
+                        }
+                        
+                        // Получаем иконку квариарца
+                        BufferedImage iconImage = nurgling.actions.bots.MasterMiner.getQuarryartzIcon();
+                        if(iconImage != null && gui.map instanceof NMapView) {
+                            NMapView mapView = (NMapView) gui.map;
+                            
+                            // Проверяем, что mapView инициализирован
+                            if(mapView.glob == null || mapView.glob.oc == null) {
+                                gui.msg("Карта не инициализирована", java.awt.Color.YELLOW);
+                                return true;
+                            }
+                            
+                            // Отправляем персонажа к месту метки
+                            Gob playerGob = mapView.player();
+                            if(playerGob != null) {
+                                // Используем ту же формулу, что и в MiniMap.mvclick для движения
+                                Coord worldPosFloor = tileWorldPos.floor(OCache.posres);
+                                
+                                // Отправляем команду движения к координатам метки (как в MiniMap.mvclick)
+                                // Используем ui.mc для координат мыши (или Coord.z если не важно)
+                                Coord mc = ui.mc != null ? ui.mc : Coord.z;
+                                mapView.wdgmsg("click", mc, worldPosFloor, 1, 0);
+                                
+                                double dist = playerGob.rc.dist(tileWorldPos);
+                                gui.msg(String.format("Идем к метке: тайл (%d,%d), мир (%.1f,%.1f), расстояние %.1f", 
+                                    labeledMark.tileCoords.x, labeledMark.tileCoords.y,
+                                    tileWorldPos.x, tileWorldPos.y, dist), java.awt.Color.GREEN);
+                                
+                                // Также создаем луч от игрока к тайлу для визуализации
+                                mapView.setMarkerTarget(tileWorldPos);
+                                
+                                // Создаем виртуальный Gob на тайле с оверлеем
+                                // Используем правильную высоту для виртуального Gob
+                                try {
+                                    float zHeight = mapView.glob.map.getzp(tileWorldPos).z;
+                                    OCache.Virtual dummy = mapView.glob.oc.new Virtual(tileWorldPos, zHeight);
+                                    dummy.virtual = true;
+                                    
+                                    gui.msg("Создаем крестик на тайле", java.awt.Color.YELLOW);
+                                    
+                                    // Создаем оверлей с крестиком на тайле (как система пыли при копке)
+                                    // Порядок как в RouteLabel и NAreaLabel: сначала addcustomol, потом add в oc
+                                    nurgling.overlays.QuarryartzCrossOverlay crossOverlay = 
+                                        new nurgling.overlays.QuarryartzCrossOverlay(dummy);
+                                    
+                                    // Добавляем оверлей к виртуальному Gob ПЕРЕД добавлением в кэш
+                                    dummy.addcustomol(crossOverlay);
+                                    
+                                    // Также создаем оверлей с иконкой и качеством (опционально, для информации)
+                                    if (iconImage != null) {
+                                        nurgling.overlays.QuarryartzTileOverlay overlay = 
+                                            new nurgling.overlays.QuarryartzTileOverlay(dummy, iconImage, quality);
+                                        dummy.addcustomol(overlay);
+                                    }
+                                    
+                                    // Теперь добавляем виртуальный Gob в кэш объектов (после добавления overlay)
+                                    mapView.glob.oc.add(dummy);
+                                    
+                                    gui.msg("Крестик создан на тайле", java.awt.Color.GREEN);
+                                    
+                                    // Через 30 секунд убираем луч и dummy
+                                    final OCache.Virtual finalDummy = dummy;
+                                    NUtils.getUI().core.addTask(new nurgling.tasks.NTask() {
+                                        { this.maxCounter = 1800; }
+                                        @Override
+                                        public boolean check() {
+                                            // Удаляем dummy
+                                            if (mapView.glob.oc.getgob(finalDummy.id) != null) {
+                                                mapView.glob.oc.remove(finalDummy);
+                                            }
+                                            // Убираем луч
+                                            mapView.setMarkerTarget(null);
+                                            return true;
+                                        }
+                                    });
+                                } catch (Exception e) {
+                                    // Если не удалось создать виртуальный Gob, просто убираем луч через 30 секунд
+                                    NUtils.getUI().core.addTask(new nurgling.tasks.NTask() {
+                                        { this.maxCounter = 1800; }
+                                        @Override
+                                        public boolean check() {
+                                            mapView.setMarkerTarget(null);
+                                            return true;
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                        e.printStackTrace();
+                    }
+                }
+                return true; // Потребляем событие, чтобы предотвратить движение персонажа
+            }
+        }
+        
         // Handle left-click for forager path recording - prevent player movement
         if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
@@ -2161,15 +2330,44 @@ NMiniMap extends MiniMap {
             }
         }
 
-        // Handle right-click release on labeled mark (water/soil quality) - delete it
+        // Handle right-click release on labeled mark
         if(ev.b == 3 && dloc != null && sessloc != null) {
             LabeledMinimapMark labeledMark = labeledMarkAt(ev.c);
             if(labeledMark != null) {
                 NGameUI gui = NUtils.getGameUI();
                 if(gui != null && gui.labeledMarkService != null) {
-                    gui.labeledMarkService.removeMark(labeledMark);
+                    // Если это метка квариарца
+                    if("Quarryartz".equals(labeledMark.resourceType)) {
+                        // Shift+ПКМ - удалить конкретную метку
+                        if((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                            gui.labeledMarkService.removeMark(labeledMark);
+                            gui.msg("Удалена метка " + labeledMark.label, java.awt.Color.YELLOW);
+                            return true;
+                        }
+                        // Обычный ПКМ - открываем окно поиска
+                        QuarryartzSearchWindow searchWnd = gui.quarryartzSearchWindow;
+                        if(searchWnd == null || searchWnd.parent == null || !searchWnd.visible()) {
+                            searchWnd = new QuarryartzSearchWindow(gui);
+                            gui.quarryartzSearchWindow = searchWnd;
+                            gui.add(searchWnd, new Coord(100, 100));
+                        } else {
+                            searchWnd.raise();
+                        }
+                        return true;
+                    } else if(isOreSpotMark(labeledMark.resourceType)) {
+                        // Если это метка спота руды - Shift+ПКМ удаляет
+                        if((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                            gui.labeledMarkService.removeMark(labeledMark);
+                            gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
+                            return true;
+                        }
+                        return true;
+                    } else {
+                        // Для других меток - удаление
+                        gui.labeledMarkService.removeMark(labeledMark);
+                        return true;
+                    }
                 }
-                return true;
             }
         }
         

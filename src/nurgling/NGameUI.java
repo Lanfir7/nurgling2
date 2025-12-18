@@ -70,6 +70,7 @@ public class NGameUI extends GameUI
     public ProspectingLocationService prospectingLocationService;
     public ProspectingSearchWindow prospectingSearchWindow = null;
     public TerrainSearchWindow terrainSearchWindow = null;
+    public nurgling.widgets.QuarryartzSearchWindow quarryartzSearchWindow = null;
     public LabeledMarkService labeledMarkService;
     public StudyDeskPlannerWidget studyDeskPlanner = null;
     public NDraggableWidget studyReportWidget = null;

@@ -18,6 +18,12 @@ public class NMasterMinerProp implements JConf {
 
     /** Писать расчёт в чат. */
     public boolean showCalc = false;
+    
+    /** Порог качества для сброса камня. */
+    public float dropThreshold = Float.NaN;
+    
+    /** Порог качества для постановки меток на карте. */
+    public float markerThreshold = Float.NaN;
 
     public NMasterMinerProp(String username, String chrid) {
         this.username = username;
@@ -32,6 +38,20 @@ public class NMasterMinerProp implements JConf {
         }
         if (values.get("showCalc") != null) {
             showCalc = (Boolean) values.get("showCalc");
+        }
+        if (values.get("dropThreshold") != null) {
+            Object dt = values.get("dropThreshold");
+            if (dt instanceof Number) {
+                float val = ((Number) dt).floatValue();
+                dropThreshold = Float.isNaN(val) ? Float.NaN : val;
+            }
+        }
+        if (values.get("markerThreshold") != null) {
+            Object mt = values.get("markerThreshold");
+            if (mt instanceof Number) {
+                float val = ((Number) mt).floatValue();
+                markerThreshold = Float.isNaN(val) ? Float.NaN : val;
+            }
         }
     }
 
@@ -60,6 +80,12 @@ public class NMasterMinerProp implements JConf {
         j.put("chrid", chrid);
         j.put("minWallQ", minWallQ);
         j.put("showCalc", showCalc);
+        if (!Float.isNaN(dropThreshold)) {
+            j.put("dropThreshold", dropThreshold);
+        }
+        if (!Float.isNaN(markerThreshold)) {
+            j.put("markerThreshold", markerThreshold);
+        }
         return j;
     }
 

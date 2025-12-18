@@ -231,6 +231,76 @@ public class LabeledMarkService implements ProfileAwareService {
     }
 
     /**
+     * Get all labeled marks for a specific resource type.
+     */
+    public List<LabeledMinimapMark> getMarksByResourceType(String resourceType) {
+        lock.readLock().lock();
+        try {
+            List<LabeledMinimapMark> result = new ArrayList<>();
+            for (LabeledMinimapMark mark : labeledMarks.values()) {
+                if (mark.resourceType.equals(resourceType)) {
+                    result.add(mark);
+                }
+            }
+            return result;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Remove all marks for a specific resource type.
+     */
+    public int removeMarksByResourceType(String resourceType) {
+        lock.writeLock().lock();
+        try {
+            int removed = 0;
+            Iterator<Map.Entry<String, LabeledMinimapMark>> it = labeledMarks.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<String, LabeledMinimapMark> entry = it.next();
+                if (entry.getValue().resourceType.equals(resourceType)) {
+                    it.remove();
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                saveLabeledMarks();
+            }
+            return removed;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Get marks filtered by quality threshold (for Quarryartz marks with "q" prefix in label).
+     */
+    public List<LabeledMinimapMark> getQuarryartzMarksAboveThreshold(double threshold) {
+        lock.readLock().lock();
+        try {
+            List<LabeledMinimapMark> result = new ArrayList<>();
+            for (LabeledMinimapMark mark : labeledMarks.values()) {
+                if (!"Quarryartz".equals(mark.resourceType)) continue;
+                // Parse quality from label (format: "q101", "q95", etc.)
+                try {
+                    if (mark.label != null && mark.label.startsWith("q")) {
+                        String qStr = mark.label.substring(1).trim();
+                        double quality = Double.parseDouble(qStr);
+                        if (quality > threshold) {
+                            result.add(mark);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore parsing errors
+                }
+            }
+            return result;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
      * Dispose the service and cleanup resources.
      */
     public void dispose() {

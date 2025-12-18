@@ -30,8 +30,9 @@ public class LabeledMinimapMark {
     private Text labelText;
     
     // Text furnace for rendering labels (like quest giver names)
+    // Уменьшенный шрифт для меток квариарца
     private static final Text.Furnace labelFurnace = new PUtils.BlurFurn(
-        new Text.Foundry(Text.sans, 10, Color.WHITE).aa(true), 
+        new Text.Foundry(Text.sans, 8, Color.WHITE).aa(true), 
         2, 1, new Color(60, 30, 30)
     );
     
@@ -147,12 +148,18 @@ public class LabeledMinimapMark {
      * Create the text render for the label with the appropriate color.
      */
     private Text createLabelText() {
+        // Используем меньший шрифт для квариарца
+        int fontSize = "Quarryartz".equals(resourceType) ? 8 : 10;
         if (labelColor.equals(Color.WHITE)) {
-            return labelFurnace.render(label);
+            Text.Furnace furnace = new PUtils.BlurFurn(
+                new Text.Foundry(Text.sans, fontSize, Color.WHITE).aa(true), 
+                2, 1, new Color(60, 30, 30)
+            );
+            return furnace.render(label);
         } else {
             // Create custom furnace with the specified color
             Text.Furnace customFurnace = new PUtils.BlurFurn(
-                new Text.Foundry(Text.sans, 10, labelColor).aa(true), 
+                new Text.Foundry(Text.sans, fontSize, labelColor).aa(true), 
                 2, 1, new Color(60, 30, 30)
             );
             return customFurnace.render(label);

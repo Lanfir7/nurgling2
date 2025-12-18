@@ -172,7 +172,8 @@ public class NConfig
         studyInfoOverlay,
         progressOverlay,
         volumeOverlay,
-        masterminerprop
+        masterminerprop,
+        masterminermarkingconfig
     }
 
     public enum BBDisplayMode
@@ -782,6 +783,9 @@ public class NConfig
                                 break;
                             case "NMasterMinerProp":
                                 res.add(new NMasterMinerProp(obj));
+                                break;
+                            case "NMasterMinerMarkingConfig":
+                                res.add(new NMasterMinerMarkingConfig(obj));
                                 break;
                             case "NPrepBProp":
                                 res.add(new NPrepBlocksProp(obj));

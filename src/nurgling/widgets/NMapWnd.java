@@ -16,6 +16,8 @@ public class NMapWnd extends MapWnd {
     MapToggleButton fishBtn;
     MapToggleButton oresBtn;
     MapToggleButton prospectBtn;
+    MapToggleButton quarryartzBtn;
+    MapToggleButton oreSpotsBtn; // Кнопка для переключения видимости маркеров спотов руд
     MapToggleButton vectorClearBtn;
     TextEntry markerSearchField;
     private static final int btnw = UI.scale(95);
@@ -71,8 +73,20 @@ public class NMapWnd extends MapWnd {
         prospectBtn.a = getProspectingIconsState(); // Set initial state
         prospectBtn.changed(val -> setProspectingIconsState(val));
         
-        // Vector clear button (leftmost)
+        // Quarryartz button
         btnPos = btnPos.sub(prospectBtn.sz.x + btnSpacing, 0);
+        quarryartzBtn = add(new MapToggleButton("tree", "Toggle Quarryartz markers (Right-click: Quarryartz Search)", this::openQuarryartzSearch), btnPos);
+        quarryartzBtn.a = getQuarryartzIconsState(); // Set initial state
+        quarryartzBtn.changed(val -> setQuarryartzIconsState(val));
+        
+        // Ore Spots button (для маркеров спотов руд)
+        btnPos = btnPos.sub(quarryartzBtn.sz.x + btnSpacing, 0);
+        oreSpotsBtn = add(new MapToggleButton("tree", "Toggle Ore Spot markers", null), btnPos);
+        oreSpotsBtn.a = getOreSpotsIconsState(); // Set initial state
+        oreSpotsBtn.changed(val -> setOreSpotsIconsState(val));
+        
+        // Vector clear button (leftmost)
+        btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
         vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null), btnPos);
         vectorClearBtn.a = false; // Always show as unpressed
         vectorClearBtn.click(this::clearVectors);
@@ -139,6 +153,36 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showProspectingIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showProspectingIcons = val;
+    }
+
+    private boolean getQuarryartzIconsState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            return ((NMiniMap) gui.mmap).showQuarryartzIcons;
+        return true;
+    }
+
+    private void setQuarryartzIconsState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            ((NMiniMap) gui.mmap).showQuarryartzIcons = val;
+        if(view instanceof NMiniMap)
+            ((NMiniMap) view).showQuarryartzIcons = val;
+    }
+    
+    private boolean getOreSpotsIconsState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            return ((NMiniMap) gui.mmap).showOreSpotIcons;
+        return true;
+    }
+    
+    private void setOreSpotsIconsState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            ((NMiniMap) gui.mmap).showOreSpotIcons = val;
+        if(view instanceof NMiniMap)
+            ((NMiniMap) view).showOreSpotIcons = val;
     }
 
     private void openTreeSearch() {
@@ -209,6 +253,24 @@ public class NMapWnd extends MapWnd {
                 gui.prospectingSearchWindow = new ProspectingSearchWindow(gui);
                 gui.add(gui.prospectingSearchWindow, new Coord(100, 100));
                 gui.prospectingSearchWindow.show();
+            }
+        }
+    }
+
+    private void openQuarryartzSearch() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null) {
+            if(gui.quarryartzSearchWindow != null) {
+                if(gui.quarryartzSearchWindow.visible()) {
+                    gui.quarryartzSearchWindow.hide();
+                } else {
+                    gui.quarryartzSearchWindow.show();
+                    gui.quarryartzSearchWindow.raise();
+                }
+            } else {
+                gui.quarryartzSearchWindow = new QuarryartzSearchWindow(gui);
+                gui.add(gui.quarryartzSearchWindow, new Coord(100, 100));
+                gui.quarryartzSearchWindow.show();
             }
         }
     }
