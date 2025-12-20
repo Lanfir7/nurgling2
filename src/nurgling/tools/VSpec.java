@@ -1501,7 +1501,7 @@ public class VSpec {
 //        pies.add(new JSONObject("{\"static\":\"gfx/invobjs/bakedbirchdream\",\"name\":\"Baked Birchbark Bream\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/barkbread\",\"name\":\"Bark Bread\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/birthdaycake\",\"name\":\"Birthday Cake\"}"));
-//        pies.add(new JSONObject("{\"static\":\"gfx/invobjs/blueberrypie\",\"name\":\"Blueberry Pie\"}"));
+        pies.add(new JSONObject("{\"static\":\"gfx/invobjs/blueberryslice\",\"name\":\"Blueberry Pie\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/bread\",\"name\":\"Bread\"}"));
 //        pies.add(new JSONObject("{\"static\":\"gfx/invobjs/butterscones\",\"name\":\"Butter Scones\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/carrotcake\",\"name\":\"Carrot Cake\"}"));
@@ -1523,7 +1523,7 @@ public class VSpec {
 //        pies.add(new JSONObject("{\"static\":\"gfx/invobjs/magpie\",\"name\":\"Magpie (Pie)\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/marrowcake\",\"name\":\"Marrow Cake\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/meatpie\",\"name\":\"Meatpie\"}"));
-//        pies.add(new JSONObject("{\"static\":\"gfx/invobjs/mushroompirozhki\",\"name\":\"Mushroom & Onion Pirozhki\"}"));
+        pies.add(new JSONObject("{\"static\":\"gfx/invobjs/pirozhki\",\"name\":\"Mushroom & Onion Pirozhki\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/mushroompie\",\"name\":\"Mushroom Pie\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/olivebread\",\"name\":\"Olive Bread\"}"));
         pies.add(new JSONObject("{\"static\":\"gfx/invobjs/peapie\",\"name\":\"Pea Pie\"}"));
@@ -1543,6 +1543,7 @@ public class VSpec {
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-barkbread\",\"name\":\"Unbaked Bark Bread\"}"));
 //        doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-birthdaycake\",\"name\":\"Unbaked Birthday Cake\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-bread\",\"name\":\"Bread Dough\"}"));
+        doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-blueberryslice\",\"name\":\"Blueberry Pie Dough\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-carrotcake\",\"name\":\"Unbaked Carrot Cake\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-cheesecake\",\"name\":\"Unbaked Cheesecake\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-dreamcookies\",\"name\":\"Unbaked Dream Cookies\"}"));
@@ -1565,11 +1566,13 @@ public class VSpec {
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-poultrypotpie\",\"name\":\"Unbaked Poultry Pot Pie\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-pumpkinbread\",\"name\":\"Unbaked Pumpkin Bread\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-pumpkinpie\",\"name\":\"Unbaked Pumpkin Pie\"}"));
+        doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-pirozhki\",\"name\":\"Mushroom & Onion Pirozhki Dough\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-raisinbuttercake\",\"name\":\"Unbaked Raisin Butter-Cake\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-ringofbrodgar\",\"name\":\"Unbaked Ring of Brodgar\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-shepherdspie\",\"name\":\"Unbaked Shepherd's Pie\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-strawberrycake\",\"name\":\"Unbaked Strawberry Cake\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-onionbread\",\"name\":\"Unbaked Onion Bread\"}"));
+        doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-seedcrispbread\",\"name\":\"Unbaked Seedcrisp Flatbread\"}"));
         categories.put("Dough", doughs);
 
         ArrayList<JSONObject> giantAntItems = new ArrayList<>();
@@ -1950,6 +1953,48 @@ public class VSpec {
         fishFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-zander\",\"gfx/invobjs/meat-filet\"],\"name\":\"Filet of Zander\"}"));
         fishFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-zope\",\"gfx/invobjs/meat-filet\"],\"name\":\"Filet of Zope\"}"));
         categories.put("Filet of ", fishFilet);
+
+        ArrayList<JSONObject> fishDFilet = new ArrayList<>();
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-abyssgazer\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Abyss Gazer\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-asp\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Asp\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-bass\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Bass\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-bream\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Bream\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-brill\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Brill\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-burbot\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Burbot\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-carp\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Carp\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-catfish\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Catfish\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-caveangler\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Cave Angler\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-cavesculpin\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Cave Sculpin\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-cavelacanth\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Cavelacanth\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-chub\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Chub\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-cod\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Cod\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-eel\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Eel\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-grayling\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Grayling\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-haddock\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Haddock\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-herring\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Herring\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-ide\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Ide\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-lavaret\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Lavaret\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-mackerel\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Mackerel\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-mullet\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Mullet\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-paleghostfish\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Pale Ghostfish\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-perch\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Perch\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-pike\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Pike\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-plaice\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Plaice\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-pomfret\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Pomfret\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-roach\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Roach\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-rosefish\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Rose Fish\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-ruffe\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Ruffe\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-saithe\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Saithe\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-salmon\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Salmon\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-silverbream\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Silver Bream\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-smelt\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Smelt\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-sturgeon\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Sturgeon\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-tench\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Tench\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-trout\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Trout\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-whiting\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Whiting\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-zander\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Zander\"}"));
+        fishDFilet.add(new JSONObject("{\"layer\":[\"gfx/invobjs/meat-zope\",\"gfx/invobjs/meat-dfilet\"],\"name\":\"Dried Filet of Zope\"}"));
+        categories.put("Dried Filet of ", fishDFilet);
 
         ArrayList<JSONObject> rawChevon = new ArrayList<>();
         rawChevon.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-goat\"], \"name\": \"Raw Chevon\"}"));

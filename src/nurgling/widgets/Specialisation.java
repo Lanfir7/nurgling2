@@ -92,7 +92,8 @@ public class Specialisation extends Window
         soilForTrees,
         plantingGardenPots,
         boardsForBuild,
-        gardenPotSeeds;
+        gardenPotSeeds,
+        rawfish;
     }
 
     private static ArrayList<SpecialisationItem> specialisation = new ArrayList<>();
@@ -180,6 +181,9 @@ public class Specialisation extends Window
         // Building resources
         specialisation.add(new SpecialisationItem(SpecName.boardsForBuild.toString(),"Boards for build",Resource.loadsimg("nurgling/categories/block")));
         specialisation.add(new SpecialisationItem(SpecName.gardenPotSeeds.toString(),"Garden Pot Seeds",Resource.loadsimg("nurgling/categories/gardenpot")));
+        
+        // Raw fish piles
+        specialisation.add(new SpecialisationItem(SpecName.rawfish.toString(),"Piles of raw fish",Resource.loadsimg("nurgling/categories/rawhide")));
 
         specialisation.sort(new Comparator<SpecialisationItem>() {
             @Override

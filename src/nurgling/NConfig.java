@@ -115,7 +115,6 @@ public class NConfig
         waypointRetryOnStuck,
         verboseCal,
         highlightRockTiles,
-        showFullPathLines,
         preferredMovementSpeed,
         preferredHorseSpeed,
         uiOpacity,
@@ -142,6 +141,8 @@ public class NConfig
         simpleInspect,
         showSpeedometer,
         showPathLine,
+        pathLineWidth,
+        pathLineColor,
         parasiteBotEnabled,
         leechAction,
         tickAction,
@@ -166,6 +167,7 @@ public class NConfig
         treeScaleDisableZoomHide,
         treeScaleMinThreshold,
         treeHarvestOverlay,
+        thinOutlines,
         itemQualityOverlay,
         stackQualityOverlay,
         amountOverlay,
@@ -173,7 +175,8 @@ public class NConfig
         progressOverlay,
         volumeOverlay,
         masterminerprop,
-        masterminermarkingconfig
+        masterminermarkingconfig,
+        equipProxySlots
     }
 
     public enum BBDisplayMode
@@ -299,9 +302,10 @@ public class NConfig
         conf.put(Key.waypointRetryOnStuck, true);
         conf.put(Key.verboseCal, false);
         conf.put(Key.highlightRockTiles, true);
-        conf.put(Key.showFullPathLines, false);
         conf.put(Key.showSpeedometer, false);
         conf.put(Key.showPathLine, false);
+        conf.put(Key.pathLineWidth, 4);
+        conf.put(Key.pathLineColor, new Color(255, 255, 0));  // Yellow
 
         ArrayList<HashMap<String, Object>> qpattern = new ArrayList<>();
         HashMap<String, Object> res1 = new HashMap<>();
@@ -453,6 +457,9 @@ public class NConfig
         // Tree harvest (leaf/seed/fruit) overlay settings
         conf.put(Key.treeHarvestOverlay, false);
         
+        // Outline rendering settings
+        conf.put(Key.thinOutlines, false);  // If true, use thinner object outlines
+
         // Item quality overlay settings
         conf.put(Key.itemQualityOverlay, new ItemQualityOverlaySettings());
         // Stack quality overlay settings
@@ -484,6 +491,13 @@ public class NConfig
         volumeDefaults.defaultColor = new java.awt.Color(65, 255, 115);
         volumeDefaults.showBackground = true;
         conf.put(Key.volumeOverlay, volumeDefaults);
+
+        // Equipment proxy slots - default to Left Hand, Right Hand, Belt
+        ArrayList<Integer> defaultEquipProxySlots = new ArrayList<>();
+        defaultEquipProxySlots.add(6);  // HAND_LEFT
+        defaultEquipProxySlots.add(7);  // HAND_RIGHT
+        defaultEquipProxySlots.add(5);  // BELT
+        conf.put(Key.equipProxySlots, defaultEquipProxySlots);
     }
 
 
@@ -825,6 +839,11 @@ public class NConfig
                     }
                 }
                 else if (jobj instanceof String) {
+                    res.addAll(objs);
+                    break;
+                }
+                else if (jobj instanceof Number) {
+                    // Handle arrays of numbers (integers, longs, etc.)
                     res.addAll(objs);
                     break;
                 }

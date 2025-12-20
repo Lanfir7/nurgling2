@@ -154,6 +154,10 @@ public class StackSupporter {
         catExceptions.add("Mole's Pawbone");
         catExceptions.add("Lobster");
         catExceptions.add("Leech");
+        catExceptions.add("Clean Adder Carcass");
+        catExceptions.add("Clean Chicken");
+        catExceptions.add("Clean Pelican");
+        catExceptions.add("Dried Filet");
     }
     private static final NAlias unstackableContainers = new NAlias("Smith's Smelter", "Ore Smelter", "Herbalist Table", "Tub", "Oven", "Steelbox", "Frame", "Kiln", "Smoke Shed", "Stack furnace");
     public static boolean isStackable(NInventory inv, String name)
@@ -161,7 +165,7 @@ public class StackSupporter {
         Window win = inv.getparent(Window.class);
         if(win!=null)
         {
-            if(NParser.checkName(win.cap,unstackableContainers) || NParser.checkName(name, new NAlias("Lynx Claws")) || name.equals("Silkworm") || catExceptions.contains(name))
+            if(NParser.checkName(win.cap,unstackableContainers) || NParser.checkName(name, new NAlias("Lynx Claws")) || name.equals("Silkworm") || name.contains("Dried Filet") || catExceptions.contains(name))
             {
                 return false;
             }
