@@ -1952,23 +1952,17 @@ NMiniMap extends MiniMap {
      * Used for right-click deletion of water/soil quality marks.
      */
     /**
-     * Проверяет, является ли маркер маркером спота руды
+     * Проверяет, является ли маркер маркером спота руды/камня
+     * Все камни и руды (кроме квариарца) идут в систему спотов
      */
     private boolean isOreSpotMark(String resourceType) {
         if (resourceType == null) return false;
-        // Список руд для системы спотов
-        String[] oreTypes = {
-            "Black Ore", "Bloodstone", "Cassiterite", "Chalcopyrite", "Cinnabar",
-            "Direvein", "Galena", "Heavy Earth", "Horn Silver", "Iron Ochre",
-            "Lead Glance", "Leaf Ore", "Malachite", "Meteorite", "Peacock Ore",
-            "Schrifterz", "Silvershine", "Wine Glance"
-        };
-        for (String ore : oreTypes) {
-            if (ore.equals(resourceType)) {
-                return true;
-            }
+        // Квариарц - отдельный слой, не спот
+        if ("Quarryartz".equals(resourceType)) {
+            return false;
         }
-        return false;
+        // Все остальные камни и руды - споты
+        return true;
     }
     
     private LabeledMinimapMark labeledMarkAt(Coord screenCoord) {

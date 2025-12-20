@@ -57,12 +57,15 @@ public class NMapView extends MapView
     // Find RouteLabel at screen coordinate
     private RouteLabel getRouteLabeAt(Coord screenCoord) {
         // Check all virtual game objects for RouteLabel overlays
-        for(Gob gob : routeDummys.values()) {
-            for(Gob.Overlay ol : gob.ols) {
-                if(ol.spr instanceof RouteLabel) {
-                    RouteLabel routeLabel = (RouteLabel) ol.spr;
-                    if(routeLabel.checkDragStart(screenCoord)) {
-                        return routeLabel;
+        synchronized (routeDummys) {
+            // Создаем копию коллекции для безопасной итерации
+            for(Gob gob : new ArrayList<>(routeDummys.values())) {
+                for(Gob.Overlay ol : gob.ols) {
+                    if(ol.spr instanceof RouteLabel) {
+                        RouteLabel routeLabel = (RouteLabel) ol.spr;
+                        if(routeLabel.checkDragStart(screenCoord)) {
+                            return routeLabel;
+                        }
                     }
                 }
             }
@@ -210,7 +213,9 @@ public class NMapView extends MapView
 
         super.draw(g);
         synchronized (dummys) {
-            for (Gob dummy : dummys.values()) {
+            // Создаем копию коллекции для безопасной итерации,
+            // чтобы избежать ConcurrentModificationException при модификации из других потоков
+            for (Gob dummy : new ArrayList<>(dummys.values())) {
                 dummy.gtick(g.out);
             }
         }
@@ -345,22 +350,28 @@ public class NMapView extends MapView
 
     public void destroyDummys()
     {
-        for(Gob d: dummys.values())
-        {
-            if(glob.oc.getgob(d.id)!=null)
-                glob.oc.remove(d);
+        synchronized (dummys) {
+            // Создаем копию коллекции для безопасной итерации
+            for(Gob d: new ArrayList<>(dummys.values()))
+            {
+                if(glob.oc.getgob(d.id)!=null)
+                    glob.oc.remove(d);
+            }
+            dummys.clear();
         }
-        dummys.clear();
     }
 
     public void destroyRouteDummys()
     {
-        for(Gob d: routeDummys.values())
-        {
-            if(glob.oc.getgob(d.id)!=null)
-                glob.oc.remove(d);
+        synchronized (routeDummys) {
+            // Создаем копию коллекции для безопасной итерации
+            for(Gob d: new ArrayList<>(routeDummys.values()))
+            {
+                if(glob.oc.getgob(d.id)!=null)
+                    glob.oc.remove(d);
+            }
+            routeDummys.clear();
         }
-        routeDummys.clear();
     }
 
     public static NMiningOverlay getMiningOl()

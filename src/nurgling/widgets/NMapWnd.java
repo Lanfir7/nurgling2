@@ -81,7 +81,7 @@ public class NMapWnd extends MapWnd {
         
         // Ore Spots button (для маркеров спотов руд)
         btnPos = btnPos.sub(quarryartzBtn.sz.x + btnSpacing, 0);
-        oreSpotsBtn = add(new MapToggleButton("tree", "Toggle Ore Spot markers", null), btnPos);
+        oreSpotsBtn = add(new MapToggleButton("tree", "Toggle Ore Spot markers (Right-click: Ore Search)", this::openOreSearch), btnPos);
         oreSpotsBtn.a = getOreSpotsIconsState(); // Set initial state
         oreSpotsBtn.changed(val -> setOreSpotsIconsState(val));
         
@@ -271,6 +271,24 @@ public class NMapWnd extends MapWnd {
                 gui.quarryartzSearchWindow = new QuarryartzSearchWindow(gui);
                 gui.add(gui.quarryartzSearchWindow, new Coord(100, 100));
                 gui.quarryartzSearchWindow.show();
+            }
+        }
+    }
+
+    private void openOreSearch() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null) {
+            if(gui.oreSearchWindow != null) {
+                if(gui.oreSearchWindow.visible()) {
+                    gui.oreSearchWindow.hide();
+                } else {
+                    gui.oreSearchWindow.show();
+                    gui.oreSearchWindow.raise();
+                }
+            } else {
+                gui.oreSearchWindow = new OreSearchWindow(gui);
+                gui.add(gui.oreSearchWindow, new Coord(100, 100));
+                gui.oreSearchWindow.show();
             }
         }
     }

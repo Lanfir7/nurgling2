@@ -177,9 +177,30 @@ public class MasterMinerWnd extends Window {
                 currentBest = bestStone;
                 break;
             case "Quarryartz":
-                if (bestQuarryartz == null || wallQ > bestQuarryartz.wallQ) {
+                // Для квариарца wallQ должно быть одинаковым для всех инструментов в одной клетке
+                // Используем первое рассчитанное wallQ и не обновляем его при копании другими инструментами
+                // Обновляем только если это первое значение или если wallQ значительно больше (другая клетка)
+                if (bestQuarryartz == null) {
                     bestQuarryartz = data;
                     isNewBest = true;
+                } else {
+                    // Если wallQ отличается более чем на 2.0, считаем что это другая клетка
+                    // Иначе используем уже сохраненное wallQ (оно должно быть одинаковым для всех инструментов)
+                    double diff = Math.abs(wallQ - bestQuarryartz.wallQ);
+                    if (diff > 2.0) {
+                        // Это другая клетка - обновляем если лучше
+                        if (wallQ > bestQuarryartz.wallQ) {
+                            bestQuarryartz = data;
+                            isNewBest = true;
+                        }
+                    } else {
+                        // Это та же клетка - используем уже сохраненное wallQ (оно одинаково для всех инструментов)
+                        // Обновляем только f3 для текущего инструмента
+                        bestQuarryartz.f3 = data.f3; // Обновляем f3 для текущего инструмента
+                        bestQuarryartz.stoneName = data.stoneName; // Обновляем название
+                        // wallQ НЕ обновляем - оно должно быть одинаковым для всех инструментов
+                        // bestAltQ будет пересчитан ниже на основе сохраненного wallQ
+                    }
                 }
                 currentBest = bestQuarryartz;
                 break;
@@ -201,8 +222,15 @@ public class MasterMinerWnd extends Window {
         
         if (currentBest == null) return;
         
-        // Если это новое лучшее значение, пересчитываем bestAltQ на основе текущих инструментов
-        if (isNewBest && toolSet != null) {
+        // Для квариарца всегда пересчитываем bestAltQ, так как wallQ должно быть одинаковым для всех инструментов
+        // Для остальных камней пересчитываем только если это новое лучшее значение
+        boolean shouldRecalculate = isNewBest;
+        if ("Quarryartz".equals(stoneType)) {
+            shouldRecalculate = true; // Всегда пересчитываем для квариарца
+        }
+        
+        // Пересчитываем bestAltQ на основе текущих инструментов
+        if (shouldRecalculate && toolSet != null) {
             Double recalculatedBestAltQ = null;
             if (currentToolType != MasterMiner.ToolType.STONE_AXE && toolSet.stoneAxeQ != null) {
                 Double pred;

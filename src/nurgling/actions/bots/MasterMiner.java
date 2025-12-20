@@ -1,6 +1,7 @@
 package nurgling.actions.bots;
 
 import haven.*;
+import haven.Audio;
 import haven.MCache;
 import haven.Resource;
 import nurgling.NGItem;
@@ -172,8 +173,9 @@ public class MasterMiner extends ActionWithFinal {
             // Для квариарца: новая формула (камень в рюкзаке - инструмент + камень в рюкзаке)
             // Для остальных камней: старая формула с дебафами инструмента
             double wallQ;
-            if ("Квариарц".equals(stoneType)) {
+            if ("Quarryartz".equals(stoneType)) {
                 // Новая формула для квариарца: f3 - f4 + f3 = 2*f3 - f4
+                // wallQ - это качество в стене, оно одинаково для всех инструментов
                 wallQ = (2.0 * f3) - f4;
             } else {
                 // Старая формула с дебафами инструмента для остальных камней
@@ -185,9 +187,10 @@ public class MasterMiner extends ActionWithFinal {
             Double bestAltQ = null;
             if (currentToolType != ToolType.STONE_AXE && set.stoneAxeQ != null) {
                 Double pred;
-                if ("Квариарц".equals(stoneType)) {
+                if ("Quarryartz".equals(stoneType)) {
                     // Для квариарца: обратная формула от wallQ = 2*f3 - f4
                     // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
+                    // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
                     pred = (wallQ + set.stoneAxeQ) / 2.0;
                 } else {
                     pred = invDropQ(wallQ, set.stoneAxeQ, 0.8);
@@ -199,6 +202,7 @@ public class MasterMiner extends ActionWithFinal {
                 if ("Quarryartz".equals(stoneType)) {
                     // Для квариарца: обратная формула от wallQ = 2*f3 - f4
                     // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
+                    // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
                     pred = (wallQ + set.tinkerAxeQ) / 2.0;
                 } else {
                     pred = invDropQ(wallQ, set.tinkerAxeQ, 0.9);
@@ -210,6 +214,7 @@ public class MasterMiner extends ActionWithFinal {
                 if ("Quarryartz".equals(stoneType)) {
                     // Для квариарца: обратная формула от wallQ = 2*f3 - f4
                     // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
+                    // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
                     pred = (wallQ + set.pickaxeQ) / 2.0;
                 } else {
                     pred = invDropQ(wallQ, set.pickaxeQ, 1.0);
@@ -242,10 +247,6 @@ public class MasterMiner extends ActionWithFinal {
                                 addQuarryartzMarker(gui, stoneName, wallQ);
                             } else {
                                 // Остальные камни и руды - система спотов (обновление в радиусе 30 клеток)
-                                boolean isOreType = isOre(stoneName) || 
-                                                   stoneName.equals("Black Coal") || 
-                                                   stoneName.equals("Quartz") || 
-                                                   stoneName.equals("Flint");
                                 // Все камни ставим как споты (обновление в радиусе 30 клеток)
                                 addOreSpotMarker(gui, stoneName, wallQ);
                             }
@@ -485,154 +486,200 @@ public class MasterMiner extends ActionWithFinal {
 
     /**
      * Добавляет метку на карту для квариарца
-     * Ставит четко в месте выкопан, не обновляет если рядом есть маркер
+     * Ставит четко в месте выкопан, всегда ставится при выкапывании квариарца
+     * Не склеивается с другими маркерами (не обновляет существующие)
      */
     private void addQuarryartzMarker(NGameUI gui, String stoneName, double wallQ) {
-        // Выполняем в отдельном потоке, чтобы избежать лагов
-        Thread markerThread = new Thread(() -> {
-            try {
-                if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) return;
-                
-                Gob player = NUtils.player();
-                if (player == null) return;
-                
-                // Получаем позицию игрока и направление копания
-                // Ставим четко в месте выкопан (с учетом направления копания)
-                Coord2d playerPos = player.rc;
-                double angle = player.a; // угол направления игрока
-                
-                // Смещение в направлении копания (примерно 13.75 тайлов, как в MiningSafetyAssistant)
-                Coord2d minedTile = new Coord2d(
-                    playerPos.x + (Math.cos(angle) * 13.75),
-                    playerPos.y + (Math.sin(angle) * 13.75)
-                );
-                
-                // Получаем segment ID и tile coordinates
-                long segmentId = gui.mmap.sessloc.seg.id;
-                Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
-                
-                // Проверяем, есть ли уже маркер квариарца рядом (в радиусе 2 тайлов)
-                // Если есть - не ставим новый (квариарц ставится четко в месте выкопан)
-                java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
-                    gui.labeledMarkService.getMarksByResourceType("Quarryartz");
-                boolean nearbyMarkExists = false;
-                for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
-                    if (mark.segmentId == segmentId) {
-                        int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
-                        int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
-                        if (distX <= 2 && distY <= 2) {
-                            nearbyMarkExists = true;
-                            break;
-                        }
+        try {
+            if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) return;
+            
+            Gob player = NUtils.player();
+            if (player == null) return;
+            
+            // Получаем позицию игрока и направление копания
+            // Ставим четко в месте выкопан (с учетом направления копания)
+            Coord2d playerPos = player.rc;
+            double angle = player.a; // угол направления игрока
+            
+            // Смещение в направлении копания (примерно 13.75 тайлов, как в MiningSafetyAssistant)
+            Coord2d minedTile = new Coord2d(
+                playerPos.x + (Math.cos(angle) * 13.75),
+                playerPos.y + (Math.sin(angle) * 13.75)
+            );
+            
+            // Получаем segment ID и tile coordinates
+            long segmentId = gui.mmap.sessloc.seg.id;
+            Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
+            
+            // Проверяем, есть ли уже маркер квариарца рядом (в радиусе 2 тайлов)
+            // Если есть - не ставим новый (квариарц ставится четко в месте выкопан, не склеивается)
+            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
+                gui.labeledMarkService.getMarksByResourceType("Quarryartz");
+            boolean nearbyMarkExists = false;
+            for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
+                if (mark.segmentId == segmentId) {
+                    int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
+                    int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
+                    if (distX <= 2 && distY <= 2) {
+                        nearbyMarkExists = true;
+                        break;
                     }
                 }
-                
-                if (!nearbyMarkExists) {
-                    // Создаем метку (например, "q101")
-                    String label = String.format("q%.0f", wallQ);
-                    
-                    // Получаем иконку квариарца из ресурсов игры
-                    BufferedImage iconImage = getQuarryartzIcon();
-                    
-                    // Добавляем метку через сервис (обрабатывает персистентность)
-                    gui.labeledMarkService.addLabeledMark(label, "Quarryartz", segmentId, tileCoords, iconImage);
-                }
-            } catch (Exception e) {
-                // Игнорируем ошибки
             }
-        });
-        markerThread.setDaemon(true);
-        markerThread.start();
+            
+            if (!nearbyMarkExists) {
+                // Создаем метку (например, "q101")
+                String label = String.format("q%.0f", wallQ);
+                
+                // Получаем иконку квариарца из ресурсов игры
+                BufferedImage iconImage = getQuarryartzIcon();
+                
+                // Добавляем метку через сервис (обрабатывает персистентность)
+                gui.labeledMarkService.addLabeledMark(label, "Quarryartz", segmentId, tileCoords, iconImage);
+                
+                // Воспроизводим звук при выпадении квариарца
+                playQuarryartzSound(gui);
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+    }
+    
+    /**
+     * Воспроизводит приятный звук при выпадении квариарца
+     */
+    private void playQuarryartzSound(NGameUI gui) {
+        try {
+            if (gui == null || gui.ui == null) return;
+            
+            // Используем приятный звук из встроенных ресурсов игры
+            // Пробуем несколько вариантов звуков в порядке приоритета
+            String[] soundPaths = {
+                "sfx/msg",              // Приятный звук сообщения (надежный)
+                "sfx/fx/ore",           // Звук руды
+                "sfx/fx/stone",         // Звук камня
+                "sfx/fx/water"          // Звук воды (приятный)
+            };
+            
+            for (String soundPath : soundPaths) {
+                try {
+                    // Используем local ресурсы для надежности
+                    Resource soundRes = Resource.local().loadwait(soundPath);
+                    if (soundRes != null) {
+                        // Воспроизводим через ui.sfx() - это надежный способ
+                        gui.ui.sfx(soundRes);
+                        break; // Воспроизвели успешно, выходим
+                    }
+                } catch (Exception ignored) {
+                    // Пробуем следующий звук
+                }
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки воспроизведения звука
+        }
     }
     
     /**
      * Добавляет или обновляет метку спота руды на карте
-     * Обновляет маркер в радиусе 30 клеток если качество выше
+     * Обновляет маркер в радиусе 30 клеток только если качество выше
+     * Не заменяет другие руды или камни (проверяет resourceType)
      */
     private void addOreSpotMarker(NGameUI gui, String oreName, double wallQ) {
-        // Выполняем в отдельном потоке, чтобы избежать лагов
-        Thread markerThread = new Thread(() -> {
-            try {
-                if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) {
-                    gui.msg("Ошибка: карта или сервис меток не инициализирован", java.awt.Color.RED);
-                    return;
-                }
-                
-                Gob player = NUtils.player();
-                if (player == null) {
-                    return;
-                }
-                
-                // Получаем позицию игрока и направление копания
-                Coord2d playerPos = player.rc;
-                double angle = player.a; // угол направления игрока
-                
-                // Смещение в направлении копания (примерно 13.75 тайлов)
-                Coord2d minedTile = new Coord2d(
-                    playerPos.x + (Math.cos(angle) * 13.75),
-                    playerPos.y + (Math.sin(angle) * 13.75)
-                );
-                
-                // Получаем segment ID и tile coordinates
-                long segmentId = gui.mmap.sessloc.seg.id;
-                Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
-                
-                // Ищем существующий маркер этой руды в радиусе 30 клеток (30*11 = 330 единиц)
-                // Радиус 30 тайлов для проверки
-                java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
-                    gui.labeledMarkService.getMarksByResourceType(oreName);
-                
-                nurgling.widgets.LabeledMinimapMark nearbyMark = null;
-                for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
-                    if (mark.segmentId == segmentId) {
-                        int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
-                        int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
-                        // Проверяем радиус 30 тайлов
-                        if (distX <= 30 && distY <= 30) {
-                            nearbyMark = mark;
-                            break;
-                        }
-                    }
-                }
-                
-                if (nearbyMark != null) {
-                    // Маркер найден рядом - проверяем качество
-                    try {
-                        // Парсим качество из метки (формат "q130")
-                        double existingQ = 0;
-                        if (nearbyMark.label != null && nearbyMark.label.startsWith("q")) {
-                            existingQ = Double.parseDouble(nearbyMark.label.substring(1).trim());
-                        }
-                        
-                        // Если новое качество выше - обновляем маркер
-                        if (wallQ > existingQ) {
-                            // Удаляем старый маркер
-                            gui.labeledMarkService.removeMark(nearbyMark);
-                            
-                            // Создаем новый с обновленным качеством
-                            String label = String.format("q%.0f", wallQ);
-                            BufferedImage iconImage = getOreIcon(oreName);
-                            // Создаем маркер даже если иконка не загрузилась (используется fallback)
-                            gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
-                        }
-                        // Если качество не выше - не трогаем маркер
-                    } catch (Exception e) {
-                        // Игнорируем ошибки парсинга
-                    }
-                } else {
-                    // Маркер не найден - создаем новый
-                    String label = String.format("q%.0f", wallQ);
-                    BufferedImage iconImage = getOreIcon(oreName);
-                    // Создаем маркер даже если иконка не загрузилась (используется fallback)
-                    gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
-                    gui.msg("Маркер создан: " + oreName + " " + label + " на тайле (" + tileCoords.x + "," + tileCoords.y + ")", java.awt.Color.GREEN);
-                }
-            } catch (Exception e) {
-                // Игнорируем ошибки
+        try {
+            if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) {
+                return;
             }
-        });
-        markerThread.setDaemon(true);
-        markerThread.start();
+            
+            Gob player = NUtils.player();
+            if (player == null) {
+                return;
+            }
+            
+            // Получаем позицию игрока и направление копания
+            Coord2d playerPos = player.rc;
+            double angle = player.a; // угол направления игрока
+            
+            // Смещение в направлении копания (примерно 13.75 тайлов)
+            Coord2d minedTile = new Coord2d(
+                playerPos.x + (Math.cos(angle) * 13.75),
+                playerPos.y + (Math.sin(angle) * 13.75)
+            );
+            
+            // Получаем segment ID и tile coordinates
+            long segmentId = gui.mmap.sessloc.seg.id;
+            Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
+            
+            // Ищем существующий маркер ТОЛЬКО этой же руды/камня в радиусе 30 клеток
+            // Важно: проверяем resourceType, чтобы не заменять другие руды или камни
+            // И НЕ трогаем маркеры квариарца (они в отдельном слое)
+            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
+                gui.labeledMarkService.getMarksByResourceType(oreName);
+            
+            nurgling.widgets.LabeledMinimapMark nearbyMark = null;
+            for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
+                // Проверяем, что это именно та же руда/камень (не другая руда или камень)
+                // И что это НЕ квариарц (квариарц в отдельном слое)
+                if (mark.segmentId == segmentId && oreName.equals(mark.resourceType) && !"Quarryartz".equals(mark.resourceType)) {
+                    int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
+                    int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
+                    // Проверяем радиус 30 тайлов
+                    if (distX <= 30 && distY <= 30) {
+                        nearbyMark = mark;
+                        break;
+                    }
+                }
+            }
+            
+            // Также проверяем, что в этом месте нет маркера квариарца
+            // Если есть квариарц - не ставим/не обновляем маркер спота
+            java.util.List<nurgling.widgets.LabeledMinimapMark> quarryartzMarks = 
+                gui.labeledMarkService.getMarksByResourceType("Quarryartz");
+            for (nurgling.widgets.LabeledMinimapMark mark : quarryartzMarks) {
+                if (mark.segmentId == segmentId) {
+                    int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
+                    int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
+                    // Если квариарц в радиусе 2 тайлов - не ставим маркер спота
+                    if (distX <= 2 && distY <= 2) {
+                        return; // Не ставим маркер спота, если здесь есть квариарц
+                    }
+                }
+            }
+            
+            if (nearbyMark != null) {
+                // Маркер найден рядом - проверяем качество
+                // Обновляем ТОЛЬКО если выкопал выше
+                try {
+                    // Парсим качество из метки (формат "q130")
+                    double existingQ = 0;
+                    if (nearbyMark.label != null && nearbyMark.label.startsWith("q")) {
+                        existingQ = Double.parseDouble(nearbyMark.label.substring(1).trim());
+                    }
+                    
+                    // Если новое качество выше - обновляем маркер
+                    if (wallQ > existingQ) {
+                        // Удаляем старый маркер
+                        gui.labeledMarkService.removeMark(nearbyMark);
+                        
+                        // Создаем новый с обновленным качеством
+                        String label = String.format("q%.0f", wallQ);
+                        BufferedImage iconImage = getOreIcon(oreName);
+                        // Создаем маркер даже если иконка не загрузилась (используется fallback)
+                        gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
+                    }
+                    // Если качество не выше - не трогаем маркер
+                } catch (Exception e) {
+                    // Игнорируем ошибки парсинга
+                }
+            } else {
+                // Маркер не найден - создаем новый
+                String label = String.format("q%.0f", wallQ);
+                BufferedImage iconImage = getOreIcon(oreName);
+                // Создаем маркер даже если иконка не загрузилась (используется fallback)
+                gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
     }
     
     /**
