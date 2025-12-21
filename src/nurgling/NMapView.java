@@ -316,8 +316,10 @@ public class NMapView extends MapView
             }
         }
         
-        // Создаем dummy и label только если зона видима и не скрыта
-        Pair<Coord2d,Coord2d> space = area.getRCArea();
+        // ВАЖНО: Используем getRawRCArea() для получения координат независимо от hide
+        // Это нужно чтобы overlay создавался для всех зон, включая скрытые
+        // getRCArea() возвращает null для скрытых зон, что мешает созданию overlay
+        Pair<Coord2d,Coord2d> space = area.getRawRCArea();
 
         if(space!=null)
         {

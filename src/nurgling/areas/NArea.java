@@ -379,6 +379,38 @@ public class NArea
         }
         return null;
     }
+    
+    /**
+     * Получает координаты зоны без проверки hide (для создания overlay)
+     * Используется в createAreaLabel() чтобы всегда создавать overlay, даже для скрытых зон
+     */
+    public Pair<Coord2d,Coord2d> getRawRCArea()
+    {
+        if(isVisible())
+        {
+            Coord begin = null;
+            Coord end = null;
+
+            for (Long id : space.space.keySet())
+            {
+                MCache.Grid grid = NUtils.getGameUI().map.glob.map.findGrid(id);
+                if(grid==null) // НЕ проверяем hide здесь
+                    return null;
+                Area area = space.space.get(id).area;
+                Coord b = area.ul.add(grid.ul);
+                Coord e = area.br.add(grid.ul);
+                begin = (begin != null) ? new Coord(Math.min(begin.x, b.x), Math.min(begin.y, b.y)) : b;
+                end = (end != null) ? new Coord(Math.max(end.x, e.x), Math.max(end.y, e.y)) : e;
+            }
+            if (begin != null) {
+                if (NUtils.player()!=null && begin.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000 && end.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000) {
+                    return null;
+                }
+                return new Pair<Coord2d, Coord2d>(begin.mul(MCache.tilesz), end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
+            }
+        }
+        return null;
+    }
 
     public Pair<Coord2d,Coord2d> getRCArea()
     {

@@ -994,11 +994,30 @@ public class NContext {
 
         areas.sort(ta_comp);
 
+        // ВАЖНО: Выбираем зону с максимальным порогом, который <= качества предмета
+        // Зона без порога (th=1) должна использоваться только если нет зон с порогом >= качества предмета
         double tth = 1;
+        boolean foundZoneWithThreshold = false;
+        
+        // Сначала ищем зоны с порогом >= качества предмета (приоритет)
         for (TestedArea area : areas) {
-            if(area.th<=th) {
+            if (area.th > 1 && area.th <= th) {
+                // Зона с порогом, который подходит для предмета
                 res = area.area;
                 tth = area.th;
+                foundZoneWithThreshold = true;
+            }
+        }
+        
+        // Если не нашли зону с порогом, используем зону без порога (th=1)
+        if (!foundZoneWithThreshold) {
+            for (TestedArea area : areas) {
+                if (area.th == 1) {
+                    // Зона без порога (принимает все)
+                    res = area.area;
+                    tth = 1;
+                    break;
+                }
             }
         }
 
