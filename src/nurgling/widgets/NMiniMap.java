@@ -41,6 +41,7 @@ NMiniMap extends MiniMap {
     public boolean showProspectingIcons = true;
     public boolean showQuarryartzIcons = true;
     public boolean showOreSpotIcons = true; // Видимость маркеров спотов руд
+    public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
 
     private static final Coord2d sgridsz = new Coord2d(new Coord(100,100));
     public NMiniMap(Coord sz, MapFile file) {

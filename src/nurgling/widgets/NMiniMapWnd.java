@@ -217,6 +217,24 @@ public class NMiniMapWnd extends Widget{
         treeharv.a = (Boolean) NConfig.get(NConfig.Key.treeHarvestOverlay);
         buttons.add(treeharv);
 
+        // Show all zones always toggle
+        ACheckBox showAllZones = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/ico", KeyBinding.get("ol-showzones", KeyMatch.nil), "Show all zones always");
+        showAllZones.changed(a -> {
+            if (miniMap instanceof NMiniMap) {
+                ((NMiniMap) miniMap).showAllZonesAlways = a;
+                // ВАЖНО: При включении тоггла создаем лейблы зон, если они еще не созданы
+                // Это аналогично тому, что происходит при открытии окна редактирования зон
+                if (a && NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+                    NMapView mapView = (NMapView) NUtils.getGameUI().map;
+                    mapView.initDummys();
+                }
+            }
+        });
+        if (miniMap instanceof NMiniMap) {
+            showAllZones.a = ((NMiniMap) miniMap).showAllZonesAlways;
+        }
+        buttons.add(showAllZones);
+
         // Layout buttons with wrapping
         layoutButtons(buttons);
 

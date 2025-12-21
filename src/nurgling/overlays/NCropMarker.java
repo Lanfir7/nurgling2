@@ -3,6 +3,7 @@ package nurgling.overlays;
 import haven.*;
 import haven.render.*;
 import nurgling.*;
+import nurgling.NProperties;
 /**
  * NCropMarker is responsible for rendering crop markers on the map.
  * Uses batched rendering system for performance with thousands of markers.

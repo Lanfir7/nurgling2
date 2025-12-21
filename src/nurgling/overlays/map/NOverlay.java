@@ -4,6 +4,7 @@ import haven.*;
 import haven.render.*;
 import nurgling.*;
 import nurgling.areas.*;
+import nurgling.widgets.NMiniMap;
 
 import java.awt.*;
 import java.util.*;
@@ -43,10 +44,37 @@ public class NOverlay extends MapView.MapRaster
 
     public void tick() {
         super.tick();
-        if(area != null) {
-            base.tick();
-            outl.tick();
+        // ВАЖНО: Оверлеи зон (визуальное выделение) отображаются ВСЕГДА
+        // Проверяем только локальное скрытие зоны (hide) с учетом тоггла
+        if (id >= 0) {
+            NArea zoneArea = NUtils.getArea(id);
+            if (zoneArea != null && zoneArea.hide) {
+                // Проверяем тоггл "показывать все зоны" для скрытых зон
+                NGameUI gui = NUtils.getGameUI();
+                boolean showAllZones = false;
+                if (gui != null) {
+                    // Пробуем через mmapw.miniMap (это более надежный способ, так как miniMap точно является NMiniMap)
+                    if (gui.mmapw != null && gui.mmapw.miniMap != null && gui.mmapw.miniMap instanceof NMiniMap) {
+                        showAllZones = ((NMiniMap) gui.mmapw.miniMap).showAllZonesAlways;
+                    }
+                    // Запасной вариант через mmap
+                    else if (gui.mmap != null && gui.mmap instanceof NMiniMap) {
+                        showAllZones = ((NMiniMap) gui.mmap).showAllZonesAlways;
+                    }
+                }
+                
+                // Скрываем оверлей только если зона скрыта локально И тоггл не включен
+                if (!showAllZones) {
+                    return;
+                }
+            }
         }
+        
+        // ВАЖНО: Всегда вызываем base.tick() и outl.tick() для обновления оверлея
+        // area - это поле родительского класса MapRaster, которое может быть не инициализировано
+        // но base и outl должны обновляться всегда
+        base.tick();
+        outl.tick();
     }
 
     public void added(RenderTree.Slot slot) {

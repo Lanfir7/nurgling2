@@ -37,7 +37,7 @@ public class NAreasWidget extends Window
     final static Tex folderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/d"));
     final static Tex openfolderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/u"));
     NCatSelection catSelection;
-    class Folder
+    static class Folder
     {
         public String name;
         public String rootPath;
@@ -276,6 +276,33 @@ public class NAreasWidget extends Window
                 }
             }
 
+    }
+
+    /**
+     * Обновляет текущий путь без потери выделения
+     * Используется при синхронизации зон
+     */
+    public void refreshCurrentPath() {
+        // Сохраняем текущее выделение
+        AreaItem currentSel = al.sel;
+        int selectedAreaId = -1;
+        if (currentSel != null && currentSel.area != null) {
+            selectedAreaId = currentSel.area.id;
+        }
+        
+        // Обновляем список
+        showPath(currentPath);
+        
+        // Восстанавливаем выделение, если возможно
+        if (selectedAreaId >= 0) {
+            for (AreaItem item : items) {
+                if (item.area != null && item.area.id == selectedAreaId) {
+                    al.sel = item;
+                    select(selectedAreaId);
+                    return;
+                }
+            }
+        }
     }
 
     private void updateFilteredList() {
@@ -931,8 +958,19 @@ public class NAreasWidget extends Window
     @Override
     public void hide() {
         super.hide();
-        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null && !createMode)
-            ((NMapView)NUtils.getGameUI().map).destroyDummys();
+        // ВАЖНО: Не удаляем лейблы зон при закрытии окна, если включен тоггл "показывать все зоны"
+        // Лейблы будут скрыты через проверку в NAreaLabel.draw()
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null && !createMode) {
+            NGameUI gui = NUtils.getGameUI();
+            boolean showAllZones = false;
+            if (gui.mmapw != null && gui.mmapw.miniMap != null && gui.mmapw.miniMap instanceof nurgling.widgets.NMiniMap) {
+                showAllZones = ((nurgling.widgets.NMiniMap) gui.mmapw.miniMap).showAllZonesAlways;
+            }
+            // Удаляем лейблы только если тоггл не включен
+            if (!showAllZones) {
+                ((NMapView)NUtils.getGameUI().map).destroyDummys();
+            }
+        }
     }
 
     @Override

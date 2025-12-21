@@ -509,11 +509,6 @@ public class NCore extends Widget
                 recipeStatement.setInt(5, (int) (fi.energy() * 100));
 
                 int recipeInserted = recipeStatement.executeUpdate();
-                if (recipeInserted == 0) {
-                    System.out.println("NGItemWriter: Recipe already exists (not inserted): " + item.name() + " (hash: " + recipeHash.substring(0, Math.min(8, recipeHash.length())) + "...)");
-                } else {
-                    System.out.println("NGItemWriter: New recipe inserted: " + item.name() + " (hash: " + recipeHash.substring(0, Math.min(8, recipeHash.length())) + "...)");
-                }
 
                 for (ItemInfo info : item.info) {
                     if (info instanceof Ingredient) {
@@ -538,7 +533,6 @@ public class NCore extends Widget
                 // Фиксируем транзакцию
                 conn.commit();
                 if (recipeInserted > 0) {
-                    System.out.println("NGItemWriter: Successfully saved NEW recipe for item: " + item.name() + " (recipe count should increase)");
                     // После сохранения нового рецепта принудительно сбрасываем флаг загрузки в кукбуке
                     // чтобы он обновился при следующем открытии
                     try {
@@ -550,8 +544,6 @@ public class NCore extends Widget
                     } catch (Exception e) {
                         // Игнорируем ошибки при попытке обновить кукбук
                     }
-                } else {
-                    System.out.println("NGItemWriter: Recipe already exists for item: " + item.name() + " (recipe count unchanged)");
                 }
 
             } catch (SQLException e) {

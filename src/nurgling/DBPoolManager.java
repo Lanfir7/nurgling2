@@ -51,32 +51,21 @@ public class DBPoolManager {
                     String taskStr = r.toString();
                     boolean isReadTask = taskStr.contains("RecipeHashFetcher");
                     
-                    System.err.println("DBPoolManager: Queue full (" + taskQueue.size() + "), rejected task (isRead: " + isReadTask + ")");
-                    
                     // При переполнении очереди пытаемся удалить старые задачи записи
                     // чтобы освободить место для задач чтения
                     if (isReadTask) {
                         // Для задач чтения удаляем задачи записи из очереди
-                        int removedCount = 0;
                         for (int i = 0; i < 5 && !taskQueue.isEmpty(); i++) {
-                            Runnable removed = taskQueue.poll();
-                            if (removed != null) {
-                                removedCount++;
-                            }
-                        }
-                        if (removedCount > 0) {
-                            System.out.println("DBPoolManager: Removed " + removedCount + " write tasks to make room for RecipeHashFetcher");
+                            taskQueue.poll();
                         }
                         // Пробуем добавить задачу чтения
                         try {
                             executor.execute(r);
                         } catch (RejectedExecutionException e) {
-                            System.err.println("DBPoolManager: Still rejected after cleanup");
+                            // Ignore
                         }
-                    } else {
-                        // Для задач записи просто пропускаем
-                        System.out.println("DBPoolManager: Skipping write task due to full queue");
                     }
+                    // Для задач записи просто пропускаем
                 }
             }
         );
@@ -175,25 +164,18 @@ public class DBPoolManager {
     public Future<?> submitTask(Runnable task) {
         String taskName = task.getClass().getSimpleName();
         int queueSize = taskQueue.size();
-        System.out.println("DBPoolManager: Submitting task: " + taskName + " (queue size: " + queueSize + ")");
         
         // Если очередь почти полна и это задача записи, пропускаем её
         if (queueSize >= MAX_QUEUE_SIZE - 5 && taskName.contains("NGItemWriter")) {
-            System.out.println("DBPoolManager: Queue almost full, skipping write task: " + taskName);
             return null;
         }
         
         return executorService.submit(() -> {
             try {
-                System.out.println("DBPoolManager: Starting task: " + taskName);
                 task.run();
-                System.out.println("DBPoolManager: Completed task: " + taskName);
             } catch (Exception e) {
                 // Проверяем, не было ли прерывания
-                if (Thread.currentThread().isInterrupted()) {
-                    System.out.println("DBPoolManager: Task " + taskName + " was interrupted");
-                } else {
-                    System.err.println("DBPoolManager: Error in task " + taskName + ": " + e.getMessage());
+                if (!Thread.currentThread().isInterrupted()) {
                     e.printStackTrace();
                 }
             } finally {

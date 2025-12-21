@@ -156,6 +156,12 @@ public class NMapView extends MapView
 
     public static boolean hitNWidgetsInfo(Coord pc) {
         boolean isFound = false;
+        // ВАЖНО: Клики по лейблам зон работают только при открытом окне редактирования зон
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.areas == null || !gui.areas.visible()) {
+            return false;
+        }
+        
         for(Long gobid: ((NMapView)NUtils.getGameUI().map).dummys.keySet())
         {
             Gob gob = Finder.findGob(gobid);

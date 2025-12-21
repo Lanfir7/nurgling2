@@ -4,10 +4,12 @@ import haven.*;
 import haven.render.Homo3D;
 import haven.render.Pipe;
 import haven.render.RenderTree;
+import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NStyle;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
+import nurgling.widgets.NMiniMap;
 import nurgling.widgets.Specialisation;
 
 import java.awt.*;
@@ -75,6 +77,37 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
 
     @Override
     public void draw(GOut g, Pipe state) {
+        // ВАЖНО: Проверяем видимость зоны
+        // Зона должна быть видна если:
+        // 1. Окно редактирования зон открыто ИЛИ включен тоггл "показывать все зоны"
+        // 2. Зона не скрыта локально (hide = false)
+        NGameUI gui = NUtils.getGameUI();
+        boolean areasWindowOpen = gui != null && gui.areas != null && gui.areas.visible();
+        // Проверяем тоггл "показывать все зоны"
+        // mmap может быть NMiniMap или NCornerMiniMap (который наследуется от NMiniMap)
+        // Также можно получить через mmapw.miniMap (который является NMiniMapWnd.Map extends NCornerMiniMap)
+        boolean showAllZones = false;
+        if (gui != null) {
+            // Пробуем через mmapw.miniMap (это более надежный способ, так как miniMap точно является NMiniMap)
+            if (gui.mmapw != null && gui.mmapw.miniMap != null && gui.mmapw.miniMap instanceof NMiniMap) {
+                showAllZones = ((NMiniMap) gui.mmapw.miniMap).showAllZonesAlways;
+            }
+            // Запасной вариант через mmap
+            else if (gui.mmap != null && gui.mmap instanceof NMiniMap) {
+                showAllZones = ((NMiniMap) gui.mmap).showAllZonesAlways;
+            }
+        }
+        
+        if (area.hide && !showAllZones) {
+            // Зона скрыта и не включен режим "показывать все"
+            return;
+        }
+        
+        if (!areasWindowOpen && !showAllZones) {
+            // Окно редактирования закрыто и не включен режим "показывать все"
+            return;
+        }
+        
         sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
         if (label != null)
             if(isSelected)

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 
 public class EquipTravellersSacksFromBelt implements Action {
     private static final NAlias sackAlias = new NAlias("Traveller's Sack", "Traveler's Sack");
+    private static final NAlias bindleAlias = new NAlias("Wanderer's Bindl");
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
@@ -26,26 +27,36 @@ public class EquipTravellersSacksFromBelt implements Action {
 
         NInventory beltInv = (NInventory) wbelt.item.contents;
         ArrayList<WItem> sacksOnBelt = beltInv.getItems(sackAlias);
-        if (sacksOnBelt.isEmpty())
-            return Results.ERROR("No Traveller's Sacks on belt");
+        
+        // Если тревел саков нет, используем Wanderer's Bindl
+        NAlias targetAlias = sacksOnBelt.isEmpty() ? bindleAlias : sackAlias;
+        ArrayList<WItem> itemsOnBelt = sacksOnBelt.isEmpty() ? beltInv.getItems(bindleAlias) : sacksOnBelt;
+        
+        if (itemsOnBelt.isEmpty()) {
+            if (sacksOnBelt.isEmpty()) {
+                return Results.ERROR("No Traveller's Sacks or Wanderer's Bindl on belt");
+            } else {
+                return Results.ERROR("No Traveller's Sacks on belt");
+            }
+        }
 
         WItem lhand = NUtils.getEquipment().findItem(NEquipory.Slots.HAND_LEFT.idx);
-        if (lhand == null || !NParser.checkName(((NGItem) lhand.item).name(), sackAlias)) {
-            if (!equipSackToHand(gui, beltInv, NEquipory.Slots.HAND_LEFT.idx))
-                return Results.ERROR("Could not equip sack to left hand");
+        if (lhand == null || !NParser.checkName(((NGItem) lhand.item).name(), targetAlias)) {
+            if (!equipSackToHand(gui, beltInv, NEquipory.Slots.HAND_LEFT.idx, targetAlias))
+                return Results.ERROR("Could not equip item to left hand");
         }
 
         WItem rhand = NUtils.getEquipment().findItem(NEquipory.Slots.HAND_RIGHT.idx);
-        if (rhand == null || !NParser.checkName(((NGItem) rhand.item).name(), sackAlias)) {
-            if (!equipSackToHand(gui, beltInv, NEquipory.Slots.HAND_RIGHT.idx))
-                return Results.ERROR("Could not equip sack to right hand");
+        if (rhand == null || !NParser.checkName(((NGItem) rhand.item).name(), targetAlias)) {
+            if (!equipSackToHand(gui, beltInv, NEquipory.Slots.HAND_RIGHT.idx, targetAlias))
+                return Results.ERROR("Could not equip item to right hand");
         }
 
         return Results.SUCCESS();
     }
 
-    private boolean equipSackToHand(NGameUI gui, NInventory beltInv, int handSlot) throws InterruptedException {
-        WItem sack = beltInv.getItem(sackAlias);
+    private boolean equipSackToHand(NGameUI gui, NInventory beltInv, int handSlot, NAlias alias) throws InterruptedException {
+        WItem sack = beltInv.getItem(alias);
         if (sack == null)
             return false;
 

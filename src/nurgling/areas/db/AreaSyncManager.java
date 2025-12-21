@@ -181,21 +181,8 @@ public class AreaSyncManager {
             syncClient.syncTime();
         }
         
-        // Форматируем интервал для вывода
-        String intervalStr;
-        if (intervalSeconds < 60) {
-            intervalStr = intervalSeconds + " sec";
-        } else {
-            int minutes = intervalSeconds / 60;
-            int remainingSeconds = intervalSeconds % 60;
-            if (remainingSeconds == 0) {
-                intervalStr = minutes + " min";
-            } else {
-                intervalStr = minutes + " min " + remainingSeconds + " sec";
-            }
-        }
-        System.out.println("AreaSyncManager: Starting sync (interval: " + intervalStr + ")...");
-        System.out.println("AreaSyncManager: Synced zones cache size: " + syncedZones.size());
+        long syncStartTime = System.currentTimeMillis();
+        System.out.println("AreaSyncManager: Sync started");
         
         // Загружаем актуальные данные из БД перед синхронизацией
         // Это гарантирует, что у нас актуальные значения lastUpdated
@@ -203,17 +190,6 @@ public class AreaSyncManager {
         try {
             Map<Integer, NArea> dbAreas = dbManager.loadAllAreas();
             freshAreas = dbAreas.values();
-            System.out.println("AreaSyncManager: Loaded " + freshAreas.size() + " areas from DB for sync");
-            
-            // Выводим информацию о зонах для отладки
-            for (NArea area : freshAreas) {
-                Long lastSynced = syncedZones.get(area.uuid);
-                System.out.println("AreaSyncManager: Zone " + area.id + " (" + area.name + ") - " +
-                                 "lastUpdated: " + area.lastUpdated + 
-                                 (area.uuid != null ? ", UUID: " + area.uuid.substring(0, Math.min(8, area.uuid.length())) : ", UUID: null") +
-                                 (lastSynced != null ? ", lastSynced: " + lastSynced + 
-                                  (area.lastUpdated > lastSynced ? " (NEEDS SYNC)" : " (synced)") : " (never synced)"));
-            }
         } catch (Exception e) {
             System.err.println("AreaSyncManager: Failed to load fresh areas from DB, using provided areas: " + e.getMessage());
             e.printStackTrace();
@@ -223,20 +199,19 @@ public class AreaSyncManager {
         // ВАЖНО: Сначала получаем обновления с сервера (pull),
         // чтобы удалить зоны, которые были удалены на сервере.
         // Это предотвращает отправку зон, которые уже удалены на сервере.
-        pullServerUpdates(freshAreas, dbManager);
+        int[] pullStats = pullServerUpdates(freshAreas, dbManager);
         
         // После получения обновлений с сервера, загружаем зоны снова,
         // так как некоторые зоны могли быть удалены
         try {
             Map<Integer, NArea> dbAreas = dbManager.loadAllAreas();
             freshAreas = dbAreas.values();
-            System.out.println("AreaSyncManager: Reloaded " + freshAreas.size() + " areas from DB after pull");
         } catch (Exception e) {
             System.err.println("AreaSyncManager: Failed to reload areas from DB after pull: " + e.getMessage());
         }
         
         // Теперь отправляем локальные изменения (push)
-        pushLocalChanges(freshAreas, dbManager);
+        int[] pushStats = pushLocalChanges(freshAreas, dbManager);
         
         // ВАЖНО: Обновляем glob.map.areas и виджет зон после синхронизации
         // Делаем это безопасно, через SwingUtilities.invokeLater для выполнения в UI потоке
@@ -248,7 +223,9 @@ public class AreaSyncManager {
         });
         
         lastSyncTime = System.currentTimeMillis();
-        System.out.println("AreaSyncManager: Sync completed");
+        long syncDuration = (lastSyncTime - syncStartTime) / 1000;
+        System.out.println("AreaSyncManager: Sync completed, took " + syncDuration + " seconds. " +
+                         "Added: " + pullStats[0] + ", updated: " + pullStats[1] + ", sent: " + pushStats[0]);
     }
     
     /**
@@ -270,10 +247,11 @@ public class AreaSyncManager {
     
     /**
      * Отправляет измененные локальные зоны на сервер
+     * @return массив [отправлено, пропущено]
      */
-    private void pushLocalChanges(Collection<NArea> localAreas, AreaDBManager dbManager) {
+    private int[] pushLocalChanges(Collection<NArea> localAreas, AreaDBManager dbManager) {
         if (localAreas == null || localAreas.isEmpty()) {
-            return;
+            return new int[]{0, 0};
         }
         
         int pushed = 0;
@@ -344,13 +322,9 @@ public class AreaSyncManager {
             }
             
             if (!shouldPush) {
-                System.out.println("AreaSyncManager: Skipping zone " + area.id + " (" + area.name + ") - " + reason);
                 skipped++;
                 continue;
             }
-            
-            System.out.println("AreaSyncManager: Pushing zone " + area.id + " (" + area.name + ") - " + reason + 
-                             " (UUID: " + (area.uuid != null ? area.uuid.substring(0, Math.min(8, area.uuid.length())) : "null") + ")");
             
             // Отправляем на сервер
             boolean success = syncClient.pushZone(area);
@@ -367,16 +341,14 @@ public class AreaSyncManager {
             }
         }
         
-        if (pushed > 0 || conflicts > 0) {
-            System.out.println("AreaSyncManager: Pushed " + pushed + " zones, " + 
-                             skipped + " skipped, " + conflicts + " conflicts");
-        }
+        return new int[]{pushed, skipped};
     }
     
     /**
      * Получает обновления с сервера и применяет их
+     * @return массив [создано, обновлено]
      */
-    private void pullServerUpdates(Collection<NArea> localAreas, AreaDBManager dbManager) {
+    private int[] pullServerUpdates(Collection<NArea> localAreas, AreaDBManager dbManager) {
         // ВАЖНО: Для обнаружения удаленных зон нужно запросить ВСЕ зоны с сервера,
         // а не только обновленные после lastSyncTime. Иначе удаленные зоны не будут обнаружены.
         // Используем updatedAfter = 0, чтобы получить все активные зоны
@@ -389,8 +361,6 @@ public class AreaSyncManager {
         if (serverZones == null) {
             serverZones = new ArrayList<>();
         }
-        
-        System.out.println("AreaSyncManager: Received " + serverZones.size() + " zones from server");
         
         // Создаем карту локальных зон по UUID для быстрого поиска
         Map<String, NArea> localByUuid = new HashMap<>();
@@ -476,9 +446,6 @@ public class AreaSyncManager {
                     updateLastSyncAt(serverZone.uuid, serverZone.lastUpdated, dbManager);
                     
                     created++;
-                    System.out.println("AreaSyncManager: Created zone " + serverZone.id + " (" + 
-                                     (serverZone.name != null ? serverZone.name : "unknown") + 
-                                     ") from server (UUID: " + serverZone.uuid + ")");
                 } catch (Exception e) {
                     System.err.println("AreaSyncManager: Failed to create zone from server (UUID: " + 
                                      (serverZone.uuid != null ? serverZone.uuid : "unknown") + 
@@ -520,19 +487,12 @@ public class AreaSyncManager {
                 boolean wasSynced = syncedZones.containsKey(localZone.uuid);
                 boolean inServerUuids = serverUuids.contains(localZone.uuid);
                 
-                // Логируем для отладки
-                if (!inServerUuids) {
-                    System.out.println("AreaSyncManager: Zone " + localZone.id + " (" + localZone.name + ") not in server response. " +
-                                     "wasSynced=" + wasSynced + ", UUID=" + localZone.uuid.substring(0, Math.min(8, localZone.uuid.length())));
-                }
-                
                 // Если зона была синхронизирована (имеет last_sync_at), но её нет на сервере - значит она удалена на сервере
                 // НЕ удаляем зоны, которые никогда не синхронизировались (они просто еще не были отправлены)
+                // ВАЖНО: Проверяем также, что зона действительно была отправлена на сервер (имеет last_sync_at)
+                // Это предотвращает удаление зон, которые были созданы локально, но еще не синхронизированы
                 if (wasSynced && !inServerUuids) {
                     // Зона была удалена на сервере - удаляем её локально
-                    System.out.println("AreaSyncManager: Zone " + localZone.id + " (" + 
-                                     (localZone.name != null ? localZone.name : "unknown") + 
-                                     ") was deleted on server, deleting locally (UUID: " + localZone.uuid + ")");
                     try {
                         dbManager.deleteArea(localZone.id);
                         syncedZones.remove(localZone.uuid);
@@ -565,14 +525,7 @@ public class AreaSyncManager {
             }
         }
         
-        if (deleted > 0) {
-            System.out.println("AreaSyncManager: Deleted " + deleted + " zones that were removed on server");
-        }
-        
-        if (merged > 0 || created > 0) {
-            System.out.println("AreaSyncManager: Merged " + merged + " zones, created " + 
-                             created + " new zones, skipped " + skipped);
-        }
+        return new int[]{created, merged};
     }
     
     /**
@@ -591,20 +544,12 @@ public class AreaSyncManager {
         // Правило: принимаем более новую версию
         if (server.lastUpdated > local.lastUpdated) {
             // Сервер новее - обновляем локальную зону
-            System.out.println("AreaSyncManager: Server zone is newer. Merging zone " + local.id + 
-                             " (local name: " + local.name + ", server name: " + server.name + 
-                             ", local lastUpdated: " + local.lastUpdated + ", server lastUpdated: " + server.lastUpdated + ")");
             
             // Сохраняем оригинальное lastUpdated с сервера перед merge
             long serverLastUpdated = server.lastUpdated;
             
             mergeZoneData(local, server);
             
-            // Логируем изменения для отладки
-            System.out.println("AreaSyncManager: Merged zone " + local.id + " - name: " + local.name + 
-                             ", color: " + (local.color != null ? local.color.toString() : "null") +
-                             ", space: " + (local.space != null && local.space.space != null ? local.space.space.size() + " entries" : "null") +
-                             ", spec: " + (local.spec != null ? local.spec.size() + " items" : "null"));
             
             // ВАЖНО: После merge устанавливаем synced = false, чтобы saveArea() правильно определил изменения
             // Это гарантирует, что hasAreaChanged() обнаружит изменения и обновит ВСЕ поля в БД
@@ -616,7 +561,6 @@ public class AreaSyncManager {
                 // ВАЖНО: сохраняем без троттлинга, чтобы не пропустить изменения с сервера
                 // saveArea() установит lastUpdated = System.currentTimeMillis() при hasChanges=true
                 dbManager.saveAreaNoThrottle(local);
-                System.out.println("AreaSyncManager: Saved zone " + local.id + " to DB with all fields (name, color, space, spec, etc.)");
                 
                 // ВАЖНО: Восстанавливаем server.lastUpdated после сохранения,
                 // так как saveArea() установил System.currentTimeMillis() при hasChanges=true
@@ -634,7 +578,6 @@ public class AreaSyncManager {
                 // Сохраняем last_sync_at в БД
                 updateLastSyncAt(local.uuid, local.lastUpdated, dbManager);
                 
-                System.out.println("AreaSyncManager: Successfully merged zone " + local.id + " (new name: " + local.name + ", lastUpdated: " + local.lastUpdated + ")");
                 return true;
             } catch (Exception e) {
                 System.err.println("AreaSyncManager: Failed to merge zone: " + e.getMessage());
@@ -665,7 +608,8 @@ public class AreaSyncManager {
         local.name = server.name;
         local.path = server.path;
         local.color = server.color;
-        local.hide = server.hide;
+        // ВАЖНО: hide - локальный параметр, не синхронизируется с сервером
+        // local.hide сохраняется локально для каждого игрока
         local.lastUpdated = server.lastUpdated;
         local.zoneSync = server.zoneSync;
         local.synced = true;
@@ -956,7 +900,6 @@ public class AreaSyncManager {
                                 mapView.createAreaLabel(areaId);
                             }
                             
-                            System.out.println("AreaSyncManager: Updated zone " + areaId + " (" + updatedArea.name + ") in memory and visual display after merge (color, coordinates, etc.)");
                         } else {
                             // Зона не найдена в памяти - добавляем
                             mapView.glob.map.areas.put(areaId, updatedArea);
@@ -969,15 +912,16 @@ public class AreaSyncManager {
                             // Подключаем к графу маршрутов
                             mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(updatedArea);
                             
-                            System.out.println("AreaSyncManager: Added zone " + areaId + " (" + updatedArea.name + ") to memory and visual display after merge");
                         }
                     }
                     
-                    // Обновляем виджет зон, если он открыт
-                    if (nurgling.NUtils.getGameUI().areas != null && nurgling.NUtils.getGameUI().areas.visible()) {
-                        nurgling.NConfig.needAreasUpdate();
-                        nurgling.NUtils.getGameUI().areas.showPath(nurgling.NUtils.getGameUI().areas.currentPath);
-                    }
+            // Обновляем виджет зон, если он открыт
+            // ВАЖНО: Не перезагружаем весь список, только обновляем существующие элементы
+            if (nurgling.NUtils.getGameUI().areas != null && nurgling.NUtils.getGameUI().areas.visible()) {
+                nurgling.NConfig.needAreasUpdate();
+                // Обновляем только текущий путь без полной перезагрузки
+                nurgling.NUtils.getGameUI().areas.refreshCurrentPath();
+            }
                     
                 } catch (Exception e) {
                     System.err.println("AreaSyncManager: Failed to update zone in memory: " + e.getMessage());
@@ -1023,7 +967,6 @@ public class AreaSyncManager {
                         // Новая зона - добавляем в память
                         mapView.glob.map.areas.put(areaId, dbArea);
                         newZoneIds.add(areaId);
-                        System.out.println("AreaSyncManager: Added zone " + areaId + " (" + dbArea.name + ") to memory");
                     } else {
                         // Существующая зона - обновляем данные
                         updateAreaData(existingArea, dbArea);
@@ -1045,7 +988,6 @@ public class AreaSyncManager {
                     
                     // Удаляем из памяти
                     mapView.glob.map.areas.remove(areaId);
-                    System.out.println("AreaSyncManager: Removed zone " + areaId + " from memory");
                 }
                 
                 // Удаляем визуальные элементы для всех удаленных зон
@@ -1092,7 +1034,6 @@ public class AreaSyncManager {
                     // Подключаем к графу маршрутов (как в addArea)
                     mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(newZone);
                     
-                    System.out.println("AreaSyncManager: Initialized zone " + newZoneId + " (" + newZone.name + ") - created label and connected to route graph");
                 }
             }
             
@@ -1163,7 +1104,6 @@ public class AreaSyncManager {
                         synchronized (mapView.nols) {
                             mapView.createAreaLabel(areaId);
                         }
-                        System.out.println("AreaSyncManager: Added zone " + areaId + " (" + dbArea.name + ") to visual display");
                     } else {
                         // Существующая зона - обновляем данные
                         updateAreaData(existingArea, dbArea);
@@ -1178,7 +1118,6 @@ public class AreaSyncManager {
                             mapView.createAreaLabel(areaId);
                         }
                         
-                        System.out.println("AreaSyncManager: Updated zone " + areaId + " (" + dbArea.name + ") in visual display");
                     }
                 }
             }
@@ -1272,7 +1211,6 @@ public class AreaSyncManager {
             if (nol != null) {
                 nol.remove();
                 mapView.nols.remove(areaId);
-                System.out.println("AreaSyncManager: Removed overlay for zone " + areaId);
             }
         }
         
@@ -1282,7 +1220,6 @@ public class AreaSyncManager {
             if (dummy != null) {
                 mapView.glob.oc.remove(dummy);
                 mapView.dummys.remove(area.gid);
-                System.out.println("AreaSyncManager: Removed dummy for zone " + areaId + " (gid: " + area.gid + ")");
             }
         } else {
             // Если area не доступна, пытаемся найти dummy по всем зонам
@@ -1294,7 +1231,6 @@ public class AreaSyncManager {
                         if (dummy != null) {
                             mapView.glob.oc.remove(dummy);
                             mapView.dummys.remove(existingArea.gid);
-                            System.out.println("AreaSyncManager: Removed dummy for zone " + areaId + " (gid: " + existingArea.gid + ")");
                         }
                         break;
                     }
@@ -1314,6 +1250,5 @@ public class AreaSyncManager {
             nurgling.NUtils.getGameUI().areas.removeArea(areaId);
         }
         
-        System.out.println("AreaSyncManager: Removed zone " + areaId + " from visual display");
     }
 }
