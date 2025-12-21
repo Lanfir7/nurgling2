@@ -162,7 +162,15 @@ public class NMapView extends MapView
             return false;
         }
         
-        for(Long gobid: ((NMapView)NUtils.getGameUI().map).dummys.keySet())
+        // ВАЖНО: Создаем копию keySet для безопасной итерации
+        // чтобы избежать ConcurrentModificationException при модификации из других потоков
+        NMapView mapView = (NMapView)NUtils.getGameUI().map;
+        Set<Long> dummysKeys;
+        synchronized (mapView.dummys) {
+            dummysKeys = new HashSet<>(mapView.dummys.keySet());
+        }
+        
+        for(Long gobid: dummysKeys)
         {
             Gob gob = Finder.findGob(gobid);
             Gob.Overlay ol;
@@ -171,7 +179,12 @@ public class NMapView extends MapView
                 NAreaLabel al = (NAreaLabel) ol.spr;
                 if(al.isect(pc)) {
                     isFound = true;
-                    for (NArea area : ((NMapView) NUtils.getGameUI().map).glob.map.areas.values()) {
+                    // ВАЖНО: Создаем копию areas.values() для безопасной итерации
+                    Collection<NArea> areasCopy;
+                    synchronized (mapView.glob.map.areas) {
+                        areasCopy = new ArrayList<>(mapView.glob.map.areas.values());
+                    }
+                    for (NArea area : areasCopy) {
                         if(area.gid == gobid)
                         {
                             NUtils.getGameUI().areas.showPath(area.path);

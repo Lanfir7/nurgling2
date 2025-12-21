@@ -969,17 +969,27 @@ public class NContext {
         NArea res = null;
         ArrayList<TestedArea> areas = new ArrayList<>();
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
-            Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
+            // ВАЖНО: Создаем копию nols.keySet() для безопасной итерации
+            // чтобы избежать ConcurrentModificationException при модификации из других потоков
+            Set<Integer> nids;
+            synchronized (NUtils.getGameUI().map.nols) {
+                nids = new HashSet<>(NUtils.getGameUI().map.nols.keySet());
+            }
+            
             for(Integer id : nids) {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (cand == null) continue;
+                    if (cand == null) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " not found in glob.map.areas");
+                        continue;
+                    }
                     
                     // ВАЖНО: Не проверяем isVisible() здесь, так как для синхронизированных зон
                     // grid может быть еще не загружен, но зона должна быть доступна ботам
                     // Проверяем только containOut и getRCArea (который может вернуть null если grid не загружен)
                     // Если getRCArea() == null, зона все равно может быть использована, если есть space
-                    if (cand.containOut(name)) {
+                    boolean containsOut = cand.containOut(name);
+                    if (containsOut) {
                         // Пытаемся получить координаты зоны
                         Pair<Coord2d, Coord2d> rcArea = cand.getRCArea();
                         // Если getRCArea() вернул null (grid не загружен), проверяем есть ли space
@@ -1003,10 +1013,17 @@ public class NContext {
                                 } else {
                                     // Grid не загружен, но есть space - добавляем зону без проверки пути
                                     // Путь будет проверен позже, когда grid загрузится
+                                    System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (grid not loaded)");
                                     areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
                                 }
+                            } else {
+                                System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") quality threshold mismatch: item th=" + th + ", zone th=" + areaTh);
                             }
+                        } else {
+                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") output not found for " + name);
                         }
+                    } else {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") does not containOut " + name + " (jout.length=" + (cand.jout != null ? cand.jout.length() : 0) + ")");
                     }
                 }
             }
