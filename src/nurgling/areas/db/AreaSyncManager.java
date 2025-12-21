@@ -1129,11 +1129,14 @@ public class AreaSyncManager {
                     
                     if (existingArea == null) {
                         // Новая зона - добавляем
+                        System.out.println("AreaSyncManager.updateAreasInMemory: Adding new zone " + areaId + " (" + dbArea.name + ") from sync");
                         mapView.glob.map.areas.put(areaId, dbArea);
                         // ВАЖНО: Выполняем те же действия, что и при создании через UI
                         // Создаем overlay синхронизированно
                         synchronized (mapView.nols) {
+                            System.out.println("AreaSyncManager.updateAreasInMemory: Creating overlay for zone " + areaId + ", nols.size before=" + mapView.nols.size());
                             mapView.createAreaLabel(areaId);
+                            System.out.println("AreaSyncManager.updateAreasInMemory: Overlay created for zone " + areaId + ", nols.size after=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
                         }
                         // Подключаем к графу маршрутов (как в addArea)
                         mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(dbArea);
