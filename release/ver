@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 2.100.29
+=======
+2.100.28
+>>>>>>> 7d8337aded769dc5cf6406e133f224b40b32e9b3
 AlarmSounds/AlarmSounds.7z=3c8abc53f8bd73d1c78be2b191b2ce79e2ac05d00c6b909c62d7f490975b080f
 AlarmSounds/ND_Ambush.wav=daa33ce1c7fd0a4dd18cea801f9574c2aa783457a759318fa992610f958ef171
 AlarmSounds/ND_Badger.wav=74e25f265aa821f14a72165b1bb3643496168596e26ea048afb0eb4a710cb916
@@ -49,7 +53,11 @@ gluegen-rt-natives-windows-amd64.jar=dd2a4bceb583290575ee3d0ff4e90dff2b9d9c5c10f
 gluegen-rt-natives-windows-i586.jar=985eeb02eb0152297cc72b596c4a7ad883242f4f1def4e35e0e7cc49f5f551f9
 gluegen-rt.jar=1a196212a1dd07b708d5039805a040f00b2b3b975ad332009ac5fc8b4d2b418f
 hafen-res.jar=d2950d4f562a2ae6b3a8e40d1616d74e4af169b03b450183c08415e0bf052ce0
+<<<<<<< HEAD
 hafen.jar=a969a1a01f32578e3d85d42fe4bb0a7f7a138b23b341ec621268d445f8cc515f
+=======
+hafen.jar=1afec844028ca947a135c2ea53c1745fef4261280a70a0c0ad30259b58ce0c56
+>>>>>>> 7d8337aded769dc5cf6406e133f224b40b32e9b3
 haven-config.properties=353381982aac6c22985bc97438e31b1054dfe7e35461a17e68366b9b8cef74ae
 jogl-all-natives-linux-aarch64.jar=994dfe10ecb77e1c8efd677b840ea7bd01664669724ac23aa82c6dbfb5beab6b
 jogl-all-natives-linux-amd64.jar=595df3e5afa85877947faf2574ca9aea96414750c32c79040a952a2165fcfe1e
