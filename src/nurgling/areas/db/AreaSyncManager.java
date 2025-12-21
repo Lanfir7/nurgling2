@@ -1201,14 +1201,26 @@ public class AreaSyncManager {
         }
         
         // Обновляем spec, jin, jout если изменились
+        // ВАЖНО: Создаем новые объекты, чтобы гарантировать обновление ссылок
         if (fromDB.spec != null) {
-            existing.spec = fromDB.spec;
+            existing.spec = new ArrayList<>(fromDB.spec);
         }
         if (fromDB.jin != null) {
-            existing.jin = fromDB.jin;
+            // Создаем новый JSONArray из fromDB.jin, чтобы гарантировать обновление
+            try {
+                existing.jin = new org.json.JSONArray(fromDB.jin.toString());
+            } catch (Exception e) {
+                existing.jin = fromDB.jin;
+            }
         }
         if (fromDB.jout != null) {
-            existing.jout = fromDB.jout;
+            // ВАЖНО: Создаем новый JSONArray из fromDB.jout, чтобы гарантировать обновление
+            // Это нужно чтобы боты видели изменения в jout после синхронизации
+            try {
+                existing.jout = new org.json.JSONArray(fromDB.jout.toString());
+            } catch (Exception e) {
+                existing.jout = fromDB.jout;
+            }
         }
     }
     
