@@ -553,7 +553,7 @@ public class AreaDBStorage implements AreaStorage {
             // ВАЖНО: Обновляем lastUpdated ПЕРЕД сохранением, чтобы синхронизация увидела изменение
             // Используем текущее время, чтобы гарантировать, что оно будет больше любого предыдущего значения
             area.lastUpdated = System.currentTimeMillis();
-            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") changed, updating lastUpdated to: " + area.lastUpdated);
+            // Убрано избыточное логирование - зона сохраняется при каждом изменении
         }
         
         // Если зона синхронизирована с сервером и имеет оригинальное lastUpdated,
@@ -603,7 +603,6 @@ public class AreaDBStorage implements AreaStorage {
         // Если зона изменилась, проверяем, что updated_at действительно обновился в БД
         if (hasChanges) {
             long savedLastUpdated = area.lastUpdated; // Сохраняем значение, которое мы установили
-            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - saved with lastUpdated: " + savedLastUpdated);
             
             // Проверяем, что updated_at действительно обновился в БД
             try (PreparedStatement checkStmt = conn.prepareStatement("SELECT updated_at FROM areas WHERE id = ?")) {
@@ -615,10 +614,6 @@ public class AreaDBStorage implements AreaStorage {
                             long dbLastUpdated = updatedAt.getTime();
                             // Используем большее значение для надежности
                             area.lastUpdated = Math.max(savedLastUpdated, dbLastUpdated);
-                            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - verified: saved=" + savedLastUpdated + 
-                                             ", db=" + dbLastUpdated + ", using=" + area.lastUpdated);
-                        } else {
-                            System.out.println("AreaDBStorage: Zone " + area.id + " (" + area.name + ") - WARNING: updated_at is NULL in DB!");
                         }
                     }
                 }

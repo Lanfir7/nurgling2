@@ -973,8 +973,20 @@ public class NContext {
             for(Integer id : nids) {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (cand.containOut(name) && ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand)) != null) {
-                        areas.add(new TestedArea(cand, cand.getOutput(name).th));
+                    // Проверяем, что зона содержит этот предмет (без проверки порога здесь, порог проверяется позже)
+                    if (cand.isVisible() && cand.containOut(name) && cand.getRCArea() != null) {
+                        NArea.Ingredient output = cand.getOutput(name);
+                        if (output != null) {
+                            // Проверяем путь только если зона подходит по порогу качества
+                            // Если у зоны порог 60, а у предмета качество 73, то 60 <= 73 = true
+                            int areaTh = output.th;
+                            if (areaTh == -1 || th >= areaTh) {
+                                // Порог не указан (принимает все) или качество предмета >= порога зоны
+                                if (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand)) != null) {
+                                    areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1023,7 +1035,11 @@ public class NContext {
                         if(cand.getRCArea()!=null) {
                             for (int i = 0; i < cand.jout.length(); i++) {
                                 if (NParser.checkName((String) ((JSONObject) cand.jout.get(i)).get("name"), name)) {
-                                    Integer th = (((JSONObject) cand.jout.get(i)).has("th")) ? ((Integer) ((JSONObject) cand.jout.get(i)).get("th")) : 1;
+                                    int th = 1;
+                                    if (((JSONObject) cand.jout.get(i)).has("th")) {
+                                        Object thObj = ((JSONObject) cand.jout.get(i)).get("th");
+                                        th = (thObj instanceof Number) ? ((Number) thObj).intValue() : 1;
+                                    }
                                     areas.put(th, cand);
                                 }
                             }
@@ -1045,7 +1061,11 @@ public class NContext {
                         if(!cand.hide) {
                             for (int i = 0; i < cand.jout.length(); i++) {
                                 if (NParser.checkName((String) ((JSONObject) cand.jout.get(i)).get("name"), name)) {
-                                    Integer th = (((JSONObject) cand.jout.get(i)).has("th")) ? ((Integer) ((JSONObject) cand.jout.get(i)).get("th")) : 1;
+                                    int th = 1;
+                                    if (((JSONObject) cand.jout.get(i)).has("th")) {
+                                        Object thObj = ((JSONObject) cand.jout.get(i)).get("th");
+                                        th = (thObj instanceof Number) ? ((Number) thObj).intValue() : 1;
+                                    }
                                     areas.put(th, cand);
                                 }
                             }

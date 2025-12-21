@@ -72,7 +72,15 @@ public class MasterMiner extends ActionWithFinal {
         }
 
         try {
-            known = gui.getInventory().getItems(MINED_ITEMS);
+            // Получаем все предметы из инвентаря и фильтруем камни (обычные и драгоценные)
+            ArrayList<WItem> allItems;
+            try {
+                allItems = gui.getInventory().getItems();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return Results.SUCCESS();
+            }
+            known = filterMinedItems(allItems);
 
             while (!stop && wnd != null && !wnd.isClosed()) {
                 int masonry = 0;
@@ -90,7 +98,15 @@ public class MasterMiner extends ActionWithFinal {
                     continue;
                 }
 
-                ArrayList<WItem> cur = gui.getInventory().getItems(MINED_ITEMS);
+                // Получаем все предметы из инвентаря и фильтруем камни (обычные и драгоценные)
+                ArrayList<WItem> cur;
+                try {
+                    allItems = gui.getInventory().getItems();
+                    cur = filterMinedItems(allItems);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
                 // Обрабатываем все новые камни, а не только первый
                 ArrayList<WItem> newItems = new ArrayList<>();
                 for (WItem it : cur) {
@@ -122,6 +138,41 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
+     * Фильтрует предметы из инвентаря, оставляя только выкопанные камни (обычные и драгоценные)
+     */
+    private ArrayList<WItem> filterMinedItems(ArrayList<WItem> allItems) {
+        ArrayList<WItem> result = new ArrayList<>();
+        if (allItems == null) return result;
+        
+        for (WItem item : allItems) {
+            if (item == null || item.item == null) continue;
+            
+            try {
+                NGItem ngItem = (NGItem) item.item;
+                String itemName = ngItem.name();
+                
+                if (itemName == null) continue;
+                
+                // Проверяем, является ли это обычным камнем (из MINED_ITEMS)
+                if (NParser.checkName(itemName, MINED_ITEMS)) {
+                    result.add(item);
+                    continue;
+                }
+                
+                // Проверяем, является ли это драгоценным камнем
+                if (isGemstone(ngItem) || isGemstone(itemName)) {
+                    result.add(item);
+                    continue;
+                }
+            } catch (Exception e) {
+                // Игнорируем ошибки при проверке предмета
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
      * Обрабатывает один новый камень
      */
     private void processNewStone(NGameUI gui, WItem newItem, MasterMinerWnd wnd) throws InterruptedException {
@@ -146,6 +197,34 @@ public class MasterMiner extends ActionWithFinal {
         double f3 = dropped.quality;
         String stoneName = dropped.name();
         String stoneType = classifyStoneType(stoneName);
+
+        // Проверяем, является ли это драгоценным камнем
+        boolean isGem = isGemstone(dropped);
+        if (!isGem) {
+            isGem = isGemstone(stoneName);
+        }
+        
+        // Драгоценные камни НЕ учитываются при подсчете качества и НЕ обновляют UI
+        // Но маркеры для них ставятся
+        if (isGem) {
+            // Только ставим маркер для драгоценного камня, если он включен в настройках
+            nurgling.conf.NMasterMinerMarkingConfig markingConfig = nurgling.conf.NMasterMinerMarkingConfig.get();
+            if (markingConfig != null) {
+                String configKey = extractGemstoneBaseName(stoneName);
+                Boolean enabled = markingConfig.isEnabled(configKey);
+                Double threshold = markingConfig.getThreshold(configKey);
+                
+                if (enabled != null && enabled) {
+                    double itemThreshold = (threshold != null && !threshold.isNaN()) ? threshold : 10.0;
+                    if (f3 >= itemThreshold) {
+                        // Драгоценные камни - отдельный слой, ставим с фактическим качеством (f3)
+                        addGemstoneMarker(gui, dropped, stoneName, f3);
+                    }
+                }
+            }
+            // Драгоценные камни НЕ сбрасываются и НЕ учитываются в статистике
+            return;
+        }
 
         WItem tool = findMiningTool();
         if (tool == null) {
@@ -235,22 +314,22 @@ public class MasterMiner extends ActionWithFinal {
                 // Проверяем, нужно ли поставить метку на карте согласно настройкам
                 nurgling.conf.NMasterMinerMarkingConfig markingConfig = nurgling.conf.NMasterMinerMarkingConfig.get();
                 if (markingConfig != null) {
-                    Boolean enabled = markingConfig.isEnabled(stoneName);
-                    Double threshold = markingConfig.getThreshold(stoneName);
+                    // Для остальных камней используем полное название
+                    String configKey = stoneName;
+                    
+                    Boolean enabled = markingConfig.isEnabled(configKey);
+                    Double threshold = markingConfig.getThreshold(configKey);
                     
                     // Если элемент включен в настройках и качество в стене >= порога
                     if (enabled != null && enabled) {
                         double itemThreshold = (threshold != null && !threshold.isNaN()) ? threshold : 10.0;
+                        
                         if (wallQ >= itemThreshold) {
                             if ("Quarryartz".equals(stoneType)) {
                                 // Квариарц ставится четко в месте выкопан
                                 addQuarryartzMarker(gui, stoneName, wallQ);
-                            } else if (isGemstone(stoneName)) {
-                                // Драгоценные камни - отдельный слой, ставим с фактическим качеством (f3)
-                                addGemstoneMarker(gui, stoneName, f3);
                             } else {
                                 // Остальные камни и руды - система спотов (обновление в радиусе 30 клеток)
-                                // Все камни ставим как споты (обновление в радиусе 30 клеток)
                                 addOreSpotMarker(gui, stoneName, wallQ);
                             }
                         }
@@ -261,6 +340,7 @@ public class MasterMiner extends ActionWithFinal {
             // проверка порога и сброс камня (только если не стак)
             // Сброс происходит по фактическому качеству камня (f3), а не по qWall
             // Для ракух и кэтголдов используется отдельный порог
+            // Драгоценные камни НЕ сбрасываются (они уже обработаны выше и вернулись)
             double threshold;
             if ("Shell".equals(stoneType) || "Cat Gold".equals(stoneType)) {
                 threshold = wnd.getShellCatGoldThreshold();
@@ -339,15 +419,179 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
-     * Проверяет, является ли камень драгоценным (cut, faceted, jotun size)
+     * Проверяет, является ли камень драгоценным
+     * Проверяет последнее слово в названии (например, "Onyx", "Amethyst")
+     * До этого идут слова об огранке и размере
      */
     public static boolean isGemstone(String stoneName) {
-        if (stoneName == null) return false;
-        String name = stoneName.toLowerCase();
-        // Проверяем паттерны для драгоценных камней
-        return name.contains("cut") || 
-               name.contains("faceted") || 
-               name.contains("jotun");
+        if (stoneName == null || stoneName.trim().isEmpty()) return false;
+        
+        // Разбиваем название на слова и берем последнее слово
+        String[] words = stoneName.trim().split("\\s+");
+        if (words.length == 0) return false;
+        
+        String lastWord = words[words.length - 1].toLowerCase();
+        
+        // Специальная обработка для составных названий (два слова)
+        if (words.length > 1) {
+            String secondLastWord = words[words.length - 2].toLowerCase();
+            
+            // "Dust Jewel" - последнее слово "jewel", предпоследнее "dust"
+            if (lastWord.equals("jewel") && secondLastWord.equals("dust")) {
+                return true;
+            }
+            
+            // "Star Shard" - последнее слово "shard", предпоследнее "star"
+            if (lastWord.equals("shard") && secondLastWord.equals("star")) {
+                return true;
+            }
+            
+            // "Sugar Diamond" - последнее слово "diamond", предпоследнее "sugar"
+            if (lastWord.equals("diamond") && secondLastWord.equals("sugar")) {
+                return true;
+            }
+            
+            // "Red Coral" - последнее слово "coral", предпоследнее "red"
+            if (lastWord.equals("coral") && secondLastWord.equals("red")) {
+                return true;
+            }
+            
+            // "Oyster Pearl" - последнее слово "pearl", предпоследнее "oyster"
+            if (lastWord.equals("pearl") && secondLastWord.equals("oyster")) {
+                return true;
+            }
+            
+            // "River Pearl" - последнее слово "pearl", предпоследнее "river"
+            if (lastWord.equals("pearl") && secondLastWord.equals("river")) {
+                return true;
+            }
+        }
+        
+        // Список простых названий драгоценных камней (одно слово - последнее слово)
+        // Полный список из игры: Amber, Amethyst, Diamond, Emerald, Jade,
+        // Moonstone, Onyx, Opal, Ruby, Sapphire, Topaz, Turquoise
+        String[] simpleGemstoneNames = {
+            "amber", "amethyst", "diamond", "emerald", "jade",
+            "moonstone", "onyx", "opal", "ruby",
+            "sapphire", "topaz", "turquoise"
+        };
+        
+        // Проверяем простые названия (но исключаем "diamond", если это "Sugar Diamond")
+        for (String gemName : simpleGemstoneNames) {
+            if (lastWord.equals(gemName)) {
+                // Для "diamond" проверяем, что это не "Sugar Diamond"
+                if (gemName.equals("diamond") && words.length > 1 && 
+                    words[words.length - 2].toLowerCase().equals("sugar")) {
+                    continue; // Это "Sugar Diamond", уже обработан выше
+                }
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Извлекает базовое название драгоценного камня из полного названия
+     * Например: "Fair Cabochon Onyx" -> "Onyx", "Small Rough Onyx" -> "Onyx"
+     * "Dust Jewel" -> "Dust Jewel", "Sugar Diamond" -> "Sugar Diamond"
+     */
+    private static String extractGemstoneBaseName(String fullName) {
+        if (fullName == null || fullName.trim().isEmpty()) return fullName;
+        
+        String[] words = fullName.trim().split("\\s+");
+        if (words.length == 0) return fullName;
+        
+        String lastWord = words[words.length - 1];
+        if (lastWord == null || lastWord.isEmpty()) return fullName;
+        
+        // Проверяем составные названия (два слова)
+        if (words.length > 1) {
+            String secondLastWord = words[words.length - 2];
+            if (secondLastWord != null && !secondLastWord.isEmpty()) {
+                String secondLastWordLower = secondLastWord.toLowerCase();
+                String lastWordLower = lastWord.toLowerCase();
+                
+                // Составные названия возвращаем полностью
+                if ((lastWordLower.equals("jewel") && secondLastWordLower.equals("dust")) ||
+                    (lastWordLower.equals("shard") && secondLastWordLower.equals("star")) ||
+                    (lastWordLower.equals("diamond") && secondLastWordLower.equals("sugar")) ||
+                    (lastWordLower.equals("coral") && secondLastWordLower.equals("red")) ||
+                    (lastWordLower.equals("pearl") && (secondLastWordLower.equals("oyster") || secondLastWordLower.equals("river")))) {
+                    return secondLastWord.substring(0, 1).toUpperCase() + secondLastWord.substring(1).toLowerCase() + " " + 
+                           lastWord.substring(0, 1).toUpperCase() + lastWord.substring(1).toLowerCase();
+                }
+            }
+        }
+        
+        // Для простых названий возвращаем последнее слово с заглавной буквы
+        if (lastWord.length() > 1) {
+            return lastWord.substring(0, 1).toUpperCase() + lastWord.substring(1).toLowerCase();
+        } else {
+            return lastWord.toUpperCase();
+        }
+    }
+    
+    /**
+     * Проверяет, является ли предмет драгоценным камнем по ресурсному пути
+     * Более надежный способ определения драгоценных камней
+     */
+    public static boolean isGemstone(NGItem item) {
+        if (item == null) return false;
+        
+        // Сначала проверяем по названию (для обратной совместимости)
+        String name = item.name();
+        if (isGemstone(name)) {
+            return true;
+        }
+        
+        // Проверяем ресурсный путь (более надежно)
+        try {
+            // Пробуем получить ресурс через res.get()
+            if (item.res != null) {
+                try {
+                    Resource res = item.res.get();
+                    if (res != null && res.name != null) {
+                        String resName = res.name.toLowerCase();
+                        // Проверяем различные паттерны для драгоценных камней в пути ресурса
+                        if (resName.contains("gems/gemstone") || 
+                            resName.contains("/gems/") ||
+                            resName.contains("gemstone") ||
+                            resName.contains("invobjs/gems") ||
+                            resName.contains("gfx/invobjs/gems")) {
+                            return true;
+                        }
+                    }
+                } catch (Loading e) {
+                    // Ресурс еще загружается, пропускаем
+                } catch (Exception e) {
+                    // Игнорируем другие ошибки
+                }
+            }
+            
+            // Также пробуем через getres() метод
+            try {
+                Resource res2 = item.getres();
+                if (res2 != null && res2.name != null) {
+                    String resName2 = res2.name.toLowerCase();
+                    if (resName2.contains("gems/gemstone") || 
+                        resName2.contains("/gems/") ||
+                        resName2.contains("gemstone") ||
+                        resName2.contains("invobjs/gems") ||
+                        resName2.contains("gfx/invobjs/gems")) {
+                        return true;
+                    }
+                }
+            } catch (Loading e) {
+                // Ресурс еще загружается, пропускаем
+            } catch (Exception ignored) {
+                // Игнорируем другие ошибки getres()
+            }
+        } catch (Exception e) {
+            // Если не удалось проверить ресурс, используем только проверку по названию
+        }
+        
+        return false;
     }
     
     /**
@@ -762,8 +1006,9 @@ public class MasterMiner extends ActionWithFinal {
      * Добавляет метку на карту для драгоценного камня
      * Ставит с фактическим качеством (f3), без применения формул
      * Использует систему спотов (обновление в радиусе 30 клеток)
+     * Использует иконку самого предмета
      */
-    private void addGemstoneMarker(NGameUI gui, String gemName, double quality) {
+    private void addGemstoneMarker(NGameUI gui, NGItem gemItem, String gemName, double quality) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) {
                 return;
@@ -823,7 +1068,7 @@ public class MasterMiner extends ActionWithFinal {
                         
                         // Создаем новый с обновленным качеством
                         String label = String.format("q%.0f", quality);
-                        BufferedImage iconImage = getGemstoneIcon(gemName);
+                        BufferedImage iconImage = getGemstoneIconFromItem(gemItem);
                         // Создаем маркер даже если иконка не загрузилась (используется fallback)
                         gui.labeledMarkService.addLabeledMark(label, gemName, segmentId, tileCoords, iconImage);
                     }
@@ -834,7 +1079,7 @@ public class MasterMiner extends ActionWithFinal {
             } else {
                 // Маркер не найден - создаем новый
                 String label = String.format("q%.0f", quality);
-                BufferedImage iconImage = getGemstoneIcon(gemName);
+                BufferedImage iconImage = getGemstoneIconFromItem(gemItem);
                 // Создаем маркер даже если иконка не загрузилась (используется fallback)
                 gui.labeledMarkService.addLabeledMark(label, gemName, segmentId, tileCoords, iconImage);
             }
@@ -844,7 +1089,50 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
+     * Получает иконку драгоценного камня из самого предмета
+     */
+    public static BufferedImage getGemstoneIconFromItem(NGItem gemItem) {
+        if (gemItem == null) return null;
+        
+        // Пробуем получить иконку из ресурса самого предмета
+        try {
+            if (gemItem.res != null) {
+                try {
+                    Resource res = gemItem.res.get();
+                    if (res != null) {
+                        Resource.Image imgLayer = res.layer(Resource.imgc);
+                        if (imgLayer != null && imgLayer.img != null) {
+                            return imgLayer.img;
+                        }
+                    }
+                } catch (Loading e) {
+                    // Ресурс еще загружается, пробуем через getres()
+                }
+            }
+            
+            // Пробуем через getres()
+            try {
+                Resource res2 = gemItem.getres();
+                if (res2 != null) {
+                    Resource.Image imgLayer = res2.layer(Resource.imgc);
+                    if (imgLayer != null && imgLayer.img != null) {
+                        return imgLayer.img;
+                    }
+                }
+            } catch (Exception e) {
+                // Игнорируем ошибки
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+        
+        // Если не удалось загрузить - возвращаем null (будет использован fallback)
+        return null;
+    }
+    
+    /**
      * Получает иконку драгоценного камня (огранка бриллиант размера йотун)
+     * Fallback метод для случаев, когда нет доступа к самому предмету
      */
     public static BufferedImage getGemstoneIcon(String gemName) {
         if (gemName == null) return null;

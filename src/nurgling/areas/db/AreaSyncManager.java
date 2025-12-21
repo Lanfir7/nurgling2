@@ -1108,6 +1108,16 @@ public class AreaSyncManager {
                         // Существующая зона - обновляем данные
                         updateAreaData(existingArea, dbArea);
                         
+                        // ВАЖНО: Сбрасываем gid чтобы createAreaLabel() пересоздал dummy и overlay
+                        if (existingArea.gid != Long.MIN_VALUE) {
+                            haven.Gob dummy = mapView.dummys.get(existingArea.gid);
+                            if (dummy != null) {
+                                mapView.glob.oc.remove(dummy);
+                                mapView.dummys.remove(existingArea.gid);
+                            }
+                            existingArea.gid = Long.MIN_VALUE; // Сбрасываем gid для пересоздания
+                        }
+                        
                         // Пересоздаем overlay если нужно
                         synchronized (mapView.nols) {
                             nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);

@@ -2,6 +2,7 @@ package nurgling.actions;
 
 import haven.*;
 import haven.res.ui.stackinv.ItemStack;
+import haven.res.ui.tt.stackn.Stack;
 import nurgling.*;
 import nurgling.tasks.*;
 import nurgling.tools.*;
@@ -152,6 +153,55 @@ public class TransferToContainer implements Action
                     int oldSpace = gui.getInventory(container.cap).getItems(items).size();
                     int transferred = 0;
 
+                    // Проверяем, нужно ли переносить по одному предмету для проверки качества
+                    // ВАЖНО: Если th > 1, значит зона настроена на разделение по качеству - ВСЕГДА переносим по одному
+                    // Также проверяем качество даже если th = -1, если есть предметы с разным качеством
+                    // Это нужно для правильного разделения по зонам (например, wine glance)
+                    boolean needQualityCheck = false;
+                    if (th > 1) {
+                        // Если есть порог качества в зоне, ВСЕГДА переносим по одному для проверки качества
+                        needQualityCheck = true;
+                    } else {
+                        // Проверяем, есть ли предметы с разным качеством в инвентаре (включая стаки)
+                        try {
+                            ArrayList<WItem> allItems = gui.getInventory().getItems(items);
+                            if (allItems.size() > 1) {
+                                Float firstQuality = null;
+                                for (WItem witem : allItems) {
+                                    if (NGItem.validateItem(witem)) {
+                                        NGItem gi = (NGItem) witem.item;
+                                        Float quality = null;
+                                        
+                                        // Проверяем качество стака, если предмет в стаке
+                                        if (witem.parent instanceof ItemStack) {
+                                            Stack stackInfo = gi.getInfo(Stack.class);
+                                            if (stackInfo != null && stackInfo.quality > 0) {
+                                                quality = (float)stackInfo.quality;
+                                            }
+                                        }
+                                        
+                                        // Если не нашли качество стака, используем качество предмета
+                                        if (quality == null) {
+                                            quality = gi.quality;
+                                        }
+                                        
+                                        if (quality != null) {
+                                            if (firstQuality == null) {
+                                                firstQuality = quality;
+                                            } else if (!firstQuality.equals(quality)) {
+                                                // Нашли предметы/стаки с разным качеством
+                                                needQualityCheck = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            // Игнорируем ошибки
+                        }
+                    }
+
                     while (!availableItems.isEmpty())
                     {
                         WItem currentItem = availableItems.get(0);
@@ -163,8 +213,9 @@ public class TransferToContainer implements Action
                             continue;
                         }
 
-
-                        int itemsTransferred = transfer(currentItem, gui.getInventory(container.cap), transfer_size);
+                        // Если нужно проверять качество, ограничиваем transfer_size до 1
+                        int currentTransferSize = needQualityCheck ? 1 : transfer_size;
+                        int itemsTransferred = transfer(currentItem, gui.getInventory(container.cap), currentTransferSize, itemName);
 
                         if (itemsTransferred > 0)
                         {
@@ -279,13 +330,20 @@ public class TransferToContainer implements Action
 
     public static int transfer(WItem item, NInventory targetInv, int transfer_size) throws InterruptedException
     {
+        return transfer(item, targetInv, transfer_size, null);
+    }
+
+    public static int transfer(WItem item, NInventory targetInv, int transfer_size, String itemName) throws InterruptedException
+    {
         // Проверяем валидность предмета перед транспортировкой
         if (!NGItem.validateItem(item))
         {
             return 0;
         }
 
-        String itemName = ((NGItem) item.item).name();
+        if (itemName == null) {
+            itemName = ((NGItem) item.item).name();
+        }
 
         if (!StackSupporter.isStackable(targetInv, itemName))
         {
@@ -382,8 +440,60 @@ public class TransferToContainer implements Action
                     // Если НЕТ неполных стаков в целевом инвентаре и есть свободное место
                     if (targetInv.getFreeSpace() > 0)
                     {
-                        // Проверяем, не превышает ли размер стака лимит переноса
-                        if (oldstacksize > transfer_size)
+                        // ВАЖНО: Если есть предметы с разным качеством, переносим по одному предмету
+                        // для проверки качества, даже если transfer_size позволяет перенести весь стак
+                        // Проверяем, нужно ли переносить по одному предмету
+                        // ВАЖНО: Если th > 1 (передан через TransferItems2), ВСЕГДА переносим по одному
+                        boolean needQualityCheck = false;
+                        // Проверяем th из TransferToContainer (если передан)
+                        // Но th не доступен в статическом методе transfer(), поэтому проверяем качество предметов
+                        if (itemName != null) {
+                            try {
+                                NGameUI gui = NUtils.getGameUI();
+                                if (gui != null) {
+                                    // Проверяем, есть ли предметы с разным качеством в инвентаре (включая стаки)
+                                    ArrayList<WItem> allItems = gui.getInventory().getItems(new NAlias(itemName));
+                                    if (allItems.size() > 1) {
+                                        Float firstQuality = null;
+                                        for (WItem witem : allItems) {
+                                            if (NGItem.validateItem(witem)) {
+                                                NGItem gi = (NGItem) witem.item;
+                                                Float quality = null;
+                                                
+                                                // Проверяем качество стака, если предмет в стаке
+                                                if (witem.parent instanceof haven.res.ui.stackinv.ItemStack) {
+                                                    haven.res.ui.tt.stackn.Stack stackInfo = gi.getInfo(haven.res.ui.tt.stackn.Stack.class);
+                                                    if (stackInfo != null && stackInfo.quality > 0) {
+                                                        quality = (float)stackInfo.quality;
+                                                    }
+                                                }
+                                                
+                                                // Если не нашли качество стака, используем качество предмета
+                                                if (quality == null) {
+                                                    quality = gi.quality;
+                                                }
+                                                
+                                                if (quality != null) {
+                                                    if (firstQuality == null) {
+                                                        firstQuality = quality;
+                                                    } else if (!firstQuality.equals(quality)) {
+                                                        // Нашли предметы/стаки с разным качеством
+                                                        needQualityCheck = true;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                // Игнорируем ошибки
+                            }
+                        }
+                        
+                        // Если нужно проверять качество или размер стака превышает лимит, переносим по одному
+                        // Также проверяем th > 1 (если передан через параметр)
+                        if (needQualityCheck || oldstacksize > transfer_size)
                         {
                             // Сохраняем исходный размер стека ДО взятия предмета
                             int originalStackSize = sourceStack.wmap.size();

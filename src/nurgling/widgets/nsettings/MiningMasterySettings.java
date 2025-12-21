@@ -141,7 +141,7 @@ public class MiningMasterySettings extends Panel {
         add(new Label("Click on right side of item to edit quality threshold"), new Coord(margin, y));
         y += UI.scale(25);
 
-        // Создаем список всех камней и руд (статический список для оптимизации)
+        // Создаем список всех камней, руд и драгоценных камней (статический список для оптимизации)
         // Используем предварительно отсортированный список чтобы избежать сортировки при каждом создании
         List<String> allItems = Arrays.asList(
             "Alabaster", "Apatite", "Arkose", "Basalt", "Bat Rock",
@@ -158,7 +158,11 @@ public class MiningMasterySettings extends Panel {
             "Quarryartz", "Quartz", "Rhyolite", "Rock Crystal", "Rock Salt",
             "Sandstone", "Schist", "Schrifterz", "Serpentine", "Shard of Conch",
             "Silvershine", "Slag", "Slate", "Soapstone", "Sodalite",
-            "Sunstone", "Wine Glance", "Zincspar"
+            "Sunstone", "Wine Glance", "Zincspar",
+            // Драгоценные камни (gemstones)
+            "Amber", "Amethyst", "Diamond", "Dust Jewel", "Emerald", "Jade",
+            "Moonstone", "Onyx", "Opal", "Oyster Pearl", "Red Coral", "River Pearl",
+            "Ruby", "Sapphire", "Star Shard", "Sugar Diamond", "Topaz", "Turquoise"
         );
 
         // Создаем Scrollport для прокрутки списка (шире для двух колонок)
@@ -223,18 +227,22 @@ public class MiningMasterySettings extends Panel {
                            itemName.equals("Quartz") || 
                            itemName.equals("Flint");
             boolean isQuarryartz = itemName.equals("Quarryartz");
+            // Проверяем, является ли это драгоценным камнем
+            boolean isGemstone = MasterMiner.isGemstone(itemName);
             
             Boolean enabledObj = config.isEnabled(itemName);
             boolean enabled;
             if (enabledObj == null) {
-                enabled = isOre || isQuarryartz; // По умолчанию руды и Quarryartz включены
+                // По умолчанию руды, Quarryartz и драгоценные камни включены
+                enabled = isOre || isQuarryartz || isGemstone;
             } else {
                 enabled = enabledObj;
             }
             
             Double threshold = config.getThreshold(itemName);
             if (threshold == null) {
-                threshold = (isOre || isQuarryartz) ? 10.0 : Double.NaN; // По умолчанию руды и Quarryartz с порогом 10
+                // По умолчанию руды, Quarryartz и драгоценные камни с порогом 10
+                threshold = (isOre || isQuarryartz || isGemstone) ? 10.0 : Double.NaN;
             }
             
             checkbox.setEnabled(enabled);

@@ -85,11 +85,16 @@ public class NArea
     boolean containOut(String name, double th)
     {
         for (int i = 0; i < jout.length(); i++) {
-            if (((String) ((JSONObject) jout.get(i)).get("name")).equals(name))
-                if (((JSONObject) jout.get(i)).has("th") && ((Integer) ((JSONObject) jout.get(i)).get("th")) > th)
+            if (((String) ((JSONObject) jout.get(i)).get("name")).equals(name)) {
+                if (((JSONObject) jout.get(i)).has("th")) {
+                    Object thObj = ((JSONObject) jout.get(i)).get("th");
+                    int areaTh = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
+                    if (areaTh > th)
+                        return true;
+                } else {
                     return true;
-                else
-                    return true;
+                }
+            }
         }
         return false;
     }
@@ -97,11 +102,16 @@ public class NArea
     private boolean containOut(NAlias name, double th)
     {
         for (int i = 0; i < jout.length(); i++) {
-            if (NParser.checkName((String) ((JSONObject) jout.get(i)).get("name"),name))
-                if (((JSONObject) jout.get(i)).has("th") && ((Integer) ((JSONObject) jout.get(i)).get("th")) > th)
+            if (NParser.checkName((String) ((JSONObject) jout.get(i)).get("name"),name)) {
+                if (((JSONObject) jout.get(i)).has("th")) {
+                    Object thObj = ((JSONObject) jout.get(i)).get("th");
+                    int areaTh = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
+                    if (areaTh > th)
+                        return true;
+                } else {
                     return true;
-                else
-                    return true;
+                }
+            }
         }
         return false;
     }
@@ -338,6 +348,38 @@ public class NArea
         return new Area(begin,end);
     }
 
+    /**
+     * Получает координаты зоны для создания overlay (без проверки hide)
+     * Используется в createAreaLabel() чтобы всегда создавать overlay
+     */
+    private Pair<Coord2d,Coord2d> getRCAreaForOverlay()
+    {
+        if(isVisible())
+        {
+            Coord begin = null;
+            Coord end = null;
+
+            for (Long id : space.space.keySet())
+            {
+                MCache.Grid grid = NUtils.getGameUI().map.glob.map.findGrid(id);
+                if(grid==null)
+                    return null;
+                Area area = space.space.get(id).area;
+                Coord b = area.ul.add(grid.ul);
+                Coord e = area.br.add(grid.ul);
+                begin = (begin != null) ? new Coord(Math.min(begin.x, b.x), Math.min(begin.y, b.y)) : b;
+                end = (end != null) ? new Coord(Math.max(end.x, e.x), Math.max(end.y, e.y)) : e;
+            }
+            if (begin != null) {
+                if (NUtils.player()!=null && begin.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000 && end.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000) {
+                    return null;
+                }
+                return new Pair<Coord2d, Coord2d>(begin.mul(MCache.tilesz), end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
+            }
+        }
+        return null;
+    }
+
     public Pair<Coord2d,Coord2d> getRCArea()
     {
         if(isVisible())
@@ -500,7 +542,9 @@ public class NArea
                         Ingredient.Type.CONTAINER;
                 if(((JSONObject)jout.get(i)).has("th"))
                 {
-                    return new Ingredient(type,name, (Integer)((JSONObject)jout.get(i)).get("th"));
+                    Object thObj = ((JSONObject)jout.get(i)).get("th");
+                    int th = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
+                    return new Ingredient(type,name, th);
                 }
                 return new Ingredient(type,name);
             }

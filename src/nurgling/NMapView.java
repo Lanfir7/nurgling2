@@ -297,7 +297,16 @@ public class NMapView extends MapView
             return; // Зона не найдена
         }
         
-        // ВАЖНО: Проверяем, не создан ли уже dummy для этой зоны
+        // ВАЖНО: Создаем overlay ВСЕГДА, даже если зона скрыта (hide == true)
+        // Это нужно чтобы зона была в nols для макросов
+        // Проверка hide будет в методах поиска зон (findIn, findOut и т.д.)
+        synchronized (nols) {
+            if (!nols.containsKey(id)) {
+                addCustomOverlay(id);
+            }
+        }
+        
+        // Проверяем, не создан ли уже dummy для этой зоны
         if (area.gid != Long.MIN_VALUE && dummys.containsKey(area.gid)) {
             // Dummy уже существует, проверяем overlay
             Gob existingDummy = dummys.get(area.gid);
@@ -307,6 +316,7 @@ public class NMapView extends MapView
             }
         }
         
+        // Создаем dummy и label только если зона видима и не скрыта
         Pair<Coord2d,Coord2d> space = area.getRCArea();
 
         if(space!=null)
@@ -328,14 +338,6 @@ public class NMapView extends MapView
             dummy.addcustomol(new NAreaLabel(dummy, area));
             dummys.put(dummy.id, dummy);
             glob.oc.add(dummy);
-            
-            // ВАЖНО: Создаем overlay синхронизированно, чтобы избежать ConcurrentModificationException
-            // Проверяем, не создан ли уже overlay для этой зоны
-            synchronized (nols) {
-                if (!nols.containsKey(id)) {
-                    addCustomOverlay(id);
-                }
-            }
         }
     }
 
