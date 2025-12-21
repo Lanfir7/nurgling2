@@ -313,9 +313,18 @@ public class AreaDBManager {
     }
     
     /**
-     * Удаляет зону
+     * Удаляет зону (без пропуска синхронизации - для обратной совместимости)
      */
     public void deleteArea(int areaId) {
+        deleteArea(areaId, false);
+    }
+    
+    /**
+     * Удаляет зону
+     * @param areaId ID зоны для удаления
+     * @param skipServerSync если true, не отправляет команду удаления на сервер (используется при синхронизации)
+     */
+    public void deleteArea(int areaId, boolean skipServerSync) {
         try {
             // Получаем зону перед удалением для синхронизации
             NArea area = getActiveStorage().getArea(areaId);
@@ -339,16 +348,32 @@ public class AreaDBManager {
                 }
             }
             
-            // Синхронизируем удаление с сервером (если включено)
-            if (syncManager != null && syncManager.isEnabled() && area != null) {
+            // Синхронизируем удаление с сервером (если включено и не пропущено)
+            // ВАЖНО: Не отправляем команду удаления на сервер, если зона уже была удалена на сервере
+            // (т.е. если удаление происходит во время синхронизации из-за того, что зоны нет на сервере)
+            // Это предотвращает отправку команд удаления для зон, которые уже удалены на сервере
+            if (!skipServerSync && syncManager != null && syncManager.isEnabled() && area != null) {
                 if (area.uuid != null && !area.uuid.isEmpty()) {
-                    System.out.println("AreaDBManager: Syncing deletion of zone " + areaId + " (" + 
-                                     (area.name != null ? area.name : "unknown") + ") to server (UUID: " + area.uuid + ")");
-                    syncManager.deleteZone(area);
+                    // Проверяем, была ли зона синхронизирована ранее
+                    // Если зона была синхронизирована, но её нет на сервере - значит она уже удалена на сервере
+                    // В этом случае НЕ отправляем команду удаления на сервер
+                    boolean wasSynced = syncManager.isZoneSynced(area.uuid);
+                    if (wasSynced) {
+                        // Зона была синхронизирована - отправляем команду удаления на сервер
+                        System.out.println("AreaDBManager: Syncing deletion of zone " + areaId + " (" + 
+                                         (area.name != null ? area.name : "unknown") + ") to server (UUID: " + area.uuid + ")");
+                        syncManager.deleteZone(area);
+                    } else {
+                        // Зона не была синхронизирована - не отправляем команду удаления на сервер
+                        System.out.println("AreaDBManager: Zone " + areaId + " (" + 
+                                         (area.name != null ? area.name : "unknown") + ") was not synced, skipping server deletion");
+                    }
                 } else {
                     System.err.println("AreaDBManager: WARNING - Cannot sync deletion of zone " + areaId + 
                                      " (" + (area.name != null ? area.name : "unknown") + "): UUID is null or empty");
                 }
+            } else if (skipServerSync) {
+                System.out.println("AreaDBManager: Skipping server deletion sync (zone was deleted on server)");
             } else if (syncManager == null || !syncManager.isEnabled()) {
                 System.out.println("AreaDBManager: Zone synchronization is disabled, skipping server deletion");
             } else if (area == null) {

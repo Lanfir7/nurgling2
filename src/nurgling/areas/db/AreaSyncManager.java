@@ -357,9 +357,20 @@ public class AreaSyncManager {
         // Получаем зоны с сервера
         List<NArea> serverZones = syncClient.pullZones(updatedAfter);
         
-        // Если сервер вернул пустой список, это нормально - просто нет зон
+        // ВАЖНО: Если сервер вернул null или пустой список, это может быть ошибка запроса
+        // В этом случае НЕ удаляем локальные зоны, так как мы не знаем, действительно ли они удалены на сервере
+        boolean serverRequestFailed = false;
         if (serverZones == null) {
+            System.err.println("AreaSyncManager: Server returned null zones list - skipping deletion check to prevent data loss");
             serverZones = new ArrayList<>();
+            serverRequestFailed = true;
+        } else if (serverZones.isEmpty() && !localAreas.isEmpty()) {
+            // Если сервер вернул пустой список, но у нас есть локальные зоны - это подозрительно
+            // Может быть ошибка запроса или сервер действительно пуст
+            // ВАЖНО: Не удаляем зоны, если запрос мог быть неудачным
+            System.err.println("AreaSyncManager: WARNING - Server returned empty zones list but local areas exist. " +
+                             "This may indicate a server error. Skipping deletion check to prevent data loss.");
+            serverRequestFailed = true;
         }
         
         // Создаем карту локальных зон по UUID для быстрого поиска
@@ -478,23 +489,27 @@ public class AreaSyncManager {
         // и из предыдущей загрузки при инициализации
         
         int deleted = 0;
-        for (NArea localZone : localAreas) {
-            if (localZone.uuid != null && !localZone.uuid.isEmpty()) {
-                // ВАЖНО: Проверяем, была ли зона синхронизирована ранее
-                // Зона считается синхронизированной ТОЛЬКО если она есть в syncedZones
-                // (т.е. имеет last_sync_at в БД, что означает, что она была успешно отправлена на сервер)
-                // НЕ проверяем uuidToAreaId, так как он содержит все зоны с UUID, даже несинхронизированные
-                boolean wasSynced = syncedZones.containsKey(localZone.uuid);
-                boolean inServerUuids = serverUuids.contains(localZone.uuid);
-                
-                // Если зона была синхронизирована (имеет last_sync_at), но её нет на сервере - значит она удалена на сервере
-                // НЕ удаляем зоны, которые никогда не синхронизировались (они просто еще не были отправлены)
-                // ВАЖНО: Проверяем также, что зона действительно была отправлена на сервер (имеет last_sync_at)
-                // Это предотвращает удаление зон, которые были созданы локально, но еще не синхронизированы
-                if (wasSynced && !inServerUuids) {
+        // ВАЖНО: Не удаляем зоны, если запрос к серверу мог быть неудачным
+        // Это предотвращает случайное удаление зон при ошибках сети или сервера
+        if (!serverRequestFailed) {
+            for (NArea localZone : localAreas) {
+                if (localZone.uuid != null && !localZone.uuid.isEmpty()) {
+                    // ВАЖНО: Проверяем, была ли зона синхронизирована ранее
+                    // Зона считается синхронизированной ТОЛЬКО если она есть в syncedZones
+                    // (т.е. имеет last_sync_at в БД, что означает, что она была успешно отправлена на сервер)
+                    // НЕ проверяем uuidToAreaId, так как он содержит все зоны с UUID, даже несинхронизированные
+                    boolean wasSynced = syncedZones.containsKey(localZone.uuid);
+                    boolean inServerUuids = serverUuids.contains(localZone.uuid);
+                    
+                    // Если зона была синхронизирована (имеет last_sync_at), но её нет на сервере - значит она удалена на сервере
+                    // НЕ удаляем зоны, которые никогда не синхронизировались (они просто еще не были отправлены)
+                    // ВАЖНО: Проверяем также, что зона действительно была отправлена на сервер (имеет last_sync_at)
+                    // Это предотвращает удаление зон, которые были созданы локально, но еще не синхронизированы
+                    if (wasSynced && !inServerUuids) {
                     // Зона была удалена на сервере - удаляем её локально
+                    // ВАЖНО: Не отправляем команду удаления на сервер, так как зона уже удалена на сервере
                     try {
-                        dbManager.deleteArea(localZone.id);
+                        dbManager.deleteArea(localZone.id, true); // skipServerSync = true
                         syncedZones.remove(localZone.uuid);
                         uuidToAreaId.remove(localZone.uuid);
                         deleted++;
@@ -521,8 +536,11 @@ public class AreaSyncManager {
                                          " that was deleted on server: " + e.getMessage());
                         e.printStackTrace();
                     }
+                    }
                 }
             }
+        } else {
+            System.out.println("AreaSyncManager: Skipping zone deletion check due to potential server request failure");
         }
         
         return new int[]{created, merged};
@@ -685,6 +703,18 @@ public class AreaSyncManager {
                 e.printStackTrace();
             }
         });
+    }
+    
+    /**
+     * Проверяет, была ли зона синхронизирована с сервером
+     * @param uuid UUID зоны
+     * @return true если зона была синхронизирована (имеет last_sync_at в БД)
+     */
+    public boolean isZoneSynced(String uuid) {
+        if (uuid == null || uuid.isEmpty()) {
+            return false;
+        }
+        return syncedZones.containsKey(uuid);
     }
     
     /**

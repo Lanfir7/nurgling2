@@ -289,10 +289,16 @@ public class ZoneSyncClient {
                 }
             } else {
                 System.err.println("ZoneSyncClient: Failed to pull zones (response code: " + responseCode + ")");
+                // ВАЖНО: При ошибке возвращаем null, а не пустой список
+                // Это позволяет отличить ошибку запроса от пустого ответа сервера
+                return null;
             }
         } catch (Exception e) {
             System.err.println("ZoneSyncClient: Error pulling zones: " + e.getMessage());
             e.printStackTrace();
+            // ВАЖНО: При исключении возвращаем null, а не пустой список
+            // Это позволяет отличить ошибку запроса от пустого ответа сервера
+            return null;
         }
         
         return zones;
