@@ -379,6 +379,7 @@ public class NArea
         }
         return null;
     }
+
     
     /**
      * Получает координаты зоны без проверки hide (для создания overlay)
