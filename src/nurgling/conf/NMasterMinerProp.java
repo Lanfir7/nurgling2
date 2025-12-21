@@ -22,6 +22,9 @@ public class NMasterMinerProp implements JConf {
     /** Порог качества для сброса камня. */
     public float dropThreshold = Float.NaN;
     
+    /** Порог качества для сброса ракух и кэтголдов. */
+    public float shellCatGoldThreshold = Float.NaN;
+    
     /** Порог качества для постановки меток на карте. */
     public float markerThreshold = Float.NaN;
 
@@ -44,6 +47,13 @@ public class NMasterMinerProp implements JConf {
             if (dt instanceof Number) {
                 float val = ((Number) dt).floatValue();
                 dropThreshold = Float.isNaN(val) ? Float.NaN : val;
+            }
+        }
+        if (values.get("shellCatGoldThreshold") != null) {
+            Object dt = values.get("shellCatGoldThreshold");
+            if (dt instanceof Number) {
+                float val = ((Number) dt).floatValue();
+                shellCatGoldThreshold = Float.isNaN(val) ? Float.NaN : val;
             }
         }
         if (values.get("markerThreshold") != null) {
@@ -82,6 +92,9 @@ public class NMasterMinerProp implements JConf {
         j.put("showCalc", showCalc);
         if (!Float.isNaN(dropThreshold)) {
             j.put("dropThreshold", dropThreshold);
+        }
+        if (!Float.isNaN(shellCatGoldThreshold)) {
+            j.put("shellCatGoldThreshold", shellCatGoldThreshold);
         }
         if (!Float.isNaN(markerThreshold)) {
             j.put("markerThreshold", markerThreshold);

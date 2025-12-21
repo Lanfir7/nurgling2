@@ -34,7 +34,8 @@ public class MasterMinerWnd extends Window {
     private final Label catGoldLbl;    // Кэт голд
     private final Label rakuhLbl;       // Ракуха
     private final Label counterLbl;    // Счетчик выкопанных камней
-    private final TextEntry thresholdEntry;
+    private final TextEntry thresholdEntry; // Порог сброса для камней
+    private final TextEntry shellCatGoldThresholdEntry; // Порог сброса для ракух и кэтголдов
     private MasterMiner masterMinerBot; // Ссылка на бот для переключения инструментов
 
     private int totalStonesMined = 0;
@@ -64,10 +65,15 @@ public class MasterMinerWnd extends Window {
         // Загружаем сохраненные настройки
         NMasterMinerProp prop = loadSettings();
         String savedDropThreshold = "";
+        String savedShellCatGoldThreshold = "";
         if (prop != null) {
             if (!Float.isNaN(prop.dropThreshold)) {
                 savedDropThreshold = String.valueOf((int)prop.dropThreshold == prop.dropThreshold ? 
                     (int)prop.dropThreshold : prop.dropThreshold);
+            }
+            if (!Float.isNaN(prop.shellCatGoldThreshold)) {
+                savedShellCatGoldThreshold = String.valueOf((int)prop.shellCatGoldThreshold == prop.shellCatGoldThreshold ? 
+                    (int)prop.shellCatGoldThreshold : prop.shellCatGoldThreshold);
             }
         }
 
@@ -112,6 +118,27 @@ public class MasterMinerWnd extends Window {
             }
         }, setBtn1Pos);
         cur = thresholdEntry.pos("bl").add(0, UI.scale(6));
+        
+        // Порог сброса для ракух и кэтголдов
+        add(new Label("Drop threshold (Shell/Cat Gold):"), cur);
+        cur = cur.add(UI.scale(0, UI.scale(18)));
+        shellCatGoldThresholdEntry = add(new TextEntry(UI.scale(80), savedShellCatGoldThreshold) {
+            @Override
+            public void changed() {
+                super.changed();
+                // Сохраняем при изменении текста
+                saveSettings();
+            }
+        }, cur);
+        Coord setBtn2Pos = shellCatGoldThresholdEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
+        add(new Button(UI.scale(40), "Set") {
+            @Override
+            public void click() {
+                super.click();
+                saveSettings();
+            }
+        }, setBtn2Pos);
+        cur = shellCatGoldThresholdEntry.pos("bl").add(0, UI.scale(6));
 
         // Кнопка Switch для смены кирки/топора между руками и рюкзаком
         add(new Button(UI.scale(160), "Switch") {
@@ -344,6 +371,16 @@ public class MasterMinerWnd extends Window {
         }
     }
     
+    public double getShellCatGoldThreshold() {
+        try {
+            String txt = shellCatGoldThresholdEntry.text().trim();
+            if (txt.isEmpty()) return Double.NaN;
+            return Double.parseDouble(txt.replace(',', '.'));
+        } catch (Exception e) {
+            return Double.NaN;
+        }
+    }
+    
     
     /**
      * Загружает сохраненные настройки
@@ -375,7 +412,7 @@ public class MasterMinerWnd extends Window {
                     }
                 }
                 
-                // Сохраняем порог сброса
+                // Сохраняем порог сброса для камней
                 try {
                     String dropText = thresholdEntry.text().trim();
                     if (!dropText.isEmpty()) {
@@ -385,6 +422,18 @@ public class MasterMinerWnd extends Window {
                     }
                 } catch (Exception e) {
                     prop.dropThreshold = Float.NaN;
+                }
+                
+                // Сохраняем порог сброса для ракух и кэтголдов
+                try {
+                    String shellCatGoldText = shellCatGoldThresholdEntry.text().trim();
+                    if (!shellCatGoldText.isEmpty()) {
+                        prop.shellCatGoldThreshold = Float.parseFloat(shellCatGoldText.replace(',', '.'));
+                    } else {
+                        prop.shellCatGoldThreshold = Float.NaN;
+                    }
+                } catch (Exception e) {
+                    prop.shellCatGoldThreshold = Float.NaN;
                 }
                 
                 NMasterMinerProp.set(prop);

@@ -162,6 +162,10 @@ public class NConfig
         showQuestGiverNames,
         showThingwallNames,
         showPartyMemberNames,
+        showProspectingIcons,
+        showQuarryartzIcons,
+        showOreSpotIcons,
+        showGemstoneIcons,
         trackingVectors,
         randomAreaColor,
         treeScaleDisableZoomHide,
@@ -443,6 +447,10 @@ public class NConfig
         conf.put(Key.showQuestGiverNames, true);
         conf.put(Key.showThingwallNames, true);
         conf.put(Key.showPartyMemberNames, true);
+        conf.put(Key.showProspectingIcons, true);
+        conf.put(Key.showQuarryartzIcons, true);
+        conf.put(Key.showOreSpotIcons, true);
+        conf.put(Key.showGemstoneIcons, true);
         
         // Map tracking vectors
         conf.put(Key.trackingVectors, false);

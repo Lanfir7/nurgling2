@@ -3,6 +3,7 @@ package nurgling.widgets;
 import haven.*;
 import haven.Locked;
 import nurgling.NGameUI;
+import nurgling.actions.bots.MasterMiner;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -69,11 +70,11 @@ public class OreSearchWindow extends Window {
     private List<String> getDistinctOreTypes() {
         if (gui == null || gui.labeledMarkService == null) return new ArrayList<>();
 
-        // Получаем все метки кроме квариарца (у него своё окно поиска)
+        // Получаем все метки кроме квариарца и драгоценных камней (у них свои окна поиска)
         Collection<LabeledMinimapMark> allMarks = gui.labeledMarkService.getAllMarks();
         return allMarks.stream()
             .map(mark -> mark.resourceType)
-            .filter(type -> type != null && !type.equals("Quarryartz")) // Исключаем квариарц
+            .filter(type -> type != null && !type.equals("Quarryartz") && !MasterMiner.isGemstone(type)) // Исключаем квариарц и драгоценные камни
             .distinct()
             .sorted()
             .collect(Collectors.toList());
@@ -130,10 +131,15 @@ public class OreSearchWindow extends Window {
         }
         final double finalThreshold = threshold;
 
-        // Получаем все метки (кроме квариарца)
+        // Получаем все метки (кроме квариарца и драгоценных камней)
         Collection<LabeledMinimapMark> allMarks = gui.labeledMarkService.getAllMarks();
         List<LabeledMinimapMark> results = allMarks.stream()
             .filter(mark -> {
+                // Исключаем квариарц и драгоценные камни
+                if (mark.resourceType == null || mark.resourceType.equals("Quarryartz") || MasterMiner.isGemstone(mark.resourceType)) {
+                    return false;
+                }
+                
                 // Фильтр по типу руды/камня
                 if (!selectedOreType.equals("Any") && !mark.resourceType.equals(selectedOreType)) {
                     return false;
@@ -276,5 +282,7 @@ public class OreSearchWindow extends Window {
         }
     }
 }
+
+
 
 

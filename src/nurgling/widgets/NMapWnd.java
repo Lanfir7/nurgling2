@@ -1,6 +1,7 @@
 package nurgling.widgets;
 
 import haven.*;
+import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 
@@ -18,6 +19,7 @@ public class NMapWnd extends MapWnd {
     MapToggleButton prospectBtn;
     MapToggleButton quarryartzBtn;
     MapToggleButton oreSpotsBtn; // Кнопка для переключения видимости маркеров спотов руд
+    MapToggleButton gemstonesBtn; // Кнопка для переключения видимости маркеров драгоценных камней
     MapToggleButton vectorClearBtn;
     TextEntry markerSearchField;
     private static final int btnw = UI.scale(95);
@@ -85,6 +87,12 @@ public class NMapWnd extends MapWnd {
         oreSpotsBtn.a = getOreSpotsIconsState(); // Set initial state
         oreSpotsBtn.changed(val -> setOreSpotsIconsState(val));
         
+        // Gemstones button (для маркеров драгоценных камней)
+        btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
+        gemstonesBtn = add(new MapToggleButton("tree", "Toggle Gemstone markers (Right-click: Gemstone Search)", this::openGemstoneSearch), btnPos);
+        gemstonesBtn.a = getGemstonesIconsState(); // Set initial state
+        gemstonesBtn.changed(val -> setGemstonesIconsState(val));
+        
         // Vector clear button (leftmost)
         btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
         vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null), btnPos);
@@ -144,7 +152,9 @@ public class NMapWnd extends MapWnd {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null && gui.mmap instanceof NMiniMap)
             return ((NMiniMap) gui.mmap).showProspectingIcons;
-        return true;
+        // Загружаем из конфига
+        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showProspectingIcons);
+        return saved != null ? saved : true;
     }
 
     private void setProspectingIconsState(boolean val) {
@@ -153,13 +163,18 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showProspectingIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showProspectingIcons = val;
+        // Сохраняем состояние
+        NConfig.set(NConfig.Key.showProspectingIcons, val);
+        NConfig.needUpdate();
     }
 
     private boolean getQuarryartzIconsState() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null && gui.mmap instanceof NMiniMap)
             return ((NMiniMap) gui.mmap).showQuarryartzIcons;
-        return true;
+        // Загружаем из конфига
+        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showQuarryartzIcons);
+        return saved != null ? saved : true;
     }
 
     private void setQuarryartzIconsState(boolean val) {
@@ -168,13 +183,18 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showQuarryartzIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showQuarryartzIcons = val;
+        // Сохраняем состояние
+        NConfig.set(NConfig.Key.showQuarryartzIcons, val);
+        NConfig.needUpdate();
     }
     
     private boolean getOreSpotsIconsState() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null && gui.mmap instanceof NMiniMap)
             return ((NMiniMap) gui.mmap).showOreSpotIcons;
-        return true;
+        // Загружаем из конфига
+        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showOreSpotIcons);
+        return saved != null ? saved : true;
     }
     
     private void setOreSpotsIconsState(boolean val) {
@@ -183,6 +203,47 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showOreSpotIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showOreSpotIcons = val;
+        // Сохраняем состояние
+        NConfig.set(NConfig.Key.showOreSpotIcons, val);
+        NConfig.needUpdate();
+    }
+    
+    private boolean getGemstonesIconsState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            return ((NMiniMap) gui.mmap).showGemstoneIcons;
+        // Загружаем из конфига
+        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showGemstoneIcons);
+        return saved != null ? saved : true;
+    }
+    
+    private void setGemstonesIconsState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            ((NMiniMap) gui.mmap).showGemstoneIcons = val;
+        if(view instanceof NMiniMap)
+            ((NMiniMap) view).showGemstoneIcons = val;
+        // Сохраняем состояние
+        NConfig.set(NConfig.Key.showGemstoneIcons, val);
+        NConfig.needUpdate();
+    }
+    
+    private void openGemstoneSearch() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null) {
+            if(gui.gemstoneSearchWindow != null) {
+                if(gui.gemstoneSearchWindow.visible()) {
+                    gui.gemstoneSearchWindow.hide();
+                } else {
+                    gui.gemstoneSearchWindow.show();
+                    gui.gemstoneSearchWindow.raise();
+                }
+            } else {
+                gui.gemstoneSearchWindow = new GemstoneSearchWindow(gui);
+                gui.add(gui.gemstoneSearchWindow, new Coord(100, 100));
+                gui.gemstoneSearchWindow.show();
+            }
+        }
     }
 
     private void openTreeSearch() {

@@ -15,6 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 import java.awt.image.BufferedImage;
@@ -29,6 +31,12 @@ public class LabeledMarkService implements ProfileAwareService {
     private String dataFile;
     private final NGameUI gui;
     private String genus;
+    private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "LabeledMarkService-Save");
+        t.setDaemon(true);
+        return t;
+    });
+    private volatile boolean saveScheduled = false;
 
     public LabeledMarkService(NGameUI gui) {
         this.gui = gui;
@@ -91,9 +99,36 @@ public class LabeledMarkService implements ProfileAwareService {
             // Create and add new mark
             LabeledMinimapMark mark = new LabeledMinimapMark(label, resourceType, segmentId, tileCoords, iconImage);
             labeledMarks.put(mark.getLocationId(), mark);
-            saveLabeledMarks();
+            // Сохраняем асинхронно, чтобы избежать пролога
+            scheduleSave();
         } finally {
             lock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Планирует асинхронное сохранение (чтобы избежать пролога при установке маркера)
+     */
+    private void scheduleSave() {
+        if (!saveScheduled) {
+            saveScheduled = true;
+            saveExecutor.submit(() -> {
+                try {
+                    Thread.sleep(100); // Небольшая задержка для батчинга
+                    lock.writeLock().lock();
+                    try {
+                        saveLabeledMarks();
+                    } finally {
+                        lock.writeLock().unlock();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    // Игнорируем ошибки сохранения
+                } finally {
+                    saveScheduled = false;
+                }
+            });
         }
     }
 
@@ -135,7 +170,7 @@ public class LabeledMarkService implements ProfileAwareService {
         try {
             boolean removed = labeledMarks.remove(locationId) != null;
             if (removed) {
-                saveLabeledMarks();
+                scheduleSave(); // Сохраняем асинхронно
             }
             return removed;
         } finally {
@@ -264,7 +299,7 @@ public class LabeledMarkService implements ProfileAwareService {
                 }
             }
             if (removed > 0) {
-                saveLabeledMarks();
+                scheduleSave(); // Сохраняем асинхронно
             }
             return removed;
         } finally {
@@ -304,6 +339,17 @@ public class LabeledMarkService implements ProfileAwareService {
      * Dispose the service and cleanup resources.
      */
     public void dispose() {
+        // Ждем завершения всех сохранений перед закрытием
+        try {
+            saveExecutor.shutdown();
+            if (!saveExecutor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                saveExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            saveExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        
         lock.writeLock().lock();
         try {
             saveLabeledMarks();

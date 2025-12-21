@@ -3,6 +3,7 @@ package nurgling.widgets;
 import haven.*;
 import haven.res.ui.obj.buddy.Buddy;
 import nurgling.*;
+import nurgling.actions.bots.MasterMiner;
 import nurgling.overlays.map.MinimapClaimRenderer;
 import nurgling.overlays.map.MinimapExploredAreaRenderer;
 import nurgling.tools.ExploredArea;
@@ -41,15 +42,35 @@ NMiniMap extends MiniMap {
     public boolean showProspectingIcons = true;
     public boolean showQuarryartzIcons = true;
     public boolean showOreSpotIcons = true; // Видимость маркеров спотов руд
+    public boolean showGemstoneIcons = true; // Видимость маркеров драгоценных камней
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
 
     private static final Coord2d sgridsz = new Coord2d(new Coord(100,100));
     public NMiniMap(Coord sz, MapFile file) {
         super(sz, file);
+        loadToggleStates();
     }
-
+    
     public NMiniMap(MapFile file) {
         super(file);
+        loadToggleStates();
+    }
+    
+    /**
+     * Загружает состояние тогглов из конфига
+     */
+    private void loadToggleStates() {
+        Boolean prospecting = (Boolean) NConfig.get(NConfig.Key.showProspectingIcons);
+        if (prospecting != null) showProspectingIcons = prospecting;
+        
+        Boolean quarryartz = (Boolean) NConfig.get(NConfig.Key.showQuarryartzIcons);
+        if (quarryartz != null) showQuarryartzIcons = quarryartz;
+        
+        Boolean oreSpots = (Boolean) NConfig.get(NConfig.Key.showOreSpotIcons);
+        if (oreSpots != null) showOreSpotIcons = oreSpots;
+        
+        Boolean gemstones = (Boolean) NConfig.get(NConfig.Key.showGemstoneIcons);
+        if (gemstones != null) showGemstoneIcons = gemstones;
     }
 
     /**
@@ -971,6 +992,11 @@ NMiniMap extends MiniMap {
             
             // Пропускаем метки спотов руд, если они скрыты
             if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) {
+                continue;
+            }
+            
+            // Пропускаем метки драгоценных камней, если они скрыты
+            if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
                 continue;
             }
             
@@ -1954,7 +1980,7 @@ NMiniMap extends MiniMap {
      */
     /**
      * Проверяет, является ли маркер маркером спота руды/камня
-     * Все камни и руды (кроме квариарца) идут в систему спотов
+     * Все камни и руды (кроме квариарца и драгоценных камней) идут в систему спотов
      */
     private boolean isOreSpotMark(String resourceType) {
         if (resourceType == null) return false;
@@ -1962,8 +1988,20 @@ NMiniMap extends MiniMap {
         if ("Quarryartz".equals(resourceType)) {
             return false;
         }
+        // Драгоценные камни - отдельный слой, не спот
+        if (MasterMiner.isGemstone(resourceType)) {
+            return false;
+        }
         // Все остальные камни и руды - споты
         return true;
+    }
+    
+    /**
+     * Проверяет, является ли маркер маркером драгоценного камня
+     */
+    private boolean isGemstoneMark(String resourceType) {
+        if (resourceType == null) return false;
+        return MasterMiner.isGemstone(resourceType);
     }
     
     private LabeledMinimapMark labeledMarkAt(Coord screenCoord) {
@@ -1984,6 +2022,10 @@ NMiniMap extends MiniMap {
             }
             // Пропускаем метки руд (споты), если они скрыты
             if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) {
+                continue;
+            }
+            // Пропускаем метки драгоценных камней, если они скрыты
+            if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
                 continue;
             }
             

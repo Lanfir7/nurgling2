@@ -245,6 +245,9 @@ public class MasterMiner extends ActionWithFinal {
                             if ("Quarryartz".equals(stoneType)) {
                                 // Квариарц ставится четко в месте выкопан
                                 addQuarryartzMarker(gui, stoneName, wallQ);
+                            } else if (isGemstone(stoneName)) {
+                                // Драгоценные камни - отдельный слой, ставим с фактическим качеством (f3)
+                                addGemstoneMarker(gui, stoneName, f3);
                             } else {
                                 // Остальные камни и руды - система спотов (обновление в радиусе 30 клеток)
                                 // Все камни ставим как споты (обновление в радиусе 30 клеток)
@@ -257,7 +260,14 @@ public class MasterMiner extends ActionWithFinal {
 
             // проверка порога и сброс камня (только если не стак)
             // Сброс происходит по фактическому качеству камня (f3), а не по qWall
-            double threshold = wnd.getDropThreshold();
+            // Для ракух и кэтголдов используется отдельный порог
+            double threshold;
+            if ("Shell".equals(stoneType) || "Cat Gold".equals(stoneType)) {
+                threshold = wnd.getShellCatGoldThreshold();
+            } else {
+                threshold = wnd.getDropThreshold();
+            }
+            
             if (!Double.isNaN(threshold) && f3 < threshold) {
                 // проверяем, что это действительно камень из инвентаря, а не инструмент
                 if (newItem != null && newItem.parent == gui.getInventory()) {
@@ -326,6 +336,18 @@ public class MasterMiner extends ActionWithFinal {
             }
         }
         return false;
+    }
+    
+    /**
+     * Проверяет, является ли камень драгоценным (cut, faceted, jotun size)
+     */
+    public static boolean isGemstone(String stoneName) {
+        if (stoneName == null) return false;
+        String name = stoneName.toLowerCase();
+        // Проверяем паттерны для драгоценных камней
+        return name.contains("cut") || 
+               name.contains("faceted") || 
+               name.contains("jotun");
     }
     
     /**
@@ -720,6 +742,122 @@ public class MasterMiner extends ActionWithFinal {
             "gfx/tiles/rocks/" + original,
             "gfx/terobjs/bumblings/" + normalized,
             "gfx/terobjs/bumblings/" + original
+        };
+        
+        for (String path : possiblePaths) {
+            try {
+                Resource res = Resource.remote().loadwait(path);
+                return res.layer(Resource.imgc).img;
+            } catch (Exception e) {
+                // Пробуем следующий путь
+                continue;
+            }
+        }
+        
+        // Если не удалось загрузить - возвращаем null (будет использован fallback)
+        return null;
+    }
+    
+    /**
+     * Добавляет метку на карту для драгоценного камня
+     * Ставит с фактическим качеством (f3), без применения формул
+     * Использует систему спотов (обновление в радиусе 30 клеток)
+     */
+    private void addGemstoneMarker(NGameUI gui, String gemName, double quality) {
+        try {
+            if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) {
+                return;
+            }
+            
+            Gob player = NUtils.player();
+            if (player == null) {
+                return;
+            }
+            
+            // Получаем позицию игрока и направление копания
+            Coord2d playerPos = player.rc;
+            double angle = player.a; // угол направления игрока
+            
+            // Смещение в направлении копания (примерно 13.75 тайлов)
+            Coord2d minedTile = new Coord2d(
+                playerPos.x + (Math.cos(angle) * 13.75),
+                playerPos.y + (Math.sin(angle) * 13.75)
+            );
+            
+            // Получаем segment ID и tile coordinates
+            long segmentId = gui.mmap.sessloc.seg.id;
+            Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
+            
+            // Ищем существующий маркер этого же драгоценного камня в радиусе 30 клеток
+            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
+                gui.labeledMarkService.getMarksByResourceType(gemName);
+            
+            nurgling.widgets.LabeledMinimapMark nearbyMark = null;
+            for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
+                // Проверяем, что это именно тот же драгоценный камень
+                if (mark.segmentId == segmentId && gemName.equals(mark.resourceType)) {
+                    int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
+                    int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
+                    // Проверяем радиус 30 тайлов
+                    if (distX <= 30 && distY <= 30) {
+                        nearbyMark = mark;
+                        break;
+                    }
+                }
+            }
+            
+            if (nearbyMark != null) {
+                // Маркер найден рядом - проверяем качество
+                // Обновляем ТОЛЬКО если выкопал выше
+                try {
+                    // Парсим качество из метки (формат "q130")
+                    double existingQ = 0;
+                    if (nearbyMark.label != null && nearbyMark.label.startsWith("q")) {
+                        existingQ = Double.parseDouble(nearbyMark.label.substring(1).trim());
+                    }
+                    
+                    // Если новое качество выше - обновляем маркер
+                    if (quality > existingQ) {
+                        // Удаляем старый маркер
+                        gui.labeledMarkService.removeMark(nearbyMark);
+                        
+                        // Создаем новый с обновленным качеством
+                        String label = String.format("q%.0f", quality);
+                        BufferedImage iconImage = getGemstoneIcon(gemName);
+                        // Создаем маркер даже если иконка не загрузилась (используется fallback)
+                        gui.labeledMarkService.addLabeledMark(label, gemName, segmentId, tileCoords, iconImage);
+                    }
+                    // Если качество не выше - не трогаем маркер
+                } catch (Exception e) {
+                    // Игнорируем ошибки парсинга
+                }
+            } else {
+                // Маркер не найден - создаем новый
+                String label = String.format("q%.0f", quality);
+                BufferedImage iconImage = getGemstoneIcon(gemName);
+                // Создаем маркер даже если иконка не загрузилась (используется fallback)
+                gui.labeledMarkService.addLabeledMark(label, gemName, segmentId, tileCoords, iconImage);
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+    }
+    
+    /**
+     * Получает иконку драгоценного камня (огранка бриллиант размера йотун)
+     */
+    public static BufferedImage getGemstoneIcon(String gemName) {
+        if (gemName == null) return null;
+        
+        // Пробуем найти иконку огранки бриллиант размера йотун
+        // Путь может быть: gfx/invobjs/gems/cut-diamond-jotun или подобный
+        String[] possiblePaths = {
+            "gfx/invobjs/gems/cut-diamond-jotun",
+            "gfx/invobjs/gems/diamond-cut-jotun",
+            "gfx/invobjs/gems/jotun-cut-diamond",
+            "gfx/invobjs/gems/cut-diamond",
+            "gfx/invobjs/gems/diamond",
+            "gfx/invobjs/gems/gemstone"
         };
         
         for (String path : possiblePaths) {

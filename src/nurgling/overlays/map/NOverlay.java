@@ -44,6 +44,12 @@ public class NOverlay extends MapView.MapRaster
 
     public void tick() {
         super.tick();
+        // ВАЖНО: Проверяем, что area инициализирован перед использованием
+        // area инициализируется в super.tick(), но может быть null если NUtils.getGameUI() == null
+        if (area == null) {
+            return;
+        }
+        
         // ВАЖНО: Оверлеи зон (визуальное выделение) отображаются ВСЕГДА
         // Проверяем только локальное скрытие зоны (hide) с учетом тоггла
         if (id >= 0) {
@@ -70,9 +76,8 @@ public class NOverlay extends MapView.MapRaster
             }
         }
         
-        // ВАЖНО: Всегда вызываем base.tick() и outl.tick() для обновления оверлея
-        // area - это поле родительского класса MapRaster, которое может быть не инициализировано
-        // но base и outl должны обновляться всегда
+        // ВАЖНО: Вызываем base.tick() и outl.tick() только если area инициализирован
+        // base и outl используют area через this.this$0.area, поэтому нужна проверка
         base.tick();
         outl.tick();
     }
