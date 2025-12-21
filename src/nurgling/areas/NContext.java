@@ -973,8 +973,20 @@ public class NContext {
             for(Integer id : nids) {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    // Проверяем, что зона содержит этот предмет (без проверки порога здесь, порог проверяется позже)
-                    if (cand.isVisible() && cand.containOut(name) && cand.getRCArea() != null) {
+                    if (cand == null) continue;
+                    
+                    // ВАЖНО: Не проверяем isVisible() здесь, так как для синхронизированных зон
+                    // grid может быть еще не загружен, но зона должна быть доступна ботам
+                    // Проверяем только containOut и getRCArea (который может вернуть null если grid не загружен)
+                    // Если getRCArea() == null, зона все равно может быть использована, если есть space
+                    if (cand.containOut(name)) {
+                        // Пытаемся получить координаты зоны
+                        Pair<Coord2d, Coord2d> rcArea = cand.getRCArea();
+                        // Если getRCArea() вернул null (grid не загружен), проверяем есть ли space
+                        if (rcArea == null && (cand.space == null || cand.space.space == null || cand.space.space.isEmpty())) {
+                            continue; // Нет координат и нет space - пропускаем
+                        }
+                        
                         NArea.Ingredient output = cand.getOutput(name);
                         if (output != null) {
                             // Проверяем путь только если зона подходит по порогу качества
@@ -982,7 +994,15 @@ public class NContext {
                             int areaTh = output.th;
                             if (areaTh == -1 || th >= areaTh) {
                                 // Порог не указан (принимает все) или качество предмета >= порога зоны
-                                if (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand)) != null) {
+                                // ВАЖНО: Если getRCArea() == null, пытаемся найти путь используя space напрямую
+                                if (rcArea != null) {
+                                    // Grid загружен - проверяем путь через routeGraphManager
+                                    if (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand)) != null) {
+                                        areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
+                                    }
+                                } else {
+                                    // Grid не загружен, но есть space - добавляем зону без проверки пути
+                                    // Путь будет проверен позже, когда grid загрузится
                                     areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
                                 }
                             }

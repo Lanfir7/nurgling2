@@ -319,7 +319,27 @@ public class NMapView extends MapView
         // ВАЖНО: Используем getRawRCArea() для получения координат независимо от hide
         // Это нужно чтобы overlay создавался для всех зон, включая скрытые
         // getRCArea() возвращает null для скрытых зон, что мешает созданию overlay
+        // ВАЖНО: Если grid еще не загружен (isVisible() == false), все равно создаем overlay
+        // чтобы зона была видна ботам даже до загрузки grid
         Pair<Coord2d,Coord2d> space = area.getRawRCArea();
+        
+        // Если getRawRCArea() вернул null (grid не загружен), пытаемся получить координаты из space напрямую
+        if (space == null && area.space != null && area.space.space != null && !area.space.space.isEmpty()) {
+            // Пытаемся получить координаты из первого доступного grid
+            Long firstGridId = area.space.space.keySet().iterator().next();
+            NArea.VArea vArea = area.space.space.get(firstGridId);
+            if (vArea != null && vArea.area != null) {
+                // Используем координаты из space, даже если grid еще не загружен
+                Coord begin = vArea.area.ul;
+                Coord end = vArea.area.br;
+                if (begin != null && end != null) {
+                    space = new Pair<Coord2d, Coord2d>(
+                        begin.mul(MCache.tilesz), 
+                        end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz)
+                    );
+                }
+            }
+        }
 
         if(space!=null)
         {

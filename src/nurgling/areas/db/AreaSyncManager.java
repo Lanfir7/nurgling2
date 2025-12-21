@@ -1130,10 +1130,13 @@ public class AreaSyncManager {
                     if (existingArea == null) {
                         // Новая зона - добавляем
                         mapView.glob.map.areas.put(areaId, dbArea);
+                        // ВАЖНО: Выполняем те же действия, что и при создании через UI
                         // Создаем overlay синхронизированно
                         synchronized (mapView.nols) {
                             mapView.createAreaLabel(areaId);
                         }
+                        // Подключаем к графу маршрутов (как в addArea)
+                        mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(dbArea);
                     } else {
                         // Существующая зона - обновляем данные
                         updateAreaData(existingArea, dbArea);
