@@ -967,12 +967,15 @@ public class AreaSyncManager {
      */
     private void updateAreasInMemory() {
         try {
+            System.out.println("AreaSyncManager.updateAreasInMemory: Starting memory update");
             // Проверяем, что игра запущена
             if (nurgling.NUtils.getGameUI() == null || nurgling.NUtils.getGameUI().map == null) {
+                System.out.println("AreaSyncManager.updateAreasInMemory: GameUI or map is null, skipping");
                 return;
             }
             
             nurgling.NMapView mapView = (nurgling.NMapView) nurgling.NUtils.getGameUI().map;
+            System.out.println("AreaSyncManager.updateAreasInMemory: MapView found, areas in memory: " + mapView.glob.map.areas.size() + ", nols.size: " + mapView.nols.size());
             
             // Загружаем актуальные зоны из БД
             Map<Integer, nurgling.areas.NArea> dbAreas = new HashMap<>();
@@ -1142,6 +1145,7 @@ public class AreaSyncManager {
                         mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(dbArea);
                     } else {
                         // Существующая зона - обновляем данные
+                        System.out.println("AreaSyncManager.updateAreasInMemory: Updating existing zone " + areaId + " (" + dbArea.name + ") from sync");
                         updateAreaData(existingArea, dbArea);
                         
                         // ВАЖНО: Сбрасываем gid чтобы createAreaLabel() пересоздал dummy и overlay
@@ -1156,12 +1160,15 @@ public class AreaSyncManager {
                         
                         // Пересоздаем overlay если нужно
                         synchronized (mapView.nols) {
+                            System.out.println("AreaSyncManager.updateAreasInMemory: Recreating overlay for zone " + areaId + ", nols.size before=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
                             nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);
                             if (nol != null) {
                                 nol.remove();
                                 mapView.nols.remove(areaId);
+                                System.out.println("AreaSyncManager.updateAreasInMemory: Removed old overlay for zone " + areaId);
                             }
                             mapView.createAreaLabel(areaId);
+                            System.out.println("AreaSyncManager.updateAreasInMemory: Overlay recreated for zone " + areaId + ", nols.size after=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
                         }
                         
                     }
