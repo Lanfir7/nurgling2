@@ -1,10 +1,7 @@
 #Build Number for ANT. Do not edit!
-<<<<<<< HEAD
-#Sun Dec 21 19:14:20 EET 2025
+#Sun Dec 21 19:17:38 EET 2025
+=\=\=\=\=\=\=
 1=
+<<<<<<<=HEAD
+>>>>>>>=7d8337aded769dc5cf6406e133f224b40b32e9b3
 build.number=30
-=======
-#Sun Dec 21 19:01:12 EET 2025
-1=
-build.number=29
->>>>>>> 7d8337aded769dc5cf6406e133f224b40b32e9b3
