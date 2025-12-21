@@ -218,12 +218,16 @@ public class NMapView extends MapView
         }
 
         super.draw(g);
+        // ВАЖНО: Создаем копию коллекции для безопасной итерации,
+        // чтобы избежать ConcurrentModificationException при модификации из других потоков
+        // Создаем копию внутри synchronized блока, чтобы гарантировать атомарность
+        ArrayList<Gob> dummysCopy;
         synchronized (dummys) {
-            // Создаем копию коллекции для безопасной итерации,
-            // чтобы избежать ConcurrentModificationException при модификации из других потоков
-            for (Gob dummy : new ArrayList<>(dummys.values())) {
-                dummy.gtick(g.out);
-            }
+            dummysCopy = new ArrayList<>(dummys.values());
+        }
+        // Итерируемся по копии вне synchronized блока, чтобы не блокировать другие потоки
+        for (Gob dummy : dummysCopy) {
+            dummy.gtick(g.out);
         }
         
         // Draw path line from player to click destination
