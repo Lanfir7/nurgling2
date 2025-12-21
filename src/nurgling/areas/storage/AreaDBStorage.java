@@ -193,33 +193,69 @@ public class AreaDBStorage implements AreaStorage {
             stmt.setInt(1, area.id);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    JSONObject output = new JSONObject();
-                    output.put("name", rs.getString("name"));
-                    String type = rs.getString("type");
-                    if (type != null) {
-                        output.put("type", type);
-                    }
-                    int th = rs.getInt("th");
-                    if (!rs.wasNull() && th >= 0) {
-                        output.put("th", th);
-                    }
-                    // Загружаем данные об изображении если они есть
+                    // ВАЖНО: Пытаемся загрузить полный JSON объект из icon_data
+                    // Если icon_data содержит полный JSON объект (новый формат), используем его
+                    // Иначе загружаем старый формат (отдельные поля)
                     String iconData = rs.getString("icon_data");
+                    JSONObject output = null;
+                    
                     if (iconData != null && !rs.wasNull() && !iconData.isEmpty()) {
                         try {
-                            JSONObject iconJson = new JSONObject(iconData);
-                            // Копируем поля из icon_data в основной объект
-                            if (iconJson.has("layer")) {
-                                output.put("layer", iconJson.get("layer"));
-                            }
-                            if (iconJson.has("static")) {
-                                output.put("static", iconJson.get("static"));
+                            // Пытаемся распарсить как полный JSON объект
+                            JSONObject parsedJson = new JSONObject(iconData);
+                            // Проверяем, содержит ли он поле "name" - если да, это полный объект
+                            if (parsedJson.has("name")) {
+                                output = parsedJson;
+                            } else {
+                                // Старый формат - только layer/static, создаем объект из отдельных полей
+                                output = new JSONObject();
+                                output.put("name", rs.getString("name"));
+                                String type = rs.getString("type");
+                                if (type != null) {
+                                    output.put("type", type);
+                                }
+                                int th = rs.getInt("th");
+                                if (!rs.wasNull() && th >= 0) {
+                                    output.put("th", th);
+                                }
+                                // Копируем поля из icon_data
+                                if (parsedJson.has("layer")) {
+                                    output.put("layer", parsedJson.get("layer"));
+                                }
+                                if (parsedJson.has("static")) {
+                                    output.put("static", parsedJson.get("static"));
+                                }
                             }
                         } catch (Exception e) {
-                            // Игнорируем ошибки парсинга icon_data
+                            // Если не удалось распарсить как JSON, используем старый формат
+                            output = new JSONObject();
+                            output.put("name", rs.getString("name"));
+                            String type = rs.getString("type");
+                            if (type != null) {
+                                output.put("type", type);
+                            }
+                            int th = rs.getInt("th");
+                            if (!rs.wasNull() && th >= 0) {
+                                output.put("th", th);
+                            }
+                        }
+                    } else {
+                        // Нет icon_data - используем только отдельные поля
+                        output = new JSONObject();
+                        output.put("name", rs.getString("name"));
+                        String type = rs.getString("type");
+                        if (type != null) {
+                            output.put("type", type);
+                        }
+                        int th = rs.getInt("th");
+                        if (!rs.wasNull() && th >= 0) {
+                            output.put("th", th);
                         }
                     }
-                    area.jout.put(output);
+                    
+                    if (output != null) {
+                        area.jout.put(output);
+                    }
                 }
             }
         }
@@ -889,20 +925,12 @@ public class AreaDBStorage implements AreaStorage {
                     } else {
                         stmt.setNull(4, Types.INTEGER);
                     }
-                    // Сохраняем данные об изображении (layer или static)
-                    String iconData = null;
-                    if (output.has("layer") || output.has("static")) {
-                        JSONObject iconJson = new JSONObject();
-                        if (output.has("layer")) {
-                            iconJson.put("layer", output.get("layer"));
-                        }
-                        if (output.has("static")) {
-                            iconJson.put("static", output.get("static"));
-                        }
-                        iconData = iconJson.toString();
-                    }
-                    if (iconData != null) {
-                        stmt.setString(5, iconData);
+                    // ВАЖНО: Сохраняем весь JSON объект в icon_data для сохранения всех полей
+                    // Это нужно чтобы не потерять данные при синхронизации (например, для категорий)
+                    // Сохраняем весь объект целиком, чтобы при загрузке восстановить все поля
+                    String fullJsonData = output.toString();
+                    if (fullJsonData != null && !fullJsonData.isEmpty()) {
+                        stmt.setString(5, fullJsonData);
                     } else {
                         stmt.setNull(5, Types.VARCHAR);
                     }
