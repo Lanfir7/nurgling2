@@ -46,6 +46,7 @@ public class QoL extends Panel {
     private CheckBox randomAreaColor;
     private CheckBox treeScaleDisableZoomHide;
     private TextEntry treeScaleMinThresholdEntry;
+    private CheckBox diabloLikeRun;
 
     private Dropbox<String> preferredSpeedDropbox;
     private Dropbox<String> preferredHorseSpeedDropbox;
@@ -220,6 +221,9 @@ public class QoL extends Panel {
         rightPrev = disableDrugEffects = rightColumn.add(new CheckBox("Disable drug/alcohol visual effects"), rightPrev.pos("bl").adds(0, 5));
         rightPrev = randomAreaColor = rightColumn.add(new CheckBox("Random color for new areas"), rightPrev.pos("bl").adds(0, 5));
 
+        rightPrev = rightColumn.add(new Label("● QoL Lanfir"), rightPrev.pos("bl").adds(0, 15));
+        rightPrev = diabloLikeRun = rightColumn.add(new CheckBox("Diablo-like run (auto-click while LMB held)"), rightPrev.pos("bl").adds(0, 5));
+
         rightPrev = rightColumn.add(new Label("● Debug & Development"), rightPrev.pos("bl").adds(0, 15));
         rightPrev = debug = rightColumn.add(new CheckBox("DEBUG"), rightPrev.pos("bl").adds(0, 5));
         rightPrev = printpfmap = rightColumn.add(new CheckBox("Path Finder map in debug"), rightPrev.pos("bl").adds(0, 5));
@@ -291,6 +295,7 @@ public class QoL extends Panel {
         alwaysObfuscate.a = getBool(NConfig.Key.alwaysObfuscate);
         randomAreaColor.a = getBool(NConfig.Key.randomAreaColor);
         treeScaleDisableZoomHide.a = getBool(NConfig.Key.treeScaleDisableZoomHide);
+        diabloLikeRun.a = getBool(NConfig.Key.diabloLikeRun);
         
         Object minThreshold = NConfig.get(NConfig.Key.treeScaleMinThreshold);
         treeScaleMinThresholdEntry.settext(minThreshold == null ? "0" : minThreshold.toString());
@@ -461,6 +466,7 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.alwaysObfuscate, alwaysObfuscate.a);
         NConfig.set(NConfig.Key.randomAreaColor, randomAreaColor.a);
         NConfig.set(NConfig.Key.treeScaleDisableZoomHide, treeScaleDisableZoomHide.a);
+        NConfig.set(NConfig.Key.diabloLikeRun, diabloLikeRun.a);
         
         int minThreshold = parseIntOrDefault(treeScaleMinThresholdEntry.text(), 0);
         NConfig.set(NConfig.Key.treeScaleMinThreshold, minThreshold);

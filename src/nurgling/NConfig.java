@@ -180,7 +180,8 @@ public class NConfig
         volumeOverlay,
         masterminerprop,
         masterminermarkingconfig,
-        equipProxySlots
+        equipProxySlots,
+        diabloLikeRun
     }
 
     public enum BBDisplayMode
@@ -506,6 +507,9 @@ public class NConfig
         defaultEquipProxySlots.add(7);  // HAND_RIGHT
         defaultEquipProxySlots.add(5);  // BELT
         conf.put(Key.equipProxySlots, defaultEquipProxySlots);
+        
+        // Diablo-like running (auto-click on ground while LMB held)
+        conf.put(Key.diabloLikeRun, false);
     }
 
 

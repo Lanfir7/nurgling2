@@ -5,6 +5,7 @@ import haven.render.RenderTree;
 
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
+import static haven.OCache.posres;
 
 import haven.Composite;
 import haven.res.ui.gobcp.Gobcopy;
@@ -53,6 +54,12 @@ public class NMapView extends MapView
     private RouteLabel draggedRouteLabel = null;
     private boolean isDraggingRoutePoint = false;
     private UI.Grab dragGrab = null;
+    
+    // Diablo-like running state
+    private boolean leftMouseButtonHeld = false;
+    private UI.Grab leftMouseGrab = null;
+    private long lastAutoClickTime = 0;
+    private static final long AUTO_CLICK_INTERVAL_MS = 100; // Интервал между автоматическими кликами (100мс)
     
     // Find RouteLabel at screen coordinate
     private RouteLabel getRouteLabeAt(Coord screenCoord) {
@@ -948,6 +955,32 @@ public class NMapView extends MapView
 //        for(Long id : forRemove)
 //            dummys.remove(id);
         super.tick(dt);
+        
+        // Diablo-like running: auto-click on ground while LMB is held
+        boolean diabloLikeRunEnabled = NConfig.get(NConfig.Key.diabloLikeRun) instanceof Boolean 
+            && (Boolean) NConfig.get(NConfig.Key.diabloLikeRun);
+        
+        if(diabloLikeRunEnabled && leftMouseButtonHeld && lastCoord != null) {
+            // Don't auto-click in DRAG mode or when dragging route points
+            if(ui.core.mode != NCore.Mode.DRAG && !isDraggingRoutePoint) {
+                // Check if mouse is within map bounds
+                if(lastCoord.x >= 0 && lastCoord.y >= 0 && lastCoord.x < sz.x && lastCoord.y < sz.y) {
+                    long currentTime = System.currentTimeMillis();
+                    if(currentTime - lastAutoClickTime >= AUTO_CLICK_INTERVAL_MS) {
+                        // Send click on ground at current mouse position (only if no object under cursor)
+                        new Hittest(lastCoord) {
+                            protected void hit(Coord pc, Coord2d mc, ClickData inf) {
+                                // Only click on ground (inf == null means no object)
+                                if(inf == null && mc != null) {
+                                    wdgmsg("click", pc, mc.floor(posres), 1, ui.modflags());
+                                }
+                            }
+                        }.run();
+                        lastAutoClickTime = currentTime;
+                    }
+                }
+            }
+        }
 
         if(NConfig.botmod != null && !botsInit) {
             Scenario scenario = NUtils.getUI().core.scenarioManager.getScenarios().getOrDefault(NConfig.botmod.scenarioId, null);
@@ -1007,6 +1040,18 @@ public class NMapView extends MapView
         // Block all clicks in DRAG mode to prevent character movement during UI adjustment
         if(ui.core.mode == NCore.Mode.DRAG) {
             return true;
+        }
+        
+        // Track left mouse button for Diablo-like running
+        if(ev.b == 1) {
+            boolean diabloLikeRunEnabled = NConfig.get(NConfig.Key.diabloLikeRun) instanceof Boolean 
+                && (Boolean) NConfig.get(NConfig.Key.diabloLikeRun);
+            
+            if(diabloLikeRunEnabled && leftMouseGrab == null) {
+                leftMouseButtonHeld = true;
+                leftMouseGrab = ui.grabmouse(this);
+                lastAutoClickTime = System.currentTimeMillis();
+            }
         }
         
         // Alt+Ctrl+LMB activates area selection for chat sharing
@@ -1128,6 +1173,13 @@ public class NMapView extends MapView
         // Block all clicks in DRAG mode to prevent character movement during UI adjustment
         if(ui.core.mode == NCore.Mode.DRAG) {
             return true;
+        }
+        
+        // Release left mouse button tracking for Diablo-like running
+        if(ev.b == 1 && leftMouseGrab != null) {
+            leftMouseButtonHeld = false;
+            leftMouseGrab.remove();
+            leftMouseGrab = null;
         }
         
         if(isDraggingRoutePoint) {
