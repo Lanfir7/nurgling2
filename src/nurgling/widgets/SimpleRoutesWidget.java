@@ -249,14 +249,31 @@ public class SimpleRoutesWidget extends Window {
                 Thread t = new Thread(() -> {
                     try {
                         NUtils.getGameUI().msg("Starting navigation to start of route: " + route.name);
-                        SimpleRoutePoint firstPoint = route.waypoints.get(0);
-                        Coord2d target = firstPoint.toCoord2d(NUtils.getGameUI().map.glob.map);
-                        if (target != null) {
-                            SimpleRoutesWidget.this.navigateToPoint(target);
-                            NUtils.getGameUI().msg("Arrived at start of route: " + route.name);
-                        } else {
-                            NUtils.getGameUI().msg("Cannot reach start point");
+                        
+                        // Получаем текущую позицию (игрока или корабля)
+                        Coord2d currentPos = getCurrentPosition();
+                        if (currentPos == null) {
+                            NUtils.getGameUI().msg("Cannot determine current position");
+                            return;
                         }
+                        
+                        // Находим ближайшую точку маршрута к текущей позиции
+                        int nearestIndex = findNearestWaypointIndex(route, currentPos);
+                        if (nearestIndex < 0) {
+                            NUtils.getGameUI().msg("Cannot find nearest waypoint");
+                            return;
+                        }
+                        
+                        // Идем от ближайшей точки к началу (в обратном порядке)
+                        for (int i = nearestIndex; i >= 0; i--) {
+                            SimpleRoutePoint point = route.waypoints.get(i);
+                            Coord2d target = getWaypointCoord(point);
+                            if (target != null) {
+                                SimpleRoutesWidget.this.navigateToPoint(target);
+                            }
+                        }
+                        
+                        NUtils.getGameUI().msg("Arrived at start of route: " + route.name);
                     } catch (InterruptedException e) {
                         NUtils.getGameUI().msg("Navigation interrupted");
                     }
@@ -299,6 +316,83 @@ public class SimpleRoutesWidget extends Window {
     }
 
     /**
+     * Получает текущую позицию (игрока или корабля, если игрок на корабле)
+     */
+    private Coord2d getCurrentPosition() {
+        Gob player = NUtils.player();
+        if (player == null) return null;
+        
+        // Если игрок на корабле, используем координаты корабля
+        haven.Following following = player.getattr(haven.Following.class);
+        if (following != null) {
+            Gob vehicle = following.tgt();
+            if (vehicle != null) {
+                return vehicle.rc;
+            }
+        }
+        
+        return player.rc;
+    }
+
+    /**
+     * Получает координаты waypoint, используя координаты корабля если нужно
+     */
+    private Coord2d getWaypointCoord(SimpleRoutePoint point) {
+        MCache map = NUtils.getGameUI().map.glob.map;
+        
+        // Сначала пробуем стандартный способ
+        Coord2d coord = point.toCoord2d(map);
+        if (coord != null) {
+            return coord;
+        }
+        
+        // Если не получилось, пробуем использовать координаты корабля для определения gridId
+        if (isShipDriver()) {
+            Gob player = NUtils.player();
+            if (player != null) {
+                haven.Following following = player.getattr(haven.Following.class);
+                if (following != null) {
+                    Gob vehicle = following.tgt();
+                    if (vehicle != null) {
+                        // Используем координаты корабля для поиска grid
+                        Coord tilec = vehicle.rc.div(MCache.tilesz).floor();
+                        MCache.Grid vehicleGrid = map.getgridt(tilec);
+                        if (vehicleGrid != null && vehicleGrid.id == point.gridId) {
+                            // Если grid совпадает, используем координаты из waypoint
+                            Coord tilec2 = vehicleGrid.ul.add(point.localCoord);
+                            return tilec2.mul(MCache.tilesz).add(MCache.tilehsz);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Находит индекс ближайшей точки маршрута к текущей позиции
+     */
+    private int findNearestWaypointIndex(SimpleRoute route, Coord2d currentPos) {
+        int nearestIndex = -1;
+        double minDistance = Double.MAX_VALUE;
+        
+        for (int i = 0; i < route.waypoints.size(); i++) {
+            SimpleRoutePoint point = route.waypoints.get(i);
+            Coord2d pointCoord = getWaypointCoord(point);
+            if (pointCoord != null) {
+                double dist = currentPos.dist(pointCoord);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestIndex = i;
+                }
+            }
+        }
+        
+        return nearestIndex;
+    }
+
+    /**
      * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
      */
     private void navigateToPoint(Coord2d target) throws InterruptedException {
@@ -310,11 +404,11 @@ public class SimpleRoutesWidget extends Window {
             Thread.sleep(500);
             
             // Ждем, пока достигнем точки (с большей погрешностью для корабля)
-            Gob player = NUtils.player();
+            Coord2d currentPos = getCurrentPosition();
             int attempts = 0;
-            while (player != null && player.rc.dist(target) > 11.0 && attempts < 100) {
+            while (currentPos != null && currentPos.dist(target) > 11.0 && attempts < 100) {
                 Thread.sleep(200);
-                player = NUtils.player();
+                currentPos = getCurrentPosition();
                 attempts++;
             }
         } else {
@@ -495,7 +589,7 @@ public class SimpleRoutesWidget extends Window {
                 private void startNavigation(SimpleRoutePoint point) {
             Thread t = new Thread(() -> {
                 try {
-                    Coord2d target = point.toCoord2d(NUtils.getGameUI().map.glob.map);
+                    Coord2d target = SimpleRoutesWidget.this.getWaypointCoord(point);
                     if (target != null) {
                         SimpleRoutesWidget.this.navigateToPoint(target);
                     }
@@ -535,7 +629,7 @@ public class SimpleRoutesWidget extends Window {
                                     if (option.name.equals("Navigate To")) {
                                         new Thread(() -> {
                                             try {
-                                                Coord2d target = rp.toCoord2d(NUtils.getGameUI().map.glob.map);
+                                                Coord2d target = SimpleRoutesWidget.this.getWaypointCoord(rp);
                                                 if (target != null) {
                                                     SimpleRoutesWidget.this.navigateToPoint(target);
                                                 }

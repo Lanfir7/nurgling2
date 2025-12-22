@@ -4,6 +4,7 @@ import haven.Coord;
 import haven.Coord2d;
 import haven.Following;
 import haven.Gob;
+import haven.MCache;
 import static haven.OCache.posres;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -74,6 +75,59 @@ public class SimpleRouteWorker implements Action {
     }
 
     /**
+     * Получает текущую позицию (игрока или корабля, если игрок на корабле)
+     */
+    private Coord2d getCurrentPosition() {
+        Gob player = NUtils.player();
+        if (player == null) return null;
+        
+        // Если игрок на корабле, используем координаты корабля
+        Following following = player.getattr(Following.class);
+        if (following != null) {
+            Gob vehicle = following.tgt();
+            if (vehicle != null) {
+                return vehicle.rc;
+            }
+        }
+        
+        return player.rc;
+    }
+
+    /**
+     * Получает координаты waypoint, используя координаты корабля если нужно
+     */
+    private Coord2d getWaypointCoord(SimpleRoutePoint point, MCache map) {
+        // Сначала пробуем стандартный способ
+        Coord2d coord = point.toCoord2d(map);
+        if (coord != null) {
+            return coord;
+        }
+        
+        // Если не получилось, пробуем использовать координаты корабля для определения gridId
+        if (isShipDriver()) {
+            Gob player = NUtils.player();
+            if (player != null) {
+                Following following = player.getattr(Following.class);
+                if (following != null) {
+                    Gob vehicle = following.tgt();
+                    if (vehicle != null) {
+                        // Используем координаты корабля для поиска grid
+                        Coord tilec = vehicle.rc.div(MCache.tilesz).floor();
+                        MCache.Grid vehicleGrid = map.getgridt(tilec);
+                        if (vehicleGrid != null && vehicleGrid.id == point.gridId) {
+                            // Если grid совпадает, используем координаты из waypoint
+                            Coord tilec2 = vehicleGrid.ul.add(point.localCoord);
+                            return tilec2.mul(MCache.tilesz).add(MCache.tilehsz);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    /**
      * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
      */
     private Results navigateToPoint(NGameUI gui, Coord2d target) throws InterruptedException {
@@ -99,8 +153,9 @@ public class SimpleRouteWorker implements Action {
                 NUtils.getUI().core.addTask(new MovingCompleted(target));
             }
             
-            // Проверяем, достигли ли мы точки (с большей погрешностью для корабля)
-            if (player.rc.dist(target) > 11.0) {
+            // Проверяем, достигли ли мы точки (используем координаты корабля)
+            Coord2d currentPos = getCurrentPosition();
+            if (currentPos == null || currentPos.dist(target) > 11.0) {
                 return Results.FAIL();
             }
             return Results.SUCCESS();
@@ -119,7 +174,7 @@ public class SimpleRouteWorker implements Action {
 
         for (int i = 0; i < route.waypoints.size(); i++) {
             SimpleRoutePoint rp = route.waypoints.get(i);
-            Coord2d target = rp.toCoord2d(gui.map.glob.map);
+            Coord2d target = getWaypointCoord(rp, gui.map.glob.map);
             if (target == null) continue;
 
             navigateToPoint(gui, target);
@@ -157,7 +212,7 @@ public class SimpleRouteWorker implements Action {
     private void goToStart(NGameUI gui, int lastVisited) throws InterruptedException {
         for (int j = lastVisited; j >= 0; j--) {
             SimpleRoutePoint backtrackPoint = route.waypoints.get(j);
-            Coord2d backtrackTarget = backtrackPoint.toCoord2d(gui.map.glob.map);
+            Coord2d backtrackTarget = getWaypointCoord(backtrackPoint, gui.map.glob.map);
             if (backtrackTarget != null)
                 navigateToPoint(gui, backtrackTarget);
         }
@@ -165,7 +220,7 @@ public class SimpleRouteWorker implements Action {
 
     private void returnToLastVisited(NGameUI gui, int lastVisited) throws InterruptedException {
         for (int j = 1; j <= lastVisited; j++) {
-            Coord2d resume = route.waypoints.get(j).toCoord2d(gui.map.glob.map);
+            Coord2d resume = getWaypointCoord(route.waypoints.get(j), gui.map.glob.map);
             if (resume != null)
                 navigateToPoint(gui, resume);
         }
