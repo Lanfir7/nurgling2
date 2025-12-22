@@ -1,10 +1,17 @@
 package nurgling.actions;
 
+import haven.Coord;
 import haven.Coord2d;
+import haven.Following;
+import haven.Gob;
+import static haven.OCache.posres;
 import nurgling.NGameUI;
+import nurgling.NUtils;
 import nurgling.routes.SimpleRoute;
 import nurgling.routes.SimpleRoutePoint;
-import nurgling.tasks.NTask;
+import nurgling.tasks.*;
+import nurgling.tools.NAlias;
+import nurgling.tools.NParser;
 
 /**
  * Worker для воспроизведения простых маршрутов без привязки к зонам.
@@ -36,6 +43,73 @@ public class SimpleRouteWorker implements Action {
         this.finalAction = finalAction;
     }
 
+    /**
+     * Проверяет, является ли игрок рулевым корабля (не пассажиром)
+     */
+    private boolean isShipDriver() {
+        Gob player = NUtils.player();
+        if (player == null) return false;
+        
+        Following following = player.getattr(Following.class);
+        if (following == null) return false;
+        
+        Gob vehicle = following.tgt();
+        if (vehicle == null) return false;
+        
+        String pos = following.xfname;
+        String vehicleName = vehicle.ngob.name;
+        
+        // Проверяем различные типы кораблей
+        if (NParser.checkName(vehicleName, "/vehicle/snekkja")) {
+            return pos.equals("m0"); // m0 = рулевой
+        } else if (NParser.checkName(vehicleName, "/vehicle/knarr")) {
+            return pos.equals("m0"); // m0 = рулевой
+        } else if (NParser.checkName(vehicleName, "/vehicle/rowboat")) {
+            return pos.equals("d"); // d = рулевой
+        } else if (NParser.checkName(vehicleName, "/vehicle/spark")) {
+            return pos.equals("d"); // d = рулевой
+        }
+        
+        return false;
+    }
+
+    /**
+     * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
+     */
+    private Results navigateToPoint(NGameUI gui, Coord2d target) throws InterruptedException {
+        if (isShipDriver()) {
+            // Для корабля используем прямой клик на карту
+            Gob player = NUtils.player();
+            Following following = player.getattr(Following.class);
+            Gob vehicle = following.tgt();
+            
+            // Кликаем на карту для движения корабля
+            gui.map.wdgmsg("click", Coord.z, target.floor(posres), 1, 0);
+            
+            // Ждем, пока корабль начнет движение и достигнет точки
+            if (NParser.isIt(vehicle, new NAlias("rowboat"))) {
+                NUtils.getUI().core.addTask(new IsPoseMov(target, player, new NAlias("gfx/borka/rowing")));
+                NUtils.getUI().core.addTask(new IsNotPose(player, new NAlias("gfx/borka/rowing")));
+            } else if (NParser.isIt(vehicle, new NAlias("dugout"))) {
+                NUtils.getUI().core.addTask(new IsPoseMov(target, player, new NAlias("gfx/borka/dugoutrowan")));
+                NUtils.getUI().core.addTask(new IsNotPose(player, new NAlias("gfx/borka/dugoutrowan")));
+            } else {
+                // Для других кораблей просто ждем достижения точки
+                NUtils.getUI().core.addTask(new IsMoving(target));
+                NUtils.getUI().core.addTask(new MovingCompleted(target));
+            }
+            
+            // Проверяем, достигли ли мы точки (с большей погрешностью для корабля)
+            if (player.rc.dist(target) > 11.0) {
+                return Results.FAIL();
+            }
+            return Results.SUCCESS();
+        } else {
+            // Для пешего движения используем PathFinder
+            return new PathFinder(target).run(gui);
+        }
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         if (route == null || route.waypoints.isEmpty())
@@ -48,7 +122,7 @@ public class SimpleRouteWorker implements Action {
             Coord2d target = rp.toCoord2d(gui.map.glob.map);
             if (target == null) continue;
 
-            new PathFinder(target).run(gui);
+            navigateToPoint(gui, target);
             lastVisited = i;
 
             action.run(gui);
@@ -85,7 +159,7 @@ public class SimpleRouteWorker implements Action {
             SimpleRoutePoint backtrackPoint = route.waypoints.get(j);
             Coord2d backtrackTarget = backtrackPoint.toCoord2d(gui.map.glob.map);
             if (backtrackTarget != null)
-                new PathFinder(backtrackTarget).run(gui);
+                navigateToPoint(gui, backtrackTarget);
         }
     }
 
@@ -93,7 +167,7 @@ public class SimpleRouteWorker implements Action {
         for (int j = 1; j <= lastVisited; j++) {
             Coord2d resume = route.waypoints.get(j).toCoord2d(gui.map.glob.map);
             if (resume != null)
-                new PathFinder(resume).run(gui);
+                navigateToPoint(gui, resume);
         }
     }
 }

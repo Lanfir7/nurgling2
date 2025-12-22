@@ -221,6 +221,7 @@ public class SimpleRoutesWidget extends Window {
                 Thread t = new Thread(() -> {
                     try {
                         NUtils.getGameUI().msg("Starting navigation to end of route: " + route.name);
+                        // Используем SimpleRouteWorker, который автоматически определяет waterMode
                         new SimpleRouteWorker(new Action() {
                             @Override
                             public nurgling.actions.Results run(NGameUI gui) throws InterruptedException {
@@ -251,7 +252,7 @@ public class SimpleRoutesWidget extends Window {
                         SimpleRoutePoint firstPoint = route.waypoints.get(0);
                         Coord2d target = firstPoint.toCoord2d(NUtils.getGameUI().map.glob.map);
                         if (target != null) {
-                            new PathFinder(target).run(NUtils.getGameUI());
+                            SimpleRoutesWidget.this.navigateToPoint(target);
                             NUtils.getGameUI().msg("Arrived at start of route: " + route.name);
                         } else {
                             NUtils.getGameUI().msg("Cannot reach start point");
@@ -270,6 +271,56 @@ public class SimpleRoutesWidget extends Window {
 
     public int getSelectedRouteId() {
         return this.routeList.selectedRouteId;
+    }
+
+    /**
+     * Проверяет, является ли игрок рулевым корабля
+     */
+    private boolean isShipDriver() {
+        Gob player = NUtils.player();
+        if (player == null) return false;
+        
+        haven.Following following = player.getattr(haven.Following.class);
+        if (following == null) return false;
+        
+        Gob vehicle = following.tgt();
+        if (vehicle == null) return false;
+        
+        String pos = following.xfname;
+        String vehicleName = vehicle.ngob.name;
+        
+        if (nurgling.tools.NParser.checkName(vehicleName, "/vehicle/snekkja") && pos.equals("m0") ||
+            nurgling.tools.NParser.checkName(vehicleName, "/vehicle/knarr") && pos.equals("m0") ||
+            nurgling.tools.NParser.checkName(vehicleName, "/vehicle/rowboat") && pos.equals("d") ||
+            nurgling.tools.NParser.checkName(vehicleName, "/vehicle/spark") && pos.equals("d")) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
+     */
+    private void navigateToPoint(Coord2d target) throws InterruptedException {
+        if (isShipDriver()) {
+            // Для корабля используем прямой клик на карту
+            NUtils.getGameUI().map.wdgmsg("click", Coord.z, target.floor(haven.OCache.posres), 1, 0);
+            
+            // Ждем немного для начала движения
+            Thread.sleep(500);
+            
+            // Ждем, пока достигнем точки (с большей погрешностью для корабля)
+            Gob player = NUtils.player();
+            int attempts = 0;
+            while (player != null && player.rc.dist(target) > 11.0 && attempts < 100) {
+                Thread.sleep(200);
+                player = NUtils.player();
+                attempts++;
+            }
+        } else {
+            // Для пешего движения используем PathFinder
+            new PathFinder(target).run(NUtils.getGameUI());
+        }
     }
 
     public void updateWaypoints() {
@@ -441,12 +492,12 @@ public class SimpleRoutesWidget extends Window {
 
         NFlowerMenu menu;
 
-        private void startNavigation(SimpleRoutePoint point) {
+                private void startNavigation(SimpleRoutePoint point) {
             Thread t = new Thread(() -> {
                 try {
                     Coord2d target = point.toCoord2d(NUtils.getGameUI().map.glob.map);
                     if (target != null) {
-                        new PathFinder(target).run(NUtils.getGameUI());
+                        SimpleRoutesWidget.this.navigateToPoint(target);
                     }
                 } catch (InterruptedException e) {
                     NUtils.getGameUI().error("Navigation interrupted by the user");
@@ -486,7 +537,7 @@ public class SimpleRoutesWidget extends Window {
                                             try {
                                                 Coord2d target = rp.toCoord2d(NUtils.getGameUI().map.glob.map);
                                                 if (target != null) {
-                                                    new PathFinder(target).run(NUtils.getGameUI());
+                                                    SimpleRoutesWidget.this.navigateToPoint(target);
                                                 }
                                             } catch (InterruptedException e) {
                                                 NUtils.getGameUI().error("Navigation interrupted: " + e.getMessage());
