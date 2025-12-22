@@ -84,16 +84,31 @@ public class NArea
 
     boolean containOut(String name, double th)
     {
+        // ВАЖНО: Проверяем что jout не null
+        if (jout == null) {
+            return false;
+        }
+        
         for (int i = 0; i < jout.length(); i++) {
-            if (((String) ((JSONObject) jout.get(i)).get("name")).equals(name)) {
-                if (((JSONObject) jout.get(i)).has("th")) {
-                    Object thObj = ((JSONObject) jout.get(i)).get("th");
-                    int areaTh = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
-                    if (areaTh > th)
+            try {
+                JSONObject output = jout.getJSONObject(i);
+                String outputName = output.getString("name");
+                if (outputName.equals(name)) {
+                    if (output.has("th")) {
+                        Object thObj = output.get("th");
+                        int areaTh = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
+                        // ВАЖНО: Зона принимает предмет, если качество предмета >= порога зоны
+                        // Если порог не указан (areaTh == -1), зона принимает все
+                        if (areaTh == -1 || th >= areaTh) {
+                            return true;
+                        }
+                    } else {
+                        // Порог не указан - зона принимает все
                         return true;
-                } else {
-                    return true;
+                    }
                 }
+            } catch (Exception e) {
+                System.err.println("NArea.containOut: Error checking output " + i + " for zone " + id + ": " + e.getMessage());
             }
         }
         return false;
@@ -101,16 +116,31 @@ public class NArea
 
     private boolean containOut(NAlias name, double th)
     {
+        // ВАЖНО: Проверяем что jout не null
+        if (jout == null) {
+            return false;
+        }
+        
         for (int i = 0; i < jout.length(); i++) {
-            if (NParser.checkName((String) ((JSONObject) jout.get(i)).get("name"),name)) {
-                if (((JSONObject) jout.get(i)).has("th")) {
-                    Object thObj = ((JSONObject) jout.get(i)).get("th");
-                    int areaTh = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
-                    if (areaTh > th)
+            try {
+                JSONObject output = jout.getJSONObject(i);
+                String outputName = output.getString("name");
+                if (NParser.checkName(outputName, name)) {
+                    if (output.has("th")) {
+                        Object thObj = output.get("th");
+                        int areaTh = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
+                        // ВАЖНО: Зона принимает предмет, если качество предмета >= порога зоны
+                        // Если порог не указан (areaTh == -1), зона принимает все
+                        if (areaTh == -1 || th >= areaTh) {
+                            return true;
+                        }
+                    } else {
+                        // Порог не указан - зона принимает все
                         return true;
-                } else {
-                    return true;
+                    }
                 }
+            } catch (Exception e) {
+                System.err.println("NArea.containOut: Error checking output " + i + " for zone " + id + ": " + e.getMessage());
             }
         }
         return false;
@@ -118,9 +148,21 @@ public class NArea
 
     boolean containOut(String name)
     {
+        // ВАЖНО: Проверяем что jout не null
+        if (jout == null) {
+            return false;
+        }
+        
         for (int i = 0; i < jout.length(); i++) {
-            if (((String) ((JSONObject) jout.get(i)).get("name")).equals(name))
+            try {
+                JSONObject output = jout.getJSONObject(i);
+                String outputName = output.getString("name");
+                if (outputName.equals(name)) {
                     return true;
+                }
+            } catch (Exception e) {
+                System.err.println("NArea.containOut: Error checking output " + i + " for zone " + id + ": " + e.getMessage());
+            }
         }
         return false;
     }

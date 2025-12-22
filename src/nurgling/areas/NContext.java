@@ -988,8 +988,18 @@ public class NContext {
                     // grid может быть еще не загружен, но зона должна быть доступна ботам
                     // Проверяем только containOut и getRCArea (который может вернуть null если grid не загружен)
                     // Если getRCArea() == null, зона все равно может быть использована, если есть space
+                    // ВАЖНО: Проверяем что jout не null
+                    if (cand.jout == null) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has null jout - skipping");
+                        continue;
+                    }
+                    if (cand.jout.length() == 0) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has empty jout - skipping");
+                        continue;
+                    }
                     boolean containsOut = cand.containOut(name);
                     if (containsOut) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") containsOut " + name + " (jout.length=" + cand.jout.length() + ")");
                         // Пытаемся получить координаты зоны
                         Pair<Coord2d, Coord2d> rcArea = cand.getRCArea();
                         // Если getRCArea() вернул null (grid не загружен), проверяем есть ли space

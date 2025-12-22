@@ -20,6 +20,8 @@ import nurgling.overlays.map.*;
 import nurgling.routes.Route;
 import nurgling.routes.RouteGraphManager;
 import nurgling.routes.RoutePoint;
+import nurgling.routes.SimpleRoute;
+import nurgling.routes.SimpleRouteManager;
 import nurgling.scenarios.Scenario;
 import nurgling.tasks.WaitForMapLoadNoCoord;
 import nurgling.tools.*;
@@ -95,6 +97,9 @@ public class NMapView extends MapView
         if (routeGraphManager == null) {
             routeGraphManager = new RouteGraphManager(genus);
         }
+        if (simpleRouteManager == null) {
+            simpleRouteManager = new SimpleRouteManager(genus);
+        }
     }
 
     final HashMap<String, String> ttip = new HashMap<>();
@@ -130,6 +135,7 @@ public class NMapView extends MapView
     public HashMap<Long, Gob> routeDummys = new HashMap<>();
 
     public RouteGraphManager routeGraphManager;
+    public SimpleRouteManager simpleRouteManager;
 
     /**
      * Get RouteGraphManager, initializing with fallback if needed
@@ -140,6 +146,15 @@ public class NMapView extends MapView
             routeGraphManager = new RouteGraphManager(); // fallback to global
         }
         return routeGraphManager;
+    }
+
+    /**
+     * Initialize SimpleRouteManager
+     */
+    public void initializeSimpleRouteManager(String genus) {
+        if (simpleRouteManager == null) {
+            simpleRouteManager = new SimpleRouteManager(genus);
+        }
     }
 
 
@@ -919,6 +934,54 @@ public class NMapView extends MapView
         return key;
     }
 
+    public String addSimpleRoute()
+    {
+        String key;
+        SimpleRouteManager manager = simpleRouteManager;
+        if (manager == null) {
+            manager = new SimpleRouteManager();
+            simpleRouteManager = manager;
+        }
+        
+        synchronized (manager.getRoutes())
+        {
+            HashSet<String> names = new HashSet<String>();
+            int id = 0;
+            for(SimpleRoute route : manager.getRoutes().values())
+            {
+                if(route.id >= id)
+                {
+                    id = route.id + 1;
+                }
+                names.add(route.name);
+            }
+            key = ("New Simple Route" + manager.getRoutes().size());
+            while(names.contains(key))
+            {
+                key = key+"(1)";
+            }
+            SimpleRoute newRoute = new SimpleRoute(key);
+            newRoute.id = id;
+            if (NUtils.getGameUI() != null && NUtils.getGameUI().simpleRoutesWidget != null) {
+                newRoute.path = NUtils.getGameUI().simpleRoutesWidget.currentPath;
+            }
+            manager.getRoutes().put(id, newRoute);
+            manager.save();
+        }
+        return key;
+    }
+
+    public void changeSimpleRouteName(int id, String new_name) {
+        SimpleRouteManager manager = simpleRouteManager;
+        if (manager != null) {
+            SimpleRoute route = manager.getRoutes().get(id);
+            if (route != null) {
+                route.name = new_name;
+                manager.updateRoute(route);
+                manager.save();
+            }
+        }
+    }
 
     boolean botsInit = false;
     private static final long BOT_DELAY_MS = 15 * 1000;
