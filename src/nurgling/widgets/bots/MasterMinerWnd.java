@@ -29,6 +29,7 @@ public class MasterMinerWnd extends Window {
     private volatile boolean closed = false;
 
     private final Label masonryLbl;
+    private final Label lastMinedLbl;  // Последний выкопанный камень
     private final Label stoneLbl;      // Камень (любой кроме квариарц)
     private final Label quarryartzLbl; // Квариарц
     private final Label catGoldLbl;    // Кэт голд
@@ -83,6 +84,9 @@ public class MasterMinerWnd extends Window {
         masonryLbl = add(new Label("Masonry: (waiting)", boldFoundry), cur);
         masonryLbl.setcolor(masonryColor);
         cur = masonryLbl.pos("bl").add(0, UI.scale(4));
+
+        lastMinedLbl = add(new Label("Last mined: -"), cur);
+        cur = lastMinedLbl.pos("bl").add(0, UI.scale(4));
 
         stoneLbl = add(new Label("Stone: -"), cur);
         cur = stoneLbl.pos("bl").add(0, UI.scale(4));
@@ -359,6 +363,19 @@ public class MasterMinerWnd extends Window {
     public void incrementCounter() {
         totalStonesMined++;
         counterLbl.settext("Mined: " + totalStonesMined);
+    }
+
+    /**
+     * Обновляет строку с последним выкопанным камнем
+     */
+    public void setLastMined(String stoneName, double f3, int masonry) {
+        if (stoneName == null || stoneName.isEmpty()) {
+            lastMinedLbl.settext("Last mined: -");
+            return;
+        }
+        
+        String text = String.format("Last mined: %s %.1f", stoneName, f3);
+        lastMinedLbl.settext(text);
     }
 
     public double getDropThreshold() {

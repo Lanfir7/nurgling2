@@ -4,6 +4,7 @@ import haven.*;
 import haven.Audio;
 import haven.MCache;
 import haven.Resource;
+import haven.res.lib.itemtex.ItemTex;
 import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -107,6 +108,31 @@ public class MasterMiner extends ActionWithFinal {
                     Thread.currentThread().interrupt();
                     break;
                 }
+                
+                // Проверяем также предмет в руках (vhand) - камень/руда может попасть туда, если инвентарь полон
+                WItem vhandItem = gui.vhand;
+                if (vhandItem != null && vhandItem.item instanceof NGItem) {
+                    NGItem vhandNGItem = (NGItem) vhandItem.item;
+                    String vhandName = vhandNGItem.name();
+                    if (vhandName != null) {
+                        // Проверяем, является ли это камнем/рудой/драгоценным камнем
+                        boolean isMinedItem = NParser.checkName(vhandName, MINED_ITEMS) || 
+                                             NParser.checkName(vhandName, ORE_ITEMS) ||
+                                             isGemstone(vhandNGItem) || 
+                                             isGemstone(vhandName);
+                        if (isMinedItem && !known.contains(vhandItem)) {
+                            // Обрабатываем камень из рук
+                            try {
+                                processNewStone(gui, vhandItem, wnd);
+                                known.add(vhandItem);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        }
+                    }
+                }
+                
                 // Обрабатываем все новые камни, а не только первый
                 ArrayList<WItem> newItems = new ArrayList<>();
                 for (WItem it : cur) {
@@ -114,7 +140,25 @@ public class MasterMiner extends ActionWithFinal {
                         newItems.add(it);
                     }
                 }
-                if (newItems.isEmpty()) {
+                
+                // Также проверяем ВСЕ стаки в инвентаре каждый цикл (они могут обновляться без появления новых предметов)
+                // Проверяем все стаки, независимо от того, новые они или нет
+                ArrayList<WItem> stacksToCheck = new ArrayList<>();
+                for (WItem it : cur) {
+                    // Проверяем, является ли это стаком
+                    try {
+                        NGItem ngItem = (NGItem) it.item;
+                        haven.GItem.Amount amount = ngItem.getInfo(haven.GItem.Amount.class);
+                        if (amount != null && amount.itemnum() > 1) {
+                            // Это стак - проверяем его качество
+                            stacksToCheck.add(it);
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+                
+                if (newItems.isEmpty() && stacksToCheck.isEmpty()) {
                     NUtils.addTask(new WaitTicks(5));
                     continue;
                 }
@@ -123,6 +167,18 @@ public class MasterMiner extends ActionWithFinal {
                 // Обрабатываем каждый новый камень
                 for (WItem newItem : newItems) {
                     processNewStone(gui, newItem, wnd);
+                }
+                
+                // Обрабатываем стаки (проверяем их качество и сбрасываем если нужно)
+                // Важно: обрабатываем стаки отдельно, чтобы не мешать обработке новых предметов
+                for (WItem stackItem : stacksToCheck) {
+                    try {
+                        // Для стаков проверяем качество и сбрасываем напрямую, если нужно
+                        checkAndDropStack(gui, stackItem, wnd);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
                 
                 // Небольшой yield после обработки всех камней
@@ -135,6 +191,137 @@ public class MasterMiner extends ActionWithFinal {
             wnd = null;
         }
         return Results.SUCCESS();
+    }
+    
+    /**
+     * Получает качество предмета, учитывая стаки
+     * Для стаков использует Stack info, для отдельных предметов - item.quality
+     */
+    private double getItemQuality(NGItem item, WItem wItem) {
+        if (item == null) return -1;
+        
+        // Проверяем, является ли это стаком
+        try {
+            haven.GItem.Amount amount = item.getInfo(haven.GItem.Amount.class);
+            if (amount != null && amount.itemnum() > 1) {
+                // Это стак - получаем качество через Stack info
+                haven.res.ui.tt.stackn.Stack stackInfo = item.getInfo(haven.res.ui.tt.stackn.Stack.class);
+                if (stackInfo != null && stackInfo.quality > 0) {
+                    return stackInfo.quality;
+                }
+                // Если Stack info еще не готов, пробуем получить через Quality info из info()
+                List<ItemInfo> infoList = item.info();
+                if (infoList != null) {
+                    haven.res.ui.tt.q.quality.Quality qualityInfo = haven.ItemInfo.find(haven.res.ui.tt.q.quality.Quality.class, infoList);
+                    if (qualityInfo != null && qualityInfo.q > 0) {
+                        return qualityInfo.q;
+                    }
+                }
+                // Если и это не сработало, пробуем получить среднее качество из всех предметов в стаке
+                // (это fallback на случай, если Stack info еще не обновился)
+                if (wItem != null && wItem.parent instanceof haven.res.ui.stackinv.ItemStack) {
+                    haven.res.ui.stackinv.ItemStack itemStack = (haven.res.ui.stackinv.ItemStack) wItem.parent;
+                    double sumQuality = 0;
+                    int count = 0;
+                    for (WItem w : itemStack.wmap.values()) {
+                        if (w.item instanceof NGItem) {
+                            NGItem ngItem = (NGItem) w.item;
+                            if (ngItem.quality != null) {
+                                sumQuality += ngItem.quality;
+                                count++;
+                            }
+                        }
+                    }
+                    if (count > 0) {
+                        return sumQuality / count;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+        
+        // Для отдельных предметов используем item.quality
+        if (item.quality != null) {
+            return item.quality;
+        }
+        
+        return -1; // Качество еще не готово
+    }
+    
+    /**
+     * Проверяет стак и сбрасывает его, если качество ниже порога
+     */
+    private void checkAndDropStack(NGameUI gui, WItem stackItem, MasterMinerWnd wnd) throws InterruptedException {
+        if (stackItem == null || stackItem.item == null || !(stackItem.item instanceof NGItem)) {
+            return;
+        }
+        
+        NGItem ngItem = (NGItem) stackItem.item;
+        String itemName = ngItem.name();
+        if (itemName == null) {
+            return;
+        }
+        
+        // Проверяем, является ли это камнем/рудой (драгоценные камни не сбрасываются)
+        boolean isMinedItem = NParser.checkName(itemName, MINED_ITEMS) || 
+                             NParser.checkName(itemName, ORE_ITEMS);
+        // Драгоценные камни не сбрасываются
+        if (isGemstone(ngItem) || isGemstone(itemName)) {
+            return;
+        }
+        if (!isMinedItem) {
+            return; // Не камень/руда - пропускаем
+        }
+        
+        // Получаем качество стака - пробуем несколько раз, так как Stack info может быть еще не готов
+        double f3 = -1;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            f3 = getItemQuality(ngItem, stackItem);
+            if (f3 >= 0) {
+                break; // Качество получено
+            }
+            // Небольшая задержка перед следующей попыткой
+            if (attempt < 4) {
+                NUtils.addTask(new WaitTicks(2));
+            }
+        }
+        
+        if (f3 < 0) {
+            return; // Качество все еще не готово после всех попыток
+        }
+        
+        // Определяем тип камня и порог
+        String stoneType = classifyStoneType(itemName);
+        double threshold;
+        if ("Shell".equals(stoneType) || "Cat Gold".equals(stoneType)) {
+            threshold = wnd.getShellCatGoldThreshold();
+        } else {
+            threshold = wnd.getDropThreshold();
+        }
+        
+        // Проверяем порог и сбрасываем стак, если качество ниже
+        if (!Double.isNaN(threshold) && f3 < threshold) {
+            // Проверяем, что это действительно камень из инвентаря, а не инструмент
+            boolean isInInventory = (stackItem.parent == gui.getInventory());
+            boolean isInHand = (stackItem == gui.vhand);
+            if (isInInventory || isInHand) {
+                // Дополнительная проверка: убеждаемся, что это не инструмент
+                String itemNameLower = itemName != null ? itemName.toLowerCase() : "";
+                boolean isTool = itemNameLower.contains("axe") || itemNameLower.contains("pickaxe") || 
+                               itemNameLower.contains("топор") || itemNameLower.contains("кирк");
+                if (!isTool) {
+                    // Небольшая задержка перед сбросом
+                    NUtils.addTask(new WaitTicks(3));
+                    // Еще раз проверяем, что предмет все еще в инвентаре или в руках
+                    if ((stackItem.parent == gui.getInventory()) || (stackItem == gui.vhand)) {
+                        NUtils.drop(stackItem);
+                        // Удаляем из known, чтобы не обрабатывать повторно
+                        known.remove(stackItem);
+                    }
+                }
+            }
+        }
     }
     
     /**
@@ -177,24 +364,29 @@ public class MasterMiner extends ActionWithFinal {
      */
     private void processNewStone(NGameUI gui, WItem newItem, MasterMinerWnd wnd) throws InterruptedException {
         NGItem dropped = (NGItem) newItem.item;
-        if (dropped.quality == null) {
-            // на всякий случай дожидаемся качества
+        
+        // Для стаков нужно получить качество через Stack info
+        double f3 = getItemQuality(dropped, newItem);
+        
+        if (f3 < 0) {
+            // Качество еще не готово - ждем
             WItem finalNewItem = newItem;
             NUtils.addTask(new NTask() {
                 { this.infinite = true; }
                 @Override
                 public boolean check() {
                     NGItem gi = (NGItem) finalNewItem.item;
-                    return gi.name() != null && gi.quality != null;
+                    if (gi.name() == null) return false;
+                    double quality = getItemQuality(gi, finalNewItem);
+                    return quality >= 0;
                 }
             });
+            f3 = getItemQuality(dropped, newItem);
+            if (f3 < 0) {
+                NUtils.addTask(new WaitTicks(2));
+                return;
+            }
         }
-        if (dropped.quality == null) {
-            NUtils.addTask(new WaitTicks(2));
-            return;
-        }
-
-        double f3 = dropped.quality;
         String stoneName = dropped.name();
         String stoneType = classifyStoneType(stoneName);
 
@@ -207,19 +399,62 @@ public class MasterMiner extends ActionWithFinal {
         // Драгоценные камни НЕ учитываются при подсчете качества и НЕ обновляют UI
         // Но маркеры для них ставятся
         if (isGem) {
+            // Обновляем UI с последним выкопанным драгоценным камнем
+            int masonryForUI = 0;
+            try {
+                masonryForUI = NUtils.getUI().sess.glob.getcattr("masonry").comp;
+            } catch (Exception ignored) {
+            }
+            wnd.setLastMined(stoneName, f3, masonryForUI);
+            
             // Только ставим маркер для драгоценного камня, если он включен в настройках
             nurgling.conf.NMasterMinerMarkingConfig markingConfig = nurgling.conf.NMasterMinerMarkingConfig.get();
             if (markingConfig != null) {
                 String configKey = extractGemstoneBaseName(stoneName);
+                System.out.println("Checking gemstone config for: '" + stoneName + "' -> base name: '" + configKey + "'");
+                
+                // Пробуем найти в конфиге с разными вариантами регистра
                 Boolean enabled = markingConfig.isEnabled(configKey);
+                if (enabled == null && !configKey.equals(configKey.toLowerCase())) {
+                    // Пробуем с маленькой буквы
+                    enabled = markingConfig.isEnabled(configKey.toLowerCase());
+                    if (enabled != null) {
+                        configKey = configKey.toLowerCase();
+                        System.out.println("Found config with lowercase key: '" + configKey + "'");
+                    }
+                }
+                if (enabled == null && !configKey.equals(configKey.substring(0, 1).toUpperCase() + configKey.substring(1).toLowerCase())) {
+                    // Пробуем с правильным регистром (первая буква заглавная)
+                    String properCase = configKey.substring(0, 1).toUpperCase() + configKey.substring(1).toLowerCase();
+                    enabled = markingConfig.isEnabled(properCase);
+                    if (enabled != null) {
+                        configKey = properCase;
+                        System.out.println("Found config with proper case key: '" + configKey + "'");
+                    }
+                }
+                
                 Double threshold = markingConfig.getThreshold(configKey);
+                System.out.println("Config result for key '" + configKey + "' - enabled: " + enabled + ", threshold: " + threshold);
                 
                 if (enabled != null && enabled) {
                     double itemThreshold = (threshold != null && !threshold.isNaN()) ? threshold : 10.0;
                     if (f3 >= itemThreshold) {
                         // Драгоценные камни - отдельный слой, ставим с фактическим качеством (f3)
-                        addGemstoneMarker(gui, dropped, stoneName, f3);
+                        // Используем базовое название для resourceType (например, "Moonstone" вместо "Small Smooth Moonstone")
+                        String baseGemName = extractGemstoneBaseName(stoneName);
+                        try {
+                            addGemstoneMarker(gui, dropped, baseGemName, f3);
+                        } catch (Exception e) {
+                            System.err.println("Failed to add gemstone marker for " + baseGemName + ": " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    } else {
+                        // Качество ниже порога - не ставим маркер
+                        System.out.println("Gemstone " + extractGemstoneBaseName(stoneName) + " quality " + f3 + " below threshold " + itemThreshold);
                     }
+                } else {
+                    // Маркер не включен в настройках
+                    System.out.println("Gemstone " + extractGemstoneBaseName(stoneName) + " not enabled in settings");
                 }
             }
             // Драгоценные камни НЕ сбрасываются и НЕ учитываются в статистике
@@ -309,6 +544,7 @@ public class MasterMiner extends ActionWithFinal {
                 } catch (Exception ignored) {
                 }
                 wnd.setStoneInfo(stoneType, stoneName, f3, wallQ, bestAltQ, masonryForUI, set, currentToolType);
+                wnd.setLastMined(stoneName, f3, masonryForUI);
                 wnd.incrementCounter();
                 
                 // Проверяем, нужно ли поставить метку на карте согласно настройкам
@@ -330,14 +566,14 @@ public class MasterMiner extends ActionWithFinal {
                                 addQuarryartzMarker(gui, stoneName, wallQ);
                             } else {
                                 // Остальные камни и руды - система спотов (обновление в радиусе 30 клеток)
-                                addOreSpotMarker(gui, stoneName, wallQ);
+                                addOreSpotMarker(gui, dropped, stoneName, wallQ);
                             }
                         }
                     }
                 }
             }
 
-            // проверка порога и сброс камня (только если не стак)
+            // проверка порога и сброс камня (включая стаки)
             // Сброс происходит по фактическому качеству камня (f3), а не по qWall
             // Для ракух и кэтголдов используется отдельный порог
             // Драгоценные камни НЕ сбрасываются (они уже обработаны выше и вернулись)
@@ -349,27 +585,20 @@ public class MasterMiner extends ActionWithFinal {
             }
             
             if (!Double.isNaN(threshold) && f3 < threshold) {
-                // проверяем, что это действительно камень из инвентаря, а не инструмент
-                if (newItem != null && newItem.parent == gui.getInventory()) {
+                // проверяем, что это действительно камень из инвентаря или из рук (vhand), а не инструмент
+                boolean isInInventory = (newItem != null && newItem.parent == gui.getInventory());
+                boolean isInHand = (newItem != null && newItem == gui.vhand);
+                if (isInInventory || isInHand) {
                     // дополнительная проверка: убеждаемся, что это не инструмент
                     String itemName = stoneName != null ? stoneName.toLowerCase() : "";
                     boolean isTool = itemName.contains("axe") || itemName.contains("pickaxe") || 
                                    itemName.contains("топор") || itemName.contains("кирк");
-                    // проверяем, что это не стак (проверяем через Amount)
-                    boolean isStack = false;
-                    try {
-                        haven.GItem.Amount amount = ((NGItem) newItem.item).getInfo(haven.GItem.Amount.class);
-                        if (amount != null && amount.itemnum() > 1) {
-                            isStack = true;
-                        }
-                    } catch (Exception ignored) {
-                        // если не удалось проверить, считаем что не стак
-                    }
-                    if (!isTool && !isStack) {
+                    // Стаки теперь тоже сбрасываются
+                    if (!isTool) {
                         // небольшая задержка перед сбросом, чтобы игра успела обработать появление камня
                         NUtils.addTask(new WaitTicks(3));
-                        // еще раз проверяем, что предмет все еще в инвентаре
-                        if (newItem.parent == gui.getInventory()) {
+                        // еще раз проверяем, что предмет все еще в инвентаре или в руках
+                        if ((newItem.parent == gui.getInventory()) || (newItem == gui.vhand)) {
                             NUtils.drop(newItem);
                             // удаляем из known, чтобы не обрабатывать повторно
                             known.remove(newItem);
@@ -546,44 +775,49 @@ public class MasterMiner extends ActionWithFinal {
         }
         
         // Проверяем ресурсный путь (более надежно)
+        // Проверяем, загружен ли ресурс, и если да - проверяем его путь
         try {
             // Пробуем получить ресурс через res.get()
             if (item.res != null) {
-                try {
-                    Resource res = item.res.get();
-                    if (res != null && res.name != null) {
-                        String resName = res.name.toLowerCase();
-                        // Проверяем различные паттерны для драгоценных камней в пути ресурса
-                        if (resName.contains("gems/gemstone") || 
-                            resName.contains("/gems/") ||
-                            resName.contains("gemstone") ||
-                            resName.contains("invobjs/gems") ||
-                            resName.contains("gfx/invobjs/gems")) {
-                            return true;
+                // Сначала проверяем, готов ли ресурс
+                if (item.res.isReady()) {
+                    try {
+                        Resource res = item.res.get();
+                        if (res != null && res.name != null) {
+                            String resName = res.name.toLowerCase();
+                            // Проверяем различные паттерны для драгоценных камней в пути ресурса
+                            // Учитываем форматы: ns/gemstone, gems/gemstone, /gems/, invobjs/gems, gfx/invobjs/gems
+                            // Простая проверка: если путь содержит "gemstone" или заканчивается на "/gems"
+                            if (resName.contains("gemstone") || 
+                                resName.contains("/gems/") ||
+                                resName.endsWith("/gems") ||
+                                resName.contains("invobjs/gems") ||
+                                resName.contains("gfx/invobjs/gems")) {
+                                return true;
+                            }
                         }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
                     }
-                } catch (Loading e) {
-                    // Ресурс еще загружается, пропускаем
-                } catch (Exception e) {
-                    // Игнорируем другие ошибки
                 }
             }
             
-            // Также пробуем через getres() метод
+            // Также пробуем через getres() метод (может работать даже если res не готов)
             try {
                 Resource res2 = item.getres();
                 if (res2 != null && res2.name != null) {
                     String resName2 = res2.name.toLowerCase();
-                    if (resName2.contains("gems/gemstone") || 
+                    // Проверяем различные паттерны для драгоценных камней в пути ресурса
+                    if (resName2.contains("gemstone") || 
                         resName2.contains("/gems/") ||
-                        resName2.contains("gemstone") ||
+                        resName2.endsWith("/gems") ||
                         resName2.contains("invobjs/gems") ||
                         resName2.contains("gfx/invobjs/gems")) {
                         return true;
                     }
                 }
             } catch (Loading e) {
-                // Ресурс еще загружается, пропускаем
+                // Ресурс еще загружается, пропускаем - полагаемся на проверку по названию
             } catch (Exception ignored) {
                 // Игнорируем другие ошибки getres()
             }
@@ -850,7 +1084,7 @@ public class MasterMiner extends ActionWithFinal {
      * Обновляет маркер в радиусе 30 клеток только если качество выше
      * Не заменяет другие руды или камни (проверяет resourceType)
      */
-    private void addOreSpotMarker(NGameUI gui, String oreName, double wallQ) {
+    private void addOreSpotMarker(NGameUI gui, NGItem oreItem, String oreName, double wallQ) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) {
                 return;
@@ -896,21 +1130,7 @@ public class MasterMiner extends ActionWithFinal {
                 }
             }
             
-            // Также проверяем, что в этом месте нет маркера квариарца
-            // Если есть квариарц - не ставим/не обновляем маркер спота
-            java.util.List<nurgling.widgets.LabeledMinimapMark> quarryartzMarks = 
-                gui.labeledMarkService.getMarksByResourceType("Quarryartz");
-            for (nurgling.widgets.LabeledMinimapMark mark : quarryartzMarks) {
-                if (mark.segmentId == segmentId) {
-                    int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
-                    int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
-                    // Если квариарц в радиусе 2 тайлов - не ставим маркер спота
-                    if (distX <= 2 && distY <= 2) {
-                        return; // Не ставим маркер спота, если здесь есть квариарц
-                    }
-                }
-            }
-            
+            // Убрали проверку на другие типы маркеров - теперь все маркеры могут сосуществовать
             if (nearbyMark != null) {
                 // Маркер найден рядом - проверяем качество
                 // Обновляем ТОЛЬКО если выкопал выше
@@ -928,7 +1148,7 @@ public class MasterMiner extends ActionWithFinal {
                         
                         // Создаем новый с обновленным качеством
                         String label = String.format("q%.0f", wallQ);
-                        BufferedImage iconImage = getOreIcon(oreName);
+                        BufferedImage iconImage = getOreIconFromItem(oreItem, oreName);
                         // Создаем маркер даже если иконка не загрузилась (используется fallback)
                         gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
                     }
@@ -939,7 +1159,7 @@ public class MasterMiner extends ActionWithFinal {
             } else {
                 // Маркер не найден - создаем новый
                 String label = String.format("q%.0f", wallQ);
-                BufferedImage iconImage = getOreIcon(oreName);
+                BufferedImage iconImage = getOreIconFromItem(oreItem, oreName);
                 // Создаем маркер даже если иконка не загрузилась (используется fallback)
                 gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
             }
@@ -949,7 +1169,83 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
-     * Получает иконку руды из ресурсов игры
+     * Получает иконку руды из самого предмета (приоритет) или из ресурсов игры (fallback)
+     * Пытается несколько раз получить спрайт, так как он может быть еще не загружен
+     */
+    public static BufferedImage getOreIconFromItem(NGItem oreItem, String oreName) {
+        if (oreItem == null) {
+            return getOreIcon(oreName);
+        }
+        
+        // ПЕРВЫЙ ПРИОРИТЕТ: Пробуем получить изображение через спрайт предмета
+        // Используем spr() который пытается создать спрайт если его нет
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                GSprite spr = oreItem.spr();
+                if (spr != null) {
+                    // Используем ItemTex.sprimg для получения изображения из спрайта
+                    BufferedImage sprImg = ItemTex.sprimg(spr);
+                    if (sprImg != null) {
+                        return sprImg;
+                    }
+                    
+                    // Альтернативный способ: если спрайт реализует ImageSprite
+                    if (spr instanceof GSprite.ImageSprite) {
+                        BufferedImage img = ((GSprite.ImageSprite) spr).image();
+                        if (img != null) {
+                            return img;
+                        }
+                    }
+                }
+            } catch (Loading e) {
+                // Ресурс еще загружается - попробуем еще раз после небольшой задержки
+                if (attempt < 2) {
+                    try {
+                        Thread.sleep(50); // Небольшая задержка 50мс
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    continue;
+                }
+            } catch (Exception e) {
+                // Игнорируем другие ошибки и пробуем следующий способ
+                break;
+            }
+        }
+        
+        // ВТОРОЙ ПРИОРИТЕТ: Пробуем создать спрайт из ресурса напрямую
+        try {
+            if (oreItem.res != null && oreItem.res.isReady() && oreItem.sdt != null) {
+                Resource res = oreItem.res.get();
+                if (res != null) {
+                    // Создаем спрайт из ресурса
+                    GSprite spr = GSprite.create(oreItem, res, oreItem.sdt.clone());
+                    if (spr != null) {
+                        BufferedImage sprImg = ItemTex.sprimg(spr);
+                        if (sprImg != null) {
+                            return sprImg;
+                        }
+                        
+                        if (spr instanceof GSprite.ImageSprite) {
+                            BufferedImage img = ((GSprite.ImageSprite) spr).image();
+                            if (img != null) {
+                                return img;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+        
+        // ТРЕТИЙ ПРИОРИТЕТ: Fallback - пробуем загрузить напрямую из ресурсов (старый способ)
+        return getOreIcon(oreName);
+    }
+    
+    /**
+     * Получает иконку руды из ресурсов игры (fallback метод)
      */
     public static BufferedImage getOreIcon(String oreName) {
         if (oreName == null) return null;
@@ -1033,51 +1329,28 @@ public class MasterMiner extends ActionWithFinal {
             long segmentId = gui.mmap.sessloc.seg.id;
             Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
             
-            // Ищем существующий маркер этого же драгоценного камня в радиусе 30 клеток
+            // Драгоценные камни ставятся как квариарц - четко в месте выкопан, без системы спотов
+            // Проверяем, есть ли уже маркер этого же драгоценного камня рядом (в радиусе 2 тайлов)
+            // Если есть - не ставим новый (как квариарц, не склеивается)
             java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
                 gui.labeledMarkService.getMarksByResourceType(gemName);
             
-            nurgling.widgets.LabeledMinimapMark nearbyMark = null;
+            boolean nearbyMarkExists = false;
             for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
                 // Проверяем, что это именно тот же драгоценный камень
                 if (mark.segmentId == segmentId && gemName.equals(mark.resourceType)) {
                     int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
                     int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
-                    // Проверяем радиус 30 тайлов
-                    if (distX <= 30 && distY <= 30) {
-                        nearbyMark = mark;
+                    // Проверяем радиус 2 тайла (как квариарц)
+                    if (distX <= 2 && distY <= 2) {
+                        nearbyMarkExists = true;
                         break;
                     }
                 }
             }
             
-            if (nearbyMark != null) {
-                // Маркер найден рядом - проверяем качество
-                // Обновляем ТОЛЬКО если выкопал выше
-                try {
-                    // Парсим качество из метки (формат "q130")
-                    double existingQ = 0;
-                    if (nearbyMark.label != null && nearbyMark.label.startsWith("q")) {
-                        existingQ = Double.parseDouble(nearbyMark.label.substring(1).trim());
-                    }
-                    
-                    // Если новое качество выше - обновляем маркер
-                    if (quality > existingQ) {
-                        // Удаляем старый маркер
-                        gui.labeledMarkService.removeMark(nearbyMark);
-                        
-                        // Создаем новый с обновленным качеством
-                        String label = String.format("q%.0f", quality);
-                        BufferedImage iconImage = getGemstoneIconFromItem(gemItem);
-                        // Создаем маркер даже если иконка не загрузилась (используется fallback)
-                        gui.labeledMarkService.addLabeledMark(label, gemName, segmentId, tileCoords, iconImage);
-                    }
-                    // Если качество не выше - не трогаем маркер
-                } catch (Exception e) {
-                    // Игнорируем ошибки парсинга
-                }
-            } else {
-                // Маркер не найден - создаем новый
+            if (!nearbyMarkExists) {
+                // Создаем новый маркер (как квариарц - четко в месте выкопан)
                 String label = String.format("q%.0f", quality);
                 BufferedImage iconImage = getGemstoneIconFromItem(gemItem);
                 // Создаем маркер даже если иконка не загрузилась (используется fallback)
@@ -1092,35 +1365,120 @@ public class MasterMiner extends ActionWithFinal {
      * Получает иконку драгоценного камня из самого предмета
      */
     public static BufferedImage getGemstoneIconFromItem(NGItem gemItem) {
-        if (gemItem == null) return null;
+        if (gemItem == null) {
+            return null;
+        }
         
-        // Пробуем получить иконку из ресурса самого предмета
+        // ПЕРВЫЙ ПРИОРИТЕТ: Пробуем получить изображение через спрайт предмета
+        // Используем spr() который пытается создать спрайт если его нет
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                GSprite spr = gemItem.spr();
+                if (spr != null) {
+                    // Используем ItemTex.sprimg для получения изображения из спрайта
+                    BufferedImage sprImg = ItemTex.sprimg(spr);
+                    if (sprImg != null) {
+                        return sprImg;
+                    }
+                    
+                    // Альтернативный способ: если спрайт реализует ImageSprite
+                    if (spr instanceof GSprite.ImageSprite) {
+                        BufferedImage img = ((GSprite.ImageSprite) spr).image();
+                        if (img != null) {
+                            return img;
+                        }
+                    }
+                }
+            } catch (Loading e) {
+                // Ресурс еще загружается - попробуем еще раз после небольшой задержки
+                if (attempt < 2) {
+                    try {
+                        Thread.sleep(50); // Небольшая задержка 50мс
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    continue;
+                }
+            } catch (Exception e) {
+                // Игнорируем другие ошибки и пробуем следующий способ
+                break;
+            }
+        }
+        
+        // ВТОРОЙ ПРИОРИТЕТ: Пробуем создать спрайт из ресурса напрямую
         try {
-            if (gemItem.res != null) {
+            if (gemItem.res != null && gemItem.res.isReady() && gemItem.sdt != null) {
+                Resource res = gemItem.res.get();
+                if (res != null) {
+                    // Создаем спрайт из ресурса
+                    GSprite spr = GSprite.create(gemItem, res, gemItem.sdt.clone());
+                    if (spr != null) {
+                        BufferedImage sprImg = ItemTex.sprimg(spr);
+                        if (sprImg != null) {
+                            return sprImg;
+                        }
+                        
+                        if (spr instanceof GSprite.ImageSprite) {
+                            BufferedImage img = ((GSprite.ImageSprite) spr).image();
+                            if (img != null) {
+                                return img;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+        
+        // ТРЕТИЙ ПРИОРИТЕТ: Пробуем получить имя ресурса и загрузить его напрямую
+        try {
+            Resource resFromGetres = gemItem.getres();
+            if (resFromGetres != null && resFromGetres.name != null) {
+                String resourceName = resFromGetres.name;
+                
+                // Пробуем загрузить ресурс по имени напрямую
                 try {
-                    Resource res = gemItem.res.get();
+                    Resource res = Resource.remote().loadwait(resourceName);
                     if (res != null) {
                         Resource.Image imgLayer = res.layer(Resource.imgc);
                         if (imgLayer != null && imgLayer.img != null) {
                             return imgLayer.img;
                         }
                     }
-                } catch (Loading e) {
-                    // Ресурс еще загружается, пробуем через getres()
+                } catch (Exception e) {
+                    // Игнорируем ошибки
                 }
-            }
-            
-            // Пробуем через getres()
-            try {
-                Resource res2 = gemItem.getres();
-                if (res2 != null) {
-                    Resource.Image imgLayer = res2.layer(Resource.imgc);
+                
+                // Пробуем получить иконку напрямую из getres()
+                try {
+                    Resource.Image imgLayer = resFromGetres.layer(Resource.imgc);
                     if (imgLayer != null && imgLayer.img != null) {
                         return imgLayer.img;
                     }
+                } catch (Exception e) {
+                    // Игнорируем ошибки
                 }
-            } catch (Exception e) {
-                // Игнорируем ошибки
+            }
+            
+            // Пробуем через res.get()
+            if (gemItem.res != null) {
+                try {
+                    if (gemItem.res.isReady()) {
+                        Resource res = gemItem.res.get();
+                        if (res != null) {
+                            Resource.Image imgLayer = res.layer(Resource.imgc);
+                            if (imgLayer != null && imgLayer.img != null) {
+                                return imgLayer.img;
+                            }
+                        }
+                    }
+                } catch (Loading e) {
+                    // Ресурс еще загружается
+                } catch (Exception e) {
+                    // Игнорируем ошибки
+                }
             }
         } catch (Exception e) {
             // Игнорируем ошибки

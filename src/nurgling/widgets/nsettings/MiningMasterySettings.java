@@ -34,7 +34,12 @@ public class MiningMasterySettings extends Panel {
             checkbox = add(new CheckBox("") {
                 @Override
                 public void set(boolean val) {
+                    boolean oldVal = a;
                     a = val;
+                    // Сохраняем настройки при изменении чекбокса
+                    if (oldVal != val && onThresholdChange != null) {
+                        onThresholdChange.run();
+                    }
                 }
             }, new Coord(UI.scale(5), 0));
 
@@ -235,8 +240,16 @@ public class MiningMasterySettings extends Panel {
             if (enabledObj == null) {
                 // По умолчанию руды, Quarryartz и драгоценные камни включены
                 enabled = isOre || isQuarryartz || isGemstone;
+                // Логируем для драгоценных камней
+                if (isGemstone) {
+                    System.out.println("Loading gemstone config: " + itemName + " -> default enabled: " + enabled);
+                }
             } else {
                 enabled = enabledObj;
+                // Логируем для драгоценных камней
+                if (isGemstone) {
+                    System.out.println("Loading gemstone config: " + itemName + " -> loaded enabled: " + enabled);
+                }
             }
             
             Double threshold = config.getThreshold(itemName);
@@ -275,9 +288,15 @@ public class MiningMasterySettings extends Panel {
             
             config.setEnabled(itemName, checkbox.isEnabled());
             config.setThreshold(itemName, checkbox.getThreshold());
+            
+            // Логируем сохранение для драгоценных камней для отладки
+            if (MasterMiner.isGemstone(itemName)) {
+                System.out.println("Saving gemstone config: " + itemName + " -> enabled: " + checkbox.isEnabled() + ", threshold: " + checkbox.getThreshold());
+            }
         }
         
         NMasterMinerMarkingConfig.set(config);
         NConfig.needUpdate();
+        System.out.println("MiningMasterySettings saved successfully");
     }
 }

@@ -98,6 +98,9 @@ public class NParser
         if(name==null)
             return false;
         for (String arg : args) {
+            if (arg == null) {
+                continue; // Пропускаем null аргументы
+            }
             NAlias alias = getCachedAlias(arg);
             if (alias.matches(name)) {
                 return true;
@@ -113,6 +116,10 @@ public class NParser
      * @return cached or new NAlias object.
      */
     private static NAlias getCachedAlias(String key) {
+        if (key == null) {
+            // Возвращаем пустой alias для null ключа, который никогда не совпадет
+            return new NAlias("");
+        }
         NAlias cached = ALIAS_CACHE.get(key);
         if (cached == null) {
             cached = new NAlias(key);

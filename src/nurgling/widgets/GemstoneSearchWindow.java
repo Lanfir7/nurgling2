@@ -267,6 +267,15 @@ public class GemstoneSearchWindow extends Window {
             }
         }
     }
+    
+    @Override
+    public void wdgmsg(Widget sender, String msg, Object... args) {
+        if (msg.equals("close")) {
+            destroy();
+        } else {
+            super.wdgmsg(sender, msg, args);
+        }
+    }
 }
 
 

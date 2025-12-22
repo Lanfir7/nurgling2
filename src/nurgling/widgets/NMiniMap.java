@@ -1014,6 +1014,21 @@ NMiniMap extends MiniMap {
                     int targetSize = UI.scale(18);
                     g.aimage(iconTex, screenPos, 0.5, 0.5,
                         UI.scale(targetSize * iconTex.sz().x / dsz, targetSize * iconTex.sz().y / dsz));
+                } else {
+                    // Fallback для маркеров без иконки (например, драгоценных камней или руд)
+                    // Рисуем цветной круг
+                    Color iconColor;
+                    if (isGemstoneMark(mark.resourceType)) {
+                        iconColor = new Color(255, 215, 0); // Золотой для драгоценных камней
+                    } else if (isOreSpotMark(mark.resourceType)) {
+                        iconColor = new Color(255, 200, 0); // Золотой для руд
+                    } else {
+                        iconColor = new Color(139, 137, 137); // Серый по умолчанию
+                    }
+                    int iconSize = UI.scale(12);
+                    g.chcolor(iconColor);
+                    g.fellipse(screenPos, new Coord(iconSize, iconSize));
+                    g.chcolor();
                 }
 
                 // Draw label under the icon (like quest giver names)
@@ -1410,6 +1425,34 @@ NMiniMap extends MiniMap {
                             // Tooltip with resource type
                             String resourceType = loc.getResourceType();
                             return Text.render(resourceType != null ? resourceType : "Unknown");
+                        }
+                    }
+                }
+            }
+
+            // Check for labeled marks tooltip (Quarryartz, Ores, Gemstones)
+            if(gui != null && gui.labeledMarkService != null) {
+                // Check if markers are hidden (respect "Hide Markers" button)
+                MapWnd mapwnd = gui.mapfile;
+                boolean markersHidden = (mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall));
+
+                if(!markersHidden) {
+                    java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(sessloc.seg.id);
+                    int threshold = UI.scale(10); // Screen pixels
+
+                    for(LabeledMinimapMark mark : marks) {
+                        // Пропускаем скрытые маркеры
+                        if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) continue;
+                        if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) continue;
+                        if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) continue;
+
+                        // Convert segment-relative coordinates to screen coordinates (same as drawing)
+                        Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
+
+                        if(c.dist(screenPos) < threshold) {
+                            // Tooltip with resource type (gemstone name)
+                            String resourceType = mark.resourceType != null ? mark.resourceType : "Unknown";
+                            return Text.render(resourceType);
                         }
                     }
                 }
