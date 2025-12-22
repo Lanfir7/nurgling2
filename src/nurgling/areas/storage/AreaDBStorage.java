@@ -449,6 +449,29 @@ public class AreaDBStorage implements AreaStorage {
         }
     }
     
+    /**
+     * Проверяет, существует ли зона в БД и не удалена ли она
+     */
+    public boolean areaExists(int areaId) {
+        if (!isAvailable()) {
+            return true; // Если БД недоступна, считаем что зона существует
+        }
+        
+        try {
+            Connection conn = poolManager.getConnection();
+            String sql = "SELECT 1 FROM areas WHERE id = ? AND deleted = FALSE";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setInt(1, areaId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("AreaDBStorage: Failed to check if area exists: " + e.getMessage());
+            return true; // В случае ошибки считаем, что зона существует (не блокируем работу)
+        }
+    }
+    
     private void restoreArea(Connection conn, NArea area) throws SQLException {
         // Если у зоны нет UUID, генерируем его
         if (area.uuid == null || area.uuid.isEmpty()) {

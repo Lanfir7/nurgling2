@@ -53,6 +53,10 @@ public class NOverlay extends MapView.MapRaster
         // ВАЖНО: Оверлеи зон (визуальное выделение) отображаются ВСЕГДА
         // Проверяем только локальное скрытие зоны (hide) с учетом тоггла
         if (id >= 0) {
+            // ВАЖНО: Проверяем что GameUI доступен перед вызовом getArea()
+            if (NUtils.getGameUI() == null) {
+                return;
+            }
             NArea zoneArea = NUtils.getArea(id);
             if (zoneArea != null && zoneArea.hide) {
                 // Проверяем тоггл "показывать все зоны" для скрытых зон

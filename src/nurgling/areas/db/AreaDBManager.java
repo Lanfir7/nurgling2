@@ -315,6 +315,22 @@ public class AreaDBManager {
     /**
      * Удаляет зону (без пропуска синхронизации - для обратной совместимости)
      */
+    /**
+     * Проверяет, существует ли зона в БД и не удалена ли она
+     */
+    public boolean areaExists(int areaId) {
+        try {
+            if (useDB && primaryStorage instanceof AreaDBStorage) {
+                return ((AreaDBStorage) primaryStorage).areaExists(areaId);
+            }
+            // Для JSON fallback всегда возвращаем true (не можем проверить)
+            return true;
+        } catch (Exception e) {
+            System.err.println("AreaDBManager: Failed to check if area exists: " + e.getMessage());
+            return true; // В случае ошибки считаем, что зона существует (не блокируем работу)
+        }
+    }
+    
     public void deleteArea(int areaId) {
         deleteArea(areaId, false);
     }

@@ -980,8 +980,21 @@ public class NContext {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
                     if (cand == null) {
-                        System.out.println("NContext.findOutGlobal: Zone " + id + " not found in glob.map.areas");
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " not found in glob.map.areas - skipping");
                         continue;
+                    }
+                    
+                    // ВАЖНО: Проверяем, что зона не удалена в БД
+                    // Если зона есть в nols, но не в glob.map.areas, или удалена в БД - пропускаем
+                    try {
+                        nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
+                        if (!areaManager.areaExists(id)) {
+                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") is deleted in DB - skipping");
+                            continue;
+                        }
+                    } catch (Exception e) {
+                        // Если не удалось проверить БД, продолжаем (не блокируем работу)
+                        System.err.println("NContext.findOutGlobal: Failed to check if zone " + id + " exists in DB: " + e.getMessage());
                     }
                     
                     // ВАЖНО: Не проверяем isVisible() здесь, так как для синхронизированных зон
@@ -1004,10 +1017,12 @@ public class NContext {
                         Pair<Coord2d, Coord2d> rcArea = cand.getRCArea();
                         // Если getRCArea() вернул null (grid не загружен), проверяем есть ли space
                         if (rcArea == null && (cand.space == null || cand.space.space == null || cand.space.space.isEmpty())) {
+                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: no coordinates and no space (rcArea=null, space=" + (cand.space == null ? "null" : (cand.space.space == null ? "null" : (cand.space.space.isEmpty() ? "empty" : "exists"))) + ")");
                             continue; // Нет координат и нет space - пропускаем
                         }
                         
                         NArea.Ingredient output = cand.getOutput(name);
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") getOutput(" + name + ") returned: " + (output != null ? "output with th=" + output.th : "null"));
                         if (output != null) {
                             // Проверяем путь только если зона подходит по порогу качества
                             // Если у зоны порог 60, а у предмета качество 73, то 60 <= 73 = true
@@ -1017,7 +1032,20 @@ public class NContext {
                                 // ВАЖНО: Если getRCArea() == null, пытаемся найти путь используя space напрямую
                                 if (rcArea != null) {
                                     // Grid загружен - проверяем путь через routeGraphManager
-                                    if (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand)) != null) {
+                                    RoutePoint playerPoint = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui);
+                                    RoutePoint areaPoint = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand);
+                                    if (playerPoint != null && areaPoint != null) {
+                                        List<RoutePoint> path = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(playerPoint, areaPoint);
+                                        if (path != null && !path.isEmpty()) {
+                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added with path check (path found)");
+                                            areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
+                                        } else {
+                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: path not found (playerPoint=" + playerPoint + ", areaPoint=" + areaPoint + ")");
+                                        }
+                                    } else {
+                                        // Route point не найден, но grid загружен - добавляем зону без проверки пути
+                                        // Это может произойти для синхронизированных зон, которые еще не подключены к графу
+                                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (route point not found, but grid loaded)");
                                         areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
                                     }
                                 } else {
@@ -1040,6 +1068,11 @@ public class NContext {
         }
 
         areas.sort(ta_comp);
+        
+        System.out.println("NContext.findOutGlobal: Found " + areas.size() + " candidate zones for " + name + " (quality=" + th + ")");
+        for (TestedArea ta : areas) {
+            System.out.println("NContext.findOutGlobal: Candidate zone " + ta.area.id + " (" + ta.area.name + ") with th=" + ta.th);
+        }
 
         // ВАЖНО: Выбираем зону с максимальным порогом, который <= качества предмета
         // Зона без порога (th=1) должна использоваться только если нет зон с порогом >= качества предмета
@@ -1053,6 +1086,7 @@ public class NContext {
                 res = area.area;
                 tth = area.th;
                 foundZoneWithThreshold = true;
+                System.out.println("NContext.findOutGlobal: Selected zone with threshold: " + area.area.id + " (" + area.area.name + ") th=" + area.th);
             }
         }
         
@@ -1063,9 +1097,14 @@ public class NContext {
                     // Зона без порога (принимает все)
                     res = area.area;
                     tth = 1;
+                    System.out.println("NContext.findOutGlobal: Selected zone without threshold: " + area.area.id + " (" + area.area.name + ")");
                     break;
                 }
             }
+        }
+        
+        if (res == null) {
+            System.out.println("NContext.findOutGlobal: No suitable zone found for " + name + " (quality=" + th + ")");
         }
 
         ArrayList<NArea> targets = new ArrayList<>();
