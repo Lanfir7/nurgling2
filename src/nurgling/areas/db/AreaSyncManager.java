@@ -12,6 +12,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -36,6 +39,8 @@ public class AreaSyncManager {
     
     // ExecutorService для фоновых задач синхронизации
     private ExecutorService syncExecutor;
+    private ScheduledExecutorService scheduledExecutor;
+    private ScheduledFuture<?> delayedSyncTask;
     private final AtomicBoolean syncInProgress = new AtomicBoolean(false);
     
     // Кэш для проверки доступности сервера (обновляется в фоне)
@@ -50,12 +55,24 @@ public class AreaSyncManager {
             t.setDaemon(true); // Поток-демон, не будет блокировать завершение приложения
             return t;
         });
+        // Создаем ScheduledExecutorService для отложенных задач
+        scheduledExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "AreaSyncScheduledThread");
+            t.setDaemon(true);
+            return t;
+        });
     }
     
     /**
      * Останавливает ExecutorService (вызывается при завершении работы)
      */
     public void shutdown() {
+        if (delayedSyncTask != null && !delayedSyncTask.isDone()) {
+            delayedSyncTask.cancel(false);
+        }
+        if (scheduledExecutor != null && !scheduledExecutor.isShutdown()) {
+            scheduledExecutor.shutdown();
+        }
         if (syncExecutor != null && !syncExecutor.isShutdown()) {
             syncExecutor.shutdown();
         }
@@ -83,10 +100,39 @@ public class AreaSyncManager {
             
             // Синхронизируем время с сервером при инициализации
             syncClient.syncTime();
+            
+            // Планируем отложенную синхронизацию через 10 секунд после старта
+            scheduleDelayedSync();
         } else {
             this.enabled = false;
             System.out.println("AreaSyncManager: Sync disabled (server URL or zone_sync not set)");
         }
+    }
+    
+    /**
+     * Планирует отложенную синхронизацию через 10 секунд после старта
+     */
+    private void scheduleDelayedSync() {
+        if (delayedSyncTask != null && !delayedSyncTask.isDone()) {
+            delayedSyncTask.cancel(false);
+        }
+        
+        delayedSyncTask = scheduledExecutor.schedule(() -> {
+            try {
+                System.out.println("AreaSyncManager: Starting delayed sync (10 seconds after startup)");
+                nurgling.NGameUI gui = nurgling.NUtils.getGameUI();
+                if (gui != null && gui.map != null && gui.map.glob != null && gui.map.glob.map != null) {
+                    Collection<NArea> localAreas = gui.map.glob.map.areas.values();
+                    nurgling.areas.db.AreaDBManager dbManager = nurgling.areas.db.AreaDBManager.getInstance();
+                    syncAll(localAreas, dbManager);
+                } else {
+                    System.out.println("AreaSyncManager: Delayed sync skipped - game UI not ready");
+                }
+            } catch (Exception e) {
+                System.err.println("AreaSyncManager: Error during delayed sync: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }, 10, TimeUnit.SECONDS);
     }
     
     /**
@@ -1054,6 +1100,9 @@ public class AreaSyncManager {
                 }
             }
             
+            // Список новых/обновленных зон для подключения к роутам в отдельном потоке
+            final List<nurgling.areas.NArea> zonesToConnect = new ArrayList<>();
+            
             // ВАЖНО: Для новых зон выполняем те же действия, что и при создании через UI
             // Это обеспечивает правильное отображение и подключение к графу маршрутов
             for (Integer newZoneId : newZoneIds) {
@@ -1064,10 +1113,17 @@ public class AreaSyncManager {
                         mapView.createAreaLabel(newZoneId);
                     }
                     
-                    // Подключаем к графу маршрутов (как в addArea)
-                    mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(newZone);
-                    
+                    // Добавляем в список для подключения к роутам в отдельном потоке
+                    zonesToConnect.add(newZone);
                 }
+            }
+            
+            // Подключаем новые/обновленные зоны к роутам в отдельном потоке (чтобы не блокировать UI)
+            if (!zonesToConnect.isEmpty()) {
+                final List<nurgling.areas.NArea> zonesToConnectFinal = new ArrayList<>(zonesToConnect);
+                syncExecutor.submit(() -> {
+                    connectZonesToRoutesInBackground(zonesToConnectFinal);
+                });
             }
             
             // Обновляем виджет зон, если он открыт
@@ -1107,6 +1163,9 @@ public class AreaSyncManager {
                 return;
             }
             
+            // Список новых/обновленных зон для подключения к роутам в отдельном потоке
+            final List<nurgling.areas.NArea> zonesToConnect = new ArrayList<>();
+            
             // Синхронизируем glob.map.areas с БД
             synchronized (mapView.glob.map.areas) {
                 // Удаляем зоны, которых нет в БД
@@ -1141,36 +1200,41 @@ public class AreaSyncManager {
                             mapView.createAreaLabel(areaId);
                             System.out.println("AreaSyncManager.updateAreasInMemory: Overlay created for zone " + areaId + ", nols.size after=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
                         }
-                        // Подключаем к графу маршрутов (как в addArea)
-                        mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(dbArea);
+                        // Добавляем в список для подключения к роутам в отдельном потоке
+                        zonesToConnect.add(dbArea);
                     } else {
-                        // Существующая зона - обновляем данные
-                        System.out.println("AreaSyncManager.updateAreasInMemory: Updating existing zone " + areaId + " (" + dbArea.name + ") from sync");
-                        updateAreaData(existingArea, dbArea);
+                        // Существующая зона - проверяем, была ли она обновлена
+                        boolean wasUpdated = updateAreaData(existingArea, dbArea);
                         
-                        // ВАЖНО: Сбрасываем gid чтобы createAreaLabel() пересоздал dummy и overlay
-                        if (existingArea.gid != Long.MIN_VALUE) {
-                            haven.Gob dummy = mapView.dummys.get(existingArea.gid);
-                            if (dummy != null) {
-                                mapView.glob.oc.remove(dummy);
-                                mapView.dummys.remove(existingArea.gid);
+                        if (wasUpdated) {
+                            System.out.println("AreaSyncManager.updateAreasInMemory: Updating existing zone " + areaId + " (" + dbArea.name + ") from sync");
+                            
+                            // ВАЖНО: Сбрасываем gid чтобы createAreaLabel() пересоздал dummy и overlay
+                            if (existingArea.gid != Long.MIN_VALUE) {
+                                haven.Gob dummy = mapView.dummys.get(existingArea.gid);
+                                if (dummy != null) {
+                                    mapView.glob.oc.remove(dummy);
+                                    mapView.dummys.remove(existingArea.gid);
+                                }
+                                existingArea.gid = Long.MIN_VALUE; // Сбрасываем gid для пересоздания
                             }
-                            existingArea.gid = Long.MIN_VALUE; // Сбрасываем gid для пересоздания
-                        }
-                        
-                        // Пересоздаем overlay если нужно
-                        synchronized (mapView.nols) {
-                            System.out.println("AreaSyncManager.updateAreasInMemory: Recreating overlay for zone " + areaId + ", nols.size before=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
-                            nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);
-                            if (nol != null) {
-                                nol.remove();
-                                mapView.nols.remove(areaId);
-                                System.out.println("AreaSyncManager.updateAreasInMemory: Removed old overlay for zone " + areaId);
+                            
+                            // Пересоздаем overlay если нужно
+                            synchronized (mapView.nols) {
+                                System.out.println("AreaSyncManager.updateAreasInMemory: Recreating overlay for zone " + areaId + ", nols.size before=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
+                                nurgling.overlays.map.NOverlay nol = mapView.nols.get(areaId);
+                                if (nol != null) {
+                                    nol.remove();
+                                    mapView.nols.remove(areaId);
+                                    System.out.println("AreaSyncManager.updateAreasInMemory: Removed old overlay for zone " + areaId);
+                                }
+                                mapView.createAreaLabel(areaId);
+                                System.out.println("AreaSyncManager.updateAreasInMemory: Overlay recreated for zone " + areaId + ", nols.size after=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
                             }
-                            mapView.createAreaLabel(areaId);
-                            System.out.println("AreaSyncManager.updateAreasInMemory: Overlay recreated for zone " + areaId + ", nols.size after=" + mapView.nols.size() + ", contains=" + mapView.nols.containsKey(areaId));
+                            
+                            // Добавляем в список для подключения к роутам в отдельном потоке
+                            zonesToConnect.add(existingArea);
                         }
-                        
                     }
                 }
             }
@@ -1184,6 +1248,14 @@ public class AreaSyncManager {
             // Вызываем initDummys() для создания overlays для всех зон, которые еще не имеют их
             mapView.initDummys();
             
+            // Подключаем новые/обновленные зоны к роутам в отдельном потоке (чтобы не блокировать UI)
+            if (!zonesToConnect.isEmpty()) {
+                final List<nurgling.areas.NArea> zonesToConnectFinal = new ArrayList<>(zonesToConnect);
+                syncExecutor.submit(() -> {
+                    connectZonesToRoutesInBackground(zonesToConnectFinal);
+                });
+            }
+            
         } catch (Exception e) {
             System.err.println("AreaSyncManager: Failed to refresh visual zones: " + e.getMessage());
             e.printStackTrace();
@@ -1191,9 +1263,55 @@ public class AreaSyncManager {
     }
     
     /**
-     * Обновляет данные зоны из БД
+     * Подключает зоны к роутам в фоновом потоке (чтобы не блокировать UI)
      */
-    private void updateAreaData(nurgling.areas.NArea existing, nurgling.areas.NArea fromDB) {
+    private void connectZonesToRoutesInBackground(List<nurgling.areas.NArea> zones) {
+        try {
+            nurgling.NGameUI gui = nurgling.NUtils.getGameUI();
+            if (gui == null || gui.map == null) {
+                return;
+            }
+            
+            nurgling.NMapView mapView = (nurgling.NMapView) gui.map;
+            
+            int connectedCount = 0;
+            for (nurgling.areas.NArea area : zones) {
+                try {
+                    // Небольшая задержка между подключениями, чтобы не перегружать систему
+                    Thread.sleep(50);
+                    
+                    mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(area);
+                    connectedCount++;
+                } catch (Exception e) {
+                    System.err.println("AreaSyncManager.connectZonesToRoutesInBackground: Failed to connect zone " + area.id + " (" + area.name + "): " + e.getMessage());
+                }
+            }
+            System.out.println("AreaSyncManager.connectZonesToRoutesInBackground: Connected " + connectedCount + " zones to route points in background");
+        } catch (Exception e) {
+            System.err.println("AreaSyncManager.connectZonesToRoutesInBackground: Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Обновляет данные зоны из БД
+     * @return true если зона была обновлена, false если данные не изменились
+     */
+    private boolean updateAreaData(nurgling.areas.NArea existing, nurgling.areas.NArea fromDB) {
+        boolean wasUpdated = false;
+        
+        // Проверяем изменения в базовых полях
+        if (!java.util.Objects.equals(existing.name, fromDB.name) ||
+            !java.util.Objects.equals(existing.path, fromDB.path) ||
+            !java.util.Objects.equals(existing.color, fromDB.color) ||
+            existing.hide != fromDB.hide ||
+            !java.util.Objects.equals(existing.uuid, fromDB.uuid) ||
+            !java.util.Objects.equals(existing.zoneSync, fromDB.zoneSync) ||
+            existing.lastUpdated != fromDB.lastUpdated ||
+            existing.synced != fromDB.synced) {
+            wasUpdated = true;
+        }
+        
         existing.name = fromDB.name;
         existing.path = fromDB.path;
         existing.color = fromDB.color;
@@ -1205,6 +1323,9 @@ public class AreaSyncManager {
         
         // Обновляем space если изменился
         if (fromDB.space != null && fromDB.space.space != null) {
+            if (existing.space == null || !existing.space.space.equals(fromDB.space.space)) {
+                wasUpdated = true;
+            }
             existing.space = fromDB.space;
             // ВАЖНО: поддерживаем grids_id консистентным со space
             existing.syncGridIdsFromSpace();
@@ -1213,13 +1334,24 @@ public class AreaSyncManager {
         // Обновляем spec, jin, jout если изменились
         // ВАЖНО: Создаем новые объекты, чтобы гарантировать обновление ссылок
         if (fromDB.spec != null) {
+            if (existing.spec == null || !existing.spec.equals(fromDB.spec)) {
+                wasUpdated = true;
+            }
             existing.spec = new ArrayList<>(fromDB.spec);
         }
         if (fromDB.jin != null) {
             // Создаем новый JSONArray из fromDB.jin, чтобы гарантировать обновление
             try {
-                existing.jin = new org.json.JSONArray(fromDB.jin.toString());
+                String newJinStr = fromDB.jin.toString();
+                String oldJinStr = existing.jin != null ? existing.jin.toString() : null;
+                if (!java.util.Objects.equals(oldJinStr, newJinStr)) {
+                    wasUpdated = true;
+                }
+                existing.jin = new org.json.JSONArray(newJinStr);
             } catch (Exception e) {
+                if (existing.jin != fromDB.jin) {
+                    wasUpdated = true;
+                }
                 existing.jin = fromDB.jin;
             }
         }
@@ -1227,11 +1359,21 @@ public class AreaSyncManager {
             // ВАЖНО: Создаем новый JSONArray из fromDB.jout, чтобы гарантировать обновление
             // Это нужно чтобы боты видели изменения в jout после синхронизации
             try {
-                existing.jout = new org.json.JSONArray(fromDB.jout.toString());
+                String newJoutStr = fromDB.jout.toString();
+                String oldJoutStr = existing.jout != null ? existing.jout.toString() : null;
+                if (!java.util.Objects.equals(oldJoutStr, newJoutStr)) {
+                    wasUpdated = true;
+                }
+                existing.jout = new org.json.JSONArray(newJoutStr);
             } catch (Exception e) {
+                if (existing.jout != fromDB.jout) {
+                    wasUpdated = true;
+                }
                 existing.jout = fromDB.jout;
             }
         }
+        
+        return wasUpdated;
     }
     
     /**

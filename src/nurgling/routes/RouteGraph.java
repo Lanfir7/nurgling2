@@ -221,35 +221,73 @@ public class RouteGraph {
         }
 
         ArrayList<RoutePoint> points = findNearestPoints();
+        if (points.isEmpty()) {
+            System.out.println("RouteGraph.connectAreaToRoutePoints: No route points found for zone " + area.id + " (" + area.name + ")");
+            return;
+        }
+        
         MCache cache = NUtils.getGameUI().ui.sess.glob.map;
-        Pair<Coord2d, Coord2d> testrc = area.getRCArea();
+        // ВАЖНО: Используем getRawRCArea() для синхронизированных зон, у которых grid может быть еще не загружен
+        // getRawRCArea() возвращает координаты из space, даже если grid не загружен
+        Pair<Coord2d, Coord2d> testrc = area.getRawRCArea();
+        // Если getRawRCArea() вернул null, пробуем getRCArea() (для локальных зон)
+        if (testrc == null) {
+            testrc = area.getRCArea();
+        }
         try {
             if (testrc != null) {
+                System.out.println("RouteGraph.connectAreaToRoutePoints: Connecting zone " + area.id + " (" + area.name + ") to " + points.size() + " route points");
                 ArrayList<Gob> gobs = Finder.findGobs(area);
+                boolean gridLoaded = true;
+                int connectedCount = 0;
+                
                 for (RoutePoint point : points) {
                     Coord2d rcpoint = point.toCoord2d(cache);
-                    if (point.toCoord2d(cache) != null) {
+                    if (rcpoint != null) {
                         boolean isReachable = false;
 
-
-                        if (gobs.isEmpty()) {
+                        try {
+                            if (gobs.isEmpty()) {
                                 isReachable = PathFinder.isAvailable(testrc.a, rcpoint, false) || PathFinder.isAvailable(testrc.b, rcpoint, false);
-                        } else {
-                            for (Gob gob : gobs) {
-                                if (PathFinder.isAvailable(rcpoint, gob, true)) {
-                                    isReachable = true;
-                                    break;
+                            } else {
+                                for (Gob gob : gobs) {
+                                    if (PathFinder.isAvailable(rcpoint, gob, true)) {
+                                        isReachable = true;
+                                        break;
+                                    }
                                 }
                             }
+                        } catch (MCache.LoadingMap e) {
+                            // Grid еще не загружен - используем расстояние для подключения
+                            gridLoaded = false;
+                            // Подключаем зону к ближайшим route points по расстоянию (без проверки пути)
+                            // Это позволит зоне работать даже если grid еще не загружен
+                            double distance = area.getDistance(rcpoint);
+                            if (distance < 1000) { // Подключаем только к близким точкам (в пределах 1000 тайлов)
+                                isReachable = true;
+                            }
                         }
+                        
                         if (isReachable) {
                             point.addReachableArea(area.id, area.getDistance(rcpoint));
+                            connectedCount++;
                         }
                     }
                 }
+                
+                if (gridLoaded) {
+                    System.out.println("RouteGraph.connectAreaToRoutePoints: Zone " + area.id + " (" + area.name + ") connected to " + connectedCount + " route points (path check)");
+                } else {
+                    System.out.println("RouteGraph.connectAreaToRoutePoints: Zone " + area.id + " (" + area.name + ") connected to " + connectedCount + " route points (distance-based, grid not loaded)");
+                }
+            } else {
+                System.out.println("RouteGraph.connectAreaToRoutePoints: Zone " + area.id + " (" + area.name + ") skipped - no coordinates (getRawRCArea=null, getRCArea=null, space=" + (area.space != null && area.space.space != null ? "exists" : "null") + ")");
             }
         } catch (InterruptedException e) {
             NUtils.getGameUI().error("Unable to determine route point reachability from point to area. Skipping point");
+        } catch (MCache.LoadingMap e) {
+            // Grid еще не загружен - пропускаем подключение, но не падаем
+            System.out.println("RouteGraph.connectAreaToRoutePoints: Zone " + area.id + " (" + area.name + ") skipped - grid not loaded yet (will retry when grid loads)");
         }
     }
 
