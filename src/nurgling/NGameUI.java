@@ -34,6 +34,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static haven.Inventory.invsq;
+import org.json.JSONObject;
 
 public class NGameUI extends GameUI
 {
@@ -1154,9 +1155,10 @@ public class NGameUI extends GameUI
                 MapFile.SMarker marker = mapfile.file.smarker(gob.ngob.name, info.seg, sc);
                 
                 if (marker == null) {
-                    // Create new marker - use version 0 as default, will be updated when resource loads
+                    // Create new marker - use correct resource path from VSpec if available
                     int resVer = 0;
                     String displayName = gob.ngob.name;
+                    String resourcePathToUse = gob.ngob.name;
                     
                     try {
                         Indir<Resource> resIndir = Resource.remote().load(gob.ngob.name);
@@ -1165,6 +1167,45 @@ public class NGameUI extends GameUI
                         Resource.Tooltip tt = res.layer(Resource.Tooltip.class);
                         if (tt != null) {
                             displayName = tt.t;
+                            
+                            // Ищем правильный путь к ресурсу через VSpec (как в markobjs)
+                            String correctResourcePath = null;
+                            org.json.JSONObject vspecObj = findVSpecObjectByName(tt.t);
+                            if(vspecObj != null && vspecObj.has("static")) {
+                                correctResourcePath = vspecObj.getString("static");
+                            } else {
+                                // Fallback на старый метод
+                                correctResourcePath = getCorrectResourcePathForProspecting(tt.t, gob.ngob.name);
+                            }
+                            
+                            // Используем исправленный путь, если найден
+                            if(correctResourcePath != null && !correctResourcePath.equals(gob.ngob.name)) {
+                                resourcePathToUse = correctResourcePath;
+                                try {
+                                    Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
+                                    if(correctResLoaded != null) {
+                                        Resource.Image loadedImg = correctResLoaded.layer(Resource.imgc);
+                                        if(loadedImg != null && loadedImg.img != null) {
+                                            resVer = correctResLoaded.ver;
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // Если не удалось загрузить, используем версию из оригинального ресурса
+                                }
+                            } else {
+                                // Даже для оригинального пути проверяем, что ресурс загружен правильно
+                                try {
+                                    Resource originalResLoaded = Resource.remote().loadwait(resourcePathToUse);
+                                    if(originalResLoaded != null) {
+                                        Resource.Image loadedImg = originalResLoaded.layer(Resource.imgc);
+                                        if(loadedImg != null && loadedImg.img != null) {
+                                            resVer = originalResLoaded.ver;
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // Игнорируем ошибки
+                                }
+                            }
                         }
                     } catch (Loading e) {
                         // Resource not loaded yet, use default values
@@ -1173,7 +1214,7 @@ public class NGameUI extends GameUI
                     }
                     
                     marker = new MapFile.SMarker(info.seg, sc, displayName, 0, 
-                        new Resource.Saved(Resource.remote(), gob.ngob.name, resVer));
+                        new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
                     mapfile.file.add(marker);
                 }
                 
@@ -1190,6 +1231,167 @@ public class NGameUI extends GameUI
             // Silently ignore errors
             return null;
         }
+    }
+    
+    /**
+     * Ищет JSONObject в VSpec по названию ресурса (как в NCatSelection)
+     * Возвращает JSONObject из VSpec, если найден, иначе null
+     */
+    private org.json.JSONObject findVSpecObjectByName(String resourceName) {
+        if (resourceName == null || resourceName.trim().isEmpty() || VSpec.categories == null) {
+            return null;
+        }
+        
+        String lowerName = resourceName.trim().toLowerCase();
+        
+        // Ищем во всех категориях VSpec
+        for (String categoryName : VSpec.categories.keySet()) {
+            ArrayList<org.json.JSONObject> items = VSpec.categories.get(categoryName);
+            if (items != null) {
+                for (org.json.JSONObject obj : items) {
+                    try {
+                        String name = obj.optString("name", "");
+                        if (name != null && !name.isEmpty()) {
+                            String lowerVSpecName = name.toLowerCase().trim();
+                            
+                            // Точное совпадение (без учета регистра)
+                            if (lowerVSpecName.equals(lowerName)) {
+                                return obj;
+                            }
+                            // Нормализованное совпадение (без пробелов)
+                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                            if (normalizedVSpecName.equals(normalizedInputName)) {
+                                return obj;
+                            }
+                            // Частичное совпадение
+                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
+                                return obj;
+                            }
+                            // Проверяем, содержит ли одно название другое
+                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
+                                return obj;
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Получает правильный путь к ресурсу из VSpec по названию (как в Icon Settings)
+     * Ищет в категориях Ore и Stones
+     */
+    private String getCorrectResourcePathForProspecting(String resourceName, String currentResourcePath) {
+        if (resourceName == null || resourceName.trim().isEmpty()) {
+            return null;
+        }
+        
+        // Нормализуем название для поиска (убираем лишние пробелы, приводим к нижнему регистру)
+        String normalizedName = resourceName.trim();
+        String lowerName = normalizedName.toLowerCase();
+        
+        // ПРИОРИТЕТ 1: Ищем в VSpec
+        if (VSpec.categories != null) {
+            // Ищем в категории Ore
+            ArrayList<org.json.JSONObject> oreList = VSpec.categories.get("Ore");
+            if (oreList != null) {
+                for (org.json.JSONObject ore : oreList) {
+                    try {
+                        String name = ore.optString("name", "");
+                        if (name != null && !name.isEmpty()) {
+                            String lowerVSpecName = name.toLowerCase().trim();
+                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                            
+                            // Точное совпадение (без учета регистра)
+                            if (lowerVSpecName.equals(lowerName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Нормализованное совпадение (без пробелов)
+                            if (normalizedVSpecName.equals(normalizedInputName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Частичное совпадение
+                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Проверяем, содержит ли одно название другое
+                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+            
+            // Ищем в категории Stones
+            ArrayList<org.json.JSONObject> stonesList = VSpec.categories.get("Stone");
+            if (stonesList != null) {
+                for (org.json.JSONObject stone : stonesList) {
+                    try {
+                        String name = stone.optString("name", "");
+                        if (name != null && !name.isEmpty()) {
+                            String lowerVSpecName = name.toLowerCase().trim();
+                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                            
+                            // Точное совпадение (без учета регистра)
+                            if (lowerVSpecName.equals(lowerName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Нормализованное совпадение (без пробелов)
+                            if (normalizedVSpecName.equals(normalizedInputName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Частичное совпадение
+                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Проверяем, содержит ли одно название другое
+                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+        
+        return null;
     }
 
     @Override

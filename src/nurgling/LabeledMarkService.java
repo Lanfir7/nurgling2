@@ -91,10 +91,16 @@ public class LabeledMarkService implements ProfileAwareService {
                                Coord tileCoords, BufferedImage iconImage) {
         lock.writeLock().lock();
         try {
-            // Remove any existing mark at similar location
+            // Remove any existing mark at similar location, but ONLY if it's the same resourceType
+            // This allows different resource types (Quarryartz, Ores, Gemstones) to coexist at the same location
             final Coord tc = tileCoords;
             final long segId = segmentId;
-            labeledMarks.entrySet().removeIf(e -> e.getValue().isNear(segId, tc, 2));
+            final String resType = resourceType;
+            labeledMarks.entrySet().removeIf(e -> {
+                LabeledMinimapMark mark = e.getValue();
+                // Удаляем только маркеры того же типа ресурса в радиусе 2 тайлов
+                return mark.isNear(segId, tc, 2) && resType != null && resType.equals(mark.resourceType);
+            });
             
             // Create and add new mark
             LabeledMinimapMark mark = new LabeledMinimapMark(label, resourceType, segmentId, tileCoords, iconImage);

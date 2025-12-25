@@ -138,8 +138,8 @@ public class ProspectingLocationService implements ProfileAwareService {
                 prospectingLocations.put(location.getLocationId(), location);
                 saveProspectingLocations();
                 
-                // Создаем маркер на карте с иконкой Wine Glance (только для проспектинга)
-                createProspectingMarker(mapFile, segmentId, segmentCoord, resourceType);
+                // Маркеры создаются автоматически через markobjs() или markobj()
+                // Не создаем маркеры здесь, чтобы избежать дублирования
             } finally {
                 lock.writeLock().unlock();
             }
@@ -186,9 +186,12 @@ public class ProspectingLocationService implements ProfileAwareService {
     public boolean removeProspectingLocation(String locationId) {
         lock.writeLock().lock();
         try {
-            boolean removed = prospectingLocations.remove(locationId) != null;
+            ProspectingLocation location = prospectingLocations.remove(locationId);
+            boolean removed = location != null;
             if (removed) {
                 saveProspectingLocations();
+                // Маркеры удаляются автоматически системой игры при удалении локации
+                // Не удаляем маркеры здесь, чтобы избежать конфликтов
             }
             return removed;
         } finally {
@@ -254,125 +257,6 @@ public class ProspectingLocationService implements ProfileAwareService {
         }
     }
 
-    /**
-     * Создает маркер на карте для проспектинга с иконкой Wine Glance
-     * Использует тот же подход, что и MasterMiner для получения правильной иконки
-     */
-    private void createProspectingMarker(MapFile mapFile, long segmentId, Coord segmentCoord, String resourceType) {
-        try {
-            // Используем уникальное имя маркера на основе координат и типа ресурса
-            String markerName = resourceType != null ? resourceType : "Prospecting";
-            
-            // Получаем правильный путь к иконке Wine Glance (как в MasterMiner.getOreIcon)
-            String markerResourceName = getWineGlanceResourcePath();
-            if (markerResourceName == null) {
-                return; // Не удалось найти правильный путь к иконке
-            }
-            
-            // Пытаемся получить write lock для создания маркера
-            boolean lockAcquired = false;
-            try {
-                lockAcquired = mapFile.lock.writeLock().tryLock(500, TimeUnit.MILLISECONDS);
-                if (!lockAcquired) {
-                    return; // Не можем получить блокировку
-                }
-                
-                // Проверяем, не существует ли уже маркер проспектинга на этой позиции
-                // Используем уникальное имя ресурса для маркеров проспектинга
-                MapFile.SMarker existingProspectingMarker = mapFile.smarker(markerResourceName, segmentId, segmentCoord);
-                if (existingProspectingMarker != null) {
-                    return; // Маркер проспектинга уже существует на этой позиции
-                }
-                
-                // Также проверяем, нет ли уже обычного маркера камня на этой позиции
-                // Если есть маркер камня, не создаем маркер проспектинга, чтобы не дублировать
-                boolean hasStoneMarker = false;
-                for (MapFile.Marker mark : mapFile.markers) {
-                    if (mark.seg == segmentId && mark.tc.equals(segmentCoord)) {
-                        // Проверяем, что это не маркер проспектинга
-                        if (mark instanceof MapFile.SMarker) {
-                            MapFile.SMarker sm = (MapFile.SMarker) mark;
-                            // Если это маркер камня (не wineglance), пропускаем создание
-                            if (!sm.res.name.equals(markerResourceName)) {
-                                hasStoneMarker = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (hasStoneMarker) {
-                    return; // Уже есть маркер камня на этой позиции, не создаем дубликат
-                }
-                
-                // Загружаем ресурс иконки
-                try {
-                    Indir<Resource> resIndir = Resource.remote().load(markerResourceName);
-                    Resource res = resIndir.get();
-                    int resVer = res.ver;
-                    
-                    // Создаем маркер с иконкой Wine Glance
-                    MapFile.SMarker marker = new MapFile.SMarker(
-                        segmentId, 
-                        segmentCoord, 
-                        markerName, 
-                        0, 
-                        new Resource.Saved(Resource.remote(), markerResourceName, resVer)
-                    );
-                    
-                    mapFile.add(marker);
-                } catch (Loading e) {
-                    // Ресурс еще не загружен, создаем маркер с версией 0
-                    MapFile.SMarker marker = new MapFile.SMarker(
-                        segmentId, 
-                        segmentCoord, 
-                        markerName, 
-                        0, 
-                        new Resource.Saved(Resource.remote(), markerResourceName, 0)
-                    );
-                    mapFile.add(marker);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } finally {
-                if (lockAcquired) {
-                    mapFile.lock.writeLock().unlock();
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Error creating prospecting marker: " + e);
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * Получает правильный путь к ресурсу иконки Wine Glance
-     * Использует тот же подход, что и MasterMiner.getOreIcon
-     */
-    private String getWineGlanceResourcePath() {
-        // Специальная обработка для Wine Glance - используем правильный путь (как в MasterMiner)
-        // Пробуем несколько вариантов в порядке приоритета
-        String[] possiblePaths = {
-            "gfx/invobjs/wineglance",  // Основной путь (как в MasterMiner)
-            "gfx/invobjs/wine-glance", // Альтернативный вариант с дефисом
-            "gfx/invobjs/cuprite"      // Fallback (как в MasterMiner)
-        };
-        
-        for (String path : possiblePaths) {
-            try {
-                // Проверяем, существует ли ресурс
-                Resource res = Resource.remote().loadwait(path);
-                if (res != null) {
-                    return path; // Нашли рабочий путь
-                }
-            } catch (Exception e) {
-                // Пробуем следующий путь
-                continue;
-            }
-        }
-        
-        // Если ничего не нашлось, возвращаем основной путь (будет использован fallback)
-        return "gfx/invobjs/wineglance";
-    }
 
     /**
      * Dispose the service and cleanup resources
@@ -385,4 +269,5 @@ public class ProspectingLocationService implements ProfileAwareService {
             lock.writeLock().unlock();
         }
     }
+    
 }

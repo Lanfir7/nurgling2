@@ -368,13 +368,14 @@ public class MasterMinerWnd extends Window {
     /**
      * Обновляет строку с последним выкопанным камнем
      */
-    public void setLastMined(String stoneName, double f3, int masonry) {
+    public void setLastMined(String stoneName, double wallQ, int masonry) {
         if (stoneName == null || stoneName.isEmpty()) {
             lastMinedLbl.settext("Last mined: -");
             return;
         }
         
-        String text = String.format("Last mined: %s %.1f", stoneName, f3);
+        // Показываем wallQ (качество в стене), как и для топов
+        String text = String.format("Last mined: %s q%.1f", stoneName, wallQ);
         lastMinedLbl.settext(text);
     }
 

@@ -37,3 +37,5 @@ public class WaitNextPointForSimpleRouteAutoRecorder extends NTask {
     }
 }
 
+
+

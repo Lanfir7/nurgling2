@@ -8,9 +8,12 @@ import nurgling.overlays.map.MinimapClaimRenderer;
 import nurgling.overlays.map.MinimapExploredAreaRenderer;
 import nurgling.tools.ExploredArea;
 import nurgling.tools.NParser;
+import nurgling.tools.VSpec;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.lang.reflect.Field;
 
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
@@ -1272,7 +1275,252 @@ NMiniMap extends MiniMap {
                     }
                 }
 
+                // Исправляем путь к ресурсу для маркеров проспектинга перед отрисовкой
+                if(mark.m instanceof MapFile.SMarker) {
+                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
+                    try {
+                        // Получаем правильный путь к ресурсу через VSpec по названию маркера
+                        String markerName = sm.nm;
+                        String currentResourcePath = sm.res.name;
+                        
+                        // Получаем правильный путь к ресурсу через VSpec
+                        String correctResourcePath = getCorrectResourcePathForProspecting(markerName, currentResourcePath);
+                        
+                        // Проверяем, нужно ли исправить путь к ресурсу
+                        boolean needsFix = (correctResourcePath != null && !correctResourcePath.equals(currentResourcePath));
+                        
+                        // Также проверяем, загрузилось ли изображение - если нет, пробуем исправить путь
+                        try {
+                            Field imgField = DisplayMarker.class.getDeclaredField("img");
+                            imgField.setAccessible(true);
+                            Resource.Image currentImg = (Resource.Image)imgField.get(mark);
+                            
+                            // Если изображение не загружено, пробуем исправить путь к ресурсу
+                            if(currentImg == null && markerName != null && !markerName.trim().isEmpty()) {
+                                // Если правильный путь еще не найден, пробуем найти его
+                                if(!needsFix) {
+                                    correctResourcePath = getCorrectResourcePathForProspecting(markerName, currentResourcePath);
+                                    needsFix = (correctResourcePath != null && !correctResourcePath.equals(currentResourcePath));
+                                }
+                            }
+                        } catch (Exception e) {
+                            // Игнорируем ошибки рефлексии
+                        }
+                        
+                        if(needsFix && correctResourcePath != null) {
+                            // Обновляем путь к ресурсу в маркере (используем loadwait как в MasterMiner)
+                            try {
+                                Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
+                                
+                                // Проверяем, что ресурс действительно загрузился и имеет изображение
+                                if(correctResLoaded != null && correctResLoaded.layer(Resource.imgc) != null) {
+                                    // Обновляем ресурс в маркере
+                                    sm.res = new Resource.Saved(Resource.remote(), correctResourcePath, correctResLoaded.ver);
+                                    
+                                    // Сбрасываем кэш изображения в DisplayMarker, чтобы оно перезагрузилось
+                                    try {
+                                        Field imgField = DisplayMarker.class.getDeclaredField("img");
+                                        imgField.setAccessible(true);
+                                        imgField.set(mark, null);
+                                        Field ccField = DisplayMarker.class.getDeclaredField("cc");
+                                        ccField.setAccessible(true);
+                                        ccField.set(mark, null);
+                                        
+                                        // Пробуем загрузить изображение сразу с правильным ресурсом
+                                        try {
+                                            Resource.Image newImg = correctResLoaded.flayer(Resource.imgc);
+                                            if(newImg != null) {
+                                                imgField.set(mark, newImg);
+                                                Resource.Neg neg = correctResLoaded.layer(Resource.negc);
+                                                Coord newCc = (neg != null) ? neg.cc : newImg.ssz.div(2);
+                                                ccField.set(mark, newCc);
+                                            }
+                                        } catch (Exception e) {
+                                            // Игнорируем ошибки загрузки изображения
+                                        }
+                                    } catch (Exception e) {
+                                        // Игнорируем ошибки рефлексии
+                                    }
+                                }
+                            } catch (Exception e) {
+                                // Игнорируем ошибки
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+                
                 Coord markPos = mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz);
+                
+                // Перехватываем отрисовку маркера и исправляем путь к ресурсу, если изображение не загрузилось
+                if(mark.m instanceof MapFile.SMarker) {
+                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
+                    try {
+                        // Проверяем, загрузилось ли изображение
+                        Field imgField = DisplayMarker.class.getDeclaredField("img");
+                        imgField.setAccessible(true);
+                        Resource.Image currentImg = (Resource.Image)imgField.get(mark);
+                        
+                        // Также проверяем, правильно ли загрузился ресурс
+                        boolean needsFix = false;
+                        try {
+                            Resource currentRes = sm.res.get();
+                            Resource.Image resImg = currentRes.flayer(Resource.imgc);
+                            // Если изображение не загружено или ресурс не имеет изображения, нужно исправить
+                            if(currentImg == null || resImg == null) {
+                                needsFix = true;
+                            }
+                        } catch (Exception e) {
+                            // Если ресурс не загружается, нужно исправить
+                            needsFix = true;
+                        }
+                        
+                        // Если изображение не загружено, пробуем загрузить его заново
+                        if(needsFix || currentImg == null) {
+                            String markerName = sm.nm;
+                            String currentResourcePath = sm.res.name;
+                            
+                            if(markerName != null && markerName.toLowerCase().contains("wine")) {
+                                System.err.println("drawmarkers: Fixing marker: name='" + markerName + "', currentPath='" + currentResourcePath + "', img=" + currentImg);
+                            }
+                            
+                            // Получаем правильный путь к ресурсу через VSpec (используем findVSpecObjectByName как в markobjs)
+                            String correctResourcePath = null;
+                            org.json.JSONObject vspecObj = findVSpecObjectByName(markerName);
+                            if(vspecObj != null && vspecObj.has("static")) {
+                                correctResourcePath = vspecObj.getString("static");
+                            } else {
+                                // Fallback на старый метод
+                                correctResourcePath = getCorrectResourcePathForProspecting(markerName, currentResourcePath);
+                            }
+                            
+                            // Используем correctResourcePath, если он найден, иначе используем currentResourcePath
+                            String resourcePathToLoad = (correctResourcePath != null) ? correctResourcePath : currentResourcePath;
+                            
+                            // Если путь нужно исправить или изображение не загружено, пробуем загрузить ресурс заново
+                            if(correctResourcePath != null && !correctResourcePath.equals(currentResourcePath)) {
+                                // Обновляем ресурс в маркере
+                                try {
+                                    Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
+                                    if(correctResLoaded != null && correctResLoaded.layer(Resource.imgc) != null) {
+                                        sm.res = new Resource.Saved(Resource.remote(), correctResourcePath, correctResLoaded.ver);
+                                        resourcePathToLoad = correctResourcePath;
+                                    }
+                                } catch (Exception e) {
+                                    if(markerName != null && markerName.toLowerCase().contains("wine")) {
+                                        System.err.println("drawmarkers: Error loading correct resource: " + e.getMessage());
+                                    }
+                                }
+                            }
+                            
+                            // Пробуем загрузить изображение заново, даже если путь правильный
+                            try {
+                                Resource resToLoad = Resource.remote().loadwait(resourcePathToLoad);
+                                if(resToLoad != null && resToLoad.layer(Resource.imgc) != null) {
+                                    // Сбрасываем кэш изображения
+                                    imgField.set(mark, null);
+                                    Field ccField = DisplayMarker.class.getDeclaredField("cc");
+                                    ccField.setAccessible(true);
+                                    ccField.set(mark, null);
+                                    
+                                    // Загружаем изображение заново
+                                    Resource.Image newImg = resToLoad.flayer(Resource.imgc);
+                                    if(newImg != null) {
+                                        imgField.set(mark, newImg);
+                                        Resource.Neg neg = resToLoad.layer(Resource.negc);
+                                        Coord newCc = (neg != null) ? neg.cc : newImg.ssz.div(2);
+                                        ccField.set(mark, newCc);
+                                        
+                                        // Также устанавливаем hit область (как в DisplayMarker.draw)
+                                        Field hitField = DisplayMarker.class.getDeclaredField("hit");
+                                        hitField.setAccessible(true);
+                                        Area currentHit = (Area)hitField.get(mark);
+                                        if(currentHit == null) {
+                                            Area newHit = Area.sized(newCc.inv(), newImg.ssz);
+                                            hitField.set(mark, newHit);
+                                        }
+                                        
+                                        if(markerName != null && markerName.toLowerCase().contains("wine")) {
+                                            System.err.println("drawmarkers: Image loaded successfully: path='" + resourcePathToLoad + "', img=" + newImg + ", cc=" + newCc);
+                                        }
+                                    } else {
+                                        if(markerName != null && markerName.toLowerCase().contains("wine")) {
+                                            System.err.println("drawmarkers: Image is null after load: path='" + resourcePathToLoad + "'");
+                                        }
+                                    }
+                                } else {
+                                    if(markerName != null && markerName.toLowerCase().contains("wine")) {
+                                        System.err.println("drawmarkers: Resource loaded but no image layer: path='" + resourcePathToLoad + "'");
+                                    }
+                                }
+                            } catch (Exception e) {
+                                if(markerName != null && markerName.toLowerCase().contains("wine")) {
+                                    System.err.println("drawmarkers: Error loading resource: path='" + resourcePathToLoad + "', error=" + e.getMessage());
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки рефлексии
+                    }
+                }
+                
+                // Для всех маркеров проверяем и обновляем ресурс, если изображение не готово
+                if(mark.m instanceof MapFile.SMarker) {
+                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
+                    try {
+                        // Проверяем, нужно ли обновить ресурс
+                        Field imgField = DisplayMarker.class.getDeclaredField("img");
+                        imgField.setAccessible(true);
+                        Resource.Image currentImg = (Resource.Image)imgField.get(mark);
+                        
+                        // Если изображение не готово (null или img == null), обновляем ресурс
+                        boolean needsUpdate = false;
+                        if(currentImg == null) {
+                            needsUpdate = true;
+                        } else {
+                            try {
+                                java.awt.image.BufferedImage bufferedImg = currentImg.img;
+                                if(bufferedImg == null) {
+                                    needsUpdate = true;
+                                }
+                            } catch (Exception e) {
+                                needsUpdate = true;
+                            }
+                        }
+                        
+                        if(needsUpdate) {
+                            // Загружаем ресурс заново и обновляем маркер
+                            Resource loadedRes = Resource.remote().loadwait(sm.res.name);
+                            if(loadedRes != null) {
+                                Resource.Image loadedImg = loadedRes.layer(Resource.imgc);
+                                if(loadedImg != null && loadedImg.img != null) {
+                                    // Обновляем ресурс в маркере с правильной версией
+                                    sm.res = new Resource.Saved(Resource.remote(), sm.res.name, loadedRes.ver);
+                                    
+                                    // Сбрасываем кэш изображения, чтобы DisplayMarker перезагрузил его
+                                    imgField.set(mark, null);
+                                    Field ccField = DisplayMarker.class.getDeclaredField("cc");
+                                    ccField.setAccessible(true);
+                                    ccField.set(mark, null);
+                                    
+                                    // Также сбрасываем hit для полной перезагрузки
+                                    try {
+                                        Field hitField = DisplayMarker.class.getDeclaredField("hit");
+                                        hitField.setAccessible(true);
+                                        hitField.set(mark, null);
+                                    } catch (Exception e) {
+                                        // Игнорируем, если поле не найдено
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+                
+                // Используем стандартную отрисовку
                 mark.draw(g, markPos);
                 
                 // Draw name for quest giver markers (bush/bumling)
@@ -1803,6 +2051,45 @@ NMiniMap extends MiniMap {
     }
 
     /**
+     * Ищет путь к иконке в VSpec.object по названию руды
+     * Преобразует путь из gfx/terobjs/bumlings/... в gfx/invobjs/...
+     * 
+     * @param resourceType название ресурса (например, "Wine Glance")
+     * @return путь к иконке (например, "gfx/invobjs/cuprite") или null если не найден
+     */
+    private String getIconPathFromVSpec(String resourceType) {
+        if (resourceType == null || VSpec.object == null) return null;
+        
+        String lower = resourceType.toLowerCase().trim();
+        String normalized = lower.replaceAll("\\s+", "");
+        
+        // Ищем в VSpec.object путь к иконке по названию руды
+        for (String iconPath : VSpec.object.keySet()) {
+            ArrayList<String> oreNames = VSpec.object.get(iconPath);
+            if (oreNames != null) {
+                for (String oreName : oreNames) {
+                    String lowerOreName = oreName.toLowerCase().trim();
+                    String normalizedOreName = lowerOreName.replaceAll("\\s+", "");
+                    
+                    // Проверяем точное совпадение или нормализованное
+                    if (lowerOreName.equals(lower) || normalizedOreName.equals(normalized) ||
+                        lowerOreName.equals(normalized) || normalizedOreName.equals(lower)) {
+                        // Преобразуем путь из gfx/terobjs/bumlings/... в gfx/invobjs/...
+                        if (iconPath.startsWith("gfx/terobjs/bumlings/")) {
+                            String oreType = iconPath.substring("gfx/terobjs/bumlings/".length());
+                            return "gfx/invobjs/" + oreType;
+                        }
+                        // Если путь уже в правильном формате, возвращаем как есть
+                        return iconPath;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
      * Преобразует название ресурса проспектинга в путь к иконке
      */
     private String getProspectingIconPath(String resourceType) {
@@ -1815,6 +2102,12 @@ NMiniMap extends MiniMap {
             return "gfx/terobjs/map/cavepuddle"; // Используем иконку воды из пещеры
         } else if (lower.contains("void") || lower.contains("empty")) {
             return null; // Пустота - используем fallback
+        }
+        
+        // Сначала пробуем найти путь в VSpec (для руд с альтернативными названиями)
+        String vSpecPath = getIconPathFromVSpec(resourceType);
+        if (vSpecPath != null) {
+            return vSpecPath;
         }
         
         // Специальные случаи преобразования названий
@@ -1835,6 +2128,25 @@ NMiniMap extends MiniMap {
      */
     private TexI tryLoadProspectingIcon(String resourceType) {
         if (resourceType == null) return null;
+        
+        // Сначала пробуем найти путь в VSpec (для руд с альтернативными названиями)
+        String vSpecPath = getIconPathFromVSpec(resourceType);
+        if (vSpecPath != null) {
+            TexI cached = prospectingIconCache.get(vSpecPath);
+            if (cached != null) {
+                return cached;
+            }
+            
+            try {
+                Resource iconRes = Resource.remote().loadwait(vSpecPath);
+                BufferedImage icon = iconRes.layer(Resource.imgc).img;
+                TexI tex = new TexI(icon);
+                prospectingIconCache.put(vSpecPath, tex);
+                return tex;
+            } catch (Exception e) {
+                // Если не удалось загрузить из VSpec, пробуем другие пути
+            }
+        }
         
         String lower = resourceType.toLowerCase().trim();
         
@@ -2240,6 +2552,49 @@ NMiniMap extends MiniMap {
             }
         }
         
+        // Handle Shift+left-click on permanent markers (SMarker) - delete them
+        if(ev.b == 1 && ui.modshift && dloc != null && sessloc != null && display != null && dgext != null) {
+            Coord hsz = sz.div(2);
+            int threshold = UI.scale(10);
+            
+            // Loop through all markers and check if click is near one
+            for(Coord c : dgext) {
+                DisplayGrid dgrid = display[dgext.ri(c)];
+                if(dgrid == null)
+                    continue;
+                
+                for(DisplayMarker mark : dgrid.markers(true)) {
+                    if(filter(mark))
+                        continue;
+                    
+                    // Only handle SMarker (permanent markers)
+                    if(!(mark.m instanceof MapFile.SMarker))
+                        continue;
+                    
+                    // Calculate marker's screen position (same as drawmarkers)
+                    Coord screenPos = mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz);
+                    
+                    // Check if click is within threshold
+                    if(ev.c.dist(screenPos) < threshold) {
+                        MapFile.SMarker sm = (MapFile.SMarker)mark.m;
+                        try {
+                            // Remove marker from file
+                            file.remove(sm);
+                            NGameUI gui = NUtils.getGameUI();
+                            if(gui != null) {
+                                String markerName = sm.nm != null ? sm.nm : "маркер";
+                                gui.msg("Маркер '" + markerName + "' удален", java.awt.Color.GREEN);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error removing marker: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                        return true; // Consume event to prevent player movement
+                    }
+                }
+            }
+        }
+        
         // Handle left-click for forager path recording - prevent player movement
         if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
@@ -2613,5 +2968,447 @@ NMiniMap extends MiniMap {
         } catch(Exception e) {
             return null;
         }
+    }
+    
+    /**
+     * Переопределяем markobjs для исправления пути к ресурсу иконки для маркеров проспектинга
+     * Использует VSpec для получения правильного пути (как в Icon Settings)
+     */
+    @Override
+    public void markobjs() {
+        // Используем рефлексию для доступа к приватному полю markchecked
+        Field markcheckedField = null;
+        try {
+            markcheckedField = DisplayIcon.class.getDeclaredField("markchecked");
+            markcheckedField.setAccessible(true);
+        } catch (NoSuchFieldException e) {
+            // Если не удалось получить поле, вызываем родительский метод
+            super.markobjs();
+            return;
+        }
+        
+        for(DisplayIcon icon : icons) {
+            try {
+                boolean markchecked = markcheckedField.getBoolean(icon);
+                
+                if(markchecked)
+                    continue;
+                GobIcon.Icon micon = icon.icon;
+                if(!icon.conf.getmarkablep() || !(micon instanceof GobIcon.ImageIcon)) {
+                    markcheckedField.setBoolean(icon, true);
+                    continue;
+                }
+                
+                // Получаем правильный путь к ресурсу через VSpec (как в редакторе категорий - используем JSONObject напрямую)
+                String correctResourcePath = null;
+                String tooltipName = null;
+                try {
+                    Resource.Tooltip tt = micon.res.flayer(Resource.tooltip);
+                    if(tt != null && tt.t != null) {
+                        tooltipName = tt.t;
+                        
+                        // Ищем JSONObject в VSpec по названию (как в NCatSelection)
+                        org.json.JSONObject vspecObj = findVSpecObjectByName(tt.t);
+                        if(vspecObj != null && vspecObj.has("static")) {
+                            correctResourcePath = vspecObj.getString("static");
+                            if(tt.t.toLowerCase().contains("wine")) {
+                                System.err.println("markobjs: Found in VSpec: name='" + tt.t + "', path='" + correctResourcePath + "'");
+                            }
+                        } else {
+                            // Fallback на старый метод, если не найден в VSpec
+                            correctResourcePath = getCorrectResourcePathForProspecting(tt.t, micon.res.name);
+                            if(tt.t.toLowerCase().contains("wine")) {
+                                System.err.println("markobjs: Not in VSpec, fallback: name='" + tt.t + "', path='" + correctResourcePath + "'");
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // Игнорируем ошибки
+                }
+                
+                // Используем исправленный путь к ресурсу, если найден
+                String resourcePathToUse = (correctResourcePath != null && !correctResourcePath.equals(micon.res.name)) 
+                    ? correctResourcePath 
+                    : micon.res.name;
+                
+                Coord tc = icon.gob.rc.floor(tilesz);
+                MCache.Grid obg = ui.sess.glob.map.getgrid(tc.div(cmaps));
+                if(!file.lock.writeLock().tryLock())
+                    continue;
+                MapFile.SMarker mid = null;
+                boolean isNew = false;
+                try {
+                    MapFile.GridInfo info = file.gridinfo.get(obg.id);
+                    if(info == null)
+                        continue;
+                    Coord sc = tc.add(info.sc.sub(obg.gc).mul(cmaps));
+                    
+                    // Сначала ищем маркер по названию (tooltip) и координатам, а не по пути к ресурсу
+                    // Это нужно, чтобы найти маркер даже если он был создан с неправильным путем
+                    MapFile.SMarker prev = null;
+                    if(tooltipName != null) {
+                        // Ищем маркер по названию и координатам
+                        for(MapFile.Marker mark : file.markers) {
+                            if(mark instanceof MapFile.SMarker) {
+                                MapFile.SMarker sm = (MapFile.SMarker)mark;
+                                if(sm.nm != null && sm.nm.equals(tooltipName) && sm.seg == info.seg && sm.tc.equals(sc)) {
+                                    prev = sm;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Если не нашли по названию, пробуем найти по пути к ресурсу (как обычно)
+                    if(prev == null) {
+                        prev = file.smarker(resourcePathToUse, info.seg, sc);
+                        // Также пробуем найти по оригинальному пути
+                        if(prev == null && !resourcePathToUse.equals(micon.res.name)) {
+                            prev = file.smarker(micon.res.name, info.seg, sc);
+                        }
+                    }
+                    
+                    if(prev == null) {
+                        if(icon.conf.getmarkp()) {
+                            Resource.Tooltip tt = micon.res.flayer(Resource.tooltip);
+                            int resVer = micon.res.ver;
+                            
+                            // Загружаем ресурс с исправленным путем, если он отличается (используем loadwait как в MasterMiner)
+                            if(correctResourcePath != null && !correctResourcePath.equals(micon.res.name)) {
+                                resourcePathToUse = correctResourcePath; // Всегда используем исправленный путь
+                                try {
+                                    Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
+                                    // Проверяем, что ресурс действительно загрузился и имеет изображение с img (как в ItemTex.create())
+                                    if(correctResLoaded != null) {
+                                        Resource.Image loadedImg = correctResLoaded.layer(Resource.imgc);
+                                        if(loadedImg != null && loadedImg.img != null) {
+                                            resVer = correctResLoaded.ver;
+                                            if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                                System.err.println("markobjs: Resource loaded successfully: path='" + resourcePathToUse + "', ver=" + resVer + ", imgReady=true");
+                                            }
+                                        } else {
+                                            // Если изображение не готово, используем версию 0
+                                            resVer = 0;
+                                            if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                                System.err.println("markobjs: Resource loaded but img is null: path='" + resourcePathToUse + "'");
+                                            }
+                                        }
+                                    } else {
+                                        resVer = 0;
+                                        if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                            System.err.println("markobjs: Resource is null: path='" + resourcePathToUse + "'");
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // Если не удалось загрузить, используем версию 0
+                                    resVer = 0;
+                                    if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                        System.err.println("markobjs: Resource load error: path='" + resourcePathToUse + "', error=" + e.getMessage());
+                                    }
+                                }
+                            } else {
+                                // Даже для оригинального пути проверяем, что ресурс загружен правильно
+                                try {
+                                    Resource originalResLoaded = Resource.remote().loadwait(resourcePathToUse);
+                                    if(originalResLoaded != null) {
+                                        Resource.Image loadedImg = originalResLoaded.layer(Resource.imgc);
+                                        if(loadedImg != null && loadedImg.img != null) {
+                                            resVer = originalResLoaded.ver;
+                                        } else {
+                                            // Если изображение не готово, используем версию из micon.res
+                                            resVer = micon.res.ver;
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // Если не удалось загрузить, используем версию из micon.res
+                                    resVer = micon.res.ver;
+                                }
+                            }
+                            
+                            mid = new MapFile.SMarker(info.seg, sc, tt.t, 0, new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
+                            file.add(mid);
+                            isNew = true;
+                            if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                System.err.println("markobjs: Marker created: name='" + tt.t + "', path='" + resourcePathToUse + "', ver=" + resVer);
+                            }
+                        } else {
+                            mid = null;
+                        }
+                    } else {
+                        mid = prev;
+                        // Обновляем путь к ресурсу, если он изменился (используем loadwait как в MasterMiner)
+                        if(correctResourcePath != null && !prev.res.name.equals(correctResourcePath)) {
+                            try {
+                                Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
+                                if(correctResLoaded != null && correctResLoaded.layer(Resource.imgc) != null) {
+                                    prev.res = new Resource.Saved(Resource.remote(), correctResourcePath, correctResLoaded.ver);
+                                    file.update(prev);
+                                    if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                        System.err.println("markobjs: Marker updated: name='" + prev.nm + "', oldPath='" + prev.res.name + "', newPath='" + correctResourcePath + "'");
+                                    }
+                                } else {
+                                    if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                        System.err.println("markobjs: Marker update failed - no image: path='" + correctResourcePath + "'");
+                                    }
+                                }
+                            } catch (Exception e) {
+                                if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
+                                    System.err.println("markobjs: Marker update error: path='" + correctResourcePath + "', error=" + e.getMessage());
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    file.lock.writeLock().unlock();
+                }
+                if(mid != null) {
+                    synchronized(icon.gob) {
+                        icon.gob.setattr(new MarkerID(icon.gob, mid));
+                    }
+                    // Upload only new markers to web map
+                    if(isNew && ui.core != null && ui.core.mappingClient != null && 
+                       (Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.autoMapper)) {
+                        ui.core.mappingClient.uploadSMarker(icon.gob, mid);
+                    }
+                }
+                markcheckedField.setBoolean(icon, true);
+            } catch(Loading l) {
+                continue;
+            } catch(Exception e) {
+                // Игнорируем другие ошибки
+                try {
+                    if(markcheckedField != null) {
+                        markcheckedField.setBoolean(icon, true);
+                    }
+                } catch (Exception ex) {
+                    // Игнорируем
+                }
+            }
+        }
+    }
+    
+    /**
+     * Ищет JSONObject в VSpec по названию ресурса (как в NCatSelection)
+     * Возвращает JSONObject из VSpec, если найден, иначе null
+     */
+    private org.json.JSONObject findVSpecObjectByName(String resourceName) {
+        if (resourceName == null || resourceName.trim().isEmpty() || VSpec.categories == null) {
+            return null;
+        }
+        
+        String lowerName = resourceName.trim().toLowerCase();
+        
+        // Ищем во всех категориях VSpec
+        for (String categoryName : VSpec.categories.keySet()) {
+            ArrayList<org.json.JSONObject> items = VSpec.categories.get(categoryName);
+            if (items != null) {
+                for (org.json.JSONObject obj : items) {
+                    try {
+                        String name = obj.optString("name", "");
+                        if (name != null && !name.isEmpty()) {
+                            String lowerVSpecName = name.toLowerCase().trim();
+                            
+                            // Точное совпадение (без учета регистра)
+                            if (lowerVSpecName.equals(lowerName)) {
+                                return obj;
+                            }
+                            // Нормализованное совпадение (без пробелов)
+                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                            if (normalizedVSpecName.equals(normalizedInputName)) {
+                                return obj;
+                            }
+                            // Частичное совпадение
+                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
+                                return obj;
+                            }
+                            // Проверяем, содержит ли одно название другое
+                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
+                                return obj;
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Получает правильный путь к ресурсу из VSpec по названию (как в Icon Settings)
+     * Ищет в категориях Ore и Stones
+     */
+    private String getCorrectResourcePathForProspecting(String resourceName, String currentResourcePath) {
+        if (resourceName == null || resourceName.trim().isEmpty()) {
+            return null;
+        }
+        
+        // Нормализуем название для поиска (убираем лишние пробелы, приводим к нижнему регистру)
+        String normalizedName = resourceName.trim();
+        String lowerName = normalizedName.toLowerCase();
+        
+        // ПРИОРИТЕТ 1: Ищем в VSpec (как просил пользователь - использовать VSpec для всех ресурсов)
+        if (VSpec.categories != null) {
+            // Ищем в категории Ore
+            ArrayList<org.json.JSONObject> oreList = VSpec.categories.get("Ore");
+            if (oreList != null) {
+                for (org.json.JSONObject ore : oreList) {
+                    try {
+                        String name = ore.optString("name", "");
+                        if (name != null && !name.isEmpty()) {
+                            String lowerVSpecName = name.toLowerCase().trim();
+                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                            
+                            // Точное совпадение (без учета регистра)
+                            if (lowerVSpecName.equals(lowerName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Нормализованное совпадение (без пробелов)
+                            if (normalizedVSpecName.equals(normalizedInputName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Частичное совпадение (для случаев типа "Wine Glace" vs "Wine Glance")
+                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Проверяем, содержит ли одно название другое (для случаев типа "Lead Glance" vs "LeadGlance")
+                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
+                                String staticPath = ore.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+            
+            // Ищем в категории Stones
+            ArrayList<org.json.JSONObject> stonesList = VSpec.categories.get("Stones");
+            if (stonesList != null) {
+                for (org.json.JSONObject stone : stonesList) {
+                    try {
+                        String name = stone.optString("name", "");
+                        if (name != null && !name.isEmpty()) {
+                            String lowerVSpecName = name.toLowerCase().trim();
+                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                            
+                            // Точное совпадение (без учета регистра)
+                            if (lowerVSpecName.equals(lowerName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Нормализованное совпадение (без пробелов)
+                            if (normalizedVSpecName.equals(normalizedInputName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Частичное совпадение (для случаев типа "Wine Glace" vs "Wine Glance")
+                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                            // Проверяем, содержит ли одно название другое (для случаев типа "Lead Glance" vs "LeadGlance")
+                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
+                                String staticPath = stone.optString("static", null);
+                                if (staticPath != null && !staticPath.isEmpty()) {
+                                    return staticPath;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+        
+        // ПРИОРИТЕТ 2: Специальная обработка для известных проблемных ресурсов (только если не найдено в VSpec)
+        // Сначала проверяем по текущему пути к ресурсу (может быть неправильный путь)
+        if (currentResourcePath != null && !currentResourcePath.isEmpty()) {
+            String lowerPath = currentResourcePath.toLowerCase();
+            // Если путь содержит "cuprite" или "wineglance", но не в правильной папке
+            if ((lowerPath.contains("cuprite") || lowerPath.contains("wineglance")) && !lowerPath.equals("gfx/invobjs/cuprite")) {
+                return "gfx/invobjs/cuprite";
+            }
+            // Если путь содержит "argentite" или "silvershine", но не в правильной папке
+            if ((lowerPath.contains("argentite") || lowerPath.contains("silvershine")) && !lowerPath.equals("gfx/invobjs/argentite")) {
+                return "gfx/invobjs/argentite";
+            }
+        }
+        
+        if (lowerName.contains("wine") && (lowerName.contains("glance") || lowerName.contains("glace"))) {
+            // Сначала пробуем wineglance, потом cuprite (как в MasterMiner)
+            try {
+                Resource res = Resource.remote().loadwait("gfx/invobjs/wineglance");
+                if (res != null && res.layer(Resource.imgc) != null) {
+                    return "gfx/invobjs/wineglance";
+                }
+            } catch (Exception e) {
+                // Если не удалось, используем cuprite как fallback
+            }
+            // Всегда возвращаем cuprite как fallback (как в MasterMiner)
+            try {
+                Resource res = Resource.remote().loadwait("gfx/invobjs/cuprite");
+                if (res != null && res.layer(Resource.imgc) != null) {
+                    return "gfx/invobjs/cuprite";
+                }
+            } catch (Exception e) {
+                // Игнорируем ошибки
+            }
+            // Если ничего не загрузилось, все равно возвращаем cuprite
+            return "gfx/invobjs/cuprite";
+        }
+        if (lowerName.contains("silvershine")) {
+            return "gfx/invobjs/argentite";
+        }
+        
+        // ПРИОРИТЕТ 3: Fallback - если ресурс не найден в VSpec, пробуем загрузить напрямую по нормализованному названию
+        // Это помогает для ресурсов, которые не добавлены в VSpec или имеют другое название
+        String normalized = lowerName.replaceAll("\\s+", "");
+        String[] possiblePaths = {
+            "gfx/invobjs/" + normalized,  // Сначала пробуем нормализованное (без пробелов)
+            "gfx/invobjs/" + lowerName,    // Затем с оригинальным названием
+            "gfx/invobjs/ore-" + normalized,
+            "gfx/invobjs/ore-" + lowerName,
+            "gfx/invobjs/stone-" + normalized,
+            "gfx/invobjs/stone-" + lowerName
+        };
+        
+        for (String path : possiblePaths) {
+            try {
+                Resource res = Resource.remote().loadwait(path);
+                if (res != null && res.layer(Resource.imgc) != null) {
+                    return path;
+                }
+            } catch (Exception e) {
+                // Пробуем следующий путь
+                continue;
+            }
+        }
+        
+        return null;
     }
 }

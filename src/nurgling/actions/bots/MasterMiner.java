@@ -400,18 +400,18 @@ public class MasterMiner extends ActionWithFinal {
         // Но маркеры для них ставятся
         if (isGem) {
             // Обновляем UI с последним выкопанным драгоценным камнем
+            // Для драгоценных камней wallQ = f3 (без формулы)
             int masonryForUI = 0;
             try {
                 masonryForUI = NUtils.getUI().sess.glob.getcattr("masonry").comp;
             } catch (Exception ignored) {
             }
-            wnd.setLastMined(stoneName, f3, masonryForUI);
+            wnd.setLastMined(stoneName, f3, masonryForUI); // Для драгоценных камней f3 = wallQ
             
             // Только ставим маркер для драгоценного камня, если он включен в настройках
             nurgling.conf.NMasterMinerMarkingConfig markingConfig = nurgling.conf.NMasterMinerMarkingConfig.get();
             if (markingConfig != null) {
                 String configKey = extractGemstoneBaseName(stoneName);
-                System.out.println("Checking gemstone config for: '" + stoneName + "' -> base name: '" + configKey + "'");
                 
                 // Пробуем найти в конфиге с разными вариантами регистра
                 Boolean enabled = markingConfig.isEnabled(configKey);
@@ -420,7 +420,6 @@ public class MasterMiner extends ActionWithFinal {
                     enabled = markingConfig.isEnabled(configKey.toLowerCase());
                     if (enabled != null) {
                         configKey = configKey.toLowerCase();
-                        System.out.println("Found config with lowercase key: '" + configKey + "'");
                     }
                 }
                 if (enabled == null && !configKey.equals(configKey.substring(0, 1).toUpperCase() + configKey.substring(1).toLowerCase())) {
@@ -429,12 +428,10 @@ public class MasterMiner extends ActionWithFinal {
                     enabled = markingConfig.isEnabled(properCase);
                     if (enabled != null) {
                         configKey = properCase;
-                        System.out.println("Found config with proper case key: '" + configKey + "'");
                     }
                 }
                 
                 Double threshold = markingConfig.getThreshold(configKey);
-                System.out.println("Config result for key '" + configKey + "' - enabled: " + enabled + ", threshold: " + threshold);
                 
                 if (enabled != null && enabled) {
                     double itemThreshold = (threshold != null && !threshold.isNaN()) ? threshold : 10.0;
@@ -445,16 +442,9 @@ public class MasterMiner extends ActionWithFinal {
                         try {
                             addGemstoneMarker(gui, dropped, baseGemName, f3);
                         } catch (Exception e) {
-                            System.err.println("Failed to add gemstone marker for " + baseGemName + ": " + e.getMessage());
-                            e.printStackTrace();
+                            // Игнорируем ошибки
                         }
-                    } else {
-                        // Качество ниже порога - не ставим маркер
-                        System.out.println("Gemstone " + extractGemstoneBaseName(stoneName) + " quality " + f3 + " below threshold " + itemThreshold);
                     }
-                } else {
-                    // Маркер не включен в настройках
-                    System.out.println("Gemstone " + extractGemstoneBaseName(stoneName) + " not enabled in settings");
                 }
             }
             // Драгоценные камни НЕ сбрасываются и НЕ учитываются в статистике
@@ -544,7 +534,7 @@ public class MasterMiner extends ActionWithFinal {
                 } catch (Exception ignored) {
                 }
                 wnd.setStoneInfo(stoneType, stoneName, f3, wallQ, bestAltQ, masonryForUI, set, currentToolType);
-                wnd.setLastMined(stoneName, f3, masonryForUI);
+                wnd.setLastMined(stoneName, wallQ, masonryForUI); // Передаем wallQ вместо f3
                 wnd.incrementCounter();
                 
                 // Проверяем, нужно ли поставить метку на карте согласно настройкам
