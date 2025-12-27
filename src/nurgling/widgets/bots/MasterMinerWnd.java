@@ -180,7 +180,9 @@ public class MasterMinerWnd extends Window {
 
     public void setMasonry(int masonry) {
         // Обновляем текст с сохранением жирного шрифта и цвета
-        String newText = "Masonry: " + masonry;
+        // Добавляем "(Masonry +25%)" в квадратных скобках
+        int masonryWithBonus = (int) Math.round(masonry * 1.25);
+        String newText = "Masonry: " + masonry + " [" + masonryWithBonus + "]";
         masonryLbl.text.dispose();
         masonryLbl.text = boldFoundry.render(newText, masonryColor);
         masonryLbl.texts = newText;
@@ -332,29 +334,35 @@ public class MasterMinerWnd extends Window {
             targetLabel.settext(text);
             // Применяем цвет только для Stone, Quarryartz и Cat Gold
             if ("Stone".equals(stoneType) || "Quarryartz".equals(stoneType) || "Cat Gold".equals(stoneType)) {
-                updateWallQColor(targetLabel, currentBest.wallQ, masonry);
+                updateWallQColor(targetLabel, currentBest.wallQ, masonry, stoneType);
             } else {
                 targetLabel.setcolor(Color.WHITE);
             }
         }
     }
     
-    private Color getWallQColor(double wallQ, int masonry) {
-        // Красный когда примерно равно masonry (±1)
-        if (wallQ >= masonry - 1.0 && wallQ <= masonry + 1.0) {
+    private Color getWallQColor(double wallQ, int masonry, String stoneType) {
+        // Для квариарца используем (masonry + 25%), для остальных - обычный masonry
+        int comparisonValue = masonry;
+        if ("Quarryartz".equals(stoneType)) {
+            comparisonValue = (int) Math.round(masonry * 1.25);
+        }
+        
+        // Красный когда примерно равно comparisonValue (±1)
+        if (wallQ >= comparisonValue - 1.0 && wallQ <= comparisonValue + 1.0) {
             return Color.RED;
         }
-        // Оранжевый когда на ~10 меньше masonry (диапазон от masonry-11 до masonry-9)
-        double diff = masonry - wallQ;
+        // Оранжевый (желтый) когда на ~10 меньше comparisonValue (диапазон от comparisonValue-11 до comparisonValue-9)
+        double diff = comparisonValue - wallQ;
         if (diff >= 9.0 && diff <= 11.0) {
-            return new Color(255, 165, 0); // Оранжевый
+            return new Color(255, 165, 0); // Оранжевый (желтый)
         }
         return Color.WHITE; // Белый по умолчанию
     }
     
-    private void updateWallQColor(Label lbl, double wallQ, int masonry) {
+    private void updateWallQColor(Label lbl, double wallQ, int masonry, String stoneType) {
         // Всегда применяем цвет, даже если белый
-        Color color = getWallQColor(wallQ, masonry);
+        Color color = getWallQColor(wallQ, masonry, stoneType);
         lbl.setcolor(color);
         // Также обновляем цвет текста напрямую
         lbl.col = color;

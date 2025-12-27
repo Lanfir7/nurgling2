@@ -1,16 +1,12 @@
 package nurgling.widgets;
 
 import haven.*;
-import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
-import nurgling.tools.VSpec;
 
 import java.util.Map;
-import java.util.ArrayList;
 
 import static haven.MCache.tilesz;
-import static haven.MCache.cmaps;
 
 public class NMapWnd extends MapWnd {
     public String searchPattern = "";  // For terrain/tile search
@@ -22,7 +18,6 @@ public class NMapWnd extends MapWnd {
     MapToggleButton prospectBtn;
     MapToggleButton quarryartzBtn;
     MapToggleButton oreSpotsBtn; // Кнопка для переключения видимости маркеров спотов руд
-    MapToggleButton gemstonesBtn; // Кнопка для переключения видимости маркеров драгоценных камней
     MapToggleButton vectorClearBtn;
     TextEntry markerSearchField;
     private static final int btnw = UI.scale(95);
@@ -86,15 +81,9 @@ public class NMapWnd extends MapWnd {
         
         // Ore Spots button (для маркеров спотов руд)
         btnPos = btnPos.sub(quarryartzBtn.sz.x + btnSpacing, 0);
-        oreSpotsBtn = add(new MapToggleButton("tree", "Toggle Ore Spot markers (Right-click: Ore Search)", this::openOreSearch), btnPos);
+        oreSpotsBtn = add(new MapToggleButton("tree", "Toggle Ore Spot markers", null), btnPos);
         oreSpotsBtn.a = getOreSpotsIconsState(); // Set initial state
         oreSpotsBtn.changed(val -> setOreSpotsIconsState(val));
-        
-        // Gemstones button (для маркеров драгоценных камней)
-        btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
-        gemstonesBtn = add(new MapToggleButton("tree", "Toggle Gemstone markers (Right-click: Gemstone Search)", this::openGemstoneSearch), btnPos);
-        gemstonesBtn.a = getGemstonesIconsState(); // Set initial state
-        gemstonesBtn.changed(val -> setGemstonesIconsState(val));
         
         // Vector clear button (leftmost)
         btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
@@ -155,9 +144,7 @@ public class NMapWnd extends MapWnd {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null && gui.mmap instanceof NMiniMap)
             return ((NMiniMap) gui.mmap).showProspectingIcons;
-        // Загружаем из конфига
-        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showProspectingIcons);
-        return saved != null ? saved : true;
+        return true;
     }
 
     private void setProspectingIconsState(boolean val) {
@@ -166,18 +153,13 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showProspectingIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showProspectingIcons = val;
-        // Сохраняем состояние
-        NConfig.set(NConfig.Key.showProspectingIcons, val);
-        NConfig.needUpdate();
     }
 
     private boolean getQuarryartzIconsState() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null && gui.mmap instanceof NMiniMap)
             return ((NMiniMap) gui.mmap).showQuarryartzIcons;
-        // Загружаем из конфига
-        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showQuarryartzIcons);
-        return saved != null ? saved : true;
+        return true;
     }
 
     private void setQuarryartzIconsState(boolean val) {
@@ -186,18 +168,13 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showQuarryartzIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showQuarryartzIcons = val;
-        // Сохраняем состояние
-        NConfig.set(NConfig.Key.showQuarryartzIcons, val);
-        NConfig.needUpdate();
     }
     
     private boolean getOreSpotsIconsState() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null && gui.mmap instanceof NMiniMap)
             return ((NMiniMap) gui.mmap).showOreSpotIcons;
-        // Загружаем из конфига
-        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showOreSpotIcons);
-        return saved != null ? saved : true;
+        return true;
     }
     
     private void setOreSpotsIconsState(boolean val) {
@@ -206,47 +183,6 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showOreSpotIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showOreSpotIcons = val;
-        // Сохраняем состояние
-        NConfig.set(NConfig.Key.showOreSpotIcons, val);
-        NConfig.needUpdate();
-    }
-    
-    private boolean getGemstonesIconsState() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            return ((NMiniMap) gui.mmap).showGemstoneIcons;
-        // Загружаем из конфига
-        Boolean saved = (Boolean) NConfig.get(NConfig.Key.showGemstoneIcons);
-        return saved != null ? saved : true;
-    }
-    
-    private void setGemstonesIconsState(boolean val) {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            ((NMiniMap) gui.mmap).showGemstoneIcons = val;
-        if(view instanceof NMiniMap)
-            ((NMiniMap) view).showGemstoneIcons = val;
-        // Сохраняем состояние
-        NConfig.set(NConfig.Key.showGemstoneIcons, val);
-        NConfig.needUpdate();
-    }
-    
-    private void openGemstoneSearch() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null) {
-            if(gui.gemstoneSearchWindow != null) {
-                if(gui.gemstoneSearchWindow.visible()) {
-                    gui.gemstoneSearchWindow.hide();
-                } else {
-                    gui.gemstoneSearchWindow.show();
-                    gui.gemstoneSearchWindow.raise();
-                }
-            } else {
-                gui.gemstoneSearchWindow = new GemstoneSearchWindow(gui);
-                gui.add(gui.gemstoneSearchWindow, new Coord(100, 100));
-                gui.gemstoneSearchWindow.show();
-            }
-        }
     }
 
     private void openTreeSearch() {
@@ -335,24 +271,6 @@ public class NMapWnd extends MapWnd {
                 gui.quarryartzSearchWindow = new QuarryartzSearchWindow(gui);
                 gui.add(gui.quarryartzSearchWindow, new Coord(100, 100));
                 gui.quarryartzSearchWindow.show();
-            }
-        }
-    }
-
-    private void openOreSearch() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null) {
-            if(gui.oreSearchWindow != null) {
-                if(gui.oreSearchWindow.visible()) {
-                    gui.oreSearchWindow.hide();
-                } else {
-                    gui.oreSearchWindow.show();
-                    gui.oreSearchWindow.raise();
-                }
-            } else {
-                gui.oreSearchWindow = new OreSearchWindow(gui);
-                gui.add(gui.oreSearchWindow, new Coord(100, 100));
-                gui.oreSearchWindow.show();
             }
         }
     }
@@ -566,335 +484,5 @@ public class NMapWnd extends MapWnd {
     @Override
     public void recenter() {
         super.recenter();
-    }
-    
-    /**
-     * Переопределяем markobj для исправления пути к ресурсу иконки для маркеров проспектинга
-     * Использует VSpec для получения правильного пути (как в Icon Settings)
-     */
-    @Override
-    public void markobj(long gobid, long oid, Indir<Resource> resid, String nm) {
-        // Сначала получаем правильный путь к ресурсу через VSpec
-        try {
-            Resource res = resid.get();
-            String rnm = nm;
-            if(rnm == null) {
-                Resource.Tooltip tt = res.layer(Resource.tooltip);
-                if(tt != null) {
-                    rnm = tt.t;
-                }
-            }
-            
-            // Получаем правильный путь к ресурсу из VSpec (как в редакторе категорий - используем JSONObject напрямую)
-            String correctResourcePath = null;
-            
-            // Ищем JSONObject в VSpec по названию (как в NCatSelection)
-            org.json.JSONObject vspecObj = findVSpecObjectByName(rnm);
-            if(vspecObj != null && vspecObj.has("static")) {
-                correctResourcePath = vspecObj.getString("static");
-            } else {
-                // Fallback на старый метод, если не найден в VSpec
-                correctResourcePath = getCorrectResourcePathForProspecting(rnm, res.name);
-            }
-            
-            // Если путь нужно исправить, используем исправленный ресурс
-            if(correctResourcePath != null && !correctResourcePath.equals(res.name)) {
-                // Используем исправленный путь к ресурсу (как в MasterMiner - сначала пробуем wineglance, потом cuprite)
-                // Проверяем, что ресурс действительно существует и имеет изображение с img (как в ItemTex.create())
-                try {
-                    Resource testRes = Resource.remote().loadwait(correctResourcePath);
-                    if(testRes != null) {
-                        Resource.Image loadedImg = testRes.layer(Resource.imgc);
-                        if(loadedImg != null && loadedImg.img != null) {
-                            // Ресурс загружен правильно, создаем обертку Indir, которая возвращает ресурс с правильным путем
-                            // Проблема: родительский метод использует res.name напрямую, поэтому нужно создать обертку
-                            final Resource finalTestRes = testRes;
-                            final String finalCorrectPath = correctResourcePath;
-                            final int finalVer = testRes.ver;
-                            Indir<Resource> wrappedRes = new Indir<Resource>() {
-                                public Resource get() {
-                                    // Возвращаем загруженный ресурс, но с правильным путем через Resource.Saved
-                                    return finalTestRes;
-                                }
-                            };
-                            // Используем Resource.Saved напрямую - он будет использован в родительском методе
-                            Resource.Saved savedRes = new Resource.Saved(Resource.remote(), finalCorrectPath, finalVer);
-                            super.markobj(gobid, oid, savedRes, nm);
-                            
-                            // Обновляем маркер с правильным путем после создания (родительский метод использует res.name)
-                            // Используем отложенное обновление через UI thread
-                            final String finalRnm = rnm;
-                            ui.root.add(new Widget() {
-                                public void tick(double dt) {
-                                    try {
-                                        Gob gob = ui.sess.glob.oc.getgob(gobid);
-                                        if(gob != null) {
-                                            MiniMap.MarkerID markerId = gob.getattr(MiniMap.MarkerID.class);
-                                            if(markerId != null && markerId.mark instanceof MapFile.SMarker) {
-                                                MapFile.SMarker mark = (MapFile.SMarker)markerId.mark;
-                                                if(!mark.res.name.equals(finalCorrectPath)) {
-                                                    mark.res = new Resource.Saved(Resource.remote(), finalCorrectPath, finalVer);
-                                                    view.file.update(mark);
-                                                    if(finalRnm != null && finalRnm.toLowerCase().contains("wine")) {
-                                                        System.err.println("NMapWnd.markobj: Marker updated with corrected path: path='" + finalCorrectPath + "'");
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } catch (Exception e) {
-                                        // Игнорируем ошибки
-                                    }
-                                    reqdestroy();
-                                }
-                            });
-                            
-                            if(rnm != null && rnm.toLowerCase().contains("wine")) {
-                                System.err.println("NMapWnd.markobj: Using corrected path: name='" + rnm + "', path='" + correctResourcePath + "', ver=" + testRes.ver);
-                            }
-                            return;
-                        } else {
-                            if(rnm != null && rnm.toLowerCase().contains("wine")) {
-                                System.err.println("NMapWnd.markobj: Corrected resource loaded but img is null: path='" + correctResourcePath + "'");
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    // Если не удалось загрузить, используем оригинальный
-                    if(rnm != null && rnm.toLowerCase().contains("wine")) {
-                        System.err.println("NMapWnd.markobj: Error loading corrected resource: path='" + correctResourcePath + "', error=" + e.getMessage());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Если не удалось получить правильный путь, используем оригинальный
-        }
-        
-        // Вызываем родительский метод с оригинальным ресурсом
-        super.markobj(gobid, oid, resid, nm);
-    }
-    
-    /**
-     * Ищет JSONObject в VSpec по названию ресурса (как в NCatSelection)
-     * Возвращает JSONObject из VSpec, если найден, иначе null
-     */
-    private org.json.JSONObject findVSpecObjectByName(String resourceName) {
-        if (resourceName == null || resourceName.trim().isEmpty() || VSpec.categories == null) {
-            return null;
-        }
-        
-        String lowerName = resourceName.trim().toLowerCase();
-        
-        // Ищем во всех категориях VSpec
-        for (String categoryName : VSpec.categories.keySet()) {
-            ArrayList<org.json.JSONObject> items = VSpec.categories.get(categoryName);
-            if (items != null) {
-                for (org.json.JSONObject obj : items) {
-                    try {
-                        String name = obj.optString("name", "");
-                        if (name != null && !name.isEmpty()) {
-                            String lowerVSpecName = name.toLowerCase().trim();
-                            
-                            // Точное совпадение (без учета регистра)
-                            if (lowerVSpecName.equals(lowerName)) {
-                                return obj;
-                            }
-                            // Нормализованное совпадение (без пробелов)
-                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
-                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
-                            if (normalizedVSpecName.equals(normalizedInputName)) {
-                                return obj;
-                            }
-                            // Частичное совпадение
-                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
-                                return obj;
-                            }
-                            // Проверяем, содержит ли одно название другое
-                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
-                                return obj;
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки
-                    }
-                }
-            }
-        }
-        
-        return null;
-    }
-    
-    /**
-     * Получает правильный путь к ресурсу из VSpec по названию (как в Icon Settings)
-     * Ищет в категориях Ore и Stones
-     */
-    private String getCorrectResourcePathForProspecting(String resourceName, String currentResourcePath) {
-        if (resourceName == null || resourceName.trim().isEmpty()) {
-            return null;
-        }
-        
-        // Нормализуем название для поиска (убираем лишние пробелы, приводим к нижнему регистру)
-        String normalizedName = resourceName.trim();
-        String lowerName = normalizedName.toLowerCase();
-        
-        // ПРИОРИТЕТ 1: Ищем в VSpec (как просил пользователь - использовать VSpec для всех ресурсов)
-        if (VSpec.categories != null) {
-            // Ищем в категории Ore
-        ArrayList<org.json.JSONObject> oreList = VSpec.categories.get("Ore");
-        if (oreList != null) {
-            for (org.json.JSONObject ore : oreList) {
-                try {
-                    String name = ore.optString("name", "");
-                    if (name != null && !name.isEmpty()) {
-                        String lowerVSpecName = name.toLowerCase().trim();
-                        String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
-                        String normalizedInputName = lowerName.replaceAll("\\s+", "");
-                        
-                        // Точное совпадение (без учета регистра)
-                        if (lowerVSpecName.equals(lowerName)) {
-                            String staticPath = ore.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                        // Нормализованное совпадение (без пробелов)
-                        if (normalizedVSpecName.equals(normalizedInputName)) {
-                            String staticPath = ore.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                        // Частичное совпадение (для случаев типа "Wine Glace" vs "Wine Glance")
-                        if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
-                            String staticPath = ore.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                        // Проверяем, содержит ли одно название другое (для случаев типа "Lead Glance" vs "LeadGlance")
-                        if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
-                            String staticPath = ore.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    // Игнорируем ошибки
-                }
-            }
-        }
-        
-        // Ищем в категории Stones
-        ArrayList<org.json.JSONObject> stonesList = VSpec.categories.get("Stones");
-        if (stonesList != null) {
-            for (org.json.JSONObject stone : stonesList) {
-                try {
-                    String name = stone.optString("name", "");
-                    if (name != null && !name.isEmpty()) {
-                        String lowerVSpecName = name.toLowerCase().trim();
-                        String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
-                        String normalizedInputName = lowerName.replaceAll("\\s+", "");
-                        
-                        // Точное совпадение (без учета регистра)
-                        if (lowerVSpecName.equals(lowerName)) {
-                            String staticPath = stone.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                        // Нормализованное совпадение (без пробелов)
-                        if (normalizedVSpecName.equals(normalizedInputName)) {
-                            String staticPath = stone.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                        // Частичное совпадение (для случаев типа "Wine Glace" vs "Wine Glance")
-                        if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
-                            String staticPath = stone.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                        // Проверяем, содержит ли одно название другое (для случаев типа "Lead Glance" vs "LeadGlance")
-                        if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
-                            String staticPath = stone.optString("static", null);
-                            if (staticPath != null && !staticPath.isEmpty()) {
-                                return staticPath;
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    // Игнорируем ошибки
-                }
-            }
-        }
-        }
-        
-        // ПРИОРИТЕТ 2: Специальная обработка для известных проблемных ресурсов (только если не найдено в VSpec)
-        // Сначала проверяем по текущему пути к ресурсу (может быть неправильный путь)
-        if (currentResourcePath != null && !currentResourcePath.isEmpty()) {
-            String lowerPath = currentResourcePath.toLowerCase();
-            // Если путь содержит "cuprite" или "wineglance", но не в правильной папке
-            if ((lowerPath.contains("cuprite") || lowerPath.contains("wineglance")) && !lowerPath.equals("gfx/invobjs/cuprite")) {
-                return "gfx/invobjs/cuprite";
-            }
-            // Если путь содержит "argentite" или "silvershine", но не в правильной папке
-            if ((lowerPath.contains("argentite") || lowerPath.contains("silvershine")) && !lowerPath.equals("gfx/invobjs/argentite")) {
-                return "gfx/invobjs/argentite";
-            }
-        }
-        
-        if (lowerName.contains("wine") && (lowerName.contains("glance") || lowerName.contains("glace"))) {
-            // Сначала пробуем wineglance, потом cuprite (как в MasterMiner)
-            try {
-                Resource res = Resource.remote().loadwait("gfx/invobjs/wineglance");
-                if (res != null && res.layer(Resource.imgc) != null) {
-                    return "gfx/invobjs/wineglance";
-                }
-            } catch (Exception e) {
-                // Если не удалось, используем cuprite как fallback
-            }
-            // Всегда возвращаем cuprite как fallback (как в MasterMiner)
-            try {
-                Resource res = Resource.remote().loadwait("gfx/invobjs/cuprite");
-                if (res != null && res.layer(Resource.imgc) != null) {
-                    return "gfx/invobjs/cuprite";
-                }
-            } catch (Exception e) {
-                // Игнорируем ошибки
-            }
-            // Если ничего не загрузилось, все равно возвращаем cuprite
-            return "gfx/invobjs/cuprite";
-        }
-        if (lowerName.contains("silvershine")) {
-            return "gfx/invobjs/argentite";
-        }
-        
-        // ПРИОРИТЕТ 3: Fallback - если ресурс не найден в VSpec, пробуем загрузить напрямую по нормализованному названию
-        // Это помогает для ресурсов, которые не добавлены в VSpec или имеют другое название
-        String normalized = lowerName.replaceAll("\\s+", "");
-        String[] possiblePaths = {
-            "gfx/invobjs/" + normalized,  // Сначала пробуем нормализованное (без пробелов)
-            "gfx/invobjs/" + lowerName,    // Затем с оригинальным названием
-            "gfx/invobjs/ore-" + normalized,
-            "gfx/invobjs/ore-" + lowerName,
-            "gfx/invobjs/stone-" + normalized,
-            "gfx/invobjs/stone-" + lowerName
-        };
-        
-        for (String path : possiblePaths) {
-            try {
-                Resource res = Resource.remote().loadwait(path);
-                if (res != null && res.layer(Resource.imgc) != null) {
-                    return path;
-                }
-            } catch (Exception e) {
-                // Пробуем следующий путь
-                continue;
-            }
-        }
-        
-        return null;
     }
 }

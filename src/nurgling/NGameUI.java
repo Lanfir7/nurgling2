@@ -34,7 +34,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static haven.Inventory.invsq;
-import org.json.JSONObject;
 
 public class NGameUI extends GameUI
 {
@@ -73,7 +72,6 @@ public class NGameUI extends GameUI
     public TerrainSearchWindow terrainSearchWindow = null;
     public nurgling.widgets.QuarryartzSearchWindow quarryartzSearchWindow = null;
     public nurgling.widgets.OreSearchWindow oreSearchWindow = null;
-    public nurgling.widgets.GemstoneSearchWindow gemstoneSearchWindow = null;
     public LabeledMarkService labeledMarkService;
     public StudyDeskPlannerWidget studyDeskPlanner = null;
     public NDraggableWidget studyReportWidget = null;
@@ -95,41 +93,7 @@ public class NGameUI extends GameUI
     public String getGenus() {
         return genus;
     }
-
-    /**
-     * Gets equipment proxy slots from config and converts to Slots array.
-     * Handles both Integer and Long types that may come from JSON parsing.
-     */
-    public static NEquipory.Slots[] getEquipProxySlotsFromConfig() {
-        Object configValue = NConfig.get(NConfig.Key.equipProxySlots);
-
-        // Convert config value to list of integers, handling various types
-        ArrayList<Integer> slotIndices = new ArrayList<>();
-        if (configValue instanceof ArrayList) {
-            for (Object item : (ArrayList<?>) configValue) {
-                if (item instanceof Number) {
-                    slotIndices.add(((Number) item).intValue());
-                }
-            }
-        }
-
-        if (slotIndices.isEmpty()) {
-            // Return default slots if config is empty
-            return new NEquipory.Slots[]{NEquipory.Slots.HAND_LEFT, NEquipory.Slots.HAND_RIGHT, NEquipory.Slots.BELT};
-        }
-
-        ArrayList<NEquipory.Slots> slots = new ArrayList<>();
-        for (Integer idx : slotIndices) {
-            for (NEquipory.Slots slot : NEquipory.Slots.values()) {
-                if (slot.idx == idx) {
-                    slots.add(slot);
-                    break;
-                }
-            }
-        }
-        return slots.toArray(new NEquipory.Slots[0]);
-    }
-
+    
     public NGameUI(String chrid, long plid, String genus, NUI nui)
     {
         super(chrid, plid, genus, nui);
@@ -166,8 +130,7 @@ public class NGameUI extends GameUI
             add(new NDraggableWidget(calendar, "Calendar", UI.scale(400,90)), calPos);
         }
         add(new NDraggableWidget(alarmWdg = new NAlarmWdg(),"alarm",NStyle.alarm[0].sz().add(NDraggableWidget.delta)));
-        nep = new NEquipProxy(getEquipProxySlotsFromConfig());
-        add(new NDraggableWidget(nep, "EquipProxy", nep.sz.add(NDraggableWidget.delta)));
+        add(new NDraggableWidget(nep = new NEquipProxy(NEquipory.Slots.HAND_LEFT, NEquipory.Slots.HAND_RIGHT, NEquipory.Slots.BELT), "EquipProxy",  UI.scale(138, 55)));
         add(new NDraggableWidget(nbp = new NBeltProxy(), "BeltProxy", UI.scale(825, 55)));
         for(int i = 0; i<(Integer)NConfig.get(NConfig.Key.numbelts); i++)
         {
@@ -179,9 +142,6 @@ public class NGameUI extends GameUI
 
         add(new NDraggableWidget(questinfo = new NQuestInfo(), "quests", questinfo.sz.add(NDraggableWidget.delta)));
         add(new NDraggableWidget(recentActionsPanel = new NRecentActionsPanel(), "recentactions", recentActionsPanel.sz.add(NDraggableWidget.delta)));
-        // Add drink meter widget to show water/tea capacity (uses IMeter.fsz to match other meters)
-        DrinkMeter drinkMeter = new DrinkMeter();
-        add(new NDraggableWidget(drinkMeter, "drinkmeter", IMeter.fsz));
         add(guiinfo = new NGUIInfo(),new Coord(sz.x/2 - NGUIInfo.xs/2,sz.y/5 ));
         if(!(Boolean) NConfig.get(NConfig.Key.show_drag_menu))
             guiinfo.hide();
@@ -1155,10 +1115,9 @@ public class NGameUI extends GameUI
                 MapFile.SMarker marker = mapfile.file.smarker(gob.ngob.name, info.seg, sc);
                 
                 if (marker == null) {
-                    // Create new marker - use correct resource path from VSpec if available
+                    // Create new marker - use version 0 as default, will be updated when resource loads
                     int resVer = 0;
                     String displayName = gob.ngob.name;
-                    String resourcePathToUse = gob.ngob.name;
                     
                     try {
                         Indir<Resource> resIndir = Resource.remote().load(gob.ngob.name);
@@ -1167,45 +1126,6 @@ public class NGameUI extends GameUI
                         Resource.Tooltip tt = res.layer(Resource.Tooltip.class);
                         if (tt != null) {
                             displayName = tt.t;
-                            
-                            // Ищем правильный путь к ресурсу через VSpec (как в markobjs)
-                            String correctResourcePath = null;
-                            org.json.JSONObject vspecObj = findVSpecObjectByName(tt.t);
-                            if(vspecObj != null && vspecObj.has("static")) {
-                                correctResourcePath = vspecObj.getString("static");
-                            } else {
-                                // Fallback на старый метод
-                                correctResourcePath = getCorrectResourcePathForProspecting(tt.t, gob.ngob.name);
-                            }
-                            
-                            // Используем исправленный путь, если найден
-                            if(correctResourcePath != null && !correctResourcePath.equals(gob.ngob.name)) {
-                                resourcePathToUse = correctResourcePath;
-                                try {
-                                    Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
-                                    if(correctResLoaded != null) {
-                                        Resource.Image loadedImg = correctResLoaded.layer(Resource.imgc);
-                                        if(loadedImg != null && loadedImg.img != null) {
-                                            resVer = correctResLoaded.ver;
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    // Если не удалось загрузить, используем версию из оригинального ресурса
-                                }
-                            } else {
-                                // Даже для оригинального пути проверяем, что ресурс загружен правильно
-                                try {
-                                    Resource originalResLoaded = Resource.remote().loadwait(resourcePathToUse);
-                                    if(originalResLoaded != null) {
-                                        Resource.Image loadedImg = originalResLoaded.layer(Resource.imgc);
-                                        if(loadedImg != null && loadedImg.img != null) {
-                                            resVer = originalResLoaded.ver;
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    // Игнорируем ошибки
-                                }
-                            }
                         }
                     } catch (Loading e) {
                         // Resource not loaded yet, use default values
@@ -1214,7 +1134,7 @@ public class NGameUI extends GameUI
                     }
                     
                     marker = new MapFile.SMarker(info.seg, sc, displayName, 0, 
-                        new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
+                        new Resource.Saved(Resource.remote(), gob.ngob.name, resVer));
                     mapfile.file.add(marker);
                 }
                 
@@ -1231,167 +1151,6 @@ public class NGameUI extends GameUI
             // Silently ignore errors
             return null;
         }
-    }
-    
-    /**
-     * Ищет JSONObject в VSpec по названию ресурса (как в NCatSelection)
-     * Возвращает JSONObject из VSpec, если найден, иначе null
-     */
-    private org.json.JSONObject findVSpecObjectByName(String resourceName) {
-        if (resourceName == null || resourceName.trim().isEmpty() || VSpec.categories == null) {
-            return null;
-        }
-        
-        String lowerName = resourceName.trim().toLowerCase();
-        
-        // Ищем во всех категориях VSpec
-        for (String categoryName : VSpec.categories.keySet()) {
-            ArrayList<org.json.JSONObject> items = VSpec.categories.get(categoryName);
-            if (items != null) {
-                for (org.json.JSONObject obj : items) {
-                    try {
-                        String name = obj.optString("name", "");
-                        if (name != null && !name.isEmpty()) {
-                            String lowerVSpecName = name.toLowerCase().trim();
-                            
-                            // Точное совпадение (без учета регистра)
-                            if (lowerVSpecName.equals(lowerName)) {
-                                return obj;
-                            }
-                            // Нормализованное совпадение (без пробелов)
-                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
-                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
-                            if (normalizedVSpecName.equals(normalizedInputName)) {
-                                return obj;
-                            }
-                            // Частичное совпадение
-                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
-                                return obj;
-                            }
-                            // Проверяем, содержит ли одно название другое
-                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
-                                return obj;
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки
-                    }
-                }
-            }
-        }
-        
-        return null;
-    }
-    
-    /**
-     * Получает правильный путь к ресурсу из VSpec по названию (как в Icon Settings)
-     * Ищет в категориях Ore и Stones
-     */
-    private String getCorrectResourcePathForProspecting(String resourceName, String currentResourcePath) {
-        if (resourceName == null || resourceName.trim().isEmpty()) {
-            return null;
-        }
-        
-        // Нормализуем название для поиска (убираем лишние пробелы, приводим к нижнему регистру)
-        String normalizedName = resourceName.trim();
-        String lowerName = normalizedName.toLowerCase();
-        
-        // ПРИОРИТЕТ 1: Ищем в VSpec
-        if (VSpec.categories != null) {
-            // Ищем в категории Ore
-            ArrayList<org.json.JSONObject> oreList = VSpec.categories.get("Ore");
-            if (oreList != null) {
-                for (org.json.JSONObject ore : oreList) {
-                    try {
-                        String name = ore.optString("name", "");
-                        if (name != null && !name.isEmpty()) {
-                            String lowerVSpecName = name.toLowerCase().trim();
-                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
-                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
-                            
-                            // Точное совпадение (без учета регистра)
-                            if (lowerVSpecName.equals(lowerName)) {
-                                String staticPath = ore.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                            // Нормализованное совпадение (без пробелов)
-                            if (normalizedVSpecName.equals(normalizedInputName)) {
-                                String staticPath = ore.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                            // Частичное совпадение
-                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
-                                String staticPath = ore.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                            // Проверяем, содержит ли одно название другое
-                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
-                                String staticPath = ore.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки
-                    }
-                }
-            }
-            
-            // Ищем в категории Stones
-            ArrayList<org.json.JSONObject> stonesList = VSpec.categories.get("Stone");
-            if (stonesList != null) {
-                for (org.json.JSONObject stone : stonesList) {
-                    try {
-                        String name = stone.optString("name", "");
-                        if (name != null && !name.isEmpty()) {
-                            String lowerVSpecName = name.toLowerCase().trim();
-                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
-                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
-                            
-                            // Точное совпадение (без учета регистра)
-                            if (lowerVSpecName.equals(lowerName)) {
-                                String staticPath = stone.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                            // Нормализованное совпадение (без пробелов)
-                            if (normalizedVSpecName.equals(normalizedInputName)) {
-                                String staticPath = stone.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                            // Частичное совпадение
-                            if (normalizedVSpecName.contains(normalizedInputName) || normalizedInputName.contains(normalizedVSpecName)) {
-                                String staticPath = stone.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                            // Проверяем, содержит ли одно название другое
-                            if (lowerVSpecName.contains(lowerName) || lowerName.contains(lowerVSpecName)) {
-                                String staticPath = stone.optString("static", null);
-                                if (staticPath != null && !staticPath.isEmpty()) {
-                                    return staticPath;
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки
-                    }
-                }
-            }
-        }
-        
-        return null;
     }
 
     @Override

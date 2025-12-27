@@ -47,7 +47,7 @@ public class ProspectMine implements Action {
                 return Results.ERROR("Не удалось получить результат проспектинга");
             }
             
-            // Сохраняем данные о локации проспектинга
+            // Сохраняем маркер на карте
             if (gui.prospectingLocationService != null) {
                 gui.prospectingLocationService.saveProspectingLocation(resourceType);
             }

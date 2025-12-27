@@ -14,6 +14,7 @@ import nurgling.tasks.NTask;
 import nurgling.tasks.WaitTicks;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
+import nurgling.tools.VSpec;
 import nurgling.NInventory;
 import nurgling.widgets.NEquipory;
 import nurgling.widgets.bots.MasterMinerWnd;
@@ -21,6 +22,11 @@ import nurgling.widgets.bots.MasterMinerWnd;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Информативный "MiningMaster": висит и ждёт выпадения камня в инвентарь
@@ -54,6 +60,53 @@ public class MasterMiner extends ActionWithFinal {
     private volatile boolean stop = false;
     private MasterMinerWnd wnd = null;
     private ArrayList<WItem> known = new ArrayList<>();
+    
+    // ExecutorService для асинхронного создания маркеров (чтобы избежать лагов)
+    private static final ExecutorService markerExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "MasterMiner-MarkerCreator");
+        t.setDaemon(true);
+        return t;
+    });
+    
+    // ExecutorService для асинхронной загрузки иконок (чтобы не блокировать игру)
+    private static final ExecutorService iconLoaderExecutor = Executors.newFixedThreadPool(2, r -> {
+        Thread t = new Thread(r, "MasterMiner-IconLoader");
+        t.setDaemon(true);
+        return t;
+    });
+    
+    // Кэш для иконок руд, чтобы не загружать их каждый раз
+    private static final ConcurrentHashMap<String, BufferedImage> oreIconCache = new ConcurrentHashMap<>();
+    
+    // Система батчинга для маркеров - собирает камни за период и обрабатывает одной задачей
+    private static class MarkerBatch {
+        final String oreName;
+        final NGItem item;
+        final double wallQ;
+        final Coord tileCoords;
+        final long segmentId;
+        final String markerType; // "ore", "gem", "quarryartz"
+        
+        MarkerBatch(String oreName, NGItem item, double wallQ, Coord tileCoords, long segmentId, String markerType) {
+            this.oreName = oreName;
+            this.item = item;
+            this.wallQ = wallQ;
+            this.tileCoords = tileCoords;
+            this.segmentId = segmentId;
+            this.markerType = markerType;
+        }
+        
+        // Ключ для группировки: тип + координаты
+        String getGroupKey() {
+            return markerType + ":" + oreName + ":" + segmentId + ":" + tileCoords.x + "," + tileCoords.y;
+        }
+    }
+    
+    // Очередь батчинга для маркеров
+    private final List<MarkerBatch> markerBatchQueue = new ArrayList<>();
+    private volatile long lastBatchProcessTime = 0;
+    private static final long BATCH_DELAY_MS = 200; // Собираем камни 200мс перед обработкой
+    private final Object batchLock = new Object();
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
@@ -975,11 +1028,49 @@ public class MasterMiner extends ActionWithFinal {
     }
 
     /**
-     * Добавляет метку на карту для квариарца
+     * Добавляет квариарц в батч для обработки маркера (батчинг для устранения лагов)
+     */
+    private void addQuarryartzMarker(NGameUI gui, String stoneName, double wallQ) {
+        try {
+            if (gui.mmap == null || gui.mmap.sessloc == null) {
+                return;
+            }
+            
+            Gob player = NUtils.player();
+            if (player == null) {
+                return;
+            }
+            
+            // Получаем позицию игрока и направление копания
+            Coord2d playerPos = player.rc;
+            double angle = player.a;
+            
+            // Смещение в направлении копания (примерно 13.75 тайлов)
+            Coord2d minedTile = new Coord2d(
+                playerPos.x + (Math.cos(angle) * 13.75),
+                playerPos.y + (Math.sin(angle) * 13.75)
+            );
+            
+            // Получаем segment ID и tile coordinates
+            long segmentId = gui.mmap.sessloc.seg.id;
+            Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
+            
+            // Добавляем в батч
+            synchronized (batchLock) {
+                markerBatchQueue.add(new MarkerBatch(stoneName, null, wallQ, tileCoords, segmentId, "quarryartz"));
+                scheduleBatchProcessing(gui);
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+    }
+    
+    /**
+     * Синхронная версия добавления метки на карту для квариарца
      * Ставит четко в месте выкопан, всегда ставится при выкапывании квариарца
      * Не склеивается с другими маркерами (не обновляет существующие)
      */
-    private void addQuarryartzMarker(NGameUI gui, String stoneName, double wallQ) {
+    private void addQuarryartzMarkerSync(NGameUI gui, String stoneName, double wallQ) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) return;
             
@@ -1001,31 +1092,19 @@ public class MasterMiner extends ActionWithFinal {
             long segmentId = gui.mmap.sessloc.seg.id;
             Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
             
-            // Проверяем, есть ли уже маркер квариарца рядом (в радиусе 2 тайлов)
-            // Если есть - не ставим новый (квариарц ставится четко в месте выкопан, не склеивается)
-            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
-                gui.labeledMarkService.getMarksByResourceType("Quarryartz");
-            boolean nearbyMarkExists = false;
-            for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
-                if (mark.segmentId == segmentId) {
-                    int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
-                    int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
-                    if (distX <= 2 && distY <= 2) {
-                        nearbyMarkExists = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (!nearbyMarkExists) {
+            // УБРАНА ПРОВЕРКА существующих маркеров - она вызывала лаги из-за блокирующего lock
+            // LabeledMarkService сам удалит дубликаты в радиусе 2 тайлов при создании маркера
+            // Создаем маркер всегда - сервис сам обработает дубликаты
+            {
                 // Создаем метку (например, "q101")
                 String label = String.format("q%.0f", wallQ);
                 
-                // Получаем иконку квариарца из ресурсов игры
-                BufferedImage iconImage = getQuarryartzIcon();
-                
-                // Добавляем метку через сервис (обрабатывает персистентность)
-                gui.labeledMarkService.addLabeledMark(label, "Quarryartz", segmentId, tileCoords, iconImage);
+                // Создаем маркер БЕЗ иконки (null), иконка загрузится асинхронно
+                String locationId = gui.labeledMarkService.addLabeledMarkAsync(label, "Quarryartz", segmentId, tileCoords, null);
+                // Загружаем иконку квариарца асинхронно
+                if (locationId != null) {
+                    loadQuarryartzIconAndUpdateMarker(gui, locationId);
+                }
                 
                 // Воспроизводим звук при выпадении квариарца
                 playQuarryartzSound(gui);
@@ -1070,11 +1149,124 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
-     * Добавляет или обновляет метку спота руды на карте
+     * Добавляет камень в батч для обработки маркера (батчинг для устранения лагов)
+     */
+    private void addOreSpotMarker(NGameUI gui, NGItem oreItem, String oreName, double wallQ) {
+        try {
+            if (gui.mmap == null || gui.mmap.sessloc == null) {
+                return;
+            }
+            
+            Gob player = NUtils.player();
+            if (player == null) {
+                return;
+            }
+            
+            // Получаем позицию игрока и направление копания
+            Coord2d playerPos = player.rc;
+            double angle = player.a;
+            
+            // Смещение в направлении копания (примерно 13.75 тайлов)
+            Coord2d minedTile = new Coord2d(
+                playerPos.x + (Math.cos(angle) * 13.75),
+                playerPos.y + (Math.sin(angle) * 13.75)
+            );
+            
+            // Получаем segment ID и tile coordinates
+            long segmentId = gui.mmap.sessloc.seg.id;
+            Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
+            
+            // Добавляем в батч
+            synchronized (batchLock) {
+                markerBatchQueue.add(new MarkerBatch(oreName, oreItem, wallQ, tileCoords, segmentId, "ore"));
+                scheduleBatchProcessing(gui);
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+    }
+    
+    /**
+     * Планирует обработку батча через небольшую задержку (батчинг)
+     */
+    private void scheduleBatchProcessing(NGameUI gui) {
+        long currentTime = System.currentTimeMillis();
+        if (lastBatchProcessTime == 0 || (currentTime - lastBatchProcessTime) >= BATCH_DELAY_MS) {
+            // Обрабатываем батч сразу или через небольшую задержку
+            markerExecutor.submit(() -> {
+                try {
+                    // Небольшая задержка для сбора большего количества камней
+                    Thread.sleep(50);
+                    processMarkerBatch(gui);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    // Игнорируем ошибки
+                }
+            });
+            lastBatchProcessTime = currentTime;
+        }
+    }
+    
+    /**
+     * Обрабатывает батч маркеров - группирует по типу и координатам, выбирает лучший
+     * Оптимизировано: создает маркеры напрямую без пересчета координат
+     */
+    private void processMarkerBatch(NGameUI gui) {
+        List<MarkerBatch> batch;
+        synchronized (batchLock) {
+            if (markerBatchQueue.isEmpty()) {
+                return;
+            }
+            batch = new ArrayList<>(markerBatchQueue);
+            markerBatchQueue.clear();
+        }
+        
+        if (batch.isEmpty() || gui.labeledMarkService == null) {
+            return;
+        }
+        
+        // Группируем по ключу (тип + название + координаты) и выбираем лучший (максимальное качество)
+        Map<String, MarkerBatch> bestMarkers = new HashMap<>();
+        for (MarkerBatch item : batch) {
+            String key = item.getGroupKey();
+            MarkerBatch existing = bestMarkers.get(key);
+            if (existing == null || item.wallQ > existing.wallQ) {
+                bestMarkers.put(key, item);
+            }
+        }
+        
+        // Обрабатываем каждый уникальный маркер - создаем напрямую без пересчета координат
+        for (MarkerBatch best : bestMarkers.values()) {
+            try {
+                String label = String.format("q%.0f", best.wallQ);
+                String locationId = gui.labeledMarkService.addLabeledMarkAsync(
+                    label, best.oreName, best.segmentId, best.tileCoords, null);
+                
+                // Загружаем иконку асинхронно
+                if (locationId != null) {
+                    if ("ore".equals(best.markerType)) {
+                        loadIconAndUpdateMarker(gui, locationId, best.item, best.oreName);
+                    } else if ("gem".equals(best.markerType)) {
+                        loadIconAndUpdateMarker(gui, locationId, best.item, best.oreName);
+                    } else if ("quarryartz".equals(best.markerType)) {
+                        loadQuarryartzIconAndUpdateMarker(gui, locationId);
+                        // Воспроизводим звук при выпадении квариарца
+                        playQuarryartzSound(gui);
+                    }
+                }
+            } catch (Exception e) {
+                // Игнорируем ошибки
+            }
+        }
+    }
+    
+    /**
+     * Синхронная версия добавления или обновления метки спота руды на карте
      * Обновляет маркер в радиусе 30 клеток только если качество выше
      * Не заменяет другие руды или камни (проверяет resourceType)
      */
-    private void addOreSpotMarker(NGameUI gui, NGItem oreItem, String oreName, double wallQ) {
+    private void addOreSpotMarkerSync(NGameUI gui, NGItem oreItem, String oreName, double wallQ) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) {
                 return;
@@ -1099,20 +1291,37 @@ public class MasterMiner extends ActionWithFinal {
             long segmentId = gui.mmap.sessloc.seg.id;
             Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
             
+            // УПРОЩЕННАЯ ВЕРСИЯ: Создаем маркер сразу без проверки существующих
+            // Это устраняет блокировки и лаги, так как не нужно ждать lock
+            // LabeledMarkService сам удалит дубликаты в радиусе 2 тайлов при создании
+            // Создаем маркер БЕЗ иконки (null), иконка загрузится асинхронно
+            String label = String.format("q%.0f", wallQ);
+            String locationId = gui.labeledMarkService.addLabeledMarkAsync(label, oreName, segmentId, tileCoords, null);
+            // Загружаем иконку асинхронно и обновим маркер когда загрузится
+            if (locationId != null) {
+                loadIconAndUpdateMarker(gui, locationId, oreItem, oreName);
+            }
+            
+            // СТАРАЯ ВЕРСИЯ С ПРОВЕРКОЙ - отключена для устранения лагов
+            // Если нужна проверка существующих маркеров, можно включить обратно, но это вызывает лаги
+            /*
             // Ищем существующий маркер ТОЛЬКО этой же руды/камня в радиусе 30 клеток
-            // Важно: проверяем resourceType, чтобы не заменять другие руды или камни
-            // И НЕ трогаем маркеры квариарца (они в отдельном слое)
-            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
-                gui.labeledMarkService.getMarksByResourceType(oreName);
+            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = new ArrayList<>();
+            try {
+                existingMarks = gui.labeledMarkService.getMarksByResourceType(oreName);
+            } catch (Exception e) {
+                // Если не удалось получить маркеры, продолжаем без проверки
+            }
             
             nurgling.widgets.LabeledMinimapMark nearbyMark = null;
+            int checkedCount = 0;
+            int maxChecks = 50;
             for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
-                // Проверяем, что это именно та же руда/камень (не другая руда или камень)
-                // И что это НЕ квариарц (квариарц в отдельном слое)
-                if (mark.segmentId == segmentId && oreName.equals(mark.resourceType) && !"Quarryartz".equals(mark.resourceType)) {
+                if (checkedCount++ >= maxChecks) break;
+                if (mark.segmentId != segmentId) continue;
+                if (oreName.equals(mark.resourceType) && !"Quarryartz".equals(mark.resourceType)) {
                     int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
                     int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
-                    // Проверяем радиус 30 тайлов
                     if (distX <= 30 && distY <= 30) {
                         nearbyMark = mark;
                         break;
@@ -1120,7 +1329,6 @@ public class MasterMiner extends ActionWithFinal {
                 }
             }
             
-            // Убрали проверку на другие типы маркеров - теперь все маркеры могут сосуществовать
             if (nearbyMark != null) {
                 // Маркер найден рядом - проверяем качество
                 // Обновляем ТОЛЬКО если выкопал выше
@@ -1138,107 +1346,159 @@ public class MasterMiner extends ActionWithFinal {
                         
                         // Создаем новый с обновленным качеством
                         String label = String.format("q%.0f", wallQ);
-                        BufferedImage iconImage = getOreIconFromItem(oreItem, oreName);
-                        // Создаем маркер даже если иконка не загрузилась (используется fallback)
-                        gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
+                        String locationId = gui.labeledMarkService.addLabeledMarkAsync(label, oreName, segmentId, tileCoords, null);
+                        if (locationId != null) {
+                            loadIconAndUpdateMarker(gui, locationId, oreItem, oreName);
+                        }
                     }
-                    // Если качество не выше - не трогаем маркер
                 } catch (Exception e) {
                     // Игнорируем ошибки парсинга
                 }
             } else {
                 // Маркер не найден - создаем новый
                 String label = String.format("q%.0f", wallQ);
-                BufferedImage iconImage = getOreIconFromItem(oreItem, oreName);
-                // Создаем маркер даже если иконка не загрузилась (используется fallback)
-                gui.labeledMarkService.addLabeledMark(label, oreName, segmentId, tileCoords, iconImage);
+                String locationId = gui.labeledMarkService.addLabeledMarkAsync(label, oreName, segmentId, tileCoords, null);
+                if (locationId != null) {
+                    loadIconAndUpdateMarker(gui, locationId, oreItem, oreName);
+                }
             }
+            */
         } catch (Exception e) {
             // Игнорируем ошибки
         }
     }
     
     /**
-     * Получает иконку руды из самого предмета (приоритет) или из ресурсов игры (fallback)
-     * Пытается несколько раз получить спрайт, так как он может быть еще не загружен
+     * Ищет путь к иконке в VSpec.object по названию руды
+     * Преобразует путь из gfx/terobjs/bumlings/... в gfx/invobjs/...
+     * 
+     * @param resourceType название ресурса (например, "Wine Glance")
+     * @return путь к иконке (например, "gfx/invobjs/cuprite") или null если не найден
      */
-    public static BufferedImage getOreIconFromItem(NGItem oreItem, String oreName) {
-        if (oreItem == null) {
-            return getOreIcon(oreName);
-        }
+    private static String getIconPathFromVSpec(String resourceType) {
+        if (resourceType == null || VSpec.object == null) return null;
         
-        // ПЕРВЫЙ ПРИОРИТЕТ: Пробуем получить изображение через спрайт предмета
-        // Используем spr() который пытается создать спрайт если его нет
-        for (int attempt = 0; attempt < 3; attempt++) {
-            try {
-                GSprite spr = oreItem.spr();
-                if (spr != null) {
-                    // Используем ItemTex.sprimg для получения изображения из спрайта
-                    BufferedImage sprImg = ItemTex.sprimg(spr);
-                    if (sprImg != null) {
-                        return sprImg;
-                    }
+        String lower = resourceType.toLowerCase().trim();
+        String normalized = lower.replaceAll("\\s+", "");
+        
+        // Ищем в VSpec.object путь к иконке по названию руды
+        for (String iconPath : VSpec.object.keySet()) {
+            ArrayList<String> oreNames = VSpec.object.get(iconPath);
+            if (oreNames != null) {
+                for (String oreName : oreNames) {
+                    String lowerOreName = oreName.toLowerCase().trim();
+                    String normalizedOreName = lowerOreName.replaceAll("\\s+", "");
                     
-                    // Альтернативный способ: если спрайт реализует ImageSprite
-                    if (spr instanceof GSprite.ImageSprite) {
-                        BufferedImage img = ((GSprite.ImageSprite) spr).image();
-                        if (img != null) {
-                            return img;
+                    // Проверяем точное совпадение или нормализованное
+                    if (lowerOreName.equals(lower) || normalizedOreName.equals(normalized) ||
+                        lowerOreName.equals(normalized) || normalizedOreName.equals(lower)) {
+                        // Преобразуем путь из gfx/terobjs/bumlings/... в gfx/invobjs/...
+                        if (iconPath.startsWith("gfx/terobjs/bumlings/")) {
+                            String oreType = iconPath.substring("gfx/terobjs/bumlings/".length());
+                            return "gfx/invobjs/" + oreType;
                         }
+                        // Если путь уже в правильном формате, возвращаем как есть
+                        return iconPath;
                     }
                 }
-            } catch (Loading e) {
-                // Ресурс еще загружается - попробуем еще раз после небольшой задержки
-                if (attempt < 2) {
-                    try {
-                        Thread.sleep(50); // Небольшая задержка 50мс
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                    continue;
-                }
-            } catch (Exception e) {
-                // Игнорируем другие ошибки и пробуем следующий способ
-                break;
             }
         }
         
-        // ВТОРОЙ ПРИОРИТЕТ: Пробуем создать спрайт из ресурса напрямую
-        try {
-            if (oreItem.res != null && oreItem.res.isReady() && oreItem.sdt != null) {
-                Resource res = oreItem.res.get();
-                if (res != null) {
-                    // Создаем спрайт из ресурса
-                    GSprite spr = GSprite.create(oreItem, res, oreItem.sdt.clone());
+        return null;
+    }
+    
+    /**
+     * Получает иконку руды из ресурсов игры (приоритет) или из самого предмета (fallback)
+     * Оптимизировано: сначала загружает из ресурсов через путь (быстро, не блокирует),
+     * потом пробует получить из спрайта предмета (может быть медленнее)
+     * Использует кэш и VSpec для оптимизации производительности
+     */
+    public static BufferedImage getOreIconFromItem(NGItem oreItem, String oreName) {
+        // Проверяем кэш сначала
+        if (oreName != null) {
+            BufferedImage cached = oreIconCache.get(oreName);
+            if (cached != null) {
+                return cached;
+            }
+        }
+        
+        BufferedImage icon = null;
+        
+        // ПЕРВЫЙ ПРИОРИТЕТ: Загружаем из ресурсов через путь (быстро, как в проспектинге)
+        // Это не блокирует поток и работает быстрее, чем получение спрайта
+        icon = getOreIcon(oreName);
+        if (icon != null) {
+            // Кэшируем результат
+            if (oreName != null) {
+                oreIconCache.put(oreName, icon);
+            }
+            return icon;
+        }
+        
+        // ВТОРОЙ ПРИОРИТЕТ: Пробуем получить изображение через спрайт предмета (только если есть предмет)
+        // Убрали блокирующие задержки - пробуем только один раз, без ожидания
+        if (oreItem != null) {
+            try {
+                // Пробуем получить спрайт только если ресурс уже готов
+                if (oreItem.res != null && oreItem.res.isReady()) {
+                    GSprite spr = oreItem.spr();
                     if (spr != null) {
+                        // Используем ItemTex.sprimg для получения изображения из спрайта
                         BufferedImage sprImg = ItemTex.sprimg(spr);
                         if (sprImg != null) {
+                            // Кэшируем результат
+                            if (oreName != null) {
+                                oreIconCache.put(oreName, sprImg);
+                            }
                             return sprImg;
                         }
                         
+                        // Альтернативный способ: если спрайт реализует ImageSprite
                         if (spr instanceof GSprite.ImageSprite) {
                             BufferedImage img = ((GSprite.ImageSprite) spr).image();
                             if (img != null) {
+                                // Кэшируем результат
+                                if (oreName != null) {
+                                    oreIconCache.put(oreName, img);
+                                }
                                 return img;
                             }
                         }
                     }
                 }
+            } catch (Loading e) {
+                // Ресурс еще загружается - пропускаем, не ждем (это не блокирует поток)
+            } catch (Exception e) {
+                // Игнорируем другие ошибки
             }
-        } catch (Exception e) {
-            // Игнорируем ошибки
         }
         
-        // ТРЕТИЙ ПРИОРИТЕТ: Fallback - пробуем загрузить напрямую из ресурсов (старый способ)
-        return getOreIcon(oreName);
+        // Кэшируем результат для будущего использования (даже если null, чтобы не пытаться снова)
+        if (oreName != null && icon == null) {
+            // Не кэшируем null, чтобы можно было попробовать снова позже
+        }
+        
+        return icon;
     }
     
     /**
-     * Получает иконку руды из ресурсов игры (fallback метод)
+     * Получает иконку руды из ресурсов игры (оптимизированный метод, как в проспектинге)
+     * Использует VSpec для получения правильного пути, что быстрее и надежнее
      */
     public static BufferedImage getOreIcon(String oreName) {
         if (oreName == null) return null;
+        
+        // Сначала пробуем найти путь в VSpec (для руд с альтернативными названиями)
+        // Это быстрее и надежнее, чем перебирать все возможные пути
+        String vSpecPath = getIconPathFromVSpec(oreName);
+        if (vSpecPath != null) {
+            try {
+                Resource res = Resource.remote().loadwait(vSpecPath);
+                return res.layer(Resource.imgc).img;
+            } catch (Exception e) {
+                // Если не удалось загрузить из VSpec, пробуем другие пути
+            }
+        }
         
         // Специальная обработка для Wine Glance - используем правильный путь
         if (oreName.equalsIgnoreCase("Wine Glance")) {
@@ -1251,29 +1511,34 @@ public class MasterMiner extends ActionWithFinal {
                     Resource res = Resource.remote().loadwait("gfx/invobjs/cuprite");
                     return res.layer(Resource.imgc).img;
                 } catch (Exception e2) {
-                    return null;
+                    // Продолжаем с общими путями
                 }
             }
         }
         
-        // Нормализуем название: убираем пробелы и приводим к нижнему регистру
-        String normalized = oreName.toLowerCase().replaceAll("\\s+", "");
-        String original = oreName.toLowerCase();
+        String lower = oreName.toLowerCase().trim();
         
-        // Пробуем различные пути к иконке (как в NMiniMap.tryLoadProspectingIcon)
+        // Специальные случаи преобразования названий
+        String resourceName = lower;
+        if (lower.equals("rock salt") || lower.equals("rocksalt")) {
+            resourceName = "halite"; // Rock Salt использует иконку halite
+        }
+        
+        // Нормализуем название: убираем пробелы (например, "lead glance" -> "leadglance")
+        String normalized = resourceName.replaceAll("\\s+", "");
+        
+        // Список возможных путей к иконке (пробуем и с пробелами, и без)
+        // Сократили список - сначала пробуем самые вероятные пути
         String[] possiblePaths = {
             "gfx/invobjs/" + normalized,  // Сначала пробуем нормализованное (без пробелов)
-            "gfx/invobjs/" + original,    // Затем с оригинальным названием
+            "gfx/invobjs/" + resourceName,      // Затем с оригинальным названием
             "gfx/invobjs/ore-" + normalized,
-            "gfx/invobjs/ore-" + original,
+            "gfx/invobjs/ore-" + resourceName,
             "gfx/invobjs/stone-" + normalized,
-            "gfx/invobjs/stone-" + original,
-            "gfx/tiles/rocks/" + normalized,
-            "gfx/tiles/rocks/" + original,
-            "gfx/terobjs/bumblings/" + normalized,
-            "gfx/terobjs/bumblings/" + original
+            "gfx/invobjs/stone-" + resourceName
         };
         
+        // Пробуем загрузить из каждого пути
         for (String path : possiblePaths) {
             try {
                 Resource res = Resource.remote().loadwait(path);
@@ -1289,12 +1554,50 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
-     * Добавляет метку на карту для драгоценного камня
+     * Добавляет драгоценный камень в батч для обработки маркера (батчинг для устранения лагов)
+     */
+    private void addGemstoneMarker(NGameUI gui, NGItem gemItem, String gemName, double quality) {
+        try {
+            if (gui.mmap == null || gui.mmap.sessloc == null) {
+                return;
+            }
+            
+            Gob player = NUtils.player();
+            if (player == null) {
+                return;
+            }
+            
+            // Получаем позицию игрока и направление копания
+            Coord2d playerPos = player.rc;
+            double angle = player.a;
+            
+            // Смещение в направлении копания (примерно 13.75 тайлов)
+            Coord2d minedTile = new Coord2d(
+                playerPos.x + (Math.cos(angle) * 13.75),
+                playerPos.y + (Math.sin(angle) * 13.75)
+            );
+            
+            // Получаем segment ID и tile coordinates
+            long segmentId = gui.mmap.sessloc.seg.id;
+            Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
+            
+            // Добавляем в батч
+            synchronized (batchLock) {
+                markerBatchQueue.add(new MarkerBatch(gemName, gemItem, quality, tileCoords, segmentId, "gem"));
+                scheduleBatchProcessing(gui);
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+    }
+    
+    /**
+     * Синхронная версия добавления метки на карту для драгоценного камня
      * Ставит с фактическим качеством (f3), без применения формул
      * Использует систему спотов (обновление в радиусе 30 клеток)
      * Использует иконку самого предмета
      */
-    private void addGemstoneMarker(NGameUI gui, NGItem gemItem, String gemName, double quality) {
+    private void addGemstoneMarkerSync(NGameUI gui, NGItem gemItem, String gemName, double quality) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null || gui.labeledMarkService == null) {
                 return;
@@ -1320,31 +1623,18 @@ public class MasterMiner extends ActionWithFinal {
             Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
             
             // Драгоценные камни ставятся как квариарц - четко в месте выкопан, без системы спотов
-            // Проверяем, есть ли уже маркер этого же драгоценного камня рядом (в радиусе 2 тайлов)
-            // Если есть - не ставим новый (как квариарц, не склеивается)
-            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
-                gui.labeledMarkService.getMarksByResourceType(gemName);
-            
-            boolean nearbyMarkExists = false;
-            for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
-                // Проверяем, что это именно тот же драгоценный камень
-                if (mark.segmentId == segmentId && gemName.equals(mark.resourceType)) {
-                    int distX = Math.abs(mark.tileCoords.x - tileCoords.x);
-                    int distY = Math.abs(mark.tileCoords.y - tileCoords.y);
-                    // Проверяем радиус 2 тайла (как квариарц)
-                    if (distX <= 2 && distY <= 2) {
-                        nearbyMarkExists = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (!nearbyMarkExists) {
+            // УБРАНА ПРОВЕРКА существующих маркеров - она вызывала лаги из-за блокирующего lock
+            // LabeledMarkService сам удалит дубликаты в радиусе 2 тайлов при создании маркера
+            // Создаем маркер всегда - сервис сам обработает дубликаты
+            {
                 // Создаем новый маркер (как квариарц - четко в месте выкопан)
                 String label = String.format("q%.0f", quality);
-                BufferedImage iconImage = getGemstoneIconFromItem(gemItem);
-                // Создаем маркер даже если иконка не загрузилась (используется fallback)
-                gui.labeledMarkService.addLabeledMark(label, gemName, segmentId, tileCoords, iconImage);
+                // Создаем маркер БЕЗ иконки (null), иконка загрузится асинхронно
+                String locationId = gui.labeledMarkService.addLabeledMarkAsync(label, gemName, segmentId, tileCoords, null);
+                // Загружаем иконку асинхронно и обновим маркер когда загрузится
+                if (locationId != null) {
+                    loadIconAndUpdateMarker(gui, locationId, gemItem, gemName);
+                }
             }
         } catch (Exception e) {
             // Игнорируем ошибки
@@ -1533,5 +1823,52 @@ public class MasterMiner extends ActionWithFinal {
             }
         }
     }
+    
+    /**
+     * Асинхронно загружает иконку руды/камня и обновляет маркер
+     * Оптимизировано: загрузка иконки отложена, чтобы не блокировать создание маркера
+     */
+    private void loadIconAndUpdateMarker(NGameUI gui, String locationId, NGItem item, String resourceName) {
+        // Откладываем загрузку иконки на небольшое время, чтобы маркер успел создаться
+        // Это позволяет избежать блокировки при создании маркера
+        iconLoaderExecutor.submit(() -> {
+            try {
+                // Небольшая задержка, чтобы маркер успел создаться без блокировки
+                Thread.sleep(10);
+                
+                // Загружаем иконку (может занять время, но это в отдельном потоке)
+                BufferedImage icon = getOreIconFromItem(item, resourceName);
+                
+                // Обновляем маркер с загруженной иконкой
+                if (gui.labeledMarkService != null && icon != null) {
+                    gui.labeledMarkService.updateMarkIcon(locationId, icon);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                // Игнорируем ошибки загрузки иконки
+            }
+        });
+    }
+    
+    /**
+     * Асинхронно загружает иконку квариарца и обновляет маркер
+     */
+    private void loadQuarryartzIconAndUpdateMarker(NGameUI gui, String locationId) {
+        iconLoaderExecutor.submit(() -> {
+            try {
+                // Загружаем иконку квариарца (может занять время)
+                BufferedImage icon = getQuarryartzIcon();
+                
+                // Обновляем маркер с загруженной иконкой
+                if (gui.labeledMarkService != null) {
+                    gui.labeledMarkService.updateMarkIcon(locationId, icon);
+                }
+            } catch (Exception e) {
+                // Игнорируем ошибки загрузки иконки
+            }
+        });
+    }
 }
+
 

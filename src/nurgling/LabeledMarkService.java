@@ -27,6 +27,9 @@ import java.awt.image.BufferedImage;
  */
 public class LabeledMarkService implements ProfileAwareService {
     private final Map<String, LabeledMinimapMark> labeledMarks = new ConcurrentHashMap<>();
+    // Индексы для быстрого поиска маркеров
+    private final Map<String, List<LabeledMinimapMark>> resourceTypeIndex = new ConcurrentHashMap<>();
+    private final Map<Long, List<LabeledMinimapMark>> segmentIndex = new ConcurrentHashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private String dataFile;
     private final NGameUI gui;
@@ -84,28 +87,176 @@ public class LabeledMarkService implements ProfileAwareService {
     }
 
     /**
+     * Add a labeled mark asynchronously and return locationId for icon update.
+     * Используется для создания маркера без иконки, с последующей асинхронной загрузкой иконки.
+     */
+    public String addLabeledMarkAsync(String label, String resourceType, long segmentId, 
+                                      Coord tileCoords, BufferedImage iconImage) {
+        lock.writeLock().lock();
+        try {
+            // Используем индекс для быстрого поиска маркеров того же типа ресурса
+            final Coord tc = tileCoords;
+            final long segId = segmentId;
+            final String resType = resourceType;
+            
+            // Получаем список маркеров этого типа ресурса из индекса
+            List<LabeledMinimapMark> marksToCheck = resourceTypeIndex.getOrDefault(resType, new ArrayList<>());
+            
+            // Ищем маркеры в том же сегменте в радиусе 2 тайлов
+            List<String> toRemove = new ArrayList<>();
+            for (LabeledMinimapMark mark : marksToCheck) {
+                if (mark.segmentId == segId && mark.isNear(segId, tc, 2) && resType.equals(mark.resourceType)) {
+                    toRemove.add(mark.getLocationId());
+                }
+            }
+            
+            // Удаляем найденные маркеры
+            for (String locationId : toRemove) {
+                removeMarkFromIndexes(locationId);
+            }
+            
+            // Create and add new mark
+            LabeledMinimapMark mark = new LabeledMinimapMark(label, resourceType, segmentId, tileCoords, iconImage);
+            labeledMarks.put(mark.getLocationId(), mark);
+            addMarkToIndexes(mark);
+            
+            // Сохраняем асинхронно, чтобы избежать пролога
+            scheduleSave();
+            
+            return mark.getLocationId();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
      * Add a labeled mark (e.g., water or soil quality).
      * Removes any existing mark at the same location.
+     * Оптимизировано с использованием индексов для быстрого поиска.
      */
     public void addLabeledMark(String label, String resourceType, long segmentId, 
                                Coord tileCoords, BufferedImage iconImage) {
         lock.writeLock().lock();
         try {
-            // Remove any existing mark at similar location, but ONLY if it's the same resourceType
-            // This allows different resource types (Quarryartz, Ores, Gemstones) to coexist at the same location
+            // Используем индекс для быстрого поиска маркеров того же типа ресурса
+            // Вместо прохода по всем маркерам, ищем только в нужном сегменте и типе ресурса
             final Coord tc = tileCoords;
             final long segId = segmentId;
             final String resType = resourceType;
-            labeledMarks.entrySet().removeIf(e -> {
-                LabeledMinimapMark mark = e.getValue();
-                // Удаляем только маркеры того же типа ресурса в радиусе 2 тайлов
-                return mark.isNear(segId, tc, 2) && resType != null && resType.equals(mark.resourceType);
-            });
+            
+            // Получаем список маркеров этого типа ресурса из индекса
+            List<LabeledMinimapMark> marksToCheck = resourceTypeIndex.getOrDefault(resType, new ArrayList<>());
+            
+            // Ищем маркеры в том же сегменте в радиусе 2 тайлов
+            List<String> toRemove = new ArrayList<>();
+            for (LabeledMinimapMark mark : marksToCheck) {
+                if (mark.segmentId == segId && mark.isNear(segId, tc, 2) && resType.equals(mark.resourceType)) {
+                    toRemove.add(mark.getLocationId());
+                }
+            }
+            
+            // Удаляем найденные маркеры
+            for (String locationId : toRemove) {
+                removeMarkFromIndexes(locationId);
+            }
             
             // Create and add new mark
             LabeledMinimapMark mark = new LabeledMinimapMark(label, resourceType, segmentId, tileCoords, iconImage);
             labeledMarks.put(mark.getLocationId(), mark);
+            addMarkToIndexes(mark);
+            
             // Сохраняем асинхронно, чтобы избежать пролога
+            scheduleSave();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Добавляет маркер в индексы для быстрого поиска
+     */
+    private void addMarkToIndexes(LabeledMinimapMark mark) {
+        // Индекс по типу ресурса
+        resourceTypeIndex.computeIfAbsent(mark.resourceType, k -> new ArrayList<>()).add(mark);
+        
+        // Индекс по сегменту
+        segmentIndex.computeIfAbsent(mark.segmentId, k -> new ArrayList<>()).add(mark);
+    }
+    
+    /**
+     * Удаляет маркер из индексов
+     */
+    private void removeMarkFromIndexes(String locationId) {
+        LabeledMinimapMark mark = labeledMarks.get(locationId);
+        if (mark == null) return;
+        
+        // Удаляем из индекса по типу ресурса
+        List<LabeledMinimapMark> resourceList = resourceTypeIndex.get(mark.resourceType);
+        if (resourceList != null) {
+            resourceList.remove(mark);
+            if (resourceList.isEmpty()) {
+                resourceTypeIndex.remove(mark.resourceType);
+            }
+        }
+        
+        // Удаляем из индекса по сегменту
+        List<LabeledMinimapMark> segmentList = segmentIndex.get(mark.segmentId);
+        if (segmentList != null) {
+            segmentList.remove(mark);
+            if (segmentList.isEmpty()) {
+                segmentIndex.remove(mark.segmentId);
+            }
+        }
+        
+        // Удаляем из основного хранилища
+        labeledMarks.remove(locationId);
+    }
+    
+    /**
+     * Обновляет иконку маркера (создает новый маркер с иконкой и заменяет старый)
+     * Используется для асинхронной загрузки иконок
+     */
+    public void updateMarkIcon(String locationId, BufferedImage iconImage) {
+        lock.writeLock().lock();
+        try {
+            LabeledMinimapMark oldMark = labeledMarks.get(locationId);
+            if (oldMark == null) return;
+            
+            // Создаем новый маркер с иконкой
+            LabeledMinimapMark newMark = new LabeledMinimapMark(
+                oldMark.label, 
+                oldMark.resourceType, 
+                oldMark.segmentId, 
+                oldMark.tileCoords, 
+                iconImage,
+                oldMark.labelColor
+            );
+            
+            // Заменяем старый маркер на новый
+            labeledMarks.put(locationId, newMark);
+            
+            // Обновляем индексы (ищем по locationId, так как equals может не работать)
+            List<LabeledMinimapMark> resourceList = resourceTypeIndex.get(oldMark.resourceType);
+            if (resourceList != null) {
+                for (int i = 0; i < resourceList.size(); i++) {
+                    if (resourceList.get(i).getLocationId().equals(locationId)) {
+                        resourceList.set(i, newMark);
+                        break;
+                    }
+                }
+            }
+            
+            List<LabeledMinimapMark> segmentList = segmentIndex.get(oldMark.segmentId);
+            if (segmentList != null) {
+                for (int i = 0; i < segmentList.size(); i++) {
+                    if (segmentList.get(i).getLocationId().equals(locationId)) {
+                        segmentList.set(i, newMark);
+                        break;
+                    }
+                }
+            }
+            
+            // Сохраняем асинхронно
             scheduleSave();
         } finally {
             lock.writeLock().unlock();
@@ -140,17 +291,18 @@ public class LabeledMarkService implements ProfileAwareService {
 
     /**
      * Get all labeled marks for a segment (for map rendering).
+     * Оптимизировано с использованием индекса - O(1) вместо O(n).
      */
     public List<LabeledMinimapMark> getMarksForSegment(long segmentId) {
         lock.readLock().lock();
         try {
-            List<LabeledMinimapMark> result = new ArrayList<>();
-            for (LabeledMinimapMark mark : labeledMarks.values()) {
-                if (mark.isInSegment(segmentId)) {
-                    result.add(mark);
-                }
+            // Используем индекс для мгновенного получения маркеров нужного сегмента
+            List<LabeledMinimapMark> indexed = segmentIndex.get(segmentId);
+            if (indexed != null) {
+                // Возвращаем копию списка, чтобы избежать проблем с concurrent модификациями
+                return new ArrayList<>(indexed);
             }
-            return result;
+            return new ArrayList<>();
         } finally {
             lock.readLock().unlock();
         }
@@ -174,8 +326,9 @@ public class LabeledMarkService implements ProfileAwareService {
     public boolean removeMark(String locationId) {
         lock.writeLock().lock();
         try {
-            boolean removed = labeledMarks.remove(locationId) != null;
+            boolean removed = labeledMarks.containsKey(locationId);
             if (removed) {
+                removeMarkFromIndexes(locationId);
                 scheduleSave(); // Сохраняем асинхронно
             }
             return removed;
@@ -194,13 +347,18 @@ public class LabeledMarkService implements ProfileAwareService {
 
     /**
      * Find a mark at given segment and tile coordinates.
+     * Оптимизировано с использованием индекса по сегменту.
      */
     public LabeledMinimapMark findMarkAt(long segmentId, Coord tileCoords, int radiusTiles) {
         lock.readLock().lock();
         try {
-            for (LabeledMinimapMark mark : labeledMarks.values()) {
-                if (mark.isNear(segmentId, tileCoords, radiusTiles)) {
-                    return mark;
+            // Используем индекс по сегменту для быстрого поиска
+            List<LabeledMinimapMark> segmentMarks = segmentIndex.get(segmentId);
+            if (segmentMarks != null) {
+                for (LabeledMinimapMark mark : segmentMarks) {
+                    if (mark.isNear(segmentId, tileCoords, radiusTiles)) {
+                        return mark;
+                    }
                 }
             }
             return null;
@@ -216,6 +374,9 @@ public class LabeledMarkService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             labeledMarks.clear();
+            resourceTypeIndex.clear();
+            segmentIndex.clear();
+            
             File file = new File(dataFile);
             if (file.exists()) {
                 StringBuilder contentBuilder = new StringBuilder();
@@ -234,6 +395,7 @@ public class LabeledMarkService implements ProfileAwareService {
                             try {
                                 LabeledMinimapMark mark = new LabeledMinimapMark(array.getJSONObject(i));
                                 labeledMarks.put(mark.getLocationId(), mark);
+                                addMarkToIndexes(mark);
                             } catch (Exception e) {
                                 System.err.println("Failed to parse labeled mark: " + e.getMessage());
                             }
@@ -273,17 +435,18 @@ public class LabeledMarkService implements ProfileAwareService {
 
     /**
      * Get all labeled marks for a specific resource type.
+     * Оптимизировано с использованием индекса - O(1) вместо O(n).
      */
     public List<LabeledMinimapMark> getMarksByResourceType(String resourceType) {
         lock.readLock().lock();
         try {
-            List<LabeledMinimapMark> result = new ArrayList<>();
-            for (LabeledMinimapMark mark : labeledMarks.values()) {
-                if (mark.resourceType.equals(resourceType)) {
-                    result.add(mark);
-                }
+            // Используем индекс для мгновенного получения маркеров нужного типа
+            List<LabeledMinimapMark> indexed = resourceTypeIndex.get(resourceType);
+            if (indexed != null) {
+                // Возвращаем копию списка, чтобы избежать проблем с concurrent модификациями
+                return new ArrayList<>(indexed);
             }
-            return result;
+            return new ArrayList<>();
         } finally {
             lock.readLock().unlock();
         }
@@ -291,19 +454,25 @@ public class LabeledMarkService implements ProfileAwareService {
 
     /**
      * Remove all marks for a specific resource type.
+     * Оптимизировано с использованием индекса.
      */
     public int removeMarksByResourceType(String resourceType) {
         lock.writeLock().lock();
         try {
-            int removed = 0;
-            Iterator<Map.Entry<String, LabeledMinimapMark>> it = labeledMarks.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<String, LabeledMinimapMark> entry = it.next();
-                if (entry.getValue().resourceType.equals(resourceType)) {
-                    it.remove();
-                    removed++;
-                }
+            // Используем индекс для быстрого получения всех маркеров нужного типа
+            List<LabeledMinimapMark> marksToRemove = resourceTypeIndex.get(resourceType);
+            if (marksToRemove == null || marksToRemove.isEmpty()) {
+                return 0;
             }
+            
+            int removed = 0;
+            // Создаем копию списка, чтобы избежать concurrent modification
+            List<LabeledMinimapMark> copy = new ArrayList<>(marksToRemove);
+            for (LabeledMinimapMark mark : copy) {
+                removeMarkFromIndexes(mark.getLocationId());
+                removed++;
+            }
+            
             if (removed > 0) {
                 scheduleSave(); // Сохраняем асинхронно
             }
@@ -315,24 +484,28 @@ public class LabeledMarkService implements ProfileAwareService {
 
     /**
      * Get marks filtered by quality threshold (for Quarryartz marks with "q" prefix in label).
+     * Оптимизировано с использованием индекса.
      */
     public List<LabeledMinimapMark> getQuarryartzMarksAboveThreshold(double threshold) {
         lock.readLock().lock();
         try {
             List<LabeledMinimapMark> result = new ArrayList<>();
-            for (LabeledMinimapMark mark : labeledMarks.values()) {
-                if (!"Quarryartz".equals(mark.resourceType)) continue;
-                // Parse quality from label (format: "q101", "q95", etc.)
-                try {
-                    if (mark.label != null && mark.label.startsWith("q")) {
-                        String qStr = mark.label.substring(1).trim();
-                        double quality = Double.parseDouble(qStr);
-                        if (quality > threshold) {
-                            result.add(mark);
+            // Используем индекс для быстрого получения только Quarryartz маркеров
+            List<LabeledMinimapMark> quarryartzMarks = resourceTypeIndex.get("Quarryartz");
+            if (quarryartzMarks != null) {
+                for (LabeledMinimapMark mark : quarryartzMarks) {
+                    // Parse quality from label (format: "q101", "q95", etc.)
+                    try {
+                        if (mark.label != null && mark.label.startsWith("q")) {
+                            String qStr = mark.label.substring(1).trim();
+                            double quality = Double.parseDouble(qStr);
+                            if (quality > threshold) {
+                                result.add(mark);
+                            }
                         }
+                    } catch (Exception e) {
+                        // Ignore parsing errors
                     }
-                } catch (Exception e) {
-                    // Ignore parsing errors
                 }
             }
             return result;

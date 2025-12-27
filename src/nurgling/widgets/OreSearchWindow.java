@@ -84,6 +84,13 @@ public class OreSearchWindow extends Window {
      * Обновляет выпадающий список типов руд/камней
      */
     private void refreshOreTypeDropdown() {
+        refreshOreTypeDropdown(null);
+    }
+    
+    /**
+     * Обновляет выпадающий список типов руд/камней с возможностью установить выбранный тип
+     */
+    private void refreshOreTypeDropdown(String selectedType) {
         // Удаляем старый dropdown если существует
         if (oreTypeDropdown != null) {
             ui.destroy(oreTypeDropdown);
@@ -110,7 +117,36 @@ public class OreSearchWindow extends Window {
                 g.text(item, Coord.z);
             }
         }, controlX, oreDropdownY);
-        oreTypeDropdown.change(oreTypes.get(0)); // Выбираем "Any" по умолчанию
+        
+        // Выбираем указанный тип или "Any" по умолчанию
+        if (selectedType != null && oreTypes.contains(selectedType)) {
+            oreTypeDropdown.change(selectedType);
+        } else {
+            oreTypeDropdown.change(oreTypes.get(0)); // "Any" по умолчанию
+        }
+    }
+    
+    /**
+     * Устанавливает выбранный тип руды/камня
+     */
+    public void setSelectedOreType(String oreType) {
+        if (oreTypeDropdown != null && oreTypes != null && oreTypes.contains(oreType)) {
+            oreTypeDropdown.change(oreType);
+        } else {
+            // Если dropdown еще не создан или тип не найден, обновляем список и устанавливаем тип
+            refreshOreTypeDropdown(oreType);
+        }
+    }
+    
+    /**
+     * Устанавливает порог качества
+     */
+    public void setQualityThreshold(double quality) {
+        if (thresholdEntry != null) {
+            thresholdEntry.settext(String.valueOf((int)quality == quality ? (int)quality : quality));
+            // Автоматически выполняем поиск после установки фильтров
+            performSearch();
+        }
     }
 
     /**
@@ -282,6 +318,7 @@ public class OreSearchWindow extends Window {
         }
     }
 }
+
 
 
 
