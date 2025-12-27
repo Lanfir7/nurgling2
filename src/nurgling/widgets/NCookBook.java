@@ -474,18 +474,19 @@ public class NCookBook extends Window {
         }
         
         // Если прошло от 1 до 3 секунд, проверяем количество рецептов в БД
-        try {
-            java.sql.Connection conn = ui.core.poolManager.getConnection();
-            if (conn == null || conn.isClosed()) {
-                System.out.println("NCookBook.shouldReloadRecipes: Connection is null or closed");
-                return false; // Не можем проверить, не обновляем
-            }
-            
-            // Проверяем количество рецептов
-            try (java.sql.Statement stmt = conn.createStatement();
-                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as count FROM recipes")) {
-                if (rs.next()) {
-                    int currentCount = rs.getInt("count");
+        if (ui.core.databaseManager != null && ui.core.databaseManager.isReady()) {
+            try {
+                Integer count = ui.core.databaseManager.executeOperation(adapter -> {
+                    try (java.sql.ResultSet rs = adapter.executeQuery("SELECT COUNT(*) as count FROM recipes")) {
+                        if (rs.next()) {
+                            return rs.getInt("count");
+                        }
+                    }
+                    return 0;
+                });
+                
+                if (count != null) {
+                    int currentCount = count;
                     System.out.println("NCookBook.shouldReloadRecipes: Current count in DB: " + currentCount + ", last loaded: " + lastRecipeCount);
                     if (currentCount != lastRecipeCount) {
                         System.out.println("NCookBook.shouldReloadRecipes: Recipe count changed from " + lastRecipeCount + " to " + currentCount + ", need to reload");
@@ -494,11 +495,11 @@ public class NCookBook extends Window {
                         System.out.println("NCookBook.shouldReloadRecipes: Recipe count unchanged (" + currentCount + "), no reload needed");
                     }
                 }
+            } catch (Exception e) {
+                System.err.println("NCookBook.shouldReloadRecipes: Error checking recipe count: " + e.getMessage());
+                e.printStackTrace();
+                // При ошибке не обновляем, чтобы не создавать лишние задачи
             }
-        } catch (SQLException e) {
-            System.err.println("NCookBook.shouldReloadRecipes: Error checking recipe count: " + e.getMessage());
-            e.printStackTrace();
-            // При ошибке не обновляем, чтобы не создавать лишние задачи
         }
         
         return false; // Количество не изменилось, обновление не нужно

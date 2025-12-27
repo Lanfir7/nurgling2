@@ -281,7 +281,7 @@ public class NCore extends Widget
                     NUtils.getGameUI().map.glob.map != null) {
                     Collection<NArea> areas = ((nurgling.NMapView)NUtils.getGameUI().map).glob.map.areas.values();
                     if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
-                        AreaDBAdapter dbAdapter = new AreaDBAdapter(nurgling.NCore.databaseManager);
+                        nurgling.areas.db.AreaDBAdapter dbAdapter = new nurgling.areas.db.AreaDBAdapter(nurgling.NCore.databaseManager);
                         syncManager.syncAll(areas, dbAdapter);
                     }
                 }
@@ -342,7 +342,7 @@ public class NCore extends Widget
                         // Интервал проверяется внутри AreaSyncManager.syncAll()
                         if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
                             Collection<NArea> areas = ((nurgling.NMapView)NUtils.getGameUI().map).glob.map.areas.values();
-                            AreaDBAdapter dbAdapter = new AreaDBAdapter(nurgling.NCore.databaseManager);
+                            nurgling.areas.db.AreaDBAdapter dbAdapter = new nurgling.areas.db.AreaDBAdapter(nurgling.NCore.databaseManager);
                             syncManager.syncAll(areas, dbAdapter);
                         }
                     }

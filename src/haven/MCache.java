@@ -177,6 +177,10 @@ public class MCache implements MapSource {
 			try (Stream<String> stream = Files.lines(Paths.get(areasPath), StandardCharsets.UTF_8))
 			{
 				stream.forEach(s -> contentBuilder.append(s).append("\n"));
+			} catch (java.io.IOException e) {
+				System.err.println("Failed to read areas file: " + e.getMessage());
+				areasLoaded = true;
+				return;
 			}
 			
 			try {
