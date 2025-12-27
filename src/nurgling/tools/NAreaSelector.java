@@ -65,6 +65,7 @@ public class NAreaSelector implements Runnable
                         else if(mode == Mode.CHANGE)
                         {
                             area.space = result;
+                            area.lastLocalChange = System.currentTimeMillis();
                             area.grids_id.clear();
                             area.grids_id.addAll(area.space.space.keySet());
                             for(NArea.VArea space: area.space.space.values())
@@ -141,7 +142,16 @@ public class NAreaSelector implements Runnable
                             try {
                                 // Обновляем lastUpdated перед сохранением, чтобы синхронизация увидела изменение
                                 area.lastUpdated = System.currentTimeMillis();
-                                nurgling.areas.db.AreaDBManager.getInstance().saveArea(area);
+                                // Используем новую систему БД
+                                if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+                                    try {
+                                        String profile = NUtils.getGameUI() != null ? NUtils.getGameUI().getGenus() : "global";
+                                        if (profile == null || profile.isEmpty()) profile = "global";
+                                        nurgling.NCore.databaseManager.getAreaService().saveArea(area, profile);
+                                    } catch (Exception ex) {
+                                        System.err.println("Failed to save area to database: " + ex.getMessage());
+                                    }
+                                }
                                 System.out.println("NAreaSelector: Saved zone " + area.id + " (" + area.name + ") with new coordinates to DB");
                             } catch (Exception e) {
                                 System.err.println("NAreaSelector: Failed to save area coordinates to database: " + e.getMessage());

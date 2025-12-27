@@ -2,12 +2,7 @@ package nurgling.areas.db;
 
 import nurgling.areas.NArea;
 import nurgling.areas.sync.ZoneSyncClient;
-import nurgling.areas.storage.DatabaseConnectionManager;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -123,8 +118,14 @@ public class AreaSyncManager {
                 nurgling.NGameUI gui = nurgling.NUtils.getGameUI();
                 if (gui != null && gui.map != null && gui.map.glob != null && gui.map.glob.map != null) {
                     Collection<NArea> localAreas = gui.map.glob.map.areas.values();
-                    nurgling.areas.db.AreaDBManager dbManager = nurgling.areas.db.AreaDBManager.getInstance();
-                    syncAll(localAreas, dbManager);
+                    // Используем новую систему БД
+                    nurgling.db.DatabaseManager dbMgr = nurgling.NCore.databaseManager;
+                    if (dbMgr != null && dbMgr.isReady()) {
+                        AreaDBAdapter dbAdapter = new AreaDBAdapter(dbMgr);
+                        syncAll(localAreas, dbAdapter);
+                    } else {
+                        System.out.println("AreaSyncManager: Database not ready, skipping delayed sync");
+                    }
                 } else {
                     System.out.println("AreaSyncManager: Delayed sync skipped - game UI not ready");
                 }
@@ -145,7 +146,7 @@ public class AreaSyncManager {
     /**
      * Синхронизирует все зоны с сервером (push + pull) - запускается в фоновом потоке
      */
-    public void syncAll(Collection<NArea> localAreas, AreaDBManager dbManager) {
+    public void syncAll(Collection<NArea> localAreas, AreaDBAdapter dbAdapter) {
         if (!isEnabled()) {
             return;
         }
@@ -193,13 +194,13 @@ public class AreaSyncManager {
         
         // Запускаем синхронизацию в фоновом потоке
         final Collection<NArea> areasToSync = new ArrayList<>(localAreas);
-        final AreaDBManager manager = dbManager;
+        final AreaDBAdapter adapter = dbAdapter;
         final int finalIntervalSeconds = intervalSeconds;
         
         syncInProgress.set(true);
         syncExecutor.submit(() -> {
             try {
-                syncAllInternal(areasToSync, manager, finalIntervalSeconds);
+                syncAllInternal(areasToSync, adapter, finalIntervalSeconds);
             } catch (Exception e) {
                 System.err.println("AreaSyncManager: Error during sync: " + e.getMessage());
                 e.printStackTrace();
@@ -212,7 +213,7 @@ public class AreaSyncManager {
     /**
      * Внутренний метод синхронизации (выполняется в фоновом потоке)
      */
-    private void syncAllInternal(Collection<NArea> localAreas, AreaDBManager dbManager, int intervalSeconds) {
+    private void syncAllInternal(Collection<NArea> localAreas, AreaDBAdapter dbAdapter, int intervalSeconds) {
         long currentTime = System.currentTimeMillis();
         
         // Проверяем доступность сервера (используем кэш или проверяем в фоне)
@@ -234,7 +235,7 @@ public class AreaSyncManager {
         // Это гарантирует, что у нас актуальные значения lastUpdated
         Collection<NArea> freshAreas = new ArrayList<>();
         try {
-            Map<Integer, NArea> dbAreas = dbManager.loadAllAreas();
+            Map<Integer, NArea> dbAreas = dbAdapter.loadAllAreas();
             freshAreas = dbAreas.values();
         } catch (Exception e) {
             System.err.println("AreaSyncManager: Failed to load fresh areas from DB, using provided areas: " + e.getMessage());
@@ -245,19 +246,19 @@ public class AreaSyncManager {
         // ВАЖНО: Сначала получаем обновления с сервера (pull),
         // чтобы удалить зоны, которые были удалены на сервере.
         // Это предотвращает отправку зон, которые уже удалены на сервере.
-        int[] pullStats = pullServerUpdates(freshAreas, dbManager);
+        int[] pullStats = pullServerUpdates(freshAreas, dbAdapter);
         
         // После получения обновлений с сервера, загружаем зоны снова,
         // так как некоторые зоны могли быть удалены
         try {
-            Map<Integer, NArea> dbAreas = dbManager.loadAllAreas();
+            Map<Integer, NArea> dbAreas = dbAdapter.loadAllAreas();
             freshAreas = dbAreas.values();
         } catch (Exception e) {
             System.err.println("AreaSyncManager: Failed to reload areas from DB after pull: " + e.getMessage());
         }
         
         // Теперь отправляем локальные изменения (push)
-        int[] pushStats = pushLocalChanges(freshAreas, dbManager);
+        int[] pushStats = pushLocalChanges(freshAreas, dbAdapter);
         
         // ВАЖНО: Обновляем glob.map.areas и виджет зон после синхронизации
         // Делаем это безопасно, через SwingUtilities.invokeLater для выполнения в UI потоке
@@ -295,7 +296,7 @@ public class AreaSyncManager {
      * Отправляет измененные локальные зоны на сервер
      * @return массив [отправлено, пропущено]
      */
-    private int[] pushLocalChanges(Collection<NArea> localAreas, AreaDBManager dbManager) {
+    private int[] pushLocalChanges(Collection<NArea> localAreas, AreaDBAdapter dbAdapter) {
         if (localAreas == null || localAreas.isEmpty()) {
             return new int[]{0, 0};
         }
@@ -379,7 +380,7 @@ public class AreaSyncManager {
                 uuidToAreaId.put(area.uuid, area.id);
                 
                 // Сохраняем last_sync_at в БД
-                updateLastSyncAt(area.uuid, area.lastUpdated, dbManager);
+                dbAdapter.updateLastSyncAt(area.uuid, area.lastUpdated);
                 
                 pushed++;
             } else {
@@ -394,7 +395,7 @@ public class AreaSyncManager {
      * Получает обновления с сервера и применяет их
      * @return массив [создано, обновлено]
      */
-    private int[] pullServerUpdates(Collection<NArea> localAreas, AreaDBManager dbManager) {
+    private int[] pullServerUpdates(Collection<NArea> localAreas, AreaDBAdapter dbAdapter) {
         // ВАЖНО: Для обнаружения удаленных зон нужно запросить ВСЕ зоны с сервера,
         // а не только обновленные после lastSyncTime. Иначе удаленные зоны не будут обнаружены.
         // Используем updatedAfter = 0, чтобы получить все активные зоны
@@ -492,7 +493,7 @@ public class AreaSyncManager {
                 try {
                     // ВАЖНО: Используем saveAreaNoThrottle, чтобы гарантировать сохранение,
                     // даже если есть throttling
-                    dbManager.saveAreaNoThrottle(serverZone);
+                    dbAdapter.saveAreaNoThrottle(serverZone);
                     uuidToAreaId.put(serverZone.uuid, serverZone.id);
                     syncedZones.put(serverZone.uuid, serverZone.lastUpdated);
                     
@@ -500,7 +501,7 @@ public class AreaSyncManager {
                     // Вместо этого используем createdIds для отслеживания созданных ID
                     
                     // Сохраняем last_sync_at в БД
-                    updateLastSyncAt(serverZone.uuid, serverZone.lastUpdated, dbManager);
+                    dbAdapter.updateLastSyncAt(serverZone.uuid, serverZone.lastUpdated);
                     
                     created++;
                 } catch (Exception e) {
@@ -517,7 +518,7 @@ public class AreaSyncManager {
                 }
             } else {
                 // Зона существует локально - разрешаем конфликт
-                if (resolveConflict(localZone, serverZone, dbManager)) {
+                if (resolveConflict(localZone, serverZone, dbAdapter)) {
                     merged++;
                     // ВАЖНО: После merge нужно обновить зону в glob.map.areas,
                     // чтобы виджет увидел изменения (например, новое имя)
@@ -555,7 +556,7 @@ public class AreaSyncManager {
                     // Зона была удалена на сервере - удаляем её локально
                     // ВАЖНО: Не отправляем команду удаления на сервер, так как зона уже удалена на сервере
                     try {
-                        dbManager.deleteArea(localZone.id, true); // skipServerSync = true
+                        dbAdapter.deleteArea(localZone.id, true); // skipServerSync = true
                         syncedZones.remove(localZone.uuid);
                         uuidToAreaId.remove(localZone.uuid);
                         deleted++;
@@ -596,7 +597,7 @@ public class AreaSyncManager {
      * Разрешает конфликт между локальной и серверной версией зоны
      * @return true если конфликт разрешен, false если пропущено
      */
-    private boolean resolveConflict(NArea local, NArea server, AreaDBManager dbManager) {
+    private boolean resolveConflict(NArea local, NArea server, AreaDBAdapter dbAdapter) {
         // Защита от дублей: если UUID уже используется другой зоной, пропускаем
         Integer existingId = uuidToAreaId.get(server.uuid);
         if (existingId != null && existingId != local.id) {
@@ -624,7 +625,7 @@ public class AreaSyncManager {
                 // Сохраняем зону в БД - это обновит ВСЕ поля (имя, цвет, координаты, специализации)
                 // ВАЖНО: сохраняем без троттлинга, чтобы не пропустить изменения с сервера
                 // saveArea() установит lastUpdated = System.currentTimeMillis() при hasChanges=true
-                dbManager.saveAreaNoThrottle(local);
+                dbAdapter.saveAreaNoThrottle(local);
                 
                 // ВАЖНО: Восстанавливаем server.lastUpdated после сохранения,
                 // так как saveArea() установил System.currentTimeMillis() при hasChanges=true
@@ -635,12 +636,12 @@ public class AreaSyncManager {
                 // ВАЖНО: Обновляем updated_at в БД напрямую, чтобы сохранить server.lastUpdated
                 // saveArea() уже обновил все поля (имя, цвет, координаты, специализации),
                 // нам нужно только обновить timestamp
-                updateAreaTimestamp(local.id, serverLastUpdated, dbManager);
+                dbAdapter.updateAreaTimestamp(local.id, serverLastUpdated);
                 
                 syncedZones.put(local.uuid, local.lastUpdated);
                 
                 // Сохраняем last_sync_at в БД
-                updateLastSyncAt(local.uuid, local.lastUpdated, dbManager);
+                dbAdapter.updateLastSyncAt(local.uuid, local.lastUpdated);
                 
                 return true;
             } catch (Exception e) {
@@ -655,7 +656,7 @@ public class AreaSyncManager {
                 syncedZones.put(local.uuid, local.lastUpdated);
                 
                 // Сохраняем last_sync_at в БД
-                updateLastSyncAt(local.uuid, local.lastUpdated, dbManager);
+                dbAdapter.updateLastSyncAt(local.uuid, local.lastUpdated);
             }
             return true;
         } else {
@@ -800,52 +801,9 @@ public class AreaSyncManager {
      * Загружает UUID зон из БД для предотвращения дублей
      * Загружает syncedZones из last_sync_at, чтобы знать, какие зоны уже синхронизированы
      */
-    public void loadUuidMapping(DatabaseConnectionManager poolManager) {
-        // ВАЖНО: НЕ очищаем syncedZones, если он уже заполнен из текущей сессии
-        // Очищаем только uuidToAreaId для обновления маппинга
-        // syncedZones должен сохранять информацию о зонах, синхронизированных в этой сессии
-        uuidToAreaId.clear();
-        // НЕ очищаем syncedZones здесь, так как это может удалить информацию о зонах, синхронизированных в текущей сессии
-        // syncedZones будет обновлен только для зон с last_sync_at в БД
-        
-        try {
-            Connection conn = poolManager.getConnection();
-            // Загружаем UUID и last_sync_at для заполнения кэша синхронизации
-            String sql = "SELECT id, global_id, last_sync_at, updated_at FROM areas WHERE global_id IS NOT NULL AND global_id != '' AND deleted = FALSE";
-            
-            try (PreparedStatement stmt = conn.prepareStatement(sql);
-                 ResultSet rs = stmt.executeQuery()) {
-                
-                int loaded = 0;
-                int synced = 0;
-                
-                while (rs.next()) {
-                    int areaId = rs.getInt("id");
-                    String uuid = rs.getString("global_id");
-                    
-                    if (uuid != null && !uuid.isEmpty()) {
-                        uuidToAreaId.put(uuid, areaId);
-                        loaded++;
-                        
-                        // ВАЖНО: Загружаем last_sync_at - если он есть, значит зона была синхронизирована
-                        // НЕ используем fallback на updated_at, так как это приведет к удалению новых зон
-                        // Новые зоны имеют UUID, но не имеют last_sync_at, поэтому они не должны попадать в syncedZones
-                        java.sql.Timestamp lastSyncAt = rs.getTimestamp("last_sync_at");
-                        if (lastSyncAt != null) {
-                            // Используем last_sync_at как время последней синхронизации
-                            // Только зоны с last_sync_at считаются синхронизированными
-                            syncedZones.put(uuid, lastSyncAt.getTime());
-                            synced++;
-                        }
-                        // Если last_sync_at нет - зона не была синхронизирована, не добавляем в syncedZones
-                    }
-                }
-                
-                System.out.println("AreaSyncManager: Loaded " + loaded + " UUID mappings from DB, " + synced + " zones marked as synced");
-            }
-        } catch (SQLException e) {
-            System.err.println("AreaSyncManager: Failed to load UUID mapping: " + e.getMessage());
-            e.printStackTrace();
+    public void loadUuidMapping(AreaDBAdapter dbAdapter) {
+        if (dbAdapter != null) {
+            dbAdapter.loadUuidMapping();
         }
     }
     
@@ -863,69 +821,6 @@ public class AreaSyncManager {
         }
     }
     
-    /**
-     * Обновляет updated_at для зоны в БД напрямую
-     * (все остальные поля уже обновлены через saveArea())
-     */
-    private void updateAreaTimestamp(int areaId, long timestamp, AreaDBManager dbManager) {
-        try {
-            nurgling.areas.storage.DatabaseConnectionManager poolManager = dbManager.getPoolManager();
-            java.sql.Connection conn = poolManager.getConnection();
-            if (conn != null) {
-                try {
-                    String sql = "UPDATE areas SET updated_at = ? WHERE id = ?";
-                    try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-                        java.sql.Timestamp ts = new java.sql.Timestamp(timestamp);
-                        stmt.setTimestamp(1, ts);
-                        stmt.setInt(2, areaId);
-                        int rowsUpdated = stmt.executeUpdate();
-                        if (rowsUpdated > 0) {
-                            System.out.println("AreaSyncManager: Updated zone " + areaId + " timestamp to " + timestamp + " in DB");
-                        } else {
-                            System.err.println("AreaSyncManager: WARNING - Zone " + areaId + " not found for timestamp update");
-                        }
-                    }
-                    conn.commit();
-                } finally {
-                    conn.close();
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("AreaSyncManager: Failed to update timestamp for zone " + areaId + ": " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * Обновляет last_sync_at в БД для зоны после успешной синхронизации
-     */
-    private void updateLastSyncAt(String uuid, long syncTime, AreaDBManager dbManager) {
-        if (uuid == null || uuid.isEmpty() || dbManager == null) {
-            return;
-        }
-        
-        try {
-            // Получаем connection pool из AreaDBManager
-            nurgling.areas.storage.DatabaseConnectionManager poolManager = dbManager.getPoolManager();
-            
-            if (poolManager == null) {
-                return;
-            }
-            
-            java.sql.Connection conn = poolManager.getConnection();
-            String sql = "UPDATE areas SET last_sync_at = ? WHERE global_id = ?";
-            
-            try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-                java.sql.Timestamp timestamp = new java.sql.Timestamp(syncTime);
-                stmt.setTimestamp(1, timestamp);
-                stmt.setString(2, uuid);
-                stmt.executeUpdate();
-            }
-        } catch (Exception e) {
-            // Не критично, просто логируем
-            System.err.println("AreaSyncManager: Failed to update last_sync_at for zone " + uuid + ": " + e.getMessage());
-        }
-    }
     
     /**
      * Обновляет одну зону в памяти (glob.map.areas) после merge
@@ -1026,8 +921,11 @@ public class AreaSyncManager {
             // Загружаем актуальные зоны из БД
             Map<Integer, nurgling.areas.NArea> dbAreas = new HashMap<>();
             try {
-                nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-                dbAreas = areaManager.loadAllAreas();
+                nurgling.db.DatabaseManager dbMgr = nurgling.NCore.databaseManager;
+                if (dbMgr != null && dbMgr.isReady()) {
+                    AreaDBAdapter dbAdapter = new AreaDBAdapter(dbMgr);
+                    dbAreas = dbAdapter.loadAllAreas();
+                }
             } catch (Exception e) {
                 System.err.println("AreaSyncManager: Failed to load areas for memory update: " + e.getMessage());
                 return;
@@ -1088,8 +986,11 @@ public class AreaSyncManager {
                     // Если зона не найдена в памяти, пытаемся загрузить из БД
                     if (areaToRemove == null) {
                         try {
-                            nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-                            areaToRemove = areaManager.getArea(areaId);
+                            if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+                                AreaDBAdapter dbAdapter = new AreaDBAdapter(nurgling.NCore.databaseManager);
+                                Map<Integer, nurgling.areas.NArea> allAreas = dbAdapter.loadAllAreas();
+                                areaToRemove = allAreas.get(areaId);
+                            }
                         } catch (Exception e) {
                             // Игнорируем ошибки загрузки
                         }
@@ -1156,8 +1057,11 @@ public class AreaSyncManager {
             // Загружаем актуальные зоны из БД
             Map<Integer, nurgling.areas.NArea> dbAreas = new HashMap<>();
             try {
-                nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-                dbAreas = areaManager.loadAllAreas();
+                nurgling.db.DatabaseManager dbMgr = nurgling.NCore.databaseManager;
+                if (dbMgr != null && dbMgr.isReady()) {
+                    AreaDBAdapter dbAdapter = new AreaDBAdapter(dbMgr);
+                    dbAreas = dbAdapter.loadAllAreas();
+                }
             } catch (Exception e) {
                 System.err.println("AreaSyncManager: Failed to load areas for visual refresh: " + e.getMessage());
                 return;

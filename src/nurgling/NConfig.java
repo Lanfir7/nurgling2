@@ -47,6 +47,7 @@ public class NConfig
         nextshowCSprite,
         showCSprite,
         hideNature,
+        hideEarthworm,
         invert_hor,
         invert_ver,
         kinprop,
@@ -229,6 +230,7 @@ public class NConfig
         conf.put(Key.nextshowCSprite, false);
         conf.put(Key.showCSprite, true);
         conf.put(Key.hideNature, false);
+        conf.put(Key.hideEarthworm, true);  // true = show earthworms (checkbox unchecked by default)
         conf.put(Key.invert_hor, false);
         conf.put(Key.invert_ver, false);
         conf.put(Key.show_drag_menu, true);
@@ -384,6 +386,10 @@ public class NConfig
         arearadprop.add(new NAreaRad("gfx/kritter/goldeneagle/goldeneagle", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/goat/goat", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/troll/troll", 200));
+        arearadprop.add(new NAreaRad("gfx/kritter/rat/rat", 200));
+        arearadprop.add(new NAreaRad("gfx/kritter/eagle/eagle", 200));
+        arearadprop.add(new NAreaRad("gfx/kritter/cavelouse/cavelouse", 200));
+        arearadprop.add(new NAreaRad("gfx/kritter/boreworm/boreworm", 200));
         conf.put(Key.animalrad, arearadprop);
 
         // Movement speed setting (0=Crawl, 1=Walk, 2=Run, 3=Sprint)
@@ -516,6 +522,8 @@ public class NConfig
     HashMap<Key, Object> conf = new HashMap<>();
     private boolean isUpd = false;
     private boolean isAreasUpd = false;
+    private long lastAreasChangeTime = 0;
+    private static final long AREAS_DEBOUNCE_MS = 3000; // 3 seconds debounce for area changes
     private boolean isExploredUpd = false;
     private boolean isRoutesUpd = false;
     private boolean isScenariosUpd = false;
@@ -528,7 +536,13 @@ public class NConfig
 
     public boolean isAreasUpdated()
     {
-        return isAreasUpd;
+        // Only return true if areas changed AND debounce period has passed
+        // This batches multiple rapid changes into a single DB update
+        if (isAreasUpd && lastAreasChangeTime > 0) {
+            long elapsed = System.currentTimeMillis() - lastAreasChangeTime;
+            return elapsed >= AREAS_DEBOUNCE_MS;
+        }
+        return false;
     }
 
     public boolean isRoutesUpdated() {
@@ -569,15 +583,19 @@ public class NConfig
     public static void needAreasUpdate()
     {
         // Only update profile-specific config (areas are per-world)
+        // Record timestamp for debouncing - actual save happens after AREAS_DEBOUNCE_MS of inactivity
+        long now = System.currentTimeMillis();
         try {
             if (nurgling.NUtils.getGameUI() != null && nurgling.NUtils.getUI() != null && nurgling.NUtils.getUI().core != null) {
                 nurgling.NUtils.getUI().core.config.isAreasUpd = true;
+                nurgling.NUtils.getUI().core.config.lastAreasChangeTime = now;
             }
         } catch (Exception e) {
             // Fallback to global config if profile config not available
             if (current != null)
             {
                 current.isAreasUpd = true;
+                current.lastAreasChangeTime = now;
             }
         }
     }
@@ -1048,37 +1066,75 @@ public class NConfig
     {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
         {
-            Collection<NArea> areasToSave = ((NMapView)NUtils.getGameUI().map).glob.map.areas.values();
-            
-            // Сохраняем через AreaDBManager (БД + JSON резервная копия)
-            try {
-                nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-                areaManager.saveAllAreas(areasToSave);
-                current.isAreasUpd = false;
-            } catch (Exception e) {
-                System.err.println("Failed to save areas via AreaDBManager: " + e.getMessage());
-                e.printStackTrace();
-            }
-            
-            // Также сохраняем в JSON файл для совместимости (если указан customPath)
+            // If customPath is provided, write to file (for manual export only)
             if (customPath != null) {
-                try {
-                    JSONObject main = new JSONObject();
-                    JSONArray jareas = new JSONArray();
-                    for(NArea area : areasToSave)
-                    {
-                        jareas.put(area.toJson());
-                    }
-                    main.put("areas",jareas);
-                    FileWriter f = new FileWriter(customPath, StandardCharsets.UTF_8);
-                    main.write(f);
-                    f.close();
-                }
-                catch (IOException e)
-                {
-                    System.err.println("Failed to save areas to custom JSON path: " + e.getMessage());
-                }
+                writeAreasToFile(customPath);
+                return;
             }
+
+            // If DB is enabled - ONLY use DB, never fallback to file
+            if ((Boolean) NConfig.get(NConfig.Key.ndbenable)) {
+                // Reset flags to prevent repeated calls (use 'this' not 'current' - they may be different instances)
+                this.isAreasUpd = false;
+                this.lastAreasChangeTime = 0;
+                
+                if (NCore.databaseManager != null && NCore.databaseManager.isReady()) {
+                    try {
+                        String profile = NUtils.getGameUI().getGenus();
+                        if (profile == null || profile.isEmpty()) {
+                            profile = "global";
+                        }
+                        java.util.Map<Integer, NArea> areas = ((NMapView)NUtils.getGameUI().map).glob.map.areas;
+                        // Capture 'this' for use in async callback
+                        final NConfig self = this;
+                        NCore.databaseManager.getAreaService().exportAreasToDatabaseAsync(areas, profile)
+                            .thenAccept(count -> {
+                                // Silent save - no spam
+                            })
+                            .exceptionally(e -> {
+                                System.err.println("Failed to save areas to database: " + e.getMessage());
+                                if (e.getCause() != null) {
+                                    e.getCause().printStackTrace();
+                                }
+                                // Set flag back to retry later (with timestamp for debounce)
+                                self.isAreasUpd = true;
+                                self.lastAreasChangeTime = System.currentTimeMillis();
+                                return null;
+                            });
+                    } catch (Exception e) {
+                        System.err.println("Failed to save areas to database: " + e.getMessage());
+                        this.isAreasUpd = true;
+                        this.lastAreasChangeTime = System.currentTimeMillis();
+                    }
+                }
+                // DB enabled but not ready - just skip, will retry on next tick
+                return;
+            }
+
+            // DB not enabled - write to file
+            writeAreasToFile(getAreasPath());
+        }
+    }
+
+    private void writeAreasToFile(String path) {
+        JSONObject main = new JSONObject();
+        JSONArray jareas = new JSONArray();
+        for(NArea area : ((NMapView)NUtils.getGameUI().map).glob.map.areas.values())
+        {
+            jareas.put(area.toJson());
+        }
+        main.put("areas",jareas);
+        try
+        {
+            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
+            main.write(f);
+            f.close();
+            this.isAreasUpd = false;
+            this.lastAreasChangeTime = 0;
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
         }
     }
 
@@ -1246,25 +1302,64 @@ public class NConfig
     {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
         {
-            JSONObject main = new JSONObject();
-            JSONArray jroutes = new JSONArray();
-            for(Route route : ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().values())
-            {
-                jroutes.put(route.toJson());
+            // If customPath is provided, write to file (for manual export only)
+            if (customPath != null) {
+                writeRoutesToFile(customPath);
+                return;
             }
-            main.put("routes",jroutes);
 
-            try
-            {
-                FileWriter f = new FileWriter(customPath==null?getRoutesPath():customPath,StandardCharsets.UTF_8);
-                main.write(f);
-                f.close();
-                this.isRoutesUpd = false;
+            // If DB is enabled - ONLY use DB, never fallback to file
+            if ((Boolean) NConfig.get(NConfig.Key.ndbenable)) {
+                current.isRoutesUpd = false;
+                
+                if (NCore.databaseManager != null && NCore.databaseManager.isReady()) {
+                    try {
+                        String profile = NUtils.getGameUI().getGenus();
+                        if (profile == null || profile.isEmpty()) {
+                            profile = "global";
+                        }
+                        java.util.Map<Integer, Route> routes = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getRoutes();
+                        NCore.databaseManager.getRouteService().exportRoutesToDatabaseAsync(routes, profile)
+                            .exceptionally(e -> {
+                                System.err.println("Failed to save routes to database: " + e.getMessage());
+                                if (e.getCause() != null) {
+                                    e.getCause().printStackTrace();
+                                }
+                                current.isRoutesUpd = true;
+                                return null;
+                            });
+                    } catch (Exception e) {
+                        System.err.println("Failed to save routes to database: " + e.getMessage());
+                        current.isRoutesUpd = true;
+                    }
+                }
+                return;
             }
-            catch (IOException e)
-            {
-                throw new RuntimeException(e);
-            }
+
+            // DB not enabled - write to file
+            writeRoutesToFile(getRoutesPath());
+        }
+    }
+
+    private void writeRoutesToFile(String path) {
+        JSONObject main = new JSONObject();
+        JSONArray jroutes = new JSONArray();
+        for(Route route : ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().values())
+        {
+            jroutes.put(route.toJson());
+        }
+        main.put("routes",jroutes);
+
+        try
+        {
+            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
+            main.write(f);
+            f.close();
+            this.isRoutesUpd = false;
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
         }
     }
 

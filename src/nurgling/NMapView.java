@@ -852,6 +852,7 @@ public class NMapView extends MapView
             NArea newArea = new NArea(key);
             newArea.id = id;
             newArea.space = result;
+            newArea.lastLocalChange = System.currentTimeMillis();
             newArea.grids_id.addAll(newArea.space.space.keySet());
             newArea.path = NUtils.getGameUI().areas.currentPath;
             
@@ -1729,11 +1730,15 @@ public class NMapView extends MapView
             {
                 area.inWork = true;
                 
-                // Удаляем зону из БД
-                try {
-                    nurgling.areas.db.AreaDBManager.getInstance().deleteArea(area.id);
-                } catch (Exception e) {
-                    System.err.println("Failed to delete area from database: " + e.getMessage());
+                // Удаляем зону из БД (используем новую систему)
+                if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+                    try {
+                        String profile = nurgling.NUtils.getGameUI() != null ? nurgling.NUtils.getGameUI().getGenus() : "global";
+                        if (profile == null || profile.isEmpty()) profile = "global";
+                        nurgling.NCore.databaseManager.getAreaService().softDeleteArea(area.id, profile);
+                    } catch (Exception e) {
+                        System.err.println("Failed to delete area from database: " + e.getMessage());
+                    }
                 }
                 
                 // ВАЖНО: Сохраняем данные зоны перед удалением из памяти
@@ -1757,6 +1762,21 @@ public class NMapView extends MapView
 
                 // Удаляем из route graph
                 routeGraphManager.getGraph().deleteAreaFromRoutePoints(area.id);
+                
+                // Delete from database if enabled
+                if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
+                    nurgling.NCore.databaseManager != null && 
+                    nurgling.NCore.databaseManager.isReady()) {
+                    try {
+                        String profile = NUtils.getGameUI() != null ? NUtils.getGameUI().getGenus() : "global";
+                        if (profile == null || profile.isEmpty()) {
+                            profile = "global";
+                        }
+                        nurgling.NCore.databaseManager.getAreaService().softDeleteArea(area.id, profile);
+                    } catch (java.sql.SQLException e) {
+                        System.err.println("Failed to delete area from database: " + e.getMessage());
+                    }
+                }
 
                 break;
             }
@@ -1769,6 +1789,7 @@ public class NMapView extends MapView
             if(area.name.equals(name) && area.path.equals(path))
             {
                 area.hide = val;
+                area.lastLocalChange = System.currentTimeMillis();
                 NConfig.needAreasUpdate();
                 return;
             }
@@ -1820,14 +1841,18 @@ public class NMapView extends MapView
         
         area.name = new_name;
         
-        // ВАЖНО: Сохраняем изменение в БД
-        try {
-            nurgling.areas.db.AreaDBManager.getInstance().saveArea(area);
-        } catch (Exception e) {
-            System.err.println("NMapView: Failed to save area name change to database: " + e.getMessage());
-            e.printStackTrace();
+        // ВАЖНО: Сохраняем изменение в БД (используем новую систему)
+        if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+            try {
+                String profile = nurgling.NUtils.getGameUI() != null ? nurgling.NUtils.getGameUI().getGenus() : "global";
+                if (profile == null || profile.isEmpty()) profile = "global";
+                nurgling.NCore.databaseManager.getAreaService().saveArea(area, profile);
+            } catch (Exception e) {
+                System.err.println("NMapView: Failed to save area name change to database: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
-        
+        area.lastLocalChange = System.currentTimeMillis();
         NConfig.needAreasUpdate();
     }
 

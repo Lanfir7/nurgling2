@@ -150,7 +150,15 @@ public class SyncServerSettings extends Panel {
         // Инициализируем синхронизацию если включена
         if (enabled && !serverUrl.isEmpty() && !zoneSync.isEmpty()) {
             try {
-                AreaDBManager.getInstance().initializeSync(serverUrl, zoneSync);
+                nurgling.areas.db.AreaSyncManager syncManager = nurgling.areas.db.AreaSyncManager.getInstance();
+                syncManager.initialize(serverUrl, zoneSync);
+                
+                // Загружаем UUID mapping из новой БД
+                if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+                    nurgling.areas.db.AreaDBAdapter dbAdapter = new nurgling.areas.db.AreaDBAdapter(nurgling.NCore.databaseManager);
+                    syncManager.loadUuidMapping(dbAdapter);
+                }
+                
                 if (NUtils.getGameUI() != null) {
                     NUtils.getGameUI().msg("Zone synchronization enabled", Color.GREEN);
                 }

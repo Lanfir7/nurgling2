@@ -624,6 +624,7 @@ public class NContext {
         String id = "temp"+counter++;
         NArea tempArea = new NArea(id);
         tempArea.space = insa.result;
+        tempArea.lastLocalChange = System.currentTimeMillis();
         tempArea.grids_id.clear();
         tempArea.grids_id.addAll(tempArea.space.space.keySet());
         areas.put(id, tempArea);
@@ -987,10 +988,15 @@ public class NContext {
                     // ВАЖНО: Проверяем, что зона не удалена в БД
                     // Если зона есть в nols, но не в glob.map.areas, или удалена в БД - пропускаем
                     try {
-                        nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-                        if (!areaManager.areaExists(id)) {
-                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") is deleted in DB - skipping");
-                            continue;
+                        // Используем новую систему БД
+                        if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+                            String profile = NUtils.getGameUI() != null ? NUtils.getGameUI().getGenus() : "global";
+                            if (profile == null || profile.isEmpty()) profile = "global";
+                            java.util.Map<Integer, nurgling.areas.NArea> dbAreas = nurgling.NCore.databaseManager.getAreaService().loadAreas(profile);
+                            if (!dbAreas.containsKey(id)) {
+                                System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") is deleted in DB - skipping");
+                                continue;
+                            }
                         }
                     } catch (Exception e) {
                         // Если не удалось проверить БД, продолжаем (не блокируем работу)

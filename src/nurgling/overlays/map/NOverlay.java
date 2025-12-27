@@ -191,11 +191,11 @@ public class NOverlay extends MapView.MapRaster
         Area a = Area.sized(mm.ul, mm.sz);
 
         Buf buf = new Buf();
-        NArea areaObj = NUtils.getArea(id);
-        if (areaObj == null || areaObj.space == null || areaObj.space.space == null) {
+        NArea area = NUtils.getArea(id);
+        if (area == null || area.space == null || area.space.space == null) {
             return null;
         }
-        NArea.VArea space = areaObj.space.space.get(grid_id);
+        NArea.VArea space = area.space.space.get(grid_id);
         if (space == null || space.area == null) {
             return null;
         }
@@ -203,7 +203,7 @@ public class NOverlay extends MapView.MapRaster
         if (curArea == null) {
             return null;
         }
-        Area fullarea = areaObj.getArea();
+        Area fullarea = area.getArea();
         if (fullarea == null) {
             return null;
         }

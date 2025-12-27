@@ -102,7 +102,7 @@ public class NParser
                 continue; // Пропускаем null аргументы
             }
             NAlias alias = getCachedAlias(arg);
-            if (alias.matches(name)) {
+            if (alias != null && alias.matches(name)) {
                 return true;
             }
         }
@@ -117,8 +117,7 @@ public class NParser
      */
     private static NAlias getCachedAlias(String key) {
         if (key == null) {
-            // Возвращаем пустой alias для null ключа, который никогда не совпадет
-            return new NAlias("");
+            return null;
         }
         NAlias cached = ALIAS_CACHE.get(key);
         if (cached == null) {

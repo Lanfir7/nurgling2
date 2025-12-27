@@ -100,6 +100,30 @@ public class NUtils
         return NParser.checkName(name, new NAlias(new ArrayList<>(Arrays.asList("gfx/terobjs/tree", "gfx/terobjs/bumlings","gfx/terobjs/bushes","gfx/terobjs/stonepillar")), new ArrayList<>(Arrays.asList("log", "oldtrunk"))));
     }
 
+    public static boolean isEarthworm(String name)
+    {
+        return name != null && name.contains("earthworm");
+    }
+
+    public static void showHideEarthworm() {
+        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
+            if((Boolean) NConfig.get(NConfig.Key.hideEarthworm))
+                for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+                    if (gob.ngob.name!=null && isEarthworm(gob.ngob.name))
+                    {
+                        gob.show();
+                    }
+                }
+            else
+                for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+                    if (gob.ngob.name!=null && isEarthworm(gob.ngob.name))
+                    {
+                        gob.hide();
+                    }
+                }
+        }
+    }
+
     public static WItem takeItemToHand(WItem item) throws InterruptedException
     {
         if(item == null)
@@ -134,11 +158,11 @@ public class NUtils
 
     public static NArea getArea(int id)
     {
-        NGameUI gui = getGameUI();
-        if (gui == null || gui.map == null) {
+        if (getGameUI() == null || getGameUI().map == null || 
+            getGameUI().map.glob == null || getGameUI().map.glob.map == null) {
             return null;
         }
-        return gui.map.glob.map.areas.get(id);
+        return getGameUI().map.glob.map.areas.get(id);
     }
 
     public static Gob player()

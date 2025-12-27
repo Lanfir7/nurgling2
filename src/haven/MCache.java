@@ -111,7 +111,7 @@ public class MCache implements MapSource {
         return null;
     }
 
-	private boolean areasLoaded = false;
+	public boolean areasLoaded = false;
 
 	void init()
 	{
@@ -121,22 +121,22 @@ public class MCache implements MapSource {
 	public void loadAreasIfNeeded() {
 		if (areasLoaded) return;
 
-		// Используем AreaDBManager для загрузки зон (БД или JSON fallback)
-		try {
-			nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-			
-			// Пробуем загрузить из БД/JSON
-			Map<Integer, NArea> loadedAreas = areaManager.loadAllAreas();
-			
-			if (loadedAreas.isEmpty()) {
-				// Если зон нет, пробуем мигрировать из JSON в БД
-				areaManager.migrateFromJSON();
-				loadedAreas = areaManager.loadAllAreas();
-			}
-			
-			// Загружаем зоны в карту
-			for (Map.Entry<Integer, NArea> entry : loadedAreas.entrySet()) {
-				areas.put(entry.getKey(), entry.getValue());
+		// If DB is enabled - ONLY use DB, no fallback to file
+		if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable)) {
+			if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+				try {
+					String profile = getCurrentGenus();
+					if (profile == null || profile.isEmpty()) {
+						profile = "global";
+					}
+					java.util.Map<Integer, NArea> dbAreas = nurgling.NCore.databaseManager.getAreaService().loadAreas(profile);
+					if (dbAreas != null) {
+						areas.putAll(dbAreas);
+						System.out.println("Loaded " + dbAreas.size() + " areas from database");
+					}
+				} catch (Exception e) {
+					System.err.println("Failed to load areas from database: " + e.getMessage());
+				}
 			}
 			
 			// Инициализируем синхронизацию с сервером (если включена в настройках)
@@ -147,21 +147,50 @@ public class MCache implements MapSource {
 					String zoneSync = (String) nurgling.NConfig.get(nurgling.NConfig.Key.syncZoneSync);
 					if (serverUrl != null && !serverUrl.isEmpty() && 
 					    zoneSync != null && !zoneSync.isEmpty()) {
-						areaManager.initializeSync(serverUrl, zoneSync);
+						nurgling.areas.db.AreaSyncManager syncManager = nurgling.areas.db.AreaSyncManager.getInstance();
+						syncManager.initialize(serverUrl, zoneSync);
+						
+						// Загружаем UUID mapping из новой БД
+						if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+							nurgling.areas.db.AreaDBAdapter dbAdapter = new nurgling.areas.db.AreaDBAdapter(nurgling.NCore.databaseManager);
+							syncManager.loadUuidMapping(dbAdapter);
+						}
+						
 						System.out.println("MCache: Zone synchronization initialized: " + serverUrl + ", zone_sync: " + zoneSync);
 					}
 				}
 			} catch (Exception syncEx) {
 				System.err.println("MCache: Failed to initialize zone synchronization: " + syncEx.getMessage());
 			}
-		} catch (Exception e) {
-			// ВАЖНО: БД должна быть основным источником, JSON только для миграции
-			// НЕ загружаем из JSON автоматически, чтобы избежать конфликтов с БД
-			System.err.println("CRITICAL: Failed to load areas from AreaDBManager: " + e.getMessage());
-			System.err.println("Areas will not be loaded. Please check database connection.");
-			e.printStackTrace();
-			// Зоны не будут загружены, если БД недоступна
-			// Это предотвращает использование устаревших данных из JSON
+			
+			// DB enabled - mark as loaded even if DB not ready (sync will handle it later)
+			areasLoaded = true;
+			return;
+		}
+
+		// DB not enabled - load from file (legacy support)
+		String areasPath = getAreasPath();
+
+		if(new File(areasPath).exists())
+		{
+			StringBuilder contentBuilder = new StringBuilder();
+			try (Stream<String> stream = Files.lines(Paths.get(areasPath), StandardCharsets.UTF_8))
+			{
+				stream.forEach(s -> contentBuilder.append(s).append("\n"));
+			}
+			
+			try {
+				org.json.JSONObject json = new org.json.JSONObject(contentBuilder.toString());
+				org.json.JSONArray areasArray = json.getJSONArray("areas");
+				for (int i = 0; i < areasArray.length(); i++) {
+					org.json.JSONObject areaJson = areasArray.getJSONObject(i);
+					NArea area = new NArea(areaJson);
+					areas.put(area.id, area);
+				}
+				System.out.println("Loaded " + areas.size() + " areas from file");
+			} catch (org.json.JSONException e) {
+				// Ignore invalid JSON files
+			}
 		}
 		areasLoaded = true;
 	}

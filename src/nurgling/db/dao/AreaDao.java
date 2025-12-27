@@ -1,0 +1,471 @@
+package nurgling.db.dao;
+
+import nurgling.db.DatabaseAdapter;
+import org.json.JSONObject;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Data Access Object for Area entities
+ */
+public class AreaDao {
+
+    /**
+     * Area data class for database operations
+     */
+    public static class AreaData {
+        private final int id;
+        private final String name;
+        private final String path;
+        private final boolean hide;
+        private final int colorR;
+        private final int colorG;
+        private final int colorB;
+        private final int colorA;
+        private final String data; // JSON string containing space, in, out, spec
+        private final String profile;
+        private final Timestamp updatedAt;
+        private final int version;
+        // Sync fields
+        private final String globalId; // UUID for server sync
+        private final String zoneSync; // World/server identifier
+        private final Timestamp lastSyncAt; // Last successful sync timestamp
+        private final boolean deleted; // Soft delete flag
+
+        public AreaData(int id, String name, String path, boolean hide,
+                       int colorR, int colorG, int colorB, int colorA,
+                       String data, String profile, Timestamp updatedAt, int version,
+                       String globalId, String zoneSync, Timestamp lastSyncAt, boolean deleted) {
+            this.id = id;
+            this.name = name;
+            this.path = path;
+            this.hide = hide;
+            this.colorR = colorR;
+            this.colorG = colorG;
+            this.colorB = colorB;
+            this.colorA = colorA;
+            this.data = data;
+            this.profile = profile;
+            this.updatedAt = updatedAt;
+            this.version = version;
+            this.globalId = globalId;
+            this.zoneSync = zoneSync;
+            this.lastSyncAt = lastSyncAt;
+            this.deleted = deleted;
+        }
+
+        public int getId() { return id; }
+        public String getName() { return name; }
+        public String getPath() { return path; }
+        public boolean isHide() { return hide; }
+        public int getColorR() { return colorR; }
+        public int getColorG() { return colorG; }
+        public int getColorB() { return colorB; }
+        public int getColorA() { return colorA; }
+        public String getData() { return data; }
+        public String getProfile() { return profile; }
+        public Timestamp getUpdatedAt() { return updatedAt; }
+        public int getVersion() { return version; }
+        public String getGlobalId() { return globalId; }
+        public String getZoneSync() { return zoneSync; }
+        public Timestamp getLastSyncAt() { return lastSyncAt; }
+        public boolean isDeleted() { return deleted; }
+
+        /**
+         * Convert to JSON for NArea compatibility
+         */
+        public JSONObject toJson() {
+            JSONObject json = new JSONObject(data);
+            json.put("id", id);
+            json.put("name", name);
+            json.put("path", path);
+            json.put("hide", hide);
+
+            JSONObject color = new JSONObject();
+            color.put("r", colorR);
+            color.put("g", colorG);
+            color.put("b", colorB);
+            color.put("a", colorA);
+            json.put("color", color);
+
+            return json;
+        }
+    }
+
+    /**
+     * Save or update an area with version increment only if data changed
+     * @return the new version number, or current version if nothing changed
+     */
+    public int saveArea(DatabaseAdapter adapter, int id, String name, String path, boolean hide,
+                        int colorR, int colorG, int colorB, int colorA,
+                        String data, String profile) throws SQLException {
+        return saveArea(adapter, id, name, path, hide, colorR, colorG, colorB, colorA, data, profile, null, null, false);
+    }
+    
+    /**
+     * Save or update an area with sync fields
+     * @return the new version number, or current version if nothing changed
+     */
+    public int saveArea(DatabaseAdapter adapter, int id, String name, String path, boolean hide,
+                        int colorR, int colorG, int colorB, int colorA,
+                        String data, String profile, String globalId, String zoneSync, boolean deleted) throws SQLException {
+
+        // Determine hide value based on adapter type
+        Object hideValue = (adapter instanceof nurgling.db.PostgresAdapter) ? hide : (hide ? 1 : 0);
+        
+        // Use UPSERT to handle race conditions
+        if (adapter instanceof nurgling.db.PostgresAdapter) {
+            // PostgreSQL: INSERT ON CONFLICT with version increment
+            // Note: primary key is just 'id', not (id, profile)
+            String upsertSql = "INSERT INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at, global_id, zone_sync, deleted) " +
+                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?, ?, ?) " +
+                              "ON CONFLICT (id) DO UPDATE SET " +
+                              "name = EXCLUDED.name, path = EXCLUDED.path, hide = EXCLUDED.hide, " +
+                              "color_r = EXCLUDED.color_r, color_g = EXCLUDED.color_g, " +
+                              "color_b = EXCLUDED.color_b, color_a = EXCLUDED.color_a, " +
+                              "data = EXCLUDED.data, profile = EXCLUDED.profile, " +
+                              "global_id = COALESCE(EXCLUDED.global_id, areas.global_id), " +
+                              "zone_sync = COALESCE(EXCLUDED.zone_sync, areas.zone_sync), " +
+                              "deleted = EXCLUDED.deleted, " +
+                              "version = areas.version + 1, " +
+                              "updated_at = CURRENT_TIMESTAMP " +
+                              "WHERE areas.data != EXCLUDED.data OR areas.name != EXCLUDED.name OR areas.path != EXCLUDED.path " +
+                              "RETURNING version";
+            
+            Object deletedValue = deleted;
+            try (ResultSet rs = adapter.executeQuery(upsertSql,
+                    id, name, path, hideValue,
+                    colorR, colorG, colorB, colorA,
+                    data, profile, globalId, zoneSync, deletedValue)) {
+                if (rs.next()) {
+                    return rs.getInt("version");
+                }
+            }
+            // If no rows returned, nothing changed - get current version
+            try (ResultSet rs = adapter.executeQuery("SELECT version FROM areas WHERE id = ? AND profile = ?", id, profile)) {
+                if (rs.next()) {
+                    return rs.getInt("version");
+                }
+            }
+            return 1;
+        } else {
+            // SQLite: INSERT OR REPLACE
+            Object deletedValue = deleted ? 1 : 0;
+            String upsertSql = "INSERT OR REPLACE INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at, global_id, zone_sync, deleted) " +
+                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+                              "COALESCE((SELECT version + 1 FROM areas WHERE id = ? AND profile = ?), 1), " +
+                              "CURRENT_TIMESTAMP, ?, ?, ?)";
+            adapter.executeUpdate(upsertSql,
+                id, name, path, hideValue,
+                colorR, colorG, colorB, colorA,
+                data, profile, id, profile, globalId, zoneSync, deletedValue);
+            
+            // Get the resulting version
+            try (ResultSet rs = adapter.executeQuery("SELECT version FROM areas WHERE id = ? AND profile = ?", id, profile)) {
+                if (rs.next()) {
+                    return rs.getInt("version");
+                }
+            }
+            return 1;
+        }
+    }
+
+    /**
+     * Get version of an area
+     */
+    public int getAreaVersion(DatabaseAdapter adapter, int id, String profile) throws SQLException {
+        String sql = "SELECT version FROM areas WHERE id = ? AND profile = ?";
+        try (ResultSet rs = adapter.executeQuery(sql, id, profile)) {
+            if (rs.next()) {
+                return rs.getInt("version");
+            }
+        }
+        return 0; // Area doesn't exist
+    }
+
+    /**
+     * Load all areas for a specific profile
+     */
+    public List<AreaData> loadAreasByProfile(DatabaseAdapter adapter, String profile) throws SQLException {
+        List<AreaData> areas = new ArrayList<>();
+
+        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version, " +
+                    "global_id, zone_sync, last_sync_at, deleted " +
+                    "FROM areas WHERE profile = ? AND (deleted IS NULL OR deleted = 0 OR deleted = FALSE) ORDER BY id";
+
+        try (ResultSet rs = adapter.executeQuery(sql, profile)) {
+            while (rs.next()) {
+                boolean deleted = false;
+                if (adapter instanceof nurgling.db.PostgresAdapter) {
+                    deleted = rs.getBoolean("deleted");
+                } else {
+                    int deletedInt = rs.getInt("deleted");
+                    deleted = (deletedInt != 0);
+                }
+                if (rs.wasNull()) deleted = false;
+                
+                areas.add(new AreaData(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("path"),
+                    rs.getBoolean("hide"),
+                    rs.getInt("color_r"),
+                    rs.getInt("color_g"),
+                    rs.getInt("color_b"),
+                    rs.getInt("color_a"),
+                    rs.getString("data"),
+                    rs.getString("profile"),
+                    rs.getTimestamp("updated_at"),
+                    rs.getInt("version"),
+                    rs.getString("global_id"),
+                    rs.getString("zone_sync"),
+                    rs.getTimestamp("last_sync_at"),
+                    deleted
+                ));
+            }
+        }
+
+        return areas;
+    }
+
+    /**
+     * Load area by id and profile
+     */
+    public AreaData loadArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
+        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version, " +
+                    "global_id, zone_sync, last_sync_at, deleted " +
+                    "FROM areas WHERE id = ? AND profile = ?";
+
+        try (ResultSet rs = adapter.executeQuery(sql, id, profile)) {
+            if (rs.next()) {
+                boolean deleted = false;
+                if (adapter instanceof nurgling.db.PostgresAdapter) {
+                    deleted = rs.getBoolean("deleted");
+                } else {
+                    int deletedInt = rs.getInt("deleted");
+                    deleted = (deletedInt != 0);
+                }
+                if (rs.wasNull()) deleted = false;
+                
+                return new AreaData(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("path"),
+                    rs.getBoolean("hide"),
+                    rs.getInt("color_r"),
+                    rs.getInt("color_g"),
+                    rs.getInt("color_b"),
+                    rs.getInt("color_a"),
+                    rs.getString("data"),
+                    rs.getString("profile"),
+                    rs.getTimestamp("updated_at"),
+                    rs.getInt("version"),
+                    rs.getString("global_id"),
+                    rs.getString("zone_sync"),
+                    rs.getTimestamp("last_sync_at"),
+                    deleted
+                );
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Delete an area
+     */
+    public void deleteArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
+        adapter.executeUpdate("DELETE FROM areas WHERE id = ? AND profile = ?", id, profile);
+    }
+
+    /**
+     * Delete all areas for a profile
+     */
+    public void deleteAllAreas(DatabaseAdapter adapter, String profile) throws SQLException {
+        adapter.executeUpdate("DELETE FROM areas WHERE profile = ?", profile);
+    }
+
+    /**
+     * Check if area exists
+     */
+    public boolean areaExists(DatabaseAdapter adapter, int id, String profile) throws SQLException {
+        try (ResultSet rs = adapter.executeQuery("SELECT 1 FROM areas WHERE id = ? AND profile = ?", id, profile)) {
+            return rs.next();
+        }
+    }
+
+    /**
+     * Get the maximum updated_at timestamp for a profile
+     */
+    public Timestamp getLastUpdateTime(DatabaseAdapter adapter, String profile) throws SQLException {
+        String sql = "SELECT MAX(updated_at) as last_update FROM areas WHERE profile = ?";
+        try (ResultSet rs = adapter.executeQuery(sql, profile)) {
+            if (rs.next()) {
+                return rs.getTimestamp("last_update");
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get areas updated after a specific timestamp
+     */
+    public List<AreaData> getAreasUpdatedAfter(DatabaseAdapter adapter, String profile, Timestamp after) throws SQLException {
+        List<AreaData> areas = new ArrayList<>();
+
+        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version, " +
+                    "global_id, zone_sync, last_sync_at, deleted " +
+                    "FROM areas WHERE profile = ? AND updated_at > ? AND (deleted IS NULL OR deleted = 0 OR deleted = FALSE) ORDER BY id";
+
+        try (ResultSet rs = adapter.executeQuery(sql, profile, after)) {
+            while (rs.next()) {
+                boolean deleted = false;
+                if (adapter instanceof nurgling.db.PostgresAdapter) {
+                    deleted = rs.getBoolean("deleted");
+                } else {
+                    int deletedInt = rs.getInt("deleted");
+                    deleted = (deletedInt != 0);
+                }
+                if (rs.wasNull()) deleted = false;
+                
+                areas.add(new AreaData(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("path"),
+                    rs.getBoolean("hide"),
+                    rs.getInt("color_r"),
+                    rs.getInt("color_g"),
+                    rs.getInt("color_b"),
+                    rs.getInt("color_a"),
+                    rs.getString("data"),
+                    rs.getString("profile"),
+                    rs.getTimestamp("updated_at"),
+                    rs.getInt("version"),
+                    rs.getString("global_id"),
+                    rs.getString("zone_sync"),
+                    rs.getTimestamp("last_sync_at"),
+                    deleted
+                ));
+            }
+        }
+
+        return areas;
+    }
+
+    /**
+     * Get count of areas for a profile
+     */
+    public int getAreasCount(DatabaseAdapter adapter, String profile) throws SQLException {
+        String sql = "SELECT COUNT(*) as cnt FROM areas WHERE profile = ?";
+        try (ResultSet rs = adapter.executeQuery(sql, profile)) {
+            if (rs.next()) {
+                return rs.getInt("cnt");
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Get all area versions for a profile (for efficient version comparison)
+     */
+    public java.util.Map<Integer, Integer> getAllAreaVersions(DatabaseAdapter adapter, String profile) throws SQLException {
+        java.util.Map<Integer, Integer> versions = new java.util.HashMap<>();
+        String sql = "SELECT id, version FROM areas WHERE profile = ?";
+        try (ResultSet rs = adapter.executeQuery(sql, profile)) {
+            while (rs.next()) {
+                versions.put(rs.getInt("id"), rs.getInt("version"));
+            }
+        }
+        return versions;
+    }
+    
+    /**
+     * Update last_sync_at for an area by global_id (UUID)
+     */
+    public void updateLastSyncAt(DatabaseAdapter adapter, String globalId, Timestamp syncTime) throws SQLException {
+        String sql = "UPDATE areas SET last_sync_at = ? WHERE global_id = ?";
+        adapter.executeUpdate(sql, syncTime, globalId);
+    }
+    
+    /**
+     * Update updated_at timestamp for an area (used to preserve server timestamp)
+     */
+    public void updateAreaTimestamp(DatabaseAdapter adapter, int id, String profile, Timestamp timestamp) throws SQLException {
+        String sql = "UPDATE areas SET updated_at = ? WHERE id = ? AND profile = ?";
+        adapter.executeUpdate(sql, timestamp, id, profile);
+    }
+    
+    /**
+     * Load UUID mapping and last_sync_at for sync tracking
+     * Returns map of UUID -> (areaId, lastSyncAt timestamp)
+     */
+    public java.util.Map<String, java.util.Map.Entry<Integer, Timestamp>> loadUuidMapping(DatabaseAdapter adapter, String profile) throws SQLException {
+        java.util.Map<String, java.util.Map.Entry<Integer, Timestamp>> mapping = new java.util.HashMap<>();
+        String sql = "SELECT id, global_id, last_sync_at FROM areas WHERE profile = ? AND global_id IS NOT NULL AND global_id != ''";
+        try (ResultSet rs = adapter.executeQuery(sql, profile)) {
+            while (rs.next()) {
+                String uuid = rs.getString("global_id");
+                int areaId = rs.getInt("id");
+                Timestamp lastSyncAt = rs.getTimestamp("last_sync_at");
+                mapping.put(uuid, new java.util.AbstractMap.SimpleEntry<>(areaId, lastSyncAt));
+            }
+        }
+        return mapping;
+    }
+    
+    /**
+     * Load areas by zone_sync (for server sync filtering)
+     */
+    public List<AreaData> loadAreasByZoneSync(DatabaseAdapter adapter, String zoneSync) throws SQLException {
+        List<AreaData> areas = new ArrayList<>();
+        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version, " +
+                    "global_id, zone_sync, last_sync_at, deleted " +
+                    "FROM areas WHERE zone_sync = ? AND (deleted IS NULL OR deleted = 0 OR deleted = FALSE) ORDER BY id";
+        try (ResultSet rs = adapter.executeQuery(sql, zoneSync)) {
+            while (rs.next()) {
+                boolean deleted = false;
+                if (adapter instanceof nurgling.db.PostgresAdapter) {
+                    deleted = rs.getBoolean("deleted");
+                } else {
+                    int deletedInt = rs.getInt("deleted");
+                    deleted = (deletedInt != 0);
+                }
+                if (rs.wasNull()) deleted = false;
+                
+                areas.add(new AreaData(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("path"),
+                    rs.getBoolean("hide"),
+                    rs.getInt("color_r"),
+                    rs.getInt("color_g"),
+                    rs.getInt("color_b"),
+                    rs.getInt("color_a"),
+                    rs.getString("data"),
+                    rs.getString("profile"),
+                    rs.getTimestamp("updated_at"),
+                    rs.getInt("version"),
+                    rs.getString("global_id"),
+                    rs.getString("zone_sync"),
+                    rs.getTimestamp("last_sync_at"),
+                    deleted
+                ));
+            }
+        }
+        return areas;
+    }
+    
+    /**
+     * Soft delete an area (set deleted = true)
+     */
+    public void softDeleteArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
+        if (adapter instanceof nurgling.db.PostgresAdapter) {
+            adapter.executeUpdate("UPDATE areas SET deleted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND profile = ?", id, profile);
+        } else {
+            adapter.executeUpdate("UPDATE areas SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND profile = ?", id, profile);
+        }
+    }
+}
