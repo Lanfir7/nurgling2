@@ -1,0 +1,142 @@
+package nurgling.actions;
+
+import haven.*;
+import haven.res.ui.tt.cn.CustomName;
+import nurgling.NGItem;
+import nurgling.NGameUI;
+import nurgling.NUtils;
+import nurgling.tasks.*;
+import nurgling.tools.NAlias;
+
+import java.util.ArrayList;
+
+public class TransferToBarrel implements Action{
+
+    Gob barrel;
+    NAlias items;
+
+    int th = 9000;
+
+    double total = 0;
+
+    // When set, use exact name matching instead of NAlias substring matching
+    String exactName = null;
+
+    public TransferToBarrel(Gob barrel, NAlias items) {
+        this.barrel = barrel;
+        this.items = items;
+    }
+
+    public TransferToBarrel(Gob barrel, NAlias items, int th) {
+        this(barrel, items);
+        this.th = th;
+    }
+
+    public TransferToBarrel(Gob barrel, String exactName) {
+        this.barrel = barrel;
+        this.exactName = exactName;
+        this.items = new NAlias(exactName);
+    }
+
+    @Override
+    public Results run(NGameUI gui) throws InterruptedException {
+
+        if(barrel==null){
+            return Results.ERROR("NULL BARREL");
+        }
+        new PathFinder( barrel ).run (gui);
+        if ( !(new OpenTargetContainer (  "Barrel",barrel ).run ( gui ).isSuccess) ) {
+            return Results.ERROR("OPEN FAIL");
+        }
+        double barrelCont = gui.getBarrelContent();
+        total+=barrelCont;
+        if(barrelCont>-1 && barrelCont < th) {
+
+            ArrayList<WItem> witems = getMatchingItems(gui);
+            ArrayList<WItem> targetItems = new ArrayList<>();
+            double sum = 0;
+            for (WItem item : witems) {
+                if (sum + barrelCont > th) {
+                    break;
+                }
+                for (ItemInfo inf : item.item.info) {
+                    if (inf instanceof GItem.Amount) {
+                        int itemNum = ((GItem.Amount) inf).itemnum();
+                        if(sum + itemNum<10000) {
+                            sum += itemNum;
+                            targetItems.add(item);
+                            break;
+                        }
+                    }
+                    if (inf instanceof CustomName)
+                    {
+                        float count = ((CustomName) inf).count;
+                        if(count > 0 && sum + count < 100) {
+                            sum += count;
+                            targetItems.add(item);
+                            break;
+                        } else {
+                        }
+                    }
+                }
+            }
+            total+=sum;
+
+            if(!targetItems.isEmpty()) {
+                NUtils.takeItemToHand(targetItems.get(0));
+                if(witems.size() == targetItems.size()) {
+                    if(barrelCont == 0)
+                    {
+                        NUtils.activateItem(barrel, true);
+                        if (targetItems.size()>1) {
+                            NUtils.getUI().core.addTask(new NotThisInHand(NUtils.getGameUI().vhand));
+                        }
+                    }
+                    NUtils.dropsame(barrel);
+                    NUtils.getUI().core.addTask(new WaitItems(NUtils.getGameUI().getInventory(), items, 0));
+                }
+                else
+                {
+                    for (int i = 0; i < targetItems.size(); i++) {
+                        NUtils.activateItem(barrel, true);
+                        if (i + 1 < targetItems.size()) {
+                            NUtils.getUI().core.addTask(new NotThisInHand(NUtils.getGameUI().vhand));
+                        }
+                    }
+                    NUtils.getUI().core.addTask(new WaitItems(NUtils.getGameUI().getInventory(), items, witems.size() - targetItems.size() - 1));
+
+
+                    if (NUtils.getGameUI().vhand != null ) {
+                        NUtils.getUI().core.addTask(new WaitItemInHand());
+                        gui.getInventory().dropOn(gui.getInventory().findFreeCoord(NUtils.getGameUI().vhand));
+                    }
+                }
+            }
+        }
+        new CloseTargetContainer ( "Barrel" ).run ( gui );
+        return Results.SUCCESS();
+    }
+
+    public boolean isFull()
+    {
+        return total>th;
+    }
+
+    /**
+     * Gets items from inventory, using exact name match if exactName is set,
+     * otherwise uses NAlias substring matching.
+     */
+    private ArrayList<WItem> getMatchingItems(NGameUI gui) throws InterruptedException {
+        ArrayList<WItem> allItems = gui.getInventory().getItems(items);
+        if (exactName == null) {
+            return allItems;
+        }
+        ArrayList<WItem> exactMatches = new ArrayList<>();
+        for (WItem witem : allItems) {
+            if (((NGItem) witem.item).name().equals(exactName)) {
+                exactMatches.add(witem);
+            }
+        }
+        return exactMatches;
+    }
+}

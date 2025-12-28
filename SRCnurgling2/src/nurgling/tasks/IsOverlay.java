@@ -1,0 +1,41 @@
+package nurgling.tasks;
+
+import haven.Gob;
+import nurgling.tools.NAlias;
+import nurgling.tools.NParser;
+
+public class IsOverlay extends NTask
+{
+
+    Gob gob;
+
+    NAlias name = null;
+    int count = 0;
+    boolean found = false;
+
+    public IsOverlay(Gob gob, NAlias name)
+    {
+        this.gob = gob;
+        this.name = name;
+        this.maxCounter = 200;
+    }
+
+    @Override
+    public boolean check()
+    {
+
+        for (Gob.Overlay ol : gob.ols) {
+            if(ol.spr != null && ol.spr.res != null) {
+                if(NParser.checkName(ol.spr.res.name, name)){
+                    found = true;
+                    return true;
+                }
+            }
+        }
+        return count++ >= maxCounter;
+    }
+
+    public boolean getResult(){
+        return found;
+    }
+}

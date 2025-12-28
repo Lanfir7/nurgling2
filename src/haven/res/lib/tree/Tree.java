@@ -10,6 +10,7 @@ import haven.render.*;
 import haven.res.lib.leaves.*;
 import haven.res.lib.svaj.*;
 import java.util.*;
+import nurgling.NConfig;
 
 @haven.FromResource(name = "lib/tree", version = 15)
 public class Tree extends Sprite {
@@ -102,8 +103,27 @@ public class Tree extends Sprite {
 	if(gob != null) {
 	    gob.setattr(new TreeRotation(gob, rndrot(gob)));
 	    gob.setattr(new GobSvaj(gob));
-	    if(fscale < 1.0f || fscale >= 1.4f)
-		gob.setattr(new TreeScale(gob, fscale));
+	    
+	    // Apply tree resize if enabled (QOL Lanfir feature)
+	    float finalScale = fscale;
+	    float originalScale = fscale; // Store original scale for growth calculation
+	    try {
+		Object resizeEnabled = NConfig.get(NConfig.Key.treeResizeEnabled);
+		if(resizeEnabled instanceof Boolean && (Boolean)resizeEnabled) {
+		    Object percentage = NConfig.get(NConfig.Key.treeResizePercentage);
+		    int percentageValue = 100; // Default
+		    if(percentage instanceof Number) {
+			percentageValue = ((Number)percentage).intValue();
+		    }
+		    float scaleMultiplier = percentageValue / 100.0f;
+		    finalScale = fscale * scaleMultiplier;
+		}
+	    } catch(Exception e) {
+		// If NConfig is not available (e.g., in haven package), use default scale
+	    }
+	    
+	    if(finalScale < 1.0f || finalScale >= 1.4f || (finalScale != fscale))
+		gob.setattr(new TreeScale(gob, finalScale, originalScale));
 	}
 	parts = mkparts(res, s, fl);
 	sel = s;

@@ -1,0 +1,76 @@
+package nurgling.actions.bots;
+
+import haven.Coord;
+import haven.Coord2d;
+import haven.Gob;
+import haven.Pair;
+import haven.Resource;
+import nurgling.NGameUI;
+import nurgling.NHitBox;
+import nurgling.NMapView;
+import nurgling.NUtils;
+import nurgling.actions.Action;
+import nurgling.actions.Build;
+import nurgling.actions.Results;
+import nurgling.overlays.BuildGhostPreview;
+import nurgling.overlays.NCustomBauble;
+import nurgling.tools.NAlias;
+
+public class BuildMoundBed implements Action {
+    @Override
+    public Results run(NGameUI gui) throws InterruptedException {
+        try {
+            Build.Command command = new Build.Command();
+            command.name = "Mound Bed";
+            command.windowName = "Moundbed"; // Window name is different from menu name
+
+            // Get the custom hitbox we defined
+            NHitBox moundBedHitBox = NHitBox.findCustom("gfx/terobjs/moundbed");
+            if (moundBedHitBox == null) {
+                return Results.ERROR("Custom hitbox for Mound Bed not found");
+            }
+
+            // Set custom hitbox in command so Build action can use it
+            command.customHitBox = moundBedHitBox;
+
+            NUtils.getGameUI().msg("Please, select build area");
+            // Pass custom hitbox to SelectAreaWithLiveGhosts since plob won't have it
+            SelectAreaWithLiveGhosts buildarea = new SelectAreaWithLiveGhosts(Resource.loadsimg("baubles/buildArea"), "Mound Bed", moundBedHitBox);
+            buildarea.run(NUtils.getGameUI());
+
+            NUtils.getGameUI().msg("Please, select area for mulch");
+            SelectArea mulcharea = new SelectArea(Resource.loadsimg("baubles/mulchArea"));
+            mulcharea.run(NUtils.getGameUI());
+            command.ingredients.add(new Build.Ingredient(new Coord(1,1), mulcharea.getRCArea(), new NAlias("Mulch"), 12));
+
+            NUtils.getGameUI().msg("Please, select area for straw");
+            SelectArea strawarea = new SelectArea(Resource.loadsimg("baubles/strawArea"));
+            strawarea.run(NUtils.getGameUI());
+            command.ingredients.add(new Build.Ingredient(new Coord(1,1), strawarea.getRCArea(), new NAlias("Straw"), 6));
+
+            new Build(command, buildarea.getRCArea(), buildarea.getRotationCount()).run(gui);
+            return Results.SUCCESS();
+        } finally {
+            // Always clean up ghost preview when bot finishes or is interrupted
+            Gob player = NUtils.player();
+            if (player != null) {
+                BuildGhostPreview ghostPreview = player.getattr(BuildGhostPreview.class);
+                if (ghostPreview != null) {
+                    ghostPreview.dispose();
+                    player.delattr(BuildGhostPreview.class);
+                }
+
+                // Remove custom bauble overlay
+                Gob.Overlay baubleOverlay = player.findol(NCustomBauble.class);
+                if (baubleOverlay != null) {
+                    baubleOverlay.remove();
+                }
+
+                // Clean up area selection mode
+                if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+                    ((NMapView) NUtils.getGameUI().map).isAreaSelectionMode.set(false);
+                }
+            }
+        }
+    }
+}

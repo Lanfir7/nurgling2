@@ -5,6 +5,7 @@ import haven.*;
 import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.widgets.nsettings.*;
+import nurgling.widgets.nsettings.QOLLanfirSettings;
 import nurgling.widgets.options.*;
 
 import java.util.*;
@@ -79,6 +80,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem("Navigation", navigation = new Navigation(), container));
         general.addChild(new SettingsItem("Map Settings", new MapSettings(), container));
         general.addChild(new SettingsItem("Quality of life", qol = new QoL(), container));
+        general.addChild(new SettingsItem("QOL Lanfir", new QOLLanfirSettings(), container));
         general.addChild(new SettingsItem("Database", new DatabaseSettings(), container));
         general.addChild(new SettingsItem("SyncServer", new SyncServerSettings(), container));
         general.addChild(new SettingsItem("Auto Mapper", new AutoMapper(), container));

@@ -1,0 +1,147 @@
+package nurgling.widgets.nsettings;
+
+import haven.*;
+import nurgling.NConfig;
+import nurgling.NUtils;
+
+public class QOLLanfirSettings extends Panel {
+    
+    private CheckBox treeResizeEnabled;
+    private HSlider treeResizePercentageSlider;
+    private Label treeResizePercentageLabel;
+    
+    public QOLLanfirSettings() {
+        super("QOL Lanfir");
+        
+        int y = UI.scale(40);
+        int margin = UI.scale(10);
+        
+        // TreeResiz section
+        add(new Label("TreeResiz"), margin, y);
+        y += UI.scale(25);
+        
+        treeResizeEnabled = add(new CheckBox("Enable tree resizing") {
+            @Override
+            public void changed(boolean val) {
+                super.changed(val);
+                updateSliderVisibility();
+            }
+        }, margin, y);
+        y += UI.scale(30);
+        
+        // Slider for percentage (visible when checkbox is unchecked)
+        add(new Label("Tree resize percentage:"), margin, y);
+        y += UI.scale(20);
+        
+        treeResizePercentageLabel = new Label("100%");
+        treeResizePercentageSlider = new HSlider(UI.scale(300), 0, 200, 100) {
+            @Override
+            public void changed() {
+                treeResizePercentageLabel.settext(String.format("%d%%", this.val));
+            }
+        };
+        
+        addhlp(Coord.of(margin, y), UI.scale(5), treeResizePercentageSlider, treeResizePercentageLabel);
+        
+        pack();
+    }
+    
+    private void updateSliderVisibility() {
+        // Slider is visible when checkbox is checked (function enabled)
+        boolean visible = treeResizeEnabled.a;
+        treeResizePercentageSlider.visible = visible;
+        treeResizePercentageLabel.visible = visible;
+    }
+    
+    @Override
+    public void load() {
+        treeResizeEnabled.a = getBool(NConfig.Key.treeResizeEnabled);
+        
+        Object percentage = NConfig.get(NConfig.Key.treeResizePercentage);
+        int percentageValue = 100; // Default
+        if (percentage instanceof Number) {
+            percentageValue = ((Number) percentage).intValue();
+        }
+        treeResizePercentageSlider.val = percentageValue;
+        treeResizePercentageLabel.settext(String.format("%d%%", percentageValue));
+        
+        updateSliderVisibility();
+    }
+    
+    @Override
+    public void save() {
+        NConfig.set(NConfig.Key.treeResizeEnabled, treeResizeEnabled.a);
+        NConfig.set(NConfig.Key.treeResizePercentage, treeResizePercentageSlider.val);
+        NConfig.needUpdate();
+        
+        // Apply tree resizing to all existing trees in the world
+        applyTreeResizing();
+    }
+    
+    private void applyTreeResizing() {
+        if (NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || 
+            NUtils.getGameUI().ui.sess == null) {
+            return;
+        }
+        
+        boolean enabled = treeResizeEnabled.a;
+        int percentage = treeResizePercentageSlider.val;
+        float scaleMultiplier = percentage / 100.0f;
+        
+        OCache oc = NUtils.getGameUI().ui.sess.glob.oc;
+        synchronized(oc) {
+            for(Gob gob : oc) {
+                if(gob != null && gob.ngob != null && gob.ngob.name != null) {
+                    String resName = gob.ngob.name;
+                    // Check if it's a tree (not a log or oldtrunk)
+                    if(resName.startsWith("gfx/terobjs/trees") && 
+                       !resName.endsWith("oldtrunk")) {
+                        haven.res.lib.tree.TreeScale ts = gob.getattr(haven.res.lib.tree.TreeScale.class);
+                        
+                        if(enabled) {
+                            // Get original scale (before resize modification)
+                            float originalScale = 1.0f;
+                            if(ts != null) {
+                                // If originalScale differs from scale, it means resize was already applied
+                                // In this case, use originalScale as the base
+                                // If originalScale equals scale, it means no resize was applied yet, use scale as base
+                                if(ts.originalScale != ts.scale && ts.originalScale > 0) {
+                                    // Resize was already applied, use stored original scale
+                                    originalScale = ts.originalScale;
+                                } else {
+                                    // No resize applied yet, use current scale as original
+                                    originalScale = ts.scale;
+                                }
+                            }
+                            
+                            // Apply resize multiplier to original scale
+                            float newScale = originalScale * scaleMultiplier;
+                            
+                            // Create new TreeScale with both modified scale and original scale
+                            gob.delattr(haven.res.lib.tree.TreeScale.class);
+                            gob.setattr(new haven.res.lib.tree.TreeScale(gob, newScale, originalScale));
+                        } else {
+                            // Remove custom scaling - restore to original scale if we have it
+                            if(ts != null) {
+                                if(ts.originalScale > 0 && ts.originalScale != ts.scale) {
+                                    // Restore original scale
+                                    gob.delattr(haven.res.lib.tree.TreeScale.class);
+                                    gob.setattr(new haven.res.lib.tree.TreeScale(gob, ts.originalScale));
+                                } else {
+                                    // Remove TreeScale to let Tree constructor handle natural scaling
+                                    gob.delattr(haven.res.lib.tree.TreeScale.class);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private boolean getBool(NConfig.Key key) {
+        Object val = NConfig.get(key);
+        return val instanceof Boolean ? (Boolean) val : false;
+    }
+}
+

@@ -1075,31 +1075,105 @@ public class NContext {
             System.out.println("NContext.findOutGlobal: Candidate zone " + ta.area.id + " (" + ta.area.name + ") with th=" + ta.th);
         }
 
-        // ВАЖНО: Выбираем зону с максимальным порогом, который <= качества предмета
-        // Зона без порога (th=1) должна использоваться только если нет зон с порогом >= качества предмета
-        double tth = 1;
-        boolean foundZoneWithThreshold = false;
+        // ВАЖНО: Приоритет зонам с порогом (th > 1), даже если они дальше
+        // Сначала пробуем зоны с порогом, отсортированные по расстоянию, затем зоны без порога
         
-        // Сначала ищем зоны с порогом >= качества предмета (приоритет)
-        for (TestedArea area : areas) {
-            if (area.th > 1 && area.th <= th) {
-                // Зона с порогом, который подходит для предмета
-                res = area.area;
-                tth = area.th;
-                foundZoneWithThreshold = true;
-                System.out.println("NContext.findOutGlobal: Selected zone with threshold: " + area.area.id + " (" + area.area.name + ") th=" + area.th);
-            }
-        }
+        Gob player = NUtils.player();
+        NMapView mapView = player != null ? (NMapView)NUtils.getGameUI().map : null;
+        RoutePoint playerPoint = mapView != null ? mapView.routeGraphManager.getGraph().findNearestPointToPlayer(gui) : null;
         
-        // Если не нашли зону с порогом, используем зону без порога (th=1)
-        if (!foundZoneWithThreshold) {
+        // Собираем зоны с порогом (th > 1 и th <= качества предмета)
+        ArrayList<Pair<TestedArea, Double>> zonesWithThreshold = new ArrayList<>();
+        // Собираем зоны без порога (th = 1)
+        ArrayList<Pair<TestedArea, Double>> zonesWithoutThreshold = new ArrayList<>();
+        
+        if (player != null) {
             for (TestedArea area : areas) {
-                if (area.th == 1) {
+                if (area.th > 1 && area.th <= th) {
+                    // Зона с порогом, который подходит для предмета
+                    Coord2d center = area.area.getCenter2d();
+                    double distance = center != null ? player.rc.dist(center) : Double.MAX_VALUE;
+                    zonesWithThreshold.add(new Pair<>(area, distance));
+                } else if (area.th == 1) {
                     // Зона без порога (принимает все)
-                    res = area.area;
-                    tth = 1;
-                    System.out.println("NContext.findOutGlobal: Selected zone without threshold: " + area.area.id + " (" + area.area.name + ")");
+                    Coord2d center = area.area.getCenter2d();
+                    double distance = center != null ? player.rc.dist(center) : Double.MAX_VALUE;
+                    zonesWithoutThreshold.add(new Pair<>(area, distance));
+                }
+            }
+            
+            // Сортируем обе группы по расстоянию (ближайшие первыми)
+            zonesWithThreshold.sort((a, b) -> Double.compare(a.b, b.b));
+            zonesWithoutThreshold.sort((a, b) -> Double.compare(a.b, b.b));
+            
+            // Функция для проверки пути к зоне
+            java.util.function.Function<Pair<TestedArea, Double>, Boolean> checkZonePath = (zoneDist) -> {
+                NArea testZone = zoneDist.a.area;
+                if (playerPoint != null) {
+                    RoutePoint areaPoint = mapView.routeGraphManager.getGraph().findAreaRoutePoint(testZone);
+                    if (areaPoint != null) {
+                        List<RoutePoint> path = mapView.routeGraphManager.getGraph().findPath(playerPoint, areaPoint);
+                        if (path != null && !path.isEmpty()) {
+                            return true; // Путь найден
+                        }
+                    }
+                }
+                // Если нет playerPoint или areaPoint, но есть центр - считаем доступной
+                return testZone.getCenter2d() != null;
+            };
+            
+            // Сначала пробуем зоны с порогом (приоритет)
+            for (Pair<TestedArea, Double> zoneDist : zonesWithThreshold) {
+                NArea testZone = zoneDist.a.area;
+                if (checkZonePath.apply(zoneDist)) {
+                    res = testZone;
+                    System.out.println("NContext.findOutGlobal: Selected zone with threshold (priority): " + testZone.id + " (" + testZone.name + ") th=" + zoneDist.a.th + " distance=" + zoneDist.b);
                     break;
+                } else {
+                    System.out.println("NContext.findOutGlobal: Zone with threshold skipped (no path): " + testZone.id + " (" + testZone.name + ") th=" + zoneDist.a.th + " distance=" + zoneDist.b);
+                }
+            }
+            
+            // Если не нашли зону с порогом, пробуем зоны без порога
+            if (res == null) {
+                for (Pair<TestedArea, Double> zoneDist : zonesWithoutThreshold) {
+                    NArea testZone = zoneDist.a.area;
+                    if (checkZonePath.apply(zoneDist)) {
+                        res = testZone;
+                        System.out.println("NContext.findOutGlobal: Selected zone without threshold: " + testZone.id + " (" + testZone.name + ") distance=" + zoneDist.b);
+                        break;
+                    } else {
+                        System.out.println("NContext.findOutGlobal: Zone without threshold skipped (no path): " + testZone.id + " (" + testZone.name + ") distance=" + zoneDist.b);
+                    }
+                }
+            }
+            
+            // Если все еще не нашли, используем ближайшую доступную (fallback)
+            if (res == null) {
+                if (!zonesWithThreshold.isEmpty()) {
+                    res = zonesWithThreshold.get(0).a.area;
+                    System.out.println("NContext.findOutGlobal: Selected nearest zone with threshold (fallback): " + res.id + " (" + res.name + ") distance=" + zonesWithThreshold.get(0).b);
+                } else if (!zonesWithoutThreshold.isEmpty()) {
+                    res = zonesWithoutThreshold.get(0).a.area;
+                    System.out.println("NContext.findOutGlobal: Selected nearest zone without threshold (fallback): " + res.id + " (" + res.name + ") distance=" + zonesWithoutThreshold.get(0).b);
+                }
+            }
+        } else {
+            // Если игрок не найден, используем простую логику
+            for (TestedArea area : areas) {
+                if (area.th > 1 && area.th <= th) {
+                    res = area.area;
+                    System.out.println("NContext.findOutGlobal: Selected zone with threshold (player not found): " + area.area.id + " (" + area.area.name + ") th=" + area.th);
+                    break;
+                }
+            }
+            if (res == null) {
+                for (TestedArea area : areas) {
+                    if (area.th == 1) {
+                        res = area.area;
+                        System.out.println("NContext.findOutGlobal: Selected zone without threshold (player not found): " + area.area.id + " (" + area.area.name + ")");
+                        break;
+                    }
                 }
             }
         }
@@ -1107,18 +1181,7 @@ public class NContext {
         if (res == null) {
             System.out.println("NContext.findOutGlobal: No suitable zone found for " + name + " (quality=" + th + ")");
         }
-
-        ArrayList<NArea> targets = new ArrayList<>();
-        for(TestedArea area :areas) {
-            if(area.th == tth)
-                targets.add(area.area);
-        }
-
-        if(targets.size()>1) {
-            for (NArea test: targets) {
-                res = test;
-            }
-        }
+        
         return res;
     }
 

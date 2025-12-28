@@ -1,0 +1,361 @@
+package nurgling.widgets;
+
+import haven.*;
+import haven.Window;
+import nurgling.*;
+import nurgling.conf.*;
+
+import java.awt.*;
+
+import static nurgling.widgets.NCatSelection.fnd;
+
+public class NDraggableWidget extends Widget
+{
+    protected final String name;
+    private UI.Grab dm;
+    private Coord doff;
+    public Coord target_c;
+    protected ICheckBox btnLock;
+    protected ICheckBox btnVis;
+    private boolean isFlipped = false;
+    protected ICheckBox btnFlip;
+    public static final IBox box = Window.wbox;
+
+    public final static Coord off = new Coord(UI.scale(10,10));
+    public final static Coord delta = new Coord(UI.scale(35,20));
+    public Widget content = null;
+    TexI label = null;
+    public static Text.Furnace fnd = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(java.awt.Font.BOLD), 14, Color.YELLOW).aa(true), UI.scale(1), UI.scale(2), Color.BLACK);
+    public NDraggableWidget(Widget content, String name, Coord sz)
+    {
+        this(name,sz);
+        this.content = add(content);
+        this.content.visible = btnVis.a;
+        content.resize(this.sz.sub(delta));
+        content.move(off);
+    }
+
+    public NDraggableWidget(String name, Coord sz)
+    {
+        label = new TexI(fnd.render(name).img);
+        this.sz = sz;
+        this.name = name;
+        add(btnLock = new ICheckBox(NStyle.locki[0], NStyle.locki[1], NStyle.locki[2], NStyle.locki[3])
+        {
+            @Override
+            public void changed(boolean val)
+            {
+                super.changed(val);
+                if(NDraggableWidget.this.parent instanceof GameUI)
+                {
+                    NDragProp prop = new NDragProp(NDraggableWidget.this.c, val, btnVis.a, name);
+                    prop.flip = btnFlip.a;
+                    NDragProp.set(name, prop);
+                }
+            }
+        }, new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y / 2));
+
+        add(btnVis = new ICheckBox(NStyle.visi[0], NStyle.visi[1], NStyle.visi[2], NStyle.visi[3])
+        {
+            @Override
+            public void changed(boolean val)
+            {
+                super.changed(val);
+                if(content != null) {
+                    content.visible = val;
+                }
+                if(NDraggableWidget.this.parent instanceof GameUI)
+                {
+                    NDragProp prop = new NDragProp(NDraggableWidget.this.c, btnLock.a, val, name);
+                    prop.flip = btnFlip.a;
+                    NDragProp.set(name, prop);
+                }
+            }
+        }, new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y + off.y));
+
+        add(btnFlip = new ICheckBox(NStyle.flipi[0], NStyle.flipi[1], NStyle.flipi[2], NStyle.flipi[3])
+        {
+            @Override
+            public void changed(boolean val)
+            {
+                super.changed(val);
+                if(content!=null)
+                {
+                    flipContent();
+                }
+                if(NDraggableWidget.this.parent instanceof GameUI)
+                {
+                    NDragProp prop = new NDragProp(NDraggableWidget.this.c, btnLock.a, btnVis.a, name);
+                    prop.flip = val;
+                    NDragProp.set(name, prop);
+                }
+            }
+        }, new Coord(NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y/2));
+
+        btnVis.hide();
+        btnLock.hide();
+        btnFlip.hide();
+//        this.sz = sz.add(new Coord(NStyle.locki[0].sz().x, 0));
+        NDragProp prop = NDragProp.get(name);
+        if (prop.c != Coord.z)
+        {
+            this.c = new Coord(prop.c);
+            this.target_c = prop.c;
+            this.btnLock.a = prop.locked;
+            this.btnVis.a = prop.vis;
+            this.btnFlip.a = prop.flip;
+        }
+        else
+        {
+            this.target_c = new Coord(Coord.z);
+            this.btnVis.a = true;
+        }
+        // Apply loaded visibility state to content if it exists
+        if(content != null) {
+            content.visible = btnVis.a;
+        }
+    }
+
+
+
+    @Override
+    public void resize(Coord sz)
+    {
+        super.resize(sz);
+        btnLock.move(new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y / 2));
+        btnVis.move(new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y + off.y));
+        if(isFlipped)
+            btnFlip.move(new Coord(NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y/2));
+        if(content!=null)
+        {
+            content.resize(sz.sub(delta));
+            content.move(off);
+        }
+    }
+
+    public static final Tex bg = Resource.loadtex("nurgling/hud/wnd/bg");
+    private static final Tex ctl = Resource.loadtex("nurgling/hud/box/tl");
+
+    @Override
+    public void draw(GOut g)
+    {
+        if (ui.core.mode == NCore.Mode.DRAG)
+        {
+            drawBg(g, sz, ui);
+            box.draw(g, Coord.z, sz);
+
+        }
+        super.draw(g);
+        if (ui.core.mode == NCore.Mode.DRAG) {
+            g.aimage(label, sz.div(2), 0.5, 0.5);
+        }
+    }
+
+    public static void drawBg(GOut g, Coord sz, UI ui) {
+        Coord bgUl = new Coord(ctl.sz().x / 2, ctl.sz().y / 2);
+        Coord bgSz = new Coord(sz.x - ctl.sz().x, sz.y - ctl.sz().y);
+        
+        if (ui instanceof nurgling.NUI) {
+            nurgling.NUI nui = (nurgling.NUI)ui;
+            float opacity = nui.getUIOpacity();
+            int alpha = (int)(255 * opacity);
+            
+            if (nui.getUseSolidBackground()) {
+                // Use custom background color
+                java.awt.Color bgColor = nui.getWindowBackgroundColor();
+                g.chcolor(bgColor.getRed(), bgColor.getGreen(), bgColor.getBlue(), alpha);
+                g.frect(bgUl, bgSz);
+                g.chcolor();
+            } else {
+                // Use Window.bg texture with opacity
+                g.chcolor(255, 255, 255, alpha);
+                Coord bgc = new Coord();
+                Coord ca_ul = bgUl;
+                Coord ca_br = bgUl.add(bgSz);
+                for(bgc.y = ca_ul.y; bgc.y < ca_br.y; bgc.y += Window.bg.sz().y) {
+                    for(bgc.x = ca_ul.x; bgc.x < ca_br.x; bgc.x += Window.bg.sz().x)
+                        g.image(Window.bg, bgc, ca_ul, ca_br);
+                }
+                g.chcolor();
+            }
+        } else {
+            // Fallback
+            int x_pos = ctl.sz().x;
+            int y_pos = ctl.sz().y;
+            for (int x = ctl.sz().x / 2; x + bg.sz().x < sz.x - ctl.sz().x / 2; x += bg.sz().x)
+            {
+                for (int y = ctl.sz().y / 2; y + bg.sz().y < sz.y - ctl.sz().y / 2; y += bg.sz().y)
+                {
+                    g.image(bg, new Coord(x, y));
+                    y_pos = Math.max(y_pos, y + bg.sz().y);
+                    x_pos = Math.max(x_pos, x + bg.sz().x);
+                }
+            }
+            for (int x = ctl.sz().x / 2; x + bg.sz().x < sz.x - ctl.sz().x / 2; x += bg.sz().x)
+            {
+                g.image(bg, new Coord(x, y_pos), new Coord(bg.sz().x, sz.y - y_pos - ctl.sz().y / 2));
+                x_pos = Math.max(x_pos, x + bg.sz().x);
+            }
+            for (int y = ctl.sz().y / 2; y + bg.sz().y < sz.y - ctl.sz().y / 2; y += bg.sz().y)
+            {
+                g.image(bg, new Coord(x_pos, y), new Coord(sz.x - x_pos - ctl.sz().x / 2, bg.sz().y));
+                y_pos = Math.max(y_pos, y + bg.sz().y);
+            }
+            if (x_pos < sz.x - ctl.sz().x / 2 && y_pos < sz.y - ctl.sz().y / 2)
+            {
+                g.image(bg, new Coord(x_pos, y_pos), new Coord(sz.x - x_pos - ctl.sz().x / 2, sz.y - y_pos - ctl.sz().y / 2));
+            }
+        }
+    }
+
+    @Override
+    public boolean mousedown(MouseDownEvent ev) {
+        if (ui.core.mode == NCore.Mode.DRAG) {
+            if (!btnLock.mousedown(ev) &&
+                    !btnVis.mousedown(ev) &&
+                    !btnFlip.mousedown(ev)) {
+                if (ev.c.isect(Coord.z, sz))
+                    if (ui.grabs.isEmpty()) {
+                        if (!btnLock.a) {
+                            if (ev.b == 1) {
+                                dm = ui.grabmouse(this);
+                                doff = ev.c;
+                            }
+                        }
+                    } else {
+                        if (ev.b == 1) {
+                            dm = ui.grabmouse(this);
+                            doff = ev.c;
+                        }
+                        parent.setfocus(this);
+                    }
+            }
+        }
+        return super.mousedown(ev);
+    }
+
+
+    @Override
+    public boolean mouseup(MouseUpEvent ev) {
+        if (dm != null && ui.core.mode == NCore.Mode.DRAG)
+        {
+            NDragProp res = new NDragProp(NDraggableWidget.this.c, btnLock.a, btnVis.a, name);
+            res.flip = btnFlip.a;
+            NDragProp.set(name, res);
+            target_c.x = this.c.x;
+            target_c.y = this.c.y;
+            dm.remove();
+            dm = null;
+            return true;
+        }
+        else
+        {
+            return super.mouseup(ev);
+        }
+    }
+
+
+    @Override
+    public void mousemove(MouseMoveEvent ev) {
+        if (ui.core.mode == NCore.Mode.DRAG)
+        {
+
+            if (dm != null)
+            {
+                Coord prepc = this.c.add(ev.c.add(doff.inv()));
+                Coord newc = prepc.div(UI.scale(8)).mul(UI.scale(8)).sub(UI.scale(4),UI.scale(4));
+                
+                // Snap to screen edges
+                if(NUtils.getGameUI() != null && NUtils.getGameUI().sz != Coord.z) {
+                    int snapThreshold = UI.scale(20); // Distance at which snapping activates
+                    Coord screenSz = NUtils.getGameUI().sz;
+                    
+                    // Snap to left edge
+                    if(newc.x < snapThreshold) {
+                        newc.x = 0;
+                    }
+                    // Snap to top edge
+                    if(newc.y < snapThreshold) {
+                        newc.y = 0;
+                    }
+                    // Snap to right edge
+                    if(newc.x + sz.x > screenSz.x - snapThreshold) {
+                        newc.x = screenSz.x - sz.x;
+                    }
+                    // Snap to bottom edge
+                    if(newc.y + sz.y > screenSz.y - snapThreshold) {
+                        newc.y = screenSz.y - sz.y;
+                    }
+                }
+                
+                this.c = newc;
+            }
+            else
+            {
+                if (ev.c.isect(Coord.z, sz))
+                {
+                    btnLock.mousemove(ev);
+                    btnVis.mousemove(ev);
+                    if(isFlipped)
+                        btnFlip.mousemove(ev);
+                }
+            }
+        }
+        else
+        {
+            super.mousemove(ev);
+        }
+
+    }
+
+    @Override
+    public void tick(double dt)
+    {
+        super.tick(dt);
+        if (ui.core.mode == NCore.Mode.DRAG)
+        {
+            btnLock.show();
+            btnVis.show();
+            if( isFlipped )
+                btnFlip.show();
+        }
+        else
+        {
+            if (btnLock.visible())
+            {
+                btnLock.hide();
+                btnVis.hide();
+                btnFlip.hide();
+            }
+        }
+
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().sz!=Coord.z && dm == null)
+        {
+            if (c.x + sz.x > NUtils.getGameUI().sz.x - GameUI.margin.x)
+                c.x = NUtils.getGameUI().sz.x - sz.x;
+            else
+                c.x = target_c.x;
+            if (c.y + sz.y > NUtils.getGameUI().sz.y - GameUI.margin.y)
+                c.y = NUtils.getGameUI().sz.y - sz.y;
+            else
+                c.y = target_c.y;
+        }
+    }
+
+    public String getName()
+    {
+        return name;
+    }
+
+    public void flipContent()
+    {
+        content.flip(btnFlip.a);
+        resize(content.sz.add(delta));
+    }
+
+    public void setFlipped(boolean val)
+    {
+        isFlipped = val;
+        flipContent();
+    }
+}

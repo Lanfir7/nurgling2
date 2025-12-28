@@ -41,10 +41,18 @@ public class NTreeScaleOl extends NObjectTexLabel {
         TreeScale ts = gob.getattr(TreeScale.class);
         long scale = 0;
         if (NParser.checkName(gob.ngob.name, new NAlias("bushes"))) {
-            scale = Math.round(100 * (ts.scale - 0.3) / 0.7);
+            // Always use originalScale for growth calculation (not the modified scale)
+            // If originalScale equals scale, it means no resize was applied, so use scale
+            // If originalScale differs from scale, it means resize was applied, so use originalScale
+            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
+            scale = Math.round(100 * (scaleToUse - 0.3) / 0.7);
 
         } else {
-            scale = Math.round(100 * (ts.scale - 0.1) / 0.9);
+            // Always use originalScale for growth calculation (not the modified scale)
+            // If originalScale equals scale, it means no resize was applied, so use scale
+            // If originalScale differs from scale, it means resize was applied, so use originalScale
+            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
+            scale = Math.round(100 * (scaleToUse - 0.1) / 0.9);
         }
         this.calculatedScale = scale;
         this.img = qIcon;
@@ -222,14 +230,44 @@ public class NTreeScaleOl extends NObjectTexLabel {
 
     @Override
     public boolean tick(double dt) {
-        return gob.getattr(TreeScale.class) == null;
+        // Remove overlay if TreeScale is removed
+        TreeScale ts = gob.getattr(TreeScale.class);
+        if (ts == null) {
+            return true;
+        }
+        
+        // Recalculate growth percentage to check if tree reached 100%
+        // Always use originalScale for growth calculation (not the modified scale)
+        long currentScale = 0;
+        if (NParser.checkName(gob.ngob.name, new NAlias("bushes"))) {
+            // If originalScale differs from scale, it means resize was applied, so use originalScale
+            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
+            currentScale = Math.round(100 * (scaleToUse - 0.3) / 0.7);
+        } else {
+            // If originalScale differs from scale, it means resize was applied, so use originalScale
+            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
+            currentScale = Math.round(100 * (scaleToUse - 0.1) / 0.9);
+        }
+        
+        // Update calculated scale
+        calculatedScale = currentScale;
+        
+        // Remove overlay if tree is fully grown (100% or more)
+        if (currentScale >= 100) {
+            return true;
+        }
+        return false;
     }
     
     @Override
     public void draw(GOut g, Pipe state) {
         updateConfigCache();
+        // Don't draw if tree is fully grown (100% or more)
+        if (calculatedScale >= 100) {
+            return;
+        }
         // Don't draw if scale is below minimum threshold
-        if (calculatedScale < minThreshold && calculatedScale>=100) {
+        if (calculatedScale < minThreshold) {
             return;
         }
         super.draw(g, state);

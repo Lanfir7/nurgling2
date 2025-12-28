@@ -109,7 +109,7 @@ public class Forager implements Action {
             return Results.ERROR("Cannot get start position - waypoint not in current segment");
         }
         
-        new PathFinder(startPos).run(gui);
+        navigateToPoint(gui, startPos);
         
         // Check inventory before starting
         if (isInventoryFull(gui) && !preset.onFullInventoryAction.equals("nothing")) {
@@ -153,12 +153,12 @@ public class Forager implements Action {
             if (targetGob != null)
             {
                 // Go to the object if found within 1 tile
-                new PathFinder(targetGob).run(gui);
+                navigateToGob(gui, targetGob);
 
             } else
             {
                 // Go to the endpoint if no objects found nearby
-                new PathFinder(sectionEnd).run(gui);
+                navigateToPoint(gui, sectionEnd);
             }
 
             // Process actions for this section
@@ -230,7 +230,7 @@ public class Forager implements Action {
                         break;
                     }
 
-                    new PathFinder(gob).run(gui);
+                    navigateToGob(gui, gob);
                     new SelectFlowerAction("Pick", gob).run(gui);
                     NUtils.getUI().core.addTask(new nurgling.tasks.WaitGobRemoval(gob.id));
                     
@@ -241,7 +241,7 @@ public class Forager implements Action {
                 
             case FLOWER_ACTION:
                 for (Gob gob : gobs) {
-                    new PathFinder(gob).run(gui);
+                    navigateToGob(gui, gob);
                     new SelectFlowerAction(action.actionName, gob).run(gui);
                     
                     // Wait for pose change
@@ -344,5 +344,89 @@ public class Forager implements Action {
             }
         }
         return null;
+    }
+    
+    /**
+     * Проверяет, находится ли игрок на лошади
+     */
+    private boolean isMountedOnHorse() {
+        if (NUtils.player() == null) {
+            return false;
+        }
+        
+        Following following = NUtils.player().getattr(Following.class);
+        if (following == null) {
+            return false;
+        }
+        
+        Gob mount = NUtils.getGameUI().ui.sess.glob.oc.getgob(following.tgt);
+        if (mount == null || mount.ngob == null || mount.ngob.name == null) {
+            return false;
+        }
+        
+        String mountName = mount.ngob.name.toLowerCase();
+        return mountName.contains("horse") || 
+               mountName.contains("stallion") || 
+               mountName.contains("mare");
+    }
+    
+    /**
+     * Навигация к точке - для лошади использует прямой клик, для пешего - PathFinder
+     */
+    private void navigateToPoint(NGameUI gui, Coord2d target) throws InterruptedException {
+        if (isMountedOnHorse()) {
+            // Для лошади используем прямой клик на карту
+            gui.map.wdgmsg("click", Coord.z, target.floor(haven.OCache.posres), 1, 0);
+            
+            // Ждем немного для начала движения
+            Thread.sleep(500);
+            
+            // Ждем, пока достигнем точки (с большей погрешностью для лошади)
+            Coord2d currentPos = NUtils.player().rc;
+            int attempts = 0;
+            while (currentPos != null && currentPos.dist(target) > 11.0 && attempts < 100) {
+                Thread.sleep(200);
+                if (NUtils.player() != null) {
+                    currentPos = NUtils.player().rc;
+                } else {
+                    break;
+                }
+                attempts++;
+            }
+        } else {
+            // Для пешего движения используем PathFinder
+            new PathFinder(target).run(gui);
+        }
+    }
+    
+    /**
+     * Навигация к объекту - для лошади использует прямой клик, для пешего - PathFinder
+     */
+    private void navigateToGob(NGameUI gui, Gob target) throws InterruptedException {
+        if (isMountedOnHorse()) {
+            // Для лошади используем прямой клик на позицию объекта
+            Coord2d targetPos = target.rc;
+            gui.map.wdgmsg("click", Coord.z, targetPos.floor(haven.OCache.posres), 1, 0);
+            
+            // Ждем немного для начала движения
+            Thread.sleep(500);
+            
+            // Ждем, пока достигнем объекта (с большей погрешностью для лошади)
+            Coord2d currentPos = NUtils.player().rc;
+            int attempts = 0;
+            while (currentPos != null && currentPos.dist(targetPos) > 11.0 && attempts < 100) {
+                Thread.sleep(200);
+                if (NUtils.player() != null && Finder.findGob(target.id) != null) {
+                    currentPos = NUtils.player().rc;
+                    targetPos = target.rc;
+                } else {
+                    break;
+                }
+                attempts++;
+            }
+        } else {
+            // Для пешего движения используем PathFinder
+            new PathFinder(target).run(gui);
+        }
     }
 }

@@ -14,6 +14,8 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.lang.reflect.Field;
+import java.io.FileWriter;
+import java.io.IOException;
 
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
@@ -1275,252 +1277,183 @@ NMiniMap extends MiniMap {
                     }
                 }
 
-                // Исправляем путь к ресурсу для маркеров проспектинга перед отрисовкой
-                if(mark.m instanceof MapFile.SMarker) {
-                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
-                    try {
-                        // Получаем правильный путь к ресурсу через VSpec по названию маркера
-                        String markerName = sm.nm;
-                        String currentResourcePath = sm.res.name;
-                        
-                        // Получаем правильный путь к ресурсу через VSpec
-                        String correctResourcePath = getCorrectResourcePathForProspecting(markerName, currentResourcePath);
-                        
-                        // Проверяем, нужно ли исправить путь к ресурсу
-                        boolean needsFix = (correctResourcePath != null && !correctResourcePath.equals(currentResourcePath));
-                        
-                        // Также проверяем, загрузилось ли изображение - если нет, пробуем исправить путь
-                        try {
-                            Field imgField = DisplayMarker.class.getDeclaredField("img");
-                            imgField.setAccessible(true);
-                            Resource.Image currentImg = (Resource.Image)imgField.get(mark);
-                            
-                            // Если изображение не загружено, пробуем исправить путь к ресурсу
-                            if(currentImg == null && markerName != null && !markerName.trim().isEmpty()) {
-                                // Если правильный путь еще не найден, пробуем найти его
-                                if(!needsFix) {
-                                    correctResourcePath = getCorrectResourcePathForProspecting(markerName, currentResourcePath);
-                                    needsFix = (correctResourcePath != null && !correctResourcePath.equals(currentResourcePath));
-                                }
-                            }
-                        } catch (Exception e) {
-                            // Игнорируем ошибки рефлексии
-                        }
-                        
-                        if(needsFix && correctResourcePath != null) {
-                            // Обновляем путь к ресурсу в маркере (используем loadwait как в MasterMiner)
-                            try {
-                                Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
-                                
-                                // Проверяем, что ресурс действительно загрузился и имеет изображение
-                                if(correctResLoaded != null && correctResLoaded.layer(Resource.imgc) != null) {
-                                    // Обновляем ресурс в маркере
-                                    sm.res = new Resource.Saved(Resource.remote(), correctResourcePath, correctResLoaded.ver);
-                                    
-                                    // Сбрасываем кэш изображения в DisplayMarker, чтобы оно перезагрузилось
-                                    try {
-                                        Field imgField = DisplayMarker.class.getDeclaredField("img");
-                                        imgField.setAccessible(true);
-                                        imgField.set(mark, null);
-                                        Field ccField = DisplayMarker.class.getDeclaredField("cc");
-                                        ccField.setAccessible(true);
-                                        ccField.set(mark, null);
-                                        
-                                        // Пробуем загрузить изображение сразу с правильным ресурсом
-                                        try {
-                                            Resource.Image newImg = correctResLoaded.flayer(Resource.imgc);
-                                            if(newImg != null) {
-                                                imgField.set(mark, newImg);
-                                                Resource.Neg neg = correctResLoaded.layer(Resource.negc);
-                                                Coord newCc = (neg != null) ? neg.cc : newImg.ssz.div(2);
-                                                ccField.set(mark, newCc);
-                                            }
-                                        } catch (Exception e) {
-                                            // Игнорируем ошибки загрузки изображения
-                                        }
-                                    } catch (Exception e) {
-                                        // Игнорируем ошибки рефлексии
-                                    }
-                                }
-                            } catch (Exception e) {
-                                // Игнорируем ошибки
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки
-                    }
-                }
-                
+                // Для перманентных маркеров используем оригинальную логику - просто рисуем маркер
+                // Но исправляем путь к ресурсу, если маркер был создан с неправильным путем (например, "Cave Passage" с salvia)
                 Coord markPos = mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz);
                 
-                // Перехватываем отрисовку маркера и исправляем путь к ресурсу, если изображение не загрузилось
+                // #region agent log
                 if(mark.m instanceof MapFile.SMarker) {
                     MapFile.SMarker sm = (MapFile.SMarker)mark.m;
-                    try {
-                        // Проверяем, загрузилось ли изображение
-                        Field imgField = DisplayMarker.class.getDeclaredField("img");
-                        imgField.setAccessible(true);
-                        Resource.Image currentImg = (Resource.Image)imgField.get(mark);
-                        
-                        // Также проверяем, правильно ли загрузился ресурс
-                        boolean needsFix = false;
+                    if(sm.nm != null && (sm.nm.toLowerCase().contains("cave") || sm.nm.toLowerCase().contains("passage"))) {
                         try {
-                            Resource currentRes = sm.res.get();
-                            Resource.Image resImg = currentRes.flayer(Resource.imgc);
-                            // Если изображение не загружено или ресурс не имеет изображения, нужно исправить
-                            if(currentImg == null || resImg == null) {
-                                needsFix = true;
-                            }
-                        } catch (Exception e) {
-                            // Если ресурс не загружается, нужно исправить
-                            needsFix = true;
-                        }
-                        
-                        // Если изображение не загружено, пробуем загрузить его заново
-                        if(needsFix || currentImg == null) {
-                            String markerName = sm.nm;
-                            String currentResourcePath = sm.res.name;
-                            
-                            if(markerName != null && markerName.toLowerCase().contains("wine")) {
-                                System.err.println("drawmarkers: Fixing marker: name='" + markerName + "', currentPath='" + currentResourcePath + "', img=" + currentImg);
-                            }
-                            
-                            // Получаем правильный путь к ресурсу через VSpec (используем findVSpecObjectByName как в markobjs)
-                            String correctResourcePath = null;
-                            org.json.JSONObject vspecObj = findVSpecObjectByName(markerName);
-                            if(vspecObj != null && vspecObj.has("static")) {
-                                correctResourcePath = vspecObj.getString("static");
-                            } else {
-                                // Fallback на старый метод
-                                correctResourcePath = getCorrectResourcePathForProspecting(markerName, currentResourcePath);
-                            }
-                            
-                            // Используем correctResourcePath, если он найден, иначе используем currentResourcePath
-                            String resourcePathToLoad = (correctResourcePath != null) ? correctResourcePath : currentResourcePath;
-                            
-                            // Если путь нужно исправить или изображение не загружено, пробуем загрузить ресурс заново
-                            if(correctResourcePath != null && !correctResourcePath.equals(currentResourcePath)) {
-                                // Обновляем ресурс в маркере
-                                try {
-                                    Resource correctResLoaded = Resource.remote().loadwait(correctResourcePath);
-                                    if(correctResLoaded != null && correctResLoaded.layer(Resource.imgc) != null) {
-                                        sm.res = new Resource.Saved(Resource.remote(), correctResourcePath, correctResLoaded.ver);
-                                        resourcePathToLoad = correctResourcePath;
-                                    }
-                                } catch (Exception e) {
-                                    if(markerName != null && markerName.toLowerCase().contains("wine")) {
-                                        System.err.println("drawmarkers: Error loading correct resource: " + e.getMessage());
-                                    }
-                                }
-                            }
-                            
-                            // Пробуем загрузить изображение заново, даже если путь правильный
-                            try {
-                                Resource resToLoad = Resource.remote().loadwait(resourcePathToLoad);
-                                if(resToLoad != null && resToLoad.layer(Resource.imgc) != null) {
-                                    // Сбрасываем кэш изображения
-                                    imgField.set(mark, null);
-                                    Field ccField = DisplayMarker.class.getDeclaredField("cc");
-                                    ccField.setAccessible(true);
-                                    ccField.set(mark, null);
-                                    
-                                    // Загружаем изображение заново
-                                    Resource.Image newImg = resToLoad.flayer(Resource.imgc);
-                                    if(newImg != null) {
-                                        imgField.set(mark, newImg);
-                                        Resource.Neg neg = resToLoad.layer(Resource.negc);
-                                        Coord newCc = (neg != null) ? neg.cc : newImg.ssz.div(2);
-                                        ccField.set(mark, newCc);
-                                        
-                                        // Также устанавливаем hit область (как в DisplayMarker.draw)
-                                        Field hitField = DisplayMarker.class.getDeclaredField("hit");
-                                        hitField.setAccessible(true);
-                                        Area currentHit = (Area)hitField.get(mark);
-                                        if(currentHit == null) {
-                                            Area newHit = Area.sized(newCc.inv(), newImg.ssz);
-                                            hitField.set(mark, newHit);
-                                        }
-                                        
-                                        if(markerName != null && markerName.toLowerCase().contains("wine")) {
-                                            System.err.println("drawmarkers: Image loaded successfully: path='" + resourcePathToLoad + "', img=" + newImg + ", cc=" + newCc);
-                                        }
-                                    } else {
-                                        if(markerName != null && markerName.toLowerCase().contains("wine")) {
-                                            System.err.println("drawmarkers: Image is null after load: path='" + resourcePathToLoad + "'");
-                                        }
-                                    }
-                                } else {
-                                    if(markerName != null && markerName.toLowerCase().contains("wine")) {
-                                        System.err.println("drawmarkers: Resource loaded but no image layer: path='" + resourcePathToLoad + "'");
-                                    }
-                                }
-                            } catch (Exception e) {
-                                if(markerName != null && markerName.toLowerCase().contains("wine")) {
-                                    System.err.println("drawmarkers: Error loading resource: path='" + resourcePathToLoad + "', error=" + e.getMessage());
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки рефлексии
+                            FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A,C\",\"location\":\"NMiniMap.drawmarkers:1282\",\"message\":\"Drawing SMarker\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"resourcePath\":\"" + sm.res.name + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                            fw.close();
+                        } catch(IOException e) {}
                     }
                 }
+                // #endregion
                 
-                // Для всех маркеров проверяем и обновляем ресурс, если изображение не готово
+                // Исправляем путь к ресурсу для маркеров с неправильным путем (например, "Cave Passage" с salvia)
                 if(mark.m instanceof MapFile.SMarker) {
                     MapFile.SMarker sm = (MapFile.SMarker)mark.m;
-                    try {
-                        // Проверяем, нужно ли обновить ресурс
-                        Field imgField = DisplayMarker.class.getDeclaredField("img");
-                        imgField.setAccessible(true);
-                        Resource.Image currentImg = (Resource.Image)imgField.get(mark);
-                        
-                        // Если изображение не готово (null или img == null), обновляем ресурс
-                        boolean needsUpdate = false;
-                        if(currentImg == null) {
-                            needsUpdate = true;
-                        } else {
-                            try {
-                                java.awt.image.BufferedImage bufferedImg = currentImg.img;
-                                if(bufferedImg == null) {
-                                    needsUpdate = true;
-                                }
-                            } catch (Exception e) {
-                                needsUpdate = true;
-                            }
-                        }
-                        
-                        if(needsUpdate) {
-                            // Загружаем ресурс заново и обновляем маркер
-                            Resource loadedRes = Resource.remote().loadwait(sm.res.name);
-                            if(loadedRes != null) {
-                                Resource.Image loadedImg = loadedRes.layer(Resource.imgc);
-                                if(loadedImg != null && loadedImg.img != null) {
-                                    // Обновляем ресурс в маркере с правильной версией
-                                    sm.res = new Resource.Saved(Resource.remote(), sm.res.name, loadedRes.ver);
+                    if(sm.nm != null && sm.nm.toLowerCase().contains("cave") && sm.nm.toLowerCase().contains("passage")) {
+                        // Проверяем, правильный ли путь к ресурсу
+                        String currentPath = sm.res.name;
+                        if(currentPath != null && (currentPath.contains("salvia") || currentPath.contains("herbs"))) {
+                            // Путь неправильный, пытаемся найти правильный
+                            // Сначала пробуем найти через GobIcon в текущей сессии
+                            String correctPath = null;
+                            
+                            // Ищем GobIcon с tooltip "Cave Passage" в текущей сессии
+                            if(ui != null && ui.sess != null && ui.sess.glob != null && ui.sess.glob.oc != null) {
+                                synchronized(ui.sess.glob.oc) {
+                                    int gobCount = 0;
+                                    int iconCount = 0;
+                                    for(Gob gob : ui.sess.glob.oc) {
+                                        gobCount++;
+                                        try {
+                                            GobIcon icon = gob.getattr(GobIcon.class);
+                                            if(icon != null && icon.icon != null) {
+                                                iconCount++;
+                                                // Получаем tooltip через res.layer(Resource.tooltip)
+                                                String tooltip = null;
+                                                try {
+                                                    Resource.Tooltip tt = icon.icon.res.layer(Resource.tooltip);
+                                                    if(tt != null) {
+                                                        tooltip = tt.t;
+                                                    }
+                                                } catch (Exception e) {}
+                                                
+                                                // #region agent log
+                                                if(tooltip != null && tooltip.toLowerCase().contains("cave")) {
+                                                    try {
+                                                        FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                                        fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1315\",\"message\":\"Found GobIcon with cave tooltip\",\"data\":{\"tooltip\":\"" + tooltip + "\",\"resourcePath\":\"" + icon.icon.res.name + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                                                        fw.close();
+                                                    } catch(IOException e) {}
+                                                }
+                                                // #endregion
+                                                
+                                                if(tooltip != null && tooltip.equals("Cave Passage")) {
+                                                    // Нашли GobIcon с tooltip "Cave Passage"
+                                                    if(icon.icon instanceof GobIcon.ImageIcon) {
+                                                        GobIcon.ImageIcon imgIcon = (GobIcon.ImageIcon)icon.icon;
+                                                        correctPath = imgIcon.res.name;
+                                                        
+                                                        // #region agent log
+                                                        try {
+                                                            FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                                            fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1338\",\"message\":\"Found GobIcon for Cave Passage\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"currentPath\":\"" + currentPath + "\",\"correctPath\":\"" + correctPath + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                                                            fw.close();
+                                                        } catch(IOException e) {}
+                                                        // #endregion
+                                                        
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        } catch (Exception e) {
+                                            continue;
+                                        }
+                                    }
                                     
-                                    // Сбрасываем кэш изображения, чтобы DisplayMarker перезагрузил его
-                                    imgField.set(mark, null);
-                                    Field ccField = DisplayMarker.class.getDeclaredField("cc");
-                                    ccField.setAccessible(true);
-                                    ccField.set(mark, null);
-                                    
-                                    // Также сбрасываем hit для полной перезагрузки
+                                    // #region agent log
                                     try {
-                                        Field hitField = DisplayMarker.class.getDeclaredField("hit");
-                                        hitField.setAccessible(true);
-                                        hitField.set(mark, null);
+                                        FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                        fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1355\",\"message\":\"GobIcon search completed\",\"data\":{\"gobCount\":" + gobCount + ",\"iconCount\":" + iconCount + ",\"found\":\"" + (correctPath != null ? "yes" : "no") + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                                        fw.close();
+                                    } catch(IOException e) {}
+                                    // #endregion
+                                }
+                            }
+                            
+                            // Если не нашли через GobIcon, пробуем найти через поиск ресурсов с tooltip "Cave Passage"
+                            if(correctPath == null) {
+                                // Пробуем известные пути для "Cave Passage" из оригинального клиента
+                                String[] knownCavePaths = {
+                                    "gfx/terobjs/mm/cave-passage",
+                                    "gfx/terobjs/mm/cavepassage",
+                                    "gfx/terobjs/mm/cave",
+                                    "gfx/invobjs/cave-passage",
+                                    "gfx/invobjs/cavepassage",
+                                    "gfx/terobjs/cave-passage",
+                                    "gfx/terobjs/cavepassage",
+                                    "gfx/terobjs/mm/cave-entrance",
+                                    "gfx/terobjs/mm/caveentrance",
+                                    "gfx/terobjs/cave-entrance",
+                                    "gfx/terobjs/caveentrance",
+                                };
+                                
+                                for(String testPath : knownCavePaths) {
+                                    try {
+                                        Resource testRes = Resource.remote().loadwait(testPath);
+                                        if(testRes != null) {
+                                            Resource.Tooltip tt = testRes.layer(Resource.tooltip);
+                                            if(tt != null && tt.t != null && tt.t.equals("Cave Passage")) {
+                                                correctPath = testPath;
+                                                
+                                                // #region agent log
+                                                try {
+                                                    FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                                    fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1375\",\"message\":\"Found Cave Passage resource by tooltip\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"foundPath\":\"" + correctPath + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                                                    fw.close();
+                                                } catch(IOException e) {}
+                                                // #endregion
+                                                
+                                                break;
+                                            }
+                                        }
                                     } catch (Exception e) {
-                                        // Игнорируем, если поле не найдено
+                                        continue;
                                     }
                                 }
                             }
+                            
+                            // Если не нашли через GobIcon, пробуем через getCorrectResourcePathForPermanentMarker
+                            if(correctPath == null) {
+                                correctPath = getCorrectResourcePathForPermanentMarker(sm.nm, currentPath);
+                            }
+                            
+                            // #region agent log
+                            try {
+                                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1330\",\"message\":\"Fixing marker resource path\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"currentPath\":\"" + currentPath + "\",\"correctPath\":\"" + (correctPath != null ? correctPath : "null") + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                                fw.close();
+                            } catch(IOException e) {}
+                            // #endregion
+                            
+                            if(correctPath != null && !correctPath.equals(currentPath)) {
+                                // Обновляем путь к ресурсу в маркере
+                                try {
+                                    Resource correctRes = Resource.remote().loadwait(correctPath);
+                                    if(correctRes != null && correctRes.layer(Resource.imgc) != null) {
+                                        sm.res = new Resource.Saved(Resource.remote(), correctPath, correctRes.ver);
+                                        
+                                        // Обновляем маркер в файле карты
+                                        try {
+                                            NGameUI gui = NUtils.getGameUI();
+                                            if(gui != null && gui.mapfile != null && gui.mapfile.view != null && gui.mapfile.view.file != null) {
+                                                gui.mapfile.view.file.update(sm);
+                                            }
+                                        } catch (Exception e) {}
+                                        
+                                        // Сбрасываем кэш изображения в DisplayMarker
+                                        try {
+                                            Field imgField = DisplayMarker.class.getDeclaredField("img");
+                                            imgField.setAccessible(true);
+                                            imgField.set(mark, null);
+                                            Field ccField = DisplayMarker.class.getDeclaredField("cc");
+                                            ccField.setAccessible(true);
+                                            ccField.set(mark, null);
+                                        } catch (Exception e) {}
+                                    }
+                                } catch (Exception e) {}
+                            }
                         }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки
                     }
                 }
                 
-                // Используем стандартную отрисовку
                 mark.draw(g, markPos);
                 
                 // Draw name for quest giver markers (bush/bumling)
@@ -3007,20 +2940,30 @@ NMiniMap extends MiniMap {
                     if(tt != null && tt.t != null) {
                         tooltipName = tt.t;
                         
-                        // Ищем JSONObject в VSpec по названию (как в NCatSelection)
-                        org.json.JSONObject vspecObj = findVSpecObjectByName(tt.t);
+                        // Ищем JSONObject в VSpec по названию (только точное совпадение для перманентных маркеров)
+                        org.json.JSONObject vspecObj = findVSpecObjectByNameForPermanentMarker(tt.t);
                         if(vspecObj != null && vspecObj.has("static")) {
                             correctResourcePath = vspecObj.getString("static");
                             if(tt.t.toLowerCase().contains("wine")) {
                                 System.err.println("markobjs: Found in VSpec: name='" + tt.t + "', path='" + correctResourcePath + "'");
                             }
                         } else {
-                            // Fallback на старый метод, если не найден в VSpec
-                            correctResourcePath = getCorrectResourcePathForProspecting(tt.t, micon.res.name);
+                            // Fallback на метод для перманентных маркеров (только точное совпадение)
+                            correctResourcePath = getCorrectResourcePathForPermanentMarker(tt.t, micon.res.name);
                             if(tt.t.toLowerCase().contains("wine")) {
                                 System.err.println("markobjs: Not in VSpec, fallback: name='" + tt.t + "', path='" + correctResourcePath + "'");
                             }
                         }
+                        
+                        // #region agent log
+                        if(tt.t != null && (tt.t.toLowerCase().contains("cave") || tt.t.toLowerCase().contains("passage"))) {
+                            try {
+                                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"NMiniMap.markobjs:2797\",\"message\":\"Finding resource path for marker\",\"data\":{\"tooltipName\":\"" + tt.t + "\",\"miconResName\":\"" + micon.res.name + "\",\"correctResourcePath\":\"" + (correctResourcePath != null ? correctResourcePath : "null") + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                                fw.close();
+                            } catch(IOException e) {}
+                        }
+                        // #endregion
                     }
                 } catch (Exception e) {
                     // Игнорируем ошибки
@@ -3128,6 +3071,17 @@ NMiniMap extends MiniMap {
                             mid = new MapFile.SMarker(info.seg, sc, tt.t, 0, new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
                             file.add(mid);
                             isNew = true;
+                            
+                            // #region agent log
+                            if(tt.t != null && (tt.t.toLowerCase().contains("cave") || tt.t.toLowerCase().contains("passage"))) {
+                                try {
+                                    FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                    fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"NMiniMap.markobjs:2913\",\"message\":\"Created new SMarker\",\"data\":{\"markerName\":\"" + tt.t + "\",\"resourcePath\":\"" + resourcePathToUse + "\",\"miconResName\":\"" + micon.res.name + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                                    fw.close();
+                                } catch(IOException e) {}
+                            }
+                            // #endregion
+                            
                             if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
                                 System.err.println("markobjs: Marker created: name='" + tt.t + "', path='" + resourcePathToUse + "', ver=" + resVer);
                             }
@@ -3191,6 +3145,48 @@ NMiniMap extends MiniMap {
      * Ищет JSONObject в VSpec по названию ресурса (как в NCatSelection)
      * Возвращает JSONObject из VSpec, если найден, иначе null
      */
+    /**
+     * Находит объект VSpec по названию для перманентных маркеров.
+     * Использует только точное совпадение, как было в оригинале.
+     */
+    private org.json.JSONObject findVSpecObjectByNameForPermanentMarker(String resourceName) {
+        if (resourceName == null || resourceName.trim().isEmpty() || VSpec.categories == null) {
+            return null;
+        }
+        
+        String lowerName = resourceName.trim().toLowerCase();
+        
+        // Ищем во всех категориях VSpec
+        for (String categoryName : VSpec.categories.keySet()) {
+            ArrayList<org.json.JSONObject> items = VSpec.categories.get(categoryName);
+            if (items != null) {
+                for (org.json.JSONObject obj : items) {
+                    try {
+                        String name = obj.optString("name", "");
+                        if (name != null && !name.isEmpty()) {
+                            String lowerVSpecName = name.toLowerCase().trim();
+                            
+                            // ТОЛЬКО точное совпадение (без учета регистра)
+                            if (lowerVSpecName.equals(lowerName)) {
+                                return obj;
+                            }
+                            // ТОЛЬКО нормализованное совпадение (без пробелов)
+                            String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                            String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                            if (normalizedVSpecName.equals(normalizedInputName)) {
+                                return obj;
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
     private org.json.JSONObject findVSpecObjectByName(String resourceName) {
         if (resourceName == null || resourceName.trim().isEmpty() || VSpec.categories == null) {
             return null;
@@ -3238,8 +3234,146 @@ NMiniMap extends MiniMap {
     }
     
     /**
+     * Получает правильный путь к ресурсу для перманентных маркеров (SMarker).
+     * Использует только точное совпадение, как было в оригинале.
+     * Ищет во всех категориях VSpec.
+     * Если не найдено в VSpec, пробует загрузить ресурс напрямую по названию маркера.
+     */
+    private String getCorrectResourcePathForPermanentMarker(String resourceName, String currentResourcePath) {
+        // #region agent log
+        if(resourceName != null && (resourceName.toLowerCase().contains("cave") || resourceName.toLowerCase().contains("passage"))) {
+            try {
+                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3046\",\"message\":\"Method entry\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"currentResourcePath\":\"" + currentResourcePath + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                fw.close();
+            } catch(IOException e) {}
+        }
+        // #endregion
+        
+        if (resourceName == null || resourceName.trim().isEmpty()) {
+            return null;
+        }
+        
+        // Нормализуем название для поиска (убираем лишние пробелы, приводим к нижнему регистру)
+        String normalizedName = resourceName.trim();
+        String lowerName = normalizedName.toLowerCase();
+        
+        // Ищем в VSpec только с точным совпадением (без частичного)
+        if (VSpec.categories != null) {
+            // Ищем во всех категориях
+            for (String categoryName : VSpec.categories.keySet()) {
+                ArrayList<org.json.JSONObject> items = VSpec.categories.get(categoryName);
+                if (items != null) {
+                    for (org.json.JSONObject item : items) {
+                        try {
+                            String name = item.optString("name", "");
+                            if (name != null && !name.isEmpty()) {
+                                String lowerVSpecName = name.toLowerCase().trim();
+                                String normalizedVSpecName = lowerVSpecName.replaceAll("\\s+", "");
+                                String normalizedInputName = lowerName.replaceAll("\\s+", "");
+                                
+                                // ТОЛЬКО точное совпадение (без учета регистра)
+                                if (lowerVSpecName.equals(lowerName)) {
+                                    String staticPath = item.optString("static", null);
+                                    if (staticPath != null && !staticPath.isEmpty()) {
+                                        return staticPath;
+                                    }
+                                }
+                                // ТОЛЬКО нормализованное совпадение (без пробелов)
+                                if (normalizedVSpecName.equals(normalizedInputName)) {
+                                    String staticPath = item.optString("static", null);
+                                    if (staticPath != null && !staticPath.isEmpty()) {
+                                        return staticPath;
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            // Игнорируем ошибки
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Специальная обработка для известных маркеров, которые могут иметь неправильный путь к ресурсу
+        // В оригинальном клиенте маркеры используют путь из GobIcon без исправлений
+        // Но если маркер был создан с неправильным путем, нужно найти правильный
+        
+        // Специальная обработка для "Cave Passage" - ищем правильный путь к ресурсу
+        if(lowerName.contains("cave") && lowerName.contains("passage")) {
+            // Пробуем различные варианты путей для входа в пещеру
+            String[] cavePaths = {
+                "gfx/terobjs/mm/cave-passage",
+                "gfx/terobjs/mm/cavepassage", 
+                "gfx/terobjs/mm/cave",
+                "gfx/invobjs/cave-passage",
+                "gfx/invobjs/cavepassage",
+                "gfx/terobjs/cave-passage",
+                "gfx/terobjs/cavepassage",
+            };
+            
+            // #region agent log
+            try {
+                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3144\",\"message\":\"Trying cave paths\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"pathsCount\":" + cavePaths.length + "},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                fw.close();
+            } catch(IOException e) {}
+            // #endregion
+            
+            for (String path : cavePaths) {
+                try {
+                    Resource res = Resource.remote().loadwait(path);
+                    if (res != null && res.layer(Resource.imgc) != null) {
+                        // #region agent log
+                        try {
+                            FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3158\",\"message\":\"Found cave path\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"foundPath\":\"" + path + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                            fw.close();
+                        } catch(IOException e) {}
+                        // #endregion
+                        return path;
+                    }
+                } catch (Exception e) {
+                    // #region agent log
+                    try {
+                        FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                        fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3162\",\"message\":\"Failed to load cave path\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"path\":\"" + path + "\",\"error\":\"" + e.getMessage() + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                        fw.close();
+                    } catch(IOException e2) {}
+                    // #endregion
+                    continue;
+                }
+            }
+            
+            // #region agent log
+            try {
+                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3166\",\"message\":\"No cave path found\",\"data\":{\"resourceName\":\"" + resourceName + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                fw.close();
+            } catch(IOException e) {}
+            // #endregion
+        }
+        
+        // Если не найдено в VSpec и нет специальной обработки, возвращаем null
+        // В оригинальном клиенте просто используется путь из маркера без исправлений
+        
+        // #region agent log
+        if(resourceName != null && (resourceName.toLowerCase().contains("cave") || resourceName.toLowerCase().contains("passage"))) {
+            try {
+                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3325\",\"message\":\"Method exit\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"currentResourcePath\":\"" + currentResourcePath + "\",\"result\":\"null\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+                fw.close();
+            } catch(IOException e) {}
+        }
+        // #endregion
+        
+        return null;
+    }
+    
+    /**
      * Получает правильный путь к ресурсу из VSpec по названию (как в Icon Settings)
      * Ищет в категориях Ore и Stones
+     * Использует частичное совпадение для проспектинга
      */
     private String getCorrectResourcePathForProspecting(String resourceName, String currentResourcePath) {
         if (resourceName == null || resourceName.trim().isEmpty()) {

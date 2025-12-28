@@ -182,7 +182,9 @@ public class NConfig
         masterminerprop,
         masterminermarkingconfig,
         equipProxySlots,
-        diabloLikeRun
+        diabloLikeRun,
+        treeResizeEnabled,
+        treeResizePercentage
     }
 
     public enum BBDisplayMode
@@ -468,6 +470,10 @@ public class NConfig
         // Tree scale overlay settings
         conf.put(Key.treeScaleDisableZoomHide, false);  // If true, always show full label (don't hide on zoom out)
         conf.put(Key.treeScaleMinThreshold, 0);  // Minimum growth % to display tree scale (0 = show all)
+        
+        // Tree resize settings (QOL Lanfir)
+        conf.put(Key.treeResizeEnabled, false);  // Enable/disable tree resizing
+        conf.put(Key.treeResizePercentage, 100);  // Tree resize percentage (0-200, default 100)
         
         // Tree harvest (leaf/seed/fruit) overlay settings
         conf.put(Key.treeHarvestOverlay, false);

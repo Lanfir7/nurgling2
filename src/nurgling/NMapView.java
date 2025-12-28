@@ -258,7 +258,12 @@ public class NMapView extends MapView
         // Создаем копию внутри synchronized блока, чтобы гарантировать атомарность
         ArrayList<Gob> dummysCopy;
         synchronized (dummys) {
-            dummysCopy = new ArrayList<>(dummys.values());
+            // Используем простой цикл для безопасного копирования, чтобы избежать race condition
+            // при изменении HashMap во время создания ArrayList из values()
+            dummysCopy = new ArrayList<>(dummys.size());
+            for (Gob dummy : dummys.values()) {
+                dummysCopy.add(dummy);
+            }
         }
         // Итерируемся по копии вне synchronized блока, чтобы не блокировать другие потоки
         for (Gob dummy : dummysCopy) {

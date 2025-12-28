@@ -15,10 +15,19 @@ import java.util.*;
 public class TreeScale extends GAttrib implements Gob.SetupMod {
     public final float scale;
     public final Location mod;
+    public float originalScale = 1.0f; // Original scale before resize modification
 
     public TreeScale(Gob gob, float scale) {
 	super(gob);
 	this.scale = scale;
+	this.originalScale = scale; // Default: same as scale
+	this.mod = Tree.mkscale(scale);
+    }
+
+    public TreeScale(Gob gob, float scale, float originalScale) {
+	super(gob);
+	this.scale = scale;
+	this.originalScale = originalScale;
 	this.mod = Tree.mkscale(scale);
     }
 

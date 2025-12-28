@@ -113,6 +113,23 @@ public class NEquipory extends Equipory
     }
 
     /**
+     * Converts a list of slot indices to an array of Slots enum values.
+     */
+    private static Slots[] convertIndicesToSlots(ArrayList<Integer> indices) {
+        ArrayList<Slots> slotsList = new ArrayList<>();
+        for (Integer idx : indices) {
+            // Find the Slots enum value with matching idx
+            for (Slots slot : Slots.values()) {
+                if (slot.idx == idx) {
+                    slotsList.add(slot);
+                    break;
+                }
+            }
+        }
+        return slotsList.toArray(new Slots[0]);
+    }
+
+    /**
      * Check if a slot index is currently in the quick access bar config
      */
     private static boolean isSlotInQuickBar(int slotIdx) {
@@ -136,7 +153,9 @@ public class NEquipory extends Equipory
 
         // Update the NEquipProxy widget if it exists
         if (NUtils.getGameUI() != null && NUtils.getGameUI().nep != null) {
-            NUtils.getGameUI().nep.setSlots(NGameUI.getEquipProxySlotsFromConfig());
+            ArrayList<Integer> slotIndices = getEquipProxySlotsFromConfig();
+            Slots[] slotsArray = convertIndicesToSlots(slotIndices);
+            NUtils.getGameUI().nep.setSlots(slotsArray);
         }
     }
 

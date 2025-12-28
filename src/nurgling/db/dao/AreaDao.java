@@ -165,7 +165,7 @@ public class AreaDao {
         List<AreaData> areas = new ArrayList<>();
 
         String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
-                    "FROM areas WHERE profile = ? ORDER BY id";
+                    "FROM areas WHERE profile = ? AND deleted = FALSE ORDER BY id";
 
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             while (rs.next()) {
@@ -194,7 +194,7 @@ public class AreaDao {
      */
     public AreaData loadArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
         String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
-                    "FROM areas WHERE id = ? AND profile = ?";
+                    "FROM areas WHERE id = ? AND profile = ? AND deleted = FALSE";
 
         try (ResultSet rs = adapter.executeQuery(sql, id, profile)) {
             if (rs.next()) {
@@ -218,10 +218,10 @@ public class AreaDao {
     }
 
     /**
-     * Delete an area
+     * Delete an area (soft delete - marks as deleted)
      */
     public void deleteArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
-        adapter.executeUpdate("DELETE FROM areas WHERE id = ? AND profile = ?", id, profile);
+        adapter.executeUpdate("UPDATE areas SET deleted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND profile = ?", id, profile);
     }
 
     /**
@@ -235,7 +235,7 @@ public class AreaDao {
      * Check if area exists
      */
     public boolean areaExists(DatabaseAdapter adapter, int id, String profile) throws SQLException {
-        try (ResultSet rs = adapter.executeQuery("SELECT 1 FROM areas WHERE id = ? AND profile = ?", id, profile)) {
+        try (ResultSet rs = adapter.executeQuery("SELECT 1 FROM areas WHERE id = ? AND profile = ? AND deleted = FALSE", id, profile)) {
             return rs.next();
         }
     }
@@ -244,7 +244,7 @@ public class AreaDao {
      * Get the maximum updated_at timestamp for a profile
      */
     public Timestamp getLastUpdateTime(DatabaseAdapter adapter, String profile) throws SQLException {
-        String sql = "SELECT MAX(updated_at) as last_update FROM areas WHERE profile = ?";
+        String sql = "SELECT MAX(updated_at) as last_update FROM areas WHERE profile = ? AND deleted = FALSE";
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             if (rs.next()) {
                 return rs.getTimestamp("last_update");
@@ -260,7 +260,7 @@ public class AreaDao {
         List<AreaData> areas = new ArrayList<>();
 
         String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
-                    "FROM areas WHERE profile = ? AND updated_at > ? ORDER BY id";
+                    "FROM areas WHERE profile = ? AND updated_at > ? AND deleted = FALSE ORDER BY id";
 
         try (ResultSet rs = adapter.executeQuery(sql, profile, after)) {
             while (rs.next()) {
@@ -288,7 +288,7 @@ public class AreaDao {
      * Get count of areas for a profile
      */
     public int getAreasCount(DatabaseAdapter adapter, String profile) throws SQLException {
-        String sql = "SELECT COUNT(*) as cnt FROM areas WHERE profile = ?";
+        String sql = "SELECT COUNT(*) as cnt FROM areas WHERE profile = ? AND deleted = FALSE";
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             if (rs.next()) {
                 return rs.getInt("cnt");
@@ -302,12 +302,52 @@ public class AreaDao {
      */
     public java.util.Map<Integer, Integer> getAllAreaVersions(DatabaseAdapter adapter, String profile) throws SQLException {
         java.util.Map<Integer, Integer> versions = new java.util.HashMap<>();
-        String sql = "SELECT id, version FROM areas WHERE profile = ?";
+        String sql = "SELECT id, version FROM areas WHERE profile = ? AND deleted = FALSE";
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             while (rs.next()) {
                 versions.put(rs.getInt("id"), rs.getInt("version"));
             }
         }
         return versions;
+    }
+
+    /**
+     * Soft delete an area (marks as deleted)
+     */
+    public void softDeleteArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
+        deleteArea(adapter, id, profile); // deleteArea already does soft delete
+    }
+
+    /**
+     * Update area timestamp (server timestamp)
+     */
+    public void updateAreaTimestamp(DatabaseAdapter adapter, int id, String profile, long timestamp) throws SQLException {
+        Timestamp ts = new Timestamp(timestamp);
+        adapter.executeUpdate("UPDATE areas SET updated_at = ? WHERE id = ? AND profile = ?", ts, id, profile);
+    }
+
+    /**
+     * Update last_sync_at for an area by UUID
+     */
+    public void updateLastSyncAt(DatabaseAdapter adapter, String uuid, long syncTime) throws SQLException {
+        Timestamp ts = new Timestamp(syncTime);
+        adapter.executeUpdate("UPDATE areas SET last_sync_at = ? WHERE global_id = ? AND deleted = FALSE", ts, uuid);
+    }
+
+    /**
+     * Load UUID mapping (global_id -> (areaId, last_sync_at)) for a profile
+     */
+    public java.util.Map<String, java.util.Map.Entry<Integer, Timestamp>> loadUuidMapping(DatabaseAdapter adapter, String profile) throws SQLException {
+        java.util.Map<String, java.util.Map.Entry<Integer, Timestamp>> mapping = new java.util.HashMap<>();
+        String sql = "SELECT id, global_id, last_sync_at FROM areas WHERE profile = ? AND global_id IS NOT NULL AND global_id != '' AND deleted = FALSE";
+        try (ResultSet rs = adapter.executeQuery(sql, profile)) {
+            while (rs.next()) {
+                String uuid = rs.getString("global_id");
+                Integer areaId = rs.getInt("id");
+                Timestamp lastSyncAt = rs.getTimestamp("last_sync_at");
+                mapping.put(uuid, new java.util.AbstractMap.SimpleEntry<>(areaId, lastSyncAt));
+            }
+        }
+        return mapping;
     }
 }
