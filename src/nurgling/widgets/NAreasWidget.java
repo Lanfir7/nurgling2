@@ -140,6 +140,17 @@ public class NAreasWidget extends Window
         }, exportbt.pos("ur").adds(UI.scale(10, 0)));
         exportDbBtn.settip("Export all areas to database for sharing");
 
+        // Import from Database JSON button
+        haven.Button importDbBtn;
+        add(importDbBtn = new haven.Button(UI.scale(80), "IMPORT") {
+            @Override
+            public void click() {
+                super.click();
+                importAreasFromJsonFile();
+            }
+        }, exportDbBtn.pos("ur").adds(UI.scale(10, 0)));
+        importDbBtn.settip("Import areas from server JSON file to database");
+
         TextEntry searchField;
         prev = add(searchField = new TextEntry(UI.scale(580), "") {
             @Override
@@ -1003,6 +1014,70 @@ public class NAreasWidget extends Window
             ((NMapView)NUtils.getGameUI().map).initDummys();
         }
         return super.show(show);
+    }
+
+    /**
+     * Import areas from server JSON file to database.
+     * Supports old server structure with uuid, zone_sync, last_update fields.
+     */
+    private void importAreasFromJsonFile() {
+        if (nurgling.NCore.databaseManager == null) {
+            NUtils.getGameUI().msg("Database is not connected");
+            return;
+        }
+
+        if (!nurgling.NCore.databaseManager.isReady()) {
+            NUtils.getGameUI().msg("Database is not ready");
+            return;
+        }
+
+        java.awt.EventQueue.invokeLater(() -> {
+            JFileChooser fc = new JFileChooser();
+            fc.setFileFilter(new FileNameExtensionFilter("JSON files", "json"));
+            if (fc.showOpenDialog(null) != JFileChooser.APPROVE_OPTION)
+                return;
+
+            java.io.File selectedFile = fc.getSelectedFile();
+            if (selectedFile == null)
+                return;
+
+            // Get current profile/genus
+            String profile = "global";
+            if (NUtils.getGameUI() != null) {
+                String genus = NUtils.getGameUI().getGenus();
+                if (genus != null && !genus.isEmpty()) {
+                    profile = genus;
+                }
+            }
+
+            final String finalProfile = profile;
+            final java.io.File finalFile = selectedFile;
+
+            // Import asynchronously
+            NUtils.getGameUI().msg("Importing areas from " + finalFile.getName() + "...");
+            
+            nurgling.NCore.databaseManager.getAreaService().importAreasFromServerJsonAsync(finalFile, finalProfile)
+                .thenAccept(result -> {
+                    NUtils.getGameUI().msg("Imported " + result.getImportedCount() + " areas, " + 
+                        result.getSkippedCount() + " skipped, " + result.getErrorCount() + " errors");
+                    // Reload areas from database
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+                        try {
+                            haven.MCache cache = NUtils.getGameUI().map.glob.map;
+                            if (cache != null) {
+                                cache.loadAreasIfNeeded();
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Failed to reload areas after import: " + e.getMessage());
+                        }
+                    }
+                })
+                .exceptionally(e -> {
+                    NUtils.getGameUI().error("Failed to import areas: " + e.getMessage());
+                    e.printStackTrace();
+                    return null;
+                });
+        });
     }
 
     /**

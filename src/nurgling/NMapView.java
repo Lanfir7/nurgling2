@@ -333,7 +333,7 @@ public class NMapView extends MapView
     public void createAreaLabel(Integer id) {
         NArea area = glob.map.areas.get(id);
         if (area == null) {
-            System.out.println("NMapView.createAreaLabel: Zone " + id + " not found in glob.map.areas");
+            //System.out.println("NMapView.createAreaLabel: Zone " + id + " not found in glob.map.areas");
             return; // Зона не найдена
         }
         
@@ -342,11 +342,11 @@ public class NMapView extends MapView
         // Проверка hide будет в методах поиска зон (findIn, findOut и т.д.)
         synchronized (nols) {
             if (!nols.containsKey(id)) {
-                System.out.println("NMapView.createAreaLabel: Adding zone " + id + " (" + area.name + ") to nols");
+                //System.out.println("NMapView.createAreaLabel: Adding zone " + id + " (" + area.name + ") to nols");
                 addCustomOverlay(id);
-                System.out.println("NMapView.createAreaLabel: Zone " + id + " added to nols, nols.size=" + nols.size() + ", contains=" + nols.containsKey(id));
+                //System.out.println("NMapView.createAreaLabel: Zone " + id + " added to nols, nols.size=" + nols.size() + ", contains=" + nols.containsKey(id));
             } else {
-                System.out.println("NMapView.createAreaLabel: Zone " + id + " (" + area.name + ") already in nols");
+                //System.out.println("NMapView.createAreaLabel: Zone " + id + " (" + area.name + ") already in nols");
             }
         }
         
