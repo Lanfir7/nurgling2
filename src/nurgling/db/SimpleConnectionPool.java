@@ -5,6 +5,8 @@ import nurgling.NConfig;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Properties;
+import java.util.TimeZone;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -46,7 +48,7 @@ public class SimpleConnectionPool {
         if (isPostgres) {
             // Increased timeouts: connectTimeout=10s, socketTimeout=60s for slow operations
             this.jdbcUrl = "jdbc:postgresql://" + NConfig.get(NConfig.Key.serverNode)
-                         + "/nurgling_db?connectTimeout=10&socketTimeout=60";
+                         + "/railway?sslmode=require&connectTimeout=10&socketTimeout=60";
             this.user = (String) NConfig.get(NConfig.Key.serverUser);
             this.password = (String) NConfig.get(NConfig.Key.serverPass);
         } else {
@@ -165,7 +167,20 @@ public class SimpleConnectionPool {
         try {
             Connection conn;
             if (isPostgres) {
-                conn = DriverManager.getConnection(jdbcUrl, user, password);
+                // Temporarily set system timezone to UTC to prevent JDBC driver
+                // from sending system timezone (e.g., Europe/Kiev) which Railway doesn't support
+                TimeZone originalTz = TimeZone.getDefault();
+                TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+                try {
+                    // Use Properties to pass credentials
+                    Properties props = new Properties();
+                    props.setProperty("user", user);
+                    props.setProperty("password", password);
+                    conn = DriverManager.getConnection(jdbcUrl, props);
+                } finally {
+                    // Restore original timezone
+                    TimeZone.setDefault(originalTz);
+                }
             } else {
                 conn = DriverManager.getConnection(jdbcUrl);
             }

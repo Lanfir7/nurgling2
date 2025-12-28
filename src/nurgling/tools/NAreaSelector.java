@@ -136,18 +136,6 @@ public class NAreaSelector implements Runnable
                             }
                             
                             area.inWork = false;
-                            
-                            // ВАЖНО: Сохраняем изменение координат в БД
-                            // Это нужно для синхронизации с сервером и для сохранения изменений
-                            try {
-                                // Обновляем lastUpdated перед сохранением, чтобы синхронизация увидела изменение
-                                area.lastUpdated = System.currentTimeMillis();
-                                nurgling.areas.db.AreaDBManager.getInstance().saveArea(area);
-                                System.out.println("NAreaSelector: Saved zone " + area.id + " (" + area.name + ") with new coordinates to DB");
-                            } catch (Exception e) {
-                                System.err.println("NAreaSelector: Failed to save area coordinates to database: " + e.getMessage());
-                                e.printStackTrace();
-                            }
                         }
                         NConfig.needAreasUpdate();
                         ((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph().connectAreaToRoutePoints(area);
