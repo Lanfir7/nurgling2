@@ -852,6 +852,7 @@ public class NMapView extends MapView
             NArea newArea = new NArea(key);
             newArea.id = id;
             newArea.space = result;
+            newArea.lastLocalChange = System.currentTimeMillis();
             newArea.grids_id.addAll(newArea.space.space.keySet());
             newArea.path = NUtils.getGameUI().areas.currentPath;
             
@@ -878,6 +879,7 @@ public class NMapView extends MapView
     public String addRoute()
     {
         String key;
+        Route newRoute;
         synchronized (((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes())
         {
             HashSet<String> names = new HashSet<String>();
@@ -895,18 +897,21 @@ public class NMapView extends MapView
             {
                 key = key+"(1)";
             }
-            Route newRoute = new Route(key);
+            newRoute = new Route(key);
             newRoute.id = id;
             newRoute.path = NUtils.getGameUI().routesWidget.currentPath;
             ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().put(id, newRoute);
             createRouteLabel(id);
         }
+        // Save to database if DB mode is enabled
+        routeGraphManager.saveRouteToDatabase(newRoute);
         return key;
     }
 
     public String addHearthFireRoute()
     {
         String key;
+        Route newRoute;
         synchronized (((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes())
         {
             HashSet<String> names = new HashSet<String>();
@@ -924,13 +929,15 @@ public class NMapView extends MapView
             {
                 key = key+"(1)";
             }
-            Route newRoute = new Route(key);
+            newRoute = new Route(key);
             newRoute.id = id;
             newRoute.path = NUtils.getGameUI().routesWidget.currentPath;
             newRoute.spec.add(new Route.RouteSpecialization("HearthFires"));
             ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().put(id, newRoute);
             createRouteLabel(id);
         }
+        // Save to database if DB mode is enabled
+        routeGraphManager.saveRouteToDatabase(newRoute);
         return key;
     }
 
@@ -1728,35 +1735,27 @@ public class NMapView extends MapView
             if(area.name.equals(name))
             {
                 area.inWork = true;
-                
-                // Удаляем зону из БД
-                try {
-                    nurgling.areas.db.AreaDBManager.getInstance().deleteArea(area.id);
-                } catch (Exception e) {
-                    System.err.println("Failed to delete area from database: " + e.getMessage());
-                }
-                
-                // ВАЖНО: Сохраняем данные зоны перед удалением из памяти
-                final long areaGid = area.gid;
                 final int areaId = area.id;
-                
-                // Удаляем из памяти
-                glob.map.areas.remove(area.id);
-                
-                // Удаляем dummy (используем сохраненные данные)
-                if(areaGid != Long.MIN_VALUE) {
-                    Gob dummy = dummys.get(areaGid);
-                    if(dummy != null) {
-                        glob.oc.remove(dummy);
-                        dummys.remove(areaGid);
-                    }
+                glob.map.areas.remove(areaId);
+                Gob dummy = dummys.get(area.gid);
+                if(dummy != null) {
+                    glob.oc.remove(dummy);
+                    dummys.remove(area.gid);
                 }
-                
-                // Удаляем из виджета зон (он удалит overlay)
                 NUtils.getGameUI().areas.removeArea(areaId);
 
-                // Удаляем из route graph
-                routeGraphManager.getGraph().deleteAreaFromRoutePoints(area.id);
+                routeGraphManager.getGraph().deleteAreaFromRoutePoints(areaId);
+
+                // Delete from database if enabled
+                if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
+                    nurgling.NCore.databaseManager != null && 
+                    nurgling.NCore.databaseManager.isReady()) {
+                    String profile = NUtils.getGameUI().getGenus();
+                    if (profile == null || profile.isEmpty()) {
+                        profile = "global";
+                    }
+                    nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(areaId, profile);
+                }
 
                 break;
             }
@@ -1769,6 +1768,7 @@ public class NMapView extends MapView
             if(area.name.equals(name) && area.path.equals(path))
             {
                 area.hide = val;
+                area.lastLocalChange = System.currentTimeMillis();
                 NConfig.needAreasUpdate();
                 return;
             }
@@ -1813,28 +1813,18 @@ public class NMapView extends MapView
     public void changeAreaName(Integer id, String new_name)
     {
         NArea area = glob.map.areas.get(id);
-        if (area == null) {
-            System.err.println("NMapView: Cannot change name for zone " + id + " - zone not found in glob.map.areas");
-            return;
-        }
-        
         area.name = new_name;
-        
-        // ВАЖНО: Сохраняем изменение в БД
-        try {
-            nurgling.areas.db.AreaDBManager.getInstance().saveArea(area);
-        } catch (Exception e) {
-            System.err.println("NMapView: Failed to save area name change to database: " + e.getMessage());
-            e.printStackTrace();
-        }
-        
+        area.lastLocalChange = System.currentTimeMillis();
         NConfig.needAreasUpdate();
     }
 
     public void changeRouteName(Integer id, String new_name)
     {
-        ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().get(id).name = new_name;
+        Route route = ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().get(id);
+        route.name = new_name;
         NConfig.needRoutesUpdate();
+        // Save to database if DB mode is enabled
+        routeGraphManager.saveRouteToDatabase(route);
     }
 
     void getGob(Coord c) {

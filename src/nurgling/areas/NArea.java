@@ -17,12 +17,6 @@ public class NArea
     public long gid = Long.MIN_VALUE;
     public String path = "";
     public boolean hide = false;
-    
-    // Поля для синхронизации с сервером
-    public String uuid = null; // UUID зоны для синхронизации (генерируется при первом сохранении)
-    public String zoneSync = null; // Идентификатор мира/сервера для разделения зон
-    public long lastUpdated = 0; // Timestamp последнего обновления (в миллисекундах)
-    public boolean synced = false; // Флаг синхронизации с сервером
 
 
 
@@ -260,6 +254,26 @@ public class NArea
         return new Color(r, g, b, a);
     }
 
+    /**
+     * Update this area's fields from another area (for sync without replacing object reference)
+     */
+    public void updateFrom(NArea other) {
+        this.name = other.name;
+        this.path = other.path;
+        this.hide = other.hide;
+        this.color = other.color;
+        this.space = other.space;
+        this.version = other.version;
+        this.grids_id.clear();
+        this.grids_id.addAll(other.grids_id);
+        this.jin = other.jin;
+        this.jout = other.jout;
+        this.jspec = other.jspec;
+        this.spec.clear();
+        this.spec.addAll(other.spec);
+        // Don't copy lastLocalChange - keep our own timestamp
+    }
+
     public NArea(JSONObject obj)
     {
         this.name = (String) obj.get("name");
@@ -314,38 +328,16 @@ public class NArea
                 }
             }
         }
-        
-        // Загружаем поля синхронизации (если есть)
-        if(obj.has("uuid")) {
-            this.uuid = obj.getString("uuid");
-        }
-        if(obj.has("zone_sync")) {
-            this.zoneSync = obj.getString("zone_sync");
-        }
-        if(obj.has("last_updated")) {
-            try {
-                // Может быть ISO8601 строка или timestamp в миллисекундах
-                Object lastUpdatedObj = obj.get("last_updated");
-                if (lastUpdatedObj instanceof String) {
-                    // ISO8601 формат: "2025-01-01T12:00:00Z"
-                    String isoStr = (String) lastUpdatedObj;
-                    // Простой парсинг ISO8601 (можно улучшить)
-                    java.time.Instant instant = java.time.Instant.parse(isoStr);
-                    this.lastUpdated = instant.toEpochMilli();
-                } else if (lastUpdatedObj instanceof Long) {
-                    this.lastUpdated = (Long) lastUpdatedObj;
-                } else if (lastUpdatedObj instanceof Integer) {
-                    this.lastUpdated = ((Integer) lastUpdatedObj).longValue();
-                }
-            } catch (Exception e) {
-                // Игнорируем ошибки парсинга
-                this.lastUpdated = System.currentTimeMillis();
-            }
+        if(obj.has("version"))
+        {
+            this.version = obj.getInt("version");
         }
     }
     public Space space;
     public String name;
     public int id;
+    public int version = 1;  // Version for sync - incremented on each update
+    public long lastLocalChange = 0;  // Timestamp of last local change (to prevent sync overwrite)
     public Color color = new Color(194,194,65,56);
     public final ArrayList<Long> grids_id = new ArrayList<>();
 
@@ -540,21 +532,8 @@ public class NArea
             jspec.put(obj);
         }
         res.put("spec",jspec);
+        res.put("version", version);
         this.jspec = jspec;
-        
-        // Добавляем поля синхронизации (если они установлены)
-        if (uuid != null) {
-            res.put("uuid", uuid);
-        }
-        if (zoneSync != null) {
-            res.put("zone_sync", zoneSync);
-        }
-        if (lastUpdated > 0) {
-            // Сохраняем как ISO8601 строку для совместимости с сервером
-            java.time.Instant instant = java.time.Instant.ofEpochMilli(lastUpdated);
-            res.put("last_updated", instant.toString());
-        }
-        
         return res;
     }
     

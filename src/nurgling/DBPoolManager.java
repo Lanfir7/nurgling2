@@ -12,65 +12,21 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Each database task should borrow a connection, use it, and return it.
  */
 public class DBPoolManager {
-    private final ThreadPoolExecutor executorService;
-    private final BlockingQueue<Runnable> taskQueue;
+    private final ExecutorService executorService;
     private SimpleConnectionPool connectionPool;
     private volatile boolean initialized = false;
 
-    // Ограничение очереди задач
-    private static final int MAX_QUEUE_SIZE = 50;
-    
     // Pool sizes: PostgreSQL can handle multiple concurrent connections,
     // SQLite should use 1 (doesn't support concurrent writes)
     private static final int POSTGRES_POOL_SIZE = 5;
     private static final int SQLITE_POOL_SIZE = 1;
 
-    public DBPoolManager(int poolSize) {
-        // Создаем очередь с ограничением размера
-        this.taskQueue = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
-        
-        // Создаем ThreadPoolExecutor с кастомным RejectedExecutionHandler
-        // который отменяет старые задачи записи при переполнении очереди
-        this.executorService = new ThreadPoolExecutor(
-            poolSize, poolSize,
-            0L, TimeUnit.MILLISECONDS,
-            taskQueue,
-            new ThreadFactory() {
-                private final AtomicInteger threadNumber = new AtomicInteger(1);
-                @Override
-                public Thread newThread(Runnable r) {
-                    Thread t = new Thread(r, "DBPoolManager-thread-" + threadNumber.getAndIncrement());
-                    t.setDaemon(true);
-                    return t;
-                }
-            },
-            new RejectedExecutionHandler() {
-                @Override
-                public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
-                    // Определяем тип задачи по строковому представлению
-                    String taskStr = r.toString();
-                    boolean isReadTask = taskStr.contains("RecipeHashFetcher");
-                    
-                    // При переполнении очереди пытаемся удалить старые задачи записи
-                    // чтобы освободить место для задач чтения
-                    if (isReadTask) {
-                        // Для задач чтения удаляем задачи записи из очереди
-                        for (int i = 0; i < 5 && !taskQueue.isEmpty(); i++) {
-                            taskQueue.poll();
-                        }
-                        // Пробуем добавить задачу чтения
-                        try {
-                            executor.execute(r);
-                        } catch (RejectedExecutionException e) {
-                            // Ignore
-                        }
-                    }
-                    // Для задач записи просто пропускаем
-                }
-            }
-        );
-        
-        // Initialize connection pool
+    public DBPoolManager(int threadPoolSize) {
+        this.executorService = Executors.newFixedThreadPool(threadPoolSize, r -> {
+            Thread t = new Thread(r, "DBPool-Worker");
+            t.setDaemon(true);  // Daemon thread won't prevent JVM shutdown
+            return t;
+        });
         initializePool();
     }
 
@@ -162,14 +118,6 @@ public class DBPoolManager {
      * Submit a task for execution.
      */
     public Future<?> submitTask(Runnable task) {
-        String taskName = task.getClass().getSimpleName();
-        int queueSize = taskQueue.size();
-        
-        // Если очередь почти полна и это задача записи, пропускаем её
-        if (queueSize >= MAX_QUEUE_SIZE - 5 && taskName.contains("NGItemWriter")) {
-            return null;
-        }
-        
         return executorService.submit(() -> {
             try {
                 task.run();
@@ -178,8 +126,6 @@ public class DBPoolManager {
                 if (!Thread.currentThread().isInterrupted()) {
                     e.printStackTrace();
                 }
-            } finally {
-                // Освобождаем ресурсы, если необходимо
             }
         });
     }

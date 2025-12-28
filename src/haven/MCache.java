@@ -111,7 +111,7 @@ public class MCache implements MapSource {
         return null;
     }
 
-	private boolean areasLoaded = false;
+	public boolean areasLoaded = false;
 
 	void init()
 	{
@@ -121,47 +121,56 @@ public class MCache implements MapSource {
 	public void loadAreasIfNeeded() {
 		if (areasLoaded) return;
 
-		// Используем AreaDBManager для загрузки зон (БД или JSON fallback)
-		try {
-			nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-			
-			// Пробуем загрузить из БД/JSON
-			Map<Integer, NArea> loadedAreas = areaManager.loadAllAreas();
-			
-			if (loadedAreas.isEmpty()) {
-				// Если зон нет, пробуем мигрировать из JSON в БД
-				areaManager.migrateFromJSON();
-				loadedAreas = areaManager.loadAllAreas();
-			}
-			
-			// Загружаем зоны в карту
-			for (Map.Entry<Integer, NArea> entry : loadedAreas.entrySet()) {
-				areas.put(entry.getKey(), entry.getValue());
-			}
-			
-			// Инициализируем синхронизацию с сервером (если включена в настройках)
-			try {
-				boolean syncEnabled = (Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.syncServerEnabled);
-				if (syncEnabled) {
-					String serverUrl = (String) nurgling.NConfig.get(nurgling.NConfig.Key.syncServerUrl);
-					String zoneSync = (String) nurgling.NConfig.get(nurgling.NConfig.Key.syncZoneSync);
-					if (serverUrl != null && !serverUrl.isEmpty() && 
-					    zoneSync != null && !zoneSync.isEmpty()) {
-						areaManager.initializeSync(serverUrl, zoneSync);
-						System.out.println("MCache: Zone synchronization initialized: " + serverUrl + ", zone_sync: " + zoneSync);
+		// If DB is enabled - ONLY use DB, no fallback to file
+		if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable)) {
+			if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+				try {
+					String profile = getCurrentGenus();
+					if (profile == null || profile.isEmpty()) {
+						profile = "global";
 					}
+					java.util.Map<Integer, NArea> dbAreas = nurgling.NCore.databaseManager.getAreaService().loadAreas(profile);
+					if (dbAreas != null) {
+						areas.putAll(dbAreas);
+						System.out.println("Loaded " + dbAreas.size() + " areas from database");
+					}
+				} catch (Exception e) {
+					System.err.println("Failed to load areas from database: " + e.getMessage());
 				}
-			} catch (Exception syncEx) {
-				System.err.println("MCache: Failed to initialize zone synchronization: " + syncEx.getMessage());
 			}
-		} catch (Exception e) {
-			// ВАЖНО: БД должна быть основным источником, JSON только для миграции
-			// НЕ загружаем из JSON автоматически, чтобы избежать конфликтов с БД
-			System.err.println("CRITICAL: Failed to load areas from AreaDBManager: " + e.getMessage());
-			System.err.println("Areas will not be loaded. Please check database connection.");
-			e.printStackTrace();
-			// Зоны не будут загружены, если БД недоступна
-			// Это предотвращает использование устаревших данных из JSON
+			// DB enabled - mark as loaded even if DB not ready (sync will handle it later)
+			areasLoaded = true;
+			return;
+		}
+
+		// DB not enabled - load from file (legacy support)
+		String areasPath = getAreasPath();
+
+		if(new File(areasPath).exists())
+		{
+			StringBuilder contentBuilder = new StringBuilder();
+			try (Stream<String> stream = Files.lines(Paths.get(areasPath), StandardCharsets.UTF_8))
+			{
+				stream.forEach(s -> contentBuilder.append(s).append("\n"));
+			}
+			catch (IOException ignore)
+			{
+			}
+
+			if (!contentBuilder.toString().isEmpty())
+			{
+				try {
+					JSONObject main = new JSONObject(contentBuilder.toString());
+					JSONArray array = (JSONArray) main.get("areas");
+					for (int i = 0; i < array.length(); i++) {
+						NArea a = new NArea((JSONObject) array.get(i));
+						areas.put(a.id, a);
+					}
+					System.out.println("Loaded " + areas.size() + " areas from file");
+				} catch (org.json.JSONException e) {
+					// Ignore invalid JSON files
+				}
+			}
 		}
 		areasLoaded = true;
 	}

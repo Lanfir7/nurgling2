@@ -17,8 +17,6 @@ import nurgling.cookbook.Recipe;
 import nurgling.cookbook.connection.RecipeHashFetcher;
 import nurgling.cookbook.connection.RecipeLoader;
 
-import nurgling.DBPoolManager;
-
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
@@ -49,13 +47,7 @@ public class NCookBook extends Window {
 
     private TextEntry searchF;
     RecipeHashFetcher rhf = null;
-    private java.util.concurrent.Future<?> rhfFuture = null;
     private FavoriteRecipeManager favoriteManager = null;
-    private boolean recipesLoaded = false; // Флаг, что рецепты уже загружены
-    private int lastRecipeCount = 0; // Количество рецептов при последней загрузке
-    private long lastLoadTime = 0; // Время последней загрузки
-    private static final long MIN_RELOAD_INTERVAL_MS = 1000; // Минимальный интервал между перезагрузками (1 секунда)
-    private static final long AUTO_RELOAD_INTERVAL_MS = 3000; // Автоматическое обновление каждые 3 секунды при открытии
 
     private ICheckBox onetwo; // Добавляем поле для хранения кнопки onetwo
     private ICheckBox[] statButtons; // Массив для хранения кнопок статов
@@ -93,11 +85,11 @@ public class NCookBook extends Window {
                 boolean res = super.keydown(e);
                 if(e.code==10)
                 {
-                    if (ui.core.poolManager == null || !ui.core.poolManager.isConnectionReady()) {
+                    if (ui.core.databaseManager == null || !ui.core.databaseManager.isReady()) {
                         return res; // Database not ready
                     }
-                    rhf = new RecipeHashFetcher(ui.core.poolManager, searchF.text());
-                    ui.core.poolManager.submitTask(rhf);
+                    rhf = new RecipeHashFetcher(ui.core.databaseManager, searchF.text());
+                    ui.core.databaseManager.submitTask(rhf);
                     disable();
                 }
                 return res;
@@ -429,157 +421,26 @@ public class NCookBook extends Window {
     public void tick(double dt) {
         super.tick(dt);
         if (rhf != null && rhf.ready.get()) {
-            System.out.println("NCookBook.tick: Processing RecipeHashFetcher results");
             allRecipes = rhf.getRecipes();
-            lastRecipeCount = allRecipes.size();
-            lastLoadTime = System.currentTimeMillis();
-            recipesLoaded = true; // Помечаем, что рецепты загружены
-            // Очищаем Future и rhf только после использования результатов
-            rhfFuture = null;
             rhf = null;
             sortRecipes(currentSortType, currentSortDesc);
-            // Сбрасываем список, чтобы он обновился с новыми данными
             if (rl != null) {
                 rl.reset();
             }
             enable();
-            System.out.println("NCookBook.tick: Recipes processed (" + lastRecipeCount + " recipes), cookbook enabled");
         }
-    }
-    
-    /**
-     * Проверяет, нужно ли обновить данные рецептов
-     * @return true если нужно обновить данные
-     */
-    private boolean shouldReloadRecipes() {
-        if (!recipesLoaded) {
-            System.out.println("NCookBook.shouldReloadRecipes: Recipes not loaded yet, need to load");
-            return true; // Если еще не загружены, нужно загрузить
-        }
-        
-        long currentTime = System.currentTimeMillis();
-        long timeSinceLastLoad = currentTime - lastLoadTime;
-        
-        // Проверяем минимальный интервал между перезагрузками
-        if (timeSinceLastLoad < MIN_RELOAD_INTERVAL_MS) {
-            System.out.println("NCookBook.shouldReloadRecipes: Too soon since last load (" + timeSinceLastLoad + "ms < " + MIN_RELOAD_INTERVAL_MS + "ms)");
-            return false; // Слишком рано для перезагрузки
-        }
-        
-        // Автоматическое обновление каждые 3 секунды при открытии кукбука
-        // Это гарантирует, что новые рецепты появятся даже если проверка количества не сработает
-        if (timeSinceLastLoad >= AUTO_RELOAD_INTERVAL_MS) {
-            System.out.println("NCookBook.shouldReloadRecipes: Auto-reload interval reached (" + timeSinceLastLoad + "ms >= " + AUTO_RELOAD_INTERVAL_MS + "ms), forcing reload");
-            return true; // Автоматическое обновление
-        }
-        
-        // Если прошло от 1 до 3 секунд, проверяем количество рецептов в БД
-        try {
-            java.sql.Connection conn = ui.core.poolManager.getConnection();
-            if (conn == null || conn.isClosed()) {
-                System.out.println("NCookBook.shouldReloadRecipes: Connection is null or closed");
-                return false; // Не можем проверить, не обновляем
-            }
-            
-            // Проверяем количество рецептов
-            try (java.sql.Statement stmt = conn.createStatement();
-                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as count FROM recipes")) {
-                if (rs.next()) {
-                    int currentCount = rs.getInt("count");
-                    System.out.println("NCookBook.shouldReloadRecipes: Current count in DB: " + currentCount + ", last loaded: " + lastRecipeCount);
-                    if (currentCount != lastRecipeCount) {
-                        System.out.println("NCookBook.shouldReloadRecipes: Recipe count changed from " + lastRecipeCount + " to " + currentCount + ", need to reload");
-                        return true; // Количество изменилось, нужно обновить
-                    } else {
-                        System.out.println("NCookBook.shouldReloadRecipes: Recipe count unchanged (" + currentCount + "), no reload needed");
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("NCookBook.shouldReloadRecipes: Error checking recipe count: " + e.getMessage());
-            e.printStackTrace();
-            // При ошибке не обновляем, чтобы не создавать лишние задачи
-        }
-        
-        return false; // Количество не изменилось, обновление не нужно
     }
 
     @Override
     public boolean show(boolean show) {
-        if (show && (Boolean) NConfig.get(NConfig.Key.ndbenable) && ui.core.poolManager!=null && ui.core.poolManager.isConnectionReady()) {
-            try {
-                System.out.println("NCookBook.show: Opening cookbook (recipesLoaded=" + recipesLoaded + ", lastRecipeCount=" + lastRecipeCount + ")");
-                
-                // Проверяем, нужно ли обновить данные
-                boolean needReload = shouldReloadRecipes();
-                
-                // Если рецепты уже загружены, нет активной задачи и обновление не требуется, просто показываем окно
-                if (recipesLoaded && !needReload && (rhfFuture == null || rhfFuture.isDone()) && (rhf == null || rhf.ready.get())) {
-                    System.out.println("NCookBook.show: Recipes already loaded and up-to-date, showing cookbook");
-                    return super.show(show);
-                }
-                
-                // Если нужно обновить данные, сбрасываем флаг загрузки
-                if (needReload) {
-                    System.out.println("NCookBook.show: Recipe count changed or first load, reloading recipes");
-                    recipesLoaded = false;
-                    // Также сбрасываем счетчик, чтобы следующая проверка была корректной
-                    lastRecipeCount = 0;
-                }
-                
-                // Проверяем, не выполняется ли уже задача
-                if (rhfFuture != null && !rhfFuture.isDone()) {
-                    System.out.println("NCookBook.show: RecipeHashFetcher task already running, waiting for completion");
-                    // Не создаем новую задачу, ждем завершения текущей
-                    return super.show(show);
-                }
-                
-                // Если предыдущая задача уже завершилась, обрабатываем результаты
-                if (rhf != null && rhf.ready.get()) {
-                    System.out.println("NCookBook.show: Previous RecipeHashFetcher already completed, processing results");
-                    // Обрабатываем результаты сразу
-                    allRecipes = rhf.getRecipes();
-                    lastRecipeCount = allRecipes.size();
-                    lastLoadTime = System.currentTimeMillis();
-                    recipesLoaded = true;
-                    rhfFuture = null;
-                    rhf = null;
-                    sortRecipes(currentSortType, currentSortDesc);
-                    // Сбрасываем список, чтобы он обновился с новыми данными
-                    if (rl != null) {
-                        rl.reset();
-                    }
-                    enable();
-                    return super.show(show);
-                }
-                
-                // Создаем новую задачу только если рецепты еще не загружены
-                if (!recipesLoaded) {
-                    System.out.println("NCookBook.show: Creating new RecipeHashFetcher task");
-                    
-                    if (favoriteManager == null) {
-                        favoriteManager = new FavoriteRecipeManager(ui.core.poolManager);
-                    }
-                    rhf = new RecipeHashFetcher(ui.core.poolManager,
-                            RecipeHashFetcher.genFep(currentSortType, currentSortDesc));
-                    rhfFuture = ui.core.poolManager.submitTask(rhf);
-                    if (rhfFuture == null) {
-                        System.err.println("NCookBook.show: Failed to submit RecipeHashFetcher task (queue full?)");
-                        return super.show(show);
-                    }
-                    System.out.println("NCookBook.show: RecipeHashFetcher task submitted successfully");
-                    disable();
-                } else {
-                    System.out.println("NCookBook.show: Recipes already loaded, skipping task creation");
-                }
-            } catch (Exception e) {
-                System.err.println("NCookBook.show: Exception: " + e.getMessage());
-                e.printStackTrace();
+        if (show && (Boolean) NConfig.get(NConfig.Key.ndbenable) && ui.core.databaseManager!=null && ui.core.databaseManager.isReady()) {
+            if (favoriteManager == null) {
+                favoriteManager = new FavoriteRecipeManager(ui.core.databaseManager);
             }
-
-        } else if (!show) {
-            // При закрытии окна не сбрасываем флаг загрузки
-            System.out.println("NCookBook.show: Closing cookbook");
+            rhf = new RecipeHashFetcher(ui.core.databaseManager,
+                    RecipeHashFetcher.genFep(currentSortType, currentSortDesc));
+            ui.core.databaseManager.submitTask(rhf);
+            disable();
         }
         return super.show(show);
     }

@@ -32,7 +32,7 @@ public class NCore extends Widget
     public AutoSaveTableware autoSaveTableware = null;
     public ScenarioManager scenarioManager = new ScenarioManager();
 
-    public DBPoolManager poolManager = null;
+    public static volatile nurgling.db.DatabaseManager databaseManager = null;
     public boolean isInspectMode()
     {
         if(debug)
@@ -154,10 +154,6 @@ public class NCore extends Widget
     private static final long RECIPE_SAVE_THROTTLE_MS = 1000; // Не сохраняем один и тот же рецепт чаще чем раз в секунду
     private long lastRecipeSaveTime = 0;
     private static final long RECIPE_SAVE_INTERVAL_MS = 500; // Минимальный интервал между сохранениями разных рецептов
-    
-    // Периодическая синхронизация зон с сервером
-    private long lastZoneSyncTime = 0;
-    private static final long ZONE_SYNC_CHECK_INTERVAL_MS = 5000; // Проверяем каждые 5 секунд, нужно ли синхронизировать
 
     public BotmodSettings getBotMod()
     {
@@ -189,20 +185,32 @@ public class NCore extends Widget
         }
     }
 
+    private static final Object dbLock = new Object();
+
     @Override
     public void tick(double dt)
     {
-        if((Boolean) NConfig.get(NConfig.Key.ndbenable) && poolManager == null)
+        if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager == null)
         {
-            // Увеличиваем размер пула до 3, чтобы чтение и запись могли выполняться параллельно
-            // и не блокировать друг друга при большом количестве задач
-            poolManager = new DBPoolManager(3);
+            synchronized (dbLock) {
+                if (databaseManager == null) {  // Double-check inside lock
+                    databaseManager = new nurgling.db.DatabaseManager(1);
+                    // Start area and route sync after database is initialized
+                    startAreaSync();
+                    startRouteSync();
+                }
+            }
         }
 
-        if(!(Boolean) NConfig.get(NConfig.Key.ndbenable) && poolManager != null)
+        if(!(Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager != null)
         {
-            poolManager.shutdown();
-            poolManager = null;
+            synchronized (dbLock) {
+                if (databaseManager != null) {
+                    stopAreaSync();
+                    databaseManager.shutdown();
+                    databaseManager = null;
+                }
+            }
         }
 
         if(autoDrink == null && (Boolean)NConfig.get(NConfig.Key.autoDrink))
@@ -260,20 +268,6 @@ public class NCore extends Widget
         if (config.isAreasUpdated())
         {
             config.writeAreas(null);
-            
-            // Синхронизируем зоны с сервером после сохранения (если включено)
-            try {
-                nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-                if (areaManager.isSyncEnabled() && NUtils.getGameUI() != null && 
-                    NUtils.getGameUI().map != null && NUtils.getGameUI().map.glob != null &&
-                    NUtils.getGameUI().map.glob.map != null) {
-                    Collection<NArea> areas = ((nurgling.NMapView)NUtils.getGameUI().map).glob.map.areas.values();
-                    areaManager.syncAllAreas(areas);
-                }
-            } catch (Exception e) {
-                // Игнорируем ошибки синхронизации, чтобы не прерывать сохранение
-                System.err.println("NCore: Failed to sync areas: " + e.getMessage());
-            }
         }
         if (config.isExploredUpdated())
         {
@@ -311,36 +305,6 @@ public class NCore extends Widget
             for_remove.clear();
         }
         mappingClient.tick(dt);
-        
-        // Периодическая синхронизация зон с сервером
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastZoneSyncTime > ZONE_SYNC_CHECK_INTERVAL_MS) {
-            try {
-                boolean syncEnabled = (Boolean) NConfig.get(NConfig.Key.syncServerEnabled);
-                if (syncEnabled) {
-                    nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
-                    if (areaManager.isSyncEnabled() && NUtils.getGameUI() != null && 
-                        NUtils.getGameUI().map != null && NUtils.getGameUI().map.glob != null &&
-                        NUtils.getGameUI().map.glob.map != null) {
-                        
-                        // Проверяем, прошло ли достаточно времени с последней синхронизации
-                        // Интервал проверяется внутри AreaSyncManager.syncAll()
-                        nurgling.areas.db.AreaSyncManager syncManager = nurgling.areas.db.AreaSyncManager.getInstance();
-                        if (syncManager.isEnabled()) {
-                            Collection<NArea> areas = ((nurgling.NMapView)NUtils.getGameUI().map).glob.map.areas.values();
-                            areaManager.syncAllAreas(areas);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Игнорируем ошибки синхронизации, чтобы не прерывать игру
-                // Логируем только первые несколько ошибок
-                if (currentTime - lastZoneSyncTime < 60000) { // Логируем не чаще раза в минуту
-                    System.err.println("NCore: Failed to sync zones: " + e.getMessage());
-                }
-            }
-            lastZoneSyncTime = currentTime;
-        }
     }
 
 
@@ -382,11 +346,8 @@ public class NCore extends Widget
     @Override
     public void dispose() {
         mappingClient.done.set(true);
-        if(poolManager!=null)
-        {
-            poolManager.shutdown();
-            poolManager = null;
-        }
+        // Don't shutdown databaseManager here - it's static and should persist across UI/session changes
+        // It will be shutdown only when the application exits or database is disabled
         super.dispose();
     }
 
@@ -404,210 +365,483 @@ public class NCore extends Widget
 
     public static class NGItemWriter implements Runnable {
         private final NGItem item;
-        private final DBPoolManager poolManager;
+        private final nurgling.db.DatabaseManager databaseManager;
 
-        public NGItemWriter(NGItem item, DBPoolManager poolManager) {
+        public NGItemWriter(NGItem item, nurgling.db.DatabaseManager databaseManager) {
             this.item = item;
-            this.poolManager = poolManager;
-        }
-
-        private String getInsertRecipeSQL() {
-            if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
-                return "INSERT INTO recipes (recipe_hash, item_name, resource_name, hunger, energy) VALUES (?, ?, ?, ?, ?) ON CONFLICT(recipe_hash) DO NOTHING";
-            } else { // SQLite
-                return "INSERT OR IGNORE INTO recipes (recipe_hash, item_name, resource_name, hunger, energy) VALUES (?, ?, ?, ?, ?)";
-            }
-        }
-
-        private String getInsertIngredientSQL() {
-            if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
-                return "INSERT INTO ingredients (recipe_hash, name, percentage, resource_name) VALUES (?, ?, ?, ?) ON CONFLICT(recipe_hash, name) DO NOTHING";
-            } else { // SQLite
-                return "INSERT OR IGNORE INTO ingredients (recipe_hash, name, percentage, resource_name) VALUES (?, ?, ?, ?)";
-            }
-        }
-
-        private String getInsertFepsSQL() {
-            if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
-                return "INSERT INTO feps (recipe_hash, name, value, weight) VALUES (?, ?, ?, ?) ON CONFLICT(recipe_hash, name) DO NOTHING";
-            } else { // SQLite
-                return "INSERT OR IGNORE INTO feps (recipe_hash, name, value, weight) VALUES (?, ?, ?, ?)";
-            }
+            this.databaseManager = databaseManager;
         }
 
         @Override
         public void run() {
-            if (!(Boolean) NConfig.get(NConfig.Key.postgres) && !(Boolean) NConfig.get(NConfig.Key.sqlite)) {
-                return;
-            }
-
-            java.sql.Connection conn = null;
             try {
-                conn = poolManager.getConnection();
-                if (conn == null) {
-                    return;
-                }
-
-                PreparedStatement recipeStatement = conn.prepareStatement(getInsertRecipeSQL());
-                PreparedStatement ingredientStatement = conn.prepareStatement(getInsertIngredientSQL());
-                PreparedStatement fepsStatement = conn.prepareStatement(getInsertFepsSQL());
-
+                // Extract food information
                 NFoodInfo fi = item.getInfo(NFoodInfo.class);
+                if (fi == null) {
+                    return; // Not a food item
+                }
+
+                // Calculate hunger value
                 String hunger = Utils.odformat2(2 * fi.glut / (1 + Math.sqrt(item.quality / 10)) * 1000, 2);
-                
-                // Get composite resource name from item sprite FIRST (needed for hash)
-                String resourceName = item.getres().name;
-                try {
-                    GSprite spr = item.spr;
-                    if (spr != null) {
-                        JSONObject saved = ItemTex.save(spr);
-                        if (saved != null) {
-                            if (saved.has("layer")) {
-                                JSONArray layers = saved.getJSONArray("layer");
-                                StringBuilder sb = new StringBuilder();
-                                for (int i = 0; i < layers.length(); i++) {
-                                    if (i > 0) sb.append("+");
-                                    sb.append(layers.getString(i));
-                                }
-                                resourceName = sb.toString();
-                            } else if (saved.has("static")) {
-                                resourceName = saved.getString("static");
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    // Fallback to base resource name
-                }
-                
-                // Build hash including composite resource name for unique identification
-                StringBuilder hashInput = new StringBuilder();
-                hashInput.append(item.name).append((int) (100 * fi.energy()));
-                hashInput.append(resourceName); // Include composite resource in hash
 
-                for (ItemInfo info : item.info) {
-                    if (info instanceof Ingredient) {
-                        Ingredient ing = ((Ingredient) info);
-                        // Use resName if available (for unique identification of meats, fish, etc.)
-                        // Fall back to name if resName is null
-                        if (ing.resName != null) {
-                            hashInput.append(ing.resName);
-                        } else {
-                            hashInput.append(ing.name);
-                        }
-                        if (ing.val != null) {
-                            hashInput.append(ing.val * 100);
-                        }
-                    }
-                }
+                // Get composite resource name from item sprite
+                String resourceName = getCompositeResourceName();
 
-                String recipeHash = NUtils.calculateSHA256(hashInput.toString());
+                // Build recipe hash
+                String recipeHash = buildRecipeHash(fi, resourceName);
 
-                recipeStatement.setString(1, recipeHash);
-                recipeStatement.setString(2, item.name());
-                recipeStatement.setString(3, resourceName);
-                recipeStatement.setDouble(4, Double.parseDouble(hunger));
-                recipeStatement.setInt(5, (int) (fi.energy() * 100));
+                // Extract ingredients (including smoking wood)
+                java.util.Map<String, nurgling.cookbook.Recipe.IngredientInfo> ingredients = extractIngredients();
 
-                int recipeInserted = recipeStatement.executeUpdate();
+                // Extract food effects (FEPs)
+                java.util.Map<String, nurgling.cookbook.Recipe.Fep> feps = extractFeps(fi);
 
-                for (ItemInfo info : item.info) {
-                    if (info instanceof Ingredient) {
-                        Ingredient ing = (Ingredient) info;
-                        ingredientStatement.setString(1, recipeHash);
-                        ingredientStatement.setString(2, ing.name);
-                        ingredientStatement.setDouble(3, ing.val != null ? ing.val * 100 : 0);
-                        ingredientStatement.setString(4, ing.resName); // Store composite resource name for layered sprites
-                        ingredientStatement.executeUpdate();
-                    }
-                }
+                // Create recipe object
+                nurgling.cookbook.Recipe recipe = new nurgling.cookbook.Recipe(
+                    recipeHash,
+                    item.name(),
+                    resourceName,
+                    Double.parseDouble(hunger),
+                    (int) (fi.energy() * 100),
+                    ingredients,
+                    feps
+                );
 
-                double multiplier = Math.sqrt(item.quality / 10.0);
-                for (FoodInfo.Event ef : fi.evs) {
-                    fepsStatement.setString(1, recipeHash);
-                    fepsStatement.setString(2, ef.ev.nm);
-                    fepsStatement.setDouble(3, Double.parseDouble(Utils.odformat2(ef.a / multiplier, 2)));
-                    fepsStatement.setDouble(4, Double.parseDouble(Utils.odformat2(ef.a / fi.fepSum, 2)));
-                    fepsStatement.executeUpdate();
-                }
+                // Save recipe using service (handles duplicates gracefully)
+                databaseManager.getRecipeService().saveRecipeAsync(recipe)
+                    .exceptionally(ex -> {
+                        System.err.println("Failed to save recipe: " + ex.getMessage());
+                        return null;
+                    });
 
-                // Фиксируем транзакцию
-                conn.commit();
-                if (recipeInserted > 0) {
-                    // После сохранения нового рецепта принудительно сбрасываем флаг загрузки в кукбуке
-                    // чтобы он обновился при следующем открытии
-                    try {
-                        // Получаем UI и находим кукбук
-                        if (NUtils.getGameUI() != null && NUtils.getGameUI().ui != null) {
-                            // Ищем открытый кукбук в UI и сбрасываем его флаг загрузки
-                            // Это будет сделано через проверку количества при следующем открытии
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки при попытке обновить кукбук
-                    }
-                }
-
-            } catch (SQLException e) {
-                System.err.println("NGItemWriter: SQLException saving recipe for " + item.name() + ": " + e.getMessage());
-                System.err.println("NGItemWriter: SQLState: " + e.getSQLState() + ", ErrorCode: " + e.getErrorCode());
+            } catch (Exception e) {
+                // Log error but don't crash - recipe import should be resilient
+                System.err.println("Failed to save recipe for item: " + item.name());
                 e.printStackTrace();
-                try {
-                    // В случае ошибки откатываем транзакцию
-                    if (conn != null) {
-                        conn.rollback();
-                    }
-                } catch (SQLException ex) {
-                    // ignore rollback error
-                }
+            }
+        }
 
-                // Ignore unique constraint violations
-                boolean isUniqueViolation = false;
-                if ((Boolean) NConfig.get(NConfig.Key.postgres)) {
-                    isUniqueViolation = e.getSQLState() != null && e.getSQLState().equals("23505");
-                } else if ((Boolean) NConfig.get(NConfig.Key.sqlite)) {
-                    isUniqueViolation = e.getMessage() != null && e.getMessage().contains("UNIQUE constraint");
+        private String getCompositeResourceName() {
+            String resourceName = item.getres().name;
+            try {
+                GSprite spr = item.spr;
+                if (spr != null) {
+                    JSONObject saved = ItemTex.save(spr);
+                    if (saved != null) {
+                        if (saved.has("layer")) {
+                            JSONArray layers = saved.getJSONArray("layer");
+                            StringBuilder sb = new StringBuilder();
+                            for (int i = 0; i < layers.length(); i++) {
+                                if (i > 0) sb.append("+");
+                                sb.append(layers.getString(i));
+                            }
+                            resourceName = sb.toString();
+                        } else if (saved.has("static")) {
+                            resourceName = saved.getString("static");
+                        }
+                    }
                 }
-                
-                if (!isUniqueViolation) {
-                    e.printStackTrace();
-                }
-            } finally {
-                if (conn != null) {
-                    poolManager.returnConnection(conn);
+            } catch (Exception e) {
+                // Fallback to base resource name
+            }
+            return resourceName;
+        }
+
+        private String buildRecipeHash(NFoodInfo fi, String resourceName) {
+            StringBuilder hashInput = new StringBuilder();
+            hashInput.append(item.name).append((int) (100 * fi.energy()));
+            hashInput.append(resourceName);
+
+            for (ItemInfo info : item.info) {
+                if (info instanceof Ingredient) {
+                    Ingredient ing = (Ingredient) info;
+                    // Use resName if available, otherwise fall back to name
+                    if (ing.resName != null) {
+                        hashInput.append(ing.resName);
+                    } else {
+                        hashInput.append(ing.name);
+                    }
+                    if (ing.val != null) {
+                        hashInput.append(ing.val * 100);
+                    }
                 }
             }
+
+            return NUtils.calculateSHA256(hashInput.toString());
+        }
+
+        private java.util.Map<String, nurgling.cookbook.Recipe.IngredientInfo> extractIngredients() {
+            java.util.Map<String, nurgling.cookbook.Recipe.IngredientInfo> ingredients = new java.util.HashMap<>();
+
+            // Extract regular ingredients
+            for (ItemInfo info : item.info) {
+                if (info instanceof Ingredient) {
+                    Ingredient ing = (Ingredient) info;
+                    double percentage = ing.val != null ? ing.val * 100 : 0;
+                    // Use pretty name as key, store resName in IngredientInfo for resource lookup
+                    ingredients.put(ing.name, new nurgling.cookbook.Recipe.IngredientInfo(percentage, ing.resName));
+                }
+            }
+            
+            // Extract smoking wood information from Smoke ItemInfo
+            try {
+                for (ItemInfo info : item.info) {
+                    // Check if this is the Smoke info (dynamically loaded from resources)
+                    if (info.getClass().getName().contains("Smoke")) {
+                        // Try to get wood information via reflection
+                        try {
+                            java.lang.reflect.Field nameField = info.getClass().getDeclaredField("name");
+                            nameField.setAccessible(true);
+                            String woodName = (String) nameField.get(info);
+                            
+                            // Try to get resource name
+                            String woodResName = null;
+                            try {
+                                java.lang.reflect.Field resNameField = info.getClass().getDeclaredField("resName");
+                                resNameField.setAccessible(true);
+                                woodResName = (String) resNameField.get(info);
+                            } catch (NoSuchFieldException e) {
+                                // resName field doesn't exist, use name only
+                            }
+                            
+                            if (woodName != null && !woodName.isEmpty()) {
+                                // Add wood as ingredient with 100% (smoking wood is always 100%)
+                                ingredients.put(woodName, new nurgling.cookbook.Recipe.IngredientInfo(100.0, woodResName));
+                            }
+                        } catch (NoSuchFieldException | IllegalAccessException e) {
+                            System.err.println("Could not extract smoking wood info: " + e.getMessage());
+                        }
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore errors in smoking wood extraction - item might not be smoked
+            }
+
+            return ingredients;
+        }
+
+        private java.util.Map<String, nurgling.cookbook.Recipe.Fep> extractFeps(NFoodInfo fi) {
+            java.util.Map<String, nurgling.cookbook.Recipe.Fep> feps = new java.util.HashMap<>();
+            double multiplier = Math.sqrt(item.quality / 10.0);
+
+            for (FoodInfo.Event ef : fi.evs) {
+                double value = Double.parseDouble(Utils.odformat2(ef.a / multiplier, 2));
+                double weight = Double.parseDouble(Utils.odformat2(ef.a / fi.fepSum, 2));
+                feps.put(ef.ev.nm, new nurgling.cookbook.Recipe.Fep(value, weight));
+            }
+
+            return feps;
         }
     }
 
     public void writeNGItem(NGItem item) {
-        if (poolManager == null) {
+        if (databaseManager == null) {
             return;
         }
-        NGItemWriter ngItemWriter = new NGItemWriter(item, poolManager);
-        poolManager.submitTask(ngItemWriter);
+        NGItemWriter ngItemWriter = new NGItemWriter(item, databaseManager);
+        databaseManager.submitTask(ngItemWriter);
     }
 
     public void writeContainerInfo(Gob gob) {
-        if (gob != null && poolManager != null && poolManager.isConnectionReady()) {
-            ContainerWatcher cw = new ContainerWatcher(gob, poolManager);
-            poolManager.submitTask(cw);
+        if (gob != null && databaseManager != null && databaseManager.isReady()) {
+            ContainerWatcher cw = new ContainerWatcher(gob, databaseManager);
+            databaseManager.submitTask(cw);
         }
     }
 
-    public void writeItemInfoForContainer(ArrayList<ItemWatcher.ItemInfo> iis) {
-        if (poolManager == null || !poolManager.isConnectionReady()) {
+    /**
+     * Clear all items for a container when it's opened (to refresh data)
+     * Note: Don't notify search here - data is being cleared, search will update when container closes
+     */
+    public void clearContainerItems(Gob gob) {
+        if (gob == null || databaseManager == null || !databaseManager.isReady()) {
             return;
         }
-        ItemWatcher itemWatcher = new ItemWatcher(iis, poolManager);
-        poolManager.submitTask(itemWatcher);
+        databaseManager.submitTask(() -> {
+            try {
+                // Wait for hash to be available
+                int waitCount = 0;
+                while (gob.ngob.hash == null && waitCount < 100) {
+                    Thread.sleep(10);
+                    waitCount++;
+                }
+                if (gob.ngob.hash != null) {
+                    databaseManager.getStorageItemService().deleteStorageItemsByContainer(gob.ngob.hash);
+                    // Don't notify search here - container is being browsed, data will be saved when closed
+                }
+            } catch (Exception e) {
+                // Silently ignore errors during container item clearing
+            }
+        });
+    }
+
+    public void writeItemInfoForContainer(ArrayList<ItemWatcher.ItemInfo> iis) {
+        if (databaseManager == null || !databaseManager.isReady()) {
+            return;
+        }
+        ItemWatcher itemWatcher = new ItemWatcher(iis, databaseManager);
+        databaseManager.submitTask(itemWatcher);
     }
 
     final ArrayList<String> targetGobs = new ArrayList<>();
 
     public void searchContainer(NSearchItem item) {
-        if (poolManager == null || !poolManager.isConnectionReady()) {
+        if (databaseManager == null || !databaseManager.isReady()) {
             return;
         }
-        NGlobalSearchItems gsi = new NGlobalSearchItems(item, poolManager);
-        poolManager.submitTask(gsi);
+        NGlobalSearchItems gsi = new NGlobalSearchItems(item, databaseManager);
+        databaseManager.submitTask(gsi);
+    }
+
+    private static volatile boolean areaSyncStarted = false;
+    private static volatile boolean routeSyncStarted = false;
+
+    /**
+     * Start periodic area sync from database
+     */
+    private void startAreaSync() {
+        if (areaSyncStarted || databaseManager == null || !databaseManager.isReady()) {
+            return;
+        }
+
+        // Get current profile
+        String profile = "global";
+        try {
+            if (NUtils.getGameUI() != null) {
+                String genus = NUtils.getGameUI().getGenus();
+                if (genus != null && !genus.isEmpty()) {
+                    profile = genus;
+                }
+            }
+        } catch (Exception e) {
+            // Use default profile
+        }
+
+        final String syncProfile = profile;
+
+        // Start sync with 4 second interval
+        databaseManager.getAreaService().startSync(syncProfile, 4,
+            new nurgling.db.service.AreaService.AreaSyncCallback() {
+                @Override
+                public void onAreasUpdated(java.util.List<nurgling.areas.NArea> updatedAreas) {
+                    // Update areas in map cache
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null &&
+                        NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
+                        long now = System.currentTimeMillis();
+                        int skipped = 0;
+                        int updated = 0;
+                        boolean needsWidgetRefresh = false;
+                        for (nurgling.areas.NArea newArea : updatedAreas) {
+                            // Check if this area was modified locally recently
+                            // Window = debounce(3s) + save time(2s) + buffer(5s) = 10s
+                            nurgling.areas.NArea localArea = NUtils.getGameUI().map.glob.map.areas.get(newArea.id);
+                            if (localArea != null && (now - localArea.lastLocalChange) < 10000) {
+                                // Skip - local changes are still pending save
+                                skipped++;
+                                continue;
+                            }
+                            
+                            // Also skip if local version >= DB version (we just saved it)
+                            if (localArea != null && localArea.version >= newArea.version) {
+                                skipped++;
+                                continue;
+                            }
+                            
+                            if (localArea != null) {
+                                // Update existing area object (preserves references in labels/lists)
+                                localArea.updateFrom(newArea);
+                            } else {
+                                // New area - add it
+                                NUtils.getGameUI().map.glob.map.areas.put(newArea.id, newArea);
+                            }
+                            needsWidgetRefresh = true;
+                            
+                            // Force overlay to redraw
+                            try {
+                                nurgling.overlays.map.NOverlay overlay = NUtils.getGameUI().map.nols.get(newArea.id);
+                                if (overlay != null) {
+                                    overlay.requpdate2 = true;
+                                }
+                            } catch (Exception e) {
+                                // Ignore overlay refresh errors
+                            }
+                            updated++;
+                        }
+                        
+                        // Refresh area labels and widget
+                        if (needsWidgetRefresh) {
+                            refreshAreaLabelsAndWidget();
+                        }
+                        
+                        if (updated > 0) {
+                            System.out.println("Updated " + updated + " areas from database" + (skipped > 0 ? " (skipped " + skipped + " with pending local changes)" : ""));
+                        }
+                    }
+                }
+
+                @Override
+                public void onAreaDeleted(int areaId) {
+                    // Remove area from map cache
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null &&
+                        NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
+                        NUtils.getGameUI().map.glob.map.areas.remove(areaId);
+                        refreshAreaLabelsAndWidget();
+                        System.out.println("Deleted area " + areaId + " from database sync");
+                    }
+                }
+
+                @Override
+                public void onFullSync(java.util.Map<Integer, nurgling.areas.NArea> allAreas) {
+                    // Replace all areas in map cache
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null &&
+                        NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
+                        NUtils.getGameUI().map.glob.map.areas.clear();
+                        NUtils.getGameUI().map.glob.map.areas.putAll(allAreas);
+                        refreshAreaLabelsAndWidget();
+                        System.out.println("Full sync: loaded " + allAreas.size() + " areas from database");
+                    }
+                }
+            });
+
+        areaSyncStarted = true;
+        System.out.println("Area sync started for profile: " + syncProfile);
+    }
+
+    /**
+     * Refresh area labels on map and NAreasWidget after sync update
+     */
+    private static void refreshAreaLabelsAndWidget() {
+        try {
+            if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null) return;
+            
+            nurgling.NMapView map = (nurgling.NMapView) NUtils.getGameUI().map;
+            
+            // Refresh area overlays on map
+            if (map.nols != null) {
+                for (nurgling.overlays.map.NOverlay overlay : map.nols.values()) {
+                    if (overlay != null) {
+                        overlay.requpdate2 = true;
+                    }
+                }
+            }
+            
+            // Update area labels (NAreaLabel sprites on dummy gobs)
+            if (map.dummys != null) {
+                for (haven.Gob dummy : map.dummys.values()) {
+                    if (dummy != null) {
+                        for (haven.Gob.Overlay ol : dummy.ols) {
+                            if (ol != null && ol.spr instanceof nurgling.overlays.NAreaLabel) {
+                                ((nurgling.overlays.NAreaLabel) ol.spr).update();
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Refresh NAreasWidget if open
+            if (NUtils.getGameUI().areas != null && NUtils.getGameUI().areas.al != null) {
+                // Trigger list refresh by re-showing current path
+                NUtils.getGameUI().areas.showPath(NUtils.getGameUI().areas.currentPath);
+            }
+        } catch (Exception e) {
+            // Ignore refresh errors
+        }
+    }
+
+    /**
+     * Stop periodic area sync
+     */
+    private void stopAreaSync() {
+        if (databaseManager != null && databaseManager.getAreaService() != null) {
+            databaseManager.getAreaService().stopSync();
+        }
+        areaSyncStarted = false;
+    }
+
+    /**
+     * Start periodic route sync from database
+     */
+    private void startRouteSync() {
+        if (routeSyncStarted || databaseManager == null || !databaseManager.isReady()) {
+            return;
+        }
+
+        // Get current profile dynamically in sync, not at startup
+        String syncProfile = "global"; // placeholder, will be obtained dynamically
+
+        databaseManager.getRouteService().startSync(syncProfile, 4,
+            new nurgling.db.service.RouteService.RouteSyncCallback() {
+                @Override
+                public void onRoutesUpdated(java.util.List<nurgling.routes.Route> updatedRoutes) {
+                    // Skip sync if route recording is in progress
+                    if (nurgling.NMapView.isRecordingRoutePoint) {
+                        return;
+                    }
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+                        nurgling.NMapView map = (nurgling.NMapView) NUtils.getGameUI().map;
+                        long now = System.currentTimeMillis();
+                        int updated = 0;
+                        for (nurgling.routes.Route newRoute : updatedRoutes) {
+                            nurgling.routes.Route localRoute = map.routeGraphManager.getRoutes().get(newRoute.id);
+                            if (localRoute != null && (now - localRoute.lastLocalChange) < 5000) {
+                                continue; // Skip - local changes pending
+                            }
+                            if (localRoute != null) {
+                                localRoute.updateFrom(newRoute);
+                            } else {
+                                map.routeGraphManager.getRoutes().put(newRoute.id, newRoute);
+                            }
+                            updated++;
+                        }
+                        if (updated > 0) {
+                            map.routeGraphManager.updateGraph();
+                            System.out.println("Updated " + updated + " routes from database");
+                        }
+                    }
+                }
+
+                @Override
+                public void onRouteDeleted(int routeId) {
+                    // Skip sync if route recording is in progress
+                    if (nurgling.NMapView.isRecordingRoutePoint) {
+                        return;
+                    }
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+                        nurgling.NMapView map = (nurgling.NMapView) NUtils.getGameUI().map;
+                        map.routeGraphManager.getRoutes().remove(routeId);
+                        map.routeGraphManager.updateGraph();
+                        System.out.println("Deleted route " + routeId + " from database sync");
+                    }
+                }
+
+                @Override
+                public void onFullSync(java.util.Map<Integer, nurgling.routes.Route> allRoutes) {
+                    // Skip sync if route recording is in progress
+                    if (nurgling.NMapView.isRecordingRoutePoint) {
+                        return;
+                    }
+                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+                        nurgling.NMapView map = (nurgling.NMapView) NUtils.getGameUI().map;
+                        map.routeGraphManager.getRoutes().clear();
+                        map.routeGraphManager.getRoutes().putAll(allRoutes);
+                        map.routeGraphManager.updateGraph();
+                        System.out.println("Full sync: loaded " + allRoutes.size() + " routes from database");
+                    }
+                }
+            });
+
+        routeSyncStarted = true;
+        System.out.println("Route sync started");
+    }
+
+    /**
+     * Stop periodic route sync
+     */
+    private void stopRouteSync() {
+        if (databaseManager != null && databaseManager.getRouteService() != null) {
+            databaseManager.getRouteService().stopSync();
+        }
+        routeSyncStarted = false;
     }
 }

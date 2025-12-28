@@ -74,6 +74,22 @@ public class RouteGraphManager implements ProfileAwareService {
         needsUpdate = true;
     }
 
+    /**
+     * Save a single route to database if DB mode is enabled.
+     * Call this after modifying a route through the UI.
+     */
+    public void saveRouteToDatabase(Route route) {
+        if ((Boolean) NConfig.get(NConfig.Key.ndbenable) &&
+            nurgling.NCore.databaseManager != null && 
+            nurgling.NCore.databaseManager.isReady()) {
+            String profile = NUtils.getGameUI() != null ? NUtils.getGameUI().getGenus() : null;
+            if (profile == null || profile.isEmpty()) {
+                profile = "global";
+            }
+            nurgling.NCore.databaseManager.getRouteService().saveRouteAsync(route, profile);
+        }
+    }
+
     public void updateGraph() {
         if (!needsUpdate) return;
 
@@ -96,6 +112,34 @@ public class RouteGraphManager implements ProfileAwareService {
     }
 
     public void loadRoutes() {
+        // If DB is enabled - ONLY use DB
+        if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable)) {
+            if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
+                try {
+                    String profile = genus;
+                    if (profile == null || profile.isEmpty()) {
+                        if (nurgling.NUtils.getGameUI() != null) {
+                            profile = nurgling.NUtils.getGameUI().getGenus();
+                        }
+                    }
+                    if (profile == null || profile.isEmpty()) {
+                        profile = "global";
+                    }
+                    java.util.Map<Integer, Route> dbRoutes = nurgling.NCore.databaseManager.getRouteService().loadRoutes(profile);
+                    if (dbRoutes != null) {
+                        routes.putAll(dbRoutes);
+                        System.out.println("Loaded " + dbRoutes.size() + " routes from database");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Failed to load routes from database: " + e.getMessage());
+                }
+            }
+            needsUpdate = true;
+            updateGraph();
+            return;
+        }
+
+        // DB not enabled - load from file
         if (new File(configPath).exists()) {
             StringBuilder contentBuilder = new StringBuilder();
             try (Stream<String> stream = Files.lines(Paths.get(configPath), StandardCharsets.UTF_8)) {
@@ -110,12 +154,11 @@ public class RouteGraphManager implements ProfileAwareService {
                     Route route = new Route((JSONObject) array.get(i), this.routePointMap);
                     routes.put(route.id, route);
                 }
-
-                // Update the graph after loading routes
-                needsUpdate = true;
-                updateGraph();
+                System.out.println("Loaded " + routes.size() + " routes from file");
             }
         }
+        needsUpdate = true;
+        updateGraph();
     }
 
     public Map<Integer, Route> getRoutes() {
@@ -179,7 +222,20 @@ public class RouteGraphManager implements ProfileAwareService {
             }
         }
 
-        ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().remove(route.id);
+        int routeId = route.id;
+        ((NMapView) NUtils.getGameUI().map).routeGraphManager.getRoutes().remove(routeId);
+
+        // Delete from database if enabled
+        if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
+            nurgling.NCore.databaseManager != null && 
+            nurgling.NCore.databaseManager.isReady()) {
+            String profile = NUtils.getGameUI().getGenus();
+            if (profile == null || profile.isEmpty()) {
+                profile = "global";
+            }
+            final String finalProfile = profile;
+            nurgling.NCore.databaseManager.getRouteService().deleteRouteAsync(routeId, finalProfile);
+        }
     }
 
     public void deleteRoutePointFromNeighborsAndConnections(RoutePoint routePoint) {
