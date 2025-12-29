@@ -14,8 +14,6 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.lang.reflect.Field;
-import java.io.FileWriter;
-import java.io.IOException;
 
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
@@ -1281,19 +1279,6 @@ NMiniMap extends MiniMap {
                 // Но исправляем путь к ресурсу, если маркер был создан с неправильным путем (например, "Cave Passage" с salvia)
                 Coord markPos = mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz);
                 
-                // #region agent log
-                if(mark.m instanceof MapFile.SMarker) {
-                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
-                    if(sm.nm != null && (sm.nm.toLowerCase().contains("cave") || sm.nm.toLowerCase().contains("passage"))) {
-                        try {
-                            FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A,C\",\"location\":\"NMiniMap.drawmarkers:1282\",\"message\":\"Drawing SMarker\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"resourcePath\":\"" + sm.res.name + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                            fw.close();
-                        } catch(IOException e) {}
-                    }
-                }
-                // #endregion
-                
                 // Исправляем путь к ресурсу для маркеров с неправильным путем (например, "Cave Passage" с salvia)
                 if(mark.m instanceof MapFile.SMarker) {
                     MapFile.SMarker sm = (MapFile.SMarker)mark.m;
@@ -1325,30 +1310,11 @@ NMiniMap extends MiniMap {
                                                     }
                                                 } catch (Exception e) {}
                                                 
-                                                // #region agent log
-                                                if(tooltip != null && tooltip.toLowerCase().contains("cave")) {
-                                                    try {
-                                                        FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                                        fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1315\",\"message\":\"Found GobIcon with cave tooltip\",\"data\":{\"tooltip\":\"" + tooltip + "\",\"resourcePath\":\"" + icon.icon.res.name + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                                                        fw.close();
-                                                    } catch(IOException e) {}
-                                                }
-                                                // #endregion
-                                                
                                                 if(tooltip != null && tooltip.equals("Cave Passage")) {
                                                     // Нашли GobIcon с tooltip "Cave Passage"
                                                     if(icon.icon instanceof GobIcon.ImageIcon) {
                                                         GobIcon.ImageIcon imgIcon = (GobIcon.ImageIcon)icon.icon;
                                                         correctPath = imgIcon.res.name;
-                                                        
-                                                        // #region agent log
-                                                        try {
-                                                            FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                                            fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1338\",\"message\":\"Found GobIcon for Cave Passage\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"currentPath\":\"" + currentPath + "\",\"correctPath\":\"" + correctPath + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                                                            fw.close();
-                                                        } catch(IOException e) {}
-                                                        // #endregion
-                                                        
                                                         break;
                                                     }
                                                 }
@@ -1357,14 +1323,6 @@ NMiniMap extends MiniMap {
                                             continue;
                                         }
                                     }
-                                    
-                                    // #region agent log
-                                    try {
-                                        FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                        fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1355\",\"message\":\"GobIcon search completed\",\"data\":{\"gobCount\":" + gobCount + ",\"iconCount\":" + iconCount + ",\"found\":\"" + (correctPath != null ? "yes" : "no") + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                                        fw.close();
-                                    } catch(IOException e) {}
-                                    // #endregion
                                 }
                             }
                             
@@ -1392,15 +1350,6 @@ NMiniMap extends MiniMap {
                                             Resource.Tooltip tt = testRes.layer(Resource.tooltip);
                                             if(tt != null && tt.t != null && tt.t.equals("Cave Passage")) {
                                                 correctPath = testPath;
-                                                
-                                                // #region agent log
-                                                try {
-                                                    FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                                    fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1375\",\"message\":\"Found Cave Passage resource by tooltip\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"foundPath\":\"" + correctPath + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                                                    fw.close();
-                                                } catch(IOException e) {}
-                                                // #endregion
-                                                
                                                 break;
                                             }
                                         }
@@ -1414,14 +1363,6 @@ NMiniMap extends MiniMap {
                             if(correctPath == null) {
                                 correctPath = getCorrectResourcePathForPermanentMarker(sm.nm, currentPath);
                             }
-                            
-                            // #region agent log
-                            try {
-                                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"FIX\",\"location\":\"NMiniMap.drawmarkers:1330\",\"message\":\"Fixing marker resource path\",\"data\":{\"markerName\":\"" + sm.nm + "\",\"currentPath\":\"" + currentPath + "\",\"correctPath\":\"" + (correctPath != null ? correctPath : "null") + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                                fw.close();
-                            } catch(IOException e) {}
-                            // #endregion
                             
                             if(correctPath != null && !correctPath.equals(currentPath)) {
                                 // Обновляем путь к ресурсу в маркере
@@ -2954,16 +2895,6 @@ NMiniMap extends MiniMap {
                                 System.err.println("markobjs: Not in VSpec, fallback: name='" + tt.t + "', path='" + correctResourcePath + "'");
                             }
                         }
-                        
-                        // #region agent log
-                        if(tt.t != null && (tt.t.toLowerCase().contains("cave") || tt.t.toLowerCase().contains("passage"))) {
-                            try {
-                                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"NMiniMap.markobjs:2797\",\"message\":\"Finding resource path for marker\",\"data\":{\"tooltipName\":\"" + tt.t + "\",\"miconResName\":\"" + micon.res.name + "\",\"correctResourcePath\":\"" + (correctResourcePath != null ? correctResourcePath : "null") + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                                fw.close();
-                            } catch(IOException e) {}
-                        }
-                        // #endregion
                     }
                 } catch (Exception e) {
                     // Игнорируем ошибки
@@ -3071,16 +3002,6 @@ NMiniMap extends MiniMap {
                             mid = new MapFile.SMarker(info.seg, sc, tt.t, 0, new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
                             file.add(mid);
                             isNew = true;
-                            
-                            // #region agent log
-                            if(tt.t != null && (tt.t.toLowerCase().contains("cave") || tt.t.toLowerCase().contains("passage"))) {
-                                try {
-                                    FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                    fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"NMiniMap.markobjs:2913\",\"message\":\"Created new SMarker\",\"data\":{\"markerName\":\"" + tt.t + "\",\"resourcePath\":\"" + resourcePathToUse + "\",\"miconResName\":\"" + micon.res.name + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                                    fw.close();
-                                } catch(IOException e) {}
-                            }
-                            // #endregion
                             
                             if(tooltipName != null && tooltipName.toLowerCase().contains("wine")) {
                                 System.err.println("markobjs: Marker created: name='" + tt.t + "', path='" + resourcePathToUse + "', ver=" + resVer);
@@ -3240,16 +3161,6 @@ NMiniMap extends MiniMap {
      * Если не найдено в VSpec, пробует загрузить ресурс напрямую по названию маркера.
      */
     private String getCorrectResourcePathForPermanentMarker(String resourceName, String currentResourcePath) {
-        // #region agent log
-        if(resourceName != null && (resourceName.toLowerCase().contains("cave") || resourceName.toLowerCase().contains("passage"))) {
-            try {
-                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3046\",\"message\":\"Method entry\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"currentResourcePath\":\"" + currentResourcePath + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                fw.close();
-            } catch(IOException e) {}
-        }
-        // #endregion
-        
         if (resourceName == null || resourceName.trim().isEmpty()) {
             return null;
         }
@@ -3312,60 +3223,20 @@ NMiniMap extends MiniMap {
                 "gfx/terobjs/cavepassage",
             };
             
-            // #region agent log
-            try {
-                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3144\",\"message\":\"Trying cave paths\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"pathsCount\":" + cavePaths.length + "},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                fw.close();
-            } catch(IOException e) {}
-            // #endregion
-            
             for (String path : cavePaths) {
                 try {
                     Resource res = Resource.remote().loadwait(path);
                     if (res != null && res.layer(Resource.imgc) != null) {
-                        // #region agent log
-                        try {
-                            FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3158\",\"message\":\"Found cave path\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"foundPath\":\"" + path + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                            fw.close();
-                        } catch(IOException e) {}
-                        // #endregion
                         return path;
                     }
                 } catch (Exception e) {
-                    // #region agent log
-                    try {
-                        FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                        fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3162\",\"message\":\"Failed to load cave path\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"path\":\"" + path + "\",\"error\":\"" + e.getMessage() + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                        fw.close();
-                    } catch(IOException e2) {}
-                    // #endregion
                     continue;
                 }
             }
-            
-            // #region agent log
-            try {
-                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3166\",\"message\":\"No cave path found\",\"data\":{\"resourceName\":\"" + resourceName + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                fw.close();
-            } catch(IOException e) {}
-            // #endregion
         }
         
         // Если не найдено в VSpec и нет специальной обработки, возвращаем null
         // В оригинальном клиенте просто используется путь из маркера без исправлений
-        
-        // #region agent log
-        if(resourceName != null && (resourceName.toLowerCase().contains("cave") || resourceName.toLowerCase().contains("passage"))) {
-            try {
-                FileWriter fw = new FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                fw.write("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"NMiniMap.getCorrectResourcePathForPermanentMarker:3325\",\"message\":\"Method exit\",\"data\":{\"resourceName\":\"" + resourceName + "\",\"currentResourcePath\":\"" + currentResourcePath + "\",\"result\":\"null\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-                fw.close();
-            } catch(IOException e) {}
-        }
-        // #endregion
         
         return null;
     }

@@ -232,7 +232,10 @@ public class Forager implements Action {
 
                     navigateToGob(gui, gob);
                     new SelectFlowerAction("Pick", gob).run(gui);
-                    NUtils.getUI().core.addTask(new nurgling.tasks.WaitGobRemoval(gob.id));
+                    
+                    // Небольшая задержка для завершения действия сбора
+                    // WaitGobRemoval может быть медленным, используем минимальную задержку
+                    Thread.sleep(150);
                     
                     // Mark as processed
                     processedGobs.add(gob.id);
@@ -244,8 +247,9 @@ public class Forager implements Action {
                     navigateToGob(gui, gob);
                     new SelectFlowerAction(action.actionName, gob).run(gui);
                     
-                    // Wait for pose change
-                    NUtils.getUI().core.addTask(new nurgling.tasks.WaitPose(NUtils.player(), "gfx/borka/idle"));
+                    // Небольшая задержка для выполнения действия, но не блокирующая
+                    // WaitPose может быть медленным, поэтому просто небольшая пауза
+                    Thread.sleep(100);
                     
                     // Mark as processed
                     processedGobs.add(gob.id);
@@ -371,28 +375,12 @@ public class Forager implements Action {
     }
     
     /**
-     * Навигация к точке - для лошади использует прямой клик, для пешего - PathFinder
+     * Навигация к точке - для лошади использует GoTo напрямую, для пешего - PathFinder
      */
     private void navigateToPoint(NGameUI gui, Coord2d target) throws InterruptedException {
         if (isMountedOnHorse()) {
-            // Для лошади используем прямой клик на карту
-            gui.map.wdgmsg("click", Coord.z, target.floor(haven.OCache.posres), 1, 0);
-            
-            // Ждем немного для начала движения
-            Thread.sleep(500);
-            
-            // Ждем, пока достигнем точки (с большей погрешностью для лошади)
-            Coord2d currentPos = NUtils.player().rc;
-            int attempts = 0;
-            while (currentPos != null && currentPos.dist(target) > 11.0 && attempts < 100) {
-                Thread.sleep(200);
-                if (NUtils.player() != null) {
-                    currentPos = NUtils.player().rc;
-                } else {
-                    break;
-                }
-                attempts++;
-            }
+            // Для лошади используем GoTo напрямую (он поддерживает лошадь)
+            new GoTo(target).run(gui);
         } else {
             // Для пешего движения используем PathFinder
             new PathFinder(target).run(gui);
@@ -400,30 +388,12 @@ public class Forager implements Action {
     }
     
     /**
-     * Навигация к объекту - для лошади использует прямой клик, для пешего - PathFinder
+     * Навигация к объекту - для лошади использует GoTo напрямую, для пешего - PathFinder
      */
     private void navigateToGob(NGameUI gui, Gob target) throws InterruptedException {
         if (isMountedOnHorse()) {
-            // Для лошади используем прямой клик на позицию объекта
-            Coord2d targetPos = target.rc;
-            gui.map.wdgmsg("click", Coord.z, targetPos.floor(haven.OCache.posres), 1, 0);
-            
-            // Ждем немного для начала движения
-            Thread.sleep(500);
-            
-            // Ждем, пока достигнем объекта (с большей погрешностью для лошади)
-            Coord2d currentPos = NUtils.player().rc;
-            int attempts = 0;
-            while (currentPos != null && currentPos.dist(targetPos) > 11.0 && attempts < 100) {
-                Thread.sleep(200);
-                if (NUtils.player() != null && Finder.findGob(target.id) != null) {
-                    currentPos = NUtils.player().rc;
-                    targetPos = target.rc;
-                } else {
-                    break;
-                }
-                attempts++;
-            }
+            // Для лошади используем GoTo напрямую на позицию объекта
+            new GoTo(target.rc).run(gui);
         } else {
             // Для пешего движения используем PathFinder
             new PathFinder(target).run(gui);
