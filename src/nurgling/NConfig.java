@@ -184,7 +184,9 @@ public class NConfig
         equipProxySlots,
         diabloLikeRun,
         treeResizeEnabled,
-        treeResizePercentage
+        treeResizePercentage,
+        permIconScale,
+        prospectIconScale
     }
 
     public enum BBDisplayMode
@@ -474,6 +476,10 @@ public class NConfig
         // Tree resize settings (QOL Lanfir)
         conf.put(Key.treeResizeEnabled, false);  // Enable/disable tree resizing
         conf.put(Key.treeResizePercentage, 100);  // Tree resize percentage (0-200, default 100)
+        
+        // Icon scale settings (QOL Lanfir)
+        conf.put(Key.permIconScale, 100);  // Permanent icon scale (1-200, default 100)
+        conf.put(Key.prospectIconScale, 100);  // Prospect icon scale (1-200, default 100)
         
         // Tree harvest (leaf/seed/fruit) overlay settings
         conf.put(Key.treeHarvestOverlay, false);

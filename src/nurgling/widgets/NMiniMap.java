@@ -1395,7 +1395,44 @@ NMiniMap extends MiniMap {
                     }
                 }
                 
-                mark.draw(g, markPos);
+                // Apply scale to permanent markers (SMarker)
+                if(mark.m instanceof MapFile.SMarker) {
+                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
+                    Object scaleObj = NConfig.get(NConfig.Key.permIconScale);
+                    int scalePercent = 100; // Default
+                    if (scaleObj instanceof Number) {
+                        scalePercent = ((Number) scaleObj).intValue();
+                    }
+                    float scaleMultiplier = scalePercent / 100.0f;
+                    
+                    // Get the image and center from DisplayMarker
+                    try {
+                        java.lang.reflect.Field imgField = haven.MiniMap.DisplayMarker.class.getDeclaredField("img");
+                        imgField.setAccessible(true);
+                        Resource.Image img = (Resource.Image) imgField.get(mark);
+                        
+                        java.lang.reflect.Field ccField = haven.MiniMap.DisplayMarker.class.getDeclaredField("cc");
+                        ccField.setAccessible(true);
+                        Coord cc = (Coord) ccField.get(mark);
+                        
+                        if(img != null && cc != null && scaleMultiplier != 1.0f) {
+                            // Draw scaled icon using Tex
+                            Tex tex = img.rawtex();
+                            Coord imgSize = img.ssz;
+                            Coord scaledSize = new Coord((int)(imgSize.x * scaleMultiplier), (int)(imgSize.y * scaleMultiplier));
+                            g.aimage(tex, markPos, 0.5, 0.5, scaledSize);
+                        } else {
+                            // Fallback to original draw if image not loaded yet or scale is 100%
+                            mark.draw(g, markPos);
+                        }
+                    } catch (Exception e) {
+                        // Fallback to original draw on error
+                        mark.draw(g, markPos);
+                    }
+                } else {
+                    // For PMarker, use original draw
+                    mark.draw(g, markPos);
+                }
                 
                 // Draw name for quest giver markers (bush/bumling)
                 if(mark.m instanceof MapFile.SMarker) {
@@ -2169,9 +2206,17 @@ NMiniMap extends MiniMap {
                     }
                     
                     if(tex != null) {
-                        // Draw scaled icon (same size as tree icons)
+                        // Get scale from config
+                        Object scaleObj = NConfig.get(NConfig.Key.prospectIconScale);
+                        int scalePercent = 100; // Default
+                        if (scaleObj instanceof Number) {
+                            scalePercent = ((Number) scaleObj).intValue();
+                        }
+                        float scaleMultiplier = scalePercent / 100.0f;
+                        
+                        // Draw scaled icon (same size as tree icons, but with scale multiplier)
                         int dsz = Math.max(tex.sz().y, tex.sz().x);
-                        int targetSize = UI.scale(18);
+                        int targetSize = (int)(UI.scale(18) * scaleMultiplier);
                         g.aimage(tex, screenPos, 0.5, 0.5, UI.scale(targetSize * tex.sz().x / dsz, targetSize * tex.sz().y / dsz));
                     } else {
                         // Fallback: draw colored circle if icon fails

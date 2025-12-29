@@ -10,6 +10,11 @@ public class QOLLanfirSettings extends Panel {
     private HSlider treeResizePercentageSlider;
     private Label treeResizePercentageLabel;
     
+    private HSlider permIconScaleSlider;
+    private Label permIconScaleLabel;
+    private HSlider prospectIconScaleSlider;
+    private Label prospectIconScaleLabel;
+    
     public QOLLanfirSettings() {
         super("QOL Lanfir");
         
@@ -42,6 +47,35 @@ public class QOLLanfirSettings extends Panel {
         };
         
         addhlp(Coord.of(margin, y), UI.scale(5), treeResizePercentageSlider, treeResizePercentageLabel);
+        y += UI.scale(50);
+        
+        // Icon scale section
+        add(new Label("PermIcon Scale"), margin, y);
+        y += UI.scale(20);
+        
+        permIconScaleLabel = new Label("100%");
+        permIconScaleSlider = new HSlider(UI.scale(300), 1, 200, 100) {
+            @Override
+            public void changed() {
+                permIconScaleLabel.settext(String.format("%d%%", this.val));
+            }
+        };
+        
+        addhlp(Coord.of(margin, y), UI.scale(5), permIconScaleSlider, permIconScaleLabel);
+        y += UI.scale(50);
+        
+        add(new Label("Icon Scale"), margin, y);
+        y += UI.scale(20);
+        
+        prospectIconScaleLabel = new Label("100%");
+        prospectIconScaleSlider = new HSlider(UI.scale(300), 1, 200, 100) {
+            @Override
+            public void changed() {
+                prospectIconScaleLabel.settext(String.format("%d%%", this.val));
+            }
+        };
+        
+        addhlp(Coord.of(margin, y), UI.scale(5), prospectIconScaleSlider, prospectIconScaleLabel);
         
         pack();
     }
@@ -66,12 +100,31 @@ public class QOLLanfirSettings extends Panel {
         treeResizePercentageLabel.settext(String.format("%d%%", percentageValue));
         
         updateSliderVisibility();
+        
+        // Load icon scale settings
+        Object permScale = NConfig.get(NConfig.Key.permIconScale);
+        int permScaleValue = 100; // Default
+        if (permScale instanceof Number) {
+            permScaleValue = ((Number) permScale).intValue();
+        }
+        permIconScaleSlider.val = permScaleValue;
+        permIconScaleLabel.settext(String.format("%d%%", permScaleValue));
+        
+        Object prospectScale = NConfig.get(NConfig.Key.prospectIconScale);
+        int prospectScaleValue = 100; // Default
+        if (prospectScale instanceof Number) {
+            prospectScaleValue = ((Number) prospectScale).intValue();
+        }
+        prospectIconScaleSlider.val = prospectScaleValue;
+        prospectIconScaleLabel.settext(String.format("%d%%", prospectScaleValue));
     }
     
     @Override
     public void save() {
         NConfig.set(NConfig.Key.treeResizeEnabled, treeResizeEnabled.a);
         NConfig.set(NConfig.Key.treeResizePercentage, treeResizePercentageSlider.val);
+        NConfig.set(NConfig.Key.permIconScale, permIconScaleSlider.val);
+        NConfig.set(NConfig.Key.prospectIconScale, prospectIconScaleSlider.val);
         NConfig.needUpdate();
         
         // Apply tree resizing to all existing trees in the world
