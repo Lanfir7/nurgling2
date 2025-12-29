@@ -26,6 +26,7 @@ build.bat
 /.vscode
 /HerSRC
 /OldSRC
+/SRCnurgling2
 Areas.db
 Areas.db-wal
 AlarmSounds/AlarmSounds.7z
