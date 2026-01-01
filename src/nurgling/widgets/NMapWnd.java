@@ -18,6 +18,7 @@ public class NMapWnd extends MapWnd {
     MapToggleButton prospectBtn;
     MapToggleButton quarryartzBtn;
     MapToggleButton oreSpotsBtn; // Кнопка для переключения видимости маркеров спотов руд
+    MapToggleButton gemstoneBtn; // Кнопка для переключения видимости маркеров драгоценных камней
     MapToggleButton vectorClearBtn;
     TextEntry markerSearchField;
     private static final int btnw = UI.scale(95);
@@ -85,8 +86,14 @@ public class NMapWnd extends MapWnd {
         oreSpotsBtn.a = getOreSpotsIconsState(); // Set initial state
         oreSpotsBtn.changed(val -> setOreSpotsIconsState(val));
         
-        // Vector clear button (leftmost)
+        // Gemstone button (для маркеров драгоценных камней)
         btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
+        gemstoneBtn = add(new MapToggleButton("tree", "Toggle Gemstone markers (Right-click: Gemstone Search)", this::openGemstoneSearch), btnPos);
+        gemstoneBtn.a = getGemstoneIconsState(); // Set initial state
+        gemstoneBtn.changed(val -> setGemstoneIconsState(val));
+        
+        // Vector clear button (leftmost)
+        btnPos = btnPos.sub(gemstoneBtn.sz.x + btnSpacing, 0);
         vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null), btnPos);
         vectorClearBtn.a = false; // Always show as unpressed
         vectorClearBtn.click(this::clearVectors);
@@ -183,6 +190,39 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showOreSpotIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showOreSpotIcons = val;
+    }
+    
+    private boolean getGemstoneIconsState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            return ((NMiniMap) gui.mmap).showGemstoneIcons;
+        return true;
+    }
+    
+    private void setGemstoneIconsState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            ((NMiniMap) gui.mmap).showGemstoneIcons = val;
+        if(view instanceof NMiniMap)
+            ((NMiniMap) view).showGemstoneIcons = val;
+    }
+    
+    private void openGemstoneSearch() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null) {
+            if(gui.gemstoneSearchWindow != null) {
+                if(gui.gemstoneSearchWindow.visible()) {
+                    gui.gemstoneSearchWindow.hide();
+                } else {
+                    gui.gemstoneSearchWindow.show();
+                    gui.gemstoneSearchWindow.raise();
+                }
+            } else {
+                gui.gemstoneSearchWindow = new GemstoneSearchWindow(gui);
+                gui.add(gui.gemstoneSearchWindow, new Coord(100, 100));
+                gui.gemstoneSearchWindow.show();
+            }
+        }
     }
 
     private void openTreeSearch() {
@@ -316,7 +356,7 @@ public class NMapWnd extends MapWnd {
         super.resize(sz);
         
         // Position buttons in top-right corner (15px right, 10px down from original position)
-        if(oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null && vectorClearBtn != null) {
+        if(oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null && gemstoneBtn != null && vectorClearBtn != null) {
             int btnSpacing = UI.scale(5);
             Coord btnPos = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
 
@@ -328,6 +368,12 @@ public class NMapWnd extends MapWnd {
             btnPos = btnPos.sub(treeBtn.sz.x + btnSpacing, 0);
             prospectBtn.c = btnPos;
             btnPos = btnPos.sub(prospectBtn.sz.x + btnSpacing, 0);
+            quarryartzBtn.c = btnPos;
+            btnPos = btnPos.sub(quarryartzBtn.sz.x + btnSpacing, 0);
+            oreSpotsBtn.c = btnPos;
+            btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
+            gemstoneBtn.c = btnPos;
+            btnPos = btnPos.sub(gemstoneBtn.sz.x + btnSpacing, 0);
             vectorClearBtn.c = btnPos;
         }
         

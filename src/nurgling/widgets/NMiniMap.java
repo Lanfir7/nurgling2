@@ -1010,16 +1010,25 @@ NMiniMap extends MiniMap {
             if(screenPos.x >= 0 && screenPos.x <= sz.x &&
                screenPos.y >= 0 && screenPos.y <= sz.y) {
 
+                // Получаем скейлинг для иконок и текста (выносим за пределы if-else)
+                Object scaleObj = NConfig.get(NConfig.Key.prospectIconScale);
+                int scalePercent = 100; // Default
+                if (scaleObj instanceof Number) {
+                    scalePercent = ((Number) scaleObj).intValue();
+                }
+                float scaleMultiplier = scalePercent / 100.0f;
+                
                 // Draw icon if available
                 TexI iconTex = mark.getIconTex();
                 if(iconTex != null) {
                     int dsz = Math.max(iconTex.sz().y, iconTex.sz().x);
-                    int targetSize = UI.scale(18);
+                    // Применяем скейлинг для иконок камней, руд и квариарца (как для проспектинга)
+                    int targetSize = (int)(UI.scale(18) * scaleMultiplier);
                     g.aimage(iconTex, screenPos, 0.5, 0.5,
                         UI.scale(targetSize * iconTex.sz().x / dsz, targetSize * iconTex.sz().y / dsz));
                 } else {
                     // Fallback для маркеров без иконки (например, драгоценных камней или руд)
-                    // Рисуем цветной круг
+                    // Рисуем цветной круг с применением скейлинга
                     Color iconColor;
                     if (isGemstoneMark(mark.resourceType)) {
                         iconColor = new Color(255, 215, 0); // Золотой для драгоценных камней
@@ -1028,7 +1037,7 @@ NMiniMap extends MiniMap {
                     } else {
                         iconColor = new Color(139, 137, 137); // Серый по умолчанию
                     }
-                    int iconSize = UI.scale(12);
+                    int iconSize = (int)(UI.scale(12) * scaleMultiplier);
                     g.chcolor(iconColor);
                     g.fellipse(screenPos, new Coord(iconSize, iconSize));
                     g.chcolor();
@@ -1036,11 +1045,21 @@ NMiniMap extends MiniMap {
 
                 // Draw label under the icon (like quest giver names)
                 // Для квариарца поднимаем подпись выше и используем меньший шрифт
+                // Применяем скейлинг к тексту вместе с иконкой
                 Text labelText = mark.getLabelText();
                 if(labelText != null) {
                     int offsetY = "Quarryartz".equals(mark.resourceType) ? UI.scale(6) : UI.scale(10);
                     Coord textPos = screenPos.add(0, offsetY);
-                    g.aimage(labelText.tex(), textPos, 0.5, 0);
+                    
+                    // Применяем скейлинг к тексту
+                    Coord originalTextSize = labelText.sz();
+                    Coord scaledTextSize = new Coord(
+                        (int)(originalTextSize.x * scaleMultiplier),
+                        (int)(originalTextSize.y * scaleMultiplier)
+                    );
+                    
+                    // Рисуем текст с масштабированием
+                    g.aimage(labelText.tex(), textPos, 0.5, 0, scaledTextSize);
                 }
             }
         }
@@ -1079,9 +1098,9 @@ NMiniMap extends MiniMap {
         } else {
             // Zoom in - multiply by 1.0526 (inverse of 0.95, ~5.3% increase)
             targetScale *= 1.0526f;
-            // Limit maximum scale to 8x (увеличено для большего приближения)
-            if(targetScale > 8.0f)
-                targetScale = 8.0f;
+            // Limit maximum scale to 16x (увеличено для большего приближения)
+            if(targetScale > 16.0f)
+                targetScale = 16.0f;
         }
         
         // Update zoomlevel for compatibility with base class
@@ -1110,6 +1129,16 @@ NMiniMap extends MiniMap {
         
         Coord base = tc.add(sessloc.tc).sub(dloc.tc).div(1 << dataLevel);
         return(UI.scale(base).mul(scaleFactor).add(sz.div(2)));
+    }
+    
+    @Override
+    public Coord p2c(Coord2d pc) {
+        // Исправление смещения игрока на карте
+        // Базовый метод использует pc.floor(tilesz), что может давать смещение
+        // Используем точное преобразование через st2c с корректировкой смещения
+        // Смещение: левее и выше означает, что нужно сдвинуть вправо и вниз
+        Coord2d corrected = pc.add(MCache.tilesz.x * 0.1, MCache.tilesz.y * 0.1); // Корректировка смещения
+        return st2c(corrected.floor(tilesz));
     }
 
     @Override

@@ -92,6 +92,16 @@ public class LabeledMarkService implements ProfileAwareService {
      */
     public String addLabeledMarkAsync(String label, String resourceType, long segmentId, 
                                       Coord tileCoords, BufferedImage iconImage) {
+        return addLabeledMarkAsync(label, resourceType, segmentId, tileCoords, iconImage, 2);
+    }
+    
+    /**
+     * Add a labeled mark asynchronously with custom radius for duplicate checking.
+     * @param radiusTiles радиус проверки дубликатов в тайлах (0 = только точно на том же месте, 1 = в радиусе 1 тайла, 2 = в радиусе 2 тайлов)
+     */
+    public String addLabeledMarkAsync(String label, String resourceType, long segmentId, 
+                                      Coord tileCoords, BufferedImage iconImage, int radiusTiles) {
+        // Оптимизация: ограничиваем проверки для уменьшения лагов
         lock.writeLock().lock();
         try {
             // Используем индекс для быстрого поиска маркеров того же типа ресурса
@@ -102,10 +112,14 @@ public class LabeledMarkService implements ProfileAwareService {
             // Получаем список маркеров этого типа ресурса из индекса
             List<LabeledMinimapMark> marksToCheck = resourceTypeIndex.getOrDefault(resType, new ArrayList<>());
             
-            // Ищем маркеры в том же сегменте в радиусе 2 тайлов
+            // Ищем маркеры в том же сегменте в указанном радиусе
+            // Ограничиваем количество проверок для уменьшения лагов
             List<String> toRemove = new ArrayList<>();
+            int checkedCount = 0;
+            int maxChecks = 200; // Ограничиваем проверки для уменьшения лагов
             for (LabeledMinimapMark mark : marksToCheck) {
-                if (mark.segmentId == segId && mark.isNear(segId, tc, 2) && resType.equals(mark.resourceType)) {
+                if (checkedCount++ >= maxChecks) break; // Прерываем если проверили достаточно
+                if (mark.segmentId == segId && mark.isNear(segId, tc, radiusTiles) && resType.equals(mark.resourceType)) {
                     toRemove.add(mark.getLocationId());
                 }
             }
@@ -213,6 +227,60 @@ public class LabeledMarkService implements ProfileAwareService {
     }
     
     /**
+     * Обновляет позицию и качество существующего маркера (для "плавающих" маркеров)
+     * Перемещает маркер в новое место с лучшим качеством
+     */
+    public String updateMarkPosition(String locationId, String newLabel, Coord newTileCoords) {
+        lock.writeLock().lock();
+        try {
+            LabeledMinimapMark oldMark = labeledMarks.get(locationId);
+            if (oldMark == null) return null;
+            
+            // Создаем новый маркер с обновленными координатами и label, сохраняя старый locationId
+            LabeledMinimapMark newMark = new LabeledMinimapMark(
+                locationId, // Сохраняем старый locationId
+                newLabel, 
+                oldMark.resourceType, 
+                oldMark.segmentId, 
+                newTileCoords, 
+                oldMark.iconImage,
+                oldMark.labelColor
+            );
+            
+            // Заменяем старый маркер на новый (locationId остается тот же)
+            labeledMarks.put(locationId, newMark);
+            
+            // Обновляем индексы
+            List<LabeledMinimapMark> resourceList = resourceTypeIndex.get(oldMark.resourceType);
+            if (resourceList != null) {
+                for (int i = 0; i < resourceList.size(); i++) {
+                    if (resourceList.get(i).getLocationId().equals(locationId)) {
+                        resourceList.set(i, newMark);
+                        break;
+                    }
+                }
+            }
+            
+            List<LabeledMinimapMark> segmentList = segmentIndex.get(oldMark.segmentId);
+            if (segmentList != null) {
+                for (int i = 0; i < segmentList.size(); i++) {
+                    if (segmentList.get(i).getLocationId().equals(locationId)) {
+                        segmentList.set(i, newMark);
+                        break;
+                    }
+                }
+            }
+            
+            // Сохраняем асинхронно
+            scheduleSave();
+            
+            return locationId;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
      * Обновляет иконку маркера (создает новый маркер с иконкой и заменяет старый)
      * Используется для асинхронной загрузки иконок
      */
@@ -289,6 +357,18 @@ public class LabeledMarkService implements ProfileAwareService {
         }
     }
 
+    /**
+     * Get a labeled mark by location ID.
+     */
+    public LabeledMinimapMark getMark(String locationId) {
+        lock.readLock().lock();
+        try {
+            return labeledMarks.get(locationId);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+    
     /**
      * Get all labeled marks for a segment (for map rendering).
      * Оптимизировано с использованием индекса - O(1) вместо O(n).

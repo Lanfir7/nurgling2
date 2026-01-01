@@ -16,7 +16,7 @@ import java.util.Base64;
  * Shows an icon with a label underneath (e.g., "q20" for quality 20).
  */
 public class LabeledMinimapMark {
-    private final String locationId;     // Unique ID for this mark
+    private String locationId;     // Unique ID for this mark (can be set manually for updates)
     public final String label;           // The text label (e.g., "q20", "q95")
     public final String resourceType;    // Resource type (e.g., "Water", "Clay", "Soil")
     public final long segmentId;
@@ -56,6 +56,28 @@ public class LabeledMinimapMark {
         this.labelColor = labelColor != null ? labelColor : Color.WHITE;
         this.timestamp = System.currentTimeMillis();
         this.locationId = generateLocationId(segmentId, tileCoords, label);
+        
+        // Pre-render textures
+        if (iconImage != null) {
+            this.iconTex = new TexI(iconImage);
+        }
+        this.labelText = createLabelText();
+    }
+    
+    /**
+     * Create a labeled minimap mark with a specific locationId (for updates).
+     * Used when updating an existing mark to preserve its ID.
+     */
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
+                              Coord tileCoords, BufferedImage iconImage, Color labelColor) {
+        this.locationId = locationId; // Use provided locationId
+        this.label = label;
+        this.resourceType = resourceType != null ? resourceType : "Unknown";
+        this.segmentId = segmentId;
+        this.tileCoords = tileCoords;
+        this.iconImage = iconImage;
+        this.labelColor = labelColor != null ? labelColor : Color.WHITE;
+        this.timestamp = System.currentTimeMillis();
         
         // Pre-render textures
         if (iconImage != null) {
@@ -210,7 +232,18 @@ public class LabeledMinimapMark {
         if (this.segmentId != segId) return false;
         int dx = Math.abs(this.tileCoords.x - tc.x);
         int dy = Math.abs(this.tileCoords.y - tc.y);
-        return dx <= radiusTiles && dy <= radiusTiles;
+        boolean result = dx <= radiusTiles && dy <= radiusTiles;
+        
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"LabeledMinimapMark.java:%d\",\"message\":\"isNear check\",\"data\":{\"thisTileCoords\":\"%s\",\"otherTileCoords\":\"%s\",\"dx\":%d,\"dy\":%d,\"radiusTiles\":%d,\"result\":%s},\"timestamp\":%d}\n",
+                209, this.tileCoords.toString(), tc.toString(), dx, dy, radiusTiles, result, System.currentTimeMillis()));
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
+        
+        return result;
     }
 }
 

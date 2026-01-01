@@ -142,6 +142,29 @@ public class MiningMasterySettings extends Panel {
         int y = UI.scale(36);
 
         add(new Label("Select which items to mark on map when mining:"), new Coord(margin, y));
+        
+        // Вычисляем позицию справа для кнопок - справа от верхнего текста
+        int labelWidth = UI.scale(400); // Примерная ширина первого label
+        int buttonX = margin + labelWidth + UI.scale(20); // Справа от текста с отступом
+        int buttonY = y; // На той же высоте, что и первый label
+        
+        // Кнопка "Threshold for all stones" - устанавливает порог для всех камней (кроме руд и драгоценных камней)
+        add(new Button(UI.scale(150), "Threshold for all stones") {
+            @Override
+            public void click() {
+                showThresholdForAllDialog();
+            }
+        }, new Coord(buttonX, buttonY));
+        buttonY += UI.scale(30);
+        
+        // Кнопка "Threshold for all ores" - устанавливает порог для всех руд
+        add(new Button(UI.scale(150), "Threshold for all ores") {
+            @Override
+            public void click() {
+                showThresholdForAllOresDialog();
+            }
+        }, new Coord(buttonX, buttonY));
+        
         y += UI.scale(32);
         add(new Label("Click on right side of item to edit quality threshold"), new Coord(margin, y));
         y += UI.scale(25);
@@ -298,5 +321,116 @@ public class MiningMasterySettings extends Panel {
         NMasterMinerMarkingConfig.set(config);
         NConfig.needUpdate();
         System.out.println("MiningMasterySettings saved successfully");
+    }
+    
+    /**
+     * Показывает диалог для установки порога для всех обычных камней (кроме руд и драгоценных камней)
+     */
+    private void showThresholdForAllDialog() {
+        if (ui == null) return;
+        Window thresholdDialog = new Window(UI.scale(300, 140), "Threshold for all") {
+            private TextEntry thresholdEntry;
+
+            {
+                add(new Label("Enter quality threshold for all stones"), new Coord(UI.scale(10), UI.scale(30)));
+                add(new Label("(except ores and gemstones):"), new Coord(UI.scale(10), UI.scale(50)));
+                thresholdEntry = add(new TextEntry(UI.scale(100), "10"), 
+                    new Coord(UI.scale(10), UI.scale(70)));
+                
+                add(new Button(UI.scale(80), "OK") {
+                    @Override
+                    public void click() {
+                        try {
+                            double threshold = Double.parseDouble(thresholdEntry.buf.line());
+                            // Устанавливаем порог только для обычных камней (исключая руды и драгоценные камни)
+                            for (Map.Entry<String, ItemCheckbox> entry : checkboxes.entrySet()) {
+                                String itemName = entry.getKey();
+                                ItemCheckbox checkbox = entry.getValue();
+                                
+                                // Проверяем, является ли это рудой
+                                boolean isOre = MasterMiner.isOre(itemName) || 
+                                               itemName.equals("Black Coal") || 
+                                               itemName.equals("Quartz") || 
+                                               itemName.equals("Flint");
+                                // Проверяем, является ли это драгоценным камнем
+                                boolean isGemstone = MasterMiner.isGemstone(itemName);
+                                
+                                // Устанавливаем порог только для обычных камней (не руды и не драгоценные камни)
+                                if (!isOre && !isGemstone) {
+                                    checkbox.setThreshold(threshold);
+                                }
+                            }
+                            // Сохраняем изменения
+                            save();
+                            parent.destroy();
+                        } catch (NumberFormatException e) {
+                            // Ignore invalid input
+                        }
+                    }
+                }, new Coord(UI.scale(10), UI.scale(100)));
+                
+                add(new Button(UI.scale(80), "Cancel") {
+                    @Override
+                    public void click() {
+                        parent.destroy();
+                    }
+                }, new Coord(UI.scale(100), UI.scale(100)));
+            }
+        };
+        ui.root.add(thresholdDialog, UI.scale(200, 200));
+    }
+    
+    /**
+     * Показывает диалог для установки порога для всех руд
+     */
+    private void showThresholdForAllOresDialog() {
+        if (ui == null) return;
+        Window thresholdDialog = new Window(UI.scale(300, 140), "Threshold for all ores") {
+            private TextEntry thresholdEntry;
+
+            {
+                add(new Label("Enter quality threshold for all ores:"), new Coord(UI.scale(10), UI.scale(30)));
+                thresholdEntry = add(new TextEntry(UI.scale(100), "10"), 
+                    new Coord(UI.scale(10), UI.scale(70)));
+                
+                add(new Button(UI.scale(80), "OK") {
+                    @Override
+                    public void click() {
+                        try {
+                            double threshold = Double.parseDouble(thresholdEntry.buf.line());
+                            // Устанавливаем порог только для руд
+                            for (Map.Entry<String, ItemCheckbox> entry : checkboxes.entrySet()) {
+                                String itemName = entry.getKey();
+                                ItemCheckbox checkbox = entry.getValue();
+                                
+                                // Проверяем, является ли это рудой
+                                boolean isOre = MasterMiner.isOre(itemName) || 
+                                               itemName.equals("Black Coal") || 
+                                               itemName.equals("Quartz") || 
+                                               itemName.equals("Flint");
+                                
+                                // Устанавливаем порог только для руд
+                                if (isOre) {
+                                    checkbox.setThreshold(threshold);
+                                }
+                            }
+                            // Сохраняем изменения
+                            save();
+                            parent.destroy();
+                        } catch (NumberFormatException e) {
+                            // Ignore invalid input
+                        }
+                    }
+                }, new Coord(UI.scale(10), UI.scale(100)));
+                
+                add(new Button(UI.scale(80), "Cancel") {
+                    @Override
+                    public void click() {
+                        parent.destroy();
+                    }
+                }, new Coord(UI.scale(100), UI.scale(100)));
+            }
+        };
+        ui.root.add(thresholdDialog, UI.scale(200, 200));
     }
 }

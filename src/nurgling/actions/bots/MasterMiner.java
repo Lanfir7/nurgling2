@@ -105,7 +105,7 @@ public class MasterMiner extends ActionWithFinal {
     // Очередь батчинга для маркеров
     private final List<MarkerBatch> markerBatchQueue = new ArrayList<>();
     private volatile long lastBatchProcessTime = 0;
-    private static final long BATCH_DELAY_MS = 200; // Собираем камни 200мс перед обработкой
+    private static final long BATCH_DELAY_MS = 1000; // Увеличена задержка для сбора большего количества камней (1000мс = 1 секунда)
     private final Object batchLock = new Object();
 
     @Override
@@ -486,7 +486,17 @@ public class MasterMiner extends ActionWithFinal {
                 
                 Double threshold = markingConfig.getThreshold(configKey);
                 
-                if (enabled != null && enabled) {
+                // Если enabled == null, используем значение по умолчанию (драгоценные камни включены)
+                boolean shouldMark = false;
+                if (enabled == null) {
+                    // По умолчанию драгоценные камни включены
+                    shouldMark = true;
+                } else {
+                    // Используем явное значение из настроек
+                    shouldMark = enabled;
+                }
+                
+                if (shouldMark) {
                     double itemThreshold = (threshold != null && !threshold.isNaN()) ? threshold : 10.0;
                     if (f3 >= itemThreshold) {
                         // Драгоценные камни - отдельный слой, ставим с фактическим качеством (f3)
@@ -599,8 +609,26 @@ public class MasterMiner extends ActionWithFinal {
                     Boolean enabled = markingConfig.isEnabled(configKey);
                     Double threshold = markingConfig.getThreshold(configKey);
                     
+                    // Определяем, является ли это рудой, Quarryartz или драгоценным камнем для значений по умолчанию
+                    boolean isOre = isOre(stoneName) || 
+                                   stoneName.equals("Black Coal") || 
+                                   stoneName.equals("Quartz") || 
+                                   stoneName.equals("Flint");
+                    boolean isQuarryartz = "Quarryartz".equals(stoneType);
+                    // isGem уже определена выше в методе
+                    
+                    // Если enabled == null, используем значения по умолчанию (руды, Quarryartz и драгоценные камни включены)
+                    boolean shouldMark = false;
+                    if (enabled == null) {
+                        // По умолчанию руды, Quarryartz и драгоценные камни включены
+                        shouldMark = isOre || isQuarryartz || isGem;
+                    } else {
+                        // Используем явное значение из настроек
+                        shouldMark = enabled;
+                    }
+                    
                     // Если элемент включен в настройках и качество в стене >= порога
-                    if (enabled != null && enabled) {
+                    if (shouldMark) {
                         double itemThreshold = (threshold != null && !threshold.isNaN()) ? threshold : 10.0;
                         
                         if (wallQ >= itemThreshold) {
@@ -1045,10 +1073,10 @@ public class MasterMiner extends ActionWithFinal {
             Coord2d playerPos = player.rc;
             double angle = player.a;
             
-            // Смещение в направлении копания (примерно 13.75 тайлов)
+            // Смещение в направлении копания на 1 тайл (для квариарца)
             Coord2d minedTile = new Coord2d(
-                playerPos.x + (Math.cos(angle) * 13.75),
-                playerPos.y + (Math.sin(angle) * 13.75)
+                playerPos.x + (Math.cos(angle) * MCache.tilesz.x),
+                playerPos.y + (Math.sin(angle) * MCache.tilesz.y)
             );
             
             // Получаем segment ID и tile coordinates
@@ -1078,23 +1106,22 @@ public class MasterMiner extends ActionWithFinal {
             if (player == null) return;
             
             // Получаем позицию игрока и направление копания
-            // Ставим четко в месте выкопан (с учетом направления копания)
+            // Квариарц ставится на 1 тайл в сторону куда смотрит игрок (без проверки на существующие маркеры)
             Coord2d playerPos = player.rc;
             double angle = player.a; // угол направления игрока
             
-            // Смещение в направлении копания (примерно 13.75 тайлов, как в MiningSafetyAssistant)
+            // Смещение в направлении копания на 1 тайл
             Coord2d minedTile = new Coord2d(
-                playerPos.x + (Math.cos(angle) * 13.75),
-                playerPos.y + (Math.sin(angle) * 13.75)
+                playerPos.x + (Math.cos(angle) * MCache.tilesz.x),
+                playerPos.y + (Math.sin(angle) * MCache.tilesz.y)
             );
             
             // Получаем segment ID и tile coordinates
             long segmentId = gui.mmap.sessloc.seg.id;
             Coord tileCoords = minedTile.floor(MCache.tilesz).add(gui.mmap.sessloc.tc);
             
-            // УБРАНА ПРОВЕРКА существующих маркеров - она вызывала лаги из-за блокирующего lock
-            // LabeledMarkService сам удалит дубликаты в радиусе 2 тайлов при создании маркера
-            // Создаем маркер всегда - сервис сам обработает дубликаты
+            // Квариарц ставится всегда, без проверки на существующие маркеры рядом
+            // LabeledMarkService удалит дубликаты только в радиусе 2 тайлов, но мы ставим на 1 тайл
             {
                 // Создаем метку (например, "q101")
                 String label = String.format("q%.0f", wallQ);
@@ -1166,10 +1193,10 @@ public class MasterMiner extends ActionWithFinal {
             Coord2d playerPos = player.rc;
             double angle = player.a;
             
-            // Смещение в направлении копания (примерно 13.75 тайлов)
+            // Смещение в направлении копания на 1 тайл (для квариарца)
             Coord2d minedTile = new Coord2d(
-                playerPos.x + (Math.cos(angle) * 13.75),
-                playerPos.y + (Math.sin(angle) * 13.75)
+                playerPos.x + (Math.cos(angle) * MCache.tilesz.x),
+                playerPos.y + (Math.sin(angle) * MCache.tilesz.y)
             );
             
             // Получаем segment ID и tile coordinates
@@ -1192,11 +1219,11 @@ public class MasterMiner extends ActionWithFinal {
     private void scheduleBatchProcessing(NGameUI gui) {
         long currentTime = System.currentTimeMillis();
         if (lastBatchProcessTime == 0 || (currentTime - lastBatchProcessTime) >= BATCH_DELAY_MS) {
-            // Обрабатываем батч сразу или через небольшую задержку
+            // Обрабатываем батч через задержку в отдельном потоке
             markerExecutor.submit(() -> {
                 try {
-                    // Небольшая задержка для сбора большего количества камней
-                    Thread.sleep(50);
+                    // Увеличенная задержка для сбора большего количества камней перед обработкой
+                    Thread.sleep(BATCH_DELAY_MS);
                     processMarkerBatch(gui);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -1236,25 +1263,321 @@ public class MasterMiner extends ActionWithFinal {
             }
         }
         
-        // Обрабатываем каждый уникальный маркер - создаем напрямую без пересчета координат
-        for (MarkerBatch best : bestMarkers.values()) {
+        // Обрабатываем каждый уникальный маркер - создаем с задержками для избежания лагов
+        // Обрабатываем маркеры по одному с задержками, чтобы не перегружать систему
+        List<MarkerBatch> markersList = new ArrayList<>(bestMarkers.values());
+        
+        for (int i = 0; i < markersList.size(); i++) {
+            MarkerBatch best = markersList.get(i);
             try {
                 String label = String.format("q%.0f", best.wallQ);
-                String locationId = gui.labeledMarkService.addLabeledMarkAsync(
-                    label, best.oreName, best.segmentId, best.tileCoords, null);
                 
-                // Загружаем иконку асинхронно
-                if (locationId != null) {
-                    if ("ore".equals(best.markerType)) {
-                        loadIconAndUpdateMarker(gui, locationId, best.item, best.oreName);
-                    } else if ("gem".equals(best.markerType)) {
-                        loadIconAndUpdateMarker(gui, locationId, best.item, best.oreName);
-                    } else if ("quarryartz".equals(best.markerType)) {
-                        loadQuarryartzIconAndUpdateMarker(gui, locationId);
-                        // Воспроизводим звук при выпадении квариарца
-                        playQuarryartzSound(gui);
+                // Для квариарца не проверяем существующие маркеры - всегда создаем новый (радиус 0 = только точно на том же месте)
+                // Для руд проверяем существующие маркеры в радиусе 1 тайла (слипаются в один маркер, обновляется только если качество выше)
+                // Для камней (не руд, не квариарц, не драг камни) проверяем в радиусе 20 тайлов
+                int radiusTiles;
+                if ("quarryartz".equals(best.markerType)) {
+                    // Квариарц ставится всегда, без проверки на существующие маркеры рядом (только точно на том же месте)
+                    radiusTiles = 0;
+                } else if ("ore".equals(best.markerType)) {
+                    // Проверяем, является ли это камнем (не рудой, не квариарцем, не драг камнем)
+                    boolean isStone = !isOre(best.oreName) && 
+                                     !"Quarryartz".equals(best.oreName) && 
+                                     !isGemstone(best.oreName);
+                    
+                    if (isStone) {
+                        // Камни: один "плавающий" маркер на расстоянии 20 тайлов (огромная жила)
+                        // Маркер перемещается в место с лучшим качеством
+                        java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
+                            gui.labeledMarkService.getMarksByResourceType(best.oreName);
+                        String existingLocationId = null;
+                        double existingQ = 0;
+                        int checkedCount = 0;
+                        int maxChecks = 100; // Ограничиваем количество проверок
+                        
+                        // #region agent log
+                        try {
+                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Stone marker check start\",\"data\":{\"oreName\":\"%s\",\"tileCoords\":\"%s\",\"wallQ\":%.1f,\"existingMarksCount\":%d,\"segmentId\":%d},\"timestamp\":%d}\n",
+                                1288, best.oreName, best.tileCoords.toString(), best.wallQ, existingMarks.size(), best.segmentId, System.currentTimeMillis()));
+                            fw.close();
+                        } catch (Exception e) {}
+                        // #endregion
+                        
+                        for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
+                            if (checkedCount++ >= maxChecks) break;
+                            boolean sameSegment = mark.segmentId == best.segmentId;
+                            boolean isNear = mark.isNear(best.segmentId, best.tileCoords, 20);
+                            boolean sameType = best.oreName.equals(mark.resourceType);
+                            
+                            // #region agent log
+                            try {
+                                java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Checking existing stone mark\",\"data\":{\"markTileCoords\":\"%s\",\"newTileCoords\":\"%s\",\"sameSegment\":%s,\"isNear\":%s,\"sameType\":%s,\"radiusTiles\":20,\"dx\":%d,\"dy\":%d},\"timestamp\":%d}\n",
+                                    1298, mark.tileCoords.toString(), best.tileCoords.toString(), sameSegment, isNear, sameType, 
+                                    Math.abs(mark.tileCoords.x - best.tileCoords.x), Math.abs(mark.tileCoords.y - best.tileCoords.y), System.currentTimeMillis()));
+                                fw.close();
+                            } catch (Exception e) {}
+                            // #endregion
+                            
+                            if (sameSegment && isNear && sameType) {
+                                // Парсим качество из метки
+                                double markQ = 0;
+                                if (mark.label != null && mark.label.startsWith("q")) {
+                                    try {
+                                        markQ = Double.parseDouble(mark.label.substring(1).trim());
+                                    } catch (NumberFormatException e) {
+                                        // Игнорируем ошибки парсинга
+                                    }
+                                }
+                                // Сохраняем маркер с лучшим качеством
+                                if (markQ > existingQ) {
+                                    existingQ = markQ;
+                                    existingLocationId = mark.getLocationId();
+                                    
+                                    // #region agent log
+                                    try {
+                                        java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                        fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Found better existing stone mark\",\"data\":{\"existingQ\":%.1f,\"newQ\":%.1f,\"locationId\":\"%s\"},\"timestamp\":%d}\n",
+                                            1313, existingQ, best.wallQ, existingLocationId, System.currentTimeMillis()));
+                                        fw.close();
+                                    } catch (Exception e) {}
+                                    // #endregion
+                                }
+                            }
+                        }
+                        
+                        // Если нашли существующий маркер и новое качество выше - обновляем его
+                        // #region agent log
+                        try {
+                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Stone marker decision\",\"data\":{\"existingLocationId\":\"%s\",\"existingQ\":%.1f,\"newQ\":%.1f,\"willUpdate\":%s,\"willCreate\":%s},\"timestamp\":%d}\n",
+                                1320, existingLocationId != null ? existingLocationId : "null", existingQ, best.wallQ, 
+                                (existingLocationId != null && best.wallQ > existingQ), (existingLocationId == null || best.wallQ > existingQ), System.currentTimeMillis()));
+                            fw.close();
+                        } catch (Exception e) {}
+                        // #endregion
+                        
+                        if (existingLocationId != null && best.wallQ > existingQ) {
+                            // Обновляем существующий маркер (перемещаем в новое место)
+                            final String finalLocationId = existingLocationId;
+                            final String finalLabel = label;
+                            final Coord finalTileCoords = best.tileCoords;
+                            
+                            markerExecutor.submit(() -> {
+                                try {
+                                    gui.labeledMarkService.updateMarkPosition(finalLocationId, finalLabel, finalTileCoords);
+                                } catch (Exception e) {
+                                    // Игнорируем ошибки
+                                }
+                            });
+                            continue; // Пропускаем создание нового маркера
+                        } else if (existingLocationId != null && best.wallQ <= existingQ) {
+                            // Качество не выше - не обновляем
+                            continue;
+                        }
+                        
+                        // Маркера нет или качество выше - создаем новый
+                        radiusTiles = 20;
+                    } else {
+                        // Руды: один "плавающий" маркер на расстоянии 1 тайла
+                        // Маркер перемещается в место с лучшим качеством
+                        java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
+                            gui.labeledMarkService.getMarksByResourceType(best.oreName);
+                        String existingLocationId = null;
+                        double existingQ = 0;
+                        int checkedCount = 0;
+                        int maxChecks = 50; // Ограничиваем количество проверок для руд
+                        
+                        // #region agent log
+                        try {
+                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Ore marker check start\",\"data\":{\"oreName\":\"%s\",\"tileCoords\":\"%s\",\"wallQ\":%.1f,\"existingMarksCount\":%d,\"segmentId\":%d},\"timestamp\":%d}\n",
+                                1342, best.oreName, best.tileCoords.toString(), best.wallQ, existingMarks.size(), best.segmentId, System.currentTimeMillis()));
+                            fw.close();
+                        } catch (Exception e) {}
+                        // #endregion
+                        
+                        for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
+                            if (checkedCount++ >= maxChecks) break;
+                            boolean sameSegment = mark.segmentId == best.segmentId;
+                            boolean isNear = mark.isNear(best.segmentId, best.tileCoords, 1);
+                            boolean sameType = best.oreName.equals(mark.resourceType);
+                            
+                            // #region agent log
+                            try {
+                                java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Checking existing ore mark\",\"data\":{\"markTileCoords\":\"%s\",\"newTileCoords\":\"%s\",\"sameSegment\":%s,\"isNear\":%s,\"sameType\":%s,\"radiusTiles\":1,\"dx\":%d,\"dy\":%d},\"timestamp\":%d}\n",
+                                    1352, mark.tileCoords.toString(), best.tileCoords.toString(), sameSegment, isNear, sameType,
+                                    Math.abs(mark.tileCoords.x - best.tileCoords.x), Math.abs(mark.tileCoords.y - best.tileCoords.y), System.currentTimeMillis()));
+                                fw.close();
+                            } catch (Exception e) {}
+                            // #endregion
+                            
+                            if (sameSegment && isNear && sameType) {
+                                // Парсим качество из метки
+                                double markQ = 0;
+                                if (mark.label != null && mark.label.startsWith("q")) {
+                                    try {
+                                        markQ = Double.parseDouble(mark.label.substring(1).trim());
+                                    } catch (NumberFormatException e) {
+                                        // Игнорируем ошибки парсинга
+                                    }
+                                }
+                                // Сохраняем маркер с лучшим качеством
+                                if (markQ > existingQ) {
+                                    existingQ = markQ;
+                                    existingLocationId = mark.getLocationId();
+                                    
+                                    // #region agent log
+                                    try {
+                                        java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                                        fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Found better existing ore mark\",\"data\":{\"existingQ\":%.1f,\"newQ\":%.1f,\"locationId\":\"%s\"},\"timestamp\":%d}\n",
+                                            1367, existingQ, best.wallQ, existingLocationId, System.currentTimeMillis()));
+                                        fw.close();
+                                    } catch (Exception e) {}
+                                    // #endregion
+                                }
+                            }
+                        }
+                        
+                        // Если нашли существующий маркер и новое качество выше - обновляем его
+                        // #region agent log
+                        try {
+                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Ore marker decision\",\"data\":{\"existingLocationId\":\"%s\",\"existingQ\":%.1f,\"newQ\":%.1f,\"willUpdate\":%s,\"willCreate\":%s},\"timestamp\":%d}\n",
+                                1374, existingLocationId != null ? existingLocationId : "null", existingQ, best.wallQ,
+                                (existingLocationId != null && best.wallQ > existingQ), (existingLocationId == null || best.wallQ > existingQ), System.currentTimeMillis()));
+                            fw.close();
+                        } catch (Exception e) {}
+                        // #endregion
+                        
+                        if (existingLocationId != null && best.wallQ > existingQ) {
+                            // Обновляем существующий маркер (перемещаем в новое место)
+                            final String finalLocationId = existingLocationId;
+                            final String finalLabel = label;
+                            final Coord finalTileCoords = best.tileCoords;
+                            
+                            markerExecutor.submit(() -> {
+                                try {
+                                    gui.labeledMarkService.updateMarkPosition(finalLocationId, finalLabel, finalTileCoords);
+                                } catch (Exception e) {
+                                    // Игнорируем ошибки
+                                }
+                            });
+                            continue; // Пропускаем создание нового маркера
+                        } else if (existingLocationId != null && best.wallQ <= existingQ) {
+                            // Качество не выше - не обновляем
+                            continue;
+                        }
+                        
+                        // Маркера нет или качество выше - создаем новый
+                        radiusTiles = 1;
                     }
+                } else {
+                    // Для остальных (драгоценные камни) используем стандартный радиус 2
+                    radiusTiles = 2;
                 }
+                
+                // Создаем маркер асинхронно в отдельном потоке для уменьшения лагов
+                final String finalLabel = label;
+                final String finalOreName = best.oreName;
+                final long finalSegmentId = best.segmentId;
+                final Coord finalTileCoords = best.tileCoords;
+                final int finalRadiusTiles = radiusTiles;
+                final String finalMarkerType = best.markerType;
+                final NGItem finalItem = best.item;
+                
+                markerExecutor.submit(() -> {
+                    try {
+                        long startTime = System.currentTimeMillis();
+                        
+                        // #region agent log
+                        try {
+                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Creating marker async start\",\"data\":{\"oreName\":\"%s\",\"tileCoords\":\"%s\",\"radiusTiles\":%d,\"markerType\":\"%s\"},\"timestamp\":%d}\n",
+                                1411, finalOreName, finalTileCoords.toString(), finalRadiusTiles, finalMarkerType, startTime));
+                            fw.close();
+                        } catch (Exception e) {}
+                        // #endregion
+                        
+                        // Проверяем, есть ли уже маркер проспектинга в этом месте
+                        BufferedImage existingIcon = null;
+                        if (gui.mapfile != null && gui.mapfile.file != null) {
+                            try {
+                                // Пытаемся найти существующий маркер проспектинга
+                                String iconPath = getIconPathFromVSpec(finalOreName);
+                                if (iconPath != null) {
+                                    MapFile.SMarker existingMarker = gui.mapfile.file.smarker(iconPath, finalSegmentId, finalTileCoords);
+                                    if (existingMarker != null && existingMarker.res != null) {
+                                        try {
+                                            Resource res = existingMarker.res.get();
+                                            if (res != null) {
+                                                existingIcon = res.layer(Resource.imgc).img;
+                                            }
+                                        } catch (Exception e) {
+                                            // Игнорируем ошибки загрузки
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                // Игнорируем ошибки проверки
+                            }
+                        }
+                        
+                        // Если иконка не найдена в проспектинге, пробуем загрузить из VSpec или кэша
+                        if (existingIcon == null) {
+                            if ("quarryartz".equals(finalMarkerType)) {
+                                existingIcon = getQuarryartzIcon();
+                            } else if (finalItem != null) {
+                                existingIcon = getOreIconFromItem(finalItem, finalOreName);
+                            } else {
+                                existingIcon = getOreIcon(finalOreName);
+                            }
+                        }
+                        
+                        long beforeAddTime = System.currentTimeMillis();
+                        String locationId = gui.labeledMarkService.addLabeledMarkAsync(
+                            finalLabel, finalOreName, finalSegmentId, finalTileCoords, existingIcon, finalRadiusTiles);
+                        long afterAddTime = System.currentTimeMillis();
+                        
+                        // #region agent log
+                        try {
+                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
+                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Marker created\",\"data\":{\"locationId\":\"%s\",\"addTimeMs\":%d,\"totalTimeMs\":%d},\"timestamp\":%d}\n",
+                                1448, locationId != null ? locationId : "null", (afterAddTime - beforeAddTime), (afterAddTime - startTime), System.currentTimeMillis()));
+                            fw.close();
+                        } catch (Exception e) {}
+                        // #endregion
+                        
+                        // Если иконка не была загружена сразу, загружаем асинхронно
+                        if (locationId != null && existingIcon == null) {
+                            if ("ore".equals(finalMarkerType)) {
+                                loadIconAndUpdateMarker(gui, locationId, finalItem, finalOreName);
+                            } else if ("gem".equals(finalMarkerType)) {
+                                loadIconAndUpdateMarker(gui, locationId, finalItem, finalOreName);
+                            } else if ("quarryartz".equals(finalMarkerType)) {
+                                loadQuarryartzIconAndUpdateMarker(gui, locationId);
+                                // Воспроизводим звук при выпадении квариарца
+                                playQuarryartzSound(gui);
+                            }
+                        } else if ("quarryartz".equals(finalMarkerType) && locationId != null) {
+                            // Воспроизводим звук при выпадении квариарца
+                            playQuarryartzSound(gui);
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки
+                    }
+                });
+                
+                // Задержка между маркерами, чтобы не перегружать систему и избежать лагов
+                // Обрабатываем маркеры постепенно, а не все сразу
+                if (i < markersList.size() - 1) {
+                    Thread.sleep(200); // 200мс задержка между маркерами для плавности (увеличено для уменьшения лагов)
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
                 // Игнорируем ошибки
             }
@@ -1281,10 +1604,10 @@ public class MasterMiner extends ActionWithFinal {
             Coord2d playerPos = player.rc;
             double angle = player.a; // угол направления игрока
             
-            // Смещение в направлении копания (примерно 13.75 тайлов)
+            // Смещение в направлении копания на 1 тайл (для квариарца)
             Coord2d minedTile = new Coord2d(
-                playerPos.x + (Math.cos(angle) * 13.75),
-                playerPos.y + (Math.sin(angle) * 13.75)
+                playerPos.x + (Math.cos(angle) * MCache.tilesz.x),
+                playerPos.y + (Math.sin(angle) * MCache.tilesz.y)
             );
             
             // Получаем segment ID и tile coordinates
@@ -1571,10 +1894,10 @@ public class MasterMiner extends ActionWithFinal {
             Coord2d playerPos = player.rc;
             double angle = player.a;
             
-            // Смещение в направлении копания (примерно 13.75 тайлов)
+            // Смещение в направлении копания на 1 тайл (для квариарца)
             Coord2d minedTile = new Coord2d(
-                playerPos.x + (Math.cos(angle) * 13.75),
-                playerPos.y + (Math.sin(angle) * 13.75)
+                playerPos.x + (Math.cos(angle) * MCache.tilesz.x),
+                playerPos.y + (Math.sin(angle) * MCache.tilesz.y)
             );
             
             // Получаем segment ID и tile coordinates
@@ -1612,10 +1935,10 @@ public class MasterMiner extends ActionWithFinal {
             Coord2d playerPos = player.rc;
             double angle = player.a; // угол направления игрока
             
-            // Смещение в направлении копания (примерно 13.75 тайлов)
+            // Смещение в направлении копания на 1 тайл (для квариарца)
             Coord2d minedTile = new Coord2d(
-                playerPos.x + (Math.cos(angle) * 13.75),
-                playerPos.y + (Math.sin(angle) * 13.75)
+                playerPos.x + (Math.cos(angle) * MCache.tilesz.x),
+                playerPos.y + (Math.sin(angle) * MCache.tilesz.y)
             );
             
             // Получаем segment ID и tile coordinates
@@ -1827,17 +2150,45 @@ public class MasterMiner extends ActionWithFinal {
     /**
      * Асинхронно загружает иконку руды/камня и обновляет маркер
      * Оптимизировано: загрузка иконки отложена, чтобы не блокировать создание маркера
+     * Улучшено: проверяет существующие маркеры проспектинга и использует их иконки
      */
     private void loadIconAndUpdateMarker(NGameUI gui, String locationId, NGItem item, String resourceName) {
-        // Откладываем загрузку иконки на небольшое время, чтобы маркер успел создаться
-        // Это позволяет избежать блокировки при создании маркера
         iconLoaderExecutor.submit(() -> {
             try {
                 // Небольшая задержка, чтобы маркер успел создаться без блокировки
-                Thread.sleep(10);
+                Thread.sleep(50);
                 
-                // Загружаем иконку (может занять время, но это в отдельном потоке)
-                BufferedImage icon = getOreIconFromItem(item, resourceName);
+                // Сначала проверяем существующие маркеры проспектинга
+                BufferedImage icon = null;
+                if (gui.mapfile != null && gui.mapfile.file != null) {
+                    try {
+                        // Получаем координаты маркера для проверки
+                        nurgling.widgets.LabeledMinimapMark mark = gui.labeledMarkService.getMark(locationId);
+                        if (mark != null) {
+                            String iconPath = getIconPathFromVSpec(resourceName);
+                            if (iconPath != null) {
+                                MapFile.SMarker existingMarker = gui.mapfile.file.smarker(iconPath, mark.segmentId, mark.tileCoords);
+                                if (existingMarker != null && existingMarker.res != null) {
+                                    try {
+                                        Resource res = existingMarker.res.get();
+                                        if (res != null) {
+                                            icon = res.layer(Resource.imgc).img;
+                                        }
+                                    } catch (Exception e) {
+                                        // Игнорируем ошибки загрузки
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки проверки
+                    }
+                }
+                
+                // Если иконка не найдена в проспектинге, загружаем из предмета или VSpec
+                if (icon == null) {
+                    icon = getOreIconFromItem(item, resourceName);
+                }
                 
                 // Обновляем маркер с загруженной иконкой
                 if (gui.labeledMarkService != null && icon != null) {
@@ -1853,17 +2204,56 @@ public class MasterMiner extends ActionWithFinal {
     
     /**
      * Асинхронно загружает иконку квариарца и обновляет маркер
+     * Улучшено: проверяет существующие маркеры проспектинга и использует их иконки
      */
     private void loadQuarryartzIconAndUpdateMarker(NGameUI gui, String locationId) {
         iconLoaderExecutor.submit(() -> {
             try {
-                // Загружаем иконку квариарца (может занять время)
-                BufferedImage icon = getQuarryartzIcon();
+                // Небольшая задержка, чтобы маркер успел создаться
+                Thread.sleep(50);
+                
+                // Сначала проверяем существующие маркеры проспектинга
+                BufferedImage icon = null;
+                if (gui.mapfile != null && gui.mapfile.file != null) {
+                    try {
+                        // Получаем координаты маркера для проверки
+                        nurgling.widgets.LabeledMinimapMark mark = gui.labeledMarkService.getMark(locationId);
+                        if (mark != null) {
+                            // Проверяем маркер проспектинга для квариарца
+                            String iconPath = "gfx/invobjs/quarryquartz"; // Путь к иконке квариарца
+                            MapFile.SMarker existingMarker = gui.mapfile.file.smarker(iconPath, mark.segmentId, mark.tileCoords);
+                            if (existingMarker == null) {
+                                // Пробуем альтернативный путь
+                                iconPath = "gfx/invobjs/quarryartz";
+                                existingMarker = gui.mapfile.file.smarker(iconPath, mark.segmentId, mark.tileCoords);
+                            }
+                            if (existingMarker != null && existingMarker.res != null) {
+                                try {
+                                    Resource res = existingMarker.res.get();
+                                    if (res != null) {
+                                        icon = res.layer(Resource.imgc).img;
+                                    }
+                                } catch (Exception e) {
+                                    // Игнорируем ошибки загрузки
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Игнорируем ошибки проверки
+                    }
+                }
+                
+                // Если иконка не найдена в проспектинге, загружаем из ресурсов
+                if (icon == null) {
+                    icon = getQuarryartzIcon();
+                }
                 
                 // Обновляем маркер с загруженной иконкой
-                if (gui.labeledMarkService != null) {
+                if (gui.labeledMarkService != null && icon != null) {
                     gui.labeledMarkService.updateMarkIcon(locationId, icon);
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 // Игнорируем ошибки загрузки иконки
             }
