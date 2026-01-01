@@ -100,7 +100,7 @@ public class NConfig
         questNotified, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, ndbenable, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, simplecrops,
         syncServerEnabled, syncServerUrl, syncZoneSync, syncIntervalMinutes,
-        temsmarktime, exploredAreaEnable, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
+        temsmarktime, exploredAreaEnable, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         shortCupboards,
         shortWalls,
         decalsOnTop,
@@ -133,6 +133,7 @@ public class NConfig
         bbDisplayMode,
         showBeehiveRadius,
         showTroughRadius,
+        showMoundBedRadius,
         showDamageShields,
         disableTileSmoothing,
         disableTileTransitions,
@@ -286,6 +287,7 @@ public class NConfig
         conf.put(Key.syncZoneSync, "");
         conf.put(Key.syncIntervalMinutes, 300); // 300 секунд = 5 минут (по умолчанию)
         conf.put(Key.exploredAreaEnable, false);
+        conf.put(Key.chunkNavOverlay, false);
         conf.put(Key.player_box, false);
         conf.put(Key.player_fov, false);
         conf.put(Key.gridbox, false);
@@ -422,6 +424,7 @@ public class NConfig
         // Object radius overlays - simple boolean flags
         conf.put(Key.showBeehiveRadius, false);
         conf.put(Key.showTroughRadius, false);
+        conf.put(Key.showMoundBedRadius, false);
 
         // Damage shields display
         conf.put(Key.showDamageShields, true);

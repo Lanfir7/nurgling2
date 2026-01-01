@@ -17,6 +17,9 @@ import nurgling.conf.QuickActionPreset;
 import nurgling.widgets.options.QuickActions;
 import nurgling.overlays.*;
 import nurgling.overlays.map.*;
+import nurgling.navigation.ChunkNavData;
+import nurgling.navigation.ChunkNavManager;
+import nurgling.navigation.ChunkPortal;
 import nurgling.routes.Route;
 import nurgling.routes.RouteGraphManager;
 import nurgling.routes.RoutePoint;
@@ -28,6 +31,7 @@ import nurgling.tools.*;
 import nurgling.widgets.NAreasWidget;
 import nurgling.widgets.NMiniMap;
 import nurgling.widgets.NZoneMeasureTool;
+import nurgling.NConfig;
 
 import java.awt.event.KeyEvent;
 import java.awt.image.*;
@@ -56,6 +60,8 @@ public class NMapView extends MapView
     private RouteLabel draggedRouteLabel = null;
     private boolean isDraggingRoutePoint = false;
     private UI.Grab dragGrab = null;
+    // Chunk navigation manager - owned by NMapView, not a singleton
+    private ChunkNavManager chunkNavManager;
     
     // Diablo-like running state
     private boolean leftMouseButtonHeld = false;
@@ -100,6 +106,23 @@ public class NMapView extends MapView
         if (simpleRouteManager == null) {
             simpleRouteManager = new SimpleRouteManager(genus);
         }
+        // Initialize ChunkNav system for this world
+        try {
+            if (chunkNavManager == null) {
+                chunkNavManager = new ChunkNavManager();
+            }
+            chunkNavManager.initialize(genus);
+        } catch(Exception e) {
+            System.err.println("NMapView: Error initializing ChunkNavManager: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Get the chunk navigation manager for this map view.
+     * @return The ChunkNavManager instance, or null if not initialized
+     */
+    public ChunkNavManager getChunkNavManager() {
+        return chunkNavManager;
     }
 
     final HashMap<String, String> ttip = new HashMap<>();
@@ -133,6 +156,7 @@ public class NMapView extends MapView
 
     public HashMap<Long, Gob> dummys = new HashMap<>();
     public HashMap<Long, Gob> routeDummys = new HashMap<>();
+    public HashMap<Long, Gob> portalDummys = new HashMap<>();
 
     public RouteGraphManager routeGraphManager;
     public SimpleRouteManager simpleRouteManager;
@@ -454,6 +478,59 @@ public class NMapView extends MapView
                     glob.oc.remove(d);
             }
             routeDummys.clear();
+        }
+    }
+
+    public void destroyPortalDummys()
+    {
+        for(Gob d: portalDummys.values())
+        {
+            if(glob.oc.getgob(d.id)!=null)
+                glob.oc.remove(d);
+        }
+        portalDummys.clear();
+    }
+
+    /**
+     * Create portal labels for all portals in all visible chunks.
+     * Only creates labels if chunkNavOverlay config is enabled.
+     */
+    public void createPortalLabels() {
+        destroyPortalDummys();
+
+        // Check if ChunkNav overlay is enabled
+        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
+        if (!(val instanceof Boolean) || !(Boolean) val) {
+            return; // Don't show portal dots if overlay is disabled
+        }
+
+        ChunkNavManager manager = getChunkNavManager();
+        if (manager == null || !manager.isInitialized()) return;
+
+        MCache mcache = glob.map;
+        if (mcache == null) return;
+
+        synchronized (mcache.grids) {
+            for (MCache.Grid grid : mcache.grids.values()) {
+                if (grid == null || grid.ul == null) continue;
+
+                ChunkNavData chunk = manager.getGraph().getChunk(grid.id);
+                if (chunk == null) continue;
+
+                for (ChunkPortal portal : chunk.portals) {
+                    if (portal.localCoord == null) continue;
+
+                    // Convert local tile coord to world coord
+                    Coord worldTile = grid.ul.add(portal.localCoord);
+                    Coord2d absCoord = worldTile.mul(MCache.tilesz).add(MCache.tilesz.div(2));
+
+                    OCache.Virtual dummy = glob.oc.new Virtual(absCoord, 0);
+                    dummy.virtual = true;
+                    dummy.addcustomol(new PortalLabel(dummy, chunk, portal));
+                    portalDummys.put(dummy.id, dummy);
+                    glob.oc.add(dummy);
+                }
+            }
         }
     }
 
@@ -1012,6 +1089,11 @@ public class NMapView extends MapView
         // Update marker line overlay (follows player)
         if(markerLineOverlay != null) {
             markerLineOverlay.tick();
+        }
+
+        // Tick chunk navigation system for recording
+        if (chunkNavManager != null) {
+            chunkNavManager.tick();
         }
         ArrayList<Long> forRemove = new ArrayList<>();
 //        for(Gob dummy : dummys.values())

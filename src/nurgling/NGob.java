@@ -773,6 +773,10 @@ public class NGob
                 {
                     parent.addcustomol(new nurgling.overlays.NTroughRadius(parent));
                 }
+                else if (name.contains("moundbed"))
+                {
+                    parent.addcustomol(new nurgling.overlays.NMoundBedRadius(parent));
+                }
             }
         }
     }
