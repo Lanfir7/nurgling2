@@ -22,6 +22,7 @@ import nurgling.routes.RouteGraphManager;
 import nurgling.routes.RoutePoint;
 import nurgling.routes.SimpleRoute;
 import nurgling.routes.SimpleRouteManager;
+import nurgling.navigation.ChunkNavManager;
 import nurgling.scenarios.Scenario;
 import nurgling.tasks.WaitForMapLoadNoCoord;
 import nurgling.tools.*;
@@ -100,6 +101,15 @@ public class NMapView extends MapView
         if (simpleRouteManager == null) {
             simpleRouteManager = new SimpleRouteManager(genus);
         }
+        // Initialize ChunkNav system for this world
+        try {
+            if (chunkNavManager == null) {
+                chunkNavManager = new ChunkNavManager();
+            }
+            chunkNavManager.initialize(genus);
+        } catch(Exception e) {
+            System.err.println("NMapView: Error initializing ChunkNavManager: " + e.getMessage());
+        }
     }
 
     final HashMap<String, String> ttip = new HashMap<>();
@@ -136,6 +146,15 @@ public class NMapView extends MapView
 
     public RouteGraphManager routeGraphManager;
     public SimpleRouteManager simpleRouteManager;
+    private ChunkNavManager chunkNavManager;
+
+    /**
+     * Get the chunk navigation manager for this map view.
+     * @return The ChunkNavManager instance, or null if not initialized
+     */
+    public ChunkNavManager getChunkNavManager() {
+        return chunkNavManager;
+    }
 
     /**
      * Get RouteGraphManager, initializing with fallback if needed
@@ -997,6 +1016,16 @@ public class NMapView extends MapView
     public void tick(double dt)
     {
         checkTempMarks();
+        
+        // Tick ChunkNav system for recording and portal tracking
+        if (chunkNavManager != null) {
+            try {
+                chunkNavManager.tick();
+            } catch (Exception e) {
+                // Ignore - system may not be fully initialized
+            }
+        }
+        
         synchronized (glob.map.areas)
         {
             for (NArea area : glob.map.areas.values())
