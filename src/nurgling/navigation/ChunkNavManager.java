@@ -587,13 +587,7 @@ public class ChunkNavManager {
      * Refresh portal visualization (called from tick).
      */
     private void refreshPortalVisualization() {
-        try {
-            NGameUI gui = NUtils.getGameUI();
-            if (gui != null && gui.map != null) {
-                ((nurgling.NMapView) gui.map).createPortalLabels();
-            }
-        } catch (Exception e) {
-            // Ignore - UI might not be ready
-        }
+        // Portal visualization is handled by MinimapChunkNavRenderer
+        // No explicit refresh needed here - renderer queries graph on each draw
     }
 }
