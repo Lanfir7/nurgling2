@@ -83,7 +83,7 @@ public class NTreeScaleOl extends NObjectTexLabel {
             // Check if Tree Finder is enabled
             Boolean enabled = (Boolean) NConfig.get(NConfig.Key.treeFinderEnabled);
             if (enabled == null || !enabled) {
-                System.err.println("Tree Finder: Disabled");
+                //System.err.println("Tree Finder: Disabled");
                 return;
             }
             

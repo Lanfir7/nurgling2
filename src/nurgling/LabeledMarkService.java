@@ -15,8 +15,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 import java.awt.image.BufferedImage;
@@ -40,6 +42,33 @@ public class LabeledMarkService implements ProfileAwareService {
         return t;
     });
     private volatile boolean saveScheduled = false;
+    
+    // Очередь для неблокирующего добавления маркеров (устраняет лаги UI)
+    private final ConcurrentLinkedQueue<PendingMark> pendingMarks = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean processingScheduled = new AtomicBoolean(false);
+    private static final long PROCESS_DELAY_MS = 50; // Минимальная задержка для батчинга
+    
+    // Структура для хранения ожидающих маркеров
+    private static class PendingMark {
+        final String locationId;
+        final String label;
+        final String resourceType;
+        final long segmentId;
+        final Coord tileCoords;
+        final BufferedImage iconImage;
+        final int radiusTiles;
+        
+        PendingMark(String locationId, String label, String resourceType, long segmentId, 
+                   Coord tileCoords, BufferedImage iconImage, int radiusTiles) {
+            this.locationId = locationId;
+            this.label = label;
+            this.resourceType = resourceType;
+            this.segmentId = segmentId;
+            this.tileCoords = tileCoords;
+            this.iconImage = iconImage;
+            this.radiusTiles = radiusTiles;
+        }
+    }
 
     public LabeledMarkService(NGameUI gui) {
         this.gui = gui;
@@ -89,6 +118,7 @@ public class LabeledMarkService implements ProfileAwareService {
     /**
      * Add a labeled mark asynchronously and return locationId for icon update.
      * Используется для создания маркера без иконки, с последующей асинхронной загрузкой иконки.
+     * НЕБЛОКИРУЮЩИЙ: добавляет маркер в очередь и обрабатывает в фоне.
      */
     public String addLabeledMarkAsync(String label, String resourceType, long segmentId, 
                                       Coord tileCoords, BufferedImage iconImage) {
@@ -97,50 +127,100 @@ public class LabeledMarkService implements ProfileAwareService {
     
     /**
      * Add a labeled mark asynchronously with custom radius for duplicate checking.
+     * НЕБЛОКИРУЮЩИЙ: добавляет маркер в очередь и обрабатывает в фоне, не блокируя UI.
      * @param radiusTiles радиус проверки дубликатов в тайлах (0 = только точно на том же месте, 1 = в радиусе 1 тайла, 2 = в радиусе 2 тайлов)
      */
     public String addLabeledMarkAsync(String label, String resourceType, long segmentId, 
                                       Coord tileCoords, BufferedImage iconImage, int radiusTiles) {
-        // Оптимизация: ограничиваем проверки для уменьшения лагов
+        // Генерируем locationId заранее чтобы вернуть его сразу
+        String locationId = resourceType + "_" + segmentId + "_" + tileCoords.x + "_" + tileCoords.y + "_" + System.currentTimeMillis();
+        
+        // Добавляем в очередь без блокировки (ConcurrentLinkedQueue lock-free)
+        pendingMarks.offer(new PendingMark(locationId, label, resourceType, segmentId, tileCoords, iconImage, radiusTiles));
+        
+        // Планируем обработку очереди
+        scheduleProcessing();
+        
+        return locationId;
+    }
+    
+    /**
+     * Планирует асинхронную обработку очереди маркеров
+     */
+    private void scheduleProcessing() {
+        if (processingScheduled.compareAndSet(false, true)) {
+            saveExecutor.submit(() -> {
+                try {
+                    // Небольшая задержка для батчинга нескольких маркеров
+                    Thread.sleep(PROCESS_DELAY_MS);
+                    processPendingMarks();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    processingScheduled.set(false);
+                    // Если есть ещё маркеры в очереди, планируем ещё раз
+                    if (!pendingMarks.isEmpty()) {
+                        scheduleProcessing();
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Обрабатывает все ожидающие маркеры из очереди (вызывается в фоновом потоке)
+     */
+    private void processPendingMarks() {
+        List<PendingMark> batch = new ArrayList<>();
+        PendingMark pm;
+        while ((pm = pendingMarks.poll()) != null) {
+            batch.add(pm);
+        }
+        
+        if (batch.isEmpty()) return;
+        
+        // Обрабатываем весь батч с одной блокировкой
         lock.writeLock().lock();
         try {
-            // Используем индекс для быстрого поиска маркеров того же типа ресурса
-            final Coord tc = tileCoords;
-            final long segId = segmentId;
-            final String resType = resourceType;
-            
-            // Получаем список маркеров этого типа ресурса из индекса
-            List<LabeledMinimapMark> marksToCheck = resourceTypeIndex.getOrDefault(resType, new ArrayList<>());
-            
-            // Ищем маркеры в том же сегменте в указанном радиусе
-            // Ограничиваем количество проверок для уменьшения лагов
-            List<String> toRemove = new ArrayList<>();
-            int checkedCount = 0;
-            int maxChecks = 200; // Ограничиваем проверки для уменьшения лагов
-            for (LabeledMinimapMark mark : marksToCheck) {
-                if (checkedCount++ >= maxChecks) break; // Прерываем если проверили достаточно
-                if (mark.segmentId == segId && mark.isNear(segId, tc, radiusTiles) && resType.equals(mark.resourceType)) {
-                    toRemove.add(mark.getLocationId());
-                }
+            for (PendingMark mark : batch) {
+                processMarkInternal(mark);
             }
-            
-            // Удаляем найденные маркеры
-            for (String locationId : toRemove) {
-                removeMarkFromIndexes(locationId);
-            }
-            
-            // Create and add new mark
-            LabeledMinimapMark mark = new LabeledMinimapMark(label, resourceType, segmentId, tileCoords, iconImage);
-            labeledMarks.put(mark.getLocationId(), mark);
-            addMarkToIndexes(mark);
-            
-            // Сохраняем асинхронно, чтобы избежать пролога
+            // Сохраняем один раз для всего батча
             scheduleSave();
-            
-            return mark.getLocationId();
         } finally {
             lock.writeLock().unlock();
         }
+    }
+    
+    /**
+     * Внутренняя обработка одного маркера (вызывается внутри блокировки)
+     */
+    private void processMarkInternal(PendingMark pm) {
+        // Получаем список маркеров этого типа ресурса из индекса
+        List<LabeledMinimapMark> marksToCheck = resourceTypeIndex.getOrDefault(pm.resourceType, new ArrayList<>());
+        
+        // Ищем маркеры в том же сегменте в указанном радиусе
+        List<String> toRemove = new ArrayList<>();
+        int checkedCount = 0;
+        int maxChecks = 100; // Уменьшено для производительности
+        for (LabeledMinimapMark mark : marksToCheck) {
+            if (checkedCount++ >= maxChecks) break;
+            if (mark.segmentId == pm.segmentId && 
+                mark.isNear(pm.segmentId, pm.tileCoords, pm.radiusTiles) && 
+                pm.resourceType.equals(mark.resourceType)) {
+                toRemove.add(mark.getLocationId());
+            }
+        }
+        
+        // Удаляем найденные маркеры
+        for (String locationId : toRemove) {
+            removeMarkFromIndexes(locationId);
+        }
+        
+        // Создаем и добавляем новый маркер
+        LabeledMinimapMark mark = new LabeledMinimapMark(pm.label, pm.resourceType, pm.segmentId, pm.tileCoords, pm.iconImage);
+        labeledMarks.put(mark.getLocationId(), mark);
+        addMarkToIndexes(mark);
     }
     
     /**
@@ -333,19 +413,15 @@ public class LabeledMarkService implements ProfileAwareService {
     
     /**
      * Планирует асинхронное сохранение (чтобы избежать пролога при установке маркера)
+     * Оптимизировано: использует readLock для быстрого снимка, затем пишет без блокировки
      */
     private void scheduleSave() {
         if (!saveScheduled) {
             saveScheduled = true;
             saveExecutor.submit(() -> {
                 try {
-                    Thread.sleep(100); // Небольшая задержка для батчинга
-                    lock.writeLock().lock();
-                    try {
-                        saveLabeledMarks();
-                    } finally {
-                        lock.writeLock().unlock();
-                    }
+                    Thread.sleep(500); // Увеличенная задержка для лучшего батчинга
+                    saveLabeledMarksOptimized();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (Exception e) {
@@ -354,6 +430,38 @@ public class LabeledMarkService implements ProfileAwareService {
                     saveScheduled = false;
                 }
             });
+        }
+    }
+    
+    /**
+     * Оптимизированное сохранение: делает быстрый снимок с readLock, затем пишет без блокировки
+     */
+    private void saveLabeledMarksOptimized() {
+        // Быстро копируем данные с readLock (не блокирует write операции)
+        List<LabeledMinimapMark> snapshot;
+        lock.readLock().lock();
+        try {
+            snapshot = new ArrayList<>(labeledMarks.values());
+        } finally {
+            lock.readLock().unlock();
+        }
+        
+        // Записываем в файл БЕЗ блокировки
+        try {
+            JSONObject main = new JSONObject();
+            JSONArray jMarks = new JSONArray();
+            for (LabeledMinimapMark mark : snapshot) {
+                jMarks.put(mark.toJson());
+            }
+            main.put("labeledMarks", jMarks);
+            main.put("version", 1);
+            main.put("lastSaved", java.time.Instant.now().toString());
+
+            try (FileWriter writer = new FileWriter(dataFile, StandardCharsets.UTF_8)) {
+                writer.write(main.toString(2));
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to save labeled marks: " + e.getMessage());
         }
     }
 

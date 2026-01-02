@@ -1,7 +1,6 @@
 package nurgling.actions.bots;
 
 import haven.*;
-import haven.Audio;
 import haven.MCache;
 import haven.Resource;
 import haven.res.lib.itemtex.ItemTex;
@@ -303,7 +302,53 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
-     * Проверяет стак и сбрасывает его, если качество ниже порога
+     * Получает МАКСИМАЛЬНОЕ качество в стаке (для решения о выбрасывании)
+     * Если максимальное качество ниже порога - весь стак можно выбросить
+     */
+    private double getMaxStackQuality(NGItem item, WItem wItem) {
+        if (item == null) return -1;
+        
+        try {
+            haven.GItem.Amount amount = item.getInfo(haven.GItem.Amount.class);
+            if (amount != null && amount.itemnum() > 1) {
+                // Это стак - получаем максимальное качество из всех предметов
+                if (wItem != null && wItem.parent instanceof haven.res.ui.stackinv.ItemStack) {
+                    haven.res.ui.stackinv.ItemStack itemStack = (haven.res.ui.stackinv.ItemStack) wItem.parent;
+                    double maxQuality = -1;
+                    for (WItem w : itemStack.wmap.values()) {
+                        if (w.item instanceof NGItem) {
+                            NGItem ngItem = (NGItem) w.item;
+                            if (ngItem.quality != null && ngItem.quality > maxQuality) {
+                                maxQuality = ngItem.quality;
+                            }
+                        }
+                    }
+                    if (maxQuality > 0) {
+                        return maxQuality;
+                    }
+                }
+                
+                // Fallback: используем Stack info качество
+                haven.res.ui.tt.stackn.Stack stackInfo = item.getInfo(haven.res.ui.tt.stackn.Stack.class);
+                if (stackInfo != null && stackInfo.quality > 0) {
+                    return stackInfo.quality;
+                }
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+        
+        // Для отдельных предметов используем item.quality
+        if (item.quality != null) {
+            return item.quality;
+        }
+        
+        return -1;
+    }
+    
+    /**
+     * Проверяет стак и сбрасывает его, если МАКСИМАЛЬНОЕ качество ниже порога
+     * Стак выбрасывается целиком если даже лучший камень в нём хуже порога
      */
     private void checkAndDropStack(NGameUI gui, WItem stackItem, MasterMinerWnd wnd) throws InterruptedException {
         if (stackItem == null || stackItem.item == null || !(stackItem.item instanceof NGItem)) {
@@ -327,11 +372,11 @@ public class MasterMiner extends ActionWithFinal {
             return; // Не камень/руда - пропускаем
         }
         
-        // Получаем качество стака - пробуем несколько раз, так как Stack info может быть еще не готов
-        double f3 = -1;
+        // Получаем МАКСИМАЛЬНОЕ качество стака - пробуем несколько раз
+        double maxQ = -1;
         for (int attempt = 0; attempt < 5; attempt++) {
-            f3 = getItemQuality(ngItem, stackItem);
-            if (f3 >= 0) {
+            maxQ = getMaxStackQuality(ngItem, stackItem);
+            if (maxQ >= 0) {
                 break; // Качество получено
             }
             // Небольшая задержка перед следующей попыткой
@@ -340,7 +385,7 @@ public class MasterMiner extends ActionWithFinal {
             }
         }
         
-        if (f3 < 0) {
+        if (maxQ < 0) {
             return; // Качество все еще не готово после всех попыток
         }
         
@@ -353,8 +398,8 @@ public class MasterMiner extends ActionWithFinal {
             threshold = wnd.getDropThreshold();
         }
         
-        // Проверяем порог и сбрасываем стак, если качество ниже
-        if (!Double.isNaN(threshold) && f3 < threshold) {
+        // Сбрасываем стак, если МАКСИМАЛЬНОЕ качество ниже порога
+        if (!Double.isNaN(threshold) && maxQ < threshold) {
             // Проверяем, что это действительно камень из инвентаря, а не инструмент
             boolean isInInventory = (stackItem.parent == gui.getInventory());
             boolean isInHand = (stackItem == gui.vhand);
@@ -1237,7 +1282,7 @@ public class MasterMiner extends ActionWithFinal {
     
     /**
      * Обрабатывает батч маркеров - группирует по типу и координатам, выбирает лучший
-     * Оптимизировано: создает маркеры напрямую без пересчета координат
+     * Для камней и руд: "плавающий" маркер - обновляется только если качество выше существующего
      */
     private void processMarkerBatch(NGameUI gui) {
         List<MarkerBatch> batch;
@@ -1263,324 +1308,121 @@ public class MasterMiner extends ActionWithFinal {
             }
         }
         
-        // Обрабатываем каждый уникальный маркер - создаем с задержками для избежания лагов
-        // Обрабатываем маркеры по одному с задержками, чтобы не перегружать систему
-        List<MarkerBatch> markersList = new ArrayList<>(bestMarkers.values());
-        
-        for (int i = 0; i < markersList.size(); i++) {
-            MarkerBatch best = markersList.get(i);
+        // Обрабатываем все маркеры
+        for (MarkerBatch best : bestMarkers.values()) {
             try {
                 String label = String.format("q%.0f", best.wallQ);
                 
-                // Для квариарца не проверяем существующие маркеры - всегда создаем новый (радиус 0 = только точно на том же месте)
-                // Для руд проверяем существующие маркеры в радиусе 1 тайла (слипаются в один маркер, обновляется только если качество выше)
-                // Для камней (не руд, не квариарц, не драг камни) проверяем в радиусе 20 тайлов
-                int radiusTiles;
-                if ("quarryartz".equals(best.markerType)) {
-                    // Квариарц ставится всегда, без проверки на существующие маркеры рядом (только точно на том же месте)
-                    radiusTiles = 0;
-                } else if ("ore".equals(best.markerType)) {
-                    // Проверяем, является ли это камнем (не рудой, не квариарцем, не драг камнем)
-                    boolean isStone = !isOre(best.oreName) && 
-                                     !"Quarryartz".equals(best.oreName) && 
-                                     !isGemstone(best.oreName);
-                    
-                    if (isStone) {
-                        // Камни: один "плавающий" маркер на расстоянии 20 тайлов (огромная жила)
-                        // Маркер перемещается в место с лучшим качеством
-                        java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
-                            gui.labeledMarkService.getMarksByResourceType(best.oreName);
-                        String existingLocationId = null;
-                        double existingQ = 0;
-                        int checkedCount = 0;
-                        int maxChecks = 100; // Ограничиваем количество проверок
-                        
-                        // #region agent log
-                        try {
-                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Stone marker check start\",\"data\":{\"oreName\":\"%s\",\"tileCoords\":\"%s\",\"wallQ\":%.1f,\"existingMarksCount\":%d,\"segmentId\":%d},\"timestamp\":%d}\n",
-                                1288, best.oreName, best.tileCoords.toString(), best.wallQ, existingMarks.size(), best.segmentId, System.currentTimeMillis()));
-                            fw.close();
-                        } catch (Exception e) {}
-                        // #endregion
-                        
-                        for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
-                            if (checkedCount++ >= maxChecks) break;
-                            boolean sameSegment = mark.segmentId == best.segmentId;
-                            boolean isNear = mark.isNear(best.segmentId, best.tileCoords, 20);
-                            boolean sameType = best.oreName.equals(mark.resourceType);
-                            
-                            // #region agent log
-                            try {
-                                java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Checking existing stone mark\",\"data\":{\"markTileCoords\":\"%s\",\"newTileCoords\":\"%s\",\"sameSegment\":%s,\"isNear\":%s,\"sameType\":%s,\"radiusTiles\":20,\"dx\":%d,\"dy\":%d},\"timestamp\":%d}\n",
-                                    1298, mark.tileCoords.toString(), best.tileCoords.toString(), sameSegment, isNear, sameType, 
-                                    Math.abs(mark.tileCoords.x - best.tileCoords.x), Math.abs(mark.tileCoords.y - best.tileCoords.y), System.currentTimeMillis()));
-                                fw.close();
-                            } catch (Exception e) {}
-                            // #endregion
-                            
-                            if (sameSegment && isNear && sameType) {
-                                // Парсим качество из метки
-                                double markQ = 0;
-                                if (mark.label != null && mark.label.startsWith("q")) {
-                                    try {
-                                        markQ = Double.parseDouble(mark.label.substring(1).trim());
-                                    } catch (NumberFormatException e) {
-                                        // Игнорируем ошибки парсинга
-                                    }
-                                }
-                                // Сохраняем маркер с лучшим качеством
-                                if (markQ > existingQ) {
-                                    existingQ = markQ;
-                                    existingLocationId = mark.getLocationId();
-                                    
-                                    // #region agent log
-                                    try {
-                                        java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                        fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Found better existing stone mark\",\"data\":{\"existingQ\":%.1f,\"newQ\":%.1f,\"locationId\":\"%s\"},\"timestamp\":%d}\n",
-                                            1313, existingQ, best.wallQ, existingLocationId, System.currentTimeMillis()));
-                                        fw.close();
-                                    } catch (Exception e) {}
-                                    // #endregion
-                                }
-                            }
-                        }
-                        
-                        // Если нашли существующий маркер и новое качество выше - обновляем его
-                        // #region agent log
-                        try {
-                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Stone marker decision\",\"data\":{\"existingLocationId\":\"%s\",\"existingQ\":%.1f,\"newQ\":%.1f,\"willUpdate\":%s,\"willCreate\":%s},\"timestamp\":%d}\n",
-                                1320, existingLocationId != null ? existingLocationId : "null", existingQ, best.wallQ, 
-                                (existingLocationId != null && best.wallQ > existingQ), (existingLocationId == null || best.wallQ > existingQ), System.currentTimeMillis()));
-                            fw.close();
-                        } catch (Exception e) {}
-                        // #endregion
-                        
-                        if (existingLocationId != null && best.wallQ > existingQ) {
-                            // Обновляем существующий маркер (перемещаем в новое место)
-                            final String finalLocationId = existingLocationId;
-                            final String finalLabel = label;
-                            final Coord finalTileCoords = best.tileCoords;
-                            
-                            markerExecutor.submit(() -> {
-                                try {
-                                    gui.labeledMarkService.updateMarkPosition(finalLocationId, finalLabel, finalTileCoords);
-                                } catch (Exception e) {
-                                    // Игнорируем ошибки
-                                }
-                            });
-                            continue; // Пропускаем создание нового маркера
-                        } else if (existingLocationId != null && best.wallQ <= existingQ) {
-                            // Качество не выше - не обновляем
-                            continue;
-                        }
-                        
-                        // Маркера нет или качество выше - создаем новый
-                        radiusTiles = 20;
-                    } else {
-                        // Руды: один "плавающий" маркер на расстоянии 1 тайла
-                        // Маркер перемещается в место с лучшим качеством
-                        java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
-                            gui.labeledMarkService.getMarksByResourceType(best.oreName);
-                        String existingLocationId = null;
-                        double existingQ = 0;
-                        int checkedCount = 0;
-                        int maxChecks = 50; // Ограничиваем количество проверок для руд
-                        
-                        // #region agent log
-                        try {
-                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Ore marker check start\",\"data\":{\"oreName\":\"%s\",\"tileCoords\":\"%s\",\"wallQ\":%.1f,\"existingMarksCount\":%d,\"segmentId\":%d},\"timestamp\":%d}\n",
-                                1342, best.oreName, best.tileCoords.toString(), best.wallQ, existingMarks.size(), best.segmentId, System.currentTimeMillis()));
-                            fw.close();
-                        } catch (Exception e) {}
-                        // #endregion
-                        
-                        for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
-                            if (checkedCount++ >= maxChecks) break;
-                            boolean sameSegment = mark.segmentId == best.segmentId;
-                            boolean isNear = mark.isNear(best.segmentId, best.tileCoords, 1);
-                            boolean sameType = best.oreName.equals(mark.resourceType);
-                            
-                            // #region agent log
-                            try {
-                                java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Checking existing ore mark\",\"data\":{\"markTileCoords\":\"%s\",\"newTileCoords\":\"%s\",\"sameSegment\":%s,\"isNear\":%s,\"sameType\":%s,\"radiusTiles\":1,\"dx\":%d,\"dy\":%d},\"timestamp\":%d}\n",
-                                    1352, mark.tileCoords.toString(), best.tileCoords.toString(), sameSegment, isNear, sameType,
-                                    Math.abs(mark.tileCoords.x - best.tileCoords.x), Math.abs(mark.tileCoords.y - best.tileCoords.y), System.currentTimeMillis()));
-                                fw.close();
-                            } catch (Exception e) {}
-                            // #endregion
-                            
-                            if (sameSegment && isNear && sameType) {
-                                // Парсим качество из метки
-                                double markQ = 0;
-                                if (mark.label != null && mark.label.startsWith("q")) {
-                                    try {
-                                        markQ = Double.parseDouble(mark.label.substring(1).trim());
-                                    } catch (NumberFormatException e) {
-                                        // Игнорируем ошибки парсинга
-                                    }
-                                }
-                                // Сохраняем маркер с лучшим качеством
-                                if (markQ > existingQ) {
-                                    existingQ = markQ;
-                                    existingLocationId = mark.getLocationId();
-                                    
-                                    // #region agent log
-                                    try {
-                                        java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                                        fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Found better existing ore mark\",\"data\":{\"existingQ\":%.1f,\"newQ\":%.1f,\"locationId\":\"%s\"},\"timestamp\":%d}\n",
-                                            1367, existingQ, best.wallQ, existingLocationId, System.currentTimeMillis()));
-                                        fw.close();
-                                    } catch (Exception e) {}
-                                    // #endregion
-                                }
-                            }
-                        }
-                        
-                        // Если нашли существующий маркер и новое качество выше - обновляем его
-                        // #region agent log
-                        try {
-                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Ore marker decision\",\"data\":{\"existingLocationId\":\"%s\",\"existingQ\":%.1f,\"newQ\":%.1f,\"willUpdate\":%s,\"willCreate\":%s},\"timestamp\":%d}\n",
-                                1374, existingLocationId != null ? existingLocationId : "null", existingQ, best.wallQ,
-                                (existingLocationId != null && best.wallQ > existingQ), (existingLocationId == null || best.wallQ > existingQ), System.currentTimeMillis()));
-                            fw.close();
-                        } catch (Exception e) {}
-                        // #endregion
-                        
-                        if (existingLocationId != null && best.wallQ > existingQ) {
-                            // Обновляем существующий маркер (перемещаем в новое место)
-                            final String finalLocationId = existingLocationId;
-                            final String finalLabel = label;
-                            final Coord finalTileCoords = best.tileCoords;
-                            
-                            markerExecutor.submit(() -> {
-                                try {
-                                    gui.labeledMarkService.updateMarkPosition(finalLocationId, finalLabel, finalTileCoords);
-                                } catch (Exception e) {
-                                    // Игнорируем ошибки
-                                }
-                            });
-                            continue; // Пропускаем создание нового маркера
-                        } else if (existingLocationId != null && best.wallQ <= existingQ) {
-                            // Качество не выше - не обновляем
-                            continue;
-                        }
-                        
-                        // Маркера нет или качество выше - создаем новый
-                        radiusTiles = 1;
-                    }
-                } else {
-                    // Для остальных (драгоценные камни) используем стандартный радиус 2
-                    radiusTiles = 2;
-                }
-                
-                // Создаем маркер асинхронно в отдельном потоке для уменьшения лагов
+                // Определяем радиус и логику на основе типа
                 final String finalLabel = label;
                 final String finalOreName = best.oreName;
                 final long finalSegmentId = best.segmentId;
                 final Coord finalTileCoords = best.tileCoords;
-                final int finalRadiusTiles = radiusTiles;
                 final String finalMarkerType = best.markerType;
                 final NGItem finalItem = best.item;
+                final double finalWallQ = best.wallQ;
                 
-                markerExecutor.submit(() -> {
-                    try {
-                        long startTime = System.currentTimeMillis();
-                        
-                        // #region agent log
+                if ("quarryartz".equals(best.markerType)) {
+                    // Квариарц: всегда создаём новый маркер (радиус 0)
+                    createMarkerDirect(gui, finalLabel, finalOreName, finalSegmentId, finalTileCoords, finalMarkerType, finalItem, 0);
+                    playQuarryartzSound(gui);
+                } else if ("gem".equals(best.markerType)) {
+                    // Драгоценные камни: радиус 2
+                    createMarkerDirect(gui, finalLabel, finalOreName, finalSegmentId, finalTileCoords, finalMarkerType, finalItem, 2);
+                } else {
+                    // Камни и руды: "плавающий" маркер - обновляем только если качество выше
+                    // Радиус 40 тайлов для камней и руд (большой спот)
+                    final int radiusTiles = 40;
+                    
+                    // Ищем существующий маркер в радиусе (в фоне, чтобы не блокировать)
+                    markerExecutor.submit(() -> {
                         try {
-                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Creating marker async start\",\"data\":{\"oreName\":\"%s\",\"tileCoords\":\"%s\",\"radiusTiles\":%d,\"markerType\":\"%s\"},\"timestamp\":%d}\n",
-                                1411, finalOreName, finalTileCoords.toString(), finalRadiusTiles, finalMarkerType, startTime));
-                            fw.close();
-                        } catch (Exception e) {}
-                        // #endregion
-                        
-                        // Проверяем, есть ли уже маркер проспектинга в этом месте
-                        BufferedImage existingIcon = null;
-                        if (gui.mapfile != null && gui.mapfile.file != null) {
-                            try {
-                                // Пытаемся найти существующий маркер проспектинга
-                                String iconPath = getIconPathFromVSpec(finalOreName);
-                                if (iconPath != null) {
-                                    MapFile.SMarker existingMarker = gui.mapfile.file.smarker(iconPath, finalSegmentId, finalTileCoords);
-                                    if (existingMarker != null && existingMarker.res != null) {
+                            java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
+                                gui.labeledMarkService.getMarksByResourceType(finalOreName);
+                            
+                            String existingLocationId = null;
+                            double existingQ = 0;
+                            int checkedCount = 0;
+                            int maxChecks = 50;
+                            
+                            for (nurgling.widgets.LabeledMinimapMark mark : existingMarks) {
+                                if (checkedCount++ >= maxChecks) break;
+                                if (mark.segmentId == finalSegmentId && 
+                                    mark.isNear(finalSegmentId, finalTileCoords, radiusTiles) && 
+                                    finalOreName.equals(mark.resourceType)) {
+                                    // Парсим качество из метки
+                                    double markQ = 0;
+                                    if (mark.label != null && mark.label.startsWith("q")) {
                                         try {
-                                            Resource res = existingMarker.res.get();
-                                            if (res != null) {
-                                                existingIcon = res.layer(Resource.imgc).img;
-                                            }
-                                        } catch (Exception e) {
-                                            // Игнорируем ошибки загрузки
+                                            markQ = Double.parseDouble(mark.label.substring(1).trim());
+                                        } catch (NumberFormatException e) {
+                                            // Игнорируем
                                         }
                                     }
+                                    if (markQ > existingQ) {
+                                        existingQ = markQ;
+                                        existingLocationId = mark.getLocationId();
+                                    }
                                 }
-                            } catch (Exception e) {
-                                // Игнорируем ошибки проверки
                             }
-                        }
-                        
-                        // Если иконка не найдена в проспектинге, пробуем загрузить из VSpec или кэша
-                        if (existingIcon == null) {
-                            if ("quarryartz".equals(finalMarkerType)) {
-                                existingIcon = getQuarryartzIcon();
-                            } else if (finalItem != null) {
-                                existingIcon = getOreIconFromItem(finalItem, finalOreName);
+                            
+                            if (existingLocationId != null) {
+                                // Маркер найден - обновляем ТОЛЬКО если качество выше
+                                if (finalWallQ > existingQ) {
+                                    gui.labeledMarkService.updateMarkPosition(existingLocationId, finalLabel, finalTileCoords);
+                                }
+                                // Если качество не выше - ничего не делаем
                             } else {
-                                existingIcon = getOreIcon(finalOreName);
+                                // Маркера нет - создаём новый
+                                createMarkerDirect(gui, finalLabel, finalOreName, finalSegmentId, finalTileCoords, finalMarkerType, finalItem, radiusTiles);
                             }
+                        } catch (Exception e) {
+                            // Игнорируем ошибки
                         }
-                        
-                        long beforeAddTime = System.currentTimeMillis();
-                        String locationId = gui.labeledMarkService.addLabeledMarkAsync(
-                            finalLabel, finalOreName, finalSegmentId, finalTileCoords, existingIcon, finalRadiusTiles);
-                        long afterAddTime = System.currentTimeMillis();
-                        
-                        // #region agent log
-                        try {
-                            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-                            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\",\"location\":\"MasterMiner.java:%d\",\"message\":\"Marker created\",\"data\":{\"locationId\":\"%s\",\"addTimeMs\":%d,\"totalTimeMs\":%d},\"timestamp\":%d}\n",
-                                1448, locationId != null ? locationId : "null", (afterAddTime - beforeAddTime), (afterAddTime - startTime), System.currentTimeMillis()));
-                            fw.close();
-                        } catch (Exception e) {}
-                        // #endregion
-                        
-                        // Если иконка не была загружена сразу, загружаем асинхронно
-                        if (locationId != null && existingIcon == null) {
-                            if ("ore".equals(finalMarkerType)) {
-                                loadIconAndUpdateMarker(gui, locationId, finalItem, finalOreName);
-                            } else if ("gem".equals(finalMarkerType)) {
-                                loadIconAndUpdateMarker(gui, locationId, finalItem, finalOreName);
-                            } else if ("quarryartz".equals(finalMarkerType)) {
-                                loadQuarryartzIconAndUpdateMarker(gui, locationId);
-                                // Воспроизводим звук при выпадении квариарца
-                                playQuarryartzSound(gui);
-                            }
-                        } else if ("quarryartz".equals(finalMarkerType) && locationId != null) {
-                            // Воспроизводим звук при выпадении квариарца
-                            playQuarryartzSound(gui);
-                        }
-                    } catch (Exception e) {
-                        // Игнорируем ошибки
-                    }
-                });
-                
-                // Задержка между маркерами, чтобы не перегружать систему и избежать лагов
-                // Обрабатываем маркеры постепенно, а не все сразу
-                if (i < markersList.size() - 1) {
-                    Thread.sleep(200); // 200мс задержка между маркерами для плавности (увеличено для уменьшения лагов)
+                    });
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
             } catch (Exception e) {
                 // Игнорируем ошибки
             }
+        }
+    }
+    
+    /**
+     * Создаёт маркер напрямую (для квариарца, драгоценных камней и новых спотов)
+     */
+    private void createMarkerDirect(NGameUI gui, String label, String oreName, long segmentId, 
+                                    Coord tileCoords, String markerType, NGItem item, int radiusTiles) {
+        // Получаем иконку из кэша
+        BufferedImage icon = null;
+        if ("quarryartz".equals(markerType)) {
+            icon = getQuarryartzIcon();
+        } else if (item != null) {
+            icon = getOreIconFromItem(item, oreName);
+        } else {
+            icon = getOreIcon(oreName);
+        }
+        
+        // Добавляем маркер (неблокирующий вызов)
+        String locationId = gui.labeledMarkService.addLabeledMarkAsync(
+            label, oreName, segmentId, tileCoords, icon, radiusTiles);
+        
+        // Если иконка не была загружена, загружаем асинхронно
+        if (locationId != null && icon == null) {
+            final String fLocationId = locationId;
+            final NGItem fItem = item;
+            final String fOreName = oreName;
+            final String fMarkerType = markerType;
+            iconLoaderExecutor.submit(() -> {
+                try {
+                    if ("quarryartz".equals(fMarkerType)) {
+                        loadQuarryartzIconAndUpdateMarker(gui, fLocationId);
+                    } else {
+                        loadIconAndUpdateMarker(gui, fLocationId, fItem, fOreName);
+                    }
+                } catch (Exception e) {
+                    // Игнорируем
+                }
+            });
         }
     }
     
