@@ -4,8 +4,6 @@ import haven.*;
 import nurgling.*;
 import nurgling.actions.bots.RoutePointNavigator;
 import nurgling.actions.bots.SelectArea;
-import nurgling.navigation.ChunkNavManager;
-import nurgling.navigation.ChunkPath;
 import nurgling.routes.RoutePoint;
 import nurgling.tools.*;
 import nurgling.tools.Container;
@@ -607,35 +605,7 @@ public class NContext {
             gui.msg(areaId + " Not found!");
             return;
         }
-
-        // Check if we need to navigate (area not visible or too far)
-        boolean needsNavigation = !area.isVisible() || area.getCenter2d() == null ||
-                                  area.getCenter2d().dist(NUtils.player().rc) > 450;
-
-        if (!needsNavigation) {
-            return;
-        }
-
-        // Try ChunkNav first if it has data for the area
-        ChunkNavManager chunkNav = (gui.map != null && gui.map instanceof NMapView)
-            ? ((NMapView)gui.map).getChunkNavManager() : null;
-        System.out.println("NContext: ChunkNav initialized=" + (chunkNav != null && chunkNav.isInitialized()));
-        if (chunkNav != null && chunkNav.isInitialized()) {
-            ChunkPath path = chunkNav.planToArea(area);
-            System.out.println("NContext: ChunkNav path=" + (path != null ? path.size() + " waypoints" : "null"));
-            if (path != null) {
-                System.out.println("NContext: Using ChunkNav to navigate to " + areaId);
-                nurgling.actions.Results result = chunkNav.navigateToArea(area, gui);
-                System.out.println("NContext: ChunkNav result=" + result.IsSuccess());
-                if (result.IsSuccess()) {
-                    return;
-                }
-                System.out.println("NContext: ChunkNav navigation failed, falling back to routes");
-            }
-        }
-
-        // Fallback to RoutePointNavigator if ChunkNav fails or has no data
-        if (rps.containsKey(areaId)) {
+        if((!area.isVisible() || area.getCenter2d() == null || area.getCenter2d().dist(NUtils.player().rc)>450) && rps.containsKey(areaId)) {
             new RoutePointNavigator(rps.get(areaId), area.id).run(gui);
         }
     }
@@ -936,61 +906,25 @@ public class NContext {
         return res;
     }
 
-    /**
-     * Calculate distance to an area using ChunkNav if available, falling back to RouteGraph.
-     * Returns Double.MAX_VALUE if area is unreachable.
-     */
-    private static double getDistanceToArea(NArea area, NGameUI gui) {
-        if (gui == null || gui.map == null) {
-            return Double.MAX_VALUE;
-        }
-
-        // Try ChunkNav first
-        if (gui.map instanceof NMapView) {
-            ChunkNavManager chunkNav = ((NMapView) gui.map).getChunkNavManager();
-            if (chunkNav != null && chunkNav.isInitialized()) {
-                ChunkPath path = chunkNav.planToArea(area);
-                if (path != null) {
-                    // ChunkNav has a path - use its cost
-                    return path.totalCost;
-                }
-            }
-        }
-
-        // Fallback to RouteGraph
-        if (gui.map instanceof NMapView) {
-            List<RoutePoint> routePoints = ((NMapView) gui.map).routeGraphManager.getGraph().findPath(
-                ((NMapView) gui.map).routeGraphManager.getGraph().findNearestPointToPlayer(gui),
-                ((NMapView) gui.map).routeGraphManager.getGraph().findAreaRoutePoint(area)
-            );
-            if (routePoints != null) {
-                // Scale route points to be comparable with ChunkNav costs
-                // Route points are typically counted, so multiply to make units similar
-                return routePoints.size() * 100.0;
-            }
-        }
-
-        return Double.MAX_VALUE;
-    }
-
     public static NArea findInGlobal(String name) {
         return findInGlobal(new NAlias(name));
     }
 
     public static NArea findInGlobal(NAlias name) {
-        double dist = Double.MAX_VALUE;
+        double dist = 10000;
         NArea res = null;
-        NGameUI gui = NUtils.getGameUI();
-        if (gui != null && gui.map != null) {
-            Set<Integer> nids = gui.map.nols.keySet();
-            for (Integer id : nids) {
-                if (id > 0) {
-                    NArea cand = gui.map.glob.map.areas.get(id);
-                    if (cand != null && cand.containIn(name)) {
-                        double candDist = getDistanceToArea(cand, gui);
-                        if (candDist < dist) {
-                            res = cand;
-                            dist = candDist;
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
+            Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
+            for(Integer id : nids) {
+                if(id>0) {
+                    if (NUtils.getGameUI().map.glob.map.areas.get(id).containIn(name)) {
+                        NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                        List<RoutePoint> routePoints = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand));
+                        if(routePoints!=null) {
+                            if(routePoints.size() <dist) {
+                                res = cand;
+                                dist = routePoints.size();
+                            }
                         }
                     }
                 }
@@ -1000,23 +934,22 @@ public class NContext {
     }
 
     public static NArea findSpecGlobal(String name, String sub) {
-        double dist = Double.MAX_VALUE;
+        int dist = 10000;
         NArea target = null;
-        NGameUI gui = NUtils.getGameUI();
-        if (gui != null && gui.map != null) {
-            Set<Integer> nids = gui.map.nols.keySet();
-            for (Integer id : nids) {
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
+            Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
+            for(Integer id : nids) {
                 if (id > 0) {
-                    NArea area = gui.map.glob.map.areas.get(id);
-                    if (area == null) continue;
-                    for (NArea.Specialisation s : area.spec) {
-                        if (s.name.equals(name) && ((sub == null || sub.isEmpty()) || (s.subtype != null && s.subtype.equalsIgnoreCase(sub)))) {
-                            double candDist = getDistanceToArea(area, gui);
-                            if (candDist < dist) {
-                                target = area;
-                                dist = candDist;
+                    for (NArea.Specialisation s : NUtils.getGameUI().map.glob.map.areas.get(id).spec) {
+                        if (s.name.equals(name)  && ((sub == null || sub.isEmpty()) || s.subtype != null && s.subtype.toLowerCase().equals(sub.toLowerCase()))) {
+                            NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                            List<RoutePoint> routePoints = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand));
+                            if(routePoints!=null) {
+                                if(routePoints.size() <dist) {
+                                    target = cand;
+                                    dist = routePoints.size();
+                                }
                             }
-                            break; // Found matching spec, no need to check other specs for same area
                         }
                     }
                 }
@@ -1036,60 +969,156 @@ public class NContext {
     public static NArea findOutGlobal(String name, double th, NGameUI gui) {
         NArea res = null;
         ArrayList<TestedArea> areas = new ArrayList<>();
-        if (gui != null && gui.map != null) {
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
             // ВАЖНО: Создаем копию nols.keySet() для безопасной итерации
             // чтобы избежать ConcurrentModificationException при модификации из других потоков
             Set<Integer> nids;
-            synchronized (gui.map.nols) {
-                nids = new HashSet<>(gui.map.nols.keySet());
+            synchronized (NUtils.getGameUI().map.nols) {
+                nids = new HashSet<>(NUtils.getGameUI().map.nols.keySet());
             }
             
-            for (Integer id : nids) {
+            for(Integer id : nids) {
                 if (id > 0) {
-                    NArea cand = gui.map.glob.map.areas.get(id);
-                    if (cand != null && cand.containOut(name)) {
-                        // Check reachability using ChunkNav or RouteGraph
-                        double dist = getDistanceToArea(cand, gui);
-                        if (dist < Double.MAX_VALUE) {
-                            NArea.Ingredient output = cand.getOutput(name);
-                            if (output != null) {
-                                areas.add(new TestedArea(cand, output.th));
-                            }
+                    NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                    if (cand == null) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " not found in glob.map.areas - skipping");
+                        continue;
+                    }
+                    
+                    // ВАЖНО: Проверяем, что зона не удалена в БД
+                    // Если зона есть в nols, но не в glob.map.areas, или удалена в БД - пропускаем
+                    try {
+                        nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
+                        if (!areaManager.areaExists(id)) {
+                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") is deleted in DB - skipping");
+                            continue;
                         }
+                    } catch (Exception e) {
+                        // Если не удалось проверить БД, продолжаем (не блокируем работу)
+                        System.err.println("NContext.findOutGlobal: Failed to check if zone " + id + " exists in DB: " + e.getMessage());
+                    }
+                    
+                    // ВАЖНО: Не проверяем isVisible() здесь, так как для синхронизированных зон
+                    // grid может быть еще не загружен, но зона должна быть доступна ботам
+                    // Проверяем только containOut и getRCArea (который может вернуть null если grid не загружен)
+                    // Если getRCArea() == null, зона все равно может быть использована, если есть space
+                    // ВАЖНО: Проверяем что jout не null
+                    if (cand.jout == null) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has null jout - skipping");
+                        continue;
+                    }
+                    if (cand.jout.length() == 0) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has empty jout - skipping");
+                        continue;
+                    }
+                    boolean containsOut = cand.containOut(name);
+                    if (containsOut) {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") containsOut " + name + " (jout.length=" + cand.jout.length() + ")");
+                        // Пытаемся получить координаты зоны
+                        Pair<Coord2d, Coord2d> rcArea = cand.getRCArea();
+                        // Если getRCArea() вернул null (grid не загружен), проверяем есть ли space
+                        if (rcArea == null && (cand.space == null || cand.space.space == null || cand.space.space.isEmpty())) {
+                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: no coordinates and no space (rcArea=null, space=" + (cand.space == null ? "null" : (cand.space.space == null ? "null" : (cand.space.space.isEmpty() ? "empty" : "exists"))) + ")");
+                            continue; // Нет координат и нет space - пропускаем
+                        }
+                        
+                        NArea.Ingredient output = cand.getOutput(name);
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") getOutput(" + name + ") returned: " + (output != null ? "output with th=" + output.th : "null"));
+                        if (output != null) {
+                            // Проверяем путь только если зона подходит по порогу качества
+                            // Если у зоны порог 60, а у предмета качество 73, то 60 <= 73 = true
+                            int areaTh = output.th;
+                            if (areaTh == -1 || th >= areaTh) {
+                                // Порог не указан (принимает все) или качество предмета >= порога зоны
+                                // ВАЖНО: Если getRCArea() == null, пытаемся найти путь используя space напрямую
+                                if (rcArea != null) {
+                                    // Grid загружен - проверяем путь через routeGraphManager
+                                    RoutePoint playerPoint = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui);
+                                    RoutePoint areaPoint = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand);
+                                    if (playerPoint != null && areaPoint != null) {
+                                        List<RoutePoint> path = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(playerPoint, areaPoint);
+                                        if (path != null && !path.isEmpty()) {
+                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added with path check (path found)");
+                                            areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
+                                        } else {
+                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: path not found (playerPoint=" + playerPoint + ", areaPoint=" + areaPoint + ")");
+                                        }
+                                    } else {
+                                        // Route point не найден, но grid загружен - добавляем зону без проверки пути
+                                        // Это может произойти для синхронизированных зон, которые еще не подключены к графу
+                                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (route point not found, but grid loaded)");
+                                        areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
+                                    }
+                                } else {
+                                    // Grid не загружен, но есть space - добавляем зону без проверки пути
+                                    // Путь будет проверен позже, когда grid загрузится
+                                    System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (grid not loaded)");
+                                    areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
+                                }
+                            } else {
+                                System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") quality threshold mismatch: item th=" + th + ", zone th=" + areaTh);
+                            }
+                        } else {
+                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") output not found for " + name);
+                        }
+                    } else {
+                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") does not containOut " + name + " (jout.length=" + (cand.jout != null ? cand.jout.length() : 0) + ")");
                     }
                 }
             }
         }
 
         areas.sort(ta_comp);
+        
+        System.out.println("NContext.findOutGlobal: Found " + areas.size() + " candidate zones for " + name + " (quality=" + th + ")");
+        for (TestedArea ta : areas) {
+            System.out.println("NContext.findOutGlobal: Candidate zone " + ta.area.id + " (" + ta.area.name + ") with th=" + ta.th);
+        }
 
+        // ВАЖНО: Выбираем зону с максимальным порогом, который <= качества предмета
+        // Зона без порога (th=1) должна использоваться только если нет зон с порогом >= качества предмета
         double tth = 1;
+        boolean foundZoneWithThreshold = false;
+        
+        // Сначала ищем зоны с порогом >= качества предмета (приоритет)
         for (TestedArea area : areas) {
-            if (area.th <= th) {
+            if (area.th > 1 && area.th <= th) {
+                // Зона с порогом, который подходит для предмета
                 res = area.area;
                 tth = area.th;
+                foundZoneWithThreshold = true;
+                System.out.println("NContext.findOutGlobal: Selected zone with threshold: " + area.area.id + " (" + area.area.name + ") th=" + area.th);
             }
         }
-
-        // If multiple areas have the same threshold, pick the closest one
-        ArrayList<NArea> targets = new ArrayList<>();
-        for (TestedArea area : areas) {
-            if (area.th == tth) {
-                targets.add(area.area);
-            }
-        }
-
-        if (targets.size() > 1) {
-            double bestDist = Double.MAX_VALUE;
-            for (NArea test : targets) {
-                double dist = getDistanceToArea(test, gui);
-                if (dist < bestDist) {
-                    res = test;
-                    bestDist = dist;
+        
+        // Если не нашли зону с порогом, используем зону без порога (th=1)
+        if (!foundZoneWithThreshold) {
+            for (TestedArea area : areas) {
+                if (area.th == 1) {
+                    // Зона без порога (принимает все)
+                    res = area.area;
+                    tth = 1;
+                    System.out.println("NContext.findOutGlobal: Selected zone without threshold: " + area.area.id + " (" + area.area.name + ")");
+                    break;
                 }
             }
         }
         
+        if (res == null) {
+            System.out.println("NContext.findOutGlobal: No suitable zone found for " + name + " (quality=" + th + ")");
+        }
+
+        ArrayList<NArea> targets = new ArrayList<>();
+        for(TestedArea area :areas) {
+            if(area.th == tth)
+                targets.add(area.area);
+        }
+
+        if(targets.size()>1) {
+            for (NArea test: targets) {
+                res = test;
+            }
+        }
         return res;
     }
 
@@ -1218,29 +1247,31 @@ public class NContext {
 
     /**
      * Find all areas with a specific specialization and optional subtype.
-     * Uses ChunkNav distance when available, falling back to route graph.
-     * Returns list of areas sorted by distance from player.
+     * Uses global search with route graph distance, similar to findSpecGlobal.
+     * Returns list of areas sorted by route distance from player.
      */
     public static ArrayList<NArea> findAllSpec(String name, String subtype) {
-        // Map to store areas with their distances
-        Map<NArea, Double> areaDistances = new HashMap<>();
-        NGameUI gui = NUtils.getGameUI();
+        // Map to store areas with their route distances
+        Map<NArea, Integer> areaDistances = new HashMap<>();
 
-        if (gui != null && gui.map != null) {
-            Set<Integer> nids = gui.map.nols.keySet();
+        if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
+            Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
             for (Integer id : nids) {
                 if (id > 0) {
-                    NArea area = gui.map.glob.map.areas.get(id);
+                    NArea area = NUtils.getGameUI().map.glob.map.areas.get(id);
                     if (area != null) {
                         for (NArea.Specialisation s : area.spec) {
                             boolean nameMatch = s.name.equals(name);
                             boolean subtypeMatch = (subtype == null || subtype.isEmpty()) ||
                                 (s.subtype != null && s.subtype.equalsIgnoreCase(subtype));
                             if (nameMatch && subtypeMatch) {
-                                // Check if area is reachable using ChunkNav or RouteGraph
-                                double dist = getDistanceToArea(area, gui);
-                                if (dist < Double.MAX_VALUE) {
-                                    areaDistances.put(area, dist);
+                                // Check if area is reachable via route graph
+                                List<RoutePoint> routePoints = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(
+                                    ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()),
+                                    ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)
+                                );
+                                if (routePoints != null) {
+                                    areaDistances.put(area, routePoints.size());
                                 }
                                 break; // Don't check other specs for same area
                             }
@@ -1250,9 +1281,9 @@ public class NContext {
             }
         }
 
-        // Sort by distance
+        // Sort by route distance
         ArrayList<NArea> results = new ArrayList<>(areaDistances.keySet());
-        results.sort((a, b) -> Double.compare(areaDistances.get(a), areaDistances.get(b)));
+        results.sort((a, b) -> Integer.compare(areaDistances.get(a), areaDistances.get(b)));
         return results;
     }
 
