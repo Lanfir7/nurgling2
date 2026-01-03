@@ -506,6 +506,28 @@ public class AreaSyncManager {
             NArea localZone = localByUuid.get(serverZone.uuid);
             
             if (localZone == null) {
+                // ВАЖНО: Проверяем, не была ли зона удалена локально
+                // Если да - НЕ создаём её заново, а отправляем команду удаления на сервер
+                boolean wasLocallyDeleted = isLocallyDeleted(serverZone.uuid);
+                System.out.println("AreaSyncManager.pullServerUpdates: Zone UUID=" + serverZone.uuid + 
+                                 " not found locally. isLocallyDeleted=" + wasLocallyDeleted + 
+                                 ", locallyDeletedZones.size=" + locallyDeletedZones.size());
+                if (wasLocallyDeleted) {
+                    System.out.println("AreaSyncManager.pullServerUpdates: BLOCKING zone resurrection (UUID: " + serverZone.uuid + 
+                                     ", name: " + serverZone.name + ") - was deleted locally, sending DELETE to server");
+                    // Отправляем DELETE на сервер, чтобы удалить зону там тоже
+                    boolean deleteSuccess = syncClient.deleteZone(serverZone.uuid);
+                    if (deleteSuccess) {
+                        System.out.println("AreaSyncManager: Successfully deleted resurrected zone on server: " + serverZone.uuid);
+                        locallyDeletedZones.remove(serverZone.uuid);
+                        syncedZones.remove(serverZone.uuid);
+                    } else {
+                        System.err.println("AreaSyncManager: Failed to delete resurrected zone on server: " + serverZone.uuid);
+                    }
+                    skipped++;
+                    continue;
+                }
+                
                 // Новая зона с сервера - создаем локально
                 // ВАЖНО: Находим свободный ID, учитывая уже созданные зоны в этой синхронизации
                 int newId = maxExistingId + 1;
@@ -538,6 +560,12 @@ public class AreaSyncManager {
                     maxExistingId = finalNewId;
                 }
                 serverZone.synced = true;
+                
+                // ВАЖНО: Применяем локальный hide статус для новых зон с сервера
+                // По умолчанию все зоны с сервера скрыты, если не в списке разрешённых
+                nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(serverZone);
+                System.out.println("AreaSyncManager: New zone from server (UUID: " + serverZone.uuid + 
+                                 ", name: " + serverZone.name + ") - hide=" + serverZone.hide);
                 
                 try {
                     // ВАЖНО: Используем saveAreaNoThrottle, чтобы гарантировать сохранение,
@@ -818,31 +846,41 @@ public class AreaSyncManager {
      */
     public void deleteZone(NArea area) {
         if (!isEnabled()) {
-            System.out.println("AreaSyncManager: Zone synchronization is disabled, skipping deletion");
+            System.out.println("AreaSyncManager.deleteZone: Zone synchronization is disabled, skipping deletion");
             return;
         }
         
         if (area == null) {
-            System.err.println("AreaSyncManager: WARNING - Cannot delete zone: area is null");
+            System.err.println("AreaSyncManager.deleteZone: WARNING - Cannot delete zone: area is null");
             return;
         }
         
         if (area.uuid == null || area.uuid.isEmpty()) {
-            System.err.println("AreaSyncManager: WARNING - Cannot delete zone " + area.id + 
-                             " (" + (area.name != null ? area.name : "unknown") + "): UUID is null or empty");
+            System.err.println("AreaSyncManager.deleteZone: WARNING - Cannot delete zone " + area.id + 
+                             " (" + (area.name != null ? area.name : "unknown") + "): UUID is null or empty. " +
+                             "Zone will be deleted locally only.");
             return;
         }
         
-        System.out.println("AreaSyncManager: Deleting zone " + area.id + " (" + 
+        System.out.println("AreaSyncManager.deleteZone: DELETING zone " + area.id + " (" + 
                          (area.name != null ? area.name : "unknown") + ") on server (UUID: " + area.uuid + ")");
+        
+        // ВАЖНО: Сразу помечаем зону как удалённую локально,
+        // чтобы она не воскресла при следующей синхронизации даже если DELETE не прошёл на сервер
+        markAsLocallyDeleted(area.uuid);
+        System.out.println("AreaSyncManager.deleteZone: Marked zone " + area.uuid + " as locally deleted. Total deleted: " + locallyDeletedZones.size());
         
         boolean success = syncClient.deleteZone(area.uuid);
         if (success) {
-            System.out.println("AreaSyncManager: Successfully deleted zone " + area.id + " on server");
+            System.out.println("AreaSyncManager.deleteZone: Successfully deleted zone " + area.id + " on server");
             syncedZones.remove(area.uuid);
             uuidToAreaId.remove(area.uuid);
+            // НЕ удаляем из locallyDeletedZones - оставляем для предотвращения воскрешения
+            // locallyDeletedZones.remove(area.uuid);
+            System.out.println("AreaSyncManager.deleteZone: Zone " + area.uuid + " remains in locallyDeletedZones for protection");
         } else {
-            System.err.println("AreaSyncManager: Failed to delete zone " + area.id + " on server");
+            System.err.println("AreaSyncManager.deleteZone: Failed to delete zone " + area.id + " on server - zone marked for retry");
+            // Не удаляем из locallyDeletedZones - при следующей синхронизации попробуем удалить снова
         }
     }
     
@@ -850,6 +888,25 @@ public class AreaSyncManager {
      * Загружает UUID зон из БД для предотвращения дублей
      * Загружает syncedZones из last_sync_at, чтобы знать, какие зоны уже синхронизированы
      */
+    // Хранит UUID зон, удалённых локально (soft delete), чтобы не создавать их заново при синхронизации
+    private final ConcurrentHashMap<String, Long> locallyDeletedZones = new ConcurrentHashMap<>();
+    
+    /**
+     * Проверяет, была ли зона удалена локально
+     */
+    public boolean isLocallyDeleted(String uuid) {
+        return uuid != null && locallyDeletedZones.containsKey(uuid);
+    }
+    
+    /**
+     * Помечает зону как удалённую локально (чтобы не создавать заново при синхронизации)
+     */
+    public void markAsLocallyDeleted(String uuid) {
+        if (uuid != null && !uuid.isEmpty()) {
+            locallyDeletedZones.put(uuid, System.currentTimeMillis());
+        }
+    }
+    
     public void loadUuidMapping(DatabaseConnectionManager poolManager) {
         // ВАЖНО: НЕ очищаем syncedZones, если он уже заполнен из текущей сессии
         // Очищаем только uuidToAreaId для обновления маппинга
@@ -861,19 +918,35 @@ public class AreaSyncManager {
         try {
             Connection conn = poolManager.getConnection();
             // Загружаем UUID и last_sync_at для заполнения кэша синхронизации
-            String sql = "SELECT id, global_id, last_sync_at, updated_at FROM areas WHERE global_id IS NOT NULL AND global_id != '' AND deleted = FALSE";
+            // ВКЛЮЧАЕМ deleted зоны для активных зон (uuidToAreaId) и синхронизации
+            String sql = "SELECT id, global_id, last_sync_at, updated_at, deleted FROM areas WHERE global_id IS NOT NULL AND global_id != ''";
             
             try (PreparedStatement stmt = conn.prepareStatement(sql);
                  ResultSet rs = stmt.executeQuery()) {
                 
                 int loaded = 0;
                 int synced = 0;
+                int deletedLoaded = 0;
                 
                 while (rs.next()) {
                     int areaId = rs.getInt("id");
                     String uuid = rs.getString("global_id");
+                    boolean isDeleted = rs.getBoolean("deleted");
                     
                     if (uuid != null && !uuid.isEmpty()) {
+                        // ВАЖНО: Для УДАЛЁННЫХ зон - добавляем в locallyDeletedZones, чтобы не создавать заново
+                        // Это предотвращает "воскрешение" зон, которые пользователь удалил
+                        if (isDeleted) {
+                            java.sql.Timestamp lastSyncAt = rs.getTimestamp("last_sync_at");
+                            if (lastSyncAt != null) {
+                                // Зона была синхронизирована и удалена локально
+                                locallyDeletedZones.put(uuid, lastSyncAt.getTime());
+                                syncedZones.put(uuid, lastSyncAt.getTime()); // Важно для isZoneSynced()
+                                deletedLoaded++;
+                            }
+                            continue; // Не добавляем в uuidToAreaId (зона удалена)
+                        }
+                        
                         uuidToAreaId.put(uuid, areaId);
                         loaded++;
                         
@@ -891,7 +964,7 @@ public class AreaSyncManager {
                     }
                 }
                 
-                System.out.println("AreaSyncManager: Loaded " + loaded + " UUID mappings from DB, " + synced + " zones marked as synced");
+                System.out.println("AreaSyncManager: Loaded " + loaded + " UUID mappings from DB, " + synced + " zones marked as synced, " + deletedLoaded + " locally deleted zones tracked");
             }
         } catch (SQLException e) {
             System.err.println("AreaSyncManager: Failed to load UUID mapping: " + e.getMessage());
@@ -1091,13 +1164,16 @@ public class AreaSyncManager {
                     Integer areaId = entry.getKey();
                     nurgling.areas.NArea dbArea = entry.getValue();
                     
+                    // ВАЖНО: Применяем локальный hide статус ПЕРЕД добавлением в память
+                    nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(dbArea);
+                    
                     nurgling.areas.NArea existingArea = mapView.glob.map.areas.get(areaId);
                     if (existingArea == null) {
                         // Новая зона - добавляем в память
                         mapView.glob.map.areas.put(areaId, dbArea);
                         newZoneIds.add(areaId);
                     } else {
-                        // Существующая зона - обновляем данные
+                        // Существующая зона - обновляем данные (hide НЕ обновляется из БД)
                         updateAreaData(existingArea, dbArea);
                     }
                 }
@@ -1241,7 +1317,11 @@ public class AreaSyncManager {
                     
                     if (existingArea == null) {
                         // Новая зона - добавляем
-                        System.out.println("AreaSyncManager.updateAreasInMemory: Adding new zone " + areaId + " (" + dbArea.name + ") from sync");
+                        // ВАЖНО: Применяем локальный hide статус - по умолчанию все зоны из БД скрыты,
+                        // кроме тех что в локальном списке разрешённых
+                        nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(dbArea);
+                        
+                        System.out.println("AreaSyncManager.updateAreasInMemory: Adding new zone " + areaId + " (" + dbArea.name + ") from sync, hide=" + dbArea.hide);
                         mapView.glob.map.areas.put(areaId, dbArea);
                         // ВАЖНО: Выполняем те же действия, что и при создании через UI
                         // Создаем overlay синхронизированно
@@ -1351,10 +1431,10 @@ public class AreaSyncManager {
         boolean wasUpdated = false;
         
         // Проверяем изменения в базовых полях
+        // ВАЖНО: hide НЕ сравниваем и НЕ копируем из БД - это локальный параметр!
         if (!java.util.Objects.equals(existing.name, fromDB.name) ||
             !java.util.Objects.equals(existing.path, fromDB.path) ||
             !java.util.Objects.equals(existing.color, fromDB.color) ||
-            existing.hide != fromDB.hide ||
             !java.util.Objects.equals(existing.uuid, fromDB.uuid) ||
             !java.util.Objects.equals(existing.zoneSync, fromDB.zoneSync) ||
             existing.lastUpdated != fromDB.lastUpdated ||
@@ -1365,7 +1445,9 @@ public class AreaSyncManager {
         existing.name = fromDB.name;
         existing.path = fromDB.path;
         existing.color = fromDB.color;
-        existing.hide = fromDB.hide;
+        // ВАЖНО: НЕ копируем hide из БД - используем локальный AllowedZonesManager
+        // existing.hide остаётся без изменений, или применяется локальный статус
+        nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(existing);
         existing.uuid = fromDB.uuid;
         existing.zoneSync = fromDB.zoneSync;
         existing.lastUpdated = fromDB.lastUpdated;

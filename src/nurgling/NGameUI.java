@@ -102,6 +102,9 @@ public class NGameUI extends GameUI
         // Initialize world-specific profile
         nurgling.profiles.ConfigFactory.initializeProfile(genus);
 
+        // Initialize local allowed zones manager (for local hide control)
+        nurgling.areas.AllowedZonesManager.getInstance().initialize(genus);
+
         // Initialize local ring config
         iconRingConfig = new IconRingConfig(genus);
 

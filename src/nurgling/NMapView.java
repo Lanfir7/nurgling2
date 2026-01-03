@@ -894,6 +894,10 @@ public class NMapView extends MapView
             glob.map.areas.put(id, newArea);
 //            NUtils.getGameUI().areas.addArea(id, newArea.name, newArea);
 
+            // ВАЖНО: Помечаем зону как созданную локально - она автоматически разрешена (hide=false)
+            nurgling.areas.AllowedZonesManager.getInstance().markAsLocallyCreated(id, newArea.uuid);
+            newArea.hide = false; // Локально созданные зоны всегда видны
+
             routeGraphManager.getGraph().connectAreaToRoutePoints(newArea);
             createAreaLabel(id);
         }
@@ -1803,6 +1807,17 @@ public class NMapView extends MapView
             {
                 area.hide = val;
                 area.lastLocalChange = System.currentTimeMillis();
+                
+                // ВАЖНО: Синхронизируем с локальным списком разрешённых зон
+                // hide=true означает disallow, hide=false означает allow
+                if (area.uuid != null && !area.uuid.isEmpty()) {
+                    if (val) {
+                        nurgling.areas.AllowedZonesManager.getInstance().disallow(area.uuid);
+                    } else {
+                        nurgling.areas.AllowedZonesManager.getInstance().allow(area.uuid);
+                    }
+                }
+                
                 NConfig.needAreasUpdate();
                 return;
             }

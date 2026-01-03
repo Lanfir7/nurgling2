@@ -167,19 +167,22 @@ public class SimpleConnectionPool {
         try {
             Connection conn;
             if (isPostgres) {
-                // Use Properties to pass credentials and timezone
-                // Set timezone to UTC to prevent JDBC driver from sending system timezone
-                // (e.g., Europe/Kiev) which some PostgreSQL servers don't support
-                Properties props = new Properties();
-                props.setProperty("user", user);
-                props.setProperty("password", password);
-                // IMPORTANT: Set timezone in connection options to avoid TimeZone errors
-                // This is more reliable than temporarily changing system timezone
-                String connUrl = jdbcUrl;
-                if (!connUrl.contains("options=")) {
-                    connUrl = connUrl + (connUrl.contains("?") ? "&" : "?") + "options=-c%20timezone%3DUTC";
+                // CRITICAL: PostgreSQL JDBC driver sends JVM's default timezone to server
+                // during connection handshake. Old timezone names like "Europe/Kiev" cause errors.
+                // We must set UTC timezone BEFORE creating connection.
+                TimeZone originalTz = TimeZone.getDefault();
+                try {
+                    TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+                    
+                    Properties props = new Properties();
+                    props.setProperty("user", user);
+                    props.setProperty("password", password);
+                    
+                    conn = DriverManager.getConnection(jdbcUrl, props);
+                } finally {
+                    // Restore original timezone after connection is established
+                    TimeZone.setDefault(originalTz);
                 }
-                conn = DriverManager.getConnection(connUrl, props);
             } else {
                 conn = DriverManager.getConnection(jdbcUrl);
             }

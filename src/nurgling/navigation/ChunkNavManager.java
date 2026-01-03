@@ -402,6 +402,10 @@ public class ChunkNavManager {
         saveInternal();
     }
 
+    // Counter to limit error spam
+    private int saveErrorCount = 0;
+    private static final int MAX_SAVE_ERRORS_LOGGED = 3;
+    
     /**
      * Internal save implementation.
      */
@@ -412,7 +416,6 @@ public class ChunkNavManager {
 
         try {
             Path filePath = getStoragePath();
-            Path tempFile = filePath.resolveSibling(filePath.getFileName() + ".tmp");
             Files.createDirectories(filePath.getParent());
 
             JSONObject root = new JSONObject();
@@ -427,22 +430,50 @@ public class ChunkNavManager {
             }
             root.put("chunks", chunksArray);
 
-            // Write to temp file first (atomic write pattern)
             byte[] data = root.toString(2).getBytes(StandardCharsets.UTF_8);
-            Files.write(tempFile, data);
-
-            // Atomically rename temp file to real file
-            // This prevents corruption if process crashes mid-write
+            
+            // Try atomic write pattern first (temp file + rename)
+            // This is safer but may fail if antivirus deletes .tmp files
+            Path tempFile = filePath.resolveSibling(filePath.getFileName() + ".tmp");
+            boolean atomicSuccess = false;
+            
             try {
-                Files.move(tempFile, filePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-                // Fallback for filesystems that don't support atomic move
-                Files.move(tempFile, filePath, StandardCopyOption.REPLACE_EXISTING);
+                Files.write(tempFile, data);
+                // Verify temp file exists before trying to move (antivirus may delete it)
+                if (Files.exists(tempFile)) {
+                    try {
+                        Files.move(tempFile, filePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                        atomicSuccess = true;
+                    } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                        // Fallback for filesystems that don't support atomic move
+                        Files.move(tempFile, filePath, StandardCopyOption.REPLACE_EXISTING);
+                        atomicSuccess = true;
+                    }
+                }
+            } catch (java.nio.file.NoSuchFileException e) {
+                // Temp file was deleted (likely by antivirus) - will use direct write fallback
+            } catch (Exception e) {
+                // Other error during atomic write - clean up and try direct write
+                try { Files.deleteIfExists(tempFile); } catch (Exception ignored) {}
             }
+            
+            // Fallback: direct write if atomic pattern failed
+            if (!atomicSuccess) {
+                Files.write(filePath, data);
+            }
+            
+            // Reset error count on successful save
+            saveErrorCount = 0;
 
         } catch (Exception e) {
-            System.err.println("ChunkNav: Failed to save data: " + e.getMessage());
-            e.printStackTrace();
+            // Limit error logging to avoid spam
+            if (saveErrorCount < MAX_SAVE_ERRORS_LOGGED) {
+                System.err.println("ChunkNav: Failed to save data: " + e.getMessage());
+                saveErrorCount++;
+                if (saveErrorCount == MAX_SAVE_ERRORS_LOGGED) {
+                    System.err.println("ChunkNav: Further save errors will be suppressed");
+                }
+            }
         }
     }
 
