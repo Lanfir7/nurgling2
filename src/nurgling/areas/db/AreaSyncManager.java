@@ -403,6 +403,9 @@ public class AreaSyncManager {
         // Получаем зоны с сервера
         List<NArea> serverZones = syncClient.pullZones(updatedAfter);
         
+        // Получаем список UUID зон, удалённых на сервере
+        List<String> deletedUuids = syncClient.getLastDeletedUuids();
+        
         // ВАЖНО: Если сервер вернул null или пустой список, это может быть ошибка запроса
         // В этом случае НЕ удаляем локальные зоны, так как мы не знаем, действительно ли они удалены на сервере
         boolean serverRequestFailed = false;
@@ -410,13 +413,60 @@ public class AreaSyncManager {
             System.err.println("AreaSyncManager: Server returned null zones list - skipping deletion check to prevent data loss");
             serverZones = new ArrayList<>();
             serverRequestFailed = true;
-        } else if (serverZones.isEmpty() && !localAreas.isEmpty()) {
-            // Если сервер вернул пустой список, но у нас есть локальные зоны - это подозрительно
+        } else if (serverZones.isEmpty() && !localAreas.isEmpty() && (deletedUuids == null || deletedUuids.isEmpty())) {
+            // Если сервер вернул пустой список И нет удалённых зон, но у нас есть локальные зоны - это подозрительно
             // Может быть ошибка запроса или сервер действительно пуст
             // ВАЖНО: Не удаляем зоны, если запрос мог быть неудачным
             System.err.println("AreaSyncManager: WARNING - Server returned empty zones list but local areas exist. " +
                              "This may indicate a server error. Skipping deletion check to prevent data loss.");
             serverRequestFailed = true;
+        }
+        
+        // ВАЖНО: Обрабатываем зоны, удалённые на сервере (deleted=true)
+        // Это гарантирует, что удаления синхронизируются между всеми клиентами
+        int deletedFromServer = 0;
+        if (deletedUuids != null && !deletedUuids.isEmpty() && !serverRequestFailed) {
+            for (String deletedUuid : deletedUuids) {
+                NArea localZone = null;
+                for (NArea area : localAreas) {
+                    if (deletedUuid.equals(area.uuid)) {
+                        localZone = area;
+                        break;
+                    }
+                }
+                
+                if (localZone != null) {
+                    // Зона найдена локально, но удалена на сервере - удаляем локально
+                    try {
+                        System.out.println("AreaSyncManager: Deleting zone " + localZone.id + " (" + localZone.name + 
+                                         ") because it was deleted on server (UUID: " + deletedUuid + ")");
+                        dbManager.deleteArea(localZone.id, true); // skipServerSync = true
+                        syncedZones.remove(deletedUuid);
+                        uuidToAreaId.remove(deletedUuid);
+                        deletedFromServer++;
+                        
+                        // Удаляем визуальные элементы через SwingUtilities.invokeLater
+                        final int zoneIdToRemove = localZone.id;
+                        final NArea zoneToRemove = localZone;
+                        javax.swing.SwingUtilities.invokeLater(() -> {
+                            try {
+                                if (nurgling.NUtils.getGameUI() != null && nurgling.NUtils.getGameUI().map != null) {
+                                    nurgling.NMapView mapView = (nurgling.NMapView) nurgling.NUtils.getGameUI().map;
+                                    removeVisualZone(mapView, zoneIdToRemove, zoneToRemove);
+                                }
+                            } catch (Exception e) {
+                                System.err.println("AreaSyncManager: Failed to remove visual zone " + zoneIdToRemove + ": " + e.getMessage());
+                            }
+                        });
+                    } catch (Exception e) {
+                        System.err.println("AreaSyncManager: Failed to delete zone " + localZone.id + 
+                                         " that was deleted on server: " + e.getMessage());
+                    }
+                }
+            }
+            if (deletedFromServer > 0) {
+                System.out.println("AreaSyncManager: Deleted " + deletedFromServer + " zones that were deleted on server");
+            }
         }
         
         // Создаем карту локальных зон по UUID для быстрого поиска

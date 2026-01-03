@@ -167,20 +167,19 @@ public class SimpleConnectionPool {
         try {
             Connection conn;
             if (isPostgres) {
-                // Temporarily set system timezone to UTC to prevent JDBC driver
-                // from sending system timezone (e.g., Europe/Kiev) which Railway doesn't support
-                TimeZone originalTz = TimeZone.getDefault();
-                TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
-                try {
-                    // Use Properties to pass credentials
-                    Properties props = new Properties();
-                    props.setProperty("user", user);
-                    props.setProperty("password", password);
-                    conn = DriverManager.getConnection(jdbcUrl, props);
-                } finally {
-                    // Restore original timezone
-                    TimeZone.setDefault(originalTz);
+                // Use Properties to pass credentials and timezone
+                // Set timezone to UTC to prevent JDBC driver from sending system timezone
+                // (e.g., Europe/Kiev) which some PostgreSQL servers don't support
+                Properties props = new Properties();
+                props.setProperty("user", user);
+                props.setProperty("password", password);
+                // IMPORTANT: Set timezone in connection options to avoid TimeZone errors
+                // This is more reliable than temporarily changing system timezone
+                String connUrl = jdbcUrl;
+                if (!connUrl.contains("options=")) {
+                    connUrl = connUrl + (connUrl.contains("?") ? "&" : "?") + "options=-c%20timezone%3DUTC";
                 }
+                conn = DriverManager.getConnection(connUrl, props);
             } else {
                 conn = DriverManager.getConnection(jdbcUrl);
             }

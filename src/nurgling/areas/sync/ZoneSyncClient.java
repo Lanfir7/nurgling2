@@ -243,6 +243,8 @@ public class ZoneSyncClient {
     
     /**
      * Получает зоны с сервера (только обновленные после указанной даты)
+     * ВАЖНО: Также запрашиваем удалённые зоны (include_deleted=true),
+     * чтобы синхронизировать удаления между клиентами
      */
     public List<NArea> pullZones(long updatedAfter) {
         if (serverUrl == null || serverUrl.isEmpty()) {
@@ -250,10 +252,15 @@ public class ZoneSyncClient {
         }
         
         List<NArea> zones = new ArrayList<>();
+        // Отдельный список для UUID удалённых зон
+        List<String> deletedUuids = new ArrayList<>();
         
         try {
             String urlStr = serverUrl + "/zones?zone_sync=" + 
                            java.net.URLEncoder.encode(zoneSync, StandardCharsets.UTF_8.toString());
+            
+            // ВАЖНО: Запрашиваем и удалённые зоны, чтобы синхронизировать удаления
+            urlStr += "&include_deleted=true";
             
             if (updatedAfter > 0) {
                 Instant instant = Instant.ofEpochMilli(updatedAfter);
@@ -281,12 +288,31 @@ public class ZoneSyncClient {
                     JSONArray zonesJson = new JSONArray(response.toString());
                     for (int i = 0; i < zonesJson.length(); i++) {
                         JSONObject zoneJson = zonesJson.getJSONObject(i);
-                        NArea area = serverJsonToArea(zoneJson);
-                        if (area != null) {
-                            zones.add(area);
+                        
+                        // Проверяем, удалена ли зона на сервере
+                        boolean isDeleted = zoneJson.has("deleted") && zoneJson.getBoolean("deleted");
+                        String uuid = zoneJson.has("uuid") ? zoneJson.getString("uuid") : null;
+                        
+                        if (isDeleted && uuid != null) {
+                            // Зона удалена на сервере - добавляем в список для удаления
+                            deletedUuids.add(uuid);
+                            System.out.println("ZoneSyncClient: Zone " + uuid + " marked as deleted on server");
+                        } else {
+                            NArea area = serverJsonToArea(zoneJson);
+                            if (area != null) {
+                                zones.add(area);
+                            }
                         }
                     }
                 }
+                
+                // Сохраняем список удалённых UUID для обработки в AreaSyncManager
+                if (!deletedUuids.isEmpty()) {
+                    lastDeletedUuids = new ArrayList<>(deletedUuids);
+                } else {
+                    lastDeletedUuids = null;
+                }
+                
             } else {
                 System.err.println("ZoneSyncClient: Failed to pull zones (response code: " + responseCode + ")");
                 // ВАЖНО: При ошибке возвращаем null, а не пустой список
@@ -302,6 +328,16 @@ public class ZoneSyncClient {
         }
         
         return zones;
+    }
+    
+    // Список UUID зон, удалённых на сервере (для обработки в AreaSyncManager)
+    private List<String> lastDeletedUuids = null;
+    
+    /**
+     * Возвращает список UUID зон, которые были удалены на сервере при последнем pullZones()
+     */
+    public List<String> getLastDeletedUuids() {
+        return lastDeletedUuids;
     }
     
     /**
