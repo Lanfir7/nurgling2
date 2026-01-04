@@ -163,10 +163,10 @@ public class NAreasWidget extends Window
         }, createNewFolder.pos("bl").adds(0, 10));
         searchField.settip("Search areas by name, category, or items");
 
-        prev = add(al = new AreaList(UI.scale(new Coord(400,170))), searchField.pos("bl").adds(0, 25));
+        prev = add(al = new AreaList(UI.scale(new Coord(400,270))), searchField.pos("bl").adds(0, 25));
         Widget lab = add(new Label("Specialisation",NStyle.areastitle), prev.pos("bl").add(UI.scale(0,5)));
 
-        add(csl = new CurrentSpecialisationList(UI.scale(164,190)),lab.pos("bl").add(UI.scale(0,5)));
+        add(csl = new CurrentSpecialisationList(UI.scale(164,90)),lab.pos("bl").add(UI.scale(0,5)));
         add(new IButton(NStyle.add[0].back,NStyle.add[1].back,NStyle.add[2].back){
             @Override
             public void click()
@@ -246,6 +246,43 @@ public class NAreasWidget extends Window
                 area.path = area.path.replace(path,newpath);
             }
         }
+    }
+
+    /**
+     * Устанавливает hide для всех зон в папке (включая вложенные)
+     */
+    public void setFolderHide(String folderPath, boolean hide) {
+        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        int count = 0;
+        for (NArea area : mapView.glob.map.areas.values()) {
+            // Проверяем: зона находится в этой папке или в подпапках
+            if (area.path.equals(folderPath) || area.path.startsWith(folderPath + "/")) {
+                mapView.disableArea(area.name, area.path, hide);
+                count++;
+            }
+        }
+        NConfig.needAreasUpdate();
+        NUtils.getGameUI().msg((hide ? "Hidden " : "Shown ") + count + " areas in folder");
+    }
+
+    /**
+     * Возвращает текущее состояние hide для папки
+     * true если ВСЕ зоны в папке скрыты, false если хотя бы одна видима
+     */
+    public boolean getFolderHideState(String folderPath) {
+        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        boolean allHidden = true;
+        boolean hasAreas = false;
+        for (NArea area : mapView.glob.map.areas.values()) {
+            if (area.path.equals(folderPath) || area.path.startsWith(folderPath + "/")) {
+                hasAreas = true;
+                if (!area.hide) {
+                    allHidden = false;
+                    break;
+                }
+            }
+        }
+        return hasAreas && allHidden;
     }
 
     public void showPath(String path) {
@@ -439,6 +476,7 @@ public class NAreasWidget extends Window
                     add("Select area space");
                     add("Set color");
                     add("Edit name");
+                    add("Edit folder");
                     add("Scan");
                 }
             };
@@ -447,9 +485,21 @@ public class NAreasWidget extends Window
         }
 
         public AreaItem(String text, boolean isDir){
-            this.text = add(new Label(text));
+            // Для папок сдвигаем Label вправо, чтобы оставить место для иконки
+            this.text = add(new Label(text), new Coord(UI.scale(21), 0));
             this.area = null;
             this.isDir = isDir;
+            final String folderPath = currentPath + "/" + text;
+            hide = add(new CheckBox(""){
+                @Override
+                public void changed(boolean val) {
+                    // Массово изменяем hide для всех зон в этой папке
+                    setFolderHide(folderPath, val);
+                    super.changed(val);
+                }
+            },new Coord(al.sz.x - 2*NStyle.removei[0].sz().x-UI.scale(2), 0).sub(UI.scale(5),0 ));
+            hide.a = getFolderHideState(folderPath);
+            hide.settip("Hide/Show all areas in this folder");
             remove = add(new IButton(NStyle.removei[0].back,NStyle.removei[1].back,NStyle.removei[2].back){
                 @Override
                 public void click() {
@@ -459,6 +509,8 @@ public class NAreasWidget extends Window
                 {
                     add("Edit folder name");
                     add("Remove with content");
+                    add("Show all in folder");
+                    add("Hide all in folder");
                 }
             };
             pack();
@@ -480,13 +532,16 @@ public class NAreasWidget extends Window
 
         @Override
         public void draw(GOut g) {
-            if (rootPath!=null) {
+            if (rootPath != null) {
+                // Кнопка "вверх" (..) - просто иконка и текст (без super.draw)
                 g.image(openfolderIcon, Coord.z, UI.scale(16,16));
-                g.text(text.text(), new Coord(UI.scale(21), 0)); // Текст рядом с иконкой
-            }else if (area == null) {
+                g.text(text.text(), new Coord(UI.scale(21), 0));
+            } else if (isDir) {
+                // Папка - иконка вручную, остальное через super.draw
                 g.image(folderIcon, Coord.z, UI.scale(16,16));
-                g.text(text.text(), new Coord(UI.scale(21), 0)); // Текст рядом с иконкой
-            } else {
+                super.draw(g);
+            } else if (area != null) {
+                // Зона - полная отрисовка
                 super.draw(g);
             }
         }
@@ -662,6 +717,10 @@ public class NAreasWidget extends Window
                             {
                                 NEditAreaName.changeName(area, AreaItem.this);
                             }
+                            else if (option.name.equals("Edit folder"))
+                            {
+                                ui.gui.add(new NFolderSelectWindow(area, NAreasWidget.this), ui.mc);
+                            }
                             else if (option.name.equals("Scan"))
                             {
                                 Scaner.startScan(area);
@@ -722,6 +781,18 @@ public class NAreasWidget extends Window
                                     NAreasWidget.this.showPath(NAreasWidget.this.currentPath);
                                 }
                             }
+                            else if (option.name.equals("Show all in folder"))
+                            {
+                                String folderPath = currentPath + "/" + text.text();
+                                setFolderHide(folderPath, false);
+                                if (hide != null) hide.a = false;
+                            }
+                            else if (option.name.equals("Hide all in folder"))
+                            {
+                                String folderPath = currentPath + "/" + text.text();
+                                setFolderHide(folderPath, true);
+                                if (hide != null) hide.a = true;
+                            }
                         }
                         uimsg("cancel");
                     }
@@ -756,6 +827,39 @@ public class NAreasWidget extends Window
         in_items.items.clear();
         out_items.items.clear();
         specItems.clear();
+    }
+
+    /**
+     * Выбирает зону по ID и устанавливает на неё фокус
+     */
+    public void selectAreaById(int areaId) {
+        synchronized (items) {
+            for (int i = 0; i < items.size(); i++) {
+                AreaItem item = items.get(i);
+                if (item.area != null && item.area.id == areaId) {
+                    al.sel = item;
+                    select(areaId);
+                    // Прокрутка к выбранному элементу
+                    int scrollPos = i * (al.itemh + al.marg);
+                    al.scrollval(scrollPos);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Обновляет имя зоны в списке без перестроения всего списка
+     */
+    public void updateAreaName(int areaId, String newName) {
+        synchronized (items) {
+            for (AreaItem item : items) {
+                if (item.area != null && item.area.id == areaId) {
+                    item.text.settext(newName);
+                    return;
+                }
+            }
+        }
     }
 
     public void set(int id)
@@ -1158,4 +1262,5 @@ public class NAreasWidget extends Window
                 return null;
             });
     }
+
 }

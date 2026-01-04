@@ -54,13 +54,14 @@ public class NAreaSelector implements Runnable
                 {
                     result = sa.getResult();
                 }
+                int createdAreaId = -1;
                 if(mode!=Mode.SELECT)
                 {
                     if(result!=null)
                     {
                         if(mode == Mode.CREATE)
                         {
-                            ((NMapView) NUtils.getGameUI().map).addArea(result);
+                            createdAreaId = ((NMapView) NUtils.getGameUI().map).addArea(result);
                         }
                         else if(mode == Mode.CHANGE)
                         {
@@ -142,6 +143,12 @@ public class NAreaSelector implements Runnable
                         NConfig.needRoutesUpdate();
                     }
                     NUtils.getGameUI().areas.show();
+                    // Set focus on the created/changed area
+                    if(mode == Mode.CREATE && createdAreaId != -1) {
+                        NUtils.getGameUI().areas.selectAreaById(createdAreaId);
+                    } else if(mode == Mode.CHANGE && area != null) {
+                        NUtils.getGameUI().areas.selectAreaById(area.id);
+                    }
                 }
             }
             catch (InterruptedException e)

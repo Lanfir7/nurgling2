@@ -691,6 +691,11 @@ public class AreaService {
         json.put("path", data.getPath());
         json.put("hide", data.isHide());
         json.put("version", data.getVersion());
+        
+        // ВАЖНО: Добавляем UUID для правильной работы AllowedZonesManager
+        if (data.getGlobalId() != null && !data.getGlobalId().isEmpty()) {
+            json.put("uuid", data.getGlobalId());
+        }
 
         JSONObject color = new JSONObject();
         color.put("r", data.getColorR());

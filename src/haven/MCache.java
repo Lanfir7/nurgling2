@@ -131,6 +131,11 @@ public class MCache implements MapSource {
 					}
 					java.util.Map<Integer, NArea> dbAreas = nurgling.NCore.databaseManager.getAreaService().loadAreas(profile);
 					if (dbAreas != null) {
+						// ВАЖНО: Применяем локальный hide статус для каждой загруженной зоны
+						for (NArea area : dbAreas.values()) {
+							nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(area);
+						}
+						
 						areas.putAll(dbAreas);
 						System.out.println("Loaded " + dbAreas.size() + " areas from database");
 					}
@@ -164,6 +169,8 @@ public class MCache implements MapSource {
 					JSONArray array = (JSONArray) main.get("areas");
 					for (int i = 0; i < array.length(); i++) {
 						NArea a = new NArea((JSONObject) array.get(i));
+						// ВАЖНО: Применяем локальный hide статус
+						nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(a);
 						areas.put(a.id, a);
 					}
 					System.out.println("Loaded " + areas.size() + " areas from file");

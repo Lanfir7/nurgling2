@@ -192,9 +192,10 @@ public class IngredientContainer extends BaseIngredientContainer {
             }
         }
         
-        // Update area list if visible
+        // Update area name in the list item without rebuilding the entire list
         if(NUtils.getGameUI().areas != null) {
-            NUtils.getGameUI().areas.showPath(NUtils.getGameUI().areas.currentPath);
+            NAreasWidget areasWidget = NUtils.getGameUI().areas;
+            areasWidget.updateAreaName(area.id, itemName);
         }
     }
 

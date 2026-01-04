@@ -29,6 +29,9 @@ public class AllowedZonesManager {
     // UUID зон, которые разрешены (hide=false)
     private final Set<String> allowedZoneUuids = ConcurrentHashMap.newKeySet();
     
+    // ID зон, которые разрешены (для зон без UUID)
+    private final Set<Integer> allowedZoneIds = ConcurrentHashMap.newKeySet();
+    
     // ID зон созданных локально в текущей сессии (автоматически разрешены)
     private final Set<Integer> locallyCreatedZoneIds = ConcurrentHashMap.newKeySet();
     
@@ -55,7 +58,7 @@ public class AllowedZonesManager {
         this.profileManager = new ProfileManager(genus);
         load();
         initialized = true;
-        System.out.println("AllowedZonesManager: Initialized with " + allowedZoneUuids.size() + " allowed zones");
+        System.out.println("AllowedZonesManager: Initialized with " + allowedZoneIds.size() + " allowed IDs, " + allowedZoneUuids.size() + " allowed UUIDs");
     }
     
     /**
@@ -80,10 +83,13 @@ public class AllowedZonesManager {
      */
     public void markAsLocallyCreated(int areaId, String uuid) {
         locallyCreatedZoneIds.add(areaId);
+        // Добавляем в allowed по ID (работает даже без UUID)
+        allowedZoneIds.add(areaId);
         if (uuid != null && !uuid.isEmpty()) {
             allowedZoneUuids.add(uuid);
-            save();
         }
+        save();
+        System.out.println("AllowedZonesManager: Marked zone " + areaId + " as locally created and allowed");
     }
     
     /**
@@ -135,22 +141,27 @@ public class AllowedZonesManager {
             return true;
         }
         
+        boolean isLocallyCreated = locallyCreatedZoneIds.contains(area.id);
+        boolean isInAllowedById = allowedZoneIds.contains(area.id);
+        boolean isInAllowedByUuid = area.uuid != null && !area.uuid.isEmpty() && allowedZoneUuids.contains(area.uuid);
+        
         // Зоны созданные локально в этой сессии - всегда видны
-        if (locallyCreatedZoneIds.contains(area.id)) {
+        if (isLocallyCreated) {
+            return false;
+        }
+        
+        // Зоны в списке разрешённых по ID - видны
+        if (isInAllowedById) {
             return false;
         }
         
         // Зоны с UUID в списке разрешённых - видны
-        if (area.uuid != null && !area.uuid.isEmpty() && allowedZoneUuids.contains(area.uuid)) {
+        if (isInAllowedByUuid) {
             return false;
         }
         
-        // Зоны без UUID (старые или локальные) - сохраняем текущий статус
-        if (area.uuid == null || area.uuid.isEmpty()) {
-            return area.hide;
-        }
-        
-        // Все остальные зоны из БД - скрыты по умолчанию
+        // ВСЕ остальные зоны - скрыты по умолчанию
+        // Это ключевое изменение: зоны без UUID тоже скрываются если не в allowed
         return true;
     }
     
@@ -182,13 +193,25 @@ public class AllowedZonesManager {
             JSONObject root = new JSONObject(content);
             
             allowedZoneUuids.clear();
+            allowedZoneIds.clear();
             
+            // Загружаем UUID (для совместимости)
             if (root.has("allowed")) {
                 JSONArray allowed = root.getJSONArray("allowed");
                 for (int i = 0; i < allowed.length(); i++) {
                     allowedZoneUuids.add(allowed.getString(i));
                 }
             }
+            
+            // Загружаем ID
+            if (root.has("allowedIds")) {
+                JSONArray allowedIds = root.getJSONArray("allowedIds");
+                for (int i = 0; i < allowedIds.length(); i++) {
+                    allowedZoneIds.add(allowedIds.getInt(i));
+                }
+            }
+            
+            System.out.println("AllowedZonesManager: Loaded " + allowedZoneIds.size() + " allowed IDs, " + allowedZoneUuids.size() + " allowed UUIDs");
             
         } catch (Exception e) {
             System.err.println("AllowedZonesManager: Failed to load: " + e.getMessage());
@@ -208,12 +231,22 @@ public class AllowedZonesManager {
             Files.createDirectories(filePath.getParent());
             
             JSONObject root = new JSONObject();
+            
+            // Сохраняем UUID
             JSONArray allowed = new JSONArray();
             for (String uuid : allowedZoneUuids) {
                 allowed.put(uuid);
             }
             root.put("allowed", allowed);
-            root.put("version", 1);
+            
+            // Сохраняем ID
+            JSONArray allowedIds = new JSONArray();
+            for (Integer id : allowedZoneIds) {
+                allowedIds.put(id);
+            }
+            root.put("allowedIds", allowedIds);
+            
+            root.put("version", 2);
             root.put("lastSaved", System.currentTimeMillis());
             
             Files.write(filePath, root.toString(2).getBytes(StandardCharsets.UTF_8));
@@ -224,10 +257,37 @@ public class AllowedZonesManager {
     }
     
     /**
+     * Разрешить зону по ID
+     */
+    public void allowById(int areaId) {
+        if (allowedZoneIds.add(areaId)) {
+            save();
+            System.out.println("AllowedZonesManager: Allowed zone ID " + areaId);
+        }
+    }
+    
+    /**
+     * Запретить зону по ID
+     */
+    public void disallowById(int areaId) {
+        if (allowedZoneIds.remove(areaId)) {
+            save();
+            System.out.println("AllowedZonesManager: Disallowed zone ID " + areaId);
+        }
+    }
+    
+    /**
+     * Проверить разрешена ли зона по ID
+     */
+    public boolean isAllowedById(int areaId) {
+        return allowedZoneIds.contains(areaId);
+    }
+    
+    /**
      * Получить количество разрешённых зон
      */
     public int getAllowedCount() {
-        return allowedZoneUuids.size();
+        return allowedZoneUuids.size() + allowedZoneIds.size();
     }
     
     /**

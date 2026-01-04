@@ -853,13 +853,14 @@ public class NMapView extends MapView
     }
 
 
-    public String addArea(NArea.Space result)
+    public int addArea(NArea.Space result)
     {
         String key;
+        int id;
         synchronized (glob.map.areas)
         {
             HashSet<String> names = new HashSet<String>();
-            int id = 1;
+            id = 1;
             for(NArea area : glob.map.areas.values())
             {
                 if(area.id >= id)
@@ -901,7 +902,7 @@ public class NMapView extends MapView
             routeGraphManager.getGraph().connectAreaToRoutePoints(newArea);
             createAreaLabel(id);
         }
-        return key;
+        return id;
     }
 
     public String addRoute()
@@ -1808,8 +1809,15 @@ public class NMapView extends MapView
                 area.hide = val;
                 area.lastLocalChange = System.currentTimeMillis();
                 
-                // ВАЖНО: Синхронизируем с локальным списком разрешённых зон
+                // ВАЖНО: Синхронизируем с локальным списком разрешённых зон по ID
                 // hide=true означает disallow, hide=false означает allow
+                if (val) {
+                    nurgling.areas.AllowedZonesManager.getInstance().disallowById(area.id);
+                } else {
+                    nurgling.areas.AllowedZonesManager.getInstance().allowById(area.id);
+                }
+                
+                // Также обновляем по UUID если есть
                 if (area.uuid != null && !area.uuid.isEmpty()) {
                     if (val) {
                         nurgling.areas.AllowedZonesManager.getInstance().disallow(area.uuid);

@@ -208,6 +208,11 @@ public class Finder
 
     public static Gob findGob(Pair<Coord2d,Coord2d> space, NAlias name) throws InterruptedException
     {
+        // Проверка на null для space - зона может не иметь загруженных координат
+        if (space == null || space.a == null || space.b == null) {
+            return null;
+        }
+        
         NUtils.getUI().core.addTask(new FindPlayer());
 
         Gob result = null;

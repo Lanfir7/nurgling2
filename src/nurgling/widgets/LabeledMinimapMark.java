@@ -232,18 +232,7 @@ public class LabeledMinimapMark {
         if (this.segmentId != segId) return false;
         int dx = Math.abs(this.tileCoords.x - tc.x);
         int dy = Math.abs(this.tileCoords.y - tc.y);
-        boolean result = dx <= radiusTiles && dy <= radiusTiles;
-        
-        // #region agent log
-        try {
-            java.io.FileWriter fw = new java.io.FileWriter("c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log", true);
-            fw.write(String.format("{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\",\"location\":\"LabeledMinimapMark.java:%d\",\"message\":\"isNear check\",\"data\":{\"thisTileCoords\":\"%s\",\"otherTileCoords\":\"%s\",\"dx\":%d,\"dy\":%d,\"radiusTiles\":%d,\"result\":%s},\"timestamp\":%d}\n",
-                209, this.tileCoords.toString(), tc.toString(), dx, dy, radiusTiles, result, System.currentTimeMillis()));
-            fw.close();
-        } catch (Exception e) {}
-        // #endregion
-        
-        return result;
+        return dx <= radiusTiles && dy <= radiusTiles;
     }
 }
 

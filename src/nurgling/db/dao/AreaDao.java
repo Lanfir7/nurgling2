@@ -30,10 +30,12 @@ public class AreaDao {
         private final String profile;
         private final Timestamp updatedAt;
         private final int version;
+        private final String globalId; // UUID для синхронизации с сервером
 
         public AreaData(int id, String name, String path, boolean hide,
                        int colorR, int colorG, int colorB, int colorA,
-                       String data, String profile, Timestamp updatedAt, int version) {
+                       String data, String profile, Timestamp updatedAt, int version,
+                       String globalId) {
             this.id = id;
             this.name = name;
             this.path = path;
@@ -46,6 +48,7 @@ public class AreaDao {
             this.profile = profile;
             this.updatedAt = updatedAt;
             this.version = version;
+            this.globalId = globalId;
         }
 
         public int getId() { return id; }
@@ -60,6 +63,7 @@ public class AreaDao {
         public String getProfile() { return profile; }
         public Timestamp getUpdatedAt() { return updatedAt; }
         public int getVersion() { return version; }
+        public String getGlobalId() { return globalId; }
 
         /**
          * Convert to JSON for NArea compatibility
@@ -164,7 +168,7 @@ public class AreaDao {
     public List<AreaData> loadAreasByProfile(DatabaseAdapter adapter, String profile) throws SQLException {
         List<AreaData> areas = new ArrayList<>();
 
-        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
+        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version, global_id " +
                     "FROM areas WHERE profile = ? AND deleted = FALSE ORDER BY id";
 
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
@@ -181,7 +185,8 @@ public class AreaDao {
                     rs.getString("data"),
                     rs.getString("profile"),
                     rs.getTimestamp("updated_at"),
-                    rs.getInt("version")
+                    rs.getInt("version"),
+                    rs.getString("global_id")
                 ));
             }
         }
@@ -193,7 +198,7 @@ public class AreaDao {
      * Load area by id and profile
      */
     public AreaData loadArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
-        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
+        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version, global_id " +
                     "FROM areas WHERE id = ? AND profile = ? AND deleted = FALSE";
 
         try (ResultSet rs = adapter.executeQuery(sql, id, profile)) {
@@ -210,7 +215,8 @@ public class AreaDao {
                     rs.getString("data"),
                     rs.getString("profile"),
                     rs.getTimestamp("updated_at"),
-                    rs.getInt("version")
+                    rs.getInt("version"),
+                    rs.getString("global_id")
                 );
             }
         }
@@ -259,7 +265,7 @@ public class AreaDao {
     public List<AreaData> getAreasUpdatedAfter(DatabaseAdapter adapter, String profile, Timestamp after) throws SQLException {
         List<AreaData> areas = new ArrayList<>();
 
-        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
+        String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version, global_id " +
                     "FROM areas WHERE profile = ? AND updated_at > ? AND deleted = FALSE ORDER BY id";
 
         try (ResultSet rs = adapter.executeQuery(sql, profile, after)) {
@@ -276,7 +282,8 @@ public class AreaDao {
                     rs.getString("data"),
                     rs.getString("profile"),
                     rs.getTimestamp("updated_at"),
-                    rs.getInt("version")
+                    rs.getInt("version"),
+                    rs.getString("global_id")
                 ));
             }
         }
