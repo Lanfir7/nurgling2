@@ -35,6 +35,20 @@ public class BuildCupboardFromZone implements Action {
         // Save build area data BEFORE navigation (to avoid grid null issues after navigation)
         Pair<Coord2d, Coord2d> buildRCArea = buildarea.getRCArea();
         int rotationCount = buildarea.getRotationCount();
+        
+        // IMPORTANT: Save the grid ID of build area BEFORE leaving this instance
+        // This is needed for ChunkNav to navigate back through portals
+        // Use player's current grid ID which is more reliable than getgridt()
+        long buildAreaGridId = -1;
+        try {
+            Gob playerGob = NUtils.player();
+            if (playerGob != null && playerGob.ngob != null && playerGob.ngob.grid_id != 0) {
+                buildAreaGridId = playerGob.ngob.grid_id;
+                System.out.println("BuildCupboardFromZone: Saved build area grid ID: " + buildAreaGridId);
+            }
+        } catch (Exception e) {
+            System.err.println("BuildCupboardFromZone: Could not get build area grid ID: " + e.getMessage());
+        }
 
         // Get ghost positions from BuildGhostPreview if available (before navigation)
         ArrayList<Coord2d> ghostPositions = null;
@@ -64,7 +78,7 @@ public class BuildCupboardFromZone implements Action {
         // Create ingredient with specialWay that uses routes for collection
         Build.Ingredient boardsIngredient = new Build.Ingredient(new Coord(4,1), boardsRCArea, new NAlias("Board"), 8);
         CollectBoardsFromZoneAction collectBoardsAction = new CollectBoardsFromZoneAction(
-            boardsRCArea, new NAlias("Board"), boardsIngredient, buildRCArea, context);
+            boardsRCArea, new NAlias("Board"), boardsIngredient, buildRCArea, buildAreaGridId, context);
         boardsIngredient.specialWay = collectBoardsAction;
         command.ingredients.add(boardsIngredient);
         
