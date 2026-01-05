@@ -1,7 +1,6 @@
 package nurgling.navigation;
 
 import haven.*;
-import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
@@ -162,14 +161,9 @@ public class ChunkNavManager {
      * Record all currently visible grids.
      * This catches grids that were already loaded when player walks through them.
      * Runs in a background thread to avoid FPS drops.
+     * Note: Recording always works - chunkNavOverlay toggle only controls visualization.
      */
     private void recordVisibleGrids() {
-        // Skip if ChunkNav overlay is disabled
-        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
-        if (!(val instanceof Boolean) || !(Boolean) val) {
-            return;
-        }
-
         // Skip if recording is already in progress
         if (recordingInProgress) {
             return;
@@ -216,14 +210,9 @@ public class ChunkNavManager {
      * Ensure the player's current chunk is recorded in the graph.
      * This is called before path planning to handle cases where the player
      * teleported (e.g., via Hearth Fire skill) to an unrecorded chunk.
+     * Note: Recording always works - chunkNavOverlay toggle only controls visualization.
      */
     private void ensurePlayerChunkRecorded() {
-        // Skip if ChunkNav overlay is disabled
-        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
-        if (!(val instanceof Boolean) || !(Boolean) val) {
-            return;
-        }
-
         try {
             NGameUI gui = NUtils.getGameUI();
             if (gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) {
@@ -504,6 +493,27 @@ public class ChunkNavManager {
             }
 
             String content = new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8);
+            
+            // Validate content before parsing
+            if (content == null || content.trim().isEmpty()) {
+                System.err.println("ChunkNav: Data file is empty, starting fresh");
+                return;
+            }
+            
+            String trimmed = content.trim();
+            if (!trimmed.startsWith("{")) {
+                System.err.println("ChunkNav: Data file is corrupted (invalid JSON), starting fresh. First chars: " + 
+                    trimmed.substring(0, Math.min(50, trimmed.length())));
+                // Delete the corrupted file so it gets overwritten with fresh data
+                try {
+                    Files.delete(filePath);
+                    System.out.println("ChunkNav: Deleted corrupted data file");
+                } catch (Exception e) {
+                    System.err.println("ChunkNav: Failed to delete corrupted file: " + e.getMessage());
+                }
+                return;
+            }
+            
             JSONObject root = new JSONObject(content);
 
             // Verify genus matches

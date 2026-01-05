@@ -227,8 +227,12 @@ public class Composite extends Drawable implements EquipTarget {
 	    List<ResData> cposes = poses, ctposes = tposes;
 	    float cttime = ttime;
 	    Composite cmp = (Composite)g.getattr(Drawable.class);
-	    if(cmp == null)
-		throw(new RuntimeException(String.format("cmppose on non-composed object: %s %s %s %s", poses, tposes, interp, ttime)));
+	    if(cmp == null) {
+		// Composite not ready yet - can happen during initial object creation
+		// when server sends pose data before Drawable is attached.
+		// Silently skip - next update will apply correctly.
+		return;
+	    }
 	    if(cmp.pseq != pseq) {
 		cmp.pseq = pseq;
 		if(poses != null)
@@ -266,8 +270,10 @@ public class Composite extends Drawable implements EquipTarget {
 		mod.add(md);
 	    }
 	    Composite cmp = (Composite)g.getattr(Drawable.class);
-	    if(cmp == null)
-		throw(new RuntimeException(String.format("cmpmod on non-composed object: %s", mod)));
+	    if(cmp == null) {
+		// Composite not ready yet - skip (will be applied on next update)
+		return;
+	    }
 	    cmp.chmod(mod);
 	}
     }
@@ -304,8 +310,10 @@ public class Composite extends Drawable implements EquipTarget {
 		equ.add(ed);
 	    }
 	    Composite cmp = (Composite)g.getattr(Drawable.class);
-	    if(cmp == null)
-		throw(new RuntimeException(String.format("cmpequ on non-composed object: %s", equ)));
+	    if(cmp == null) {
+		// Composite not ready yet - skip (will be applied on next update)
+		return;
+	    }
 	    cmp.chequ(equ);
 	}
     }

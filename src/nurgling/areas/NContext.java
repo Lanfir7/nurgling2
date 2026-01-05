@@ -605,7 +605,34 @@ public class NContext {
             gui.msg(areaId + " Not found!");
             return;
         }
-        if((!area.isVisible() || area.getCenter2d() == null || area.getCenter2d().dist(NUtils.player().rc)>450) && rps.containsKey(areaId)) {
+        
+        // Check if area is visible and close enough
+        boolean needsNavigation = !area.isVisible() || 
+                                  area.getCenter2d() == null || 
+                                  area.getCenter2d().dist(NUtils.player().rc) > 450;
+        
+        if (!needsNavigation) {
+            return; // Already at the area
+        }
+        
+        // First, try ChunkNav if available
+        if (gui.map instanceof NMapView) {
+            nurgling.navigation.ChunkNavManager chunkNavManager = ((NMapView) gui.map).getChunkNavManager();
+            if (chunkNavManager != null && chunkNavManager.isInitialized()) {
+                // Check if we have ChunkNav data for this area
+                if (chunkNavManager.hasDataForArea(area)) {
+                    // Try to navigate using ChunkNav
+                    nurgling.actions.Results chunkNavResult = chunkNavManager.navigateToArea(area, gui);
+                    if (chunkNavResult.IsSuccess()) {
+                        return; // Successfully navigated using ChunkNav
+                    }
+                    // ChunkNav failed, fall through to route navigation
+                }
+            }
+        }
+        
+        // Fallback to route navigation if ChunkNav is not available or failed
+        if (rps.containsKey(areaId)) {
             new RoutePointNavigator(rps.get(areaId), area.id).run(gui);
         }
     }
