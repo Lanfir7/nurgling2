@@ -477,6 +477,7 @@ public class NAreasWidget extends Window
                     add("Set color");
                     add("Edit name");
                     add("Edit folder");
+                    add("Дубликат");
                     add("Scan");
                 }
             };
@@ -720,6 +721,10 @@ public class NAreasWidget extends Window
                             else if (option.name.equals("Edit folder"))
                             {
                                 ui.gui.add(new NFolderSelectWindow(area, NAreasWidget.this), ui.mc);
+                            }
+                            else if (option.name.equals("Дубликат"))
+                            {
+                                duplicateArea(area);
                             }
                             else if (option.name.equals("Scan"))
                             {
@@ -1261,6 +1266,145 @@ public class NAreasWidget extends Window
                 e.printStackTrace();
                 return null;
             });
+    }
+
+    /**
+     * Дублирует зону со всеми параметрами (инпут, аутпут, специализации, цвет, space и т.д.)
+     * Название новой зоны = старое название + " 1"
+     */
+    private void duplicateArea(NArea sourceArea) {
+        if (sourceArea == null) {
+            NUtils.getGameUI().error("Cannot duplicate: area is null");
+            return;
+        }
+
+        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        synchronized (mapView.glob.map.areas) {
+            // Находим следующий доступный ID
+            int newId = 1;
+            for (NArea area : mapView.glob.map.areas.values()) {
+                if (area.id >= newId) {
+                    newId = area.id + 1;
+                }
+            }
+
+            // Создаем новое название: старое название + " 1"
+            String newName = sourceArea.name + " 1";
+            HashSet<String> names = new HashSet<>();
+            for (NArea area : mapView.glob.map.areas.values()) {
+                names.add(area.name);
+            }
+            // Если название уже существует, добавляем (2), (3) и т.д.
+            int counter = 1;
+            String finalName = newName;
+            while (names.contains(finalName)) {
+                counter++;
+                finalName = sourceArea.name + " " + counter;
+            }
+
+            // Создаем новую зону
+            NArea newArea = new NArea(finalName);
+            newArea.id = newId;
+            newArea.path = sourceArea.path;
+            newArea.color = new Color(sourceArea.color.getRed(), sourceArea.color.getGreen(), 
+                                     sourceArea.color.getBlue(), sourceArea.color.getAlpha());
+            newArea.hide = sourceArea.hide;
+            newArea.lastLocalChange = System.currentTimeMillis();
+
+            // Копируем space (глубокая копия)
+            newArea.space = new NArea.Space();
+            if (sourceArea.space != null && sourceArea.space.space != null) {
+                for (Long gridId : sourceArea.space.space.keySet()) {
+                    NArea.VArea vArea = sourceArea.space.space.get(gridId);
+                    if (vArea != null && vArea.area != null) {
+                        haven.Area sourceAreaObj = vArea.area;
+                        newArea.space.space.put(gridId, new NArea.VArea(
+                            new haven.Area(sourceAreaObj.ul, sourceAreaObj.br)
+                        ));
+                    }
+                }
+            }
+            newArea.grids_id.clear();
+            newArea.grids_id.addAll(sourceArea.grids_id);
+
+            // Копируем jin (JSONArray) - создаем новый объект
+            if (sourceArea.jin != null) {
+                try {
+                    newArea.jin = new JSONArray(sourceArea.jin.toString());
+                } catch (Exception e) {
+                    newArea.jin = new JSONArray();
+                    for (int i = 0; i < sourceArea.jin.length(); i++) {
+                        newArea.jin.put(sourceArea.jin.get(i));
+                    }
+                }
+            } else {
+                newArea.jin = new JSONArray();
+            }
+
+            // Копируем jout (JSONArray) - создаем новый объект
+            if (sourceArea.jout != null) {
+                try {
+                    newArea.jout = new JSONArray(sourceArea.jout.toString());
+                } catch (Exception e) {
+                    newArea.jout = new JSONArray();
+                    for (int i = 0; i < sourceArea.jout.length(); i++) {
+                        newArea.jout.put(sourceArea.jout.get(i));
+                    }
+                }
+            } else {
+                newArea.jout = new JSONArray();
+            }
+
+            // Копируем spec (ArrayList) - создаем новый список с копиями объектов
+            newArea.spec = new ArrayList<>();
+            if (sourceArea.spec != null) {
+                for (NArea.Specialisation spec : sourceArea.spec) {
+                    if (spec.subtype != null) {
+                        newArea.spec.add(new NArea.Specialisation(spec.name, spec.subtype));
+                    } else {
+                        newArea.spec.add(new NArea.Specialisation(spec.name));
+                    }
+                }
+            }
+
+            // Копируем jspec если есть
+            if (sourceArea.jspec != null) {
+                try {
+                    newArea.jspec = new JSONArray(sourceArea.jspec.toString());
+                } catch (Exception e) {
+                    newArea.jspec = new JSONArray();
+                    for (int i = 0; i < sourceArea.jspec.length(); i++) {
+                        newArea.jspec.put(sourceArea.jspec.get(i));
+                    }
+                }
+            } else {
+                newArea.jspec = new JSONArray();
+            }
+
+            // Добавляем зону в карту
+            mapView.glob.map.areas.put(newId, newArea);
+
+            // Помечаем зону как созданную локально
+            nurgling.areas.AllowedZonesManager.getInstance().markAsLocallyCreated(newId, newArea.uuid);
+            newArea.hide = false; // Локально созданные зоны всегда видны
+
+            // Подключаем к графу маршрутов
+            mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(newArea);
+
+            // Создаем лейбл зоны
+            mapView.createAreaLabel(newId);
+
+            // Обновляем конфигурацию
+            NConfig.needAreasUpdate();
+
+            // Обновляем список зон
+            showPath(currentPath);
+
+            // Выбираем новую зону
+            select(newId);
+
+            NUtils.getGameUI().msg("Зона '" + finalName + "' создана");
+        }
     }
 
 }
