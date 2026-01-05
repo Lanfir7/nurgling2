@@ -219,6 +219,7 @@ public class NGameUI extends GameUI
             if (simpleRoutesWidget == null) {
                 simpleRoutesWidget = new SimpleRoutesWidget();
                 add(simpleRoutesWidget, new Coord(100, 200));
+                simpleRoutesWidget.hide(); // Скрываем виджет при создании
             }
         }
         

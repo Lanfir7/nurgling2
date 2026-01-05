@@ -1295,12 +1295,33 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		// Bottom row - 5 buttons: Areas, Routes, Cook Book, Tree Garden, Encyclopedia
 		int secondRowY = firstButton.sz.y + UI.scale(5);
 		prev = add(new MenuCheckBox("rbtn/areas/", kb_areas, "Areas Settings"), 0, secondRowY).state(() -> wndstate(areas)).click(() -> togglewnd(areas));
-		// Simple Routes button (only if NGameUI)
-		if (GameUI.this instanceof nurgling.NGameUI) {
-			nurgling.widgets.SimpleRoutesWidget simpleRoutes = ((nurgling.NGameUI) GameUI.this).simpleRoutesWidget;
-			if (simpleRoutes != null) {
-				prev = add(new MenuCheckBox("rbtn/routes/", null, "Simple Routes"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(simpleRoutes)).click(() -> togglewnd(simpleRoutes));
+		// Simple Routes button (only if NGameUI) - check dynamically
+		Widget simpleRoutesBtn = null;
+		try {
+			// Check if this is NGameUI by checking if simpleRoutesWidget field exists
+			if (GameUI.this.getClass().getName().equals("nurgling.NGameUI") || GameUI.this instanceof nurgling.NGameUI) {
+				simpleRoutesBtn = add(new MenuCheckBox("rbtn/routes/", null, "Simple Routes"), prev.pos("ur").add(UI.scale(10),0));
+				((MenuCheckBox)simpleRoutesBtn).state(() -> {
+					try {
+						nurgling.widgets.SimpleRoutesWidget simpleRoutes = ((nurgling.NGameUI) GameUI.this).simpleRoutesWidget;
+						return simpleRoutes != null && wndstate(simpleRoutes);
+					} catch (Exception e) {
+						return false;
+					}
+				}).click(() -> {
+					try {
+						nurgling.widgets.SimpleRoutesWidget simpleRoutes = ((nurgling.NGameUI) GameUI.this).simpleRoutesWidget;
+						if (simpleRoutes != null) {
+							togglewnd(simpleRoutes);
+						}
+					} catch (Exception e) {
+						// Ignore
+					}
+				});
+				prev = simpleRoutesBtn;
 			}
+		} catch (Exception e) {
+			// If check fails, skip button
 		}
 		prev = add(new MenuCheckBox("rbtn/cookbook/", kb_cookbook, "Cook Book"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(cookBook)).click(() -> togglewnd(cookBook));
 		prev = add(new MenuCheckBox("rbtn/blueprints/", kb_blueprints, "Blueprint Manager"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(blueprintWidget)).click(() -> togglewnd(blueprintWidget));

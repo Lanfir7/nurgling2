@@ -42,10 +42,17 @@ public class FreeContainersInUnboxZone implements Action {
 
         ArrayList<Gob> gobs;
         HashSet<String> targets = new HashSet<>();
+        HashSet<Long> processedPiles = new HashSet<>(); // Защита от бесконечного цикла
         while(!(gobs = Finder.findGobs(area, new NAlias("stockpile"))).isEmpty())
         {
+            boolean anyProcessed = false;
             for (Gob pile : gobs) {
+                // Пропускаем уже обработанные или недоступные pile
+                if (processedPiles.contains(pile.id)) {
+                    continue;
+                }
                 if(PathFinder.isAvailable(pile)) {
+                    anyProcessed = true;
                     Coord size = StockpileUtils.itemMaxSize.get(pile.ngob.name);
                     new PathFinder(pile).run(gui);
                     new OpenTargetContainer("Stockpile",pile).run(gui);
@@ -66,7 +73,8 @@ public class FreeContainersInUnboxZone implements Action {
 //                                            new RoutePointNavigator(this.closestRoutePoint).run(NUtils.getGameUI());
                                         }
                                         targets.clear();
-                                        if (Finder.findGob(pile.id) != null) {
+                                        // Проверяем что pile существует И доступен (можно построить путь)
+                                        if (Finder.findGob(pile.id) != null && PathFinder.isAvailable(pile)) {
                                             new PathFinder(pile).run(gui);
                                             new OpenTargetContainer("Stockpile", pile).run(gui);
                                         } else break;
@@ -78,6 +86,17 @@ public class FreeContainersInUnboxZone implements Action {
                                     }
                                 }
                                 while (target_size!=0);
+                            } else {
+                                // Stockpile закрылся или закончился - пробуем открыть снова
+                                if (Finder.findGob(pile.id) != null && PathFinder.isAvailable(pile)) {
+                                    new OpenTargetContainer("Stockpile", pile).run(gui);
+                                    // Если всё ещё не открылся - выходим (pile пустой)
+                                    if (gui.getStockpile() == null) {
+                                        break;
+                                    }
+                                } else {
+                                    break; // pile недоступен
+                                }
                             }
                         }
                     else
@@ -87,12 +106,24 @@ public class FreeContainersInUnboxZone implements Action {
                                 context.getSpecArea(Specialisation.SpecName.unbox);
 //                                new RoutePointNavigator(this.closestRoutePoint).run(NUtils.getGameUI());
                             }
-                            if(Finder.findGob(pile.id) != null) {
+                            // Проверяем что pile существует И доступен (можно построить путь)
+                            if(Finder.findGob(pile.id) != null && PathFinder.isAvailable(pile)) {
                                 new PathFinder(pile).run(gui);
                                 new OpenTargetContainer("Stockpile", pile).run(gui);
+                            } else {
+                                break; // pile недоступен - выходим
                             }
                         }
+                    // Помечаем pile как обработанный
+                    processedPiles.add(pile.id);
+                } else {
+                    // Pile недоступен (возможно на другом этаже) - помечаем как обработанный чтобы не зависнуть
+                    processedPiles.add(pile.id);
                 }
+            }
+            // Если ни один pile не был обработан - выходим из цикла
+            if (!anyProcessed) {
+                break;
             }
         }
         gui.msg("FINAL TRANSFER!");

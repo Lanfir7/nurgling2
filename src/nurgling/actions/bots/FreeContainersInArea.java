@@ -56,7 +56,8 @@ public class FreeContainersInArea implements Action {
                                         new FreeInventory2(context).run(gui);
                                         context.navigateToAreaIfNeeded(workAreaId);
                                         targets.clear();
-                                        if (Finder.findGob(pile.id) != null)
+                                        // Проверяем что pile существует И доступен (можно построить путь)
+                                        if (Finder.findGob(pile.id) != null && PathFinder.isAvailable(pile))
                                         {
                                             new PathFinder(pile).run(gui);
                                             new OpenTargetContainer("Stockpile", pile).run(gui);
@@ -70,15 +71,29 @@ public class FreeContainersInArea implements Action {
                                     }
                                 }
                                 while (target_size != 0);
+                            } else {
+                                // Stockpile закрылся или закончился - пробуем открыть снова
+                                if (Finder.findGob(pile.id) != null && PathFinder.isAvailable(pile)) {
+                                    new OpenTargetContainer("Stockpile", pile).run(gui);
+                                    // Если всё ещё не открылся - выходим (pile пустой)
+                                    if (gui.getStockpile() == null) {
+                                        break;
+                                    }
+                                } else {
+                                    break; // pile недоступен
+                                }
                             }
                         } else
                         {
                             new FreeInventory2(context).run(gui);
                             context.navigateToAreaIfNeeded(workAreaId);
-                            if (Finder.findGob(pile.id) != null)
+                            // Проверяем что pile существует И доступен (можно построить путь)
+                            if (Finder.findGob(pile.id) != null && PathFinder.isAvailable(pile))
                             {
                                 new PathFinder(pile).run(gui);
                                 new OpenTargetContainer("Stockpile", pile).run(gui);
+                            } else {
+                                break; // pile недоступен - выходим
                             }
                         }
                         context.navigateToAreaIfNeeded(workAreaId);

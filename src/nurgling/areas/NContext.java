@@ -609,9 +609,17 @@ public class NContext {
         ChunkNavManager chunkNav = (gui.map != null && gui.map instanceof NMapView)
             ? ((NMapView)gui.map).getChunkNavManager() : null;
         if (chunkNav != null && chunkNav.isInitialized()) {
-            ChunkPath path = chunkNav.planToArea(area);
-            if (path != null) {
-                nurgling.actions.Results result = chunkNav.navigateToArea(area, gui);
+            try {
+                ChunkPath path = chunkNav.planToArea(area);
+                if (path != null) {
+                    nurgling.actions.Results result = chunkNav.navigateToArea(area, gui);
+                }
+            } catch (haven.MCache.LoadingMap e) {
+                // Grid ещё не загружен - пропускаем навигацию через ChunkNav
+                System.out.println("NContext.navigateToAreaIfNeeded: Map not loaded for area " + areaId + ", skipping ChunkNav");
+            } catch (Exception e) {
+                // Любая другая ошибка ChunkNav - не критично
+                System.err.println("NContext.navigateToAreaIfNeeded: ChunkNav error: " + e.getMessage());
             }
         }
     }
@@ -719,6 +727,10 @@ public class NContext {
                 if(id>0 && player!=null) {
                     if (NUtils.getGameUI().map.glob.map.areas.get(id).containIn(name)) {
                         NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
+                        // Пропускаем скрытые зоны
+                        if (test.hide) {
+                            continue;
+                        }
                         Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                         if(test.getRCArea()!=null) {
                             double testdist;
@@ -743,6 +755,10 @@ public class NContext {
                 if(id>0) {
                     if (NUtils.getGameUI().map.glob.map.areas.get(id).containIn(name)) {
                         NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
+                        // Пропускаем скрытые зоны
+                        if (test.hide) {
+                            continue;
+                        }
                         Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                         if(test.getRCArea()!=null) {
                             double testdist;
@@ -821,7 +837,8 @@ public class NContext {
             for(Integer id : nids) {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (cand.isVisible() && cand.containOut(name.getDefault(), th) && cand.getRCArea()!=null) {
+                    // Пропускаем скрытые зоны
+                    if (!cand.hide && cand.isVisible() && cand.containOut(name.getDefault(), th) && cand.getRCArea()!=null) {
                         areas.add(new TestedArea(cand, cand.getOutput(name.getDefault()).th));
                     }
                 }
@@ -869,7 +886,8 @@ public class NContext {
             for(Integer id : nids) {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (cand.isVisible() && cand.containOut(name, th) && cand.getRCArea()!=null) {
+                    // Пропускаем скрытые зоны
+                    if (!cand.hide && cand.isVisible() && cand.containOut(name, th) && cand.getRCArea()!=null) {
                         areas.add(new TestedArea(cand, cand.getOutput(name).th));
                     }
                 }
@@ -920,6 +938,10 @@ public class NContext {
                 if(id>0) {
                     if (NUtils.getGameUI().map.glob.map.areas.get(id).containIn(name)) {
                         NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                        // Пропускаем скрытые зоны
+                        if (cand.hide) {
+                            continue;
+                        }
                         // Use ChunkNav if available for distance calculation
                         ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
                             ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
@@ -957,6 +979,10 @@ public class NContext {
                     for (NArea.Specialisation s : NUtils.getGameUI().map.glob.map.areas.get(id).spec) {
                         if (s.name.equals(name)  && ((sub == null || sub.isEmpty()) || s.subtype != null && s.subtype.toLowerCase().equals(sub.toLowerCase()))) {
                             NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                            // Пропускаем скрытые зоны
+                            if (cand.hide) {
+                                continue;
+                            }
                             // Use ChunkNav if available for distance calculation
                             ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
                                 ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
@@ -1009,6 +1035,11 @@ public class NContext {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
                     if (cand == null) {
                         System.out.println("NContext.findOutGlobal: Zone " + id + " not found in glob.map.areas - skipping");
+                        continue;
+                    }
+                    
+                    // ВАЖНО: Пропускаем скрытые зоны (hide=true)
+                    if (cand.hide) {
                         continue;
                     }
                     
@@ -1164,7 +1195,8 @@ public class NContext {
                 if (id > 0)
                     if (NUtils.getGameUI().map.glob.map.areas.get(id).containOut(name.getDefault())) {
                         NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                        if(cand.getRCArea()!=null) {
+                        // Пропускаем скрытые зоны
+                        if (!cand.hide && cand.getRCArea()!=null) {
                             for (int i = 0; i < cand.jout.length(); i++) {
                                 if (NParser.checkName((String) ((JSONObject) cand.jout.get(i)).get("name"), name)) {
                                     int th = 1;
@@ -1190,6 +1222,7 @@ public class NContext {
                 if (id > 0)
                     if (NUtils.getGameUI().map.glob.map.areas.get(id).containOut(name)) {
                         NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                        // Пропускаем скрытые зоны
                         if(!cand.hide) {
                             for (int i = 0; i < cand.jout.length(); i++) {
                                 if (NParser.checkName((String) ((JSONObject) cand.jout.get(i)).get("name"), name)) {
@@ -1225,7 +1258,8 @@ public class NContext {
                     for (NArea.Specialisation s : NUtils.getGameUI().map.glob.map.areas.get(id).spec) {
                         if (s.name.equals(name)) {
                             NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
-                            if(test.isVisible()) {
+                            // Пропускаем скрытые зоны
+                            if (!test.hide && test.isVisible()) {
                                 Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                                 if(testrc != null) {
                                     double testdist;
@@ -1253,7 +1287,8 @@ public class NContext {
                     for (NArea.Specialisation s : NUtils.getGameUI().map.glob.map.areas.get(id).spec) {
                         if (s.name.equals(name) && s.subtype != null && s.subtype.toLowerCase().equals(sub.toLowerCase())) {
                             NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
-                            if(test.isVisible()) {
+                            // Пропускаем скрытые зоны
+                            if (!test.hide && test.isVisible()) {
                                 Pair<Coord2d,Coord2d> testrc = test.getRCArea();
                                 if(testrc!=null) {
                                     double testdist;
