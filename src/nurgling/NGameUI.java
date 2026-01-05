@@ -48,7 +48,6 @@ public class NGameUI extends GameUI
     public NEditFolderName nefn;
     public NImportStrategyDialog importDialog;
     public Specialisation spec;
-    public RouteSpecialization routespec;
     public BotsInterruptWidget biw;
     public NEquipProxy nep;
     public NBeltProxy nbp;
@@ -76,6 +75,7 @@ public class NGameUI extends GameUI
     public LabeledMarkService labeledMarkService;
     public StudyDeskPlannerWidget studyDeskPlanner = null;
     public NDraggableWidget studyReportWidget = null;
+    public SimpleRoutesWidget simpleRoutesWidget = null;
     
     // Local storage for ring settings
     public IconRingConfig iconRingConfig;
@@ -169,14 +169,14 @@ public class NGameUI extends GameUI
         // Position Specialisation relative to areas widget center
         add(spec = new Specialisation(), new Coord(sz.x/2 - spec.sz.x/2, sz.y/2 - spec.sz.y/2));
         spec.hide();
-        // Position RouteSpecialization relative to routes widget center
-        add(routespec = new RouteSpecialization(), new Coord(sz.x/2 - routespec.sz.x/2, sz.y/2 - routespec.sz.y/2));
-        routespec.hide();
-        
+
         // Heavy service widgets
         add(localizedResourceTimerDialog = new LocalizedResourceTimerDialog(), new Coord(200, 200));
         localizedResourceTimerService = new LocalizedResourceTimerService(this, genus);
         add(localizedResourceTimersWindow = new LocalizedResourceTimersWindow(localizedResourceTimerService), new Coord(100, 100));
+
+        // Simple routes widget (initialized in attached() after SimpleRouteManager is ready)
+        // Will be added in attached() method
 
         // Profile-aware components are now initialized in attached() before super.attached()
     }
@@ -213,6 +213,15 @@ public class NGameUI extends GameUI
 
         super.attached();
         initHeavyWidgets();
+        
+        // Initialize SimpleRoutesWidget after SimpleRouteManager is ready
+        if (map instanceof NMapView && ((NMapView) map).simpleRouteManager != null) {
+            if (simpleRoutesWidget == null) {
+                simpleRoutesWidget = new SimpleRoutesWidget();
+                add(simpleRoutesWidget, new Coord(100, 200));
+            }
+        }
+        
         // Apply local ring settings to iconconf after it's loaded (only once)
         if (!ringSettingsApplied) {
             applyLocalRingSettings();

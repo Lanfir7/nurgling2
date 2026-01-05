@@ -15,7 +15,6 @@ import nurgling.actions.Results;
 import nurgling.actions.TakeItemsFromPile;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
-import nurgling.routes.RoutePoint;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.widgets.Specialisation;
@@ -31,15 +30,15 @@ public class CollectBoardsFromZoneAction implements Action {
     private final Pair<Coord2d, Coord2d> boardsRCArea;
     private final NAlias itemName;
     private final Build.Ingredient ingredient;
-    private final RoutePoint buildAreaRoutePoint;
+    private final Pair<Coord2d, Coord2d> buildAreaRCArea;
     private final NContext context;
 
     public CollectBoardsFromZoneAction(Pair<Coord2d, Coord2d> boardsRCArea, NAlias itemName, 
-                                       Build.Ingredient ingredient, RoutePoint buildAreaRoutePoint, NContext context) {
+                                       Build.Ingredient ingredient, Pair<Coord2d, Coord2d> buildAreaRCArea, NContext context) {
         this.boardsRCArea = boardsRCArea;
         this.itemName = itemName;
         this.ingredient = ingredient;
-        this.buildAreaRoutePoint = buildAreaRoutePoint;
+        this.buildAreaRCArea = buildAreaRCArea;
         this.context = context;
     }
 
@@ -95,9 +94,13 @@ public class CollectBoardsFromZoneAction implements Action {
             new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);
         }
 
-        // Return to build area RoutePoint after collecting
-        if (buildAreaRoutePoint != null) {
-            new RoutePointNavigator(buildAreaRoutePoint).run(gui);
+        // Return to build area after collecting (using ChunkNav if needed)
+        if (buildAreaRCArea != null) {
+            Coord2d buildCenter = new Coord2d(
+                (buildAreaRCArea.a.x + buildAreaRCArea.b.x) / 2.0,
+                (buildAreaRCArea.a.y + buildAreaRCArea.b.y) / 2.0
+            );
+            new PathFinder(buildCenter).run(gui);
         }
 
         return Results.SUCCESS();

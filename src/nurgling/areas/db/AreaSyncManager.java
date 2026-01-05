@@ -1108,9 +1108,6 @@ public class AreaSyncManager {
                                 mapView.createAreaLabel(areaId);
                             }
                             
-                            // Подключаем к графу маршрутов
-                            mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(updatedArea);
-                            
                         }
                     }
                     
@@ -1402,21 +1399,8 @@ public class AreaSyncManager {
                 return;
             }
             
-            nurgling.NMapView mapView = (nurgling.NMapView) gui.map;
-            
-            int connectedCount = 0;
-            for (nurgling.areas.NArea area : zones) {
-                try {
-                    // Небольшая задержка между подключениями, чтобы не перегружать систему
-                    Thread.sleep(50);
-                    
-                    mapView.routeGraphManager.getGraph().connectAreaToRoutePoints(area);
-                    connectedCount++;
-                } catch (Exception e) {
-                    System.err.println("AreaSyncManager.connectZonesToRoutesInBackground: Failed to connect zone " + area.id + " (" + area.name + "): " + e.getMessage());
-                }
-            }
-            System.out.println("AreaSyncManager.connectZonesToRoutesInBackground: Connected " + connectedCount + " zones to route points in background");
+            // Метод больше не используется, так как старая система маршрутов удалена
+            // Зоны теперь управляются через ChunkNav систему
         } catch (Exception e) {
             System.err.println("AreaSyncManager.connectZonesToRoutesInBackground: Error: " + e.getMessage());
             e.printStackTrace();
@@ -1575,13 +1559,6 @@ public class AreaSyncManager {
                     }
                 }
             }
-        }
-        
-        // Удаляем из route graph
-        try {
-            mapView.routeGraphManager.getGraph().deleteAreaFromRoutePoints(areaId);
-        } catch (Exception e) {
-            // Игнорируем ошибки
         }
         
         // Удаляем из areas widget

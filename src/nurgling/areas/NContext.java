@@ -2,9 +2,9 @@ package nurgling.areas;
 
 import haven.*;
 import nurgling.*;
-import nurgling.actions.bots.RoutePointNavigator;
 import nurgling.actions.bots.SelectArea;
-import nurgling.routes.RoutePoint;
+import nurgling.navigation.ChunkNavManager;
+import nurgling.navigation.ChunkPath;
 import nurgling.tools.*;
 import nurgling.tools.Container;
 import nurgling.widgets.Specialisation;
@@ -24,7 +24,6 @@ public class NContext {
     private HashMap<String, BarrelStorage> barrelstorage = new HashMap<>();
     private HashMap<NArea.Specialisation, String> specArea = new HashMap<>();
     private HashMap<String, NArea> areas = new HashMap<>();
-    private HashMap<String, RoutePoint> rps = new HashMap<>();
     private HashMap<String, ObjectStorage> containers = new HashMap<>();
 
     public boolean bwaused = false;
@@ -61,6 +60,7 @@ public class NContext {
         contcaps.put("gfx/terobjs/map/jotunclam", "Jotun Clam");
         contcaps.put("gfx/terobjs/studydesk", "Study Desk");
         contcaps.put("gfx/terobjs/htable", "Herbalist Table");
+        contcaps.put("gfx/terobjs/dng/ratchest", "Chest");
     }
 
     public static HashMap<String, String> customTool = new HashMap<>();
@@ -185,10 +185,6 @@ public class NContext {
         return outAreas.get(item);
     }
 
-    public RoutePoint getRoutePoint(String areaId) {
-        return rps.get(areaId);
-    }
-
     public NArea getSpecArea(NContext.Workstation workstation) throws InterruptedException {
         if(!areas.containsKey(workstation_spec_map.get(workstation.station).toString())) {
             NArea area = findSpec(workstation_spec_map.get(workstation.station).toString());
@@ -197,9 +193,6 @@ public class NContext {
             }
             if (area != null) {
                 areas.put(String.valueOf(workstation_spec_map.get(workstation.station).toString()), area);
-                List<RoutePoint> pointList = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area));
-                if(pointList!=null && !pointList.isEmpty())
-                    rps.put(workstation_spec_map.get(workstation.station).toString(),pointList.get(pointList.size()-1));
             }
             else
             {
@@ -234,9 +227,6 @@ public class NContext {
             }
             if (area != null) {
                 areas.put(String.valueOf(area.id), area);
-                List<RoutePoint> pointList = (((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)));
-                if(pointList!=null && !pointList.isEmpty())
-                    rps.put(String.valueOf(area.id),pointList.get(pointList.size()-1));
                 barrels.put(item, String.valueOf(area.id));
             }
             if(area == null)
@@ -293,9 +283,6 @@ public class NContext {
             }
             if (area != null) {
                 areas.put(String.valueOf(name.toString()), area);
-                List<RoutePoint> pointList = (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)));
-                if(pointList!=null && !pointList.isEmpty())
-                    rps.put(String.valueOf(name.toString()),pointList.get(pointList.size()-1));
             }
             else
             {
@@ -314,9 +301,6 @@ public class NContext {
             }
             if (area != null) {
                 areas.put(String.valueOf(name.toString()), area);
-                List<RoutePoint> pointList = (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)));
-                if(pointList!=null && !pointList.isEmpty())
-                    rps.put(String.valueOf(name.toString()),pointList.get(pointList.size()-1));
             }
             else
             {
@@ -337,13 +321,19 @@ public class NContext {
             NArea area = NUtils.getGameUI().map.glob.map.areas.get(areaId);
             if (area != null) {
                 areas.put(key, area);
-                List<RoutePoint> pointList = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(
-                    ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()),
-                    ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)
-                );
-                if (pointList != null && !pointList.isEmpty()) {
-                    rps.put(key, pointList.get(pointList.size() - 1));
-                }
+            } else {
+                return null;
+            }
+        }
+        navigateToAreaIfNeeded(key);
+        return areas.get(key);
+    }
+
+    public NArea getAreaById(String key) throws InterruptedException {
+        if (!areas.containsKey(key)) {
+            NArea area = NUtils.getGameUI().map.glob.map.areas.get(key);
+            if (area != null) {
+                areas.put(key, area);
             } else {
                 return null;
             }
@@ -379,7 +369,7 @@ public class NContext {
                 inputs.add(containers.get(hash));
             }
             else {
-                Container ic = new Container(gob, contcaps.get(gob.ngob.name));
+                Container ic = new Container(gob, contcaps.get(gob.ngob.name),area);
                 ic.initattr(Container.Space.class);
                 containers.put(gob.ngob.hash, ic);
                 inputs.add(ic);
@@ -430,7 +420,7 @@ public class NContext {
                                 inputs.add(containers.get(hash));
                             }
                             else {
-                                Container ic = new Container(gob, contcaps.get(gob.ngob.name));
+                                Container ic = new Container(gob, contcaps.get(gob.ngob.name),area);
                                 containers.put(gob.ngob.hash, ic);
                                 inputs.add(ic);
                             }
@@ -493,7 +483,7 @@ public class NContext {
                                 outputs.add(containers.get(hash));
                             }
                             else {
-                                Container ic = new Container(gob, contcaps.get(gob.ngob.name));
+                                Container ic = new Container(gob, contcaps.get(gob.ngob.name),area);
                                 ic.initattr(Container.Space.class);
                                 containers.put(gob.ngob.hash, ic);
                                 outputs.add(ic);
@@ -523,7 +513,7 @@ public class NContext {
                         outputs.add(containers.get(hash));
                     }
                     else {
-                        Container ic = new Container(gob, contcaps.get(gob.ngob.name));
+                        Container ic = new Container(gob, contcaps.get(gob.ngob.name),area);
                         ic.initattr(Container.Space.class);
                         containers.put(gob.ngob.hash, ic);
                         outputs.add(ic);
@@ -614,26 +604,15 @@ public class NContext {
         if (!needsNavigation) {
             return; // Already at the area
         }
-        
-        // First, try ChunkNav if available
-        if (gui.map instanceof NMapView) {
-            nurgling.navigation.ChunkNavManager chunkNavManager = ((NMapView) gui.map).getChunkNavManager();
-            if (chunkNavManager != null && chunkNavManager.isInitialized()) {
-                // Check if we have ChunkNav data for this area
-                if (chunkNavManager.hasDataForArea(area)) {
-                    // Try to navigate using ChunkNav
-                    nurgling.actions.Results chunkNavResult = chunkNavManager.navigateToArea(area, gui);
-                    if (chunkNavResult.IsSuccess()) {
-                        return; // Successfully navigated using ChunkNav
-                    }
-                    // ChunkNav failed, fall through to route navigation
-                }
+
+        // Try ChunkNav first if it has data for the area
+        ChunkNavManager chunkNav = (gui.map != null && gui.map instanceof NMapView)
+            ? ((NMapView)gui.map).getChunkNavManager() : null;
+        if (chunkNav != null && chunkNav.isInitialized()) {
+            ChunkPath path = chunkNav.planToArea(area);
+            if (path != null) {
+                nurgling.actions.Results result = chunkNav.navigateToArea(area, gui);
             }
-        }
-        
-        // Fallback to route navigation if ChunkNav is not available or failed
-        if (rps.containsKey(areaId)) {
-            new RoutePointNavigator(rps.get(areaId), area.id).run(gui);
         }
     }
 
@@ -655,18 +634,19 @@ public class NContext {
         tempArea.grids_id.clear();
         tempArea.grids_id.addAll(tempArea.space.space.keySet());
         areas.put(id, tempArea);
-        int size = 10000;
-        RoutePoint target = null;
-        for(RoutePoint point : ((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestRoutePoints(tempArea)) {
-            List<RoutePoint> path = ((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(NUtils.findNearestPoint(), point);
-            if(path!=null) {
-                if (size > path.size()) {
-                    target = point;
-                    size = path.size();
-                }
-            }
-        }
-        rps.put(id,target);
+        return id;
+    }
+
+    public String createPlayerLastPos()
+    {
+        String id = "temp"+counter++;
+        NArea tempArea = new NArea(id);
+        Coord2d plc = NUtils.player().rc;
+        tempArea.space = new NArea.Space(plc.sub(MCache.tilehsz).floor(MCache.tilesz),plc.add(MCache.tilehsz).floor(MCache.tilesz));
+        tempArea.lastLocalChange = System.currentTimeMillis();
+        tempArea.grids_id.clear();
+        tempArea.grids_id.addAll(tempArea.space.space.keySet());
+        areas.put(id, tempArea);
         return id;
     }
 
@@ -690,9 +670,6 @@ public class NContext {
         if(area!=null)
         {
             areas.put(String.valueOf(area.id),area);
-            List<RoutePoint> pointList = (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)));
-            if(pointList!=null && !pointList.isEmpty())
-                rps.put(String.valueOf(area.id),pointList.get(pointList.size()-1));
             inAreas.put(name, String.valueOf(area.id));
         }
         if (loadsimg!=null && area == null) {
@@ -718,9 +695,6 @@ public class NContext {
         if(area!=null)
         {
             areas.put(String.valueOf(area.id),area);
-            List<RoutePoint> pointList = (((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)));
-            if(pointList!=null && !pointList.isEmpty())
-                rps.put(String.valueOf(area.id),pointList.get(pointList.size()-1));
             outAreas.get(name).put(Math.abs((double)area.getOutput(name).th), String.valueOf(area.id));
         }
         if (loadsimg!=null && area == null) {
@@ -946,11 +920,24 @@ public class NContext {
                 if(id>0) {
                     if (NUtils.getGameUI().map.glob.map.areas.get(id).containIn(name)) {
                         NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                        List<RoutePoint> routePoints = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand));
-                        if(routePoints!=null) {
-                            if(routePoints.size() <dist) {
+                        // Use ChunkNav if available for distance calculation
+                        ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
+                            ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
+                        if (chunkNav != null && chunkNav.isInitialized()) {
+                            ChunkPath path = chunkNav.planToArea(cand);
+                            if(path != null && path.totalCost < dist) {
                                 res = cand;
-                                dist = routePoints.size();
+                                dist = (int)path.totalCost;
+                            }
+                        } else {
+                            // Fallback to distance-based selection if ChunkNav not available
+                            Pair<Coord2d, Coord2d> testrc = cand.getRCArea();
+                            if(testrc != null) {
+                                double testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc));
+                                if (testdist < dist) {
+                                    res = cand;
+                                    dist = testdist;
+                                }
                             }
                         }
                     }
@@ -970,11 +957,24 @@ public class NContext {
                     for (NArea.Specialisation s : NUtils.getGameUI().map.glob.map.areas.get(id).spec) {
                         if (s.name.equals(name)  && ((sub == null || sub.isEmpty()) || s.subtype != null && s.subtype.toLowerCase().equals(sub.toLowerCase()))) {
                             NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                            List<RoutePoint> routePoints = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()), ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand));
-                            if(routePoints!=null) {
-                                if(routePoints.size() <dist) {
+                            // Use ChunkNav if available for distance calculation
+                            ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
+                                ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
+                            if (chunkNav != null && chunkNav.isInitialized()) {
+                                ChunkPath path = chunkNav.planToArea(cand);
+                                if(path != null && path.totalCost < dist) {
                                     target = cand;
-                                    dist = routePoints.size();
+                                    dist = (int)path.totalCost;
+                                }
+                            } else {
+                                // Fallback to distance-based selection if ChunkNav not available
+                                Pair<Coord2d, Coord2d> testrc = cand.getRCArea();
+                                if(testrc != null) {
+                                    double testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc));
+                                    if (testdist < dist) {
+                                        target = cand;
+                                        dist = (int)testdist;
+                                    }
                                 }
                             }
                         }
@@ -1059,21 +1059,20 @@ public class NContext {
                                 // Порог не указан (принимает все) или качество предмета >= порога зоны
                                 // ВАЖНО: Если getRCArea() == null, пытаемся найти путь используя space напрямую
                                 if (rcArea != null) {
-                                    // Grid загружен - проверяем путь через routeGraphManager
-                                    RoutePoint playerPoint = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(gui);
-                                    RoutePoint areaPoint = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(cand);
-                                    if (playerPoint != null && areaPoint != null) {
-                                        List<RoutePoint> path = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(playerPoint, areaPoint);
-                                        if (path != null && !path.isEmpty()) {
-                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added with path check (path found)");
+                                    // Grid загружен - проверяем путь через ChunkNav если доступен
+                                    ChunkNavManager chunkNav = (NUtils.getGameUI() != null && NUtils.getGameUI().map instanceof NMapView)
+                                        ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
+                                    if (chunkNav != null && chunkNav.isInitialized()) {
+                                        ChunkPath path = chunkNav.planToArea(cand);
+                                        if (path != null) {
+                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added with ChunkNav path check (path found)");
                                             areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
                                         } else {
-                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: path not found (playerPoint=" + playerPoint + ", areaPoint=" + areaPoint + ")");
+                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: ChunkNav path not found");
                                         }
                                     } else {
-                                        // Route point не найден, но grid загружен - добавляем зону без проверки пути
-                                        // Это может произойти для синхронизированных зон, которые еще не подключены к графу
-                                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (route point not found, but grid loaded)");
+                                        // ChunkNav не доступен - добавляем зону без проверки пути
+                                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (ChunkNav not available)");
                                         areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
                                     }
                                 } else {
@@ -1292,13 +1291,21 @@ public class NContext {
                             boolean subtypeMatch = (subtype == null || subtype.isEmpty()) ||
                                 (s.subtype != null && s.subtype.equalsIgnoreCase(subtype));
                             if (nameMatch && subtypeMatch) {
-                                // Check if area is reachable via route graph
-                                List<RoutePoint> routePoints = ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findPath(
-                                    ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findNearestPointToPlayer(NUtils.getGameUI()),
-                                    ((NMapView)NUtils.getGameUI().map).routeGraphManager.getGraph().findAreaRoutePoint(area)
-                                );
-                                if (routePoints != null) {
-                                    areaDistances.put(area, routePoints.size());
+                                // Check if area is reachable via ChunkNav
+                                ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
+                                    ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
+                                if (chunkNav != null && chunkNav.isInitialized()) {
+                                    ChunkPath path = chunkNav.planToArea(area);
+                                    if (path != null) {
+                                        areaDistances.put(area, (int)path.totalCost);
+                                    }
+                                } else {
+                                    // Fallback: use distance if ChunkNav not available
+                                    Pair<Coord2d, Coord2d> testrc = area.getRCArea();
+                                    if(testrc != null) {
+                                        double testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc));
+                                        areaDistances.put(area, (int)testdist);
+                                    }
                                 }
                                 break; // Don't check other specs for same area
                             }

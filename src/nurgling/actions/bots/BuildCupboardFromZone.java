@@ -16,8 +16,6 @@ import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.overlays.BuildGhostPreview;
 import nurgling.overlays.NCustomBauble;
-import nurgling.routes.RouteGraph;
-import nurgling.routes.RoutePoint;
 import nurgling.tools.NAlias;
 import nurgling.widgets.Specialisation;
 
@@ -49,27 +47,6 @@ public class BuildCupboardFromZone implements Action {
             }
         }
 
-        // Find and save RoutePoint for build area BEFORE navigation to boards area
-        // This is the starting point we need to return to after collecting boards
-        RouteGraph graph = ((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph();
-        RoutePoint buildAreaRoutePoint = null;
-        // Try to find a temporary area for build zone to get its RoutePoint
-        // Since build area is selected by user, we need to find nearest RoutePoint to build area center
-        Coord2d buildCenter = new Coord2d(
-            (buildRCArea.a.x + buildRCArea.b.x) / 2.0,
-            (buildRCArea.a.y + buildRCArea.b.y) / 2.0
-        );
-        // Find nearest RoutePoint to build area center
-        RoutePoint nearestToBuild = graph.findNearestPointToPlayer(NUtils.getGameUI());
-        if (nearestToBuild != null) {
-            // Get player's current grid and position to find starting RoutePoint
-            Coord playerTile = NUtils.player().rc.floor(MCache.tilesz);
-            MCache.Grid playerGrid = NUtils.getGameUI().map.glob.map.getgridt(playerTile);
-            long playerGridId = playerGrid.id;
-            Coord playerLocalCoord = playerTile.sub(playerGrid.ul);
-            buildAreaRoutePoint = graph.findNearestPoint(playerGridId, playerLocalCoord);
-        }
-
         // Get boards area from specialization using NContext to enable route navigation
         NContext context = new NContext(gui);
         NArea boardsArea = context.getSpecArea(Specialisation.SpecName.boardsForBuild);
@@ -87,7 +64,7 @@ public class BuildCupboardFromZone implements Action {
         // Create ingredient with specialWay that uses routes for collection
         Build.Ingredient boardsIngredient = new Build.Ingredient(new Coord(4,1), boardsRCArea, new NAlias("Board"), 8);
         CollectBoardsFromZoneAction collectBoardsAction = new CollectBoardsFromZoneAction(
-            boardsRCArea, new NAlias("Board"), boardsIngredient, buildAreaRoutePoint, context);
+            boardsRCArea, new NAlias("Board"), boardsIngredient, buildRCArea, context);
         boardsIngredient.specialWay = collectBoardsAction;
         command.ingredients.add(boardsIngredient);
         

@@ -94,7 +94,7 @@ public class Build implements Action
             {
                 for (Gob sm : Finder.findGobs(ingredient.area, new NAlias(new ArrayList<>(Context.contcaps.keySet()))))
                 {
-                    Container cand = new Container(sm, Context.contcaps.get(sm.ngob.name));
+                    Container cand = new Container(sm, Context.contcaps.get(sm.ngob.name), null);
                     cand.initattr(Container.Space.class);
                     ingredient.containers.add(cand);
                 }

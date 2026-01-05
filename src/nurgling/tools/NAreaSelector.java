@@ -139,8 +139,6 @@ public class NAreaSelector implements Runnable
                             area.inWork = false;
                         }
                         NConfig.needAreasUpdate();
-                        ((NMapView) NUtils.getGameUI().map).routeGraphManager.getGraph().connectAreaToRoutePoints(area);
-                        NConfig.needRoutesUpdate();
                     }
                     NUtils.getGameUI().areas.show();
                     // Set focus on the created/changed area

@@ -197,7 +197,6 @@ public class NCore extends Widget
                     databaseManager = new nurgling.db.DatabaseManager(1);
                     // Start area and route sync after database is initialized
                     startAreaSync();
-                    startRouteSync();
                 }
             }
         }
@@ -272,10 +271,6 @@ public class NCore extends Widget
         if (config.isExploredUpdated())
         {
             config.writeExploredArea(null);
-        }
-        if (config.isRoutesUpdated())
-        {
-            config.writeRoutes(null);
         }
         if (config.isScenariosUpdated())
         {
@@ -633,6 +628,14 @@ public class NCore extends Widget
                         int updated = 0;
                         boolean needsWidgetRefresh = false;
                         for (nurgling.areas.NArea newArea : updatedAreas) {
+                            // Check if this area was deleted locally - don't restore it
+                            boolean isLocallyDeleted = ((NMapView)NUtils.getGameUI().map).isLocallyDeleted(newArea.id);
+                            if (isLocallyDeleted) {
+                                System.out.println("Area sync: Skipping locally deleted area " + newArea.id + " (" + newArea.name + ")");
+                                skipped++;
+                                continue;
+                            }
+
                             // Check if this area was modified locally recently
                             // Window = debounce(3s) + save time(2s) + buffer(5s) = 10s
                             nurgling.areas.NArea localArea = NUtils.getGameUI().map.glob.map.areas.get(newArea.id);
@@ -641,13 +644,13 @@ public class NCore extends Widget
                                 skipped++;
                                 continue;
                             }
-                            
+
                             // Also skip if local version >= DB version (we just saved it)
                             if (localArea != null && localArea.version >= newArea.version) {
                                 skipped++;
                                 continue;
                             }
-                            
+
                             if (localArea != null) {
                                 // Update existing area object (preserves references in labels/lists)
                                 localArea.updateFrom(newArea);
@@ -693,11 +696,19 @@ public class NCore extends Widget
 
                 @Override
                 public void onFullSync(java.util.Map<Integer, nurgling.areas.NArea> allAreas) {
-                    // Replace all areas in map cache
+                    // Replace all areas in map cache, but filter out locally deleted areas
                     if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null &&
                         NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
                         NUtils.getGameUI().map.glob.map.areas.clear();
-                        NUtils.getGameUI().map.glob.map.areas.putAll(allAreas);
+                        for (java.util.Map.Entry<Integer, nurgling.areas.NArea> entry : allAreas.entrySet()) {
+                            // Skip areas that were deleted locally
+                            boolean isLocallyDeleted = ((NMapView)NUtils.getGameUI().map).isLocallyDeleted(entry.getKey());
+                            if (isLocallyDeleted) {
+                                System.out.println("Full sync: Skipping locally deleted area " + entry.getKey() + " (" + entry.getValue().name + ")");
+                                continue;
+                            }
+                            NUtils.getGameUI().map.glob.map.areas.put(entry.getKey(), entry.getValue());
+                        }
                         refreshAreaLabelsAndWidget();
                         System.out.println("Full sync: loaded " + allAreas.size() + " areas from database");
                     }
@@ -759,89 +770,4 @@ public class NCore extends Widget
         areaSyncStarted = false;
     }
 
-    /**
-     * Start periodic route sync from database
-     */
-    private void startRouteSync() {
-        if (routeSyncStarted || databaseManager == null || !databaseManager.isReady()) {
-            return;
-        }
-
-        // Get current profile dynamically in sync, not at startup
-        String syncProfile = "global"; // placeholder, will be obtained dynamically
-
-        databaseManager.getRouteService().startSync(syncProfile, 4,
-            new nurgling.db.service.RouteService.RouteSyncCallback() {
-                @Override
-                public void onRoutesUpdated(java.util.List<nurgling.routes.Route> updatedRoutes) {
-                    // Skip sync if route recording is in progress
-                    if (nurgling.NMapView.isRecordingRoutePoint) {
-                        return;
-                    }
-                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                        nurgling.NMapView map = (nurgling.NMapView) NUtils.getGameUI().map;
-                        long now = System.currentTimeMillis();
-                        int updated = 0;
-                        for (nurgling.routes.Route newRoute : updatedRoutes) {
-                            nurgling.routes.Route localRoute = map.routeGraphManager.getRoutes().get(newRoute.id);
-                            if (localRoute != null && (now - localRoute.lastLocalChange) < 5000) {
-                                continue; // Skip - local changes pending
-                            }
-                            if (localRoute != null) {
-                                localRoute.updateFrom(newRoute);
-                            } else {
-                                map.routeGraphManager.getRoutes().put(newRoute.id, newRoute);
-                            }
-                            updated++;
-                        }
-                        if (updated > 0) {
-                            map.routeGraphManager.updateGraph();
-                            System.out.println("Updated " + updated + " routes from database");
-                        }
-                    }
-                }
-
-                @Override
-                public void onRouteDeleted(int routeId) {
-                    // Skip sync if route recording is in progress
-                    if (nurgling.NMapView.isRecordingRoutePoint) {
-                        return;
-                    }
-                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                        nurgling.NMapView map = (nurgling.NMapView) NUtils.getGameUI().map;
-                        map.routeGraphManager.getRoutes().remove(routeId);
-                        map.routeGraphManager.updateGraph();
-                        System.out.println("Deleted route " + routeId + " from database sync");
-                    }
-                }
-
-                @Override
-                public void onFullSync(java.util.Map<Integer, nurgling.routes.Route> allRoutes) {
-                    // Skip sync if route recording is in progress
-                    if (nurgling.NMapView.isRecordingRoutePoint) {
-                        return;
-                    }
-                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                        nurgling.NMapView map = (nurgling.NMapView) NUtils.getGameUI().map;
-                        map.routeGraphManager.getRoutes().clear();
-                        map.routeGraphManager.getRoutes().putAll(allRoutes);
-                        map.routeGraphManager.updateGraph();
-                        System.out.println("Full sync: loaded " + allRoutes.size() + " routes from database");
-                    }
-                }
-            });
-
-        routeSyncStarted = true;
-        System.out.println("Route sync started");
-    }
-
-    /**
-     * Stop periodic route sync
-     */
-    private void stopRouteSync() {
-        if (databaseManager != null && databaseManager.getRouteService() != null) {
-            databaseManager.getRouteService().stopSync();
-        }
-        routeSyncStarted = false;
-    }
 }
