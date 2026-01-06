@@ -4,6 +4,9 @@ import haven.*;
 import haven.res.ui.obj.buddy.Buddy;
 import nurgling.*;
 import nurgling.actions.bots.MasterMiner;
+import nurgling.navigation.ChunkNavManager;
+import nurgling.navigation.ChunkPath;
+import nurgling.areas.NArea;
 import nurgling.overlays.map.MinimapChunkNavRenderer;
 import nurgling.overlays.map.MinimapClaimRenderer;
 import nurgling.overlays.map.MinimapExploredAreaRenderer;
@@ -2346,6 +2349,64 @@ NMiniMap extends MiniMap {
         }
         return null;
     }
+    
+    /**
+     * Создает временную NArea из координат маркера для навигации через ChunkNav
+     */
+    private nurgling.areas.NArea createTempAreaFromMarker(LabeledMinimapMark mark, Coord2d worldPos, NGameUI gui) {
+        try {
+            if(gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) {
+                return null;
+            }
+            
+            MCache mcache = gui.map.glob.map;
+            
+            // Получаем координаты тайла из мировых координат
+            Coord tileCoord = worldPos.floor(MCache.tilesz);
+            
+            // Получаем grid из координат тайла
+            // getgridt может выбросить LoadingMap если grid еще не загружен
+            MCache.Grid grid;
+            try {
+                grid = mcache.getgridt(tileCoord);
+            } catch (MCache.LoadingMap e) {
+                // Grid еще не загружен - возвращаем null
+                return null;
+            }
+            
+            if(grid == null) {
+                return null;
+            }
+            
+            // Получаем локальные координаты тайла внутри grid
+            Coord localTileCoord = tileCoord.sub(grid.ul);
+            
+            // Создаем небольшую область вокруг маркера (3x3 тайла)
+            // Это нужно для того, чтобы ChunkNav мог найти путь к этой области
+            Coord areaSize = new Coord(3, 3);
+            Coord ul = localTileCoord.sub(areaSize.div(2));
+            Coord br = localTileCoord.add(areaSize.div(2)).add(1, 1); // +1 для включения правой границы
+            
+            // Создаем временную NArea
+            nurgling.areas.NArea tempArea = new nurgling.areas.NArea("_temp_marker_" + mark.resourceType);
+            tempArea.space = new nurgling.areas.NArea.Space();
+            tempArea.space.space = new java.util.HashMap<>();
+            
+            // Добавляем область в grid
+            tempArea.space.space.put(grid.id, new nurgling.areas.NArea.VArea(
+                new haven.Area(ul, br)
+            ));
+            
+            // Синхронизируем grids_id
+            tempArea.grids_id.clear();
+            tempArea.grids_id.add(grid.id);
+            
+            return tempArea;
+        } catch (Exception e) {
+            // Игнорируем другие ошибки
+            return null;
+        }
+    }
 
     @Override
     public boolean filter(DisplayMarker mark) {
@@ -2378,12 +2439,14 @@ NMiniMap extends MiniMap {
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
-        // Handle Alt+left-click on Quarryartz labeled mark - show overlay (prevent player movement)
+        // Handle Alt+left-click on labeled marks - navigate via ChunkNav
         if(ev.b == 1 && ui.modmeta && dloc != null && sessloc != null) {
             LabeledMinimapMark labeledMark = labeledMarkAt(ev.c);
-            if(labeledMark != null && "Quarryartz".equals(labeledMark.resourceType)) {
+            if(labeledMark != null) {
                 NGameUI gui = NUtils.getGameUI();
-                if(gui != null && gui.map != null) {
+                if(gui != null && gui.map != null && gui.map instanceof NMapView) {
+                    NMapView mapView = (NMapView) gui.map;
+                    
                     try {
                         // Проверяем, что метка в том же сегменте, что и текущая сессия
                         if(gui.mmap == null || gui.mmap.sessloc == null || 
@@ -2393,110 +2456,60 @@ NMiniMap extends MiniMap {
                         }
                         
                         // Правильно вычисляем мировые координаты из координат тайла
-                        // Используем ту же формулу, что и в MiniMap.mvclick для Ctrl+ЛКМ
-                        // Формула: tileCoords.sub(sessloc.tc).mul(tilesz).add(tilesz.div(2))
                         Coord2d tileWorldPos = labeledMark.tileCoords.sub(gui.mmap.sessloc.tc)
                             .mul(MCache.tilesz).add(MCache.tilesz.div(2));
                         
-                        // Парсим качество из метки (формат "q101")
-                        double quality = 0;
-                        try {
-                            if(labeledMark.label != null && labeledMark.label.startsWith("q")) {
-                                quality = Double.parseDouble(labeledMark.label.substring(1).trim());
-                            }
-                        } catch (Exception e) {
-                            // Игнорируем ошибки парсинга
+                        // Получаем ChunkNavManager
+                        nurgling.navigation.ChunkNavManager chunkNav = mapView.getChunkNavManager();
+                        if(chunkNav == null || !chunkNav.isInitialized()) {
+                            gui.msg("ChunkNav не инициализирован", java.awt.Color.YELLOW);
+                            return true;
                         }
                         
-                        // Получаем иконку квариарца
-                        BufferedImage iconImage = nurgling.actions.bots.MasterMiner.getQuarryartzIcon();
-                        if(iconImage != null && gui.map instanceof NMapView) {
-                            NMapView mapView = (NMapView) gui.map;
-                            
-                            // Проверяем, что mapView инициализирован
-                            if(mapView.glob == null || mapView.glob.oc == null) {
-                                gui.msg("Карта не инициализирована", java.awt.Color.YELLOW);
-                                return true;
-                            }
-                            
-                            // Отправляем персонажа к месту метки
-                            Gob playerGob = mapView.player();
-                            if(playerGob != null) {
-                                // Используем ту же формулу, что и в MiniMap.mvclick для движения
-                                Coord worldPosFloor = tileWorldPos.floor(OCache.posres);
-                                
-                                // Отправляем команду движения к координатам метки (как в MiniMap.mvclick)
-                                // Используем ui.mc для координат мыши (или Coord.z если не важно)
-                                Coord mc = ui.mc != null ? ui.mc : Coord.z;
-                                mapView.wdgmsg("click", mc, worldPosFloor, 1, 0);
-                                
-                                double dist = playerGob.rc.dist(tileWorldPos);
-                                gui.msg(String.format("Идем к метке: тайл (%d,%d), мир (%.1f,%.1f), расстояние %.1f", 
-                                    labeledMark.tileCoords.x, labeledMark.tileCoords.y,
-                                    tileWorldPos.x, tileWorldPos.y, dist), java.awt.Color.GREEN);
-                                
-                                // Также создаем луч от игрока к тайлу для визуализации
-                                mapView.setMarkerTarget(tileWorldPos);
-                                
-                                // Создаем виртуальный Gob на тайле с оверлеем
-                                // Используем правильную высоту для виртуального Gob
-                                try {
-                                    float zHeight = mapView.glob.map.getzp(tileWorldPos).z;
-                                    OCache.Virtual dummy = mapView.glob.oc.new Virtual(tileWorldPos, zHeight);
-                                    dummy.virtual = true;
-                                    
-                                    gui.msg("Создаем крестик на тайле", java.awt.Color.YELLOW);
-                                    
-                                    // Создаем оверлей с крестиком на тайле (как система пыли при копке)
-                                    // Порядок как в RouteLabel и NAreaLabel: сначала addcustomol, потом add в oc
-                                    nurgling.overlays.QuarryartzCrossOverlay crossOverlay = 
-                                        new nurgling.overlays.QuarryartzCrossOverlay(dummy);
-                                    
-                                    // Добавляем оверлей к виртуальному Gob ПЕРЕД добавлением в кэш
-                                    dummy.addcustomol(crossOverlay);
-                                    
-                                    // Также создаем оверлей с иконкой и качеством (опционально, для информации)
-                                    if (iconImage != null) {
-                                        nurgling.overlays.QuarryartzTileOverlay overlay = 
-                                            new nurgling.overlays.QuarryartzTileOverlay(dummy, iconImage, quality);
-                                        dummy.addcustomol(overlay);
-                                    }
-                                    
-                                    // Теперь добавляем виртуальный Gob в кэш объектов (после добавления overlay)
-                                    mapView.glob.oc.add(dummy);
-                                    
-                                    gui.msg("Крестик создан на тайле", java.awt.Color.GREEN);
-                                    
-                                    // Через 30 секунд убираем луч и dummy
-                                    final OCache.Virtual finalDummy = dummy;
-                                    NUtils.getUI().core.addTask(new nurgling.tasks.NTask() {
-                                        { this.maxCounter = 1800; }
-                                        @Override
-                                        public boolean check() {
-                                            // Удаляем dummy
-                                            if (mapView.glob.oc.getgob(finalDummy.id) != null) {
-                                                mapView.glob.oc.remove(finalDummy);
-                                            }
-                                            // Убираем луч
-                                            mapView.setMarkerTarget(null);
-                                            return true;
-                                        }
-                                    });
-                                } catch (Exception e) {
-                                    // Если не удалось создать виртуальный Gob, просто убираем луч через 30 секунд
-                                    NUtils.getUI().core.addTask(new nurgling.tasks.NTask() {
-                                        { this.maxCounter = 1800; }
-                                        @Override
-                                        public boolean check() {
-                                            mapView.setMarkerTarget(null);
-                                            return true;
-                                        }
-                                    });
-                                }
-                            }
+                        // Создаем временную NArea из координат маркера для навигации
+                        nurgling.areas.NArea tempArea = createTempAreaFromMarker(labeledMark, tileWorldPos, gui);
+                        if(tempArea == null) {
+                            gui.msg("Не удалось создать зону для навигации", java.awt.Color.YELLOW);
+                            return true;
                         }
+                        
+                        // Запускаем навигацию через ChunkNav в отдельном потоке
+                        Thread navThread = new Thread(() -> {
+                            try {
+                                gui.msg("Планируем путь к маркеру через ChunkNav...", java.awt.Color.CYAN);
+                                
+                                nurgling.navigation.ChunkPath path = chunkNav.planToArea(tempArea);
+                                if(path == null) {
+                                    gui.msg("Путь к маркеру не найден (территория не разведана?)", java.awt.Color.YELLOW);
+                                    return;
+                                }
+                                
+                                if(path.isEmpty()) {
+                                    gui.msg("Уже в целевом чанке, идем к маркеру...", java.awt.Color.CYAN);
+                                } else {
+                                    gui.msg("Путь найден! " + path.waypoints.size() + " точек пути", java.awt.Color.GREEN);
+                                }
+                                
+                                nurgling.actions.Results result = chunkNav.navigateToArea(tempArea, gui);
+                                
+                                if(result.IsSuccess()) {
+                                    gui.msg("Прибыли к маркеру: " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.GREEN);
+                                } else {
+                                    gui.msg("Навигация к маркеру не удалась", java.awt.Color.YELLOW);
+                                }
+                            } catch (InterruptedException e) {
+                                gui.msg("Навигация прервана", java.awt.Color.YELLOW);
+                                Thread.currentThread().interrupt();
+                            } catch (Exception e) {
+                                gui.msg("Ошибка навигации: " + e.getMessage(), java.awt.Color.RED);
+                                e.printStackTrace();
+                            }
+                        }, "MarkerNavigator");
+                        navThread.start();
+                        gui.biw.addObserve(navThread);
+                        
                     } catch (Exception e) {
-                        // Игнорируем ошибки
+                        gui.msg("Ошибка: " + e.getMessage(), java.awt.Color.RED);
                         e.printStackTrace();
                     }
                 }

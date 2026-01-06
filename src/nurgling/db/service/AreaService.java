@@ -691,11 +691,6 @@ public class AreaService {
         json.put("path", data.getPath());
         json.put("hide", data.isHide());
         json.put("version", data.getVersion());
-        
-        // ВАЖНО: Добавляем UUID для правильной работы AllowedZonesManager
-        if (data.getGlobalId() != null && !data.getGlobalId().isEmpty()) {
-            json.put("uuid", data.getGlobalId());
-        }
 
         JSONObject color = new JSONObject();
         color.put("r", data.getColorR());
@@ -826,44 +821,5 @@ public class AreaService {
             // Ignore
         }
         return null; // Return null if no valid genus
-    }
-
-    /**
-     * Soft delete an area (marks as deleted)
-     */
-    public void softDeleteArea(int areaId, String profile) throws SQLException {
-        databaseManager.executeOperation(adapter -> {
-            areaDao.softDeleteArea(adapter, areaId, profile);
-            return null;
-        });
-    }
-
-    /**
-     * Update area timestamp (server timestamp)
-     */
-    public void updateAreaTimestamp(int areaId, String profile, long timestamp) throws SQLException {
-        databaseManager.executeOperation(adapter -> {
-            areaDao.updateAreaTimestamp(adapter, areaId, profile, timestamp);
-            return null;
-        });
-    }
-
-    /**
-     * Update last_sync_at for an area by UUID
-     */
-    public void updateLastSyncAt(String uuid, long syncTime) throws SQLException {
-        databaseManager.executeOperation(adapter -> {
-            areaDao.updateLastSyncAt(adapter, uuid, syncTime);
-            return null;
-        });
-    }
-
-    /**
-     * Load UUID mapping (global_id -> (areaId, last_sync_at)) for a profile
-     */
-    public java.util.Map<String, java.util.Map.Entry<Integer, Timestamp>> loadUuidMapping(String profile) throws SQLException {
-        return databaseManager.executeOperation(adapter -> 
-            areaDao.loadUuidMapping(adapter, profile)
-        );
     }
 }
