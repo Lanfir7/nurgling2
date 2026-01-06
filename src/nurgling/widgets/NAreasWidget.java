@@ -466,8 +466,12 @@ public class NAreasWidget extends Window
             remove = add(new IButton(NStyle.removei[0].back,NStyle.removei[1].back,NStyle.removei[2].back){
                 @Override
                 public void click() {
-                    ((NMapView)NUtils.getGameUI().map).removeArea(AreaItem.this.text.text());
-                    NConfig.needAreasUpdate();
+                    // Используем ID зоны вместо имени, чтобы удалять именно ту зону, на которую кликнули
+                    // (имена могут совпадать, но ID уникальны)
+                    if (AreaItem.this.area != null) {
+                        ((NMapView)NUtils.getGameUI().map).removeArea(AreaItem.this.area.id);
+                        NConfig.needAreasUpdate();
+                    }
                 }
             },new Coord(al.sz.x - NStyle.removei[0].sz().x, 0).sub(UI.scale(5),UI.scale(1) ));
             remove.settip(Resource.remote().loadwait("nurgling/hud/buttons/removeItem/u").flayer(Resource.tooltip).t);

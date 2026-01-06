@@ -1452,36 +1452,54 @@ public class NMapView extends MapView
         return null;
     }
 
+    public void removeArea(int id)
+    {
+        NArea area = glob.map.areas.get(id);
+        if (area != null)
+        {
+            area.inWork = true;
+            final int areaId = area.id;
+            glob.map.areas.remove(areaId);
+            // Track locally deleted areas to prevent restoration during sync
+            locallyDeletedAreas.add(areaId);
+            System.out.println("Area deleted locally: " + areaId + " (" + area.name + ")");
+            Gob dummy = dummys.get(area.gid);
+            if(dummy != null) {
+                glob.oc.remove(dummy);
+                dummys.remove(area.gid);
+            }
+            
+            // Удаляем overlay
+            synchronized (nols) {
+                nurgling.overlays.map.NOverlay nol = nols.get(areaId);
+                if (nol != null) {
+                    nol.remove();
+                }
+                nols.remove(areaId);
+            }
+            
+            NUtils.getGameUI().areas.removeArea(areaId);
+
+            // Delete from database if enabled
+            if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
+                nurgling.NCore.databaseManager != null && 
+                nurgling.NCore.databaseManager.isReady()) {
+                String profile = NUtils.getGameUI().getGenus();
+                if (profile == null || profile.isEmpty()) {
+                    profile = "global";
+                }
+                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(areaId, profile);
+            }
+        }
+    }
+
     public void removeArea(String name)
     {
         for(NArea area : glob.map.areas.values())
         {
             if(area.name.equals(name))
             {
-                area.inWork = true;
-                final int areaId = area.id;
-                glob.map.areas.remove(areaId);
-                // Track locally deleted areas to prevent restoration during sync
-                locallyDeletedAreas.add(areaId);
-                System.out.println("Area deleted locally: " + areaId + " (" + area.name + ")");
-                Gob dummy = dummys.get(area.gid);
-                if(dummy != null) {
-                    glob.oc.remove(dummy);
-                    dummys.remove(area.gid);
-                }
-                NUtils.getGameUI().areas.removeArea(areaId);
-
-                // Delete from database if enabled
-                if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
-                    nurgling.NCore.databaseManager != null && 
-                    nurgling.NCore.databaseManager.isReady()) {
-                    String profile = NUtils.getGameUI().getGenus();
-                    if (profile == null || profile.isEmpty()) {
-                        profile = "global";
-                    }
-                    nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(areaId, profile);
-                }
-
+                removeArea(area.id);
                 break;
             }
         }
@@ -1561,6 +1579,7 @@ public class NMapView extends MapView
                     dummys.remove(area.gid);
                 }
                 NUtils.getGameUI().map.nols.remove(area.id);
+                // routeGraphManager удален в текущей версии, вызов deleteAreaFromRoutePoints не нужен
             }
             NAreaSelector.changeArea(area);
         }
