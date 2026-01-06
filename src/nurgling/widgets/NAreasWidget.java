@@ -478,7 +478,7 @@ public class NAreasWidget extends Window
                     add("Set color");
                     add("Edit name");
                     add("Edit folder");
-                    add("Дубликат");
+                    add("Duplicate");
                     add("Scan");
                 }
             };
@@ -727,7 +727,7 @@ public class NAreasWidget extends Window
                             {
                                 ui.gui.add(new NFolderSelectWindow(area, NAreasWidget.this), ui.mc);
                             }
-                            else if (option.name.equals("Дубликат"))
+                            else if (option.name.equals("Duplicate"))
                             {
                                 duplicateArea(area);
                             }
