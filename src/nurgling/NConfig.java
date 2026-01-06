@@ -98,7 +98,6 @@ public class NConfig
         worldexplorerprop,
         questNotified, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, ndbenable, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, simplecrops,
-        syncServerEnabled, syncServerUrl, syncZoneSync, syncIntervalMinutes,
         temsmarktime, exploredAreaEnable, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         shortCupboards,
         shortWalls,
@@ -281,10 +280,6 @@ public class NConfig
         conf.put(Key.serverNode, "");
         conf.put(Key.serverPass, "");
         conf.put(Key.serverUser, "");
-        conf.put(Key.syncServerEnabled, false);
-        conf.put(Key.syncServerUrl, "");
-        conf.put(Key.syncZoneSync, "");
-        conf.put(Key.syncIntervalMinutes, 300); // 300 секунд = 5 минут (по умолчанию)
         conf.put(Key.exploredAreaEnable, false);
         conf.put(Key.chunkNavOverlay, false);
         conf.put(Key.player_box, false);

@@ -326,13 +326,27 @@ public class ChunkNavManager {
 
     /**
      * Navigate to an area using the chunk navigation system.
+     * Includes retry logic for cases when the map is still loading.
      */
     public nurgling.actions.Results navigateToArea(NArea area, NGameUI gui) throws InterruptedException {
         if (!enabled || !initialized) {
             return nurgling.actions.Results.FAIL();
         }
 
-        ChunkPath path = planToArea(area);
+        // Retry planning if the first attempt fails (map may still be loading)
+        ChunkPath path = null;
+        int maxRetries = 3;
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            path = planToArea(area);
+            if (path != null) {
+                break;
+            }
+            // Wait and retry - map might still be loading
+            if (attempt < maxRetries - 1) {
+                Thread.sleep(500 + attempt * 500); // 500ms, 1000ms, 1500ms
+            }
+        }
+        
         if (path == null) {
             return nurgling.actions.Results.FAIL();
         }

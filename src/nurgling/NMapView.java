@@ -305,14 +305,9 @@ public class NMapView extends MapView
         // ВАЖНО: Создаем overlay ВСЕГДА, даже если зона скрыта (hide == true)
         // Это нужно чтобы зона была в nols для макросов
         // Проверка hide будет в методах поиска зон (findIn, findOut и т.д.)
-        synchronized (nols) {
-            if (!nols.containsKey(id)) {
-                //System.out.println("NMapView.createAreaLabel: Adding zone " + id + " (" + area.name + ") to nols");
-                addCustomOverlay(id);
-                //System.out.println("NMapView.createAreaLabel: Zone " + id + " added to nols, nols.size=" + nols.size() + ", contains=" + nols.containsKey(id));
-            } else {
-                //System.out.println("NMapView.createAreaLabel: Zone " + id + " (" + area.name + ") already in nols");
-            }
+        // ConcurrentHashMap - атомарная проверка и добавление
+        if (!nols.containsKey(id)) {
+            addCustomOverlay(id);
         }
         
         // Проверяем, не создан ли уже dummy для этой зоны
@@ -815,6 +810,11 @@ public class NMapView extends MapView
             }
             
             glob.map.areas.put(id, newArea);
+            
+            // Помечаем зону как созданную локально (без hide)
+            nurgling.areas.AllowedZonesManager.getInstance().markAsLocallyCreated(id, newArea.uuid);
+            newArea.hide = false;
+            
             createAreaLabel(id);
         }
         return id;
@@ -904,9 +904,9 @@ public class NMapView extends MapView
         super.oltick();
         // ВАЖНО: Создаем копию коллекции для безопасной итерации,
         // так как nols может изменяться из фонового потока синхронизации
-        synchronized (nols) {
-            for(NOverlay ol : new ArrayList<>(nols.values()))
-                ol.tick();
+        // ConcurrentHashMap итерация потокобезопасна
+        for(NOverlay ol : nols.values()) {
+            ol.tick();
         }
     }
 

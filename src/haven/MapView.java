@@ -71,7 +71,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		}
 	}
 	public ClickedGob clickedGob = null;
-	public HashMap<Integer, NOverlay> nols = new HashMap<>();
+	public java.util.concurrent.ConcurrentHashMap<Integer, NOverlay> nols = new java.util.concurrent.ConcurrentHashMap<>();
     public interface Delayed {
 	public void run(GOut g);
     }

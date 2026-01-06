@@ -205,37 +205,44 @@ public class NArea
             Coord ed = end.div(cmaps);
             Coord bm = begin.mod(cmaps);
             Coord em = end.mod(cmaps).add(1,1);
-            if (bd.equals(ed.x,ed.y))
-            {
-                MCache.Grid grid = NUtils.getGameUI().map.glob.map.grids.get(bd);
-                space.put(grid.id, new VArea(new Area(bm, em)));
-            }
-            else
-            {
-                if (bd.x != ed.x && bd.y != ed.y)
+            
+            // ВАЖНО: Синхронизируемся с grids для потокобезопасности
+            Map<Coord, MCache.Grid> grids = NUtils.getGameUI().map.glob.map.grids;
+            synchronized(grids) {
+                if (bd.equals(ed.x,ed.y))
                 {
-                    MCache.Grid grid = NUtils.getGameUI().map.glob.map.grids.get(bd);
-                    space.put(grid.id, new VArea(new Area(bm, new Coord(max,max))));
-                    grid = NUtils.getGameUI().map.glob.map.grids.get(new Coord(bd.x, ed.y));
-                    space.put(grid.id, new VArea(new Area(new Coord(bm.x, min), new Coord(max, em.y))));
-                    grid = NUtils.getGameUI().map.glob.map.grids.get(new Coord(ed.x, bd.y));
-                    space.put(grid.id, new VArea(new Area(new Coord(min, bm.y), new Coord(em.x, max))));
-                    grid = NUtils.getGameUI().map.glob.map.grids.get(ed);
-                    space.put(grid.id, new VArea(new Area(new Coord(min, min), em)));
-                }
-                else if (bd.x != ed.x)
-                {
-                    MCache.Grid grid = NUtils.getGameUI().map.glob.map.grids.get(bd);
-                    space.put(grid.id, new VArea(new Area(bm, new Coord(max, em.y))));
-                    grid = NUtils.getGameUI().map.glob.map.grids.get(new Coord(ed.x, bd.y));
-                    space.put(grid.id, new VArea(new Area(new Coord(min, bm.y), em)));
+                    MCache.Grid grid = grids.get(bd);
+                    if (grid != null) {
+                        space.put(grid.id, new VArea(new Area(bm, em)));
+                    }
                 }
                 else
                 {
-                    MCache.Grid grid = NUtils.getGameUI().map.glob.map.grids.get(bd);
-                    space.put(grid.id, new VArea(new Area(bm, new Coord(em.x, max))));
-                    grid = NUtils.getGameUI().map.glob.map.grids.get(new Coord(bd.x, ed.y));
-                    space.put(grid.id, new VArea(new Area(new Coord(bm.x, min), em)));
+                    if (bd.x != ed.x && bd.y != ed.y)
+                    {
+                        MCache.Grid grid = grids.get(bd);
+                        if (grid != null) space.put(grid.id, new VArea(new Area(bm, new Coord(max,max))));
+                        grid = grids.get(new Coord(bd.x, ed.y));
+                        if (grid != null) space.put(grid.id, new VArea(new Area(new Coord(bm.x, min), new Coord(max, em.y))));
+                        grid = grids.get(new Coord(ed.x, bd.y));
+                        if (grid != null) space.put(grid.id, new VArea(new Area(new Coord(min, bm.y), new Coord(em.x, max))));
+                        grid = grids.get(ed);
+                        if (grid != null) space.put(grid.id, new VArea(new Area(new Coord(min, min), em)));
+                    }
+                    else if (bd.x != ed.x)
+                    {
+                        MCache.Grid grid = grids.get(bd);
+                        if (grid != null) space.put(grid.id, new VArea(new Area(bm, new Coord(max, em.y))));
+                        grid = grids.get(new Coord(ed.x, bd.y));
+                        if (grid != null) space.put(grid.id, new VArea(new Area(new Coord(min, bm.y), em)));
+                    }
+                    else
+                    {
+                        MCache.Grid grid = grids.get(bd);
+                        if (grid != null) space.put(grid.id, new VArea(new Area(bm, new Coord(em.x, max))));
+                        grid = grids.get(new Coord(bd.x, ed.y));
+                        if (grid != null) space.put(grid.id, new VArea(new Area(new Coord(bm.x, min), em)));
+                    }
                 }
             }
         }

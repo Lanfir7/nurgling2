@@ -7,8 +7,7 @@ import nurgling.db.service.AreaService;
 import java.util.Map;
 
 /**
- * Адаптер для AreaSyncManager, который использует новую систему БД (DatabaseManager/AreaService)
- * вместо старой (AreaDBManager)
+ * Адаптер для работы с зонами через новую систему БД (DatabaseManager/AreaService)
  */
 public class AreaDBAdapter {
     private final AreaService areaService;
@@ -90,49 +89,6 @@ public class AreaDBAdapter {
             areaService.updateLastSyncAt(uuid, syncTime);
         } catch (Exception e) {
             System.err.println("AreaDBAdapter: Failed to update last_sync_at: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * Загружает UUID mapping для синхронизации
-     */
-    public void loadUuidMapping() {
-        try {
-            String profile = getCurrentProfile();
-            if (profile == null || profile.isEmpty()) {
-                profile = "global";
-            }
-            Map<String, java.util.Map.Entry<Integer, java.sql.Timestamp>> mapping = areaService.loadUuidMapping(profile);
-            
-            // Обновляем кэш в AreaSyncManager
-            AreaSyncManager syncManager = AreaSyncManager.getInstance();
-            for (Map.Entry<String, java.util.Map.Entry<Integer, java.sql.Timestamp>> entry : mapping.entrySet()) {
-                String uuid = entry.getKey();
-                Integer areaId = entry.getValue().getKey();
-                java.sql.Timestamp lastSyncAt = entry.getValue().getValue();
-                
-                // Используем рефлексию для доступа к приватным полям AreaSyncManager
-                try {
-                    java.lang.reflect.Field uuidToAreaIdField = AreaSyncManager.class.getDeclaredField("uuidToAreaId");
-                    uuidToAreaIdField.setAccessible(true);
-                    @SuppressWarnings("unchecked")
-                    Map<String, Integer> uuidToAreaId = (Map<String, Integer>) uuidToAreaIdField.get(syncManager);
-                    uuidToAreaId.put(uuid, areaId);
-                    
-                    if (lastSyncAt != null) {
-                        java.lang.reflect.Field syncedZonesField = AreaSyncManager.class.getDeclaredField("syncedZones");
-                        syncedZonesField.setAccessible(true);
-                        @SuppressWarnings("unchecked")
-                        Map<String, Long> syncedZones = (Map<String, Long>) syncedZonesField.get(syncManager);
-                        syncedZones.put(uuid, lastSyncAt.getTime());
-                    }
-                } catch (Exception e) {
-                    System.err.println("AreaDBAdapter: Failed to update sync manager cache: " + e.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("AreaDBAdapter: Failed to load UUID mapping: " + e.getMessage());
             e.printStackTrace();
         }
     }

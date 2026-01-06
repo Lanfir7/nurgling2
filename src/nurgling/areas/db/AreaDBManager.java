@@ -18,7 +18,6 @@ public class AreaDBManager {
     private AreaStorage fallbackStorage;
     private AreasDBPoolManager areasPoolManager;
     private boolean useDB = false;
-    private AreaSyncManager syncManager;
     
     // Throttling для сохранений (не чаще чем раз в 2 секунды)
     private long lastSaveTime = 0;
@@ -180,11 +179,6 @@ public class AreaDBManager {
             
             lastSaveTime = currentTime;
             lastSavedAreas.put(area.id, currentTime);
-            
-            // Синхронизируем с сервером (если включено)
-            if (syncManager != null && syncManager.isEnabled()) {
-                syncManager.pushZone(area);
-            }
         } catch (AreaStorage.StorageException e) {
             // Не логируем каждую ошибку, только серьезные
             if (!e.getMessage().contains("locked") && !e.getMessage().contains("BUSY")) {
@@ -338,21 +332,10 @@ public class AreaDBManager {
     /**
      * Удаляет зону
      * @param areaId ID зоны для удаления
-     * @param skipServerSync если true, не отправляет команду удаления на сервер (используется при синхронизации)
+     * @param skipServerSync не используется (оставлено для обратной совместимости)
      */
     public void deleteArea(int areaId, boolean skipServerSync) {
         try {
-            // Получаем зону перед удалением для синхронизации
-            NArea area = getActiveStorage().getArea(areaId);
-            
-            // ВАЖНО: Обновляем lastUpdated в объекте зоны перед удалением,
-            // чтобы синхронизация увидела изменение
-            if (area != null) {
-                area.lastUpdated = System.currentTimeMillis();
-                System.out.println("AreaDBManager: Zone " + areaId + " (" + (area.name != null ? area.name : "unknown") + 
-                                 ") - updating lastUpdated to: " + area.lastUpdated + " before deletion");
-            }
-            
             getActiveStorage().deleteArea(areaId);
             
             // Также удаляем из резервной копии
@@ -362,50 +345,6 @@ public class AreaDBManager {
                 } catch (Exception e) {
                     // Игнорируем ошибки
                 }
-            }
-            
-            // Синхронизируем удаление с сервером (если включено и не пропущено)
-            // ВАЖНО: Не отправляем команду удаления на сервер, если зона уже была удалена на сервере
-            // (т.е. если удаление происходит во время синхронизации из-за того, что зоны нет на сервере)
-            // Это предотвращает отправку команд удаления для зон, которые уже удалены на сервере
-            if (!skipServerSync && syncManager != null && area != null) {
-                if (area.uuid != null && !area.uuid.isEmpty()) {
-                    // ВАЖНО: ВСЕГДА помечаем зону как локально удалённую,
-                    // даже если синхронизация отключена или зона не была синхронизирована!
-                    // Это предотвращает "воскрешение" зон при следующей синхронизации.
-                    syncManager.markAsLocallyDeleted(area.uuid);
-                    System.out.println("AreaDBManager: Marked zone " + areaId + " (" + 
-                                     (area.name != null ? area.name : "unknown") + ") as locally deleted (UUID: " + area.uuid + ")");
-                    
-                    if (syncManager.isEnabled()) {
-                        // Проверяем, была ли зона синхронизирована ранее
-                        boolean wasSynced = syncManager.isZoneSynced(area.uuid);
-                        if (wasSynced) {
-                            // Зона была синхронизирована - отправляем команду удаления на сервер
-                            System.out.println("AreaDBManager: Syncing deletion of zone " + areaId + " to server (UUID: " + area.uuid + ")");
-                            syncManager.deleteZone(area);
-                        } else {
-                            // Зона не была синхронизирована - пробуем удалить на сервере на всякий случай
-                            System.out.println("AreaDBManager: Zone " + areaId + " was not synced, but trying server deletion anyway (UUID: " + area.uuid + ")");
-                            syncManager.deleteZone(area);
-                        }
-                    } else {
-                        System.out.println("AreaDBManager: Zone synchronization disabled, but zone marked as locally deleted");
-                    }
-                } else {
-                    System.err.println("AreaDBManager: WARNING - Cannot mark deletion of zone " + areaId + 
-                                     " (" + (area.name != null ? area.name : "unknown") + "): UUID is null or empty");
-                }
-            } else if (skipServerSync) {
-                System.out.println("AreaDBManager: Skipping server deletion sync (zone was deleted on server)");
-                // Но всё равно помечаем как локально удалённую для защиты от воскрешения
-                if (syncManager != null && area != null && area.uuid != null && !area.uuid.isEmpty()) {
-                    syncManager.markAsLocallyDeleted(area.uuid);
-                }
-            } else if (syncManager == null) {
-                System.out.println("AreaDBManager: SyncManager is null, cannot track deletion");
-            } else if (area == null) {
-                System.out.println("AreaDBManager: WARNING - Zone " + areaId + " not found, cannot sync deletion");
             }
             
             System.out.println("AreaDBManager: Deleted area " + areaId);
@@ -488,35 +427,5 @@ public class AreaDBManager {
         useDB = false;
     }
     
-    /**
-     * Инициализирует синхронизацию с сервером
-     */
-    public void initializeSync(String serverUrl, String zoneSync) {
-        if (syncManager == null) {
-            syncManager = AreaSyncManager.getInstance();
-        }
-        syncManager.initialize(serverUrl, zoneSync);
-        
-        // Загружаем UUID mapping из БД для защиты от дублей
-        if (useDB && areasPoolManager != null && syncManager.isEnabled()) {
-            syncManager.loadUuidMapping(areasPoolManager);
-        }
-    }
-    
-    /**
-     * Синхронизирует все зоны с сервером
-     */
-    public void syncAllAreas(Collection<NArea> areas) {
-        if (syncManager != null && syncManager.isEnabled()) {
-            syncManager.syncAll(areas, this);
-        }
-    }
-    
-    /**
-     * Проверяет, включена ли синхронизация
-     */
-    public boolean isSyncEnabled() {
-        return syncManager != null && syncManager.isEnabled();
-    }
 }
 
