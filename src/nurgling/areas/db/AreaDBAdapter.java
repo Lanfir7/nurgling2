@@ -50,7 +50,7 @@ public class AreaDBAdapter {
     }
     
     /**
-     * Удаляет зону (soft delete)
+     * Удаляет зону
      */
     public void deleteArea(int areaId, boolean skipServerSync) {
         try {
@@ -58,37 +58,9 @@ public class AreaDBAdapter {
             if (profile == null || profile.isEmpty()) {
                 profile = "global";
             }
-            areaService.softDeleteArea(areaId, profile);
+            areaService.deleteArea(areaId, profile);
         } catch (Exception e) {
             System.err.println("AreaDBAdapter: Failed to delete area: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * Обновляет timestamp зоны (для сохранения server timestamp)
-     */
-    public void updateAreaTimestamp(int areaId, long timestamp) {
-        try {
-            String profile = getCurrentProfile();
-            if (profile == null || profile.isEmpty()) {
-                profile = "global";
-            }
-            areaService.updateAreaTimestamp(areaId, profile, timestamp);
-        } catch (Exception e) {
-            System.err.println("AreaDBAdapter: Failed to update timestamp: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * Обновляет last_sync_at для зоны
-     */
-    public void updateLastSyncAt(String uuid, long syncTime) {
-        try {
-            areaService.updateLastSyncAt(uuid, syncTime);
-        } catch (Exception e) {
-            System.err.println("AreaDBAdapter: Failed to update last_sync_at: " + e.getMessage());
             e.printStackTrace();
         }
     }

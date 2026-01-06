@@ -185,7 +185,8 @@ public class NConfig
         treeResizeEnabled,
         treeResizePercentage,
         permIconScale,
-        prospectIconScale
+        prospectIconScale,
+        syncZoneSync
     }
 
     public enum BBDisplayMode
@@ -525,6 +526,9 @@ public class NConfig
         
         // Diablo-like running (auto-click on ground while LMB held)
         conf.put(Key.diabloLikeRun, false);
+        
+        // Zone sync setting for area synchronization
+        conf.put(Key.syncZoneSync, "");
     }
 
 

@@ -753,16 +753,19 @@ public class NAreasWidget extends Window
                                 }
                                 synchronized (((NMapView) NUtils.getGameUI().map).glob.map.areas)
                                 {
+                                    // Get profile once before the loop
+                                    String profile = NUtils.getGameUI().getGenus();
+                                    if (profile == null || profile.isEmpty()) {
+                                        profile = "global";
+                                    }
+                                    final String finalProfile = profile;
+                                    
                                     for(Integer key:forRemove)
                                     {
                                         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
                                         {
-                                            // Удаляем зону из БД
-                                            try {
-                                                nurgling.areas.db.AreaDBManager.getInstance().deleteArea(key);
-                                            } catch (Exception e) {
-                                                System.err.println("Failed to delete area from database: " + e.getMessage());
-                                            }
+                                            // Track as locally deleted to prevent sync restoration
+                                            ((NMapView) NUtils.getGameUI().map).locallyDeletedAreas.add(key);
                                             
                                             NOverlay nol = NUtils.getGameUI().map.nols.get(key);
                                             if(nol != null) {
@@ -779,15 +782,12 @@ public class NAreasWidget extends Window
                                             }
                                             ((NMapView) NUtils.getGameUI().map).glob.map.areas.remove(key);
                                             
-                                            // Delete from database if enabled
+                                            // Delete from database using async service (uses connection pool properly)
                                             if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
                                                 nurgling.NCore.databaseManager != null && 
                                                 nurgling.NCore.databaseManager.isReady()) {
-                                                String profile = NUtils.getGameUI().getGenus();
-                                                if (profile == null || profile.isEmpty()) {
-                                                    profile = "global";
-                                                }
-                                                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(key, profile);
+                                                final int finalKey = key;
+                                                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(finalKey, finalProfile);
                                             }
                                         }
                                     }

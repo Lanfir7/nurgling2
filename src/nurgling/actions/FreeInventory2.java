@@ -28,10 +28,12 @@ public class FreeInventory2 implements Action
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
+        System.out.println("=== FreeInventory2: Starting ===");
         HashMap<String,Integer> props = DropContainer.getDropProps();
         WItem fordrop = null;
 
         do {
+            System.out.println("=== FreeInventory2: Loop iteration, interrupted=" + Thread.currentThread().isInterrupted() + " ===");
             fordrop = null;
             for (WItem item : gui.getInventory().getItems()) {
                 if (props.containsKey(((NGItem) item.item).name())) {

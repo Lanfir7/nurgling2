@@ -27,10 +27,13 @@ public class StackSupporter {
         customStackSizes.put("Forest Lizard", 3);
         customStackSizes.put("Cavebulb", 4);
         customStackSizes.put("Dusk Fern", 4);
+        customStackSizes.put("Straw", 5);
+        customStackSizes.put("Standing Grass", 4);
         customStackSizes.put("Frog", 3);
         customStackSizes.put("Toad", 3);
         customStackSizes.put("Waybroad", 4);
         customStackSizes.put("Green Kelp", 4);
+        customStackSizes.put("Cattail Roots", 4);
 
         HashSet<String> size3 = new HashSet<>();
         size3.add("Tuber");
@@ -66,8 +69,6 @@ public class StackSupporter {
         size3.add("Any Brick");
         size3.add("Clay");
         size3.add("Casting Material");
-        size3.add("Board");
-        size3.add("Block of Wood");
         size3.add("Ore");
         size3.add("Stone");
         size3.add("Lures");
@@ -159,6 +160,10 @@ public class StackSupporter {
         catExceptions.add("Clean Chicken");
         catExceptions.add("Clean Pelican");
         catExceptions.add("Dried Filet");
+        catExceptions.add("Rabbit Frost");
+        catExceptions.add("Whirling Snowflake");
+        catExceptions.add("Precious Snowflake");
+        catExceptions.add("Sleighbell");
     }
     private static final NAlias unstackableContainers = new NAlias("Smith's Smelter", "Ore Smelter", "Herbalist Table", "Tub", "Oven", "Steelbox", "Frame", "Kiln", "Smoke Shed", "Stack furnace");
     public static boolean isStackable(NInventory inv, String name)

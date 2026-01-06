@@ -389,7 +389,13 @@ public class NBotsMenu extends Widget
                     }
                     catch (InterruptedException e)
                     {
+                        System.out.println("=== NBotsMenu: InterruptedException caught! Bot stopped. ===");
                         NUtils.getGameUI().msg(path + ":" + "STOPPED");
+                    }
+                    catch (Exception e)
+                    {
+                        System.out.println("=== NBotsMenu: Other exception: " + e.getClass().getName() + " - " + e.getMessage() + " ===");
+                        e.printStackTrace();
                     }
                     finally
                     {

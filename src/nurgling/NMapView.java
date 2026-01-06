@@ -57,7 +57,7 @@ public class NMapView extends MapView
     public nurgling.routes.SimpleRouteManager simpleRouteManager;
 
     // Track areas that were deleted locally to prevent restoration during sync
-    private final Set<Integer> locallyDeletedAreas = new HashSet<>();
+    public final Set<Integer> locallyDeletedAreas = new HashSet<>();
     public NMapView(Coord sz, Glob glob, Coord2d cc, long plgob)
     {
         super(sz, glob, cc, plgob);
@@ -1480,7 +1480,7 @@ public class NMapView extends MapView
             
             NUtils.getGameUI().areas.removeArea(areaId);
 
-            // Delete from database if enabled
+            // Delete from database using async service (uses connection pool properly)
             if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
                 nurgling.NCore.databaseManager != null && 
                 nurgling.NCore.databaseManager.isReady()) {
@@ -1488,7 +1488,13 @@ public class NMapView extends MapView
                 if (profile == null || profile.isEmpty()) {
                     profile = "global";
                 }
-                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(areaId, profile);
+                final int finalAreaId = areaId;
+                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(finalAreaId, profile)
+                    .thenRun(() -> System.out.println("Area " + finalAreaId + " deleted from database"))
+                    .exceptionally(e -> {
+                        System.err.println("Failed to delete area " + finalAreaId + " from database: " + e.getMessage());
+                        return null;
+                    });
             }
         }
     }

@@ -141,8 +141,8 @@ public class MCache implements MapSource {
 						nurgling.areas.AllowedZonesManager allowedZonesManager = nurgling.areas.AllowedZonesManager.getInstance();
 						for (NArea area : dbAreas.values()) {
 							allowedZonesManager.applyLocalHideStatus(area);
+							areas.put(area.id, area);
 						}
-						areas.putAll(dbAreas);
 						System.out.println("Loaded " + dbAreas.size() + " areas from database");
 					}
 				} catch (Exception e) {

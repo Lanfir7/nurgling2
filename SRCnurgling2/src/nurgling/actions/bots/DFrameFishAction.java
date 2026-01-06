@@ -33,27 +33,27 @@ public class DFrameFishAction implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-        NArea.Specialisation rdframe = new NArea.Specialisation(Specialisation.SpecName.dframe.toString());
+        NArea.Specialisation rdframe = new NArea.Specialisation(Specialisation.SpecName.dframe.toString(), "Fish");
         NArea.Specialisation rrawfish = new NArea.Specialisation(Specialisation.SpecName.rawfish.toString());
 
         ArrayList<NArea.Specialisation> req = new ArrayList<>();
         req.add(rdframe);
         req.add(rrawfish);
         ArrayList<NArea.Specialisation> opt = new ArrayList<>();
-        
+
         if(new Validator(req, opt).run(gui).IsSuccess()) {
             // Получаем все drying frames
             ArrayList<Container> containers = new ArrayList<>();
-
-            for (Gob dframe : Finder.findGobs(NContext.findSpec(Specialisation.SpecName.dframe.toString()),
+            NArea dframearea = NContext.findSpec(rdframe);
+            for (Gob dframe : Finder.findGobs(dframearea,
                     new NAlias("gfx/terobjs/dframe"))) {
-                Container cand = new Container(dframe, "Frame");
+                Container cand = new Container(dframe, "Frame",dframearea);
                 cand.initattr(Container.Space.class);
                 containers.add(cand);
             }
             
             // Сортируем контейнеры для последовательной работы
-            Pair<Coord2d,Coord2d> rca = NContext.findSpec(Specialisation.SpecName.dframe.toString()).getRCArea();
+            Pair<Coord2d,Coord2d> rca = dframearea.getRCArea();
             boolean dir = rca.b.x - rca.a.x > rca.b.y - rca.a.y;
             containers.sort(new Comparator<Container>() {
                 @Override

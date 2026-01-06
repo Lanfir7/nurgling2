@@ -197,6 +197,8 @@ public class TransferToContainer implements Action
                                     }
                                 }
                             }
+                        } catch (InterruptedException e) {
+                            throw e; // Don't swallow interrupt!
                         } catch (Exception e) {
                             // Игнорируем ошибки
                         }
@@ -490,6 +492,8 @@ public class TransferToContainer implements Action
                                         }
                                     }
                                 }
+                            } catch (InterruptedException e) {
+                                throw e; // Don't swallow interrupt!
                             } catch (Exception e) {
                                 // Игнорируем ошибки
                             }
