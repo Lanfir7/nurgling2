@@ -105,16 +105,16 @@ public class MinimapExploredAreaRenderer {
                         Coord baseGridCoord = new Coord(bgx, bgy);
                         
                         // Render main explored area
-                        boolean[] baseMask = exploredArea.getExploredMaskForGrid(baseGridCoord, map.sessloc.seg.id, 0);
-                        if (baseMask != null && hasAnyTrue(baseMask)) {
-                            renderGridOverlay(g, map, nmap, baseGridCoord, baseMask, 
+                        ExploredArea.GridMask baseGridMask = exploredArea.getExploredMaskForGrid(baseGridCoord, map.sessloc.seg.id, 0);
+                        if (baseGridMask != null && baseGridMask.hasAny) {
+                            renderGridOverlay(g, map, nmap, baseGridCoord, baseGridMask, 
                                 NMiniMap.VIEW_EXPLORED_COLOR, hsz, scaleFactor, dataLevel, false);
                         }
                         
                         // Render session layer on top if active
-                        boolean[] sessionMask = exploredArea.getSessionMaskForGrid(baseGridCoord, map.sessloc.seg.id);
-                        if (sessionMask != null && hasAnyTrue(sessionMask)) {
-                            renderGridOverlay(g, map, nmap, baseGridCoord, sessionMask,
+                        ExploredArea.GridMask sessionGridMask = exploredArea.getSessionMaskForGrid(baseGridCoord, map.sessloc.seg.id);
+                        if (sessionGridMask != null && sessionGridMask.hasAny) {
+                            renderGridOverlay(g, map, nmap, baseGridCoord, sessionGridMask,
                                 NMiniMap.VIEW_SESSION_COLOR, hsz, scaleFactor, dataLevel, true);
                         }
                     }
@@ -126,26 +126,17 @@ public class MinimapExploredAreaRenderer {
     }
     
     /**
-     * Check if mask has any true values
-     */
-    private static boolean hasAnyTrue(boolean[] mask) {
-        for (boolean b : mask) {
-            if (b) return true;
-        }
-        return false;
-    }
-    
-    /**
      * Render a single grid's overlay
+     * Uses per-grid seq from GridMask for efficient cache invalidation.
      */
     private static void renderGridOverlay(GOut g, MiniMap map, NMiniMap nmap, 
-            Coord baseGridCoord, boolean[] mask, Color color,
+            Coord baseGridCoord, ExploredArea.GridMask gridMask, Color color,
             Coord hsz, float scaleFactor, int dataLevel, boolean isSession) {
         try {
-            // Get overlay texture for this base grid
+            // Get overlay texture for this base grid using per-grid seq for cache
             Tex overlayImg = isSession 
-                ? getSessionOverlay(baseGridCoord, map.sessloc.seg.id, mask, dataLevel)
-                : getExploredOverlay(baseGridCoord, map.sessloc.seg.id, mask, dataLevel);
+                ? getSessionOverlay(baseGridCoord, map.sessloc.seg.id, gridMask, dataLevel)
+                : getExploredOverlay(baseGridCoord, map.sessloc.seg.id, gridMask, dataLevel);
             
             if (overlayImg != null) {
                 // Calculate screen position for this base grid
@@ -212,26 +203,28 @@ public class MinimapExploredAreaRenderer {
     private static final java.util.Map<CacheKey, ExploredOverlayCache> sessionOverlayCache = new java.util.HashMap<>();
 
     /**
-     * Get explored area overlay for a base grid with caching
+     * Get explored area overlay for a base grid with caching.
+     * Uses per-grid seq from GridMask for efficient cache invalidation.
+     * This means only changed grids will regenerate textures, not all visible grids.
      */
-    private static Tex getExploredOverlay(Coord baseGridCoord, long segmentId, boolean[] mask, int dataLevel) {
+    private static Tex getExploredOverlay(Coord baseGridCoord, long segmentId, ExploredArea.GridMask gridMask, int dataLevel) {
         CacheKey key = new CacheKey(baseGridCoord, segmentId);
         ExploredOverlayCache cache = overlayCache.get(key);
         
-        // Check if cache is valid
-        if (cache != null && cache.seq == ExploredArea.seq && cache.dataLevel == dataLevel) {
+        // Check if cache is valid using per-grid seq (not global seq)
+        if (cache != null && cache.seq == gridMask.seq && cache.dataLevel == dataLevel) {
             return cache.img;
         }
         
-        // Generate new overlay
+        // Generate new overlay only for this specific changed grid
         try {
-            BufferedImage overlayBuf = renderOverlayImage(mask, NMiniMap.VIEW_EXPLORED_COLOR);
+            BufferedImage overlayBuf = renderOverlayImage(gridMask.mask, NMiniMap.VIEW_EXPLORED_COLOR);
             Tex overlayTex = new TexI(overlayBuf);
             
-            // Update cache
+            // Update cache with per-grid seq
             cache = new ExploredOverlayCache();
             cache.img = overlayTex;
-            cache.seq = ExploredArea.seq;
+            cache.seq = gridMask.seq;
             cache.dataLevel = dataLevel;
             overlayCache.put(key, cache);
             
@@ -242,26 +235,27 @@ public class MinimapExploredAreaRenderer {
     }
     
     /**
-     * Get session overlay for a base grid with caching
+     * Get session overlay for a base grid with caching.
+     * Uses per-grid seq from GridMask for efficient cache invalidation.
      */
-    private static Tex getSessionOverlay(Coord baseGridCoord, long segmentId, boolean[] mask, int dataLevel) {
+    private static Tex getSessionOverlay(Coord baseGridCoord, long segmentId, ExploredArea.GridMask gridMask, int dataLevel) {
         CacheKey key = new CacheKey(baseGridCoord, segmentId);
         ExploredOverlayCache cache = sessionOverlayCache.get(key);
         
-        // Check if cache is valid
-        if (cache != null && cache.seq == ExploredArea.sessionSeq && cache.dataLevel == dataLevel) {
+        // Check if cache is valid using per-grid seq (not global seq)
+        if (cache != null && cache.seq == gridMask.seq && cache.dataLevel == dataLevel) {
             return cache.img;
         }
         
-        // Generate new overlay
+        // Generate new overlay only for this specific changed grid
         try {
-            BufferedImage overlayBuf = renderOverlayImage(mask, NMiniMap.VIEW_SESSION_COLOR);
+            BufferedImage overlayBuf = renderOverlayImage(gridMask.mask, NMiniMap.VIEW_SESSION_COLOR);
             Tex overlayTex = new TexI(overlayBuf);
             
-            // Update cache
+            // Update cache with per-grid seq
             cache = new ExploredOverlayCache();
             cache.img = overlayTex;
-            cache.seq = ExploredArea.sessionSeq;
+            cache.seq = gridMask.seq;
             cache.dataLevel = dataLevel;
             sessionOverlayCache.put(key, cache);
             

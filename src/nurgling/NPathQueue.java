@@ -190,7 +190,7 @@ public class NPathQueue {
 		if(NParser.checkName(vehicle.ngob.name,"/vehicle/snekkja")) {
 		    passenger = !pos.equals("m0");
 		} else if(NParser.checkName(vehicle.ngob.name,"/vehicle/knarr")) {
-		    passenger = !pos.equals("m0"); //TODO: check if knarr works properly
+		    passenger = !(pos.equals("m0") || pos.equals("d")); // Рулевой на m0 или d
 		} else if(NParser.checkName(vehicle.ngob.name,"/vehicle/rowboat")) {
 		    passenger = !pos.equals("d");
 		} else if(NParser.checkName(vehicle.ngob.name,"/vehicle/spark")) {

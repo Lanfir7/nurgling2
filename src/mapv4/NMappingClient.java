@@ -41,15 +41,23 @@ public class NMappingClient {
     }
     public void tick(double dt)
     {
-        if(NUtils.getGameUI()!=null && (autoMapper!=(Boolean)NConfig.get(NConfig.Key.autoMapper) || autoMapper && ((reqTread == null || !reqTread.isAlive()) && (conTread == null || !conTread.isAlive()))))
+        Boolean newState = (Boolean)NConfig.get(NConfig.Key.autoMapper);
+        if(NUtils.getGameUI() == null || newState == null) {
+            return;
+        }
+        
+        boolean settingChanged = !newState.equals(autoMapper);
+        boolean threadsNeedRestart = newState && ((reqTread == null || !reqTread.isAlive()) || (conTread == null || !conTread.isAlive()));
+        
+        if(settingChanged || threadsNeedRestart)
         {
-            Boolean newState = (Boolean)NConfig.get(NConfig.Key.autoMapper);
-            if(newState != null && !newState.equals(autoMapper)) {
-                autoMapper = newState;
-                if(autoMapper)
-                {
-                    done.set(false);
+            autoMapper = newState;
+            if(autoMapper)
+            {
+                done.set(false);
 
+                // Start requestor thread if not running
+                if(reqTread == null || !reqTread.isAlive()) {
                     (reqTread = new Thread(new Runnable()
                     {
                         @Override
@@ -65,7 +73,10 @@ public class NMappingClient {
                             }
                         }
                     }, "automapper-requestor")).start();
+                }
 
+                // Start connector thread if not running
+                if(conTread == null || !conTread.isAlive()) {
                     (conTread = new Thread(new Runnable()
                     {
                         @Override
@@ -82,15 +93,15 @@ public class NMappingClient {
                         }
                     }, "automapper-connector")).start();
                 }
-                else
-                {
-                    done.set(true);
-                    if(reqTread != null) {
-                        reqTread.interrupt();
-                    }
-                    if(conTread != null) {
-                        conTread.interrupt();
-                    }
+            }
+            else
+            {
+                done.set(true);
+                if(reqTread != null) {
+                    reqTread.interrupt();
+                }
+                if(conTread != null) {
+                    conTread.interrupt();
                 }
             }
         }

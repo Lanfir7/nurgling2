@@ -2360,17 +2360,97 @@ NMiniMap extends MiniMap {
             }
             
             MCache mcache = gui.map.glob.map;
+            int chunkSize = 100; // CHUNK_SIZE
+            
+            // Стратегия 1: Использовать сохранённый gridId из маркера (самый надёжный способ!)
+            // gridId сохраняется при создании маркера и не зависит от того, загружен ли grid сейчас
+            if(mark.gridId != -1 && mark.localTileCoords != null) {
+                // Проверяем, что чанк существует в ChunkNavGraph
+                if(gui.map instanceof NMapView) {
+                    NMapView mapView = (NMapView) gui.map;
+                    nurgling.navigation.ChunkNavManager chunkNav = mapView.getChunkNavManager();
+                    if(chunkNav != null && chunkNav.isInitialized()) {
+                        nurgling.navigation.ChunkNavGraph graph = chunkNav.getGraph();
+                        if(graph != null && graph.getChunk(mark.gridId) != null) {
+                            // Отлично! Чанк есть в графе, используем сохранённые координаты
+                            Coord areaSize = new Coord(3, 3);
+                            Coord ul = mark.localTileCoords.sub(areaSize.div(2));
+                            Coord br = mark.localTileCoords.add(areaSize.div(2)).add(1, 1);
+                            
+                            // Ограничиваем область границами чанка
+                            ul = new Coord(Math.max(0, ul.x), Math.max(0, ul.y));
+                            br = new Coord(Math.min(chunkSize, br.x), Math.min(chunkSize, br.y));
+                            
+                            nurgling.areas.NArea tempArea = new nurgling.areas.NArea("_temp_marker_" + mark.resourceType);
+                            tempArea.space = new nurgling.areas.NArea.Space();
+                            tempArea.space.space = new java.util.HashMap<>();
+                            tempArea.space.space.put(mark.gridId, new nurgling.areas.NArea.VArea(
+                                new haven.Area(ul, br)
+                            ));
+                            tempArea.grids_id.clear();
+                            tempArea.grids_id.add(mark.gridId);
+                            
+                            return tempArea;
+                        }
+                    }
+                }
+            }
             
             // Получаем координаты тайла из мировых координат
             Coord tileCoord = worldPos.floor(MCache.tilesz);
             
-            // Получаем grid из координат тайла
-            // getgridt может выбросить LoadingMap если grid еще не загружен
-            MCache.Grid grid;
+            // Стратегия 2: Получаем grid из MCache (работает если маркер близко)
+            MCache.Grid grid = null;
             try {
                 grid = mcache.getgridt(tileCoord);
             } catch (MCache.LoadingMap e) {
-                // Grid еще не загружен - возвращаем null
+                // Grid еще не загружен - попробуем ChunkNav
+            }
+            
+            // Стратегия 3: Если grid не загружен в MCache, ищем в ChunkNavGraph по worldTileOrigin
+            if(grid == null && gui.map instanceof NMapView) {
+                NMapView mapView = (NMapView) gui.map;
+                nurgling.navigation.ChunkNavManager chunkNav = mapView.getChunkNavManager();
+                if(chunkNav != null && chunkNav.isInitialized()) {
+                    // mark.tileCoords - абсолютные тайловые координаты в сегменте карты
+                    Coord markerAbsTile = mark.tileCoords;
+                    
+                    nurgling.navigation.ChunkNavGraph graph = chunkNav.getGraph();
+                    if(graph != null) {
+                        for(nurgling.navigation.ChunkNavData chunk : graph.getAllChunks()) {
+                            if(chunk.worldTileOrigin == null) continue;
+                            
+                            // Проверяем, попадает ли маркер в этот чанк (100x100 тайлов)
+                            if(markerAbsTile.x >= chunk.worldTileOrigin.x && 
+                               markerAbsTile.x < chunk.worldTileOrigin.x + chunkSize &&
+                               markerAbsTile.y >= chunk.worldTileOrigin.y && 
+                               markerAbsTile.y < chunk.worldTileOrigin.y + chunkSize) {
+                                
+                                // Нашли чанк! Создаем NArea с этим grid ID
+                                Coord localTileCoord = markerAbsTile.sub(chunk.worldTileOrigin);
+                                
+                                Coord areaSize = new Coord(3, 3);
+                                Coord ul = localTileCoord.sub(areaSize.div(2));
+                                Coord br = localTileCoord.add(areaSize.div(2)).add(1, 1);
+                                
+                                ul = new Coord(Math.max(0, ul.x), Math.max(0, ul.y));
+                                br = new Coord(Math.min(chunkSize, br.x), Math.min(chunkSize, br.y));
+                                
+                                nurgling.areas.NArea tempArea = new nurgling.areas.NArea("_temp_marker_" + mark.resourceType);
+                                tempArea.space = new nurgling.areas.NArea.Space();
+                                tempArea.space.space = new java.util.HashMap<>();
+                                tempArea.space.space.put(chunk.gridId, new nurgling.areas.NArea.VArea(
+                                    new haven.Area(ul, br)
+                                ));
+                                tempArea.grids_id.clear();
+                                tempArea.grids_id.add(chunk.gridId);
+                                
+                                return tempArea;
+                            }
+                        }
+                    }
+                }
+                // Чанк не найден в ChunkNavGraph - территория не разведана
                 return null;
             }
             
@@ -2382,22 +2462,19 @@ NMiniMap extends MiniMap {
             Coord localTileCoord = tileCoord.sub(grid.ul);
             
             // Создаем небольшую область вокруг маркера (3x3 тайла)
-            // Это нужно для того, чтобы ChunkNav мог найти путь к этой области
             Coord areaSize = new Coord(3, 3);
             Coord ul = localTileCoord.sub(areaSize.div(2));
-            Coord br = localTileCoord.add(areaSize.div(2)).add(1, 1); // +1 для включения правой границы
+            Coord br = localTileCoord.add(areaSize.div(2)).add(1, 1);
             
             // Создаем временную NArea
             nurgling.areas.NArea tempArea = new nurgling.areas.NArea("_temp_marker_" + mark.resourceType);
             tempArea.space = new nurgling.areas.NArea.Space();
             tempArea.space.space = new java.util.HashMap<>();
             
-            // Добавляем область в grid
             tempArea.space.space.put(grid.id, new nurgling.areas.NArea.VArea(
                 new haven.Area(ul, br)
             ));
             
-            // Синхронизируем grids_id
             tempArea.grids_id.clear();
             tempArea.grids_id.add(grid.id);
             

@@ -21,6 +21,8 @@ public class LabeledMinimapMark {
     public final String resourceType;    // Resource type (e.g., "Water", "Clay", "Soil")
     public final long segmentId;
     public final Coord tileCoords;        // Tile coordinates within the segment
+    public final long gridId;             // Grid ID for ChunkNav navigation (stored when marker is created)
+    public final Coord localTileCoords;   // Local tile coordinates within the grid (0-99)
     public final BufferedImage iconImage; // The icon to display
     public final long timestamp;          // When it was created
     public final Color labelColor;        // Color for the label text
@@ -43,15 +45,20 @@ public class LabeledMinimapMark {
      * @param resourceType The type of resource (e.g., "Water", "Clay")
      * @param segmentId The map segment ID
      * @param tileCoords The tile coordinates within the segment
+     * @param gridId The grid ID for ChunkNav navigation (-1 if unknown)
+     * @param localTileCoords Local tile coordinates within the grid (null if unknown)
      * @param iconImage The icon image to display
      * @param labelColor Optional color for the label (null = white)
      */
     public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords, 
+                              long gridId, Coord localTileCoords,
                               BufferedImage iconImage, Color labelColor) {
         this.label = label;
         this.resourceType = resourceType != null ? resourceType : "Unknown";
         this.segmentId = segmentId;
         this.tileCoords = tileCoords;
+        this.gridId = gridId;
+        this.localTileCoords = localTileCoords;
         this.iconImage = iconImage;
         this.labelColor = labelColor != null ? labelColor : Color.WHITE;
         this.timestamp = System.currentTimeMillis();
@@ -65,16 +72,27 @@ public class LabeledMinimapMark {
     }
     
     /**
+     * Create a labeled minimap mark (legacy, without grid info).
+     */
+    public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords, 
+                              BufferedImage iconImage, Color labelColor) {
+        this(label, resourceType, segmentId, tileCoords, -1, null, iconImage, labelColor);
+    }
+    
+    /**
      * Create a labeled minimap mark with a specific locationId (for updates).
      * Used when updating an existing mark to preserve its ID.
      */
     public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
-                              Coord tileCoords, BufferedImage iconImage, Color labelColor) {
+                              Coord tileCoords, long gridId, Coord localTileCoords,
+                              BufferedImage iconImage, Color labelColor) {
         this.locationId = locationId; // Use provided locationId
         this.label = label;
         this.resourceType = resourceType != null ? resourceType : "Unknown";
         this.segmentId = segmentId;
         this.tileCoords = tileCoords;
+        this.gridId = gridId;
+        this.localTileCoords = localTileCoords;
         this.iconImage = iconImage;
         this.labelColor = labelColor != null ? labelColor : Color.WHITE;
         this.timestamp = System.currentTimeMillis();
@@ -84,6 +102,14 @@ public class LabeledMinimapMark {
             this.iconTex = new TexI(iconImage);
         }
         this.labelText = createLabelText();
+    }
+    
+    /**
+     * Create a labeled minimap mark with a specific locationId (legacy, without grid info).
+     */
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
+                              Coord tileCoords, BufferedImage iconImage, Color labelColor) {
+        this(locationId, label, resourceType, segmentId, tileCoords, -1, null, iconImage, labelColor);
     }
     
     /**
@@ -104,6 +130,14 @@ public class LabeledMinimapMark {
         this.segmentId = json.getLong("segmentId");
         this.tileCoords = new Coord(json.getInt("tileX"), json.getInt("tileY"));
         this.timestamp = json.getLong("timestamp");
+        
+        // Load grid info for ChunkNav navigation
+        this.gridId = json.optLong("gridId", -1);
+        if (json.has("localTileX") && json.has("localTileY")) {
+            this.localTileCoords = new Coord(json.getInt("localTileX"), json.getInt("localTileY"));
+        } else {
+            this.localTileCoords = null;
+        }
         
         // Load label color
         if (json.has("labelColor")) {
@@ -145,6 +179,15 @@ public class LabeledMinimapMark {
         json.put("tileY", tileCoords.y);
         json.put("timestamp", timestamp);
         json.put("labelColor", labelColor.getRGB());
+        
+        // Save grid info for ChunkNav navigation
+        if (gridId != -1) {
+            json.put("gridId", gridId);
+        }
+        if (localTileCoords != null) {
+            json.put("localTileX", localTileCoords.x);
+            json.put("localTileY", localTileCoords.y);
+        }
         
         // Save icon image as base64
         if (iconImage != null) {

@@ -11,7 +11,6 @@ import nurgling.NUtils;
 import nurgling.routes.SimpleRoute;
 import nurgling.routes.SimpleRoutePoint;
 import nurgling.tasks.*;
-import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 
 /**
@@ -45,9 +44,9 @@ public class SimpleRouteWorker implements Action {
     }
 
     /**
-     * Проверяет, является ли игрок рулевым корабля (не пассажиром)
+     * Проверяет, находится ли игрок на корабле/лодке
      */
-    private boolean isShipDriver() {
+    private boolean isOnShip() {
         Gob player = NUtils.player();
         if (player == null) return false;
         
@@ -57,21 +56,27 @@ public class SimpleRouteWorker implements Action {
         Gob vehicle = following.tgt();
         if (vehicle == null) return false;
         
-        String pos = following.xfname;
         String vehicleName = vehicle.ngob.name;
         
-        // Проверяем различные типы кораблей
-        if (NParser.checkName(vehicleName, "/vehicle/snekkja")) {
-            return pos.equals("m0"); // m0 = рулевой
-        } else if (NParser.checkName(vehicleName, "/vehicle/knarr")) {
-            return pos.equals("m0"); // m0 = рулевой
-        } else if (NParser.checkName(vehicleName, "/vehicle/rowboat")) {
-            return pos.equals("d"); // d = рулевой
-        } else if (NParser.checkName(vehicleName, "/vehicle/spark")) {
-            return pos.equals("d"); // d = рулевой
-        }
+        // Проверяем, является ли транспорт водным
+        return NParser.checkName(vehicleName, "/vehicle/snekkja") ||
+               NParser.checkName(vehicleName, "/vehicle/knarr") ||
+               NParser.checkName(vehicleName, "/vehicle/rowboat") ||
+               NParser.checkName(vehicleName, "/vehicle/spark") ||
+               NParser.checkName(vehicleName, "/vehicle/dugout");
+    }
+    
+    /**
+     * Получает корабль, на котором находится игрок
+     */
+    private Gob getShip() {
+        Gob player = NUtils.player();
+        if (player == null) return null;
         
-        return false;
+        Following following = player.getattr(Following.class);
+        if (following == null) return null;
+        
+        return following.tgt();
     }
 
     /**
@@ -104,23 +109,15 @@ public class SimpleRouteWorker implements Action {
         }
         
         // Если не получилось, пробуем использовать координаты корабля для определения gridId
-        if (isShipDriver()) {
-            Gob player = NUtils.player();
-            if (player != null) {
-                Following following = player.getattr(Following.class);
-                if (following != null) {
-                    Gob vehicle = following.tgt();
-                    if (vehicle != null) {
-                        // Используем координаты корабля для поиска grid
-                        Coord tilec = vehicle.rc.div(MCache.tilesz).floor();
-                        MCache.Grid vehicleGrid = map.getgridt(tilec);
-                        if (vehicleGrid != null && vehicleGrid.id == point.gridId) {
-                            // Если grid совпадает, используем координаты из waypoint
-                            Coord tilec2 = vehicleGrid.ul.add(point.localCoord);
-                            return tilec2.mul(MCache.tilesz).add(MCache.tilehsz);
-                        }
-                    }
-                }
+        Gob ship = getShip();
+        if (ship != null) {
+            // Используем координаты корабля для поиска grid
+            Coord tilec = ship.rc.div(MCache.tilesz).floor();
+            MCache.Grid vehicleGrid = map.getgridt(tilec);
+            if (vehicleGrid != null && vehicleGrid.id == point.gridId) {
+                // Если grid совпадает, используем координаты из waypoint
+                Coord tilec2 = vehicleGrid.ul.add(point.localCoord);
+                return tilec2.mul(MCache.tilesz).add(MCache.tilehsz);
             }
         }
         
@@ -131,27 +128,14 @@ public class SimpleRouteWorker implements Action {
      * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
      */
     private Results navigateToPoint(NGameUI gui, Coord2d target) throws InterruptedException {
-        if (isShipDriver()) {
-            // Для корабля используем прямой клик на карту
-            Gob player = NUtils.player();
-            Following following = player.getattr(Following.class);
-            Gob vehicle = following.tgt();
-            
-            // Кликаем на карту для движения корабля
+        Gob ship = getShip();
+        
+        if (isOnShip() && ship != null) {
+            // Для корабля кликаем на карту для движения
             gui.map.wdgmsg("click", Coord.z, target.floor(posres), 1, 0);
             
-            // Ждем, пока корабль начнет движение и достигнет точки
-            if (NParser.isIt(vehicle, new NAlias("rowboat"))) {
-                NUtils.getUI().core.addTask(new IsPoseMov(target, player, new NAlias("gfx/borka/rowing")));
-                NUtils.getUI().core.addTask(new IsNotPose(player, new NAlias("gfx/borka/rowing")));
-            } else if (NParser.isIt(vehicle, new NAlias("dugout"))) {
-                NUtils.getUI().core.addTask(new IsPoseMov(target, player, new NAlias("gfx/borka/dugoutrowan")));
-                NUtils.getUI().core.addTask(new IsNotPose(player, new NAlias("gfx/borka/dugoutrowan")));
-            } else {
-                // Для других кораблей просто ждем достижения точки
-                NUtils.getUI().core.addTask(new IsMoving(target));
-                NUtils.getUI().core.addTask(new MovingCompleted(target));
-            }
+            // Ждем движение корабля по его координатам (универсальный способ для всех кораблей)
+            waitForShipMovement(ship, target);
             
             // Проверяем, достигли ли мы точки (используем координаты корабля)
             Coord2d currentPos = getCurrentPosition();
@@ -162,6 +146,61 @@ public class SimpleRouteWorker implements Action {
         } else {
             // Для пешего движения используем PathFinder
             return new PathFinder(target).run(gui);
+        }
+    }
+    
+    /**
+     * Ожидание движения большого корабля (snekkja, knarr) по его координатам
+     */
+    private void waitForShipMovement(Gob vehicle, Coord2d target) throws InterruptedException {
+        // Порог достижения цели
+        final double ARRIVAL_THRESHOLD = 11.0;
+        // Максимальное время ожидания начала движения (мс)
+        final long START_TIMEOUT = 3000;
+        // Максимальное время полёта до цели (мс)
+        final long MOVEMENT_TIMEOUT = 60000;
+        // Интервал проверки (мс)
+        final long CHECK_INTERVAL = 100;
+        
+        Coord2d startPos = vehicle.rc;
+        long startTime = System.currentTimeMillis();
+        
+        // Фаза 1: Ждём начала движения (позиция изменилась или уже близко к цели)
+        while (System.currentTimeMillis() - startTime < START_TIMEOUT) {
+            if (vehicle.rc.dist(target) <= ARRIVAL_THRESHOLD) {
+                return; // Уже на месте
+            }
+            if (vehicle.rc.dist(startPos) > 1.0) {
+                break; // Корабль начал движение
+            }
+            Thread.sleep(CHECK_INTERVAL);
+        }
+        
+        // Фаза 2: Ждём достижения цели
+        startTime = System.currentTimeMillis();
+        Coord2d lastPos = vehicle.rc;
+        int stoppedCount = 0;
+        
+        while (System.currentTimeMillis() - startTime < MOVEMENT_TIMEOUT) {
+            Coord2d currentPos = vehicle.rc;
+            
+            // Проверяем достижение цели
+            if (currentPos.dist(target) <= ARRIVAL_THRESHOLD) {
+                return;
+            }
+            
+            // Проверяем остановку корабля (координаты не меняются)
+            if (currentPos.dist(lastPos) < 0.1) {
+                stoppedCount++;
+                if (stoppedCount > 10) { // Корабль остановился
+                    return;
+                }
+            } else {
+                stoppedCount = 0;
+            }
+            
+            lastPos = currentPos;
+            Thread.sleep(CHECK_INTERVAL);
         }
     }
 

@@ -55,16 +55,21 @@ public class LabeledMarkService implements ProfileAwareService {
         final String resourceType;
         final long segmentId;
         final Coord tileCoords;
+        final long gridId;            // Grid ID for ChunkNav navigation (-1 if unknown)
+        final Coord localTileCoords;  // Local tile coords within grid (null if unknown)
         final BufferedImage iconImage;
         final int radiusTiles;
         
         PendingMark(String locationId, String label, String resourceType, long segmentId, 
-                   Coord tileCoords, BufferedImage iconImage, int radiusTiles) {
+                   Coord tileCoords, long gridId, Coord localTileCoords,
+                   BufferedImage iconImage, int radiusTiles) {
             this.locationId = locationId;
             this.label = label;
             this.resourceType = resourceType;
             this.segmentId = segmentId;
             this.tileCoords = tileCoords;
+            this.gridId = gridId;
+            this.localTileCoords = localTileCoords;
             this.iconImage = iconImage;
             this.radiusTiles = radiusTiles;
         }
@@ -135,8 +140,28 @@ public class LabeledMarkService implements ProfileAwareService {
         // Генерируем locationId заранее чтобы вернуть его сразу
         String locationId = resourceType + "_" + segmentId + "_" + tileCoords.x + "_" + tileCoords.y + "_" + System.currentTimeMillis();
         
+        // Получаем gridId и localTileCoords для ChunkNav навигации
+        long gridId = -1;
+        Coord localTileCoords = null;
+        try {
+            if (gui != null && gui.map != null && gui.map.glob != null && gui.map.glob.map != null) {
+                MCache mcache = gui.map.glob.map;
+                // tileCoords - абсолютные координаты тайла в сегменте карты
+                // Пытаемся получить grid для этих координат
+                MCache.Grid grid = mcache.getgridt(tileCoords);
+                if (grid != null) {
+                    gridId = grid.id;
+                    localTileCoords = tileCoords.sub(grid.ul);
+                }
+            }
+        } catch (MCache.LoadingMap e) {
+            // Grid еще не загружен - оставляем gridId = -1
+        } catch (Exception e) {
+            // Игнорируем другие ошибки
+        }
+        
         // Добавляем в очередь без блокировки (ConcurrentLinkedQueue lock-free)
-        pendingMarks.offer(new PendingMark(locationId, label, resourceType, segmentId, tileCoords, iconImage, radiusTiles));
+        pendingMarks.offer(new PendingMark(locationId, label, resourceType, segmentId, tileCoords, gridId, localTileCoords, iconImage, radiusTiles));
         
         // Планируем обработку очереди
         scheduleProcessing();
@@ -217,8 +242,9 @@ public class LabeledMarkService implements ProfileAwareService {
             removeMarkFromIndexes(locationId);
         }
         
-        // Создаем и добавляем новый маркер
-        LabeledMinimapMark mark = new LabeledMinimapMark(pm.label, pm.resourceType, pm.segmentId, pm.tileCoords, pm.iconImage);
+        // Создаем и добавляем новый маркер с gridId для ChunkNav навигации
+        LabeledMinimapMark mark = new LabeledMinimapMark(pm.label, pm.resourceType, pm.segmentId, pm.tileCoords, 
+                                                         pm.gridId, pm.localTileCoords, pm.iconImage, null);
         labeledMarks.put(mark.getLocationId(), mark);
         addMarkToIndexes(mark);
     }
