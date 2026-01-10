@@ -186,7 +186,16 @@ public class NConfig
         treeResizePercentage,
         permIconScale,
         prospectIconScale,
-        syncZoneSync
+        syncZoneSync,
+        equipmentBotConfig,
+        // Starvation alert settings
+        starvationAlertEnabled,
+        starvationPopup1Threshold,
+        starvationPopup2Threshold,
+        starvationVignetteStartThreshold,
+        starvationVignetteCriticalThreshold,
+        starvationSoundThreshold,
+        starvationSoundInterval
     }
 
     public enum BBDisplayMode
@@ -433,8 +442,8 @@ public class NConfig
         
         // Parasite bot settings
         conf.put(Key.parasiteBotEnabled, false);
-        conf.put(Key.leechAction, "ground");  // "ground" or "inventory"
-        conf.put(Key.tickAction, "ground");   // "ground" or "inventory"
+        conf.put(Key.leechAction, "ground");  // "nothing", "ground" or "inventory"
+        conf.put(Key.tickAction, "ground");   // "nothing", "ground" or "inventory"
         
         // Safety settings - auto hearth/logout on unknown players
         conf.put(Key.autoHearthOnUnknown, false);
@@ -529,6 +538,15 @@ public class NConfig
         
         // Zone sync setting for area synchronization
         conf.put(Key.syncZoneSync, "");
+
+        // Starvation alert settings
+        conf.put(Key.starvationAlertEnabled, true);
+        conf.put(Key.starvationPopup1Threshold, 2700);  // First warning popup (0 to disable)
+        conf.put(Key.starvationPopup2Threshold, 2500);  // Critical warning popup (0 to disable)
+        conf.put(Key.starvationVignetteStartThreshold, 2300);  // Vignette starts (0 to disable)
+        conf.put(Key.starvationVignetteCriticalThreshold, 2000);  // Vignette intensifies (0 to disable)
+        conf.put(Key.starvationSoundThreshold, 2000);  // Sound alarm threshold (0 to disable)
+        conf.put(Key.starvationSoundInterval, 10000);  // Sound interval in milliseconds
     }
 
 
@@ -756,6 +774,14 @@ public class NConfig
      */
     public String getScenariosPath() {
         return ((HashDirCache) ResCache.global).base + "\\..\\" + "scenarios.nurgling.json";
+    }
+
+    /**
+     * Gets the dynamic path for equipment presets configuration file
+     * Note: equipment presets are always stored globally, not per-profile
+     */
+    public String getEquipmentPresetsPath() {
+        return ((HashDirCache) ResCache.global).base + "\\..\\" + "equipment_presets.nurgling.json";
     }
 
     @SuppressWarnings("unchecked")

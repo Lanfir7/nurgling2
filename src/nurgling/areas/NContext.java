@@ -925,6 +925,41 @@ public class NContext {
         return res;
     }
 
+    /**
+     * Calculate distance to an area using ChunkNav if available, falling back to RouteGraph.
+     * Returns Double.MAX_VALUE if area is unreachable.
+     */
+    private static double getDistanceToArea(NArea area, NGameUI gui) {
+        if (gui == null || gui.map == null) {
+            return Double.MAX_VALUE;
+        }
+
+        // Try ChunkNav first
+        if (gui.map instanceof NMapView) {
+            ChunkNavManager chunkNav = ((NMapView) gui.map).getChunkNavManager();
+            if (chunkNav != null && chunkNav.isInitialized()) {
+                ChunkPath path = chunkNav.planToArea(area);
+                if (path != null) {
+                    // ChunkNav has a path - use its cost
+                    return path.totalCost;
+                }
+            }
+        }
+
+        return Double.MAX_VALUE;
+    }
+
+    /**
+     * Calculate distance to an area by areaId using ChunkNav.
+     * Returns Double.MAX_VALUE if area is unreachable.
+     */
+    public double getDistanceToAreaById(String areaId, NGameUI gui) {
+        NArea area = areas.get(areaId);
+        if (area == null) return Double.MAX_VALUE;
+        return getDistanceToArea(area, gui);
+    }
+
+
     public static NArea findInGlobal(String name) {
         return findInGlobal(new NAlias(name));
     }
