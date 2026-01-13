@@ -556,6 +556,8 @@ public class NConfig
     private long lastAreasChangeTime = 0;
     private static final long AREAS_DEBOUNCE_MS = 3000; // 3 seconds debounce for area changes
     private boolean isExploredUpd = false;
+    private long lastExploredChangeTime = 0;
+    private static final long EXPLORED_DEBOUNCE_MS = 5000; // 5 seconds debounce for explored area changes
     private boolean isRoutesUpd = false;
     private boolean isScenariosUpd = false;
     String path = ((HashDirCache) ResCache.global).base + "\\..\\" + "nconfig.nurgling.json";
@@ -584,7 +586,15 @@ public class NConfig
         return isScenariosUpd;
     }
 
-    public boolean isExploredUpdated() { return isExploredUpd; }
+    public boolean isExploredUpdated() {
+        // Only return true if explored area changed AND debounce period has passed
+        // This batches multiple rapid changes into a single file update
+        if (isExploredUpd && lastExploredChangeTime > 0) {
+            long elapsed = System.currentTimeMillis() - lastExploredChangeTime;
+            return elapsed >= EXPLORED_DEBOUNCE_MS;
+        }
+        return false;
+    }
 
     public static Object get(Key key)
     {
@@ -636,15 +646,19 @@ public class NConfig
     public static void needExploredUpdate()
     {
         // Only update profile-specific config (explored area is per-world)
+        // Record timestamp for debouncing - actual save happens after EXPLORED_DEBOUNCE_MS of inactivity
+        long now = System.currentTimeMillis();
         try {
             if (nurgling.NUtils.getGameUI() != null && nurgling.NUtils.getUI() != null && nurgling.NUtils.getUI().core != null) {
                 nurgling.NUtils.getUI().core.config.isExploredUpd = true;
+                nurgling.NUtils.getUI().core.config.lastExploredChangeTime = now;
             }
         } catch (Exception e) {
             // Fallback to global config if profile config not available
             if (current != null)
             {
                 current.isExploredUpd = true;
+                current.lastExploredChangeTime = now;
             }
         }
     }
@@ -952,9 +966,10 @@ public class NConfig
         {
         }
 
-        if (!contentBuilder.toString().isEmpty())
+        String content = contentBuilder.toString().trim();
+        if (!content.isEmpty() && content.startsWith("{"))
         {
-            JSONObject main = new JSONObject(contentBuilder.toString());
+            JSONObject main = new JSONObject(content);
             Map<String, Object> map = toMapCompat(main);
             for (Map.Entry<String, Object> entry : map.entrySet())
             {
@@ -1173,6 +1188,7 @@ public class NConfig
                 // Merge with existing data on disk to prevent data loss when multiple clients run
                 ((NCornerMiniMap)NUtils.getGameUI().mmap).exploredArea.mergeAndSaveToFile(filePath);
                 this.isExploredUpd = false;
+                this.lastExploredChangeTime = 0;
             }
             catch (Exception e)
             {
