@@ -95,7 +95,8 @@ public class Specialisation extends Window
         boardsForBuild,
         gardenPotSeeds,
         rawfish,
-        candelabrum;
+        candelabrum,
+        buildMaterials;
     }
 
     private static ArrayList<SpecialisationItem> specialisation = new ArrayList<>();
@@ -187,7 +188,10 @@ public class Specialisation extends Window
         specialisation.add(new SpecialisationItem(SpecName.gardenPotSeeds.toString(),"Garden Pot Seeds",Resource.loadsimg("nurgling/categories/gardenpot")));
         
         // Raw fish piles
-        specialisation.add(new SpecialisationItem(SpecName.rawfish.toString(),"Piles of raw fish",Resource.loadsimg("nurgling/categories/rawhide")));
+        specialisation.add(new SpecialisationItem(SpecName.rawfish.toString(),"Piles of raw fish",Resource.loadsimg("nurgling/categories/fishpile")));
+
+        // Construction materials (with subtypes: Block, Board, Stone, String, Nugget, etc.)
+        specialisation.add(new SpecialisationItem(SpecName.buildMaterials.toString(),"Construction Materials",Resource.loadsimg("nurgling/categories/consmaterials")));
 
         specialisation.sort(new Comparator<SpecialisationItem>() {
             @Override
@@ -349,9 +353,9 @@ public class Specialisation extends Window
             }
         }
         
-        // Update area list if visible
+        // Update area list if visible, retaining selection on current area
         if(NUtils.getGameUI().areas != null) {
-            NUtils.getGameUI().areas.showPath(NUtils.getGameUI().areas.currentPath);
+            NUtils.getGameUI().areas.showPath(NUtils.getGameUI().areas.currentPath, area.id);
         }
     }
 }

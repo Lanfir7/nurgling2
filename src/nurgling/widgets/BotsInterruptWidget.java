@@ -8,6 +8,7 @@ import nurgling.actions.AutoDrink;
 import nurgling.areas.NContext;
 import nurgling.NConfig;
 import nurgling.NCore;
+import haven.res.ui.croster.Entry;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -146,6 +147,8 @@ public class BotsInterruptWidget extends Widget {
         } catch (Exception e) {
             // Ignore errors when stopping
         }
+        // Clear kill list highlight when bot stops
+        Entry.killList.clear();
         synchronized (obs)
         {
             for(Gear g: obs)
@@ -187,6 +190,8 @@ public class BotsInterruptWidget extends Widget {
             {
                 if(g.t.isInterrupted() || !g.t.isAlive())
                 {
+                    // Clear kill list highlight when bot stops
+                    Entry.killList.clear();
                     if(stackObs.contains(g.t))
                     {
                         stackObs.remove(g.t);

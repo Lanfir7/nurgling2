@@ -57,6 +57,7 @@ public class NAreaSelector implements Runnable
                 int createdAreaId = -1;
                 if(mode!=Mode.SELECT)
                 {
+                    int selectedAreaId = -1;
                     if(result!=null)
                     {
                         if(mode == Mode.CREATE)
@@ -74,13 +75,13 @@ public class NAreaSelector implements Runnable
                                 space.isVis = false;
                             ((NMapView) NUtils.getGameUI().map).createAreaLabel(area.id);
                             area.inWork = false;
+                            selectedAreaId = area.id;
                         }
                         NConfig.needAreasUpdate();
                         // routeGraphManager удален в текущей версии, вызовы connectAreaToRoutePoints и needRoutesUpdate не нужны
                     }
                     NUtils.getGameUI().areas.show();
-                    // В оригинале нет вызова selectAreaById после CHANGE - убираем его, чтобы избежать проблем
-                    // Set focus only for CREATE mode (как в оригинале)
+                    // Set focus only for CREATE mode
                     if(mode == Mode.CREATE && createdAreaId != -1) {
                         NUtils.getGameUI().areas.selectAreaById(createdAreaId);
                     }

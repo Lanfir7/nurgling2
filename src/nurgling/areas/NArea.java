@@ -516,6 +516,21 @@ public class NArea
         return null;
     }
 
+    /**
+     * Check if a position is inside this area
+     * @param pos Position in world coordinates (RC)
+     * @return true if position is inside the area
+     */
+    public boolean checkHit(Coord2d pos) {
+        Pair<Coord2d, Coord2d> rcArea = getRCArea();
+        if (rcArea == null || pos == null) {
+            return false;
+        }
+        Coord2d begin = rcArea.a;
+        Coord2d end = rcArea.b;
+        return pos.x >= begin.x && pos.x <= end.x && pos.y >= begin.y && pos.y <= end.y;
+    }
+
     public void tick(double dt)
     {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null && NUtils.getGameUI().map.nols.get(id)==null && !inWork)

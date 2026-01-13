@@ -287,6 +287,10 @@ public class NAreasWidget extends Window
     }
 
     public void showPath(String path) {
+        showPath(path, -1);
+    }
+    
+    public void showPath(String path, int selectAreaId) {
         synchronized (items) {
             items.clear();
             currentPath = path;
@@ -326,7 +330,20 @@ public class NAreasWidget extends Window
             items.addAll(areas);
         }
             if(!items.isEmpty()) {
-                al.sel = items.get(items.size() - 1);
+                // Try to select the specified area, otherwise select last item
+                AreaItem selectedItem = null;
+                if(selectAreaId >= 0) {
+                    for(AreaItem item : items) {
+                        if(item.area != null && item.area.id == selectAreaId) {
+                            selectedItem = item;
+                            break;
+                        }
+                    }
+                }
+                if(selectedItem == null) {
+                    selectedItem = items.get(items.size() - 1);
+                }
+                al.sel = selectedItem;
                 if (al.sel.area != null) {
                     select(al.sel.area.id);
                 }
@@ -453,6 +470,7 @@ public class NAreasWidget extends Window
         public AreaItem(String text, NArea area){
             this.text = add(new Label(text));
             this.area = area;
+            this.settip(text);
             hide = add(new CheckBox(""){
                 @Override
                 public void changed(boolean val) {
@@ -700,16 +718,25 @@ public class NAreasWidget extends Window
 
                                         float old = NUtils.getUI().gprefs.bghz.val;
                                         NUtils.getUI().gprefs.bghz.val = NUtils.getUI().gprefs.hz.val;
+                                        final int areaId = area.id;
                                         JDialog chooser = JColorChooser.createDialog(null, "SelectColor", true, colorChooser, new AbstractAction() {
                                             @Override
                                             public void actionPerformed(ActionEvent e) {
-                                                area.color = colorChooser.getColor();
-                                                area.lastLocalChange = System.currentTimeMillis();
-                                                if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
-                                                {
-                                                    NOverlay nol = NUtils.getGameUI().map.nols.get(area.id);
-                                                    nol.remove();
-                                                    NUtils.getGameUI().map.nols.remove(area.id);
+                                                NArea theArea = NUtils.getArea(areaId);
+                                                if(theArea != null) {
+                                                    theArea.color = colorChooser.getColor();
+                                                    theArea.lastLocalChange = System.currentTimeMillis();
+                                                    if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
+                                                    {
+                                                        NOverlay nol = NUtils.getGameUI().map.nols.get(areaId);
+                                                        if(nol != null) {
+                                                            nol.remove();
+                                                            NUtils.getGameUI().map.nols.remove(areaId);
+                                                        }
+                                                    }
+                                                    NConfig.needAreasUpdate();
+                                                    // Retain selection on this area
+                                                    NUtils.getGameUI().areas.showPath(NUtils.getGameUI().areas.currentPath, areaId);
                                                 }
                                             }
                                         }, new ActionListener() {
@@ -1024,8 +1051,42 @@ public class NAreasWidget extends Window
         Label text;
         NArea.Specialisation item;
         IButton spec = null;
+        IButton rankPresetBtn = null;
         NFlowerMenu menu;
+        NFlowerMenu rankMenu;
         TexI icon;
+        
+        // Check if specialisation is for animals
+        private boolean isAnimalSpec(String name) {
+            return name.equals("cows") || name.equals("goats") || name.equals("sheeps") || 
+                   name.equals("pigs") || name.equals("horses") || name.equals("deer");
+        }
+        
+        // Get list of presets for animal type
+        private java.util.HashSet<String> getPresetNames(String specName) {
+            switch(specName) {
+                case "cows": return nurgling.conf.CowsHerd.getKeySet();
+                case "goats": return nurgling.conf.GoatsHerd.getKeySet();
+                case "sheeps": return nurgling.conf.SheepsHerd.getKeySet();
+                case "pigs": return nurgling.conf.PigsHerd.getKeySet();
+                case "horses": return nurgling.conf.HorseHerd.getKeySet();
+                case "deer": return nurgling.conf.TeimDeerHerd.getKeySet();
+                default: return new java.util.HashSet<>();
+            }
+        }
+        
+        // Get current preset for area and animal type
+        private String getCurrentPreset(NArea area, String specName) {
+            if(area == null) return null;
+            return NConfig.getAreaRankPreset(area.id, specName);
+        }
+        
+        // Set preset for area and animal type
+        private void setPreset(NArea area, String specName, String presetName) {
+            if(area == null) return;
+            NConfig.setAreaRankPreset(area.id, specName, presetName);
+        }
+        
         public SpecialisationItem(NArea.Specialisation item)
         {
             this.item = item;
@@ -1040,6 +1101,9 @@ public class NAreasWidget extends Window
             if(specialisationItem != null) {
                 icon = new TexI(specialisationItem.image);
             }
+            
+            int btnX = UI.scale(135);
+            
             if(SpecialisationData.data.get(item.name)!=null)
             {
                 add(spec = new IButton("nurgling/hud/buttons/settingsnf/","u","d","h"){
@@ -1065,8 +1129,31 @@ public class NAreasWidget extends Window
                             {
                                 if(option!=null)
                                 {
-                                    SpecialisationItem.this.text.settext(item.name + "(" + option.name + ")");
+                                    Specialisation.SpecialisationItem specItem = findSpecialisation(item.name);
+                                    String prettyName = specItem != null ? specItem.prettyName : item.name;
+                                    SpecialisationItem.this.text.settext(prettyName + "(" + option.name + ")");
                                     item.subtype = option.name;
+                                    
+                                    // Auto-rename area if its name matches the specialisation prettyName
+                                    if(al.sel != null && al.sel.area != null) {
+                                        NArea area = al.sel.area;
+                                        if(area.name.equals(prettyName)) {
+                                            String newName = prettyName + "(" + option.name + ")";
+                                            ((NMapView)NUtils.getGameUI().map).changeAreaName(area.id, newName);
+                                            al.sel.text.settext(newName);
+                                            al.sel.settip(newName);
+                                            // Update area label on map
+                                            Gob dummy = ((NMapView) NUtils.getGameUI().map).dummys.get(area.gid);
+                                            if(dummy != null) {
+                                                Gob.Overlay ol = dummy.findol(nurgling.overlays.NAreaLabel.class);
+                                                if(ol != null && ol.spr instanceof nurgling.overlays.NAreaLabel) {
+                                                    nurgling.overlays.NAreaLabel tl = (nurgling.overlays.NAreaLabel) ol.spr;
+                                                    tl.update();
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
                                     NConfig.needAreasUpdate();
                                 }
                                 uimsg("cancel");
@@ -1082,7 +1169,77 @@ public class NAreasWidget extends Window
                         }
                         ui.root.add(menu, pos);
                     }
-                },UI.scale(new Coord(135,4)));
+                },UI.scale(new Coord(btnX,4)));
+                btnX += UI.scale(18);
+            }
+            
+            // Add rank preset selection button for animal specialisations
+            if(isAnimalSpec(item.name))
+            {
+                add(rankPresetBtn = new IButton("nurgling/hud/buttons/settingsnf/","u","d","h"){
+                    @Override
+                    public void click() {
+                        super.click();
+                        java.util.HashSet<String> presets = getPresetNames(item.name);
+                        if(presets.isEmpty()) {
+                            NUtils.getGameUI().msg("No presets available for " + item.name);
+                            return;
+                        }
+                        
+                        // Add reset option
+                        String[] options = new String[presets.size() + 1];
+                        options[0] = "-- None --";
+                        int i = 1;
+                        for(String preset : presets) {
+                            options[i++] = preset;
+                        }
+                        
+                        rankMenu = new NFlowerMenu(options) {
+                            @Override
+                            public boolean mousedown(MouseDownEvent ev) {
+                                if(super.mousedown(ev))
+                                    nchoose(null);
+                                return true;
+                            }
+
+                            public void destroy() {
+                                rankMenu = null;
+                                super.destroy();
+                            }
+
+                            @Override
+                            public void nchoose(NPetal option) {
+                                if(option != null && al.sel != null && al.sel.area != null) {
+                                    String presetName = option.name.equals("-- None --") ? null : option.name;
+                                    setPreset(al.sel.area, item.name, presetName);
+                                    NConfig.needAreasUpdate();
+                                    if(presetName != null) {
+                                        NUtils.getGameUI().msg("Rank preset set to: " + presetName);
+                                    } else {
+                                        NUtils.getGameUI().msg("Rank preset cleared");
+                                    }
+                                }
+                                uimsg("cancel");
+                            }
+                        };
+                        Widget par = parent;
+                        Coord pos = c.add(UI.scale(32,43));
+                        while(par!=null && !(par instanceof GameUI)) {
+                            pos = pos.add(par.c);
+                            par = par.parent;
+                        }
+                        ui.root.add(rankMenu, pos);
+                    }
+                    
+                    @Override
+                    public Object tooltip(Coord c, Widget prev) {
+                        if(al.sel != null && al.sel.area != null) {
+                            String current = getCurrentPreset(al.sel.area, item.name);
+                            return "Rank preset: " + (current != null ? current : "Default");
+                        }
+                        return "Select rank preset";
+                    }
+                },UI.scale(new Coord(btnX, 4)));
             }
             pack();
             sz.y = UI.scale(24);

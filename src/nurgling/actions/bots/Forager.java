@@ -109,7 +109,7 @@ public class Forager implements Action {
             return Results.ERROR("Cannot get start position - waypoint not in current segment");
         }
         
-        navigateToPoint(gui, startPos);
+        navigateToPoint(gui, startPos, preset);
         
         // Check inventory before starting
         if (isInventoryFull(gui) && !preset.onFullInventoryAction.equals("nothing")) {
@@ -153,12 +153,11 @@ public class Forager implements Action {
             if (targetGob != null)
             {
                 // Go to the object if found within 1 tile
-                navigateToGob(gui, targetGob);
-
+                navigateToGob(gui, targetGob, preset);
             } else
             {
                 // Go to the endpoint if no objects found nearby
-                navigateToPoint(gui, sectionEnd);
+                navigateToPoint(gui, sectionEnd, preset);
             }
 
             // Process actions for this section
@@ -230,7 +229,7 @@ public class Forager implements Action {
                         break;
                     }
 
-                    navigateToGob(gui, gob);
+                    navigateToGob(gui, gob, preset);
                     new SelectFlowerAction("Pick", gob).run(gui);
                     
                     // Небольшая задержка для завершения действия сбора
@@ -244,7 +243,7 @@ public class Forager implements Action {
                 
             case FLOWER_ACTION:
                 for (Gob gob : gobs) {
-                    navigateToGob(gui, gob);
+                    navigateToGob(gui, gob, preset);
                     new SelectFlowerAction(action.actionName, gob).run(gui);
                     
                     // Небольшая задержка для выполнения действия, но не блокирующая
@@ -377,26 +376,30 @@ public class Forager implements Action {
     /**
      * Навигация к точке - для лошади использует GoTo напрямую, для пешего - PathFinder
      */
-    private void navigateToPoint(NGameUI gui, Coord2d target) throws InterruptedException {
+    private void navigateToPoint(NGameUI gui, Coord2d target, NForagerProp.PresetData preset) throws InterruptedException {
         if (isMountedOnHorse()) {
             // Для лошади используем GoTo напрямую (он поддерживает лошадь)
             new GoTo(target).run(gui);
         } else {
             // Для пешего движения используем PathFinder
-            new PathFinder(target).run(gui);
+            PathFinder pf = new PathFinder(target);
+            pf.waterMode = preset.waterMode;
+            pf.run(gui);
         }
     }
     
     /**
      * Навигация к объекту - для лошади использует GoTo напрямую, для пешего - PathFinder
      */
-    private void navigateToGob(NGameUI gui, Gob target) throws InterruptedException {
+    private void navigateToGob(NGameUI gui, Gob target, NForagerProp.PresetData preset) throws InterruptedException {
         if (isMountedOnHorse()) {
             // Для лошади используем GoTo напрямую на позицию объекта
             new GoTo(target.rc).run(gui);
         } else {
             // Для пешего движения используем PathFinder
-            new PathFinder(target).run(gui);
+            PathFinder pf = new PathFinder(target);
+            pf.waterMode = preset.waterMode;
+            pf.run(gui);
         }
     }
 }
