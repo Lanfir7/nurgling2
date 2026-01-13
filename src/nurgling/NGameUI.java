@@ -235,11 +235,11 @@ public class NGameUI extends GameUI
             ui.core.updateConfigForProfile(genus);
         }
 
-        // Reload explored area with profile-specific data
+        // Reload explored area with profile-specific data (async to avoid blocking startup)
         if (mmap != null && mmap instanceof NCornerMiniMap) {
             NCornerMiniMap nmmap = (NCornerMiniMap) mmap;
             if (nmmap.exploredArea != null) {
-                nmmap.exploredArea.reloadFromFile();
+                nmmap.exploredArea.reloadFromFileAsync();
             }
         }
 

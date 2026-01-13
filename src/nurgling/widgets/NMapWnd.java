@@ -1,6 +1,7 @@
 package nurgling.widgets;
 
 import haven.*;
+import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 
@@ -160,6 +161,9 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showProspectingIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showProspectingIcons = val;
+        // Save to config for persistence
+        NConfig.set(NConfig.Key.showProspectingIcons, val);
+        NConfig.needUpdate();
     }
 
     private boolean getQuarryartzIconsState() {
@@ -175,6 +179,9 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showQuarryartzIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showQuarryartzIcons = val;
+        // Save to config for persistence
+        NConfig.set(NConfig.Key.showQuarryartzIcons, val);
+        NConfig.needUpdate();
     }
     
     private boolean getOreSpotsIconsState() {
@@ -190,6 +197,9 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showOreSpotIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showOreSpotIcons = val;
+        // Save to config for persistence
+        NConfig.set(NConfig.Key.showOreSpotIcons, val);
+        NConfig.needUpdate();
     }
     
     private boolean getGemstoneIconsState() {
@@ -205,6 +215,9 @@ public class NMapWnd extends MapWnd {
             ((NMiniMap) gui.mmap).showGemstoneIcons = val;
         if(view instanceof NMiniMap)
             ((NMiniMap) view).showGemstoneIcons = val;
+        // Save to config for persistence
+        NConfig.set(NConfig.Key.showGemstoneIcons, val);
+        NConfig.needUpdate();
     }
     
     private void openGemstoneSearch() {

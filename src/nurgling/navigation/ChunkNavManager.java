@@ -51,6 +51,9 @@ public class ChunkNavManager {
 
     // Guard flag to prevent saves during initialization (prevents Bug #3 - empty graph race condition)
     private volatile boolean initializationInProgress = false;
+    
+    // Flag to track if async loading is in progress
+    private volatile boolean loadingInProgress = false;
 
     // Instance reference - managed by NMapView, not a traditional singleton
     // This static reference exists for backward compatibility with code that
@@ -93,6 +96,7 @@ public class ChunkNavManager {
 
     /**
      * Initialize the navigation system for a specific world.
+     * Heavy data loading is performed asynchronously to avoid blocking startup.
      */
     public void initialize(String genus) {
         if (genus == null || genus.isEmpty()) {
@@ -107,30 +111,34 @@ public class ChunkNavManager {
         // Set guard flag BEFORE any state changes to prevent saves during init
         initializationInProgress = true;
 
-        try {
-            // Save previous world data if switching
-            if (initialized && currentGenus != null) {
-                save();
-            }
-
-            // Clear renderer cache to avoid stale textures from previous genus
-            MinimapChunkNavRenderer.clearCache();
-
-            this.currentGenus = genus;
-            this.graph = new ChunkNavGraph();
-            this.recorder = new ChunkNavRecorder(graph);
-            this.planner = new ChunkNavPlanner(graph);
-            this.portalTracker = new PortalTraversalTracker(graph, recorder);
-            this.fileStore = new ChunkNavFileStore(genus);
-
-            // Load saved data (with migration if needed)
-            load();
-
-            this.initialized = true;
-        } finally {
-            // Clear guard flag AFTER load completes (even if exception occurs)
-            initializationInProgress = false;
+        // Save previous world data if switching
+        if (initialized && currentGenus != null) {
+            save();
         }
+
+        // Clear renderer cache to avoid stale textures from previous genus
+        MinimapChunkNavRenderer.clearCache();
+
+        this.currentGenus = genus;
+        this.graph = new ChunkNavGraph();
+        this.recorder = new ChunkNavRecorder(graph);
+        this.planner = new ChunkNavPlanner(graph);
+        this.portalTracker = new PortalTraversalTracker(graph, recorder);
+        this.fileStore = new ChunkNavFileStore(genus);
+
+        // Mark as initialized immediately so tick() can work with empty graph
+        this.initialized = true;
+        
+        // Load saved data asynchronously to avoid blocking game startup
+        loadingInProgress = true;
+        recordingExecutor.submit(() -> {
+            try {
+                load();
+            } finally {
+                loadingInProgress = false;
+                initializationInProgress = false;
+            }
+        });
     }
 
     /**

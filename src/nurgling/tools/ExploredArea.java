@@ -329,12 +329,54 @@ public class ExploredArea {
         }
     }
     
+    // Flag to track if async loading is in progress
+    private volatile boolean loadingInProgress = false;
+    
+    // Executor for async loading
+    private static final java.util.concurrent.ExecutorService loadExecutor = 
+        java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "ExploredArea-Loader");
+            t.setDaemon(true);
+            t.setPriority(Thread.MIN_PRIORITY);
+            return t;
+        });
+    
     /**
-     * Reload explored area data from file.
+     * Check if async loading is in progress.
+     */
+    public boolean isLoadingInProgress() {
+        return loadingInProgress;
+    }
+    
+    /**
+     * Reload explored area data from file asynchronously.
+     * Call this after profile initialization to load profile-specific data.
+     * This is the preferred method for startup to avoid blocking the game.
+     */
+    public void reloadFromFileAsync() {
+        loadingInProgress = true;
+        loadExecutor.submit(() -> {
+            try {
+                reloadFromFileInternal();
+            } finally {
+                loadingInProgress = false;
+            }
+        });
+    }
+    
+    /**
+     * Reload explored area data from file (synchronous version).
      * Call this after profile initialization to load profile-specific data.
      * Merges file data with any in-memory data (in case exploration happened before profile init).
      */
     public void reloadFromFile() {
+        reloadFromFileInternal();
+    }
+    
+    /**
+     * Internal implementation of file reload.
+     */
+    private void reloadFromFileInternal() {
         // Save current in-memory data before loading
         Map<GridKey, GridMask> currentData = new HashMap<>(gridMasks);
         
