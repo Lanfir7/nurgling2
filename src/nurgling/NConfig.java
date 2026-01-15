@@ -91,6 +91,8 @@ public class NConfig
         showInventoryNums,
         hidecredo,
         autoDrink,
+        autoDrinkThreshold,
+        autoDrinkTimeout,
         autoSaveTableware,
         chipperprop,
         animalrad,
@@ -272,6 +274,8 @@ public class NConfig
         conf.put(Key.sendOverlays, false);
         conf.put(Key.showInventoryNums, true);
         conf.put(Key.autoDrink, false);
+        conf.put(Key.autoDrinkThreshold, 0.51);
+        conf.put(Key.autoDrinkTimeout, 5.0);
         conf.put(Key.autoSaveTableware, true);
         conf.put(Key.endpoint, "");
         conf.put(Key.questNotified, false);

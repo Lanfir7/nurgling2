@@ -14,6 +14,10 @@ public class QoL extends Panel {
     private HSlider nightVisionBrightnessSlider;
     private Label nightVisionBrightnessLabel;
     private CheckBox autoDrink;
+    private HSlider autoDrinkThresholdSlider;
+    private Label autoDrinkThresholdLabel;
+    private HSlider autoDrinkTimeoutSlider;
+    private Label autoDrinkTimeoutLabel;
     private CheckBox autoSaveTableware;
     private CheckBox showBB;
     private CheckBox showCSprite;
@@ -212,7 +216,6 @@ public class QoL extends Panel {
         // RIGHT COLUMN - Advanced Settings
         Widget rightPrev = null;
         rightPrev = rightColumn.add(new Label("● Quality of Life"), new Coord(5, 5));
-        rightPrev = autoDrink = rightColumn.add(new CheckBox("Auto-drink"), rightPrev.pos("bl").adds(0, 5));
         rightPrev = autoSaveTableware = rightColumn.add(new CheckBox("Auto-save tableware"), rightPrev.pos("bl").adds(0, 5));
         rightPrev = questNotified = rightColumn.add(new CheckBox("Enable quest notified"), rightPrev.pos("bl").adds(0, 5));
         rightPrev = lpassistent = rightColumn.add(new CheckBox("Enable LP assistant"), rightPrev.pos("bl").adds(0, 5));
@@ -222,7 +225,30 @@ public class QoL extends Panel {
         rightPrev = randomAreaColor = rightColumn.add(new CheckBox("Random color for new areas"), rightPrev.pos("bl").adds(0, 5));
 
         rightPrev = rightColumn.add(new Label("● QoL Lanfir"), rightPrev.pos("bl").adds(0, 15));
-        rightPrev = diabloLikeRun = rightColumn.add(new CheckBox("Diablo-like run (auto-click while LMB held)"), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = autoDrink = rightColumn.add(new CheckBox("Auto-drink"), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = rightColumn.add(new Label("Auto-drink threshold:"), rightPrev.pos("bl").adds(10, 3));
+        {
+            autoDrinkThresholdLabel = new Label("51%");
+            autoDrinkThresholdSlider = new HSlider(UI.scale(150), 10, 90, 51) {
+                public void changed() {
+                    autoDrinkThresholdLabel.settext(String.format("%d%%", this.val));
+                }
+            };
+            rightColumn.addhlp(rightPrev.pos("bl").adds(0, 2), UI.scale(5), autoDrinkThresholdSlider, autoDrinkThresholdLabel);
+            rightPrev = autoDrinkThresholdSlider;
+        }
+        rightPrev = rightColumn.add(new Label("Auto-drink timeout (seconds):"), rightPrev.pos("bl").adds(-10, 3));
+        {
+            autoDrinkTimeoutLabel = new Label("5.0s");
+            autoDrinkTimeoutSlider = new HSlider(UI.scale(150), 1, 15, 5) {
+                public void changed() {
+                    autoDrinkTimeoutLabel.settext(String.format("%.1fs", (double) this.val));
+                }
+            };
+            rightColumn.addhlp(rightPrev.pos("bl").adds(0, 2), UI.scale(5), autoDrinkTimeoutSlider, autoDrinkTimeoutLabel);
+            rightPrev = autoDrinkTimeoutSlider;
+        }
+        rightPrev = diabloLikeRun = rightColumn.add(new CheckBox("Diablo-like run (auto-click while LMB held)"), rightPrev.pos("bl").adds(-10, 5));
 
         rightPrev = rightColumn.add(new Label("● Debug & Development"), rightPrev.pos("bl").adds(0, 15));
         rightPrev = debug = rightColumn.add(new CheckBox("DEBUG"), rightPrev.pos("bl").adds(0, 5));
@@ -263,6 +289,25 @@ public class QoL extends Panel {
         nightVisionBrightnessLabel.settext(String.format("%d%%", brightnessValue));
         
         autoDrink.a = getBool(NConfig.Key.autoDrink);
+        
+        // Load auto-drink threshold
+        Object thresholdPref = NConfig.get(NConfig.Key.autoDrinkThreshold);
+        int thresholdValue = 51; // Default 51%
+        if (thresholdPref instanceof Number) {
+            thresholdValue = (int)(((Number) thresholdPref).doubleValue() * 100);
+        }
+        autoDrinkThresholdSlider.val = thresholdValue;
+        autoDrinkThresholdLabel.settext(String.format("%d%%", thresholdValue));
+        
+        // Load auto-drink timeout
+        Object timeoutPref = NConfig.get(NConfig.Key.autoDrinkTimeout);
+        int timeoutValue = 5; // Default 5 seconds
+        if (timeoutPref instanceof Number) {
+            timeoutValue = (int)((Number) timeoutPref).doubleValue();
+        }
+        autoDrinkTimeoutSlider.val = timeoutValue;
+        autoDrinkTimeoutLabel.settext(String.format("%.1fs", (double) timeoutValue));
+        
         autoSaveTableware.a = getBool(NConfig.Key.autoSaveTableware);
         showBB.a = getBool(NConfig.Key.showBB);
         showCSprite.a = getBool(NConfig.Key.nextshowCSprite);
@@ -360,6 +405,8 @@ public class QoL extends Panel {
         }
         
         NConfig.set(NConfig.Key.autoDrink, autoDrink.a);
+        NConfig.set(NConfig.Key.autoDrinkThreshold, autoDrinkThresholdSlider.val / 100.0);
+        NConfig.set(NConfig.Key.autoDrinkTimeout, (double) autoDrinkTimeoutSlider.val);
         NConfig.set(NConfig.Key.autoSaveTableware, autoSaveTableware.a);
         NConfig.set(NConfig.Key.showBB, showBB.a);
         NConfig.set(NConfig.Key.nextshowCSprite, showCSprite.a);
