@@ -142,7 +142,7 @@ public class SimpleRoutesWidget extends Window {
         });
 
         loadTrackedObjectsSettings();
-        startObjectTracker();
+        // Не запускаем отслеживание автоматически - только при запуске маршрута
         pack();
     }
     
@@ -329,6 +329,8 @@ public class SimpleRoutesWidget extends Window {
                 }
                 Thread t = new Thread(() -> {
                     try {
+                        // Запускаем отслеживание объектов при старте маршрута
+                        startObjectTracker();
                         NUtils.getGameUI().msg("Starting navigation to end of route: " + route.name);
                         // Используем SimpleRouteWorker, который автоматически определяет waterMode
                         new SimpleRouteWorker(new Action() {
@@ -340,6 +342,9 @@ public class SimpleRoutesWidget extends Window {
                         NUtils.getGameUI().msg("Finished navigation to end of route: " + route.name);
                     } catch (InterruptedException e) {
                         NUtils.getGameUI().msg("Navigation interrupted");
+                    } finally {
+                        // Останавливаем отслеживание объектов при завершении маршрута
+                        stopObjectTracker();
                     }
                 }, "SimpleRouteNavigator");
                 t.start();
@@ -357,6 +362,8 @@ public class SimpleRoutesWidget extends Window {
                 }
                 Thread t = new Thread(() -> {
                     try {
+                        // Запускаем отслеживание объектов при старте маршрута
+                        startObjectTracker();
                         NUtils.getGameUI().msg("Starting navigation to start of route: " + route.name);
                         
                         // Получаем текущую позицию (игрока или корабля)
@@ -385,6 +392,9 @@ public class SimpleRoutesWidget extends Window {
                         NUtils.getGameUI().msg("Arrived at start of route: " + route.name);
                     } catch (InterruptedException e) {
                         NUtils.getGameUI().msg("Navigation interrupted");
+                    } finally {
+                        // Останавливаем отслеживание объектов при завершении маршрута
+                        stopObjectTracker();
                     }
                 }, "SimpleRouteToStart");
                 t.start();

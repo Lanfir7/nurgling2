@@ -23,10 +23,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
-import javax.net.ssl.HttpsURLConnection;
-import java.net.URI;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import mapv4.MultipartUtility;
+import java.io.InputStream;
 
 /**
  * Класс для отслеживания объектов во время движения по маршруту
@@ -186,7 +184,7 @@ public class ObjectTracker {
                         // Объект найден впервые - отправляем уведомление
                         String readableName = getReadableName(gob);
                         String displayName = readableName != null ? readableName : gobName;
-                        String message = "Find " + displayName;
+                        String message = "Found " + displayName;
                         if (gui != null) {
                             gui.msg("ObjectTracker: Found " + pattern + " - " + displayName);
                         }
@@ -258,18 +256,15 @@ public class ObjectTracker {
             if (mapImage != null) {
                 // Отправляем через Discord webhook с файлом
                 sendDiscordWithImage(discordSettings, message, mapImage);
-            } else {
-                // Если не удалось создать скриншот, отправляем просто сообщение
-                gui.msgToDiscord(discordSettings, message);
             }
+            // Если не удалось создать скриншот, не отправляем сообщение вообще
         } catch (Exception e) {
-            // В случае ошибки отправляем просто сообщение
-            gui.msgToDiscord(discordSettings, message);
+            // В случае ошибки не отправляем сообщение
         }
     }
     
     /**
-     * Создает скриншот карты с зеленой меткой в месте находки объекта
+     * Создает скриншот карты 3x3 grid'ов с зеленой меткой в месте находки объекта
      */
     private BufferedImage createMapScreenshotWithMarker(Gob gob) {
         try {
@@ -285,43 +280,83 @@ public class ObjectTracker {
             MCache map = mapView.glob.map;
             Coord2d gobPos = gob.rc;
             
-            // Получаем grid, в котором находится объект
+            // Получаем центральный grid, в котором находится объект
             Coord tilec = gobPos.div(MCache.tilesz).floor();
-            MCache.Grid grid = map.getgridt(tilec);
-            if (grid == null) {
+            Coord centerGridCoord = tilec.div(MCache.cmaps);
+            MCache.Grid centerGrid = map.getgridt(tilec);
+            if (centerGrid == null) {
                 return null;
             }
             
-            // Рендерим карту используя MinimapImageGenerator
-            BufferedImage mapImage = MinimapImageGenerator.drawmap(map, grid);
-            if (mapImage == null) {
+            // Сначала рендерим центральный grid, чтобы узнать реальный размер
+            BufferedImage centerGridImage;
+            try {
+                centerGridImage = MinimapImageGenerator.drawmap(map, centerGrid);
+            } catch (InterruptedException e) {
+                return null;
+            }
+            if (centerGridImage == null || centerGridImage.getWidth() <= 0 || centerGridImage.getHeight() <= 0) {
                 return null;
             }
             
-            // Вычисляем позицию объекта на карте
-            // MCache.cmaps - это размер одного grid в тайлах (обычно 33x33)
-            // gobPos - это координаты объекта в игровых координатах
-            // grid.ul - это верхний левый угол grid в тайлах
+            // Размер одного grid'а в пикселях (берем из реального изображения)
+            int gridPixelSizeX = centerGridImage.getWidth();
+            int gridPixelSizeY = centerGridImage.getHeight();
+            int totalSizeX = gridPixelSizeX * 3;
+            int totalSizeY = gridPixelSizeY * 3;
             
-            // Переводим координаты объекта в локальные координаты grid
-            Coord2d gridUlWorld = grid.ul.mul(MCache.tilesz).add(MCache.tilehsz);
-            Coord2d localPos = gobPos.sub(gridUlWorld);
+            // Создаем большое изображение для 3x3 grid'ов
+            BufferedImage combinedImage = new BufferedImage(totalSizeX, totalSizeY, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D combinedG = combinedImage.createGraphics();
+            combinedG.setColor(Color.BLACK);
+            combinedG.fillRect(0, 0, totalSizeX, totalSizeY);
             
-            // Переводим в координаты на изображении карты
-            // MCache.cmaps - размер grid в тайлах (33x33)
-            // mapImage имеет размер MCache.cmaps в пикселях
-            double scaleX = (double)mapImage.getWidth() / MCache.cmaps.x;
-            double scaleY = (double)mapImage.getHeight() / MCache.cmaps.y;
+            // Рендерим каждый grid из 3x3 области
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    Coord gridCoord = centerGridCoord.add(dx, dy);
+                    Coord gridTilec = gridCoord.mul(MCache.cmaps);
+                    MCache.Grid grid = map.getgridt(gridTilec);
+                    
+                    if (grid != null) {
+                        try {
+                            BufferedImage gridImage = MinimapImageGenerator.drawmap(map, grid);
+                            if (gridImage != null && gridImage.getWidth() > 0 && gridImage.getHeight() > 0) {
+                                // Рисуем grid на комбинированном изображении
+                                int x = (dx + 1) * gridPixelSizeX;
+                                int y = (dy + 1) * gridPixelSizeY;
+                                combinedG.drawImage(gridImage, x, y, gridPixelSizeX, gridPixelSizeY, null);
+                            }
+                        } catch (InterruptedException e) {
+                            // Прервано - пропускаем этот grid
+                        }
+                    }
+                }
+            }
+            combinedG.dispose();
             
-            int markerX = (int)(localPos.x / MCache.tilesz.x * scaleX);
-            int markerY = (int)(localPos.y / MCache.tilesz.y * scaleY);
+            // Вычисляем позицию объекта на комбинированном изображении
+            // Центральный grid находится в позиции (1, 1) в 3x3 массиве
+            Coord2d centerGridUlWorld = centerGrid.ul.mul(MCache.tilesz).add(MCache.tilehsz);
+            Coord2d localPos = gobPos.sub(centerGridUlWorld);
+            
+            // Позиция центрального grid'а на комбинированном изображении
+            int centerGridX = gridPixelSizeX; // Позиция центрального grid'а (1 * gridPixelSizeX)
+            int centerGridY = gridPixelSizeY;
+            
+            // Переводим локальные координаты в координаты на изображении
+            double scaleX = (double)gridPixelSizeX / MCache.cmaps.x;
+            double scaleY = (double)gridPixelSizeY / MCache.cmaps.y;
+            
+            int markerX = centerGridX + (int)(localPos.x / MCache.tilesz.x * scaleX);
+            int markerY = centerGridY + (int)(localPos.y / MCache.tilesz.y * scaleY);
             
             // Ограничиваем координаты
-            markerX = Math.max(5, Math.min(markerX, mapImage.getWidth() - 6));
-            markerY = Math.max(5, Math.min(markerY, mapImage.getHeight() - 6));
+            markerX = Math.max(5, Math.min(markerX, totalSizeX - 6));
+            markerY = Math.max(5, Math.min(markerY, totalSizeY - 6));
             
             // Рисуем зеленую метку на карте
-            Graphics2D g = mapImage.createGraphics();
+            Graphics2D g = combinedImage.createGraphics();
             g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
             
             // Рисуем зеленый круг
@@ -341,7 +376,7 @@ public class ObjectTracker {
             
             g.dispose();
             
-            return mapImage;
+            return combinedImage;
         } catch (Exception e) {
             return null;
         }
@@ -352,19 +387,29 @@ public class ObjectTracker {
      */
     private void sendDiscordWithImage(NDiscordNotification settings, String message, BufferedImage image) {
         try {
+            // Проверяем, что изображение не null и имеет размер
+            if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
+                // Если нет изображения, не отправляем сообщение вообще
+                return;
+            }
+            
             // Конвертируем изображение в JPEG
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(image, "jpg", baos);
+            boolean written = ImageIO.write(image, "jpg", baos);
+            if (!written) {
+                // Если JPEG не поддерживается, пробуем PNG
+                baos.reset();
+                ImageIO.write(image, "png", baos);
+            }
             byte[] imageBytes = baos.toByteArray();
             
-            // Создаем multipart/form-data запрос
-            String boundary = "----WebKitFormBoundary" + System.currentTimeMillis();
-            URL url = URI.create(settings.webhookUrl).toURL();
-            HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-            connection.setRequestProperty("User-Agent", "Java-DiscordWebhook");
+            if (imageBytes.length == 0) {
+                // Если изображение пустое, не отправляем сообщение
+                return;
+            }
+            
+            // Используем MultipartUtility для правильной отправки
+            MultipartUtility multipart = new MultipartUtility(settings.webhookUrl, "UTF-8");
             
             // Формируем JSON payload
             StringBuilder jsonPayload = new StringBuilder();
@@ -377,57 +422,22 @@ public class ObjectTracker {
             }
             jsonPayload.append("}");
             
-            String jsonStr = jsonPayload.toString();
-            byte[] jsonBytes = jsonStr.getBytes(StandardCharsets.UTF_8);
+            // Добавляем JSON payload
+            multipart.addFormField("payload_json", jsonPayload.toString());
             
-            // Формируем multipart данные
-            String LINE_FEED = "\r\n";
-            ByteArrayOutputStream multipartData = new ByteArrayOutputStream();
+            // Добавляем файл изображения
+            InputStream imageStream = new java.io.ByteArrayInputStream(imageBytes);
+            multipart.addFilePart("file", imageStream, "map.jpg");
             
-            // JSON payload часть
-            multipartData.write(("--" + boundary + LINE_FEED).getBytes(StandardCharsets.UTF_8));
-            multipartData.write("Content-Disposition: form-data; name=\"payload_json\"".getBytes(StandardCharsets.UTF_8));
-            multipartData.write(LINE_FEED.getBytes(StandardCharsets.UTF_8));
-            multipartData.write("Content-Type: application/json".getBytes(StandardCharsets.UTF_8));
-            multipartData.write((LINE_FEED + LINE_FEED).getBytes(StandardCharsets.UTF_8));
-            multipartData.write(jsonBytes);
-            multipartData.write(LINE_FEED.getBytes(StandardCharsets.UTF_8));
-            
-            // Файл изображения часть
-            multipartData.write(("--" + boundary + LINE_FEED).getBytes(StandardCharsets.UTF_8));
-            multipartData.write("Content-Disposition: form-data; name=\"file\"; filename=\"map.jpg\"".getBytes(StandardCharsets.UTF_8));
-            multipartData.write(LINE_FEED.getBytes(StandardCharsets.UTF_8));
-            multipartData.write("Content-Type: image/jpeg".getBytes(StandardCharsets.UTF_8));
-            multipartData.write((LINE_FEED + LINE_FEED).getBytes(StandardCharsets.UTF_8));
-            multipartData.write(imageBytes);
-            multipartData.write(LINE_FEED.getBytes(StandardCharsets.UTF_8));
-            
-            // Закрывающая граница
-            multipartData.write(("--" + boundary + "--" + LINE_FEED).getBytes(StandardCharsets.UTF_8));
-            
-            byte[] multipartBytes = multipartData.toByteArray();
-            connection.setFixedLengthStreamingMode(multipartBytes.length);
-            
-            try (java.io.OutputStream outputStream = connection.getOutputStream()) {
-                outputStream.write(multipartBytes);
-                outputStream.flush();
+            // Отправляем запрос
+            try {
+                multipart.finish();
+                // Если ошибка, просто игнорируем - не отправляем сообщение без картинки
+            } catch (Exception e) {
+                // В случае ошибки не отправляем сообщение
             }
-            
-            // Читаем ответ
-            int responseCode = connection.getResponseCode();
-            if (responseCode >= 200 && responseCode < 300) {
-                // Успешно отправлено
-            } else {
-                // Ошибка - отправляем просто сообщение
-                gui.msgToDiscord(settings, message);
-            }
-            
-            connection.disconnect();
         } catch (Exception e) {
-            // В случае ошибки отправляем просто сообщение
-            if (gui != null) {
-                gui.msgToDiscord(settings, message);
-            }
+            // В случае ошибки не отправляем сообщение
         }
     }
     
