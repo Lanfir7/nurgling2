@@ -37,20 +37,38 @@ public class ObjectTracker {
     // Множество объектов, которые были видны при старте (чтобы их игнорировать)
     private static final Set<Long> initiallyVisibleGobs = new HashSet<>();
     private final ArrayList<String> trackedPatterns;
-    private final boolean discordNotifyEnabled;
+    private boolean discordNotifyEnabled;
     private final NGameUI gui;
     private static boolean initialized = false;
 
     public ObjectTracker(NGameUI gui, ArrayList<String> trackedPatterns, boolean discordNotifyEnabled) {
         this.gui = gui;
-        this.trackedPatterns = trackedPatterns;
+        this.trackedPatterns = trackedPatterns != null ? trackedPatterns : new ArrayList<>();
         this.discordNotifyEnabled = discordNotifyEnabled;
         
         // При первом создании помечаем все видимые объекты
-        if (!initialized) {
+        // Но только если список отслеживания не пустой
+        if (!initialized && !this.trackedPatterns.isEmpty()) {
+            if (gui != null) {
+                gui.msg("ObjectTracker: Marking initially visible objects...");
+            }
             markInitiallyVisibleObjects();
             initialized = true;
+            if (gui != null) {
+                gui.msg("ObjectTracker: Marked " + initiallyVisibleGobs.size() + " initially visible objects");
+            }
         }
+    }
+    
+    /**
+     * Обновляет настройки отслеживания
+     */
+    public void updateSettings(ArrayList<String> trackedPatterns, boolean discordNotifyEnabled) {
+        this.trackedPatterns.clear();
+        if (trackedPatterns != null) {
+            this.trackedPatterns.addAll(trackedPatterns);
+        }
+        this.discordNotifyEnabled = discordNotifyEnabled;
     }
     
     /**
@@ -114,13 +132,17 @@ public class ObjectTracker {
      * при первом обнаружении объекта из списка отслеживания.
      */
     public void checkObjects() {
-        if (!discordNotifyEnabled || trackedPatterns.isEmpty()) {
-            return;
+        if (!discordNotifyEnabled) {
+            return; // Не логируем, чтобы не спамить
+        }
+        
+        if (trackedPatterns == null || trackedPatterns.isEmpty()) {
+            return; // Не логируем, чтобы не спамить
         }
 
         if (NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || 
             NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
-            return;
+            return; // Не логируем, чтобы не спамить
         }
 
         synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
@@ -165,7 +187,7 @@ public class ObjectTracker {
                         // Проверяем, не был ли этот объект уже найден
                         synchronized (foundObjects) {
                             if (foundObjects.contains(uniqueKey)) {
-                                // Уже нашли этот объект ранее - пропускаем
+                                // Уже нашли этот объект ранее - пропускаем (без логирования, чтобы не спамить)
                                 break;
                             }
                             
@@ -173,22 +195,31 @@ public class ObjectTracker {
                             synchronized (initiallyVisibleGobs) {
                                 if (initiallyVisibleGobs.contains(gob.id)) {
                                     // Был виден при старте - пропускаем
+                                    if (gui != null) {
+                                        gui.msg("ObjectTracker: Object was visible at start: " + gobName + " (id: " + gob.id + ")");
+                                    }
                                     break;
                                 }
                             }
                             
-                            // Отмечаем как найденный
+                            // Отмечаем как найденный ПЕРЕД отправкой, чтобы избежать дублирования
                             foundObjects.add(uniqueKey);
+                            
+                            // Объект найден впервые - отправляем уведомление в отдельном потоке
+                            String readableName = getReadableName(gob);
+                            String displayName = readableName != null ? readableName : gobName;
+                            String message = "Found " + displayName;
+                            if (gui != null) {
+                                gui.msg("ObjectTracker: NEW OBJECT FOUND! " + pattern + " - " + displayName + " (id: " + gob.id + ")");
+                            }
+                            
+                            // Отправляем уведомление в отдельном потоке, чтобы не блокировать основной поток
+                            final Gob gobForNotification = gob;
+                            final String finalMessage = message;
+                            new Thread(() -> {
+                                sendDiscordNotificationWithMap(finalMessage, gobForNotification);
+                            }, "ObjectTracker-DiscordNotification").start();
                         }
-                        
-                        // Объект найден впервые - отправляем уведомление
-                        String readableName = getReadableName(gob);
-                        String displayName = readableName != null ? readableName : gobName;
-                        String message = "Found " + displayName;
-                        if (gui != null) {
-                            gui.msg("ObjectTracker: Found " + pattern + " - " + displayName);
-                        }
-                        sendDiscordNotificationWithMap(message, gob);
                         break; // Не проверяем другие паттерны для этого объекта
                     }
                 }
@@ -240,26 +271,79 @@ public class ObjectTracker {
      */
     private void sendDiscordNotificationWithMap(String message, Gob gob) {
         if (gui == null || message == null || message.isEmpty()) {
+            if (gui != null) {
+                gui.msg("ObjectTracker: Cannot send - gui is null or message is empty");
+            }
             return;
         }
         
         NDiscordNotification discordSettings = NDiscordNotification.get("general");
-        if (discordSettings == null || discordSettings.webhookUrl == null || 
-            discordSettings.webhookUrl.isEmpty()) {
+        if (discordSettings == null) {
+            if (gui != null) {
+                gui.msg("ObjectTracker: Discord settings not found (general)");
+            }
             return;
         }
         
+        if (discordSettings.webhookUrl == null || discordSettings.webhookUrl.isEmpty()) {
+            if (gui != null) {
+                gui.msg("ObjectTracker: Discord webhook URL is empty");
+            }
+            return;
+        }
+        
+        if (gui != null) {
+            gui.msg("ObjectTracker: Sending Discord notification: " + message);
+        }
+        
         try {
-            // Создаем скриншот карты с зеленой меткой
-            BufferedImage mapImage = createMapScreenshotWithMarker(gob);
+            // Пытаемся создать скриншот карты с зеленой меткой
+            // Делаем несколько попыток, так как карта может быть еще не загружена
+            BufferedImage mapImage = null;
+            int attempts = 0;
+            int maxAttempts = 5; // Увеличиваем количество попыток
+            
+            while (mapImage == null && attempts < maxAttempts) {
+                try {
+                    mapImage = createMapScreenshotWithMarker(gob);
+                    if (mapImage == null && attempts < maxAttempts - 1) {
+                        // Ждем немного перед следующей попыткой
+                        Thread.sleep(1000); // Увеличиваем задержку
+                    }
+                } catch (InterruptedException e) {
+                    // Карта еще не загружена - ждем и пробуем снова
+                    if (attempts < maxAttempts - 1) {
+                        Thread.sleep(2000); // Увеличиваем задержку при ошибке
+                    }
+                }
+                attempts++;
+            }
             
             if (mapImage != null) {
+                if (gui != null) {
+                    gui.msg("ObjectTracker: Map image created, size: " + mapImage.getWidth() + "x" + mapImage.getHeight());
+                }
                 // Отправляем через Discord webhook с файлом
                 sendDiscordWithImage(discordSettings, message, mapImage);
+            } else {
+                // Если не удалось создать карту, отправляем просто сообщение без карты
+                if (gui != null) {
+                    gui.msg("ObjectTracker: Map not ready, sending notification without map");
+                    try {
+                        gui.msgToDiscord(discordSettings, message);
+                        gui.msg("ObjectTracker: Notification sent without map");
+                    } catch (Exception e) {
+                        gui.msg("ObjectTracker: ERROR sending notification without map: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                }
             }
-            // Если не удалось создать скриншот, не отправляем сообщение вообще
         } catch (Exception e) {
-            // В случае ошибки не отправляем сообщение
+            // В случае ошибки отправляем просто сообщение
+            if (gui != null) {
+                gui.msg("ObjectTracker: ERROR sending notification: " + e.getMessage() + ", sending without map");
+                gui.msgToDiscord(discordSettings, message);
+            }
         }
     }
     
@@ -289,12 +373,31 @@ public class ObjectTracker {
             }
             
             // Сначала рендерим центральный grid, чтобы узнать реальный размер
-            BufferedImage centerGridImage;
-            try {
-                centerGridImage = MinimapImageGenerator.drawmap(map, centerGrid);
-            } catch (InterruptedException e) {
-                return null;
+            // Делаем несколько попыток, так как карта может быть еще не загружена
+            BufferedImage centerGridImage = null;
+            int attempts = 0;
+            int maxAttempts = 3;
+            
+            while (centerGridImage == null && attempts < maxAttempts) {
+                try {
+                    centerGridImage = MinimapImageGenerator.drawmap(map, centerGrid);
+                    if (centerGridImage == null && attempts < maxAttempts - 1) {
+                        Thread.sleep(500);
+                    }
+                } catch (InterruptedException e) {
+                    // Карта еще не загружена - ждем и пробуем снова
+                    if (attempts < maxAttempts - 1) {
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            return null;
+                        }
+                    }
+                }
+                attempts++;
             }
+            
             if (centerGridImage == null || centerGridImage.getWidth() <= 0 || centerGridImage.getHeight() <= 0) {
                 return null;
             }
@@ -378,6 +481,10 @@ public class ObjectTracker {
             
             return combinedImage;
         } catch (Exception e) {
+            if (gui != null) {
+                gui.msg("ObjectTracker: ERROR creating map screenshot: " + e.getMessage());
+                e.printStackTrace();
+            }
             return null;
         }
     }
@@ -405,7 +512,14 @@ public class ObjectTracker {
             
             if (imageBytes.length == 0) {
                 // Если изображение пустое, не отправляем сообщение
+                if (gui != null) {
+                    gui.msg("ObjectTracker: ERROR - Image bytes are empty!");
+                }
                 return;
+            }
+            
+            if (gui != null) {
+                gui.msg("ObjectTracker: Image converted, size: " + imageBytes.length + " bytes");
             }
             
             // Используем MultipartUtility для правильной отправки
@@ -431,13 +545,41 @@ public class ObjectTracker {
             
             // Отправляем запрос
             try {
-                multipart.finish();
-                // Если ошибка, просто игнорируем - не отправляем сообщение без картинки
+                Object response = multipart.finish();
+                // Проверяем статус через рефлексию
+                try {
+                    java.lang.reflect.Field statusCodeField = response.getClass().getField("statusCode");
+                    statusCodeField.setAccessible(true); // Разрешаем доступ к полю
+                    int statusCode = statusCodeField.getInt(response);
+                    
+                    if (statusCode >= 200 && statusCode < 300) {
+                        if (gui != null) {
+                            gui.msg("ObjectTracker: Discord notification sent successfully! (status: " + statusCode + ")");
+                        }
+                    } else {
+                        if (gui != null) {
+                            gui.msg("ObjectTracker: ERROR - Discord returned status code: " + statusCode);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Если не удалось проверить статус, но finish() не выбросил исключение, считаем успешным
+                    if (gui != null) {
+                        gui.msg("ObjectTracker: Discord notification sent (status check failed, but no exception)");
+                    }
+                }
             } catch (Exception e) {
-                // В случае ошибки не отправляем сообщение
+                // В случае ошибки логируем
+                if (gui != null) {
+                    gui.msg("ObjectTracker: ERROR sending to Discord: " + e.getMessage());
+                    e.printStackTrace();
+                }
             }
         } catch (Exception e) {
-            // В случае ошибки не отправляем сообщение
+            // В случае ошибки логируем
+            if (gui != null) {
+                gui.msg("ObjectTracker: ERROR preparing Discord message: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
     

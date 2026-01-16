@@ -228,7 +228,10 @@ public class SimpleRouteWorker implements Action {
         // Инициализируем ObjectTracker для отслеживания объектов
         boolean discordNotifyEnabled = getBool(NConfig.Key.simpleRoutesDiscordNotify);
         ArrayList<String> trackedObjects = getTrackedObjects();
-        ObjectTracker objectTracker = new ObjectTracker(gui, trackedObjects, discordNotifyEnabled);
+        ObjectTracker objectTracker = null;
+        if (discordNotifyEnabled && trackedObjects != null && !trackedObjects.isEmpty()) {
+            objectTracker = new ObjectTracker(gui, trackedObjects, discordNotifyEnabled);
+        }
 
         int lastVisited = 0;
 
@@ -240,13 +243,17 @@ public class SimpleRouteWorker implements Action {
             navigateToPoint(gui, target, objectTracker);
             lastVisited = i;
 
-            // Проверяем объекты во время движения
-            objectTracker.checkObjects();
+            // Проверяем объекты во время движения (если tracker создан)
+            if (objectTracker != null) {
+                objectTracker.checkObjects();
+            }
 
             action.run(gui);
 
-            // Проверяем объекты после выполнения действия
-            objectTracker.checkObjects();
+            // Проверяем объекты после выполнения действия (если tracker создан)
+            if (objectTracker != null) {
+                objectTracker.checkObjects();
+            }
 
             if (predicate != null && predicate.check()) {
                 gui.msg("Predicate triggered. Backtracking to start.");
@@ -266,8 +273,10 @@ public class SimpleRouteWorker implements Action {
 
         if (backtrack) {
             goToStart(gui, lastVisited, objectTracker);
-            // Проверяем объекты при возврате
-            objectTracker.checkObjects();
+            // Проверяем объекты при возврате (если tracker создан)
+            if (objectTracker != null) {
+                objectTracker.checkObjects();
+            }
         }
 
         if (finalAction != null) {

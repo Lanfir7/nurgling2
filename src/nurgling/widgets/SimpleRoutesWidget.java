@@ -161,10 +161,16 @@ public class SimpleRoutesWidget extends Window {
                     if (discordNotifyEnabled != null && discordNotifyEnabled.a) {
                         ArrayList<String> enabledObjects = getEnabledTrackedObjects();
                         if (!enabledObjects.isEmpty() && NUtils.getGameUI() != null) {
-                            // Создаем ObjectTracker только один раз при первом запуске
+                            // Создаем или обновляем ObjectTracker
                             if (objectTrackerInstance == null) {
                                 objectTrackerInstance = new nurgling.actions.ObjectTracker(
                                     NUtils.getGameUI(), enabledObjects, true);
+                                if (NUtils.getGameUI() != null) {
+                                    NUtils.getGameUI().msg("ObjectTracker started with " + enabledObjects.size() + " patterns");
+                                }
+                            } else {
+                                // Обновляем настройки если они изменились
+                                objectTrackerInstance.updateSettings(enabledObjects, true);
                             }
                             // Проверяем объекты
                             if (objectTrackerInstance != null) {
@@ -172,6 +178,9 @@ public class SimpleRoutesWidget extends Window {
                             }
                         } else {
                             // Если настройки изменились, сбрасываем tracker
+                            if (objectTrackerInstance != null && NUtils.getGameUI() != null) {
+                                NUtils.getGameUI().msg("ObjectTracker stopped: no enabled objects or empty list");
+                            }
                             objectTrackerInstance = null;
                         }
                     } else {
@@ -182,7 +191,10 @@ public class SimpleRoutesWidget extends Window {
                 } catch (InterruptedException e) {
                     break;
                 } catch (Exception e) {
-                    // Игнорируем ошибки
+                    // Логируем ошибки для отладки
+                    if (NUtils.getGameUI() != null) {
+                        NUtils.getGameUI().msg("ObjectTracker error: " + e.getMessage());
+                    }
                 }
             }
         }, "SimpleRoutesObjectTracker");
