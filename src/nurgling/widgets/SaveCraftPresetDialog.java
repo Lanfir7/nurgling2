@@ -2,6 +2,7 @@ package nurgling.widgets;
 
 import haven.*;
 import nurgling.NUtils;
+import nurgling.i18n.L10n;
 import nurgling.scenarios.CraftPreset;
 import nurgling.scenarios.CraftPresetManager;
 
@@ -19,7 +20,7 @@ public class SaveCraftPresetDialog extends Window {
     private Label statusLabel;
 
     public SaveCraftPresetDialog(NMakewindow mwnd) {
-        super(UI.scale(new Coord(300, 250)), "Save Craft Preset");
+        super(UI.scale(new Coord(300, 250)), L10n.get("craftpreset.save_title"));
         this.mwnd = mwnd;
         createUI();
     }
@@ -28,11 +29,11 @@ public class SaveCraftPresetDialog extends Window {
         int y = 10;
 
         // Recipe name display
-        add(new Label("Recipe: " + (mwnd.rcpnm != null ? mwnd.rcpnm : "Unknown")), UI.scale(10, y));
+        add(new Label(L10n.get("craftpreset.recipe") + " " + (mwnd.rcpnm != null ? mwnd.rcpnm : L10n.get("craftpreset.unknown"))), UI.scale(10, y));
         y += 25;
 
         // Preset name input
-        add(new Label("Preset Name:"), UI.scale(10, y));
+        add(new Label(L10n.get("craftpreset.preset_name")), UI.scale(10, y));
         y += 18;
 
         String defaultName = mwnd.rcpnm != null ? mwnd.rcpnm : "New Preset";
@@ -40,7 +41,7 @@ public class SaveCraftPresetDialog extends Window {
         y += 35;
 
         // Inputs summary
-        add(new Label("Inputs:"), UI.scale(10, y));
+        add(new Label(L10n.get("craftpreset.inputs")), UI.scale(10, y));
         y += 18;
 
         StringBuilder inputsSummary = new StringBuilder();
@@ -53,11 +54,11 @@ public class SaveCraftPresetDialog extends Window {
         String inputsText = inputsSummary.length() > 40
             ? inputsSummary.substring(0, 37) + "..."
             : inputsSummary.toString();
-        add(new Label(inputsText.isEmpty() ? "(none)" : inputsText), UI.scale(20, y));
+        add(new Label(inputsText.isEmpty() ? L10n.get("craftpreset.none") : inputsText), UI.scale(20, y));
         y += 20;
 
         // Outputs summary
-        add(new Label("Outputs:"), UI.scale(10, y));
+        add(new Label(L10n.get("craftpreset.outputs")), UI.scale(10, y));
         y += 18;
 
         StringBuilder outputsSummary = new StringBuilder();
@@ -70,7 +71,7 @@ public class SaveCraftPresetDialog extends Window {
         String outputsText = outputsSummary.length() > 40
             ? outputsSummary.substring(0, 37) + "..."
             : outputsSummary.toString();
-        add(new Label(outputsText.isEmpty() ? "(none)" : outputsText), UI.scale(20, y));
+        add(new Label(outputsText.isEmpty() ? L10n.get("craftpreset.none") : outputsText), UI.scale(20, y));
         y += 25;
 
         // Status label for feedback
@@ -78,14 +79,14 @@ public class SaveCraftPresetDialog extends Window {
         y += 25;
 
         // Buttons
-        add(new Button(UI.scale(80), "Cancel") {
+        add(new Button(UI.scale(80), L10n.get("common.cancel")) {
             @Override
             public void click() {
                 close();
             }
         }, UI.scale(50, y));
 
-        add(new Button(UI.scale(80), "Save") {
+        add(new Button(UI.scale(80), L10n.get("common.save")) {
             @Override
             public void click() {
                 savePreset();
@@ -116,7 +117,7 @@ public class SaveCraftPresetDialog extends Window {
     private void savePreset() {
         String presetName = nameEntry.text().trim();
         if (presetName.isEmpty()) {
-            statusLabel.settext("Please enter a name");
+            statusLabel.settext(L10n.get("craftpreset.enter_name"));
             return;
         }
 
@@ -126,7 +127,7 @@ public class SaveCraftPresetDialog extends Window {
 
             CraftPresetManager.getInstance().addOrUpdatePreset(preset);
 
-            NUtils.getGameUI().msg("Craft preset saved: " + presetName);
+            NUtils.getGameUI().msg(L10n.get("craftpreset.saved").replace("%s", presetName));
             close();
 
         } catch (Exception e) {
@@ -181,12 +182,30 @@ public class SaveCraftPresetDialog extends Window {
             outputSpec.setName(spec.name);
             outputSpec.setCount(spec.count);
 
+            // Capture resource path and item size
+            // The crafting window uses "small" preview icons, so we need to load the real item resource
             try {
                 if (spec.res != null && spec.res.get() != null) {
-                    outputSpec.setResourcePath(spec.res.get().name);
+                    String resName = spec.res.get().name;
+
+                    // Strip "/small/" from the path to get the actual item resource
+                    String actualResName = resName.replace("/small/", "/");
+                    outputSpec.setResourcePath(actualResName);
+
+                    Resource actualRes = Resource.remote().loadwait(actualResName);
+                    Resource.Image img = actualRes.layer(Resource.imgc);
+
+                    if (img != null && img.ssz != null) {
+                        Coord imgSz = img.ssz;
+                        // Convert pixel size to inventory squares
+                        int width = Math.max(1, (imgSz.x + Inventory.sqsz.x - 1) / Inventory.sqsz.x);
+                        int height = Math.max(1, (imgSz.y + Inventory.sqsz.y - 1) / Inventory.sqsz.y);
+                        outputSpec.setWidth(width);
+                        outputSpec.setHeight(height);
+                    }
                 }
-            } catch (Loading l) {
-                // Resource not loaded
+            } catch (Loading | Resource.LoadException l) {
+                // Resource not loaded or doesn't exist, use default 1x1
             }
 
             outputs.add(outputSpec);

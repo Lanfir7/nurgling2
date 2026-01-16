@@ -145,7 +145,7 @@ public class NArea
         return false;
     }
 
-    boolean containOut(String name)
+    public boolean containOut(String name)
     {
         // ВАЖНО: Проверяем что jout не null
         if (jout == null) {

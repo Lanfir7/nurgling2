@@ -198,7 +198,9 @@ public class NConfig
         starvationVignetteStartThreshold,
         starvationVignetteCriticalThreshold,
         starvationSoundThreshold,
-        starvationSoundInterval
+        starvationSoundInterval,
+        // Localization
+        language
     }
 
     public enum BBDisplayMode

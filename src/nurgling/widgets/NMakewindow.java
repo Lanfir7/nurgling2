@@ -11,6 +11,7 @@ import haven.res.lib.itemtex.*;
 import nurgling.*;
 import nurgling.actions.bots.*;
 import nurgling.areas.*;
+import nurgling.i18n.L10n;
 import nurgling.tools.*;
 import org.json.*;
 
@@ -24,12 +25,20 @@ public class NMakewindow extends Widget {
 
     public static Text.Furnace fnd = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(java.awt.Font.BOLD), 12).aa(true), UI.scale(1), UI.scale(1), Color.BLACK);
     public static Text.Furnace fnd2 = new Text.Foundry(Text.sans, 12).aa(true);
-    public static final Text qmodl = fnd.render(("Quality:"));
+    public static Text qmodl = null;
+    private static Text getQmodl() {
+        if (qmodl == null) qmodl = fnd.render(L10n.get("craft.quality"));
+        return qmodl;
+    }
     public static final TexI aready = new TexI(Resource.loadsimg("nurgling/hud/autocraft/ready"));
     public static final TexI anotfound = new TexI(Resource.loadsimg("nurgling/hud/autocraft/notfound"));
     public static final TexI categories = new TexI(Resource.loadsimg("nurgling/hud/autocraft/spec"));
     public static final TexI ignoreOverlay = new TexI(Resource.loadsimg("nurgling/hud/autocraft/ignore"));
-    public static final Text tooll = fnd.render(("Tools:"));
+    public static Text tooll = null;
+    private static Text getTooll() {
+        if (tooll == null) tooll = fnd.render(L10n.get("craft.tools"));
+        return tooll;
+    }
     public static final Coord boff = UI.scale(new Coord(7, 9));
     public String rcpnm;
     public String recipeResource;
@@ -44,7 +53,7 @@ public class NMakewindow extends Widget {
     private static Tex softTexLabel = null;
     public CheckBox noTransfer = null;
     public boolean autoMode = false;
-    private Button savePresetBtn = null;
+    private IButton savePresetBtn = null;
 
     private static final OwnerContext.ClassResolver<NMakewindow> ctxr = new OwnerContext.ClassResolver<NMakewindow>()
             .add(Glob.class, wdg -> wdg.ui.sess.glob)
@@ -123,7 +132,7 @@ public class NMakewindow extends Widget {
                 Resource.Tooltip tt = res.get().layer(Resource.tooltip);
                 if(tt == null)
                     return(null);
-                return(Text.render(tt.t).img);
+                return(Text.render(tt.text()).img);
             }
             return(ItemInfo.shorttip(info()));
         }
@@ -134,7 +143,7 @@ public class NMakewindow extends Widget {
                 Resource.Tooltip tt = res.get().layer(Resource.tooltip);
                 if(tt == null)
                     return(null);
-                img = Text.render(tt.t).img;
+                img = Text.render(tt.text()).img;
             } else {
                 img = ItemInfo.longtip(info);
             }
@@ -290,13 +299,13 @@ public class NMakewindow extends Widget {
     public static final KeyBinding kb_make = KeyBinding.get("make/one", KeyMatch.forcode(java.awt.event.KeyEvent.VK_ENTER, 0));
     public static final KeyBinding kb_makeall = KeyBinding.get("make/all", KeyMatch.forcode(java.awt.event.KeyEvent.VK_ENTER, KeyMatch.C));
     public NMakewindow(String rcpnm) {
-        int inputW = add(new Label("Input:"), new Coord(0, UI.scale(8))).sz.x;
-        int resultW = add(new Label("Result:"), new Coord(0, outy + UI.scale(8))).sz.x;
+        int inputW = add(new Label(L10n.get("craft.input")), new Coord(0, UI.scale(8))).sz.x;
+        int resultW = add(new Label(L10n.get("craft.result")), new Coord(0, outy + UI.scale(8))).sz.x;
         xoff = Math.max(inputW, resultW) + UI.scale(10);
 
-        add(new Button(UI.scale(85), "Craft"), UI.scale(new Coord(230, 75))).action(() -> craft()).setgkey(kb_make);
+        add(new Button(UI.scale(85), L10n.get("craft.craft")), UI.scale(new Coord(230, 75))).action(() -> craft()).setgkey(kb_make);
         add(craft_num = new TextEntry(UI.scale(55), ""), UI.scale(new Coord(165, 82)));
-        add(new Button(UI.scale(85), "Craft All"), UI.scale(new Coord(325, 75))).action(() -> craftAll()).setgkey(kb_makeall);
+        add(new Button(UI.scale(85), L10n.get("craft.craft_all")), UI.scale(new Coord(325, 75))).action(() -> craftAll()).setgkey(kb_makeall);
         add(new ICheckBox(NStyle.auto[0],NStyle.auto[1],NStyle.auto[2],NStyle.auto[3]){
             @Override
             public void changed(boolean val)
@@ -307,22 +316,29 @@ public class NMakewindow extends Widget {
             }
         }, UI.scale(new Coord(365, 5)));
 
-        add(noTransfer = new CheckBox("No transfer")
+        add(noTransfer = new CheckBox(L10n.get("craft.no_transfer"))
         {
             @Override
             public void changed(boolean val) {
                 super.changed(val);
             }
-        }, new Coord(336, 35));
+        }, UI.scale(new Coord(325, 38)));
         noTransfer.visible = false;
 
         // Save Preset button - only visible in auto mode when all inputs are configured
-        savePresetBtn = add(new Button(UI.scale(85), "Save Preset") {
+        // Scale icons to 2/3 size and position left of quantity input
+        int scaledW = NStyle.savei[0].back.getWidth() * 2 / 3;
+        int scaledH = NStyle.savei[0].back.getHeight() * 2 / 3;
+        Coord scaledSz = new Coord(scaledW, scaledH);
+        BufferedImage scaledUp = PUtils.convolve(NStyle.savei[0].back, scaledSz, CharWnd.iconfilter);
+        BufferedImage scaledDown = PUtils.convolve(NStyle.savei[1].back, scaledSz, CharWnd.iconfilter);
+        BufferedImage scaledHover = PUtils.convolve(NStyle.savei[2].back, scaledSz, CharWnd.iconfilter);
+        savePresetBtn = add(new IButton(scaledUp, scaledDown, scaledHover) {
             @Override
             public void click() {
                 openSavePresetDialog();
             }
-        }, UI.scale(new Coord(325, 38)));
+        }, UI.scale(new Coord(340, 5)));
         savePresetBtn.visible = false;
 
         pack();
@@ -443,7 +459,7 @@ public class NMakewindow extends Widget {
         {
             int x = 0;
             if(!qmod.isEmpty()) {
-                x += qmodl.sz().x + UI.scale(5);
+                x += getQmodl().sz().x + UI.scale(5);
                 x = Math.max(x, xoff);
                 qmx = x;
                 int count = 0;
@@ -489,8 +505,8 @@ public class NMakewindow extends Widget {
 
             }
             if(!tools.isEmpty()) {
-                g.aimage(tooll.tex(), new Coord(x, qmy + (qmodsz.y / 2) - UI.scale(2)), 0, 0.5);
-                x += tooll.sz().x + UI.scale(5);
+                g.aimage(getTooll().tex(), new Coord(x, qmy + (qmodsz.y / 2) - UI.scale(2)), 0, 0.5);
+                x += getTooll().sz().x + UI.scale(5);
                 x = Math.max(x, xoff);
                 toolx = x;
                 for(Indir<Resource> tool : tools) {
@@ -557,7 +573,7 @@ public class NMakewindow extends Widget {
                 if (softTex != null) {
                     softTex.dispose();
                 }
-                softTexLabel = new TexI(fnd.render("Softcap:").img);
+                softTexLabel = new TexI(fnd.render(L10n.get("craft.softcap")).img);
                 softTex = new TexI(fnd2.render(format).img);
             }
             g.image(softTexLabel, p.add(UI.scale(5), UI.scale(-2)));
@@ -605,7 +621,7 @@ public class NMakewindow extends Widget {
                     Tex t = qmicon(qm);
                     Coord sz = t.sz();
                     if(mc.isect(c, sz))
-                        return(qm.get().layer(Resource.tooltip).t);
+                        return(qm.get().layer(Resource.tooltip).text());
                     c = c.add(sz.x + UI.scale(1), 0);
                 }
             } catch(Loading l) {
@@ -617,7 +633,7 @@ public class NMakewindow extends Widget {
                 for(Indir<Resource> tool : tools) {
                     Coord tsz = qmicon(tool).sz();
                     if(mc.isect(c, tsz))
-                        return(tool.get().layer(Resource.tooltip).t);
+                        return(tool.get().layer(Resource.tooltip).text());
                     c = c.add(tsz.x + UI.scale(1), 0);
                 }
             } catch(Loading l) {
@@ -787,13 +803,17 @@ public class NMakewindow extends Widget {
 
 
     public static class Optional extends ItemInfo.Tip {
-        public static final Text text = RichText.render(String.format("$i{%s}", "Optional"), 0);
+        public static Text text = null;
+        private static Text getText() {
+            if (text == null) text = RichText.render(String.format("$i{%s}", L10n.get("craft.optional")), 0);
+            return text;
+        }
         public Optional(Owner owner) {
             super(owner);
         }
 
         public BufferedImage tipimg() {
-            return(text.img);
+            return(getText().img);
         }
 
         public Tip shortvar() {return(this);}
@@ -873,7 +893,7 @@ public class NMakewindow extends Widget {
             if (isOptional) {
                 try {
                     BufferedImage ignoreImg = Resource.loadsimg("nurgling/hud/autocraft/ignore");
-                    data.add(new Ingredient(ignoreImg, "Ignore ingredient", true));
+                    data.add(new Ingredient(ignoreImg, L10n.get("craft.ignore_ingredient"), true));
                 } catch (Exception e) {
                     System.out.println("Failed to load ignore resource: " + e.getMessage());
                 }
