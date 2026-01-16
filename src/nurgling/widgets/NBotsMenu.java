@@ -245,16 +245,18 @@ public class NBotsMenu extends Widget
                     // Для prospect_mine создаем tooltip с названием и описанием
                     if (descriptor != null && "prospect_mine".equals(descriptor.id)) {
                         List<ItemInfo> info = new ArrayList<>();
-                        if (descriptor.displayName != null && !descriptor.displayName.isEmpty()) {
+                        String displayName = descriptor.getDisplayName();
+                        if (displayName != null && !displayName.isEmpty()) {
                             info.add(new ItemInfo.Tip(null) {
                                 @Override
                                 public BufferedImage tipimg() {
-                                    return Text.render(descriptor.displayName).img;
+                                    return Text.render(displayName).img;
                                 }
                             });
                         }
-                        if (descriptor.description != null && !descriptor.description.isEmpty()) {
-                            info.add(new ItemInfo.Pagina(null, descriptor.description));
+                        String description = descriptor.getDescription();
+                        if (description != null && !description.isEmpty()) {
+                            info.add(new ItemInfo.Pagina(null, description));
                         }
                         BufferedImage img = ItemInfo.longtip(info);
                         if (img != null) {
@@ -285,8 +287,11 @@ public class NBotsMenu extends Widget
                             rtip = new TexI(img);
                     }
                     // Fallback: если нет tooltip в ресурсе, используем описание из descriptor
-                    if (rtip == null && descriptor != null && descriptor.description != null && !descriptor.description.isEmpty()) {
-                        rtip = new TexI(Text.render(descriptor.description).img);
+                    if (rtip == null && descriptor != null) {
+                        String description = descriptor.getDescription();
+                        if (description != null && !description.isEmpty()) {
+                            rtip = new TexI(Text.render(description).img);
+                        }
                     }
                     return (rtip);
                 }

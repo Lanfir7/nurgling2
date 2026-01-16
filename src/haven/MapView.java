@@ -30,6 +30,7 @@ import haven.MCache.OverlayInfo;
 import haven.render.*;
 import haven.render.sl.Type;
 import haven.render.sl.Uniform;
+import nurgling.GhostAlpha;
 import nurgling.NConfig;
 import nurgling.NMapView;
 import nurgling.NUtils;
