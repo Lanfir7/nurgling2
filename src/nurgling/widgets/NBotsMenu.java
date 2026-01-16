@@ -365,61 +365,80 @@ public class NBotsMenu extends Widget
                }
 
             Thread t;
-            t = new Thread(new Runnable()
-            {
-                ArrayList<Thread> supports = new ArrayList<>();
-                @Override
-                public void run()
-                {
-                    try
-                    {
-                        showLayouts();
-                        NGameUI gui = NUtils.getGameUI();
-                        if(gui!=null) {
-                            for (Action sup : action.getSupp()) {
-                                Thread st;
-                                supports.add(st = new Thread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        try {
-                                            sup.run(gui);
-                                        } catch (InterruptedException e) {
-                                        }
-                                    }
-                                }));
-                                st.start();
-                            }
-                            action.run(gui);
-                        }
-                    }
-                    catch (InterruptedException e)
-                    {
-                        System.out.println("=== NBotsMenu: InterruptedException caught! Bot stopped. ===");
-                        NUtils.getGameUI().msg(path + ":" + "STOPPED");
-                    }
-                    catch (Exception e)
-                    {
-                        System.out.println("=== NBotsMenu: Other exception: " + e.getClass().getName() + " - " + e.getMessage() + " ===");
-                        e.printStackTrace();
-                    }
-                    finally
-                    {
-                        if(action instanceof ActionWithFinal)
-                        {
-                            ((ActionWithFinal)action).endAction();
-                        }
-                        for(Thread st: supports)
-                        {
-                            st.interrupt();
-                        }
-                        }
-                }
-            }, path);
+            t = new Thread(new BotRunnable(path, action), path);
             if(disStacks)
                 NUtils.getGameUI().biw.addObserve(t, true);
             else
                 NUtils.getGameUI().biw.addObserve(t);
             t.start();
+        }
+
+        private class BotRunnable implements Runnable {
+            private final String path;
+            private final Action action;
+            private final ArrayList<Thread> supports = new ArrayList<>();
+
+            BotRunnable(String path, Action action) {
+                this.path = path;
+                this.action = action;
+            }
+
+            @Override
+            public void run()
+            {
+                try
+                {
+                    showLayouts();
+                    NGameUI gui = NUtils.getGameUI();
+                    if(gui!=null) {
+                        for (Action sup : action.getSupp()) {
+                            Thread st;
+                            supports.add(st = new Thread(new SupportRunnable(sup, gui)));
+                            st.start();
+                        }
+                        action.run(gui);
+                    }
+                }
+                catch (InterruptedException e)
+                {
+                    System.out.println("=== NBotsMenu: InterruptedException caught! Bot stopped. ===");
+                    NUtils.getGameUI().msg(path + ":" + "STOPPED");
+                }
+                catch (Exception e)
+                {
+                    System.out.println("=== NBotsMenu: Other exception: " + e.getClass().getName() + " - " + e.getMessage() + " ===");
+                    e.printStackTrace();
+                }
+                finally
+                {
+                    if(action instanceof ActionWithFinal)
+                    {
+                        ((ActionWithFinal)action).endAction();
+                    }
+                    for(Thread st: supports)
+                    {
+                        st.interrupt();
+                    }
+                }
+            }
+        }
+
+        private class SupportRunnable implements Runnable {
+            private final Action sup;
+            private final NGameUI gui;
+
+            SupportRunnable(Action sup, NGameUI gui) {
+                this.sup = sup;
+                this.gui = gui;
+            }
+
+            @Override
+            public void run() {
+                try {
+                    sup.run(gui);
+                } catch (InterruptedException e) {
+                }
+            }
         }
 
 
