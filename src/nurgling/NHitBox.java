@@ -61,7 +61,7 @@ public class NHitBox
             put("gfx/terobjs/htable", new NHitBox(new Coord2d(-3.5,-7.0),new Coord2d(3.5,7.0), true));
             put("gfx/terobjs/lanternpost", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
             put("gfx/terobjs/cistern", new NHitBox(new Coord(-9,-9),new Coord(9,9)));
-            put("gfx/terobjs/oven", new NHitBox(new Coord(-9,-7),new Coord(9,7)));
+            put("gfx/terobjs/oven", new NHitBox(new Coord2d(-9,-7.5),new Coord2d(9,7.5)));
             put("gfx/terobjs/kiln", new NHitBox(new Coord(-10,-10),new Coord(10,10)));
             put("gfx/terobjs/leanto", new NHitBox(new Coord(-9,-9),new Coord(9,9)));
             put("gfx/terobjs/stonepillar", new NHitBox(new Coord(-12,-12),new Coord(12,12)));
@@ -112,6 +112,7 @@ public class NHitBox
             put("gfx/kritter/pig/piglet", new NHitBox(new Coord(-6,-3),new Coord(6,3)));
             put("gfx/kritter/pig/sow", new NHitBox(new Coord(-6,-3),new Coord(6,3)));
             put("gfx/kritter/pig/hog", new NHitBox(new Coord(-6,-3),new Coord(6,3)));
+            put("gfx/kritter/orca/orcabeef", new NHitBox(new Coord2d(-1,-4),new Coord2d(1,4)));
             put("gfx/kritter/sheep/lamb", new NHitBox(new Coord(-5,-2),new Coord(5,2)));
             put("gfx/kritter/sheep/sheep", new NHitBox(new Coord(-5,-2),new Coord(5,2)));
             put("gfx/kritter/goat/billy", new NHitBox(new Coord(-5,-2),new Coord(5,2)));

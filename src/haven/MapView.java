@@ -1774,18 +1774,175 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	boolean freerot = false;
 
 	public void adjust(Plob plob, Coord pc, Coord2d mc, int modflags) {
+	    final boolean altsnap = (modflags & UI.MOD_META) != 0; // ALT is treated as META in this client
 	    Coord2d nc;
-	    if((modflags & UI.MOD_SHIFT) == 0)
+	    if(!altsnap && ((modflags & UI.MOD_SHIFT) == 0)) {
 		nc = mc.floor(tilesz).mul(tilesz).add(tilesz.div(2));
-	    else if(plobpgran > 0)
+	    } else if(plobpgran > 0) {
 		nc = mc.div(tilesz).mul(plobpgran).roundf().div(plobpgran).mul(tilesz);
-	    else
+	    } else {
 		nc = mc;
+	    }
+
 	    Gob pl = plob.mv().player();
+	    final double na;
 	    if((pl != null) && !freerot)
-		plob.move(nc, Math.round(plob.rc.angle(pl.rc) / (Math.PI / 2)) * (Math.PI / 2));
+		na = Math.round(plob.rc.angle(pl.rc) / (Math.PI / 2)) * (Math.PI / 2);
+	    else
+		na = plob.a;
+
+	    if(altsnap)
+		nc = snapToNeighbor(plob, nc, na);
+
+	    if((pl != null) && !freerot)
+		plob.move(nc, na);
 	    else
 		plob.move(nc);
+	}
+
+	/*
+	 * ALT snapping:
+	 * - When holding ALT (mapped to MOD_META), the placement preview will try to "stick"
+	 *   to nearby objects by aligning hitbox edges without overlap.
+	 */
+	private static Coord2d snapToNeighbor(Plob plob, Coord2d pos, double angle) {
+	    final MapView mv = plob.mv();
+	    if((mv == null) || (mv.glob == null) || (mv.glob.oc == null))
+		return(pos);
+
+	    /* Try to get hitbox for the thing being placed.
+	     * For lifted objects, placement preview is often a Gobcopy, and the hitbox lives on the copied gob.
+	     */
+	    nurgling.NHitBox hb0 = plob.ngob.hitBox;
+	    if(hb0 == null) {
+		try {
+		    ResDrawable rd = plob.getattr(ResDrawable.class);
+		    if((rd != null) && (rd.spr instanceof haven.res.ui.gobcp.Gobcopy)) {
+			Gob tg = ((haven.res.ui.gobcp.Gobcopy)rd.spr).gob;
+			if((tg != null) && (tg.ngob != null)) {
+			    hb0 = tg.ngob.hitBox;
+			    if((hb0 == null) && (tg.ngob.name != null))
+				hb0 = nurgling.NHitBox.findCustom(tg.ngob.name);
+			}
+		    }
+		} catch(Exception ignored) {
+		}
+	    }
+	    if((hb0 == null) && (plob.ngob.name != null))
+		hb0 = nurgling.NHitBox.findCustom(plob.ngob.name);
+	    final nurgling.NHitBox hb = hb0;
+	    if(hb == null)
+		return(pos);
+
+	    /* Search radius and snap distance are in world units (tile is ~11). */
+	    final double snapMax = Math.max(6.0, MCache.tilesz.x * 1.1);
+	    final double searchPad = Math.max(80.0, MCache.tilesz.x * 8.0);
+
+	    final nurgling.pf.NHitBoxD base = new nurgling.pf.NHitBoxD(hb.begin, hb.end, pos, angle);
+	    final Coord2d baseUL = base.getCircumscribedUL();
+	    final Coord2d baseBR = base.getCircumscribedBR();
+
+	    final ArrayList<nurgling.pf.NHitBoxD> obstacles = new ArrayList<>();
+	    synchronized(mv.glob.oc) {
+		for(Gob gob : mv.glob.oc) {
+		    if((gob == null) || (gob == mv.player()))
+			continue;
+		    if(gob instanceof OCache.Virtual)
+			continue;
+		    if(gob.getattr(GhostAlpha.class) != null)
+			continue;
+		    if(gob.getattr(Following.class) != null)
+			continue;
+		    if(gob.attr == null || gob.attr.isEmpty())
+			continue;
+		    if(gob.id == plob.id)
+			continue;
+
+		    nurgling.NHitBox ghb = gob.ngob.hitBox;
+		    if((ghb == null) && (gob.ngob.name != null))
+			ghb = nurgling.NHitBox.findCustom(gob.ngob.name);
+		    if(ghb == null)
+			continue;
+
+		    nurgling.pf.NHitBoxD ob = new nurgling.pf.NHitBoxD(ghb.begin, ghb.end, gob.rc, gob.a);
+		    Coord2d oul = ob.getCircumscribedUL();
+		    Coord2d obr = ob.getCircumscribedBR();
+		    /* Quick reject: only keep obstacles near our current AABB. */
+		    if((obr.x < baseUL.x - searchPad) || (oul.x > baseBR.x + searchPad) ||
+		       (obr.y < baseUL.y - searchPad) || (oul.y > baseBR.y + searchPad))
+			continue;
+		    obstacles.add(ob);
+		}
+	    }
+	    if(obstacles.isEmpty())
+		return(pos);
+
+	    Coord2d best = pos;
+	    double bestDist = Double.MAX_VALUE;
+
+	    for(nurgling.pf.NHitBoxD ob : obstacles) {
+		Coord2d oul = ob.getCircumscribedUL();
+		Coord2d obr = ob.getCircumscribedBR();
+
+		/* Helper: validate candidate by checking non-overlap with nearby obstacles. */
+		java.util.function.Predicate<Coord2d> valid = candPos -> {
+		    nurgling.pf.NHitBoxD cand = new nurgling.pf.NHitBoxD(hb.begin, hb.end, candPos, angle);
+		    for(nurgling.pf.NHitBoxD other : obstacles) {
+			if(other.intersects(cand, false))
+			    return(false);
+		    }
+		    return(true);
+		};
+
+		/* Side snapping requires overlap on the perpendicular axis. */
+		boolean yOver = (Math.min(baseBR.y, obr.y) - Math.max(baseUL.y, oul.y)) > 0.0;
+		boolean xOver = (Math.min(baseBR.x, obr.x) - Math.max(baseUL.x, oul.x)) > 0.0;
+
+		/* Snap our left/right edge to obstacle right/left edge. */
+		if(yOver) {
+		    double dx1 = obr.x - baseUL.x; // our left  -> obstacle right
+		    if(Math.abs(dx1) <= snapMax) {
+			Coord2d cand = pos.add(dx1, 0);
+			double dist = Math.abs(dx1);
+			if((dist < bestDist) && valid.test(cand)) { bestDist = dist; best = cand; }
+		    }
+		    double dx2 = oul.x - baseBR.x; // our right -> obstacle left
+		    if(Math.abs(dx2) <= snapMax) {
+			Coord2d cand = pos.add(dx2, 0);
+			double dist = Math.abs(dx2);
+			if((dist < bestDist) && valid.test(cand)) { bestDist = dist; best = cand; }
+		    }
+		}
+
+		/* Snap our top/bottom edge to obstacle bottom/top edge. */
+		if(xOver) {
+		    double dy1 = obr.y - baseUL.y; // our top    -> obstacle bottom
+		    if(Math.abs(dy1) <= snapMax) {
+			Coord2d cand = pos.add(0, dy1);
+			double dist = Math.abs(dy1);
+			if((dist < bestDist) && valid.test(cand)) { bestDist = dist; best = cand; }
+		    }
+		    double dy2 = oul.y - baseBR.y; // our bottom -> obstacle top
+		    if(Math.abs(dy2) <= snapMax) {
+			Coord2d cand = pos.add(0, dy2);
+			double dist = Math.abs(dy2);
+			if((dist < bestDist) && valid.test(cand)) { bestDist = dist; best = cand; }
+		    }
+		}
+
+		/* Corner snapping: if we're already close in both axes, allow combined snap. */
+		double[] dxs = {obr.x - baseUL.x, oul.x - baseBR.x};
+		double[] dys = {obr.y - baseUL.y, oul.y - baseBR.y};
+		for(double dx : dxs) for(double dy : dys) {
+		    if((Math.abs(dx) <= snapMax) && (Math.abs(dy) <= snapMax)) {
+			Coord2d cand = pos.add(dx, dy);
+			double dist = Math.hypot(dx, dy);
+			if((dist < bestDist) && valid.test(cand)) { bestDist = dist; best = cand; }
+		    }
+		}
+	    }
+
+	    return(best);
 	}
 
 	public boolean rotate(Plob plob, int amount, int modflags) {
