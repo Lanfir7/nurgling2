@@ -200,7 +200,10 @@ public class NConfig
         starvationSoundThreshold,
         starvationSoundInterval,
         // Localization
-        language
+        language,
+        // Simple Routes tracking
+        simpleRoutesDiscordNotify,
+        simpleRoutesTrackedObjects
     }
 
     public enum BBDisplayMode
@@ -554,6 +557,10 @@ public class NConfig
         conf.put(Key.starvationVignetteCriticalThreshold, 2000);  // Vignette intensifies (0 to disable)
         conf.put(Key.starvationSoundThreshold, 2000);  // Sound alarm threshold (0 to disable)
         conf.put(Key.starvationSoundInterval, 10000);  // Sound interval in milliseconds
+        
+        // Simple Routes tracking settings
+        conf.put(Key.simpleRoutesDiscordNotify, false);
+        conf.put(Key.simpleRoutesTrackedObjects, new ArrayList<HashMap<String, Object>>());
     }
 
 

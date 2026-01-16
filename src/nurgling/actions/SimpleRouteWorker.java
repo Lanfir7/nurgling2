@@ -12,6 +12,9 @@ import nurgling.routes.SimpleRoute;
 import nurgling.routes.SimpleRoutePoint;
 import nurgling.tasks.*;
 import nurgling.tools.NParser;
+import nurgling.NConfig;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * Worker для воспроизведения простых маршрутов без привязки к зонам.
@@ -127,7 +130,7 @@ public class SimpleRouteWorker implements Action {
     /**
      * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
      */
-    private Results navigateToPoint(NGameUI gui, Coord2d target) throws InterruptedException {
+    private Results navigateToPoint(NGameUI gui, Coord2d target, ObjectTracker objectTracker) throws InterruptedException {
         Gob ship = getShip();
         
         if (isOnShip() && ship != null) {
@@ -135,7 +138,7 @@ public class SimpleRouteWorker implements Action {
             gui.map.wdgmsg("click", Coord.z, target.floor(posres), 1, 0);
             
             // Ждем движение корабля по его координатам (универсальный способ для всех кораблей)
-            waitForShipMovement(ship, target);
+            waitForShipMovement(ship, target, objectTracker);
             
             // Проверяем, достигли ли мы точки (используем координаты корабля)
             Coord2d currentPos = getCurrentPosition();
@@ -145,6 +148,10 @@ public class SimpleRouteWorker implements Action {
             return Results.SUCCESS();
         } else {
             // Для пешего движения используем PathFinder
+            // Проверяем объекты во время движения
+            if (objectTracker != null) {
+                objectTracker.checkObjects();
+            }
             return new PathFinder(target).run(gui);
         }
     }
@@ -152,7 +159,7 @@ public class SimpleRouteWorker implements Action {
     /**
      * Ожидание движения большого корабля (snekkja, knarr) по его координатам
      */
-    private void waitForShipMovement(Gob vehicle, Coord2d target) throws InterruptedException {
+    private void waitForShipMovement(Gob vehicle, Coord2d target, ObjectTracker objectTracker) throws InterruptedException {
         // Порог достижения цели
         final double ARRIVAL_THRESHOLD = 11.0;
         // Максимальное время ожидания начала движения (мс)
@@ -200,6 +207,15 @@ public class SimpleRouteWorker implements Action {
             }
             
             lastPos = currentPos;
+            
+            // Проверяем объекты во время движения корабля (каждую секунду)
+            if (objectTracker != null) {
+                long elapsed = System.currentTimeMillis() - startTime;
+                if (elapsed % 1000 < CHECK_INTERVAL * 2) {
+                    objectTracker.checkObjects();
+                }
+            }
+            
             Thread.sleep(CHECK_INTERVAL);
         }
     }
@@ -209,6 +225,11 @@ public class SimpleRouteWorker implements Action {
         if (route == null || route.waypoints.isEmpty())
             return Results.ERROR("No route or waypoints defined.");
 
+        // Инициализируем ObjectTracker для отслеживания объектов
+        boolean discordNotifyEnabled = getBool(NConfig.Key.simpleRoutesDiscordNotify);
+        ArrayList<String> trackedObjects = getTrackedObjects();
+        ObjectTracker objectTracker = new ObjectTracker(gui, trackedObjects, discordNotifyEnabled);
+
         int lastVisited = 0;
 
         for (int i = 0; i < route.waypoints.size(); i++) {
@@ -216,29 +237,37 @@ public class SimpleRouteWorker implements Action {
             Coord2d target = getWaypointCoord(rp, gui.map.glob.map);
             if (target == null) continue;
 
-            navigateToPoint(gui, target);
+            navigateToPoint(gui, target, objectTracker);
             lastVisited = i;
 
+            // Проверяем объекты во время движения
+            objectTracker.checkObjects();
+
             action.run(gui);
+
+            // Проверяем объекты после выполнения действия
+            objectTracker.checkObjects();
 
             if (predicate != null && predicate.check()) {
                 gui.msg("Predicate triggered. Backtracking to start.");
 
-                goToStart(gui, lastVisited);
+                goToStart(gui, lastVisited, objectTracker);
 
                 if (returnAction != null) {
                     returnAction.run(gui);
                 }
 
                 if (lastVisited > 0) {
-                    returnToLastVisited(gui, lastVisited);
+                    returnToLastVisited(gui, lastVisited, objectTracker);
                 }
                 i=i-1;
             }
         }
 
         if (backtrack) {
-            goToStart(gui, lastVisited);
+            goToStart(gui, lastVisited, objectTracker);
+            // Проверяем объекты при возврате
+            objectTracker.checkObjects();
         }
 
         if (finalAction != null) {
@@ -248,20 +277,48 @@ public class SimpleRouteWorker implements Action {
         return Results.SUCCESS();
     }
 
-    private void goToStart(NGameUI gui, int lastVisited) throws InterruptedException {
+    /**
+     * Получает значение boolean из конфига
+     */
+    private boolean getBool(NConfig.Key key) {
+        Object val = NConfig.get(key);
+        return val instanceof Boolean ? (Boolean) val : false;
+    }
+
+    /**
+     * Получает список отслеживаемых объектов из конфига
+     */
+    @SuppressWarnings("unchecked")
+    private ArrayList<String> getTrackedObjects() {
+        ArrayList<String> result = new ArrayList<>();
+        if (NConfig.get(NConfig.Key.simpleRoutesTrackedObjects) != null) {
+            for (HashMap<String, Object> item : (ArrayList<HashMap<String, Object>>) NConfig.get(NConfig.Key.simpleRoutesTrackedObjects)) {
+                Boolean enabled = (Boolean) item.get("enabled");
+                if (enabled != null && enabled) {
+                    String name = (String) item.get("name");
+                    if (name != null && !name.isEmpty()) {
+                        result.add(name);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    private void goToStart(NGameUI gui, int lastVisited, ObjectTracker objectTracker) throws InterruptedException {
         for (int j = lastVisited; j >= 0; j--) {
             SimpleRoutePoint backtrackPoint = route.waypoints.get(j);
             Coord2d backtrackTarget = getWaypointCoord(backtrackPoint, gui.map.glob.map);
             if (backtrackTarget != null)
-                navigateToPoint(gui, backtrackTarget);
+                navigateToPoint(gui, backtrackTarget, objectTracker);
         }
     }
 
-    private void returnToLastVisited(NGameUI gui, int lastVisited) throws InterruptedException {
+    private void returnToLastVisited(NGameUI gui, int lastVisited, ObjectTracker objectTracker) throws InterruptedException {
         for (int j = 1; j <= lastVisited; j++) {
             Coord2d resume = getWaypointCoord(route.waypoints.get(j), gui.map.glob.map);
             if (resume != null)
-                navigateToPoint(gui, resume);
+                navigateToPoint(gui, resume, objectTracker);
         }
     }
 }

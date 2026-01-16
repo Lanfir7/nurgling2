@@ -16,7 +16,11 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import nurgling.conf.NDiscordNotification;
 
 /**
  * Упрощенный виджет для управления простыми маршрутами без привязки к зонам.
@@ -28,6 +32,16 @@ public class SimpleRoutesWidget extends Window {
     private final List<RouteItem> routeItems = new ArrayList<>();
     private WaypointList waypointList;
     private Widget actionContainer;
+    
+    // Discord notification settings
+    private CheckBox discordNotifyEnabled;
+    private ArrayList trackedObjects = new ArrayList();
+    private Widget trackedObjectList;
+    private TextEntry newObjectEntry;
+    private Widget trackedObjectsContainer;
+    private Thread objectTrackerThread;
+    private boolean trackerRunning = false;
+    private nurgling.actions.ObjectTracker objectTrackerInstance = null;
 
     public SimpleRoutesWidget() {
         super(UI.scale(new Coord(300, 400)), "Simple Routes");
@@ -96,7 +110,95 @@ public class SimpleRoutesWidget extends Window {
         Label routeInfoLabel = add(new Label("Route Info:", NStyle.areastitle), routeList.pos("bl").adds(0, UI.scale(5)));
         waypointList = add(new WaypointList(UI.scale(new Coord(350, 140))), routeInfoLabel.pos("bl").adds(0, UI.scale(5)));
 
+        // Discord notification checkbox
+        discordNotifyEnabled = add(new CheckBox("Оповещать в Discord"), waypointList.pos("bl").adds(0, UI.scale(10)));
+        
+        // Tracked objects section
+        Label trackedObjectsLabel = add(new Label("Отслеживаемые объекты:", NStyle.areastitle), discordNotifyEnabled.pos("bl").adds(0, UI.scale(5)));
+        trackedObjectsContainer = add(new Widget(UI.scale(new Coord(350, 150))), trackedObjectsLabel.pos("bl").adds(0, UI.scale(5)));
+        
+        trackedObjectList = trackedObjectsContainer.add(new TrackedObjectList(UI.scale(new Coord(340, 100))), new Coord(0, 0));
+        
+        newObjectEntry = trackedObjectsContainer.add(new TextEntry(UI.scale(200), ""), trackedObjectList.pos("bl").adds(0, UI.scale(5)));
+        trackedObjectsContainer.add(new haven.Button(UI.scale(45), "Add") {
+            @Override
+            public void click() {
+                if (!newObjectEntry.text().isEmpty()) {
+                    TrackedObjectItem item = new TrackedObjectItem(newObjectEntry.text());
+                    item.isEnabled.a = true;
+                    trackedObjects.add(item);
+                    objectTrackerInstance = null; // Пересоздаем tracker при добавлении объекта
+                    ((TrackedObjectList)trackedObjectList).update();
+                    saveTrackedObjectsSettings();
+                    newObjectEntry.settext("");
+                }
+            }
+        }, newObjectEntry.pos("ur").adds(UI.scale(10), 0));
+        
+        // При изменении настроек пересоздаем tracker
+        discordNotifyEnabled.changed((val) -> {
+            objectTrackerInstance = null;
+            saveTrackedObjectsSettings();
+        });
+
+        loadTrackedObjectsSettings();
+        startObjectTracker();
         pack();
+    }
+    
+    /**
+     * Запускает поток для постоянной проверки объектов
+     */
+    private void startObjectTracker() {
+        if (objectTrackerThread != null && objectTrackerThread.isAlive()) {
+            return;
+        }
+        
+        trackerRunning = true;
+        objectTrackerThread = new Thread(() -> {
+            while (trackerRunning) {
+                try {
+                    if (discordNotifyEnabled != null && discordNotifyEnabled.a) {
+                        ArrayList<String> enabledObjects = getEnabledTrackedObjects();
+                        if (!enabledObjects.isEmpty() && NUtils.getGameUI() != null) {
+                            // Создаем ObjectTracker только один раз при первом запуске
+                            if (objectTrackerInstance == null) {
+                                objectTrackerInstance = new nurgling.actions.ObjectTracker(
+                                    NUtils.getGameUI(), enabledObjects, true);
+                            }
+                            // Проверяем объекты
+                            if (objectTrackerInstance != null) {
+                                objectTrackerInstance.checkObjects();
+                            }
+                        } else {
+                            // Если настройки изменились, сбрасываем tracker
+                            objectTrackerInstance = null;
+                        }
+                    } else {
+                        // Если отключено, сбрасываем tracker
+                        objectTrackerInstance = null;
+                    }
+                    Thread.sleep(2000); // Проверяем каждые 2 секунды
+                } catch (InterruptedException e) {
+                    break;
+                } catch (Exception e) {
+                    // Игнорируем ошибки
+                }
+            }
+        }, "SimpleRoutesObjectTracker");
+        objectTrackerThread.setDaemon(true);
+        objectTrackerThread.start();
+    }
+    
+    /**
+     * Останавливает поток проверки объектов
+     */
+    private void stopObjectTracker() {
+        trackerRunning = false;
+        objectTrackerInstance = null;
+        if (objectTrackerThread != null) {
+            objectTrackerThread.interrupt();
+        }
     }
 
     @Override
@@ -123,10 +225,17 @@ public class SimpleRoutesWidget extends Window {
     @Override
     public void wdgmsg(Widget sender, String msg, Object... args) {
         if (msg.equals("close")) {
+            stopObjectTracker();
             hide();
         } else {
             super.wdgmsg(sender, msg, args);
         }
+    }
+    
+    @Override
+    public void destroy() {
+        stopObjectTracker();
+        super.destroy();
     }
 
     private void select(int id) {
@@ -716,6 +825,137 @@ public class SimpleRoutesWidget extends Window {
         public void draw(GOut g) {
             super.draw(g);
         }
+    }
+
+    public class TrackedObjectList extends SListBox<TrackedObjectItem, Widget> {
+        TrackedObjectList(Coord sz) {
+            super(sz, UI.scale(22));
+        }
+
+        @Override
+        protected List<TrackedObjectItem> items() {
+            return trackedObjects;
+        }
+
+        @Override
+        protected Widget makeitem(TrackedObjectItem item, int idx, Coord sz) {
+            return new ItemWidget<TrackedObjectItem>(this, sz, item) {
+                {
+                    add(item);
+                    item.resize(sz);
+                }
+            };
+        }
+
+        Color bg = new Color(30, 40, 40, 160);
+
+        @Override
+        public void draw(GOut g) {
+            g.chcolor(bg);
+            g.frect(Coord.z, g.sz());
+            g.chcolor();
+            super.draw(g);
+        }
+    }
+
+    public class TrackedObjectItem extends Widget {
+        Label text;
+        IButton remove;
+        public CheckBox isEnabled;
+
+        @Override
+        public void resize(Coord sz) {
+            if (isEnabled != null) {
+                isEnabled.move(new Coord(isEnabled.c.x, (sz.y - isEnabled.sz.y) / 2));
+            }
+            if (text != null) {
+                text.move(new Coord(text.c.x, (sz.y - text.sz.y) / 2));
+            }
+            if (remove != null) {
+                remove.move(new Coord(sz.x - NStyle.removei[0].sz().x - UI.scale(5),
+                        (sz.y - remove.sz.y) / 2));
+            }
+            super.resize(sz);
+        }
+
+        public TrackedObjectItem(String text) {
+            prev = isEnabled = add(new CheckBox("") {
+                public void set(boolean val) {
+                    a = val;
+                    objectTrackerInstance = null; // Пересоздаем tracker при изменении
+                    saveTrackedObjectsSettings();
+                }
+            });
+            this.text = add(new Label(text), prev.pos("ur").add(UI.scale(2), 0));
+            remove = add(new IButton(NStyle.removei[0].back, NStyle.removei[1].back, NStyle.removei[2].back) {
+                @Override
+                public void click() {
+                    trackedObjects.remove(TrackedObjectItem.this);
+                    objectTrackerInstance = null; // Пересоздаем tracker при изменении списка
+                    if (trackedObjectList != null) {
+                        ((TrackedObjectList)trackedObjectList).update();
+                    }
+                    saveTrackedObjectsSettings();
+                }
+            }, new Coord(UI.scale(340) - NStyle.removei[0].sz().x, 0).sub(UI.scale(5), UI.scale(1)));
+            remove.settip("Remove");
+            pack();
+        }
+
+        public String text() {
+            return text.text();
+        }
+    }
+
+    private void loadTrackedObjectsSettings() {
+        discordNotifyEnabled.a = getBool(NConfig.Key.simpleRoutesDiscordNotify);
+        trackedObjects.clear();
+
+        if (NConfig.get(NConfig.Key.simpleRoutesTrackedObjects) != null) {
+            for (HashMap<String, Object> item : (ArrayList<HashMap<String, Object>>) NConfig.get(NConfig.Key.simpleRoutesTrackedObjects)) {
+                TrackedObjectItem aitem = new TrackedObjectItem((String) item.get("name"));
+                aitem.isEnabled.a = (Boolean) item.get("enabled");
+                trackedObjects.add(aitem);
+            }
+        }
+
+        if (trackedObjectList != null)
+            ((TrackedObjectList)trackedObjectList).update();
+    }
+
+    private void saveTrackedObjectsSettings() {
+        NConfig.set(NConfig.Key.simpleRoutesDiscordNotify, discordNotifyEnabled.a);
+
+        ArrayList<HashMap<String, Object>> plist = new ArrayList<>();
+        for (Object obj : trackedObjects) {
+            TrackedObjectItem item = (TrackedObjectItem) obj;
+            HashMap<String, Object> map = new HashMap<>();
+            map.put("name", item.text());
+            map.put("enabled", item.isEnabled.a);
+            plist.add(map);
+        }
+        NConfig.set(NConfig.Key.simpleRoutesTrackedObjects, plist);
+        NConfig.needUpdate();
+    }
+
+    private boolean getBool(NConfig.Key key) {
+        Object val = NConfig.get(key);
+        return val instanceof Boolean ? (Boolean) val : false;
+    }
+
+    public boolean isDiscordNotifyEnabled() {
+        return discordNotifyEnabled != null && discordNotifyEnabled.a;
+    }
+
+    public ArrayList<String> getEnabledTrackedObjects() {
+        ArrayList<String> result = new ArrayList<>();
+        for (Object obj : trackedObjects) {
+            TrackedObjectItem item = (TrackedObjectItem) obj;
+            if (item.isEnabled.a) {
+                result.add(item.text());
+            }
+        }
+        return result;
     }
 }
 
