@@ -396,6 +396,10 @@ public class Composited implements RenderTree.Node, EquipTarget {
 	    return(ret);
 	}
 
+	public static Desc decode(Session sess, Object[] args) {
+	    return(decode((Resource.Resolver)sess, args));
+	}
+
 	public Desc clone() {
 	    Desc ret = new Desc(base);
 	    for(MD mod : this.mod)

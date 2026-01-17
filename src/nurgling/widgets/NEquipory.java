@@ -38,11 +38,161 @@ public class NEquipory extends Equipory
 
     // Queue for pending parasite checks
     private final ArrayList<NGItem> pendingParasiteChecks = new ArrayList<>();
+    
+    // Stats display widget
+    private EquipmentStatsWidget statsWidget = null;
+    private boolean showStatsPanel = false;
+    private ICheckBox statsToggleButton = null;
+    private Coord originalSize = null; // Store original size
+    
+    // Arrow button textures (mirrored from inventory)
+    private static final TexI[] collapsei = new TexI[]{
+        new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/u")),
+        new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/d")),
+        new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/h")),
+        new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/dh"))
+    };
+    
+    private static final TexI[] collapseiRight = createMirroredTextures(collapsei);
+    
+    private static TexI[] createMirroredTextures(TexI[] original) {
+        TexI[] mirrored = new TexI[original.length];
+        for (int i = 0; i < original.length; i++) {
+            BufferedImage img = original[i].back;
+            
+            // Use ARGB format to ensure compatibility
+            int imageType = img.getType();
+            if (imageType == 0) {
+                imageType = BufferedImage.TYPE_INT_ARGB;
+            }
+            
+            BufferedImage flippedImg = new BufferedImage(img.getWidth(), img.getHeight(), imageType);
+            
+            // Create mirrored image using Graphics2D for better handling
+            java.awt.Graphics2D g2d = flippedImg.createGraphics();
+            g2d.drawImage(img, img.getWidth(), 0, 0, img.getHeight(), 0, 0, img.getWidth(), img.getHeight(), null);
+            g2d.dispose();
+            
+            mirrored[i] = new TexI(flippedImg);
+        }
+        return mirrored;
+    }
 
     public NEquipory(long gobid)
     {
         super(gobid);
+        originalSize = new Coord(sz.x, sz.y); // Store original size
         initToggleButtons();
+        initStatsWidget();
+    }
+    
+    private void initStatsWidget() {
+        // Calculate position: to the right of all equipment slots
+        // Find the rightmost slot position
+        int maxX = 0;
+        for (Coord ec : ecoords) {
+            int slotX = ec.x + invsq.sz().x;
+            if (slotX > maxX) {
+                maxX = slotX;
+            }
+        }
+        // Add spacing after the rightmost slot
+        int statsX = maxX + UI.scale(20);
+        int statsY = UI.scale(5);
+        int statsWidth = UI.scale(220);
+        int statsHeight = Math.max(sz.y - statsY - UI.scale(10), UI.scale(200));
+        
+        statsWidget = add(new EquipmentStatsWidget(new Coord(statsWidth, statsHeight)), new Coord(statsX, statsY));
+        statsWidget.hide(); // Hide by default
+        
+        // Don't resize widget immediately - only when panel is shown
+    }
+    
+    @Override
+    protected void added() {
+        super.added();
+        // Add toggle button to parent window
+        haven.Window win = getparent(haven.Window.class);
+        if (win != null) {
+            // Create toggle button for stats panel
+            statsToggleButton = new ICheckBox(collapseiRight[0], collapseiRight[1], collapseiRight[2], collapseiRight[3]) {
+                @Override
+                public void changed(boolean val) {
+                    super.changed(val);
+                    showStatsPanel = val;
+                    updateStatsPanelVisibility();
+                }
+            };
+            statsToggleButton.a = false; // Start with panel hidden
+            statsToggleButton.settip("Показать характеристики");
+            
+            // Add button to window, positioned like in inventory
+            // Position relative to widget size, not window size
+            Coord buttonPos = new Coord(sz.x + UI.scale(4), UI.scale(27));
+            win.add(statsToggleButton, buttonPos);
+        }
+    }
+    
+    private void updateButtonPosition() {
+        if (statsToggleButton == null) return;
+        
+        // Position button relative to widget size, like in inventory
+        // This ensures button stays at the right edge of the widget
+        statsToggleButton.c = new Coord(sz.x + UI.scale(4), UI.scale(27));
+    }
+    
+    private void updateStatsPanelVisibility() {
+        haven.Window win = getparent(haven.Window.class);
+        if (win == null) return;
+        
+        // Calculate required sizes
+        int statsWidth = UI.scale(220);
+        int maxX = 0;
+        for (Coord ec : ecoords) {
+            int slotX = ec.x + invsq.sz().x;
+            if (slotX > maxX) {
+                maxX = slotX;
+            }
+        }
+        int statsX = maxX + UI.scale(20);
+        
+        if (showStatsPanel) {
+            // Show stats widget and update it
+            if (statsWidget != null) {
+                statsWidget.show();
+                // Force update of stats
+                statsWidget.updateStatsFromItems(quickslots);
+            }
+            // Expand Equipory widget size to accommodate stats panel
+            Coord newEquipSize = new Coord(statsX + statsWidth, sz.y);
+            resize(newEquipSize);
+            // Expand window to show stats panel
+            win.resize(newEquipSize);
+        } else {
+            // Hide stats widget
+            if (statsWidget != null) {
+                statsWidget.hide();
+            }
+            // Shrink Equipory widget back to original size
+            if (originalSize != null) {
+                resize(originalSize);
+                // Shrink window back to original size
+                win.resize(originalSize);
+            } else {
+                // Fallback: use current sz as original
+                Coord currentSize = new Coord(sz.x, sz.y);
+                resize(currentSize);
+                win.resize(currentSize);
+            }
+        }
+        
+        // Update button position after resize (positioned relative to widget size)
+        updateButtonPosition();
+        
+        // Update button state to match panel visibility
+        if (statsToggleButton != null) {
+            statsToggleButton.a = showStatsPanel;
+        }
     }
 
     // Custom offset for STORE_HAT slot to avoid overlapping HEAD slot's button
@@ -385,6 +535,11 @@ public class NEquipory extends Equipory
         updatePercExpText();
         updateTotalArmor();
         checkPendingParasites();
+        
+        // Update stats display
+        if (statsWidget != null) {
+            statsWidget.updateStatsFromItems(quickslots);
+        }
     }
     
     private void checkPendingParasites() {
@@ -487,9 +642,13 @@ public class NEquipory extends Equipory
     @Override
     public void draw(GOut g) {
         super.draw(g);
-        Coord textCoord = new Coord(sz.x - percExpText.getWidth() - UI.scale(85), UI.scale(3));
+        // Move old elements (eye/perception and armor) to the left of mask slot (EYES slot)
+        // EYES slot is at ecoords[17] = rx, 1*yo where rx = invsq.sz().x + bg.sz().x
+        // Position to the left of EYES slot
+        int eyesSlotX = getSlotDisplayCoord(Slots.EYES.idx).x;
+        // Position elements to the left of the EYES slot with some spacing
+        Coord textCoord = new Coord(eyesSlotX - UI.scale(120), UI.scale(3));
         if (percExpText != null) {
-
             g.image(eye, textCoord, UI.scale(20,20));
             g.image(percExpText, textCoord.add(UI.scale(21, -1)));
         }

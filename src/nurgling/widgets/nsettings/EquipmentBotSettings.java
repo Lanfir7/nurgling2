@@ -3,6 +3,8 @@ package nurgling.widgets.nsettings;
 import haven.*;
 import nurgling.NStyle;
 import nurgling.NUtils;
+import nurgling.NGItem;
+import java.awt.Color;
 import nurgling.actions.bots.EquipmentBot;
 import nurgling.equipment.EquipmentPreset;
 import nurgling.equipment.EquipmentPresetIcons;
@@ -11,6 +13,7 @@ import nurgling.widgets.NEquipmentPresetButton;
 import nurgling.widgets.TextInputWindow;
 
 import nurgling.i18n.L10n;
+import nurgling.widgets.EquipmentStatsWidget;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -18,6 +21,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.Comparator;
 
 import static haven.Inventory.invsq;
 import static haven.Equipory.ebgs;
@@ -39,6 +44,9 @@ public class EquipmentBotSettings extends Panel implements DTarget {
     // Slot configuration for editor
     private final Map<Integer, String> slotConfig = new HashMap<>();
     private final Map<Integer, Tex> slotTextures = new HashMap<>();
+    
+    // Stats display widget
+    private StatsDisplayWidget statsWidget = null;
 
     // Custom horizontal layout: 2 rows of slots instead of 2 columns
     // Row 1: slots 0-11, Row 2: slots 12-22
@@ -63,6 +71,9 @@ public class EquipmentBotSettings extends Panel implements DTarget {
 
     public EquipmentBotSettings() {
         super("");
+        
+        // Increase window size to accommodate stats panel on the right
+        resize(new Coord(UI.scale(850), UI.scale(580)));
 
         int btnWidth = UI.scale(120);
         int btnHeight = UI.scale(28);
@@ -152,6 +163,21 @@ public class EquipmentBotSettings extends Panel implements DTarget {
         editorPanel.add(new Label(L10n.get("equipment.rightclick_hint")), new Coord(margin, y));
 
         // Equipment slots are drawn in draw() method
+        
+        // Stats display widget - positioned to the right of equipment slots
+        int statsWidth = UI.scale(220);
+        // Calculate position: after the equipment slots grid
+        int slotsGridWidth = SLOTS_PER_ROW * (Inventory.sqsz.x + UI.scale(2));
+        int statsX = gridOffset.x + slotsGridWidth + UI.scale(30);
+        int statsY = gridOffset.y;
+        int statsHeight = contentHeight - statsY - margin;
+        statsWidget = editorPanel.add(new StatsDisplayWidget(new Coord(statsWidth, statsHeight)), new Coord(statsX, statsY));
+        statsWidget.hide();
+        
+        // Ensure editor panel is wide enough
+        if (statsX + statsWidth > editorPanel.sz.x) {
+            editorPanel.resize(new Coord(statsX + statsWidth + margin, editorPanel.sz.y));
+        }
 
         // Buttons at bottom
         int btnY = bottomY - btnHeight - UI.scale(8);
@@ -238,6 +264,11 @@ public class EquipmentBotSettings extends Panel implements DTarget {
             if (slot >= 0) {
                 slotConfig.remove(slot);
                 slotTextures.remove(slot);
+                
+                // Update stats display
+                if (statsWidget != null) {
+                    statsWidget.updateStats(slotConfig);
+                }
                 return true;
             }
         }
@@ -259,6 +290,11 @@ public class EquipmentBotSettings extends Panel implements DTarget {
                         Resource.Image img = res.layer(Resource.imgc);
                         if (img != null) {
                             slotTextures.put(slot, new TexI(img.scaled()));
+                        }
+                        
+                        // Update stats display
+                        if (statsWidget != null) {
+                            statsWidget.updateStats(slotConfig);
                         }
                         return true;
                     }
@@ -340,6 +376,12 @@ public class EquipmentBotSettings extends Panel implements DTarget {
                     // Resource not available
                 }
             }
+        }
+        
+        // Update stats display
+        if (statsWidget != null) {
+            statsWidget.updateStats(slotConfig);
+            statsWidget.show();
         }
     }
 
@@ -477,6 +519,17 @@ public class EquipmentBotSettings extends Panel implements DTarget {
                 }
             }
             return super.mouseup(ev);
+        }
+    }
+    
+    // Use the shared EquipmentStatsWidget class
+    private class StatsDisplayWidget extends EquipmentStatsWidget {
+        public StatsDisplayWidget(Coord sz) {
+            super(sz);
+        }
+        
+        public void updateStats(Map<Integer, String> slotConfig) {
+            updateStatsFromPreset(slotConfig);
         }
     }
 }
