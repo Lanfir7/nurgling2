@@ -746,12 +746,16 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	final Pipe.Op mods;
 
 	private GobState() {
-	    if(setupmods.isEmpty()) {
+	    Collection<SetupMod> modscopy;
+	    synchronized(Gob.this) {
+		modscopy = new ArrayList<>(setupmods);
+	    }
+	    if(modscopy.isEmpty()) {
 		this.mods = null;
 	    } else {
-		Pipe.Op[] mods = new Pipe.Op[setupmods.size()];
+		Pipe.Op[] mods = new Pipe.Op[modscopy.size()];
 		int n = 0;
-		for(SetupMod mod : setupmods) {
+		for(SetupMod mod : modscopy) {
 		    if((mods[n] = mod.gobstate()) != null)
 			n++;
 		}
@@ -934,12 +938,16 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 			this.rot = null;
 		    }
 		    this.tilestate = tilestate;
-		    if(setupmods.isEmpty()) {
+		    Collection<SetupMod> modscopy;
+		    synchronized(Gob.this) {
+			modscopy = new ArrayList<>(setupmods);
+		    }
+		    if(modscopy.isEmpty()) {
 			this.mods = null;
 		    } else {
-			Pipe.Op[] mods = new Pipe.Op[setupmods.size()];
+			Pipe.Op[] mods = new Pipe.Op[modscopy.size()];
 			int n = 0;
-			for(SetupMod mod : setupmods) {
+			for(SetupMod mod : modscopy) {
 			    if((mods[n] = mod.placestate()) != null)
 				n++;
 			}
