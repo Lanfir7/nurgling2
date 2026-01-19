@@ -1074,9 +1074,9 @@ public class VSpec {
         hornblendeOp.add("Hornblende"); // Камень
         object.put("gfx/terobjs/bumlings/hornblende", hornblendeOp);
 
-//        ArrayList<String> limoniteOp = new ArrayList<>();
-//        limoniteOp.add("Iron Ochre"); // Камень
-//        object.put("gfx/terobjs/bumlings/limonite", limoniteOp);
+        ArrayList<String> limoniteOp = new ArrayList<>();
+        limoniteOp.add("Iron Ochre"); // Камень
+        object.put("gfx/terobjs/bumlings/limonite", limoniteOp);
 
         ArrayList<String> jasperOp = new ArrayList<>();
         jasperOp.add("Jasper"); // Камень

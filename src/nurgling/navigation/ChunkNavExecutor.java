@@ -160,6 +160,17 @@ public class ChunkNavExecutor implements Action {
 
                 currentLayer = getCurrentPlayerLayer();
                 tickPortalTracker();
+
+                // After portal traversal, ensure grid is loaded before continuing
+                // This prevents "grid not loaded" errors when starting next segment
+                if (!waitForGridLoad(gui)) {
+                    // Grid not loaded - wait a bit more and try again
+                    Thread.sleep(500);
+                    if (!waitForGridLoad(gui)) {
+                        // Still not loaded - this might cause issues, but continue anyway
+                        // The next segment's followSegmentTiles will also check grid load
+                    }
+                }
             }
 
             tickPortalTracker();
@@ -544,6 +555,13 @@ public class ChunkNavExecutor implements Action {
             return SegmentWalkResult.success();
         }
 
+        // Ensure grid is loaded before starting to walk the segment
+        // This is especially important after portal traversal
+        if (!waitForGridLoad(gui)) {
+            // Grid not loaded after waiting - return fail to trigger replanning
+            return SegmentWalkResult.fail();
+        }
+
         ChunkNavData segmentChunk = graph.getChunk(segment.gridId);
 
         // Get LIVE worldTileOrigin from MCache
@@ -593,17 +611,15 @@ public class ChunkNavExecutor implements Action {
                     // For buildings, navigate to door access point instead of gob center
                     Coord2d accessPoint = getPortalAccessPoint(visiblePortal);
                     if (accessPoint != null) {
-                        PathFinder accessPf = new PathFinder(accessPoint);
-                        Results accessResult = accessPf.run(gui);
-                        if (accessResult.IsSuccess()) {
+                        Results accessResult = tryPathFinderWithGridWait(gui, accessPoint);
+                        if (accessResult != null && accessResult.IsSuccess()) {
                             return SegmentWalkResult.successWithPortal(visiblePortal);
                         }
                         // Failed to reach access point, continue with coordinate-based walk
                     } else {
                         // Non-building portal - pathfind directly to gob
-                        PathFinder portalPf = new PathFinder(visiblePortal);
-                        Results portalResult = portalPf.run(gui);
-                        if (portalResult.IsSuccess()) {
+                        Results portalResult = tryPathFinderWithGridWait(gui, visiblePortal);
+                        if (portalResult != null && portalResult.IsSuccess()) {
                             return SegmentWalkResult.successWithPortal(visiblePortal);
                         }
                         // PathFinder failed, continue with coordinate-based walk
@@ -624,11 +640,9 @@ public class ChunkNavExecutor implements Action {
                 continue;
             }
 
-            // Try PathFinder first
-            PathFinder pf = new PathFinder(waypoint);
-            Results pfResult = pf.run(gui);
-
-            if (pfResult.IsSuccess()) {
+            // Try PathFinder first - with grid loading check
+            Results pfResult = tryPathFinderWithGridWait(gui, waypoint);
+            if (pfResult != null && pfResult.IsSuccess()) {
                 currentStepIndex = targetIndex + 1;
                 continue;
             }
@@ -643,8 +657,8 @@ public class ChunkNavExecutor implements Action {
                 double midDist = player.rc.dist(midWaypoint);
                 if (midDist < tileSize * 1.5) continue;
 
-                PathFinder midPf = new PathFinder(midWaypoint);
-                if (midPf.run(gui).IsSuccess()) {
+                Results midResult = tryPathFinderWithGridWait(gui, midWaypoint);
+                if (midResult != null && midResult.IsSuccess()) {
                     currentStepIndex = midIndex + 1;
                     madeProgress = true;
                     break;
@@ -665,7 +679,8 @@ public class ChunkNavExecutor implements Action {
                         break;
                     }
 
-                    if (new PathFinder(singleWaypoint).run(gui).IsSuccess()) {
+                    Results singleResult = tryPathFinderWithGridWait(gui, singleWaypoint);
+                    if (singleResult != null && singleResult.IsSuccess()) {
                         currentStepIndex = singleIndex + 1;
                         madeProgress = true;
                         break;
@@ -679,6 +694,111 @@ public class ChunkNavExecutor implements Action {
         }
 
         return SegmentWalkResult.success();
+    }
+
+    /**
+     * Wait for grid to load at player's current position.
+     * Returns true if grid is loaded, false if timeout.
+     */
+    private boolean waitForGridLoad(NGameUI gui) throws InterruptedException {
+        Gob player = gui.map.player();
+        if (player == null || player.rc == null) {
+            return false;
+        }
+
+        MCache mcache = gui.map.glob.map;
+        Coord tileCoord = player.rc.floor(MCache.tilesz);
+        Coord gc = tileCoord.div(MCache.cmaps);
+
+        int maxRetries = 15; // Увеличено до 15 попыток (3 секунды)
+        int retryCount = 0;
+
+        while (retryCount < maxRetries) {
+            try {
+                mcache.getgrid(gc);
+                // Grid loaded successfully
+                return true;
+            } catch (MCache.LoadingMap e) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    return false; // Timeout
+                }
+                Thread.sleep(200); // Wait 200ms before retry
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Safely try to use PathFinder, waiting for grid to load if necessary.
+     * Handles MCache.LoadingMap exception by waiting for grid load.
+     */
+    private Results tryPathFinderWithGridWait(NGameUI gui, Coord2d target) throws InterruptedException {
+        return tryPathFinderWithGridWait(gui, target, null);
+    }
+
+    /**
+     * Safely try to use PathFinder with a Gob target, waiting for grid to load if necessary.
+     * Handles MCache.LoadingMap exception by waiting for grid load.
+     */
+    private Results tryPathFinderWithGridWait(NGameUI gui, Gob targetGob) throws InterruptedException {
+        if (targetGob == null) return null;
+        return tryPathFinderWithGridWait(gui, targetGob.rc, targetGob);
+    }
+
+    /**
+     * Safely try to use PathFinder, waiting for grid to load if necessary.
+     * Handles MCache.LoadingMap exception by waiting for grid load.
+     */
+    private Results tryPathFinderWithGridWait(NGameUI gui, Coord2d target, Gob targetGob) throws InterruptedException {
+        int maxRetries = 10; // Увеличено до 10 попыток (2 секунды)
+        int retryCount = 0;
+        
+        while (retryCount < maxRetries) {
+            try {
+                // Check if grid is loaded for the target position
+                MCache mcache = gui.map.glob.map;
+                Coord tileCoord = target.floor(MCache.tilesz);
+                Coord gc = tileCoord.div(MCache.cmaps);
+                
+                try {
+                    // Try to get grid - this will throw LoadingMap if not loaded
+                    mcache.getgrid(gc);
+                } catch (MCache.LoadingMap e) {
+                    // Grid not loaded yet - wait a bit and retry
+                    retryCount++;
+                    if (retryCount >= maxRetries) {
+                        return null; // Grid still not loaded after retries
+                    }
+                    Thread.sleep(200); // Wait 200ms before retry
+                    continue;
+                }
+                
+                // Grid is loaded - try PathFinder
+                PathFinder pf;
+                if (targetGob != null) {
+                    pf = new PathFinder(targetGob);
+                } else {
+                    pf = new PathFinder(target);
+                }
+                return pf.run(gui);
+                
+            } catch (MCache.LoadingMap e) {
+                // PathFinder construction or run threw LoadingMap - wait and retry
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    return null; // Grid still not loaded after retries
+                }
+                Thread.sleep(200); // Wait 200ms before retry
+                continue;
+            } catch (Exception e) {
+                // Other error - return null to indicate failure
+                return null;
+            }
+        }
+        
+        return null;
     }
 
     /**
@@ -788,19 +908,59 @@ public class ChunkNavExecutor implements Action {
             return Results.FAIL();
         }
 
+        Gob currentPlayer = gui.map.player();
+        if (currentPlayer == null) {
+            return Results.FAIL();
+        }
+
+        // Check if player is already inside the area
+        if (targetArea.checkHit(currentPlayer.rc)) {
+            return Results.SUCCESS();
+        }
+
         Pair<Coord2d, Coord2d> areaBounds = targetArea.getRCArea();
         Coord2d areaCenter = targetArea.getCenter2d();
+
+        // If area is not visible (too far), try to get center from stored data
+        if (areaCenter == null && targetArea.space != null && targetArea.space.space != null && !targetArea.space.space.isEmpty()) {
+            // Calculate center from stored VArea regions (similar to ChunkNavPlanner.getAreaCenterFromStored)
+            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+
+            for (java.util.Map.Entry<Long, nurgling.areas.NArea.VArea> entry : targetArea.space.space.entrySet()) {
+                ChunkNavData chunk = graph.getChunk(entry.getKey());
+                if (chunk == null || chunk.worldTileOrigin == null) continue;
+
+                nurgling.areas.NArea.VArea varea = entry.getValue();
+                if (varea.area != null) {
+                    Coord ul = chunk.worldTileOrigin.add(varea.area.ul);
+                    Coord br = chunk.worldTileOrigin.add(varea.area.br);
+                    minX = Math.min(minX, ul.x);
+                    minY = Math.min(minY, ul.y);
+                    maxX = Math.max(maxX, br.x);
+                    maxY = Math.max(maxY, br.y);
+                }
+            }
+
+            if (minX != Integer.MAX_VALUE) {
+                int centerX = (minX + maxX) / 2;
+                int centerY = (minY + maxY) / 2;
+                areaCenter = new Coord(centerX, centerY).mul(MCache.tilesz).add(MCache.tilehsz);
+            }
+        }
 
         if (areaBounds == null && areaCenter == null) {
             return Results.FAIL();
         }
 
-        if (areaBounds == null) {
+        // If area bounds are not available (too far), navigate to center first
+        if (areaBounds == null && areaCenter != null) {
             Results walkResult = walkTowardTarget(areaCenter, gui, WalkConfig.DEFAULT);
             if (!walkResult.IsSuccess()) {
                 return Results.FAIL();
             }
 
+            // After reaching center, try to get area bounds
             int waitAttempts = 0;
             while (areaBounds == null && waitAttempts < 10) {
                 areaBounds = targetArea.getRCArea();
@@ -822,24 +982,55 @@ public class ChunkNavExecutor implements Action {
             }
         }
 
+        // If still no bounds, check if we're inside using checkHit
         if (areaBounds == null) {
+            currentPlayer = gui.map.player();
+            if (currentPlayer != null && targetArea.checkHit(currentPlayer.rc)) {
+                return Results.SUCCESS();
+            }
             return Results.FAIL();
         }
 
-        Gob currentPlayer = gui.map.player();
+        // Update player position (may have changed after navigation)
+        currentPlayer = gui.map.player();
         if (currentPlayer == null) {
             return Results.FAIL();
         }
-        Coord2d playerPos = currentPlayer.rc;
+        Coord2d currentPlayerPos = currentPlayer.rc;
 
         List<Coord2d> edgePoints = getAllAreaEdgePoints(areaBounds);
-        edgePoints.sort(Comparator.comparingDouble(p -> p.dist(playerPos)));
+        edgePoints.sort(Comparator.comparingDouble(p -> p.dist(currentPlayerPos)));
 
+        // Try to reach each edge point, checking if we're inside the area after each attempt
         for (Coord2d edgePoint : edgePoints) {
             Results edgeResult = walkTowardTarget(edgePoint, gui, WalkConfig.DEFAULT);
             if (edgeResult.IsSuccess()) {
-                return Results.SUCCESS();
+                // After reaching edge point, check if we're actually inside the area
+                currentPlayer = gui.map.player();
+                if (currentPlayer != null && targetArea.checkHit(currentPlayer.rc)) {
+                    return Results.SUCCESS();
+                }
+                // Not inside yet, but we reached the edge point - try to walk into the area
+                // Walk toward center of area to ensure we're inside
+                Coord2d center = new Coord2d(
+                    (areaBounds.a.x + areaBounds.b.x) / 2,
+                    (areaBounds.a.y + areaBounds.b.y) / 2
+                );
+                Results centerResult = walkTowardTarget(center, gui, WalkConfig.DEFAULT);
+                if (centerResult.IsSuccess()) {
+                    // Check again if we're inside
+                    currentPlayer = gui.map.player();
+                    if (currentPlayer != null && targetArea.checkHit(currentPlayer.rc)) {
+                        return Results.SUCCESS();
+                    }
+                }
             }
+        }
+
+        // Final check - maybe we're inside the area now
+        currentPlayer = gui.map.player();
+        if (currentPlayer != null && targetArea.checkHit(currentPlayer.rc)) {
+            return Results.SUCCESS();
         }
 
         return Results.FAIL();
@@ -1188,29 +1379,111 @@ public class ChunkNavExecutor implements Action {
         return points;
     }
 
-    private static class WaitForMapLoad extends NTask {
+    private class WaitForMapLoad extends NTask {
         private long startTime;
+        private long playerAppearedTime = 0;
+        private long gridIdStableTime = 0;
+        private long lastGridId = -1;
         private static final long TIMEOUT_MS = PORTAL_LOAD_TIMEOUT_MS;
+        private static final long MIN_WAIT_AFTER_PLAYER_MS = 3000; // Минимум 3 секунды после появления игрока
+        private static final long GRID_ID_STABILITY_MS = 1000; // GridId должен быть стабильным 1 секунду
 
         public boolean check() {
             if (startTime == 0) {
                 startTime = System.currentTimeMillis();
             }
 
-            if (System.currentTimeMillis() - startTime > TIMEOUT_MS) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            
+            // Таймаут - не ждем вечно
+            if (elapsed > TIMEOUT_MS) {
                 return true;
             }
 
             try {
                 Gob player = NUtils.player();
-                if (player != null) {
-                    return System.currentTimeMillis() - startTime > 2000;
+                if (player == null || player.rc == null) {
+                    return false; // Игрок еще не появился
                 }
-            } catch (Exception e) {
-                // Still loading
-            }
 
-            return false;
+                // Запоминаем время появления игрока
+                if (playerAppearedTime == 0) {
+                    playerAppearedTime = System.currentTimeMillis();
+                }
+
+                // Проверяем, что grid загружен в MCache
+                NGameUI gui = NUtils.getGameUI();
+                if (gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) {
+                    return false;
+                }
+
+                MCache mcache = gui.map.glob.map;
+                Coord2d playerPos = player.rc;
+                Coord tileCoord = playerPos.floor(MCache.tilesz);
+                
+                // Проверяем, что grid загружен
+                MCache.Grid playerGrid = null;
+                try {
+                    playerGrid = mcache.getgridt(tileCoord);
+                } catch (Exception e) {
+                    // Grid еще не загружен
+                    return false;
+                }
+
+                if (playerGrid == null) {
+                    return false; // Grid не загружен
+                }
+
+                // Проверяем, что можем получить gridId через ChunkNavGraph
+                long currentGridId = graph.getPlayerChunkId();
+                if (currentGridId == -1) {
+                    return false; // Не можем определить gridId - мир еще не готов
+                }
+
+                // Проверяем стабильность gridId (он не должен меняться)
+                if (currentGridId != lastGridId) {
+                    lastGridId = currentGridId;
+                    gridIdStableTime = System.currentTimeMillis();
+                    return false; // GridId изменился, сбрасываем таймер стабильности
+                }
+
+                // Проверяем, что gridId стабилен достаточно долго
+                if (gridIdStableTime == 0 || (System.currentTimeMillis() - gridIdStableTime) < GRID_ID_STABILITY_MS) {
+                    return false;
+                }
+
+                // Проверяем, что в мире есть объекты (подтверждение загрузки)
+                // Проверяем наличие объектов через попытку итерации по OCache
+                boolean hasObjects = false;
+                try {
+                    synchronized (gui.map.glob.oc) {
+                        // Проверяем, что OCache не пустой
+                        // Если OCache пустой, итератор не будет иметь элементов
+                        if (gui.map.glob.oc.iterator().hasNext()) {
+                            hasObjects = true;
+                        }
+                    }
+                } catch (Exception e) {
+                    // Игнорируем ошибки
+                }
+
+                // Если объектов нет, мир еще не загружен
+                if (!hasObjects) {
+                    return false;
+                }
+
+                // Проверяем, что прошло достаточно времени после появления игрока
+                long timeSincePlayerAppeared = System.currentTimeMillis() - playerAppearedTime;
+                if (timeSincePlayerAppeared < MIN_WAIT_AFTER_PLAYER_MS) {
+                    return false;
+                }
+
+                // Все проверки пройдены - мир загружен
+                return true;
+            } catch (Exception e) {
+                // Все еще загружается
+                return false;
+            }
         }
     }
 

@@ -51,7 +51,9 @@ public class NSearchWidget extends Widget {
             @Override
             public boolean keydown(KeyDownEvent e) {
                 boolean res = super.keydown(e);
-                NUtils.getGameUI().itemsForSearch.install(text());
+                NGameUI gui = NUtils.getGameUI();
+                if(gui != null && gui.itemsForSearch != null)
+                    gui.itemsForSearch.install(text());
                 return res;
             }
         };
@@ -76,7 +78,9 @@ public class NSearchWidget extends Widget {
                     write();
                     super.click();
                 }else {
-                    NUtils.getGameUI().error("Input field is empty");
+                    NGameUI gui = NUtils.getGameUI();
+                    if(gui != null)
+                        gui.error("Input field is empty");
                 }
             }
         };
@@ -118,11 +122,25 @@ public class NSearchWidget extends Widget {
             }
 
         };
-        NUtils.getGameUI().add(helpwnd);
-
+        NGameUI gui = NUtils.getGameUI();
+        NPopupWidget historyWidget = new NPopupWidget(new Coord(UI.scale(200), UI.scale(150)), NPopupWidget.Type.TOP);
+        if(gui != null) {
+            gui.add(helpwnd);
+            history = gui.add(historyWidget);
+        } else {
+            // GUI not yet initialized, add to root instead
+            // Will be moved to GUI when it becomes available
+            NUI ui = NUtils.getUI();
+            if(ui != null && ui.root != null) {
+                ui.root.add(helpwnd);
+                history = ui.root.add(historyWidget);
+            } else {
+                // Fallback: create without adding (will be added later)
+                history = historyWidget;
+            }
+        }
         initHelp();
         helpwnd.hide();
-        history = NUtils.getGameUI().add(new NPopupWidget(new Coord(UI.scale(200), UI.scale(150)), NPopupWidget.Type.TOP));
 
         history.pack();
         cmdList = history.add(new CmdList(UI.scale(250, 200)),history.atl);
@@ -256,7 +274,9 @@ public class NSearchWidget extends Widget {
                     if(!psel) {
                         String value = item.text.text();
                         searchF.settext(value);
-                        NUtils.getGameUI().itemsForSearch.install(value);
+                        NGameUI gui = NUtils.getGameUI();
+                        if(gui != null && gui.itemsForSearch != null)
+                            gui.itemsForSearch.install(value);
                     }
                     return(true);
                 }

@@ -746,6 +746,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	final Pipe.Op mods;
 
 	private GobState() {
+	    // Synchronize to safely copy setupmods (may be modified from other threads)
 	    Collection<SetupMod> modscopy;
 	    synchronized(Gob.this) {
 		modscopy = new ArrayList<>(setupmods);
@@ -938,10 +939,8 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 			this.rot = null;
 		    }
 		    this.tilestate = tilestate;
-		    Collection<SetupMod> modscopy;
-		    synchronized(Gob.this) {
-			modscopy = new ArrayList<>(setupmods);
-		    }
+		    // autotick() is already synchronized on Gob.this, so we can safely copy setupmods without additional sync
+		    Collection<SetupMod> modscopy = new ArrayList<>(setupmods);
 		    if(modscopy.isEmpty()) {
 			this.mods = null;
 		    } else {

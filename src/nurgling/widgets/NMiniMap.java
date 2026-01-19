@@ -2061,6 +2061,8 @@ NMiniMap extends MiniMap {
         String resourceName = lower;
         if (lower.equals("rock salt") || lower.equals("rocksalt")) {
             resourceName = "halite"; // Rock Salt использует иконку halite
+        } else if (lower.equals("iron ochre") || lower.equals("ironochre")) {
+            resourceName = "limonite"; // Iron Ochre использует иконку limonite
         }
         
         // Нормализуем название: убираем пробелы (например, "lead glance" -> "leadglance")
@@ -2101,6 +2103,8 @@ NMiniMap extends MiniMap {
         String resourceName = lower;
         if (lower.equals("rock salt") || lower.equals("rocksalt")) {
             resourceName = "halite"; // Rock Salt использует иконку halite
+        } else if (lower.equals("iron ochre") || lower.equals("ironochre")) {
+            resourceName = "limonite"; // Iron Ochre использует иконку limonite
         }
         
         // Нормализуем название: убираем пробелы (например, "lead glance" -> "leadglance")
