@@ -857,6 +857,12 @@ public class UI {
 
     public void keydown(KeyEvent ev) {
 	setmods(ev);
+	// Обработка F8 для переключения рендеринга
+	if(ev.getKeyCode() == KeyEvent.VK_F8) {
+	    GLPanel.Loop.renderDisabled = !GLPanel.Loop.renderDisabled;
+	    msg("Рендеринг " + (GLPanel.Loop.renderDisabled ? "отключен" : "включен"));
+	    return;
+	}
 	if(!dispatch(root, new KeyDownEvent(ev)))
 	    dispatch(root, new GlobKeyEvent(ev));
     }

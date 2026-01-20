@@ -586,9 +586,14 @@ public class MasterMiner extends ActionWithFinal {
             // Для остальных камней: старая формула с дебафами инструмента
             double wallQ;
             if ("Quarryartz".equals(stoneType)) {
-                // Новая формула для квариарца: f3 - f4 + f3 = 2*f3 - f4
-                // wallQ - это качество в стене, оно одинаково для всех инструментов
-                wallQ = (2.0 * f3) - f4;
+                // Если камень ниже инструмента - качество в стене равно качеству камня
+                if (f3 < f4) {
+                    wallQ = f3;
+                } else {
+                    // Новая формула для квариарца: f3 - f4 + f3 = 2*f3 - f4
+                    // wallQ - это качество в стене, оно одинаково для всех инструментов
+                    wallQ = (2.0 * f3) - f4;
+                }
             } else {
                 // Старая формула с дебафами инструмента для остальных камней
                 wallQ = calcWallQ(f3, f4, f5);
@@ -600,10 +605,15 @@ public class MasterMiner extends ActionWithFinal {
             if (currentToolType != ToolType.STONE_AXE && set.stoneAxeQ != null) {
                 Double pred;
                 if ("Quarryartz".equals(stoneType)) {
-                    // Для квариарца: обратная формула от wallQ = 2*f3 - f4
-                    // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
-                    // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
-                    pred = (wallQ + set.stoneAxeQ) / 2.0;
+                    // Если качество в стене ниже инструмента - предсказанное качество равно wallQ
+                    if (wallQ < set.stoneAxeQ) {
+                        pred = wallQ;
+                    } else {
+                        // Для квариарца: обратная формула от wallQ = 2*f3 - f4
+                        // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
+                        // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
+                        pred = (wallQ + set.stoneAxeQ) / 2.0;
+                    }
                 } else {
                     pred = invDropQ(wallQ, set.stoneAxeQ, 0.8);
                 }
@@ -612,10 +622,15 @@ public class MasterMiner extends ActionWithFinal {
             if (currentToolType != ToolType.TINKER_AXE && set.tinkerAxeQ != null) {
                 Double pred;
                 if ("Quarryartz".equals(stoneType)) {
-                    // Для квариарца: обратная формула от wallQ = 2*f3 - f4
-                    // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
-                    // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
-                    pred = (wallQ + set.tinkerAxeQ) / 2.0;
+                    // Если качество в стене ниже инструмента - предсказанное качество равно wallQ
+                    if (wallQ < set.tinkerAxeQ) {
+                        pred = wallQ;
+                    } else {
+                        // Для квариарца: обратная формула от wallQ = 2*f3 - f4
+                        // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
+                        // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
+                        pred = (wallQ + set.tinkerAxeQ) / 2.0;
+                    }
                 } else {
                     pred = invDropQ(wallQ, set.tinkerAxeQ, 0.9);
                 }
@@ -624,10 +639,15 @@ public class MasterMiner extends ActionWithFinal {
             if (currentToolType != ToolType.PICKAXE && set.pickaxeQ != null) {
                 Double pred;
                 if ("Quarryartz".equals(stoneType)) {
-                    // Для квариарца: обратная формула от wallQ = 2*f3 - f4
-                    // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
-                    // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
-                    pred = (wallQ + set.pickaxeQ) / 2.0;
+                    // Если качество в стене ниже инструмента - предсказанное качество равно wallQ
+                    if (wallQ < set.pickaxeQ) {
+                        pred = wallQ;
+                    } else {
+                        // Для квариарца: обратная формула от wallQ = 2*f3 - f4
+                        // Если wallQ = 2*f3_new - f4_new, то f3_new = (wallQ + f4_new) / 2
+                        // wallQ одинаково для всех инструментов, поэтому используем то же wallQ
+                        pred = (wallQ + set.pickaxeQ) / 2.0;
+                    }
                 } else {
                     pred = invDropQ(wallQ, set.pickaxeQ, 1.0);
                 }

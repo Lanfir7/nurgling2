@@ -199,8 +199,8 @@ public class MinimapExploredAreaRenderer {
         }
     }
     
-    private static final java.util.Map<CacheKey, ExploredOverlayCache> overlayCache = new java.util.HashMap<>();
-    private static final java.util.Map<CacheKey, ExploredOverlayCache> sessionOverlayCache = new java.util.HashMap<>();
+    private static final java.util.Map<CacheKey, ExploredOverlayCache> overlayCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<CacheKey, ExploredOverlayCache> sessionOverlayCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Get explored area overlay for a base grid with caching.
@@ -221,12 +221,21 @@ public class MinimapExploredAreaRenderer {
             BufferedImage overlayBuf = renderOverlayImage(gridMask.mask, NMiniMap.VIEW_EXPLORED_COLOR);
             Tex overlayTex = new TexI(overlayBuf);
             
+            // Dispose old texture to prevent GPU memory leak
+            if (cache != null && cache.img != null) {
+                try {
+                    cache.img.dispose();
+                } catch (Exception ignore) {}
+            }
+            
             // Update cache with per-grid seq
-            cache = new ExploredOverlayCache();
+            if (cache == null) {
+                cache = new ExploredOverlayCache();
+                overlayCache.put(key, cache);
+            }
             cache.img = overlayTex;
             cache.seq = gridMask.seq;
             cache.dataLevel = dataLevel;
-            overlayCache.put(key, cache);
             
             return overlayTex;
         } catch (Exception e) {
@@ -252,12 +261,21 @@ public class MinimapExploredAreaRenderer {
             BufferedImage overlayBuf = renderOverlayImage(gridMask.mask, NMiniMap.VIEW_SESSION_COLOR);
             Tex overlayTex = new TexI(overlayBuf);
             
+            // Dispose old texture to prevent GPU memory leak
+            if (cache != null && cache.img != null) {
+                try {
+                    cache.img.dispose();
+                } catch (Exception ignore) {}
+            }
+            
             // Update cache with per-grid seq
-            cache = new ExploredOverlayCache();
+            if (cache == null) {
+                cache = new ExploredOverlayCache();
+                sessionOverlayCache.put(key, cache);
+            }
             cache.img = overlayTex;
             cache.seq = gridMask.seq;
             cache.dataLevel = dataLevel;
-            sessionOverlayCache.put(key, cache);
             
             return overlayTex;
         } catch (Exception e) {

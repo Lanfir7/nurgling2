@@ -42,6 +42,7 @@ public interface GLPanel extends UIPanel, UI.Context {
 
     public static class Loop implements Console.Directory {
 	public static boolean gldebug = false;
+	public static volatile boolean renderDisabled = false;
 	public final GLPanel p;
 	public final CPUProfile uprof = new CPUProfile(300), rprof = new CPUProfile(300);
 	public final GPUProfile gprof = new GPUProfile(300);
@@ -322,7 +323,6 @@ public interface GLPanel extends UIPanel, UI.Context {
 		while(true) {
 		    double fwaited = 0;
 		    GLEnvironment env = p.env();
-		    buf = env.render();
 		    UI ui;
 		    synchronized(uilock) {
 			this.lockedui = ui = this.ui;
@@ -332,14 +332,20 @@ public interface GLPanel extends UIPanel, UI.Context {
 		    GSettings prefs = ui.gprefs;
 		    SyncMode syncmode = prefs.syncmode.val;
 		    CPUProfile.Current curf = profile.get() ?  CPUProfile.set(uprof.new Frame()) : null;
-		    GPUProfile.Frame curgf = profilegpu.get() ? gprof.new Frame(buf) : null;
-		    rprofc = profile.get() ? new ProfileCycle(rprof, rprofc, buf) : null;
-		    BufferBGL.Profile frameprof = false ? new BufferBGL.Profile() : null;
-		    if(frameprof != null) buf.submit(frameprof.start);
-		    buf.submit(new ProfilePart(rprofc, "tick"));
-		    if(curgf != null) curgf.part(buf, "tick");
+		    GPUProfile.Frame curgf = null;
+		    
+		    // Всегда создаем буфер, даже если рендеринг отключен, чтобы избежать NullPointerException
+		    buf = env.render();
+		    if(!renderDisabled) {
+			curgf = profilegpu.get() ? gprof.new Frame(buf) : null;
+			rprofc = profile.get() ? new ProfileCycle(rprof, rprofc, buf) : null;
+			BufferBGL.Profile frameprof = false ? new BufferBGL.Profile() : null;
+			if(frameprof != null) buf.submit(frameprof.start);
+			buf.submit(new ProfilePart(rprofc, "tick"));
+			if(curgf != null) curgf.part(buf, "tick");
+		    }
 		    Fence curframe = new Fence();
-		    if(syncmode == SyncMode.FRAME)
+		    if(!renderDisabled && syncmode == SyncMode.FRAME)
 			buf.submit(curframe);
 
 		    boolean tickwait = (syncmode == SyncMode.FRAME) || (syncmode == SyncMode.TICK);
@@ -362,16 +368,20 @@ public interface GLPanel extends UIPanel, UI.Context {
 			CPUProfile.phase(curf, "stick");
 			if(ui.sess != null) {
 			    ui.sess.glob.ctick();
+			    // Всегда вызываем gtick, но он может быть пустым если рендеринг отключен
 			    ui.sess.glob.gtick(buf);
 			}
 			CPUProfile.phase(curf, "tick");
 			ui.tick();
+			// Всегда вызываем gtick, но он может быть пустым если рендеринг отключен
 			ui.gtick(buf);
 			Area shape = p.shape();
 			if((ui.root.sz.x != (shape.br.x - shape.ul.x)) || (ui.root.sz.y != (shape.br.y - shape.ul.y)))
 			    ui.root.resize(new Coord(shape.br.x - shape.ul.x, shape.br.y - shape.ul.y));
-			buf.submit(new ProfilePart(rprofc, "draw"));
-			if(curgf != null) curgf.part(buf, "draw");
+			if(!renderDisabled) {
+			    buf.submit(new ProfilePart(rprofc, "draw"));
+			    if(curgf != null) curgf.part(buf, "draw");
+			}
 		    }
 
 		    if(tickwait) {
@@ -384,27 +394,34 @@ public interface GLPanel extends UIPanel, UI.Context {
 			}
 		    }
 
-		    CPUProfile.phase(curf, "draw");
-		    display(ui, buf);
-		    CPUProfile.phase(curf, "aux");
-		    if(curgf != null) curgf.part(buf, "swap");
-		    buf.submit(new ProfilePart(rprofc, "swap"));
-		    buf.submit(new BufferSwap(cfno));
-		    if(curgf != null) curgf.fin(buf);
-		    if(syncmode == SyncMode.FINISH) {
-			buf.submit(new ProfilePart(rprofc, "finish"));
-			buf.submit(new GLFinish());
+		    if(!renderDisabled) {
+			CPUProfile.phase(curf, "draw");
+			display(ui, buf);
+			CPUProfile.phase(curf, "aux");
+			if(curgf != null) curgf.part(buf, "swap");
+			buf.submit(new ProfilePart(rprofc, "swap"));
+			buf.submit(new BufferSwap(cfno));
+			if(curgf != null) curgf.fin(buf);
+			if(syncmode == SyncMode.FINISH) {
+			    buf.submit(new ProfilePart(rprofc, "finish"));
+			    buf.submit(new GLFinish());
+			}
+			if(syncmode != SyncMode.FRAME)
+			    buf.submit(curframe);
+			buf.submit(new ProfilePart(rprofc, "wait"));
+			buf.submit(new FrameCycle());
+			BufferBGL.Profile frameprof = false ? new BufferBGL.Profile() : null;
+			if(frameprof != null) {
+			    buf.submit(frameprof.stop);
+			    buf.submit(frameprof.dump(Utils.path("frameprof")));
+			}
+			env.submit(buf);
+			buf = null;
+		    } else {
+			// Когда рендеринг отключен, просто освобождаем буфер без отображения
+			buf.dispose();
+			buf = null;
 		    }
-		    if(syncmode != SyncMode.FRAME)
-			buf.submit(curframe);
-		    buf.submit(new ProfilePart(rprofc, "wait"));
-		    buf.submit(new FrameCycle());
-		    if(frameprof != null) {
-			buf.submit(frameprof.stop);
-			buf.submit(frameprof.dump(Utils.path("frameprof")));
-		    }
-		    env.submit(buf);
-		    buf = null;
 
 		    CPUProfile.phase(curf, "wait");
 		    double now = Utils.rtime();
@@ -436,7 +453,11 @@ public interface GLPanel extends UIPanel, UI.Context {
 		    framep = (framep + 1) % frames.length;
 
 		    CPUProfile.end(curf);
-		    prevframe = curframe;
+		    // Устанавливаем prevframe только если рендеринг включен и curframe был отправлен в буфер
+		    if(!renderDisabled)
+			prevframe = curframe;
+		    else
+			prevframe = null;
 		}
 	    } finally {
 		synchronized(uilock) {

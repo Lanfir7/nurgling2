@@ -473,11 +473,82 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	    }
 	}
 	ols.removeAll(toRemove);
+	
+	// Проверка и применение подсветки для буксируемых мертвых животных (Orc, Whale)
+	updateTowedAnimalHighlight();
+	
 	updstate();
 	if(virtual && ols.isEmpty() && (getattr(Drawable.class) == null))
 	    glob.oc.remove(this);
 	if(!ngob.effector)
 		ngob.tick(dt);
+    }
+    
+    /**
+     * Обновляет подсветку для буксируемых мертвых животных (Orc, Whale)
+     * Оптимизировано: проверяет только если есть Following (прицеплено к чему-то)
+     */
+    private void updateTowedAnimalHighlight() {
+	// Быстрая проверка: только если есть Following (прицеплено к чему-то)
+	Following following = getattr(Following.class);
+	if(following == null) {
+	    // Если нет Following, удаляем подсветку если была
+	    TowedAnimalHighlight highlight = getattr(TowedAnimalHighlight.class);
+	    if(highlight != null) {
+		delattr(TowedAnimalHighlight.class);
+	    }
+	    return;
+	}
+	
+	// Проверяем, что это животное (kritter)
+	if(ngob == null || ngob.name == null)
+	    return;
+	
+	String name = ngob.name;
+	// Быстрая проверка: только kritter (животные)
+	if(!name.contains("/kritter/"))
+	    return;
+	
+	// Проверяем, является ли это Orc или Whale
+	// Orca: gfx/kritter/orca/orca
+	// Spermwhale: gfx/kritter/spermwhale/spermwhale
+	// Используем точную проверку имени
+	boolean isOrcOrWhale = name.equals("gfx/kritter/orca/orca") || 
+				name.equals("gfx/kritter/spermwhale/spermwhale") ||
+				name.contains("orca/orca") || 
+				name.contains("spermwhale/spermwhale");
+	
+	if(!isOrcOrWhale)
+	    return;
+	
+	// Проверяем, мертво ли животное (dead или knock)
+	String pose = pose();
+	boolean isDead = pose != null && (pose.contains("dead") || pose.contains("knock"));
+	
+	if(!isDead)
+	    return;
+	
+	// Проверяем, прицеплено ли животное к лодке
+	Gob target = following.tgt();
+	boolean isTowed = false;
+	
+	if(target != null && target.ngob != null && target.ngob.name != null) {
+	    String vehicleName = target.ngob.name;
+	    // Проверяем, является ли цель лодкой
+	    isTowed = vehicleName.contains("/vehicle/snekkja") ||
+		      vehicleName.contains("/vehicle/knarr") ||
+		      vehicleName.contains("/vehicle/rowboat") ||
+		      vehicleName.contains("/vehicle/spark") ||
+		      vehicleName.contains("/vehicle/dugout");
+	}
+	
+	// Добавляем или удаляем атрибут подсветки
+	TowedAnimalHighlight highlight = getattr(TowedAnimalHighlight.class);
+	if(isTowed && highlight == null) {
+	    setattr(new TowedAnimalHighlight(this));
+	} else if(!isTowed && highlight != null) {
+	    delattr(TowedAnimalHighlight.class);
+	}
     }
 
     public void gtick(Render g) {
