@@ -81,6 +81,17 @@ public class BotRegistry {
                 "maintainstock",
                 false
         ));
+        bots.add(new BotDescriptor(
+                "followdist",
+                BotDescriptor.BotType.UTILS,
+                "Follow Distance Tool",
+                "Opens a window to follow a target at specified distance. Select target by clicking on object, set distance and start following. No combat, just follows like an animal.",
+                false,
+                true,
+                FollowDistanceTool.class,
+                "followdist",
+                false
+        ));
 
         // RESOURCES (using localization keys: bot.<id>.title and bot.<id>.desc)
         bots.add(new BotDescriptor("choper", BotDescriptor.BotType.RESOURCES, "bot.chopper.title", "bot.chopper.desc", false, true, Chopper.class, "choper", false));
