@@ -318,6 +318,14 @@ public class MiniMap extends Widget
 		return(true);
 	    return(false);
 	}
+
+	// Воспроизводит звук уведомления, если он есть (используется даже при отключенном рендеринге)
+	public void playNotification() {
+	    if(snotify != null) {
+		snotify.accept(ui);
+		snotify = null;
+	    }
+	}
     }
 
     public static class MarkerID extends GAttrib {
@@ -614,9 +622,14 @@ public class MiniMap extends Widget
                 GobIcon.Setting conf = iconconf.get(icon.icon());
 			if((conf != null) && conf.show) {
 			    DisplayIcon disp = pmap.remove(icon);
-			    if(disp == null)
+			    boolean isNew = (disp == null);
+			    if(isNew)
 				disp = new DisplayIcon(icon, conf);
 			    disp.update(gob.rc, gob.a);
+			    // Воспроизводим звук сразу для новых объектов, даже если рендеринг отключен
+			    if(isNew) {
+				disp.playNotification();
+			    }
 			    ret.add(disp);
 			}
 		    }

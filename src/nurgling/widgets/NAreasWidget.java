@@ -40,6 +40,16 @@ public class NAreasWidget extends Window
     final static Tex folderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/d"));
     final static Tex openfolderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/u"));
     NCatSelection catSelection;
+    
+    // Состояние раскрытия правой панели (Take и Put вместе)
+    private boolean showRightPanel = true;
+    private Frame in_frame;
+    private Frame out_frame;
+    private Widget takeLabel;
+    private Widget putLabel;
+    private Widget takeRuleButton;
+    private Widget putRuleButton;
+    private ICheckBox rightPanelToggleButton;
     static class Folder
     {
         public String name;
@@ -143,17 +153,6 @@ public class NAreasWidget extends Window
 //        }, exportbt.pos("ur").adds(UI.scale(10, 0)));
 //        exportDbBtn.settip("Export all areas to database for sharing");
 
-        // Import from Database JSON button
-        haven.Button importDbBtn;
-        add(importDbBtn = new haven.Button(UI.scale(80), "IMPORT") {
-            @Override
-            public void click() {
-                super.click();
-                importAreasFromJsonFile();
-            }
-        }, exportbt.pos("ur").adds(UI.scale(10, 0)));
-        importDbBtn.settip("Import areas from server JSON file to database");
-
         TextEntry searchField;
         prev = add(searchField = new TextEntry(UI.scale(580), "") {
             @Override
@@ -166,8 +165,27 @@ public class NAreasWidget extends Window
         }, createNewFolder.pos("bl").adds(0, 10));
         searchField.settip(get("area.search.placeholder"));
 
-        prev = add(al = new AreaList(UI.scale(new Coord(400,170))), searchField.pos("bl").adds(0, 25));
-        Widget lab = add(new Label(get("area.label.specialisation"),NStyle.areastitle), prev.pos("bl").add(UI.scale(0,5)));
+        prev = add(al = new AreaList(UI.scale(new Coord(400,280))), searchField.pos("bl").adds(0, 25));
+        
+        // Кнопка для скрытия/показа всей правой панели (Take и Put) - стрелка типа 1
+        // Используем стрелки cookbook left/right, для dh используем ту же текстуру что и для h
+        rightPanelToggleButton = add(new ICheckBox(
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/left/u")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/right/u")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/left/h")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/right/u"))
+        ) {
+            @Override
+            public void changed(boolean val) {
+                super.changed(val);
+                showRightPanel = val;
+                updateRightPanelVisibility();
+            }
+        }, prev.pos("ur").adds(UI.scale(5, 0)));
+        rightPanelToggleButton.a = true; // Начальное состояние - показано (стрелка влево = скрыто, стрелка вправо = показано)
+        rightPanelToggleButton.settip("Скрыть/Показать правую панель");
+        
+        Widget lab = add(new Label(get("area.label.specialisation"),NStyle.areastitle), prev.pos("bl").add(UI.scale(0,10)));
 
         add(csl = new CurrentSpecialisationList(UI.scale(164,90)),lab.pos("bl").add(UI.scale(0,5)));
         add(new IButton(NStyle.add[0].back,NStyle.add[1].back,NStyle.add[2].back){
@@ -207,12 +225,28 @@ public class NAreasWidget extends Window
             }
         },prev.pos("br").sub(UI.scale(17,-5)));
 
-        prev = add(Frame.with(in_items = new IngredientContainer("in"),true), prev.pos("ur").add(UI.scale(5,-5)));
-        add(new Label(get("area.label.take"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20)));
-        add(new IngredientContainer.RuleButton(in_items ),prev.pos("ur").sub(UI.scale(30,20)));
-        prev = add(Frame.with(out_items = new IngredientContainer("out"),true), prev.pos("ur").adds(UI.scale(5, 0)));
-        add(new Label(get("area.label.put"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20)));
-        add(new IngredientContainer.RuleButton(out_items ),prev.pos("ur").sub(UI.scale(30,20)));
+        // Создаем правую часть (Take и Put)
+        in_items = new IngredientContainer("in");
+        in_frame = add(Frame.with(in_items, true), prev.pos("ur").add(UI.scale(5,-5)));
+        takeLabel = add(new Label(get("area.label.take"),NStyle.areastitle), in_frame.pos("ul").sub(UI.scale(-5,20)));
+        takeRuleButton = add(new IngredientContainer.RuleButton(in_items), in_frame.pos("ur").sub(UI.scale(30,20)));
+        
+        out_items = new IngredientContainer("out");
+        out_frame = add(Frame.with(out_items, true), in_frame.pos("ur").adds(UI.scale(5, 0)));
+        putLabel = add(new Label(get("area.label.put"),NStyle.areastitle), out_frame.pos("ul").sub(UI.scale(-5,20)));
+        putRuleButton = add(new IngredientContainer.RuleButton(out_items), out_frame.pos("ur").sub(UI.scale(30,20)));
+        
+        pack();
+    }
+    
+    private void updateRightPanelVisibility() {
+        boolean visible = showRightPanel;
+        if (in_frame != null) in_frame.show(visible);
+        if (out_frame != null) out_frame.show(visible);
+        if (takeLabel != null) takeLabel.show(visible);
+        if (putLabel != null) putLabel.show(visible);
+        if (takeRuleButton != null) takeRuleButton.show(visible);
+        if (putRuleButton != null) putRuleButton.show(visible);
         pack();
     }
 
@@ -466,11 +500,16 @@ public class NAreasWidget extends Window
             if(remove!=null) {
                 remove.move(new Coord(sz.x - NStyle.removei[0].sz().x - UI.scale(5), remove.c.y));
             }
+            if(hide!=null) {
+                hide.move(new Coord(sz.x - 2*NStyle.removei[0].sz().x-UI.scale(2), hide.c.y).sub(UI.scale(5),0));
+            }
             super.resize(sz);
         }
 
         public AreaItem(String text, NArea area){
-            this.text = add(new Label(text));
+            // Ограничиваем ширину текста, чтобы он не выходил за границы при масштабировании
+            int textMaxWidth = al.sz.x - 2*NStyle.removei[0].sz().x - UI.scale(2) - UI.scale(10);
+            this.text = add(new Label(text, textMaxWidth));
             this.area = area;
             this.settip(text);
             hide = add(new CheckBox(""){
@@ -512,7 +551,9 @@ public class NAreasWidget extends Window
 
         public AreaItem(String text, boolean isDir){
             // Для папок сдвигаем Label вправо, чтобы оставить место для иконки
-            this.text = add(new Label(text), new Coord(UI.scale(21), 0));
+            // Ограничиваем ширину текста, чтобы он не выходил за границы при масштабировании
+            int textMaxWidth = al.sz.x - 2*NStyle.removei[0].sz().x - UI.scale(2) - UI.scale(10) - UI.scale(21);
+            this.text = add(new Label(text, textMaxWidth), new Coord(UI.scale(21), 0));
             this.area = null;
             this.isDir = isDir;
             final String folderPath = currentPath + "/" + text;
