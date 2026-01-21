@@ -1,21 +1,16 @@
 package nurgling.widgets;
 
 import haven.*;
-import haven.Button;
 import haven.Label;
 import haven.Window;
-import haven.res.lib.itemtex.ItemTex;
 import nurgling.NConfig;
 import nurgling.NFlowerMenu;
 import nurgling.NStyle;
 import nurgling.NUtils;
 import nurgling.actions.ReadJsonAction;
-import nurgling.actions.bots.AutoChooser;
-import nurgling.actions.bots.Craft;
 import nurgling.cookbook.FavoriteRecipeManager;
 import nurgling.cookbook.Recipe;
 import nurgling.cookbook.connection.RecipeHashFetcher;
-import nurgling.cookbook.connection.RecipeLoader;
 import nurgling.i18n.L10n;
 
 import javax.swing.*;
@@ -668,7 +663,7 @@ public class NCookBook extends Window {
                 
                 final NCookBook finalCookbook = cookbook;
                 String[] opts = new String[] { 
-                    recipe.isFavorite() ? L10n.get("cookbook.remove_from_favorites") : L10n.get("cookbook.add_to_favorites") 
+                    recipe.isFavorite() ? L10n.get("cookbook.remove_from_favorites") : L10n.get("cookbook.add_to_favorites")
                 };
                 
                 menu = new NFlowerMenu(opts) {

@@ -26,6 +26,10 @@ public class NContext {
     private HashMap<NArea.Specialisation, String> specArea = new HashMap<>();
     private HashMap<String, NArea> areas = new HashMap<>();
     private HashMap<String, ObjectStorage> containers = new HashMap<>();
+    
+    // Barrel tracking for BarrelWorkArea (when no workstation is used)
+    private HashMap<String, String> bwaPlacedBarrelHashes = new HashMap<>();
+    private HashMap<String, NGlobalCoord> bwaOriginalBarrelCoords = new HashMap<>();
 
     public boolean bwaused = false;
     int counter = 0;
@@ -57,7 +61,7 @@ public class NContext {
         contcaps.put("gfx/terobjs/furn/table-stone", "Table");
         contcaps.put("gfx/terobjs/furn/table-rustic", "Table");
         contcaps.put("gfx/terobjs/furn/table-elegant", "Table");
-        contcaps.put("gfx/terobjs/furn/table-cottage", "Table");
+        contcaps.put("gfx/terobjs/furn/cottagetable", "Table");
         contcaps.put("gfx/terobjs/map/jotunclam", "Jotun Clam");
         contcaps.put("gfx/terobjs/studydesk", "Study Desk");
         contcaps.put("gfx/terobjs/htable", "Herbalist Table");
@@ -187,21 +191,28 @@ public class NContext {
     }
 
     public NArea getSpecArea(NContext.Workstation workstation) throws InterruptedException {
-        if(!areas.containsKey(workstation_spec_map.get(workstation.station).toString())) {
-            NArea area = findSpec(workstation_spec_map.get(workstation.station).toString());
+        String specName = workstation_spec_map.get(workstation.station).toString();
+        NUtils.getGameUI().msg("getSpecArea: Looking for spec '" + specName + "' for station '" + workstation.station + "'");
+        
+        if(!areas.containsKey(specName)) {
+            NUtils.getGameUI().msg("getSpecArea: Area not in cache, searching...");
+            NArea area = findSpec(specName);
+            NUtils.getGameUI().msg("getSpecArea: findSpec returned " + (area != null ? "area" : "null"));
             if (area == null) {
-                area = findSpecGlobal(workstation_spec_map.get(workstation.station).toString());
+                area = findSpecGlobal(specName);
+                NUtils.getGameUI().msg("getSpecArea: findSpecGlobal returned " + (area != null ? "area" : "null"));
             }
             if (area != null) {
-                areas.put(String.valueOf(workstation_spec_map.get(workstation.station).toString()), area);
+                areas.put(specName, area);
             }
             else
             {
+                NUtils.getGameUI().msg("getSpecArea: No area found, returning null");
                 return null;
             }
         }
-        navigateToAreaIfNeeded(workstation_spec_map.get(workstation.station).toString());
-        return areas.get(workstation_spec_map.get(workstation.station).toString());
+        navigateToAreaIfNeeded(specName);
+        return areas.get(specName);
     }
 
     public static class BarrelStorage
@@ -249,6 +260,110 @@ public class NContext {
 
 
     public Gob getBarrelInWorkArea(String item) throws InterruptedException {
+        String storedHash = getPlacedBarrelHash(item);
+        
+        // First try to find barrel by stored hash (most reliable after placement)
+        if (storedHash != null) {
+            ArrayList<Gob> allBarrels = nurgling.tools.Finder.findGobs(new nurgling.tools.NAlias("barrel"));
+            for (Gob gob : allBarrels) {
+                if (storedHash.equals(gob.ngob.hash)) {
+                    return gob;
+                }
+            }
+            
+            // Hash stored but barrel not found in cache
+            // Check if we're already near workstation - if so, just search by proximity without navigation
+            boolean alreadyNearWorkstation = false;
+            if (workstation != null && workstation.selected != -1) {
+                Gob ws = nurgling.tools.Finder.findGob(workstation.selected);
+                if (ws != null) {
+                    double distToWs = NUtils.player().rc.dist(ws.rc);
+                    if (distToWs < 30) {
+                        alreadyNearWorkstation = true;
+                        NUtils.getGameUI().msg("getBarrelInWorkArea: Already near workstation (dist=" + 
+                                String.format("%.2f", distToWs) + "), searching nearby barrels...");
+                        
+                        // Search by proximity without navigation - verify content
+                        String expectedContent = barrelstorage.containsKey(item) ? barrelstorage.get(item).olname : null;
+                        for (Gob gob : allBarrels) {
+                            if (gob.rc.dist(ws.rc) < 30) {
+                                // Check if barrel has correct content or is empty
+                                boolean isEmpty = !NUtils.barrelHasContent(gob);
+                                String barrelContent = NUtils.getContentsOfBarrel(gob);
+                                boolean contentMatches = expectedContent != null && 
+                                        barrelContent != null && 
+                                        barrelContent.equalsIgnoreCase(expectedContent);
+                                
+                                if (isEmpty || contentMatches) {
+                                    NUtils.getGameUI().msg("getBarrelInWorkArea: Found barrel near workstation (dist=" + 
+                                            String.format("%.2f", gob.rc.dist(ws.rc)) + ", empty=" + isEmpty + 
+                                            ", content=" + barrelContent + "), updating hash");
+                                    storeBarrelInfo(item, gob.ngob.hash, getOriginalBarrelCoord(item));
+                                    return gob;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Not near workstation - navigate to reload objects from cache
+            if (!alreadyNearWorkstation) {
+                NUtils.getGameUI().msg("getBarrelInWorkArea: Barrel with hash not in cache, navigating to reload...");
+                
+                NArea area;
+                if(workstation==null)
+                    area = getSpecArea(Specialisation.SpecName.barrelworkarea);
+                else
+                    area = getSpecArea(workstation);
+                
+                if (area != null) {
+                    haven.Pair<haven.Coord2d, haven.Coord2d> rcArea = area.getRCArea();
+                    if (rcArea != null) {
+                        haven.Coord2d center = rcArea.b.sub(rcArea.a).div(2).add(rcArea.a);
+                        new nurgling.actions.PathFinder(center).run(NUtils.getGameUI());
+                        
+                        Thread.sleep(500);
+                        
+                        allBarrels = nurgling.tools.Finder.findGobs(new nurgling.tools.NAlias("barrel"));
+                        for (Gob gob : allBarrels) {
+                            if (storedHash.equals(gob.ngob.hash)) {
+                                NUtils.getGameUI().msg("getBarrelInWorkArea: Found barrel after navigation, hash=" + storedHash.substring(0, 16) + "...");
+                                return gob;
+                            }
+                        }
+                        
+                        // Search by proximity after navigation - verify content
+                        if (workstation != null && workstation.selected != -1) {
+                            Gob ws = nurgling.tools.Finder.findGob(workstation.selected);
+                            if (ws != null) {
+                                String expectedContent = barrelstorage.containsKey(item) ? barrelstorage.get(item).olname : null;
+                                for (Gob gob : allBarrels) {
+                                    if (gob.rc.dist(ws.rc) < 30) {
+                                        // Check if barrel has correct content or is empty
+                                        boolean isEmpty = !NUtils.barrelHasContent(gob);
+                                        String barrelContent = NUtils.getContentsOfBarrel(gob);
+                                        boolean contentMatches = expectedContent != null && 
+                                                barrelContent != null && 
+                                                barrelContent.equalsIgnoreCase(expectedContent);
+                                        
+                                        if (isEmpty || contentMatches) {
+                                            NUtils.getGameUI().msg("getBarrelInWorkArea: Found barrel near workstation (dist=" + 
+                                                    String.format("%.2f", gob.rc.dist(ws.rc)) + ", empty=" + isEmpty + 
+                                                    ", content=" + barrelContent + "), updating hash");
+                                            storeBarrelInfo(item, gob.ngob.hash, getOriginalBarrelCoord(item));
+                                            return gob;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Fallback: search in area by content
         NArea area;
         if(workstation==null)
             area = getSpecArea(Specialisation.SpecName.barrelworkarea);
@@ -258,7 +373,7 @@ public class NContext {
             return null;
         if(barrelstorage.containsKey(item))
         {
-            for (Gob gob : Finder.findGobs(area, new NAlias("barrel")))
+            for (Gob gob : nurgling.tools.Finder.findGobs(area, new nurgling.tools.NAlias("barrel")))
             {
                 String content = NUtils.getContentsOfBarrel(gob);
                 if (content != null && (content.equalsIgnoreCase(barrelstorage.get(item).olname)))
@@ -269,6 +384,63 @@ public class NContext {
         }
         return null;
 
+    }
+    
+    /**
+     * Get placed barrel hash for an item (checks both workstation and BWA storage)
+     */
+    public String getPlacedBarrelHash(String item) {
+        if (workstation != null) {
+            return workstation.getPlacedBarrelHash(item);
+        } else {
+            return bwaPlacedBarrelHashes.get(item);
+        }
+    }
+    
+    /**
+     * Get original barrel coord for an item (checks both workstation and BWA storage)
+     */
+    public NGlobalCoord getOriginalBarrelCoord(String item) {
+        if (workstation != null) {
+            return workstation.getOriginalBarrelCoord(item);
+        } else {
+            return bwaOriginalBarrelCoords.get(item);
+        }
+    }
+    
+    /**
+     * Store barrel tracking info for an item
+     */
+    public void storeBarrelInfo(String item, String hash, NGlobalCoord originalCoord) {
+        if (workstation != null) {
+            workstation.storeBarrelInfo(item, hash, originalCoord);
+        } else {
+            bwaPlacedBarrelHashes.put(item, hash);
+            bwaOriginalBarrelCoords.put(item, originalCoord);
+        }
+    }
+    
+    /**
+     * Clear barrel tracking info for a specific item
+     */
+    public void clearBarrelInfo(String item) {
+        if (workstation != null) {
+            workstation.clearBarrelInfo(item);
+        } else {
+            bwaPlacedBarrelHashes.remove(item);
+            bwaOriginalBarrelCoords.remove(item);
+        }
+    }
+    
+    /**
+     * Clear all barrel tracking info
+     */
+    public void clearAllBarrelInfo() {
+        if (workstation != null) {
+            workstation.clearAllBarrelInfo();
+        }
+        bwaPlacedBarrelHashes.clear();
+        bwaOriginalBarrelCoords.clear();
     }
 
     public void navigateToBarrelArea(String item) throws InterruptedException {
@@ -608,11 +780,55 @@ public class NContext {
         public long selected = -1;
 
         public NGlobalCoord targetPoint = null;
+        
+        // Map of placed barrels: item name -> barrel hash (supports multiple barrels)
+        public HashMap<String, String> placedBarrelHashes = new HashMap<>();
+        // Map of original barrel coordinates: item name -> original position
+        public HashMap<String, NGlobalCoord> originalBarrelCoords = new HashMap<>();
 
         public Workstation(String station, String pose)
         {
             this.station = station;
             this.pose = pose;
+        }
+        
+        /**
+         * Store barrel tracking info for a specific item
+         */
+        public void storeBarrelInfo(String item, String hash, NGlobalCoord originalCoord) {
+            placedBarrelHashes.put(item, hash);
+            originalBarrelCoords.put(item, originalCoord);
+        }
+        
+        /**
+         * Get placed barrel hash for a specific item
+         */
+        public String getPlacedBarrelHash(String item) {
+            return placedBarrelHashes.get(item);
+        }
+        
+        /**
+         * Get original barrel coord for a specific item
+         */
+        public NGlobalCoord getOriginalBarrelCoord(String item) {
+            return originalBarrelCoords.get(item);
+        }
+        
+        /**
+         * Clear barrel tracking info for a specific item
+         */
+        public void clearBarrelInfo(String item) {
+            placedBarrelHashes.remove(item);
+            originalBarrelCoords.remove(item);
+        }
+        
+        /**
+         * Reset all barrel tracking info
+         */
+        public void clearAllBarrelInfo() {
+            placedBarrelHashes.clear();
+            originalBarrelCoords.clear();
+            this.targetPoint = null;
         }
     }
 
@@ -663,7 +879,6 @@ public class NContext {
     public void navigateToAreaIfNeeded(String areaId) throws InterruptedException {
         NArea area = areas.get(areaId);
         if(area == null) {
-            gui.msg(areaId + " Not found!");
             return;
         }
         NUtils.navigateToArea(area);

@@ -88,6 +88,7 @@ public class FillWaterskins implements Action {
             return Results.ERROR("no water area");
         }
         WItem wbelt = NUtils.getEquipment().findItem (NEquipory.Slots.BELT.idx);
+        boolean needPf = true;
         if(wbelt!=null)
         {
             if(wbelt.item.contents instanceof NInventory)
@@ -96,8 +97,10 @@ public class FillWaterskins implements Action {
                 if(targetContent != null && (targetContent.contains("water") || targetContent.contains("Water")))
                 {
                     ArrayList<WItem> witems = ((NInventory) wbelt.item.contents).getItems(new NAlias("Waterskin"));
-                    if(!witems.isEmpty() && target!=null)
+                    if(!witems.isEmpty() && target!=null) {
+                        needPf = false;
                         new PathFinder(target).run(gui);
+                    }
                     for(WItem item : witems)
                     {
                         NGItem ngItem = ((NGItem)item.item);
@@ -132,6 +135,8 @@ public class FillWaterskins implements Action {
                 }
             }
         }
+        if(needPf)
+            new PathFinder(target).run(gui);
         refillItemInEquip(gui,NUtils.getEquipment().findItem(NEquipory.Slots.LFOOT.idx),target, targetContent);
         refillItemInEquip(gui,NUtils.getEquipment().findItem(NEquipory.Slots.RFOOT.idx),target, targetContent);
         // Refill buckets in hands
