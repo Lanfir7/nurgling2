@@ -269,6 +269,43 @@ public class MigrationManager {
             }
         });
 
+        migrations.add(new Migration(6, "Add deleted column to areas table for soft delete support") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                // Check if column already exists
+                boolean columnExists = false;
+                if (adapter instanceof nurgling.db.PostgresAdapter) {
+                    // PostgreSQL: use information_schema with explicit schema
+                    try (ResultSet rs = adapter.executeQuery(
+                            "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'areas' AND column_name = 'deleted'")) {
+                        columnExists = rs.next();
+                    }
+                } else {
+                    // SQLite: use pragma
+                    try (ResultSet rs = adapter.executeQuery("PRAGMA table_info(areas)")) {
+                        while (rs.next()) {
+                            if ("deleted".equals(rs.getString("name"))) {
+                                columnExists = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (columnExists) {
+                    System.out.println("deleted column already exists in areas table");
+                } else {
+                    // Add deleted column with default value
+                    if (adapter instanceof nurgling.db.PostgresAdapter) {
+                        adapter.executeUpdate("ALTER TABLE areas ADD COLUMN deleted BOOLEAN DEFAULT FALSE NOT NULL");
+                    } else {
+                        adapter.executeUpdate("ALTER TABLE areas ADD COLUMN deleted INTEGER DEFAULT 0 NOT NULL");
+                    }
+                    System.out.println("Added deleted column to areas table");
+                }
+            }
+        });
+
         return migrations;
     }
 

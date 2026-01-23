@@ -403,7 +403,11 @@ public class CharWnd extends Window {
 	public void show() {
 		super.show();
 		battrtab.resize(battrtab.contentsz());
-		tbbattrtab.c.y = battr.sz.y + UI.scale(10) + tbbattrtab.sz.y/2;
+		if(battr != null) {
+			tbbattrtab.c.y = battr.sz.y + UI.scale(10) + tbbattrtab.sz.y/2;
+		} else {
+			tbbattrtab.c.y = battrtab.sz.y + UI.scale(10) + tbbattrtab.sz.y/2;
+		}
 		tbsattrtab.c.y = tbbattrtab.c.y;
 		tbskilltab.c.y = tbbattrtab.c.y;
 		tbfighttab.c.y = tbbattrtab.c.y;

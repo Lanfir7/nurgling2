@@ -91,15 +91,52 @@ public class NMakewindow extends Widget {
             try {
                 if(ing==null || !autoMode)
                 {
-                    sprite().draw(g);
+                    // Если это категория блоков или досок, показываем стандартную иконку
+                    if(name != null && (name.equals("Block of Wood") || name.equals("Board"))) {
+                        BufferedImage categoryIcon = getCategoryIcon(name);
+                        if(categoryIcon != null) {
+                            g.image(new TexI(categoryIcon), Coord.z, UI.scale(32,32));
+                        } else {
+                            sprite().draw(g);
+                        }
+                    } else {
+                        sprite().draw(g);
+                    }
                 }
                 else
                 {
-                    g.image(new TexI(ing.img), Coord.z, UI.scale(32,32));
+                    // В режиме автокрафта также проверяем категории
+                    if(ing != null && ing.name != null && (ing.name.equals("Block of Wood") || ing.name.equals("Board"))) {
+                        BufferedImage categoryIcon = getCategoryIcon(ing.name);
+                        if(categoryIcon != null) {
+                            g.image(new TexI(categoryIcon), Coord.z, UI.scale(32,32));
+                        } else {
+                            g.image(new TexI(ing.img), Coord.z, UI.scale(32,32));
+                        }
+                    } else {
+                        g.image(new TexI(ing.img), Coord.z, UI.scale(32,32));
+                    }
                 }
             } catch(Loading e) {}
             if(num != null)
                 g.aimage(num, Inventory.sqsz, 1.0, 1.0);
+        }
+        
+        /**
+         * Получает стандартную иконку для категории блоков или досок
+         * Использует ванильные иконки из игры
+         */
+        private BufferedImage getCategoryIcon(String categoryName) {
+            try {
+                if("Block of Wood".equals(categoryName)) {
+                    return Resource.loadsimg("gfx/invobjs/wblock-oak");
+                } else if("Board".equals(categoryName)) {
+                    return Resource.loadsimg("gfx/invobjs/board-oak");
+                }
+            } catch (Exception e) {
+                // Если не удалось загрузить, вернем null
+            }
+            return null;
         }
 
         private int opt = 0;
@@ -197,6 +234,10 @@ public class NMakewindow extends Widget {
                 {
                     categories = (VSpec.categories.get(name)!=null);
                 }
+                // Также проверяем, является ли это категорией блоков или досок
+                if("Block of Wood".equals(name) || "Board".equals(name)) {
+                    categories = true;
+                }
                 for(Spec s : inputs) {
                     if(s.categories && s.ing!=null)
                     {
@@ -220,6 +261,7 @@ public class NMakewindow extends Widget {
         public boolean logisticin = false;
         public boolean logisticout = false;
         public boolean categories = false;
+        public boolean useCategory = false; // Флаг использования категории вместо конкретного предмета
 
 
     }
@@ -263,8 +305,44 @@ public class NMakewindow extends Widget {
     public boolean mousedown(MouseDownEvent ev) {
         if(autoMode)
         {
+            // Проверяем клик по чекбоксу "all" для категорий в inputs
             Coord sc = new Coord(xoff, 0);
             boolean popt = false;
+            for(Spec s : inputs) {
+                boolean opt = s.opt();
+                if (opt != popt)
+                    sc = sc.add(10, 0);
+                if(s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                    Coord checkboxPos = sc.add(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
+                    if(ev.c.isect(checkboxPos, UI.scale(10, 10))) {
+                        s.useCategory = !s.useCategory;
+                        return true;
+                    }
+                }
+                sc = sc.add(Inventory.sqsz.x, 0);
+                popt = opt;
+            }
+            
+            // Проверяем клик по чекбоксу "all" для категорий в outputs
+            sc = new Coord(xoff, outy);
+            popt = false;
+            for(Spec s : outputs) {
+                boolean opt = s.opt();
+                if (opt != popt)
+                    sc = sc.add(10, 0);
+                if(s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                    Coord checkboxPos = sc.add(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
+                    if(ev.c.isect(checkboxPos, UI.scale(10, 10))) {
+                        s.useCategory = !s.useCategory;
+                        return true;
+                    }
+                }
+                sc = sc.add(Inventory.sqsz.x, 0);
+                popt = opt;
+            }
+            
+            sc = new Coord(xoff, 0);
+            popt = false;
             if (clickForCategories(inputs, popt, sc, ev.c)) return true;
             sc = new Coord(xoff, outy);
             if (clickForCategories(outputs, popt, sc, ev.c)) return true;
@@ -426,6 +504,26 @@ public class NMakewindow extends Widget {
                 sg.image(invsq, Coord.z);
             }
             s.draw(sg);
+            
+            // Рисуем чекбокс "all" для категорий
+            if(autoMode && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                Coord checkboxPos = new Coord(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
+                // Рисуем простой чекбокс
+                if(s.useCategory) {
+                    sg.chcolor(0, 255, 0, 255);
+                    sg.frect(checkboxPos, UI.scale(10, 10));
+                    sg.chcolor();
+                    sg.chcolor(255, 255, 255, 255);
+                    sg.line(checkboxPos.add(UI.scale(2), UI.scale(5)), checkboxPos.add(UI.scale(4), UI.scale(7)), 1);
+                    sg.line(checkboxPos.add(UI.scale(4), UI.scale(7)), checkboxPos.add(UI.scale(8), UI.scale(2)), 1);
+                    sg.chcolor();
+                } else {
+                    sg.chcolor(255, 255, 255, 128);
+                    sg.frect(checkboxPos, UI.scale(10, 10));
+                    sg.chcolor();
+                }
+            }
+            
             c = c.add(Inventory.sqsz.x, 0);
             popt = opt;
             if(autoMode)
@@ -532,6 +630,26 @@ public class NMakewindow extends Widget {
             GOut sg = g.reclip(c, invsq.sz());
             sg.image(invsq, Coord.z);
             s.draw(sg);
+            
+            // Рисуем чекбокс "all" для категорий
+            if(autoMode && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                Coord checkboxPos = new Coord(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
+                // Рисуем простой чекбокс
+                if(s.useCategory) {
+                    sg.chcolor(0, 255, 0, 255);
+                    sg.frect(checkboxPos, UI.scale(10, 10));
+                    sg.chcolor();
+                    sg.chcolor(255, 255, 255, 255);
+                    sg.line(checkboxPos.add(UI.scale(2), UI.scale(5)), checkboxPos.add(UI.scale(4), UI.scale(7)), 1);
+                    sg.line(checkboxPos.add(UI.scale(4), UI.scale(7)), checkboxPos.add(UI.scale(8), UI.scale(2)), 1);
+                    sg.chcolor();
+                } else {
+                    sg.chcolor(255, 255, 255, 128);
+                    sg.frect(checkboxPos, UI.scale(10, 10));
+                    sg.chcolor();
+                }
+            }
+            
             c = c.add(Inventory.sqsz.x, 0);
             if(autoMode)
             {
@@ -878,6 +996,11 @@ public class NMakewindow extends Widget {
         ).add(UI.scale(20,18));
     }
     
+    private static Coord calculateCategoriesSize(int itemCount, boolean isOptional) {
+        int totalSize = itemCount + (isOptional ? 1 : 0);
+        return calculateSize(totalSize);
+    }
+    
     public class Categories extends Widget
     {
 
@@ -891,7 +1014,7 @@ public class NMakewindow extends Widget {
         
         public Categories(ArrayList<JSONObject> objs, Spec s, boolean isOptional)
         {
-            super(calculateSize(objs.size() + (isOptional ? 1 : 0)));
+            super(calculateCategoriesSize(objs.size(), isOptional));
             this.s = s;
             this.isOptional = isOptional;
             add(fr = new Frame(sz.sub(catend),true));
@@ -905,6 +1028,8 @@ public class NMakewindow extends Widget {
                     System.out.println("Failed to load ignore resource: " + e.getMessage());
                 }
             }
+            
+            // Больше не добавляем опцию категории - используем чекбокс "all" вместо этого
             
             for(JSONObject obj: objs)
             {

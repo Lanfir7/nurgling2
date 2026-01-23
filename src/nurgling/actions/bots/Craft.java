@@ -12,6 +12,7 @@ import nurgling.widgets.*;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.awt.image.BufferedImage;
 
 import static haven.OCache.posres;
 import nurgling.tools.StackSupporter;
@@ -74,25 +75,50 @@ public class Craft implements Action {
                 continue;
             }
 
-            if (!s.categories) {
-                ncontext.addInItem(s.name, ItemTex.create(ItemTex.save(s.spr)));
-                if (!ncontext.isInBarrel(s.name)) {
-                    size += s.count;
+            // Determine the item name: if useCategory is set, use category name; otherwise use specific item
+            String itemName;
+            BufferedImage itemImg;
+            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                // useCategory checkbox is set - use category name
+                itemName = s.name;
+                // Используем ванильную иконку для категории
+                try {
+                    if("Block of Wood".equals(itemName)) {
+                        itemImg = Resource.loadsimg("gfx/invobjs/wblock-oak");
+                    } else if("Board".equals(itemName)) {
+                        itemImg = Resource.loadsimg("gfx/invobjs/board-oak");
+                    } else {
+                        itemImg = ItemTex.create(ItemTex.save(s.spr));
+                    }
+                } catch (Exception e) {
+                    itemImg = ItemTex.create(ItemTex.save(s.spr));
                 }
+            } else if (!s.categories) {
+                itemName = s.name;
+                itemImg = ItemTex.create(ItemTex.save(s.spr));
             } else if (s.ing != null) {
-                ncontext.addInItem(s.ing.name, s.ing.img);
-                if (!ncontext.isInBarrel(s.ing.name)) {
-                    size += s.count;
-                }
+                itemName = s.ing.name;
+                itemImg = s.ing.img;
             } else {
                 // Auto-select any available ingredient from category
                 selectIngredientFromCategory(s);
                 if (s.ing != null && !s.ing.isIgnored) {
-                    ncontext.addInItem(s.ing.name, s.ing.img);
-                    if (!ncontext.isInBarrel(s.ing.name)) {
-                        size += s.count;
-                    }
+                    itemName = s.ing.name;
+                    itemImg = s.ing.img;
+                } else {
+                    continue; // Не удалось выбрать ингредиент
                 }
+            }
+            
+            ncontext.addInItem(itemName, itemImg);
+            // Доски и блоки обычно не хранятся в бочках, проверяем только если это не категория
+            if (!itemName.equals("Board") && !itemName.equals("Block of Wood")) {
+                if (!ncontext.isInBarrel(itemName)) {
+                    size += s.count;
+                }
+            } else {
+                // Для категорий считаем, что они не в бочках
+                size += s.count;
             }
         }
 
@@ -223,7 +249,19 @@ public class Craft implements Action {
                 continue;
             }
             
-            String item = s.ing == null ? s.name : s.ing.name;
+            // Determine the item name: if useCategory is set, use category name; otherwise use specific item
+            String item;
+            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                // useCategory checkbox is set - use category name
+                item = s.name;
+            } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+                // Category selected - use category name
+                item = s.ing.name;
+            } else {
+                // Specific item selected or no selection
+                item = s.ing == null ? s.name : s.ing.name;
+            }
+            
             if (ncontext.isInBarrel(item)) {
                 if(ncontext.workstation == null) {
                     new TransferBarrelInWorkArea(ncontext, item).run(gui);
@@ -233,7 +271,7 @@ public class Craft implements Action {
                     new TransferBarrelToWorkstation(ncontext, item).run(gui);
                 }
             } else {
-                if (!new TakeItems2(ncontext, s.ing == null ? s.name : s.ing.name, s.count * for_craft).run(gui).IsSuccess()) {
+                if (!new TakeItems2(ncontext, item, s.count * for_craft).run(gui).IsSuccess()) {
                     return Results.ERROR("Failed to take items: " + item);
                 }
             }
@@ -294,7 +332,18 @@ public class Craft implements Action {
                 continue;
             }
             
-            String item = s.ing == null ? s.name : s.ing.name;
+            // Determine the item name: if useCategory is set, use category name; otherwise use specific item
+            String item;
+            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                // useCategory checkbox is set - use category name
+                item = s.name;
+            } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+                // Category selected - use category name
+                item = s.ing.name;
+            } else {
+                // Specific item selected or no selection
+                item = s.ing == null ? s.name : s.ing.name;
+            }
             if (ncontext.isInBarrel(item)) {
                 double val = gui.findBarrelContent(windows, new NAlias(item));
                 
@@ -326,7 +375,19 @@ public class Craft implements Action {
                     continue;
                 }
                 
-                String item = s.ing == null ? s.name : s.ing.name;
+                // Determine the item name: if useCategory is set, use category name; otherwise use specific item
+                String item;
+                if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                    // useCategory checkbox is set - use category name
+                    item = s.name;
+                } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+                    // Category selected - use category name
+                    item = s.ing.name;
+                } else {
+                    // Specific item selected or no selection
+                    item = s.ing == null ? s.name : s.ing.name;
+                }
+                
                 if (ncontext.isInBarrel(item)) {
                     new ReturnBarrelFromWorkArea(ncontext, item).run(gui);
                 }
@@ -535,7 +596,18 @@ public class Craft implements Action {
                     continue;
                 }
                 
-                String itemName = s.ing == null ? s.name : s.ing.name;
+                // Determine the item name: if useCategory is set, use category name; otherwise use specific item
+                String itemName;
+                if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                    // useCategory checkbox is set - use category name
+                    itemName = s.name;
+                } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+                    // Category selected - use category name
+                    itemName = s.ing.name;
+                } else {
+                    // Specific item selected or no selection
+                    itemName = s.ing == null ? s.name : s.ing.name;
+                }
                 int required = s.count;
                 
                 if (ncontext.isInBarrel(itemName)) {
@@ -546,11 +618,47 @@ public class Craft implements Action {
                     }
                 } else {
                     // Check inventory
-                    ArrayList<WItem> items = gui.getInventory().getItems(new NAlias(itemName));
                     int available = 0;
-                    for (WItem item : items) {
-                        available += getActualItemCount(item);
+                    
+                    // Если itemName является категорией, ищем все предметы из этой категории
+                    if("Board".equals(itemName) || "Block of Wood".equals(itemName)) {
+                        ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(itemName);
+                        if(categoryItems != null) {
+                            for(org.json.JSONObject categoryItem : categoryItems) {
+                                String categoryItemName = categoryItem.getString("name");
+                                ArrayList<WItem> items = gui.getInventory().getItems(new NAlias(categoryItemName));
+                                for (WItem item : items) {
+                                    available += getActualItemCount(item);
+                                }
+                            }
+                        }
+                    } else {
+                        // Обычная проверка по точному имени
+                        ArrayList<WItem> items = gui.getInventory().getItems(new NAlias(itemName));
+                        for (WItem item : items) {
+                            available += getActualItemCount(item);
+                        }
                     }
+                    
+                    // Если недостаточно в инвентаре, проверяем наличие в бартере
+                    if (available < required) {
+                        // Проверяем, есть ли бартер для этого предмета
+                        try {
+                            ArrayList<NContext.ObjectStorage> storages = ncontext.getInStorages(itemName);
+                            if(storages != null && !storages.isEmpty()) {
+                                for(NContext.ObjectStorage storage : storages) {
+                                    if(storage instanceof NContext.Barter) {
+                                        // Если есть бартер, считаем что предметы доступны (можно купить)
+                                        available = required;
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (InterruptedException e) {
+                            // Игнорируем исключение при проверке
+                        }
+                    }
+                    
                     if (available < required) {
                         return false;
                     }
@@ -574,7 +682,18 @@ public class Craft implements Action {
                 continue;
             }
             
-            String item = s.ing == null ? s.name : s.ing.name;
+            // Determine the item name: if useCategory is set, use category name; otherwise use specific item
+            String item;
+            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                // useCategory checkbox is set - use category name
+                item = s.name;
+            } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+                // Category selected - use category name
+                item = s.ing.name;
+            } else {
+                // Specific item selected or no selection
+                item = s.ing == null ? s.name : s.ing.name;
+            }
             String storedHash = ncontext.getPlacedBarrelHash(item);
             NUtils.getGameUI().msg("GetBarrelsIds: Checking item '" + item + "', isInBarrel=" + ncontext.isInBarrel(item) + 
                     ", storedHash=" + (storedHash != null ? storedHash.substring(0, Math.min(16, storedHash.length())) + "..." : "null"));
@@ -596,6 +715,12 @@ public class Craft implements Action {
             return;
         }
 
+        // If useCategory is set, don't auto-select - user wants to use category
+        if (spec.useCategory) {
+            return;
+        }
+
+        // Try to find specific items from category
         ArrayList<org.json.JSONObject> categoryItems = VSpec.categories.get(spec.name);
         if (categoryItems == null || categoryItems.isEmpty()) {
             NUtils.getGameUI().msg("Category '" + spec.name + "' not found in VSpec.categories");
@@ -604,7 +729,7 @@ public class Craft implements Action {
 
         NUtils.getGameUI().msg("Searching ingredient for category: " + spec.name + " (" + categoryItems.size() + " options)");
 
-        // First try to find in nearby areas
+        // Try to find items from category in nearby areas
         for (org.json.JSONObject obj : categoryItems) {
             String itemName = (String) obj.get("name");
             if (NContext.findIn(itemName) != null) {
@@ -614,7 +739,7 @@ public class Craft implements Action {
             }
         }
 
-        // If not found nearby, try global search
+        // Global search
         for (org.json.JSONObject obj : categoryItems) {
             String itemName = (String) obj.get("name");
             if (NContext.findInGlobal(itemName) != null) {

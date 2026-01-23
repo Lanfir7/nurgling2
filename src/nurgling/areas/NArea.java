@@ -64,8 +64,39 @@ public class NArea
     {
         for (int i = 0; i < jin.length(); i++)
         {
-            if(((String) ((JSONObject)jin.get(i)).get("name")).equals(name))
+            JSONObject item = (JSONObject) jin.get(i);
+            String itemName = item.getString("name");
+            
+            // Прямое совпадение
+            if(itemName.equals(name))
                 return true;
+            
+            // Проверка категорий: если в зоне указана категория, проверяем входит ли предмет в эту категорию
+            if(item.has("isCategory") && item.getBoolean("isCategory")) {
+                // Если ищем саму категорию (например "Board"), и в зоне указана эта категория
+                if(itemName.equals(name)) {
+                    return true;
+                }
+                // Или если ищем конкретный предмет, который входит в эту категорию
+                if(isItemInCategory(name, itemName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Проверяет, входит ли предмет в категорию
+     */
+    private boolean isItemInCategory(String itemName, String categoryName) {
+        ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(categoryName);
+        if(categoryItems != null) {
+            for(org.json.JSONObject categoryItem : categoryItems) {
+                if(categoryItem.getString("name").equals(itemName)) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -74,8 +105,25 @@ public class NArea
     {
         for (int i = 0; i < jin.length(); i++)
         {
-            if(NParser.eqDefName((String) ((JSONObject)jin.get(i)).get("name"),name))
+            JSONObject item = (JSONObject) jin.get(i);
+            String itemName = item.getString("name");
+            
+            // Прямое совпадение
+            if(NParser.eqDefName(itemName, name))
                 return true;
+            
+            // Проверка категорий: если в зоне указана категория, проверяем входит ли предмет в эту категорию
+            if(item.has("isCategory") && item.getBoolean("isCategory")) {
+                // Для NAlias нужно проверить все предметы в категории
+                ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(itemName);
+                if(categoryItems != null) {
+                    for(org.json.JSONObject categoryItem : categoryItems) {
+                        if(NParser.eqDefName(categoryItem.getString("name"), name)) {
+                            return true;
+                        }
+                    }
+                }
+            }
         }
         return false;
     }
@@ -92,6 +140,8 @@ public class NArea
             try {
                 JSONObject output = jout.getJSONObject(i);
                 String outputName = output.getString("name");
+                
+                // Прямое совпадение
                 if (outputName.equals(name)) {
                     if (output.has("th")) {
                         Object thObj = output.get("th");
@@ -104,6 +154,21 @@ public class NArea
                     } else {
                         // Порог не указан - зона принимает все
                         return true;
+                    }
+                }
+                
+                // Проверка категорий: если в зоне указана категория, проверяем входит ли предмет в эту категорию
+                if(output.has("isCategory") && output.getBoolean("isCategory")) {
+                    if(isItemInCategory(name, outputName)) {
+                        if (output.has("th")) {
+                            Object thObj = output.get("th");
+                            int areaTh = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
+                            if (areaTh == -1 || th >= areaTh) {
+                                return true;
+                            }
+                        } else {
+                            return true;
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -156,8 +221,17 @@ public class NArea
             try {
                 JSONObject output = jout.getJSONObject(i);
                 String outputName = output.getString("name");
+                
+                // Прямое совпадение
                 if (outputName.equals(name)) {
                     return true;
+                }
+                
+                // Проверка категорий: если в зоне указана категория, проверяем входит ли предмет в эту категорию
+                if(output.has("isCategory") && output.getBoolean("isCategory")) {
+                    if(isItemInCategory(name, outputName)) {
+                        return true;
+                    }
                 }
             } catch (Exception e) {
                 System.err.println("NArea.containOut: Error checking output " + i + " for zone " + id + ": " + e.getMessage());
@@ -644,33 +718,78 @@ public class NArea
         for (int i = 0; i < jin.length(); i++)
         {
             JSONObject obj = (JSONObject)jin.get(i);
-            if(((String)((JSONObject)jin.get(i)).get("name")).equals(name))
+            String itemName = obj.getString("name");
+            
+            // Прямое совпадение
+            if(itemName.equals(name))
             {
                 NArea.Ingredient.Type type = (obj.has("type")) ?
                         type = NArea.Ingredient.Type.valueOf((String) obj.get("type")) :
                         Ingredient.Type.CONTAINER;
                 return new Ingredient(type,name);
             }
+            
+            // Проверка категорий: если в зоне указана категория, проверяем входит ли предмет в эту категорию
+            if(obj.has("isCategory") && obj.getBoolean("isCategory")) {
+                // Если ищем категорию и в зоне сохранена та же категория - совпадение
+                if(itemName.equals(name) && (name.equals("Board") || name.equals("Block of Wood"))) {
+                    NArea.Ingredient.Type type = (obj.has("type")) ?
+                            type = NArea.Ingredient.Type.valueOf((String) obj.get("type")) :
+                            Ingredient.Type.CONTAINER;
+                    return new Ingredient(type, itemName);
+                }
+                // Если в зоне категория, а ищем конкретный предмет - проверяем входит ли он в категорию
+                if(isItemInCategory(name, itemName)) {
+                    NArea.Ingredient.Type type = (obj.has("type")) ?
+                            type = NArea.Ingredient.Type.valueOf((String) obj.get("type")) :
+                            Ingredient.Type.CONTAINER;
+                    return new Ingredient(type, itemName); // Возвращаем категорию, а не конкретный предмет
+                }
+            }
         }
         return null;
     }
 
     public Ingredient getOutput(String name) {
+        // ВАЖНО: Проверяем что jout не null
+        if (jout == null) {
+            return null;
+        }
+        
         for (int i = 0; i < jout.length(); i++)
         {
             JSONObject obj = (JSONObject)jout.get(i);
-            if(((String)((JSONObject)jout.get(i)).get("name")).equals(name))
+            String itemName = obj.getString("name");
+            
+            // Прямое совпадение
+            if(itemName.equals(name))
             {
                 NArea.Ingredient.Type type = (obj.has("type")) ?
                         type = NArea.Ingredient.Type.valueOf((String) obj.get("type")) :
                         Ingredient.Type.CONTAINER;
-                if(((JSONObject)jout.get(i)).has("th"))
+                if(obj.has("th"))
                 {
-                    Object thObj = ((JSONObject)jout.get(i)).get("th");
+                    Object thObj = obj.get("th");
                     int th = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
                     return new Ingredient(type,name, th);
                 }
                 return new Ingredient(type,name);
+            }
+            
+            // Проверка категорий: если в зоне указана категория, проверяем входит ли предмет в эту категорию
+            if(obj.has("isCategory") && obj.getBoolean("isCategory")) {
+                if(isItemInCategory(name, itemName)) {
+                    NArea.Ingredient.Type type = (obj.has("type")) ?
+                            type = NArea.Ingredient.Type.valueOf((String) obj.get("type")) :
+                            Ingredient.Type.CONTAINER;
+                    if(obj.has("th"))
+                    {
+                        Object thObj = obj.get("th");
+                        int th = (thObj instanceof Number) ? ((Number) thObj).intValue() : -1;
+                        return new Ingredient(type, itemName, th); // Возвращаем категорию, а не конкретный предмет
+                    }
+                    return new Ingredient(type, itemName);
+                }
             }
         }
         return null;

@@ -601,9 +601,12 @@ public class LabeledMarkService implements ProfileAwareService {
                     return;
                 }
 
-                if (!contentBuilder.toString().trim().isEmpty()) {
+                // Сохраняем строку один раз, чтобы избежать множественных вызовов toString()
+                String content = contentBuilder.toString();
+                // Проверяем длину вместо trim() для избежания OutOfMemoryError на больших файлах
+                if (content.length() > 0) {
                     try {
-                        JSONObject main = new JSONObject(contentBuilder.toString());
+                        JSONObject main = new JSONObject(content);
                         JSONArray array = main.getJSONArray("labeledMarks");
                         for (int i = 0; i < array.length(); i++) {
                             try {

@@ -9,7 +9,7 @@ import java.util.*;
 import java.awt.Color;
 
 /* >wdg: haven.res.ui.barterbox.Shopbox */
-@haven.FromResource(name = "ui/barterbox", version = 75)
+@haven.FromResource(name = "ui/barterbox", version = 76)
 public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Owner {
     public static final Text qlbl = Text.render("Quality:");
     public static final Text any = Text.render("Any");

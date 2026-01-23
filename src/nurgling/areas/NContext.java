@@ -641,9 +641,62 @@ public class NContext {
 
         ArrayList<ObjectStorage> inputs = new ArrayList<>();
         String id = inAreas.get(item);
+        
+        // Если не найдено по точному имени, проверяем категории
+        if(id == null) {
+            // Проверяем, является ли item категорией
+            if("Board".equals(item) || "Block of Wood".equals(item)) {
+                // Сначала проверяем все зоны напрямую через findIn (это найдет зоны с категорией)
+                NArea categoryArea = findIn(item);
+                if(categoryArea != null) {
+                    id = String.valueOf(categoryArea.id);
+                    areas.put(id, categoryArea);
+                    inAreas.put(item, id);
+                }
+                
+                // Если не нашли зону с категорией локально, ищем глобально
+                if(id == null) {
+                    categoryArea = findInGlobal(item);
+                    if(categoryArea != null) {
+                        id = String.valueOf(categoryArea.id);
+                        areas.put(id, categoryArea);
+                        inAreas.put(item, id);
+                    }
+                }
+                
+                // Если не нашли зону с категорией, ищем зоны с конкретными предметами из категории
+                if(id == null) {
+                    ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(item);
+                    if(categoryItems != null) {
+                        for(org.json.JSONObject categoryItem : categoryItems) {
+                            String categoryItemName = categoryItem.getString("name");
+                            // Проверяем кэш
+                            String categoryId = inAreas.get(categoryItemName);
+                            if(categoryId != null) {
+                                id = categoryId;
+                                inAreas.put(item, id); // Кэшируем категорию
+                                break; // Используем первую найденную зону
+                            }
+                            // Если не в кэше, ищем зону для конкретного предмета
+                            NArea itemArea = findIn(categoryItemName);
+                            if(itemArea == null) {
+                                itemArea = findInGlobal(categoryItemName);
+                            }
+                            if(itemArea != null) {
+                                id = String.valueOf(itemArea.id);
+                                areas.put(id, itemArea);
+                                inAreas.put(categoryItemName, id);
+                                inAreas.put(item, id); // Кэшируем категорию
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if(id!=null) {
-            navigateToAreaIfNeeded(inAreas.get(item));
+            navigateToAreaIfNeeded(id);
 
             NArea area = areas.get(id);
             if(area != null) {
@@ -932,13 +985,20 @@ public class NContext {
     }
 
     public boolean isInBarrel(String item) {
+        // Доски и блоки обычно не хранятся в бочках
+        if("Board".equals(item) || "Block of Wood".equals(item)) {
+            return false;
+        }
         NArea area = findIn(item);
         if (area == null) {
             area = findInGlobal(item);
         }
         if(area!=null)
         {
-            return area.getInput(item).type == NArea.Ingredient.Type.BARREL;
+            NArea.Ingredient ingredient = area.getInput(item);
+            if(ingredient != null) {
+                return ingredient.type == NArea.Ingredient.Type.BARREL;
+            }
         }
         return false;
     }
@@ -1342,7 +1402,7 @@ public class NContext {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
                     if (cand == null) {
-                        System.out.println("NContext.findOutGlobal: Zone " + id + " not found in glob.map.areas - skipping");
+                        //System.out.println("NContext.findOutGlobal: Zone " + id + " not found in glob.map.areas - skipping");
                         continue;
                     }
                     
@@ -1356,12 +1416,12 @@ public class NContext {
                     try {
                         nurgling.areas.db.AreaDBManager areaManager = nurgling.areas.db.AreaDBManager.getInstance();
                         if (!areaManager.areaExists(id)) {
-                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") is deleted in DB - skipping");
+                            //System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") is deleted in DB - skipping");
                             continue;
                         }
                     } catch (Exception e) {
                         // Если не удалось проверить БД, продолжаем (не блокируем работу)
-                        System.err.println("NContext.findOutGlobal: Failed to check if zone " + id + " exists in DB: " + e.getMessage());
+                        //System.err.println("NContext.findOutGlobal: Failed to check if zone " + id + " exists in DB: " + e.getMessage());
                     }
                     
                     // ВАЖНО: Не проверяем isVisible() здесь, так как для синхронизированных зон
@@ -1370,11 +1430,11 @@ public class NContext {
                     // Если getRCArea() == null, зона все равно может быть использована, если есть space
                     // ВАЖНО: Проверяем что jout не null
                     if (cand.jout == null) {
-                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has null jout - skipping");
+                        //System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has null jout - skipping");
                         continue;
                     }
                     if (cand.jout.length() == 0) {
-                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has empty jout - skipping");
+                        //System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") has empty jout - skipping");
                         continue;
                     }
                     boolean containsOut = cand.containOut(name);

@@ -4,11 +4,8 @@ import haven.*;
 import nurgling.NInventory;
 import nurgling.NStyle;
 import nurgling.NUtils;
-import nurgling.actions.AutoDrink;
 import nurgling.areas.NContext;
 import nurgling.NConfig;
-import nurgling.NCore;
-import haven.res.ui.croster.Entry;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -148,7 +145,21 @@ public class BotsInterruptWidget extends Widget {
             // Ignore errors when stopping
         }
         // Clear kill list highlight when bot stops
-        Entry.killList.clear();
+        // Используем рефлексию для безопасного доступа к Entry.killList
+        // чтобы избежать ExceptionInInitializerError при устаревших ресурсах
+        try {
+            Class<?> entryClass = Class.forName("haven.res.ui.croster.Entry");
+            java.lang.reflect.Field killListField = entryClass.getField("killList");
+            @SuppressWarnings("unchecked")
+            java.util.Set<?> killList = (java.util.Set<?>) killListField.get(null);
+            killList.clear();
+        } catch (ExceptionInInitializerError e) {
+            // Игнорируем ошибки инициализации класса (устаревшие ресурсы)
+        } catch (LinkageError e) {
+            // Игнорируем ошибки загрузки класса
+        } catch (Exception e) {
+            // Ignore errors when clearing kill list (e.g., class not found, reflection errors)
+        }
         synchronized (obs)
         {
             for(Gear g: obs)
@@ -191,7 +202,21 @@ public class BotsInterruptWidget extends Widget {
                 if(g.t.isInterrupted() || !g.t.isAlive())
                 {
                     // Clear kill list highlight when bot stops
-                    Entry.killList.clear();
+                    // Используем рефлексию для безопасного доступа к Entry.killList
+                    // чтобы избежать ExceptionInInitializerError при устаревших ресурсах
+                    try {
+                        Class<?> entryClass = Class.forName("haven.res.ui.croster.Entry");
+                        java.lang.reflect.Field killListField = entryClass.getField("killList");
+                        @SuppressWarnings("unchecked")
+                        java.util.Set<?> killList = (java.util.Set<?>) killListField.get(null);
+                        killList.clear();
+                    } catch (ExceptionInInitializerError e) {
+                        // Игнорируем ошибки инициализации класса (устаревшие ресурсы)
+                    } catch (LinkageError e) {
+                        // Игнорируем ошибки загрузки класса
+                    } catch (Exception e) {
+                        // Ignore errors when clearing kill list (e.g., class not found, reflection errors)
+                    }
                     if(stackObs.contains(g.t))
                     {
                         stackObs.remove(g.t);

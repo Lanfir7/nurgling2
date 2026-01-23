@@ -97,13 +97,15 @@ public class AreaDao {
         if (adapter instanceof nurgling.db.PostgresAdapter) {
             // PostgreSQL: INSERT ON CONFLICT with version increment
             // Note: primary key is just 'id', not (id, profile)
-            String upsertSql = "INSERT INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at) " +
-                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP) " +
+            // Also reset deleted flag when saving (in case zone was restored)
+            String upsertSql = "INSERT INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at, deleted) " +
+                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, FALSE) " +
                               "ON CONFLICT (id) DO UPDATE SET " +
                               "name = EXCLUDED.name, path = EXCLUDED.path, hide = EXCLUDED.hide, " +
                               "color_r = EXCLUDED.color_r, color_g = EXCLUDED.color_g, " +
                               "color_b = EXCLUDED.color_b, color_a = EXCLUDED.color_a, " +
                               "data = EXCLUDED.data, profile = EXCLUDED.profile, " +
+                              "deleted = FALSE, " +
                               "version = areas.version + 1, " +
                               "updated_at = CURRENT_TIMESTAMP " +
                               "WHERE areas.data != EXCLUDED.data OR areas.name != EXCLUDED.name OR areas.path != EXCLUDED.path " +
@@ -126,10 +128,11 @@ public class AreaDao {
             return 1;
         } else {
             // SQLite: INSERT OR REPLACE
-            String upsertSql = "INSERT OR REPLACE INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at) " +
+            // Also reset deleted flag when saving (in case zone was restored)
+            String upsertSql = "INSERT OR REPLACE INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at, deleted) " +
                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
                               "COALESCE((SELECT version + 1 FROM areas WHERE id = ? AND profile = ?), 1), " +
-                              "CURRENT_TIMESTAMP)";
+                              "CURRENT_TIMESTAMP, 0)";
             adapter.executeUpdate(upsertSql,
                 id, name, path, hideValue,
                 colorR, colorG, colorB, colorA,
@@ -146,26 +149,29 @@ public class AreaDao {
     }
 
     /**
-     * Get version of an area
+     * Get version of an area (only for non-deleted areas)
      */
     public int getAreaVersion(DatabaseAdapter adapter, int id, String profile) throws SQLException {
-        String sql = "SELECT version FROM areas WHERE id = ? AND profile = ?";
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
+        String sql = "SELECT version FROM areas WHERE id = ? AND profile = ? AND " + deletedCheck;
         try (ResultSet rs = adapter.executeQuery(sql, id, profile)) {
             if (rs.next()) {
                 return rs.getInt("version");
             }
         }
-        return 0; // Area doesn't exist
+        return 0; // Area doesn't exist or is deleted
     }
 
     /**
-     * Load all areas for a specific profile
+     * Load all areas for a specific profile (excluding deleted areas)
      */
     public List<AreaData> loadAreasByProfile(DatabaseAdapter adapter, String profile) throws SQLException {
         List<AreaData> areas = new ArrayList<>();
 
+        // Filter out deleted areas - use appropriate boolean check for database type
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
         String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
-                    "FROM areas WHERE profile = ? ORDER BY id";
+                    "FROM areas WHERE profile = ? AND " + deletedCheck + " ORDER BY id";
 
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             while (rs.next()) {
@@ -190,11 +196,13 @@ public class AreaDao {
     }
 
     /**
-     * Load area by id and profile
+     * Load area by id and profile (excluding deleted areas)
      */
     public AreaData loadArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
+        // Filter out deleted areas - use appropriate boolean check for database type
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
         String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
-                    "FROM areas WHERE id = ? AND profile = ?";
+                    "FROM areas WHERE id = ? AND profile = ? AND " + deletedCheck;
 
         try (ResultSet rs = adapter.executeQuery(sql, id, profile)) {
             if (rs.next()) {
@@ -218,10 +226,15 @@ public class AreaDao {
     }
 
     /**
-     * Delete an area
+     * Delete an area (soft delete - marks as deleted instead of removing from database)
      */
     public void deleteArea(DatabaseAdapter adapter, int id, String profile) throws SQLException {
-        adapter.executeUpdate("DELETE FROM areas WHERE id = ? AND profile = ?", id, profile);
+        // Use soft delete: mark as deleted and update timestamp
+        if (adapter instanceof nurgling.db.PostgresAdapter) {
+            adapter.executeUpdate("UPDATE areas SET deleted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND profile = ?", id, profile);
+        } else {
+            adapter.executeUpdate("UPDATE areas SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND profile = ?", id, profile);
+        }
     }
 
     /**
@@ -232,19 +245,21 @@ public class AreaDao {
     }
 
     /**
-     * Check if area exists
+     * Check if area exists (only non-deleted areas)
      */
     public boolean areaExists(DatabaseAdapter adapter, int id, String profile) throws SQLException {
-        try (ResultSet rs = adapter.executeQuery("SELECT 1 FROM areas WHERE id = ? AND profile = ?", id, profile)) {
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
+        try (ResultSet rs = adapter.executeQuery("SELECT 1 FROM areas WHERE id = ? AND profile = ? AND " + deletedCheck, id, profile)) {
             return rs.next();
         }
     }
 
     /**
-     * Get the maximum updated_at timestamp for a profile
+     * Get the maximum updated_at timestamp for a profile (excluding deleted areas)
      */
     public Timestamp getLastUpdateTime(DatabaseAdapter adapter, String profile) throws SQLException {
-        String sql = "SELECT MAX(updated_at) as last_update FROM areas WHERE profile = ?";
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
+        String sql = "SELECT MAX(updated_at) as last_update FROM areas WHERE profile = ? AND " + deletedCheck;
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             if (rs.next()) {
                 return rs.getTimestamp("last_update");
@@ -254,13 +269,14 @@ public class AreaDao {
     }
 
     /**
-     * Get areas updated after a specific timestamp
+     * Get areas updated after a specific timestamp (excluding deleted areas)
      */
     public List<AreaData> getAreasUpdatedAfter(DatabaseAdapter adapter, String profile, Timestamp after) throws SQLException {
         List<AreaData> areas = new ArrayList<>();
 
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
         String sql = "SELECT id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, updated_at, version " +
-                    "FROM areas WHERE profile = ? AND updated_at > ? ORDER BY id";
+                    "FROM areas WHERE profile = ? AND updated_at > ? AND " + deletedCheck + " ORDER BY id";
 
         try (ResultSet rs = adapter.executeQuery(sql, profile, after)) {
             while (rs.next()) {
@@ -285,10 +301,11 @@ public class AreaDao {
     }
 
     /**
-     * Get count of areas for a profile
+     * Get count of areas for a profile (excluding deleted areas)
      */
     public int getAreasCount(DatabaseAdapter adapter, String profile) throws SQLException {
-        String sql = "SELECT COUNT(*) as cnt FROM areas WHERE profile = ?";
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
+        String sql = "SELECT COUNT(*) as cnt FROM areas WHERE profile = ? AND " + deletedCheck;
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             if (rs.next()) {
                 return rs.getInt("cnt");
@@ -298,11 +315,12 @@ public class AreaDao {
     }
 
     /**
-     * Get all area versions for a profile (for efficient version comparison)
+     * Get all area versions for a profile (for efficient version comparison, excluding deleted areas)
      */
     public java.util.Map<Integer, Integer> getAllAreaVersions(DatabaseAdapter adapter, String profile) throws SQLException {
         java.util.Map<Integer, Integer> versions = new java.util.HashMap<>();
-        String sql = "SELECT id, version FROM areas WHERE profile = ?";
+        String deletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = FALSE" : "deleted = 0";
+        String sql = "SELECT id, version FROM areas WHERE profile = ? AND " + deletedCheck;
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             while (rs.next()) {
                 versions.put(rs.getInt("id"), rs.getInt("version"));

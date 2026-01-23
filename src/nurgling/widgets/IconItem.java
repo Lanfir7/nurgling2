@@ -17,6 +17,7 @@ public class IconItem extends Widget
     private static final String KEY_MARK_BARTER = "iconitem.mark_barter";
     private static final String KEY_MARK_BARREL = "iconitem.mark_barrel";
     private static final String KEY_UNMARK = "iconitem.unmark";
+    private static final String KEY_BY_TYPE = "iconitem.by_type";
     public static final TexI frame = new TexI(Resource.loadimg("nurgling/hud/iconframe"));
     public static final TexI framet = new TexI(Resource.loadimg("nurgling/hud/iconframet"));
     public static final TexI bm = new TexI(Resource.loadimg("nurgling/hud/bartermark"));
@@ -36,6 +37,9 @@ public class IconItem extends Widget
 
     String name;
 
+    // Сохраняем ссылку на IngredientContainer для доступа из обработчика меню
+    private IngredientContainer ingredientContainer = null;
+    
     public IconItem(String name, BufferedImage img, Widget parent)
     {
         this.parent = parent;
@@ -44,6 +48,21 @@ public class IconItem extends Widget
 
         tex = new TexI(img);
         this.sz = UI.scale(new Coord(32, 42));
+        
+        // Сохраняем ссылку на IngredientContainer, если parent является им
+        if(parent instanceof IngredientContainer) {
+            this.ingredientContainer = (IngredientContainer) parent;
+        } else {
+            // Ищем IngredientContainer в иерархии родителей
+            Widget current = parent;
+            while(current != null) {
+                if(current instanceof IngredientContainer) {
+                    this.ingredientContainer = (IngredientContainer) current;
+                    break;
+                }
+                current = current.parent;
+            }
+        }
     }
 
     public IconItem(String name, TexI img)
@@ -96,6 +115,18 @@ public class IconItem extends Widget
     @Override
     public Object tooltip(Coord c, Widget prev)
     {
+        // Если это категория, показываем более информативный tooltip
+        if(parent instanceof IngredientContainer) {
+            IngredientContainer ic = (IngredientContainer) parent;
+            JSONObject itemData = ic.getItemData(name);
+            if(itemData != null && itemData.has("isCategory") && itemData.getBoolean("isCategory")) {
+                if(itemData.has("originalName")) {
+                    return new TexI(RichText.render(name + " (was: " + itemData.getString("originalName") + ")").img);
+                } else {
+                    return new TexI(RichText.render(name + " (category)").img);
+                }
+            }
+        }
         return tip;
     }
 
@@ -127,6 +158,7 @@ public class IconItem extends Widget
     }
 
     public void opts( Coord c ) {
+        System.out.println("IconItem.opts: Called for name='" + name + "', type=" + type);
         if(menu == null) {
             menuKeyMap.clear();
             ArrayList<String> optList = new ArrayList<>();
@@ -139,6 +171,13 @@ public class IconItem extends Widget
                 if (parent instanceof IngredientContainer) {
                     addMenuOption(optList, KEY_MARK_BARTER);
                     addMenuOption(optList, KEY_MARK_BARREL);
+                    // Добавляем опцию "By type" для блоков и досок
+                    boolean isBlock = isBlockOrBoard(name);
+                    System.out.println("IconItem.opts: name='" + name + "', isBlockOrBoard=" + isBlock + ", parent=" + (parent != null ? parent.getClass().getName() : "null"));
+                    if (isBlock) {
+                        String localized = addMenuOption(optList, KEY_BY_TYPE);
+                        System.out.println("IconItem.opts: Added KEY_BY_TYPE as '" + localized + "'");
+                    }
                 }
             }
             else
@@ -149,6 +188,12 @@ public class IconItem extends Widget
                 addMenuOption(optList, KEY_DELETE);
                 if(parent instanceof IngredientContainer) {
                     addMenuOption(optList, KEY_UNMARK);
+                    // Добавляем опцию "By type" для блоков и досок
+                    boolean isBlock = isBlockOrBoard(name);
+                    System.out.println("IconItem.opts: name='" + name + "', isBlockOrBoard=" + isBlock);
+                    if (isBlock) {
+                        addMenuOption(optList, KEY_BY_TYPE);
+                    }
                 }
             }
             
@@ -169,11 +214,32 @@ public class IconItem extends Widget
                 @Override
                 public void nchoose(NPetal option)
                 {
+                    System.out.println("IconItem.nchoose: Called! option=" + (option != null ? option.name : "null"));
+                    System.out.println("IconItem.nchoose: menuKeyMap contents: " + menuKeyMap);
+                    
+                    // Показываем сообщение в игре для отладки
+                    if(NUtils.getGameUI() != null && option != null) {
+                        NUtils.getGameUI().msg("Menu: " + option.name, java.awt.Color.YELLOW);
+                    }
+                    
                     if(option!=null)
                     {
                         // Get the key from the localized name
                         String key = menuKeyMap.get(option.name);
-                        if (key == null) key = "";
+                        System.out.println("IconItem.nchoose: Looking for key for option.name='" + option.name + "', found key='" + key + "'");
+                        
+                        if (key == null) {
+                            key = "";
+                            System.err.println("IconItem.nchoose: WARNING - key not found in menuKeyMap!");
+                            System.err.println("IconItem.nchoose: menuKeyMap keys: " + menuKeyMap.keySet());
+                            if(NUtils.getGameUI() != null) {
+                                NUtils.getGameUI().msg("Error: Key not found!", java.awt.Color.RED);
+                            }
+                        }
+                        
+                        if(NUtils.getGameUI() != null) {
+                            NUtils.getGameUI().msg("Key: " + key, java.awt.Color.CYAN);
+                        }
                         
                         if (key.equals(KEY_THRESHOLD))
                         {
@@ -204,6 +270,35 @@ public class IconItem extends Widget
                         {
                             ((IngredientContainer)IconItem.this.parent).setType(IconItem.this.name, NArea.Ingredient.Type.CONTAINER);
                         }
+                        else if(key.equals(KEY_BY_TYPE))
+                        {
+                            // Используем сохраненную ссылку на IngredientContainer
+                            if(IconItem.this.ingredientContainer != null) {
+                                IngredientContainer ic = IconItem.this.ingredientContainer;
+                                
+                                // Получаем данные из JSON
+                                JSONObject itemData = ic.getItemData(IconItem.this.name);
+                                
+                                // Если это уже категория (есть originalName), то ничего не делаем
+                                if(itemData != null && itemData.has("originalName")) {
+                                    if(NUtils.getGameUI() != null) {
+                                        NUtils.getGameUI().msg("Already a category!", java.awt.Color.RED);
+                                    }
+                                    return;
+                                }
+                                
+                                // Используем текущее имя - это конкретный блок/доска
+                                if(NUtils.getGameUI() != null) {
+                                    NUtils.getGameUI().msg("Converting to category...", java.awt.Color.CYAN);
+                                }
+                                ic.setCategory(IconItem.this.name);
+                            } else {
+                                System.err.println("IconItem.KEY_BY_TYPE: ingredientContainer is null!");
+                                if(NUtils.getGameUI() != null) {
+                                    NUtils.getGameUI().msg("Error: Container not found", java.awt.Color.RED);
+                                }
+                            }
+                        }
                     }
                     uimsg("cancel");
                 }
@@ -219,6 +314,25 @@ public class IconItem extends Widget
             }
             ui.root.add(menu, pos);
         }
+    }
+
+    /**
+     * Проверяет, является ли предмет блоком или доской (но не категорией)
+     */
+    private boolean isBlockOrBoard(String itemName) {
+        if (itemName == null) {
+            System.out.println("isBlockOrBoard: itemName is null");
+            return false;
+        }
+        // Исключаем категории
+        if("Block of Wood".equals(itemName) || "Board".equals(itemName)) {
+            System.out.println("isBlockOrBoard: '" + itemName + "' is a category, returning false");
+            return false;
+        }
+        // Проверяем, начинается ли название с "Block of " или "Board of " (с пробелом в конце)
+        boolean result = itemName.startsWith("Block of ") || itemName.startsWith("Board of ");
+        System.out.println("isBlockOrBoard: '" + itemName + "' -> " + result);
+        return result;
     }
 
     public JSONObject toJson() {
