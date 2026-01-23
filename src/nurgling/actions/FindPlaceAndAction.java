@@ -24,6 +24,24 @@ public class FindPlaceAndAction implements Action {
         if(placed == null)
             placed = findLiftedbyPlayer();
         if ( placed != null ) {
+            // ВАЖНО: Если зона не видна, навигируем к ней через ChunkNav перед использованием PathFinder
+            // PathFinder не может найти путь к координатам в невидимых зонах (grid не загружен)
+            if (targetArea != null && !targetArea.isVisible()) {
+                // Навигируем к зоне через ChunkNav
+                NUtils.navigateToArea(targetArea);
+                // После навигации зона должна стать видимой, получаем координаты
+                area = targetArea.getRCArea();
+            }
+            
+            // Если area все еще null, пытаемся получить из сохраненных данных
+            if (area == null && targetArea != null) {
+                area = targetArea.getRCAreaFromStoredData();
+            }
+            
+            if (area == null) {
+                return Results.ERROR("Area coordinates not available");
+            }
+            
             Coord2d pos = Finder.getFreePlace(area, placed);
             if(pos!=null) {
 
@@ -45,6 +63,7 @@ public class FindPlaceAndAction implements Action {
     {
         this.placed = gob;
         this.area = area.getRCArea();
+        this.targetArea = area;
     }
 
     public FindPlaceAndAction(
@@ -55,6 +74,7 @@ public class FindPlaceAndAction implements Action {
         this.placed = gob;
         this.area = area.getRCArea();
         this.dynamicPf = dynamicPf;
+        this.targetArea = area;
     }
 
     public Gob getPlaced() {
@@ -63,4 +83,5 @@ public class FindPlaceAndAction implements Action {
 
     Gob placed = null;
     Pair<Coord2d, Coord2d> area = null;
+    NArea targetArea = null;
 }

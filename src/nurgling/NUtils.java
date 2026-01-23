@@ -483,7 +483,7 @@ public class NUtils
     public static void setQuestConds(int id, Object... args)
     {
         NGameUI gui = getGameUI();
-        if(gui!=null)
+        if(gui!=null && gui.questinfo != null)
         {
             gui.questinfo.updateConds(id, args);
         }
@@ -491,14 +491,14 @@ public class NUtils
 
     public static void removeQuest(int id) {
         NGameUI gui = getGameUI();
-        if(gui!=null) {
+        if(gui!=null && gui.questinfo != null) {
             gui.questinfo.removeQuest(id);
         }
     }
 
     public static void addQuest(int id) {
         NGameUI gui = getGameUI();
-        if(gui!=null) {
+        if(gui!=null && gui.questinfo != null) {
             gui.questinfo.addQuest(id);
         }
     }

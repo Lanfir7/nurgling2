@@ -27,6 +27,11 @@ public class NContext {
     private HashMap<String, NArea> areas = new HashMap<>();
     private HashMap<String, ObjectStorage> containers = new HashMap<>();
     
+    // Кэш для "не найдено" результатов поиска зон (чтобы не искать повторно слишком часто)
+    // Ключ: имя предмета, Значение: время последней неудачной попытки поиска
+    private HashMap<String, Long> notFoundCache = new HashMap<>();
+    private static final long NOT_FOUND_CACHE_TIMEOUT = 30000; // 30 секунд
+    
     // Barrel tracking for BarrelWorkArea (when no workstation is used)
     private HashMap<String, String> bwaPlacedBarrelHashes = new HashMap<>();
     private HashMap<String, NGlobalCoord> bwaOriginalBarrelCoords = new HashMap<>();
@@ -644,6 +649,19 @@ public class NContext {
         
         // Если не найдено по точному имени, проверяем категории
         if(id == null) {
+            // Проверяем кэш "не найдено" - если недавно искали и не нашли, не ищем снова
+            Long lastNotFoundTime = notFoundCache.get(item);
+            if(lastNotFoundTime != null) {
+                long timeSinceLastSearch = System.currentTimeMillis() - lastNotFoundTime;
+                if(timeSinceLastSearch < NOT_FOUND_CACHE_TIMEOUT) {
+                    // Недавно искали и не нашли - возвращаем пустой список без повторного поиска
+                    return inputs;
+                } else {
+                    // Кэш устарел - удаляем и ищем снова
+                    notFoundCache.remove(item);
+                }
+            }
+            
             // Проверяем, является ли item категорией
             if("Board".equals(item) || "Block of Wood".equals(item)) {
                 // Сначала проверяем все зоны напрямую через findIn (это найдет зоны с категорией)
@@ -665,10 +683,18 @@ public class NContext {
                 }
                 
                 // Если не нашли зону с категорией, ищем зоны с конкретными предметами из категории
+                // Ограничиваем количество попыток, чтобы не зависать
                 if(id == null) {
                     ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(item);
                     if(categoryItems != null) {
+                        int maxSearchAttempts = Math.min(5, categoryItems.size()); // Максимум 5 попыток
+                        int attempts = 0;
                         for(org.json.JSONObject categoryItem : categoryItems) {
+                            if(attempts >= maxSearchAttempts) {
+                                break; // Прекращаем поиск после максимального количества попыток
+                            }
+                            attempts++;
+                            
                             String categoryItemName = categoryItem.getString("name");
                             // Проверяем кэш
                             String categoryId = inAreas.get(categoryItemName);
@@ -678,10 +704,8 @@ public class NContext {
                                 break; // Используем первую найденную зону
                             }
                             // Если не в кэше, ищем зону для конкретного предмета
+                            // Используем только findIn (локальный поиск) для производительности
                             NArea itemArea = findIn(categoryItemName);
-                            if(itemArea == null) {
-                                itemArea = findInGlobal(categoryItemName);
-                            }
                             if(itemArea != null) {
                                 id = String.valueOf(itemArea.id);
                                 areas.put(id, itemArea);
@@ -691,6 +715,11 @@ public class NContext {
                             }
                         }
                     }
+                }
+                
+                // Если после всех попыток не нашли - кэшируем "не найдено"
+                if(id == null) {
+                    notFoundCache.put(item, System.currentTimeMillis());
                 }
             }
         }
@@ -1302,6 +1331,11 @@ public class NContext {
         NArea res = null;
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
             Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
+            
+            // Сначала собираем все подходящие зоны с простым расчетом расстояния
+            // Это быстрее, чем вызывать ChunkNav для каждой зоны
+            ArrayList<Pair<NArea, Double>> candidates = new ArrayList<>();
+            
             for(Integer id : nids) {
                 if(id>0) {
                     if (NUtils.getGameUI().map.glob.map.areas.get(id).containIn(name)) {
@@ -1310,28 +1344,49 @@ public class NContext {
                         if (cand.hide) {
                             continue;
                         }
-                        // Use ChunkNav if available for distance calculation
-                        ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
-                            ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
-                        if (chunkNav != null && chunkNav.isInitialized()) {
-                            ChunkPath path = chunkNav.planToArea(cand);
-                            if(path != null && path.totalCost < dist) {
-                                res = cand;
-                                dist = (int)path.totalCost;
-                            }
-                        } else {
-                            // Fallback to distance-based selection if ChunkNav not available
-                            Pair<Coord2d, Coord2d> testrc = cand.getRCArea();
-                            if(testrc != null) {
-                                double testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc));
-                                if (testdist < dist) {
-                                    res = cand;
-                                    dist = testdist;
-                                }
-                            }
+                        // Используем простой расчет расстояния для первичной фильтрации
+                        Pair<Coord2d, Coord2d> testrc = cand.getRCArea();
+                        if(testrc != null) {
+                            double testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc));
+                            candidates.add(new Pair<NArea, Double>(cand, testdist));
                         }
                     }
                 }
+            }
+            
+            // Сортируем кандидатов по расстоянию
+            candidates.sort((a, b) -> Double.compare(a.b, b.b));
+            
+            // Используем ChunkNav только для ближайших 3 зон (или всех, если их меньше 3)
+            // Это значительно уменьшает количество дорогих вызовов ChunkNav
+            ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
+                ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
+            boolean useChunkNav = (chunkNav != null && chunkNav.isInitialized());
+            
+            int maxChunkNavChecks = Math.min(3, candidates.size());
+            for(int i = 0; i < maxChunkNavChecks; i++) {
+                NArea cand = candidates.get(i).a;
+                double testdist = candidates.get(i).b;
+                
+                if(useChunkNav) {
+                    // Используем ChunkNav для точного расчета пути
+                    ChunkPath path = chunkNav.planToArea(cand);
+                    if(path != null && path.totalCost < dist) {
+                        res = cand;
+                        dist = path.totalCost;
+                    }
+                } else {
+                    // Fallback к простому расстоянию
+                    if (testdist < dist) {
+                        res = cand;
+                        dist = testdist;
+                    }
+                }
+            }
+            
+            // Если ChunkNav не использовался или не нашел путь, используем ближайшую зону по простому расстоянию
+            if(res == null && !candidates.isEmpty()) {
+                res = candidates.get(0).a;
             }
         }
         return res;
@@ -1439,66 +1494,42 @@ public class NContext {
                     }
                     boolean containsOut = cand.containOut(name);
                     if (containsOut) {
-                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") containsOut " + name + " (jout.length=" + cand.jout.length() + ")");
                         // Пытаемся получить координаты зоны
                         Pair<Coord2d, Coord2d> rcArea = cand.getRCArea();
                         // Если getRCArea() вернул null (grid не загружен), проверяем есть ли space
                         if (rcArea == null && (cand.space == null || cand.space.space == null || cand.space.space.isEmpty())) {
-                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: no coordinates and no space (rcArea=null, space=" + (cand.space == null ? "null" : (cand.space.space == null ? "null" : (cand.space.space.isEmpty() ? "empty" : "exists"))) + ")");
                             continue; // Нет координат и нет space - пропускаем
                         }
                         
                         NArea.Ingredient output = cand.getOutput(name);
-                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") getOutput(" + name + ") returned: " + (output != null ? "output with th=" + output.th : "null"));
                         if (output != null) {
                             // Проверяем путь только если зона подходит по порогу качества
                             // Если у зоны порог 60, а у предмета качество 73, то 60 <= 73 = true
                             int areaTh = output.th;
                             if (areaTh == -1 || th >= areaTh) {
                                 // Порог не указан (принимает все) или качество предмета >= порога зоны
-                                // ВАЖНО: Если getRCArea() == null, пытаемся найти путь используя space напрямую
-                                if (rcArea != null) {
-                                    // Grid загружен - проверяем путь через ChunkNav если доступен
-                                    ChunkNavManager chunkNav = (NUtils.getGameUI() != null && NUtils.getGameUI().map instanceof NMapView)
-                                        ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
-                                    if (chunkNav != null && chunkNav.isInitialized()) {
-                                        ChunkPath path = chunkNav.planToArea(cand);
-                                        if (path != null) {
-                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added with ChunkNav path check (path found)");
-                                            areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
-                                        } else {
-                                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") skipped: ChunkNav path not found");
-                                        }
-                                    } else {
-                                        // ChunkNav не доступен - добавляем зону без проверки пути
-                                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (ChunkNav not available)");
+                                // ВАЖНО: Проверяем путь через ChunkNav даже если grid не загружен (rcArea == null)
+                                // ChunkNav может работать с space данными для планирования пути к зонам за экраном
+                                ChunkNavManager chunkNav = (NUtils.getGameUI() != null && NUtils.getGameUI().map instanceof NMapView)
+                                    ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
+                                if (chunkNav != null && chunkNav.isInitialized()) {
+                                    // Проверяем путь через ChunkNav - работает даже когда grid не загружен
+                                    ChunkPath path = chunkNav.planToArea(cand);
+                                    if (path != null) {
                                         areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
                                     }
                                 } else {
-                                    // Grid не загружен, но есть space - добавляем зону без проверки пути
-                                    // Путь будет проверен позже, когда grid загрузится
-                                    System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") added without path check (grid not loaded)");
+                                    // ChunkNav не доступен - добавляем зону без проверки пути
                                     areas.add(new TestedArea(cand, areaTh == -1 ? 1 : areaTh));
                                 }
-                            } else {
-                                System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") quality threshold mismatch: item th=" + th + ", zone th=" + areaTh);
                             }
-                        } else {
-                            System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") output not found for " + name);
                         }
-                    } else {
-                        System.out.println("NContext.findOutGlobal: Zone " + id + " (" + cand.name + ") does not containOut " + name + " (jout.length=" + (cand.jout != null ? cand.jout.length() : 0) + ")");
                     }
                 }
             }
         }
 
         areas.sort(ta_comp);
-        
-        System.out.println("NContext.findOutGlobal: Found " + areas.size() + " candidate zones for " + name + " (quality=" + th + ")");
-        for (TestedArea ta : areas) {
-            System.out.println("NContext.findOutGlobal: Candidate zone " + ta.area.id + " (" + ta.area.name + ") with th=" + ta.th);
-        }
 
         // ВАЖНО: Выбираем зону с максимальным порогом, который <= качества предмета
         // Зона без порога (th=1) должна использоваться только если нет зон с порогом >= качества предмета
@@ -1512,7 +1543,6 @@ public class NContext {
                 res = area.area;
                 tth = area.th;
                 foundZoneWithThreshold = true;
-                System.out.println("NContext.findOutGlobal: Selected zone with threshold: " + area.area.id + " (" + area.area.name + ") th=" + area.th);
             }
         }
         
@@ -1523,14 +1553,9 @@ public class NContext {
                     // Зона без порога (принимает все)
                     res = area.area;
                     tth = 1;
-                    System.out.println("NContext.findOutGlobal: Selected zone without threshold: " + area.area.id + " (" + area.area.name + ")");
                     break;
                 }
             }
-        }
-        
-        if (res == null) {
-            System.out.println("NContext.findOutGlobal: No suitable zone found for " + name + " (quality=" + th + ")");
         }
 
         ArrayList<NArea> targets = new ArrayList<>();

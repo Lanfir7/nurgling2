@@ -158,7 +158,10 @@ public class NGItem extends GItem
                 }
             }
             if (lastQuestUpdate < NQuestInfo.lastUpdate.get()) {
-                isQuested = NUtils.getGameUI().questinfo.isQuestedItem(this);
+                NGameUI gui = NUtils.getGameUI();
+                if (gui != null && gui.questinfo != null) {
+                    isQuested = gui.questinfo.isQuestedItem(this);
+                }
                 lastQuestUpdate = NQuestInfo.lastUpdate.get();
             }
         }

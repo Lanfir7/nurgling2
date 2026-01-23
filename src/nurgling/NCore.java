@@ -188,17 +188,32 @@ public class NCore extends Widget
     }
 
     private static final Object dbLock = new Object();
+    private static volatile boolean dbInitInProgress = false;
 
     @Override
     public void tick(double dt)
     {
-        if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager == null)
+        if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager == null && !dbInitInProgress)
         {
             synchronized (dbLock) {
-                if (databaseManager == null) {  // Double-check inside lock
-                    databaseManager = new nurgling.db.DatabaseManager(1);
-                    // Start area and route sync after database is initialized
-                    startAreaSync();
+                if (databaseManager == null && !dbInitInProgress) {  // Double-check inside lock
+                    dbInitInProgress = true;
+                    // Инициализируем DatabaseManager в отдельном потоке, чтобы не блокировать главный цикл
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                databaseManager = new nurgling.db.DatabaseManager(1);
+                                // Start area and route sync after database is initialized
+                                startAreaSync();
+                            } catch (Exception e) {
+                                System.err.println("Failed to initialize DatabaseManager in background: " + e.getMessage());
+                                e.printStackTrace();
+                            } finally {
+                                dbInitInProgress = false;
+                            }
+                        }
+                    }, "DatabaseManager-Init").start();
                 }
             }
         }

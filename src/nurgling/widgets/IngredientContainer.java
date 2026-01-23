@@ -288,11 +288,13 @@ public class IngredientContainer extends BaseIngredientContainer {
         }
         icons.clear();
         if(id != -1) {
+            NArea area = NUtils.getArea(id);
+            if(area == null) return;
             JSONArray data;
             if(type.equals("in"))
-                data = NUtils.getArea(id).jin;
+                data = area.jin;
             else
-                data = NUtils.getArea(id).jout;
+                data = area.jout;
 
             for(int i = 0; i < data.length(); i++) {
                 addIcon(((JSONObject) data.get(i)));

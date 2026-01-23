@@ -587,7 +587,82 @@ public class NArea
                 return new Pair<Coord2d, Coord2d>(begin.mul(MCache.tilesz), end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
             }
         }
-        return null;
+        // Fallback: попытаться получить координаты из сохраненных данных ChunkNav
+        return getRCAreaFromStoredData();
+    }
+    
+    /**
+     * Получает координаты зоны из сохраненных данных ChunkNav, даже когда зона не видна.
+     * Использует worldTileOrigin из записанных чанков для расчета мировых координат.
+     */
+    public Pair<Coord2d, Coord2d> getRCAreaFromStoredData() {
+        if (space == null || space.space == null || space.space.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // Получаем ChunkNavManager
+            if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null) {
+                return null;
+            }
+            
+            if (!(NUtils.getGameUI().map instanceof nurgling.NMapView)) {
+                return null;
+            }
+            
+            nurgling.NMapView mapView = (nurgling.NMapView) NUtils.getGameUI().map;
+            nurgling.navigation.ChunkNavManager chunkNav = mapView.getChunkNavManager();
+            if (chunkNav == null || !chunkNav.isInitialized()) {
+                return null;
+            }
+            
+            nurgling.navigation.ChunkNavGraph graph = chunkNav.getGraph();
+            if (graph == null) {
+                return null;
+            }
+            
+            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+            int foundChunks = 0;
+            
+            for (java.util.Map.Entry<Long, VArea> entry : space.space.entrySet()) {
+                long gridId = entry.getKey();
+                VArea varea = entry.getValue();
+                
+                if (varea == null || varea.area == null) {
+                    continue;
+                }
+                
+                // Пытаемся получить worldTileOrigin из сохраненных данных чанка
+                nurgling.navigation.ChunkNavData chunk = graph.getChunk(gridId);
+                if (chunk == null || chunk.worldTileOrigin == null) {
+                    continue;
+                }
+                
+                // Вычисляем мировые координаты тайлов
+                Coord ul = chunk.worldTileOrigin.add(varea.area.ul);
+                Coord br = chunk.worldTileOrigin.add(varea.area.br);
+                
+                minX = Math.min(minX, ul.x);
+                minY = Math.min(minY, ul.y);
+                maxX = Math.max(maxX, br.x);
+                maxY = Math.max(maxY, br.y);
+                foundChunks++;
+            }
+            
+            if (foundChunks == 0) {
+                return null;
+            }
+            
+            // Конвертируем координаты тайлов в мировые координаты
+            Coord2d begin = new Coord(minX, minY).mul(MCache.tilesz);
+            Coord2d end = new Coord(maxX - 1, maxY - 1).mul(MCache.tilesz).add(MCache.tilesz);
+            
+            return new Pair<>(begin, end);
+            
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

@@ -146,7 +146,19 @@ public class NGameUI extends GameUI
         add(new NDraggableWidget(botsMenu = new NBotsMenu(), "botsmenu", botsMenu.sz.add(NDraggableWidget.delta)));
     }
     
-    private void initHeavyWidgets() {
+    /**
+     * Инициализация критичных виджетов, которые нужны сразу после подключения
+     * (например, questinfo - сервер отправляет квесты сразу)
+     */
+    private void initCriticalWidgets() {
+        // questinfo нужен сразу, так как сервер отправляет квесты при подключении
+        add(new NDraggableWidget(questinfo = new NQuestInfo(), "quests", questinfo.sz.add(NDraggableWidget.delta)));
+    }
+    
+    /**
+     * Инициализация некритичных тяжелых виджетов (можно загружать асинхронно)
+     */
+    private void initNonCriticalHeavyWidgets() {
         itemsForSearch = new NSearchItem();
         // Replace Cal with NCal to keep calendar customizations in nurgling package
         Widget oldCalendarWidget = null;
@@ -181,8 +193,6 @@ public class NGameUI extends GameUI
             belt.setFlipped(true);
         }
 
-
-        add(new NDraggableWidget(questinfo = new NQuestInfo(), "quests", questinfo.sz.add(NDraggableWidget.delta)));
         add(new NDraggableWidget(recentActionsPanel = new NRecentActionsPanel(), "recentactions", recentActionsPanel.sz.add(NDraggableWidget.delta)));
         // Add drink meter widget to show water/tea capacity (uses IMeter.fsz to match other meters)
         DrinkMeter drinkMeter = new DrinkMeter();
@@ -243,17 +253,42 @@ public class NGameUI extends GameUI
             }
         }
 
-        // Load areas now that genus is available
+        // Load areas now that genus is available - делаем асинхронно для ускорения старта
         if (map != null && map.glob != null && map.glob.map != null) {
-            map.glob.map.loadAreasIfNeeded();
-            // ВАЖНО: Создаем визуальное отображение для загруженных зон
-            if (map instanceof NMapView) {
-                ((NMapView) map).initDummys();
-            }
+            // Загружаем зоны асинхронно, чтобы не блокировать старт
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        map.glob.map.loadAreasIfNeeded();
+                        // ВАЖНО: Создаем визуальное отображение для загруженных зон
+                        if (map instanceof NMapView) {
+                            ((NMapView) map).initDummys();
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Failed to load areas asynchronously: " + e.getMessage());
+                    }
+                }
+            }, "Areas-Loader").start();
         }
 
         super.attached();
-        initHeavyWidgets();
+        
+        // Инициализируем критичные виджеты синхронно (нужны сразу после подключения)
+        initCriticalWidgets();
+        
+        // Остальные тяжелые виджеты инициализируем асинхронно
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(100); // Небольшая задержка, чтобы UI успел отрисоваться
+                    initNonCriticalHeavyWidgets();
+                } catch (Exception e) {
+                    System.err.println("Failed to initialize heavy widgets: " + e.getMessage());
+                }
+            }
+        }, "HeavyWidgets-Init").start();
         
         // Initialize SimpleRoutesWidget after SimpleRouteManager is ready
         if (map instanceof NMapView && ((NMapView) map).simpleRouteManager != null) {

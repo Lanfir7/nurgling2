@@ -2,6 +2,7 @@ package nurgling.actions;
 
 import nurgling.NConfig;
 import nurgling.NGameUI;
+import nurgling.NUtils;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.tools.Context;
@@ -92,6 +93,11 @@ public class TransferItems implements Action
                     while (listIter.hasPrevious()) {
                         int th = listIter.previous();
                         NArea area = outOfReachAreas.get(th);
+                        // ВАЖНО: Навигируем к зоне перед переносом предметов, если зона не видна
+                        // Это необходимо для того, чтобы getRCArea() мог вернуть координаты
+                        if (area != null && !area.isVisible()) {
+                            NUtils.navigateToArea(area);
+                        }
                         for (Context.Output out : cnt.GetOutput(item, area)) {
                             cnt.addOutput(item, th, out);
                         }
