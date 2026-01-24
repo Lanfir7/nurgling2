@@ -575,7 +575,7 @@ public class NConfig
     private static final long EXPLORED_DEBOUNCE_MS = 5000; // 5 seconds debounce for explored area changes
     private boolean isRoutesUpd = false;
     private boolean isScenariosUpd = false;
-    String path = ((HashDirCache) ResCache.global).base + "\\..\\" + "nconfig.nurgling.json";
+    String path = NUtils.getDataFile("nconfig.nurgling.json");
 
     public boolean isUpdated()
     {
@@ -769,7 +769,7 @@ public class NConfig
         if (profileManager != null) {
             return profileManager.getConfigPathString(filename);
         }
-        return ((HashDirCache) ResCache.global).base + "\\..\\" + filename;
+        return NUtils.getDataFile(filename);
     }
 
     /**
@@ -848,7 +848,7 @@ public class NConfig
      * Note: scenarios are always stored globally, not per-profile
      */
     public String getScenariosPath() {
-        return ((HashDirCache) ResCache.global).base + "\\..\\" + "scenarios.nurgling.json";
+        return NUtils.getDataFile("scenarios.nurgling.json");
     }
 
     /**
@@ -856,7 +856,7 @@ public class NConfig
      * Note: equipment presets are always stored globally, not per-profile
      */
     public String getEquipmentPresetsPath() {
-        return ((HashDirCache) ResCache.global).base + "\\..\\" + "equipment_presets.nurgling.json";
+        return NUtils.getDataFile("equipment_presets.nurgling.json");
     }
 
     /**
@@ -864,7 +864,15 @@ public class NConfig
      * Note: craft presets are always stored globally, not per-profile
      */
     public String getCraftPresetsPath() {
-        return ((HashDirCache) ResCache.global).base + "\\..\\" + "craft_presets.nurgling.json";
+        return NUtils.getDataFile("craft_presets.nurgling.json");
+    }
+
+    /**
+     * Gets the dynamic path for custom icons configuration file
+     * Note: custom icons are always stored globally, not per-profile
+     */
+    public String getCustomIconsPath() {
+        return ((HashDirCache) ResCache.global).base + "\\..\\" + "custom_icons.nurgling.json";
     }
 
     @SuppressWarnings("unchecked")
