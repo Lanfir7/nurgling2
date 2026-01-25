@@ -2,11 +2,16 @@ package nurgling.actions.bots;
 
 import haven.*;
 import nurgling.NGameUI;
+import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.actions.*;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.conf.NCarrierProp;
+import nurgling.navigation.AreaNavigationHelper;
+import nurgling.navigation.ChunkNavExecutor;
+import nurgling.navigation.ChunkNavManager;
+import nurgling.navigation.ChunkPath;
 import nurgling.tasks.WaitCheckable;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
@@ -87,8 +92,10 @@ public class TransferLiftableGlobal implements Action
             // Lift the item
             new LiftObject(item).run(gui);
 
-            // Navigate to output area using chunk navigation
-            NUtils.navigateToArea(carrierOutArea);
+            // Navigate to output area using chunk navigation with lifted item
+            // ВАЖНО: С поднятым предметом PathFinder не работает вне экрана, поэтому используем специальную навигацию
+            navigateToAreaWithLiftedItem(carrierOutArea, gui);
+            
             // Move to output area and place the item
             // ВАЖНО: Передаем NArea, чтобы FindPlaceAndAction мог навигировать к зоне, если она не видна
             new FindPlaceAndAction(null, carrierOutArea).run(gui);
@@ -102,5 +109,77 @@ public class TransferLiftableGlobal implements Action
         }
 
         return Results.SUCCESS();
+    }
+
+    /**
+     * Навигация к зоне с поднятым предметом.
+     * Использует ChunkNav для навигации между чанками с правильным обходом препятствий.
+     * Для финального подхода к зоне использует прямой клик, так как PathFinder не работает с поднятыми предметами.
+     */
+    private void navigateToAreaWithLiftedItem(NArea area, NGameUI gui) throws InterruptedException {
+        if (area == null) return;
+        
+        // Проверяем, находимся ли мы уже в зоне
+        Gob player = gui.map.player();
+        if (player != null && area.checkHit(player.rc)) {
+            return;
+        }
+        
+        // Используем ChunkNavManager для навигации с правильным обходом препятствий
+        ChunkNavManager chunkNav = null;
+        if (gui.map instanceof NMapView) {
+            chunkNav = ((NMapView) gui.map).getChunkNavManager();
+        }
+        
+        if (chunkNav != null && chunkNav.isInitialized()) {
+            // Планируем путь к зоне через ChunkNav (правильно обходит препятствия)
+            ChunkPath path = AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
+            
+            if (path != null && !path.isEmpty()) {
+                // Навигируем по waypoints через ChunkNavExecutor - он правильно обходит препятствия
+                // Но используем его только для навигации между чанками, не для финального подхода
+                ChunkNavExecutor executor = new ChunkNavExecutor(path, area, chunkNav);
+                
+                // Запускаем навигацию - она обойдет препятствия через ChunkNav
+                // Если PathFinder не сможет подойти близко из-за поднятого предмета, это нормально
+                executor.run(gui);
+            }
+            
+            // Всегда используем прямой клик для финального подхода к зоне,
+            // так как PathFinder не работает с поднятыми предметами вне экрана
+            player = gui.map.player();
+            if (player != null && !area.checkHit(player.rc)) {
+                Coord2d areaCenter = area.getCenter2d();
+                if (areaCenter != null) {
+                    // Используем прямой клик на карту для финального подхода
+                    gui.map.wdgmsg("click", Coord.z, areaCenter.floor(haven.OCache.posres), 1, 0);
+                    // Ждем, пока достигнем зоны
+                    int attempts = 0;
+                    while (attempts < 30 && (player == null || !area.checkHit(player.rc))) {
+                        Thread.sleep(200);
+                        player = gui.map.player();
+                        if (player != null && player.rc.dist(areaCenter) < MCache.tilesz.x * 5) {
+                            break; // Достаточно близко
+                        }
+                        attempts++;
+                    }
+                }
+            }
+        } else {
+            // ChunkNav не доступен - используем прямой клик как fallback
+            Coord2d areaCenter = area.getCenter2d();
+            if (areaCenter != null) {
+                gui.map.wdgmsg("click", Coord.z, areaCenter.floor(haven.OCache.posres), 1, 0);
+                int attempts = 0;
+                while (attempts < 30 && (player == null || !area.checkHit(player.rc))) {
+                    Thread.sleep(200);
+                    player = gui.map.player();
+                    if (player != null && player.rc.dist(areaCenter) < MCache.tilesz.x * 5) {
+                        break;
+                    }
+                    attempts++;
+                }
+            }
+        }
     }
 }
