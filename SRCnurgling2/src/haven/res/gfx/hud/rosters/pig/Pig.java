@@ -9,7 +9,7 @@ import nurgling.conf.PigsHerd;
 
 import java.util.*;
 
-@haven.FromResource(name = "gfx/hud/rosters/pig", version = 64)
+@haven.FromResource(name = "gfx/hud/rosters/pig", version = 65)
 public class Pig extends Entry {
     public int meat, milk;
     public int meatq, milkq, hideq;
@@ -72,7 +72,7 @@ public class Pig extends Entry {
     }
 
 	public double rang() {
-		PigsHerd herd = PigsHerd.getCurrent();
+		PigsHerd herd = PigsHerd.getForArea(areaId);
 		if (herd != null) {
 			double ql = (!herd.ignoreBD || hog) ? (q > (seedq - herd.breedingGap)) ? (q + seedq - herd.breedingGap) / 2. : q + ((seedq - herd.breedingGap) - q) * herd.coverbreed : q;
 			double m = (herd.disable_q_percentage ? (herd.meatq * meatq) : (ql * herd.meatq * meatq / 100.));

@@ -215,9 +215,20 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
     }
 
     public void wdgmsg(Widget sender, String msg, Object... args) {
-	Integer n;
 	if(sender == bbtn) {
-	    wdgmsg("buy");
+	    if(ui.modshift && ui.modctrl) {
+		// Ctrl+Shift+клик - покупаем 40 штук
+		for(int i = 0; i < 40; i++) {
+		    wdgmsg("buy");
+		}
+	    } else if(ui.modshift) {
+		// Shift+клик - покупаем 10 штук
+		for(int i = 0; i < 10; i++) {
+		    wdgmsg("buy");
+		}
+	    } else {
+		wdgmsg("buy");
+	    }
 	} else if(sender == spipe) {
 	    wdgmsg("spipe");
 	} else if(sender == bpipe) {

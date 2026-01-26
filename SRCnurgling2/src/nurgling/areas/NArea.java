@@ -99,7 +99,7 @@ public class NArea
         return false;
     }
 
-    boolean containOut(String name)
+    public boolean containOut(String name)
     {
         for (int i = 0; i < jout.length(); i++) {
             if (((String) ((JSONObject) jout.get(i)).get("name")).equals(name))
@@ -326,6 +326,21 @@ public class NArea
             }
         }
         return null;
+    }
+
+    /**
+     * Check if a position is inside this area
+     * @param pos Position in world coordinates (RC)
+     * @return true if position is inside the area
+     */
+    public boolean checkHit(Coord2d pos) {
+        Pair<Coord2d, Coord2d> rcArea = getRCArea();
+        if (rcArea == null || pos == null) {
+            return false;
+        }
+        Coord2d begin = rcArea.a;
+        Coord2d end = rcArea.b;
+        return pos.x >= begin.x && pos.x <= end.x && pos.y >= begin.y && pos.y <= end.y;
     }
 
     public void tick(double dt)

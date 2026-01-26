@@ -25,6 +25,7 @@ import java.util.*;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.nio.file.Path;
 
 import static haven.OCache.posres;
 
@@ -164,6 +165,25 @@ public class NUtils
             return null;
         }
         return getGameUI().map.glob.map.areas.get(id);
+    }
+
+    /**
+     * Get area that contains the given position
+     * @param pos Position in world coordinates
+     * @return NArea that contains the position, or null if not in any area
+     */
+    public static NArea getAreaByPosition(Coord2d pos)
+    {
+        if (getGameUI() == null || getGameUI().map == null || 
+            getGameUI().map.glob == null || getGameUI().map.glob.map == null || pos == null) {
+            return null;
+        }
+        for (NArea area : getGameUI().map.glob.map.areas.values()) {
+            if (area.isVisible() && area.checkHit(pos)) {
+                return area;
+            }
+        }
+        return null;
     }
 
     public static Gob player()
@@ -765,13 +785,23 @@ public class NUtils
 
     public static boolean navigateToArea(NArea area) throws InterruptedException
     {
+        if (area == null) return false;
+        
+        // Check if any corner of the area is reachable via local pathfinding
+        // If yes - we're already close enough, no need to use global navigation
+        if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
+            return true;
+        }
+        
+        // Area is not reachable by local PF, use chunk navigation
+        // Plan to all 4 corners in parallel and choose the shortest path
         ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
         if (chunkNav != null && chunkNav.isInitialized())
         {
-            ChunkPath path = chunkNav.planToArea(area);
-            if (path != null)
+            ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
+            if (bestPath != null)
             {
-                return chunkNav.navigateToArea(area, NUtils.getGameUI()).IsSuccess();
+                return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
             }
         }
         return false;
@@ -779,17 +809,42 @@ public class NUtils
 
     public static boolean navigateToArea(Specialisation string) throws InterruptedException
     {
-        ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
         NArea area = NContext.findSpecGlobal(string.toString());
-        if (chunkNav != null && chunkNav.isInitialized() && area!=null)
+        if (area == null) return false;
+        
+        // Check if any corner of the area is reachable via local pathfinding
+        // If yes - we're already close enough, no need to use global navigation
+        if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
+            return true;
+        }
+        
+        // Area is not reachable by local PF, use chunk navigation
+        // Plan to all 4 corners in parallel and choose the shortest path
+        ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
+        if (chunkNav != null && chunkNav.isInitialized())
         {
-            ChunkPath path = chunkNav.planToArea(area);
-            if (path != null)
+            ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
+            if (bestPath != null)
             {
-
-                return chunkNav.navigateToArea(area, NUtils.getGameUI()).IsSuccess();
+                return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
             }
         }
         return false;
     }
+
+    public static String getDataFile(String... pathElements){
+        Path path = getDataFilePath(pathElements);
+        return path.toString();
+    }
+
+    public static Path getDataFilePath(String... pathElements) {
+        Path path = ((HashDirCache) ResCache.global).base;
+        path = path.resolve("..").normalize();
+        for (String pathElement: pathElements) {
+            path = path.resolve(pathElement);
+        }
+        System.out.println("generated path for" + path);
+        return path;
+    }
+
 }

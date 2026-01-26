@@ -85,8 +85,7 @@ public class TransferLiftable implements Action
 
             NUtils.navigateToArea(carrierOutArea);
             // Move to output area and place the item
-            // ВАЖНО: Передаем NArea, чтобы FindPlaceAndAction мог навигировать к зоне, если она не видна
-            new FindPlaceAndAction(null, carrierOutArea).run(gui);
+            new FindPlaceAndAction(null, carrierOutArea.getRCArea()).run(gui);
 
             // Move away from the placed item
             Coord2d shift = item.rc.sub(NUtils.player().rc).norm().mul(2);

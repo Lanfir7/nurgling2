@@ -402,20 +402,7 @@ public class ChunkNavManager {
             return nurgling.actions.Results.FAIL();
         }
 
-        // Retry planning if the first attempt fails (map may still be loading)
-        ChunkPath path = null;
-        int maxRetries = 3;
-        for (int attempt = 0; attempt < maxRetries; attempt++) {
-            path = planToArea(area);
-            if (path != null) {
-                break;
-            }
-            // Wait and retry - map might still be loading
-            if (attempt < maxRetries - 1) {
-                Thread.sleep(500 + attempt * 500); // 500ms, 1000ms, 1500ms
-            }
-        }
-        
+        ChunkPath path = planToArea(area);
         if (path == null) {
             return nurgling.actions.Results.FAIL();
         }
@@ -500,10 +487,6 @@ public class ChunkNavManager {
         saveInternal();
     }
 
-    // Counter to limit error spam
-    private int saveErrorCount = 0;
-    private static final int MAX_SAVE_ERRORS_LOGGED = 3;
-    
     /**
      * Internal save implementation.
      * Only saves chunks that were updated within the save throttle window.
@@ -529,19 +512,10 @@ public class ChunkNavManager {
                     System.err.println("ChunkNav: Failed to save chunk " + chunk.gridId + ": " + e.getMessage());
                 }
             }
-            
-            // Reset error count on successful save
-            saveErrorCount = 0;
 
         } catch (Exception e) {
-            // Limit error logging to avoid spam
-            if (saveErrorCount < MAX_SAVE_ERRORS_LOGGED) {
-                System.err.println("ChunkNav: Failed to save data: " + e.getMessage());
-                saveErrorCount++;
-                if (saveErrorCount == MAX_SAVE_ERRORS_LOGGED) {
-                    System.err.println("ChunkNav: Further save errors will be suppressed");
-                }
-            }
+            System.err.println("ChunkNav: Failed to save data: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -703,7 +677,13 @@ public class ChunkNavManager {
      * Refresh portal visualization (called from tick).
      */
     private void refreshPortalVisualization() {
-        // Portal visualization is handled by MinimapChunkNavRenderer
-        // No explicit refresh needed here - renderer queries graph on each draw
+        try {
+            NGameUI gui = NUtils.getGameUI();
+            if (gui != null && gui.map != null) {
+                ((nurgling.NMapView) gui.map).createPortalLabels();
+            }
+        } catch (Exception e) {
+            // Ignore - UI might not be ready
+        }
     }
 }

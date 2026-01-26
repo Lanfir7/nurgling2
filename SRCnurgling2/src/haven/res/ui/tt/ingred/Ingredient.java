@@ -9,7 +9,7 @@ import java.util.*;
 import java.awt.image.BufferedImage;
 
 /* >tt: Ingredient */
-@haven.FromResource(name = "ui/tt/ingred", version = 27)
+@haven.FromResource(name = "ui/tt/ingred", version = 28)
 public class Ingredient extends ItemInfo.Tip {
     public final String name;
     public final Double val;
@@ -34,7 +34,7 @@ public class Ingredient extends ItemInfo.Tip {
 	int a = 1;
 	String name;
 	String resName = null;
-	
+
 	if(args[a] instanceof String) {
 	    name = (String)args[a++];
 	} else if(args[1] instanceof Integer) {
@@ -81,7 +81,7 @@ public class Ingredient extends ItemInfo.Tip {
 	}
 	Double val = null;
 	if(args.length > a)
-	    val = (args[a] == null)?null:((Number)args[a]).doubleValue();
+	    val = (args[a] == null)?null:Utils.dv(args[a]);
 	return(new Ingredient(owner, name, val, resName));
     }
 

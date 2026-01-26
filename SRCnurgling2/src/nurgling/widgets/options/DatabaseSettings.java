@@ -3,16 +3,14 @@ package nurgling.widgets.options;
 import haven.*;
 import haven.Button;
 import haven.Label;
-import nurgling.DBPoolManager;
 import nurgling.NConfig;
 import nurgling.NUtils;
-import nurgling.tools.NParser;
+import nurgling.i18n.L10n;
 import nurgling.widgets.nsettings.Panel;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
@@ -28,8 +26,8 @@ public class DatabaseSettings extends Panel {
     private Button initDbButton;
     private CheckBox enableCheckbox;
     private Dropbox<String> dbType;
-    private final int labelWidth = UI.scale(80); // Ширина лейблов
-    private final int entryX = UI.scale(110);    // X-координата для TextEntry (was 90, increased for better space)
+    private final int labelWidth = UI.scale(80); // РЁРёСЂРёРЅР° Р»РµР№Р±Р»РѕРІ
+    private final int entryX = UI.scale(110);    // X-РєРѕРѕСЂРґРёРЅР°С‚Р° РґР»СЏ TextEntry (was 90, increased for better space)
     private final int margin = UI.scale(10);
 
     private boolean enabled;
@@ -40,8 +38,8 @@ public class DatabaseSettings extends Panel {
         super("");
         int y = margin;
 
-        // Чекбокс включения/выключения базы данных
-        prev = enableCheckbox = add(new CheckBox("Enable using Database") {
+        // Р§РµРєР±РѕРєСЃ РІРєР»СЋС‡РµРЅРёСЏ/РІС‹РєР»СЋС‡РµРЅРёСЏ Р±Р°Р·С‹ РґР°РЅРЅС‹С…
+        prev = enableCheckbox = add(new CheckBox(L10n.get("database.enable")) {
             public void set(boolean val) {
                 a = val;
                 enabled = val;
@@ -50,12 +48,12 @@ public class DatabaseSettings extends Panel {
         }, new Coord(margin, y));
         y += enableCheckbox.sz.y + UI.scale(8);
 
-        // Заголовок раздела
-        prev = add(new Label("Database Settings:"), new Coord(margin, y));
+        // Р—Р°РіРѕР»РѕРІРѕРє СЂР°Р·РґРµР»Р°
+        prev = add(new Label(L10n.get("database.settings")), new Coord(margin, y));
         y += prev.sz.y + UI.scale(5);
 
-        // Выпадающий список для выбора типа базы данных
-        prev = add(new Label("Database Type:"), new Coord(margin, y));
+        // Р’С‹РїР°РґР°СЋС‰РёР№ СЃРїРёСЃРѕРє РґР»СЏ РІС‹Р±РѕСЂР° С‚РёРїР° Р±Р°Р·С‹ РґР°РЅРЅС‹С…
+        prev = add(new Label(L10n.get("database.type")), new Coord(margin, y));
         dbType = add(new Dropbox<String>(UI.scale(150), 5, UI.scale(16)) {
             @Override
             protected String listitem(int i) {
@@ -83,27 +81,27 @@ public class DatabaseSettings extends Panel {
 
         int firstSettingY = y;
 
-        // Создаем виджеты для PostgreSQL
-        hostLabel = add(new Label("Host:"), new Coord(margin, firstSettingY));
+        // РЎРѕР·РґР°РµРј РІРёРґР¶РµС‚С‹ РґР»СЏ PostgreSQL
+        hostLabel = add(new Label(L10n.get("database.host")), new Coord(margin, firstSettingY));
         hostEntry = add(new TextEntry(UI.scale(150), ""), new Coord(entryX, firstSettingY));
         y += hostEntry.sz.y + UI.scale(5);
 
-        userLabel = add(new Label("Username:"), new Coord(margin, y));
+        userLabel = add(new Label(L10n.get("database.username")), new Coord(margin, y));
         usernameEntry = add(new TextEntry(UI.scale(150), ""), new Coord(entryX, y));
         y += usernameEntry.sz.y + UI.scale(5);
 
-        passLabel = add(new Label("Password:"), new Coord(margin, y));
+        passLabel = add(new Label(L10n.get("database.password")), new Coord(margin, y));
         passwordEntry = add(new TextEntry(UI.scale(150), ""), new Coord(entryX, y));
         passwordEntry.pw = true;
         y += passwordEntry.sz.y + UI.scale(10);
 
-        // Создаем виджеты для SQLite
-        fileLabel = add(new Label("File Path:"), new Coord(margin, firstSettingY));
+        // РЎРѕР·РґР°РµРј РІРёРґР¶РµС‚С‹ РґР»СЏ SQLite
+        fileLabel = add(new Label(L10n.get("database.filepath")), new Coord(margin, firstSettingY));
         filePathEntry = add(new TextEntry(UI.scale(150), ""), new Coord(entryX, firstSettingY));
         y += filePathEntry.sz.y + UI.scale(5);
 
-        // Кнопка инициализации новой базы данных
-        initDbButton = add(new Button(UI.scale(200), "Initialize New Database") {
+        // РљРЅРѕРїРєР° РёРЅРёС†РёР°Р»РёР·Р°С†РёРё РЅРѕРІРѕР№ Р±Р°Р·С‹ РґР°РЅРЅС‹С…
+        initDbButton = add(new Button(UI.scale(200), L10n.get("database.init_new")) {
             @Override
             public void click() {
                 super.click();
@@ -119,11 +117,11 @@ public class DatabaseSettings extends Panel {
                     }
 
                     try {
-                        // Создаем новую базу данных
+                        // РЎРѕР·РґР°РµРј РЅРѕРІСѓСЋ Р±Р°Р·Сѓ РґР°РЅРЅС‹С…
                         Files.deleteIfExists(Paths.get(dbPathLocal));
                         Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbPathLocal);
 
-                        // Инициализируем таблицы
+                        // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј С‚Р°Р±Р»РёС†С‹
                         try (Statement stmt = conn.createStatement()) {
                             stmt.executeUpdate("CREATE TABLE recipes (" +
                                     "recipe_hash VARCHAR(64) PRIMARY KEY, " +
@@ -161,7 +159,7 @@ public class DatabaseSettings extends Panel {
 
                         conn.close();
 
-                        // Устанавливаем путь в текстовое поле
+                        // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РїСѓС‚СЊ РІ С‚РµРєСЃС‚РѕРІРѕРµ РїРѕР»Рµ
                         filePathEntry.settext(dbPathLocal);
                         dbPath = dbPathLocal;
                         NUtils.getGameUI().msg("Database successfully created and initialized", Color.YELLOW);
@@ -316,7 +314,7 @@ public class DatabaseSettings extends Panel {
         boolean isSQLite = isEnabled && !isPostgres;
 
         if (hostLabel != null) {
-            // Управляем видимостью всех элементов в зависимости от включения базы данных
+            // РЈРїСЂР°РІР»СЏРµРј РІРёРґРёРјРѕСЃС‚СЊСЋ РІСЃРµС… СЌР»РµРјРµРЅС‚РѕРІ РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ РІРєР»СЋС‡РµРЅРёСЏ Р±Р°Р·С‹ РґР°РЅРЅС‹С…
             hostLabel.visible = isPostgres;
             hostEntry.visible = isPostgres;
             userLabel.visible = isPostgres;
@@ -330,7 +328,7 @@ public class DatabaseSettings extends Panel {
             // Don't reconnect here - it's just visibility update, not settings change
         }
 
-        // Переупаковываем виджет
+        // РџРµСЂРµСѓРїР°РєРѕРІС‹РІР°РµРј РІРёРґР¶РµС‚
         pack();
         sz.y = UI.scale(200);
     }
