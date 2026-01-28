@@ -1016,11 +1016,6 @@ public class MCache implements MapSource {
 	init();
     }
 
-    private Coord lastPlayerGrid = null;
-    private long lastTrimTime = 0;
-    private static final long TRIM_INTERVAL = 30000; // Очистка каждые 30 секунд
-    private static final int MAX_GRID_DISTANCE = 5; // Максимальное расстояние в гридах от игрока
-
     public void ctick(double dt) {
 	Collection<Grid> copy;
 	synchronized(grids) {
@@ -1028,100 +1023,6 @@ public class MCache implements MapSource {
 	}
 	for(Grid g : copy)
 	    g.tick(dt);
-	
-	// Автоматическая очистка гридов, далёких от игрока
-	long now = System.currentTimeMillis();
-	if(now - lastTrimTime > TRIM_INTERVAL) {
-	    autoTrimGrids();
-	    lastTrimTime = now;
-	}
-    }
-    
-    private void autoTrimGrids() {
-	try {
-	    // Получаем позицию игрока через NUtils
-	    Gob player = nurgling.NUtils.player();
-	    
-	    if(player == null || player.rc == null) {
-		return; // Игрок не найден, пропускаем очистку
-	    }
-	    
-	    // Получаем координаты грида игрока
-	    Coord playerGrid = player.rc.floor(tilesz).div(cmaps);
-	    
-	    // Если позиция игрока не изменилась значительно, пропускаем очистку
-	    if(lastPlayerGrid != null && playerGrid.dist(lastPlayerGrid) < 2) {
-		return;
-	    }
-	    
-	    lastPlayerGrid = playerGrid;
-	    
-	    // Вычисляем область, которую нужно сохранить (игрок + MAX_GRID_DISTANCE в каждую сторону)
-	    Coord ul = playerGrid.sub(MAX_GRID_DISTANCE, MAX_GRID_DISTANCE);
-	    Coord lr = playerGrid.add(MAX_GRID_DISTANCE, MAX_GRID_DISTANCE);
-	    
-	    // Удаляем гриды вне этой области
-	    synchronized(grids) {
-		synchronized(req) {
-		    int removed = 0;
-		    for(Iterator<Map.Entry<Coord, Grid>> i = grids.entrySet().iterator(); i.hasNext();) {
-			Map.Entry<Coord, Grid> e = i.next();
-			Coord gc = e.getKey();
-			Grid g = e.getValue();
-			if((gc.x < ul.x) || (gc.y < ul.y) || (gc.x > lr.x) || (gc.y > lr.y)) {
-			    g.dispose();
-			    i.remove();
-			    removed++;
-			}
-		    }
-		    // Также очищаем запросы для удалённых гридов
-		    for(Iterator<Coord> i = req.keySet().iterator(); i.hasNext();) {
-			Coord gc = i.next();
-			if((gc.x < ul.x) || (gc.y < ul.y) || (gc.x > lr.x) || (gc.y > lr.y))
-			    i.remove();
-		    }
-		    if(removed > 0) {
-			gridwait.wnotify();
-			Debug.log.printf("Auto-trimmed %d grids, player at %s\n", removed, playerGrid);
-			// После удаления гридов очищаем зоны, которые ссылаются на удалённые гриды
-			cleanupOrphanedAreas();
-		    }
-		}
-	    }
-	} catch(Exception e) {
-	    // Игнорируем ошибки при автоматической очистке, чтобы не нарушить работу игры
-	    Debug.log.printf("Error in autoTrimGrids: %s\n", e.getMessage());
-	}
-    }
-    
-    /**
-     * Очищает зоны, которые ссылаются на удалённые гриды или находятся далеко от игрока.
-     * ВАЖНО: НЕ очищаем area.space.space, так как ChunkNav использует его для навигации
-     * (ChunkNavPlanner.findChunksNearArea() использует area.space.space.keySet()).
-     * 
-     * Основная память занимается загруженными гридами, а не зонами.
-     * Space зон содержит только небольшие объекты (HashMap<Long, VArea>),
-     * где VArea содержит только два Coord - это незначительный объём памяти.
-     * 
-     * Поэтому мы НЕ очищаем space зон, чтобы не нарушить работу ChunkNav.
-     * Если в будущем понадобится оптимизация зон, нужно будет изменить ChunkNav,
-     * чтобы он использовал area.grids_id вместо area.space.space.keySet().
-     */
-    private void cleanupOrphanedAreas() {
-	// ЗАКОММЕНТИРОВАНО: Очистка space зон может нарушить работу ChunkNav
-	// ChunkNav использует area.space.space.keySet() для поиска чанков
-	// Основная память занимается гридами, а не зонами, поэтому очистка зон не критична
-	
-	/* 
-	try {
-	    // Логика очистки закомментирована для совместимости с ChunkNav
-	    // Если нужно будет оптимизировать зоны, нужно:
-	    // 1. Изменить ChunkNavPlanner.findChunksNearArea() чтобы использовать area.grids_id
-	    // 2. Затем раскомментировать эту логику
-	} catch(Exception e) {
-	    Debug.log.printf("Error in cleanupOrphanedAreas: %s\n", e.getMessage());
-	}
-	*/
     }
 
     public void gtick(Render g) {

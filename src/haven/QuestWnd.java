@@ -163,7 +163,7 @@ public class QuestWnd extends Widget {
 	    protected void added() {
 		super.added();
 		StringBuilder buf = new StringBuilder();
-		buf.append(String.format("%s{%c %s", RichText.Parser.col2a(stcol[cond.done]), stsym[cond.done], cond.desc));
+		buf.append(String.format("%s{%c %s", RichText.Parser.col2a(Quest.stcol[cond.done]), Quest.stsym[cond.done], cond.desc));
 		if(cond.status != null) {
 		    buf.append(' ');
 		    buf.append(cond.status);
