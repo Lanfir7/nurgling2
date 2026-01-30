@@ -106,12 +106,23 @@ public class NGameUI extends GameUI
     
     public void startAnimalMarkerMacro() {
         if (animalMarkerMacroRunning) return;
+        // Проверяем, включены ли метки в настройках
+        if (!nurgling.widgets.nsettings.AnimalMarkersSettings.isMarkerEnabled()) {
+            msg("Маркеры животных отключены в настройках (Bots -> Animal markers)");
+            return;
+        }
         animalMarkerMacroRunning = true;
         animalMarkerMacroThread = new Thread(() -> {
             while (animalMarkerMacroRunning && NGameUI.this.ui != null) {
                 try {
+                    // Проверяем настройку каждую итерацию
+                    if (!nurgling.widgets.nsettings.AnimalMarkersSettings.isMarkerEnabled()) {
+                        stopAnimalMarkerMacro();
+                        return;
+                    }
                     if (animalMarkerMacroTracker == null) {
-                        animalMarkerMacroTracker = new nurgling.actions.ObjectTracker(NGameUI.this, getAnimalMarkerMacroPatterns(), false, false);
+                        // filterKritterOnly = true: только kritter + пропускаем трупы (knock)
+                        animalMarkerMacroTracker = new nurgling.actions.ObjectTracker(NGameUI.this, getAnimalMarkerMacroPatterns(), false, false, true);
                         msg("Макрос: маркеры животных включён — при первой встрече криттер будет отмечен на карте; ткни лупой по трупу для качества.");
                     }
                     if (animalMarkerMacroTracker != null)
@@ -1236,14 +1247,18 @@ public class NGameUI extends GameUI
         if (message.contains("Quality")) {
             if(map.clickedGob!=null)
             {
-                Matcher m = Pattern.compile("Quality: (\\d+)").matcher(message);
-                if(m.matches()) {
+                Matcher m = Pattern.compile("Quality:\\s*(\\d+)").matcher(message);
+                if(m.find()) {  // find() вместо matches() — ищем подстроку, а не полное совпадение
                     try {
                         int quality = Integer.parseInt(m.group(1));
+                        System.err.println("[NGameUI] Quality message parsed: " + quality + " for gob " + map.clickedGob.gob.id);
                         map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, quality));
                         // Обновить маркер животного на карте (качество приходит сообщением от сервера, не из sdt)
                         if (map instanceof nurgling.NMapView) {
+                            System.err.println("[NGameUI] Calling applyAnimalMarkerQuality for gob " + map.clickedGob.gob.id + " quality=" + quality);
                             ((nurgling.NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, quality);
+                        } else {
+                            System.err.println("[NGameUI] map is NOT NMapView: " + (map != null ? map.getClass().getName() : "null"));
                         }
                     } catch (NumberFormatException ignored) {
                     } finally {

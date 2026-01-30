@@ -44,16 +44,27 @@ public class ObjectTracker {
     private boolean discordNotifyEnabled;
     private final NGameUI gui;
     private static boolean initialized = false;
+    /** Фильтровать только kritter (животных) и пропускать трупы (knock). Для макроса Animal Markers — true. */
+    private final boolean filterKritterOnly;
 
     public ObjectTracker(NGameUI gui, ArrayList<String> trackedPatterns, boolean discordNotifyEnabled) {
-        this(gui, trackedPatterns, discordNotifyEnabled, true);
+        this(gui, trackedPatterns, discordNotifyEnabled, true, false);
     }
     
     /** @param markInitiallyVisible если false (макрос «Маркеры животных») — не помечать уже видимые, ставить маркеры при первой встрече */
     public ObjectTracker(NGameUI gui, ArrayList<String> trackedPatterns, boolean discordNotifyEnabled, boolean markInitiallyVisible) {
+        this(gui, trackedPatterns, discordNotifyEnabled, markInitiallyVisible, false);
+    }
+    
+    /** 
+     * @param markInitiallyVisible если false (макрос «Маркеры животных») — не помечать уже видимые
+     * @param filterKritterOnly если true — фильтровать только kritter и пропускать трупы (для Animal Markers)
+     */
+    public ObjectTracker(NGameUI gui, ArrayList<String> trackedPatterns, boolean discordNotifyEnabled, boolean markInitiallyVisible, boolean filterKritterOnly) {
         this.gui = gui;
         this.trackedPatterns = trackedPatterns != null ? trackedPatterns : new ArrayList<>();
         this.discordNotifyEnabled = discordNotifyEnabled;
+        this.filterKritterOnly = filterKritterOnly;
         
         if (!markInitiallyVisible || this.trackedPatterns.isEmpty()) return;
         // При первом создании помечаем все видимые объекты (чтобы не слать уведомления за уже видимое)
@@ -78,6 +89,20 @@ public class ObjectTracker {
             this.trackedPatterns.addAll(trackedPatterns);
         }
         this.discordNotifyEnabled = discordNotifyEnabled;
+    }
+    
+    /**
+     * Проверяет, является ли объект трупом (поза knocked/dead)
+     */
+    private static boolean isKnocked(Gob gob) {
+        if (gob == null) return false;
+        try {
+            String pose = gob.pose();
+            if (pose != null) {
+                return pose.contains("knock") || pose.contains("dead");
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
     
     /**
@@ -162,6 +187,17 @@ public class ObjectTracker {
                 }
 
                 String gobName = gob.ngob.name;
+                
+                // Фильтр: только kritter (животные) — только для Animal Markers
+                if (filterKritterOnly) {
+                    if (!gobName.contains("gfx/kritter/")) {
+                        continue;
+                    }
+                    // Фильтр: пропускаем трупы (поза knock)
+                    if (isKnocked(gob)) {
+                        continue;
+                    }
+                }
 
                 // Проверяем каждый паттерн из списка отслеживания
                 for (String pattern : trackedPatterns) {
@@ -508,12 +544,12 @@ public class ObjectTracker {
             return null;
         }
         try {
-            // Извлекаем короткое имя животного: gfx/kritter/fox/fox -> fox
+            // Извлекаем короткое имя животного: gfx/kritter/fox/fox -> fox, gfx/kritter/mammoth/mammoth -> mammoth
             String shortName = null;
             if (animalType.startsWith("gfx/kritter/")) {
-                String suffix = animalType.substring("gfx/kritter/".length()); // fox/fox или fox
+                String suffix = animalType.substring("gfx/kritter/".length()); // fox/fox или mammoth/mammoth
                 if (suffix.contains("/")) {
-                    shortName = suffix.substring(0, suffix.indexOf("/")); // fox
+                    shortName = suffix.substring(0, suffix.indexOf("/")); // fox, mammoth
                 } else {
                     shortName = suffix;
                 }
@@ -524,11 +560,23 @@ public class ObjectTracker {
             // Формируем ожидаемый ключ: gfx/kritter/fox/icon
             String expectedKey = "gfx/kritter/" + shortName + "/icon";
             
-            // Ищем в iconconf.settings
+            // 1) Точное совпадение gfx/kritter/{name}/icon
             for (GobIcon.Setting setting : gui.iconconf.settings.values()) {
                 if (setting.id != null && setting.id.res != null) {
-                    // Точное совпадение с ожидаемым ключом
                     if (expectedKey.equals(setting.id.res)) {
+                        if (setting.icon != null) {
+                            return setting.icon.image();
+                        }
+                    }
+                }
+            }
+            
+            // 2) Частичное совпадение: ищем ключи содержащие shortName
+            String kritterPrefix = "gfx/kritter/" + shortName;
+            for (GobIcon.Setting setting : gui.iconconf.settings.values()) {
+                if (setting.id != null && setting.id.res != null) {
+                    // Ключ начинается с gfx/kritter/{name}
+                    if (setting.id.res.startsWith(kritterPrefix)) {
                         if (setting.icon != null) {
                             return setting.icon.image();
                         }

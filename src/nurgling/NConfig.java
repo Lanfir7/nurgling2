@@ -206,7 +206,9 @@ public class NConfig
         simpleRoutesDiscordNotify,
         simpleRoutesTrackedObjects,
         // Animal markers (макрос маркеров животных: список regex-паттернов)
-        animal_marker_patterns
+        animal_marker_patterns,
+        // Animal markers enabled (ставить метки на животных автоматически)
+        animal_marker_enabled
     }
 
     public enum BBDisplayMode
@@ -370,6 +372,8 @@ public class NConfig
         amp.put("enabled", true);
         animalMarkerPatterns.add(amp);
         conf.put(Key.animal_marker_patterns, animalMarkerPatterns);
+        // По умолчанию метки на животных включены
+        conf.put(Key.animal_marker_enabled, true);
 
         ArrayList<HashMap<String, Object>> petal = new ArrayList<>();
         HashMap<String, Object> pres1 = new HashMap<>();

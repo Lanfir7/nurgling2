@@ -19,6 +19,7 @@ public class AnimalMarkersSettings extends Panel {
     public ArrayList<PatternItem> patterns = new ArrayList<>();
     private PatternList list;
     private TextEntry newPattern;
+    private CheckBox enabledCheckbox;
     private final int width = UI.scale(210);
 
     private static final List<String> DEFAULT_PATTERNS;
@@ -59,8 +60,18 @@ public class AnimalMarkersSettings extends Panel {
         super(L10n.get("animal_markers.settings.title"));
         final int margin = UI.scale(10);
 
-        prev = add(new Label(L10n.get("animal_markers.patterns_list")), new Coord(margin, margin + UI.scale(20)));
-        prev = add(list = new PatternList(new Coord(width, UI.scale(220))), prev.pos("bl").adds(0, 5));
+        // Checkbox для включения/выключения меток на животных
+        prev = enabledCheckbox = add(new CheckBox(L10n.get("animal_markers.enable_markers")) {
+            @Override
+            public void set(boolean val) {
+                a = val;
+                NConfig.set(NConfig.Key.animal_marker_enabled, val);
+                NConfig.needUpdate();
+            }
+        }, new Coord(margin, margin + UI.scale(20)));
+        
+        prev = add(new Label(L10n.get("animal_markers.patterns_list")), prev.pos("bl").adds(0, UI.scale(10)));
+        prev = add(list = new PatternList(new Coord(width, UI.scale(200))), prev.pos("bl").adds(0, 5));
 
         prev = add(newPattern = new TextEntry(UI.scale(175), ""), prev.pos("bl").adds(0, 10));
         add(new IButton(
@@ -86,6 +97,12 @@ public class AnimalMarkersSettings extends Panel {
     @Override
     @SuppressWarnings("unchecked")
     public void load() {
+        // Загружаем состояние checkbox
+        Object enabledRaw = NConfig.get(NConfig.Key.animal_marker_enabled);
+        if (enabledCheckbox != null) {
+            enabledCheckbox.a = enabledRaw instanceof Boolean ? (Boolean) enabledRaw : true;
+        }
+        
         patterns.clear();
         Object raw = NConfig.get(NConfig.Key.animal_marker_patterns);
         if (raw instanceof ArrayList) {
@@ -126,6 +143,14 @@ public class AnimalMarkersSettings extends Panel {
         NConfig.needUpdate();
     }
 
+    /**
+     * Проверяет, включены ли метки на животных в настройках.
+     */
+    public static boolean isMarkerEnabled() {
+        Object val = NConfig.get(NConfig.Key.animal_marker_enabled);
+        return val instanceof Boolean ? (Boolean) val : true;
+    }
+    
     /**
      * Возвращает список включённых regex-паттернов для макроса (используется NGameUI.startAnimalMarkerMacro).
      */
