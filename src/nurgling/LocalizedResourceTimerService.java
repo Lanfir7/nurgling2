@@ -219,10 +219,12 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
     }
     
     /**
-     * Check if a resource type supports timers
+     * Check if a resource type supports timers.
+     * Supports both minimap markers (gfx/terobjs/mm/...) and direct terobjs
+     * (e.g. gfx/terobjs/crystalpatch, gfx/terobjs/bumlings/...) that send "Will refill in" when inspected.
      */
     public boolean isTimerSupportedResource(String resourceType) {
-        return resourceType != null && resourceType.startsWith("gfx/terobjs/mm");
+        return resourceType != null && resourceType.startsWith("gfx/terobjs/");
     }
     
     /**

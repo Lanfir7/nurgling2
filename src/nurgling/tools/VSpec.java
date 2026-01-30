@@ -3139,6 +3139,10 @@ public class VSpec {
 
     public static void checkLpExplorer(Gob clickedGob, String name) {
         if(clickedGob!=null) {
+            // Save for refill timer: "Will refill in..." often arrives later via system msg, when clickedGob may already be cleared
+            if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null && NUtils.getGameUI().map.clickedGob != null) {
+                NUtils.getGameUI().setPendingRefillGob(NUtils.getGameUI().map.clickedGob);
+            }
             if (NUtils.getGameUI() != null && NUtils.getGameUI().getCharInfo() != null) {
                 if (clickedGob.ngob.name != null && object.containsKey(clickedGob.ngob.name)) {
                     if (object.get(clickedGob.ngob.name).contains(name)) {
@@ -3164,9 +3168,9 @@ public class VSpec {
                     }
                 }
             }
-            if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                NUtils.getGameUI().map.clickedGob = null;
-            }
+            // Do not clear clickedGob here - NGameUI.msg() needs it to add resource refill timer
+            // when "Will refill in..." message arrives (often after the name/tooltip message).
+            // It will be cleared by the refill handler or overwritten on next click.
         }
     }
 
