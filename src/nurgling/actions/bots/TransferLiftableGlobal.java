@@ -16,67 +16,61 @@ import java.util.ArrayList;
 
 /**
  * Transfers liftable objects using global zones with chunk navigation.
- * Automatically finds and uses global CarrierIn and CarrierOut zones.
+ * Uses global CarrierOut zone for output.
+ * For input: uses global CarrierIn zone if exists, otherwise prompts user to select.
  */
-public class TransferLiftableGlobal implements Action
-{
+public class TransferLiftableGlobal implements Action {
+
     @Override
-    public Results run(NGameUI gui) throws InterruptedException
-    {
+    public Results run(NGameUI gui) throws InterruptedException {
         nurgling.widgets.bots.Carrier w = null;
         NCarrierProp prop = null;
-        try
-        {
+        try {
             NUtils.getUI().core.addTask(new WaitCheckable(NUtils.getGameUI().add((w = new nurgling.widgets.bots.Carrier()), UI.scale(200, 200))));
             prop = w.prop;
-        } catch (InterruptedException e)
-        {
+        } catch (InterruptedException e) {
             throw e;
-        } finally
-        {
+        } finally {
             if (w != null)
                 w.destroy();
         }
-        if (prop == null)
-        {
+        if (prop == null) {
             return Results.ERROR("No config");
         }
 
-        // Create context for transfer
+        // Create context for global transfer
         NContext context = new NContext(gui);
 
-        // Prompt for input area selection (no global carrierin specialization exists)
-        String insaId = context.createArea("Please, select input area", Resource.loadsimg("baubles/inputArea"));
-        NArea inarea = context.getAreaById(insaId);
-
-        if (inarea == null)
-        {
-            return Results.ERROR("No input area selected.");
-        }
-
-        // Find global CarrierOut area for output
+        // Find CarrierOut area for output (required global zone)
         NArea.Specialisation carrierOutSpec = new NArea.Specialisation(Specialisation.SpecName.carrierout.toString());
         NArea carrierOutArea = NContext.findSpecGlobal(carrierOutSpec);
 
-        if (carrierOutArea == null)
-        {
-            return Results.ERROR("No global CarrierOut zone found. Please create a CarrierOut zone first.");
+        if (carrierOutArea == null) {
+            return Results.ERROR("No CarrierOut zone found! Please create a global zone with 'carrierout' specialization.");
         }
 
-        // Navigate to input area using chunk navigation
-        NUtils.navigateToArea(inarea);
+        // Find CarrierIn area for input - try global first, fallback to selection
+        // Note: We need a specialization for carrier input, using sorting as fallback
+        NArea.Specialisation carrierInSpec = new NArea.Specialisation(Specialisation.SpecName.sorting.toString());
+        NArea inarea = NContext.findSpecGlobal(carrierInSpec);
+
+        if (inarea == null) {
+            // Fallback: prompt user to select input area
+            String insaId = context.createArea("Please, select input area", Resource.loadsimg("baubles/inputArea"));
+            inarea = context.getAreaById(insaId);
+        } else {
+            // Navigate to the global input area
+            NUtils.navigateToArea(inarea);
+        }
 
         ArrayList<Gob> items;
-        while (!(items = Finder.findGobs(inarea, new NAlias(prop.object))).isEmpty())
-        {
+        while (!(items = Finder.findGobs(inarea, new NAlias(prop.object))).isEmpty()) {
             ArrayList<Gob> availableItems = new ArrayList<>();
-            for (Gob currGob : items)
-            {
+            for (Gob currGob : items) {
                 if (PathFinder.isAvailable(currGob))
                     availableItems.add(currGob);
             }
-            if (availableItems.isEmpty())
-            {
+            if (availableItems.isEmpty()) {
                 NUtils.getGameUI().msg("Can't reach any " + prop.object + " in current area, skipping...");
                 break;
             }

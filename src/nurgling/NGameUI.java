@@ -77,6 +77,7 @@ public class NGameUI extends GameUI
     public StudyDeskPlannerWidget studyDeskPlanner = null;
     public NDraggableWidget studyReportWidget = null;
     public SimpleRoutesWidget simpleRoutesWidget = null;
+    public DbStatsOverlay dbStatsOverlay = null;
     
     // Local storage for ring settings
     public IconRingConfig iconRingConfig;
@@ -88,6 +89,11 @@ public class NGameUI extends GameUI
     
     // Maps gob id to kin name for party member names on minimap
     public static Map<Long, String> gobIdToKinName = new ConcurrentHashMap<>();
+
+    /** Saved when inspection tooltip is processed (e.g. name); used when "Will refill in" arrives later via system msg. */
+    private MapView.ClickedGob pendingRefillGob = null;
+
+    public void setPendingRefillGob(MapView.ClickedGob g) { this.pendingRefillGob = g; }
 
     /**
      * Gets the genus (world identifier) for this game instance
@@ -225,6 +231,10 @@ public class NGameUI extends GameUI
         add(localizedResourceTimerDialog = new LocalizedResourceTimerDialog(), new Coord(200, 200));
         localizedResourceTimerService = new LocalizedResourceTimerService(this, genus);
         add(localizedResourceTimersWindow = new LocalizedResourceTimersWindow(localizedResourceTimerService), new Coord(100, 100));
+        
+        // Database debug overlay - shows in top-right corner
+        add(dbStatsOverlay = new DbStatsOverlay(), new Coord(sz.x - 290, 10));
+        dbStatsOverlay.hide(); // Hidden by default, toggle with F11 or settings
 
         // Simple routes widget (initialized in attached() after SimpleRouteManager is ready)
         // Will be added in attached() method
@@ -1145,46 +1155,91 @@ public class NGameUI extends GameUI
             }
         }
         
-        // Handle resource refill time messages (e.g., "Will refill in 10 hours" or "Will refill in 2 days")
-        if (map.clickedGob != null && localizedResourceTimerService != null) {
-            Matcher refillMatcher = Pattern.compile(".*[Ww]ill refill in (\\d+)\\s*(day|days|hour|hours|minute|minutes|second|seconds|hr|hrs|min|mins|sec|secs)").matcher(message);
-            if (refillMatcher.find()) {
-                try {
-                    int timeValue = Integer.parseInt(refillMatcher.group(1));
-                    String timeUnit = refillMatcher.group(2).toLowerCase();
-                    
-                    // Convert to milliseconds
-                    long durationMs = 0;
-                    if (timeUnit.startsWith("day")) {
-                        // Convert days to hours: 1 day = 24 hours
-                        durationMs = timeValue * 24L * 60L * 60L * 1000L;
-                    } else if (timeUnit.startsWith("hour") || timeUnit.startsWith("hr")) {
-                        durationMs = timeValue * 60L * 60L * 1000L;
-                    } else if (timeUnit.startsWith("minute") || timeUnit.startsWith("min")) {
-                        durationMs = timeValue * 60L * 1000L;
-                    } else if (timeUnit.startsWith("second") || timeUnit.startsWith("sec")) {
-                        durationMs = timeValue * 1000L;
-                    }
-                    
-                    if (durationMs > 0) {
-                        Gob gob = map.clickedGob.gob;
-                        MapFile.SMarker marker = findOrCreateMarker(gob);
-                        if (marker != null && localizedResourceTimerService.isTimerSupportedResource(marker.res.name)) {
-                            String resourceName = marker.nm != null ? marker.nm : marker.res.name;
-                            localizedResourceTimerService.createTimer(
-                                marker.seg,
-                                marker.tc,
-                                resourceName,
-                                marker.res.name,
-                                durationMs,
-                                resourceName
-                            );
-                            // Clear clickedGob after processing
-                            map.clickedGob = null;
+        // Keep pendingRefillGob updated so we have a gob when "Will refill in" arrives later (even if resource isn't in VSpec / checkLpExplorer wasn't called)
+        if (map.clickedGob != null) {
+            pendingRefillGob = map.clickedGob;
+        }
+        // Handle resource refill time messages (e.g., "Will refill in 10 hours" or "Refills in 2 weeks")
+        // Use clickedGob or pendingRefillGob: "Will refill in" often arrives via system msg after tooltip, when clickedGob may already be cleared
+        if (localizedResourceTimerService != null) {
+            MapView.ClickedGob refillGob = map.clickedGob != null ? map.clickedGob : pendingRefillGob;
+            if (refillGob != null) {
+                // Match "Will refill in X units", "Refill(s) in X units" (with or without "Will")
+                Matcher refillMatcher = Pattern.compile(".*(?:[Ww]ill\\s+)?[Rr]efills?\\s+in\\s+(\\d+)\\s*(week|weeks|day|days|hour|hours|minute|minutes|second|seconds|hr|hrs|min|mins|sec|secs)").matcher(message);
+                if (refillMatcher.find()) {
+                    try {
+                        int timeValue = Integer.parseInt(refillMatcher.group(1));
+                        String timeUnit = refillMatcher.group(2).toLowerCase();
+                        
+                        // Convert to milliseconds
+                        long durationMs = 0;
+                        if (timeUnit.startsWith("week")) {
+                            durationMs = timeValue * 7L * 24L * 60L * 60L * 1000L;
+                        } else if (timeUnit.startsWith("day")) {
+                            // Convert days to hours: 1 day = 24 hours
+                            durationMs = timeValue * 24L * 60L * 60L * 1000L;
+                        } else if (timeUnit.startsWith("hour") || timeUnit.startsWith("hr")) {
+                            durationMs = timeValue * 60L * 60L * 1000L;
+                        } else if (timeUnit.startsWith("minute") || timeUnit.startsWith("min")) {
+                            durationMs = timeValue * 60L * 1000L;
+                        } else if (timeUnit.startsWith("second") || timeUnit.startsWith("sec")) {
+                            durationMs = timeValue * 1000L;
                         }
+                        
+                        if (durationMs > 0) {
+                            Gob gob = refillGob.gob;
+                            String resName = gob.ngob != null ? gob.ngob.name : null;
+                            if (resName != null && localizedResourceTimerService.isTimerSupportedResource(resName)) {
+                                long segmentId = 0;
+                                Coord tileCoords = null;
+                                String resourceName = null;
+                                MapFile.SMarker marker = findOrCreateMarker(gob);
+                                if (marker != null) {
+                                    segmentId = marker.seg;
+                                    tileCoords = marker.tc;
+                                    resourceName = marker.nm != null ? marker.nm : marker.res.name;
+                                } else {
+                                    // Fallback when marker fails (e.g. grid not in map file - Rock Crystal, caves): use player segment and same-grid offset
+                                    segmentId = mapfile != null ? mapfile.playerSegmentId() : 0;
+                                    Gob player = map.player();
+                                    if (segmentId != 0 && player != null) {
+                                        Coord gobTc = gob.rc.floor(tilesz);
+                                        Coord playerTc = player.rc.floor(tilesz);
+                                        if (gobTc.div(cmaps).equals(playerTc.div(cmaps))) {
+                                            MiniMap.Location sessloc = (mapfile instanceof nurgling.widgets.NMapWnd) ? ((nurgling.widgets.NMapWnd) mapfile).view.sessloc : null;
+                                            if (sessloc != null) {
+                                                tileCoords = sessloc.tc.add(gobTc.sub(playerTc));
+                                                try {
+                                                    Resource.Tooltip tt = Resource.remote().load(resName).get().layer(Resource.Tooltip.class);
+                                                    resourceName = tt != null ? tt.t : resName;
+                                                } catch (Exception e) {
+                                                    resourceName = resName;
+                                                }
+                                            } else {
+                                                segmentId = 0;
+                                            }
+                                        } else {
+                                            segmentId = 0;
+                                        }
+                                    }
+                                }
+                                if (segmentId != 0 && tileCoords != null && resourceName != null) {
+                                    localizedResourceTimerService.createTimer(
+                                        segmentId,
+                                        tileCoords,
+                                        resourceName,
+                                        resName,
+                                        durationMs,
+                                        resourceName
+                                    );
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Silently ignore errors
                     }
-                } catch (Exception e) {
-                    // Silently ignore errors
+                    map.clickedGob = null;
+                    pendingRefillGob = null;
                 }
             }
         }
@@ -1272,6 +1327,20 @@ public class NGameUI extends GameUI
     @Override
     public boolean keydown(KeyDownEvent ev) {
         nurgling.tasks.WaitKeyPress.setLastKeyPressed(ev.code);
+        
+        // F11 - Toggle DB stats overlay
+        if (ev.code == KeyEvent.VK_F11 && (Boolean) NConfig.get(NConfig.Key.ndbenable)) {
+            if (dbStatsOverlay != null) {
+                if (dbStatsOverlay.visible()) {
+                    dbStatsOverlay.hide();
+                } else {
+                    dbStatsOverlay.show();
+                    dbStatsOverlay.raise();
+                }
+            }
+            return true;
+        }
+        
         return super.keydown(ev);
     }
 

@@ -2058,7 +2058,7 @@ public class VSpec {
         raw.addAll(rawMutton);
         raw.addAll(rawPork);
         raw.addAll(rawHorse);
-        raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-mammoth\"], \"name\": \"Mammoth Meat\"}"));
+        raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-mammoth\"], \"name\": \"Raw Mammoth\",}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-adder\"], \"name\": \"Raw Adder\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-badger\"], \"name\": \"Raw Badger\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-bat\"], \"name\": \"Raw Bat\"}"));
@@ -2361,6 +2361,7 @@ public class VSpec {
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/wolfhide-blood\",\"name\":\"Fresh Wolf Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/wolverinehide-blood\",\"name\":\"Fresh Wolverine Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/foxhide-blood\",\"name\":\"Fresh Fox Hide\"}"));
+        hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/narwhalhide-blood\",\"name\":\"Fresh Narwhal Hide\"}"));
         categories.put("Hide Fresh", hidesFresh);
 
         ArrayList<JSONObject> preparedAnimalHides = new ArrayList<>();
@@ -2403,6 +2404,7 @@ public class VSpec {
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/wildhorsehide\",\"name\":\"Wildhorse Hide\"}"));
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/wolfhide\",\"name\":\"Wolf Hide\"}"));
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/wolverinehide\",\"name\":\"Wolverine Hide\"}"));
+        preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/narwhalhide\",\"name\":\"Narwhal Hide\"}"));
         categories.put("Prepared Animal Hide", preparedAnimalHides);
 
         ArrayList<JSONObject> boards = new ArrayList<>();
