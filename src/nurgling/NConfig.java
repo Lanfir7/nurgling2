@@ -169,6 +169,7 @@ public class NConfig
         showQuarryartzIcons,
         showOreSpotIcons,
         showGemstoneIcons,
+        showAnimalIcons,
         trackingVectors,
         randomAreaColor,
         treeScaleDisableZoomHide,
@@ -203,7 +204,9 @@ public class NConfig
         language,
         // Simple Routes tracking
         simpleRoutesDiscordNotify,
-        simpleRoutesTrackedObjects
+        simpleRoutesTrackedObjects,
+        // Animal markers (макрос маркеров животных: список regex-паттернов)
+        animal_marker_patterns
     }
 
     public enum BBDisplayMode
@@ -359,6 +362,15 @@ public class NConfig
         qpresets.add(QuickActionPreset.createDefault());
         conf.put(Key.q_presets, qpresets);
 
+        // Animal markers: по умолчанию все криттеры (gfx/kritter/.*)
+        ArrayList<HashMap<String, Object>> animalMarkerPatterns = new ArrayList<>();
+        HashMap<String, Object> amp = new HashMap<>();
+        amp.put("type", "NPattern");
+        amp.put("name", "gfx/kritter/.*");
+        amp.put("enabled", true);
+        animalMarkerPatterns.add(amp);
+        conf.put(Key.animal_marker_patterns, animalMarkerPatterns);
+
         ArrayList<HashMap<String, Object>> petal = new ArrayList<>();
         HashMap<String, Object> pres1 = new HashMap<>();
         pres1.put("type", "NPetal");
@@ -481,6 +493,7 @@ public class NConfig
         conf.put(Key.showQuarryartzIcons, true);
         conf.put(Key.showOreSpotIcons, true);
         conf.put(Key.showGemstoneIcons, true);
+        conf.put(Key.showAnimalIcons, true);
         
         // Map tracking vectors
         conf.put(Key.trackingVectors, false);

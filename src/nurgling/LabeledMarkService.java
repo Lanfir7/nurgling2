@@ -4,6 +4,8 @@ import haven.*;
 import nurgling.profiles.ConfigFactory;
 import nurgling.profiles.ProfileAwareService;
 import nurgling.widgets.LabeledMinimapMark;
+import nurgling.NGameUI;
+import nurgling.db.dao.AnimalMarkerDao;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -29,6 +31,8 @@ import java.awt.image.BufferedImage;
  */
 public class LabeledMarkService implements ProfileAwareService {
     private final Map<String, LabeledMinimapMark> labeledMarks = new ConcurrentHashMap<>();
+    /** Кэш иконок животных по gobId: при добавлении локально (есть Gob) иконка сохраняется; при merge из БД берётся отсюда. */
+    private final Map<Long, BufferedImage> animalIconCache = new ConcurrentHashMap<>();
     // Индексы для быстрого поиска маркеров
     private final Map<String, List<LabeledMinimapMark>> resourceTypeIndex = new ConcurrentHashMap<>();
     private final Map<Long, List<LabeledMinimapMark>> segmentIndex = new ConcurrentHashMap<>();
@@ -477,6 +481,8 @@ public class LabeledMarkService implements ProfileAwareService {
             JSONObject main = new JSONObject();
             JSONArray jMarks = new JSONArray();
             for (LabeledMinimapMark mark : snapshot) {
+                // Do not persist animal markers (synced from Postgres every 30s)
+                if (mark.getLocationId().startsWith("animal_")) continue;
                 jMarks.put(mark.toJson());
             }
             main.put("labeledMarks", jMarks);
@@ -488,6 +494,159 @@ public class LabeledMarkService implements ProfileAwareService {
             }
         } catch (IOException e) {
             System.err.println("Failed to save labeled marks: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Add or update a single animal marker locally (e.g. when this client just found the animal).
+     * Does not schedule file save (animal marks are not persisted to file).
+     */
+    public void addAnimalMarkerLocal(long gobId, String animalType, String displayName, long segmentId,
+                                    int tileX, int tileY, Long gridId, Integer localTileX, Integer localTileY,
+                                    BufferedImage icon) {
+        String locationId = "animal_" + gobId;
+        // Подпись только когда будет качество (q40); без качества — пусто
+        String label = "";
+        // Для подсказки на карте используем короткое имя (Fox), а не путь
+        String resourceType = (displayName != null && !displayName.isEmpty()) ? displayName : ((animalType != null && !animalType.contains("/")) ? animalType : "Animal");
+        Coord tileCoords = new Coord(tileX, tileY);
+        long gid = gridId != null ? gridId : -1;
+        Coord localTileCoords = (localTileX != null && localTileY != null) ? new Coord(localTileX, localTileY) : null;
+        lock.writeLock().lock();
+        try {
+            removeMarkFromIndexes(locationId);
+            if (icon != null) animalIconCache.put(gobId, icon);
+            LabeledMinimapMark mark = new LabeledMinimapMark(locationId, label, resourceType, segmentId, tileCoords, gid, localTileCoords, icon, null);
+            labeledMarks.put(locationId, mark);
+            addMarkToIndexes(mark);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Merge animal markers from DB (Postgres) into the displayed marks.
+     * Removes all existing animal_ marks and adds/updates from the list.
+     * Does not schedule file save (animal marks are not persisted to file).
+     */
+    public void mergeAnimalMarkersFromDb(List<AnimalMarkerDao.AnimalMarkerData> fromDb, BufferedImage defaultIcon) {
+        mergeAnimalMarkersFromDb(fromDb, defaultIcon, null);
+    }
+
+    /**
+     * То же с передачей NGameUI для загрузки иконок через Icon Settings (iconconf) и NStyle.iconMap (mm/).
+     */
+    public void mergeAnimalMarkersFromDb(List<AnimalMarkerDao.AnimalMarkerData> fromDb, BufferedImage defaultIcon, NGameUI gui) {
+        if (fromDb == null) return;
+        lock.writeLock().lock();
+        try {
+            List<String> toRemove = new ArrayList<>();
+            for (String locationId : labeledMarks.keySet()) {
+                if (locationId.startsWith("animal_")) toRemove.add(locationId);
+            }
+            for (String locationId : toRemove) {
+                removeMarkFromIndexes(locationId);
+            }
+            for (AnimalMarkerDao.AnimalMarkerData data : fromDb) {
+                String locationId = "animal_" + data.getGobId();
+                // Подпись только при наличии качества: "q40", иначе пусто
+                String label = data.getQuality() != null ? ("q" + (int) Math.round(data.getQuality())) : "";
+                String displayName = data.getDisplayName() != null && !data.getDisplayName().isEmpty() ? data.getDisplayName() : (data.getAnimalType() != null && !data.getAnimalType().contains("/") ? data.getAnimalType() : "Animal");
+                String resourceType = displayName; // подсказка — короткое имя
+                Coord tileCoords = new Coord(data.getTileX(), data.getTileY());
+                long gridId = data.getGridId() != null ? data.getGridId() : -1;
+                Coord localTileCoords = (data.getLocalTileX() != null && data.getLocalTileY() != null) ? new Coord(data.getLocalTileX(), data.getLocalTileY()) : null;
+                // Иконка: кэш → icon_path → iconconf → animal_type. Если не загрузилась, но есть iconPath/animalType — оставляем null,
+                // чтобы при отрисовке сработала ленивая загрузка (Resource доступен на UI-потоке).
+                BufferedImage icon = animalIconCache.get(data.getGobId());
+                if (icon == null && data.getIconPath() != null && !data.getIconPath().isEmpty()) {
+                    icon = nurgling.actions.ObjectTracker.loadIconFromResourcePath(data.getIconPath());
+                    if (icon != null) animalIconCache.put(data.getGobId(), icon);
+                }
+                // Пробуем через Icon Settings (iconconf) — работает когда игра полностью загружена
+                if (icon == null && data.getAnimalType() != null && data.getAnimalType().startsWith("gfx/kritter/") && gui != null) {
+                    icon = nurgling.actions.ObjectTracker.loadIconFromIconConf(data.getAnimalType(), gui);
+                    if (icon != null) animalIconCache.put(data.getGobId(), icon);
+                }
+                if (icon == null && data.getAnimalType() != null && data.getAnimalType().startsWith("gfx/kritter/")) {
+                    icon = nurgling.actions.ObjectTracker.loadAnimalIconFromPath(data.getAnimalType(), data.getDisplayName(), gui);
+                    if (icon != null) animalIconCache.put(data.getGobId(), icon);
+                }
+                boolean canLazyLoad = (data.getIconPath() != null && !data.getIconPath().isEmpty()) || (data.getAnimalType() != null && data.getAnimalType().startsWith("gfx/kritter/"));
+                if (icon == null && !canLazyLoad) {
+                    icon = defaultIcon;
+                    if (icon == null) {
+                        try { icon = Resource.loadsimg("gfx/invobjs/kritter"); } catch (Exception ignored) { }
+                    }
+                }
+                Long killedAtMs = data.getKilledAt() != null ? data.getKilledAt().getTime() : null;
+                String killedBy = data.getKilledBy();
+                LabeledMinimapMark mark = new LabeledMinimapMark(locationId, label, resourceType, data.getSegmentId(), tileCoords, gridId, localTileCoords, icon, null, killedAtMs, killedBy, data.getIconPath(), data.getAnimalType());
+                labeledMarks.put(locationId, mark);
+                addMarkToIndexes(mark);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Обновляет иконку маркера животного (ленивая загрузка после перезахода).
+     */
+    public void updateAnimalMarkerIcon(String locationId, java.awt.image.BufferedImage icon) {
+        if (locationId == null || !locationId.startsWith("animal_") || icon == null) return;
+        lock.writeLock().lock();
+        try {
+            LabeledMinimapMark oldMark = labeledMarks.get(locationId);
+            if (oldMark == null) return;
+            LabeledMinimapMark newMark = new LabeledMinimapMark(
+                locationId, oldMark.label, oldMark.resourceType, oldMark.segmentId, oldMark.tileCoords,
+                oldMark.gridId, oldMark.localTileCoords, icon, oldMark.labelColor, oldMark.killedAtMs, oldMark.killedBy, null, null);
+            labeledMarks.put(locationId, newMark);
+            updateMarkInIndexes(oldMark, newMark);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private void updateMarkInIndexes(LabeledMinimapMark oldMark, LabeledMinimapMark newMark) {
+        List<LabeledMinimapMark> segmentList = segmentIndex.get(oldMark.segmentId);
+        if (segmentList != null) {
+            for (int i = 0; i < segmentList.size(); i++) {
+                if (segmentList.get(i).getLocationId().equals(oldMark.getLocationId())) {
+                    segmentList.set(i, newMark);
+                    break;
+                }
+            }
+        }
+        List<LabeledMinimapMark> resourceList = resourceTypeIndex.get(oldMark.resourceType);
+        if (resourceList != null) {
+            for (int i = 0; i < resourceList.size(); i++) {
+                if (resourceList.get(i).getLocationId().equals(oldMark.getLocationId())) {
+                    resourceList.set(i, newMark);
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Обновляет подпись маркера животного (например, после инспекции туши — добавляем качество "Fox q72").
+     * Не сохраняет в файл (маркеры животных только из БД).
+     */
+    public void updateAnimalMarkerLabel(String locationId, String newLabel) {
+        if (locationId == null || !locationId.startsWith("animal_")) return;
+        lock.writeLock().lock();
+        try {
+            LabeledMinimapMark oldMark = labeledMarks.get(locationId);
+            if (oldMark == null) return;
+            LabeledMinimapMark newMark = new LabeledMinimapMark(
+                locationId, newLabel, oldMark.resourceType, oldMark.segmentId, oldMark.tileCoords,
+                oldMark.gridId, oldMark.localTileCoords, oldMark.iconImage, oldMark.labelColor, oldMark.killedAtMs, oldMark.killedBy, oldMark.iconPath, oldMark.animalType);
+            labeledMarks.put(locationId, newMark);
+            updateMarkInIndexes(oldMark, newMark);
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -540,6 +699,14 @@ public class LabeledMarkService implements ProfileAwareService {
     public boolean removeMark(String locationId) {
         lock.writeLock().lock();
         try {
+            if (locationId != null && locationId.startsWith("animal_")) {
+                try {
+                    long gobId = Long.parseLong(locationId.substring("animal_".length()));
+                    animalIconCache.remove(gobId);
+                    // Удаляем из БД при любом удалении маркера животного (карта, окно поиска и т.д.)
+                    if (gui != null) gui.deleteAnimalMarkerFromDb(gobId);
+                } catch (NumberFormatException ignored) { }
+            }
             boolean removed = labeledMarks.containsKey(locationId);
             if (removed) {
                 removeMarkFromIndexes(locationId);
@@ -571,6 +738,26 @@ public class LabeledMarkService implements ProfileAwareService {
             if (segmentMarks != null) {
                 for (LabeledMinimapMark mark : segmentMarks) {
                     if (mark.isNear(segmentId, tileCoords, radiusTiles)) {
+                        return mark;
+                    }
+                }
+            }
+            return null;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Найти маркер животного в данной точке (для обновления качества по позиции туши).
+     */
+    public LabeledMinimapMark findAnimalMarkerAt(long segmentId, Coord tileCoords, int radiusTiles) {
+        lock.readLock().lock();
+        try {
+            List<LabeledMinimapMark> segmentMarks = segmentIndex.get(segmentId);
+            if (segmentMarks != null) {
+                for (LabeledMinimapMark mark : segmentMarks) {
+                    if (mark.getLocationId() != null && mark.getLocationId().startsWith("animal_") && mark.isNear(segmentId, tileCoords, radiusTiles)) {
                         return mark;
                     }
                 }

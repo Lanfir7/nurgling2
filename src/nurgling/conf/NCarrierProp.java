@@ -8,6 +8,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 
 public class NCarrierProp implements JConf
@@ -15,6 +17,10 @@ public class NCarrierProp implements JConf
     final private String username;
     final private String chrid;
     public String object = null;
+    /** ID выбранной зоны Carry Out (null = использовать глобальную/по умолчанию) */
+    public Integer targetZoneId = null;
+    public List<String> objectHistory = new ArrayList<>();
+    private static final int MAX_HISTORY_SIZE = 30;
 
 
     public NCarrierProp(String username, String chrid) {
@@ -28,6 +34,30 @@ public class NCarrierProp implements JConf
         username = (String) values.get("username");
         if (values.get("object") != null)
             object = (String) values.get("object");
+        Object tzi = values.get("targetZoneId");
+        if (tzi != null) {
+            if (tzi instanceof Number)
+                targetZoneId = ((Number) tzi).intValue();
+            else
+                targetZoneId = (Integer) tzi;
+        }
+        if (values.get("objectHistory") != null)
+            objectHistory = (List<String>) values.get("objectHistory");
+    }
+
+    public void addToHistory(String objectName) {
+        if (objectName == null || objectName.trim().isEmpty()) {
+            return;
+        }
+        LinkedHashSet<String> uniqueHistory = new LinkedHashSet<>(objectHistory);
+        uniqueHistory.remove(objectName);
+        List<String> newHistory = new ArrayList<>();
+        newHistory.add(objectName);
+        newHistory.addAll(uniqueHistory);
+        if (newHistory.size() > MAX_HISTORY_SIZE) {
+            newHistory = newHistory.subList(0, MAX_HISTORY_SIZE);
+        }
+        objectHistory = newHistory;
     }
 
     public static void set(NCarrierProp prop)
@@ -68,6 +98,9 @@ public class NCarrierProp implements JConf
         jcarrier.put("username", username);
         jcarrier.put("chrid", chrid);
         jcarrier.put("object", object);
+        if (targetZoneId != null)
+            jcarrier.put("targetZoneId", targetZoneId);
+        jcarrier.put("objectHistory", objectHistory);
         return jcarrier;
     }
 

@@ -693,6 +693,9 @@ public class NMapView extends MapView
                                 }
                             }
                         }
+                        // Чтобы при ответе сервера "Quality: XX" знать, какую тушу инспектировали
+                        clickedGob = new MapView.ClickedGob(gob, 1);
+                        tryUpdateAnimalMarkerQuality(gob);
                     }
                 }
                 
@@ -794,6 +797,10 @@ public class NMapView extends MapView
                             ttip.put("marker", String.valueOf(gob.ngob.getModelAttribute()));
                         }
 
+                        // Чтобы при ответе сервера "Quality: XX" знать, какую тушу инспектировали
+                        clickedGob = new MapView.ClickedGob(gob, 1);
+                        tryUpdateAnimalMarkerQuality(gob);
+
 //                        if(gob.getattr(Drawable.class)!=null && gob.getattr(Drawable.class) instanceof Composite && ((Composite)gob.getattr(Drawable.class)).oldposes!=null)
 //                        {
 //                            StringBuilder poses = new StringBuilder();
@@ -828,6 +835,91 @@ public class NMapView extends MapView
         }.run();
     }
 
+    /**
+     * Применить качество к маркеру животного (вызывается при инспекции туши).
+     * Качество может прийти из ResDrawable.sdt или из сообщения сервера "Quality: XX".
+     */
+    public void applyAnimalMarkerQuality(Gob gob, double quality) {
+        if (gob == null || NCore.databaseManager == null) return;
+        nurgling.db.service.AnimalMarkerService animalMarkerService = NCore.databaseManager.getAnimalMarkerService();
+        if (animalMarkerService == null || !animalMarkerService.isAvailable()) return;
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.labeledMarkService == null) return;
+        String profile = gui.getGenus();
+        if (profile == null || profile.isEmpty()) return;
+        double q = quality;
+        if (q <= 0 || q > 100) return;
+        final double fQ = q;
+        final int qRounded = (int) Math.round(q);
+        // Тушу на земле и живого зверя могут представлять разные gob с разными id — ищем маркер по позиции в первую очередь
+        String locationId = "animal_" + gob.id;
+        nurgling.widgets.LabeledMinimapMark mark = null;
+        if (gui.map != null && gui.map.glob != null && gui.map.glob.map != null && gui.mapfile != null && gui.mapfile.file != null) {
+            try {
+                haven.Coord tc = gob.rc.floor(haven.MCache.tilesz);
+                haven.MCache.Grid obg = gui.map.glob.map.getgrid(tc.div(haven.MCache.cmaps));
+                haven.MapFile.GridInfo info = gui.mapfile.file.gridinfo.get(obg.id);
+                if (info != null) {
+                    haven.Coord sc = tc.add(info.sc.sub(obg.gc).mul(haven.MCache.cmaps));
+                    mark = gui.labeledMarkService.findAnimalMarkerAt(info.seg, sc, 5);
+                    if (mark != null) locationId = mark.getLocationId();
+                }
+            } catch (Exception ignored) { }
+        }
+        if (mark == null) mark = gui.labeledMarkService.getMark(locationId);
+        if (mark != null) {
+            final String fProfile = profile;
+            long gobIdForDb = gob.id;
+            if (locationId.startsWith("animal_")) {
+                try { gobIdForDb = Long.parseLong(locationId.substring("animal_".length())); } catch (NumberFormatException ignored) { }
+            }
+            final long fGobIdForDb = gobIdForDb;
+            // Ник игрока: prsname() (отображаемое имя персонажа) или sessInfo.username
+            String killerName = null;
+            try {
+                if (gui.ui != null && gui.ui.sess != null && gui.ui.sess.user != null) {
+                    killerName = gui.ui.sess.user.prsname(); // метод: prsname != null ? prsname : name
+                    if (killerName == null || killerName.isEmpty()) killerName = gui.ui.sess.user.name;
+                }
+                if ((killerName == null || killerName.isEmpty()) && gui.ui instanceof nurgling.NUI) {
+                    nurgling.NUI.NSessInfo si = ((nurgling.NUI) gui.ui).sessInfo;
+                    if (si != null && si.username != null) killerName = si.username;
+                }
+            } catch (Exception ignored) { }
+            final String fKilledBy = killerName != null && !killerName.isEmpty() ? killerName : "";
+            System.err.println("[NMapView] applyAnimalMarkerQuality: profile=" + fProfile + " gobId=" + fGobIdForDb + " quality=" + fQ + " killedBy=" + fKilledBy + " locationId=" + locationId);
+            new Thread(() -> animalMarkerService.updateQualityByGobId(fProfile, fGobIdForDb, fQ, fKilledBy), "NMapView-UpdateAnimalMarkerQuality").start();
+            gui.labeledMarkService.updateAnimalMarkerLabel(locationId, "q" + qRounded);
+        } else {
+            System.err.println("[NMapView] applyAnimalMarkerQuality: mark not found for gob.id=" + gob.id + " locationId=" + locationId + " — quality not saved to DB");
+        }
+    }
+
+    /**
+     * When inspecting a gob that has ResDrawable with quality in sdt (e.g. carcass),
+     * update the corresponding animal marker in Postgres so the quality shows on the shared map.
+     */
+    private void tryUpdateAnimalMarkerQuality(Gob gob) {
+        if (gob == null) return;
+        haven.ResDrawable rd = gob.getattr(haven.ResDrawable.class);
+        if (rd == null || rd.sdt == null) return;
+        try {
+            MessageBuf buf = rd.sdt.clone();
+            int rem = buf.rt - buf.rh;
+            if (rem >= 4) {
+                double q = buf.float32();
+                if (q <= 0 || q > 100) {
+                    // У туши первый байт может быть флагом — пробуем смещение 1
+                    if (rem >= 5) {
+                        buf = rd.sdt.clone();
+                        buf.uint8();
+                        q = buf.float32();
+                    }
+                }
+                if (q > 0 && q <= 100) applyAnimalMarkerQuality(gob, q);
+            }
+        } catch (Exception ignored) { }
+    }
 
     public int addArea(NArea.Space result)
     {

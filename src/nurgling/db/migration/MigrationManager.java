@@ -306,6 +306,71 @@ public class MigrationManager {
             }
         });
 
+        migrations.add(new Migration(7, "Create animal_markers table for Postgres (animal discovery markers)") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
+                    return;
+                }
+                if (adapter.tableExists("animal_markers")) {
+                    System.out.println("animal_markers table already exists");
+                    return;
+                }
+                String createSql = "CREATE TABLE animal_markers (" +
+                    "id SERIAL PRIMARY KEY, " +
+                    "profile VARCHAR(255) NOT NULL, " +
+                    "gob_id BIGINT NOT NULL, " +
+                    "animal_type VARCHAR(128), " +
+                    "display_name VARCHAR(255), " +
+                    "segment_id BIGINT NOT NULL, " +
+                    "tile_x INTEGER NOT NULL, " +
+                    "tile_y INTEGER NOT NULL, " +
+                    "grid_id BIGINT, " +
+                    "local_tile_x INTEGER, " +
+                    "local_tile_y INTEGER, " +
+                    "quality DOUBLE PRECISION, " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "UNIQUE (profile, gob_id)" +
+                    ")";
+                adapter.executeUpdate(createSql);
+                adapter.executeUpdate("CREATE INDEX idx_animal_markers_profile ON animal_markers (profile)");
+                adapter.executeUpdate("CREATE INDEX idx_animal_markers_profile_gob ON animal_markers (profile, gob_id)");
+                System.out.println("Created animal_markers table");
+            }
+        });
+
+        migrations.add(new Migration(8, "Add killed_at, killed_by to animal_markers") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) return;
+                if (!adapter.tableExists("animal_markers")) return;
+                try {
+                    adapter.executeUpdate("ALTER TABLE animal_markers ADD COLUMN IF NOT EXISTS killed_at TIMESTAMP");
+                    adapter.executeUpdate("ALTER TABLE animal_markers ADD COLUMN IF NOT EXISTS killed_by VARCHAR(255)");
+                    System.out.println("Added killed_at, killed_by to animal_markers");
+                } catch (SQLException e) {
+                    if (e.getMessage() != null && !e.getMessage().contains("already exists"))
+                        throw e;
+                }
+            }
+        });
+
+        migrations.add(new Migration(9, "Add icon_path to animal_markers (saved icon path for reload)") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) return;
+                if (!adapter.tableExists("animal_markers")) return;
+                try {
+                    adapter.executeUpdate("ALTER TABLE animal_markers ADD COLUMN IF NOT EXISTS icon_path VARCHAR(512)");
+                    System.out.println("Added icon_path to animal_markers");
+                } catch (SQLException e) {
+                    if (e.getMessage() != null && !e.getMessage().contains("already exists"))
+                        throw e;
+                }
+            }
+        });
+
         return migrations;
     }
 

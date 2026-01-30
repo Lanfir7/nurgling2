@@ -41,12 +41,17 @@ public class TransferLiftableGlobal implements Action {
         // Create context for global transfer
         NContext context = new NContext(gui);
 
-        // Find CarrierOut area for output (required global zone)
-        NArea.Specialisation carrierOutSpec = new NArea.Specialisation(Specialisation.SpecName.carrierout.toString());
-        NArea carrierOutArea = NContext.findSpecGlobal(carrierOutSpec);
-
+        // Find CarrierOut area for output: use selected zone from settings, else global
+        NArea carrierOutArea = null;
+        if (prop.targetZoneId != null) {
+            carrierOutArea = NUtils.getArea(prop.targetZoneId);
+        }
         if (carrierOutArea == null) {
-            return Results.ERROR("No CarrierOut zone found! Please create a global zone with 'carrierout' specialization.");
+            NArea.Specialisation carrierOutSpec = new NArea.Specialisation(Specialisation.SpecName.carrierout.toString());
+            carrierOutArea = NContext.findSpecGlobal(carrierOutSpec);
+        }
+        if (carrierOutArea == null) {
+            return Results.ERROR("No CarrierOut zone found! Please create a global zone with 'carrierout' specialization or select one in macro settings.");
         }
 
         // Find CarrierIn area for input - try global first, fallback to selection

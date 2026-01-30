@@ -9,10 +9,14 @@ import nurgling.NUtils;
 import nurgling.conf.NDiscordNotification;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
+import nurgling.tools.VSpec;
 import nurgling.NMapView;
+import nurgling.NCore;
+import nurgling.db.service.AnimalMarkerService;
 import haven.MCache;
 import haven.Coord;
 import haven.Coord2d;
+import haven.MapFile;
 import mapv4.MinimapImageGenerator;
 import java.awt.image.BufferedImage;
 import java.awt.Graphics2D;
@@ -42,13 +46,18 @@ public class ObjectTracker {
     private static boolean initialized = false;
 
     public ObjectTracker(NGameUI gui, ArrayList<String> trackedPatterns, boolean discordNotifyEnabled) {
+        this(gui, trackedPatterns, discordNotifyEnabled, true);
+    }
+    
+    /** @param markInitiallyVisible если false (макрос «Маркеры животных») — не помечать уже видимые, ставить маркеры при первой встрече */
+    public ObjectTracker(NGameUI gui, ArrayList<String> trackedPatterns, boolean discordNotifyEnabled, boolean markInitiallyVisible) {
         this.gui = gui;
         this.trackedPatterns = trackedPatterns != null ? trackedPatterns : new ArrayList<>();
         this.discordNotifyEnabled = discordNotifyEnabled;
         
-        // При первом создании помечаем все видимые объекты
-        // Но только если список отслеживания не пустой
-        if (!initialized && !this.trackedPatterns.isEmpty()) {
+        if (!markInitiallyVisible || this.trackedPatterns.isEmpty()) return;
+        // При первом создании помечаем все видимые объекты (чтобы не слать уведомления за уже видимое)
+        if (!initialized) {
             if (gui != null) {
                 gui.msg("ObjectTracker: Marking initially visible objects...");
             }
@@ -132,10 +141,6 @@ public class ObjectTracker {
      * при первом обнаружении объекта из списка отслеживания.
      */
     public void checkObjects() {
-        if (!discordNotifyEnabled) {
-            return; // Не логируем, чтобы не спамить
-        }
-        
         if (trackedPatterns == null || trackedPatterns.isEmpty()) {
             return; // Не логируем, чтобы не спамить
         }
@@ -208,17 +213,21 @@ public class ObjectTracker {
                             // Объект найден впервые - отправляем уведомление в отдельном потоке
                             String readableName = getReadableName(gob);
                             String displayName = readableName != null ? readableName : gobName;
-                            String message = "Found " + displayName;
-                            if (gui != null) {
-                                gui.msg("ObjectTracker: NEW OBJECT FOUND! " + pattern + " - " + displayName + " (id: " + gob.id + ")");
-                            }
+                            // Save animal marker to Postgres (for shared map markers and quality updates)
+                            saveAnimalMarkerToDb(gob, displayName, gobName);
                             
-                            // Отправляем уведомление в отдельном потоке, чтобы не блокировать основной поток
-                            final Gob gobForNotification = gob;
-                            final String finalMessage = message;
-                            new Thread(() -> {
-                                sendDiscordNotificationWithMap(finalMessage, gobForNotification);
-                            }, "ObjectTracker-DiscordNotification").start();
+                            // Уведомления (в игре и Discord) — только если включено; макрос «Маркеры животных» без уведомлений
+                            if (discordNotifyEnabled) {
+                                if (gui != null) {
+                                    gui.msg("ObjectTracker: NEW OBJECT FOUND! " + pattern + " - " + displayName + " (id: " + gob.id + ")");
+                                }
+                                String message = "Found " + displayName;
+                                final Gob gobForNotification = gob;
+                                final String finalMessage = message;
+                                new Thread(() -> {
+                                    sendDiscordNotificationWithMap(finalMessage, gobForNotification);
+                                }, "ObjectTracker-DiscordNotification").start();
+                            }
                         }
                         break; // Не проверяем другие паттерны для этого объекта
                     }
@@ -264,6 +273,286 @@ public class ObjectTracker {
             // Игнорируем ошибки
         }
         return null;
+    }
+
+    private static final int MARKER_RETRY_DELAY_MS = 6000;
+    private static final int MARKER_MAX_RETRIES = 2;
+
+    /**
+     * Saves animal marker to Postgres and adds it locally so the finder sees it immediately.
+     * Runs in bot thread (when gob is valid), adds mark locally and DB in background.
+     * On map loading (haven.Loading) schedules one delayed retry so marker is placed after map is ready.
+     */
+    private void saveAnimalMarkerToDb(Gob gob, String displayName, String animalType) {
+        saveAnimalMarkerToDb(gob, displayName, animalType, 0);
+    }
+
+    private void saveAnimalMarkerToDb(Gob gob, String displayName, String animalType, int attempt) {
+        if (gui == null || gui.labeledMarkService == null) {
+            return;
+        }
+        AnimalMarkerService animalMarkerService = NCore.databaseManager != null ? NCore.databaseManager.getAnimalMarkerService() : null;
+        final boolean dbAvailable = animalMarkerService != null && animalMarkerService.isAvailable();
+        final String profile = gui.getGenus();
+        if (profile == null || profile.isEmpty()) {
+            return;
+        }
+        final long fGobId = gob.id;
+        final String fAnimalType = animalType != null ? animalType : "";
+        final String fDisplayName = displayName != null ? displayName : fAnimalType;
+        try {
+            if (gui.map == null || gui.map.glob == null || gui.map.glob.map == null ||
+                gui.mapfile == null || gui.mapfile.file == null) {
+                if (attempt < MARKER_MAX_RETRIES) {
+                    scheduleMarkerRetry(gob, displayName, animalType, attempt);
+                } else {
+                    gui.msg("ObjectTracker: Map not ready for marker");
+                }
+                return;
+            }
+            Coord tc = gob.rc.floor(MCache.tilesz);
+            MCache.Grid obg = gui.map.glob.map.getgrid(tc.div(MCache.cmaps));
+            MapFile.GridInfo info = gui.mapfile.file.gridinfo.get(obg.id);
+            long segmentId;
+            int tileX;
+            int tileY;
+            if (info != null) {
+                Coord sc = tc.add(info.sc.sub(obg.gc).mul(MCache.cmaps));
+                segmentId = info.seg;
+                tileX = sc.x;
+                tileY = sc.y;
+            } else {
+                segmentId = gui.mapfile.playerSegmentId();
+                if (segmentId == 0) {
+                    gui.msg("ObjectTracker: No segment for marker");
+                    return;
+                }
+                tileX = tc.x;
+                tileY = tc.y;
+            }
+            long gridId = obg.id;
+            int localTileX = tc.x - obg.gc.x * MCache.cmaps.x;
+            int localTileY = tc.y - obg.gc.y * MCache.cmaps.y;
+            BufferedImage icon = loadAnimalIcon(gob);
+            if (icon == null) {
+                try {
+                    icon = Resource.loadsimg("gfx/invobjs/kritter");
+                } catch (Exception ignored) { }
+            }
+            gui.labeledMarkService.addAnimalMarkerLocal(fGobId, fAnimalType, fDisplayName,
+                segmentId, tileX, tileY, gridId, localTileX, localTileY, icon);
+            gui.msg("ObjectTracker: Animal marker placed at segment " + segmentId);
+            if (dbAvailable) {
+                final long fSegmentId = segmentId;
+                final int fTileX = tileX;
+                final int fTileY = tileY;
+                final Long fGridId = gridId;
+                final Integer fLocalTileX = localTileX;
+                final Integer fLocalTileY = localTileY;
+                final String fProfile = profile;
+                final String iconPath = getAnimalIconPath(fAnimalType, fDisplayName);
+                try {
+                    gui.getAnimalMarkerWorker().submit(() -> {
+                        animalMarkerService.insert(fProfile, fGobId, fAnimalType, fDisplayName, iconPath,
+                            fSegmentId, fTileX, fTileY, fGridId, fLocalTileX, fLocalTileY);
+                    });
+                } catch (Exception e) {
+                    if (gui != null) gui.msg("ObjectTracker: не удалось поставить сохранение маркера в очередь: " + e.getMessage());
+                }
+            }
+        } catch (haven.Loading e) {
+            if (attempt < MARKER_MAX_RETRIES) {
+                if (gui != null) {
+                    gui.msg("ObjectTracker: Map loading, retrying marker in " + (MARKER_RETRY_DELAY_MS / 1000) + "s");
+                }
+                scheduleMarkerRetry(gob, displayName, animalType, attempt);
+            } else {
+                gui.msg("ObjectTracker: Map loading, marker skipped");
+            }
+        } catch (Exception e) {
+            if (gui != null) {
+                gui.msg("ObjectTracker: Failed to save animal marker: " + e.getMessage());
+            }
+        }
+    }
+
+    /** Пытается загрузить иконку животного из gob (GobIcon/Drawable или путь invobjs). */
+    private static BufferedImage loadAnimalIcon(Gob gob) {
+        if (gob == null) return null;
+        try {
+            GobIcon gicon = gob.getattr(GobIcon.class);
+            if (gicon != null && gicon.icon != null && gicon.icon.res != null) {
+                Resource.Image img = gicon.icon.res.layer(Resource.imgc);
+                if (img != null && img.img != null) return img.img;
+            }
+            haven.Drawable d = gob.getattr(haven.Drawable.class);
+            if (d != null) {
+                Resource res = d.getres();
+                if (res != null) {
+                    Resource.Image img = res.layer(Resource.imgc);
+                    if (img != null && img.img != null) return img.img;
+                }
+            }
+            String name = gob.ngob != null ? gob.ngob.name : null;
+            if (name != null) return loadAnimalIconFromPath(name);
+        } catch (Exception ignored) { }
+        return null;
+    }
+
+    /** Загружает иконку животного по пути ресурса (для маркеров из БД, когда gob нет). Сначала ВСПЕК (boar -> wildboar и т.д.), затем по display name. */
+    public static BufferedImage loadAnimalIconFromPath(String animalTypePath) {
+        return loadAnimalIconFromPath(animalTypePath, null);
+    }
+
+    /** С display name и опционально UI (параметр не используется, оставлен для совместимости). */
+    public static BufferedImage loadAnimalIconFromPath(String animalTypePath, String displayName) {
+        return loadAnimalIconFromPath(animalTypePath, displayName, null);
+    }
+
+    /** По пути gfx/kritter/... загружает иконку из gfx/invobjs/kritter/... (ВСПЕК boar->wildboar, суффикс, display name).
+     *  НЕ возвращает fallback-иконку — для поддержки lazy-loading при перезаходе. */
+    public static BufferedImage loadAnimalIconFromPath(String animalTypePath, String displayName, NGameUI gui) {
+        if (animalTypePath == null || !animalTypePath.startsWith("gfx/kritter/")) return null;
+        BufferedImage img = null;
+        // 0) ВСПЕК: boar -> wildboar, sheep -> mouflon и т.д. (иначе иконки не находятся)
+        if (VSpec.kritterToInvobjsIcon != null) {
+            String mapped = VSpec.getKritterIconPath(animalTypePath);
+            if (mapped != null) {
+                img = loadIconFromResourcePath(mapped);
+                if (img != null) return img;
+            }
+        }
+        // 1) По суффиксу пути: gfx/kritter/boar/boar -> gfx/invobjs/kritter/boar/boar и варианты
+        String suffix = animalTypePath.substring("gfx/kritter/".length());
+        String[] pathsToTry = {
+            "gfx/invobjs/kritter/" + suffix,
+            "gfx/invobjs/kritter/" + suffix.replaceFirst("/[^/]+$", ""),
+        };
+        for (String invPath : pathsToTry) {
+            if (invPath.equals("gfx/invobjs/kritter/")) continue;
+            try {
+                img = loadIconFromResourcePath(invPath);
+                if (img != null) return img;
+            } catch (Exception ignored) { }
+        }
+        // 2) По display name: "Wild Boar" -> gfx/invobjs/kritter/wildboar
+        if (displayName != null && !displayName.isEmpty()) {
+            String normalized = displayName.toLowerCase().trim().replaceAll("\\s+", "");
+            if (!normalized.isEmpty()) {
+                img = loadIconFromResourcePath("gfx/invobjs/kritter/" + normalized);
+                if (img != null) return img;
+            }
+        }
+        // НЕ возвращаем fallback gfx/invobjs/kritter — это позволяет lazy-loading работать
+        // Fallback применяется только в loadAnimalIconForGob (локальный маркер при обнаружении)
+        return null;
+    }
+
+    /**
+     * Возвращает путь ресурса иконки, который успешно загружается (для сохранения в БД и загрузки после перезахода).
+     * Порядок попыток тот же, что в loadAnimalIconFromPath. Если ни один путь не загрузился — null.
+     */
+    public static String getAnimalIconPath(String animalTypePath, String displayName) {
+        if (animalTypePath == null || !animalTypePath.startsWith("gfx/kritter/")) return null;
+        String path = null;
+        if (VSpec.kritterToInvobjsIcon != null) {
+            String mapped = VSpec.getKritterIconPath(animalTypePath);
+            if (mapped != null && loadIconFromResourcePath(mapped) != null) return mapped;
+        }
+        String suffix = animalTypePath.substring("gfx/kritter/".length());
+        String[] pathsToTry = {
+            "gfx/invobjs/kritter/" + suffix,
+            "gfx/invobjs/kritter/" + suffix.replaceFirst("/[^/]+$", ""),
+        };
+        for (String invPath : pathsToTry) {
+            if (invPath.equals("gfx/invobjs/kritter/")) continue;
+            if (loadIconFromResourcePath(invPath) != null) return invPath;
+        }
+        if (displayName != null && !displayName.isEmpty()) {
+            String normalized = displayName.toLowerCase().trim().replaceAll("\\s+", "");
+            if (!normalized.isEmpty()) {
+                path = "gfx/invobjs/kritter/" + normalized;
+                if (loadIconFromResourcePath(path) != null) return path;
+            }
+        }
+        path = "gfx/invobjs/kritter";
+        if (loadIconFromResourcePath(path) != null) return path;
+        return null;
+    }
+
+    /** Публичный загрузчик иконки по пути ресурса (для LabeledMarkService при загрузке маркеров из БД по icon_path). */
+    public static BufferedImage loadIconFromResourcePath(String path) {
+        try {
+            BufferedImage direct = Resource.loadsimg(path);
+            if (direct != null) return direct;
+        } catch (Exception ignored) { }
+        try {
+            Resource res = Resource.remote().loadwait(path);
+            if (res != null) {
+                Resource.Image img = res.layer(Resource.imgc);
+                if (img != null && img.img != null) return img.img;
+            }
+        } catch (Exception ignored) { }
+        return null;
+    }
+
+    /**
+     * Загружает иконку животного через Icon Settings (iconconf) — всегда работает после загрузки игры.
+     * Формат ключей в iconconf: gfx/kritter/{animal}/icon (например gfx/kritter/fox/icon)
+     * @param animalType путь ресурса животного (gfx/kritter/fox/fox)
+     * @param gui NGameUI для доступа к iconconf
+     * @return BufferedImage иконки или null если не найдена
+     */
+    public static BufferedImage loadIconFromIconConf(String animalType, NGameUI gui) {
+        if (animalType == null || gui == null || gui.iconconf == null) {
+            return null;
+        }
+        try {
+            // Извлекаем короткое имя животного: gfx/kritter/fox/fox -> fox
+            String shortName = null;
+            if (animalType.startsWith("gfx/kritter/")) {
+                String suffix = animalType.substring("gfx/kritter/".length()); // fox/fox или fox
+                if (suffix.contains("/")) {
+                    shortName = suffix.substring(0, suffix.indexOf("/")); // fox
+                } else {
+                    shortName = suffix;
+                }
+            }
+            
+            if (shortName == null) return null;
+            
+            // Формируем ожидаемый ключ: gfx/kritter/fox/icon
+            String expectedKey = "gfx/kritter/" + shortName + "/icon";
+            
+            // Ищем в iconconf.settings
+            for (GobIcon.Setting setting : gui.iconconf.settings.values()) {
+                if (setting.id != null && setting.id.res != null) {
+                    // Точное совпадение с ожидаемым ключом
+                    if (expectedKey.equals(setting.id.res)) {
+                        if (setting.icon != null) {
+                            return setting.icon.image();
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) { 
+            // Игнорируем
+        }
+        return null;
+    }
+
+    private void scheduleMarkerRetry(Gob gob, String displayName, String animalType, int attempt) {
+        final NGameUI g = gui;
+        if (g == null) return;
+        new Thread(() -> {
+            try {
+                Thread.sleep(MARKER_RETRY_DELAY_MS);
+                if (g.labeledMarkService == null) return;
+                saveAnimalMarkerToDb(gob, displayName, animalType, attempt + 1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "ObjectTracker-MarkerRetry").start();
     }
     
     /**

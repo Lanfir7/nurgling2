@@ -78,6 +78,66 @@ public class NGameUI extends GameUI
     public NDraggableWidget studyReportWidget = null;
     public SimpleRoutesWidget simpleRoutesWidget = null;
     public DbStatsOverlay dbStatsOverlay = null;
+    public AnimalMarkerSyncService animalMarkerSyncService = null;
+    /** Отдельный поток для установки маркеров в БД и загрузки из БД (merge выполняется на UI-потоке). */
+    private volatile java.util.concurrent.ExecutorService animalMarkerWorker = null;
+
+    public synchronized java.util.concurrent.ExecutorService getAnimalMarkerWorker() {
+        if (animalMarkerWorker == null) {
+            animalMarkerWorker = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "AnimalMarkerWorker");
+                t.setDaemon(true);
+                return t;
+            });
+        }
+        return animalMarkerWorker;
+    }
+
+    /** Макрос «Маркеры животных»: при включении ставит маркер при первой встрече с любым криттером; качество добавляется при инспекте лупы по трупу. */
+    private volatile boolean animalMarkerMacroRunning = false;
+    private Thread animalMarkerMacroThread = null;
+    private nurgling.actions.ObjectTracker animalMarkerMacroTracker = null;
+    public boolean isAnimalMarkerMacroEnabled() { return animalMarkerMacroRunning; }
+
+    /** Паттерны для макроса маркеров животных берутся из настроек (Animal markers). */
+    private static java.util.ArrayList<String> getAnimalMarkerMacroPatterns() {
+        return nurgling.widgets.nsettings.AnimalMarkersSettings.getEnabledPatterns();
+    }
+    
+    public void startAnimalMarkerMacro() {
+        if (animalMarkerMacroRunning) return;
+        animalMarkerMacroRunning = true;
+        animalMarkerMacroThread = new Thread(() -> {
+            while (animalMarkerMacroRunning && NGameUI.this.ui != null) {
+                try {
+                    if (animalMarkerMacroTracker == null) {
+                        animalMarkerMacroTracker = new nurgling.actions.ObjectTracker(NGameUI.this, getAnimalMarkerMacroPatterns(), false, false);
+                        msg("Макрос: маркеры животных включён — при первой встрече криттер будет отмечен на карте; ткни лупой по трупу для качества.");
+                    }
+                    if (animalMarkerMacroTracker != null)
+                        animalMarkerMacroTracker.checkObjects();
+                } catch (Exception e) {
+                    if (animalMarkerMacroRunning) msg("Макрос маркеров животных: " + e.getMessage());
+                }
+                for (int i = 0; i < 20 && animalMarkerMacroRunning; i++) {
+                    try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+                }
+            }
+            animalMarkerMacroTracker = null;
+        }, "AnimalMarkerMacro");
+        animalMarkerMacroThread.setDaemon(true);
+        animalMarkerMacroThread.start();
+    }
+    
+    public void stopAnimalMarkerMacro() {
+        animalMarkerMacroRunning = false;
+        if (animalMarkerMacroThread != null) {
+            animalMarkerMacroThread.interrupt();
+            animalMarkerMacroThread = null;
+        }
+        animalMarkerMacroTracker = null;
+        msg("Макрос: маркеры животных выключен.");
+    }
     
     // Local storage for ring settings
     public IconRingConfig iconRingConfig;
@@ -100,6 +160,18 @@ public class NGameUI extends GameUI
      */
     public String getGenus() {
         return genus;
+    }
+
+    /**
+     * Удаляет маркер животного из БД (вызывается при любом удалении метки animal_ — с карты или из окна поиска).
+     */
+    public void deleteAnimalMarkerFromDb(long gobId) {
+        String profile = getGenus();
+        if (profile == null || profile.isEmpty()) return;
+        nurgling.db.service.AnimalMarkerService svc = NCore.databaseManager != null ? NCore.databaseManager.getAnimalMarkerService() : null;
+        if (svc != null && svc.isAvailable()) {
+            svc.deleteByGobId(profile, gobId);
+        }
     }
     
     /**
@@ -236,6 +308,12 @@ public class NGameUI extends GameUI
         add(dbStatsOverlay = new DbStatsOverlay(), new Coord(sz.x - 290, 10));
         dbStatsOverlay.hide(); // Hidden by default, toggle with F11 or settings
 
+        // Start animal marker sync from Postgres (labeledMarkService уже создан здесь; в attached() он ещё null)
+        if (animalMarkerSyncService == null && labeledMarkService != null && genus != null) {
+            animalMarkerSyncService = new AnimalMarkerSyncService(this);
+            animalMarkerSyncService.start();
+        }
+
         // Simple routes widget (initialized in attached() after SimpleRouteManager is ready)
         // Will be added in attached() method
 
@@ -308,6 +386,12 @@ public class NGameUI extends GameUI
                 simpleRoutesWidget.hide(); // Скрываем виджет при создании
             }
         }
+
+        // Start animal marker sync from Postgres (every 30s into LabeledMarkService)
+        if (animalMarkerSyncService == null && labeledMarkService != null && genus != null) {
+            animalMarkerSyncService = new AnimalMarkerSyncService(this);
+            animalMarkerSyncService.start();
+        }
         
         // Apply local ring settings to iconconf after it's loaded (only once)
         if (!ringSettingsApplied) {
@@ -347,6 +431,15 @@ public class NGameUI extends GameUI
             }
         }
         // If shouldOpenInventory is false, inventory stays hidden (default behavior)
+    }
+
+    @Override
+    public void togglewnd(haven.Window wnd) {
+        super.togglewnd(wnd);
+        // При открытии карты — подгрузить маркеры животных из БД (на случай перезахода)
+        if (wnd != null && wnd == mapfile && wnd.visible() && animalMarkerSyncService != null) {
+            animalMarkerSyncService.syncNow();
+        }
     }
 
     @Override
@@ -1146,7 +1239,12 @@ public class NGameUI extends GameUI
                 Matcher m = Pattern.compile("Quality: (\\d+)").matcher(message);
                 if(m.matches()) {
                     try {
-                        map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, Integer.parseInt(m.group(1))));
+                        int quality = Integer.parseInt(m.group(1));
+                        map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, quality));
+                        // Обновить маркер животного на карте (качество приходит сообщением от сервера, не из sdt)
+                        if (map instanceof nurgling.NMapView) {
+                            ((nurgling.NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, quality);
+                        }
                     } catch (NumberFormatException ignored) {
                     } finally {
                         map.clickedGob = null;

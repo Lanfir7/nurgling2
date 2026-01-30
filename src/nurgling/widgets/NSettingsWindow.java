@@ -6,6 +6,7 @@ import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
 import nurgling.widgets.nsettings.*;
+import nurgling.widgets.nsettings.AnimalMarkersSettings;
 import nurgling.widgets.nsettings.QOLLanfirSettings;
 import nurgling.widgets.options.*;
 
@@ -106,6 +107,7 @@ public class NSettingsWindow extends Widget {
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.pickling"), new PicklingSettings(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.parasite"), new ParasiteSettings(), container));
         bots.addChild(new SettingsItem("Mining Mastery", new MiningMasterySettings(), container));
+        bots.addChild(new SettingsItem(L10n.get("nsettings.item.animal_markers"), new AnimalMarkersSettings(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.equipment"), new EquipmentBotSettings(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.starvation"), new StarvationAlertSettings(), container));
         bots.addChild(new SettingsItem("Icon Generator", new IconGeneratorPanel(), container));

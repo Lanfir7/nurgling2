@@ -1757,6 +1757,21 @@ public class NContext {
     }
 
     /**
+     * Find all Carry Out zones that are visible (not hide).
+     * Used by Carrier macro to let user choose target zone.
+     */
+    public static ArrayList<NArea> findVisibleCarrierOutZones() {
+        ArrayList<NArea> all = findAllSpec(Specialisation.SpecName.carrierout.toString());
+        ArrayList<NArea> visible = new ArrayList<>();
+        for (NArea a : all) {
+            if (!a.hide) {
+                visible.add(a);
+            }
+        }
+        return visible;
+    }
+
+    /**
      * Find swill delivery areas (areas with swill or trough specialization).
      * Returns areas prioritized by distance from player.
      */

@@ -331,6 +331,21 @@ public class NStyle {
         iconMap.put("gfx/terobjs/map/cavepuddle",new Resource.Saved(Resource.remote(),"mm/clay-cave",-1));
         iconMap.put("gfx/terobjs/minehole",new Resource.Saved(Resource.remote(),"mm/down",-1));
         iconMap.put("gfx/terobjs/ladder",new Resource.Saved(Resource.remote(),"mm/up",-1));
+        // Животные: kritter -> mm/ иконки (как в Icon Settings)
+        iconMap.put("gfx/kritter/boar/boar", new Resource.Saved(Resource.remote(), "mm/boar", -1));
+        iconMap.put("gfx/kritter/mammoth/mammoth", new Resource.Saved(Resource.remote(), "mm/mammoth", -1));
+        iconMap.put("gfx/kritter/deer/deer", new Resource.Saved(Resource.remote(), "mm/deer", -1));
+        iconMap.put("gfx/kritter/horse/stallion", new Resource.Saved(Resource.remote(), "mm/horse", -1));
+        iconMap.put("gfx/kritter/horse/mare", new Resource.Saved(Resource.remote(), "mm/horse", -1));
+        iconMap.put("gfx/kritter/goat/goat", new Resource.Saved(Resource.remote(), "mm/goat", -1));
+        iconMap.put("gfx/kritter/sheep/sheep", new Resource.Saved(Resource.remote(), "mm/sheep", -1));
+        iconMap.put("gfx/kritter/aurochs/aurochs", new Resource.Saved(Resource.remote(), "mm/aurochs", -1));
+        iconMap.put("gfx/kritter/fox/fox", new Resource.Saved(Resource.remote(), "mm/fox", -1));
+        iconMap.put("gfx/kritter/wolf/wolf", new Resource.Saved(Resource.remote(), "mm/wolf", -1));
+        iconMap.put("gfx/kritter/bear/bear", new Resource.Saved(Resource.remote(), "mm/bear", -1));
+        iconMap.put("gfx/kritter/moose/moose", new Resource.Saved(Resource.remote(), "mm/moose", -1));
+        iconMap.put("gfx/kritter/lynx/lynx", new Resource.Saved(Resource.remote(), "mm/lynx", -1));
+        iconMap.put("gfx/kritter/badger/badger", new Resource.Saved(Resource.remote(), "mm/badger", -1));
     }
 
     public static HashMap<String, String> iconName = new HashMap<>();

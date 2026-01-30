@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
+import nurgling.i18n.L10n;
 
 import java.util.Map;
 
@@ -20,6 +21,8 @@ public class NMapWnd extends MapWnd {
     MapToggleButton quarryartzBtn;
     MapToggleButton oreSpotsBtn; // Кнопка для переключения видимости маркеров спотов руд
     MapToggleButton gemstoneBtn; // Кнопка для переключения видимости маркеров драгоценных камней
+    MapToggleButton animalsBtn;  // Кнопка для переключения видимости маркеров животных (ObjectTracker + БД)
+    MapToggleButton markAnimalsMacroBtn; // Макрос: ставить маркеры при первой встрече с криттером; качество — при инспекте лупы по трупу
     MapToggleButton vectorClearBtn;
     TextEntry markerSearchField;
     private static final int btnw = UI.scale(95);
@@ -92,9 +95,21 @@ public class NMapWnd extends MapWnd {
         gemstoneBtn = add(new MapToggleButton("tree", "Toggle Gemstone markers (Right-click: Gemstone Search)", this::openGemstoneSearch), btnPos);
         gemstoneBtn.a = getGemstoneIconsState(); // Set initial state
         gemstoneBtn.changed(val -> setGemstoneIconsState(val));
+
+        // Animals button (маркеры животных: ObjectTracker при обнаружении + синхронизация из БД)
+        btnPos = btnPos.sub(gemstoneBtn.sz.x + btnSpacing, 0);
+        animalsBtn = add(new MapToggleButton("tree", "Toggle Animal markers (from Discord notification list)", null), btnPos);
+        animalsBtn.a = getAnimalIconsState(); // Set initial state
+        animalsBtn.changed(val -> setAnimalIconsState(val));
+        
+        // Макрос «Маркеры животных»: при включении — маркер при первой встрече с криттером; качество при инспекте лупы по трупу
+        btnPos = btnPos.sub(animalsBtn.sz.x + btnSpacing, 0);
+        markAnimalsMacroBtn = add(new MapToggleButton("tree", L10n.get("map.mark_animals_macro_tip"), null), btnPos);
+        markAnimalsMacroBtn.a = getMarkAnimalsMacroState();
+        markAnimalsMacroBtn.changed(val -> setMarkAnimalsMacroState(val));
         
         // Vector clear button (leftmost)
-        btnPos = btnPos.sub(gemstoneBtn.sz.x + btnSpacing, 0);
+        btnPos = btnPos.sub(markAnimalsMacroBtn.sz.x + btnSpacing, 0);
         vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null), btnPos);
         vectorClearBtn.a = false; // Always show as unpressed
         vectorClearBtn.click(this::clearVectors);
@@ -218,6 +233,34 @@ public class NMapWnd extends MapWnd {
         // Save to config for persistence
         NConfig.set(NConfig.Key.showGemstoneIcons, val);
         NConfig.needUpdate();
+    }
+
+    private boolean getAnimalIconsState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            return ((NMiniMap) gui.mmap).showAnimalIcons;
+        return true;
+    }
+
+    private void setAnimalIconsState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            ((NMiniMap) gui.mmap).showAnimalIcons = val;
+        if(view instanceof NMiniMap)
+            ((NMiniMap) view).showAnimalIcons = val;
+        NConfig.set(NConfig.Key.showAnimalIcons, val);
+    }
+    
+    private boolean getMarkAnimalsMacroState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        return gui != null && gui.isAnimalMarkerMacroEnabled();
+    }
+    
+    private void setMarkAnimalsMacroState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if (gui == null) return;
+        if (val) gui.startAnimalMarkerMacro();
+        else gui.stopAnimalMarkerMacro();
     }
     
     private void openGemstoneSearch() {
@@ -369,7 +412,7 @@ public class NMapWnd extends MapWnd {
         super.resize(sz);
         
         // Position buttons in top-right corner (15px right, 10px down from original position)
-        if(oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null && gemstoneBtn != null && vectorClearBtn != null) {
+        if(oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null && gemstoneBtn != null && animalsBtn != null && markAnimalsMacroBtn != null && vectorClearBtn != null) {
             int btnSpacing = UI.scale(5);
             Coord btnPos = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
 
@@ -387,6 +430,10 @@ public class NMapWnd extends MapWnd {
             btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
             gemstoneBtn.c = btnPos;
             btnPos = btnPos.sub(gemstoneBtn.sz.x + btnSpacing, 0);
+            animalsBtn.c = btnPos;
+            btnPos = btnPos.sub(animalsBtn.sz.x + btnSpacing, 0);
+            markAnimalsMacroBtn.c = btnPos;
+            btnPos = btnPos.sub(markAnimalsMacroBtn.sz.x + btnSpacing, 0);
             vectorClearBtn.c = btnPos;
         }
         

@@ -26,7 +26,14 @@ public class LabeledMinimapMark {
     public final BufferedImage iconImage; // The icon to display
     public final long timestamp;          // When it was created
     public final Color labelColor;        // Color for the label text
-    
+    /** Для маркеров животных: когда убито (мс), кем — для тултипа "убита X дней назад", "Убийца: N" */
+    public final Long killedAtMs;
+    public final String killedBy;
+    /** Путь иконки для ленивой загрузки после перезахода (gfx/invobjs/kritter/...). */
+    public final String iconPath;
+    /** Тип животного для fallback-загрузки иконки (gfx/kritter/...). */
+    public final String animalType;
+
     // Cached textures for rendering
     private TexI iconTex;
     private Text labelText;
@@ -63,11 +70,11 @@ public class LabeledMinimapMark {
         this.labelColor = labelColor != null ? labelColor : Color.WHITE;
         this.timestamp = System.currentTimeMillis();
         this.locationId = generateLocationId(segmentId, tileCoords, label);
-        
-        // Pre-render textures
-        if (iconImage != null) {
-            this.iconTex = new TexI(iconImage);
-        }
+        this.killedAtMs = null;
+        this.killedBy = null;
+        this.iconPath = null;
+        this.animalType = null;
+        if (iconImage != null) this.iconTex = new TexI(iconImage);
         this.labelText = createLabelText();
     }
     
@@ -86,7 +93,27 @@ public class LabeledMinimapMark {
     public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
                               Coord tileCoords, long gridId, Coord localTileCoords,
                               BufferedImage iconImage, Color labelColor) {
-        this.locationId = locationId; // Use provided locationId
+        this(locationId, label, resourceType, segmentId, tileCoords, gridId, localTileCoords, iconImage, labelColor, null, null, null, null);
+    }
+
+    /**
+     * Create a labeled minimap mark with optional killed info (for animal markers tooltip).
+     * iconPath and animalType are for lazy-loading icon after reconnect; can be null.
+     */
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
+                              Coord tileCoords, long gridId, Coord localTileCoords,
+                              BufferedImage iconImage, Color labelColor, Long killedAtMs, String killedBy) {
+        this(locationId, label, resourceType, segmentId, tileCoords, gridId, localTileCoords, iconImage, labelColor, killedAtMs, killedBy, null, null);
+    }
+
+    /**
+     * Create a labeled minimap mark with killed info and optional iconPath/animalType for lazy icon load.
+     */
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
+                              Coord tileCoords, long gridId, Coord localTileCoords,
+                              BufferedImage iconImage, Color labelColor, Long killedAtMs, String killedBy,
+                              String iconPath, String animalType) {
+        this.locationId = locationId;
         this.label = label;
         this.resourceType = resourceType != null ? resourceType : "Unknown";
         this.segmentId = segmentId;
@@ -96,11 +123,11 @@ public class LabeledMinimapMark {
         this.iconImage = iconImage;
         this.labelColor = labelColor != null ? labelColor : Color.WHITE;
         this.timestamp = System.currentTimeMillis();
-        
-        // Pre-render textures
-        if (iconImage != null) {
-            this.iconTex = new TexI(iconImage);
-        }
+        this.killedAtMs = killedAtMs;
+        this.killedBy = killedBy != null && !killedBy.isEmpty() ? killedBy : null;
+        this.iconPath = iconPath != null && !iconPath.isEmpty() ? iconPath : null;
+        this.animalType = animalType != null && animalType.startsWith("gfx/kritter/") ? animalType : null;
+        if (iconImage != null) this.iconTex = new TexI(iconImage);
         this.labelText = createLabelText();
     }
     
@@ -158,11 +185,11 @@ public class LabeledMinimapMark {
             }
         }
         this.iconImage = loadedIcon;
-        
-        // Pre-render textures
-        if (iconImage != null) {
-            this.iconTex = new TexI(iconImage);
-        }
+        this.killedAtMs = null;
+        this.killedBy = null;
+        this.iconPath = null;
+        this.animalType = null;
+        if (iconImage != null) this.iconTex = new TexI(iconImage);
         this.labelText = createLabelText();
     }
     

@@ -51,10 +51,15 @@ public class TransferLiftable implements Action
         String insaId = context.createArea("Please, select input area", Resource.loadsimg("baubles/inputArea"));
         NArea inarea = context.getAreaById(insaId);
 
-        // Find CarrierOut area for output - use global if exists, otherwise prompt
-        NArea.Specialisation carrierOutSpec = new NArea.Specialisation(Specialisation.SpecName.carrierout.toString());
-        NArea carrierOutArea = NContext.findSpecGlobal(carrierOutSpec);
-
+        // Find CarrierOut area for output: use selected zone from settings, else global, else prompt
+        NArea carrierOutArea = null;
+        if (prop.targetZoneId != null) {
+            carrierOutArea = NUtils.getArea(prop.targetZoneId);
+        }
+        if (carrierOutArea == null) {
+            NArea.Specialisation carrierOutSpec = new NArea.Specialisation(Specialisation.SpecName.carrierout.toString());
+            carrierOutArea = NContext.findSpecGlobal(carrierOutSpec);
+        }
         if (carrierOutArea == null)
         {
             String outsaId = context.createArea("Please, select output area", Resource.loadsimg("baubles/outputArea"));

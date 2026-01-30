@@ -50,6 +50,7 @@ NMiniMap extends MiniMap {
     public boolean showQuarryartzIcons = true;
     public boolean showOreSpotIcons = true; // Видимость маркеров спотов руд
     public boolean showGemstoneIcons = true; // Видимость маркеров драгоценных камней
+    public boolean showAnimalIcons = true; // Видимость маркеров животных (ObjectTracker + БД)
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
 
     private static final Coord2d sgridsz = new Coord2d(new Coord(100,100));
@@ -78,6 +79,13 @@ NMiniMap extends MiniMap {
         
         Boolean gemstones = (Boolean) NConfig.get(NConfig.Key.showGemstoneIcons);
         if (gemstones != null) showGemstoneIcons = gemstones;
+
+        Boolean animals = (Boolean) NConfig.get(NConfig.Key.showAnimalIcons);
+        if (animals != null) showAnimalIcons = animals;
+    }
+
+    private static boolean isAnimalMark(LabeledMinimapMark mark) {
+        return mark != null && mark.getLocationId() != null && mark.getLocationId().startsWith("animal_");
     }
 
     /**
@@ -608,7 +616,18 @@ NMiniMap extends MiniMap {
 
     @Override
     public void tick(double dt) {
-        super.tick(dt);
+        try {
+            super.tick(dt);
+        } catch (Resource.NoSuchResourceException e) {
+            // Ресурс иконки (например mm/sheep) может отсутствовать на сервере — не роняем UI
+            System.err.println("NMiniMap.tick: skipping missing resource: " + e.getMessage());
+        } catch (Exception e) {
+            if (e.getCause() instanceof Resource.NoSuchResourceException) {
+                System.err.println("NMiniMap.tick: skipping missing resource: " + e.getCause().getMessage());
+            } else {
+                throw e;
+            }
+        }
         if(ui.gui.map==null)
             return;
 
@@ -1001,7 +1020,7 @@ NMiniMap extends MiniMap {
             }
             
             // Пропускаем метки спотов руд, если они скрыты
-            if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) {
+            if(isOreSpotMark(mark) && !showOreSpotIcons) {
                 continue;
             }
             
@@ -1009,7 +1028,11 @@ NMiniMap extends MiniMap {
             if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
                 continue;
             }
-            
+            // Пропускаем маркеры животных (Animals), если слой выключен
+            if(isAnimalMark(mark) && !showAnimalIcons) {
+                continue;
+            }
+
             // Calculate screen position
             Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
 
@@ -1025,8 +1048,28 @@ NMiniMap extends MiniMap {
                 }
                 float scaleMultiplier = scalePercent / 100.0f;
                 
-                // Draw icon if available
+                // Draw icon if available; для животных без иконки — ленивая загрузка по iconPath/animalType/iconconf
                 TexI iconTex = mark.getIconTex();
+                if (iconTex == null && isAnimalMark(mark)) {
+                    java.awt.image.BufferedImage lazyIcon = null;
+                    // 1) Пробуем загрузить по сохранённому iconPath
+                    if (mark.iconPath != null)
+                        lazyIcon = nurgling.actions.ObjectTracker.loadIconFromResourcePath(mark.iconPath);
+                    // 2) Пробуем загрузить по animalType через Icon Settings (iconconf) — всегда работает
+                    if (lazyIcon == null && mark.animalType != null && gui != null)
+                        lazyIcon = nurgling.actions.ObjectTracker.loadIconFromIconConf(mark.animalType, gui);
+                    // 3) Пробуем загрузить по animalType (gfx/kritter/... -> gfx/invobjs/kritter/...)
+                    if (lazyIcon == null && mark.animalType != null && gui != null)
+                        lazyIcon = nurgling.actions.ObjectTracker.loadAnimalIconFromPath(mark.animalType, mark.resourceType, gui);
+                    // 4) Fallback — общая иконка криттера (чтобы не показывать серый круг)
+                    if (lazyIcon == null) {
+                        try { lazyIcon = Resource.loadsimg("gfx/invobjs/kritter"); } catch (Exception ignored) { }
+                    }
+                    if (lazyIcon != null) {
+                        gui.labeledMarkService.updateAnimalMarkerIcon(mark.getLocationId(), lazyIcon);
+                        iconTex = new TexI(lazyIcon);
+                    }
+                }
                 if(iconTex != null) {
                     int dsz = Math.max(iconTex.sz().y, iconTex.sz().x);
                     // Применяем скейлинг для иконок камней, руд и квариарца (как для проспектинга)
@@ -1039,7 +1082,7 @@ NMiniMap extends MiniMap {
                     Color iconColor;
                     if (isGemstoneMark(mark.resourceType)) {
                         iconColor = new Color(255, 215, 0); // Золотой для драгоценных камней
-                    } else if (isOreSpotMark(mark.resourceType)) {
+                    } else if (isOreSpotMark(mark)) {
                         iconColor = new Color(255, 200, 0); // Золотой для руд
                     } else {
                         iconColor = new Color(139, 137, 137); // Серый по умолчанию
@@ -1052,9 +1095,9 @@ NMiniMap extends MiniMap {
 
                 // Draw label under the icon (like quest giver names)
                 // Для квариарца поднимаем подпись выше и используем меньший шрифт
-                // Применяем скейлинг к тексту вместе с иконкой
+                // Для животных без качества подпись пустая — не рисуем
                 Text labelText = mark.getLabelText();
-                if(labelText != null) {
+                if(labelText != null && mark.label != null && !mark.label.isEmpty()) {
                     int offsetY = "Quarryartz".equals(mark.resourceType) ? UI.scale(6) : UI.scale(10);
                     Coord textPos = screenPos.add(0, offsetY);
                     
@@ -1638,15 +1681,33 @@ NMiniMap extends MiniMap {
                     for(LabeledMinimapMark mark : marks) {
                         // Пропускаем скрытые маркеры
                         if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) continue;
-                        if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) continue;
+                        if(isOreSpotMark(mark) && !showOreSpotIcons) continue;
                         if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) continue;
+                        if(isAnimalMark(mark) && !showAnimalIcons) continue;
 
                         // Convert segment-relative coordinates to screen coordinates (same as drawing)
                         Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
 
                         if(c.dist(screenPos) < threshold) {
-                            // Tooltip with resource type (gemstone name)
                             String resourceType = mark.resourceType != null ? mark.resourceType : "Unknown";
+                            if(isAnimalMark(mark)) {
+                                // Строка 1: имя + качество; строка 2: убита ...; строка 3: Убийца: N (каждая строка — отдельный Text, чтобы перенос работал)
+                                String line1 = resourceType + (mark.label != null && !mark.label.isEmpty() ? " " + mark.label : "");
+                                java.util.List<BufferedImage> parts = new java.util.ArrayList<>();
+                                if (mark.iconImage != null) parts.add(mark.iconImage);
+                                parts.add(Text.render(line1).img);
+                                if (mark.killedAtMs != null) {
+                                    parts.add(Text.render("убита " + formatKilledAgo(mark.killedAtMs)).img);
+                                }
+                                if (mark.killedBy != null && !mark.killedBy.isEmpty()) {
+                                    parts.add(Text.render("Убийца: " + mark.killedBy).img);
+                                }
+                                if (parts.size() == 1) {
+                                    return new TexI(parts.get(0));
+                                }
+                                BufferedImage combined = ItemInfo.catimgs(0, parts.toArray(new BufferedImage[0]));
+                                return new TexI(combined);
+                            }
                             return Text.render(resourceType);
                         }
                     }
@@ -1668,6 +1729,38 @@ NMiniMap extends MiniMap {
         return(super.tooltip(c, prev));
     }
     
+    /** Форматирует "X дней Y часов назад" по времени убийства (мс). */
+    private static String formatKilledAgo(long killedAtMs) {
+        long diffMs = System.currentTimeMillis() - killedAtMs;
+        if (diffMs < 60_000) return "менее минуты назад";
+        long minutes = diffMs / 60_000;
+        long hours = minutes / 60;
+        long days = hours / 24;
+        minutes %= 60;
+        hours %= 24;
+        StringBuilder sb = new StringBuilder();
+        if (days > 0) {
+            sb.append(days).append(pluralRu((int) days, " день ", " дня ", " дней "));
+            if (hours > 0) sb.append(hours).append(pluralRu((int) hours, " час ", " часа ", " часов "));
+        } else if (hours > 0) {
+            sb.append(hours).append(pluralRu((int) hours, " час ", " часа ", " часов "));
+            if (minutes > 0) sb.append(minutes).append(pluralRu((int) minutes, " минуту ", " минуты ", " минут "));
+        } else {
+            sb.append(minutes).append(pluralRu((int) minutes, " минуту ", " минуты ", " минут "));
+        }
+        sb.append(" назад");
+        return sb.toString();
+    }
+
+    private static String pluralRu(int n, String one, String few, String many) {
+        int mod10 = n % 10;
+        int mod100 = n % 100;
+        if (mod100 >= 11 && mod100 <= 19) return many;
+        if (mod10 == 1) return one;
+        if (mod10 >= 2 && mod10 <= 4) return few;
+        return many;
+    }
+
     private String getTerrainTooltip(Coord c) {
         // Only show terrain tooltip when Shift is pressed
         if(ui == null || !ui.modshift) {
@@ -2293,20 +2386,16 @@ NMiniMap extends MiniMap {
      * Used for right-click deletion of water/soil quality marks.
      */
     /**
-     * Проверяет, является ли маркер маркером спота руды/камня
-     * Все камни и руды (кроме квариарца и драгоценных камней) идут в систему спотов
+     * Проверяет, является ли маркер маркером спота руды/камня.
+     * Маркеры животных (animal_) не считаются спотами — иначе тогл Ore Spot скрывал бы и их.
      */
-    private boolean isOreSpotMark(String resourceType) {
+    private boolean isOreSpotMark(LabeledMinimapMark mark) {
+        if (mark == null) return false;
+        if (isAnimalMark(mark)) return false;
+        String resourceType = mark.resourceType;
         if (resourceType == null) return false;
-        // Квариарц - отдельный слой, не спот
-        if ("Quarryartz".equals(resourceType)) {
-            return false;
-        }
-        // Драгоценные камни - отдельный слой, не спот
-        if (MasterMiner.isGemstone(resourceType)) {
-            return false;
-        }
-        // Все остальные камни и руды - споты
+        if ("Quarryartz".equals(resourceType)) return false;
+        if (MasterMiner.isGemstone(resourceType)) return false;
         return true;
     }
     
@@ -2335,14 +2424,18 @@ NMiniMap extends MiniMap {
                 continue;
             }
             // Пропускаем метки руд (споты), если они скрыты
-            if(isOreSpotMark(mark.resourceType) && !showOreSpotIcons) {
+            if(isOreSpotMark(mark) && !showOreSpotIcons) {
                 continue;
             }
             // Пропускаем метки драгоценных камней, если они скрыты
             if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
                 continue;
             }
-            
+            // Пропускаем маркеры животных, если слой выключен
+            if(isAnimalMark(mark) && !showAnimalIcons) {
+                continue;
+            }
+
             // Calculate screen position for this mark
             Coord markScreenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
 
@@ -2835,7 +2928,7 @@ NMiniMap extends MiniMap {
                             searchWnd.raise();
                         }
                         return true;
-                    } else if(isOreSpotMark(labeledMark.resourceType)) {
+                    } else if(isOreSpotMark(labeledMark)) {
                         // Если это метка спота руды - Shift+ПКМ удаляет
                         if((ui.modflags() & UI.MOD_SHIFT) != 0) {
                             gui.labeledMarkService.removeMark(labeledMark);
@@ -2844,8 +2937,9 @@ NMiniMap extends MiniMap {
                         }
                         return true;
                     } else {
-                        // Для других меток - удаление
+                        // Для других меток - удаление. Маркер животного (animal_) удаляется из БД внутри removeMark.
                         gui.labeledMarkService.removeMark(labeledMark);
+                        gui.msg("Удалена метка " + labeledMark.resourceType + (labeledMark.label != null && !labeledMark.label.isEmpty() ? " " + labeledMark.label : ""), java.awt.Color.YELLOW);
                         return true;
                     }
                 }

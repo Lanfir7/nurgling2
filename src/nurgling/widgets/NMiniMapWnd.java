@@ -245,6 +245,22 @@ public class NMiniMapWnd extends Widget{
         chunkNav.a = (Boolean) NConfig.get(NConfig.Key.chunkNavOverlay);
         buttons.add(chunkNav);
 
+        // Animals layer (маркеры животных: ObjectTracker + БД)
+        ACheckBox animals = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/natura", KeyBinding.get("ol-animals", KeyMatch.nil), "Animals (tracked + DB)");
+        animals.changed(a -> {
+            NConfig.set(NConfig.Key.showAnimalIcons, a);
+            NConfig.needUpdate();
+            if (miniMap instanceof NMiniMap) {
+                ((NMiniMap) miniMap).showAnimalIcons = a;
+            }
+        });
+        Boolean animalsState = (Boolean) NConfig.get(NConfig.Key.showAnimalIcons);
+        animals.a = animalsState != null ? animalsState : true;
+        if (miniMap instanceof NMiniMap) {
+            ((NMiniMap) miniMap).showAnimalIcons = animals.a;
+        }
+        buttons.add(animals);
+
         // Layout buttons with wrapping
         layoutButtons(buttons);
 
