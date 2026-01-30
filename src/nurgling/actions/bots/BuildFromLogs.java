@@ -11,6 +11,7 @@ import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.Build;
 import nurgling.actions.Results;
+import nurgling.areas.NContext;
 import nurgling.conf.NPrepBoardsProp;
 import nurgling.overlays.BuildGhostPreview;
 import nurgling.overlays.NCustomBauble;
@@ -42,8 +43,9 @@ public class BuildFromLogs implements Action {
             Build.Command command = new Build.Command();
             command.name = "Crate";
 
+            NContext context = new NContext(gui);
             NUtils.getGameUI().msg("Please, select build area");
-            SelectAreaWithLiveGhosts buildarea = new SelectAreaWithLiveGhosts(Resource.loadsimg("baubles/buildArea"), "Crate");
+            SelectAreaWithLiveGhosts buildarea = new SelectAreaWithLiveGhosts(context, Resource.loadsimg("baubles/buildArea"), "Crate");
             buildarea.run(NUtils.getGameUI());
 
             NUtils.getGameUI().msg("Please, select area with logs");
@@ -68,7 +70,7 @@ public class BuildFromLogs implements Action {
                 }
             }
 
-            new Build(command, buildarea.getRCArea(), buildarea.getRotationCount(), ghostPositions, ghostPreview).run(gui);
+            new Build(context, command, buildarea.ghostArea, buildarea.getRotationCount(), ghostPositions, ghostPreview).run(gui);
             return Results.SUCCESS();
         } finally {
             // Always clean up ghost preview when bot finishes or is interrupted

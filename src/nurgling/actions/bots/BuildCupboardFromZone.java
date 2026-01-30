@@ -28,8 +28,9 @@ public class BuildCupboardFromZone implements Action {
         Build.Command command = new Build.Command();
         command.name = "Cupboard";
 
+        NContext context = new NContext(gui);
         NUtils.getGameUI().msg("Please, select build area");
-        SelectAreaWithLiveGhosts buildarea = new SelectAreaWithLiveGhosts(Resource.loadsimg("baubles/buildArea"), "Cupboard");
+        SelectAreaWithLiveGhosts buildarea = new SelectAreaWithLiveGhosts(context, Resource.loadsimg("baubles/buildArea"), "Cupboard");
         buildarea.run(NUtils.getGameUI());
 
         // Save build area data BEFORE navigation (to avoid grid null issues after navigation)
@@ -62,7 +63,6 @@ public class BuildCupboardFromZone implements Action {
         }
 
         // Get boards area from specialization using NContext to enable route navigation
-        NContext context = new NContext(gui);
         NArea boardsArea = context.getSpecArea(Specialisation.SpecName.boardsForBuild);
         if (boardsArea == null) {
             NUtils.getGameUI().error("Zone with specialization 'Boards for build' not found!");
@@ -76,13 +76,13 @@ public class BuildCupboardFromZone implements Action {
         }
         
         // Create ingredient with specialWay that uses routes for collection
-        Build.Ingredient boardsIngredient = new Build.Ingredient(new Coord(4,1), boardsRCArea, new NAlias("Board"), 8);
+        Build.Ingredient boardsIngredient = new Build.Ingredient(new Coord(4,1), boardsArea, new NAlias("Board"), 8);
         CollectBoardsFromZoneAction collectBoardsAction = new CollectBoardsFromZoneAction(
             boardsRCArea, new NAlias("Board"), boardsIngredient, buildRCArea, buildAreaGridId, context);
         boardsIngredient.specialWay = collectBoardsAction;
         command.ingredients.add(boardsIngredient);
         
-        new Build(command, buildRCArea, rotationCount, ghostPositions, ghostPreview).run(gui);
+        new Build(context, command, buildarea.ghostArea, rotationCount, ghostPositions, ghostPreview).run(gui);
         return Results.SUCCESS();
         } finally {
             // Always clean up ghost preview when bot finishes or is interrupted
