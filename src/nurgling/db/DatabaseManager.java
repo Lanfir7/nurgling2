@@ -27,6 +27,7 @@ public class DatabaseManager {
     private StorageItemService storageItemService;
     private AreaService areaService;
     private AnimalMarkerService animalMarkerService;
+    private LocalTimerService localTimerService;
 
     // Task queue for retry logic
     private final BlockingQueue<QueuedTask<?>> taskQueue = new LinkedBlockingQueue<>(1000);
@@ -303,6 +304,7 @@ public class DatabaseManager {
         this.storageItemService = new StorageItemService(this);
         this.areaService = new AreaService(this);
         this.animalMarkerService = new AnimalMarkerService(this);
+        this.localTimerService = new LocalTimerService(this);
     }
 
     /**
@@ -517,6 +519,13 @@ public class DatabaseManager {
      */
     public AnimalMarkerService getAnimalMarkerService() {
         return animalMarkerService;
+    }
+
+    /**
+     * Get local timer service (Postgres only)
+     */
+    public LocalTimerService getLocalTimerService() {
+        return localTimerService;
     }
 
     /**

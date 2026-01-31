@@ -28,6 +28,22 @@ public class LocalizedResourceTimer {
         this.resourceId = generateResourceId(segmentId, tileCoords, resourceType);
     }
     
+    /**
+     * Constructor for loading from database with explicit start time (UTC milliseconds).
+     */
+    public LocalizedResourceTimer(String resourceId, long segmentId, haven.Coord tileCoords,
+                                  String resourceName, String resourceType,
+                                  long startTimeUtc, long duration, String description) {
+        this.resourceId = resourceId;
+        this.segmentId = segmentId;
+        this.tileCoords = tileCoords;
+        this.resourceName = resourceName;
+        this.resourceType = resourceType;
+        this.startTime = startTimeUtc;
+        this.duration = duration;
+        this.description = description;
+    }
+    
     public LocalizedResourceTimer(JSONObject json) {
         this.resourceId = json.getString("resourceId");
         this.segmentId = json.getLong("segmentId");
@@ -97,4 +113,10 @@ public class LocalizedResourceTimer {
     public long getSegmentId() { return segmentId; }
     public haven.Coord getTileCoords() { return tileCoords; }
     public String getDescription() { return description; }
+    public String getResourceName() { return resourceName; }
+    public String getResourceType() { return resourceType; }
+    /** Start time in UTC milliseconds (from Instant.now().toEpochMilli()) */
+    public long getStartTime() { return startTime; }
+    /** Duration in milliseconds */
+    public long getDuration() { return duration; }
 }

@@ -80,6 +80,7 @@ public class NGameUI extends GameUI
     public SimpleRoutesWidget simpleRoutesWidget = null;
     public DbStatsOverlay dbStatsOverlay = null;
     public AnimalMarkerSyncService animalMarkerSyncService = null;
+    public LocalTimerSyncService localTimerSyncService = null;
     /** Отдельный поток для установки маркеров в БД и загрузки из БД (merge выполняется на UI-потоке). */
     private volatile java.util.concurrent.ExecutorService animalMarkerWorker = null;
 
@@ -326,6 +327,12 @@ public class NGameUI extends GameUI
             animalMarkerSyncService.start();
         }
 
+        // Start local timer sync from Postgres (every 5 minutes)
+        if (localTimerSyncService == null && localizedResourceTimerService != null && genus != null) {
+            localTimerSyncService = new LocalTimerSyncService(this);
+            localTimerSyncService.start();
+        }
+
         // Simple routes widget (initialized in attached() after SimpleRouteManager is ready)
         // Will be added in attached() method
 
@@ -404,6 +411,23 @@ public class NGameUI extends GameUI
             animalMarkerSyncService = new AnimalMarkerSyncService(this);
             animalMarkerSyncService.start();
         }
+
+        // Start local timer sync from Postgres (every 5 minutes)
+        if (localTimerSyncService == null && localizedResourceTimerService != null && genus != null) {
+            localTimerSyncService = new LocalTimerSyncService(this);
+            localTimerSyncService.start();
+        }
+        
+        // Автозапуск макроса маркеров животных если включён в настройках
+        if (nurgling.widgets.nsettings.AnimalMarkersSettings.isMarkerEnabled()) {
+            // Запускаем с небольшой задержкой чтобы UI полностью загрузился
+            new Thread(() -> {
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) { return; }
+                if (NGameUI.this.ui != null && !animalMarkerMacroRunning) {
+                    startAnimalMarkerMacro();
+                }
+            }, "AnimalMarkerMacro-AutoStart").start();
+        }
         
         // Apply local ring settings to iconconf after it's loaded (only once)
         if (!ringSettingsApplied) {
@@ -458,6 +482,10 @@ public class NGameUI extends GameUI
     public void dispose() {
         if(localizedResourceTimerService != null)
             localizedResourceTimerService.dispose();
+        if(localTimerSyncService != null)
+            localTimerSyncService.stop();
+        if(animalMarkerSyncService != null)
+            animalMarkerSyncService.stop();
         if(fishLocationService != null)
             fishLocationService.dispose();
         if(nurgling.NUtils.getUI().core!=null)
@@ -1462,6 +1490,13 @@ public class NGameUI extends GameUI
         if(localizedResourceTimerService != null) {
             localizedResourceTimerService.showTimerWindow();
         }
+    }
+    
+    /**
+     * Get the localized resource timer service
+     */
+    public LocalizedResourceTimerService getLocalizedResourceTimerService() {
+        return localizedResourceTimerService;
     }
     
     public LocalizedResourceTimerDialog getAddResourceTimerWidget() {

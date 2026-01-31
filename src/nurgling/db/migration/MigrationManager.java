@@ -371,6 +371,42 @@ public class MigrationManager {
             }
         });
 
+        migrations.add(new Migration(10, "Create local_timers table for Postgres (resource timers like tar pit, clay pit)") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
+                    return;
+                }
+                if (adapter.tableExists("local_timers")) {
+                    System.out.println("local_timers table already exists");
+                    return;
+                }
+                // All times stored as UTC milliseconds to avoid timezone issues
+                // Server is GMT+0, clients may be GMT+2 or other timezones
+                String createSql = "CREATE TABLE local_timers (" +
+                    "id SERIAL PRIMARY KEY, " +
+                    "profile VARCHAR(255) NOT NULL, " +
+                    "resource_id VARCHAR(512) NOT NULL, " +  // Unique ID: res_segmentId_x_y_resourceType
+                    "segment_id BIGINT NOT NULL, " +
+                    "tile_x INTEGER NOT NULL, " +
+                    "tile_y INTEGER NOT NULL, " +
+                    "resource_name VARCHAR(255), " +
+                    "resource_type VARCHAR(512), " +  // e.g., gfx/terobjs/map/tarpit
+                    "start_time_utc BIGINT NOT NULL, " +  // Unix timestamp in milliseconds (UTC)
+                    "duration_ms BIGINT NOT NULL, " +  // Duration in milliseconds
+                    "description VARCHAR(512), " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "UNIQUE (profile, resource_id)" +
+                    ")";
+                adapter.executeUpdate(createSql);
+                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile ON local_timers (profile)");
+                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile_resource ON local_timers (profile, resource_id)");
+                adapter.executeUpdate("CREATE INDEX idx_local_timers_expiration ON local_timers (profile, start_time_utc, duration_ms)");
+                System.out.println("Created local_timers table");
+            }
+        });
+
         return migrations;
     }
 

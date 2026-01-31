@@ -67,6 +67,15 @@ public class AnimalMarkersSettings extends Panel {
                 a = val;
                 NConfig.set(NConfig.Key.animal_marker_enabled, val);
                 NConfig.needUpdate();
+                // Запуск/остановка макроса при изменении чекбокса
+                nurgling.NGameUI gui = nurgling.NUtils.getGameUI();
+                if (gui != null) {
+                    if (val) {
+                        gui.startAnimalMarkerMacro();
+                    } else {
+                        gui.stopAnimalMarkerMacro();
+                    }
+                }
             }
         }, new Coord(margin, margin + UI.scale(20)));
         

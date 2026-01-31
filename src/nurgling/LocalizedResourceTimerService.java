@@ -339,4 +339,68 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
             lock.writeLock().unlock();
         }
     }
+    
+    // ========== Database Sync Methods ==========
+    
+    /**
+     * Add a timer loaded from database (called by LocalTimerSyncService).
+     * Does not trigger save to file or DB (to avoid infinite loops).
+     */
+    public void addTimerFromDb(String resourceId, long segmentId, haven.Coord tileCoords,
+                               String resourceName, String resourceType,
+                               long startTimeUtc, long durationMs, String description) {
+        lock.writeLock().lock();
+        try {
+            LocalizedResourceTimer timer = new LocalizedResourceTimer(
+                resourceId, segmentId, tileCoords, resourceName, resourceType,
+                startTimeUtc, durationMs, description);
+            
+            // Only add if not expired
+            if (!timer.isExpired()) {
+                timers.put(resourceId, timer);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Update an existing timer with data from database.
+     * Creates a new timer instance with updated values.
+     */
+    public void updateTimerFromDb(String resourceId, long startTimeUtc, long durationMs, String description) {
+        lock.writeLock().lock();
+        try {
+            LocalizedResourceTimer existing = timers.get(resourceId);
+            if (existing != null) {
+                // Create new timer with updated values
+                LocalizedResourceTimer updated = new LocalizedResourceTimer(
+                    resourceId,
+                    existing.getSegmentId(),
+                    existing.getTileCoords(),
+                    existing.getResourceName(),
+                    existing.getResourceType(),
+                    startTimeUtc,
+                    durationMs,
+                    description
+                );
+                
+                // Only update if not expired
+                if (!updated.isExpired()) {
+                    timers.put(resourceId, updated);
+                } else {
+                    timers.remove(resourceId);
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Refresh timer window from sync (called on UI thread).
+     */
+    public void refreshTimerWindowFromSync() {
+        refreshTimerWindow();
+    }
 }
