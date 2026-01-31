@@ -448,6 +448,7 @@ public interface GLPanel extends UIPanel, UI.Context {
 			if(now > frames[ckf]) {
 			    fps = (int)Math.round((i + 1) / (now - frames[ckf]));
 			    uidle = twait / (now - frames[ckf]);
+			    NUtils.setFps(fps); // Update static FPS for debug overlay
 			}
 		    }
 		    framep = (framep + 1) % frames.length;

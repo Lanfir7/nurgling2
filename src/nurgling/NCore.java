@@ -157,6 +157,45 @@ public class NCore extends Widget
     private long lastRecipeSaveTime = 0;
     private static final long RECIPE_SAVE_INTERVAL_MS = 500; // Минимальный интервал между сохранениями разных рецептов
 
+    /**
+     * Get list of active task names for debug display
+     */
+    public String[] getActiveTaskNames() {
+        synchronized (tasks) {
+            if (tasks.isEmpty()) {
+                return new String[0];
+            }
+            return tasks.stream()
+                .map(t -> {
+                    String name = t.getClass().getName();
+                    // Shorten package names
+                    name = name.replace("nurgling.actions.", "");
+                    name = name.replace("nurgling.tasks.", "");
+                    // For anonymous classes, show parent class
+                    if (name.contains("$")) {
+                        int dollarIdx = name.indexOf('$');
+                        String parent = name.substring(0, dollarIdx);
+                        String suffix = name.substring(dollarIdx);
+                        // Get just class name from parent
+                        int lastDot = parent.lastIndexOf('.');
+                        if (lastDot > 0) {
+                            parent = parent.substring(lastDot + 1);
+                        }
+                        name = parent + suffix;
+                    }
+                    return name;
+                })
+                .toArray(String[]::new);
+        }
+    }
+    
+    /**
+     * Get count of active tasks
+     */
+    public int getActiveTaskCount() {
+        return tasks.size();
+    }
+
     public BotmodSettings getBotMod()
     {
         return bms;

@@ -80,6 +80,8 @@ public class NOverlay extends MapView.MapRaster
             }
         }
         
+        requpdate2 = false;
+        
         // ВАЖНО: Вызываем base.tick() и outl.tick() только если area инициализирован
         // base и outl используют area через this.this$0.area, поэтому нужна проверка
         base.tick();
