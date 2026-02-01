@@ -23,39 +23,69 @@ public class ItemWatcher implements Runnable {
     public static int getContainerCacheSize() {
         return containerItemCache.size();
     }
+    
+    /**
+     * Clear cached signature for a container to force re-sync on next close
+     */
+    public static void invalidateContainerCache(String containerHash) {
+        if (containerHash != null) {
+            containerItemCache.remove(containerHash);
+        }
+    }
 
     public static class ItemInfo {
-        String name;
-        double q = -1;
-        Coord c;
-        String container;
+        public String name;
+        public double q = -1;
+        public Coord c;           // Coordinates in inventory (or stack parent coords if in stack)
+        public String container;
+        public int stackIndex;    // Index in stack (-1 if not in stack)
 
-        public ItemInfo(String name, double q, Coord c, String container) {
+        public ItemInfo(String name, double q, Coord c, String container, int stackIndex) {
             this.name = name;
             this.q = Double.parseDouble(Utils.odformat2(q, 2));
             this.c = c;
             this.container = container;
+            this.stackIndex = stackIndex;
+        }
+        
+        // Backward compatible constructor
+        public ItemInfo(String name, double q, Coord c, String container) {
+            this(name, q, c, container, -1);
         }
     }
 
     private final DatabaseManager databaseManager;
     private final ArrayList<ItemInfo> iis;
+    private final String containerHash; // Store container hash separately for empty cache case
 
+    public ItemWatcher(ArrayList<ItemInfo> iis, DatabaseManager databaseManager, String containerHash) {
+        this.iis = iis;
+        this.databaseManager = databaseManager;
+        this.containerHash = containerHash;
+    }
+    
+    // Backward compatible constructor (deprecated - use new one with containerHash)
     public ItemWatcher(ArrayList<ItemInfo> iis, DatabaseManager databaseManager) {
         this.iis = iis;
         this.databaseManager = databaseManager;
+        this.containerHash = (iis != null && !iis.isEmpty()) ? iis.get(0).container : null;
     }
 
     @Override
     public void run() {
-        if (iis == null || iis.isEmpty()) {
+        if (containerHash == null) {
             return;
         }
-
-        String containerHash = iis.get(0).container;
         
-        // Build a signature of all items in this container
-        String itemsSignature = buildItemsSignature();
+        // Filter out items with negative or zero quality (stacks and unqualified items)
+        if (iis != null) {
+            iis.removeIf(item -> item.q <= 0);
+        }
+        
+        boolean isEmpty = (iis == null || iis.isEmpty());
+        
+        // Build a signature of all items in this container (empty string if no items)
+        String itemsSignature = isEmpty ? "" : buildItemsSignature();
         
         // Check if this container already has the same items (skip duplicate write)
         String cachedSignature = containerItemCache.get(containerHash);
@@ -66,12 +96,15 @@ public class ItemWatcher implements Runnable {
 
         try {
             databaseManager.executeOperation(adapter -> {
-                // Delete old items from container
-                deleteItems(adapter);
-
-                // Insert new items
-                insertItems(adapter);
-
+                if (isEmpty) {
+                    // Cache is empty - delete ALL items for this container from DB
+                    deleteAllContainerItems(adapter);
+                } else {
+                    // Delete items that are NOT in the cache
+                    deleteItems(adapter);
+                    // Insert/update items from cache
+                    insertItems(adapter);
+                }
                 return null;
             });
             
@@ -111,20 +144,45 @@ public class ItemWatcher implements Runnable {
         return NUtils.calculateSHA256(sb.toString());
     }
 
+    /**
+     * Delete ALL items for this container (used when cache is empty)
+     */
+    private void deleteAllContainerItems(nurgling.db.DatabaseAdapter adapter) throws SQLException {
+        String deleteSql = "DELETE FROM storageitems WHERE container = ?";
+        adapter.executeUpdate(deleteSql, containerHash);
+        System.out.println("ItemWatcher: Deleted ALL items for container " + containerHash);
+    }
+    
     private void deleteItems(nurgling.db.DatabaseAdapter adapter) throws SQLException {
+        if (iis == null || iis.isEmpty()) return;
+        
+        // First, count how many items will be deleted for logging
+        String countSql = "SELECT COUNT(*) FROM storageitems WHERE container = ?";
+        int beforeCount = 0;
+        try (java.sql.ResultSet rs = adapter.executeQuery(countSql, containerHash)) {
+            if (rs.next()) {
+                beforeCount = rs.getInt(1);
+            }
+        }
+        
         // Build parameterized IN clause: DELETE ... WHERE ... NOT IN (?, ?, ?, ...)
         String placeholders = iis.stream().map(i -> "?").collect(java.util.stream.Collectors.joining(","));
         String deleteSql = "DELETE FROM storageitems WHERE container = ? AND item_hash NOT IN (" + placeholders + ")";
 
         Object[] params = new Object[iis.size() + 1];
-        params[0] = iis.get(0).container;
+        params[0] = containerHash;
 
         // Set each item hash as a separate parameter
         for (int i = 0; i < iis.size(); i++) {
             params[i + 1] = generateItemHash(iis.get(i));
         }
 
-        adapter.executeUpdate(deleteSql, params);
+        int deleted = adapter.executeUpdate(deleteSql, params);
+        
+        if (deleted > 0 || beforeCount != iis.size()) {
+            System.out.println("ItemWatcher.deleteItems: container=" + containerHash + 
+                " beforeDB=" + beforeCount + " cache=" + iis.size() + " deleted=" + deleted);
+        }
     }
 
     private void insertItems(nurgling.db.DatabaseAdapter adapter) throws SQLException {
@@ -149,7 +207,9 @@ public class ItemWatcher implements Runnable {
     }
 
     private String generateItemHash(ItemInfo item) {
-        String data = item.name + item.c.toString() + item.q;
+        // Hash includes: name + coords + quality + stackIndex
+        // stackIndex ensures items in same stack with same quality have different hashes
+        String data = item.name + item.c.toString() + item.q + "_" + item.stackIndex;
         return NUtils.calculateSHA256(data);
     }
 }

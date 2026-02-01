@@ -14,6 +14,9 @@ import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
 
+import static nurgling.areas.NContext.workstation_spec_map;
+import static nurgling.tools.Finder.findLiftedbyPlayer;
+
 public class TransferBarrelToWorkstation implements Action {
     NContext context;
     String item;
@@ -33,14 +36,27 @@ public class TransferBarrelToWorkstation implements Action {
         Coord2d originalPos = barrel.rc;
         
         new LiftObject(barrel).run(gui);
-        long barrelId = barrel.id;
         
         if (context.workstation != null) {
+            // Get specialization name for this workstation type
+            Specialisation.SpecName specName = workstation_spec_map.get(context.workstation.station);
+            if (specName == null)
+                return Results.ERROR("NO WORKSTATION SPEC MAPPING for " + context.workstation.station);
+            
+            // Find workstation area globally and navigate to it
+            NArea area = context.getSpecArea(context.workstation);
+            if (area == null) {
+                area = NContext.findSpecGlobal(specName.toString());
+            }
+            if (area == null)
+                return Results.ERROR("NO WORKSTATION AREA");
+            
+            // Navigate to the area using global pathfinding before placing
+            // This works even if area is not currently visible
+            NUtils.navigateToArea(area);
+            
             // Select workstation if not already selected
             if (context.workstation.selected == -1) {
-                NArea area = context.getSpecArea(context.workstation);
-                if (area == null)
-                    return Results.ERROR("NO WORKSTATION AREA");
                 
                 Gob ws = null;
                 if (context.workstation.station.startsWith("gfx/terobjs/pow")) {
@@ -63,23 +79,42 @@ public class TransferBarrelToWorkstation implements Action {
             if (ws == null)
                 return Results.ERROR("NO WORKSTATION in area");
             
-            barrel = Finder.findGob(barrelId);
-            if (barrel == null || barrel.ngob.hitBox == null)
-                return Results.ERROR("BARREL NOT FOUND");
+            // Use findLiftedbyPlayer() instead of barrelId since ID can change during location transitions
+            Gob liftedBarrel = findLiftedbyPlayer();
+            if (liftedBarrel == null || liftedBarrel.ngob.hitBox == null)
+                return Results.ERROR("BARREL NOT FOUND - no lifted object");
             
             // Place barrel at diagonal position from workstation corner
-            Coord2d placedPos = placeBarrelAtDiagonal(gui, ws, barrel, barrelId);
+            Coord2d placedPos = placeBarrelAtDiagonal(gui, ws, liftedBarrel);
             
             if (placedPos != null) {
-                // Get updated barrel reference after placement
-                barrel = Finder.findGob(barrelId);
-                if (barrel != null) {
-                    // Recalculate and store barrel hash after placement
-                    // Hash may change after moving to new position
-                    context.storeBarrelInfo(item, barrel.ngob.hash, new NGlobalCoord(originalPos));
+                // Wait for barrel to be placed (no longer lifted by player)
+                NUtils.addTask(new nurgling.tasks.NTask() {
+                    @Override
+                    public boolean check() {
+                        return findLiftedbyPlayer() == null;
+                    }
+                });
+                
+                // Find placed barrel by proximity to placement position
+                ArrayList<Gob> nearbyBarrels = Finder.findGobs(new NAlias("barrel"));
+                Gob placedBarrel = null;
+                double minDist = Double.MAX_VALUE;
+                for (Gob b : nearbyBarrels) {
+                    double dist = b.rc.dist(placedPos);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        placedBarrel = b;
+                    }
+                }
+                
+                if (placedBarrel != null) {
+                    // Store barrel hash after placement
+                    context.storeBarrelInfo(item, placedBarrel.ngob.hash, new NGlobalCoord(originalPos));
                     
                     // Find common approach point for workstation and barrel
-                    Coord2d commonPoint = PathFinder.findNearestCommonApproachPoint(ws, barrel);
+                    Coord2d commonPoint = PathFinder.findNearestCommonApproachPoint(ws, placedBarrel);
+                    
                     if (commonPoint != null) {
                         context.workstation.targetPoint = new NGlobalCoord(commonPoint);
                     } else {
@@ -97,10 +132,11 @@ public class TransferBarrelToWorkstation implements Action {
     /**
      * Place barrel at a diagonal position from one of the workstation corners.
      * Diagonal positions ensure the player can access both objects from a single point.
+     * Uses findLiftedbyPlayer() instead of barrelId since ID can change during location transitions.
      * 
      * @return The position where barrel was placed, or null if no free position found
      */
-    private Coord2d placeBarrelAtDiagonal(NGameUI gui, Gob ws, Gob barrel, long barrelId) throws InterruptedException {
+    private Coord2d placeBarrelAtDiagonal(NGameUI gui, Gob ws, Gob barrel) throws InterruptedException {
         if (ws.ngob.hitBox == null) {
             return null;
         }
@@ -153,7 +189,8 @@ public class TransferBarrelToWorkstation implements Action {
             
             Coord2d pos = Finder.getFreePlace(new Pair<>(ul, br), barrel);
             if (pos != null) {
-                new PlaceObject(Finder.findGob(barrelId), pos, 0).run(gui);
+                // Use findLiftedbyPlayer() to get the currently carried barrel
+                new PlaceObject(findLiftedbyPlayer(), pos, 0).run(gui);
                 return pos;
             }
         }

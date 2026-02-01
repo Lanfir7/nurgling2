@@ -14,6 +14,8 @@ import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
 
+import static nurgling.tools.Finder.findLiftedbyPlayer;
+
 public class ReturnBarrelFromWorkArea implements Action {
     NContext context;
     String item;
@@ -25,48 +27,50 @@ public class ReturnBarrelFromWorkArea implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-        long barrelid = -1;
+        boolean barrelLifted = false;
         Gob gob = null;
         
         // First try to find barrel by stored hash for this specific item
         String storedHash = context.getPlacedBarrelHash(item);
+        
         if (storedHash != null) {
             // First try to find locally and check if reachable
             gob = findBarrelByHashLocal(storedHash);
+            
             if (gob != null && PathFinder.isAvailable(gob)) {
                 new LiftObject(gob).run(gui);
-                barrelid = gob.id;
+                barrelLifted = true;
             } else {
                 // Barrel not in local cache or not reachable - need to navigate
                 gob = findBarrelByHash(gui, storedHash);
                 if (gob != null) {
                     new LiftObject(gob).run(gui);
-                    barrelid = gob.id;
+                    barrelLifted = true;
                 }
             }
         }
         
         // Fallback: find barrel in work area by content
-        if (barrelid == -1) {
+        if (!barrelLifted) {
             gob = context.getBarrelInWorkArea(item);
             if (gob != null && NUtils.barrelHasContent(gob) && 
                 context.getBarrelStorage(item) != null &&
                 NUtils.getContentsOfBarrel(gob).equals(context.getBarrelStorage(item).olname)) {
                 new LiftObject(gob).run(gui);
-                barrelid = gob.id;
+                barrelLifted = true;
             }
         }
 
         // Fallback: find any barrel in work area
-        if (barrelid == -1) {
+        if (!barrelLifted) {
             gob = context.getBarrelInWorkArea(item);
             if (gob != null && !NUtils.barrelHasContent(gob)) {
                 new LiftObject(gob).run(gui);
-                barrelid = gob.id;
+                barrelLifted = true;
             }
         }
         
-        if (barrelid == -1) {
+        if (!barrelLifted) {
             return Results.ERROR("Could not find barrel to return");
         }
         
@@ -80,8 +84,50 @@ public class ReturnBarrelFromWorkArea implements Action {
             return Results.ERROR("No target position for barrel return");
         }
         
+        // Navigate to barrel storage area
         context.navigateToBarrelArea(item);
-        new PlaceObject(Finder.findGob(barrelid), targetCoord.getCurrentCoord(), 0).run(gui);
+        
+        // Verify we still have the barrel lifted
+        Gob liftedBarrel = findLiftedbyPlayer();
+        
+        if (liftedBarrel == null) {
+            return Results.ERROR("Lost barrel during navigation");
+        }
+        
+        // Place the barrel at target position
+        Coord2d placePos = targetCoord.getCurrentCoord();
+        
+        if (placePos == null) {
+            // Try to find free place in the barrel storage area
+            NArea barrelArea = context.getBarrelAreaForItem(item);
+            if (barrelArea != null && barrelArea.getRCArea() != null) {
+                placePos = Finder.getFreePlace(barrelArea.getRCArea(), liftedBarrel);
+            }
+            
+            // Fallback: search near player
+            if (placePos == null) {
+                Pair<Coord2d, Coord2d> searchArea = new Pair<>(
+                    NUtils.player().rc.sub(20, 20),
+                    NUtils.player().rc.add(20, 20)
+                );
+                placePos = Finder.getFreePlace(searchArea, liftedBarrel);
+                
+                if (placePos == null) {
+                    // Last resort: place near player
+                    placePos = NUtils.player().rc.add(5, 5);
+                }
+            }
+        }
+        
+        new PlaceObject(liftedBarrel, placePos, 0).run(gui);
+        
+        // Wait for barrel to be placed
+        NUtils.addTask(new nurgling.tasks.NTask() {
+            @Override
+            public boolean check() {
+                return findLiftedbyPlayer() == null;
+            }
+        });
         
         // Clear barrel tracking info for this item after returning
         context.clearBarrelInfo(item);
@@ -125,15 +171,11 @@ public class ReturnBarrelFromWorkArea implements Action {
             area = context.getSpecArea(context.workstation);
         }
         
-        if (area != null && area.getRCArea() != null) {
-            haven.Pair<haven.Coord2d, haven.Coord2d> rcArea = area.getRCArea();
-            haven.Coord2d center = rcArea.b.sub(rcArea.a).div(2).add(rcArea.a);
-            new PathFinder(center).run(gui);
+        if (area != null) {
+            // Navigate to area using global pathfinding
+            NUtils.navigateToArea(area);
             
-            // Wait for objects to load
-            Thread.sleep(500);
-            
-            // Retry search
+            // Retry search after navigation
             barrels = Finder.findGobs(new NAlias("barrel"));
             for (Gob barrel : barrels) {
                 if (hash.equals(barrel.ngob.hash)) {
