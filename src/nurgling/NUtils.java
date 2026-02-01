@@ -859,8 +859,10 @@ public class NUtils
     {
         if (area == null) return false;
         
-        // Check if any corner of the area is reachable via local pathfinding
-        // If yes - we're already close enough, no need to use global navigation
+        String zoneName = (area.name != null) ? area.name : ("#" + area.id);
+        
+        // Check if player is already inside or very close to the area
+        // If yes - no need for global navigation
         if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
             return true;
         }
@@ -868,13 +870,62 @@ public class NUtils
         // Area is not reachable by local PF, use chunk navigation
         // Plan to all 4 corners in parallel and choose the shortest path
         ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
-        if (chunkNav != null && chunkNav.isInitialized())
+        if (chunkNav == null) {
+            NUtils.getGameUI().msg("ChunkNav not available for zone '" + zoneName + "'", java.awt.Color.ORANGE);
+            return false;
+        }
+        
+        if (!chunkNav.isInitialized()) {
+            NUtils.getGameUI().msg("ChunkNav not initialized for zone '" + zoneName + "'", java.awt.Color.ORANGE);
+            return false;
+        }
+        
+        // Force record visible grids before planning to ensure fresh data
+        chunkNav.forceRecordVisibleGrids();
+        
+        ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
+        if (bestPath != null)
         {
-            ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
-            if (bestPath != null)
-            {
-                return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
+            return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
+        }
+        else
+        {
+            // Path not found - add diagnostic info
+            // Check if area grids are in ChunkNav
+            boolean hasGridsInNav = false;
+            if (area.space != null && area.space.space != null) {
+                for (Long gridId : area.space.space.keySet()) {
+                    if (chunkNav.getGraph().hasChunk(gridId)) {
+                        hasGridsInNav = true;
+                        break;
+                    }
+                }
             }
+            
+            // Check player location
+            boolean playerLocFound = false;
+            try {
+                Gob player = NUtils.player();
+                if (player != null) {
+                    haven.MCache mcache = NUtils.getGameUI().map.glob.map;
+                    haven.Coord playerTile = player.rc.floor(haven.MCache.tilesz);
+                    haven.MCache.Grid grid = mcache.getgridt(playerTile);
+                    playerLocFound = (grid != null);
+                }
+            } catch (Exception e) {
+                // ignore
+            }
+            
+            String diagMsg = "Can't find path to '" + zoneName + "'. ";
+            if (!playerLocFound) {
+                diagMsg += "Player grid not loaded. ";
+            }
+            if (!hasGridsInNav) {
+                diagMsg += "Zone grids not in ChunkNav. ";
+            }
+            diagMsg += "Try walking closer first.";
+            
+            NUtils.getGameUI().msg(diagMsg, java.awt.Color.ORANGE);
         }
         return false;
     }
@@ -899,6 +950,14 @@ public class NUtils
             if (bestPath != null)
             {
                 return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
+            }
+            else
+            {
+                // Path not found - zone is too far or unexplored
+                String zoneName = (area.name != null) ? area.name : ("#" + area.id);
+                NUtils.getGameUI().msg("Cannot find path to zone '" + zoneName + "'. " +
+                    "The zone may be too far away or the path has not been explored yet. " +
+                    "Try walking closer to the zone first.", java.awt.Color.ORANGE);
             }
         }
         return false;

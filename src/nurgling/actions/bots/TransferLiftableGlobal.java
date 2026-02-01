@@ -86,14 +86,27 @@ public class TransferLiftableGlobal implements Action {
             // Lift the item
             new LiftObject(item).run(gui);
 
-            NUtils.navigateToArea(carrierOutArea);
+            // Navigate to output area - check if navigation succeeded
+            if (!NUtils.navigateToArea(carrierOutArea)) {
+                String zoneName = (carrierOutArea.name != null) ? carrierOutArea.name : ("#" + carrierOutArea.id);
+                return Results.ERROR("Cannot navigate to output zone '" + zoneName + "'. " +
+                    "The zone may be too far away. Try walking closer to it first.");
+            }
+            
             // Move to output area and place the item
-            new FindPlaceAndAction(null, carrierOutArea.getRCArea()).run(gui);
+            // Use NArea constructor so FindPlaceAndAction can navigate to zone if needed
+            new FindPlaceAndAction(null, carrierOutArea).run(gui);
 
             // Move away from the placed item
             Coord2d shift = item.rc.sub(NUtils.player().rc).norm().mul(2);
             new GoTo(NUtils.player().rc.sub(shift)).run(gui);
-            NUtils.navigateToArea(inarea);
+            
+            // Navigate back to input area - check if navigation succeeded
+            if (!NUtils.navigateToArea(inarea)) {
+                String zoneName = (inarea.name != null) ? inarea.name : ("#" + inarea.id);
+                return Results.ERROR("Cannot navigate back to input zone '" + zoneName + "'. " +
+                    "The zone may be too far away. Try walking closer to it first.");
+            }
         }
 
         return Results.SUCCESS();

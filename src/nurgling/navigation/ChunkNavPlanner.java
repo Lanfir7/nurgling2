@@ -475,6 +475,7 @@ public class ChunkNavPlanner {
 
     /**
      * Get player's current grid ID and local coordinate using direct MCache lookup.
+     * Falls back to searching ChunkNav by worldTileOrigin if MCache lookup fails.
      * This is more reliable than ngob.grid_id which can be stale after teleports.
      */
     private PlayerLocation getPlayerLocation() {
@@ -490,7 +491,7 @@ public class ChunkNavPlanner {
             MCache mcache = gui.map.glob.map;
             Coord playerTile = player.rc.floor(MCache.tilesz);
 
-            // Direct lookup - most reliable
+            // Strategy 1: Direct MCache lookup - most reliable
             MCache.Grid grid = mcache.getgridt(playerTile);
             if (grid != null) {
                 Coord localCoord = playerTile.sub(grid.ul);
@@ -498,6 +499,18 @@ public class ChunkNavPlanner {
                 if (localCoord.x >= 0 && localCoord.x < CHUNK_SIZE &&
                     localCoord.y >= 0 && localCoord.y < CHUNK_SIZE) {
                     return new PlayerLocation(grid.id, localCoord);
+                }
+            }
+
+            // Strategy 2: Fallback - search recorded chunks by worldTileOrigin
+            // This handles cases where MCache lookup fails but we have recorded data
+            for (ChunkNavData chunk : graph.getAllChunks()) {
+                if (chunk.worldTileOrigin == null) continue;
+                
+                Coord localCoord = playerTile.sub(chunk.worldTileOrigin);
+                if (localCoord.x >= 0 && localCoord.x < CHUNK_SIZE &&
+                    localCoord.y >= 0 && localCoord.y < CHUNK_SIZE) {
+                    return new PlayerLocation(chunk.gridId, localCoord);
                 }
             }
 

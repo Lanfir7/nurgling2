@@ -174,6 +174,12 @@ public class ChunkNavRecorder {
      * Discover and record neighbor relationships by examining all currently loaded grids.
      * When multiple grids are loaded, we can see their spatial relationship through gc coordinates.
      * These relationships are persistent because grid IDs never change.
+     * 
+     * IMPORTANT: This method only ADDS neighbor relationships, never removes them.
+     * This ensures that neighbors discovered during earlier navigation are preserved
+     * even when those chunks are no longer visible.
+     * 
+     * Also updates the reverse relationship on the neighbor chunk if it exists in the graph.
      */
     private void discoverNeighbors(MCache.Grid grid, ChunkNavData chunk) {
         try {
@@ -191,18 +197,48 @@ public class ChunkNavRecorder {
                     int dy = otherGc.y - myGc.y;
 
                     // Check if this grid is an immediate neighbor (exactly 1 grid apart)
+                    // Only SET neighbor if not already set (preserve existing relationships)
+                    // Also update the reverse relationship on the neighbor chunk
                     if (dx == 0 && dy == -1) {
                         // Other is to the north
-                        chunk.neighborNorth = other.id;
+                        if (chunk.neighborNorth == -1) {
+                            chunk.neighborNorth = other.id;
+                        }
+                        // Update reverse: we are to the south of other
+                        ChunkNavData otherChunk = graph.getChunk(other.id);
+                        if (otherChunk != null && otherChunk.neighborSouth == -1) {
+                            otherChunk.neighborSouth = grid.id;
+                        }
                     } else if (dx == 0 && dy == 1) {
                         // Other is to the south
-                        chunk.neighborSouth = other.id;
+                        if (chunk.neighborSouth == -1) {
+                            chunk.neighborSouth = other.id;
+                        }
+                        // Update reverse: we are to the north of other
+                        ChunkNavData otherChunk = graph.getChunk(other.id);
+                        if (otherChunk != null && otherChunk.neighborNorth == -1) {
+                            otherChunk.neighborNorth = grid.id;
+                        }
                     } else if (dx == 1 && dy == 0) {
                         // Other is to the east
-                        chunk.neighborEast = other.id;
+                        if (chunk.neighborEast == -1) {
+                            chunk.neighborEast = other.id;
+                        }
+                        // Update reverse: we are to the west of other
+                        ChunkNavData otherChunk = graph.getChunk(other.id);
+                        if (otherChunk != null && otherChunk.neighborWest == -1) {
+                            otherChunk.neighborWest = grid.id;
+                        }
                     } else if (dx == -1 && dy == 0) {
                         // Other is to the west
-                        chunk.neighborWest = other.id;
+                        if (chunk.neighborWest == -1) {
+                            chunk.neighborWest = other.id;
+                        }
+                        // Update reverse: we are to the east of other
+                        ChunkNavData otherChunk = graph.getChunk(other.id);
+                        if (otherChunk != null && otherChunk.neighborEast == -1) {
+                            otherChunk.neighborEast = grid.id;
+                        }
                     }
                 }
             }

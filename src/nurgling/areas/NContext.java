@@ -1710,6 +1710,10 @@ public class NContext {
      * Find all areas with a specific specialization and optional subtype.
      * Uses global search with route graph distance, similar to findSpecGlobal.
      * Returns list of areas sorted by route distance from player.
+     * 
+     * IMPORTANT: Areas are included even if ChunkNav cannot find a path to them!
+     * This allows showing zones that are far away and haven't been explored yet.
+     * Such zones will use Euclidean distance as fallback for sorting.
      */
     public static ArrayList<NArea> findAllSpec(String name, String subtype) {
         // Map to store areas with their route distances
@@ -1726,20 +1730,31 @@ public class NContext {
                             boolean subtypeMatch = (subtype == null || subtype.isEmpty()) ||
                                 (s.subtype != null && s.subtype.equalsIgnoreCase(subtype));
                             if (nameMatch && subtypeMatch) {
-                                // Check if area is reachable via ChunkNav
+                                // Try to get distance via ChunkNav first
                                 ChunkNavManager chunkNav = (NUtils.getGameUI().map instanceof NMapView)
                                     ? ((NMapView)NUtils.getGameUI().map).getChunkNavManager() : null;
+                                boolean foundPath = false;
+                                
                                 if (chunkNav != null && chunkNav.isInitialized()) {
                                     ChunkPath path = chunkNav.planToArea(area);
                                     if (path != null) {
                                         areaDistances.put(area, (int)path.totalCost);
+                                        foundPath = true;
                                     }
-                                } else {
-                                    // Fallback: use distance if ChunkNav not available
+                                }
+                                
+                                // Fallback: use Euclidean distance if ChunkNav not available or no path found
+                                // This ensures zones are shown even if they haven't been explored yet
+                                if (!foundPath) {
                                     Pair<Coord2d, Coord2d> testrc = area.getRCArea();
-                                    if(testrc != null) {
+                                    if (testrc != null && NUtils.player() != null) {
                                         double testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc));
-                                        areaDistances.put(area, (int)testdist);
+                                        // Add large offset to sort unexplored zones after explored ones
+                                        areaDistances.put(area, (int)testdist + 100000);
+                                    } else {
+                                        // No coordinates available (not visible), but still include the zone
+                                        // Use very large distance so it appears at the end
+                                        areaDistances.put(area, Integer.MAX_VALUE / 2);
                                     }
                                 }
                                 break; // Don't check other specs for same area
