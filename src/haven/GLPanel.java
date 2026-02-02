@@ -471,6 +471,19 @@ public interface GLPanel extends UIPanel, UI.Context {
 	}
 
 	public UI newui(UI.Runner fun) {
+	    // Clear global resource caches (remote + local) and nurgling static caches when switching
+	    // to a game session to free memory and avoid CPU/memory spike on 2nd/3rd re-login.
+	    if (fun != null && fun instanceof RemoteUI) {
+		if (Resource.local() != null)
+		    Resource.local().clearCache();
+		if (Resource.remote() != null)
+		    Resource.remote().clearCache();
+		nurgling.NCore.clearSessionCaches();
+		if (nurgling.NGameUI.gobIdToKinName != null)
+		    nurgling.NGameUI.gobIdToKinName.clear();
+		// Hint GC to reclaim memory from discarded session/UI (heap often stays high until GC runs)
+		System.gc();
+	    }
 	    UI prevui, newui = new NUI(p, new Coord(p.getSize()), fun);
 	    newui.env = p.env();
 		UI.ui = (NUI) newui;

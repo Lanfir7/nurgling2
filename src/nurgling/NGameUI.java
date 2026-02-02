@@ -488,6 +488,15 @@ public class NGameUI extends GameUI
             animalMarkerSyncService.stop();
         if(fishLocationService != null)
             fishLocationService.dispose();
+        if (animalMarkerWorker != null) {
+            animalMarkerWorker.shutdownNow();
+            animalMarkerWorker = null;
+        }
+        animalMarkerMacroRunning = false;
+        if (animalMarkerMacroThread != null) {
+            animalMarkerMacroThread.interrupt();
+            animalMarkerMacroThread = null;
+        }
         if(nurgling.NUtils.getUI().core!=null)
             NUtils.getUI().core.dispose();
         super.dispose();

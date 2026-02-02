@@ -660,7 +660,7 @@ public class ChunkNavManager {
     public void shutdown() {
         initialized = false;
 
-        // Shutdown recording executor
+        // Shutdown recording executor (stops thread leak on character switch)
         if (recordingExecutor != null) {
             recordingExecutor.shutdown();
             try {
@@ -670,6 +670,10 @@ public class ChunkNavManager {
             } catch (InterruptedException e) {
                 recordingExecutor.shutdownNow();
             }
+            recordingExecutor = null;
+        }
+        if (instance == this) {
+            instance = null;
         }
     }
 

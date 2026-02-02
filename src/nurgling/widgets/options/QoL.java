@@ -28,6 +28,7 @@ public class QoL extends Panel {
     private CheckBox crime;
     private CheckBox swimming;
     private CheckBox openInventoryOnLogin;
+    private CheckBox lowMemoryMode;
     private CheckBox disableMenugridKeys;
     private CheckBox questNotified;
     private CheckBox lpassistent;
@@ -144,6 +145,7 @@ public class QoL extends Panel {
         leftPrev = crime = leftColumn.add(new CheckBox(L10n.get("qol.crime")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = swimming = leftColumn.add(new CheckBox(L10n.get("qol.swimming")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = openInventoryOnLogin = leftColumn.add(new CheckBox(L10n.get("qol.open_inventory")), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = lowMemoryMode = leftColumn.add(new CheckBox(L10n.get("qol.low_memory")), leftPrev.pos("bl").adds(0, 5));
 
         leftPrev = leftColumn.add(new Label(L10n.get("qol.preferred_speed")), leftPrev.pos("bl").adds(0, 10));
         leftPrev = preferredSpeedDropbox = leftColumn.add(new Dropbox<String>(UI.scale(150), 4, UI.scale(16)) {
@@ -360,6 +362,7 @@ public class QoL extends Panel {
         crime.a = getBool(NConfig.Key.crime);
         swimming.a = getBool(NConfig.Key.swimming);
         openInventoryOnLogin.a = getBool(NConfig.Key.openInventoryOnLogin);
+        lowMemoryMode.a = getBool(NConfig.Key.lowMemoryMode);
         disableMenugridKeys.a = getBool(NConfig.Key.disableMenugridKeys);
         questNotified.a = getBool(NConfig.Key.questNotified);
         lpassistent.a = getBool(NConfig.Key.lpassistent);
@@ -477,6 +480,7 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.crime, crime.a);
         NConfig.set(NConfig.Key.swimming, swimming.a);
         NConfig.set(NConfig.Key.openInventoryOnLogin, openInventoryOnLogin.a);
+        NConfig.set(NConfig.Key.lowMemoryMode, lowMemoryMode.a);
         NConfig.set(NConfig.Key.disableMenugridKeys, disableMenugridKeys.a);
         NConfig.set(NConfig.Key.questNotified, questNotified.a);
 

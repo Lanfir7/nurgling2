@@ -17,14 +17,17 @@ import java.util.stream.Collectors;
 /**
  * Collects tar from tar kilns into barrels.
  * Lifts a barrel from zone with barrel(Tar) specialization, goes to zone with tarkiln specialization,
- * right-clicks each tar kiln that has tar (marker != 10 means not empty) to collect tar into the lifted barrel,
+ * right-clicks each tar kiln that has tar to collect tar into the lifted barrel,
  * then returns and places the barrel back. Repeats until no barrels or no tar kilns with tar.
  * Uses same icon as Tarkiln Refiller (tarkiln).
+ * <p>
+ * State is read from gob.ngob.getModelAttribute() (debug "marker"), like drying frames / trees with cones:
+ * empty (no tar) = 22, has tar (e.g. full 54, possibly still with wood) = other values.
  */
 public class CollectTarFromKilns implements Action {
 
-    /** Empty tar kiln has marker 10; any other value (e.g. 42 when full) means tar is present. */
-    private static final int TARKILN_EMPTY_MARKER = 10;
+    /** Empty tar kiln (no tar): marker 22. Has tar = e.g. 54 (with wood still) or other non-empty state. */
+    private static final int TARKILN_EMPTY_MARKER = 22;
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
@@ -78,6 +81,7 @@ public class CollectTarFromKilns implements Action {
 
         for (Gob kiln : kilnsWithTar) {
             if (!PathFinder.isAvailable(kiln)) continue;
+            new PathFinder(kiln).run(gui);
             new CollectFromGob(kiln, "Collect tar", "gfx/borka/bushpickan", new Coord(1, 1), null, true).run(gui);
         }
 

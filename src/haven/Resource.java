@@ -525,6 +525,19 @@ public class Resource implements Serializable {
 	    sources.add(src);
 	}
 
+	/** Clear cache and load queue when switching character; new session will reload from disk.
+	 *  Also clears queue/queued so loaders do not repopulate cache from pending work. */
+	public void clearCache() {
+	    synchronized(cache) {
+		cache.clear();
+	    }
+	    synchronized(queue) {
+		queue.clear();
+		queued.clear();
+		queue.notifyAll();
+	    }
+	}
+
 	private class Queued extends Named implements Prioritized, Serializable {
 	    transient final Collection<Queued> rdep = new LinkedList<Queued>();
 	    final Waitable.Queue wq = new Waitable.Queue();

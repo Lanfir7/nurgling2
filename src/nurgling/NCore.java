@@ -423,11 +423,22 @@ public class NCore extends Widget
 
     // In-memory cache of recently sent recipe hashes to avoid duplicate DB writes
     private static final Set<String> sentRecipeHashes = ConcurrentHashMap.newKeySet();
-    private static final int MAX_RECIPE_CACHE_SIZE = 5000;
+    private static final int MAX_RECIPE_CACHE_SIZE_NORMAL = 5000;
+    private static final int MAX_RECIPE_CACHE_SIZE_LOW = 1000;
     
     // Quick cache for early filtering (name + energy) - checked BEFORE creating task
     private static final Set<String> recipeQuickCache = ConcurrentHashMap.newKeySet();
-    private static final int MAX_QUICK_CACHE_SIZE = 2000;
+    private static final int MAX_QUICK_CACHE_SIZE_NORMAL = 2000;
+    private static final int MAX_QUICK_CACHE_SIZE_LOW = 500;
+
+    private static int getMaxRecipeCacheSize() {
+        Object v = NConfig.get(NConfig.Key.lowMemoryMode);
+        return (v instanceof Boolean && (Boolean) v) ? MAX_RECIPE_CACHE_SIZE_LOW : MAX_RECIPE_CACHE_SIZE_NORMAL;
+    }
+    private static int getMaxQuickCacheSize() {
+        Object v = NConfig.get(NConfig.Key.lowMemoryMode);
+        return (v instanceof Boolean && (Boolean) v) ? MAX_QUICK_CACHE_SIZE_LOW : MAX_QUICK_CACHE_SIZE_NORMAL;
+    }
     
     // Pending recipe tasks counter for debug
     private static final java.util.concurrent.atomic.AtomicInteger pendingRecipeTasks = new java.util.concurrent.atomic.AtomicInteger(0);
@@ -457,9 +468,10 @@ public class NCore extends Widget
      * Add recipe hash to cache
      */
     public static void addRecipeToCache(String recipeHash) {
-        if (sentRecipeHashes.size() >= MAX_RECIPE_CACHE_SIZE) {
+        int maxRecipe = getMaxRecipeCacheSize();
+        if (sentRecipeHashes.size() >= maxRecipe) {
             // Simple eviction: clear half of the cache when full
-            int toRemove = MAX_RECIPE_CACHE_SIZE / 2;
+            int toRemove = maxRecipe / 2;
             java.util.Iterator<String> it = sentRecipeHashes.iterator();
             while (it.hasNext() && toRemove > 0) {
                 it.next();
@@ -481,9 +493,10 @@ public class NCore extends Widget
      * Add to quick cache
      */
     public static void addRecipeQuickCache(String quickKey) {
-        if (recipeQuickCache.size() >= MAX_QUICK_CACHE_SIZE) {
+        int maxQuick = getMaxQuickCacheSize();
+        if (recipeQuickCache.size() >= maxQuick) {
             // Simple eviction
-            int toRemove = MAX_QUICK_CACHE_SIZE / 2;
+            int toRemove = maxQuick / 2;
             java.util.Iterator<String> it = recipeQuickCache.iterator();
             while (it.hasNext() && toRemove > 0) {
                 it.next();
@@ -499,6 +512,15 @@ public class NCore extends Widget
      */
     public static int getRecipeQuickCacheSize() {
         return recipeQuickCache.size();
+    }
+
+    /**
+     * Clear static session-related caches when switching character to reduce memory and CPU.
+     * Call from UI when creating a new game session (e.g. after Resource.remote().clearCache()).
+     */
+    public static void clearSessionCaches() {
+        sentRecipeHashes.clear();
+        recipeQuickCache.clear();
     }
     
     public static class NGItemWriter implements Runnable {
@@ -552,9 +574,10 @@ public class NCore extends Widget
                 );
 
                 // Add to cache before saving (prevents duplicates during async save)
-                if (sentRecipeHashes.size() >= MAX_RECIPE_CACHE_SIZE) {
+                int maxRecipe = getMaxRecipeCacheSize();
+                if (sentRecipeHashes.size() >= maxRecipe) {
                     // Simple eviction: clear half of the cache when full
-                    int toRemove = MAX_RECIPE_CACHE_SIZE / 2;
+                    int toRemove = maxRecipe / 2;
                     Iterator<String> it = sentRecipeHashes.iterator();
                     while (it.hasNext() && toRemove > 0) {
                         it.next();

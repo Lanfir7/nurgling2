@@ -131,6 +131,7 @@ public class NConfig
         picklingRedOnion,
         picklingYellowOnion,
         openInventoryOnLogin,
+        lowMemoryMode,
         bbDisplayMode,
         showBeehiveRadius,
         showTroughRadius,
@@ -452,6 +453,7 @@ public class NConfig
 
         // Login settings
         conf.put(Key.openInventoryOnLogin, false);  // Default to closed (current behavior)
+        conf.put(Key.lowMemoryMode, false);  // Reduce in-memory caches to lower RAM use (~8 GB -> less)
 
         // Object radius overlays - simple boolean flags
         conf.put(Key.showBeehiveRadius, false);

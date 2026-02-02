@@ -409,6 +409,15 @@ public class NMapView extends MapView
         }
     }
 
+    @Override
+    public void dispose() {
+        if (chunkNavManager != null) {
+            chunkNavManager.shutdown();
+            chunkNavManager = null;
+        }
+        super.dispose();
+    }
+
     /**
      * Create portal labels for all portals in all visible chunks.
      * Only creates labels if chunkNavOverlay config is enabled.
