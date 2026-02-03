@@ -29,6 +29,8 @@ public class AutoDrink implements Action
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
+        if (gui == null)
+            return Results.FAIL();
         while(!stop.get())
         {
             // Get threshold from config (make it final for inner class)
@@ -42,10 +44,10 @@ public class AutoDrink implements Action
                 threshold = thresholdValue;
             }
             
-            NUtils.addTask(new NTask() {
+            gui.ui.core.addTask(new NTask() {
                 @Override
                 public boolean check() {
-                    if(NUtils.getGameUI()==null)
+                    if(gui == null || gui.map == null)
                         return false;
                     double stamina = NUtils.getStamina();
                     if(stamina < 0)
@@ -54,25 +56,20 @@ public class AutoDrink implements Action
                 }
             });
             if(stop.get()) {
-                NUtils.getUI().core.autoDrink = null;
+                gui.ui.core.autoDrink = null;
                 return Results.SUCCESS();
             }
 
-            DrinkResult drinkResult = checkDrink();
-            if(drinkResult.hasDrink) {
-                NUtils.getUI().dropLastError();
-                NGameUI gameUI = NUtils.getGameUI();
-                if (gameUI == null) {
-                    continue;
-                }
-                
+            DrinkResult drinkResult = checkDrink(gui);
+            if(drinkResult.hasDrink && gui != null) {
+                gui.ui.dropLastError();
                 String actionName = drinkResult.isTea ? "Sip" : "Drink";
                 boolean actionUsed = false;
                 
                 if (drinkResult.isTea && drinkResult.itemToActivate != null) {
                     // For tea, use SelectFlowerAction for instant menu usage (like in other actions)
                     SelectFlowerAction selectAction = new SelectFlowerAction(actionName, drinkResult.itemToActivate);
-                    Results result = selectAction.run(gameUI);
+                    Results result = selectAction.run(gui);
                     if (result.IsSuccess()) {
                         actionUsed = true;
                     } else {
@@ -80,14 +77,14 @@ public class AutoDrink implements Action
                     }
                 } else {
                     // For water, use already open menu (like in Drink.java)
-                    if (gameUI.menu == null) {
+                    if (gui.menu == null) {
                         continue;
                     }
                     
                     MenuGrid.PagButton foundButton = null;
                     Collection<MenuGrid.Pagina> paginaeCopy;
-                    synchronized (gameUI.menu.paginae) {
-                        paginaeCopy = new ArrayList<>(gameUI.menu.paginae);
+                    synchronized (gui.menu.paginae) {
+                        paginaeCopy = new ArrayList<>(gui.menu.paginae);
                     }
                     
                     for (MenuGrid.Pagina pag : paginaeCopy) {
@@ -106,15 +103,16 @@ public class AutoDrink implements Action
                     }
                     
                     // Use the found button (reset=true to close menu after use)
-                    gameUI.menu.use(foundButton, new MenuGrid.Interaction(1, 0), true);
+                    gui.menu.use(foundButton, new MenuGrid.Interaction(1, 0), true);
                     actionUsed = true;
                 }
                 
                 // Only wait for animation if action was actually used
                 if (actionUsed) {
-                    // Wait for drinking animation to start
-                    WaitPoseOrMsg wops = new WaitPoseOrMsg(NUtils.player(), "gfx/borka/drinkan", new NAlias("You have nothing on your hotbelt to drink."));
-                    NUtils.getUI().core.addTask(wops);
+                    // Wait for drinking animation to start (use this session's player, not global)
+                    Gob player = gui.map != null ? gui.map.player() : null;
+                    WaitPoseOrMsg wops = new WaitPoseOrMsg(player, "gfx/borka/drinkan", new NAlias("You have nothing on your hotbelt to drink."));
+                    gui.ui.core.addTask(wops);
                     
                     // Get timeout from config (in seconds, convert to ticks at ~60fps)
                     double timeoutSeconds = 5.0; // Default
@@ -125,12 +123,12 @@ public class AutoDrink implements Action
                     final int maxTimeout = (int)(timeoutSeconds * 60); // Convert seconds to ticks
                     
                     // Wait for animation to finish or timeout, and also wait for stamina to recover
-                    NUtils.addTask(new NTask() {
+                    gui.ui.core.addTask(new NTask() {
                         private int timeout = 0;
                         
                         @Override
                         public boolean check() {
-                            Gob player = NUtils.player();
+                            Gob player = gui.map != null ? gui.map.player() : null;
                             if (player == null) {
                                 return true; // Player gone, stop waiting
                             }
@@ -159,7 +157,7 @@ public class AutoDrink implements Action
                 }
             }
         }
-        NUtils.getUI().core.autoDrink = null;
+        gui.ui.core.autoDrink = null;
         return Results.SUCCESS();
     }
 
@@ -169,11 +167,11 @@ public class AutoDrink implements Action
         WItem itemToActivate = null; // Item that needs to be activated to open menu
     }
 
-    DrinkResult checkDrink() throws InterruptedException
+    DrinkResult checkDrink(NGameUI gui) throws InterruptedException
     {
         DrinkResult result = new DrinkResult();
         
-        NEquipory equipment = NUtils.getEquipment();
+        NEquipory equipment = NUtils.getEquipment(gui);
         if (equipment == null) {
             return result;
         }
@@ -236,8 +234,8 @@ public class AutoDrink implements Action
         }
         
         // Check for tea in hands (for teapots, cups, etc.)
-        WItem leftHand = NUtils.getEquipment().findItem(NEquipory.Slots.HAND_LEFT.idx);
-        WItem rightHand = NUtils.getEquipment().findItem(NEquipory.Slots.HAND_RIGHT.idx);
+        WItem leftHand = equipment.findItem(NEquipory.Slots.HAND_LEFT.idx);
+        WItem rightHand = equipment.findItem(NEquipory.Slots.HAND_RIGHT.idx);
         
         for (WItem handItem : new WItem[]{leftHand, rightHand}) {
             if (handItem != null) {
@@ -304,9 +302,8 @@ public class AutoDrink implements Action
         }
         
         // Check main inventory for drink containers
-        NGameUI gameUI = NUtils.getGameUI();
-        if (gameUI != null) {
-            NInventory mainInv = gameUI.getInventory();
+        if (gui != null) {
+            NInventory mainInv = gui.getInventory();
             if (mainInv != null) {
                 ArrayList<WItem> invItems = mainInv.getItems(new NAlias("Waterskin", "Glass Jug", "Waterflask", "Kuksa"));
                 if (!invItems.isEmpty()) {

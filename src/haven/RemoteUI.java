@@ -30,9 +30,15 @@ import java.util.*;
 
 public class RemoteUI implements UI.Receiver, UI.Runner {
     public final Session sess;
+    private final boolean isGameSession; // true if this is a game session (created via Return), false if auth session
 
     public RemoteUI(Session sess) {
+	this(sess, false);
+    }
+
+    public RemoteUI(Session sess, boolean isGameSession) {
 	this.sess = sess;
+	this.isGameSession = isGameSession;
 	Widget.initnames();
     }
 
@@ -89,14 +95,22 @@ public class RemoteUI implements UI.Receiver, UI.Runner {
     public UI.Runner run(UI ui) throws InterruptedException {
 	try {
 	    ui.setreceiver(this);
+	    // Send user agent info - required by server for both auth and game sessions
 	    sendua(ui);
 	    while(true) {
 		PMessage msg = sess.getuimsg();
 		if(msg == null) {
 		    return(null);
 		} else if(msg instanceof Return) {
+		    Session newSess = ((Return)msg).ret;
 		    sess.close();
-		    return(new RemoteUI(((Return)msg).ret));
+		    // Clear shadow maps to avoid "widget already has parent" errors
+		    // The server manages actual widgets via RMSG_DSTWDG and RMSG_NEWWDG
+		    // We just need to clear our tracking structures
+		    ui.clearShadowMaps();
+		    RemoteUI newRemoteUI = new RemoteUI(newSess, true);
+		    newRemoteUI.init(ui); // Sets ui.sess = newSess
+		    return newRemoteUI.run(ui);
 		} else if(msg.type == RMessage.RMSG_NEWWDG) {
 		    int id = msg.int32();
 		    String type = msg.string();

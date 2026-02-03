@@ -40,6 +40,8 @@ import java.awt.event.MouseEvent;
 import java.awt.event.InputEvent;
 import java.awt.image.BufferedImage;
 import java.io.Serializable;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import static haven.Utils.el;
 import haven.render.Environment;
 import haven.render.Render;
@@ -48,12 +50,69 @@ import nurgling.*;
 public class UI {
 
 	static NUI ui = null;
+	/** Lock for getInstance/setInstance so GL frame and background ticks never race (prevents flicker and wrong brightness). */
+	public static final Object contextLock = new Object();
 	public static NUI getInstance(){
 		return ui;
 	}
 	public static void setInstance(NUI instance) {
 		ui = instance;
 	}
+
+    // Multi-session state management
+    public enum State {
+        ACTIVE,      // Full rendering, normal TPS (60)
+        BACKGROUND,  // Reduced TPS (5), no rendering
+        INTERRUPTED, // Session closing in progress
+        CLOSED       // Session fully closed
+    }
+
+    private volatile State state = State.BACKGROUND;
+    private volatile Thread uiThread;
+    private volatile Thread runnerThread;
+
+    public State state() {
+        return state;
+    }
+
+    public void state(State newState) {
+        this.state = newState;
+        // Adjust thread priority based on state
+        Thread t = this.uiThread;
+        if (t != null) {
+            switch (newState) {
+                case ACTIVE:
+                    t.setPriority(Thread.NORM_PRIORITY);
+                    break;
+                case BACKGROUND:
+                    t.setPriority((Thread.NORM_PRIORITY + Thread.MIN_PRIORITY) / 2);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    public boolean isState(State s) {
+        return this.state == s;
+    }
+
+    public void setUiThread(Thread t) {
+        this.uiThread = t;
+    }
+
+    public Thread getUiThread() {
+        return this.uiThread;
+    }
+
+    public void setRunnerThread(Thread t) {
+        this.runnerThread = t;
+    }
+
+    public Thread getRunnerThread() {
+        return this.runnerThread;
+    }
+
     public static int MOD_SHIFT = KeyMatch.S, MOD_CTRL = KeyMatch.C, MOD_META = KeyMatch.M, MOD_SUPER = KeyMatch.SUPER;
     public RootWidget root;
     public final List<Grab> grabs = new CopyOnWriteArrayList<Grab>();
@@ -209,6 +268,61 @@ public class UI {
 	}
     }
 
+    /**
+     * Clear only shadow maps (shadowparents and shadowchildren).
+     * Used when transitioning from auth to game session via Return message.
+     * The server manages widgets via RMSG_DSTWDG/RMSG_NEWWDG, we just need
+     * to clear our tracking structures to avoid "already has parent" errors.
+     */
+    public void clearShadowMaps() {
+	synchronized(widgets) {
+	    synchronized(shadowchildren) {
+		shadowparents.clear();
+		// Use widgets.keySet() to get all potential parent IDs
+		for(Integer key : new ArrayList<>(widgets.keySet())) {
+		    shadowchildren.removeall(key);
+		}
+	    }
+	}
+    }
+    
+    /**
+     * Recreate the root widget, clearing all existing widgets.
+     * Used when starting a new runner in multi-session mode.
+     */
+    public void recreateRoot(Coord sz) {
+	synchronized(widgets) {
+	    synchronized(shadowchildren) {
+		// Clear shadow structures
+		shadowparents.clear();
+		// Clear shadowchildren by removing all entries
+		for(Integer key : new ArrayList<>(widgets.keySet())) {
+		    shadowchildren.removeall(key);
+		}
+		
+		// Destroy all widgets except root
+		for(Widget w : new ArrayList<>(rwidgets.keySet())) {
+		    if(w != null && w != root) {
+			try {
+			    w.destroy();
+			} catch (Exception e) {
+			    // Ignore errors during cleanup
+			}
+		    }
+		}
+		
+		// Clear widget maps
+		widgets.clear();
+		rwidgets.clear();
+		
+		// Create new root
+		root = new RootWidget(this, sz);
+		widgets.put(0, root);
+		rwidgets.put(root, 0);
+	    }
+	}
+    }
+
     public static class Command implements Serializable {
 	private static final java.util.concurrent.atomic.AtomicInteger nextid = new java.util.concurrent.atomic.AtomicInteger(0);
 	public final int id = nextid.getAndIncrement();
@@ -343,8 +457,24 @@ public class UI {
 	synchronized(widgets) {
 	    widgets.put(id, w);
 	    rwidgets.put(w, id);
+	    // Update root reference when server sends new root widget (id=0)
+	    if (id == 0 && w instanceof RootWidget) {
+		// #region agent log
+		debugLog("J", "bind:newRoot", "New root widget from server", "oldRoot=" + root + ",newRoot=" + w);
+		// #endregion
+		root = (RootWidget) w;
+	    }
 	}
     }
+    
+    // #region agent log
+    private static final String DEBUG_LOG_PATH = "c:\\Game\\Lanfir-nurgling2\\.cursor\\debug.log";
+    private static void debugLog(String hypothesisId, String location, String message, String data) {
+	try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(DEBUG_LOG_PATH, true))) {
+	    pw.println("{\"hypothesisId\":\"" + hypothesisId + "\",\"location\":\"" + location + "\",\"message\":\"" + message + "\",\"data\":\"" + data.replace("\"", "'").replace("\n", " ") + "\",\"timestamp\":" + System.currentTimeMillis() + "}");
+	} catch (Exception e) { /* ignore */ }
+    }
+    // #endregion
 
     public Widget getwidget(int id) {
 	synchronized(widgets) {

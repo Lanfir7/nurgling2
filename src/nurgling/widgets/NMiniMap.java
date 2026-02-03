@@ -657,8 +657,9 @@ NMiniMap extends MiniMap {
                     
                     // Expand BR by 1,1 to cover rounding gaps
                     Coord expandedBR = br.add(1, 1);
-                    
-                    exploredArea.updateExploredTiles(ul, expandedBR, curloc.seg.id);
+                    // Use sessloc when curloc is null (e.g. background session not yet having map focus)
+                    long segId = (curloc != null) ? curloc.seg.id : sessloc.seg.id;
+                    exploredArea.updateExploredTiles(ul, expandedBR, segId);
                 }
             }
         }
@@ -957,6 +958,8 @@ NMiniMap extends MiniMap {
         if((Boolean)NConfig.get(NConfig.Key.tempmark)) {
             Gob player = NUtils.player();
             if (player != null && sessloc != null && dloc != null) {
+                // curloc may be null when minimap hasn't focused map yet (e.g. after switch)
+                MiniMap.Location ploc = (curloc != null) ? curloc : sessloc;
                 // Calculate visible area boundaries (same as explored area calculation)
                 Coord ul = player.rc.floor(sgridsz).sub(4, 4).mul(sgridsz).floor(tilesz).add(sessloc.tc);
                 Coord unscaledViewSize = _sgridsz.mul(9).div(tilesz.floor());
@@ -965,7 +968,7 @@ NMiniMap extends MiniMap {
                 synchronized (((NMapView)ui.gui.map).tempMarkList)
                 {
                 for (TempMark cm : ((NMapView)ui.gui.map).tempMarkList) {
-                    if (cm.loc!=null && ui.gui.mmap.curloc.seg.id == cm.loc.seg.id) {
+                    if (cm.loc!=null && ploc.seg.id == cm.loc.seg.id) {
                         if (cm.icon != null && !cm.gc.equals(Coord.z)) {
                             // Check if mark is outside the 81-tile visible area
                             boolean isOutsideVisibleArea = 
@@ -1333,11 +1336,12 @@ NMiniMap extends MiniMap {
             parentWidget = parentWidget.parent;
         }
 
+        GameUI gui = getparent(GameUI.class);
         for(Coord c : dgext) {
             DisplayGrid dgrid = display[dgext.ri(c)];
             if(dgrid == null)
                 continue;
-            for(DisplayMarker mark : dgrid.markers(true)) {
+            for(DisplayMarker mark : dgrid.markers(true, gui)) {
                 // First check the normal filter (marker config, etc.)
                 if(filter(mark))
                     continue;
@@ -1452,9 +1456,9 @@ NMiniMap extends MiniMap {
                                         
                                         // Обновляем маркер в файле карты
                                         try {
-                                            NGameUI gui = NUtils.getGameUI();
-                                            if(gui != null && gui.mapfile != null && gui.mapfile.view != null && gui.mapfile.view.file != null) {
-                                                gui.mapfile.view.file.update(sm);
+                                            NGameUI ngui = NUtils.getGameUI();
+                                            if(ngui != null && ngui.mapfile != null && ngui.mapfile.view != null && ngui.mapfile.view.file != null) {
+                                                ngui.mapfile.view.file.update(sm);
                                             }
                                         } catch (Exception e) {}
                                         
@@ -2697,12 +2701,13 @@ NMiniMap extends MiniMap {
             int threshold = UI.scale(10);
             
             // Loop through all markers and check if click is near one
+            GameUI guiMarkers = getparent(GameUI.class);
             for(Coord c : dgext) {
                 DisplayGrid dgrid = display[dgext.ri(c)];
                 if(dgrid == null)
                     continue;
                 
-                for(DisplayMarker mark : dgrid.markers(true)) {
+                for(DisplayMarker mark : dgrid.markers(true, guiMarkers)) {
                     if(filter(mark))
                         continue;
                     
@@ -2870,12 +2875,13 @@ NMiniMap extends MiniMap {
             int threshold = UI.scale(10); // Same threshold as fish/tree
 
             // Loop through all markers and check if click is near one
+            GameUI guiClick = getparent(GameUI.class);
             for(Coord c : dgext) {
                 DisplayGrid dgrid = display[dgext.ri(c)];
                 if(dgrid == null)
                     continue;
 
-                for(DisplayMarker mark : dgrid.markers(true)) {
+                for(DisplayMarker mark : dgrid.markers(true, guiClick)) {
                     if(filter(mark))
                         continue;
 

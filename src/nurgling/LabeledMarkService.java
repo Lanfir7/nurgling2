@@ -768,6 +768,9 @@ public class LabeledMarkService implements ProfileAwareService {
         }
     }
 
+    /** Max size for labeled marks JSON to avoid OutOfMemoryError (e.g. corrupted or merged files). */
+    private static final long MAX_LABELED_MARKS_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
+
     /**
      * Load labeled marks from JSON.
      */
@@ -780,7 +783,12 @@ public class LabeledMarkService implements ProfileAwareService {
             
             File file = new File(dataFile);
             if (file.exists()) {
-                StringBuilder contentBuilder = new StringBuilder();
+                long size = file.length();
+                if (size > MAX_LABELED_MARKS_FILE_BYTES) {
+                    System.err.println("LabeledMarkService: Skipping load (file too large: " + size + " bytes, max " + MAX_LABELED_MARKS_FILE_BYTES + ")");
+                    return;
+                }
+                StringBuilder contentBuilder = new StringBuilder((int) Math.min(size + 1024, Integer.MAX_VALUE));
                 try (Stream<String> stream = Files.lines(Paths.get(dataFile), StandardCharsets.UTF_8)) {
                     stream.forEach(s -> contentBuilder.append(s).append("\n"));
                 } catch (IOException e) {

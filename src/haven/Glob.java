@@ -294,7 +294,9 @@ public class Glob {
 			if(curv instanceof Weather) {
 				if(res instanceof Session.CachedRes.Ref) {
 					Session.CachedRes.Ref ref = ((Session.CachedRes.Ref) res);
-					NUtils.getGameUI().calendar.setWeather(ref.resnm());
+					nurgling.NGameUI gui = NUtils.getGameUI();
+					if(gui != null && gui.ui != null && gui.ui.sess == sess && gui.calendar != null)
+						gui.calendar.setWeather(ref.resnm());
 				}
 			    Weather cur = (Weather)curv;
 			    cur.update(args);

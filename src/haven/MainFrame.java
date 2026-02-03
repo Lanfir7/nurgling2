@@ -27,6 +27,7 @@
 package haven;
 
 import nurgling.NConfig;
+import nurgling.UIObserver;
 import nurgling.headless.Headless;
 import nurgling.headless.HeadlessConfig;
 import nurgling.headless.HeadlessMain;
@@ -49,6 +50,9 @@ public class MainFrame extends java.awt.Frame implements Console.Directory {
     boolean fullscreen;
     DisplayMode fsmode = null, prefs = null;
     Coord prefssz = null;
+    
+    // Multi-session manager
+    private final UIObserver uis;
 
     public static void initlocale() {
 	try {
@@ -255,9 +259,18 @@ public class MainFrame extends java.awt.Frame implements Console.Directory {
 	pp.requestFocus();
 	seticon();
 	setVisible(true);
+	
+	// Initialize multi-session manager
+	this.uis = new UIObserver();
+	this.uis.setMainFrame(this);
+	if(p instanceof GLPanel) {
+	    this.uis.setPanel((GLPanel)p);
+	}
+	
 	addWindowListener(new WindowAdapter() {
 		public void windowClosing(WindowEvent e) {
-		    mt.interrupt();
+		    if (mt != null)
+			mt.interrupt();
 		}
 
 		public void windowActivated(WindowEvent e) {
@@ -351,6 +364,37 @@ public class MainFrame extends java.awt.Frame implements Console.Directory {
 	    fun = fun.run(p.newui(fun));
 	}
     }
+    
+    /**
+     * Multi-session UI loop using UIObserver.
+     * Sessions are managed by UIObserver, this just waits for termination.
+     */
+    private void multiSessionLoop() throws InterruptedException {
+	// Initialize session widget
+	uis.initSessionWidget();
+	
+	// Start first session
+	uis.startRunner();
+	
+	// Wait for termination signal
+	while(!Thread.currentThread().isInterrupted()) {
+	    // Update window title based on active session
+	    UI active = uis.active;
+	    String username = uis.getActiveUsername();
+	    int sessionCount = uis.size();
+	    
+	    String title = "Haven & Hearth (Nurgling II)";
+	    if(username != null) {
+		title += " \u2013 " + username;
+	    }
+	    if(sessionCount > 1) {
+		title += " [" + sessionCount + " sessions]";
+	    }
+	    setTitle(title);
+	    
+	    Thread.sleep(500); // Update title periodically
+	}
+    }
 
     private void run(UI.Runner task) {
 	synchronized(this) {
@@ -364,13 +408,17 @@ public class MainFrame extends java.awt.Frame implements Console.Directory {
 	    try {
 		try {
 		    if(task == null) {
-			uiloop();
+			// Use multi-session mode
+			multiSessionLoop();
 		    } else {
+			// Legacy single-task mode
 			while(task != null)
 			    task = task.run(p.newui(task));
 		    }
 		} catch(InterruptedException e) {
 		} finally {
+		    // Terminate all sessions
+		    uis.terminate();
 		    p.newui(null);
 		}
 		savewndstate();
@@ -388,6 +436,32 @@ public class MainFrame extends java.awt.Frame implements Console.Directory {
 		this.mt = null;
 	    }
 	}
+    }
+    
+    /**
+     * Get the UIObserver for multi-session management.
+     */
+    public UIObserver getUIObserver() {
+	return uis;
+    }
+    
+    /**
+     * Open a new game window with its own session (like BeyondSRC: new window = new session).
+     * Each window has its own UIObserver and GLPanel; the new window starts with one new session.
+     */
+    public static void openNewWindow() {
+	Thread t = new HackThread(() -> {
+	    try {
+		MainFrame f = new MainFrame(null);
+		if (initfullscreen.get())
+		    f.setfs();
+		f.run(null);
+	    } catch (Throwable e) {
+		Warning.warn("New window failed: " + e.getMessage());
+	    }
+	}, "Haven New Window");
+	t.setDaemon(false);
+	t.start();
     }
     
     public static final Config.Variable<Boolean> nopreload = Config.Variable.propb("haven.nopreload", false);

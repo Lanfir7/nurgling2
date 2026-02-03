@@ -96,15 +96,54 @@ public class NUI extends UI
     public NUI(Context uictx, Coord sz, Runner fun)
     {
         super(uictx, sz, fun);
-        if (fun != null)
-        {
-            root.add(core = new NCore());
-            bind(core, 7001);
-            core.debug = (Boolean) NConfig.get(NConfig.Key.debug);
-            dataTables = new NDataTables();
+        // Always initialize core - it's needed for multi-session mode
+        // Previously this was only done when fun != null, but in multi-session
+        // mode we create UI with fun=null and set runner later
+        root.add(core = new NCore());
+        bind(core, 7001);
+        core.debug = (Boolean) NConfig.get(NConfig.Key.debug);
+        dataTables = new NDataTables();
 
-            // Load opacity settings from config
-            loadOpacitySettings();
+        // Load opacity settings from config
+        loadOpacitySettings();
+    }
+
+    /**
+     * Override recreateRoot to preserve NCore across session transitions.
+     * NCore is a critical widget that manages game state and should not be destroyed
+     * when switching between login and game sessions.
+     */
+    @Override
+    public void recreateRoot(Coord sz) {
+        // Save reference to core before destroying widgets
+        NCore savedCore = this.core;
+        Integer coreWidgetId = null;
+        if (savedCore != null) {
+            coreWidgetId = rwidgets.get(savedCore);
+            // Temporarily remove core from widget maps so it's not destroyed
+            if (coreWidgetId != null) {
+                widgets.remove(coreWidgetId);
+                rwidgets.remove(savedCore);
+            }
+            // Unlink from parent but don't destroy
+            if (savedCore.parent != null) {
+                savedCore.unlink();
+            }
+        }
+        
+        // Call parent recreateRoot which destroys all other widgets
+        super.recreateRoot(sz);
+        
+        // Restore core to new root
+        if (savedCore != null) {
+            root.add(savedCore);
+            // Re-bind with same or new ID
+            if (coreWidgetId != null) {
+                widgets.put(coreWidgetId, savedCore);
+                rwidgets.put(savedCore, coreWidgetId);
+            } else {
+                bind(savedCore, 7001);
+            }
         }
     }
 

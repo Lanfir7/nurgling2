@@ -1095,8 +1095,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    }
 	}
 	if(s_amblight != null) {
-	    s_amblight.remove();
-	    s_amblight = null;
+	    RenderTree.Slot old = s_amblight;
+	    s_amblight = null; // Clear reference first to avoid double-remove
+	    try {
+	        old.remove();
+	    } catch(RenderTree.SlotRemoved e) {
+	        // Slot already removed during session transition, ignore
+	    }
 	}
 	if(amblight != null)
 	    s_amblight = basic.add(amblight);

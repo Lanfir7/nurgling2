@@ -150,6 +150,12 @@ public abstract class PView extends Widget {
 			    for(Pipe.Op op : dcomb)
 				op.apply(p);
 			});
+		} catch(haven.render.RenderTree.SlotRemoved e) {
+		    if(prev == null)
+			basicstates.remove(id);
+		    else
+			basicstates.put(id, prev);
+		    /* slot removed (e.g. char list switched), skip state update */
 		} catch(RuntimeException e) {
 		    if(prev == null)
 			basicstates.remove(id);
@@ -180,8 +186,18 @@ public abstract class PView extends Widget {
 	    this.curprefs = gprefs;
 	    reconf();
 	}
-	conf.ostate(frame());
-	ticklist.tick(dt);
+	// Skip heavy render-tree update for background sessions (multi-session: save CPU, avoid SlotRemoved)
+	if (ui != null && !ui.isState(UI.State.ACTIVE)) {
+	    if (audio != null)
+		audio.cycle();
+	    return;
+	}
+	try {
+	    conf.ostate(frame());
+	    ticklist.tick(dt);
+	} catch (RenderTree.SlotRemoved e) {
+	    // Slot was removed during switch/teardown; skip this tick
+	}
 	if(audio != null)
 	    audio.cycle();
     }
@@ -328,13 +344,19 @@ public abstract class PView extends Widget {
 	}
 	lights();
 	FColor cc = clearcolor();
-	if(cc != null)
-	    g.out.clear(basic.state(), FragColor.fragcol, cc);
-	g.out.clear(basic.state(), 1.0);
+	try {
+	    if(cc != null)
+		g.out.clear(basic.state(), FragColor.fragcol, cc);
+	    g.out.clear(basic.state(), 1.0);
+	} catch(haven.render.RenderTree.SlotRemoved e) {
+	    // Не прерывать кадр: слот мог обновиться, продолжаем отрисовку без clear (карта/миникарта не должны оставаться пустыми)
+	}
 	ctx.prerender(g.out);
 	try(Locked lk = tree.lock()) {
 	    instancer.commit(g.out);
 	    maindraw(g.out);
+	} catch(haven.render.RenderTree.SlotRemoved e) {
+	    return;
 	}
 	ctx.postrender(g.out);
 	resolve(g);

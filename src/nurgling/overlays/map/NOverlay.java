@@ -44,6 +44,10 @@ public class NOverlay extends MapView.MapRaster
 
     public void tick() {
         super.tick();
+        // Неактивная сессия (BACKGROUND): не обновлять оверлей — рендер не отображается, экономим CPU
+        NGameUI gui = NUtils.getGameUI();
+        if (gui != null && gui.ui != null && !gui.ui.isState(UI.State.ACTIVE))
+            return;
         // ВАЖНО: Проверяем, что area инициализирован перед использованием
         // area инициализируется в super.tick(), но может быть null если NUtils.getGameUI() == null
         if (area == null) {
@@ -54,15 +58,14 @@ public class NOverlay extends MapView.MapRaster
         // Проверяем только локальное скрытие зоны (hide) с учетом тоггла
         if (id >= 0) {
             // ВАЖНО: Проверяем что GameUI доступен перед вызовом getArea()
-            if (NUtils.getGameUI() == null) {
+            if (gui == null) {
                 return;
             }
             NArea zoneArea = NUtils.getArea(id);
             if (zoneArea != null && zoneArea.hide) {
                 // Проверяем тоггл "показывать все зоны" для скрытых зон
-                NGameUI gui = NUtils.getGameUI();
                 boolean showAllZones = false;
-                if (gui != null) {
+                {
                     // Пробуем через mmapw.miniMap (это более надежный способ, так как miniMap точно является NMiniMap)
                     if (gui.mmapw != null && gui.mmapw.miniMap != null && gui.mmapw.miniMap instanceof NMiniMap) {
                         showAllZones = ((NMiniMap) gui.mmapw.miniMap).showAllZonesAlways;
@@ -203,7 +206,7 @@ public class NOverlay extends MapView.MapRaster
         }
         Area curArea = space.area.xl(grid_ul);
         Area fullarea = area.getArea();
-        if (fullarea == null) {
+        if (fullarea == null || fullarea.ul == null || curArea == null || curArea.ul == null) {
             return null;
         }
         for(Coord t : a) {

@@ -199,16 +199,28 @@ public class NUtils
 
     public static Gob player()
     {
-        if(getGameUI()== null || getGameUI().map ==null)
+        return player(getGameUI());
+    }
+
+    /** Player gob for the given session (for macros running in background window). */
+    public static Gob player(NGameUI gui)
+    {
+        if (gui == null || gui.map == null)
             return null;
-        return getGameUI().map.player();
+        return gui.map.player();
     }
 
     public static long playerID()
     {
-        if(getGameUI()== null || getGameUI().map ==null )
+        return playerID(getGameUI());
+    }
+
+    /** Player gob id for the given session (for macros running in background window). */
+    public static long playerID(NGameUI gui)
+    {
+        if (gui == null || gui.map == null)
             return -1;
-        return getGameUI().map.plgob;
+        return gui.map.plgob;
     }
 
     public static double getStamina()
@@ -228,8 +240,12 @@ public class NUtils
     }
 
     public static NEquipory getEquipment(){
-        if ( getGameUI()!=null && getGameUI().equwnd != null ) {
-            for ( Widget w = getGameUI().equwnd.lchild ; w != null ; w = w.prev ) {
+        return getEquipment(getGameUI());
+    }
+
+    public static NEquipory getEquipment(NGameUI gui){
+        if ( gui != null && gui.equwnd != null ) {
+            for ( Widget w = gui.equwnd.lchild ; w != null ; w = w.prev ) {
                 if ( w instanceof Equipory ) {
                     return ( NEquipory ) w;
                 }
@@ -377,6 +393,17 @@ public class NUtils
             return Double.compare(o1.rc.dist(NUtils.getGameUI().map.player().rc),o2.rc.dist(NUtils.getGameUI().map.player().rc));
         }
     };
+
+    /** Distance comparator for the given session's player (for macros in background window). */
+    public static Comparator<Gob> d_comp(NGameUI gui) {
+        if (gui == null || gui.map == null)
+            return d_comp;
+        Gob pl = gui.map.player();
+        if (pl == null)
+            return d_comp;
+        final Coord2d prc = pl.rc;
+        return (o1, o2) -> Double.compare(o1.rc.dist(prc), o2.rc.dist(prc));
+    }
 
     public static Comparator<Gob> y_min_comp = new Comparator<Gob>() {
         @Override
@@ -855,110 +882,89 @@ public class NUtils
         return true;
     }
 
-    public static boolean navigateToArea(NArea area) throws InterruptedException
+    public static boolean navigateToArea(NArea area) throws InterruptedException {
+        return navigateToArea(area, getGameUI());
+    }
+
+    /** Navigate to area using the given session's map/chunk nav (for macros on background window). */
+    public static boolean navigateToArea(NArea area, NGameUI gui) throws InterruptedException
     {
-        if (area == null) return false;
+        if (area == null || gui == null || gui.map == null) return false;
         
         String zoneName = (area.name != null) ? area.name : ("#" + area.id);
         
-        // Check if player is already inside or very close to the area
-        // If yes - no need for global navigation
-        if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
+        if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area, gui)) {
             return true;
         }
         
-        // Area is not reachable by local PF, use chunk navigation
-        // Plan to all 4 corners in parallel and choose the shortest path
-        ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
+        ChunkNavManager chunkNav = (gui.map instanceof NMapView) ? ((NMapView) gui.map).getChunkNavManager() : null;
         if (chunkNav == null) {
-            NUtils.getGameUI().msg("ChunkNav not available for zone '" + zoneName + "'", java.awt.Color.ORANGE);
+            gui.msg("ChunkNav not available for zone '" + zoneName + "'", java.awt.Color.ORANGE);
             return false;
         }
         
         if (!chunkNav.isInitialized()) {
-            NUtils.getGameUI().msg("ChunkNav not initialized for zone '" + zoneName + "'", java.awt.Color.ORANGE);
+            gui.msg("ChunkNav not initialized for zone '" + zoneName + "'", java.awt.Color.ORANGE);
             return false;
         }
         
-        // Force record visible grids before planning to ensure fresh data
         chunkNav.forceRecordVisibleGrids();
         
         ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
-        if (bestPath != null)
-        {
-            return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
+        if (bestPath != null) {
+            return chunkNav.navigateWithPath(bestPath, area, gui).IsSuccess();
         }
-        else
-        {
-            // Path not found - add diagnostic info
-            // Check if area grids are in ChunkNav
-            boolean hasGridsInNav = false;
-            if (area.space != null && area.space.space != null) {
-                for (Long gridId : area.space.space.keySet()) {
-                    if (chunkNav.getGraph().hasChunk(gridId)) {
-                        hasGridsInNav = true;
-                        break;
-                    }
+        boolean hasGridsInNav = false;
+        if (area.space != null && area.space.space != null) {
+            for (Long gridId : area.space.space.keySet()) {
+                if (chunkNav.getGraph().hasChunk(gridId)) {
+                    hasGridsInNav = true;
+                    break;
                 }
             }
-            
-            // Check player location
-            boolean playerLocFound = false;
-            try {
-                Gob player = NUtils.player();
-                if (player != null) {
-                    haven.MCache mcache = NUtils.getGameUI().map.glob.map;
-                    haven.Coord playerTile = player.rc.floor(haven.MCache.tilesz);
-                    haven.MCache.Grid grid = mcache.getgridt(playerTile);
-                    playerLocFound = (grid != null);
-                }
-            } catch (Exception e) {
-                // ignore
-            }
-            
-            String diagMsg = "Can't find path to '" + zoneName + "'. ";
-            if (!playerLocFound) {
-                diagMsg += "Player grid not loaded. ";
-            }
-            if (!hasGridsInNav) {
-                diagMsg += "Zone grids not in ChunkNav. ";
-            }
-            diagMsg += "Try walking closer first.";
-            
-            NUtils.getGameUI().msg(diagMsg, java.awt.Color.ORANGE);
         }
+        boolean playerLocFound = false;
+        try {
+            Gob player = gui.map.player();
+            if (player != null && gui.map.glob != null && gui.map.glob.map != null) {
+                haven.MCache mcache = gui.map.glob.map;
+                haven.Coord playerTile = player.rc.floor(haven.MCache.tilesz);
+                haven.MCache.Grid grid = mcache.getgridt(playerTile);
+                playerLocFound = (grid != null);
+            }
+        } catch (Exception e) { }
+        String diagMsg = "Can't find path to '" + zoneName + "'. ";
+        if (!playerLocFound) diagMsg += "Player grid not loaded. ";
+        if (!hasGridsInNav) diagMsg += "Zone grids not in ChunkNav. ";
+        diagMsg += "Try walking closer first.";
+        gui.msg(diagMsg, java.awt.Color.ORANGE);
         return false;
     }
 
-    public static boolean navigateToArea(Specialisation string) throws InterruptedException
+    public static boolean navigateToArea(Specialisation string) throws InterruptedException {
+        return navigateToArea(string, getGameUI());
+    }
+
+    public static boolean navigateToArea(Specialisation string, NGameUI gui) throws InterruptedException
     {
+        if (gui == null) return false;
         NArea area = NContext.findSpecGlobal(string.toString());
         if (area == null) return false;
         
-        // Check if any corner of the area is reachable via local pathfinding
-        // If yes - we're already close enough, no need to use global navigation
-        if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
+        if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area, gui)) {
             return true;
         }
         
-        // Area is not reachable by local PF, use chunk navigation
-        // Plan to all 4 corners in parallel and choose the shortest path
-        ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
-        if (chunkNav != null && chunkNav.isInitialized())
-        {
+        ChunkNavManager chunkNav = (gui.map instanceof NMapView) ? ((NMapView) gui.map).getChunkNavManager() : null;
+        if (chunkNav != null && chunkNav.isInitialized()) {
             ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
-            if (bestPath != null)
-            {
-                return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
+            if (bestPath != null) {
+                return chunkNav.navigateWithPath(bestPath, area, gui).IsSuccess();
             }
-            else
-            {
-                // Path not found - zone is too far or unexplored
-                String zoneName = (area.name != null) ? area.name : ("#" + area.id);
-                NUtils.getGameUI().msg("Cannot find path to zone '" + zoneName + "'. " +
-                    "The zone may be too far away or the path has not been explored yet. " +
-                    "Try walking closer to the zone first.", java.awt.Color.ORANGE);
-            }
+            String zoneName = (area.name != null) ? area.name : ("#" + area.id);
+            gui.msg("Cannot find path to zone '" + zoneName + "'. " +
+                "The zone may be too far away or the path has not been explored yet. " +
+                "Try walking closer to the zone first.", java.awt.Color.ORANGE);
         }
         return false;
     }

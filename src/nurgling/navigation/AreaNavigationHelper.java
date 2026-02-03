@@ -173,21 +173,25 @@ public class AreaNavigationHelper {
      * 2. Player is inside the area bounds OR within 3 tiles of the area edge
      */
     public static boolean isAreaReachableByLocalPF(NArea area) throws InterruptedException {
-        if (area == null || NUtils.player() == null) return false;
+        return isAreaReachableByLocalPF(area, NUtils.getGameUI());
+    }
+
+    /** Check reachability using the given session's player and map (for macros on background window). */
+    public static boolean isAreaReachableByLocalPF(NArea area, nurgling.NGameUI gui) throws InterruptedException {
+        if (area == null || gui == null || gui.map == null) return false;
+        haven.Gob player = gui.map.player();
+        if (player == null) return false;
         
-        // STAGE 1: Check if grid is loaded in MCache
         if (!area.isVisible()) {
             return false;
         }
         
-        // STAGE 2: Get area coordinates
         Pair<Coord2d, Coord2d> rcArea = area.getRCArea();
         if (rcArea == null) {
             return false;
         }
         
-        // STAGE 3: Check if player is inside or very close to the area
-        Coord2d playerPos = NUtils.player().rc;
+        Coord2d playerPos = player.rc;
         
         // Check if player is inside the area bounds
         if (playerPos.x >= rcArea.a.x && playerPos.x <= rcArea.b.x &&

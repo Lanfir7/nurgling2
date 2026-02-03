@@ -24,6 +24,7 @@ public class WaitPoseOrMsg extends NTask
     public boolean check()
     {
         count++;
+        if (gob == null) return true;
         String cpose = gob.pose();
         String lastMsg = NUtils.getUI().getLastError();
         if((cpose != null && cpose.contains(pose)) )

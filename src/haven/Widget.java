@@ -916,8 +916,8 @@ public class Widget {
 	    for(int i = 0; i < listening.size(); i++) {
 		EventHandler.Listener<?> l = listening.get(i);
 		if(l.h == h) {
-		    listening.remove(i);
-		    return(true);
+		    /* remove by object to avoid IndexOutOfBoundsException when list is modified concurrently */
+		    return(listening.remove(l));
 		}
 	    }
 	}

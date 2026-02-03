@@ -50,7 +50,7 @@ public class CollectTarFromKilns implements Action {
             return Results.ERROR("No zone with Tarkilns specialization found.");
         }
 
-        ArrayList<Gob> barrels = Finder.findGobs(barrelArea, new NAlias("barrel"));
+        ArrayList<Gob> barrels = Finder.findGobs(barrelArea, new NAlias("barrel"), gui);
         ArrayList<Gob> availableBarrels = new ArrayList<>();
         for (Gob b : barrels) {
             if (PathFinder.isAvailable(b)) {
@@ -60,24 +60,24 @@ public class CollectTarFromKilns implements Action {
         if (availableBarrels.isEmpty()) {
             return Results.ERROR("No barrels in Tar barrel zone or none reachable.");
         }
-        availableBarrels.sort(NUtils.d_comp);
+        availableBarrels.sort(NUtils.d_comp(gui));
         Gob barrel = availableBarrels.get(0);
 
         new LiftObject(barrel).run(gui);
-        if (Finder.findLiftedbyPlayer() == null) {
+        if (Finder.findLiftedbyPlayer(gui) == null) {
             return Results.ERROR("Failed to lift barrel.");
         }
 
-        if (!NUtils.navigateToArea(tarkilnArea)) {
+        if (!NUtils.navigateToArea(tarkilnArea, gui)) {
             new FindPlaceAndAction(null, barrelArea).run(gui);
             return Results.ERROR("Cannot navigate to Tarkilns zone.");
         }
 
-        ArrayList<Gob> allKilns = Finder.findGobs(tarkilnArea, new NAlias("gfx/terobjs/tarkiln"));
+        ArrayList<Gob> allKilns = Finder.findGobs(tarkilnArea, new NAlias("gfx/terobjs/tarkiln"), gui);
         List<Gob> kilnsWithTar = allKilns.stream()
                 .filter(g -> g.ngob.getModelAttribute() != -1 && g.ngob.getModelAttribute() != TARKILN_EMPTY_MARKER)
                 .collect(Collectors.toList());
-        kilnsWithTar.sort(NUtils.d_comp);
+        kilnsWithTar.sort(NUtils.d_comp(gui));
 
         for (Gob kiln : kilnsWithTar) {
             if (!PathFinder.isAvailable(kiln)) continue;
@@ -85,13 +85,16 @@ public class CollectTarFromKilns implements Action {
             new CollectFromGob(kiln, "Collect tar", "gfx/borka/bushpickan", new Coord(1, 1), null, true).run(gui);
         }
 
-        if (!NUtils.navigateToArea(barrelArea)) {
+        if (!NUtils.navigateToArea(barrelArea, gui)) {
             return Results.ERROR("Cannot navigate back to Tar barrel zone.");
         }
         new FindPlaceAndAction(null, barrelArea).run(gui);
 
-        Coord2d shift = barrel.rc.sub(NUtils.player().rc).norm().mul(2);
-        new GoTo(NUtils.player().rc.sub(shift)).run(gui);
+        Gob pl = NUtils.player(gui);
+        if (pl != null) {
+            Coord2d shift = barrel.rc.sub(pl.rc).norm().mul(2);
+            new GoTo(pl.rc.sub(shift)).run(gui);
+        }
 
         return Results.SUCCESS();
     }

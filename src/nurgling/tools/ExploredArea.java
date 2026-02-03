@@ -797,7 +797,8 @@ public class ExploredArea {
             }
         } catch (Exception e) {
             // If locking fails, fall back to simple save
-            System.err.println("Error during merge-save, falling back to simple save: " + e.getMessage());
+            String msg = e != null ? e.getMessage() : null;
+            System.err.println("Error during merge-save, falling back to simple save: " + (msg != null ? msg : String.valueOf(e)));
             saveWithoutMerge(filePath);
         }
     }

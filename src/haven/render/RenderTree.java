@@ -724,6 +724,8 @@ public class RenderTree implements RenderList.Adapter, Disposable {
 	    @SuppressWarnings("unchecked")
 	    public <T extends State> T get(State.Slot<T> slot) {
 		DepInfo bk = dstate();
+		if (bk == null)
+		    throw(new SlotRemoved(TreeSlot.this));
 		int idx = slot.id;
 		if((bk.states.length <= idx) || !bk.def[idx])
 		    NUtils.getGameUI().error("Reading undefined slot " + slot + " from slot-pipe");

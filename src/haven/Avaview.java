@@ -217,7 +217,11 @@ public class Avaview extends PView {
 	    }
 	}
 	if(compslot == null) {
-	    compslot = basic.add(comp);
+	    try {
+		compslot = basic.add(comp);
+	    } catch(haven.render.RenderTree.SlotRemoved e) {
+		/* slot removed (e.g. char list switched), skip add this frame */
+	    }
 	}
     }
 

@@ -593,18 +593,16 @@ public class NInventory extends Inventory
         // These are only processed if the timer expired (container didn't close)
         if (!pendingCacheRemovals.isEmpty() && (Boolean) NConfig.get(NConfig.Key.ndbenable)) {
             long currentTick = NUtils.getTickId();
-            java.util.Iterator<PendingCacheRemoval> it = pendingCacheRemovals.iterator();
+            // Iterate over a copy to avoid ConcurrentModificationException if another thread/callback modifies pendingCacheRemovals
+            java.util.List<PendingCacheRemoval> copy = new java.util.ArrayList<>(pendingCacheRemovals);
             int removedCount = 0;
-            while (it.hasNext()) {
-                PendingCacheRemoval pr = it.next();
+            for (PendingCacheRemoval pr : copy) {
                 if (currentTick >= pr.removeAtTick) {
-                    // Timer expired, container didn't close - item was consumed
-                    // Remove from cache (iis) using direct reference
                     if (iis.remove(pr.itemInfo)) {
                         removedCount++;
                         System.out.println("NInventory.tick: Removed consumed item: " + pr.itemInfo.name);
                     }
-                    it.remove();
+                    pendingCacheRemovals.remove(pr);
                 }
             }
             // Schedule search refresh after cache changes

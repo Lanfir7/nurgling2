@@ -206,6 +206,9 @@ public class MiniMap extends Widget
 
     private Locator sesslocator;
     public void tick(double dt) {
+	// Неактивная сессия (BACKGROUND): не обновлять миникарту — рендер не отображается, экономим CPU
+	if (ui != null && !ui.isState(UI.State.ACTIVE))
+	    return;
 	if(setloc != null) {
 	    try {
 		Location loc = resolve(setloc);
@@ -365,17 +368,16 @@ public class MiniMap extends Widget
 	    flagcc = UI.scale(flag.layer(Resource.negc).cc);
 	}
 
-	public DisplayMarker(Marker marker) {
+	public DisplayMarker(Marker marker, GameUI gui) {
 	    this.m = marker;
 	    this.tip = Text.render(m.nm);
 	    if(marker instanceof PMarker)
 		this.hit = Area.sized(flagcc.inv(), UI.scale(flagbg.sz));
-		NGameUI gui = NUtils.getGameUI();
 		if(gui != null && gui.mapfile != null && gui.mapfile.view != null && gui.mapfile.view.sessloc != null) {
 			MiniMap.Location loc = gui.mapfile.view.sessloc;
-			if(gui.questinfo != null && gui.mapfile.playerSegmentId() == marker.seg && marker instanceof SMarker && NParser.checkName(((SMarker)marker).res.name,"small/bush","small/bumling")) {
+			if(gui instanceof nurgling.NGameUI && ((nurgling.NGameUI)gui).questinfo != null && gui.mapfile.playerSegmentId() == marker.seg && marker instanceof SMarker && NParser.checkName(((SMarker)marker).res.name,"small/bush","small/bumling")) {
 				Coord2d tmp = marker.tc.sub(loc.tc).mul(tilesz).add(tilesz.div(2));
-				gui.questinfo.addMarkerCoord(tmp,((SMarker)marker).nm,marker.seg);
+				((nurgling.NGameUI)gui).questinfo.addMarkerCoord(tmp,((SMarker)marker).nm,marker.seg);
 			}
 		}
 	}
@@ -493,14 +495,14 @@ public class MiniMap extends Widget
 
 	private Collection<DisplayMarker> markers = Collections.emptyList();
 	private int markerseq = -1;
-	public Collection<DisplayMarker> markers(boolean remark) {
+	public Collection<DisplayMarker> markers(boolean remark, GameUI gui) {
 	    if(remark && (markerseq != file.markerseq)) {
 		if(file.lock.readLock().tryLock()) {
 		    try {
 			ArrayList<DisplayMarker> marks = new ArrayList<>();
 			for(Marker mark : file.markers) {
 			    if((mark.seg == this.seg.id) && mapext.contains(mark.tc))
-				marks.add(new DisplayMarker(mark));
+				marks.add(new DisplayMarker(mark, gui));
 			}
 			marks.trimToSize();
 			markers = (marks.size() == 0) ? Collections.emptyList() : marks;
@@ -591,11 +593,12 @@ public class MiniMap extends Widget
 
     public void drawmarkers(GOut g) {
 	Coord hsz = sz.div(2);
+	GameUI gui = getparent(GameUI.class);
 	for(Coord c : dgext) {
 	    DisplayGrid dgrid = display[dgext.ri(c)];
 	    if(dgrid == null)
 		continue;
-	    for(DisplayMarker mark : dgrid.markers(true)) {
+	    for(DisplayMarker mark : dgrid.markers(true, gui)) {
 		if(filter(mark))
 		    continue;
 		mark.draw(g, mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz));
@@ -607,9 +610,9 @@ public class MiniMap extends Widget
 	if((ui.sess == null) || (iconconf == null))
 	    return(Collections.emptyList());
 	Map<GobIcon, DisplayIcon> pmap = Collections.emptyMap();
-	if(prev != null) {
+	if(prev != null && !prev.isEmpty()) {
 	    pmap = new HashMap<>();
-	    for(DisplayIcon disp : prev)
+	    for(DisplayIcon disp : new ArrayList<>(prev))
 		pmap.put(disp.attr, disp);
 	}
 	List<DisplayIcon> ret = new ArrayList<>();
@@ -698,6 +701,8 @@ public class MiniMap extends Widget
     public void draw(GOut g) {
 	Location loc = this.curloc;
 	if(loc == null)
+	    loc = this.sessloc;
+	if(loc == null)
 	    return;
 	redisplay(loc);
 	remparty();
@@ -743,10 +748,11 @@ public class MiniMap extends Widget
     }
 
     public DisplayMarker findmarker(Marker rm) {
+	GameUI gui = getparent(GameUI.class);
 	for(DisplayGrid dgrid : display) {
 	    if(dgrid == null)
 		continue;
-	    for(DisplayMarker mark : dgrid.markers(false)) {
+	    for(DisplayMarker mark : dgrid.markers(false, gui)) {
 		if(mark.m == rm)
 		    return(mark);
 	    }
@@ -755,10 +761,11 @@ public class MiniMap extends Widget
     }
 
     public DisplayMarker markerat(Coord tc) {
+	GameUI gui = getparent(GameUI.class);
 	for(DisplayGrid dgrid : display) {
 	    if(dgrid == null)
 		continue;
-	    for(DisplayMarker mark : dgrid.markers(false)) {
+	    for(DisplayMarker mark : dgrid.markers(false, gui)) {
 		if((mark.hit != null) && mark.hit.contains(tc.sub(mark.m.tc).div(scalef())) && !filter(mark))
 		    return(mark);
 	    }

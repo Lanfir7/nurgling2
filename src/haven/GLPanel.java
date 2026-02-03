@@ -54,6 +54,8 @@ public interface GLPanel extends UIPanel, UI.Context {
 	protected UI lockedui, ui;
 	private final Dispatcher ed;
 	private final Object uilock = new Object();
+	/** Thread that runs the render loop; used to avoid deadlock when changeui() is called from it */
+	private volatile Thread loopThread = null;
 
 	public Loop(GLPanel p) {
 	    this.p = p;
@@ -313,6 +315,7 @@ public interface GLPanel extends UIPanel, UI.Context {
 	}
 
 	public void run() throws InterruptedException {
+	    loopThread = Thread.currentThread();
 	    GLRender buf = null;
 	    try {
 		double then = Utils.rtime();
@@ -360,27 +363,32 @@ public interface GLPanel extends UIPanel, UI.Context {
 		    }
 
 		    int cfno = frameno++;
-		    synchronized(ui) {
-			CPUProfile.phase(curf, "dsp");
-			ed.dispatch(ui);
-			ui.mousehover(ui.mc);
+		    // Hold contextLock so getInstance() is stable for this frame (no flicker / wrong brightness from background ticks)
+		    synchronized(UI.contextLock) {
+			if(ui instanceof NUI)
+			    UI.setInstance((NUI)ui);
+			synchronized(ui) {
+			    CPUProfile.phase(curf, "dsp");
+			    ed.dispatch(ui);
+			    ui.mousehover(ui.mc);
 
-			CPUProfile.phase(curf, "stick");
-			if(ui.sess != null) {
-			    ui.sess.glob.ctick();
+			    CPUProfile.phase(curf, "stick");
+			    if(ui.sess != null) {
+				ui.sess.glob.ctick();
+				// Всегда вызываем gtick, но он может быть пустым если рендеринг отключен
+				ui.sess.glob.gtick(buf);
+			    }
+			    CPUProfile.phase(curf, "tick");
+			    ui.tick();
 			    // Всегда вызываем gtick, но он может быть пустым если рендеринг отключен
-			    ui.sess.glob.gtick(buf);
-			}
-			CPUProfile.phase(curf, "tick");
-			ui.tick();
-			// Всегда вызываем gtick, но он может быть пустым если рендеринг отключен
-			ui.gtick(buf);
-			Area shape = p.shape();
-			if((ui.root.sz.x != (shape.br.x - shape.ul.x)) || (ui.root.sz.y != (shape.br.y - shape.ul.y)))
-			    ui.root.resize(new Coord(shape.br.x - shape.ul.x, shape.br.y - shape.ul.y));
-			if(!renderDisabled) {
-			    buf.submit(new ProfilePart(rprofc, "draw"));
-			    if(curgf != null) curgf.part(buf, "draw");
+			    ui.gtick(buf);
+			    Area shape = p.shape();
+			    if((ui.root.sz.x != (shape.br.x - shape.ul.x)) || (ui.root.sz.y != (shape.br.y - shape.ul.y)))
+				ui.root.resize(new Coord(shape.br.x - shape.ul.x, shape.br.y - shape.ul.y));
+			    if(!renderDisabled) {
+				buf.submit(new ProfilePart(rprofc, "draw"));
+				if(curgf != null) curgf.part(buf, "draw");
+			    }
 			}
 		    }
 
@@ -513,6 +521,48 @@ public interface GLPanel extends UIPanel, UI.Context {
 		}
 	    }
 	    return(newui);
+	}
+
+	/**
+	 * Change the active UI for rendering without destroying the previous one.
+	 * Used by UIObserver for multi-session support.
+	 * @param newui The UI to switch to (can be null to clear)
+	 */
+	public void changeui(UI newui) {
+	    synchronized(uilock) {
+		UI prevui = this.ui;
+		ui = newui;
+		if(newui != null) {
+		    newui.env = p.env();
+		    newui.root.guprof = uprof;
+		    newui.root.grprof = rprof;
+		    newui.root.ggprof = gprof;
+		    // Update global UI reference
+		    if(newui instanceof NUI) {
+			UI.ui = (NUI) newui;
+		    }
+		}
+		// If changeui was invoked from the GL loop thread (e.g. deferred setActiveUI processed in ui.tick()),
+		// do not wait: we would deadlock since lockedui is cleared only when the loop iteration ends.
+		if (Thread.currentThread() == loopThread)
+		    return;
+		// Wait for current frame to finish with old UI
+		while((this.lockedui != null) && (this.lockedui == prevui)) {
+		    try {
+			uilock.wait();
+		    } catch(InterruptedException e) {
+			Thread.currentThread().interrupt();
+			break;
+		    }
+		}
+	    }
+	}
+
+	/**
+	 * Get the current UI being rendered.
+	 */
+	public UI getUI() {
+	    return ui;
 	}
 
 	private Map<String, Console.Command> cmdmap = new TreeMap<String, Console.Command>();

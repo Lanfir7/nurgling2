@@ -54,6 +54,13 @@ public class LWJGLPanel extends AWTGLCanvas implements GLPanel, Console.Director
     private final Loop main = new Loop(this);
     private static final Set<LWJGLPanel> activePanels = Collections.synchronizedSet(new HashSet<>());
     private static boolean shutdownHookRegistered = false;
+    
+    /**
+     * Get the render loop for multi-session UI switching.
+     */
+    public Loop getLoop() {
+        return main;
+    }
 
     public LWJGLPanel() {
 	super();

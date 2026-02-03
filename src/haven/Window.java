@@ -659,9 +659,10 @@ public class Window extends Widget {
 		    super.hide();
 		} else if(animst == "dest") {
 		    destroy();
-		} else {
+		} else if(animst != null) {
 		    throw(new AssertionError(animst));
 		}
+		/* animst == null: race with hide/destroy, just clear */
 		anim = null;
 		animst = null;
 	    }

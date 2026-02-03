@@ -45,6 +45,13 @@ public class JOGLPanel extends GLCanvas implements GLPanel, Console.Directory {
     private Area shape;
     private Pipe base, wnd;
     private final Loop main = new Loop(this);
+    
+    /**
+     * Get the render loop for multi-session UI switching.
+     */
+    public Loop getLoop() {
+        return main;
+    }
 
     public static class ProfileException extends Environment.UnavailableException {
 	public final String availability;
@@ -140,6 +147,9 @@ public class JOGLPanel extends GLCanvas implements GLPanel, Console.Directory {
 	this.env = env;
 	if(main.ui != null)
 	    main.ui.env = env;
+	synchronized(this) {
+	    notifyAll();
+	}
 
 	if(errh != null) {
 	    GLEnvironment.Caps caps = env.caps();
@@ -220,8 +230,9 @@ public class JOGLPanel extends GLCanvas implements GLPanel, Console.Directory {
 	try {
 	    uglyjoglhack();
 	    synchronized(this) {
-		if(env == null)
-		    throw(new RuntimeException("Did not get GL environment even after display"));
+		while(env == null) {
+		    try { wait(50); } catch(InterruptedException e) { return; }
+		}
 		notifyAll();
 	    }
 	    while(true) {

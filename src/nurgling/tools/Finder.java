@@ -62,16 +62,32 @@ public class Finder
         return findGobs(space,name);
     }
 
+    /** Same as findGobs(space, name) but uses the given session's object cache (for macros in background window). */
+    public static ArrayList<Gob> findGobs(NArea area, NAlias name, NGameUI gui) throws InterruptedException
+    {
+        if (gui == null) return findGobs(area, name);
+        Pair<Coord2d,Coord2d> space = area.getRCArea();
+        return findGobs(space, name, gui);
+    }
+
     public static ArrayList<Gob> findGobs(Pair<Coord2d,Coord2d> space, NAlias name) throws InterruptedException
     {
+        return findGobs(space, name, NUtils.getGameUI());
+    }
+
+    public static ArrayList<Gob> findGobs(Pair<Coord2d,Coord2d> space, NAlias name, NGameUI gui) throws InterruptedException
+    {
         ArrayList<Gob> result = new ArrayList<> ();
-        synchronized ( NUtils.getGameUI().ui.sess.glob.oc ) {
-            for ( Gob gob : NUtils.getGameUI().ui.sess.glob.oc ) {
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null)
+            return result;
+        synchronized ( gui.ui.sess.glob.oc ) {
+            for ( Gob gob : gui.ui.sess.glob.oc ) {
                 if (!(gob instanceof OCache.Virtual) && space!=null)
                 {
                     if (gob.rc.x >= space.a.x && gob.rc.y >= space.a.y && gob.rc.x <= space.b.x && gob.rc.y <= space.b.y)
                     {
-                        if ((name == null && gob.id!=NUtils.playerID()) || NParser.isIt(gob, name))
+                        long pid = NUtils.playerID(gui);
+                        if ((name == null && gob.id != pid) || NParser.isIt(gob, name))
                         {
                             result.add(gob);
                         }
@@ -162,10 +178,17 @@ public class Finder
 
     public static ArrayList<Gob> findGobs(NArea area, NAlias name, int mattr) throws InterruptedException
     {
+        return findGobs(area, name, mattr, NUtils.getGameUI());
+    }
+
+    /** Same but uses the given session's object cache (for macros in background window). */
+    public static ArrayList<Gob> findGobs(NArea area, NAlias name, int mattr, NGameUI gui) throws InterruptedException
+    {
+        if (gui == null) return findGobs(area, name, mattr);
         Pair<Coord2d,Coord2d> space = area.getRCArea();
         ArrayList<Gob> result = new ArrayList<> ();
-        synchronized ( NUtils.getGameUI().ui.sess.glob.oc ) {
-            for ( Gob gob : NUtils.getGameUI().ui.sess.glob.oc ) {
+        synchronized ( gui.ui.sess.glob.oc ) {
+            for ( Gob gob : gui.ui.sess.glob.oc ) {
                 if (!(gob instanceof OCache.Virtual))
                 {
                     if (gob.rc.x >= space.a.x && gob.rc.y >= space.a.y && gob.rc.x <= space.b.x && gob.rc.y <= space.b.y)
@@ -435,13 +458,18 @@ public class Finder
 
 
     public static Gob findLiftedbyPlayer() {
+        return findLiftedbyPlayer(NUtils.getGameUI());
+    }
+
+    /** Same but uses the given session (for macros in background window). */
+    public static Gob findLiftedbyPlayer(NGameUI gui) {
+        if (gui == null) return findLiftedbyPlayer();
         long plid;
         Following fl;
-        if ((plid = NUtils.playerID()) != -1) {
-            synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
-                for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+        if ((plid = NUtils.playerID(gui)) != -1 && gui.ui != null && gui.ui.sess != null && gui.ui.sess.glob != null) {
+            synchronized (gui.ui.sess.glob.oc) {
+                for (Gob gob : gui.ui.sess.glob.oc) {
                     if ((fl = gob.getattr(Following.class)) != null) {
-
                         if (fl.tgt == plid) {
                             return gob;
                         }

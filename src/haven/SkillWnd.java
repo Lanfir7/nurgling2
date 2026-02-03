@@ -178,15 +178,20 @@ public class SkillWnd extends Widget {
 	}
 
 	private void sksort(List<Skill> skills) {
-	    for(Skill sk : skills) {
-		try {
-		    sk.sortkey = sk.res.get().flayer(Resource.tooltip).text();
-		} catch(Loading l) {
-		    sk.sortkey = sk.nm;
-		    loading = true;
+	    synchronized (skills) {
+		List<Skill> copy = new ArrayList<>(skills);
+		for (Skill sk : copy) {
+		    try {
+			sk.sortkey = sk.res.get().flayer(Resource.tooltip).text();
+		    } catch (Loading l) {
+			sk.sortkey = sk.nm;
+			loading = true;
+		    }
 		}
+		Collections.sort(copy, (a, b) -> a.sortkey.compareTo(b.sortkey));
+		skills.clear();
+		skills.addAll(copy);
 	    }
-	    Collections.sort(skills, (a, b) -> a.sortkey.compareTo(b.sortkey));
 	}
 
 	public void tick(double dt) {

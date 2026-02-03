@@ -194,6 +194,8 @@ public class NCharacterInfo extends Widget {
 
     private double calcFEPsize(CharWnd charWnd)
     {
+        if (charWnd == null || charWnd.battr == null || charWnd.battr.feps == null || charWnd.battr.feps.els == null)
+            return 0;
         double len = 0;
         for (BAttrWnd.FoodMeter.El el : charWnd.battr.feps.els){
             len+=el.a;

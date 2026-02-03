@@ -25,6 +25,7 @@ public class EquipmentStatsWidget extends Widget {
     }
     
     public void updateStatsFromItems(WItem[] items) {
+        synchronized (this) {
         attributeMap.clear();
         totalStats.clear();
         sortedStats.clear();
@@ -126,9 +127,11 @@ public class EquipmentStatsWidget extends Widget {
         sortedStats.sort((a, b) -> Double.compare(Math.abs(b.getValue()), Math.abs(a.getValue())));
         
         needUpdate = true;
+        }
     }
     
     public void updateStatsFromPreset(Map<Integer, String> slotConfig) {
+        synchronized (this) {
         attributeMap.clear();
         totalStats.clear();
         sortedStats.clear();
@@ -225,6 +228,7 @@ public class EquipmentStatsWidget extends Widget {
         sortedStats.sort((a, b) -> Double.compare(Math.abs(b.getValue()), Math.abs(a.getValue())));
         
         needUpdate = true;
+        }
     }
     
     @Override
@@ -274,19 +278,24 @@ public class EquipmentStatsWidget extends Widget {
     }
     
     private void renderStats() {
-        if (sortedStats.isEmpty()) {
-            // Show message when no stats available
-            Text.Line emptyMsg = Text.render("Нет характеристик", new Color(150, 150, 150));
-            statsTex = new TexI(emptyMsg.img);
-            return;
+        List<Map.Entry<String, Double>> statsCopy;
+        Map<String, Attribute> attrCopy;
+        synchronized (this) {
+            if (sortedStats.isEmpty()) {
+                Text.Line emptyMsg = Text.render("Нет характеристик", new Color(150, 150, 150));
+                statsTex = new TexI(emptyMsg.img);
+                return;
+            }
+            statsCopy = new ArrayList<>(sortedStats);
+            attrCopy = new HashMap<>(attributeMap);
         }
         
         // Use AttrMod.modimg style rendering with icons
         Collection<Mod> mods = new ArrayList<>();
-        for (Map.Entry<String, Double> entry : sortedStats) {
+        for (Map.Entry<String, Double> entry : statsCopy) {
             String attrName = entry.getKey();
             double value = entry.getValue();
-            Attribute attr = attributeMap.get(attrName);
+            Attribute attr = attrCopy.get(attrName);
             if (attr != null) {
                 mods.add(new Mod(attr, value));
             }

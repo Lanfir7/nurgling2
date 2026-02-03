@@ -742,7 +742,9 @@ public class MCache implements MapSource {
 			Cut cut = geticut(cc);
 			if (!cut.nols.containsKey(id) || requpd)
 			{
-				NOverlay nol = NUtils.getGameUI().map.nols.get(id);
+				NOverlay nol = NUtils.getGameUI() != null ? NUtils.getGameUI().map.nols.get(id) : null;
+				if (nol == null)
+					return null;
 				cut.nols.put(id, nol.makenol(getcut(cc), this.id, ul));
 				cut.nedgs.put(id, nol.makenolol(getcut(cc),this.id, ul));
 				nol.cuts.add(cut);
