@@ -1,15 +1,16 @@
 package nurgling;
 
 import haven.*;
-import haven.Button;
-import haven.Label;
-import haven.Window;
-import haven.res.ui.rbuff.*;
+import haven.res.ui.rbuff.RealmBuff;
 import haven.res.ui.relcnt.RelCont;
-import nurgling.conf.*;
-import nurgling.notifications.*;
+import nurgling.conf.IconRingConfig;
+import nurgling.conf.NDiscordNotification;
+import nurgling.conf.NToolBeltProp;
+import nurgling.notifications.DiscordHookObject;
 import nurgling.overlays.QualityOl;
-import nurgling.tools.*;
+import nurgling.tools.NAlias;
+import nurgling.tools.NParser;
+import nurgling.tools.NSearchItem;
 import nurgling.widgets.*;
 import nurgling.widgets.SwimmingStatusBuff;
 import nurgling.widgets.TrackingStatusBuff;
@@ -27,7 +28,6 @@ import static haven.MCache.cmaps;
 
 import java.awt.event.KeyEvent;
 import java.util.*;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -168,6 +168,15 @@ public class NGameUI extends GameUI
 
     public void setPendingRefillGob(MapView.ClickedGob g) { this.pendingRefillGob = g; }
 
+    public static float worldSpeed;
+    public static final float DEFAULT_WORLD_SPEED = 3.29f;
+    private static final Map<String, Float> WORLD_SPEED_MAP = new HashMap<>();
+
+    private void initWorldSpeedMap() {
+        WORLD_SPEED_MAP.put("b7c199a4557503a8", 4.93f); // W16.1
+        WORLD_SPEED_MAP.put("c646473983afec09", DEFAULT_WORLD_SPEED); // W16
+    }
+
     /**
      * Gets the genus (world identifier) for this game instance
      */
@@ -235,6 +244,11 @@ public class NGameUI extends GameUI
         iconRingConfig = new IconRingConfig(genus);
 
         add(new NDraggableWidget(botsMenu = new NBotsMenu(), "botsmenu", botsMenu.sz.add(NDraggableWidget.delta)));
+
+        // Initialize world speed
+        initWorldSpeedMap();
+        Float actualWorldSpeed = WORLD_SPEED_MAP.get(genus);
+        worldSpeed = Objects.requireNonNullElse(actualWorldSpeed, DEFAULT_WORLD_SPEED);
     }
     
     /**
@@ -499,6 +513,12 @@ public class NGameUI extends GameUI
         }
         if(nurgling.NUtils.getUI().core!=null)
             NUtils.getUI().core.dispose();
+        // Shutdown ChunkNav to prevent thread accumulation on game restart
+        if(map instanceof NMapView) {
+            NMapView nmapView = (NMapView) map;
+            if(nmapView.getChunkNavManager() != null)
+                nmapView.getChunkNavManager().shutdown();
+        }
         super.dispose();
     }
 

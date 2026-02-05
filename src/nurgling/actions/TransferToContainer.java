@@ -57,7 +57,6 @@ public class TransferToContainer implements Action
             pf.run(gui);
             witems = getMatchingItems(gui);
 
-            // РџСЂРѕРІРµСЂСЏРµРј РіРѕС‚РѕРІРЅРѕСЃС‚СЊ РґР°РЅРЅС‹С… Рё Р»РѕРіРёСЂСѓРµРј РїРµСЂРµРґ РЅР°С‡Р°Р»РѕРј
             for (WItem witem : witems)
             {
                 if (NGItem.validateItem(witem))
@@ -111,7 +110,6 @@ public class TransferToContainer implements Action
             {
                 if (!witems.isEmpty())
                 {
-                    // РџРѕР»СѓС‡Р°РµРј РЅР°С‡Р°Р»СЊРЅС‹Р№ СЃРїРёСЃРѕРє РґРѕСЃС‚СѓРїРЅС‹С… РїСЂРµРґРјРµС‚РѕРІ
                     ArrayList<WItem> availableItems = new ArrayList<>();
                     for (WItem witem : witems)
                     {
@@ -126,10 +124,8 @@ public class TransferToContainer implements Action
                         return Results.SUCCESS();
                     }
 
-                    // РћРїСЂРµРґРµР»СЏРµРј СЌС‚Р°Рї СЂР°Р±РѕС‚С‹ Рё СЃРѕСЂС‚РёСЂСѓРµРј РїСЂРµРґРјРµС‚С‹ РїРѕ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РµРјСѓ РїСЂРёРѕСЂРёС‚РµС‚Сѓ
                     String itemName = ((NGItem) availableItems.get(0).item).name();
 
-                    // РџСЂРѕРІРµСЂСЏРµРј, РµСЃС‚СЊ Р»Рё РІ С†РµР»РµРІРѕРј РёРЅРІРµРЅС‚Р°СЂРµ С†РµР»Рё РґР»СЏ Р·Р°РїРѕР»РЅРµРЅРёСЏ
                     boolean hasTargetsToFill = (gui.getInventory(container.cap).findNotStack(itemName) != null || gui.getInventory(container.cap).findNotFullStack(itemName) != null);
 
                     if (hasTargetsToFill)
@@ -140,8 +136,7 @@ public class TransferToContainer implements Action
                         availableItems = sortItemsByPriority(availableItems, itemName, true); // Р­С‚Р°Рї РїРµСЂРµРЅРѕСЃР°
                     }
 
-                    // Р”Р»СЏ Р·Р°РїРѕР»РЅРµРЅРёСЏ СЃС‚Р°РєРѕРІ РїСЂРѕРґРѕР»Р¶Р°РµРј РїРѕРєР° РµСЃС‚СЊ РґРѕСЃС‚СѓРїРЅС‹Рµ РїСЂРµРґРјРµС‚С‹ Рё С†РµР»Рё РґР»СЏ Р·Р°РїРѕР»РЅРµРЅРёСЏ
-                    transfer_size = availableItems.size(); // РџРµСЂРµРЅРѕСЃРёРј РІСЃРµ РґРѕСЃС‚СѓРїРЅС‹Рµ РїСЂРµРґРјРµС‚С‹
+                    transfer_size = availableItems.size();
 
                     // Check ItemCount updater first (new system)
                     if (container.getattr(Container.ItemCount.class) != null)
@@ -221,7 +216,6 @@ public class TransferToContainer implements Action
                     {
                         WItem currentItem = availableItems.get(0);
 
-                        // РџСЂРѕРІРµСЂСЏРµРј С‡С‚Рѕ РїСЂРµРґРјРµС‚ РІСЃС‘ РµС‰С‘ РІР°Р»РёРґРµРЅ
                         if (!NGItem.validateItem(currentItem))
                         {
                             availableItems.remove(0);
@@ -238,7 +232,6 @@ public class TransferToContainer implements Action
                         {
                             transferred += itemsTransferred;
 
-                            // РЈРґР°Р»СЏРµРј РёСЃРїРѕР»СЊР·РѕРІР°РЅРЅС‹Р№ РїСЂРµРґРјРµС‚ РёР· СЃРїРёСЃРєР°
                             availableItems.remove(currentItem);
                         }
                         else
@@ -246,10 +239,8 @@ public class TransferToContainer implements Action
                             break;
                         }
 
-                        // РћР±РЅРѕРІР»СЏРµРј РѕР±С‰РёР№ СЃРїРёСЃРѕРє РїСЂРµРґРјРµС‚РѕРІ РїРѕСЃР»Рµ РєР°Р¶РґРѕРіРѕ РїРµСЂРµРЅРѕСЃР°
                         witems = getMatchingItems(gui);
 
-                        // РџРѕР»РЅРѕСЃС‚СЊСЋ РѕР±РЅРѕРІР»СЏРµРј availableItems РІРјРµСЃС‚Рѕ С„РёР»СЊС‚СЂР°С†РёРё, С‚Р°Рє РєР°Рє РЅРѕРІС‹Рµ РїСЂРµРґРјРµС‚С‹ РјРѕРіСѓС‚ РїРѕСЏРІРёС‚СЊСЃСЏ
                         availableItems.clear();
                         for (WItem witem : witems)
                         {
@@ -259,10 +250,8 @@ public class TransferToContainer implements Action
                             }
                         }
 
-                        // РџРµСЂРµСЃРѕСЂС‚РёСЂСѓРµРј РїРѕ РїСЂРёРѕСЂРёС‚РµС‚Сѓ СЃ СѓС‡РµС‚РѕРј С‚РµРєСѓС‰РµРіРѕ СЌС‚Р°РїР°
                         if (!availableItems.isEmpty())
                         {
-                            // РџСЂРѕРІРµСЂСЏРµРј СЌС‚Р°Рї РµС‰Рµ СЂР°Р· РїРѕСЃР»Рµ РѕР±РЅРѕРІР»РµРЅРёСЏ
                             boolean hasTargetsToFillRefresh = (gui.getInventory(container.cap).findNotStack(itemName) != null || gui.getInventory(container.cap).findNotFullStack(itemName) != null);
 
                             if (hasTargetsToFillRefresh)
@@ -291,13 +280,6 @@ public class TransferToContainer implements Action
         return transfer_size;
     }
 
-    /**
-     * РЎРѕСЂС‚РёСЂСѓРµРј РїСЂРµРґРјРµС‚С‹ РїРѕ РїСЂРёРѕСЂРёС‚РµС‚Сѓ РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ СЌС‚Р°РїР°
-     *
-     * @param items         СЃРїРёСЃРѕРє РїСЂРµРґРјРµС‚РѕРІ
-     * @param itemName      РёРјСЏ РїСЂРµРґРјРµС‚Р°
-     * @param transferStage true - СЌС‚Р°Рї РїРµСЂРµРЅРѕСЃР° (РїСЂРёРѕСЂРёС‚РµС‚ РїРѕР»РЅС‹Рј СЃС‚Р°РєР°Рј), false - СЌС‚Р°Рї Р·Р°РїРѕР»РЅРµРЅРёСЏ
-     */
     private static ArrayList<WItem> sortItemsByPriority(ArrayList<WItem> items, String itemName, boolean transferStage)
     {
         ArrayList<WItem> notFullStacks = new ArrayList<>();
@@ -329,21 +311,36 @@ public class TransferToContainer implements Action
 
         if (transferStage)
         {
-            // Р­РўРђРџ 2: РџРµСЂРµРЅРѕСЃ РІ РЅРѕРІС‹Рµ СЃР»РѕС‚С‹ - РїСЂРёРѕСЂРёС‚РµС‚ РїРѕР»РЅС‹Рј СЃС‚Р°РєР°Рј
-            result.addAll(fullStacks);     // 1. РџРѕР»РЅС‹Рµ СЃС‚Р°РєРё
-            result.addAll(notFullStacks);  // 2. РќРµРїРѕР»РЅС‹Рµ СЃС‚Р°РєРё
-            result.addAll(singleItems);    // 3. РћС‚РґРµР»СЊРЅС‹Рµ РїСЂРµРґРјРµС‚С‹
+            result.addAll(fullStacks);
+            result.addAll(notFullStacks);
+            result.addAll(singleItems);
         } else
         {
-            // Р­РўРђРџ 1: Р—Р°РїРѕР»РЅРµРЅРёРµ С†РµР»РµРІС‹С… СЃС‚Р°РєРѕРІ - РїСЂРёРѕСЂРёС‚РµС‚ РЅРµРїРѕР»РЅС‹Рј СЃС‚Р°РєР°Рј
-            result.addAll(notFullStacks);  // 1. РќРµРїРѕР»РЅС‹Рµ СЃС‚Р°РєРё
-            result.addAll(singleItems);    // 2. РћС‚РґРµР»СЊРЅС‹Рµ РїСЂРµРґРјРµС‚С‹
-            result.addAll(fullStacks);     // 3. РџРѕР»РЅС‹Рµ СЃС‚Р°РєРё
+            result.addAll(notFullStacks);
+            result.addAll(singleItems);
+            result.addAll(fullStacks);
         }
 
         return result;
     }
 
+
+    /**
+     * Ждёт освобождения руки. Если таймаут — возвращает предмет в основной инвентарь.
+     * @return true если рука освободилась, false если таймаут (предмет возвращён)
+     */
+    private static boolean waitFreeHandOrReturn() throws InterruptedException
+    {
+        WaitFreeHand wfh = new WaitFreeHand();
+        NUtils.addTask(wfh);
+        if (wfh.criticalExit)
+        {
+            NUtils.dropToInv();
+            NUtils.addTask(new WaitFreeHand());
+            return false;
+        }
+        return true;
+    }
 
     public static int transfer(WItem item, NInventory targetInv, int transfer_size) throws InterruptedException
     {
@@ -383,7 +380,7 @@ public class TransferToContainer implements Action
                 {
                     NUtils.addTask(new StackSizeChanged(sourceStack, originalStackSize));
                 }
-                return 1; // РџРµСЂРµРЅРѕСЃРёРј 1 РїСЂРµРґРјРµС‚ РёР· СЃС‚Р°РєР°
+                return 1;
             } else
             {
                 int id = item.item.wdgid();
@@ -397,32 +394,28 @@ public class TransferToContainer implements Action
                         return NUtils.getUI().getwidget(id)==null || (targetInv.calcFreeSpace() == 0 && count++>200);
                     }
                 });
-                return 1; // РџРµСЂРµРЅРѕСЃРёРј 1 РѕРґРёРЅРѕС‡РЅС‹Р№ РїСЂРµРґРјРµС‚
+                return 1;
             }
         }
         else
         {
-            // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј СЃС‚Р°РєСѓРµРјС‹Рµ РїСЂРµРґРјРµС‚С‹ СЃ РїСЂРёРѕСЂРёС‚РµС‚РѕРј РЅР° Р·Р°РїРѕР»РЅРµРЅРёРµ РЅРµ РїРѕР»РЅС‹С… СЃС‚Р°РєРѕРІ
-            // РџСЂРѕРІРµСЂСЏРµРј, СЏРІР»СЏРµС‚СЃСЏ Р»Рё РїСЂРµРґРјРµС‚ РёР·РЅР°С‡Р°Р»СЊРЅРѕ С‡Р°СЃС‚СЊСЋ ItemStack
             if (item.parent instanceof ItemStack)
             {
                 ItemStack sourceStack = (ItemStack) item.parent;
                 int sourceStackSize = sourceStack.wmap.size();
 
-                // РџСЂРёРѕСЂРёС‚РµС‚ С†РµР»РµР№: РѕРґРёРЅРѕС‡РЅС‹Рµ РїСЂРµРґРјРµС‚С‹, Р·Р°С‚РµРј Р·Р°РїРѕР»РЅСЏРµРјС‹Рµ СЃС‚Р°РєРё, Р·Р°С‚РµРј РЅРѕРІС‹Рµ СЃР»РѕС‚С‹
                 WItem targetSingleItem = targetInv.findNotStack(itemName);
                 ItemStack targetNotFullStack = targetInv.findNotFullStack(itemName);
 
                 if (targetSingleItem != null)
                 {
-                    // РЎРѕС…СЂР°РЅСЏРµРј РёСЃС…РѕРґРЅС‹Р№ СЂР°Р·РјРµСЂ СЃС‚РµРєР° Р”Рћ РІР·СЏС‚РёСЏ РїСЂРµРґРјРµС‚Р°
                     int originalStackSize = sourceStack.wmap.size();
 
                     NUtils.takeItemToHand(item);
                     NUtils.itemact(targetSingleItem);
-                    NUtils.addTask(new WaitFreeHand());
+                    if (!waitFreeHandOrReturn())
+                        return 0;
 
-                    // Р”Р»СЏ СЃС‚Р°РєР° СЂР°Р·РјРµСЂРѕРј 2 РёСЃРїРѕР»СЊР·СѓРµРј ISRemovedLoftar
                     if (originalStackSize <= 2)
                     {
                         if(((GItem.ContentsWindow) sourceStack.parent!=null))
@@ -431,20 +424,18 @@ public class TransferToContainer implements Action
                     {
                         NUtils.addTask(new StackSizeChanged(sourceStack, originalStackSize));
                     }
-                    return 1; // РџРµСЂРµРЅРѕСЃРёРј 1 РїСЂРµРґРјРµС‚ РёР· СЃС‚Р°РєР° Рє РѕРґРёРЅРѕС‡РЅРѕРјСѓ РїСЂРµРґРјРµС‚Сѓ
+                    return 1;
                 }
                 else if (targetNotFullStack != null)
                 {
-                    // Р•СЃР»Рё РЅРµС‚ РѕРґРёРЅРѕС‡РЅС‹С… РїСЂРµРґРјРµС‚РѕРІ, Р·Р°РїРѕР»РЅСЏРµРј РЅРµРїРѕР»РЅС‹Рµ СЃС‚Р°РєРё
                     int targetStackSize = targetNotFullStack.wmap.size();
-                    // РЎРѕС…СЂР°РЅСЏРµРј РёСЃС…РѕРґРЅС‹Р№ СЂР°Р·РјРµСЂ СЃС‚РµРєР° Р”Рћ РІР·СЏС‚РёСЏ РїСЂРµРґРјРµС‚Р°
                     int originalStackSize = sourceStack.wmap.size();
 
                     NUtils.takeItemToHand(item);
                     NUtils.itemact(((NGItem) ((GItem.ContentsWindow) targetNotFullStack.parent).cont).wi);
-                    NUtils.addTask(new WaitFreeHand());
+                    if (!waitFreeHandOrReturn())
+                        return 0;
 
-                    // Р”Р»СЏ СЃС‚Р°РєР° СЂР°Р·РјРµСЂРѕРј 2 РёСЃРїРѕР»СЊР·СѓРµРј ISRemovedLoftar
                     if (originalStackSize <= 2)
                     {
                         if(sourceStack.parent!=null)
@@ -455,12 +446,11 @@ public class TransferToContainer implements Action
                     }
                     NUtils.addTask(new StackSizeChanged(targetNotFullStack, targetStackSize));
 
-                    return 1; // РџРµСЂРµРЅРѕСЃРёРј 1 РїСЂРµРґРјРµС‚ РёР· СЃС‚Р°РєР° Рє СЃС‚Р°РєСѓ
+                    return 1;
                 }
                 else
                 {
                     int oldstacksize = sourceStack.wmap.size();
-                    // Р•СЃР»Рё РќР•Рў РЅРµРїРѕР»РЅС‹С… СЃС‚Р°РєРѕРІ РІ С†РµР»РµРІРѕРј РёРЅРІРµРЅС‚Р°СЂРµ Рё РµСЃС‚СЊ СЃРІРѕР±РѕРґРЅРѕРµ РјРµСЃС‚Рѕ
                     if (targetInv.getFreeSpace() > 0)
                     {
                         // ВАЖНО: Если есть предметы с разным качеством, переносим по одному предмету
@@ -519,14 +509,13 @@ public class TransferToContainer implements Action
                         // Если нужно проверять качество или размер стака превышает лимит, переносим по одному
                         if (needQualityCheck || oldstacksize > transfer_size)
                         {
-                            // РЎРѕС…СЂР°РЅСЏРµРј РёСЃС…РѕРґРЅС‹Р№ СЂР°Р·РјРµСЂ СЃС‚РµРєР° Р”Рћ РІР·СЏС‚РёСЏ РїСЂРµРґРјРµС‚Р°
                             int originalStackSize = sourceStack.wmap.size();
 
                             NUtils.takeItemToHand(item);
                             NUtils.dropToInv(targetInv);
-                            NUtils.addTask(new WaitFreeHand());
+                            if (!waitFreeHandOrReturn())
+                                return 0;
 
-                            // Р”Р»СЏ СЃС‚Р°РєР° СЂР°Р·РјРµСЂРѕРј 2 РёСЃРїРѕР»СЊР·СѓРµРј ISRemovedLoftar
                             if (originalStackSize <= 2)
                             {
                                 if(((GItem.ContentsWindow) sourceStack.parent!=null))
@@ -549,7 +538,6 @@ public class TransferToContainer implements Action
                 }
             } else
             {
-                // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј РѕС‚РґРµР»СЊРЅС‹Рµ РїСЂРµРґРјРµС‚С‹: РїСЂРёРѕСЂРёС‚РµС‚ Р·Р°РїРѕР»РЅРµРЅРёСЏ РЅРµ РїРѕР»РЅС‹С… СЃС‚Р°РєРѕРІ РІ С†РµР»РµРІРѕРј РёРЅРІРµРЅС‚Р°СЂРµ
                 ItemStack targetNotFullStack = targetInv.findNotFullStack(itemName);
                 WItem targetSingleItem = null;
 
@@ -558,14 +546,16 @@ public class TransferToContainer implements Action
                     int targetStackSize = targetNotFullStack.wmap.size();
                     NUtils.takeItemToHand(item);
                     NUtils.itemact(((NGItem) ((GItem.ContentsWindow) targetNotFullStack.parent).cont).wi);
-                    NUtils.addTask(new WaitFreeHand());
+                    if (!waitFreeHandOrReturn())
+                        return 0;
                     NUtils.addTask(new StackSizeChanged(targetNotFullStack, targetStackSize));
                     return 1;
                 } else if ((targetSingleItem = targetInv.findNotStack(itemName)) != null)
                 {
                     NUtils.takeItemToHand(item);
                     NUtils.itemact(targetSingleItem);
-                    NUtils.addTask(new WaitFreeHand());
+                    if (!waitFreeHandOrReturn())
+                        return 0;
                     NUtils.addTask(new GetNotFullStack(targetInv, new NAlias(itemName)));
                     return 1;
                 }
