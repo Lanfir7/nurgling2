@@ -80,7 +80,10 @@ public class NOverlay extends MapView.MapRaster
             }
         }
         
-        requpdate2 = false;
+        // Сбрасываем requpdate2 только у оверлеев зон (id >= 0). Кастомные оверлеи (mining, rock tile и т.д.)
+        // сами выставляют requpdate2 в переопределённом tick() до super.tick() — иначе тоггл и перерисовка не работают.
+        if (id >= 0)
+            requpdate2 = false;
         
         // ВАЖНО: Вызываем base.tick() и outl.tick() только если area инициализирован
         // base и outl используют area через this.this$0.area, поэтому нужна проверка

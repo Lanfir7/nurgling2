@@ -466,8 +466,15 @@ public class NUtils
         return 0;
     }
 
+    /** Сбросить весь предмет/стак на землю. */
     public static void drop(WItem item) {
         item.item.wdgmsg("drop", item.sz, getGameUI().map.player().rc, 0);
+    }
+
+    /** Сбросить один предмет из стака на землю (как Ctrl+клик: координата клика + количество 1). */
+    public static void dropOne(WItem item) {
+        haven.Coord clickCoord = item.sz.div(2);
+        item.item.wdgmsg("drop", clickCoord, getGameUI().map.player().rc, 1);
     }
     
     public static void itemact(WItem item) throws InterruptedException {

@@ -125,14 +125,7 @@ public class MasterMiner extends ActionWithFinal {
         }
 
         try {
-            // Получаем все предметы из инвентаря и фильтруем камни (обычные и драгоценные)
-            ArrayList<WItem> allItems;
-            try {
-                allItems = gui.getInventory().getItems();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return Results.SUCCESS();
-            }
+            ArrayList<WItem> allItems = collectAllWItemsFromWidget(gui.getInventory());
             known = filterMinedItems(allItems);
 
             while (!stop && wnd != null && !wnd.isClosed()) {
@@ -151,39 +144,10 @@ public class MasterMiner extends ActionWithFinal {
                     continue;
                 }
 
-                // Получаем все предметы из инвентаря и фильтруем камни (обычные и драгоценные)
-                ArrayList<WItem> cur;
-                try {
-                    allItems = gui.getInventory().getItems();
-                    cur = filterMinedItems(allItems);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-                
-                // Проверяем также предмет в руках (vhand) - камень/руда может попасть туда, если инвентарь полон
-                WItem vhandItem = gui.vhand;
-                if (vhandItem != null && vhandItem.item instanceof NGItem) {
-                    NGItem vhandNGItem = (NGItem) vhandItem.item;
-                    String vhandName = vhandNGItem.name();
-                    if (vhandName != null) {
-                        // Проверяем, является ли это камнем/рудой/драгоценным камнем
-                        boolean isMinedItem = NParser.checkName(vhandName, MINED_ITEMS) || 
-                                             NParser.checkName(vhandName, ORE_ITEMS) ||
-                                             isGemstone(vhandNGItem) || 
-                                             isGemstone(vhandName);
-                        if (isMinedItem && !known.contains(vhandItem)) {
-                            // Обрабатываем камень из рук
-                            try {
-                                processNewStone(gui, vhandItem, wnd);
-                                known.add(vhandItem);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                        }
-                    }
-                }
+                // Получаем все предметы из инвентаря рекурсивно (getItems() смотрит только child/next и может не видеть слоты)
+                allItems = collectAllWItemsFromWidget(gui.getInventory());
+                allItems = addItemsFromStacks(gui.getInventory(), allItems);
+                ArrayList<WItem> cur = filterMinedItems(allItems);
                 
                 // Обрабатываем все новые камни, а не только первый
                 ArrayList<WItem> newItems = new ArrayList<>();
@@ -194,19 +158,52 @@ public class MasterMiner extends ActionWithFinal {
                 }
                 
                 // Также проверяем ВСЕ стаки в инвентаре каждый цикл (они могут обновляться без появления новых предметов)
-                // Проверяем все стаки, независимо от того, новые они или нет
                 ArrayList<WItem> stacksToCheck = new ArrayList<>();
                 for (WItem it : cur) {
-                    // Проверяем, является ли это стаком
                     try {
                         NGItem ngItem = (NGItem) it.item;
                         haven.GItem.Amount amount = ngItem.getInfo(haven.GItem.Amount.class);
                         if (amount != null && amount.itemnum() > 1) {
-                            // Это стак - проверяем его качество
                             stacksToCheck.add(it);
                         }
                     } catch (Exception e) {
                         // Игнорируем ошибки
+                    }
+                }
+
+                // Сколько камней можно сбросить: всего - сколько оставляем для подпорки (в т.ч. в руках)
+                int totalStones = countTotalStones(cur);
+                WItem vhandItem = gui.vhand;
+                if (vhandItem != null && vhandItem.item instanceof NGItem) {
+                    NGItem vhandNGItem = (NGItem) vhandItem.item;
+                    String vhandName = vhandNGItem.name();
+                    if (vhandName != null && !isGemstone(vhandNGItem) && !isGemstone(vhandName) &&
+                        (NParser.checkName(vhandName, MINED_ITEMS) || NParser.checkName(vhandName, ORE_ITEMS))) {
+                        haven.GItem.Amount vhAm = vhandNGItem.getInfo(haven.GItem.Amount.class);
+                        totalStones += (vhAm != null && vhAm.itemnum() > 0) ? vhAm.itemnum() : 1;
+                    }
+                }
+                int keepStones = wnd.getKeepStonesForSupport();
+                int[] needToDropRef = new int[] { Math.max(0, totalStones - keepStones) };
+
+                // Проверяем предмет в руках (vhand) — камень/руда может попасть туда, если инвентарь полон
+                if (vhandItem != null && vhandItem.item instanceof NGItem) {
+                    NGItem vhandNGItem = (NGItem) vhandItem.item;
+                    String vhandName = vhandNGItem.name();
+                    if (vhandName != null) {
+                        boolean isMinedItem = NParser.checkName(vhandName, MINED_ITEMS) || 
+                                             NParser.checkName(vhandName, ORE_ITEMS) ||
+                                             isGemstone(vhandNGItem) || 
+                                             isGemstone(vhandName);
+                        if (isMinedItem && !known.contains(vhandItem)) {
+                            try {
+                                processNewStone(gui, vhandItem, wnd, needToDropRef);
+                                known.add(vhandItem);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        }
                     }
                 }
                 
@@ -216,21 +213,18 @@ public class MasterMiner extends ActionWithFinal {
                 }
                 known = cur;
                 
-                // Обрабатываем каждый новый камень
-                for (WItem newItem : newItems) {
-                    processNewStone(gui, newItem, wnd);
-                }
-                
-                // Обрабатываем стаки (проверяем их качество и сбрасываем если нужно)
-                // Важно: обрабатываем стаки отдельно, чтобы не мешать обработке новых предметов
+                // Сначала стаки — иначе лимит сброса забирают одиночные и стаки не трогаем
                 for (WItem stackItem : stacksToCheck) {
                     try {
-                        // Для стаков проверяем качество и сбрасываем напрямую, если нужно
-                        checkAndDropStack(gui, stackItem, wnd);
+                        checkAndDropStack(gui, stackItem, wnd, needToDropRef);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break;
                     }
+                }
+                // Затем одиночные/новые камни
+                for (WItem newItem : newItems) {
+                    processNewStone(gui, newItem, wnd, needToDropRef);
                 }
                 
                 // Небольшой yield после обработки всех камней
@@ -302,8 +296,8 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
-     * Получает МАКСИМАЛЬНОЕ качество в стаке (для решения о выбрасывании)
-     * Если максимальное качество ниже порога - весь стак можно выбросить
+     * Получает МАКСИМАЛЬНОЕ качество в стаке (для решения о выбрасывании).
+     * Стак может быть: 1) виджет ItemStack (несколько GItem); 2) один слот с Amount > 1 (parent = NInventory).
      */
     private double getMaxStackQuality(NGItem item, WItem wItem) {
         if (item == null) return -1;
@@ -311,7 +305,7 @@ public class MasterMiner extends ActionWithFinal {
         try {
             haven.GItem.Amount amount = item.getInfo(haven.GItem.Amount.class);
             if (amount != null && amount.itemnum() > 1) {
-                // Это стак - получаем максимальное качество из всех предметов
+                // Стак в виде виджета ItemStack (несколько GItem)
                 if (wItem != null && wItem.parent instanceof haven.res.ui.stackinv.ItemStack) {
                     haven.res.ui.stackinv.ItemStack itemStack = (haven.res.ui.stackinv.ItemStack) wItem.parent;
                     double maxQuality = -1;
@@ -323,105 +317,157 @@ public class MasterMiner extends ActionWithFinal {
                             }
                         }
                     }
-                    if (maxQuality > 0) {
-                        return maxQuality;
-                    }
+                    if (maxQuality > 0) return maxQuality;
                 }
                 
-                // Fallback: используем Stack info качество
+                // Стак в одном слоте (один GItem с Amount > 1, parent = NInventory): Stack info или quality предмета
                 haven.res.ui.tt.stackn.Stack stackInfo = item.getInfo(haven.res.ui.tt.stackn.Stack.class);
                 if (stackInfo != null && stackInfo.quality > 0) {
                     return stackInfo.quality;
+                }
+                if (item.quality != null) {
+                    return item.quality;
                 }
             }
         } catch (Exception e) {
             // Игнорируем ошибки
         }
         
-        // Для отдельных предметов используем item.quality
         if (item.quality != null) {
             return item.quality;
         }
-        
         return -1;
     }
     
+    /** Проверяет, что предмет находится в главном инвентаре (в т.ч. внутри стака — parent может быть ItemStack). */
+    private boolean isInMainInventory(NGameUI gui, WItem witem) {
+        if (witem == null || gui == null) return false;
+        if (witem == gui.vhand) return true;
+        for (Widget w = witem; w != null; w = w.parent) {
+            if (w == gui.getInventory()) return true;
+        }
+        return false;
+    }
+
     /**
-     * Проверяет стак и сбрасывает его, если МАКСИМАЛЬНОЕ качество ниже порога
-     * Стак выбрасывается целиком если даже лучший камень в нём хуже порога
+     * Рекурсивно собирает все WItem из виджета (инвентаря). GetItems() обходит только child/next,
+     * в NInventory слоты могут быть вложены — без рекурсии камни не находятся.
      */
-    private void checkAndDropStack(NGameUI gui, WItem stackItem, MasterMinerWnd wnd) throws InterruptedException {
-        if (stackItem == null || stackItem.item == null || !(stackItem.item instanceof NGItem)) {
+    private ArrayList<WItem> collectAllWItemsFromWidget(Widget w) {
+        ArrayList<WItem> out = new ArrayList<>();
+        collectAllWItemsRecur(w, out);
+        return out;
+    }
+
+    private void collectAllWItemsRecur(Widget w, ArrayList<WItem> out) {
+        if (w == null) return;
+        if (w instanceof WItem) {
+            WItem wi = (WItem) w;
+            if (wi.item != null && !out.contains(wi)) out.add(wi);
+        }
+        for (Widget ch = w.child; ch != null; ch = ch.next) {
+            collectAllWItemsRecur(ch, out);
+        }
+    }
+
+    /**
+     * Добавляет в список WItem'ы из виджетов ItemStack (стаки типа "Gneiss, stack of 3").
+     */
+    private ArrayList<WItem> addItemsFromStacks(Widget inv, ArrayList<WItem> list) {
+        if (inv == null || list == null) return list;
+        ArrayList<WItem> out = new ArrayList<>(list);
+        collectWItemsFromStacks(inv, out);
+        return out;
+    }
+
+    private void collectWItemsFromStacks(Widget w, ArrayList<WItem> out) {
+        if (w == null) return;
+        if (w instanceof haven.res.ui.stackinv.ItemStack) {
+            for (WItem wi : ((haven.res.ui.stackinv.ItemStack) w).wmap.values()) {
+                if (wi != null && wi.item != null && !out.contains(wi)) out.add(wi);
+            }
+            return;
+        }
+        for (Widget ch = w.child; ch != null; ch = ch.next) {
+            collectWItemsFromStacks(ch, out);
+        }
+    }
+
+    /**
+     * Проверяет стак и сбрасывает камни по одному, если МАКСИМАЛЬНОЕ качество стака ниже порога.
+     * Сбрасывает не весь стак, а по 1 шт., с учётом лимита needToDropRef (держать N для подпорки).
+     */
+    private void checkAndDropStack(NGameUI gui, WItem stackItem, MasterMinerWnd wnd, int[] needToDropRef) throws InterruptedException {
+        if (stackItem == null || stackItem.item == null || !(stackItem.item instanceof NGItem) ||
+            needToDropRef == null || needToDropRef[0] <= 0) {
             return;
         }
         
         NGItem ngItem = (NGItem) stackItem.item;
         String itemName = ngItem.name();
-        if (itemName == null) {
-            return;
-        }
+        if (itemName == null) return;
         
-        // Проверяем, является ли это камнем/рудой (драгоценные камни не сбрасываются)
-        boolean isMinedItem = NParser.checkName(itemName, MINED_ITEMS) || 
-                             NParser.checkName(itemName, ORE_ITEMS);
-        // Драгоценные камни не сбрасываются
-        if (isGemstone(ngItem) || isGemstone(itemName)) {
-            return;
-        }
-        if (!isMinedItem) {
-            return; // Не камень/руда - пропускаем
-        }
+        boolean isMinedItem = NParser.checkName(itemName, MINED_ITEMS) || NParser.checkName(itemName, ORE_ITEMS);
+        if (isGemstone(ngItem) || isGemstone(itemName) || !isMinedItem) return;
         
-        // Получаем МАКСИМАЛЬНОЕ качество стака - пробуем несколько раз
         double maxQ = -1;
         for (int attempt = 0; attempt < 5; attempt++) {
             maxQ = getMaxStackQuality(ngItem, stackItem);
-            if (maxQ >= 0) {
-                break; // Качество получено
-            }
-            // Небольшая задержка перед следующей попыткой
-            if (attempt < 4) {
-                NUtils.addTask(new WaitTicks(2));
-            }
+            if (maxQ >= 0) break;
+            if (attempt < 4) NUtils.addTask(new WaitTicks(2));
         }
-        
-        if (maxQ < 0) {
-            return; // Качество все еще не готово после всех попыток
+        // Если качество известно — сбрасываем только если ниже порога
+        if (maxQ >= 0) {
+            String stoneType = classifyStoneType(itemName);
+            double threshold = "Shell".equals(stoneType) || "Cat Gold".equals(stoneType)
+                ? wnd.getShellCatGoldThreshold() : wnd.getDropThreshold();
+            if (!Double.isNaN(threshold) && maxQ >= threshold) return;
         }
+        // maxQ < 0: качество у стака часто недоступно — всё равно сбрасываем лишнее сверх лимита «держать N»
         
-        // Определяем тип камня и порог
-        String stoneType = classifyStoneType(itemName);
-        double threshold;
-        if ("Shell".equals(stoneType) || "Cat Gold".equals(stoneType)) {
-            threshold = wnd.getShellCatGoldThreshold();
-        } else {
-            threshold = wnd.getDropThreshold();
-        }
+        // Предмет может быть внутри стака: parent = ItemStack, а не инвентарь
+        boolean isInInventory = isInMainInventory(gui, stackItem);
+        boolean isInHand = (stackItem == gui.vhand);
+        if (!isInInventory && !isInHand) return;
+        String itemNameLower = itemName.toLowerCase();
+        if (itemNameLower.contains("axe") || itemNameLower.contains("pickaxe") || 
+            itemNameLower.contains("топор") || itemNameLower.contains("кирк")) return;
         
-        // Сбрасываем стак, если МАКСИМАЛЬНОЕ качество ниже порога
-        if (!Double.isNaN(threshold) && maxQ < threshold) {
-            // Проверяем, что это действительно камень из инвентаря, а не инструмент
-            boolean isInInventory = (stackItem.parent == gui.getInventory());
-            boolean isInHand = (stackItem == gui.vhand);
-            if (isInInventory || isInHand) {
-                // Дополнительная проверка: убеждаемся, что это не инструмент
-                String itemNameLower = itemName != null ? itemName.toLowerCase() : "";
-                boolean isTool = itemNameLower.contains("axe") || itemNameLower.contains("pickaxe") || 
-                               itemNameLower.contains("топор") || itemNameLower.contains("кирк");
-                if (!isTool) {
-                    // Небольшая задержка перед сбросом
-                    NUtils.addTask(new WaitTicks(3));
-                    // Еще раз проверяем, что предмет все еще в инвентаре или в руках
-                    if ((stackItem.parent == gui.getInventory()) || (stackItem == gui.vhand)) {
-                        NUtils.drop(stackItem);
-                        // Удаляем из known, чтобы не обрабатывать повторно
-                        known.remove(stackItem);
-                    }
-                }
+        haven.GItem.Amount amount = ngItem.getInfo(haven.GItem.Amount.class);
+        int stackSize = (amount != null && amount.itemnum() > 0) ? amount.itemnum() : 1;
+        int toDrop = Math.min(stackSize, needToDropRef[0]);
+        for (int i = 0; i < toDrop; i++) {
+            if (needToDropRef[0] <= 0) break;
+            if (!isInMainInventory(gui, stackItem) && stackItem != gui.vhand) break;
+            if (stackItem.item == null) break;
+            NUtils.addTask(new WaitTicks(3));
+            if (isInMainInventory(gui, stackItem) || stackItem == gui.vhand) {
+                NUtils.dropOne(stackItem);
+                needToDropRef[0]--;
             }
         }
     }
     
+    /**
+     * Считает общее количество камней (включая стаки) в списке — обычные камни и руды, без драгоценных.
+     * Используется для ограничения «держать N камней для подпорки».
+     */
+    private int countTotalStones(ArrayList<WItem> items) {
+        if (items == null) return 0;
+        int total = 0;
+        for (WItem w : items) {
+            if (w == null || w.item == null || !(w.item instanceof NGItem)) continue;
+            NGItem ng = (NGItem) w.item;
+            String name = ng.name();
+            if (name == null) continue;
+            if (isGemstone(ng) || isGemstone(name)) continue;
+            if (!NParser.checkName(name, MINED_ITEMS) && !NParser.checkName(name, ORE_ITEMS)) continue;
+            haven.GItem.Amount amount = ng.getInfo(haven.GItem.Amount.class);
+            total += (amount != null && amount.itemnum() > 0) ? amount.itemnum() : 1;
+        }
+        return total;
+    }
+
     /**
      * Фильтрует предметы из инвентаря, оставляя только выкопанные камни (обычные и драгоценные)
      */
@@ -458,9 +504,10 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     /**
-     * Обрабатывает один новый камень
+     * Обрабатывает один новый камень.
+     * needToDropRef[0] — сколько ещё камней можно сбросить (с учётом лимита «держать N для подпорки»).
      */
-    private void processNewStone(NGameUI gui, WItem newItem, MasterMinerWnd wnd) throws InterruptedException {
+    private void processNewStone(NGameUI gui, WItem newItem, MasterMinerWnd wnd, int[] needToDropRef) throws InterruptedException {
         NGItem dropped = (NGItem) newItem.item;
         
         // Для стаков нужно получить качество через Stack info
@@ -720,24 +767,20 @@ public class MasterMiner extends ActionWithFinal {
                 threshold = wnd.getDropThreshold();
             }
             
-            if (!Double.isNaN(threshold) && f3 < threshold) {
-                // проверяем, что это действительно камень из инвентаря или из рук (vhand), а не инструмент
-                boolean isInInventory = (newItem != null && newItem.parent == gui.getInventory());
+            // Сброс только если разрешено лимитом «держать N камней» и качество ниже порога
+            if (needToDropRef != null && needToDropRef[0] > 0 && !Double.isNaN(threshold) && f3 < threshold) {
+                boolean isInInventory = (newItem != null && isInMainInventory(gui, newItem));
                 boolean isInHand = (newItem != null && newItem == gui.vhand);
                 if (isInInventory || isInHand) {
-                    // дополнительная проверка: убеждаемся, что это не инструмент
                     String itemName = stoneName != null ? stoneName.toLowerCase() : "";
                     boolean isTool = itemName.contains("axe") || itemName.contains("pickaxe") || 
                                    itemName.contains("топор") || itemName.contains("кирк");
-                    // Стаки теперь тоже сбрасываются
                     if (!isTool) {
-                        // небольшая задержка перед сбросом, чтобы игра успела обработать появление камня
                         NUtils.addTask(new WaitTicks(3));
-                        // еще раз проверяем, что предмет все еще в инвентаре или в руках
-                        if ((newItem.parent == gui.getInventory()) || (newItem == gui.vhand)) {
+                        if (isInMainInventory(gui, newItem) || newItem == gui.vhand) {
                             NUtils.drop(newItem);
-                            // удаляем из known, чтобы не обрабатывать повторно
                             known.remove(newItem);
+                            needToDropRef[0]--;
                         }
                     }
                 }

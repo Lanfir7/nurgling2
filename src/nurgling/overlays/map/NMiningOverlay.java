@@ -13,6 +13,10 @@ import java.util.*;
 
 public class NMiningOverlay extends NOverlay
 {
+    /** Интервал принудительного обновления оверлея (тики). ~60 тиков/сек → 120 = раз в 2 сек. */
+    private static final long REFRESH_INTERVAL_TICKS = 120;
+    private long lastRefreshTick = 0;
+
     public Gob dummy = null;
     Coord2d oldDummy = null;
     final ArrayList<Long> curGobs = new ArrayList<>();
@@ -270,6 +274,16 @@ public class NMiningOverlay extends NOverlay
         if (shortWallsEnabled != currentShortWalls) {
             res = true;
             shortWallsEnabled = currentShortWalls;
+        }
+
+        // Периодическое обновление: чтобы безопасный радиус стабильно прорисовывался,
+        // принудительно перестраиваем оверлей раз в REFRESH_INTERVAL_TICKS
+        if ((Boolean) NConfig.get(NConfig.Key.miningol)) {
+            long now = NUtils.getTickId();
+            if (now - lastRefreshTick >= REFRESH_INTERVAL_TICKS) {
+                lastRefreshTick = now;
+                res = true;
+            }
         }
 
         return res;

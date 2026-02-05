@@ -28,6 +28,7 @@ build.bat
 /HerSRC
 /OldSRC
 /SRCnurgling2
+/BeyondSRC
 Areas.db
 Areas.db-wal
 AlarmSounds/AlarmSounds.7z

@@ -212,6 +212,7 @@ public class NMapView extends MapView
         // Initialize overlays only once on first draw (when GameUI is ready)
         if (!overlaysInitialized) {
             getRockTileOverlay(); // Initialize rock tile highlighting overlay
+            getMiningOl(); // Mining support zones — создаём сразу, чтобы тоггл под картой работал
             // getShortWallCapOverlay(); // No longer needed - NCaveTile renders caps directly
             overlaysInitialized = true;
         }

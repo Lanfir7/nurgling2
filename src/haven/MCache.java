@@ -720,7 +720,7 @@ public class MCache implements MapSource {
 		if((areas.get(id)!= null && areas.get(id).grids_id.contains(this.id)) || NMapView.isCustom(id))
 		{
 			int nseq = MCache.this.olseq;
-			if (this.olseq != nseq || requpd)
+			if (this.olseq != nseq)
 			{
 				for (int i = 0; i < cutn.x * cutn.y; i++)
 				{
@@ -740,6 +740,18 @@ public class MCache implements MapSource {
 				this.olseq = nseq;
 			}
 			Cut cut = geticut(cc);
+			// При requpd перестраиваем только текущий чанк — иначе оверлей остаётся только в одном куске карты
+			if (requpd && cut.nols.containsKey(id))
+			{
+				RenderTree.Node r = cut.nols.get(id);
+				if (r instanceof Disposable)
+					((Disposable) r).dispose();
+				cut.nols.remove(id);
+				RenderTree.Node re = cut.nedgs.get(id);
+				if (re instanceof Disposable)
+					((Disposable) re).dispose();
+				cut.nedgs.remove(id);
+			}
 			if (!cut.nols.containsKey(id) || requpd)
 			{
 				NOverlay nol = NUtils.getGameUI().map.nols.get(id);

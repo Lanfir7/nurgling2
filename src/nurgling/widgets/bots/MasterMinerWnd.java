@@ -37,6 +37,7 @@ public class MasterMinerWnd extends Window {
     private final Label counterLbl;    // Счетчик выкопанных камней
     private final TextEntry thresholdEntry; // Порог сброса для камней
     private final TextEntry shellCatGoldThresholdEntry; // Порог сброса для ракух и кэтголдов
+    private final TextEntry keepStonesEntry; // Сколько камней держать для подпорки
     private MasterMiner masterMinerBot; // Ссылка на бот для переключения инструментов
 
     private int totalStonesMined = 0;
@@ -57,7 +58,7 @@ public class MasterMinerWnd extends Window {
     private BestStoneData bestRakuh = null;       // Лучшая ракуха
 
     public MasterMinerWnd() {
-        super(new Coord(UI.scale(550), UI.scale(380)), "Master Miner"); // Увеличено для полного отображения текста
+        super(new Coord(UI.scale(550), UI.scale(410)), "Master Miner");
 
         // Создаем жирный шрифт для Masonry
         Font boldFont = Text.std.font.deriveFont(Font.BOLD);
@@ -67,6 +68,7 @@ public class MasterMinerWnd extends Window {
         NMasterMinerProp prop = loadSettings();
         String savedDropThreshold = "";
         String savedShellCatGoldThreshold = "";
+        String savedKeepStones = "30";
         if (prop != null) {
             if (!Float.isNaN(prop.dropThreshold)) {
                 savedDropThreshold = String.valueOf((int)prop.dropThreshold == prop.dropThreshold ? 
@@ -76,6 +78,7 @@ public class MasterMinerWnd extends Window {
                 savedShellCatGoldThreshold = String.valueOf((int)prop.shellCatGoldThreshold == prop.shellCatGoldThreshold ? 
                     (int)prop.shellCatGoldThreshold : prop.shellCatGoldThreshold);
             }
+            savedKeepStones = String.valueOf(prop.keepStonesForSupport);
         }
 
         Coord pad = UI.scale(8, 6);
@@ -143,6 +146,26 @@ public class MasterMinerWnd extends Window {
             }
         }, setBtn2Pos);
         cur = shellCatGoldThresholdEntry.pos("bl").add(0, UI.scale(6));
+
+        // Камней держать в инвентаре (для подпорки)
+        add(new Label("Keep stones (for support):"), cur);
+        cur = cur.add(UI.scale(0, UI.scale(18)));
+        keepStonesEntry = add(new TextEntry(UI.scale(50), savedKeepStones) {
+            @Override
+            public void changed() {
+                super.changed();
+                saveSettings();
+            }
+        }, cur);
+        Coord setBtn3Pos = keepStonesEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
+        add(new Button(UI.scale(40), "Set") {
+            @Override
+            public void click() {
+                super.click();
+                saveSettings();
+            }
+        }, setBtn3Pos);
+        cur = keepStonesEntry.pos("bl").add(0, UI.scale(6));
 
         // Кнопка Switch для смены кирки/топора между руками и рюкзаком
         add(new Button(UI.scale(160), "Switch") {
@@ -406,6 +429,17 @@ public class MasterMinerWnd extends Window {
             return Double.NaN;
         }
     }
+
+    /** Сколько камней всегда держать в инвентаре (для подпорки). */
+    public int getKeepStonesForSupport() {
+        try {
+            String txt = keepStonesEntry.text().trim();
+            if (txt.isEmpty()) return 30;
+            return Math.max(0, Integer.parseInt(txt));
+        } catch (Exception e) {
+            return 30;
+        }
+    }
     
     
     /**
@@ -460,6 +494,12 @@ public class MasterMinerWnd extends Window {
                     }
                 } catch (Exception e) {
                     prop.shellCatGoldThreshold = Float.NaN;
+                }
+
+                try {
+                    prop.keepStonesForSupport = getKeepStonesForSupport();
+                } catch (Exception e) {
+                    prop.keepStonesForSupport = 30;
                 }
                 
                 NMasterMinerProp.set(prop);

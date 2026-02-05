@@ -28,6 +28,9 @@ public class NMasterMinerProp implements JConf {
     /** Порог качества для постановки меток на карте. */
     public float markerThreshold = Float.NaN;
 
+    /** Сколько камней всегда держать в инвентаре (для подпорки). Сбрасывать только сверх этого. */
+    public int keepStonesForSupport = 30;
+
     public NMasterMinerProp(String username, String chrid) {
         this.username = username;
         this.chrid = chrid;
@@ -61,6 +64,12 @@ public class NMasterMinerProp implements JConf {
             if (mt instanceof Number) {
                 float val = ((Number) mt).floatValue();
                 markerThreshold = Float.isNaN(val) ? Float.NaN : val;
+            }
+        }
+        if (values.get("keepStonesForSupport") != null) {
+            Object k = values.get("keepStonesForSupport");
+            if (k instanceof Number) {
+                keepStonesForSupport = Math.max(0, ((Number) k).intValue());
             }
         }
     }
@@ -99,6 +108,7 @@ public class NMasterMinerProp implements JConf {
         if (!Float.isNaN(markerThreshold)) {
             j.put("markerThreshold", markerThreshold);
         }
+        j.put("keepStonesForSupport", keepStonesForSupport);
         return j;
     }
 
