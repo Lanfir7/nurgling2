@@ -149,6 +149,8 @@ public class NStorageItemsWidget extends Window {
             @Override
             public void change(Grouping item) {
                 super.change(item);
+                if (item == null)
+                    return;
                 currentGrouping = item;
                 processItems();
             }
