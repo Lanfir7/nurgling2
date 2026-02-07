@@ -17,6 +17,7 @@ import static nurgling.navigation.ChunkNavData.Direction;
  */
 public class ChunkNavRecorder {
     private final ChunkNavGraph graph;
+    private ChunkNavManager manager; // Set after construction to avoid circular dependency
 
     // Blocked tile patterns
     // NOTE: "nil" = void/nothing, must be blocked (areas outside playable space)
@@ -57,6 +58,13 @@ public class ChunkNavRecorder {
     }
 
     /**
+     * Set the manager reference (called after construction to break circular dependency).
+     */
+    public void setManager(ChunkNavManager manager) {
+        this.manager = manager;
+    }
+
+    /**
      * Record navigation data for a grid that just became visible.
      * Merges new observations with existing data - tiles observed as walkable update
      * tiles that were previously unknown (blocked due to not being visible).
@@ -88,6 +96,17 @@ public class ChunkNavRecorder {
             // Portals are recorded only when traversed (via PortalTraversalTracker)
             // This eliminates phantom portal bugs from proximity-based detection
             detectLayer(chunk);
+
+            // Assign instanceId from current world context
+            // Only assign if chunk doesn't already have one (preserve existing assignments)
+            // or if current instanceId is known (not 0/unknown)
+            if (manager != null) {
+                long currentInstance = manager.getCurrentInstanceId();
+                if (chunk.instanceId == 0 && currentInstance != 0) {
+                    chunk.instanceId = currentInstance;
+                }
+            }
+
             updateEdgeWalkability(chunk);
             discoverNeighbors(grid, chunk);
             chunk.markUpdated();
@@ -192,6 +211,27 @@ public class ChunkNavRecorder {
                 for (MCache.Grid other : mcache.grids.values()) {
                     if (other.id == grid.id) continue;
 
+                    // CRITICAL: Prevent cross-instance false connections.
+                    // During portal transitions, MCache can hold grids from both
+                    // the old and new instance simultaneously. Without this check,
+                    // adjacent gc values from different instances create permanent
+                    // false neighbor links (e.g., mine chunk linked to surface chunk).
+                    //
+                    // Strict rule: if the current chunk has a known instanceId,
+                    // only allow neighbors with the SAME instanceId.
+                    // Chunks with instanceId=0 (unknown/legacy) are also rejected
+                    // because during portal transitions, the "other side" grids
+                    // may not have their instanceId assigned yet.
+                    ChunkNavData otherChunk = graph.getChunk(other.id);
+                    if (chunk.instanceId != 0) {
+                        if (otherChunk == null || otherChunk.instanceId != chunk.instanceId) {
+                            continue; // Unknown or different instance - skip
+                        }
+                    } else if (otherChunk != null && otherChunk.instanceId != 0) {
+                        // Reverse: other has known instanceId, we don't - skip too
+                        continue;
+                    }
+
                     Coord otherGc = other.gc;
                     int dx = otherGc.x - myGc.x;
                     int dy = otherGc.y - myGc.y;
@@ -205,9 +245,10 @@ public class ChunkNavRecorder {
                             chunk.neighborNorth = other.id;
                         }
                         // Update reverse: we are to the south of other
-                        ChunkNavData otherChunk = graph.getChunk(other.id);
-                        if (otherChunk != null && otherChunk.neighborSouth == -1) {
-                            otherChunk.neighborSouth = grid.id;
+                        // Reuse otherChunk from instance check above, or fetch if null
+                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
+                        if (reverseChunk != null && reverseChunk.neighborSouth == -1) {
+                            reverseChunk.neighborSouth = grid.id;
                         }
                     } else if (dx == 0 && dy == 1) {
                         // Other is to the south
@@ -215,9 +256,9 @@ public class ChunkNavRecorder {
                             chunk.neighborSouth = other.id;
                         }
                         // Update reverse: we are to the north of other
-                        ChunkNavData otherChunk = graph.getChunk(other.id);
-                        if (otherChunk != null && otherChunk.neighborNorth == -1) {
-                            otherChunk.neighborNorth = grid.id;
+                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
+                        if (reverseChunk != null && reverseChunk.neighborNorth == -1) {
+                            reverseChunk.neighborNorth = grid.id;
                         }
                     } else if (dx == 1 && dy == 0) {
                         // Other is to the east
@@ -225,9 +266,9 @@ public class ChunkNavRecorder {
                             chunk.neighborEast = other.id;
                         }
                         // Update reverse: we are to the west of other
-                        ChunkNavData otherChunk = graph.getChunk(other.id);
-                        if (otherChunk != null && otherChunk.neighborWest == -1) {
-                            otherChunk.neighborWest = grid.id;
+                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
+                        if (reverseChunk != null && reverseChunk.neighborWest == -1) {
+                            reverseChunk.neighborWest = grid.id;
                         }
                     } else if (dx == -1 && dy == 0) {
                         // Other is to the west
@@ -235,9 +276,9 @@ public class ChunkNavRecorder {
                             chunk.neighborWest = other.id;
                         }
                         // Update reverse: we are to the east of other
-                        ChunkNavData otherChunk = graph.getChunk(other.id);
-                        if (otherChunk != null && otherChunk.neighborEast == -1) {
-                            otherChunk.neighborEast = grid.id;
+                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
+                        if (reverseChunk != null && reverseChunk.neighborEast == -1) {
+                            reverseChunk.neighborEast = grid.id;
                         }
                     }
                 }

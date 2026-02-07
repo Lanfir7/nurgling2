@@ -84,12 +84,39 @@ public class ChunkPortal {
         // Gates are NOT portals - they're just openings in walls.
         // Walkability grid handles whether you can walk through them.
 
-        // Doors
+        // Doors (interior "-door" gobs)
         if (name.contains("door")) {
             return PortalType.DOOR;
         }
 
+        // Building exteriors (clicking these enters the building = same as door)
+        // These are whole-building gobs: stonemansion, logcabin, greathall, etc.
+        if (name.contains("stonemansion") || name.contains("logcabin") ||
+            name.contains("timberhouse") || name.contains("stonestead") ||
+            name.contains("greathall") || name.contains("stonetower") ||
+            name.contains("windmill") || name.contains("primitivetent")) {
+            return PortalType.DOOR;
+        }
+
         return null;
+    }
+
+    /**
+     * Check if a gob name represents a building exterior (whole-building gob).
+     * These are large structure gobs that the player clicks to enter.
+     * They differ from interior doors (which have "-door" suffix).
+     * Building exteriors can create "phantom" portals on adjacent chunks
+     * because their large footprint is visible from neighboring chunks.
+     */
+    public static boolean isBuildingExterior(String gobName) {
+        if (gobName == null) return false;
+        String lower = gobName.toLowerCase();
+        // Interior doors are NOT building exteriors
+        if (lower.contains("-door")) return false;
+        return lower.contains("stonemansion") || lower.contains("logcabin") ||
+               lower.contains("timberhouse") || lower.contains("stonestead") ||
+               lower.contains("greathall") || lower.contains("stonetower") ||
+               lower.contains("windmill") || lower.contains("primitivetent");
     }
 
     public JSONObject toJson() {

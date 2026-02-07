@@ -58,6 +58,13 @@ public class ChunkNavManager {
     // Flag to track if async loading is in progress
     private volatile boolean loadingInProgress = false;
 
+    // Current world instance context.
+    // All chunks recorded while this value is active belong to the same instance.
+    // 1 = surface (default), other values = unique per mine level / building interior / cellar.
+    // Updated by PortalTraversalTracker when player traverses a portal.
+    public static final long SURFACE_INSTANCE = 1;
+    private volatile long currentInstanceId = SURFACE_INSTANCE;
+
     // Instance reference - managed by NMapView, not a traditional singleton
     // This static reference exists for backward compatibility with code that
     // cannot easily access gui.map.getChunkNavManager()
@@ -66,8 +73,9 @@ public class ChunkNavManager {
     public ChunkNavManager() {
         this.graph = new ChunkNavGraph();
         this.recorder = new ChunkNavRecorder(graph);
+        this.recorder.setManager(this); // Wire up manager reference for instanceId access
         this.planner = new ChunkNavPlanner(graph);
-        this.portalTracker = new PortalTraversalTracker(graph, recorder);
+        this.portalTracker = new PortalTraversalTracker(graph, recorder, this);
 
         // Create single-thread executor for background recording
         this.recordingExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -125,8 +133,9 @@ public class ChunkNavManager {
         this.currentGenus = genus;
         this.graph = new ChunkNavGraph();
         this.recorder = new ChunkNavRecorder(graph);
+        this.recorder.setManager(this);
         this.planner = new ChunkNavPlanner(graph);
-        this.portalTracker = new PortalTraversalTracker(graph, recorder);
+        this.portalTracker = new PortalTraversalTracker(graph, recorder, this);
         this.fileStore = new ChunkNavFileStore(genus);
 
         // Mark as initialized immediately so tick() can work with empty graph
@@ -568,6 +577,36 @@ public class ChunkNavManager {
                 graph.addChunk(chunk);
             }
 
+            // One-time migration: wipe ALL neighbor data from legacy V1 format.
+            // Legacy data can contain false cross-instance neighbor links
+            // (e.g., mine chunks falsely connected to surface chunks) that were created
+            // before instanceId was introduced. These links cause the pathfinder to route
+            // through mines instead of houses. The wipe forces re-discovery with instanceId protection.
+            if (fileStore.needsInstanceMigration() && !loadedChunks.isEmpty()) {
+                int cleared = wipeAllNeighborData();
+                System.out.println("ChunkNav: Instance migration - wiped " + cleared +
+                    " legacy neighbor links (will re-learn correctly as you explore)");
+                fileStore.markInstanceMigrationDone();
+                // Force save of wiped data
+                saveInternal();
+            }
+
+            // Repair: remove false cross-instance neighbor links
+            // (for data that accumulated after migration but with incorrect instanceIds)
+            int repaired = repairCrossInstanceLinks();
+            if (repaired > 0) {
+                System.out.println("ChunkNav: Repaired " + repaired + " false cross-instance neighbor links");
+            }
+
+            // Repair: invalidate stale portal connections.
+            // Instance grid IDs in H&H can be reused across sessions,
+            // causing portal connectsToGridId to point to the wrong grid
+            // (e.g., minehole recorded as connecting to a house interior grid).
+            int stalePortals = invalidateStalePortalConnections();
+            if (stalePortals > 0) {
+                System.out.println("ChunkNav: Invalidated " + stalePortals + " stale portal connections");
+            }
+
             // Rebuild connections after loading all chunks
             graph.rebuildAllConnections();
 
@@ -577,6 +616,121 @@ public class ChunkNavManager {
             System.err.println("ChunkNav: Failed to load data: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Wipe ALL neighbor data from the graph.
+     * Used as a one-time migration when upgrading from V1 to V2 binary format.
+     * After wipe, neighbors will be re-discovered correctly (with instanceId protection)
+     * as the player explores.
+     */
+    private int wipeAllNeighborData() {
+        int cleared = 0;
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            if (chunk.neighborNorth != -1) { chunk.neighborNorth = -1; cleared++; }
+            if (chunk.neighborSouth != -1) { chunk.neighborSouth = -1; cleared++; }
+            if (chunk.neighborEast != -1) { chunk.neighborEast = -1; cleared++; }
+            if (chunk.neighborWest != -1) { chunk.neighborWest = -1; cleared++; }
+            chunk.connectedChunks.clear();
+        }
+        return cleared;
+    }
+
+    /**
+     * Invalidate portal connections where the portal type is incompatible
+     * with the target chunk's layer. This catches stale connections caused by
+     * H&H reusing instance grid IDs across sessions (e.g., minehole recorded
+     * as connecting to grid X when X was a mine, but X is now a house interior).
+     */
+    private int invalidateStalePortalConnections() {
+        int invalidated = 0;
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            for (ChunkPortal portal : chunk.portals) {
+                if (portal.connectsToGridId == -1) continue;
+
+                ChunkNavData target = graph.getChunk(portal.connectsToGridId);
+                if (target == null) continue;
+
+                if (!isPortalTargetLayerValid(portal.type, target.layer)) {
+                    System.out.println("ChunkNav: Stale portal '" + portal.gobName +
+                        "' (type=" + portal.type + ") on chunk " + chunk.gridId +
+                        " (layer=" + chunk.layer + ") → target " + portal.connectsToGridId +
+                        " (layer=" + target.layer + ") - invalidating");
+                    portal.connectsToGridId = -1;
+                    invalidated++;
+                }
+            }
+        }
+        return invalidated;
+    }
+
+    /**
+     * Validate that a portal type is compatible with the target chunk's layer.
+     * Same logic as UnifiedTilePathfinder.isPortalTargetLayerValid().
+     */
+    private static boolean isPortalTargetLayerValid(ChunkPortal.PortalType type, String targetLayer) {
+        if (type == null || targetLayer == null) return true;
+
+        switch (type) {
+            case MINEHOLE:
+            case MINE_ENTRANCE:
+                return "outside".equals(targetLayer);
+            case CELLAR:
+                // Cellar portals go between cellar ↔ inside (bidirectional)
+                return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
+            case LADDER:
+                return "outside".equals(targetLayer);
+            case STAIRS_UP:
+            case STAIRS_DOWN:
+                return "inside".equals(targetLayer);
+            case DOOR:
+                return "inside".equals(targetLayer) || "outside".equals(targetLayer);
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Repair cross-instance neighbor links in loaded chunk data.
+     * Legacy data (before instanceId was introduced) may contain false neighbor
+     * connections between chunks from different instances (e.g., mine chunk linked
+     * to surface chunk). This method removes those false links.
+     * 
+     * Only repairs links where BOTH chunks have a known instanceId (!= 0).
+     * Chunks with instanceId=0 (legacy, not yet visited) are left untouched.
+     */
+    private int repairCrossInstanceLinks() {
+        int repaired = 0;
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            if (chunk.instanceId == 0) continue;
+
+            // Check each neighbor link
+            long[] neighbors = {chunk.neighborNorth, chunk.neighborSouth, chunk.neighborEast, chunk.neighborWest};
+            for (int i = 0; i < 4; i++) {
+                if (neighbors[i] == -1) continue;
+                ChunkNavData neighbor = graph.getChunk(neighbors[i]);
+                if (neighbor == null || neighbor.instanceId == 0) continue;
+
+                if (chunk.instanceId != neighbor.instanceId) {
+                    // False cross-instance link - remove it
+                    switch (i) {
+                        case 0: chunk.neighborNorth = -1; break;
+                        case 1: chunk.neighborSouth = -1; break;
+                        case 2: chunk.neighborEast = -1; break;
+                        case 3: chunk.neighborWest = -1; break;
+                    }
+                    repaired++;
+                }
+            }
+
+            // Also clean connectedChunks
+            chunk.connectedChunks.removeIf(connectedId -> {
+                ChunkNavData connected = graph.getChunk(connectedId);
+                return connected != null && connected.instanceId != 0
+                        && chunk.instanceId != connected.instanceId;
+            });
+        }
+        return repaired;
     }
 
     /**
@@ -706,6 +860,22 @@ public class ChunkNavManager {
 
     public boolean isInitialized() {
         return initialized;
+    }
+
+    /**
+     * Get the current world instance context.
+     * Used by ChunkNavRecorder to assign instanceId to newly recorded chunks.
+     */
+    public long getCurrentInstanceId() {
+        return currentInstanceId;
+    }
+
+    /**
+     * Set the current world instance context.
+     * Called by PortalTraversalTracker when player traverses a portal.
+     */
+    public void setCurrentInstanceId(long instanceId) {
+        this.currentInstanceId = instanceId;
     }
 
     /**

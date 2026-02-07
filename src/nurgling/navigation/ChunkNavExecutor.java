@@ -13,7 +13,9 @@ import nurgling.tools.NAlias;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static nurgling.navigation.ChunkNavConfig.*;
@@ -29,6 +31,9 @@ public class ChunkNavExecutor implements Action {
     private final ChunkNavManager manager;
 
     private int replanAttempts = 0;
+
+    // Track chunks where portal traversal failed - avoid them when replanning
+    private final Set<Long> failedPortalChunks = new HashSet<>();
 
     /**
      * Configuration for incremental walking toward a target.
@@ -151,11 +156,23 @@ public class ChunkNavExecutor implements Action {
             if (segment.type == ChunkPath.SegmentType.PORTAL) {
                 tickPortalTracker();
 
+                Results portalResult;
                 // If we found portal gob during walking, use it directly
                 if (portalGobFromWalk != null) {
-                    traversePortalGob(gui, portalGobFromWalk, targetGridId);
+                    portalResult = traversePortalGob(gui, portalGobFromWalk, targetGridId);
                 } else {
-                    findAndTraversePortalToGrid(gui, segment, targetGridId);
+                    portalResult = findAndTraversePortalToGrid(gui, segment, targetGridId);
+                }
+
+                // Handle portal traversal failure - replan instead of continuing
+                if (portalResult == null || !portalResult.IsSuccess()) {
+                    failedPortalChunks.add(segment.gridId);
+                    if (replanAttempts < MAX_REPLAN_ATTEMPTS) {
+                        replanAttempts++;
+                        gui.msg("ChunkNav: Replanning after portal failure");
+                        return replanAndContinue(gui);
+                    }
+                    return Results.FAIL();
                 }
 
                 currentLayer = getCurrentPlayerLayer();
@@ -212,8 +229,8 @@ public class ChunkNavExecutor implements Action {
             }
         }
 
-        // Fallback: Look for common portal gob patterns
-        Gob nearestPortal = findNearestPortalGob(gui, player);
+        // Fallback: Look for common portal gob patterns, filtered by expected type
+        Gob nearestPortal = findNearestPortalGob(gui, player, expectedPortalType);
         if (nearestPortal != null) {
             return traversePortalGob(gui, nearestPortal, targetGridId);
         }
@@ -228,8 +245,22 @@ public class ChunkNavExecutor implements Action {
     private List<ScoredPortal> rankPortalCandidates(List<ChunkPortal> portals, String expectedType,
                                                      long targetGridId, Layer targetLayer) {
         List<ScoredPortal> scored = new ArrayList<>();
+        String targetLayerStr = targetLayer != null ? targetLayer.toString() : null;
 
         for (ChunkPortal portal : portals) {
+            // CRITICAL: Skip portals whose type is incompatible with the target layer.
+            // E.g., a minehole (MINEHOLE) should never be used to reach "inside" layer.
+            // Re-classify type from gobName for safety (legacy data may have wrong types).
+            ChunkPortal.PortalType effectiveType = portal.type;
+            if (effectiveType == null && portal.gobName != null) {
+                effectiveType = ChunkPortal.classifyPortal(portal.gobName);
+            }
+            if (effectiveType != null && targetLayerStr != null) {
+                if (!isPortalTypeCompatible(effectiveType, targetLayerStr)) {
+                    continue;
+                }
+            }
+
             int score = 0;
 
             // Connects to target grid: +100
@@ -256,9 +287,36 @@ public class ChunkNavExecutor implements Action {
         return scored.stream().sorted().collect(Collectors.toList());
     }
 
-    private Gob findNearestPortalGob(NGameUI gui, Gob player) {
+    /**
+     * Check if a portal type is compatible with a target layer.
+     * Same rules as UnifiedTilePathfinder.isPortalTargetLayerValid().
+     */
+    private static boolean isPortalTypeCompatible(ChunkPortal.PortalType type, String targetLayer) {
+        if (type == null || targetLayer == null) return true;
+
+        switch (type) {
+            case MINEHOLE:
+            case MINE_ENTRANCE:
+                return "outside".equals(targetLayer);
+            case CELLAR:
+                return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
+            case LADDER:
+                return "outside".equals(targetLayer);
+            case STAIRS_UP:
+            case STAIRS_DOWN:
+                return "inside".equals(targetLayer);
+            case DOOR:
+                return "inside".equals(targetLayer) || "outside".equals(targetLayer);
+            default:
+                return true;
+        }
+    }
+
+    private Gob findNearestPortalGob(NGameUI gui, Gob player, String expectedType) {
         Gob nearest = null;
         double nearestDist = Double.MAX_VALUE;
+        Gob fallbackNearest = null;
+        double fallbackDist = Double.MAX_VALUE;
 
         synchronized (gui.map.glob.oc) {
             for (Gob gob : gui.map.glob.oc) {
@@ -267,7 +325,7 @@ public class ChunkNavExecutor implements Action {
                 String lower = gob.ngob.name.toLowerCase();
                 boolean isPortal = lower.contains("door") || lower.contains("stairs") ||
                                    lower.contains("cellar") || lower.contains("ladder") ||
-                                   lower.contains("entrance") ||
+                                   lower.contains("entrance") || lower.contains("minehole") ||
                                    lower.contains("stonemansion") || lower.contains("logcabin") ||
                                    lower.contains("timberhouse") || lower.contains("stonestead") ||
                                    lower.contains("greathall") || lower.contains("stonetower") ||
@@ -275,14 +333,23 @@ public class ChunkNavExecutor implements Action {
 
                 if (isPortal) {
                     double dist = player.rc.dist(gob.rc);
-                    if (dist < nearestDist && dist < MCache.tilesz.x * 10) {
-                        nearestDist = dist;
-                        nearest = gob;
+                    if (dist >= MCache.tilesz.x * 10) continue; // Too far
+
+                    // If we know the expected type, prefer matching portals
+                    if (expectedType != null && lower.contains(expectedType)) {
+                        if (dist < nearestDist) {
+                            nearestDist = dist;
+                            nearest = gob;
+                        }
+                    } else if (dist < fallbackDist) {
+                        fallbackDist = dist;
+                        fallbackNearest = gob;
                     }
                 }
             }
         }
-        return nearest;
+        // Return type-matched portal if found, otherwise fallback
+        return nearest != null ? nearest : fallbackNearest;
     }
 
     /**
@@ -327,6 +394,10 @@ public class ChunkNavExecutor implements Action {
     private String getExpectedPortalType(Layer sourceLayer, Layer targetLayer) {
         if (sourceLayer == null || targetLayer == null) return null;
 
+        // Outside -> inside: entering a building (door or building exterior)
+        if (sourceLayer == Layer.OUTSIDE && targetLayer == Layer.INSIDE) {
+            return "-door";  // Matches stonemansion-door, logcabin-door, etc.
+        }
         // Inside -> outside: use -door suffix (exiting building)
         if (sourceLayer == Layer.INSIDE && targetLayer == Layer.OUTSIDE) {
             return "-door";
@@ -346,9 +417,23 @@ public class ChunkNavExecutor implements Action {
     }
 
     private Results tryTraversePortal(NGameUI gui, Gob player, ChunkPortal recordedPortal, long targetGridId) throws InterruptedException {
-        Gob portalGob = findGobByName(gui, recordedPortal.gobName, player.rc, MCache.tilesz.x * 30);
+        // Use larger search radius for building exteriors (they can be on adjacent chunks)
+        double searchRadius = isBuildingExteriorGob(recordedPortal.gobName)
+            ? MCache.tilesz.x * 80   // ~880 units - covers buildings on adjacent chunks
+            : MCache.tilesz.x * 30;  // ~330 units - standard for doors/portals
+        Gob portalGob = findGobByName(gui, recordedPortal.gobName, player.rc, searchRadius);
         if (portalGob == null) {
             return null;
+        }
+
+        String portalName = portalGob.ngob != null ? portalGob.ngob.name : "unknown";
+
+        // Building exterior gobs (greathall, stonemansion, etc.) are large structures.
+        // PathFinder can't walk to their center (it's inside the building footprint).
+        // Instead, skip walking and go directly to traversePortalGob - openDoorOnAGob()
+        // sends a click that makes the game auto-path the player to the door.
+        if (isBuildingExteriorGob(portalName)) {
+            return traversePortalGob(gui, portalGob, targetGridId);
         }
 
         // For buildings/doors, navigate to access point first
@@ -375,6 +460,15 @@ public class ChunkNavExecutor implements Action {
         return traversePortalGob(gui, portalGob, targetGridId);
     }
 
+    /**
+     * Check if a gob name is a building exterior (whole-building gob, not a door).
+     * These gobs represent the building structure from outside - you click them to enter.
+     * Their center position is inside the building footprint and not walkable.
+     */
+    private boolean isBuildingExteriorGob(String gobName) {
+        return ChunkPortal.isBuildingExterior(gobName);
+    }
+
     private Gob findGobByName(NGameUI gui, String gobName, Coord2d center, double maxDist) {
         Gob closest = null;
         double closestDist = maxDist;
@@ -399,16 +493,8 @@ public class ChunkNavExecutor implements Action {
     private Results traversePortalGob(NGameUI gui, Gob portalGob, long targetGridId) throws InterruptedException {
         String portalName = portalGob.ngob != null ? portalGob.ngob.name : "unknown";
 
-        System.out.println("[ChunkNavExecutor] traversePortalGob:");
-        System.out.println("  - Portal: " + portalName);
-        System.out.println("  - Portal position: " + portalGob.rc);
-        System.out.println("  - Target gridId: " + targetGridId);
-
-        // Get player position before portal
-        Gob playerBefore = gui.map.player();
-        if (playerBefore != null) {
-            System.out.println("  - Player position BEFORE portal: " + playerBefore.rc);
-        }
+        // Get player grid BEFORE portal (save grid ID now - gob.rc is live/mutable)
+        long playerGridBefore = graph.getPlayerChunkId();
 
         // Portal recording is handled automatically by PortalTraversalTracker via getLastActions()
         // No need to explicitly set the clicked portal - the tracker will detect it
@@ -421,8 +507,6 @@ public class ChunkNavExecutor implements Action {
                                    portalName.contains("minehole") ||
                                    portalName.contains("-door");
 
-        System.out.println("  - Is loading portal: " + isLoadingPortal);
-
         if (isLoadingPortal) {
             // Cellar doors, stairs, ladders, mines - use simple right-click to enter
             NUtils.rclickGob(portalGob);
@@ -432,29 +516,16 @@ public class ChunkNavExecutor implements Action {
         }
 
         // Wait for the target grid to be fully loaded (mesh and fog ready)
-        System.out.println("[ChunkNavExecutor] Waiting for target grid " + targetGridId + " to load...");
         NUtils.getUI().core.addTask(new WaitForMapLoadByGridId(gui, targetGridId));
         NUtils.getUI().core.addTask(new WaitForGobStability());
 
-        // Log player position after portal traversal
-        Gob playerAfter = gui.map.player();
-        if (playerAfter != null) {
-            System.out.println("[ChunkNavExecutor] Player position AFTER portal: " + playerAfter.rc);
-        }
+        // Verify the player actually changed grids (didn't get stuck behind a fence etc.)
+        long playerGridAfter = graph.getPlayerChunkId();
 
-        // Log loaded grids after portal
-        try {
-            MCache mcache = gui.map.glob.map;
-            synchronized (mcache.grids) {
-                System.out.println("[ChunkNavExecutor] Loaded grids after portal: " + mcache.grids.size());
-                for (MCache.Grid g : mcache.grids.values()) {
-                    if (g.id == targetGridId) {
-                        System.out.println("[ChunkNavExecutor] Target grid FOUND in MCache! ul=" + g.ul);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Ignore
+        if (playerGridBefore != -1 && playerGridAfter != -1 && playerGridAfter == playerGridBefore) {
+            // Player's grid didn't change - portal traversal failed
+            // (e.g., fence blocking path to building, building too far, etc.)
+            return Results.FAIL();
         }
 
         return Results.SUCCESS();
@@ -576,81 +647,41 @@ public class ChunkNavExecutor implements Action {
     }
 
     private SegmentWalkResult followSegmentTiles(ChunkPath.PathSegment segment, NGameUI gui, long targetGridId) throws InterruptedException {
-        System.out.println("[ChunkNavExecutor] followSegmentTiles called:");
-        System.out.println("  - Segment gridId: " + segment.gridId);
-        System.out.println("  - Segment type: " + segment.type);
-        System.out.println("  - Segment steps count: " + (segment.steps != null ? segment.steps.size() : 0));
-        System.out.println("  - Segment worldTileOrigin: " + segment.worldTileOrigin);
-        System.out.println("  - Target gridId: " + targetGridId);
-
         if (segment.isEmpty()) {
-            System.out.println("[ChunkNavExecutor] Segment is empty, returning success");
             return SegmentWalkResult.success();
         }
 
         ChunkNavData segmentChunk = graph.getChunk(segment.gridId);
-        System.out.println("[ChunkNavExecutor] SegmentChunk from graph: " + (segmentChunk != null ? "found" : "NOT FOUND"));
-        if (segmentChunk != null) {
-            System.out.println("  - Layer: " + segmentChunk.layer);
-            System.out.println("  - Stored worldTileOrigin: " + segmentChunk.worldTileOrigin);
-        }
 
         // Get LIVE worldTileOrigin from MCache
         Coord liveWorldTileOrigin = null;
         try {
             MCache mcache = gui.map.glob.map;
             synchronized (mcache.grids) {
-                System.out.println("[ChunkNavExecutor] Searching MCache for gridId " + segment.gridId + " (loaded grids: " + mcache.grids.size() + ")");
                 for (MCache.Grid grid : mcache.grids.values()) {
                     if (grid.id == segment.gridId) {
                         liveWorldTileOrigin = grid.ul;
-                        System.out.println("[ChunkNavExecutor] FOUND in MCache! liveWorldTileOrigin = " + liveWorldTileOrigin);
                         break;
                     }
                 }
-                if (liveWorldTileOrigin == null) {
-                    System.out.println("[ChunkNavExecutor] NOT FOUND in MCache - grid not loaded");
-                }
             }
         } catch (Exception e) {
-            System.out.println("[ChunkNavExecutor] Exception accessing MCache: " + e.getMessage());
+            // Ignore
         }
 
         // Get player position for reference
         Gob player = gui.map.player();
-        if (player != null) {
-            System.out.println("[ChunkNavExecutor] Player position: " + player.rc);
-        }
 
         // Determine which worldTileOrigin to use
         Coord currentWorldTileOrigin = liveWorldTileOrigin;
-        String originSource = "LIVE";
         if (currentWorldTileOrigin == null && segmentChunk != null && segmentChunk.worldTileOrigin != null) {
             currentWorldTileOrigin = segmentChunk.worldTileOrigin;
-            originSource = "STORED_CHUNK";
         } else if (currentWorldTileOrigin == null && segment.worldTileOrigin != null) {
             currentWorldTileOrigin = segment.worldTileOrigin;
-            originSource = "SEGMENT";
         }
-
-        System.out.println("[ChunkNavExecutor] Using worldTileOrigin: " + currentWorldTileOrigin + " (source: " + originSource + ")");
 
         if (currentWorldTileOrigin == null) {
-            System.out.println("[ChunkNavExecutor] ERROR: No worldTileOrigin available!");
             return SegmentWalkResult.fail();
-        }
-
-        // Show first waypoint calculation
-        if (!segment.steps.isEmpty()) {
-            ChunkPath.TileStep firstStep = segment.steps.get(0);
-            Coord worldTile = currentWorldTileOrigin.add(firstStep.localCoord);
-            Coord2d waypoint = worldTile.mul(MCache.tilesz).add(MCache.tilehsz);
-            System.out.println("[ChunkNavExecutor] First step localCoord: " + firstStep.localCoord);
-            System.out.println("[ChunkNavExecutor] First step worldTile: " + worldTile);
-            System.out.println("[ChunkNavExecutor] First step waypoint: " + waypoint);
-            if (player != null) {
-                System.out.println("[ChunkNavExecutor] Distance to first waypoint: " + player.rc.dist(waypoint));
-            }
         }
 
         // For PORTAL segments, check if we should look for portal gob during walking
@@ -1253,6 +1284,7 @@ public class ChunkNavExecutor implements Action {
         }
 
         ChunkNavPlanner planner = new ChunkNavPlanner(graph);
+        planner.setExcludedPortalChunks(failedPortalChunks);
         ChunkPath newPath = planner.planToArea(targetArea);
 
         if (newPath == null || newPath.isEmpty()) {
@@ -1261,6 +1293,7 @@ public class ChunkNavExecutor implements Action {
 
         ChunkNavExecutor newExecutor = new ChunkNavExecutor(newPath, targetArea, manager);
         newExecutor.replanAttempts = this.replanAttempts;
+        newExecutor.failedPortalChunks.addAll(this.failedPortalChunks);
         return newExecutor.run(gui);
     }
 

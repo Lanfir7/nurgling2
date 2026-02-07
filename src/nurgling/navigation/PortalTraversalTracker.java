@@ -23,6 +23,7 @@ import static nurgling.navigation.ChunkNavConfig.*;
 public class PortalTraversalTracker {
     private final ChunkNavGraph graph;
     private final ChunkNavRecorder recorder;
+    private final ChunkNavManager manager;
 
     // State tracking
     private long lastGridId = -1;
@@ -89,9 +90,10 @@ public class PortalTraversalTracker {
         "windmill"
     };
 
-    public PortalTraversalTracker(ChunkNavGraph graph, ChunkNavRecorder recorder) {
+    public PortalTraversalTracker(ChunkNavGraph graph, ChunkNavRecorder recorder, ChunkNavManager manager) {
         this.graph = graph;
         this.recorder = recorder;
+        this.manager = manager;
     }
 
     /**
@@ -142,9 +144,32 @@ public class PortalTraversalTracker {
                 if (portalCoord != null) {
                     cachedLastActionsGobLocalCoord = portalCoord;
                 }
-                // Use player's grid, not portal gob's grid - this ensures the portal is recorded
-                // in the chunk where the player accesses it from (fixes large building boundary bug)
-                cachedLastActionsGobGridId = currentGridId;
+
+                // For building exteriors, use the GOB's actual grid (where the building center is).
+                // Previously we used the player's grid, but this created "phantom" portals on
+                // adjacent chunks when the player clicked a building from across a chunk boundary.
+                // The phantom portal was physically unreachable (fences, obstacles) causing
+                // the pathfinder to route through inaccessible paths.
+                if (ChunkPortal.isBuildingExterior(gobName)) {
+                    long gobGridId = getGobGridId(lastActions.gob);
+                    if (gobGridId != -1) {
+                        cachedLastActionsGobGridId = gobGridId;
+                        // If the building is on a different grid than the player, the door offset
+                        // calculation may have produced a coord on the wrong grid.
+                        // Use the building center position on its own grid instead.
+                        if (gobGridId != currentGridId) {
+                            Coord gobLocalCoord = getGobLocalCoord(lastActions.gob);
+                            if (gobLocalCoord != null) {
+                                cachedLastActionsGobLocalCoord = gobLocalCoord;
+                            }
+                        }
+                    } else {
+                        cachedLastActionsGobGridId = currentGridId; // Fallback
+                    }
+                } else {
+                    // Non-building portals: use player's grid (doors, cellars, mines are small)
+                    cachedLastActionsGobGridId = currentGridId;
+                }
             }
         }
     }
@@ -267,10 +292,101 @@ public class PortalTraversalTracker {
             lastProcessedPortalGobId = cachedLastActionsGob.id;
         }
 
+        // Update instanceId context for subsequent chunk recordings
+        // This determines which instance newly recorded chunks belong to
+        updateInstanceIdAfterTraversal(toGridId, exitName);
+
         // Clear tracking state after use
         cachedLastActionsGob = null;
         cachedLastActionsGobLocalCoord = null;
         cachedLastActionsGobGridId = -1;
+    }
+
+    /**
+     * Update the current instanceId after a portal traversal.
+     * 
+     * Rules:
+     * - If destination chunk already has a known instanceId, inherit it
+     * - If going to surface (exiting mine/building), use SURFACE_INSTANCE
+     * - If entering a new instance (mine, building interior, cellar), use toGridId as instanceId
+     *
+     * How to tell direction:
+     * - exitPortalName is what we SEE after traversal (the exit portal on the destination side)
+     * - If exit portal is a building exterior (stonemansion, logcabin, etc.) -> we left a building -> surface
+     * - If exit portal is a minehole -> we left a mine -> surface
+     * - If exit portal is a "-door" -> we entered a building -> new instance
+     * - If exit portal is a ladder -> we entered a mine -> new instance
+     * - If exit portal is cellarstairs -> we entered a cellar -> new instance
+     * - If exit portal is cellardoor -> we left a cellar -> building interior instance
+     */
+    private void updateInstanceIdAfterTraversal(long toGridId, String exitPortalName) {
+        if (manager == null) return;
+
+        // First check: does the destination chunk already have a known instanceId?
+        ChunkNavData destChunk = graph.getChunk(toGridId);
+        if (destChunk != null && destChunk.instanceId != 0) {
+            manager.setCurrentInstanceId(destChunk.instanceId);
+            return;
+        }
+
+        // Determine from exit portal whether we're going to surface or a new instance
+        long newInstanceId = determineInstanceIdFromExitPortal(toGridId, exitPortalName);
+        manager.setCurrentInstanceId(newInstanceId);
+
+        // Also assign the instanceId to the destination chunk if it exists
+        if (destChunk != null && destChunk.instanceId == 0) {
+            destChunk.instanceId = newInstanceId;
+        }
+    }
+
+    /**
+     * Determine the instanceId based on the exit portal name.
+     * The exit portal is what we see AFTER traversing - it tells us where we ended up.
+     */
+    private long determineInstanceIdFromExitPortal(long toGridId, String exitPortalName) {
+        if (exitPortalName == null) return ChunkNavManager.SURFACE_INSTANCE;
+
+        String lower = exitPortalName.toLowerCase();
+
+        // Exit portal is a building exterior -> we LEFT a building -> now on surface
+        if (isBuildingExteriorName(lower)) {
+            return ChunkNavManager.SURFACE_INSTANCE;
+        }
+
+        // Exit portal is a minehole -> we LEFT a mine -> now on surface
+        if (lower.contains("minehole")) {
+            return ChunkNavManager.SURFACE_INSTANCE;
+        }
+
+        // Exit portal is a "-door" -> we ENTERED a building -> new instance
+        // Exit portal is a ladder -> we ENTERED a mine -> new instance
+        // Exit portal is cellarstairs -> we ENTERED a cellar -> new instance
+        // Exit portal is cellardoor -> we LEFT a cellar -> building interior instance
+        // For all of these: use toGridId as the new instance identifier
+        // Exception: cellardoor means we're back in the building interior
+        if (lower.contains("cellardoor")) {
+            // We left the cellar back into the building interior
+            // Try to find the building interior instanceId from nearby chunks
+            // Fallback: use toGridId
+            return toGridId;
+        }
+
+        // All other exits (ladder, -door, cellarstairs, upstairs, downstairs) -> new instance
+        return toGridId;
+    }
+
+    /**
+     * Check if a portal name is a building exterior (visible from outside).
+     */
+    private boolean isBuildingExteriorName(String lowerName) {
+        // These are building gob names (without "-door") indicating we're outside looking at the building
+        return (lowerName.contains("stonemansion") && !lowerName.contains("-door")) ||
+               (lowerName.contains("logcabin") && !lowerName.contains("-door")) ||
+               (lowerName.contains("timberhouse") && !lowerName.contains("-door")) ||
+               (lowerName.contains("stonestead") && !lowerName.contains("-door")) ||
+               (lowerName.contains("greathall") && !lowerName.contains("-door")) ||
+               (lowerName.contains("stonetower") && !lowerName.contains("-door")) ||
+               (lowerName.contains("windmill") && !lowerName.contains("-door"));
     }
 
     /**
@@ -353,6 +469,24 @@ public class PortalTraversalTracker {
             // Ignore
         }
         return null;
+    }
+
+    /**
+     * Get the grid ID that a gob belongs to (based on its center position).
+     * Used to determine the correct chunk for building exterior portals.
+     */
+    private long getGobGridId(Gob gob) {
+        try {
+            MCache mcache = NUtils.getGameUI().map.glob.map;
+            Coord tileCoord = gob.rc.floor(MCache.tilesz);
+            MCache.Grid grid = mcache.getgridt(tileCoord);
+            if (grid != null) {
+                return grid.id;
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return -1;
     }
 
     /**
