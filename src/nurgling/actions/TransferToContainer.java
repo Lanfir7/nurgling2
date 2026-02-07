@@ -8,6 +8,8 @@ import nurgling.tasks.*;
 import nurgling.tools.*;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 
 public class TransferToContainer implements Action
 {
@@ -82,7 +84,7 @@ public class TransferToContainer implements Action
                             ArrayList<WItem> coorditems = new ArrayList<>();
                             for (WItem witem : witems)
                             {
-                                if (witem.item.spr.sz().div(UI.scale(32)).equals(coord.y, coord.x))
+                                if (witem.item.spr != null && witem.item.spr.sz().div(UI.scale(32)).equals(coord.y, coord.x))
                                 {
                                     coorditems.add(witem);
                                 }
@@ -96,7 +98,7 @@ public class TransferToContainer implements Action
                                 coorditems = new ArrayList<>();
                                 for (WItem witem : witems)
                                 {
-                                    if (witem.item.spr.sz().div(UI.scale(32)).equals(coord.y, coord.x))
+                                    if (witem.item.spr != null && witem.item.spr.sz().div(UI.scale(32)).equals(coord.y, coord.x))
                                     {
                                         coorditems.add(witem);
                                     }
@@ -280,6 +282,20 @@ public class TransferToContainer implements Action
         return transfer_size;
     }
 
+    private static final Comparator<WItem> QUALITY_DESC = new Comparator<WItem>()
+    {
+        @Override
+        public int compare(WItem a, WItem b)
+        {
+            Float qa = ((NGItem) a.item).quality;
+            Float qb = ((NGItem) b.item).quality;
+            if (qa == null && qb == null) return 0;
+            if (qa == null) return 1;
+            if (qb == null) return -1;
+            return Float.compare(qb, qa);
+        }
+    };
+
     private static ArrayList<WItem> sortItemsByPriority(ArrayList<WItem> items, String itemName, boolean transferStage)
     {
         ArrayList<WItem> notFullStacks = new ArrayList<>();
@@ -306,6 +322,10 @@ public class TransferToContainer implements Action
                 singleItems.add(item);
             }
         }
+
+        Collections.sort(notFullStacks, QUALITY_DESC);
+        Collections.sort(singleItems, QUALITY_DESC);
+        Collections.sort(fullStacks, QUALITY_DESC);
 
         ArrayList<WItem> result = new ArrayList<>();
 

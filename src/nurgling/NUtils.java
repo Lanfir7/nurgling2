@@ -865,15 +865,15 @@ public class NUtils
     public static boolean navigateToArea(NArea area) throws InterruptedException
     {
         if (area == null) return false;
-        
+
         String zoneName = (area.name != null) ? area.name : ("#" + area.id);
-        
-        // Check if player is already inside or very close to the area
-        // If yes - no need for global navigation
+
+        // Check if any corner of the area is reachable via local pathfinding
+        // If yes - we're already close enough, no need to use global navigation
         if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
             return true;
         }
-        
+
         // Area is not reachable by local PF, use chunk navigation
         // Plan to all 4 corners in parallel and choose the shortest path
         ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
@@ -941,13 +941,13 @@ public class NUtils
     {
         NArea area = NContext.findSpecGlobal(string.toString());
         if (area == null) return false;
-        
+
         // Check if any corner of the area is reachable via local pathfinding
         // If yes - we're already close enough, no need to use global navigation
         if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
             return true;
         }
-        
+
         // Area is not reachable by local PF, use chunk navigation
         // Plan to all 4 corners in parallel and choose the shortest path
         ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();

@@ -38,11 +38,30 @@ public class Craft implements Action {
         this(mwnd, 1);
     }
 
+    /**
+     * Создает Craft в режиме prefilled - ингредиенты уже в инвентаре.
+     * TakeItems2 будет пропущен, крафт начнётся сразу.
+     * @param mwnd окно крафта
+     * @param size количество крафтов
+     * @param prefilled true если ингредиенты уже в инвентаре
+     */
+    public Craft(NMakewindow mwnd, int size, boolean prefilled) {
+        this.mwnd = mwnd;
+        this.count = size;
+        this.prefilled = prefilled;
+    }
+
     NMakewindow mwnd = null;
     String tools = null;
     int count = 0;
 
     boolean isGlobalMode = false;
+
+    /**
+     * Режим prefilled - ингредиенты уже загружены в инвентарь.
+     * Пропускает TakeItems2 при крафте.
+     */
+    boolean prefilled = false;
 
     private int getActualItemCount(WItem item) {
         if (item.item.info != null) {
@@ -243,12 +262,12 @@ public class Craft implements Action {
             if (s.categories && s.ing == null) {
                 selectIngredientFromCategory(s);
             }
-            
+
             // Skip ignored optional ingredients
             if (s.ing != null && s.ing.isIgnored) {
                 continue;
             }
-            
+
             // Determine the item name: if useCategory is set, use category name; otherwise use specific item
             String item;
             if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
@@ -261,16 +280,16 @@ public class Craft implements Action {
                 // Specific item selected or no selection
                 item = s.ing == null ? s.name : s.ing.name;
             }
-            
-            if (ncontext.isInBarrel(item)) {
+
+            if (ncontext.isInBarrel(item) && ncontext.getPlacedBarrelHash(item) == null) {
                 if(ncontext.workstation == null) {
                     new TransferBarrelInWorkArea(ncontext, item).run(gui);
                 }
-                else if(ncontext.workstation.targetPoint == null)
-                {
+                else {
                     new TransferBarrelToWorkstation(ncontext, item).run(gui);
                 }
-            } else {
+            } else if (!prefilled) {
+                // В режиме prefilled ингредиенты уже в инвентаре, пропускаем TakeItems2
                 if (!new TakeItems2(ncontext, item, s.count * for_craft).run(gui).IsSuccess()) {
                     return Results.ERROR("Failed to take items: " + item);
                 }
@@ -291,34 +310,7 @@ public class Craft implements Action {
             new PathFinder(center).run(gui);
         }
 
-        int count = 0;
-        ArrayList<Long> barrelIds = GetBarrelsIds(ncontext);
-        
-        for (Long barrelid : barrelIds) {
-            Gob barrel = Finder.findGob(barrelid);
-            if (barrel == null) {
-                continue;
-            }
-            
-            // Check distance to barrel - need to be close enough to interact
-            double distToBarrel = NUtils.player().rc.dist(barrel.rc);
-            
-            if (distToBarrel > 20) {
-                // Too far from barrel, need to move closer
-                new PathFinder(barrel).run(gui);
-            }
-            
-            gui.map.wdgmsg("click", Coord.z, barrel.rc.floor(posres), 3, 0, 0, (int) barrel.id,
-                    barrel.rc.floor(posres), 0, -1);
-            count++;
-            int finalCount = count;
-            NUtils.addTask(new NTask() {
-                @Override
-                public boolean check() {
-                    return NUtils.getGameUI().getWindowsNum("Barrel") == finalCount;
-                }
-            });
-        }
+        openBarrelWindows(ncontext, gui);
         ArrayList<Window> windows = NUtils.getGameUI().getWindows("Barrel");
         
         boolean hasEnoughResources = true;
@@ -441,6 +433,7 @@ public class Craft implements Action {
                 if (!new UseWorkStation(ncontext).run(gui).IsSuccess()) {
                     return Results.ERROR("Failed to use workstation");
                 }
+                openBarrelWindows(ncontext, gui);
                 craftProc(ncontext, gui, resfc, targetName);
             }
         }
@@ -667,6 +660,33 @@ public class Craft implements Action {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    private void openBarrelWindows(NContext ncontext, NGameUI gui) throws InterruptedException {
+        ArrayList<Long> barrelIds = GetBarrelsIds(ncontext);
+        int count = 0;
+        for (Long barrelid : barrelIds) {
+            Gob barrel = Finder.findGob(barrelid);
+            if (barrel == null) {
+                continue;
+            }
+
+            double distToBarrel = NUtils.player().rc.dist(barrel.rc);
+            if (distToBarrel > 20) {
+                new PathFinder(barrel).run(gui);
+            }
+
+            gui.map.wdgmsg("click", Coord.z, barrel.rc.floor(posres), 3, 0, 0, (int) barrel.id,
+                    barrel.rc.floor(posres), 0, -1);
+            count++;
+            int finalCount = count;
+            NUtils.addTask(new NTask() {
+                @Override
+                public boolean check() {
+                    return NUtils.getGameUI().getWindowsNum("Barrel") >= finalCount;
+                }
+            });
         }
     }
 
