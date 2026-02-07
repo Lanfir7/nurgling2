@@ -28,7 +28,8 @@ public class Clouds implements Glob.Weather {
     public Pipe.Op state() {
 	return(p -> {
 		// Check if cloud shadows are disabled - allow dynamic toggling
-		if ((Boolean)NConfig.get(NConfig.Key.disableCloudShadows)) {
+		Boolean disableClouds = (Boolean)NConfig.get(NConfig.Key.disableCloudShadows);
+		if (disableClouds != null && disableClouds) {
 		    return;  // Skip effect if disabled
 		}
 		CloudShadow ret = new CloudShadow(clouds, Glob.amblight(p), new Coord3f(xv, yv, 0), scale);

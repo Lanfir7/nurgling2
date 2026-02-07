@@ -691,6 +691,13 @@ public class NGob
                         {
                             customMask = true;
                             parent.addcustomol(new NBarrelOverlay(parent));
+                        } else if (name.equals("gfx/terobjs/largechest"))
+                        {
+                            try {
+                                parent.setattr(new nurgling.gattrr.NLargeChestColor(parent));
+                            } catch (Exception e) {
+                                System.err.println("Failed to create NLargeChestColor: " + e.getMessage());
+                            }
                         } else if (name.contains("gfx/terobjs/items/gems/gemstone"))
                         {
                             parent.addcustomol(new NTexMarker(parent, new TexI(Resource.loadsimg("marks/gem")), () -> false));

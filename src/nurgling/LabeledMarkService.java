@@ -591,6 +591,58 @@ public class LabeledMarkService implements ProfileAwareService {
     }
 
     /**
+     * Применяет маркеры животных с уже предзагруженными иконками.
+     * Этот метод вызывается на UI-потоке, но не загружает иконки — они уже готовы.
+     * Используется для устранения лагов UI при загрузке маркеров из БД.
+     * 
+     * @param preloadedMarkers список маркеров с предзагруженными иконками
+     */
+    public void mergeAnimalMarkersFromDbPreloaded(List<AnimalMarkerSyncService.PreloadedAnimalMarker> preloadedMarkers) {
+        if (preloadedMarkers == null) return;
+        lock.writeLock().lock();
+        try {
+            // Удаляем старые маркеры животных
+            List<String> toRemove = new ArrayList<>();
+            for (String locationId : labeledMarks.keySet()) {
+                if (locationId.startsWith("animal_")) toRemove.add(locationId);
+            }
+            for (String locationId : toRemove) {
+                removeMarkFromIndexes(locationId);
+            }
+            
+            // Добавляем новые маркеры с уже загруженными иконками
+            for (AnimalMarkerSyncService.PreloadedAnimalMarker pm : preloadedMarkers) {
+                LabeledMinimapMark mark = new LabeledMinimapMark(
+                    pm.locationId, pm.label, pm.resourceType, pm.segmentId, pm.tileCoords,
+                    pm.gridId, pm.localTileCoords, pm.icon, null, pm.killedAtMs, pm.killedBy, 
+                    pm.iconPath, pm.animalType);
+                labeledMarks.put(pm.locationId, mark);
+                addMarkToIndexes(mark);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Получает иконку животного из кэша.
+     * Используется AnimalMarkerSyncService для проверки кэша перед загрузкой.
+     */
+    public BufferedImage getAnimalIconFromCache(long gobId) {
+        return animalIconCache.get(gobId);
+    }
+    
+    /**
+     * Добавляет иконку животного в кэш.
+     * Используется AnimalMarkerSyncService после загрузки иконки в фоновом потоке.
+     */
+    public void cacheAnimalIcon(long gobId, BufferedImage icon) {
+        if (icon != null) {
+            animalIconCache.put(gobId, icon);
+        }
+    }
+
+    /**
      * Обновляет иконку маркера животного (ленивая загрузка после перезахода).
      */
     public void updateAnimalMarkerIcon(String locationId, java.awt.image.BufferedImage icon) {

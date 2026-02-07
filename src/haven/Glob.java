@@ -398,7 +398,8 @@ public class Glob {
 	public void brighten(){
 		synchronized(this) {
 			double coef = 0.0;
-			if((Boolean)NConfig.get(NConfig.Key.nightVision)) {
+			Boolean nightVision = (Boolean)NConfig.get(NConfig.Key.nightVision);
+			if(nightVision != null && nightVision) {
 				Object brightness = NConfig.get(NConfig.Key.nightVisionBrightness);
 				if(brightness instanceof Number) {
 					coef = ((Number)brightness).doubleValue();

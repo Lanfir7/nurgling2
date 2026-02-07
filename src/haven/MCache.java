@@ -1197,7 +1197,8 @@ public class MCache implements MapSource {
     }
 
     public Coord3f getzp(Coord2d pc) {
-		if((Boolean)NConfig.get(NConfig.Key.flatsurface))
+		Boolean flatSurface = (Boolean)NConfig.get(NConfig.Key.flatsurface);
+		if(flatSurface != null && flatSurface)
 			return(Coord3f.of((float)pc.x, (float)pc.y, 0));
 		else
 			return(Coord3f.of((float)pc.x, (float)pc.y, (float)getcz(pc)));

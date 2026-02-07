@@ -62,24 +62,38 @@ public class NLoginScreen extends LoginScreen
                 loginItems.add(new NLoginDataItem(item));
             }
         }
-        // Check for version updates - failures are silently ignored
-        try
-        {
-            if (new File("ver").exists())
-            {
+        
+        // Check for version updates asynchronously to avoid blocking UI
+        checkVersionAsync();
+    }
+    
+    /**
+     * Асинхронная проверка версии — HTTP-запрос выполняется в отдельном потоке,
+     * чтобы не блокировать UI при медленном соединении.
+     */
+    private void checkVersionAsync() {
+        Thread versionCheckThread = new Thread(() -> {
+            try {
+                if (!new File("ver").exists()) {
+                    return;
+                }
+                
                 URL upd_url = new URL((String) Objects.requireNonNull(NConfig.get(NConfig.Key.baseurl)));
                 ReadableByteChannel rbc = null;
                 FileOutputStream fos = null;
                 BufferedReader reader = null;
                 BufferedReader reader2 = null;
                 
+                String remoteLine = null;
+                String localLine = null;
+                
                 try {
                     // Attempt to download version file
                     rbc = Channels.newChannel(upd_url.openStream());
                     
                     // Check if channel was successfully created before proceeding
-                    if(rbc == null) {
-                        return; // Silently skip version check if update URL is unavailable
+                    if (rbc == null) {
+                        return;
                     }
                     
                     fos = new FileOutputStream("tmp_ver");
@@ -88,35 +102,13 @@ public class NLoginScreen extends LoginScreen
                     
                     // Read remote version
                     reader = new BufferedReader(new InputStreamReader(Files.newInputStream(Paths.get("tmp_ver")), StandardCharsets.UTF_8));
-                    String line = reader.readLine();
+                    remoteLine = reader.readLine();
                     reader.close();
                     
                     // Read local version
                     reader2 = new BufferedReader(new InputStreamReader(Files.newInputStream(Paths.get("ver")), StandardCharsets.UTF_8));
-                    String line2 = reader2.readLine();
+                    localLine = reader2.readLine();
                     reader2.close();
-                    
-                    // Compare versions
-                    if (line != null && line2 != null && !line2.contains(line))
-                    {
-                        Window win = adda(new Window(new Coord(UI.scale(150, 40)), L10n.get("login.attention"))
-                        {
-                            @Override
-                            public void wdgmsg(String msg, Object... args)
-                            {
-                                if (msg.equals("close"))
-                                {
-                                    hide();
-                                }
-                                else
-                                {
-                                    super.wdgmsg(msg, args);
-                                }
-                            }
-                        }, bgc.x, bg.sz().y / 8, 0.5, 0.5);
-
-                        win.add(new Label(L10n.get("login.new_version")));
-                    }
                 } finally {
                     // Ensure all resources are properly closed
                     try { if (rbc != null) rbc.close(); } catch (IOException ignored) {}
@@ -124,12 +116,40 @@ public class NLoginScreen extends LoginScreen
                     try { if (reader != null) reader.close(); } catch (IOException ignored) {}
                     try { if (reader2 != null) reader2.close(); } catch (IOException ignored) {}
                 }
+                
+                // Compare versions and show update window on UI thread if needed
+                final String remoteVersion = remoteLine;
+                final String localVersion = localLine;
+                if (remoteVersion != null && localVersion != null && !localVersion.contains(remoteVersion)) {
+                    java.awt.EventQueue.invokeLater(() -> showVersionUpdateWindow());
+                }
+            } catch (Exception e) {
+                // Silently ignore all version check errors to prevent login screen crashes
+                System.err.println("[NLoginScreen] Version check failed: " + e.getMessage());
             }
-        }
-        catch (Exception e)
-        {
-            // Silently ignore all version check errors to prevent login screen crashes
-            System.err.println("[NLoginScreen] Version check failed: " + e.getMessage());
+        }, "VersionCheck");
+        versionCheckThread.setDaemon(true);
+        versionCheckThread.start();
+    }
+    
+    /**
+     * Показывает окно с уведомлением о новой версии (вызывается на UI-потоке).
+     */
+    private void showVersionUpdateWindow() {
+        try {
+            Window win = adda(new Window(new Coord(UI.scale(150, 40)), L10n.get("login.attention")) {
+                @Override
+                public void wdgmsg(String msg, Object... args) {
+                    if (msg.equals("close")) {
+                        hide();
+                    } else {
+                        super.wdgmsg(msg, args);
+                    }
+                }
+            }, bgc.x, bg.sz().y / 8, 0.5, 0.5);
+            win.add(new Label(L10n.get("login.new_version")));
+        } catch (Exception e) {
+            System.err.println("[NLoginScreen] Failed to show version update window: " + e.getMessage());
         }
     }
 

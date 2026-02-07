@@ -64,6 +64,7 @@ public class OCache implements Iterable<Gob> {
     private Glob glob;
     private final Collection<ChangeCallback> cbs = new WeakList<ChangeCallback>();
 	public final NPathVisualizer paths = new NPathVisualizer();
+    
     public interface ChangeCallback {
 	public void added(Gob ob);
 	public void removed(Gob ob);

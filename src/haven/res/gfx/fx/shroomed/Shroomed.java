@@ -120,7 +120,8 @@ public class Shroomed implements Glob.Weather, RenderTree.Node {
 
     public final RenderContext.PostProcessor proc = new RenderContext.PostProcessor() {
 	    public void run(GOut g, Texture2D.Sampler2D in) {
-		if ((Boolean)NConfig.get(NConfig.Key.disableDrugEffects)) {
+		Boolean disableDrugs = (Boolean)NConfig.get(NConfig.Key.disableDrugEffects);
+		if (disableDrugs != null && disableDrugs) {
 		    g.image(new TexRaw(in, true), Coord.z);  // Just pass through without effect
 		    return;
 		}

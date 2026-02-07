@@ -128,9 +128,11 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
 
 	protected Coord inversion(Coord c, Coord o) {
+		Boolean invertHor = (Boolean)NConfig.get(NConfig.Key.invert_hor);
+		Boolean invertVer = (Boolean)NConfig.get(NConfig.Key.invert_ver);
 		return c.add(
-				(Boolean)NConfig.get(NConfig.Key.invert_hor) ? (o.x - c.x) * 2 : 0,
-				(Boolean)NConfig.get(NConfig.Key.invert_ver) ? (o.y - c.y) * 2 : 0
+				(invertHor != null && invertHor) ? (o.x - c.x) * 2 : 0,
+				(invertVer != null && invertVer) ? (o.y - c.y) * 2 : 0
 		);
 	}
     }

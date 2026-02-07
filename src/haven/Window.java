@@ -780,7 +780,8 @@ public class Window extends Widget {
 	public NormAnim(double t) {this(t, 0.0, false);}
 
 	public boolean tick(double dt) {
-		if((Boolean)NConfig.get(NConfig.Key.disableWinAnim)) {
+		Boolean disableAnim = (Boolean)NConfig.get(NConfig.Key.disableWinAnim);
+		if(disableAnim != null && disableAnim) {
 			return true;
 		}
 		else

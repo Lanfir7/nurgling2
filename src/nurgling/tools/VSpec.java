@@ -3216,6 +3216,13 @@ public class VSpec {
         jotun_state.put(NStyle.Container.FULL, 112);
     }
 
+    public static HashMap<NStyle.Container, Integer> largechest_state = new HashMap<>();
+
+    static {
+        largechest_state.put(NStyle.Container.FREE, 3);
+        largechest_state.put(NStyle.Container.FULL, 18);
+    }
+
     public static void checkLpExplorer(Gob clickedGob, String name) {
         if(clickedGob!=null) {
             // Save for refill timer: "Will refill in..." often arrives later via system msg, when clickedGob may already be cleared

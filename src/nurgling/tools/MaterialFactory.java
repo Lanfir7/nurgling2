@@ -3,7 +3,6 @@ package nurgling.tools;
 import haven.*;
 import haven.render.Pipe;
 import haven.res.lib.vmat.Materials;
-import nurgling.NGob;
 import nurgling.NStyle;
 
 import java.util.HashMap;
@@ -18,6 +17,7 @@ public class MaterialFactory {
     private static final String TEX_PINEFREE = "nurgling/tex/pinefree-tex";
     private static final String TEX_PINEFULL = "nurgling/tex/pinefull-tex";
     private static final String TEX_PINENF = "nurgling/tex/pinenf-tex";
+    
     
     private static TexR getTexR(String path, int layer) {
         String key = path + "#" + layer;
@@ -161,6 +161,7 @@ public class MaterialFactory {
         return new Material(lp, texR.tex().draw, texR.tex().clip,lc);
     }
 
+
     public enum Status{
         NOTDEFINED,
         FREE,
@@ -236,6 +237,23 @@ public class MaterialFactory {
                     return Status.FREE;
                 }
                 else if((mask & VSpec.jotun_state.get(NStyle.Container.FULL)) == VSpec.jotun_state.get(NStyle.Container.FULL))
+                {
+                    return Status.FULL;
+                }
+                else
+                {
+                    return Status.NOTFREE;
+                }
+            }
+            case "gfx/terobjs/largechest":
+            {
+                int freeMask = VSpec.largechest_state.get(NStyle.Container.FREE);
+                int fullMask = VSpec.largechest_state.get(NStyle.Container.FULL);
+
+                if((mask & ~freeMask) == 0) {
+                    return Status.FREE;
+                }
+                else if((mask & fullMask) == fullMask)
                 {
                     return Status.FULL;
                 }

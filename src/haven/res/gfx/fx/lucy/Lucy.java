@@ -12,7 +12,8 @@ import static haven.render.sl.Function.PDir.*;
 @haven.FromResource(name = "gfx/fx/lucy", version = 31)
 public class Lucy extends RUtils.AdHoc {
     public static final Uniform cstr = new Uniform(FLOAT, p -> {
-	if ((Boolean)NConfig.get(NConfig.Key.disableDrugEffects)) {
+	Boolean disableDrugs = (Boolean)NConfig.get(NConfig.Key.disableDrugEffects);
+	if (disableDrugs != null && disableDrugs) {
 	    return 0.0f;  // Disable effect by setting strength to 0
 	}
 	return ((Lucy)p.get(RUtils.adhoc)).str;

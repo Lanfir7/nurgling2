@@ -66,7 +66,8 @@ public class TerrainTile extends Tiler implements Tiler.MCons, Tiler.CTrans {
 	    vs = new Scan(Coord.z.sub(sr, sr), m.sz.add(sr * 2 + 1, sr * 2 + 1));
 	    float[][] buf1 = new float[var.length + 1][vs.l];
 	    float[][] lwc = new float[var.length + 1][vs.l];
-	    if (!(Boolean)NConfig.get(NConfig.Key.disableTileSmoothing)) {
+	    Boolean disableSmoothing = (Boolean)NConfig.get(NConfig.Key.disableTileSmoothing);
+	    if (disableSmoothing == null || !disableSmoothing) {
 		for(int i = 0; i < var.length + 1; i++) {
 		    for(int y = vs.ul.y; y < vs.br.y; y++) {
 			for(int x = vs.ul.x; x < vs.br.x; x++) {
@@ -150,7 +151,8 @@ public class TerrainTile extends Tiler implements Tiler.MCons, Tiler.CTrans {
 	}
 
 	private void setbase(float[][] bv) {
-	    if ((Boolean)NConfig.get(NConfig.Key.disableTileSmoothing)) {
+	    Boolean disableSmoothing = (Boolean)NConfig.get(NConfig.Key.disableTileSmoothing);
+	    if (disableSmoothing != null && disableSmoothing) {
 		// Simplified logic without smoothing - set all values to 1
 		for (int y = vs.ul.y; y < vs.br.y - 1; y++) {
 		    for (int x = vs.ul.x; x < vs.br.x - 1; x++) {
