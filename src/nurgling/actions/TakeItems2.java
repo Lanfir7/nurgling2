@@ -351,13 +351,14 @@ public class TakeItems2 implements Action
                         }
                         left.set(left.get() - itemsToBuy);
                         
-                        // ВАЖНО: Возвращаем лишние ветки в сундук сразу после покупки
-                        // После покупки в инвентаре остались только купленные доски/блоки и лишние ветки
-                        // Ветки которые использовались для покупки уже потрачены
-                        // Возвращаем все оставшиеся ветки (они лишние, так как мы купили только itemsToBuy досок)
+                        // ВАЖНО: Сначала закрываем окно бартера, ПОТОМ идём к сундуку
+                        // Если сначала пойти к сундуку, окно бартера закроется автоматически (из-за удаления от стенда)
+                        // и попытка закрыть его потом вызовет зависание на WindowIsClosed
+                        new CloseTargetWindow(barter_wnd).run(gui);
+                        
+                        // Возвращаем лишние ветки в сундук сразу после покупки
                         ArrayList<WItem> remainingBranches = gui.getInventory().getItems("Branch");
                         if(!remainingBranches.isEmpty()) {
-                            // Открываем сундук
                             new PathFinder(gchest).run(gui);
                             new OpenTargetContainer("Chest", gchest).run(gui);
                             
@@ -368,8 +369,6 @@ public class TakeItems2 implements Action
                             new CloseTargetWindow(gui.getWindow("Chest")).run(gui);
                         }
                         
-                        // Закрываем окно сразу после покупки (как в FillContainersFromPiles)
-                        new CloseTargetWindow(barter_wnd).run(gui);
                         break;
                     }
                 }

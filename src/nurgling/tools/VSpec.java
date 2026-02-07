@@ -800,8 +800,8 @@ public class VSpec {
         object.put("gfx/terobjs/trees/moundtreelog", moundOp_log);
 
         ArrayList<String> mulberryOp_log = new ArrayList<>();
-        mulberryOp_log.add("Board of Mulberry"); // Р”РѕСЃРєР°
-        mulberryOp_log.add("Block of Mulberry"); // Р‘Р»РѕРє
+        mulberryOp_log.add("Board of Mulberrywood"); // Р”РѕСЃРєР°
+        mulberryOp_log.add("Block of Mulberrywood"); // Р‘Р»РѕРє
         object.put("gfx/terobjs/trees/mulberrylog", mulberryOp_log);
 
         ArrayList<String> oakOp_log = new ArrayList<>();
@@ -2481,7 +2481,7 @@ public class VSpec {
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-mayflower\",\"name\":\"Board of Mayflower\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-medlartree\",\"name\":\"Board of Medlar\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-moundtree\",\"name\":\"Board of Mound\"}"));
-        boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-mulberry\",\"name\":\"Board of Mulberry\"}"));
+        boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-mulberry\",\"name\":\"Board of Mulberrywood\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-oak\",\"name\":\"Board of Oak\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-olivetree\",\"name\":\"Board of Olive\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-orangetree\",\"name\":\"Board of Orange\"}"));
@@ -2578,7 +2578,7 @@ public class VSpec {
         blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-mayflower\",\"name\":\"Block of Mayflower\"}"));
         blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-medlartree\",\"name\":\"Block of Medlar\"}"));
         blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-moundtree\",\"name\":\"Block of Mound\"}"));
-        blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-mulberry\",\"name\":\"Block of Mulberry\"}"));
+        blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-mulberry\",\"name\":\"Block of Mulberrywood\"}"));
         blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-oak\",\"name\":\"Block of Oak\"}"));
         blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-olivetree\",\"name\":\"Block of Olive\"}"));
         blocks.add(new JSONObject("{\"static\":\"gfx/invobjs/wblock-orangetree\",\"name\":\"Block of Orange\"}"));
