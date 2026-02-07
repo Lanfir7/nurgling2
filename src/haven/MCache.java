@@ -642,7 +642,8 @@ public class MCache implements MapSource {
 	    Random rnd = new Random(id + cutc.x + (cutc.y * cutn.x));
 	    Tileset.Flavor.Buffer buf = new Tileset.Flavor.Buffer(sess.glob, garea, rnd.nextLong());
 
-		if((Boolean) NConfig.get(NConfig.Key.showCSprite)){
+		Object showCS = NConfig.get(NConfig.Key.showCSprite);
+		if(showCS instanceof Boolean && (Boolean) showCS){
 	    int[] ids = new int[16];
 	    int nids = 0;
 	    {
@@ -1218,7 +1219,8 @@ public class MCache implements MapSource {
     }
 
     public double getz(SurfaceID id, Coord2d pc) {
-	if((Boolean) NConfig.get(NConfig.Key.flatsurface))
+	Object fs = NConfig.get(NConfig.Key.flatsurface);
+	if(fs instanceof Boolean && (Boolean) fs)
 		return 0;
 	Coord tc = pc.floor(tilesz);
 	Grid g = getgridt(tc);
@@ -1229,7 +1231,8 @@ public class MCache implements MapSource {
     }
 
     public Coord3f getzp(SurfaceID id, Coord2d pc) {
-	if((Boolean) NConfig.get(NConfig.Key.flatsurface))
+	Object fs2 = NConfig.get(NConfig.Key.flatsurface);
+	if(fs2 instanceof Boolean && (Boolean) fs2)
 	{
 		return(Coord3f.of((float)pc.x, (float)pc.y, 0));
 	}

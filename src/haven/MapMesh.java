@@ -126,7 +126,8 @@ public class MapMesh implements RenderTree.Node, Disposable {
 	    for(int y = vs.ul.y; y < vs.br.y; y++) {
 		for(int x = vs.ul.x; x < vs.br.x; x++) {
 			Vertex v = new Vertex(x * (float)tilesz.x, y * -(float)tilesz.y, (float)map.getfz(ul.add(x, y)));
-			if((Boolean) NConfig.get(NConfig.Key.flatsurface))
+			Object mmfs = NConfig.get(NConfig.Key.flatsurface);
+			if(mmfs instanceof Boolean && (Boolean) mmfs)
 				v.z = 0;
 			surf[vs.o(x, y)] = v;
 		}
@@ -342,7 +343,8 @@ public class MapMesh implements RenderTree.Node, Disposable {
 	    for(c.x = 0; c.x < sz.x; c.x++) {
 		Coord gc = c.add(ul);
 		long ns = rnd.nextLong();
-		if((Boolean) NConfig.get(NConfig.Key.flatsurface)) {
+		Object mmfs2 = NConfig.get(NConfig.Key.flatsurface);
+		if(mmfs2 instanceof Boolean && (Boolean) mmfs2) {
 			Tiler t = mc.tiler(mc.gettile(gc));
 			if (t instanceof TerrainTile.RidgeTile) {
 				if (m.data(Ridges.id).model(c)) {

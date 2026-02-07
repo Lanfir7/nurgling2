@@ -42,11 +42,11 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
     public long id;
     public boolean removed = false;
     public final Glob glob;
-    public Map<Class<? extends GAttrib>, GAttrib> attr = new HashMap<Class<? extends GAttrib>, GAttrib>();
+    public Map<Class<? extends GAttrib>, GAttrib> attr = new java.util.concurrent.ConcurrentHashMap<Class<? extends GAttrib>, GAttrib>();
     public final Collection<Overlay> ols = new CopyOnWriteArrayList<Overlay>();
     public final Collection<RenderTree.Slot> slots = new ArrayList<>(1);
     public int updateseq = 0, lastolid = 0;
-    private final Collection<SetupMod> setupmods = new ArrayList<>();
+    private final Collection<SetupMod> setupmods = new CopyOnWriteArrayList<>();
     private final LinkedList<Runnable> deferred = new LinkedList<>();
     private Loader.Future<?> deferral = null;
     public NGob ngob;
@@ -236,7 +236,8 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	}
 
 	private float getz(Coord2d rc, double ra) {
-		if((Boolean) NConfig.get(NConfig.Key.flatsurface))
+		Object fs = NConfig.get(NConfig.Key.flatsurface);
+		if(fs instanceof Boolean && (Boolean) fs)
 			return 0;
 	    Coord2d[][] no = this.obst, ro = new Coord2d[no.length][];
 	    {
@@ -807,10 +808,10 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	}
 	for(GAttrib a : attr.values()) {
 	    if(a instanceof RenderTree.Node) {
-			Boolean hideNature = (Boolean)NConfig.get(NConfig.Key.hideNature);
-			if (hideNature == null || hideNature || ngob.name==null || !NUtils.isNatureObject(ngob.name))
-				slot.add((RenderTree.Node)a);
-		}
+		Boolean hideNature = (Boolean)NConfig.get(NConfig.Key.hideNature);
+		if (hideNature == null || hideNature || ngob.name==null || !NUtils.isNatureObject(ngob.name))
+		    slot.add((RenderTree.Node)a);
+	    }
 	}
 	slots.add(slot);
     }

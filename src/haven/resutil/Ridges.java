@@ -613,7 +613,8 @@ public class Ridges implements MapMesh.ConsHooks {
 
 	public boolean model(Coord tc)
 	{
-		if ((Boolean) NConfig.get(NConfig.Key.flatsurface))
+		Object rfs = NConfig.get(NConfig.Key.flatsurface);
+		if (rfs instanceof Boolean && (Boolean) rfs)
 		{
 			boolean[] b = breaks(tc);
 			if (!b[0] && !b[1] && !b[2] && !b[3])

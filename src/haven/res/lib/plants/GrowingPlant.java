@@ -40,7 +40,8 @@ public class GrowingPlant implements Sprite.Factory {
 	List<RenderTree.Node> var = this.var.get(st);
 	Random rnd = owner.mkrandoom();
 	CSprite spr = new CSprite(owner, res);
-	if((Boolean) NConfig.get(NConfig.Key.simplecrops))
+	Object sc = NConfig.get(NConfig.Key.simplecrops);
+	if(sc instanceof Boolean && (Boolean) sc)
 	{
 		RenderTree.Node v = var.get(0);
 		spr.addpart((rnd.nextFloat() * 4.4f) - 2.2f, (rnd.nextFloat() * 4.4f) - 2.2f, Pipe.Op.nil, v);

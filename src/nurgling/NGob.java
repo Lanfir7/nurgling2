@@ -157,10 +157,15 @@ public class NGob
      */
     public void updateConfigCache(boolean force) {
         if (force || configCacheCounter <= 0 || ++configCacheCounter >= CONFIG_CACHE_INTERVAL) {
-            cachedShowCropStage = (Boolean) NConfig.get(NConfig.Key.showCropStage);
-            cachedShortCupboards = (Boolean) NConfig.get(NConfig.Key.shortCupboards);
-            cachedQuestNotified = (Boolean) NConfig.get(NConfig.Key.questNotified);
-            cachedLpassistent = (Boolean) NConfig.get(NConfig.Key.lpassistent);
+            Object val;
+            val = NConfig.get(NConfig.Key.showCropStage);
+            cachedShowCropStage = val instanceof Boolean ? (Boolean) val : false;
+            val = NConfig.get(NConfig.Key.shortCupboards);
+            cachedShortCupboards = val instanceof Boolean ? (Boolean) val : false;
+            val = NConfig.get(NConfig.Key.questNotified);
+            cachedQuestNotified = val instanceof Boolean ? (Boolean) val : false;
+            val = NConfig.get(NConfig.Key.lpassistent);
+            cachedLpassistent = val instanceof Boolean ? (Boolean) val : false;
             configCacheCounter = 1;
         }
     }
@@ -403,7 +408,8 @@ public class NGob
             updateMovingInfo(a, prev);
             
             // Add speedometer overlay if not present (it handles its own visibility)
-            if ((Boolean) NConfig.get(NConfig.Key.showSpeedometer) && parent.findol(NSpeedometerOverlay.class) == null)
+            Object showSpd = NConfig.get(NConfig.Key.showSpeedometer);
+            if (showSpd instanceof Boolean && (Boolean) showSpd && parent.findol(NSpeedometerOverlay.class) == null)
             {
                 parent.addcustomol(new NSpeedometerOverlay(parent));
             }

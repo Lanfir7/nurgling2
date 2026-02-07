@@ -371,41 +371,49 @@ public class OCache implements Iterable<Gob> {
 	}
 
 	private void apply() {
-	    main: {
-		synchronized(this) {
-		    if(nremoved && (!added || gremoved))
-			break main;
-		    if(nremoved && added && !gremoved) {
-			remove(gob);
-			gob.updated();
-			gremoved = true;
-			gob = null;
-			break main;
-		    }
-		    if(gob == null) {
-			gob = new Gob(glob, Coord2d.z, id);
-			gob.virtual = virtual;
-		    }
-		}
-		while(true) {
-		    AttrDelta d;
+	    try {
+		main: {
 		    synchronized(this) {
-			if((d = pending.peek()) == null)
-			    break;
+			if(nremoved && (!added || gremoved))
+			    break main;
+			if(nremoved && added && !gremoved) {
+			    remove(gob);
+			    gob.updated();
+			    gremoved = true;
+			    gob = null;
+			    break main;
+			}
+			if(gob == null) {
+			    gob = new Gob(glob, Coord2d.z, id);
+			    gob.virtual = virtual;
+			}
 		    }
-		    synchronized(gob) {
-			deltas.get(d.type).apply(gob, d.clone());
+		    while(true) {
+			AttrDelta d;
+			synchronized(this) {
+			    if((d = pending.peek()) == null)
+				break;
+			}
+			synchronized(gob) {
+			    deltas.get(d.type).apply(gob, d.clone());
+			}
+			synchronized(this) {
+			    if((pending.poll()) != d)
+				throw(new RuntimeException());
+			}
 		    }
-		    synchronized(this) {
-			if((pending.poll()) != d)
-			    throw(new RuntimeException());
+		    if(!added) {
+			add(gob);
+			added = true;
 		    }
+		    gob.updated();
 		}
-		if(!added) {
-		    add(gob);
-		    added = true;
-		}
-		gob.updated();
+	    } catch(Loading l) {
+		throw(l);
+	    } catch(Exception e) {
+		System.err.println("GobInfo.apply() error for gob " + id + ": " + e);
+		/* Ensure applier is cleaned up on non-Loading exceptions
+		 * so future deltas can still be processed. */
 	    }
 	    synchronized(this) {
 		applier = null;

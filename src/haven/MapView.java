@@ -583,7 +583,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	final Map<Gob, RenderTree.Slot> current = new HashMap<>();
 	RenderTree.Slot slot;
 
+	private static final int MAX_ADDGOB_RETRIES = 5;
+
 	private void addgob(Gob ob) {
+	    addgob(ob, 0);
+	}
+
+	private void addgob(Gob ob, int retryCount) {
 	    RenderTree.Slot slot = this.slot;
 	    if(slot == null)
 		return;
@@ -598,6 +604,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		} catch(RenderTree.SlotRemoved e) {
 		    /* Ignore here as there is a harmless remove-race
 		     * on disposal. */
+		    return;
+		} catch(Loading l) {
+		    throw(l);
+		} catch(Exception e) {
+		    /* Non-Loading exception (e.g. ConcurrentModificationException).
+		     * Schedule a retry instead of permanently losing this gob. */
+		    if(retryCount < MAX_ADDGOB_RETRIES) {
+			final int nextRetry = retryCount + 1;
+			System.err.println("addgob retry " + nextRetry + "/" + MAX_ADDGOB_RETRIES + " for gob " + ob.id + ": " + e.getClass().getSimpleName());
+			synchronized(this) {
+			    if(adding.containsKey(ob))
+				adding.put(ob, glob.loader.defer(() -> addgob(ob, nextRetry), null));
+			}
+		    } else {
+			System.err.println("addgob failed permanently for gob " + ob.id + " after " + MAX_ADDGOB_RETRIES + " retries: " + e);
+		    }
 		    return;
 		}
 		synchronized(this) {
