@@ -1,8 +1,10 @@
 package nurgling.actions.bots;
 
 import haven.*;
+import static haven.OCache.posres;
 import nurgling.*;
 import nurgling.actions.*;
+import nurgling.areas.NContext;
 import nurgling.db.dao.StorageItemDao;
 import nurgling.db.dao.ContainerDao;
 import nurgling.i18n.L10n;
@@ -125,56 +127,46 @@ public class FetchStorageItemBot implements Action {
      * @return number of items actually fetched
      */
     private int fetchFromContainer(NGameUI gui, String containerHash, int count) throws InterruptedException {
-        System.out.println("[FetchStorageItemBot] fetchFromContainer called:");
-        System.out.println("  - containerHash: " + containerHash);
-        System.out.println("  - count: " + count);
-
         // Count items before
         int beforeCount = countItemsInInventory(gui, itemName);
-        System.out.println("[FetchStorageItemBot] Items in inventory before: " + beforeCount);
 
         // First try to find the container Gob in visible area
         Gob containerGob = Finder.findGob(containerHash);
-        System.out.println("[FetchStorageItemBot] Container visible? " + (containerGob != null));
 
         if (containerGob == null) {
-            System.out.println("[FetchStorageItemBot] Container not visible - loading from database...");
             // Container not visible - try to find its position from database and navigate
             ContainerDao.ContainerData containerData = loadContainerData(gui, containerHash);
             if (containerData == null) {
-                System.out.println("[FetchStorageItemBot] ERROR: Could not load container data from DB");
+                System.out.println("[FetchStorageItemBot] Could not load container data from DB for hash: " + containerHash);
                 return 0;
             }
-
-            System.out.println("[FetchStorageItemBot] Container data from DB:");
-            System.out.println("  - Hash: " + containerData.getHash());
-            System.out.println("  - GridId: " + containerData.getGridId());
-            System.out.println("  - Coord: " + containerData.getCoord());
 
             // Parse local coordinates and navigate using gridId
             Coord localCoord = parseLocalCoordinates(containerData.getCoord());
             if (localCoord == null) {
-                System.out.println("[FetchStorageItemBot] ERROR: Could not parse local coordinates from: " + containerData.getCoord());
+                System.out.println("[FetchStorageItemBot] Could not parse coordinates: " + containerData.getCoord());
                 return 0;
             }
-            System.out.println("[FetchStorageItemBot] Parsed localCoord: " + localCoord);
 
             // Navigate to container position using chunk navigation with gridId
-            System.out.println("[FetchStorageItemBot] Navigating to container...");
+            System.out.println("[FetchStorageItemBot] Navigating to container at grid=" + containerData.getGridId() + " coord=" + localCoord);
             if (!navigateToContainer(gui, containerData.getGridId(), localCoord)) {
-                System.out.println("[FetchStorageItemBot] ERROR: Navigation failed!");
+                System.out.println("[FetchStorageItemBot] Navigation failed to grid=" + containerData.getGridId());
                 return 0;
             }
-            System.out.println("[FetchStorageItemBot] Navigation succeeded, looking for container gob again...");
 
-            // Try to find container again after navigation
+            // Try to find container again after navigation (gobs may take time to load)
             containerGob = Finder.findGob(containerHash);
             if (containerGob == null) {
-                System.out.println("[FetchStorageItemBot] ERROR: Container still not found after navigation!");
-                // Container still not found - it might have been destroyed
+                for (int retry = 0; retry < 5 && containerGob == null; retry++) {
+                    Thread.sleep(300);
+                    containerGob = Finder.findGob(containerHash);
+                }
+            }
+            if (containerGob == null) {
+                System.out.println("[FetchStorageItemBot] Container not found after navigation, hash=" + containerHash);
                 return 0;
             }
-            System.out.println("[FetchStorageItemBot] Container found after navigation!");
         }
         
         // Move to container if not close enough
@@ -185,6 +177,11 @@ public class FetchStorageItemBot implements Action {
         
         // Open container
         String containerName = getContainerWindowName(containerGob);
+        if (containerName == null) {
+            System.out.println("[FetchStorageItemBot] Unknown container type: " + 
+                (containerGob.ngob != null ? containerGob.ngob.name : "null"));
+            return 0;
+        }
         NUtils.rclickGob(containerGob);
         NUtils.addTask(new WaitWindow(containerName));
         
@@ -273,7 +270,7 @@ public class FetchStorageItemBot implements Action {
     }
     
     /**
-     * Parse local coordinates string "(x, y)" to Coord (integer tile coordinates)
+     * Parse local coordinates string "(x, y)" to Coord (in posres units, as stored by ContainerWatcher)
      */
     private Coord parseLocalCoordinates(String coords) {
         if (coords == null) return null;
@@ -297,139 +294,59 @@ public class FetchStorageItemBot implements Action {
      * Uses planToGridCoord for cross-layer navigation.
      */
     private boolean navigateToContainer(NGameUI gui, long gridId, Coord localCoord) throws InterruptedException {
-        System.out.println("[FetchStorageItemBot] navigateToContainer called:");
-        System.out.println("  - Target gridId: " + gridId);
-        System.out.println("  - Target localCoord: " + localCoord);
-
         ChunkNavManager chunkNav = ((NMapView) gui.map).getChunkNavManager();
-        if (chunkNav == null) {
-            System.out.println("[FetchStorageItemBot] ERROR: ChunkNavManager is null");
+        if (chunkNav == null || !chunkNav.isInitialized()) {
+            System.out.println("[FetchStorageItemBot] ChunkNavManager not available");
             return false;
         }
-        if (!chunkNav.isInitialized()) {
-            System.out.println("[FetchStorageItemBot] ERROR: ChunkNavManager is not initialized");
-            return false;
-        }
-        System.out.println("[FetchStorageItemBot] ChunkNavManager: enabled=" + chunkNav.isEnabled() + ", initialized=" + chunkNav.isInitialized());
 
         // Check if the grid is currently loaded (container might be nearby)
         try {
             MCache mcache = gui.map.glob.map;
             MCache.Grid grid = null;
             synchronized (mcache.grids) {
-                System.out.println("[FetchStorageItemBot] Searching for grid in MCache, loaded grids count: " + mcache.grids.size());
                 for (MCache.Grid g : mcache.grids.values()) {
                     if (g.id == gridId) {
                         grid = g;
-                        System.out.println("[FetchStorageItemBot] Found target grid in MCache! ul=" + g.ul);
                         break;
                     }
                 }
             }
             if (grid != null) {
                 // Grid is loaded - container should be visible, use local pathfinding
-                Coord worldTile = grid.ul.add(localCoord);
-                Coord2d worldPos = worldTile.mul(MCache.tilesz).add(MCache.tilehsz);
-                System.out.println("[FetchStorageItemBot] Grid is loaded, using local PathFinder to " + worldPos);
-                boolean result = new PathFinder(worldPos).run(gui).IsSuccess();
-                System.out.println("[FetchStorageItemBot] Local PathFinder result: " + result);
-                return result;
-            } else {
-                System.out.println("[FetchStorageItemBot] Target grid NOT in MCache - need chunk navigation");
+                // localCoord is in posres units, convert to world position:
+                // worldPos = gridOrigin(world) + localCoord * posres
+                Coord2d gridOrigin = new Coord2d(grid.ul.x * MCache.tilesz.x, grid.ul.y * MCache.tilesz.y);
+                Coord2d worldPos = gridOrigin.add(new Coord2d(localCoord.x * posres.x, localCoord.y * posres.y));
+                return new PathFinder(worldPos).run(gui).IsSuccess();
             }
         } catch (Exception e) {
-            System.out.println("[FetchStorageItemBot] Exception checking MCache: " + e.getMessage());
-            e.printStackTrace();
             // Fall through to chunk navigation
         }
 
         // Grid not loaded - use chunk navigation
-        System.out.println("[FetchStorageItemBot] Calling planToGridCoord...");
-        nurgling.navigation.ChunkPath path = chunkNav.planToGridCoord(gridId, localCoord);
+        // localCoord is in posres units, convert to tile coordinates for chunk nav planner
+        Coord2d offsetWorld = new Coord2d(localCoord.x * posres.x, localCoord.y * posres.y);
+        Coord tileCoord = offsetWorld.floor(MCache.tilesz);
+        nurgling.navigation.ChunkPath path = chunkNav.planToGridCoord(gridId, tileCoord);
         if (path != null) {
-            System.out.println("[FetchStorageItemBot] Path planned successfully!");
-            System.out.println("  - Path waypoints: " + (path.waypoints != null ? path.waypoints.size() : 0));
-            System.out.println("  - Path segments: " + (path.segments != null ? path.segments.size() : 0));
-            System.out.println("  - Path requiresPortals: " + path.requiresPortals);
-            System.out.println("  - Path confidence: " + path.confidence);
-            System.out.println("[FetchStorageItemBot] Calling navigateWithPath...");
-            boolean result = chunkNav.navigateWithPath(path, null, gui).IsSuccess();
-            System.out.println("[FetchStorageItemBot] navigateWithPath result: " + result);
-
-            // Log player position after navigation
-            Gob playerAfter = NUtils.player();
-            if (playerAfter != null) {
-                System.out.println("[FetchStorageItemBot] Player position after navigation: " + playerAfter.rc);
-            }
-
-            // Check if target grid is now loaded
-            try {
-                MCache mcache = gui.map.glob.map;
-                synchronized (mcache.grids) {
-                    for (MCache.Grid g : mcache.grids.values()) {
-                        if (g.id == gridId) {
-                            System.out.println("[FetchStorageItemBot] Target grid NOW LOADED! ul=" + g.ul);
-                            Coord expectedWorldTile = g.ul.add(localCoord);
-                            Coord2d expectedPos = expectedWorldTile.mul(MCache.tilesz).add(MCache.tilehsz);
-                            System.out.println("[FetchStorageItemBot] Expected container position: " + expectedPos);
-                            if (playerAfter != null) {
-                                System.out.println("[FetchStorageItemBot] Distance to expected position: " + playerAfter.rc.dist(expectedPos));
-                            }
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                System.out.println("[FetchStorageItemBot] Error checking grid after nav: " + e.getMessage());
-            }
-
-            return result;
+            return chunkNav.navigateWithPath(path, null, gui).IsSuccess();
         } else {
-            System.out.println("[FetchStorageItemBot] ERROR: planToGridCoord returned null!");
-            // Debug: check if target chunk exists in graph
-            nurgling.navigation.ChunkNavGraph graph = chunkNav.getGraph();
-            if (graph != null) {
-                boolean hasChunk = graph.hasChunk(gridId);
-                System.out.println("[FetchStorageItemBot] Graph hasChunk(" + gridId + "): " + hasChunk);
-                System.out.println("[FetchStorageItemBot] Graph total chunks: " + graph.getAllChunks().size());
-
-                // Get player's current chunk for comparison
-                long playerChunkId = graph.getPlayerChunkId();
-                System.out.println("[FetchStorageItemBot] Player current chunk: " + playerChunkId);
-                if (playerChunkId != -1) {
-                    System.out.println("[FetchStorageItemBot] Player chunk in graph: " + graph.hasChunk(playerChunkId));
-                }
-            }
+            System.out.println("[FetchStorageItemBot] Cannot plan path to grid=" + gridId + " tile=" + tileCoord);
         }
 
         return false;
     }
     
     /**
-     * Get the window name for a container Gob
+     * Get the window name for a container Gob using the canonical NContext.contcaps mapping.
+     * Returns null if the container type is unknown.
      */
     private String getContainerWindowName(Gob gob) {
         if (gob.ngob == null || gob.ngob.name == null) {
-            return "Container";
+            return null;
         }
-        
-        String name = gob.ngob.name;
-        
-        // Extract container type from resource name
-        if (name.contains("cupboard")) return "Cupboard";
-        if (name.contains("chest")) {
-            if (name.contains("largechest") || name.contains("large")) return "Large Chest";
-            return "Chest";
-        }
-        if (name.contains("crate")) return "Crate";
-        if (name.contains("barrel")) return "Barrel";
-        if (name.contains("basket")) return "Basket";
-        if (name.contains("coffer")) return "Coffer";
-        if (name.contains("cabinet")) return "Metal Cabinet";
-        if (name.contains("stonecasket")) return "Stonecasket";
-        
-        // Default fallback
-        return "Container";
+        return NContext.contcaps.get(gob.ngob.name);
     }
 }
 
