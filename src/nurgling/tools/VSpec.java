@@ -2687,7 +2687,7 @@ public class VSpec {
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/pegmatite\",\"name\":\"Pegmatite\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/porphyry\",\"name\":\"Porphyry\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/pumice\",\"name\":\"Pumice\"}"));
-        stones.add(new JSONObject("{\"static\":\"gfx/invobjs/quarryquartz\",\"name\":\"Quarry Quartz\"}"));
+        stones.add(new JSONObject("{\"static\":\"gfx/invobjs/quarryquartz\",\"name\":\"Quarryartz\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/quartz\",\"name\":\"Quartz\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/rhyolite\",\"name\":\"Rhyolite\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/rockcrystal\",\"name\":\"Rock Crystal\"}"));
@@ -2742,7 +2742,7 @@ public class VSpec {
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/pegmatite\",\"name\":\"Pegmatite\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/porphyry\",\"name\":\"Porphyry\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/pumice\",\"name\":\"Pumice\"}"));
-        nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/quarryquartz\",\"name\":\"Quarry Quartz\"}"));
+        nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/quarryquartz\",\"name\":\"Quarryartz\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/quartz\",\"name\":\"Quartz\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/rhyolite\",\"name\":\"Rhyolite\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/rockcrystal\",\"name\":\"Rock Crystal\"}"));
