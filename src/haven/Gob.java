@@ -473,82 +473,11 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	    }
 	}
 	ols.removeAll(toRemove);
-	
-	// Проверка и применение подсветки для буксируемых мертвых животных (Orc, Whale)
-	updateTowedAnimalHighlight();
-	
 	updstate();
 	if(virtual && ols.isEmpty() && (getattr(Drawable.class) == null))
 	    glob.oc.remove(this);
 	if(!ngob.effector)
 		ngob.tick(dt);
-    }
-    
-    /**
-     * Обновляет подсветку для буксируемых мертвых животных (Orc, Whale)
-     * Оптимизировано: проверяет только если есть Following (прицеплено к чему-то)
-     */
-    private void updateTowedAnimalHighlight() {
-	// Быстрая проверка: только если есть Following (прицеплено к чему-то)
-	Following following = getattr(Following.class);
-	if(following == null) {
-	    // Если нет Following, удаляем подсветку если была
-	    TowedAnimalHighlight highlight = getattr(TowedAnimalHighlight.class);
-	    if(highlight != null) {
-		delattr(TowedAnimalHighlight.class);
-	    }
-	    return;
-	}
-	
-	// Проверяем, что это животное (kritter)
-	if(ngob == null || ngob.name == null)
-	    return;
-	
-	String name = ngob.name;
-	// Быстрая проверка: только kritter (животные)
-	if(!name.contains("/kritter/"))
-	    return;
-	
-	// Проверяем, является ли это Orc или Whale
-	// Orca: gfx/kritter/orca/orca
-	// Spermwhale: gfx/kritter/spermwhale/spermwhale
-	// Используем точную проверку имени
-	boolean isOrcOrWhale = name.equals("gfx/kritter/orca/orca") || 
-				name.equals("gfx/kritter/spermwhale/spermwhale") ||
-				name.contains("orca/orca") || 
-				name.contains("spermwhale/spermwhale");
-	
-	if(!isOrcOrWhale)
-	    return;
-	
-	// Проверяем, мертво ли животное (dead или knock)
-	String pose = pose();
-	boolean isDead = pose != null && (pose.contains("dead") || pose.contains("knock"));
-	
-	if(!isDead)
-	    return;
-	
-	// Проверяем, прицеплено ли животное к лодке
-	Gob target = following.tgt();
-	boolean isTowed = false;
-	
-	if(target != null && target.ngob != null && target.ngob.name != null) {
-	    String vehicleName = target.ngob.name;
-	    // Проверяем, является ли цель лодкой
-	    isTowed = vehicleName.contains("/vehicle/snekkja") ||
-		      vehicleName.contains("/vehicle/knarr") ||
-		      vehicleName.contains("/vehicle/rowboat") ||
-		      vehicleName.contains("/vehicle/spark") ||
-		      vehicleName.contains("/vehicle/dugout");
-	}
-	
-	// Добавляем или удаляем атрибут подсветки
-	TowedAnimalHighlight highlight = getattr(TowedAnimalHighlight.class);
-	if(isTowed && highlight == null) {
-	    setattr(new TowedAnimalHighlight(this));
-	} else if(!isTowed && highlight != null) {
-	    delattr(TowedAnimalHighlight.class);
-	}
     }
 
     public void gtick(Render g) {
@@ -736,8 +665,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	if(a != null) {
 	    if(a instanceof RenderTree.Node) {
 		try {
-			if (((Boolean)NConfig.get(NConfig.Key.hideNature) || ngob.name==null || !NUtils.isNatureObject(ngob.name)) &&
-				((Boolean)NConfig.get(NConfig.Key.hideEarthworm) || ngob.name==null || !NUtils.isEarthworm(ngob.name)))
+			if ((Boolean)NConfig.get(NConfig.Key.hideNature) || ngob.name==null || !NUtils.isNatureObject(ngob.name))
 		    	RUtils.multiadd(this.slots, (RenderTree.Node)a);
 		} catch(Loading l) {
 		    if(prev instanceof RenderTree.Node) {
@@ -817,17 +745,12 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	final Pipe.Op mods;
 
 	private GobState() {
-	    // Synchronize to safely copy setupmods (may be modified from other threads)
-	    Collection<SetupMod> modscopy;
-	    synchronized(Gob.this) {
-		modscopy = new ArrayList<>(setupmods);
-	    }
-	    if(modscopy.isEmpty()) {
+	    if(setupmods.isEmpty()) {
 		this.mods = null;
 	    } else {
-		Pipe.Op[] mods = new Pipe.Op[modscopy.size()];
+		Pipe.Op[] mods = new Pipe.Op[setupmods.size()];
 		int n = 0;
-		for(SetupMod mod : modscopy) {
+		for(SetupMod mod : setupmods) {
 		    if((mods[n] = mod.gobstate()) != null)
 			n++;
 		}
@@ -858,7 +781,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	return(curstate);
     }
 
-    public void updstate() {
+    private void updstate() {
 	GobState nst;
 	try {
 	    nst = new GobState();
@@ -883,8 +806,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	}
 	for(GAttrib a : attr.values()) {
 	    if(a instanceof RenderTree.Node)
-			if (((Boolean)NConfig.get(NConfig.Key.hideNature) || ngob.name==null || !NUtils.isNatureObject(ngob.name)) &&
-				((Boolean)NConfig.get(NConfig.Key.hideEarthworm) || ngob.name==null || !NUtils.isEarthworm(ngob.name)))
+			if ((Boolean)NConfig.get(NConfig.Key.hideNature) || ngob.name==null || !NUtils.isNatureObject(ngob.name))
 				slot.add((RenderTree.Node)a);
 	}
 	slots.add(slot);
@@ -1010,14 +932,12 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 			this.rot = null;
 		    }
 		    this.tilestate = tilestate;
-		    // autotick() is already synchronized on Gob.this, so we can safely copy setupmods without additional sync
-		    Collection<SetupMod> modscopy = new ArrayList<>(setupmods);
-		    if(modscopy.isEmpty()) {
+		    if(setupmods.isEmpty()) {
 			this.mods = null;
 		    } else {
-			Pipe.Op[] mods = new Pipe.Op[modscopy.size()];
+			Pipe.Op[] mods = new Pipe.Op[setupmods.size()];
 			int n = 0;
-			for(SetupMod mod : modscopy) {
+			for(SetupMod mod : setupmods) {
 			    if((mods[n] = mod.placestate()) != null)
 				n++;
 			}
