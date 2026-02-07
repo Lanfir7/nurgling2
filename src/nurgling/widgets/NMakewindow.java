@@ -54,6 +54,8 @@ public class NMakewindow extends Widget {
     public CheckBox noTransfer = null;
     public boolean autoMode = false;
     private IButton savePresetBtn = null;
+    private int pendingRecipeIdx = -1;
+    private boolean recipeCached = false;
 
     private static final OwnerContext.ClassResolver<NMakewindow> ctxr = new OwnerContext.ClassResolver<NMakewindow>()
             .add(Glob.class, wdg -> wdg.ui.sess.glob)
@@ -286,6 +288,36 @@ public class NMakewindow extends Widget {
         if (savePresetBtn != null) {
             savePresetBtn.visible = autoMode && allInputsConfigured();
         }
+
+        // Cache ingredient/output -> recipe mapping and persist to DB
+        // inputCache: item used AS ingredient (for Alt+RMB)
+        // outputCache: item PRODUCED by recipe (for Shift+Click "how to make")
+        if(!recipeCached && recipeResource != null && !inputs.isEmpty()) {
+            boolean allNamed = true;
+            for(Spec s : inputs) {
+                if(s.name == null) { allNamed = false; break; }
+            }
+            for(Spec s : outputs) {
+                if(s.name == null) { allNamed = false; break; }
+            }
+            if(allNamed) {
+                // Cache inputs -> recipe (item is consumed by this recipe)
+                List<String> ingredientNames = new ArrayList<>();
+                for(Spec s : inputs) {
+                    ingredientNames.add(s.name);
+                }
+                RecipeIngredientCache.addInputsAndPersist(ingredientNames, recipeResource, rcpnm);
+                // Cache outputs -> recipe (item is produced by this recipe)
+                List<String> outputNames = new ArrayList<>();
+                for(Spec s : outputs) {
+                    outputNames.add(s.name);
+                }
+                if(!outputNames.isEmpty()) {
+                    RecipeIngredientCache.addOutputsAndPersist(outputNames, recipeResource, rcpnm);
+                }
+                recipeCached = true;
+            }
+        }
     }
 
     /**
@@ -303,6 +335,24 @@ public class NMakewindow extends Widget {
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
+        // Shift+Click on INPUT: "how to make this ingredient" (server findrcps + outputCache)
+        if(ev.b == 1 && (ui.modflags() & UI.MOD_SHIFT) != 0) {
+            int idx = findInputIdx(ev.c);
+            if(idx >= 0) {
+                pendingRecipeIdx = idx;
+                wdgmsg("findrcps", idx);
+                return true;
+            }
+            // Shift+Click on OUTPUT: "where is this result used as ingredient" (inputCache)
+            int outIdx = findOutputIdx(ev.c);
+            if(outIdx >= 0 && outIdx < outputs.size()) {
+                String outName = outputs.get(outIdx).name();
+                if(outName != null) {
+                    showUsageRecipes(outName);
+                }
+                return true;
+            }
+        }
         if(autoMode)
         {
             // Проверяем клик по чекбоксу "all" для категорий в inputs
@@ -348,6 +398,33 @@ public class NMakewindow extends Widget {
             if (clickForCategories(outputs, popt, sc, ev.c)) return true;
         }
         return super.mousedown(ev);
+    }
+
+    private int findInputIdx(Coord c) {
+        Coord sc = new Coord(xoff, 0);
+        boolean popt = false;
+        int idx = 0;
+        for(Spec s : inputs) {
+            boolean opt = s.opt();
+            if(opt != popt)
+                sc = sc.add(10, 0);
+            if(c.isect(sc, Inventory.sqsz))
+                return idx;
+            sc = sc.add(Inventory.sqsz.x, 0);
+            popt = opt;
+            idx++;
+        }
+        return -1;
+    }
+
+    private int findOutputIdx(Coord c) {
+        Coord sc = new Coord(xoff, outy);
+        for(int idx = 0; idx < outputs.size(); idx++) {
+            if(c.isect(sc, Inventory.sqsz))
+                return idx;
+            sc = sc.add(Inventory.sqsz.x, 0);
+        }
+        return -1;
     }
 
     private boolean clickForCategories(List<Spec> outputs, boolean popt, Coord sc, Coord c) {
@@ -475,9 +552,129 @@ public class NMakewindow extends Widget {
             this.qmod = qmod;
         } else if(msg == "tool") {
             tools.add(ui.sess.getres((Integer)args[0]));
+        } else if(msg == "inprcps") {
+            int idx = Utils.iv(args[0]);
+            List<MenuGrid.Pagina> rcps = new ArrayList<>();
+            GameUI gui = getparent(GameUI.class);
+            if(gui != null && gui.menu != null) {
+                for(int a = 1; a < args.length; a++)
+                    rcps.add(gui.menu.paginafor(ui.sess.getresv(args[a])));
+            }
+            if(idx == pendingRecipeIdx) {
+                // Supplement server results with OUTPUT cache only
+                // (recipes that PRODUCE this ingredient — "how to make it")
+                if(gui != null && gui.menu != null && idx >= 0 && idx < inputs.size()) {
+                    String ingName = inputs.get(idx).name();
+                    if(ingName != null) {
+                        List<String> searchNames = new ArrayList<>();
+                        searchNames.add(ingName);
+                        searchNames.addAll(VSpec.getCategory(ingName));
+                        // Search output cache: recipes that produce this item
+                        Set<RecipeIngredientCache.RecipeEntry> cached =
+                            RecipeIngredientCache.findOutputRecipes(searchNames);
+                        // DB fallback — search output type only
+                        if(cached.isEmpty() && NCore.databaseManager != null
+                                && NCore.databaseManager.isReady()
+                                && NCore.databaseManager.getCraftRecipeService() != null) {
+                            try {
+                                cached = NCore.databaseManager.getCraftRecipeService()
+                                    .findByProducts(searchNames);
+                            } catch(Exception e) {}
+                        }
+                        // Merge: add cache results not already in server results
+                        Set<String> existing = new HashSet<>();
+                        for(MenuGrid.Pagina p : rcps) {
+                            try { existing.add(p.res().name); } catch(Loading e) {}
+                        }
+                        Set<String> cacheRes = new HashSet<>();
+                        for(RecipeIngredientCache.RecipeEntry entry : cached) {
+                            cacheRes.add(entry.paginaResource);
+                        }
+                        for(MenuGrid.Pagina pag : gui.menu.paginae) {
+                            try {
+                                String rn = pag.res().name;
+                                if(cacheRes.contains(rn) && !existing.contains(rn)) {
+                                    rcps.add(pag);
+                                    existing.add(rn);
+                                }
+                            } catch(Loading e) {}
+                        }
+                    }
+                }
+                showRecipeMenu(rcps);
+                pendingRecipeIdx = -1;
+            }
         } else {
             super.uimsg(msg, args);
         }
+    }
+
+    /**
+     * Show recipes where the given item is used AS INGREDIENT (inputCache).
+     * Called on Shift+Click on OUTPUT items.
+     */
+    private void showUsageRecipes(String itemName) {
+        GameUI gui = getparent(GameUI.class);
+        if(gui == null || gui.menu == null) return;
+
+        // Trigger DB load on first use
+        if(!RecipeIngredientCache.isDbLoaded()) {
+            RecipeIngredientCache.loadFromDatabase();
+        }
+
+        // Search names: item name + VSpec category groups it belongs to
+        List<String> searchNames = new ArrayList<>();
+        searchNames.add(itemName);
+        searchNames.addAll(VSpec.getCategory(itemName));
+
+        // Search input cache: recipes that CONSUME this item
+        Set<RecipeIngredientCache.RecipeEntry> cached =
+            RecipeIngredientCache.findInputRecipes(searchNames);
+
+        // DB fallback — input type only
+        if(cached.isEmpty() && NCore.databaseManager != null
+                && NCore.databaseManager.isReady()
+                && NCore.databaseManager.getCraftRecipeService() != null) {
+            try {
+                cached = NCore.databaseManager.getCraftRecipeService()
+                    .findByIngredients(searchNames);
+            } catch(Exception e) {}
+        }
+        if(cached.isEmpty()) return;
+
+        // Match against available paginae
+        Set<String> cacheRes = new HashSet<>();
+        for(RecipeIngredientCache.RecipeEntry entry : cached) {
+            cacheRes.add(entry.paginaResource);
+        }
+        List<MenuGrid.Pagina> available = new ArrayList<>();
+        for(MenuGrid.Pagina pag : gui.menu.paginae) {
+            try {
+                if(cacheRes.contains(pag.res().name)) {
+                    available.add(pag);
+                }
+            } catch(Loading e) {}
+        }
+
+        showRecipeMenu(available);
+    }
+
+    private void showRecipeMenu(List<MenuGrid.Pagina> recipes) {
+        if(recipes.isEmpty()) return;
+        if(recipes.size() == 1) {
+            recipes.get(0).button().use(new MenuGrid.Interaction(1, ui.modflags()));
+            return;
+        }
+        recipes.sort((a, b) -> {
+            try {
+                return a.button().name().compareTo(b.button().name());
+            } catch(Loading e) { return 0; }
+        });
+        SListMenu.of(UI.scale(250, 120), recipes,
+                pag -> pag.button().name(),
+                pag -> pag.button().img(),
+                pag -> pag.button().use(new MenuGrid.Interaction(1, ui.modflags())))
+            .addat(this, ui.mc.sub(rootpos(Coord.z)));
     }
 
     public static final Coord qmodsz = UI.scale(20, 20);

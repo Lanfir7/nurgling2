@@ -159,7 +159,11 @@ public class NFlowerMenu extends FlowerMenu
         if(option != null && NUtils.getUI().core.getLastActions()!=null && NUtils.getUI().core.getLastActions().item!=null && option.name.contains("Prospect")) {
             NProspecting.item(NUtils.getUI().core.getLastActions().item);
         }
-        NUtils.getUI().core.resetLastAction();
+        // NOTE: Do NOT call resetLastAction() here!
+        // The server hasn't processed the flower menu choice yet.
+        // Inventory.$_.create() needs getLastActions().gob to set parentGob
+        // for Storage Items DB tracking. Actions will be naturally overridden
+        // by the next user interaction (right-click sets new action).
     }
 
     public boolean hasOpt(String action) {

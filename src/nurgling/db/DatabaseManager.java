@@ -28,6 +28,7 @@ public class DatabaseManager {
     private AreaService areaService;
     private AnimalMarkerService animalMarkerService;
     private LocalTimerService localTimerService;
+    private CraftRecipeService craftRecipeService;
 
     // Task queue for retry logic
     private final BlockingQueue<QueuedTask<?>> taskQueue = new LinkedBlockingQueue<>(1000);
@@ -305,6 +306,7 @@ public class DatabaseManager {
         this.areaService = new AreaService(this);
         this.animalMarkerService = new AnimalMarkerService(this);
         this.localTimerService = new LocalTimerService(this);
+        this.craftRecipeService = new CraftRecipeService(this);
     }
 
     /**
@@ -526,6 +528,13 @@ public class DatabaseManager {
      */
     public LocalTimerService getLocalTimerService() {
         return localTimerService;
+    }
+
+    /**
+     * Get craft recipe service (ingredient-to-recipe lookup)
+     */
+    public CraftRecipeService getCraftRecipeService() {
+        return craftRecipeService;
     }
 
     /**

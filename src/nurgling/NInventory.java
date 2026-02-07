@@ -63,52 +63,75 @@ public class NInventory extends Inventory
     public boolean isClosing = false;
     
     // Flag to indicate if this inventory should be indexed in database
-    // Only certain container types should be tracked (e.g. Cupboard, Chest, etc.)
     private Boolean isIndexable = null;
     
-    // Container types that should be indexed
-    private static final java.util.Set<String> INDEXABLE_CONTAINERS = java.util.Set.of(
-        "Cupboard",
-        "Chest",
-        "Crate",
-        "Barrel",
-        "Basket",
-        "Coffer",
-        "Large Chest",
-        "Metal Cabinet",
-        "Stonecasket"
+    // Windows that should NOT be indexed (processing stations, character UI, etc.)
+    // Everything else with a parent Window is considered a storage container.
+    private static final java.util.Set<String> NON_INDEXABLE_WINDOWS = java.util.Set.of(
+        "Character Sheet",
+        "Study",
+        "Belt",
+        "Pouch",
+        "Purse",
+        "Chicken Coop",
+        "Cauldron",
+        "Finery Forge",
+        "Fireplace",
+        "Frame",
+        "Herbalist Table",
+        "Kiln",
+        "Ore Smelter",
+        "Smith's Smelter",
+        "Oven",
+        "Pane mold",
+        "Rack",
+        "Smoke shed",
+        "Stack Furnace",
+        "Steelbox",
+        "Tub",
+        "Clay Cauldron",
+        "Cheese Rack",
+        "Drying Frame",
+        "Garden Pot",
+        "Tanning Tub"
     );
     
     /**
-     * Check if this inventory should be indexed in database
+     * Check if this inventory should be indexed in database.
+     * Uses a blacklist approach: all inventories in windows are considered
+     * indexable UNLESS the window title matches a known non-storage window.
+     * This ensures new container types (e.g. "Jotun Clam") are automatically tracked.
      */
     public boolean isIndexable() {
         if (isIndexable != null) {
             return isIndexable;
         }
         
-        // Check if this is an indexable container
         isIndexable = false;
         
-        // Skip main inventory, equipment, belt, study
+        // Skip main inventory
         NGameUI gui = NUtils.getGameUI();
         if (gui != null && this == gui.maininv) {
             return false;
         }
         
-        // Check parent window title
+        // Must be inside a window to be indexable
         Window wnd = getparent(Window.class);
-        if (wnd != null && wnd.cap != null) {
-            String title = wnd.cap;
-            for (String containerType : INDEXABLE_CONTAINERS) {
-                if (title.contains(containerType)) {
-                    isIndexable = true;
-                    return true;
-                }
+        if (wnd == null || wnd.cap == null) {
+            return false;
+        }
+        
+        // Check against blacklist of non-storage windows
+        String title = wnd.cap;
+        for (String excluded : NON_INDEXABLE_WINDOWS) {
+            if (title.contains(excluded)) {
+                return false;
             }
         }
         
-        return false;
+        // Everything else is considered a storage container
+        isIndexable = true;
+        return true;
     }
     private long pendingSearchRefreshTick = 0;
     

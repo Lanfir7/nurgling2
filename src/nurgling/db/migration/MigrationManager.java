@@ -407,6 +407,46 @@ public class MigrationManager {
             }
         });
 
+        migrations.add(new Migration(11, "Create craft_recipes table for ingredient-to-recipe lookup") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (adapter.tableExists("craft_recipes")) {
+                    System.out.println("craft_recipes table already exists");
+                    return;
+                }
+                String createSql = "CREATE TABLE craft_recipes (" +
+                    "ingredient_name VARCHAR(255) NOT NULL, " +
+                    "pagina_resource VARCHAR(512) NOT NULL, " +
+                    "recipe_name VARCHAR(255) NOT NULL, " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "PRIMARY KEY (ingredient_name, pagina_resource)" +
+                    ")";
+                adapter.executeUpdate(createSql);
+                adapter.executeUpdate("CREATE INDEX idx_craft_recipes_ingredient ON craft_recipes (ingredient_name)");
+                System.out.println("Created craft_recipes table");
+            }
+        });
+
+        migrations.add(new Migration(12, "Recreate craft_recipes with mapping_type (input/output separation)") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                // Drop old table — it's a cache, will be repopulated when recipes are opened
+                adapter.executeUpdate("DROP TABLE IF EXISTS craft_recipes");
+                adapter.executeUpdate("DROP INDEX IF EXISTS idx_craft_recipes_ingredient");
+                String createSql = "CREATE TABLE craft_recipes (" +
+                    "item_name VARCHAR(255) NOT NULL, " +
+                    "pagina_resource VARCHAR(512) NOT NULL, " +
+                    "recipe_name VARCHAR(255) NOT NULL, " +
+                    "mapping_type VARCHAR(10) NOT NULL DEFAULT 'input', " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "PRIMARY KEY (item_name, pagina_resource, mapping_type)" +
+                    ")";
+                adapter.executeUpdate(createSql);
+                adapter.executeUpdate("CREATE INDEX idx_craft_recipes_item_type ON craft_recipes (item_name, mapping_type)");
+                System.out.println("Recreated craft_recipes table with mapping_type column");
+            }
+        });
+
         return migrations;
     }
 
