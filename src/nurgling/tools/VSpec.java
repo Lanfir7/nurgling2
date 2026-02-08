@@ -2438,7 +2438,7 @@ public class VSpec {
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-alder\",\"name\":\"Board of Alder\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-almondtree\",\"name\":\"Board of Almond\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-appletree\",\"name\":\"Board of Applewood\"}"));
-        boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-appletreegreen\",\"name\":\"Board Greenapplewood\"}"));
+        boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-appletreegreen\",\"name\":\"Board of Greenapplewood\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-ash\",\"name\":\"Board of Ash\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-aspen\",\"name\":\"Board of Aspen\"}"));
         boards.add(new JSONObject("{\"static\":\"gfx/invobjs/board-baywillow\",\"name\":\"Board of Bay Willow\"}"));

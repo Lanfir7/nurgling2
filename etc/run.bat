@@ -1,2 +1,8 @@
-java -Dsun.java2d.uiScale.enabled=false -Dsun.java2d.win.uiScaleX=1.0 -Dsun.java2d.win.uiScaleY=1.0 --add-exports=java.desktop/sun.awt=ALL-UNNAMED -Xss8m -Xms1024m -Xmx4096m -jar ./hafen.jar
+java -Dsun.java2d.uiScale.enabled=false ^
+  -Xms512m -Xmx4g -Xss2m ^
+  -XX:+UseG1GC ^
+  -XX:SoftRefLRUPolicyMSPerMB=50 ^
+  -XX:+UseStringDeduplication ^
+  --add-exports=java.desktop/sun.awt=ALL-UNNAMED ^
+  -jar ./hafen.jar
 pause

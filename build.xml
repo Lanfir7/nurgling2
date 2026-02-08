@@ -193,6 +193,15 @@
     <java jar="bin/hafen.jar" fork="true">
       <sysproperty key="sun.java2d.uiScale.enabled" value="false" />
       <sysproperty key="java.net.preferIPv6Addresses" value="system" />
+      <!-- Memory settings -->
+      <jvmarg value="-Xms512m" />
+      <jvmarg value="-Xmx4g" />
+      <jvmarg value="-Xss2m" />
+      <!-- GC optimization -->
+      <jvmarg value="-XX:+UseG1GC" />
+      <jvmarg value="-XX:SoftRefLRUPolicyMSPerMB=50" />
+      <jvmarg value="-XX:+UseStringDeduplication" />
+      <!-- Module exports for Java 16+ -->
       <jvmarg if:set="jogl-exports" value="--add-exports=java.base/java.lang=ALL-UNNAMED" />
       <jvmarg if:set="jogl-exports" value="--add-exports=java.desktop/sun.awt=ALL-UNNAMED" />
       <jvmarg if:set="jogl-exports" value="--add-exports=java.desktop/sun.java2d=ALL-UNNAMED" />
