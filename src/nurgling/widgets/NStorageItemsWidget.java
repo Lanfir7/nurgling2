@@ -11,7 +11,6 @@ import nurgling.db.service.StorageItemService;
 import nurgling.i18n.L10n;
 
 import java.awt.Color;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -335,20 +334,25 @@ public class NStorageItemsWidget extends Window {
         isLoading = true;
         StorageItemService storageService = new StorageItemService(ui.core.databaseManager);
 
-        storageService.loadAllStorageItemsAsync()
-            .thenAccept(items -> {
+        // Use a dedicated Thread instead of ForkJoinPool.commonPool() (via CompletableFuture)
+        // to avoid ClassLoader issues — ForkJoinPool threads may use a different ClassLoader
+        // that cannot find application classes from hafen.jar
+        Thread loader = new Thread(() -> {
+            try {
+                List<StorageItemDao.StorageItemData> items = storageService.loadAllStorageItems();
                 // Filter out items with negative quality (shouldn't be in DB, but just in case)
                 List<StorageItemDao.StorageItemData> validItems = items.stream()
                     .filter(item -> item.getQuality() >= 0)
                     .collect(Collectors.toList());
                 processLoadedItems(validItems);
-                isLoading = false;
-            })
-            .exceptionally(e -> {
+            } catch (Exception e) {
                 e.printStackTrace();
+            } finally {
                 isLoading = false;
-                return null;
-            });
+            }
+        }, "StorageItemLoader");
+        loader.setDaemon(true);
+        loader.start();
     }
 
     private void processLoadedItems(List<StorageItemDao.StorageItemData> items) {
