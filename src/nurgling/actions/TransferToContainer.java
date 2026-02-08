@@ -369,7 +369,6 @@ public class TransferToContainer implements Action
 
     public static int transfer(WItem item, NInventory targetInv, int transfer_size, String itemName) throws InterruptedException
     {
-        // Проверяем валидность предмета перед транспортировкой
         if (!NGItem.validateItem(item))
         {
             return 0;
@@ -473,61 +472,8 @@ public class TransferToContainer implements Action
                     int oldstacksize = sourceStack.wmap.size();
                     if (targetInv.getFreeSpace() > 0)
                     {
-                        // ВАЖНО: Если есть предметы с разным качеством, переносим по одному предмету
-                        // для проверки качества, даже если transfer_size позволяет перенести весь стак
-                        // Проверяем, нужно ли переносить по одному предмету
-                        // ВАЖНО: Если th > 1 (передан через TransferItems2), ВСЕГДА переносим по одному
-                        boolean needQualityCheck = false;
-                        // Проверяем th из TransferToContainer (если передан)
-                        // Но th не доступен в статическом методе transfer(), поэтому проверяем качество предметов
-                        if (itemName != null) {
-                            try {
-                                NGameUI gui = NUtils.getGameUI();
-                                if (gui != null) {
-                                    // Проверяем, есть ли предметы с разным качеством в инвентаре (включая стаки)
-                                    ArrayList<WItem> allItems = gui.getInventory().getItems(new NAlias(itemName));
-                                    if (allItems.size() > 1) {
-                                        Float firstQuality = null;
-                                        for (WItem witem : allItems) {
-                                            if (NGItem.validateItem(witem)) {
-                                                NGItem gi = (NGItem) witem.item;
-                                                Float quality = null;
-                                                
-                                                // Проверяем качество стака, если предмет в стаке
-                                                if (witem.parent instanceof haven.res.ui.stackinv.ItemStack) {
-                                                    haven.res.ui.tt.stackn.Stack stackInfo = gi.getInfo(haven.res.ui.tt.stackn.Stack.class);
-                                                    if (stackInfo != null && stackInfo.quality > 0) {
-                                                        quality = (float)stackInfo.quality;
-                                                    }
-                                                }
-                                                
-                                                // Если не нашли качество стака, используем качество предмета
-                                                if (quality == null) {
-                                                    quality = gi.quality;
-                                                }
-                                                
-                                                if (quality != null) {
-                                                    if (firstQuality == null) {
-                                                        firstQuality = quality;
-                                                    } else if (!firstQuality.equals(quality)) {
-                                                        // Нашли предметы/стаки с разным качеством
-                                                        needQualityCheck = true;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (InterruptedException e) {
-                                throw e; // Don't swallow interrupt!
-                            } catch (Exception e) {
-                                // Игнорируем ошибки
-                            }
-                        }
-                        
-                        // Если нужно проверять качество или размер стака превышает лимит, переносим по одному
-                        if (needQualityCheck || oldstacksize > transfer_size)
+                        // Если размер стака превышает лимит переноса, переносим по одному
+                        if (oldstacksize > transfer_size)
                         {
                             int originalStackSize = sourceStack.wmap.size();
 

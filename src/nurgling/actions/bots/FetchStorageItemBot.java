@@ -21,15 +21,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Navigates to containers and collects specified items.
  */
 public class FetchStorageItemBot implements Action {
-    
+
     private final String itemName;
     private final double minQuality;
     private final double maxQuality;
     private final int targetCount;
     private final List<StorageItemDao.StorageItemData> itemsToFetch;
-    
+
     public static final AtomicBoolean stop = new AtomicBoolean(false);
-    
+
     /**
      * Create a bot to fetch items matching the given criteria
      * @param item The grouped item to fetch
@@ -41,7 +41,7 @@ public class FetchStorageItemBot implements Action {
         this.minQuality = item.minQuality;
         this.maxQuality = item.maxQuality;
         this.targetCount = count;
-        
+
         // Filter items that match the group criteria
         this.itemsToFetch = new ArrayList<>();
         for (StorageItemDao.StorageItemData data : allItems) {
@@ -53,55 +53,56 @@ public class FetchStorageItemBot implements Action {
             }
         }
     }
-    
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         stop.set(false);
-        
+
         if (itemsToFetch.isEmpty()) {
             gui.msg(L10n.get("storage.no_containers"), java.awt.Color.RED);
             return Results.FAIL();
         }
-        
+
         // Group items by container
         Map<String, List<StorageItemDao.StorageItemData>> itemsByContainer = new LinkedHashMap<>();
         for (StorageItemDao.StorageItemData item : itemsToFetch) {
             itemsByContainer.computeIfAbsent(item.getContainer(), k -> new ArrayList<>()).add(item);
         }
-        
+
         int collected = 0;
         int remaining = targetCount;
-        
+
         gui.msg(L10n.get("storage.fetching_items").replace("{0}", String.valueOf(targetCount)));
-        
+
         // Count items in player inventory before fetching
         int beforeCount = countItemsInInventory(gui, itemName);
-        
+
         for (Map.Entry<String, List<StorageItemDao.StorageItemData>> entry : itemsByContainer.entrySet()) {
             if (stop.get()) {
                 gui.msg(L10n.get("storage.fetch_cancelled"), java.awt.Color.YELLOW);
                 return Results.FAIL();
             }
-            
+
             if (remaining <= 0) break;
-            
+
             String containerHash = entry.getKey();
             List<StorageItemDao.StorageItemData> containerItems = entry.getValue();
-            int itemsInContainer = Math.min(containerItems.size(), remaining);
-            
+            // Pass actual DB records (limited by remaining) so we can match exact quality
+            List<StorageItemDao.StorageItemData> toFetch = containerItems.subList(0, Math.min(containerItems.size(), remaining));
+
             // Try to find and navigate to container
-            int fetched = fetchFromContainer(gui, containerHash, itemsInContainer);
-            
+            int fetched = fetchFromContainer(gui, containerHash, toFetch);
+
             if (fetched > 0) {
                 collected += fetched;
                 remaining -= fetched;
             }
         }
-        
+
         // Verify actual items collected
         int afterCount = countItemsInInventory(gui, itemName);
         int actualCollected = afterCount - beforeCount;
-        
+
         if (actualCollected > 0) {
             gui.msg(L10n.get("storage.fetch_complete").replace("{0}", String.valueOf(actualCollected)), java.awt.Color.GREEN);
             return Results.SUCCESS();
@@ -110,7 +111,7 @@ public class FetchStorageItemBot implements Action {
             return Results.FAIL();
         }
     }
-    
+
     /**
      * Count items with matching name in player inventory
      */
@@ -121,12 +122,13 @@ public class FetchStorageItemBot implements Action {
             return 0;
         }
     }
-    
+
     /**
-     * Navigate to container and fetch items from it
+     * Navigate to container and fetch items matching exact quality from DB records.
+     * @param requestedItems DB records with exact qualities to match
      * @return number of items actually fetched
      */
-    private int fetchFromContainer(NGameUI gui, String containerHash, int count) throws InterruptedException {
+    private int fetchFromContainer(NGameUI gui, String containerHash, List<StorageItemDao.StorageItemData> requestedItems) throws InterruptedException {
         // Count items before
         int beforeCount = countItemsInInventory(gui, itemName);
 
@@ -158,8 +160,9 @@ public class FetchStorageItemBot implements Action {
             // Try to find container again after navigation (gobs may take time to load)
             containerGob = Finder.findGob(containerHash);
             if (containerGob == null) {
-                for (int retry = 0; retry < 5 && containerGob == null; retry++) {
-                    Thread.sleep(300);
+                WaitForGobWithHash waitGob = new WaitForGobWithHash(containerHash);
+                NUtils.addTask(waitGob);
+                if (!waitGob.criticalExit) {
                     containerGob = Finder.findGob(containerHash);
                 }
             }
@@ -168,83 +171,90 @@ public class FetchStorageItemBot implements Action {
                 return 0;
             }
         }
-        
+
         // Move to container if not close enough
         if (!PathFinder.isAvailable(containerGob)) {
             PathFinder pf = new PathFinder(containerGob);
             pf.run(gui);
         }
-        
+
         // Open container
         String containerName = getContainerWindowName(containerGob);
         if (containerName == null) {
-            System.out.println("[FetchStorageItemBot] Unknown container type: " + 
+            System.out.println("[FetchStorageItemBot] Unknown container type: " +
                 (containerGob.ngob != null ? containerGob.ngob.name : "null"));
             return 0;
         }
         NUtils.rclickGob(containerGob);
         NUtils.addTask(new WaitWindow(containerName));
-        
+
         // Wait for inventory to load
         Thread.sleep(500);
-        
+
         // Get container inventory
         Window containerWindow = gui.getWindow(containerName);
         if (containerWindow == null) {
             return 0;
         }
-        
+
         NInventory containerInv = gui.getInventory(containerName);
         if (containerInv == null) {
             containerWindow.wdgmsg("close");
             return 0;
         }
-        
-        // Check if item actually exists in container
-        ArrayList<WItem> availableItems;
-        try {
-            availableItems = containerInv.getItems(itemName);
-        } catch (InterruptedException e) {
-            containerWindow.wdgmsg("close");
-            return 0;
+
+        // Fetch items one by one, matching exact quality from DB records
+        int transferred = 0;
+        for (StorageItemDao.StorageItemData dbItem : requestedItems) {
+            if (stop.get()) break;
+            if (gui.getInventory().calcFreeSpace() == 0) break;
+
+            // Find a WItem in container matching name AND exact quality
+            WItem match = findItemByQuality(containerInv, dbItem.getName(), dbItem.getQuality());
+            if (match == null) {
+                // No item with this exact quality in the container — skip
+                continue;
+            }
+
+            int oldCount = countItemsInInventory(gui, itemName);
+            TransferToContainer.transfer(match, gui.getInventory(), 1);
+
+            // Verify item was actually transferred
+            int newCount = countItemsInInventory(gui, itemName);
+            if (newCount > oldCount) {
+                transferred++;
+            }
         }
-        
-        if (availableItems.isEmpty()) {
-            // Item not found in container - close and return 0
-            containerWindow.wdgmsg("close");
-            return 0;
-        }
-        
-        // Take items from container
-        NAlias itemPattern = new NAlias(itemName);
-        HashSet<String> names = new HashSet<>();
-        names.add(itemName);
-        
-        // Create container wrapper for TakeItemsFromContainer
-        Container container = new Container(containerGob, containerName, null);
-        
-        // Create quality filter based on min/max quality
-        TakeItemsFromContainer takeAction = new TakeItemsFromContainer(
-            container,
-            names,
-            itemPattern,
-            maxQuality // Use maxQuality as the quality cap
-        );
-        takeAction.minSize = Math.min(count, availableItems.size());
-        
-        takeAction.run(gui);
-        
-        // Wait for transfer to complete
-        Thread.sleep(200);
-        
+
         // Close container window
         containerWindow.wdgmsg("close");
-        
-        // Count items after and return difference
+
+        // Return actual count based on inventory difference
         int afterCount = countItemsInInventory(gui, itemName);
         return afterCount - beforeCount;
     }
-    
+
+    /**
+     * Find a WItem in the container inventory matching the given name and exact quality.
+     * Quality is compared rounded to 2 decimal places (same precision as DB storage).
+     * @return matching WItem or null if not found
+     */
+    private WItem findItemByQuality(NInventory containerInv, String name, double targetQuality) throws InterruptedException {
+        ArrayList<WItem> items = containerInv.getItems(name);
+        for (WItem item : items) {
+            if (item.item instanceof NGItem) {
+                Float q = ((NGItem) item.item).quality;
+                if (q != null) {
+                    double rounded = Double.parseDouble(Utils.odformat2(q, 2));
+                    if (Double.compare(rounded, targetQuality) == 0) {
+                        return item;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * Load container data from database
      */
@@ -252,7 +262,7 @@ public class FetchStorageItemBot implements Action {
         if (NCore.databaseManager == null || !NCore.databaseManager.isReady()) {
             return null;
         }
-        
+
         try {
             return NCore.databaseManager.executeOperation(adapter -> {
                 ContainerDao dao = new ContainerDao();
@@ -268,7 +278,7 @@ public class FetchStorageItemBot implements Action {
             return null;
         }
     }
-    
+
     /**
      * Parse local coordinates string "(x, y)" to Coord (in posres units, as stored by ContainerWatcher)
      */
@@ -337,7 +347,7 @@ public class FetchStorageItemBot implements Action {
 
         return false;
     }
-    
+
     /**
      * Get the window name for a container Gob using the canonical NContext.contcaps mapping.
      * Returns null if the container type is unknown.
@@ -349,4 +359,3 @@ public class FetchStorageItemBot implements Action {
         return NContext.contcaps.get(gob.ngob.name);
     }
 }
-
