@@ -284,6 +284,29 @@ public class ChunkNavPlanner {
         );
 
         if (unifiedPath == null || !unifiedPath.reachable) {
+            // Diagnostic: dump start and target chunk info
+            ChunkNavData startChunk = graph.getChunk(startChunkId);
+            System.out.println("[planToGridCoord] NO PATH: start=" + startChunkId +
+                " (layer=" + (startChunk != null ? startChunk.layer : "?") +
+                " inst=" + (startChunk != null ? startChunk.instanceId : "?") +
+                " portals=" + (startChunk != null ? startChunk.portals.size() : 0) + ")" +
+                " -> target=" + gridId +
+                " (layer=" + chunk.layer + " inst=" + chunk.instanceId +
+                " portals=" + chunk.portals.size() + ")");
+            if (startChunk != null && !startChunk.portals.isEmpty()) {
+                for (ChunkPortal p : startChunk.portals) {
+                    System.out.println("[planToGridCoord]   startPortal: '" + p.gobName +
+                        "' type=" + p.type + " -> grid=" + p.connectsToGridId +
+                        " at=(" + (p.localCoord != null ? p.localCoord.x + "," + p.localCoord.y : "null") + ")");
+                }
+            }
+            if (!chunk.portals.isEmpty()) {
+                for (ChunkPortal p : chunk.portals) {
+                    System.out.println("[planToGridCoord]   targetPortal: '" + p.gobName +
+                        "' type=" + p.type + " -> grid=" + p.connectsToGridId +
+                        " at=(" + (p.localCoord != null ? p.localCoord.x + "," + p.localCoord.y : "null") + ")");
+                }
+            }
             return null;
         }
 

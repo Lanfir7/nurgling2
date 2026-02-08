@@ -469,6 +469,30 @@ public class ChunkNavExecutor implements Action {
         return ChunkPortal.isBuildingExterior(gobName);
     }
 
+    /**
+     * Check if a tile is confirmed blocked in recorded data.
+     * A tile is only considered blocked if ALL cells in the 2x2 block
+     * have been observed AND are marked as blocked (walkability=2).
+     * Unobserved cells (default=2 but never actually seen) are treated
+     * as potentially walkable to avoid false positives from partial exploration.
+     */
+    private boolean isTileConfirmedBlocked(ChunkNavData chunk, int tileX, int tileY) {
+        if (chunk == null) return false;
+        int baseCellX = tileX * CELLS_PER_TILE;
+        int baseCellY = tileY * CELLS_PER_TILE;
+        for (int dx = 0; dx < CELLS_PER_TILE; dx++) {
+            for (int dy = 0; dy < CELLS_PER_TILE; dy++) {
+                int cx = baseCellX + dx;
+                int cy = baseCellY + dy;
+                // If any cell is unobserved or walkable, the tile is NOT confirmed blocked
+                if (!chunk.isObserved(cx, cy) || chunk.getWalkability(cx, cy) != 2) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private Gob findGobByName(NGameUI gui, String gobName, Coord2d center, double maxDist) {
         Gob closest = null;
         double closestDist = maxDist;
@@ -737,30 +761,25 @@ public class ChunkNavExecutor implements Action {
             }
 
             // Check walkability before attempting PathFinder to avoid wasting time on blocked tiles
-            if (segmentChunk != null) {
-                int cellX = targetStep.localCoord.x * CELLS_PER_TILE;
-                int cellY = targetStep.localCoord.y * CELLS_PER_TILE;
-                if (segmentChunk.getWalkability(cellX, cellY) == 2) {
-                    // Target tile is blocked - scan backwards to find nearest walkable step
-                    boolean foundWalkable = false;
-                    for (int scanIdx = targetIndex - 1; scanIdx > currentStepIndex; scanIdx--) {
-                        ChunkPath.TileStep scanStep = segment.steps.get(scanIdx);
-                        int scanCellX = scanStep.localCoord.x * CELLS_PER_TILE;
-                        int scanCellY = scanStep.localCoord.y * CELLS_PER_TILE;
-                        if (segmentChunk.getWalkability(scanCellX, scanCellY) == 0) {
-                            targetIndex = scanIdx;
-                            targetStep = scanStep;
-                            waypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
-                                segmentChunk, targetStep.localCoord.x, targetStep.localCoord.y, currentWorldTileOrigin);
-                            foundWalkable = true;
-                            break;
-                        }
+            // Only skip tiles that are CONFIRMED blocked (all cells observed AND blocked)
+            if (isTileConfirmedBlocked(segmentChunk, targetStep.localCoord.x, targetStep.localCoord.y)) {
+                // Target tile is blocked - scan backwards to find nearest walkable step
+                boolean foundWalkable = false;
+                for (int scanIdx = targetIndex - 1; scanIdx > currentStepIndex; scanIdx--) {
+                    ChunkPath.TileStep scanStep = segment.steps.get(scanIdx);
+                    if (!isTileConfirmedBlocked(segmentChunk, scanStep.localCoord.x, scanStep.localCoord.y)) {
+                        targetIndex = scanIdx;
+                        targetStep = scanStep;
+                        waypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
+                            segmentChunk, targetStep.localCoord.x, targetStep.localCoord.y, currentWorldTileOrigin);
+                        foundWalkable = true;
+                        break;
                     }
-                    if (!foundWalkable) {
-                        // No walkable tile in this interval - skip ahead
-                        currentStepIndex = targetIndex + 1;
-                        continue;
-                    }
+                }
+                if (!foundWalkable) {
+                    // No walkable tile in this interval - skip ahead
+                    currentStepIndex = targetIndex + 1;
+                    continue;
                 }
             }
 
@@ -778,12 +797,8 @@ public class ChunkNavExecutor implements Action {
             for (int midIndex = currentStepIndex + 5; midIndex < targetIndex; midIndex += 5) {
                 ChunkPath.TileStep midStep = segment.steps.get(midIndex);
 
-                // Skip blocked tiles
-                if (segmentChunk != null) {
-                    int midCellX = midStep.localCoord.x * CELLS_PER_TILE;
-                    int midCellY = midStep.localCoord.y * CELLS_PER_TILE;
-                    if (segmentChunk.getWalkability(midCellX, midCellY) == 2) continue;
-                }
+                // Skip confirmed blocked tiles
+                if (isTileConfirmedBlocked(segmentChunk, midStep.localCoord.x, midStep.localCoord.y)) continue;
 
                 // Compute targeting walkable cell within tile (not tile center)
                 Coord2d midWaypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
@@ -805,12 +820,8 @@ public class ChunkNavExecutor implements Action {
                 for (int singleIndex = currentStepIndex + 1; singleIndex <= targetIndex; singleIndex++) {
                     ChunkPath.TileStep singleStep = segment.steps.get(singleIndex);
 
-                    // Skip blocked tiles
-                    if (segmentChunk != null) {
-                        int sCellX = singleStep.localCoord.x * CELLS_PER_TILE;
-                        int sCellY = singleStep.localCoord.y * CELLS_PER_TILE;
-                        if (segmentChunk.getWalkability(sCellX, sCellY) == 2) continue;
-                    }
+                    // Skip confirmed blocked tiles
+                    if (isTileConfirmedBlocked(segmentChunk, singleStep.localCoord.x, singleStep.localCoord.y)) continue;
 
                     // Compute targeting walkable cell within tile (not tile center)
                     Coord2d singleWaypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(

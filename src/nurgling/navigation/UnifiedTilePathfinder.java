@@ -290,12 +290,9 @@ public class UnifiedTilePathfinder {
 
                     // Skip "phantom" building exterior portals at chunk edges.
                     // These are recorded when a player clicks a building from an adjacent chunk -
-                    // the portal gets recorded on the player's chunk (near the edge) instead of
-                    // the building's actual chunk. Such portals are physically unreachable because
-                    // the building is on the other side of the chunk boundary.
-                    if (ChunkPortal.isBuildingExterior(portal.gobName) && isAtChunkEdge(portal.localCoord, 5)) {
-                        continue;
-                    }
+                    // Note: phantom building portals at chunk edges are prevented at recording
+                    // time by PortalTraversalTracker (uses building's actual grid, not player's).
+                    // No edge-based filtering here — real buildings CAN be near chunk edges.
                     ChunkNavData destChunk = graph.getChunk(portal.connectsToGridId);
                     if (destChunk != null) {
                         // Validate portal type vs target layer.
