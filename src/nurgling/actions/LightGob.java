@@ -2,6 +2,7 @@ package nurgling.actions;
 
 import haven.Coord2d;
 import haven.Gob;
+import haven.MCache;
 import haven.MenuSearch;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -69,6 +70,13 @@ public class LightGob implements Action
                 }
             }
             new PlaceObject(litCandelabrum, pos, 0).run(gui);
+            // Step back 1 tile from the candelabrum
+            Coord2d playerPos = NUtils.player().rc;
+            Coord2d dir = playerPos.sub(pos);
+            double dist = dir.dist(Coord2d.z);
+            if (dist > 0) {
+                new GoTo(playerPos.add(dir.norm(MCache.tilesz.x))).run(gui);
+            }
             return Results.SUCCESS();
         }
         else
@@ -112,6 +120,13 @@ public class LightGob implements Action
                         {
                             Coord2d pos = Finder.getFreePlace(context.getAreaById(Specialisation.SpecName.candelabrum.toString()).getRCArea(), Finder.findLiftedbyPlayer().ngob.hitBox, 0);
                             new PlaceObject(litCandelabrum, pos, 0).run(gui);
+                            // Step back 1 tile from the candelabrum
+                            Coord2d plPos = NUtils.player().rc;
+                            Coord2d backDir = plPos.sub(pos);
+                            double backDist = backDir.dist(Coord2d.z);
+                            if (backDist > 0) {
+                                new GoTo(plPos.add(backDir.norm(MCache.tilesz.x))).run(gui);
+                            }
                         }
                     }
 
