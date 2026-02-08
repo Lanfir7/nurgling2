@@ -5,7 +5,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -61,9 +60,7 @@ public class CustomIconManager {
         main.put("icons", jicons);
 
         try {
-            FileWriter f = new FileWriter(NConfig.current.getCustomIconsPath(), StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
+            nurgling.util.SafeJsonWriter.writeAtomic(NConfig.current.getCustomIconsPath(), main);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

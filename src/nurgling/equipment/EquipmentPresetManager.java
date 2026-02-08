@@ -7,7 +7,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -51,9 +50,8 @@ public class EquipmentPresetManager {
         main.put("presets", jpresets);
 
         try {
-            FileWriter f = new FileWriter(customPath == null ? NConfig.current.getEquipmentPresetsPath() : customPath, StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
+            nurgling.util.SafeJsonWriter.writeAtomic(
+                    customPath == null ? NConfig.current.getEquipmentPresetsPath() : customPath, main);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

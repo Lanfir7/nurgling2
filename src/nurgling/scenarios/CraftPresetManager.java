@@ -5,7 +5,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -65,9 +64,7 @@ public class CraftPresetManager {
         main.put("presets", jpresets);
 
         try {
-            FileWriter f = new FileWriter(NConfig.current.getCraftPresetsPath(), StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
+            nurgling.util.SafeJsonWriter.writeAtomic(NConfig.current.getCraftPresetsPath(), main);
         } catch (IOException e) {
             System.err.println("Error saving craft presets: " + e.getMessage());
         }

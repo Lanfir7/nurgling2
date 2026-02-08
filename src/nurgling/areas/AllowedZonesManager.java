@@ -249,7 +249,7 @@ public class AllowedZonesManager {
             root.put("version", 2);
             root.put("lastSaved", System.currentTimeMillis());
             
-            Files.write(filePath, root.toString(2).getBytes(StandardCharsets.UTF_8));
+            nurgling.util.SafeJsonWriter.writeAtomic(filePath.toString(), root);
             
         } catch (Exception e) {
             System.err.println("AllowedZonesManager: Failed to save: " + e.getMessage());

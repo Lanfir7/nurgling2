@@ -113,9 +113,7 @@ public class AreaJSONStorage implements AreaStorage {
             }
             main.put("areas", jareas);
             
-            try (FileWriter f = new FileWriter(areasPath, StandardCharsets.UTF_8)) {
-                main.write(f);
-            }
+            nurgling.util.SafeJsonWriter.writeAtomic(areasPath, main);
         } catch (IOException e) {
             throw new StorageException("Failed to save areas to JSON", e);
         }

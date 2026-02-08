@@ -9,7 +9,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -383,9 +382,7 @@ public class TreeLocationService implements ProfileAwareService {
             main.put("version", 1);
             main.put("lastSaved", java.time.Instant.now().toString());
 
-            try (FileWriter writer = new FileWriter(dataFile, StandardCharsets.UTF_8)) {
-                writer.write(main.toString(2)); // Pretty print with indent
-            }
+            nurgling.util.SafeJsonWriter.writeAtomic(dataFile, main);
         } catch (IOException e) {
             System.err.println("Failed to save tree locations: " + e.getMessage());
         }

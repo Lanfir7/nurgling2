@@ -50,17 +50,14 @@ public class IconRingConfig {
      */
     public void save() {
         try {
-            // Create directory if needed
-            Files.createDirectories(configFile.getParent());
-            
             // Build JSON
             JSONObject json = new JSONObject();
             for (Map.Entry<String, Boolean> entry : ringSettings.entrySet()) {
                 json.put(entry.getKey(), entry.getValue());
             }
             
-            // Write to file
-            Files.write(configFile, json.toString(2).getBytes());
+            // Write atomically with file locking
+            nurgling.util.SafeJsonWriter.writeAtomic(configFile.toString(), json);
         } catch (IOException e) {
             e.printStackTrace();
         }

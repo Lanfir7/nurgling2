@@ -587,6 +587,10 @@ public class NConfig
 
     HashMap<Key, Object> conf = new HashMap<>();
     private boolean isUpd = false;
+    // Tracks which keys were modified by this client instance since last write.
+    // Only these keys will be merged into the on-disk file, preserving changes from other clients.
+    private final Set<Key> dirtyKeys = new HashSet<>();
+    private boolean allKeysDirty = false; // fallback when caller uses needUpdate() without specifying keys
     private boolean isAreasUpd = false;
     private long lastAreasChangeTime = 0;
     private static final long AREAS_DEBOUNCE_MS = 3000; // 3 seconds debounce for area changes
@@ -644,6 +648,7 @@ public class NConfig
         if (current != null)
         {
             current.isUpd = true;
+            current.dirtyKeys.add(key);
             current.conf.put(key, val);
         }
     }
@@ -653,6 +658,7 @@ public class NConfig
         if (current != null)
         {
             current.isUpd = true;
+            current.allKeysDirty = true;
         }
     }
 
@@ -1171,45 +1177,65 @@ public class NConfig
         return objs;
     }
 
+    /**
+     * Prepares a single config value for JSON serialization.
+     */
+    @SuppressWarnings("unchecked")
+    private Object prepareValue(Object value) {
+        if (value instanceof JConf) {
+            return ((JConf) value).toJson();
+        } else if (value instanceof ArrayList<?>) {
+            return prepareArray((ArrayList<Object>) value);
+        } else if (value instanceof Color) {
+            Color color = (Color) value;
+            Map<String, Object> colorMap = new HashMap<>();
+            colorMap.put("type", "Color");
+            colorMap.put("red", color.getRed());
+            colorMap.put("green", color.getGreen());
+            colorMap.put("blue", color.getBlue());
+            colorMap.put("alpha", color.getAlpha());
+            return colorMap;
+        } else {
+            return value;
+        }
+    }
+
+    /**
+     * Saves configuration using read-merge-write strategy to support multiple client instances.
+     * Only the keys modified by this client (dirtyKeys) are written over the current on-disk state,
+     * so changes made by other clients are preserved.
+     * Uses file locking to prevent concurrent write corruption.
+     */
     @SuppressWarnings("unchecked")
     public void write()
     {
-        Map<String, Object> prep = new HashMap<>();
-        for (Map.Entry<Key, Object> entry : conf.entrySet())
-        {
-            if (entry.getValue() instanceof JConf)
-            {
-                prep.put(entry.getKey().toString(), ((JConf) entry.getValue()).toJson());
-            }
-            else if (entry.getValue() instanceof ArrayList<?>)
-            {
-                prep.put(entry.getKey().toString(), prepareArray((ArrayList<Object>) entry.getValue()));
-            }
-            else if (entry.getValue() instanceof Color)
-            {
-                // Convert Color objects back to Map format for JSON serialization
-                Color color = (Color) entry.getValue();
-                Map<String, Object> colorMap = new HashMap<>();
-                colorMap.put("type", "Color");
-                colorMap.put("red", color.getRed());
-                colorMap.put("green", color.getGreen());
-                colorMap.put("blue", color.getBlue());
-                colorMap.put("alpha", color.getAlpha());
-                prep.put(entry.getKey().toString(), colorMap);
-            }
-            else
-            {
-                prep.put(entry.getKey().toString(), entry.getValue());
-            }
-        }
-
-        JSONObject main = new JSONObject(prep);
         try
         {
-            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
-            current.isUpd = false;
+            if (allKeysDirty || dirtyKeys.isEmpty()) {
+                // Full write: all keys are dirty (needUpdate() was called) or first save
+                Map<String, Object> prep = new HashMap<>();
+                for (Map.Entry<Key, Object> entry : conf.entrySet())
+                {
+                    prep.put(entry.getKey().toString(), prepareValue(entry.getValue()));
+                }
+                JSONObject main = new JSONObject(prep);
+                nurgling.util.SafeJsonWriter.writeAtomic(path, main);
+            } else {
+                // Partial merge-write: only dirty keys are merged into the on-disk file
+                Map<String, Object> prep = new HashMap<>();
+                for (Key key : dirtyKeys)
+                {
+                    Object value = conf.get(key);
+                    if (value != null) {
+                        prep.put(key.toString(), prepareValue(value));
+                    }
+                }
+                JSONObject dirtyData = new JSONObject(prep);
+                nurgling.util.SafeJsonWriter.mergeAndWrite(path, dirtyData);
+            }
+            isUpd = false;
+            dirtyKeys.clear();
+            allKeysDirty = false;
         }
         catch (IOException e)
         {
@@ -1282,9 +1308,7 @@ public class NConfig
         main.put("areas",jareas);
         try
         {
-            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
+            nurgling.util.SafeJsonWriter.writeAtomic(path, main);
             this.isAreasUpd = false;
             this.lastAreasChangeTime = 0;
         }
@@ -1466,9 +1490,8 @@ public class NConfig
             main.put("scenarios", jscenarios);
 
             try {
-                FileWriter f = new FileWriter(customPath == null ? getScenariosPath() : customPath, StandardCharsets.UTF_8);
-                main.write(f);
-                f.close();
+                nurgling.util.SafeJsonWriter.writeAtomic(
+                        customPath == null ? getScenariosPath() : customPath, main);
                 current.isScenariosUpd = false;
             } catch (IOException e) {
                 throw new RuntimeException(e);

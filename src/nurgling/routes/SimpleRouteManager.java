@@ -98,7 +98,7 @@ public class SimpleRouteManager implements ProfileAwareService {
             
             main.put("routes", routesArray);
             
-            Files.write(Paths.get(configPath), main.toString(2).getBytes(StandardCharsets.UTF_8));
+            nurgling.util.SafeJsonWriter.writeAtomic(configPath, main);
         } catch (IOException e) {
             System.err.println("Failed to save simple routes: " + e.getMessage());
         }

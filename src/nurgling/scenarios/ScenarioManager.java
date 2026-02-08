@@ -53,9 +53,8 @@ public class ScenarioManager {
         main.put("scenarios", jscenarios);
 
         try {
-            FileWriter f = new FileWriter(customPath == null ? NConfig.current.getScenariosPath() : customPath, StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
+            nurgling.util.SafeJsonWriter.writeAtomic(
+                    customPath == null ? NConfig.current.getScenariosPath() : customPath, main);
             needsUpdate = false;
         } catch (IOException e) {
             throw new RuntimeException(e);
