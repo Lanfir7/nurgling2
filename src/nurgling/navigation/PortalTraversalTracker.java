@@ -244,6 +244,9 @@ public class PortalTraversalTracker {
         // Update the destination chunk's layer based on the exit portal
         updateChunkLayer(toGridId, exitName);
 
+        // Update instanceId context for subsequent chunk recordings
+        updateInstanceIdAfterTraversal(toGridId, exitName);
+
         // Record: entrance portal on its actual grid connects to toGrid
         // We determine entranceGridId first so we can use it for the exit portal's back-connection
         long entranceGridId = fromGridId;  // Default to player's grid, but prefer portal's actual grid

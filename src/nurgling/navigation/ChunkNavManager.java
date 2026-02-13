@@ -73,7 +73,7 @@ public class ChunkNavManager {
     public ChunkNavManager() {
         this.graph = new ChunkNavGraph();
         this.recorder = new ChunkNavRecorder(graph);
-        this.recorder.setManager(this); // Wire up manager reference for instanceId access
+        this.recorder.setManager(this);
         this.planner = new ChunkNavPlanner(graph);
         this.portalTracker = new PortalTraversalTracker(graph, recorder, this);
 
@@ -657,6 +657,7 @@ public class ChunkNavManager {
                         " (layer=" + chunk.layer + ") → target " + portal.connectsToGridId +
                         " (layer=" + target.layer + ") - invalidating");
                     portal.connectsToGridId = -1;
+                    portal.exitLocalCoord = null;
                     invalidated++;
                 }
             }

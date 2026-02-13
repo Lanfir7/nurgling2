@@ -93,19 +93,17 @@ public class ChunkNavRecorder {
                 sampleWalkability(grid, chunk);
             }
 
-            // Portals are recorded only when traversed (via PortalTraversalTracker)
-            // This eliminates phantom portal bugs from proximity-based detection
-            detectLayer(chunk);
-
             // Assign instanceId from current world context
-            // Only assign if chunk doesn't already have one (preserve existing assignments)
-            // or if current instanceId is known (not 0/unknown)
             if (manager != null) {
                 long currentInstance = manager.getCurrentInstanceId();
                 if (chunk.instanceId == 0 && currentInstance != 0) {
                     chunk.instanceId = currentInstance;
                 }
             }
+
+            // Portals are recorded only when traversed (via PortalTraversalTracker)
+            // This eliminates phantom portal bugs from proximity-based detection
+            detectLayer(chunk);
 
             updateEdgeWalkability(chunk);
             discoverNeighbors(grid, chunk);
@@ -582,17 +580,7 @@ public class ChunkNavRecorder {
      * Check if a gob name is a building exterior (visible from outside).
      */
     private boolean isBuildingExterior(String name) {
-        // Building exteriors - the full building gobs seen from outside
-        // These are the main building gobs, NOT the -door variants
-        if (name.contains("-door") || name.endsWith("door")) return false;
-
-        return name.contains("stonemansion") ||
-               name.contains("logcabin") ||
-               name.contains("timberhouse") ||
-               name.contains("stonestead") ||
-               name.contains("greathall") ||
-               name.contains("stonetower") ||
-               name.contains("windmill");
+        return ChunkPortal.isBuildingExterior(name);
     }
 
     /**

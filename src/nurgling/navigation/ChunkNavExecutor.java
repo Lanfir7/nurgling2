@@ -329,7 +329,7 @@ public class ChunkNavExecutor implements Action {
                                    lower.contains("stonemansion") || lower.contains("logcabin") ||
                                    lower.contains("timberhouse") || lower.contains("stonestead") ||
                                    lower.contains("greathall") || lower.contains("stonetower") ||
-                                   lower.contains("windmill");
+                                   lower.contains("windmill") || lower.contains("primitivetent");
 
                 if (isPortal) {
                     double dist = player.rc.dist(gob.rc);

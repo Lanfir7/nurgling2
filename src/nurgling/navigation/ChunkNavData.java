@@ -33,10 +33,10 @@ public class ChunkNavData {
     // "outside" = surface + mines (can walk between grids), "inside" = building interior, "cellar" = underground cellar
     public String layer = "outside";
 
-    // Instance context - distinguishes chunks from different world instances
+    // Instance context - distinguishes chunks from different world instances.
     // Chunks reachable by walking (without portals) share the same instanceId.
     // 0 = unknown/legacy (not yet assigned), other values = unique per world instance.
-    // Surface chunks share one instanceId, each mine level has its own, each building interior has its own, etc.
+    // Surface chunks share one instanceId (1), each mine level has its own, each building interior has its own, etc.
     // This prevents false neighbor connections between chunks from different instances
     // (e.g., mine level chunks falsely connected to surface chunks).
     public long instanceId = 0;

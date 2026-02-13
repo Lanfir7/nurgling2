@@ -25,10 +25,6 @@ public class UnifiedTilePathfinder {
         this.graph = graph;
     }
 
-    /**
-     * Set chunks where portal traversal has failed.
-     * The pathfinder will skip portal transitions on these chunks.
-     */
     public void setExcludedPortalChunks(Set<Long> excluded) {
         this.excludedPortalChunks = excluded != null ? excluded : Collections.emptySet();
     }
@@ -274,41 +270,26 @@ public class UnifiedTilePathfinder {
         // Skip portals on chunks that are blacklisted (portal traversal failed there before)
         boolean chunkExcluded = !excludedPortalChunks.isEmpty() && excludedPortalChunks.contains(tile.chunkId);
         for (ChunkPortal portal : chunk.portals) {
-            // Check if we're at or near the portal
             if (portal.localCoord != null && portal.connectsToGridId != -1) {
                 double dist = tile.localCoord.dist(portal.localCoord);
                 // Building exteriors (greathall, stonemansion, etc.) are large structures.
                 // Their portal coord is recorded near the building center, but those tiles
-                // are often blocked by the building's footprint. The player can only walk
-                // up to the building edge (~4-6 tiles from center). Use larger proximity.
+                // are often blocked by the building's footprint. Use larger proximity.
                 int portalProximity = ChunkPortal.isBuildingExterior(portal.gobName) ? 6 : 2;
                 if (dist <= portalProximity) {
-                    // Skip portals on blacklisted chunks (executor couldn't find the gob there)
-                    if (chunkExcluded) {
-                        continue;
-                    }
+                    if (chunkExcluded) continue;
 
-                    // Skip "phantom" building exterior portals at chunk edges.
-                    // These are recorded when a player clicks a building from an adjacent chunk -
-                    // Note: phantom building portals at chunk edges are prevented at recording
-                    // time by PortalTraversalTracker (uses building's actual grid, not player's).
+                    // Phantom building portals at chunk edges are prevented at recording
+                    // time by PortalTraversalTracker (uses building's actual grid).
                     // No edge-based filtering here — real buildings CAN be near chunk edges.
                     ChunkNavData destChunk = graph.getChunk(portal.connectsToGridId);
                     if (destChunk != null) {
-                        // Validate portal type vs target layer.
-                        // Instance grid IDs can be reused across sessions, making
-                        // portal connectsToGridId stale (e.g., minehole pointing to
-                        // house interior grid). Skip if portal type is incompatible
-                        // with the target chunk's layer.
+                        // Validate portal type vs target layer (instance grid IDs can be reused)
                         if (!isPortalTargetLayerValid(portal.type, destChunk.layer)) {
-                            continue; // Stale connection - skip
+                            continue;
                         }
-
-                        // Find the exit portal in the destination chunk
-                        // Pass source chunk ID so we can verify the exit portal connects back to us
                         Coord exitCoord = findPortalExitCoord(destChunk, portal, tile.chunkId);
                         if (exitCoord != null) {
-                            // Mark as portal transition (viaPortal = true)
                             neighbors.add(new TileNode(portal.connectsToGridId, exitCoord, true));
                         }
                     }
@@ -557,11 +538,8 @@ public class UnifiedTilePathfinder {
         // Different instances require portal traversal, not walking
         if (fromChunk.instanceId != 0 && toChunk.instanceId != 0
                 && fromChunk.instanceId != toChunk.instanceId) {
-            // Different instances - need portal(s) to get there
             int depth = getPortalPathDepth(fromChunk, toChunk, new HashSet<>());
-            if (depth == -1) {
-                return 999999.0; // No portal path between these instances
-            }
+            if (depth == -1) return 999999.0;
             return 100.0 + (depth - 1) * 400.0;
         }
 

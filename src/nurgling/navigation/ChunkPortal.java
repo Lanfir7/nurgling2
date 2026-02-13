@@ -90,11 +90,7 @@ public class ChunkPortal {
         }
 
         // Building exteriors (clicking these enters the building = same as door)
-        // These are whole-building gobs: stonemansion, logcabin, greathall, etc.
-        if (name.contains("stonemansion") || name.contains("logcabin") ||
-            name.contains("timberhouse") || name.contains("stonestead") ||
-            name.contains("greathall") || name.contains("stonetower") ||
-            name.contains("windmill") || name.contains("primitivetent")) {
+        if (isBuildingExterior(gobName)) {
             return PortalType.DOOR;
         }
 
