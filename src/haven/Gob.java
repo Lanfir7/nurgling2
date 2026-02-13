@@ -459,9 +459,16 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
     public void ctick(double dt) {
 	for(GAttrib a : new ArrayList<>(attr.values()))
 		a.ctick(dt);
+	boolean animDisabled = nurgling.widgets.nsettings.DisableGobAnimSettings.isAnimDisabled(ngob.name);
 	List<Overlay> toRemove = new ArrayList<>();
 	for(Overlay ol : ols) {
-	    if(ol.slots == null) {
+	    if(animDisabled) {
+		// Hide overlay from render tree when animation is disabled
+		if(ol.slots != null) {
+		    RUtils.multirem(new ArrayList<>(ol.slots));
+		    ol.slots = null;
+		}
+	    } else if(ol.slots == null) {
 		try {
 		    ol.init();
 		} catch(Loading e) {}
@@ -485,9 +492,12 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	Drawable d = getattr(Drawable.class);
 	if(d != null)
 	    d.gtick(g);
-	for(Overlay ol : ols) {
-	    if(ol.spr != null)
-		ol.spr.gtick(g);
+	boolean animDisabled = nurgling.widgets.nsettings.DisableGobAnimSettings.isAnimDisabled(ngob.name);
+	if(!animDisabled) {
+	    for(Overlay ol : ols) {
+		if(ol.spr != null)
+		    ol.spr.gtick(g);
+	    }
 	}
     }
 

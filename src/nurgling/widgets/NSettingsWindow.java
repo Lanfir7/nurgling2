@@ -83,6 +83,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem(L10n.get("nsettings.item.map_settings"), new MapSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.qol"), qol = new QoL(), container));
         general.addChild(new SettingsItem("QOL Lanfir", new QOLLanfirSettings(), container));
+        general.addChild(new SettingsItem("Disable Animations", new DisableGobAnimSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.database"), new DatabaseSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.auto_mapper"), new AutoMapper(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.auto_selection"), as = new AutoSelection(), container));

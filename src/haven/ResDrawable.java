@@ -66,6 +66,8 @@ public class ResDrawable extends Drawable implements Sprite.Owner, EquipTarget {
     }
 
     public void ctick(double dt) {
+	if (nurgling.widgets.nsettings.DisableGobAnimSettings.isAnimDisabled(rres.name))
+	    return;
 	spr.tick(dt);
     }
 

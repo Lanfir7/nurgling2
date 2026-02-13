@@ -209,7 +209,10 @@ public class NConfig
         // Animal markers (макрос маркеров животных: список regex-паттернов)
         animal_marker_patterns,
         // Animal markers enabled (ставить метки на животных автоматически)
-        animal_marker_enabled
+        animal_marker_enabled,
+        // Disable gob animations (отключение анимации для выбранных гобов)
+        disableGobAnimEnabled,
+        disableGobAnimPatterns
     }
 
     public enum BBDisplayMode
@@ -375,6 +378,24 @@ public class NConfig
         conf.put(Key.animal_marker_patterns, animalMarkerPatterns);
         // По умолчанию метки на животных включены
         conf.put(Key.animal_marker_enabled, true);
+
+        // Disable gob animations: default list of animated gobs
+        conf.put(Key.disableGobAnimEnabled, false);
+        ArrayList<HashMap<String, Object>> animGobPatterns = new ArrayList<>();
+        for (String aname : new String[]{
+            "gfx/terobjs/kilntar", "gfx/terobjs/kiln", "gfx/terobjs/fineryforge",
+            "gfx/terobjs/smelter", "gfx/terobjs/primsmelter", "gfx/terobjs/candle",
+            "gfx/terobjs/brazier", "gfx/terobjs/oven", "gfx/terobjs/cauldron",
+            "gfx/terobjs/crucible", "gfx/terobjs/steelcrucible",
+            "gfx/terobjs/smokeshed", "gfx/terobjs/torch"
+        }) {
+            HashMap<String, Object> am = new HashMap<>();
+            am.put("type", "NPattern");
+            am.put("name", aname);
+            am.put("enabled", true);
+            animGobPatterns.add(am);
+        }
+        conf.put(Key.disableGobAnimPatterns, animGobPatterns);
 
         ArrayList<HashMap<String, Object>> petal = new ArrayList<>();
         HashMap<String, Object> pres1 = new HashMap<>();
