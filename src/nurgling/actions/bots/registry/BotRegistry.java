@@ -107,6 +107,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("fisher", BotDescriptor.BotType.RESOURCES, "bot.fisher.title", "bot.fisher.desc", false, true, Fishing.class, "fisher", true));
         bots.add(new BotDescriptor("plower", BotDescriptor.BotType.RESOURCES, "bot.plower.title", "bot.plower.desc", false, true, Plower.class, "plower", true));
         bots.add(new BotDescriptor("plant_trees", BotDescriptor.BotType.RESOURCES, "bot.plant_trees.title", "bot.plant_trees.desc", false, true, PlantTrees.class, "treePlanter", false));
+        bots.add(new BotDescriptor("fill_tree_pots", BotDescriptor.BotType.RESOURCES, "bot.fill_tree_pots.title", "bot.fill_tree_pots.desc", false, true, FillTreePots.class, "fillTreePots", true));
         bots.add(new BotDescriptor("blueprint_tree_planter", BotDescriptor.BotType.RESOURCES, "bot.blueprint_tree_planter.title", "bot.blueprint_tree_planter.desc", false, true, BlueprintTreePlanter.class, "treegardener", false));
         bots.add(new BotDescriptor("boughbee", BotDescriptor.BotType.RESOURCES, "bot.boughbee.title", "bot.boughbee.desc", false, true, BoughBee.class, "boughpyre", false));
         bots.add(new BotDescriptor("forager", BotDescriptor.BotType.RESOURCES, "bot.forager.title", "bot.forager.desc", true, true, Forager.class, "forager", false));
@@ -234,6 +235,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("loading", BotDescriptor.BotType.UTILS, "Transfer To Vehicle", "Loads vehicle.", false, true, TransferToVeh.class, "loading", false));
         bots.add(new BotDescriptor("unloading", BotDescriptor.BotType.UTILS, "Transfer From Vehicle", "Unloads vehicle.", false, true, TransferFromVeh.class, "unloading", false));
         bots.add(new BotDescriptor("swap", BotDescriptor.BotType.UTILS, "Swap Vehicles", "Swaps between vehicles.", false, true, TransferFromVehToVeh.class, "swap", false));
+        bots.add(new BotDescriptor("waterfiller", BotDescriptor.BotType.UTILS, "bot.waterfiller.title", "bot.waterfiller.desc", false, true, WaterFiller.class, "waterfiller", false));
         bots.add(new BotDescriptor("eater", BotDescriptor.BotType.UTILS, "Eating bot", "Eat in the food area.", true, true, Eater.class, "eater", false));
         bots.add(new BotDescriptor("zoneminer", BotDescriptor.BotType.UTILS, "Mine in area", "Mine rocks in the area.", false, true, MineAction.class, "zoneminer", true));
         bots.add(new BotDescriptor("bed", BotDescriptor.BotType.UTILS, "Go to bed", "Go to any free bed in a bed area nearby.", true, false, Sleep.class, "bed", false));

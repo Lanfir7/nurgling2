@@ -58,6 +58,7 @@ public class NConfig
         blueprintplanterprop,
         autofloweractionprop,
         carrierprop,
+        filltreepotsprop,
         prepblockprop,
         prepboardprop,
         sheepsprop,
@@ -1017,6 +1018,9 @@ public class NConfig
                                 break;
                             case "NCarrierProp":
                                 res.add(new NCarrierProp(obj));
+                                break;
+                            case "NFillTreePotsProp":
+                                res.add(new NFillTreePotsProp(obj));
                                 break;
                             case "QuickActionPreset":
                                 res.add(new QuickActionPreset(obj));

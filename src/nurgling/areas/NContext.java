@@ -1806,6 +1806,21 @@ public class NContext {
     }
 
     /**
+     * Find all Soil for Trees zones that are visible (not hide).
+     * Used by Fill Tree Pots macro to let user choose mulch zone.
+     */
+    public static ArrayList<NArea> findVisibleSoilForTreesZones() {
+        ArrayList<NArea> all = findAllSpec(Specialisation.SpecName.soilForTrees.toString());
+        ArrayList<NArea> visible = new ArrayList<>();
+        for (NArea a : all) {
+            if (!a.hide) {
+                visible.add(a);
+            }
+        }
+        return visible;
+    }
+
+    /**
      * Find swill delivery areas (areas with swill or trough specialization).
      * Returns areas prioritized by distance from player.
      */
