@@ -41,9 +41,10 @@ public class TunnelingBot implements Action {
         int[] wingSideRef = new int[]{0};
         boolean[] confirmRef = new boolean[]{false};
         boolean[] cancelRef = new boolean[]{false};
+        boolean[] doubleTunnelRef = new boolean[]{false};
 
         TunnelingDialog dialog = new TunnelingDialog();
-        dialog.setReferences(directionRef, tunnelSideRef, supportTypeRef, wingOptionRef, wingSideRef, confirmRef, cancelRef);
+        dialog.setReferences(directionRef, tunnelSideRef, supportTypeRef, wingOptionRef, wingSideRef, confirmRef, cancelRef, doubleTunnelRef);
         gui.add(dialog, UI.scale(200, 200));
 
         // Wait for user input
@@ -66,9 +67,11 @@ public class TunnelingBot implements Action {
         SupportType supportType = TunnelingDialog.getSupportType(supportTypeRef[0]);
         WingOption wingOption = TunnelingDialog.getWingOption(directionRef[0], wingOptionRef[0]);
         TunnelSide wingSide = TunnelingDialog.getWingSide(directionRef[0], wingSideRef[0]);
+        boolean doubleTunnel = doubleTunnelRef[0];
 
         gui.msg("Tunneling: " + direction.name + ", Side: " + tunnelSide.name +
-                ", Support: " + supportType.menuName + ", Wings: " + wingOption.name + ", Wing Side: " + wingSide.name);
+                ", Support: " + supportType.menuName + ", Wings: " + wingOption.name +
+                ", Wing Side: " + wingSide.name + (doubleTunnel ? ", x2 Tunnel" : ""));
 
         // Find nearest support of ANY type as starting point
         Gob startSupport = findNearestSupport(gui);
@@ -103,6 +106,15 @@ public class TunnelingBot implements Action {
             Results mineResult = mineTunnelPath(gui, currentSupportPos, nextSupportPos, direction, tunnelOffset);
             if (!mineResult.IsSuccess()) {
                 return mineResult;
+            }
+
+            // Mine second tunnel row if x2 mode enabled (further from support)
+            if (doubleTunnel) {
+                Coord2d tunnelOffset2 = new Coord2d(tunnelSide.dx * TILE_SIZE * 2, tunnelSide.dy * TILE_SIZE * 2);
+                Results mineResult2 = mineTunnelPath(gui, currentSupportPos, nextSupportPos, direction, tunnelOffset2);
+                if (!mineResult2.IsSuccess()) {
+                    return mineResult2;
+                }
             }
 
             // Mine the tile where support will be placed

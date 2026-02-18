@@ -125,7 +125,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("gelatin", BotDescriptor.BotType.PRODUCTIONS, "Gelatin", "Crafts gelatin from hides. Fills inventory with hides from readyHides zone and crafts.", true, true, GelatinAction.class, "gelatin", true));
         bots.add(new BotDescriptor("smoking", BotDescriptor.BotType.PRODUCTIONS, "Smoking", "Smokes stuff.", false, true, Smoking.class, "smoking", true));
         bots.add(new BotDescriptor("tarkiln", BotDescriptor.BotType.PRODUCTIONS, "Tarkiln Action", "Burns stuff in tarkiln.", true, true, TarkilnAction.class, "tarkiln", true));
-        bots.add(new BotDescriptor("tarkiln_collect", BotDescriptor.BotType.PRODUCTIONS, "bot.tarkiln_collect.title", "bot.tarkiln_collect.desc", true, true, CollectTarFromKilns.class, "tarkiln", true));
+        bots.add(new BotDescriptor("tarkiln_collect", BotDescriptor.BotType.PRODUCTIONS, "bot.tarkiln_collect.title", "bot.tarkiln_collect.desc", true, true, CollectTarFromKilns.class, "tarkiln_collect", true));
         bots.add(new BotDescriptor("tabaco", BotDescriptor.BotType.PRODUCTIONS, "Tabaco Action", "Processes tabaco.", true, true, TabacoAction.class, "tabaco", true));
         bots.add(new BotDescriptor("brick", BotDescriptor.BotType.PRODUCTIONS, "Bricks Action", "Makes bricks.", true, true, BricksAction.class, "brick", true));
         bots.add(new BotDescriptor("branch", BotDescriptor.BotType.PRODUCTIONS, "Branch Action", "Processes branches.", true, true, BranchAction.class, "branch", false));

@@ -1,11 +1,14 @@
 package nurgling.actions.bots;
 
 import haven.*;
+import nurgling.NFlowerMenu;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.*;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
+import nurgling.tasks.NFlowerMenuIsClosed;
+import nurgling.tasks.WaitGobModelAttrChange;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.widgets.Specialisation;
@@ -13,6 +16,8 @@ import nurgling.widgets.Specialisation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static haven.OCache.posres;
 
 /**
  * Collects tar from tar kilns into barrels.
@@ -81,8 +86,22 @@ public class CollectTarFromKilns implements Action {
 
         for (Gob kiln : kilnsWithTar) {
             if (!PathFinder.isAvailable(kiln)) continue;
-            new PathFinder(kiln).run(gui);
-            new CollectFromGob(kiln, "Collect tar", "gfx/borka/bushpickan", new Coord(1, 1), null, true).run(gui);
+            PathFinder pf = new PathFinder(kiln);
+            pf.isHardMode = true;
+            pf.run(gui);
+
+            long attrBefore = kiln.ngob.getModelAttribute();
+            gui.map.wdgmsg("click", Coord.z, kiln.rc.floor(posres), 3, 0, 1,
+                    (int) kiln.id, kiln.rc.floor(posres), 0, -1);
+            NFlowerMenu fm = NUtils.findFlowerMenu();
+            if (fm != null && fm.hasOpt("Collect tar")) {
+                fm.chooseOpt("Collect tar");
+                NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());
+                NUtils.getUI().core.addTask(new WaitGobModelAttrChange(kiln, attrBefore));
+            } else if (fm != null) {
+                fm.wdgmsg("cl", -1);
+                NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());
+            }
         }
 
         if (!NUtils.navigateToArea(barrelArea)) {

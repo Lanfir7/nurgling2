@@ -105,6 +105,7 @@ public class TunnelingDialog extends Window {
     private static boolean savedWingSouth = false;
     private static boolean savedWingEast = false;
     private static boolean savedWingWest = false;
+    private static boolean savedDoubleTunnel = false;
 
     // Current selections (initialized from saved values)
     private Direction selectedDirection = savedDirection;
@@ -115,6 +116,7 @@ public class TunnelingDialog extends Window {
     private boolean wingSouth = savedWingSouth;
     private boolean wingEast = savedWingEast;
     private boolean wingWest = savedWingWest;
+    private boolean doubleTunnel = savedDoubleTunnel;
 
     // Reference arrays for communication with bot
     private int[] directionRef = null;
@@ -124,6 +126,7 @@ public class TunnelingDialog extends Window {
     private int[] wingSideRef = null;
     private boolean[] confirmRef = null;
     private boolean[] cancelRef = null;
+    private boolean[] doubleTunnelRef = null;
 
     // UI Elements
     private IButton btnDirN, btnDirS, btnDirE, btnDirW;
@@ -461,6 +464,18 @@ public class TunnelingDialog extends Window {
         btnWingSideRight.hide();
 
         y += btnTunnelLeft.sz.y + 30;
+
+        // === 3.5. DOUBLE TUNNEL CHECKBOX ===
+        CheckBox doubleTunnelCb = new CheckBox("x2 Tunnel") {
+            @Override
+            public void changed(boolean val) {
+                doubleTunnel = val;
+                updatePreview();
+            }
+        };
+        doubleTunnelCb.a = doubleTunnel;
+        add(doubleTunnelCb, new Coord(leftMargin, y));
+        y += 25;
 
         // === 4. PREVIEW with border (left) and LEGEND (right) ===
         add(new Label("Preview:"), new Coord(leftMargin, y));
@@ -852,6 +867,8 @@ public class TunnelingDialog extends Window {
         private void drawVerticalPreview(GOut g, Coord offset, int center, int radius) {
             boolean tunnelEast = (selectedTunnelSide == TunnelSide.EAST);
             int tunnelX = tunnelEast ? center + 1 : center - 1;
+            // Second tunnel row: one more tile away from support
+            int tunnel2X = tunnelEast ? center + 2 : center - 2;
             int wingYOffset = (selectedWingSide == TunnelSide.NORTH) ? -1 : 1;
 
             int support1Y = center - radius / 2;
@@ -866,6 +883,9 @@ public class TunnelingDialog extends Window {
             g.chcolor(COLOR_TUNNEL);
             for (int y = support1Y; y <= support2Y; y++) {
                 fillCell(g, offset, tunnelX, y);
+                if (doubleTunnel) {
+                    fillCell(g, offset, tunnel2X, y);
+                }
             }
 
             // Draw wings
@@ -875,13 +895,16 @@ public class TunnelingDialog extends Window {
                 int wingY = supY + wingYOffset;
                 if (wingY < 0 || wingY >= GRID_SIZE) continue;
 
+                int wingMinX = doubleTunnel ? Math.min(tunnelX, tunnel2X) : tunnelX;
+                int wingMaxX = doubleTunnel ? Math.max(tunnelX, tunnel2X) : tunnelX;
+
                 if (wingWest) {
-                    for (int x = tunnelX; x >= Math.max(0, center - radius); x--) {
+                    for (int x = wingMinX; x >= Math.max(0, center - radius); x--) {
                         fillCell(g, offset, x, wingY);
                     }
                 }
                 if (wingEast) {
-                    for (int x = tunnelX; x <= Math.min(GRID_SIZE - 1, center + radius); x++) {
+                    for (int x = wingMaxX; x <= Math.min(GRID_SIZE - 1, center + radius); x++) {
                         fillCell(g, offset, x, wingY);
                     }
                 }
@@ -898,6 +921,8 @@ public class TunnelingDialog extends Window {
         private void drawHorizontalPreview(GOut g, Coord offset, int center, int radius) {
             boolean tunnelSouth = (selectedTunnelSide == TunnelSide.SOUTH);
             int tunnelY = tunnelSouth ? center + 1 : center - 1;
+            // Second tunnel row: one more tile away from support
+            int tunnel2Y = tunnelSouth ? center + 2 : center - 2;
             int wingXOffset = (selectedWingSide == TunnelSide.WEST) ? -1 : 1;
 
             int support1X = center - radius / 2;
@@ -912,6 +937,9 @@ public class TunnelingDialog extends Window {
             g.chcolor(COLOR_TUNNEL);
             for (int x = support1X; x <= support2X; x++) {
                 fillCell(g, offset, x, tunnelY);
+                if (doubleTunnel) {
+                    fillCell(g, offset, x, tunnel2Y);
+                }
             }
 
             // Draw wings
@@ -921,13 +949,16 @@ public class TunnelingDialog extends Window {
                 int wingX = supX + wingXOffset;
                 if (wingX < 0 || wingX >= GRID_SIZE) continue;
 
+                int wingMinY = doubleTunnel ? Math.min(tunnelY, tunnel2Y) : tunnelY;
+                int wingMaxY = doubleTunnel ? Math.max(tunnelY, tunnel2Y) : tunnelY;
+
                 if (wingNorth) {
-                    for (int y = tunnelY; y >= Math.max(0, center - radius); y--) {
+                    for (int y = wingMinY; y >= Math.max(0, center - radius); y--) {
                         fillCell(g, offset, wingX, y);
                     }
                 }
                 if (wingSouth) {
-                    for (int y = tunnelY; y <= Math.min(GRID_SIZE - 1, center + radius); y++) {
+                    for (int y = wingMaxY; y <= Math.min(GRID_SIZE - 1, center + radius); y++) {
                         fillCell(g, offset, wingX, y);
                     }
                 }
@@ -988,7 +1019,8 @@ public class TunnelingDialog extends Window {
     }
 
     public void setReferences(int[] directionRef, int[] tunnelSideRef, int[] supportTypeRef,
-                              int[] wingOptionRef, int[] wingSideRef, boolean[] confirmRef, boolean[] cancelRef) {
+                              int[] wingOptionRef, int[] wingSideRef, boolean[] confirmRef, boolean[] cancelRef,
+                              boolean[] doubleTunnelRef) {
         this.directionRef = directionRef;
         this.tunnelSideRef = tunnelSideRef;
         this.supportTypeRef = supportTypeRef;
@@ -996,6 +1028,7 @@ public class TunnelingDialog extends Window {
         this.wingSideRef = wingSideRef;
         this.confirmRef = confirmRef;
         this.cancelRef = cancelRef;
+        this.doubleTunnelRef = doubleTunnelRef;
     }
 
     private void confirm() {
@@ -1008,6 +1041,7 @@ public class TunnelingDialog extends Window {
         savedWingSouth = wingSouth;
         savedWingEast = wingEast;
         savedWingWest = wingWest;
+        savedDoubleTunnel = doubleTunnel;
 
         if (directionRef != null) {
             directionRef[0] = selectedDirection.ordinal();
@@ -1035,6 +1069,9 @@ public class TunnelingDialog extends Window {
                     break;
                 }
             }
+        }
+        if (doubleTunnelRef != null) {
+            doubleTunnelRef[0] = doubleTunnel;
         }
         if (confirmRef != null) {
             confirmRef[0] = true;
