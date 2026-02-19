@@ -29,6 +29,10 @@ package haven;
 import java.util.*;
 import static haven.Utils.uint32;
 import nurgling.*;
+import nurgling.actions.Action;
+import nurgling.actions.ActionWithFinal;
+import nurgling.actions.bots.registry.BotDescriptor;
+import nurgling.actions.bots.registry.BotRegistry;
 import nurgling.areas.NArea;
 import nurgling.conf.*;
 import nurgling.overlays.*;
@@ -222,6 +226,10 @@ public class Fightview extends Widget {
 	    ava.canactivate = true;
 	    adda(give = new GiveButton(0), avaf.pos("ul").subs(5, 0), 1.0, 0.0);
 	    adda(purs = new Button(UI.scale(70), "Pursue"), give.pos("br").adds(0, 5), 1.0, 0.0);
+	    String ib = "nurgling/bots/icons/";
+	    Widget b1 = adda(makeBotBtn(ib, "combatdist"), avaf.pos("br").adds(0, UI.scale(3)), 1.0, 0.0);
+	    Widget b2 = adda(makeBotBtn(ib, "quickbarrage"), b1.pos("ul").subs(UI.scale(2), 0), 1.0, 0.0);
+	    adda(makeBotBtn(ib, "reagro"), b2.pos("ul").subs(UI.scale(2), 0), 1.0, 0.0);
 	    lpack();
 	}
 
@@ -252,6 +260,55 @@ public class Fightview extends Widget {
 		super.wdgmsg(sender, msg, args);
 	    }
 	}
+    }
+
+    private static java.awt.image.BufferedImage scaleIcon(java.awt.image.BufferedImage img) {
+	Coord tsz = new Coord(img.getWidth() * 2 / 5, img.getHeight() * 2 / 5);
+	return PUtils.convolvedown(img, tsz, CharWnd.iconfilter);
+    }
+
+    private static IButton makeBotBtn(String iconBase, String botId) {
+	BotDescriptor desc = BotRegistry.byId(botId);
+	String tip = (desc != null) ? desc.getDisplayName() : botId;
+	IButton btn = new IButton(
+	    scaleIcon(Resource.loadsimg(iconBase + botId + "/u")),
+	    scaleIcon(Resource.loadsimg(iconBase + botId + "/d")),
+	    scaleIcon(Resource.loadsimg(iconBase + botId + "/h"))
+	) {
+	    @Override
+	    public Object tooltip(Coord c, Widget prev) {
+		return Text.render(tip).tex();
+	    }
+	};
+	btn.action(() -> startBot(botId));
+	return btn;
+    }
+
+    private static void startBot(String botId) {
+	BotDescriptor desc = BotRegistry.byId(botId);
+	if(desc == null) return;
+	Action action = desc.instantiate(Map.of());
+	NGameUI gui = NUtils.getGameUI();
+	if(gui == null) return;
+	if(gui.recentActionsPanel != null)
+	    gui.recentActionsPanel.addBotAction(botId, action);
+	Thread t = new Thread(() -> {
+	    try {
+		action.run(gui);
+	    } catch(InterruptedException e) {
+		gui.msg(botId + ": STOPPED");
+	    } catch(Exception e) {
+		e.printStackTrace();
+	    } finally {
+		if(action instanceof ActionWithFinal)
+		    ((ActionWithFinal)action).endAction();
+	    }
+	}, botId);
+	if(desc.disStacks)
+	    gui.biw.addObserve(t, true);
+	else
+	    gui.biw.addObserve(t);
+	t.start();
     }
 
     public void use(Indir<Resource> act) {
