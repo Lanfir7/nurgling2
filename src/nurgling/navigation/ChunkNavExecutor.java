@@ -182,6 +182,11 @@ public class ChunkNavExecutor implements Action {
             tickPortalTracker();
         }
 
+        // Verify player actually reached the target area (same as followWaypointPath does)
+        if (targetArea != null) {
+            return navigateToTargetArea(gui);
+        }
+
         return Results.SUCCESS();
     }
 
@@ -547,8 +552,11 @@ public class ChunkNavExecutor implements Action {
         long playerGridAfter = graph.getPlayerChunkId();
 
         if (playerGridBefore != -1 && playerGridAfter != -1 && playerGridAfter == playerGridBefore) {
-            // Player's grid didn't change - portal traversal failed
-            // (e.g., fence blocking path to building, building too far, etc.)
+            return Results.FAIL();
+        }
+
+        // Verify we arrived at the EXPECTED grid, not some other portal's destination
+        if (targetGridId != -1 && playerGridAfter != -1 && playerGridAfter != targetGridId) {
             return Results.FAIL();
         }
 

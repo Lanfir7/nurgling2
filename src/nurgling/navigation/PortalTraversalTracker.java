@@ -121,6 +121,11 @@ public class PortalTraversalTracker {
         long currentGridId = graph.getPlayerChunkId();
         if (currentGridId == -1) return;
 
+        // Capture lastActions FIRST, before grid change check.
+        // This fixes a race condition where the grid changes in the same tick
+        // as the portal click, and onGridChanged() would use a stale cache.
+        captureLastActions(player, currentGridId);
+
         // Check for grid change
         if (lastGridId != -1 && currentGridId != lastGridId) {
             onGridChanged(lastGridId, currentGridId, player);
@@ -128,49 +133,50 @@ public class PortalTraversalTracker {
 
         // Update tracking state AFTER handling grid change
         lastGridId = currentGridId;
+    }
 
-        // Capture lastActions gob BEFORE grid change (like routes system does)
-        // This preserves the clicked portal info even after the grid changes
-        // Only capture if it's a NEW portal (different from the last one we processed)
-        // This prevents re-capturing stale actions after we've already recorded the portal
-        NCore.LastActions lastActions = NUtils.getUI().core.getLastActions();
-        if (lastActions != null && lastActions.gob != null && lastActions.gob.ngob != null) {
-            String gobName = lastActions.gob.ngob.name;
-            // Only capture if it's a portal AND it's not the same one we already processed
-            if (isPortalGob(gobName) && lastActions.gob.id != lastProcessedPortalGobId) {
-                cachedLastActionsGob = lastActions.gob;
-                // Use getPortalLocalCoord which offsets buildings toward player for stable door position
-                Coord portalCoord = getPortalLocalCoord(lastActions.gob, player);
-                if (portalCoord != null) {
-                    cachedLastActionsGobLocalCoord = portalCoord;
-                }
+    /**
+     * Capture the last clicked portal gob into cache.
+     * Called every tick to ensure we have the portal info before a grid change.
+     * IMPORTANT: Once captured, the same gob is never re-captured because
+     * after a grid change the coordinate context becomes invalid.
+     */
+    private void captureLastActions(Gob player, long currentGridId) {
+        try {
+            NCore.LastActions lastActions = NUtils.getUI().core.getLastActions();
+            if (lastActions != null && lastActions.gob != null && lastActions.gob.ngob != null) {
+                String gobName = lastActions.gob.ngob.name;
+                if (isPortalGob(gobName) && lastActions.gob.id != lastProcessedPortalGobId) {
+                    // If we already cached this exact gob, don't overwrite.
+                    // After a grid change, the player is on a new grid and
+                    // coordinate calculations would produce garbage.
+                    if (cachedLastActionsGob != null && cachedLastActionsGob.id == lastActions.gob.id) {
+                        return;
+                    }
+                    cachedLastActionsGob = lastActions.gob;
+                    Coord portalCoord = getPortalLocalCoord(lastActions.gob, player);
+                    if (portalCoord != null) {
+                        cachedLastActionsGobLocalCoord = portalCoord;
+                    }
 
-                // For building exteriors, use the GOB's actual grid (where the building center is).
-                // Previously we used the player's grid, but this created "phantom" portals on
-                // adjacent chunks when the player clicked a building from across a chunk boundary.
-                // The phantom portal was physically unreachable (fences, obstacles) causing
-                // the pathfinder to route through inaccessible paths.
-                if (ChunkPortal.isBuildingExterior(gobName)) {
+                    // Use the gob's actual grid for all portal types.
+                    // More reliable than player's grid, especially near chunk boundaries.
                     long gobGridId = getGobGridId(lastActions.gob);
                     if (gobGridId != -1) {
                         cachedLastActionsGobGridId = gobGridId;
-                        // If the building is on a different grid than the player, the door offset
-                        // calculation may have produced a coord on the wrong grid.
-                        // Use the building center position on its own grid instead.
-                        if (gobGridId != currentGridId) {
+                        if (ChunkPortal.isBuildingExterior(gobName) && gobGridId != currentGridId) {
                             Coord gobLocalCoord = getGobLocalCoord(lastActions.gob);
                             if (gobLocalCoord != null) {
                                 cachedLastActionsGobLocalCoord = gobLocalCoord;
                             }
                         }
                     } else {
-                        cachedLastActionsGobGridId = currentGridId; // Fallback
+                        cachedLastActionsGobGridId = currentGridId;
                     }
-                } else {
-                    // Non-building portals: use player's grid (doors, cellars, mines are small)
-                    cachedLastActionsGobGridId = currentGridId;
                 }
             }
+        } catch (Exception e) {
+            // Ignore - UI may not be ready
         }
     }
 
@@ -199,36 +205,29 @@ public class PortalTraversalTracker {
         lastProcessedToGridId = toGridId;
         lastProcessedTime = now;
 
-        // Brief wait for gobs to load after grid change
-        // This blocks the main thread but is necessary because:
-        // 1. We need exit portal gobs to be loaded to find them
-        // 2. We can't retry on next tick (duplicate prevention would skip)
-        // 3. 100ms is short enough to not noticeably affect gameplay
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-        }
-
-        // Portal detection uses cachedLastActionsGob (captured from getLastActions() before grid change)
-        // This works for both manual and automated navigation since the game tracks all clicks
-        // If we know what portal was clicked, search for the SPECIFIC expected exit using getDoorPair()
-        // This prevents phantom portals from proximity matching the wrong portal type
-        Gob exitPortal;
-        String expectedExitName = null;
-
         // Determine the expected exit from what we clicked
+        String expectedExitName = null;
         if (cachedLastActionsGob != null && cachedLastActionsGob.ngob != null) {
             String clickedName = cachedLastActionsGob.ngob.name;
             expectedExitName = GateDetector.getDoorPair(clickedName);
         }
 
-        // If we don't know what exit to look for, we didn't click a known portal - don't record anything
+        // If we don't know what exit to look for, we didn't click a known portal
         if (expectedExitName == null) {
             return;
         }
 
-        // Search for the specific exit portal we expect
-        exitPortal = Finder.findGob(new NAlias(expectedExitName));
+        // Retry loop for exit portal search - gobs may need time to load,
+        // especially for mine/cellar transitions that load a new level
+        Gob exitPortal = null;
+        for (int retry = 0; retry < 5 && exitPortal == null; retry++) {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                return;
+            }
+            exitPortal = Finder.findGob(new NAlias(expectedExitName));
+        }
 
         if (exitPortal == null || exitPortal.ngob == null) {
             return;

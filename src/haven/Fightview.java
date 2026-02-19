@@ -227,9 +227,9 @@ public class Fightview extends Widget {
 	    adda(give = new GiveButton(0), avaf.pos("ul").subs(5, 0), 1.0, 0.0);
 	    adda(purs = new Button(UI.scale(70), "Pursue"), give.pos("br").adds(0, 5), 1.0, 0.0);
 	    String ib = "nurgling/bots/icons/";
-	    Widget b1 = adda(makeBotBtn(ib, "combatdist"), avaf.pos("br").adds(0, UI.scale(3)), 1.0, 0.0);
-	    Widget b2 = adda(makeBotBtn(ib, "quickbarrage"), b1.pos("ul").subs(UI.scale(2), 0), 1.0, 0.0);
-	    adda(makeBotBtn(ib, "reagro"), b2.pos("ul").subs(UI.scale(2), 0), 1.0, 0.0);
+	    Widget b1 = adda(makeBotBtn(ib, "combatdist"), avaf.pos("br").subs(UI.scale(1), UI.scale(1)), 1.0, 1.0);
+	    Widget b2 = adda(makeBotBtn(ib, "quickbarrage"), b1.pos("ul").subs(UI.scale(1), 0), 1.0, 1.0);
+	    adda(makeBotBtn(ib, "reagro"), b2.pos("ul").subs(UI.scale(1), 0), 1.0, 1.0);
 	    lpack();
 	}
 

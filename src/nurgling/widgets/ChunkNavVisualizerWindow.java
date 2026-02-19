@@ -976,7 +976,7 @@ public class ChunkNavVisualizerWindow extends Window {
             // Zoom centered on mouse position
             float oldZoom = zoom;
             if (ev.a < 0) {
-                zoom = Math.min(10.0f, zoom * 1.2f);
+                zoom = Math.min(50.0f, zoom * 1.2f);
             } else {
                 zoom = Math.max(0.1f, zoom / 1.2f);
             }

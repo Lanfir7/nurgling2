@@ -123,6 +123,10 @@ public class ChunkNavManager {
         // Set guard flag BEFORE any state changes to prevent saves during init
         initializationInProgress = true;
 
+        // Always start with recording disabled - user must enable manually
+        NConfig.set(NConfig.Key.chunkNavOverlay, false);
+        NConfig.needUpdate();
+
         // Save previous world data if switching
         if (initialized && currentGenus != null) {
             save();
