@@ -23,7 +23,7 @@ public class LabeledMinimapMark {
     public final Coord tileCoords;        // Tile coordinates within the segment
     public final long gridId;             // Grid ID for ChunkNav navigation (stored when marker is created)
     public final Coord localTileCoords;   // Local tile coordinates within the grid (0-99)
-    public final BufferedImage iconImage; // The icon to display
+    public volatile BufferedImage iconImage; // The icon to display (lazy-loaded from base64)
     public final long timestamp;          // When it was created
     public final Color labelColor;        // Color for the label text
     /** Для маркеров животных: когда убито (мс), кем — для тултипа "убита X дней назад", "Убийца: N" */
@@ -34,8 +34,8 @@ public class LabeledMinimapMark {
     /** Тип животного для fallback-загрузки иконки (gfx/kritter/...). */
     public final String animalType;
 
-    // Cached textures for rendering
-    private TexI iconTex;
+    private volatile String iconBase64;   // Deferred base64 data for lazy icon loading
+    private volatile TexI iconTex;
     private Text labelText;
     
     // Text furnace for rendering labels (like quest giver names)
@@ -173,23 +173,13 @@ public class LabeledMinimapMark {
             this.labelColor = Color.WHITE;
         }
         
-        // Load icon image from base64
-        BufferedImage loadedIcon = null;
-        if (json.has("iconBase64")) {
-            try {
-                String base64 = json.getString("iconBase64");
-                byte[] imageBytes = Base64.getDecoder().decode(base64);
-                loadedIcon = ImageIO.read(new ByteArrayInputStream(imageBytes));
-            } catch (Exception e) {
-                System.err.println("Failed to load icon from base64: " + e.getMessage());
-            }
-        }
-        this.iconImage = loadedIcon;
+        this.iconBase64 = json.has("iconBase64") ? json.getString("iconBase64") : null;
+        this.iconImage = null;
         this.killedAtMs = null;
         this.killedBy = null;
         this.iconPath = null;
         this.animalType = null;
-        if (iconImage != null) this.iconTex = new TexI(iconImage);
+        this.iconTex = null;
         this.labelText = createLabelText();
     }
     
@@ -216,13 +206,14 @@ public class LabeledMinimapMark {
             json.put("localTileY", localTileCoords.y);
         }
         
-        // Save icon image as base64
-        if (iconImage != null) {
+        String b64 = iconBase64;
+        if (b64 != null) {
+            json.put("iconBase64", b64);
+        } else if (iconImage != null) {
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 ImageIO.write(iconImage, "png", baos);
-                String base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
-                json.put("iconBase64", base64);
+                json.put("iconBase64", Base64.getEncoder().encodeToString(baos.toByteArray()));
             } catch (Exception e) {
                 System.err.println("Failed to save icon to base64: " + e.getMessage());
             }
@@ -262,7 +253,24 @@ public class LabeledMinimapMark {
      * Get the icon texture for rendering.
      */
     public TexI getIconTex() {
-        return iconTex;
+        TexI tex = iconTex;
+        if (tex != null) return tex;
+        String b64 = iconBase64;
+        if (b64 != null) {
+            try {
+                byte[] imageBytes = Base64.getDecoder().decode(b64);
+                BufferedImage img = ImageIO.read(new ByteArrayInputStream(imageBytes));
+                if (img != null) {
+                    this.iconImage = img;
+                    tex = new TexI(img);
+                    this.iconTex = tex;
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to lazy-load icon from base64: " + e.getMessage());
+            }
+            this.iconBase64 = null;
+        }
+        return tex;
     }
     
     /**

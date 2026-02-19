@@ -28,6 +28,7 @@ package haven;
 
 import haven.render.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.*;
 import java.awt.Color;
 import haven.MapFile.Segment;
@@ -495,19 +496,23 @@ public class MiniMap extends Widget
 	private int markerseq = -1;
 	public Collection<DisplayMarker> markers(boolean remark) {
 	    if(remark && (markerseq != file.markerseq)) {
-		if(file.lock.readLock().tryLock()) {
-		    try {
-			ArrayList<DisplayMarker> marks = new ArrayList<>();
-			for(Marker mark : file.markers) {
-			    if((mark.seg == this.seg.id) && mapext.contains(mark.tc))
-				marks.add(new DisplayMarker(mark));
+		try {
+		    if(file.lock.readLock().tryLock(50, TimeUnit.MILLISECONDS)) {
+			try {
+			    ArrayList<DisplayMarker> marks = new ArrayList<>();
+			    for(Marker mark : file.markers) {
+				if((mark.seg == this.seg.id) && mapext.contains(mark.tc))
+				    marks.add(new DisplayMarker(mark));
+			    }
+			    marks.trimToSize();
+			    markers = (marks.size() == 0) ? Collections.emptyList() : marks;
+			    markerseq = file.markerseq;
+			} finally {
+			    file.lock.readLock().unlock();
 			}
-			marks.trimToSize();
-			markers = (marks.size() == 0) ? Collections.emptyList() : marks;
-			markerseq = file.markerseq;
-		    } finally {
-			file.lock.readLock().unlock();
 		    }
+		} catch(InterruptedException e) {
+		    Thread.currentThread().interrupt();
 		}
 	    }
 	    return(markers);
@@ -555,15 +560,19 @@ public class MiniMap extends Widget
 	    dtext = Area.sized(next.ul.mul(zmaps), next.sz().mul(zmaps));
 	}
 	dloc = loc;
-	if(file.lock.readLock().tryLock()) {
-	    try {
-		for(Coord c : dgext) {
-		    if(display[dgext.ri(c)] == null)
-			display[dgext.ri(c)] = new DisplayGrid(dloc.seg, c, dlvl, dloc.seg.grid(dlvl, c.mul(1 << dlvl)));
+	try {
+	    if(file.lock.readLock().tryLock(50, TimeUnit.MILLISECONDS)) {
+		try {
+		    for(Coord c : dgext) {
+			if(display[dgext.ri(c)] == null)
+			    display[dgext.ri(c)] = new DisplayGrid(dloc.seg, c, dlvl, dloc.seg.grid(dlvl, c.mul(1 << dlvl)));
+		    }
+		} finally {
+		    file.lock.readLock().unlock();
 		}
-	    } finally {
-		file.lock.readLock().unlock();
 	    }
+	} catch(InterruptedException e) {
+	    Thread.currentThread().interrupt();
 	}
 	for(DisplayIcon icon : icons)
 	    icon.dispupdate();

@@ -1,6 +1,5 @@
 package nurgling.tools;
 
-import haven.Coord;
 import haven.Gob;
 import nurgling.NMapView;
 import nurgling.NUtils;
@@ -8,7 +7,36 @@ import nurgling.areas.NGlobalCoord;
 import nurgling.tasks.NTask;
 import nurgling.tasks.WaitForMapLoad;
 
-public class CheckGridsState implements Runnable{
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
+
+public class CheckGridsState implements Runnable {
+
+    private static final AtomicReference<ExecutorService> executorRef = new AtomicReference<>(createExecutor());
+
+    private static ExecutorService createExecutor() {
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "CheckGridsState");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    public static void submit() {
+        ExecutorService ex = executorRef.get();
+        if (ex != null && !ex.isShutdown()) {
+            ex.execute(new CheckGridsState());
+        }
+    }
+
+    public static void resetExecutor() {
+        ExecutorService old = executorRef.getAndSet(createExecutor());
+        if (old != null) {
+            old.shutdownNow();
+        }
+    }
+
     @Override
     public void run() {
         try {
@@ -40,7 +68,7 @@ public class CheckGridsState implements Runnable{
                 }
             }
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            Thread.currentThread().interrupt();
         }
     }
 }

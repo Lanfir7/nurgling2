@@ -34,6 +34,10 @@ public class NAlias {
      */
     private static final int MAX_CACHE_SIZE = 1000;
 
+    public static void clearCache() {
+        MATCH_CACHE.clear();
+    }
+
     public NAlias() {
         keys = new ArrayList<String> ();
         exceptions = new ArrayList<String> ();

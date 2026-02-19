@@ -616,7 +616,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	    m.move(c);
 	this.rc = c;
 	if(NUtils.playerID()!=-1 && id == NUtils.playerID())  {
-		new Thread(new CheckGridsState(), "plgob_move").start();
+		CheckGridsState.submit();
 	}
 	this.a = a;
     }

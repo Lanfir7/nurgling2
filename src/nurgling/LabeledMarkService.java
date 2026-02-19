@@ -829,22 +829,27 @@ public class LabeledMarkService implements ProfileAwareService {
             
             File file = new File(dataFile);
             if (file.exists()) {
-                StringBuilder contentBuilder = new StringBuilder();
-                try (Stream<String> stream = Files.lines(Paths.get(dataFile), StandardCharsets.UTF_8)) {
-                    stream.forEach(s -> contentBuilder.append(s).append("\n"));
+                String content;
+                try {
+                    content = Files.readString(Paths.get(dataFile), StandardCharsets.UTF_8);
                 } catch (IOException e) {
                     System.err.println("Failed to load labeled marks: " + e.getMessage());
                     return;
                 }
 
-                // Сохраняем строку один раз, чтобы избежать множественных вызовов toString()
-                String content = contentBuilder.toString();
-                // Проверяем длину вместо trim() для избежания OutOfMemoryError на больших файлах
-                if (content.length() > 0) {
+                if (!content.isEmpty()) {
                     try {
                         JSONObject main = new JSONObject(content);
+                        content = null; // free 74MB string early
                         JSONArray array = main.getJSONArray("labeledMarks");
-                        for (int i = 0; i < array.length(); i++) {
+                        int total = array.length();
+                        System.out.println("LabeledMarks: loading " + total + " marks (lazy icons)...");
+                        long t0 = System.currentTimeMillis();
+                        for (int i = 0; i < total; i++) {
+                            if (Thread.interrupted()) {
+                                System.out.println("LabeledMarks: loading interrupted at " + i + "/" + total);
+                                return;
+                            }
                             try {
                                 LabeledMinimapMark mark = new LabeledMinimapMark(array.getJSONObject(i));
                                 labeledMarks.put(mark.getLocationId(), mark);
@@ -853,6 +858,7 @@ public class LabeledMarkService implements ProfileAwareService {
                                 System.err.println("Failed to parse labeled mark: " + e.getMessage());
                             }
                         }
+                        System.out.println("LabeledMarks: loaded " + total + " marks in " + (System.currentTimeMillis() - t0) + "ms");
                     } catch (Exception e) {
                         System.err.println("Failed to parse labeled marks JSON: " + e.getMessage());
                     }
@@ -969,7 +975,6 @@ public class LabeledMarkService implements ProfileAwareService {
      * Dispose the service and cleanup resources.
      */
     public void dispose() {
-        // Ждем завершения всех сохранений перед закрытием
         try {
             saveExecutor.shutdown();
             if (!saveExecutor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -983,6 +988,9 @@ public class LabeledMarkService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             saveLabeledMarks();
+            labeledMarks.clear();
+            resourceTypeIndex.clear();
+            segmentIndex.clear();
         } finally {
             lock.writeLock().unlock();
         }

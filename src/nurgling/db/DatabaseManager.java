@@ -181,8 +181,13 @@ public class DatabaseManager {
         }, "DB-Shutdown-Hook"));
     }
     
+    private volatile long queueProcessorDelayMs = 1000;
+    private static final long QUEUE_MIN_DELAY_MS = 1000;
+    private static final long QUEUE_MAX_DELAY_MS = 10000;
+
     /**
-     * Start the background queue processor
+     * Start the background queue processor with adaptive interval.
+     * When idle, backs off up to 10s. Resets to 1s when tasks appear.
      */
     private void startQueueProcessor() {
         queueProcessor = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -191,22 +196,34 @@ public class DatabaseManager {
             return t;
         });
         
-        queueProcessor.scheduleWithFixedDelay(() -> {
-            if (shutdown || !initialized) return;
-            
+        scheduleNextQueueRun();
+    }
+
+    private void scheduleNextQueueRun() {
+        if (shutdown) return;
+        queueProcessor.schedule(() -> {
+            if (shutdown || !initialized) {
+                scheduleNextQueueRun();
+                return;
+            }
             try {
                 processQueuedTasks();
             } catch (Exception e) {
                 System.err.println("[DatabaseManager] Queue processor error: " + e.getMessage());
             }
-        }, 1, 1, TimeUnit.SECONDS);
+            scheduleNextQueueRun();
+        }, queueProcessorDelayMs, TimeUnit.MILLISECONDS);
     }
     
     /**
      * Process queued tasks that are ready for retry
      */
     private void processQueuedTasks() {
-        if (taskQueue.isEmpty()) return;
+        if (taskQueue.isEmpty()) {
+            queueProcessorDelayMs = Math.min(queueProcessorDelayMs * 2, QUEUE_MAX_DELAY_MS);
+            return;
+        }
+        queueProcessorDelayMs = QUEUE_MIN_DELAY_MS;
         
         long now = System.currentTimeMillis();
         int processed = 0;

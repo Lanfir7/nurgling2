@@ -36,6 +36,9 @@ public class NAlarmWdg extends Widget
     private final HashMap<Long, Integer> unknownPlayerFrameCounter = new HashMap<>();
     // Track if map is fully loaded (all 9 grids)
     private boolean isMapFullyLoaded = false;
+
+    private long lastAlarmTick = 0;
+    private static final long ALARM_TICK_INTERVAL_MS = 200;
     
     public NAlarmWdg() {
         super();
@@ -46,7 +49,10 @@ public class NAlarmWdg extends Widget
     public void tick(double dt) {
         super.tick(dt);
         
-        // Check if map is fully loaded (all 9 grids)
+        long now = System.currentTimeMillis();
+        if (now - lastAlarmTick < ALARM_TICK_INTERVAL_MS) return;
+        lastAlarmTick = now;
+        
         updateMapLoadedState();
         
         synchronized (borkas) {

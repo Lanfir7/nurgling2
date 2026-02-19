@@ -2117,7 +2117,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		plgob = -1;
 	    else {
 			plgob = Utils.uiv(args[0]);
-			new Thread(new CheckGridsState(), "plgob_create").start();
+			CheckGridsState.submit();
 		}
 	} else if(msg == "flashol2") {
 	    Collection<String> ols = new LinkedList<>();

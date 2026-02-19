@@ -1,6 +1,7 @@
 package nurgling.navigation;
 
 import haven.*;
+import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
@@ -160,14 +161,15 @@ public class ChunkNavManager {
     public void tick() {
         if (!enabled || !initialized) return;
 
-        portalTracker.tick();
+        boolean recordingEnabled = (Boolean) NConfig.get(NConfig.Key.chunkNavOverlay);
 
-        // Save after portal tracking (throttled - won't save every tick)
-        saveThrottled();
+        if (recordingEnabled) {
+            portalTracker.tick();
+            saveThrottled();
+        }
 
-        // Periodically record all visible grids (not just newly loaded ones)
         long now = System.currentTimeMillis();
-        if (now - lastRecordTime >= RECORD_THROTTLE_MS) {
+        if (recordingEnabled && now - lastRecordTime >= RECORD_THROTTLE_MS) {
             lastRecordTime = now;
             recordVisibleGrids();
         }
@@ -183,7 +185,6 @@ public class ChunkNavManager {
      * Record all currently visible grids.
      * This catches grids that were already loaded when player walks through them.
      * Runs in a background thread to avoid FPS drops.
-     * Note: Recording always works - chunkNavOverlay toggle only controls visualization.
      */
     private void recordVisibleGrids() {
         // Skip if recording is already in progress
@@ -899,6 +900,7 @@ public class ChunkNavManager {
             }
             recordingExecutor = null;
         }
+        graph.clear();
         if (instance == this) {
             instance = null;
         }

@@ -589,15 +589,32 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public void addchild(Widget child, Object... args) {
 	String place = ((String)args[0]).intern();
 	if(place == "mapview") {
+	    MapView oldMap = map;
 	    child.resize(sz);
 	    map = add((MapView)child, Coord.z);
 	    map.lower();
-	    if(mmap != null)
+	    MapFile oldMapFile = null;
+	    if(mmap != null) {
+		if(mmap instanceof MiniMap)
+		    oldMapFile = ((MiniMap)mmap).file;
 		ui.destroy(mmap);
+	    }
 	    if(mapfile != null) {
+		if(oldMapFile == null)
+		    oldMapFile = mapfile.view.file;
 		ui.destroy(mapfile);
 		mapfile = null;
 	    }
+	    if(oldMapFile != null) {
+		try { oldMapFile.dispose(); } catch(Exception e) {}
+	    }
+	    if(oldMap != null) {
+		try {
+		    if(oldMap.glob != null && oldMap.glob.map != null)
+			oldMap.glob.map.trimall();
+		} catch(Exception e) {}
+	    }
+	    try { Resource.remote().clearCache(); } catch(Exception e) {}
 	    ResCache mapstore = ResCache.global;
 	    if(MapFile.mapbase.get() != null)
 		mapstore = HashDirCache.get(MapFile.mapbase.get());

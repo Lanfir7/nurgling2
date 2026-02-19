@@ -85,4 +85,12 @@ public class BackCache<K, V> {
 	store.accept(key, null);
 	cache.remove(key);
     }
+
+    public void clear() {
+	if(dispose != null) {
+	    for(Map.Entry<K, V> e : cache.entrySet())
+		dispose.accept(e.getKey(), e.getValue());
+	}
+	cache.clear();
+    }
 }

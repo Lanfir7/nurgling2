@@ -177,7 +177,6 @@ public class MaterialFactory {
     private static final Map<String, Map<Status, Map<Integer, Material>>> getMaterialsCache = new ConcurrentHashMap<>();
     
     public static void clearCache(String name) {
-        // Clear inner maps instead of removing the entire entry
         Map<Status, Map<Integer,TexR>> statusMap = materialCashe.get(name);
         if (statusMap != null) {
             statusMap.clear();
@@ -186,6 +185,13 @@ public class MaterialFactory {
         if (materialsMap != null) {
             materialsMap.clear();
         }
+    }
+
+    public static void clearAllCaches() {
+        texCache.clear();
+        materialCashe.clear();
+        materialsCashe.clear();
+        getMaterialsCache.clear();
     }
 
     public static Map<Integer,TexR> getMaterial(String name, Status status, Material.Res.Resolver resolver) {

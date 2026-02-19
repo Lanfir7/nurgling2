@@ -329,33 +329,34 @@ public class ExploredArea {
         }
     }
     
-    // Flag to track if async loading is in progress
     private volatile boolean loadingInProgress = false;
     
-    // Executor for async loading
-    private static final java.util.concurrent.ExecutorService loadExecutor = 
-        java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+    private static final java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ExecutorService> loadExecutorRef =
+        new java.util.concurrent.atomic.AtomicReference<>(createLoadExecutor());
+
+    private static java.util.concurrent.ExecutorService createLoadExecutor() {
+        return java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "ExploredArea-Loader");
             t.setDaemon(true);
             t.setPriority(Thread.MIN_PRIORITY);
             return t;
         });
-    
-    /**
-     * Check if async loading is in progress.
-     */
+    }
+
     public boolean isLoadingInProgress() {
         return loadingInProgress;
     }
+
+    public static void resetExecutor() {
+        java.util.concurrent.ExecutorService old = loadExecutorRef.getAndSet(createLoadExecutor());
+        if (old != null) old.shutdownNow();
+    }
     
-    /**
-     * Reload explored area data from file asynchronously.
-     * Call this after profile initialization to load profile-specific data.
-     * This is the preferred method for startup to avoid blocking the game.
-     */
     public void reloadFromFileAsync() {
         loadingInProgress = true;
-        loadExecutor.submit(() -> {
+        java.util.concurrent.ExecutorService ex = loadExecutorRef.get();
+        if (ex == null || ex.isShutdown()) return;
+        ex.submit(() -> {
             try {
                 reloadFromFileInternal();
             } finally {
@@ -375,27 +376,24 @@ public class ExploredArea {
     
     /**
      * Internal implementation of file reload.
+     * Builds a complete merged dataset in a temp map, then swaps it in atomically
+     * to avoid race conditions with the render thread reading gridMasks.
      */
     private void reloadFromFileInternal() {
-        // Save current in-memory data before loading
         Map<GridKey, GridMask> currentData = new HashMap<>(gridMasks);
         
-        // Load from file
-        gridMasks.clear();
-        loadFromFile();
+        Map<GridKey, GridMask> loaded = new HashMap<>();
+        loadFromFileInto(loaded);
         
-        // Merge in-memory data back (OR operation - keep explored tiles from both)
         for (Map.Entry<GridKey, GridMask> entry : currentData.entrySet()) {
             GridKey key = entry.getKey();
             GridMask memoryGridMask = entry.getValue();
             boolean[] memoryMask = memoryGridMask.mask;
             
-            GridMask fileGridMask = gridMasks.get(key);
+            GridMask fileGridMask = loaded.get(key);
             if (fileGridMask == null) {
-                // Grid only in memory, add it
-                gridMasks.put(key, memoryGridMask);
+                loaded.put(key, memoryGridMask);
             } else {
-                // Merge: OR the masks
                 boolean changed = false;
                 for (int i = 0; i < MASK_SIZE; i++) {
                     if (memoryMask[i] && !fileGridMask.mask[i]) {
@@ -410,18 +408,23 @@ public class ExploredArea {
             }
         }
         
-        // Also reload session data (session doesn't need merge - it's temporary)
-        sessionGridMasks.clear();
-        loadSessionFromFile();
+        gridMasks.clear();
+        gridMasks.putAll(loaded);
         
-        seq++; // Global seq for full reload
+        ConcurrentHashMap<GridKey, GridMask> newSession = new ConcurrentHashMap<>();
+        loadSessionFromFileInto(newSession);
+        sessionGridMasks.clear();
+        sessionGridMasks.putAll(newSession);
+        
+        seq++;
+        
+        nurgling.overlays.map.MinimapExploredAreaRenderer.clearCaches();
     }
     
     /**
-     * Load explored area from JSON file.
+     * Load explored area from JSON file into the provided map.
      */
-    private void loadFromFile() {
-        // Use profile-specific config from NCore if available, otherwise fallback to global
+    private void loadFromFileInto(Map<GridKey, GridMask> target) {
         NConfig config = getConfig();
         File file = new File(config.getExploredPath());
         if (!file.exists()) {
@@ -429,16 +432,13 @@ public class ExploredArea {
         }
         
         try {
-            StringBuilder contentBuilder = new StringBuilder();
-            try (Stream<String> stream = Files.lines(Paths.get(file.getAbsolutePath()), StandardCharsets.UTF_8)) {
-                stream.forEach(s -> contentBuilder.append(s).append("\n"));
-            }
+            String content = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())), StandardCharsets.UTF_8);
             
-            if (contentBuilder.length() == 0) {
+            if (content.trim().isEmpty()) {
                 return;
             }
             
-            JSONObject json = new JSONObject(contentBuilder.toString());
+            JSONObject json = new JSONObject(content);
             if (!json.has("grids")) {
                 return;
             }
@@ -453,16 +453,17 @@ public class ExploredArea {
                 
                 GridKey key = new GridKey(segmentId, new Coord(gx, gy));
                 
-                // Decode RLE compressed mask
                 String rle = gridJson.getString("mask");
                 boolean[] mask = decodeRLE(rle);
                 
                 if (mask != null) {
-                    gridMasks.put(key, new GridMask(mask));
+                    target.put(key, new GridMask(mask));
+                }
+                
+                if (i % 200 == 199) {
+                    Thread.yield();
                 }
             }
-            
-            seq++; // Global seq for full load
         } catch (Exception e) {
             // Ignore load errors
         }
@@ -546,9 +547,9 @@ public class ExploredArea {
     }
     
     /**
-     * Load session data from file.
+     * Load session data from file into the provided target map.
      */
-    private void loadSessionFromFile() {
+    private void loadSessionFromFileInto(Map<GridKey, GridMask> target) {
         NConfig config = getConfig();
         File file = new File(config.getSessionExploredPath());
         if (!file.exists()) {
@@ -556,18 +557,14 @@ public class ExploredArea {
         }
         
         try {
-            StringBuilder contentBuilder = new StringBuilder();
-            try (Stream<String> stream = Files.lines(Paths.get(file.getAbsolutePath()), StandardCharsets.UTF_8)) {
-                stream.forEach(s -> contentBuilder.append(s).append("\n"));
-            }
+            String content = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())), StandardCharsets.UTF_8);
             
-            if (contentBuilder.length() == 0) {
+            if (content.trim().isEmpty()) {
                 return;
             }
             
-            JSONObject json = new JSONObject(contentBuilder.toString());
+            JSONObject json = new JSONObject(content);
             
-            // Load active state
             if (json.has("active")) {
                 sessionActive = json.getBoolean("active");
             }
@@ -586,16 +583,15 @@ public class ExploredArea {
                 
                 GridKey key = new GridKey(segmentId, new Coord(gx, gy));
                 
-                // Decode RLE compressed mask
                 String rle = gridJson.getString("mask");
                 boolean[] mask = decodeRLE(rle);
                 
                 if (mask != null) {
-                    sessionGridMasks.put(key, new GridMask(mask));
+                    target.put(key, new GridMask(mask));
                 }
             }
             
-            sessionSeq++; // Global seq for full load
+            sessionSeq++;
         } catch (Exception e) {
             // Ignore load errors
         }

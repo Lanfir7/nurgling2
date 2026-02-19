@@ -27,6 +27,7 @@
 package haven;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.*;
 import java.io.*;
 import java.nio.file.*;
@@ -369,27 +370,31 @@ public class MapWnd extends Window implements Console.Directory {
 	}
 	view.markobjs();
 	if(visible && (markerseq != view.file.markerseq)) {
-	    if(view.file.lock.readLock().tryLock()) {
-		try {
-		    Map<Marker, ListMarker> prev = new HashMap<>();
-		    for(ListMarker pm : this.markers)
-			prev.put(pm.mark, pm);
-		    List<ListMarker> markers = new ArrayList<>();
-		    for(Marker mark : view.file.markers) {
-			if(!mflt.test(mark))
-			    continue;
-			ListMarker lm = prev.get(mark);
-			if(lm == null)
-			    lm = new ListMarker(mark);
-			else
-			    lm.type = MarkerType.of(lm.mark);
-			markers.add(lm);
+	    try {
+		if(view.file.lock.readLock().tryLock(50, TimeUnit.MILLISECONDS)) {
+		    try {
+			Map<Marker, ListMarker> prev = new HashMap<>();
+			for(ListMarker pm : this.markers)
+			    prev.put(pm.mark, pm);
+			List<ListMarker> markers = new ArrayList<>();
+			for(Marker mark : view.file.markers) {
+			    if(!mflt.test(mark))
+				continue;
+			    ListMarker lm = prev.get(mark);
+			    if(lm == null)
+				lm = new ListMarker(mark);
+			    else
+				lm.type = MarkerType.of(lm.mark);
+			    markers.add(lm);
+			}
+			markers.sort(mcmp);
+			this.markers = markers;
+		    } finally {
+			view.file.lock.readLock().unlock();
 		    }
-		    markers.sort(mcmp);
-		    this.markers = markers;
-		} finally {
-		    view.file.lock.readLock().unlock();
 		}
+	    } catch(InterruptedException e) {
+		Thread.currentThread().interrupt();
 	    }
 	}
     }

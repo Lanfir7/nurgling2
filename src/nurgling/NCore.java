@@ -521,6 +521,10 @@ public class NCore extends Widget
     public static void clearSessionCaches() {
         sentRecipeHashes.clear();
         recipeQuickCache.clear();
+        nurgling.tools.MaterialFactory.clearAllCaches();
+        nurgling.tools.RecipeIngredientCache.clear();
+        nurgling.tools.NParser.clearCache();
+        nurgling.tools.NAlias.clearCache();
     }
     
     public static class NGItemWriter implements Runnable {

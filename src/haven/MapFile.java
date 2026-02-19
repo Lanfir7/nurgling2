@@ -46,7 +46,7 @@ public class MapFile {
     public final Collection<Long> knownsegs = new HashSet<>();
     public final Collection<Marker> markers = new ArrayList<>();
     public final Map<Long, SMarker> smarkers = new HashMap<>();
-    public int markerseq = 0;
+    public volatile int markerseq = 0;
     public final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final Random rnd = new Random();
 
@@ -263,6 +263,29 @@ public class MapFile {
 		processor = np;
 	    }
 	    procmon.notifyAll();
+	}
+    }
+
+    public void dispose() {
+	synchronized(procmon) {
+	    if(processor != null) {
+		processor.interrupt();
+		processor = null;
+	    }
+	    updqueue.clear();
+	    dirty.clear();
+	}
+	try {
+	    if(lock.writeLock().tryLock(2, java.util.concurrent.TimeUnit.SECONDS)) {
+		try {
+		    segments.clear();
+		    gridinfo.clear();
+		} finally {
+		    lock.writeLock().unlock();
+		}
+	    }
+	} catch(InterruptedException e) {
+	    Thread.currentThread().interrupt();
 	}
     }
 

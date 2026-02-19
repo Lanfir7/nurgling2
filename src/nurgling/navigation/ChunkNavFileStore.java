@@ -3,6 +3,8 @@ package nurgling.navigation;
 import nurgling.profiles.ProfileManager;
 
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.*;
 import java.util.*;
 
@@ -55,17 +57,22 @@ public class ChunkNavFileStore {
 
         Path chunkFile = getChunkFile(chunk.gridId);
         Path tempFile = chunkFile.resolveSibling(chunk.gridId + ".tmp");
+        Path lockPath = chunkFile.resolveSibling(chunk.gridId + ".lock");
 
-        try (DataOutputStream out = new DataOutputStream(
-                new BufferedOutputStream(Files.newOutputStream(tempFile)))) {
-            ChunkNavBinaryFormat.writeChunk(chunk, out);
-        }
+        try (FileChannel ch = FileChannel.open(lockPath,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock ignored = ch.lock()) {
 
-        // Atomic rename
-        try {
-            Files.move(tempFile, chunkFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-            Files.move(tempFile, chunkFile, StandardCopyOption.REPLACE_EXISTING);
+            try (DataOutputStream out = new DataOutputStream(
+                    new BufferedOutputStream(Files.newOutputStream(tempFile)))) {
+                ChunkNavBinaryFormat.writeChunk(chunk, out);
+            }
+
+            try {
+                Files.move(tempFile, chunkFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tempFile, chunkFile, StandardCopyOption.REPLACE_EXISTING);
+            }
         }
     }
 

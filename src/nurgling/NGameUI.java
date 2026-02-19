@@ -98,6 +98,7 @@ public class NGameUI extends GameUI
     /** Макрос «Маркеры животных»: при включении ставит маркер при первой встрече с любым криттером; качество добавляется при инспекте лупы по трупу. */
     private volatile boolean animalMarkerMacroRunning = false;
     private Thread animalMarkerMacroThread = null;
+    private volatile Thread heavyWidgetsThread = null;
     private nurgling.actions.ObjectTracker animalMarkerMacroTracker = null;
     public boolean isAnimalMarkerMacroEnabled() { return animalMarkerMacroRunning; }
 
@@ -399,17 +400,20 @@ public class NGameUI extends GameUI
         initCriticalWidgets();
         
         // Остальные тяжелые виджеты инициализируем асинхронно
-        new Thread(new Runnable() {
+        heavyWidgetsThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    Thread.sleep(100); // Небольшая задержка, чтобы UI успел отрисоваться
+                    Thread.sleep(100);
                     initNonCriticalHeavyWidgets();
+                } catch (InterruptedException ignored) {
                 } catch (Exception e) {
                     System.err.println("Failed to initialize heavy widgets: " + e.getMessage());
                 }
             }
-        }, "HeavyWidgets-Init").start();
+        }, "HeavyWidgets-Init");
+        heavyWidgetsThread.setDaemon(true);
+        heavyWidgetsThread.start();
         
         // Initialize SimpleRoutesWidget after SimpleRouteManager is ready
         if (map instanceof NMapView && ((NMapView) map).simpleRouteManager != null) {
@@ -494,6 +498,10 @@ public class NGameUI extends GameUI
 
     @Override
     public void dispose() {
+        if (heavyWidgetsThread != null) {
+            heavyWidgetsThread.interrupt();
+            heavyWidgetsThread = null;
+        }
         if(localizedResourceTimerService != null)
             localizedResourceTimerService.dispose();
         if(localTimerSyncService != null)
@@ -513,13 +521,31 @@ public class NGameUI extends GameUI
         }
         if(nurgling.NUtils.getUI().core!=null)
             NUtils.getUI().core.dispose();
-        // Shutdown ChunkNav to prevent thread accumulation on game restart
         if(map instanceof NMapView) {
             NMapView nmapView = (NMapView) map;
             if(nmapView.getChunkNavManager() != null)
                 nmapView.getChunkNavManager().shutdown();
         }
+        nurgling.tools.ExploredArea.resetExecutor();
+        nurgling.tools.CheckGridsState.resetExecutor();
+        nurgling.actions.bots.MasterMiner.resetExecutors();
+        nurgling.overlays.map.MinimapExploredAreaRenderer.clearCaches();
+        gobIdToKinName.clear();
+        nurgling.NCore.clearSessionCaches();
+        synchronized(haven.res.ui.croster.RosterWindow.rosters) {
+            haven.res.ui.croster.RosterWindow.rosters.clear();
+        }
+        try {
+            if (mapfile != null && mapfile.view != null && mapfile.view.file != null)
+                mapfile.view.file.dispose();
+        } catch (Exception e) { System.err.println("[NGameUI] MapFile dispose error: " + e.getMessage()); }
+        try {
+            if (map != null && map.glob != null && map.glob.map != null)
+                map.glob.map.trimall();
+        } catch (Exception e) { System.err.println("[NGameUI] MCache trimall error: " + e.getMessage()); }
+        try { haven.Resource.remote().clearCache(); } catch (Exception ignore) {}
         super.dispose();
+        System.gc();
     }
 
     public int getMaxBase(){

@@ -54,6 +54,16 @@ NMiniMap extends MiniMap {
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
 
     private static final Coord2d sgridsz = new Coord2d(new Coord(100,100));
+
+    private final Text.Furnace readyTimerFurnace = new PUtils.BlurFurn(
+        new Text.Foundry(Text.dfont, UI.scale(9), Color.GREEN).aa(true),
+        2, 1, Color.BLACK
+    );
+    private final Text.Furnace activeTimerFurnace = new PUtils.BlurFurn(
+        new Text.Foundry(Text.dfont, UI.scale(9), Color.WHITE).aa(true),
+        2, 1, Color.BLACK
+    );
+
     public NMiniMap(Coord sz, MapFile file) {
         super(sz, file);
         loadToggleStates();
@@ -1869,16 +1879,6 @@ NMiniMap extends MiniMap {
         java.util.List<LocalizedResourceTimer> timers = gui.localizedResourceTimerService.getTimersForSegment(dloc.seg.id);
 
         Coord hsz = sz.div(2);
-
-        // Create bordered text furnaces for timer display (like barrel names and character nicknames)
-        Text.Furnace readyTimerFurnace = new PUtils.BlurFurn(
-            new Text.Foundry(Text.dfont, UI.scale(9), Color.GREEN).aa(true),
-            2, 1, Color.BLACK
-        );
-        Text.Furnace activeTimerFurnace = new PUtils.BlurFurn(
-            new Text.Foundry(Text.dfont, UI.scale(9), Color.WHITE).aa(true),
-            2, 1, Color.BLACK
-        );
 
         for(LocalizedResourceTimer timer : timers) {
             // Calculate screen position for the timer

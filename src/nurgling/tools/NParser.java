@@ -19,6 +19,10 @@ public class NParser
      * Maximum size of alias cache.
      */
     private static final int MAX_ALIAS_CACHE_SIZE = 500;
+
+    public static void clearCache() {
+        ALIAS_CACHE.clear();
+    }
     /**
      * Check if name matches the given alias.
      *

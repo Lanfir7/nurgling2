@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Информативный "MiningMaster": висит и ждёт выпадения камня в инвентарь
@@ -60,19 +61,40 @@ public class MasterMiner extends ActionWithFinal {
     private MasterMinerWnd wnd = null;
     private ArrayList<WItem> known = new ArrayList<>();
     
-    // ExecutorService для асинхронного создания маркеров (чтобы избежать лагов)
-    private static final ExecutorService markerExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "MasterMiner-MarkerCreator");
-        t.setDaemon(true);
-        return t;
-    });
-    
-    // ExecutorService для асинхронной загрузки иконок (чтобы не блокировать игру)
-    private static final ExecutorService iconLoaderExecutor = Executors.newFixedThreadPool(2, r -> {
-        Thread t = new Thread(r, "MasterMiner-IconLoader");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final AtomicReference<ExecutorService> markerExecutorRef = new AtomicReference<>(createMarkerExecutor());
+    private static final AtomicReference<ExecutorService> iconLoaderExecutorRef = new AtomicReference<>(createIconLoaderExecutor());
+
+    private static ExecutorService createMarkerExecutor() {
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "MasterMiner-MarkerCreator");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    private static ExecutorService createIconLoaderExecutor() {
+        return Executors.newFixedThreadPool(2, r -> {
+            Thread t = new Thread(r, "MasterMiner-IconLoader");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    private static ExecutorService markerExecutor() {
+        return markerExecutorRef.get();
+    }
+
+    private static ExecutorService iconLoaderExecutor() {
+        return iconLoaderExecutorRef.get();
+    }
+
+    public static void resetExecutors() {
+        ExecutorService oldMarker = markerExecutorRef.getAndSet(createMarkerExecutor());
+        if (oldMarker != null) oldMarker.shutdownNow();
+        ExecutorService oldIcon = iconLoaderExecutorRef.getAndSet(createIconLoaderExecutor());
+        if (oldIcon != null) oldIcon.shutdownNow();
+        oreIconCache.clear();
+    }
     
     // Кэш для иконок руд, чтобы не загружать их каждый раз
     private static final ConcurrentHashMap<String, BufferedImage> oreIconCache = new ConcurrentHashMap<>();
@@ -1328,7 +1350,7 @@ public class MasterMiner extends ActionWithFinal {
         long currentTime = System.currentTimeMillis();
         if (lastBatchProcessTime == 0 || (currentTime - lastBatchProcessTime) >= BATCH_DELAY_MS) {
             // Обрабатываем батч через задержку в отдельном потоке
-            markerExecutor.submit(() -> {
+            markerExecutor().submit(() -> {
                 try {
                     // Увеличенная задержка для сбора большего количества камней перед обработкой
                     Thread.sleep(BATCH_DELAY_MS);
@@ -1398,7 +1420,7 @@ public class MasterMiner extends ActionWithFinal {
                     final int radiusTiles = 40;
                     
                     // Ищем существующий маркер в радиусе (в фоне, чтобы не блокировать)
-                    markerExecutor.submit(() -> {
+                    markerExecutor().submit(() -> {
                         try {
                             java.util.List<nurgling.widgets.LabeledMinimapMark> existingMarks = 
                                 gui.labeledMarkService.getMarksByResourceType(finalOreName);
@@ -1475,7 +1497,7 @@ public class MasterMiner extends ActionWithFinal {
             final NGItem fItem = item;
             final String fOreName = oreName;
             final String fMarkerType = markerType;
-            iconLoaderExecutor.submit(() -> {
+            iconLoaderExecutor().submit(() -> {
                 try {
                     if ("quarryartz".equals(fMarkerType)) {
                         loadQuarryartzIconAndUpdateMarker(gui, fLocationId);
@@ -2058,7 +2080,7 @@ public class MasterMiner extends ActionWithFinal {
      * Улучшено: проверяет существующие маркеры проспектинга и использует их иконки
      */
     private void loadIconAndUpdateMarker(NGameUI gui, String locationId, NGItem item, String resourceName) {
-        iconLoaderExecutor.submit(() -> {
+        iconLoaderExecutor().submit(() -> {
             try {
                 // Небольшая задержка, чтобы маркер успел создаться без блокировки
                 Thread.sleep(50);
@@ -2112,7 +2134,7 @@ public class MasterMiner extends ActionWithFinal {
      * Улучшено: проверяет существующие маркеры проспектинга и использует их иконки
      */
     private void loadQuarryartzIconAndUpdateMarker(NGameUI gui, String locationId) {
-        iconLoaderExecutor.submit(() -> {
+        iconLoaderExecutor().submit(() -> {
             try {
                 // Небольшая задержка, чтобы маркер успел создаться
                 Thread.sleep(50);

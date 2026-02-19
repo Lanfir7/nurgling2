@@ -76,14 +76,11 @@ public class AreasDBPoolManager implements DatabaseConnectionManager {
             
             // Настройки SQLite для лучшей параллельной работы
             try (java.sql.Statement stmt = connection.createStatement()) {
-                // Включаем WAL mode для лучшей параллельной работы
                 stmt.execute("PRAGMA journal_mode=WAL");
-                // Увеличиваем таймаут для ожидания блокировки
-                stmt.execute("PRAGMA busy_timeout=5000");
-                // Оптимизируем синхронизацию
+                stmt.execute("PRAGMA busy_timeout=30000");
                 stmt.execute("PRAGMA synchronous=NORMAL");
+                stmt.execute("PRAGMA wal_autocheckpoint=1000");
             } catch (SQLException pragmaEx) {
-                // Игнорируем ошибки PRAGMA (могут быть на старых версиях SQLite)
                 System.err.println("AreasDBPoolManager: Warning: Failed to set SQLite PRAGMA settings: " + pragmaEx.getMessage());
             }
             
