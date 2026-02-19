@@ -23,6 +23,7 @@ public class NChopperProp implements JConf
     public boolean bushes = false;
     public boolean checkWounds = false;
     public int woundDamageThreshold = 4;
+    public int approachDirection = 1; // 0=N, 1=S(default), 2=E, 3=W
 
     public NChopperProp(String username, String chrid) {
         this.username = username;
@@ -51,6 +52,8 @@ public class NChopperProp implements JConf
             checkWounds = (Boolean) values.get("checkWounds");
         if (values.get("woundDamageThreshold") != null)
             woundDamageThreshold = ((Number) values.get("woundDamageThreshold")).intValue();
+        if (values.get("approachDirection") != null)
+            approachDirection = ((Number) values.get("approachDirection")).intValue();
     }
 
     public static void set(NChopperProp prop)
@@ -99,6 +102,7 @@ public class NChopperProp implements JConf
         jchopper.put("bushes", bushes);
         jchopper.put("checkWounds", checkWounds);
         jchopper.put("woundDamageThreshold", woundDamageThreshold);
+        jchopper.put("approachDirection", approachDirection);
         return jchopper;
     }
 

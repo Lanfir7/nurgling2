@@ -12,9 +12,11 @@ import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 import nurgling.widgets.bots.Checkable;
+import nurgling.pf.Graph;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 
 public class Chopper implements Action {
@@ -81,17 +83,35 @@ public class Chopper implements Action {
             Gob tree = trees.get(0);
             long treeId = tree.id;
             context.setLastPos(tree.rc);
-            PathFinder pf = new PathFinder(tree);
-            pf.setMode(PathFinder.Mode.Y_MAX);
-            pf.isHardMode = true;
-            pf.run(gui);
+
+            PathFinder.Mode approachMode;
+            switch (prop.approachDirection) {
+                case 0: approachMode = PathFinder.Mode.Y_MIN; break;
+                case 2: approachMode = PathFinder.Mode.X_MAX; break;
+                case 3: approachMode = PathFinder.Mode.X_MIN; break;
+                default: approachMode = PathFinder.Mode.Y_MAX; break;
+            }
+
+            moveToSideCell(gui, tree, approachMode, prop.approachDirection);
 
             while (tree!=null && context.getGob(treeArea, treeId) != null) {
                 boolean chopped = false;
                 if (NParser.isIt(tree, new NAlias("stump"))) {
                     if(!new Equip(new NAlias(prop.shovel)).run(gui).IsSuccess())
                         return Results.ERROR("Equipment not found: " + prop.shovel);
-                    new Destroy(tree,"gfx/borka/shoveldig").run(gui);
+                    moveToSideCell(gui, tree, approachMode, prop.approachDirection);
+                    for (MenuGrid.Pagina pag : NUtils.getGameUI().menu.paginae) {
+                        if (pag.button() != null && pag.button().name().equals("Destroy")) {
+                            pag.button().use(new MenuGrid.Interaction(1, 0));
+                            break;
+                        }
+                    }
+                    NUtils.getUI().core.addTask(new GetCurs("mine"));
+                    gui.map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(OCache.posres),
+                            1, 0, 0, (int) tree.id, tree.rc.floor(OCache.posres), 0, -1);
+                    NUtils.getUI().core.addTask(new WaitPose(NUtils.player(), "gfx/borka/shoveldig"));
+                    NUtils.rclickGob(tree);
+                    NUtils.getUI().core.addTask(new GetCurs("arw"));
                 } else {
                     chopped = true;
                     if(tree.getattr(TreeScale.class)!=null)
@@ -102,6 +122,7 @@ public class Chopper implements Action {
                         chopped = false;
                     if(!new Equip(new NAlias(prop.tool)).run(gui).IsSuccess())
                         return Results.ERROR("Equipment not found: " + prop.tool);
+                    moveToSideCell(gui, tree, approachMode, prop.approachDirection);
                     new SelectFlowerAction("Chop", tree).run(gui);
                     NUtils.getUI().core.addTask(new WaitPoseOrNoGob(NUtils.player(), tree, "gfx/borka/treechop"));
                 }
@@ -143,5 +164,37 @@ public class Chopper implements Action {
         }
         new RunToSafe().run(gui);
         return Results.SUCCESS();
+    }
+
+    private void moveToSideCell(NGameUI gui, Gob target, PathFinder.Mode approachMode, int approachDirection) throws InterruptedException {
+        PathFinder pf = new PathFinder(target);
+        pf.setMode(approachMode);
+        pf.isHardMode = true;
+        pf.run(gui);
+
+        Coord2d pl = NUtils.player().rc;
+        boolean wrongSide;
+        switch (approachDirection) {
+            case 0: wrongSide = pl.y >= target.rc.y; break;
+            case 2: wrongSide = pl.x <= target.rc.x; break;
+            case 3: wrongSide = pl.x >= target.rc.x; break;
+            default: wrongSide = pl.y <= target.rc.y; break;
+        }
+        if (wrongSide) {
+            PathFinder pfSide = new PathFinder(target);
+            pfSide.setMode(approachMode);
+            pfSide.isHardMode = true;
+            pfSide.skipDN = true;
+            LinkedList<Graph.Vertex> sidePath = pfSide.construct();
+            if (sidePath != null && !sidePath.isEmpty()) {
+                Coord2d rawPos = nurgling.pf.Utils.pfGridToWorld(sidePath.getLast().pos);
+                Coord tileIdx = rawPos.div(MCache.tilesz).floor();
+                Coord2d tileCenter = new Coord2d(
+                        tileIdx.x * MCache.tilesz.x + MCache.tilehsz.x,
+                        tileIdx.y * MCache.tilesz.y + MCache.tilehsz.y
+                );
+                new GoTo(tileCenter).run(gui);
+            }
+        }
     }
 }

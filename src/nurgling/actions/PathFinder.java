@@ -31,6 +31,8 @@ public class PathFinder implements Action {
     Gob dummy;
     boolean dn = false;
     Mode mode = Mode.NEAREST;
+    public boolean skipDN = false;
+    public int maxMul = 200;
     Gob gobInStartPos = null;
     double badDir = Double.MAX_VALUE;
 
@@ -127,7 +129,7 @@ public class PathFinder implements Action {
     public LinkedList<Graph.Vertex> construct(boolean test) throws InterruptedException {
         LinkedList<Graph.Vertex> path = new LinkedList<>();
         int mul = 1;
-        while (path.isEmpty() && mul < 200) {
+        while (path.isEmpty() && mul < maxMul) {
             if(pfmap!=null && pfmap.lastMul)
                 return null;
             pfmap = new NPFMap(begin, end, mul);
@@ -254,7 +256,7 @@ public class PathFinder implements Action {
         NPFMap.Cell[][] cells = pfmap.getCells();
         if(start_pos.x < pfmap.size && start_pos.y<pfmap.size && start_pos.x>=0 && start_pos.y>=0) {
             if (cells[start_pos.x][start_pos.y].val != 0) {
-                if (target_id >= 0 && cells[start_pos.x][start_pos.y].content.contains(target_id) && !test) {
+                if (target_id >= 0 && cells[start_pos.x][start_pos.y].content.contains(target_id) && !test && !skipDN) {
                     dn = true;
                     return false;
                 }
@@ -269,7 +271,7 @@ public class PathFinder implements Action {
                     }
                 start_pos = st_poses.get(0);
             }
-            if (start_pos.equals(end_pos) && dummy == null) {
+            if (start_pos.equals(end_pos) && dummy == null && !skipDN) {
                 dn = true;
                 return false;
             }
@@ -303,7 +305,7 @@ public class PathFinder implements Action {
                         end_poses = best_poses;
                     }
                     for (Coord coord : end_poses) {
-                        if (start_pos.equals(coord) && dummy == null) {
+                        if (start_pos.equals(coord) && dummy == null && !skipDN) {
                             dn = true;
                             return false;
                         }
