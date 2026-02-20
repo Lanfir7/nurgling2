@@ -129,20 +129,14 @@ public class BotsInterruptWidget extends Widget {
 
     public void removeObserve(Thread t)
     {
-        System.out.println("=== INTERRUPT CALLED for thread: " + t.getName() + " ===");
         t.interrupt();
-        System.out.println("=== Thread interrupted flag: " + t.isInterrupted() + " ===");
         
-        // Stop player movement when bot is interrupted
         try {
             if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                // Send stop command - right click on current position stops movement
                 NUtils.getGameUI().map.wdgmsg("click", haven.Coord.z, 
                     NUtils.getGameUI().map.player().rc.floor(haven.OCache.posres), 3, 0);
-                System.out.println("=== Player movement stopped ===");
             }
         } catch (Exception e) {
-            // Ignore errors when stopping
         }
         // Clear kill list highlight when bot stops
         // Используем рефлексию для безопасного доступа к Entry.killList

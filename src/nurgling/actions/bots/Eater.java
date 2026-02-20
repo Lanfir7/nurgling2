@@ -5,6 +5,7 @@ import nurgling.*;
 import nurgling.actions.*;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
+import nurgling.navigation.ChunkNavManager;
 import nurgling.tools.Context;
 import nurgling.widgets.FoodContainer;
 import nurgling.widgets.Specialisation;
@@ -36,6 +37,20 @@ public class Eater implements Action {
             nArea = NContext.findSpecGlobal(Specialisation.SpecName.eat.toString());
         if(nArea!=null)
             area = nArea.getRCArea();
+
+        // Area found but grids not in MCache (player in mine/building).
+        // Navigate to the area first via ChunkNav, then re-resolve coordinates.
+        if (area == null && nArea != null) {
+            ChunkNavManager chunkNav = (gui.map instanceof NMapView)
+                ? ((NMapView)gui.map).getChunkNavManager() : null;
+            if (chunkNav != null && chunkNav.isInitialized()) {
+                Results nav = chunkNav.navigateToArea(nArea, gui);
+                if (nav.IsSuccess()) {
+                    area = nArea.getRCArea();
+                }
+            }
+        }
+
         if(area!=null) {
             NContext cnt = new NContext(gui);
             new FindAndEatItems(cnt, items, 8000, area, nArea).run(gui);

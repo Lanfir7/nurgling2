@@ -166,6 +166,19 @@ public class Fightview extends Widget {
 	    ava.canactivate = true;
 	    add(give = new GiveButton(0, UI.scale(15, 15)), UI.scale(5, 4));
 	    adda(purs = new Button(UI.scale(70), "Pursue"), avaf.c.x + avaf.sz.x + UI.scale(5), avaf.c.y + (avaf.sz.y / 2), 0.0, 0.5);
+	    String ib = "nurgling/bots/icons/";
+	    IButton tgt = new IButton(
+		scaleIcon(Resource.loadsimg(ib + "attacknear/u")),
+		scaleIcon(Resource.loadsimg(ib + "attacknear/d")),
+		scaleIcon(Resource.loadsimg(ib + "attacknear/h"))
+	    ) {
+		@Override
+		public Object tooltip(Coord c, Widget prev) {
+		    return Text.render("Set target").tex();
+		}
+	    };
+	    tgt.action(() -> Fightview.this.wdgmsg("click", (int)rel.gobid, 1));
+	    adda(tgt, avaf.c.x + avaf.sz.x / 2, avaf.c.y, 0.5, 1.0);
 	}
 
 	public void draw(GOut g) {
@@ -228,8 +241,8 @@ public class Fightview extends Widget {
 	    adda(purs = new Button(UI.scale(70), "Pursue"), give.pos("br").adds(0, 5), 1.0, 0.0);
 	    String ib = "nurgling/bots/icons/";
 	    Widget b1 = adda(makeBotBtn(ib, "combatdist"), avaf.pos("br").subs(UI.scale(1), UI.scale(1)), 1.0, 1.0);
-	    Widget b2 = adda(makeBotBtn(ib, "quickbarrage"), b1.pos("ul").subs(UI.scale(1), 0), 1.0, 1.0);
-	    adda(makeBotBtn(ib, "reagro"), b2.pos("ul").subs(UI.scale(1), 0), 1.0, 1.0);
+	    Widget b2 = adda(makeBotBtn(ib, "quickbarrage"), b1.pos("bl").subs(UI.scale(1), 0), 1.0, 1.0);
+	    adda(makeBotBtn(ib, "reagro"), b2.pos("bl").subs(UI.scale(1), 0), 1.0, 1.0);
 	    lpack();
 	}
 
@@ -263,7 +276,7 @@ public class Fightview extends Widget {
     }
 
     private static java.awt.image.BufferedImage scaleIcon(java.awt.image.BufferedImage img) {
-	Coord tsz = new Coord(img.getWidth() * 2 / 5, img.getHeight() * 2 / 5);
+	Coord tsz = new Coord(img.getWidth() * 3 / 5, img.getHeight() * 3 / 5);
 	return PUtils.convolvedown(img, tsz, CharWnd.iconfilter);
     }
 

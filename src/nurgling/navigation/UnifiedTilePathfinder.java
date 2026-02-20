@@ -175,17 +175,10 @@ public class UnifiedTilePathfinder {
         int iterations = 0;
         int maxIterations = 500000; // Safety limit - increased for large maps
 
-        // Track unique chunks explored for diagnostics
-        Set<Long> chunksExplored = new HashSet<>();
-
-        // System.out.println("[UnifiedTilePathfinder] Starting A* search...");
-        // long searchStartTime = System.currentTimeMillis();
-
         while (!openSet.isEmpty() && iterations < maxIterations) {
             iterations++;
 
             AStarNode current = openSet.poll();
-            chunksExplored.add(current.tile.chunkId);
 
             if (current.tile.equals(targetTile)) {
                 // Found path - reconstruct it
@@ -284,10 +277,6 @@ public class UnifiedTilePathfinder {
                     // No edge-based filtering here — real buildings CAN be near chunk edges.
                     ChunkNavData destChunk = graph.getChunk(portal.connectsToGridId);
                     if (destChunk != null) {
-                        // Validate portal type vs target layer (instance grid IDs can be reused)
-                        if (!isPortalTargetLayerValid(portal.type, destChunk.layer)) {
-                            continue;
-                        }
                         Coord exitCoord = findPortalExitCoord(destChunk, portal, tile.chunkId);
                         if (exitCoord != null) {
                             neighbors.add(new TileNode(portal.connectsToGridId, exitCoord, true));
@@ -298,49 +287,6 @@ public class UnifiedTilePathfinder {
         }
 
         return neighbors;
-    }
-
-    /**
-     * Validate that a portal type is compatible with the target chunk's layer.
-     * Instance grid IDs in H&H can be reused across sessions, causing portal
-     * connectsToGridId to become stale (e.g., a minehole recorded as connecting
-     * to grid X in session 1, but grid X is now a house interior in session 2).
-     * This validation catches such stale connections.
-     *
-     * Rules:
-     * - MINEHOLE/MINE_ENTRANCE → target must be "outside" (mine interiors are "outside")
-     * - CELLAR → target must be "cellar"
-     * - DOOR (building exterior, e.g. stonemansion) → target must be "inside"
-     * - LADDER → target must be "outside" (exiting mine to surface)
-     * - STAIRS_UP/STAIRS_DOWN → target must be "inside" (moving between floors)
-     * - Others → accept anything (can't validate)
-     */
-    private boolean isPortalTargetLayerValid(ChunkPortal.PortalType type, String targetLayer) {
-        if (type == null || targetLayer == null) return true; // Can't validate
-
-        switch (type) {
-            case MINEHOLE:
-            case MINE_ENTRANCE:
-                // Mine portals lead to mine interiors which have layer "outside"
-                return "outside".equals(targetLayer);
-            case CELLAR:
-                // Cellar portals go between cellar ↔ inside building (bidirectional)
-                // cellarstairs in cellar → points to inside (going up)
-                // cellardoor in inside → points to cellar (going down)
-                return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
-            case LADDER:
-                // Ladder exits mine to surface
-                return "outside".equals(targetLayer);
-            case STAIRS_UP:
-            case STAIRS_DOWN:
-                // Stairs move between building floors (all "inside")
-                return "inside".equals(targetLayer);
-            case DOOR:
-                // Door can lead inside or outside depending on direction
-                return "inside".equals(targetLayer) || "outside".equals(targetLayer);
-            default:
-                return true; // Unknown type - accept
-        }
     }
 
     /**
@@ -528,10 +474,13 @@ public class UnifiedTilePathfinder {
         // Check if same layer - if not, add portal traversal cost estimate
         if (!fromChunk.layer.equals(toChunk.layer)) {
             int depth = getPortalPathDepth(fromChunk, toChunk, new HashSet<>());
-            if (depth == -1) {
-                return 999999.0; // Dead end - this building doesn't connect to target
+            if (depth >= 0) {
+                return 100.0 + (depth - 1) * 400.0;
             }
-            return 100.0 + (depth - 1) * 400.0;
+            // No direct portal chain — try portal exit + walking estimate
+            double crossEst = estimateCrossInstanceHeuristic(fromChunk, from, toChunk, to);
+            if (crossEst >= 0) return crossEst;
+            return 999999.0;
         }
 
         // Check if different instances on same layer (e.g., surface vs mine, both "outside")
@@ -539,8 +488,15 @@ public class UnifiedTilePathfinder {
         if (fromChunk.instanceId != 0 && toChunk.instanceId != 0
                 && fromChunk.instanceId != toChunk.instanceId) {
             int depth = getPortalPathDepth(fromChunk, toChunk, new HashSet<>());
-            if (depth == -1) return 999999.0;
-            return 100.0 + (depth - 1) * 400.0;
+            if (depth >= 0) {
+                return 100.0 + (depth - 1) * 400.0;
+            }
+            // No portal chain to target — common case: mine → portal → surface → walk.
+            // Estimate: portal cost + walking distance from portal exit to target.
+            double crossEst = estimateCrossInstanceHeuristic(fromChunk, from, toChunk, to);
+            if (crossEst >= 0) return crossEst;
+            // Ultimate fallback: portal cost alone (admissible underestimate)
+            return ChunkNavConfig.PORTAL_TRAVERSAL_COST;
         }
 
         // Try world coordinates if both chunks have been seen this session
@@ -563,6 +519,35 @@ public class UnifiedTilePathfinder {
         // No path through neighbors - might need portal
         // Return large but not infinite estimate
         return 5000.0;
+    }
+
+    /**
+     * Estimate heuristic for cross-instance paths: portal cost + walking in target instance.
+     * Looks for a portal on fromChunk (or reachable from it) that exits to toChunk's instance,
+     * then estimates walking distance from portal exit to target via neighbor BFS.
+     * Returns -1 if no portal to target's instance is found.
+     */
+    private double estimateCrossInstanceHeuristic(ChunkNavData fromChunk, TileNode from,
+                                                   ChunkNavData toChunk, TileNode to) {
+        long targetInstance = toChunk.instanceId;
+        double portalCost = ChunkNavConfig.PORTAL_TRAVERSAL_COST;
+
+        for (ChunkPortal portal : fromChunk.portals) {
+            if (portal.connectsToGridId == -1) continue;
+            ChunkNavData exitChunk = graph.getChunk(portal.connectsToGridId);
+            if (exitChunk == null) continue;
+            if (exitChunk.instanceId != targetInstance && targetInstance != 0) continue;
+
+            int walkDist = getNeighborDistance(exitChunk.gridId, to.chunkId);
+            if (walkDist >= 0) {
+                return portalCost + walkDist * CHUNK_SIZE;
+            }
+            if (exitChunk.worldTileOrigin != null && toChunk.worldTileOrigin != null) {
+                return portalCost + exitChunk.worldTileOrigin.dist(toChunk.worldTileOrigin);
+            }
+            return portalCost;
+        }
+        return -1;
     }
 
     /**
@@ -623,11 +608,7 @@ public class UnifiedTilePathfinder {
         for (ChunkPortal portal : fromChunk.portals) {
             if (portal.connectsToGridId == -1) continue;
 
-            // Validate portal type vs target layer (skip stale connections)
             ChunkNavData targetChunk = graph.getChunk(portal.connectsToGridId);
-            if (targetChunk != null && !isPortalTargetLayerValid(portal.type, targetChunk.layer)) {
-                continue;
-            }
 
             if (portal.connectsToGridId == toChunk.gridId) {
                 return 1; // Direct connection - best case

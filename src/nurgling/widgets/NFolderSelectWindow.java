@@ -29,27 +29,23 @@ public class NFolderSelectWindow extends Window {
     private void buildFolderList() {
         Set<String> folderSet = new TreeSet<>();
         
-        // Собираем все папки
+        // Собираем все уникальные папки, сохраняя формат путей (с ведущим /)
         for (NArea a : ((NMapView) NUtils.getGameUI().map).glob.map.areas.values()) {
             if (a.path != null && !a.path.isEmpty()) {
                 folderSet.add(a.path);
-                // Добавляем родительские папки
-                String[] parts = a.path.split("/");
-                StringBuilder sb = new StringBuilder();
-                for (String part : parts) {
-                    if (!part.isEmpty()) {
-                        if (sb.length() > 0) sb.append("/");
-                        sb.append(part);
-                        folderSet.add(sb.toString());
+                // Добавляем родительские папки, сохраняя ведущий /
+                int idx = a.path.lastIndexOf('/');
+                while (idx > 0) {
+                    String parentPath = a.path.substring(0, idx);
+                    if (!parentPath.isEmpty()) {
+                        folderSet.add(parentPath);
                     }
+                    idx = parentPath.lastIndexOf('/');
                 }
             }
         }
         
-        // Добавляем корневую папку первой
         folders.add("[Root]");
-        
-        // Добавляем остальные папки (уже отсортированы TreeSet)
         folders.addAll(folderSet);
     }
     
@@ -139,9 +135,9 @@ public class NFolderSelectWindow extends Window {
         if (!newFolderText.isEmpty()) {
             // Используем введённое имя новой папки
             newPath = newFolderText;
-            // Убираем начальный и конечный слеш
-            if (newPath.startsWith("/")) newPath = newPath.substring(1);
             if (newPath.endsWith("/")) newPath = newPath.substring(0, newPath.length() - 1);
+            // Путь должен начинаться с / (конвенция системы)
+            if (!newPath.startsWith("/")) newPath = "/" + newPath;
         } else {
             // Используем выбранную папку из списка
             String selected = folderDropbox.sel;

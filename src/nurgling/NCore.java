@@ -385,7 +385,6 @@ public class NCore extends Widget
                 }
                 catch (InterruptedException e)
                 {
-                    System.out.println("=== addTask: InterruptedException caught! Rethrowing... ===");
                     synchronized (tasks)
                     {
                         tasks.remove(task);

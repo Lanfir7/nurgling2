@@ -93,10 +93,12 @@ public class ChunkNavRecorder {
                 sampleWalkability(grid, chunk);
             }
 
-            // Assign instanceId from current world context.
-            // Always update (not just when ==0) so that re-entering a mine
-            // with a new session ID propagates the current instanceId.
-            if (manager != null) {
+            // Assign instanceId from current world context (only if not yet set).
+            // Existing instanceId is preserved to avoid overwriting mine chunks
+            // with SURFACE_INSTANCE after client restart (currentInstanceId defaults to 1).
+            // The mergeInstanceIds logic in discoverNeighbors handles mine re-entry
+            // where old chunks have a stale instanceId from a previous session.
+            if (chunk.instanceId == 0 && manager != null) {
                 long currentInstance = manager.getCurrentInstanceId();
                 if (currentInstance != 0) {
                     chunk.instanceId = currentInstance;
@@ -592,17 +594,19 @@ public class ChunkNavRecorder {
     /**
      * Detect the layer (outside/inside/cellar).
      * 
-     * Surface instance chunks are ALWAYS "outside" — doors visible on the
-     * surface belong to building exteriors, not interiors.  Only non-surface
-     * instances can be "inside" or "cellar" (the game loads a separate instance
-     * when entering a building or cellar).
+     * Surface instance chunks are ALWAYS "outside".
+     * Non-surface chunks: if layer was already set to "inside" or "cellar" by
+     * PortalTraversalTracker (reliable source), do NOT overwrite with gob-based detection.
+     * Gob-based detection is unreliable (uses global visibility, misses gobs).
      */
     private void detectLayer(ChunkNavData chunk) {
-        // Surface chunks are always outside.
-        // This prevents a visible door on a nearby building from falsely
-        // marking surface chunks as "inside".
         if (chunk.instanceId == ChunkNavManager.SURFACE_INSTANCE) {
             chunk.layer = "outside";
+            return;
+        }
+
+        // If portal traversal already set a specific layer, trust it
+        if ("inside".equals(chunk.layer) || "cellar".equals(chunk.layer)) {
             return;
         }
 

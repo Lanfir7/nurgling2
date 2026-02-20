@@ -910,47 +910,32 @@ public class NMapView extends MapView
      * update the corresponding animal marker in Postgres so the quality shows on the shared map.
      */
     private void tryUpdateAnimalMarkerQuality(Gob gob) {
-        System.err.println("[NMapView] tryUpdateAnimalMarkerQuality called, gob=" + (gob != null ? gob.id : "null"));
         if (gob == null) return;
-        // Проверяем что это kritter (животное)
         String gobName = gob.ngob != null ? gob.ngob.name : null;
-        System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: gobName=" + gobName);
         if (gobName == null || !gobName.contains("gfx/kritter/")) {
-            System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: skipped — not kritter");
             return;
         }
         haven.ResDrawable rd = gob.getattr(haven.ResDrawable.class);
         if (rd == null || rd.sdt == null) {
-            System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: " + gobName + " id=" + gob.id + " — no ResDrawable or sdt");
             return;
         }
         try {
             MessageBuf buf = rd.sdt.clone();
             int rem = buf.rt - buf.rh;
-            System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: " + gobName + " id=" + gob.id + " sdt.length=" + rem);
             if (rem >= 4) {
                 double q = buf.float32();
-                System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: first float32=" + q);
                 if (q <= 0 || q > 100) {
-                    // У туши первый байт может быть флагом — пробуем смещение 1
                     if (rem >= 5) {
                         buf = rd.sdt.clone();
                         buf.uint8();
                         q = buf.float32();
-                        System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: after skip 1 byte, float32=" + q);
                     }
                 }
                 if (q > 0 && q <= 100) {
-                    System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: applying quality=" + q);
                     applyAnimalMarkerQuality(gob, q);
-                } else {
-                    System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: quality out of range: " + q);
                 }
-            } else {
-                System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: sdt too short: " + rem + " bytes");
             }
         } catch (Exception e) {
-            System.err.println("[NMapView] tryUpdateAnimalMarkerQuality: exception: " + e.getMessage());
         }
     }
 

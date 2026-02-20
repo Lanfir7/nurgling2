@@ -90,6 +90,15 @@ public class AreaDao {
                         int colorR, int colorG, int colorB, int colorA,
                         String data, String profile) throws SQLException {
 
+        // Skip saving if this area was soft-deleted in DB — don't resurrect it
+        String isDeletedCheck = (adapter instanceof nurgling.db.PostgresAdapter) ? "deleted = TRUE" : "deleted = 1";
+        try (ResultSet rs = adapter.executeQuery(
+                "SELECT 1 FROM areas WHERE id = ? AND profile = ? AND " + isDeletedCheck, id, profile)) {
+            if (rs.next()) {
+                return 0;
+            }
+        }
+
         // Determine hide value based on adapter type
         Object hideValue = (adapter instanceof nurgling.db.PostgresAdapter) ? hide : (hide ? 1 : 0);
         
@@ -97,7 +106,6 @@ public class AreaDao {
         if (adapter instanceof nurgling.db.PostgresAdapter) {
             // PostgreSQL: INSERT ON CONFLICT with version increment
             // Note: primary key is just 'id', not (id, profile)
-            // Also reset deleted flag when saving (in case zone was restored)
             String upsertSql = "INSERT INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at, deleted) " +
                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, FALSE) " +
                               "ON CONFLICT (id) DO UPDATE SET " +
@@ -105,7 +113,6 @@ public class AreaDao {
                               "color_r = EXCLUDED.color_r, color_g = EXCLUDED.color_g, " +
                               "color_b = EXCLUDED.color_b, color_a = EXCLUDED.color_a, " +
                               "data = EXCLUDED.data, profile = EXCLUDED.profile, " +
-                              "deleted = FALSE, " +
                               "version = areas.version + 1, " +
                               "updated_at = CURRENT_TIMESTAMP " +
                               "WHERE areas.data != EXCLUDED.data OR areas.name != EXCLUDED.name OR areas.path != EXCLUDED.path " +
@@ -127,16 +134,21 @@ public class AreaDao {
             }
             return 1;
         } else {
-            // SQLite: INSERT OR REPLACE
-            // Also reset deleted flag when saving (in case zone was restored)
-            String upsertSql = "INSERT OR REPLACE INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at, deleted) " +
-                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
-                              "COALESCE((SELECT version + 1 FROM areas WHERE id = ? AND profile = ?), 1), " +
-                              "CURRENT_TIMESTAMP, 0)";
+            // SQLite: use INSERT ON CONFLICT to preserve deleted flag
+            String upsertSql = "INSERT INTO areas (id, name, path, hide, color_r, color_g, color_b, color_a, data, profile, version, updated_at, deleted) " +
+                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, 0) " +
+                              "ON CONFLICT(id) DO UPDATE SET " +
+                              "name = excluded.name, path = excluded.path, hide = excluded.hide, " +
+                              "color_r = excluded.color_r, color_g = excluded.color_g, " +
+                              "color_b = excluded.color_b, color_a = excluded.color_a, " +
+                              "data = excluded.data, profile = excluded.profile, " +
+                              "version = areas.version + 1, " +
+                              "updated_at = CURRENT_TIMESTAMP " +
+                              "WHERE areas.data != excluded.data OR areas.name != excluded.name OR areas.path != excluded.path";
             adapter.executeUpdate(upsertSql,
                 id, name, path, hideValue,
                 colorR, colorG, colorB, colorA,
-                data, profile, id, profile);
+                data, profile);
             
             // Get the resulting version
             try (ResultSet rs = adapter.executeQuery("SELECT version FROM areas WHERE id = ? AND profile = ?", id, profile)) {

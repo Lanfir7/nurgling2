@@ -570,8 +570,10 @@ public class NAreasWidget extends Window
             remove = add(new IButton(NStyle.removei[0].back,NStyle.removei[1].back,NStyle.removei[2].back){
                 @Override
                 public void click() {
+                    removeFolderContent(folderPath);
                 }
             },new Coord(al.sz.x - NStyle.removei[0].sz().x, 0).sub(UI.scale(5),UI.scale(1) ));
+            remove.settip(get("area.btn.remove"));
             opt = new ArrayList<String>(){
                 {
                     add(L10n.get("area.menu.edit_folder"));
@@ -621,30 +623,31 @@ public class NAreasWidget extends Window
                 return true;
             }
             else if (ev.b == 1) {
-                // SHIFT + ЛКМ - автоматическое переименование зоны
+                // SHIFT + LMB - auto-rename zone
                 if (ui.modshift && area != null && !isDir) {
                     String newName = getAutoNameForZone(area);
                     if (newName != null && !newName.isEmpty()) {
                         ((NMapView)NUtils.getGameUI().map).changeAreaName(area.id, newName);
-                        // Обновляем текст в виджете
                         text.settext(newName);
                         NConfig.needAreasUpdate();
                         return true;
                     }
                 }
-                
-                if (!isDir)
-                    if(area != null)
-                    {
+
+                if (isDir) {
+                    // For folders: let buttons (remove/hide) handle event first
+                    if (super.mousedown(ev))
+                        return true;
+                    showPath(currentPath + "/" + text.text());
+                    return true;
+                } else {
+                    // For areas: select then dispatch to children (original behavior)
+                    if (area != null) {
                         NAreasWidget.this.select(area.id);
-                    }
-                    else
-                    {
+                    } else {
                         NAreasWidget.this.showPath(rootPath);
                     }
-
-                else
-                    showPath(currentPath + "/" + text.text());
+                }
             }
             return super.mousedown(ev);
         }
@@ -799,7 +802,11 @@ public class NAreasWidget extends Window
                             }
                             else if (option.name.equals(get("area.menu.edit_folder")))
                             {
-                                ui.gui.add(new NFolderSelectWindow(area, NAreasWidget.this), ui.mc);
+                                if (area != null) {
+                                    ui.gui.add(new NFolderSelectWindow(area, NAreasWidget.this), ui.mc);
+                                } else if (isDir) {
+                                    NEditFolderName.changeName(currentPath, AreaItem.this.text.text());
+                                }
                             }
                             else if (option.name.equals("Duplicate"))
                             {
@@ -809,61 +816,9 @@ public class NAreasWidget extends Window
                             {
                                 Scaner.startScan(area);
                             }
-                            else if (option.name.equals(get("area.menu.edit_folder")))
-                            {
-                                NEditFolderName.changeName(currentPath, AreaItem.this.text.text());
-                            }
                             else if (option.name.equals(get("area.menu.remove_content")))
                             {
-                                ArrayList<Integer> forRemove = new ArrayList<>();
-                                for (NArea area : ((NMapView) NUtils.getGameUI().map).glob.map.areas.values()) {
-                                    if(area.path.startsWith(currentPath + "/" + text.text())) {
-                                        forRemove.add(area.id);
-                                    }
-                                }
-                                synchronized (((NMapView) NUtils.getGameUI().map).glob.map.areas)
-                                {
-                                    // Get profile once before the loop
-                                    String profile = NUtils.getGameUI().getGenus();
-                                    if (profile == null || profile.isEmpty()) {
-                                        profile = "global";
-                                    }
-                                    final String finalProfile = profile;
-                                    
-                                    for(Integer key:forRemove)
-                                    {
-                                        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
-                                        {
-                                            // Track as locally deleted to prevent sync restoration
-                                            ((NMapView) NUtils.getGameUI().map).locallyDeletedAreas.add(key);
-                                            
-                                            NOverlay nol = NUtils.getGameUI().map.nols.get(key);
-                                            if(nol != null) {
-                                                nol.remove();
-                                            }
-                                            NUtils.getGameUI().map.nols.remove(key);
-                                            NArea area = ((NMapView) NUtils.getGameUI().map).glob.map.areas.get(key);
-                                            if(area != null) {
-                                                Gob dummy = ((NMapView) NUtils.getGameUI().map).dummys.get(area.gid);
-                                                if(dummy!=null) {
-                                                    NUtils.getGameUI().map.glob.oc.remove(dummy);
-                                                    ((NMapView) NUtils.getGameUI().map).dummys.remove(dummy.id);
-                                                }
-                                            }
-                                            ((NMapView) NUtils.getGameUI().map).glob.map.areas.remove(key);
-                                            
-                                            // Delete from database using async service (uses connection pool properly)
-                                            if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
-                                                nurgling.NCore.databaseManager != null && 
-                                                nurgling.NCore.databaseManager.isReady()) {
-                                                final int finalKey = key;
-                                                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(finalKey, finalProfile);
-                                            }
-                                        }
-                                    }
-                                    NConfig.needAreasUpdate();
-                                    NAreasWidget.this.showPath(NAreasWidget.this.currentPath);
-                                }
+                                removeFolderContent(currentPath + "/" + text.text());
                             }
                             else if (option.name.equals("Show all in folder"))
                             {
@@ -896,6 +851,53 @@ public class NAreasWidget extends Window
         @Override
         public void draw(GOut g, boolean strict) {
             super.draw(g, strict);
+        }
+    }
+
+    private void removeFolderContent(String folderPath) {
+        ArrayList<Integer> forRemove = new ArrayList<>();
+        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        for (NArea area : mapView.glob.map.areas.values()) {
+            if (area.path.startsWith(folderPath)) {
+                forRemove.add(area.id);
+            }
+        }
+        if (forRemove.isEmpty()) return;
+
+        synchronized (mapView.glob.map.areas) {
+            String profile = NUtils.getGameUI().getGenus();
+            if (profile == null || profile.isEmpty()) {
+                profile = "global";
+            }
+            final String finalProfile = profile;
+
+            for (Integer key : forRemove) {
+                mapView.locallyDeletedAreas.add(key);
+
+                nurgling.overlays.map.NOverlay nol = mapView.nols.get(key);
+                if (nol != null) {
+                    nol.remove();
+                }
+                mapView.nols.remove(key);
+                NArea area = mapView.glob.map.areas.get(key);
+                if (area != null) {
+                    Gob dummy = mapView.dummys.get(area.gid);
+                    if (dummy != null) {
+                        mapView.glob.oc.remove(dummy);
+                        mapView.dummys.remove(dummy.id);
+                    }
+                }
+                mapView.glob.map.areas.remove(key);
+
+                if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
+                    nurgling.NCore.databaseManager != null &&
+                    nurgling.NCore.databaseManager.isReady()) {
+                    final int finalKey = key;
+                    nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(finalKey, finalProfile);
+                }
+            }
+            NConfig.needAreasUpdate();
+            showPath(currentPath);
         }
     }
 

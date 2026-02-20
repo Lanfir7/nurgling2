@@ -58,6 +58,10 @@ public class ChunkNavManager {
     
     // Flag to track if async loading is in progress
     private volatile boolean loadingInProgress = false;
+    
+    // Whether currentInstanceId has been restored from the player's chunk after load.
+    // Prevents re-detection on every tick.
+    private volatile boolean instanceIdRestoredFromPlayer = false;
 
     // Current world instance context.
     // All chunks recorded while this value is active belong to the same instance.
@@ -145,6 +149,8 @@ public class ChunkNavManager {
 
         // Mark as initialized immediately so tick() can work with empty graph
         this.initialized = true;
+        this.instanceIdRestoredFromPlayer = false;
+        this.currentInstanceId = SURFACE_INSTANCE;
         
         // Load saved data asynchronously to avoid blocking game startup
         loadingInProgress = true;
@@ -164,6 +170,14 @@ public class ChunkNavManager {
      */
     public void tick() {
         if (!enabled || !initialized) return;
+
+        // After loading, restore currentInstanceId from the player's saved chunk.
+        // This handles the case when the player restarts the client while in a mine:
+        // without this, currentInstanceId stays at SURFACE_INSTANCE=1 and mine chunks
+        // would get wrong instanceId if re-recorded before a portal traversal updates it.
+        if (!instanceIdRestoredFromPlayer && !loadingInProgress) {
+            restoreInstanceIdFromPlayerChunk();
+        }
 
         boolean recordingEnabled = (Boolean) NConfig.get(NConfig.Key.chunkNavOverlay);
 
@@ -603,13 +617,12 @@ public class ChunkNavManager {
                 System.out.println("ChunkNav: Repaired " + repaired + " false cross-instance neighbor links");
             }
 
-            // Repair: invalidate stale portal connections.
-            // Instance grid IDs in H&H can be reused across sessions,
-            // causing portal connectsToGridId to point to the wrong grid
-            // (e.g., minehole recorded as connecting to a house interior grid).
-            int stalePortals = invalidateStalePortalConnections();
-            if (stalePortals > 0) {
-                System.out.println("ChunkNav: Invalidated " + stalePortals + " stale portal connections");
+            // Repair: infer correct layer for chunks that have portals
+            // detectLayer is unreliable (uses global gob visibility), so portal types
+            // are the most trustworthy source for layer classification.
+            int layerFromPortals = repairLayersFromPortalTypes();
+            if (layerFromPortals > 0) {
+                System.out.println("ChunkNav: Fixed " + layerFromPortals + " chunk layers from portal types");
             }
 
             // Repair: fix surface chunks wrongly tagged as "inside" or "cellar"
@@ -622,7 +635,16 @@ public class ChunkNavManager {
             // Rebuild connections after loading all chunks
             graph.rebuildAllConnections();
 
-            System.out.println("ChunkNav: Loaded " + loadedChunks.size() + " chunks from binary format");
+            // Diagnostic: dump portal summary after loading
+            int totalPortals = 0, connectedPortals = 0;
+            for (ChunkNavData c : graph.getAllChunks()) {
+                for (ChunkPortal p : c.portals) {
+                    totalPortals++;
+                    if (p.connectsToGridId != -1) connectedPortals++;
+                }
+            }
+            System.out.println("ChunkNav: Loaded " + loadedChunks.size() + " chunks, " +
+                totalPortals + " portals (" + connectedPortals + " connected) from binary format");
 
         } catch (Exception e) {
             System.err.println("ChunkNav: Failed to load data: " + e.getMessage());
@@ -649,58 +671,65 @@ public class ChunkNavManager {
     }
 
     /**
-     * Invalidate portal connections where the portal type is incompatible
-     * with the target chunk's layer. This catches stale connections caused by
-     * H&H reusing instance grid IDs across sessions (e.g., minehole recorded
-     * as connecting to grid X when X was a mine, but X is now a house interior).
+     * Infer correct layer for chunks based on the portal types they contain.
+     * Portal types are set during traversal recording and are much more reliable
+     * than detectLayer (which uses global gob visibility and is easily wrong).
+     *
+     * Rules:
+     * - Chunk has cellarstairs → "cellar"
+     * - Chunk has -door, downstairs, upstairs, cellardoor → "inside"
+     * - Chunk has minehole, ladder, building exterior → "outside"
      */
-    private int invalidateStalePortalConnections() {
-        int invalidated = 0;
+    private int repairLayersFromPortalTypes() {
+        int fixed = 0;
         for (ChunkNavData chunk : graph.getAllChunks()) {
-            for (ChunkPortal portal : chunk.portals) {
-                if (portal.connectsToGridId == -1) continue;
+            if (chunk.portals.isEmpty()) continue;
 
-                ChunkNavData target = graph.getChunk(portal.connectsToGridId);
-                if (target == null) continue;
-
-                if (!isPortalTargetLayerValid(portal.type, target.layer)) {
-                    System.out.println("ChunkNav: Stale portal '" + portal.gobName +
-                        "' (type=" + portal.type + ") on chunk " + chunk.gridId +
-                        " (layer=" + chunk.layer + ") → target " + portal.connectsToGridId +
-                        " (layer=" + target.layer + ") - invalidating");
-                    portal.connectsToGridId = -1;
-                    portal.exitLocalCoord = null;
-                    invalidated++;
-                }
+            String inferred = inferLayerFromPortals(chunk);
+            if (inferred != null && !inferred.equals(chunk.layer)) {
+                chunk.layer = inferred;
+                fixed++;
             }
         }
-        return invalidated;
+        return fixed;
     }
 
     /**
-     * Validate that a portal type is compatible with the target chunk's layer.
-     * Same logic as UnifiedTilePathfinder.isPortalTargetLayerValid().
+     * Infer layer from portal types present on a chunk.
+     * The EXIT portal (what you see after arriving) determines the layer.
      */
-    private static boolean isPortalTargetLayerValid(ChunkPortal.PortalType type, String targetLayer) {
-        if (type == null || targetLayer == null) return true;
+    private static String inferLayerFromPortals(ChunkNavData chunk) {
+        boolean hasCellarStairs = false;
+        boolean hasInsideDoor = false;
+        boolean hasOutsideIndicator = false;
 
-        switch (type) {
-            case MINEHOLE:
-            case MINE_ENTRANCE:
-                return "outside".equals(targetLayer);
-            case CELLAR:
-                // Cellar portals go between cellar ↔ inside (bidirectional)
-                return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
-            case LADDER:
-                return "outside".equals(targetLayer);
-            case STAIRS_UP:
-            case STAIRS_DOWN:
-                return "inside".equals(targetLayer);
-            case DOOR:
-                return "inside".equals(targetLayer) || "outside".equals(targetLayer);
-            default:
-                return true;
+        for (ChunkPortal portal : chunk.portals) {
+            if (portal.gobName == null) continue;
+            String lower = portal.gobName.toLowerCase();
+
+            if (lower.contains("cellarstairs")) {
+                hasCellarStairs = true;
+            } else if (lower.endsWith("-door") || lower.contains("downstairs") ||
+                       lower.contains("upstairs") || lower.contains("cellardoor")) {
+                hasInsideDoor = true;
+            } else if (lower.contains("minehole") || lower.contains("ladder")) {
+                hasOutsideIndicator = true;
+            } else if (isBuildingExterior(lower)) {
+                hasOutsideIndicator = true;
+            }
         }
+
+        if (hasCellarStairs) return "cellar";
+        if (hasInsideDoor) return "inside";
+        if (hasOutsideIndicator) return "outside";
+        return null;
+    }
+
+    private static boolean isBuildingExterior(String lower) {
+        return (lower.contains("stonemansion") || lower.contains("logcabin") ||
+                lower.contains("timberhouse") || lower.contains("stonestead") ||
+                lower.contains("greathall") || lower.contains("stonetower") ||
+                lower.contains("windmill")) && !lower.contains("-door");
     }
 
     /**
@@ -910,6 +939,37 @@ public class ChunkNavManager {
      */
     public void setCurrentInstanceId(long instanceId) {
         this.currentInstanceId = instanceId;
+        this.instanceIdRestoredFromPlayer = true;
+    }
+
+    /**
+     * Restore currentInstanceId from the player's saved chunk data.
+     * Called once after loading to handle client restart inside a mine.
+     */
+    private void restoreInstanceIdFromPlayerChunk() {
+        instanceIdRestoredFromPlayer = true;
+        try {
+            Gob player = NUtils.player();
+            if (player == null) return;
+
+            MCache mcache = NUtils.getGameUI().map.glob.map;
+            if (mcache == null) return;
+
+            Coord tileCoord = player.rc.floor(MCache.tilesz);
+            MCache.Grid playerGrid = mcache.getgridt(tileCoord);
+            if (playerGrid == null) return;
+
+            ChunkNavData chunk = graph.getChunk(playerGrid.id);
+            if (chunk != null && chunk.instanceId != 0) {
+                this.currentInstanceId = chunk.instanceId;
+                if (chunk.instanceId != SURFACE_INSTANCE) {
+                    System.out.println("ChunkNav: Restored instanceId=" + chunk.instanceId +
+                        " from player chunk " + playerGrid.id + " (player is inside mine/building)");
+                }
+            }
+        } catch (Exception e) {
+            // Player not ready yet — will stay at SURFACE_INSTANCE
+        }
     }
 
     /**

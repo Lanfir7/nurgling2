@@ -66,8 +66,6 @@ public class ChunkNavPlanner {
     public ChunkPath planToArea(NArea area) {
         if (area == null) return null;
 
-        // Get player's current chunk and local position using direct MCache lookup
-        // This is more reliable than ngob.grid_id which can be stale
         PlayerLocation playerLoc = getPlayerLocation();
         if (playerLoc == null) {
             return null;
@@ -76,13 +74,11 @@ public class ChunkNavPlanner {
         long startChunkId = playerLoc.gridId;
         Coord playerLocal = playerLoc.localCoord;
 
-        // Find target chunk and local coord using STORED data (not live visibility)
         TargetLocation target = findTargetLocation(area);
         if (target == null) {
             return null;
         }
 
-        // Use unified pathfinder to get complete tile-level path
         UnifiedTilePathfinder.UnifiedPath unifiedPath = unifiedPathfinder.findPath(
             startChunkId, playerLocal,
             target.chunkId, target.localCoord

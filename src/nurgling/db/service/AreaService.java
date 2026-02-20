@@ -799,6 +799,14 @@ public class AreaService {
                         versions.put(entry.getKey(), entry.getValue().version);
                     }
                 }
+
+                // Mark locally deleted areas with MAX_VALUE so sync never tries to reload them
+                if (nurgling.NUtils.getGameUI().map instanceof nurgling.NMapView) {
+                    nurgling.NMapView mapView = (nurgling.NMapView) nurgling.NUtils.getGameUI().map;
+                    for (int deletedId : mapView.locallyDeletedAreas) {
+                        versions.put(deletedId, Integer.MAX_VALUE);
+                    }
+                }
             }
         } catch (Exception e) {
             // Ignore errors when getting local versions
