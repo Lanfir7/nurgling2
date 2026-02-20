@@ -93,23 +93,25 @@ public class ChunkNavRecorder {
                 sampleWalkability(grid, chunk);
             }
 
-            // Assign instanceId from current world context
+            // Assign instanceId from current world context.
+            // Always update (not just when ==0) so that re-entering a mine
+            // with a new session ID propagates the current instanceId.
             if (manager != null) {
                 long currentInstance = manager.getCurrentInstanceId();
-                if (chunk.instanceId == 0 && currentInstance != 0) {
+                if (currentInstance != 0) {
                     chunk.instanceId = currentInstance;
                 }
             }
 
-            // Portals are recorded only when traversed (via PortalTraversalTracker)
-            // This eliminates phantom portal bugs from proximity-based detection
             detectLayer(chunk);
-
             updateEdgeWalkability(chunk);
-            discoverNeighbors(grid, chunk);
             chunk.markUpdated();
 
+            // Add chunk to graph BEFORE neighbor discovery so that other grids
+            // processed in the same batch can find this chunk via graph.getChunk().
             graph.addChunk(chunk);
+
+            discoverNeighbors(grid, chunk);
             graph.updateConnections(chunk);
 
         } catch (Exception e) {
@@ -209,80 +211,143 @@ public class ChunkNavRecorder {
                 for (MCache.Grid other : mcache.grids.values()) {
                     if (other.id == grid.id) continue;
 
-                    // CRITICAL: Prevent cross-instance false connections.
-                    // During portal transitions, MCache can hold grids from both
-                    // the old and new instance simultaneously. Without this check,
-                    // adjacent gc values from different instances create permanent
-                    // false neighbor links (e.g., mine chunk linked to surface chunk).
-                    //
-                    // Strict rule: if the current chunk has a known instanceId,
-                    // only allow neighbors with the SAME instanceId.
-                    // Chunks with instanceId=0 (unknown/legacy) are also rejected
-                    // because during portal transitions, the "other side" grids
-                    // may not have their instanceId assigned yet.
-                    ChunkNavData otherChunk = graph.getChunk(other.id);
-                    if (chunk.instanceId != 0) {
-                        if (otherChunk == null || otherChunk.instanceId != chunk.instanceId) {
-                            continue; // Unknown or different instance - skip
-                        }
-                    } else if (otherChunk != null && otherChunk.instanceId != 0) {
-                        // Reverse: other has known instanceId, we don't - skip too
-                        continue;
-                    }
-
+                    // Only process immediate neighbors (exactly 1 grid apart)
                     Coord otherGc = other.gc;
                     int dx = otherGc.x - myGc.x;
                     int dy = otherGc.y - myGc.y;
+                    if (Math.abs(dx) + Math.abs(dy) != 1) continue;
 
-                    // Check if this grid is an immediate neighbor (exactly 1 grid apart)
-                    // Only SET neighbor if not already set (preserve existing relationships)
-                    // Also update the reverse relationship on the neighbor chunk
-                    if (dx == 0 && dy == -1) {
-                        // Other is to the north
-                        if (chunk.neighborNorth == -1) {
-                            chunk.neighborNorth = other.id;
-                        }
-                        // Update reverse: we are to the south of other
-                        // Reuse otherChunk from instance check above, or fetch if null
-                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
-                        if (reverseChunk != null && reverseChunk.neighborSouth == -1) {
-                            reverseChunk.neighborSouth = grid.id;
-                        }
-                    } else if (dx == 0 && dy == 1) {
-                        // Other is to the south
-                        if (chunk.neighborSouth == -1) {
-                            chunk.neighborSouth = other.id;
-                        }
-                        // Update reverse: we are to the north of other
-                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
-                        if (reverseChunk != null && reverseChunk.neighborNorth == -1) {
-                            reverseChunk.neighborNorth = grid.id;
-                        }
-                    } else if (dx == 1 && dy == 0) {
-                        // Other is to the east
-                        if (chunk.neighborEast == -1) {
-                            chunk.neighborEast = other.id;
-                        }
-                        // Update reverse: we are to the west of other
-                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
-                        if (reverseChunk != null && reverseChunk.neighborWest == -1) {
-                            reverseChunk.neighborWest = grid.id;
-                        }
-                    } else if (dx == -1 && dy == 0) {
-                        // Other is to the west
-                        if (chunk.neighborWest == -1) {
-                            chunk.neighborWest = other.id;
-                        }
-                        // Update reverse: we are to the east of other
-                        ChunkNavData reverseChunk = otherChunk != null ? otherChunk : graph.getChunk(other.id);
-                        if (reverseChunk != null && reverseChunk.neighborEast == -1) {
-                            reverseChunk.neighborEast = grid.id;
-                        }
+                    ChunkNavData otherChunk = graph.getChunk(other.id);
+
+                    // Instance safety check
+                    if (!canConnect(chunk, otherChunk)) continue;
+
+                    // MCache gc data is authoritative within a session.
+                    int direction = -1;
+                    if (dx == 0 && dy == -1) direction = 0;      // north
+                    else if (dx == 0 && dy == 1) direction = 1;   // south
+                    else if (dx == 1 && dy == 0) direction = 2;   // east
+                    else if (dx == -1 && dy == 0) direction = 3;  // west
+
+                    if (direction >= 0) {
+                        setNeighborPair(chunk, grid.id, otherChunk, other.id, direction);
                     }
                 }
             }
         } catch (Exception e) {
             // Ignore errors during neighbor discovery
+        }
+    }
+
+    /**
+     * Check if two chunks can be connected as neighbors.
+     * Rules:
+     * - Both must have known instanceId (or otherChunk not yet in graph → allow)
+     * - Same instanceId → always OK
+     * - Different instanceId but NEITHER is surface → merge (same mine, different sessions)
+     * - One is surface, other is not → block (portal transition artifact)
+     */
+    private boolean canConnect(ChunkNavData chunk, ChunkNavData otherChunk) {
+        if (otherChunk == null) {
+            // Other grid not in graph yet. Since we moved addChunk before
+            // discoverNeighbors, this means it truly hasn't been recorded.
+            // Allow connection — gc adjacency in same MCache is reliable.
+            // The chunk will get its instanceId when it's recorded.
+            return chunk.instanceId == 0;
+        }
+
+        long myInst = chunk.instanceId;
+        long otherInst = otherChunk.instanceId;
+
+        // Both unknown — allow
+        if (myInst == 0 && otherInst == 0) return true;
+        // One unknown — skip (can't verify)
+        if (myInst == 0 || otherInst == 0) return false;
+        // Same — OK
+        if (myInst == otherInst) return true;
+
+        // Different instanceIds. Allow only if NEITHER is surface.
+        // This handles: same mine entered in different sessions → different instanceIds.
+        // Block: surface ↔ mine/building (portal transition artifact).
+        if (myInst == ChunkNavManager.SURFACE_INSTANCE ||
+            otherInst == ChunkNavManager.SURFACE_INSTANCE) {
+            return false;
+        }
+
+        // Both non-surface with different instanceIds → same mine, merge.
+        mergeInstanceIds(otherInst, myInst);
+        return true;
+    }
+
+    /**
+     * Merge two instanceIds: all chunks with oldId get newId.
+     * Used when the same mine has different instanceIds from different sessions.
+     */
+    private void mergeInstanceIds(long keepId, long replaceId) {
+        if (keepId == replaceId) return;
+        int merged = 0;
+        for (ChunkNavData c : graph.getAllChunks()) {
+            if (c.instanceId == replaceId) {
+                c.instanceId = keepId;
+                merged++;
+            }
+        }
+        if (merged > 0) {
+            System.out.println("[ChunkNav] Merged instanceId " + replaceId +
+                " → " + keepId + " (" + merged + " chunks)");
+        }
+    }
+
+    /**
+     * Set a bidirectional neighbor pair, cleaning up any old stale references.
+     * @param direction 0=north, 1=south, 2=east, 3=west
+     */
+    private void setNeighborPair(ChunkNavData chunk, long chunkId,
+                                  ChunkNavData otherChunk, long otherId, int direction) {
+        int reverse = direction ^ 1; // 0↔1 (N↔S), 2↔3 (E↔W)
+
+        long oldForward = getNeighborField(chunk, direction);
+        if (oldForward != otherId) {
+            // Clean up old reverse: if old neighbor pointed back to us, clear it
+            if (oldForward != -1) {
+                ChunkNavData oldNeighbor = graph.getChunk(oldForward);
+                if (oldNeighbor != null && getNeighborField(oldNeighbor, reverse) == chunkId) {
+                    setNeighborField(oldNeighbor, reverse, -1);
+                }
+            }
+            setNeighborField(chunk, direction, otherId);
+        }
+
+        if (otherChunk != null) {
+            long oldReverse = getNeighborField(otherChunk, reverse);
+            if (oldReverse != chunkId) {
+                if (oldReverse != -1) {
+                    ChunkNavData oldReverseChunk = graph.getChunk(oldReverse);
+                    if (oldReverseChunk != null && getNeighborField(oldReverseChunk, direction) == otherId) {
+                        setNeighborField(oldReverseChunk, direction, -1);
+                    }
+                }
+                setNeighborField(otherChunk, reverse, chunkId);
+            }
+        }
+    }
+
+    private static long getNeighborField(ChunkNavData chunk, int dir) {
+        switch (dir) {
+            case 0: return chunk.neighborNorth;
+            case 1: return chunk.neighborSouth;
+            case 2: return chunk.neighborEast;
+            case 3: return chunk.neighborWest;
+            default: return -1;
+        }
+    }
+
+    private static void setNeighborField(ChunkNavData chunk, int dir, long value) {
+        switch (dir) {
+            case 0: chunk.neighborNorth = value; break;
+            case 1: chunk.neighborSouth = value; break;
+            case 2: chunk.neighborEast = value; break;
+            case 3: chunk.neighborWest = value; break;
         }
     }
 
@@ -526,19 +591,28 @@ public class ChunkNavRecorder {
 
     /**
      * Detect the layer (outside/inside/cellar).
-     * - "cellar" if we see cellarstairs
-     * - "inside" if we see a door but no building exterior (we're inside a building)
-     * - "outside" for everything else (surface, mines, etc.)
+     * 
+     * Surface instance chunks are ALWAYS "outside" — doors visible on the
+     * surface belong to building exteriors, not interiors.  Only non-surface
+     * instances can be "inside" or "cellar" (the game loads a separate instance
+     * when entering a building or cellar).
      */
     private void detectLayer(ChunkNavData chunk) {
+        // Surface chunks are always outside.
+        // This prevents a visible door on a nearby building from falsely
+        // marking surface chunks as "inside".
+        if (chunk.instanceId == ChunkNavManager.SURFACE_INSTANCE) {
+            chunk.layer = "outside";
+            return;
+        }
+
         try {
             NGameUI gui = NUtils.getGameUI();
             if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
-                return; // GUI not ready, layer will be detected on next recording
+                return;
             }
             Glob glob = gui.ui.sess.glob;
 
-            // Quick copy of gob names while holding lock
             List<String> gobNames = new ArrayList<>();
             synchronized (glob.oc) {
                 for (Gob gob : glob.oc) {
@@ -548,24 +622,20 @@ public class ChunkNavRecorder {
                 }
             }
 
-            // Process WITHOUT holding the lock
             boolean hasCellarStairs = false;
             boolean hasInsideIndicator = false;
-            boolean hasBuildingExterior = false;
 
             for (String name : gobNames) {
                 if (name.contains("cellarstairs")) {
                     hasCellarStairs = true;
                 } else if (name.endsWith("-door") || name.contains("downstairs")) {
                     hasInsideIndicator = true;
-                } else if (isBuildingExterior(name)) {
-                    hasBuildingExterior = true;
                 }
             }
 
             if (hasCellarStairs) {
                 chunk.layer = "cellar";
-            } else if (hasInsideIndicator && !hasBuildingExterior) {
+            } else if (hasInsideIndicator) {
                 chunk.layer = "inside";
             } else {
                 chunk.layer = "outside";

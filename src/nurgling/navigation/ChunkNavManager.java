@@ -612,6 +612,13 @@ public class ChunkNavManager {
                 System.out.println("ChunkNav: Invalidated " + stalePortals + " stale portal connections");
             }
 
+            // Repair: fix surface chunks wrongly tagged as "inside" or "cellar"
+            // due to a bug where detectLayer looked at all visible gobs globally
+            int layerFixes = repairSurfaceChunkLayers();
+            if (layerFixes > 0) {
+                System.out.println("ChunkNav: Fixed " + layerFixes + " surface chunks with wrong layer");
+            }
+
             // Rebuild connections after loading all chunks
             graph.rebuildAllConnections();
 
@@ -694,6 +701,23 @@ public class ChunkNavManager {
             default:
                 return true;
         }
+    }
+
+    /**
+     * Fix surface chunks that were wrongly tagged as "inside" or "cellar".
+     * Old detectLayer bug: it looked at ALL visible gobs (global), so a door
+     * on a nearby building could mark surface chunks as "inside".
+     * Surface instance chunks must always be "outside".
+     */
+    private int repairSurfaceChunkLayers() {
+        int fixed = 0;
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            if (chunk.instanceId == SURFACE_INSTANCE && !"outside".equals(chunk.layer)) {
+                chunk.layer = "outside";
+                fixed++;
+            }
+        }
+        return fixed;
     }
 
     /**
@@ -824,7 +848,11 @@ public class ChunkNavManager {
         // Delete the chunk file from disk
         fileStore.deleteChunkFile(gridId);
 
-        System.out.println("ChunkNav: Deleted chunk " + gridId + " (modified " + modifiedChunks.size() + " neighbors)");
+        // Repair any asymmetric links left after deletion
+        int repaired = graph.repairNeighborConsistency();
+
+        System.out.println("ChunkNav: Deleted chunk " + gridId + " (modified " + modifiedChunks.size() +
+            " neighbors" + (repaired > 0 ? ", repaired " + repaired + " links" : "") + ")");
         return true;
     }
 
