@@ -1709,6 +1709,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
     private Loading camload = null;
 	public Loading lastload = null;
+	private int loadDiagCounter = 0;
     public void draw(GOut g) {
 	Loader.Future<Plob> placing = this.placing;
 	if((placing != null) && placing.done())
@@ -1731,6 +1732,17 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	} catch(Loading e) {
 	    e.boostprio(6);
 	    lastload = e;
+	    if(loadDiagCounter++ % 300 == 0) {
+		Gob pl = player();
+		System.err.println("[MapView.draw] LOADING STUCK #" + loadDiagCounter +
+		    " cc=" + cc + " plgob=" + plgob + " player=" + (pl != null) +
+		    " camload=" + (camload != null ? camload.getMessage() : "null") +
+		    " grids=" + glob.map.grids.size() +
+		    " err=" + e.getClass().getSimpleName() + ": " + e.getMessage());
+		if(e.getCause() != null) {
+		    System.err.println("[MapView.draw]   cause: " + e.getCause());
+		}
+	    }
 	    String text = e.getMessage();
 	    if(text == null)
 		text = "Loading...";
