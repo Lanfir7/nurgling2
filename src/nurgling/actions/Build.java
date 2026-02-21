@@ -587,22 +587,46 @@ public class Build implements Action
                 
                 while (ingredient.count != 0 && NUtils.getGameUI().getInventory().getNumberFreeCoord(ingredient.coord) != 0)
                 {
+                    // Try stockpiles first
                     ArrayList<Gob> piles = Finder.findGobs(ingredientArea, new NAlias("stockpile"));
-                    if (piles.isEmpty())
+                    if (!piles.isEmpty())
                     {
-                        if (NUtils.getGameUI().getInventory().getItems(ingredient.name).size() != ingredient.count)
-                            return false;
+                        piles.sort(NUtils.d_comp);
+                        Gob pile = piles.get(0);
+                        new PathFinder(pile).run(NUtils.getGameUI());
+                        new OpenTargetContainer("Stockpile", pile).run(NUtils.getGameUI());
+                        TakeItemsFromPile tifp;
+                        (tifp = new TakeItemsFromPile(pile, NUtils.getGameUI().getStockpile(), Math.min(ingredient.count, NUtils.getGameUI().getInventory().getNumberFreeCoord(ingredient.coord)))).run(gui);
+                        new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);
+                        ingredient.count = ingredient.count - tifp.getResult();
+                        continue;
                     }
-                    piles.sort(NUtils.d_comp);
-                    if (piles.isEmpty())
+                    
+                    // Try containers (chests, cupboards, etc.)
+                    boolean foundInContainer = false;
+                    ArrayList<Gob> containerGobs = Finder.findGobs(ingredientArea, new NAlias(new ArrayList<>(NContext.contcaps.keySet()), new ArrayList<>()));
+                    containerGobs.sort(NUtils.d_comp);
+                    for (Gob contGob : containerGobs) {
+                        if (ingredient.count <= 0) break;
+                        String cap = NContext.contcaps.get(contGob.ngob.name);
+                        if (cap == null) continue;
+                        new PathFinder(contGob).run(NUtils.getGameUI());
+                        new OpenTargetContainer(cap, contGob).run(NUtils.getGameUI());
+                        Container cont = new Container(contGob, cap, ingredient.nArea);
+                        TakeAvailableItemsFromContainer tifc = new TakeAvailableItemsFromContainer(cont, ingredient.name, ingredient.count);
+                        tifc.run(gui);
+                        int taken = tifc.getCount();
+                        ingredient.count -= taken;
+                        Window wnd = NUtils.getGameUI().getWindow(cap);
+                        if (wnd != null) new CloseTargetWindow(wnd).run(gui);
+                        if (taken > 0) foundInContainer = true;
+                    }
+                    
+                    if (!foundInContainer) {
+                        if (NUtils.getGameUI().getInventory().getItems(ingredient.name).size() > 0)
+                            break;
                         return false;
-                    Gob pile = piles.get(0);
-                    new PathFinder(pile).run(NUtils.getGameUI());
-                    new OpenTargetContainer("Stockpile", pile).run(NUtils.getGameUI());
-                    TakeItemsFromPile tifp;
-                    (tifp = new TakeItemsFromPile(pile, NUtils.getGameUI().getStockpile(), Math.min(ingredient.count, NUtils.getGameUI().getInventory().getNumberFreeCoord(ingredient.coord)))).run(gui);
-                    new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);
-                    ingredient.count = ingredient.count - tifp.getResult();
+                    }
                 }
             }
         }

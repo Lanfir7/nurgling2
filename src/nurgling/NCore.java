@@ -362,9 +362,7 @@ public class NCore extends Widget
 
     public void addTask(final NTask task) throws InterruptedException
     {
-        // Check if thread was interrupted BEFORE waiting
         if (Thread.currentThread().isInterrupted()) {
-            System.out.println("=== addTask: Thread already interrupted! Throwing... ===");
             throw new InterruptedException("Thread was interrupted before addTask");
         }
         
@@ -399,6 +397,7 @@ public class NCore extends Widget
             throw new InterruptedException("Task critical exit");
         }
     }
+
 
     @Override
     public void dispose() {

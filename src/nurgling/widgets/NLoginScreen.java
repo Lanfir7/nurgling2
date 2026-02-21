@@ -279,11 +279,6 @@ public class NLoginScreen extends LoginScreen
             }
         }
 
-        // Reset auto-login retry state when any login attempt is made
-        if ("login".equals(msg) && NConfig.isBotMod()) {
-            resetAutoLoginState();
-        }
-
         super.wdgmsg(sender, msg, args);
     }
 

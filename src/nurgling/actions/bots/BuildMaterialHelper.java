@@ -228,5 +228,44 @@ public class BuildMaterialHelper {
             "Please, select area for finer plant fibre"
         );
     }
+
+    /**
+     * Get rope ingredient (auto-zone or user selection)
+     */
+    public Build.Ingredient getRope(int count) throws InterruptedException {
+        return getIngredient(
+            new Coord(1, 2),
+            new NAlias("Rope"),
+            count,
+            "baubles/rope",
+            "Please, select area for rope"
+        );
+    }
+
+    /**
+     * Get bone glue ingredient (auto-zone or user selection)
+     */
+    public Build.Ingredient getBoneGlue(int count) throws InterruptedException {
+        return getIngredient(
+            new Coord(1, 1),
+            new NAlias("Bone Glue"),
+            count,
+            "baubles/glue",
+            "Please, select area for bone glue"
+        );
+    }
+
+    /**
+     * Get leather ingredient (auto-zone or user selection)
+     */
+    public Build.Ingredient getLeather(int count) throws InterruptedException {
+        return getIngredient(
+            new Coord(1, 1),
+            new NAlias("Leather"),
+            count,
+            "baubles/leather",
+            "Please, select area for leather"
+        );
+    }
 }
 

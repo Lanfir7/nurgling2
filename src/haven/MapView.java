@@ -1717,6 +1717,10 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	if((olftimer != 0) && (olftimer < Utils.rtime()))
 	    unflashol();
 	try {
+	    glob.map.reqarea(cc.floor(tilesz).sub(MCache.cutsz.mul(view + 1)),
+			     cc.floor(tilesz).add(MCache.cutsz.mul(view + 1)));
+	} catch(Loading e) {}
+	try {
 	    if(camload != null)
 		throw(new Loading(camload));
 	    undelay(delayed, g);
@@ -1724,8 +1728,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    undelay(delayed2, g);
 	    poldraw(g);
 	    partydraw(g);
-	    glob.map.reqarea(cc.floor(tilesz).sub(MCache.cutsz.mul(view + 1)),
-			     cc.floor(tilesz).add(MCache.cutsz.mul(view + 1)));
 	} catch(Loading e) {
 	    e.boostprio(6);
 	    lastload = e;

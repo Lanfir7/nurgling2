@@ -35,7 +35,10 @@ public class ConstructionMaterialsRegistry {
         BRANCH("Branch"),
         BOUGH("Bough"),
         LOG("Log"),
-        FIBRE("Fibre");       // Plant Fibre, Finer Plant Fibre, etc.
+        FIBRE("Fibre"),       // Plant Fibre, Finer Plant Fibre, etc.
+        ROPE("Rope"),
+        BONE_GLUE("Bone Glue"),
+        LEATHER("Leather");
 
         private final String subtype;
 
@@ -100,6 +103,15 @@ public class ConstructionMaterialsRegistry {
         MATERIAL_ALIASES.put(MaterialType.FIBRE, new NAlias(
             "Finer Plant Fibre", "Plant Fibre", "Prepared Tree Bast"
         ));
+        
+        // Rope
+        MATERIAL_ALIASES.put(MaterialType.ROPE, new NAlias("Rope"));
+        
+        // Bone Glue
+        MATERIAL_ALIASES.put(MaterialType.BONE_GLUE, new NAlias("Bone Glue"));
+        
+        // Leather
+        MATERIAL_ALIASES.put(MaterialType.LEATHER, new NAlias("Leather"));
     }
 
     /**

@@ -991,6 +991,8 @@ public class NMapView extends MapView
 
     boolean botsInit = false;
     private static final long BOT_DELAY_MS = 15 * 1000;
+    private static final long MAP_LOAD_TIMEOUT_MS = 90 * 1000;
+    private static final int MAP_LOAD_MAX_RETRIES = 3;
 
     @Override
     public void tick(double dt)
@@ -1002,7 +1004,6 @@ public class NMapView extends MapView
             try {
                 chunkNavManager.tick();
             } catch (Exception e) {
-                // Ignore - system may not be fully initialized
             }
         }
         
@@ -1013,61 +1014,31 @@ public class NMapView extends MapView
                 area.tick(dt);
             }
         }
-        // Update marker line overlay (follows player)
         if(markerLineOverlay != null) {
             markerLineOverlay.tick();
         }
-        ArrayList<Long> forRemove = new ArrayList<>();
-//        for(Gob dummy : dummys.values())
-//        {
-//            if(NUtils.findGob(dummy.id)==null)
-//            {
-//                forRemove.add(dummy.id);
-//                for (NArea area : glob.map.areas.values())
-//                {
-//                    if(area.gid == dummy.id)
-//                        createAreaLabel(area.id);
-//                }
-//
-//            }
-//        }
-//        for(Long id : forRemove)
-//            dummys.remove(id);
         super.tick(dt);
 
         if(NConfig.botmod != null && !botsInit) {
-            System.out.println("[NMapView] botmod check: scenarioId=" + NConfig.botmod.scenarioId + ", gui=" + (NUtils.getGameUI() != null));
             Scenario scenario = NUtils.getUI().core.scenarioManager.getScenarios().getOrDefault(NConfig.botmod.scenarioId, null);
-            System.out.println("[NMapView] Scenario lookup: " + (scenario != null ? scenario.getName() : "null") + ", available scenarios: " + NUtils.getUI().core.scenarioManager.getScenarios().keySet());
-            if (scenario != null || !(NUtils.getGameUI() == null)) {
-                System.out.println("[NMapView] Starting bot thread, scenario=" + (scenario != null));
+            if (scenario != null || NUtils.getGameUI() != null) {
                 botsInit = true;
-                Thread t;
-                t = new Thread(() -> {
+                Thread t = new Thread(() -> {
                     try {
                         System.out.println("[NMapView] Bot thread started, waiting " + BOT_DELAY_MS + "ms...");
                         Thread.sleep(BOT_DELAY_MS);
-                        System.out.println("[NMapView] Wait complete, starting bot initialization...");
                         NConfig.botmod = null;
-                        // In headless mode, use grid-only wait (no mesh/fog rendering checks)
-                        if (Headless.isHeadless()) {
-                            System.out.println("[NMapView] Headless mode - waiting for map grid data only...");
-                            NUtils.getUI().core.addTask(new WaitForMapGridLoad(NUtils.getGameUI()));
-                            System.out.println("[NMapView] Map grid data loaded");
-                        } else {
-                            System.out.println("[NMapView] Adding WaitForMapLoadNoCoord task...");
-                            NUtils.getUI().core.addTask(new WaitForMapLoadNoCoord(NUtils.getGameUI()));
-                            System.out.println("[NMapView] WaitForMapLoadNoCoord completed");
-                        }
 
-                        // Switch to System chat for autorunner
-                        System.out.println("[NMapView] Looking for system chat...");
+                        if (!waitForMapWithTimeout()) {
+                            System.err.println("[NMapView] Map failed to load after all retries. Exiting.");
+                            System.exit(1);
+                            return;
+                        }
+                        System.out.println("[NMapView] Map loaded successfully");
+
                         ChatUI.Channel systemChat = NUtils.getGameUI().chat.findSystemChat();
                         if (systemChat != null) {
                             NUtils.getGameUI().chat.select(systemChat, false);
-                            System.out.println("[NMapView] System chat selected");
-                        } else {
-                            System.out.println("[NMapView] No system chat found");
                         }
 
                         if (scenario == null) {
@@ -1091,6 +1062,73 @@ public class NMapView extends MapView
                 NUtils.getGameUI().biw.addObserve(t);
                 t.start();
             }
+        }
+    }
+
+    private boolean waitForMapWithTimeout() throws InterruptedException {
+        for (int attempt = 1; attempt <= MAP_LOAD_MAX_RETRIES; attempt++) {
+            System.out.println("[NMapView] Map load attempt " + attempt + "/" + MAP_LOAD_MAX_RETRIES);
+            long deadline = System.currentTimeMillis() + MAP_LOAD_TIMEOUT_MS;
+
+            NGameUI gui = NUtils.getGameUI();
+            if (gui == null) {
+                System.err.println("[NMapView] GameUI is null, cannot wait for map");
+                return false;
+            }
+
+            while (System.currentTimeMillis() < deadline) {
+                if (isMapReady(gui)) {
+                    return true;
+                }
+                Thread.sleep(500);
+            }
+
+            System.err.println("[NMapView] Map load timeout on attempt " + attempt);
+            if (attempt < MAP_LOAD_MAX_RETRIES) {
+                System.out.println("[NMapView] Retrying in 5 seconds...");
+                Thread.sleep(5000);
+            }
+        }
+        return false;
+    }
+
+    private boolean isMapReady(NGameUI gui) {
+        try {
+            if (NUtils.player() == null || NUtils.player().rc == null)
+                return false;
+
+            haven.Coord2d rc = NUtils.player().rc;
+            haven.Coord tc = rc.div(haven.MCache.tilesz).floor();
+
+            if (Headless.isHeadless()) {
+                haven.Coord gc = tc.div(gui.ui.sess.glob.map.cmaps);
+                try {
+                    gui.ui.sess.glob.map.getgrid(gc);
+                    return true;
+                } catch (haven.MCache.LoadingMap e) {
+                    return false;
+                }
+            }
+
+            haven.Coord gc = tc.div(gui.ui.sess.glob.map.cmaps);
+            if (gui.ui.sess.glob.map.grids.get(gc) == null)
+                return false;
+
+            haven.MCache.Grid currentGrid = gui.ui.sess.glob.map.getgridt(tc);
+            long currentGridId = currentGrid.id;
+
+            for (haven.MCache.Grid grid : gui.map.glob.map.grids.values()) {
+                if (grid.id == currentGridId) {
+                    for (haven.MCache.Grid.Cut cut : grid.cuts) {
+                        if (!cut.mesh.isReady() || !cut.fo.isReady())
+                            return false;
+                    }
+                    return true;
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 

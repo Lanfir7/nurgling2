@@ -361,11 +361,19 @@ public class TunnelingBot implements Action {
         return 100; // Default for minesupport, ladder, towercap
     }
 
+    private boolean hasSupportAt(Coord2d pos) throws InterruptedException {
+        ArrayList<Gob> supports = Finder.findGobs(ALL_SUPPORTS);
+        for (Gob s : supports) {
+            if (s.rc.dist(pos) < 15) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Results placeSupport(NGameUI gui, Coord2d pos, SupportType supportType)
             throws InterruptedException {
-        // Check if there's already a support at this location
-        Gob existingSupport = Finder.findGob(pos);
-        if (existingSupport != null && NParser.isIt(existingSupport, ALL_SUPPORTS)) {
+        if (hasSupportAt(pos)) {
             gui.msg("Support already exists at this location, skipping placement");
             return Results.SUCCESS();
         }
@@ -494,14 +502,8 @@ public class TunnelingBot implements Action {
                         gui.msg("Warning: Low energy while chipping stones");
                         return;
                     case TIMEFORPILE:
-                        // Drop stones from hand and inventory
-                        if (gui.vhand != null) {
-                            NUtils.drop(gui.vhand);
-                        }
-                        for (WItem item : gui.getInventory().getItems(Chipper.stones)) {
-                            NUtils.drop(item);
-                        }
-                        break;
+                        gui.msg("Inventory full, stopping stone chipping");
+                        return;
                 }
 
                 // Re-check if bumling still exists
