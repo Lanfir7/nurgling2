@@ -1020,8 +1020,11 @@ public class NMapView extends MapView
         super.tick(dt);
 
         if(NConfig.botmod != null && !botsInit) {
+            NGameUI gui = NUtils.getGameUI();
+            if (gui == null || gui.biw == null)
+                return;
             Scenario scenario = NUtils.getUI().core.scenarioManager.getScenarios().getOrDefault(NConfig.botmod.scenarioId, null);
-            if (scenario != null || NUtils.getGameUI() != null) {
+            if (scenario != null || gui != null) {
                 botsInit = true;
                 Thread t = new Thread(() -> {
                     try {
@@ -1059,7 +1062,7 @@ public class NMapView extends MapView
                         e.printStackTrace();
                     }
                 });
-                NUtils.getGameUI().biw.addObserve(t);
+                gui.biw.addObserve(t);
                 t.start();
             }
         }
