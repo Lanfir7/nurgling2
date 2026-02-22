@@ -185,6 +185,7 @@ public class NConfig
         progressOverlay,
         volumeOverlay,
         masterminerprop,
+        tunnelingprop,
         masterminermarkingconfig,
         equipProxySlots,
         diabloLikeRun,
@@ -991,6 +992,9 @@ public class NConfig
                                 break;
                             case "NMasterMinerProp":
                                 res.add(new NMasterMinerProp(obj));
+                                break;
+                            case "NTunnelingProp":
+                                res.add(new NTunnelingProp(obj));
                                 break;
                             case "NMasterMinerMarkingConfig":
                                 res.add(new NMasterMinerMarkingConfig(obj));

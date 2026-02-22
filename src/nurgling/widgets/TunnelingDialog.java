@@ -1,6 +1,8 @@
 package nurgling.widgets;
 
 import haven.*;
+import nurgling.NUtils;
+import nurgling.conf.NTunnelingProp;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -96,27 +98,16 @@ public class TunnelingDialog extends Window {
         }
     }
 
-    // Session-persistent selections (static to survive dialog close/reopen)
-    private static Direction savedDirection = Direction.NORTH;
-    private static TunnelSide savedTunnelSide = TunnelSide.WEST;
-    private static TunnelSide savedWingSide = TunnelSide.NORTH;
-    private static SupportType savedSupportType = SupportType.MINE_SUPPORT;
-    private static boolean savedWingNorth = false;
-    private static boolean savedWingSouth = false;
-    private static boolean savedWingEast = false;
-    private static boolean savedWingWest = false;
-    private static boolean savedDoubleTunnel = false;
-
-    // Current selections (initialized from saved values)
-    private Direction selectedDirection = savedDirection;
-    private TunnelSide selectedTunnelSide = savedTunnelSide;
-    private TunnelSide selectedWingSide = savedWingSide;
-    private SupportType selectedSupportType = savedSupportType;
-    private boolean wingNorth = savedWingNorth;
-    private boolean wingSouth = savedWingSouth;
-    private boolean wingEast = savedWingEast;
-    private boolean wingWest = savedWingWest;
-    private boolean doubleTunnel = savedDoubleTunnel;
+    // Current selections (loaded from persistent config)
+    private Direction selectedDirection;
+    private TunnelSide selectedTunnelSide;
+    private TunnelSide selectedWingSide;
+    private SupportType selectedSupportType;
+    private boolean wingNorth;
+    private boolean wingSouth;
+    private boolean wingEast;
+    private boolean wingWest;
+    private boolean doubleTunnel;
 
     // Reference arrays for communication with bot
     private int[] directionRef = null;
@@ -201,7 +192,33 @@ public class TunnelingDialog extends Window {
 
     public TunnelingDialog() {
         super(new Coord(560, 620), "Tunneling Bot");
+        loadFromProp();
         initializeWidgets();
+    }
+
+    private void loadFromProp() {
+        NTunnelingProp prop = NTunnelingProp.get(NUtils.getUI().sessInfo);
+        if (prop != null) {
+            selectedDirection = getDirection(prop.direction);
+            selectedSupportType = getSupportType(prop.supportType);
+            selectedTunnelSide = getTunnelSide(prop.direction, prop.tunnelSide);
+            selectedWingSide = getWingSide(prop.direction, prop.wingSide);
+            wingNorth = prop.wingNorth;
+            wingSouth = prop.wingSouth;
+            wingEast = prop.wingEast;
+            wingWest = prop.wingWest;
+            doubleTunnel = prop.doubleTunnel;
+        } else {
+            selectedDirection = Direction.NORTH;
+            selectedTunnelSide = TunnelSide.WEST;
+            selectedWingSide = TunnelSide.NORTH;
+            selectedSupportType = SupportType.MINE_SUPPORT;
+            wingNorth = false;
+            wingSouth = false;
+            wingEast = false;
+            wingWest = false;
+            doubleTunnel = false;
+        }
     }
 
     private void initializeWidgets() {
@@ -1031,17 +1048,31 @@ public class TunnelingDialog extends Window {
         this.doubleTunnelRef = doubleTunnelRef;
     }
 
+    private void saveToProp() {
+        NTunnelingProp prop = NTunnelingProp.get(NUtils.getUI().sessInfo);
+        if (prop == null) return;
+        prop.direction = selectedDirection.ordinal();
+        prop.supportType = selectedSupportType.ordinal();
+
+        TunnelSide[] tSides = selectedDirection.isVertical() ? VERTICAL_TUNNEL_SIDES : HORIZONTAL_TUNNEL_SIDES;
+        for (int i = 0; i < tSides.length; i++) {
+            if (tSides[i] == selectedTunnelSide) { prop.tunnelSide = i; break; }
+        }
+        TunnelSide[] wSides = selectedDirection.isVertical() ? VERTICAL_WING_SIDES : HORIZONTAL_WING_SIDES;
+        for (int i = 0; i < wSides.length; i++) {
+            if (wSides[i] == selectedWingSide) { prop.wingSide = i; break; }
+        }
+        prop.wingOption = calculateWingOptionIndex();
+        prop.doubleTunnel = doubleTunnel;
+        prop.wingNorth = wingNorth;
+        prop.wingSouth = wingSouth;
+        prop.wingEast = wingEast;
+        prop.wingWest = wingWest;
+        NTunnelingProp.set(prop);
+    }
+
     private void confirm() {
-        // Save selections for session persistence
-        savedDirection = selectedDirection;
-        savedTunnelSide = selectedTunnelSide;
-        savedWingSide = selectedWingSide;
-        savedSupportType = selectedSupportType;
-        savedWingNorth = wingNorth;
-        savedWingSouth = wingSouth;
-        savedWingEast = wingEast;
-        savedWingWest = wingWest;
-        savedDoubleTunnel = doubleTunnel;
+        saveToProp();
 
         if (directionRef != null) {
             directionRef[0] = selectedDirection.ordinal();

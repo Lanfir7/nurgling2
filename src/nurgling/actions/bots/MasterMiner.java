@@ -201,8 +201,11 @@ public class MasterMiner extends ActionWithFinal {
                     String vhandName = vhandNGItem.name();
                     if (vhandName != null && !isGemstone(vhandNGItem) && !isGemstone(vhandName) &&
                         (NParser.checkName(vhandName, MINED_ITEMS) || NParser.checkName(vhandName, ORE_ITEMS))) {
-                        haven.GItem.Amount vhAm = vhandNGItem.getInfo(haven.GItem.Amount.class);
-                        totalStones += (vhAm != null && vhAm.itemnum() > 0) ? vhAm.itemnum() : 1;
+                        String vhandStoneType = classifyStoneType(vhandName);
+                        if (!"Shell".equals(vhandStoneType) && !"Cat Gold".equals(vhandStoneType)) {
+                            haven.GItem.Amount vhAm = vhandNGItem.getInfo(haven.GItem.Amount.class);
+                            totalStones += (vhAm != null && vhAm.itemnum() > 0) ? vhAm.itemnum() : 1;
+                        }
                     }
                 }
                 int keepStones = wnd.getKeepStonesForSupport();
@@ -484,6 +487,8 @@ public class MasterMiner extends ActionWithFinal {
             if (name == null) continue;
             if (isGemstone(ng) || isGemstone(name)) continue;
             if (!NParser.checkName(name, MINED_ITEMS) && !NParser.checkName(name, ORE_ITEMS)) continue;
+            String stoneType = classifyStoneType(name);
+            if ("Shell".equals(stoneType) || "Cat Gold".equals(stoneType)) continue;
             haven.GItem.Amount amount = ng.getInfo(haven.GItem.Amount.class);
             total += (amount != null && amount.itemnum() > 0) ? amount.itemnum() : 1;
         }
