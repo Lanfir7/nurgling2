@@ -961,6 +961,10 @@ public class NContext {
         return Finder.findGobs(areas.get(areaId), pattern);
     }
 
+    public ArrayList<Gob> getGobsLocal(String areaId, NAlias pattern) throws InterruptedException {
+        return Finder.findGobs(areas.get(areaId), pattern);
+    }
+
     public Gob getGob(String areaId, NAlias pattern) throws InterruptedException {
         navigateToAreaIfNeeded(areaId);
         return Finder.findGob(areas.get(areaId), pattern);
@@ -968,6 +972,10 @@ public class NContext {
 
     public Gob getGob(String areaId, long id) throws InterruptedException {
         navigateToAreaIfNeeded(areaId);
+        return Finder.findGob(id);
+    }
+
+    public Gob getGobLocal(String areaId, long id) {
         return Finder.findGob(id);
     }
 
@@ -1170,6 +1178,10 @@ public class NContext {
     public Coord2d getLastPosCoord(String areaId) throws InterruptedException {
         navigateToAreaIfNeeded(areaId);
 
+        return lastcoord.getCurrentCoord();
+    }
+
+    public Coord2d getLastPosCoordLocal() {
         return lastcoord.getCurrentCoord();
     }
 

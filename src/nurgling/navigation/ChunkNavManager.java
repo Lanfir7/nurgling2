@@ -179,15 +179,11 @@ public class ChunkNavManager {
             restoreInstanceIdFromPlayerChunk();
         }
 
-        boolean recordingEnabled = (Boolean) NConfig.get(NConfig.Key.chunkNavOverlay);
-
-        if (recordingEnabled) {
-            portalTracker.tick();
-            saveThrottled();
-        }
+        portalTracker.tick();
+        saveThrottled();
 
         long now = System.currentTimeMillis();
-        if (recordingEnabled && now - lastRecordTime >= RECORD_THROTTLE_MS) {
+        if (now - lastRecordTime >= RECORD_THROTTLE_MS) {
             lastRecordTime = now;
             recordVisibleGrids();
         }

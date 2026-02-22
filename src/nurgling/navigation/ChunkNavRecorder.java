@@ -174,6 +174,17 @@ public class ChunkNavRecorder {
                 }
             }
         }
+
+        // Force-update cells blocked by gobs even outside visibility radius.
+        // Gob data from glob.oc is always current, so this is safe.
+        for (Long cellKey : gobBlockedCells) {
+            int cx = (int)(cellKey >> 32);
+            int cy = (int)(cellKey & 0xFFFFFFFFL);
+            if (cx >= 0 && cx < CELLS_PER_EDGE && cy >= 0 && cy < CELLS_PER_EDGE) {
+                chunk.walkability[cx][cy] = 2;
+                chunk.setObserved(cx, cy, true);
+            }
+        }
     }
 
     /**
@@ -419,6 +430,17 @@ public class ChunkNavRecorder {
                 } else {
                     chunk.walkability[cx][cy] = 0;  // Walkable
                 }
+            }
+        }
+
+        // Force-update cells blocked by gobs even outside visibility radius.
+        // Gob data from glob.oc is always current, so this is safe.
+        for (Long cellKey : gobBlockedCells) {
+            int cx = (int)(cellKey >> 32);
+            int cy = (int)(cellKey & 0xFFFFFFFFL);
+            if (cx >= 0 && cx < CELLS_PER_EDGE && cy >= 0 && cy < CELLS_PER_EDGE) {
+                chunk.walkability[cx][cy] = 2;
+                chunk.setObserved(cx, cy, true);
             }
         }
     }

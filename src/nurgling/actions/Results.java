@@ -30,6 +30,16 @@ public class Results {
         return res;
     }
 
+    public boolean isCycle = false;
+
+    public static Results CYCLE()
+    {
+        Results res = new Results(null);
+        res.isSuccess = true;
+        res.isCycle = true;
+        return res;
+    }
+
     public boolean IsSuccess()
     {
         return isSuccess;

@@ -61,8 +61,9 @@ public class Chopper implements Action {
             pattern.keys.add("gfx/terobjs/bushes");
         }
         pattern.buildCaches(); // Rebuild caches after modifying keys/exceptions
+        context.navigateToAreaIfNeeded(treeArea);
         ArrayList<Gob> trees;
-        while (!(trees = context.getGobs(treeArea,pattern)).isEmpty()) {
+        while (!(trees = context.getGobsLocal(treeArea,pattern)).isEmpty()) {
             trees.sort(NUtils.y_min_comp);
 
             if(prop.ngrowth)
@@ -94,7 +95,7 @@ public class Chopper implements Action {
 
             moveToSideCell(gui, tree, approachMode, prop.approachDirection);
 
-            while (tree!=null && context.getGob(treeArea, treeId) != null) {
+            while (tree!=null && context.getGobLocal(treeArea, treeId) != null) {
                 boolean chopped = false;
                 if (NParser.isIt(tree, new NAlias("stump"))) {
                     if(!new Equip(new NAlias(prop.shovel)).run(gui).IsSuccess())
@@ -137,7 +138,7 @@ public class Chopper implements Action {
                         if (!new RestoreResources().run(gui).IsSuccess()) {
                             return Results.ERROR("No Drink or Eat");
                         }
-                        tree = context.getGob(treeArea, treeId);
+                        tree = context.getGobLocal(treeArea, treeId);
 
                         break;
                     }
@@ -147,15 +148,11 @@ public class Chopper implements Action {
                         return Results.ERROR("Scrapes & Cuts wound damage too high! Stopping for safety.");
 
                 }
-                if(chopped && context.getGob(treeArea, treeId) == null) {
+                if(chopped && context.getGobLocal(treeArea, treeId) == null) {
                     NUtils.addTask(new NTask() {
                         @Override
                         public boolean check() {
-                            try {
-                                return Finder.findGob(context.getLastPosCoord(treeArea))!=null;
-                            } catch (InterruptedException e) {
-                                return true;
-                            }
+                            return Finder.findGob(context.getLastPosCoordLocal())!=null;
                         }
                     });
                 }

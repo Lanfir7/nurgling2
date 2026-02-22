@@ -60,6 +60,17 @@ public class BotRegistry {
                 false
         ));
         bots.add(new BotDescriptor(
+                "cycle_bot",
+                BotDescriptor.BotType.UTILS,
+                "Cycle",
+                "Restarts the current scenario from the beginning",
+                true,
+                false,
+                CycleBot.class,
+                "cycle",
+                false
+        ));
+        bots.add(new BotDescriptor(
                 "autocraft_bot",
                 BotDescriptor.BotType.UTILS,
                 "Autocraft",

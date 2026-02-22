@@ -15,19 +15,28 @@ public class ScenarioRunner implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-        for (BotStep step : scenario.getSteps()) {
-            BotDescriptor desc = BotRegistry.byId(step.getId());
-            Action bot = (desc != null) ? desc.instantiate(step.getSettings()) : null;
-            if (bot == null) {
-                gui.msg("ScenarioRunner: Unknown bot key: " + step.getId());
-                return Results.FAIL();
+        while (true) {
+            boolean restart = false;
+            for (BotStep step : scenario.getSteps()) {
+                BotDescriptor desc = BotRegistry.byId(step.getId());
+                Action bot = (desc != null) ? desc.instantiate(step.getSettings()) : null;
+                if (bot == null) {
+                    gui.msg("ScenarioRunner: Unknown bot key: " + step.getId());
+                    return Results.FAIL();
+                }
+                Results result = bot.run(gui);
+                if (result.isCycle) {
+                    restart = true;
+                    break;
+                }
+                if (!result.IsSuccess()) {
+                    gui.msg("ScenarioRunner: Bot failed: " + step.getId());
+                    return result;
+                }
             }
-            Results result = bot.run(gui);
-            if (!result.IsSuccess()) {
-                gui.msg("ScenarioRunner: Bot failed: " + step.getId());
-                return result;
+            if (!restart) {
+                return Results.SUCCESS();
             }
         }
-        return Results.SUCCESS();
     }
 }
