@@ -16,6 +16,7 @@ import java.awt.image.BufferedImage;
 
 import static haven.OCache.posres;
 import nurgling.tools.StackSupporter;
+import nurgling.tools.RecipeIngredientCache;
 
 
 public class Craft implements Action {
@@ -63,6 +64,10 @@ public class Craft implements Action {
      */
     boolean prefilled = false;
 
+    int subCraftDepth = 0;
+    private static final int MAX_SUB_CRAFT_DEPTH = 10;
+    private Set<String> subCraftedItems = new HashSet<>();
+
     private int getActualItemCount(WItem item) {
         if (item.item.info != null) {
             for (ItemInfo inf : item.item.info) {
@@ -80,12 +85,25 @@ public class Craft implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         if (mwnd != null) {
+            if (!RecipeIngredientCache.isDbLoaded()) {
+                RecipeIngredientCache.loadFromDatabase();
+            }
             return mwnd_run(gui);
         }
         return Results.SUCCESS();
     }
 
     private Results mwnd_run(NGameUI gui) throws InterruptedException {
+        // Phase 0: Collect all Local Zone selections upfront before any crafting
+        if (mwnd.autoMode && subCraftDepth == 0) {
+            resolveLocalZones(gui);
+        }
+
+        // Phase 1: Resolve missing ingredients via sub-crafts
+        if (mwnd.autoMode && subCraftDepth < MAX_SUB_CRAFT_DEPTH) {
+            resolveSubCrafts(gui);
+        }
+
         NContext ncontext = new NContext(gui);
         int size = 0;
         for (NMakewindow.Spec s : mwnd.inputs) {
@@ -97,7 +115,7 @@ public class Craft implements Action {
             // Determine the item name: if useCategory is set, use category name; otherwise use specific item
             String itemName;
             BufferedImage itemImg;
-            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+            if (s.useCategory && s.categories && s.name != null && VSpec.categories.containsKey(s.name)) {
                 // useCategory checkbox is set - use category name
                 itemName = s.name;
                 // Используем ванильную иконку для категории
@@ -128,10 +146,21 @@ public class Craft implements Action {
                     continue; // Не удалось выбрать ингредиент
                 }
             }
-            
-            ncontext.addInItem(itemName, itemImg);
+
+            // Skip zone lookup for sub-crafted items (already in inventory)
+            if (subCraftedItems.contains(itemName)) {
+                continue;
+            }
+
+            if (s.selectedZone != null) {
+                ncontext.addInItemWithArea(itemName, s.selectedZone);
+            } else if (s.isLocalZone) {
+                ncontext.addInItem(itemName, itemImg);
+            } else {
+                ncontext.addInItem(itemName, itemImg);
+            }
             // Доски и блоки обычно не хранятся в бочках, проверяем только если это не категория
-            if (!itemName.equals("Board") && !itemName.equals("Block of Wood")) {
+            if (!VSpec.categories.containsKey(itemName)) {
                 if (!ncontext.isInBarrel(itemName)) {
                     size += s.count;
                 }
@@ -143,8 +172,23 @@ public class Craft implements Action {
 
         for (NMakewindow.Spec s : mwnd.outputs) {
 
+            if (s.isInventory) {
+                // Leave in Inventory — skip output zone setup for this item
+                continue;
+            }
+
             if (!mwnd.noTransfer.a) {
-                if (!s.categories) {
+                String outName = s.ing != null ? s.ing.name : s.name;
+                if(s.selectedZone != null && outName != null) {
+                    if(!ncontext.isInBarrel(outName))
+                        size += s.count;
+                    ncontext.addOutItemWithArea(outName, s.selectedZone, 1);
+                } else if(s.isLocalZone && outName != null) {
+                    if(!ncontext.isInBarrel(outName))
+                        size += s.count;
+                    java.awt.image.BufferedImage outImg = s.spr != null ? ItemTex.create(ItemTex.save(s.spr)) : null;
+                    ncontext.addOutItem(outName, outImg, 1);
+                } else if (!s.categories) {
                     if(!ncontext.isInBarrel(s.name))
                         size += s.count;
                     ncontext.addOutItem(s.name, ItemTex.create(ItemTex.save(s.spr)), 1);
@@ -270,15 +314,20 @@ public class Craft implements Action {
 
             // Determine the item name: if useCategory is set, use category name; otherwise use specific item
             String item;
-            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+            if (s.useCategory && s.categories && s.name != null && VSpec.categories.containsKey(s.name)) {
                 // useCategory checkbox is set - use category name
                 item = s.name;
-            } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+            } else if (s.ing != null && VSpec.categories.containsKey(s.ing.name)) {
                 // Category selected - use category name
                 item = s.ing.name;
             } else {
                 // Specific item selected or no selection
                 item = s.ing == null ? s.name : s.ing.name;
+            }
+
+            // Sub-crafted items are already in inventory — skip zone fetch
+            if (subCraftedItems.contains(item)) {
+                continue;
             }
 
             if (ncontext.isInBarrel(item) && ncontext.getPlacedBarrelHash(item) == null) {
@@ -289,9 +338,30 @@ public class Craft implements Action {
                     new TransferBarrelToWorkstation(ncontext, item).run(gui);
                 }
             } else if (!prefilled) {
-                // В режиме prefilled ингредиенты уже в инвентаре, пропускаем TakeItems2
-                if (!new TakeItems2(ncontext, item, s.count * for_craft).run(gui).IsSuccess()) {
-                    return Results.ERROR("Failed to take items: " + item);
+                int needed = s.count * for_craft;
+                try {
+                    int have = 0;
+                    if (VSpec.categories.containsKey(item)) {
+                        ArrayList<org.json.JSONObject> members = VSpec.categories.get(item);
+                        if (members != null) {
+                            for (org.json.JSONObject m : members) {
+                                String mName = m.optString("name");
+                                if (mName != null) {
+                                    for (WItem wi : NUtils.getGameUI().getInventory().getItems(new NAlias(mName)))
+                                        have += getActualItemCount(wi);
+                                }
+                            }
+                        }
+                    } else {
+                        for (WItem wi : NUtils.getGameUI().getInventory().getItems(new NAlias(item)))
+                            have += getActualItemCount(wi);
+                    }
+                    needed -= have;
+                } catch (Exception ignored) {}
+                if (needed > 0) {
+                    if (!new TakeItems2(ncontext, item, needed).run(gui).IsSuccess()) {
+                        return Results.ERROR("Failed to take items: " + item);
+                    }
                 }
             }
         }
@@ -326,10 +396,10 @@ public class Craft implements Action {
             
             // Determine the item name: if useCategory is set, use category name; otherwise use specific item
             String item;
-            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+            if (s.useCategory && s.categories && s.name != null && VSpec.categories.containsKey(s.name)) {
                 // useCategory checkbox is set - use category name
                 item = s.name;
-            } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+            } else if (s.ing != null && VSpec.categories.containsKey(s.ing.name)) {
                 // Category selected - use category name
                 item = s.ing.name;
             } else {
@@ -369,10 +439,10 @@ public class Craft implements Action {
                 
                 // Determine the item name: if useCategory is set, use category name; otherwise use specific item
                 String item;
-                if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                if (s.useCategory && s.categories && s.name != null && VSpec.categories.containsKey(s.name)) {
                     // useCategory checkbox is set - use category name
                     item = s.name;
-                } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+                } else if (s.ing != null && VSpec.categories.containsKey(s.ing.name)) {
                     // Category selected - use category name
                     item = s.ing.name;
                 } else {
@@ -591,10 +661,10 @@ public class Craft implements Action {
                 
                 // Determine the item name: if useCategory is set, use category name; otherwise use specific item
                 String itemName;
-                if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+                if (s.useCategory && s.categories && s.name != null && VSpec.categories.containsKey(s.name)) {
                     // useCategory checkbox is set - use category name
                     itemName = s.name;
-                } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+                } else if (s.ing != null && VSpec.categories.containsKey(s.ing.name)) {
                     // Category selected - use category name
                     itemName = s.ing.name;
                 } else {
@@ -614,7 +684,7 @@ public class Craft implements Action {
                     int available = 0;
                     
                     // Если itemName является категорией, ищем все предметы из этой категории
-                    if("Board".equals(itemName) || "Block of Wood".equals(itemName)) {
+                    if(VSpec.categories.containsKey(itemName)) {
                         ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(itemName);
                         if(categoryItems != null) {
                             for(org.json.JSONObject categoryItem : categoryItems) {
@@ -704,10 +774,10 @@ public class Craft implements Action {
             
             // Determine the item name: if useCategory is set, use category name; otherwise use specific item
             String item;
-            if (s.useCategory && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
+            if (s.useCategory && s.categories && s.name != null && VSpec.categories.containsKey(s.name)) {
                 // useCategory checkbox is set - use category name
                 item = s.name;
-            } else if (s.ing != null && (s.ing.name.equals("Board") || s.ing.name.equals("Block of Wood"))) {
+            } else if (s.ing != null && VSpec.categories.containsKey(s.ing.name)) {
                 // Category selected - use category name
                 item = s.ing.name;
             } else {
@@ -770,6 +840,457 @@ public class Craft implements Action {
         }
 
         NUtils.getGameUI().msg("No available ingredients found for category: " + spec.name);
+    }
+
+    /**
+     * Pre-collect all [Local Zone] selections before crafting starts.
+     * Converts isLocalZone specs into selectedZone with user-picked temp areas.
+     */
+    private void resolveLocalZones(NGameUI gui) throws InterruptedException {
+        for (NMakewindow.Spec s : mwnd.inputs) {
+            if (!s.isLocalZone) continue;
+            if (s.ing != null && s.ing.isIgnored) continue;
+
+            String itemName = getEffectiveItemName(s);
+            if (itemName == null) continue;
+
+            gui.msg("Please select area for: " + itemName);
+            BufferedImage itemImg;
+            try {
+                itemImg = (s.spr != null) ? ItemTex.create(ItemTex.save(s.spr)) : null;
+            } catch (Exception e) {
+                itemImg = null;
+            }
+
+            SelectArea sa = (itemImg != null)
+                    ? new SelectArea(Resource.loadsimg("baubles/custom"), itemImg)
+                    : new SelectArea(Resource.loadsimg("baubles/custom"));
+            sa.run(gui);
+
+            NArea tempArea = new NArea("localIn_" + itemName);
+            tempArea.space = sa.result;
+            tempArea.lastLocalChange = System.currentTimeMillis();
+            tempArea.grids_id.clear();
+            tempArea.grids_id.addAll(tempArea.space.space.keySet());
+
+            s.selectedZone = tempArea;
+            s.isLocalZone = false;
+        }
+
+        for (NMakewindow.Spec s : mwnd.outputs) {
+            if (!s.isLocalZone) continue;
+
+            String outName = s.ing != null ? s.ing.name : s.name;
+            if (outName == null) continue;
+
+            gui.msg("Please select output area for: " + outName);
+            BufferedImage outImg;
+            try {
+                outImg = (s.spr != null) ? ItemTex.create(ItemTex.save(s.spr)) : null;
+            } catch (Exception e) {
+                outImg = null;
+            }
+
+            SelectArea sa = (outImg != null)
+                    ? new SelectArea(Resource.loadsimg("baubles/custom"), outImg)
+                    : new SelectArea(Resource.loadsimg("baubles/custom"));
+            sa.run(gui);
+
+            NArea tempArea = new NArea("localOut_" + outName);
+            tempArea.space = sa.result;
+            tempArea.lastLocalChange = System.currentTimeMillis();
+            tempArea.grids_id.clear();
+            tempArea.grids_id.addAll(tempArea.space.space.keySet());
+
+            s.selectedZone = tempArea;
+            s.isLocalZone = false;
+        }
+
+        // Pre-resolve inputs that have no zone at all (would trigger addInItem→createArea mid-craft)
+        for (NMakewindow.Spec s : mwnd.inputs) {
+            if (s.selectedZone != null || s.isLocalZone || s.isSubCraft) continue;
+            if (s.ing != null && s.ing.isIgnored) continue;
+
+            String itemName = getEffectiveItemName(s);
+            if (itemName == null) continue;
+
+            // Check if a zone can be found automatically
+            NArea found = NContext.findIn(itemName);
+            if (found == null) found = NContext.findInGlobal(itemName);
+            // For VSpec categories, also search by members
+            if (found == null && VSpec.categories.containsKey(itemName)) {
+                ArrayList<org.json.JSONObject> members = VSpec.categories.get(itemName);
+                if (members != null) {
+                    for (org.json.JSONObject m : members) {
+                        String mName = m.optString("name");
+                        if (mName != null) {
+                            found = NContext.findIn(mName);
+                            if (found == null) found = NContext.findInGlobal(mName);
+                            if (found != null) break;
+                        }
+                    }
+                }
+            }
+            if (found != null) continue;
+
+            gui.msg("Please select area for: " + itemName);
+            BufferedImage img;
+            try {
+                img = (s.spr != null) ? ItemTex.create(ItemTex.save(s.spr)) : null;
+            } catch (Exception e) {
+                img = null;
+            }
+            SelectArea sa2 = (img != null)
+                    ? new SelectArea(Resource.loadsimg("baubles/custom"), img)
+                    : new SelectArea(Resource.loadsimg("baubles/custom"));
+            sa2.run(gui);
+
+            NArea tempArea = new NArea("preIn_" + itemName);
+            tempArea.space = sa2.result;
+            tempArea.lastLocalChange = System.currentTimeMillis();
+            tempArea.grids_id.clear();
+            tempArea.grids_id.addAll(tempArea.space.space.keySet());
+
+            s.selectedZone = tempArea;
+        }
+
+        // Also resolve local zones for sub-ingredient selections
+        for (NMakewindow.Spec s : mwnd.inputs) {
+            if (s.subIngredientZones == null) continue;
+            for (Map.Entry<String, NArea> entry : s.subIngredientZones.entrySet()) {
+                if (entry.getValue() != null && "[Local Zone]".equals(entry.getValue().name)) {
+                    String subName = entry.getKey();
+                    gui.msg("Please select area for sub-ingredient: " + subName);
+                    SelectArea sa =
+                            new SelectArea(Resource.loadsimg("baubles/custom"));
+                    sa.run(gui);
+
+                    NArea tempArea = new NArea("localSub_" + subName);
+                    tempArea.space = sa.result;
+                    tempArea.lastLocalChange = System.currentTimeMillis();
+                    tempArea.grids_id.clear();
+                    tempArea.grids_id.addAll(tempArea.space.space.keySet());
+
+                    entry.setValue(tempArea);
+                }
+            }
+        }
+    }
+
+    /**
+     * Scans inputs for missing zones and attempts to sub-craft those ingredients.
+     * After sub-crafting, re-opens the main recipe so mwnd is valid again.
+     */
+    private void resolveSubCrafts(NGameUI gui) throws InterruptedException {
+        String mainRecipeResource = mwnd.recipeResource;
+        if (mainRecipeResource == null) return;
+
+        List<SubCraftRequest> requests = new ArrayList<>();
+
+        for (NMakewindow.Spec s : mwnd.inputs) {
+            if (s.ing != null && s.ing.isIgnored) continue;
+
+            String itemName = getEffectiveItemName(s);
+            if (itemName == null) continue;
+
+            if (subCraftDepth == 0) {
+                // Top-level: respect user's Auto UI selection
+                if (s.selectedZone != null || s.isLocalZone) continue;
+                if (!s.isSubCraft) continue;
+            } else {
+                // Sub-craft level: automatic detection
+                if (SubRecipeResolver.hasZone(itemName)) continue;
+                if (s.categories && s.ing == null) continue;
+            }
+
+            Set<RecipeIngredientCache.RecipeEntry> recipes = SubRecipeResolver.findRecipesFor(itemName);
+            if (recipes.isEmpty()) continue;
+
+            int totalNeeded = s.count * count;
+
+            int inInventory = 0;
+            try {
+                if (VSpec.categories.containsKey(itemName)) {
+                    ArrayList<org.json.JSONObject> members = VSpec.categories.get(itemName);
+                    if (members != null) {
+                        for (org.json.JSONObject m : members) {
+                            String mName = m.optString("name");
+                            if (mName != null) {
+                                for (WItem wi : NUtils.getGameUI().getInventory().getItems(new NAlias(mName)))
+                                    inInventory += getActualItemCount(wi);
+                            }
+                        }
+                    }
+                } else {
+                    for (WItem wi : NUtils.getGameUI().getInventory().getItems(new NAlias(itemName)))
+                        inInventory += getActualItemCount(wi);
+                }
+            } catch (Exception ignored) {}
+            totalNeeded -= inInventory;
+            if (totalNeeded <= 0) {
+                subCraftedItems.add(itemName);
+                continue;
+            }
+
+            requests.add(new SubCraftRequest(itemName, totalNeeded, recipes, s.subIngredientZones));
+        }
+
+        if (requests.isEmpty()) return;
+
+        for (SubCraftRequest req : requests) {
+            RecipeIngredientCache.RecipeEntry recipe;
+            if (req.recipes.size() == 1) {
+                recipe = req.recipes.iterator().next();
+            } else {
+                recipe = selectSubRecipeViaDialog(gui, req.itemName, req.recipes);
+                if (recipe == null) continue;
+            }
+
+            gui.msg("Sub-craft: " + recipe.recipeName + " (" + req.itemName + ") x" + req.count);
+            Results result = executeSubCraft(gui, recipe, req.count, req.subIngredientZones);
+            if (result.IsSuccess()) {
+                subCraftedItems.add(req.itemName);
+            } else {
+                gui.msg("Sub-craft failed: " + req.itemName + " - " + result.toString());
+            }
+        }
+
+        if (!subCraftedItems.isEmpty()) {
+            reopenMainRecipe(gui, mainRecipeResource);
+        }
+    }
+
+    private static class SubCraftRequest {
+        final String itemName;
+        int count;
+        final Set<RecipeIngredientCache.RecipeEntry> recipes;
+        final Map<String, NArea> subIngredientZones;
+
+        SubCraftRequest(String itemName, int count, Set<RecipeIngredientCache.RecipeEntry> recipes,
+                        Map<String, NArea> subIngredientZones) {
+            this.itemName = itemName;
+            this.count = count;
+            this.recipes = recipes;
+            this.subIngredientZones = subIngredientZones != null ? new HashMap<>(subIngredientZones) : new HashMap<>();
+        }
+    }
+
+    private String getEffectiveItemName(NMakewindow.Spec s) {
+        if (s.useCategory && s.categories && s.name != null &&
+                VSpec.categories.containsKey(s.name)) {
+            return s.name;
+        } else if (!s.categories) {
+            return s.name;
+        } else if (s.ing != null) {
+            return s.ing.name;
+        }
+        return s.name;
+    }
+
+    private Results executeSubCraft(NGameUI gui, RecipeIngredientCache.RecipeEntry recipe,
+                                     int quantity, Map<String, NArea> subIngredientZones) throws InterruptedException {
+        Indir<Resource> res = Resource.remote().load(recipe.paginaResource);
+        MenuGrid.Pagina pag = gui.menu.paginafor(res);
+        if (pag == null) {
+            return Results.ERROR("Sub-recipe not found in menu: " + recipe.paginaResource);
+        }
+
+        final NMakewindow oldMwnd = (gui.craftwnd != null) ? gui.craftwnd.makeWidget : null;
+        gui.menu.use(pag.button(), new MenuGrid.Interaction(), false);
+
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return gui.craftwnd != null && gui.craftwnd.makeWidget != null
+                        && gui.craftwnd.makeWidget != oldMwnd;
+            }
+        });
+
+        NMakewindow subMwnd = gui.craftwnd.makeWidget;
+        subMwnd.autoMode = true;
+        if (subMwnd.noTransfer != null) {
+            subMwnd.noTransfer.a = true;
+        }
+
+        final boolean isHeadless = nurgling.headless.Headless.isHeadless();
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                if (subMwnd.inputs == null || subMwnd.inputs.isEmpty()) return false;
+                for (NMakewindow.Spec spec : subMwnd.inputs) {
+                    if (spec.name == null) return false;
+                    if (!isHeadless && spec.spr == null) return false;
+                }
+                if (subMwnd.outputs == null || subMwnd.outputs.isEmpty()) return false;
+                for (NMakewindow.Spec spec : subMwnd.outputs) {
+                    if (spec.name == null) return false;
+                }
+                return true;
+            }
+        });
+
+        // Auto-enable useCategory for all category inputs in sub-crafts
+        // and apply zone selections from parent's sub-ingredient dropdowns
+        for (NMakewindow.Spec spec : subMwnd.inputs) {
+            if (spec.categories) {
+                spec.useCategory = true;
+            }
+            String specName = spec.name;
+            if (specName != null && subIngredientZones != null && subIngredientZones.containsKey(specName)) {
+                spec.selectedZone = subIngredientZones.get(specName);
+            }
+            // Also check category name for zone match
+            if (spec.categories && specName != null) {
+                for (Map.Entry<String, NArea> entry : subIngredientZones.entrySet()) {
+                    if (specName.equals(entry.getKey())) {
+                        spec.selectedZone = entry.getValue();
+                        break;
+                    }
+                }
+            }
+        }
+
+        Craft subCraft = new Craft(subMwnd, quantity);
+        subCraft.subCraftDepth = this.subCraftDepth + 1;
+        return subCraft.run(gui);
+    }
+
+    private static class SpecSettings {
+        NArea selectedZone;
+        boolean isSubCraft;
+        boolean isLocalZone;
+        boolean isInventory;
+        boolean useCategory;
+        Map<String, NArea> subIngredientZones;
+    }
+
+    private Map<String, SpecSettings> saveSpecSettings(List<NMakewindow.Spec> specs) {
+        Map<String, SpecSettings> map = new LinkedHashMap<>();
+        for (NMakewindow.Spec s : specs) {
+            if (s.name == null) continue;
+            SpecSettings ss = new SpecSettings();
+            ss.selectedZone = s.selectedZone;
+            ss.isSubCraft = s.isSubCraft;
+            ss.isLocalZone = s.isLocalZone;
+            ss.isInventory = s.isInventory;
+            ss.useCategory = s.useCategory;
+            ss.subIngredientZones = s.subIngredientZones != null
+                    ? new HashMap<>(s.subIngredientZones) : new HashMap<>();
+            map.put(s.name, ss);
+        }
+        return map;
+    }
+
+    private void restoreSpecSettings(List<NMakewindow.Spec> specs, Map<String, SpecSettings> saved) {
+        for (NMakewindow.Spec s : specs) {
+            if (s.name == null) continue;
+            SpecSettings ss = saved.get(s.name);
+            if (ss == null) continue;
+            s.selectedZone = ss.selectedZone;
+            s.isSubCraft = ss.isSubCraft;
+            s.isLocalZone = ss.isLocalZone;
+            s.isInventory = ss.isInventory;
+            s.useCategory = ss.useCategory;
+            s.subIngredientZones = ss.subIngredientZones;
+        }
+    }
+
+    private void reopenMainRecipe(NGameUI gui, String recipeResource) throws InterruptedException {
+        // Save settings from current mwnd before reopening
+        Map<String, SpecSettings> savedInputs = saveSpecSettings(mwnd.inputs);
+        Map<String, SpecSettings> savedOutputs = saveSpecSettings(mwnd.outputs);
+
+        Indir<Resource> res = Resource.remote().load(recipeResource);
+        MenuGrid.Pagina pag = gui.menu.paginafor(res);
+        if (pag == null) return;
+
+        final NMakewindow oldMwnd = (gui.craftwnd != null) ? gui.craftwnd.makeWidget : null;
+        gui.menu.use(pag.button(), new MenuGrid.Interaction(), false);
+
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return gui.craftwnd != null && gui.craftwnd.makeWidget != null
+                        && gui.craftwnd.makeWidget != oldMwnd;
+            }
+        });
+
+        mwnd = gui.craftwnd.makeWidget;
+        mwnd.autoMode = true;
+
+        final boolean isHeadless = nurgling.headless.Headless.isHeadless();
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                if (mwnd.inputs == null || mwnd.inputs.isEmpty()) return false;
+                for (NMakewindow.Spec spec : mwnd.inputs) {
+                    if (spec.name == null) return false;
+                    if (!isHeadless && spec.spr == null) return false;
+                }
+                if (mwnd.outputs == null || mwnd.outputs.isEmpty()) return false;
+                for (NMakewindow.Spec spec : mwnd.outputs) {
+                    if (spec.name == null) return false;
+                }
+                return true;
+            }
+        });
+
+        // Restore all settings to the new specs
+        restoreSpecSettings(mwnd.inputs, savedInputs);
+        restoreSpecSettings(mwnd.outputs, savedOutputs);
+    }
+
+    /**
+     * Shows a dialog for the user to select which recipe to use for sub-crafting.
+     * Blocks until the user makes a selection or cancels.
+     */
+    private RecipeIngredientCache.RecipeEntry selectSubRecipeViaDialog(
+            NGameUI gui, String itemName, Set<RecipeIngredientCache.RecipeEntry> recipes)
+            throws InterruptedException {
+        List<MenuGrid.Pagina> paginae = new ArrayList<>();
+        Map<String, RecipeIngredientCache.RecipeEntry> resourceToEntry = new HashMap<>();
+
+        for (RecipeIngredientCache.RecipeEntry entry : recipes) {
+            MenuGrid.Pagina pag = gui.menu.paginafor(Resource.remote().load(entry.paginaResource));
+            if (pag != null) {
+                paginae.add(pag);
+                try {
+                    resourceToEntry.put(pag.res().name, entry);
+                } catch (Loading e) {
+                    resourceToEntry.put(entry.paginaResource, entry);
+                }
+            }
+        }
+
+        if (paginae.isEmpty()) return null;
+        if (paginae.size() == 1) {
+            try {
+                return resourceToEntry.get(paginae.get(0).res().name);
+            } catch (Loading e) {
+                return recipes.iterator().next();
+            }
+        }
+
+        final RecipeIngredientCache.RecipeEntry[] selected = {null};
+        final boolean[] done = {false};
+
+        NUtils.getGameUI().add(new SubRecipeSelectWindow(itemName, paginae, pag -> {
+            try {
+                selected[0] = resourceToEntry.get(pag.res().name);
+            } catch (Loading e) {
+                // fallback
+            }
+            done[0] = true;
+        }, () -> done[0] = true), UI.scale(new Coord(200, 200)));
+
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return done[0];
+            }
+        });
+
+        return selected[0];
     }
 
     /**

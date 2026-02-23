@@ -103,6 +103,11 @@ public class CraftPreset {
         private String preferredIngredient;
         private boolean isOptional;
         private boolean isIgnored;
+        private int selectedZoneId = -1;
+        private boolean isSubCraft = false;
+        private boolean isLocalZone = false;
+        private boolean useCategory = false;
+        private String zoneName = null;
 
         public InputSpec() {}
 
@@ -114,6 +119,11 @@ public class CraftPreset {
             this.preferredIngredient = obj.optString("preferredIngredient", null);
             this.isOptional = obj.optBoolean("isOptional", false);
             this.isIgnored = obj.optBoolean("isIgnored", false);
+            this.selectedZoneId = obj.optInt("selectedZoneId", -1);
+            this.isSubCraft = obj.optBoolean("isSubCraft", false);
+            this.isLocalZone = obj.optBoolean("isLocalZone", false);
+            this.useCategory = obj.optBoolean("useCategory", false);
+            this.zoneName = obj.optString("zoneName", null);
         }
 
         public JSONObject toJson() {
@@ -127,6 +137,15 @@ public class CraftPreset {
             }
             obj.put("isOptional", isOptional);
             obj.put("isIgnored", isIgnored);
+            if (selectedZoneId > 0) {
+                obj.put("selectedZoneId", selectedZoneId);
+            }
+            obj.put("isSubCraft", isSubCraft);
+            obj.put("isLocalZone", isLocalZone);
+            obj.put("useCategory", useCategory);
+            if (zoneName != null) {
+                obj.put("zoneName", zoneName);
+            }
             return obj;
         }
 
@@ -151,6 +170,21 @@ public class CraftPreset {
 
         public boolean isIgnored() { return isIgnored; }
         public void setIgnored(boolean ignored) { isIgnored = ignored; }
+
+        public int getSelectedZoneId() { return selectedZoneId; }
+        public void setSelectedZoneId(int selectedZoneId) { this.selectedZoneId = selectedZoneId; }
+
+        public boolean isSubCraft() { return isSubCraft; }
+        public void setSubCraft(boolean subCraft) { isSubCraft = subCraft; }
+
+        public boolean isLocalZone() { return isLocalZone; }
+        public void setLocalZone(boolean localZone) { isLocalZone = localZone; }
+
+        public boolean isUseCategory() { return useCategory; }
+        public void setUseCategory(boolean useCategory) { this.useCategory = useCategory; }
+
+        public String getZoneName() { return zoneName; }
+        public void setZoneName(String zoneName) { this.zoneName = zoneName; }
     }
 
     /**
@@ -162,6 +196,10 @@ public class CraftPreset {
         private int count;
         private int width = 1;
         private int height = 1;
+        private int selectedZoneId = -1;
+        private boolean isInventory = false;
+        private boolean isLocalZone = false;
+        private String zoneName = null;
 
         public OutputSpec() {}
 
@@ -171,6 +209,10 @@ public class CraftPreset {
             this.count = obj.optInt("count", 1);
             this.width = obj.optInt("width", 1);
             this.height = obj.optInt("height", 1);
+            this.selectedZoneId = obj.optInt("selectedZoneId", -1);
+            this.isInventory = obj.optBoolean("isInventory", false);
+            this.isLocalZone = obj.optBoolean("isLocalZone", false);
+            this.zoneName = obj.optString("zoneName", null);
         }
 
         public JSONObject toJson() {
@@ -180,6 +222,14 @@ public class CraftPreset {
             obj.put("count", count);
             obj.put("width", width);
             obj.put("height", height);
+            if (selectedZoneId > 0) {
+                obj.put("selectedZoneId", selectedZoneId);
+            }
+            obj.put("isInventory", isInventory);
+            obj.put("isLocalZone", isLocalZone);
+            if (zoneName != null) {
+                obj.put("zoneName", zoneName);
+            }
             return obj;
         }
 
@@ -198,5 +248,17 @@ public class CraftPreset {
 
         public int getHeight() { return height; }
         public void setHeight(int height) { this.height = height; }
+
+        public int getSelectedZoneId() { return selectedZoneId; }
+        public void setSelectedZoneId(int selectedZoneId) { this.selectedZoneId = selectedZoneId; }
+
+        public boolean isInventory() { return isInventory; }
+        public void setInventory(boolean inventory) { isInventory = inventory; }
+
+        public boolean isLocalZone() { return isLocalZone; }
+        public void setLocalZone(boolean localZone) { isLocalZone = localZone; }
+
+        public String getZoneName() { return zoneName; }
+        public void setZoneName(String zoneName) { this.zoneName = zoneName; }
     }
 }

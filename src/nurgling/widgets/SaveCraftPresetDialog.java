@@ -171,6 +171,14 @@ public class SaveCraftPresetDialog extends Window {
                 inputSpec.setIgnored(spec.ing.isIgnored);
             }
 
+            if (spec.selectedZone != null) {
+                inputSpec.setSelectedZoneId(spec.selectedZone.id);
+                inputSpec.setZoneName(spec.selectedZone.name);
+            }
+            inputSpec.setSubCraft(spec.isSubCraft);
+            inputSpec.setLocalZone(spec.isLocalZone);
+            inputSpec.setUseCategory(spec.useCategory);
+
             inputs.add(inputSpec);
         }
         preset.setInputs(inputs);
@@ -182,13 +190,9 @@ public class SaveCraftPresetDialog extends Window {
             outputSpec.setName(spec.name);
             outputSpec.setCount(spec.count);
 
-            // Capture resource path and item size
-            // The crafting window uses "small" preview icons, so we need to load the real item resource
             try {
                 if (spec.res != null && spec.res.get() != null) {
                     String resName = spec.res.get().name;
-
-                    // Strip "/small/" from the path to get the actual item resource
                     String actualResName = resName.replace("/small/", "/");
                     outputSpec.setResourcePath(actualResName);
 
@@ -197,7 +201,6 @@ public class SaveCraftPresetDialog extends Window {
 
                     if (img != null && img.ssz != null) {
                         Coord imgSz = img.ssz;
-                        // Convert pixel size to inventory squares
                         int width = Math.max(1, (imgSz.x + Inventory.sqsz.x - 1) / Inventory.sqsz.x);
                         int height = Math.max(1, (imgSz.y + Inventory.sqsz.y - 1) / Inventory.sqsz.y);
                         outputSpec.setWidth(width);
@@ -205,8 +208,14 @@ public class SaveCraftPresetDialog extends Window {
                     }
                 }
             } catch (Loading | Resource.LoadException l) {
-                // Resource not loaded or doesn't exist, use default 1x1
             }
+
+            if (spec.selectedZone != null) {
+                outputSpec.setSelectedZoneId(spec.selectedZone.id);
+                outputSpec.setZoneName(spec.selectedZone.name);
+            }
+            outputSpec.setInventory(spec.isInventory);
+            outputSpec.setLocalZone(spec.isLocalZone);
 
             outputs.add(outputSpec);
         }

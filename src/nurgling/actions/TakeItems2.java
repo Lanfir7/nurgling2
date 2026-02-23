@@ -79,10 +79,8 @@ public class TakeItems2 implements Action
     {
         // Сначала проверяем наличие предметов в инвентаре (с учётом категорий)
         int itemsInInventory = 0;
-        if("Board".equals(item) || "Block of Wood".equals(item) || "Block".equals(item)) {
-            // Если item является категорией, считаем все предметы из этой категории
-            String categoryName = "Block".equals(item) ? "Block of Wood" : item;
-            ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(categoryName);
+        if(nurgling.tools.VSpec.categories.containsKey(item)) {
+            ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(item);
             if(categoryItems != null) {
                 for(org.json.JSONObject categoryItem : categoryItems) {
                     String categoryItemName = categoryItem.getString("name");
@@ -234,28 +232,23 @@ public class TakeItems2 implements Action
         // Отладочное сообщение - проверяем что окно действительно открыто
         NUtils.getGameUI().msg("TakeItems2.barter: barter_wnd found, checking widgets...");
         
-        // Если item является категорией, создаем HashSet со всеми именами предметов категории
-        // Используем ту же логику, что в FillContainersFromPiles
         HashSet<String> itemNames = new HashSet<>();
-        String categoryName = "Block".equals(item) ? "Block of Wood" : item;
-        if("Board".equals(item) || "Block of Wood".equals(item) || "Block".equals(item)) {
-            ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(categoryName);
+        if(nurgling.tools.VSpec.categories.containsKey(item)) {
+            ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(item);
             if(categoryItems != null) {
                 for(org.json.JSONObject categoryItem : categoryItems) {
-                    String name = categoryItem.getString("name");
-                    itemNames.add(name);
+                    itemNames.add(categoryItem.getString("name"));
                 }
             }
-            // Если категория пуста, добавляем название категории
             if(itemNames.isEmpty()) {
-                itemNames.add(categoryName);
+                itemNames.add(item);
             }
         } else {
             itemNames.add(item);
         }
         
         // Отладочное сообщение
-        NUtils.getGameUI().msg("TakeItems2.barter: categoryName=" + categoryName + ", itemNames.size()=" + itemNames.size());
+        NUtils.getGameUI().msg("TakeItems2.barter: item=" + item + ", itemNames.size()=" + itemNames.size());
         if(itemNames.size() <= 5) {
             for(String name : itemNames) {
                 NUtils.getGameUI().msg("TakeItems2.barter: itemName=" + name);
@@ -341,9 +334,7 @@ public class TakeItems2 implements Action
                         // Небольшая пауза после всех покупок
                         Thread.sleep(200);
 
-                        // Ждем любой предмет из категории, если это категория
-                        if("Board".equals(item) || "Block".equals(item) || "Block of Wood".equals(item)) {
-                            // Создаем NAlias из всех имен предметов категории
+                        if(nurgling.tools.VSpec.categories.containsKey(item)) {
                             ArrayList<String> categoryItemNames = new ArrayList<>(itemNames);
                             NUtils.getUI().core.addTask(new WaitItems(NUtils.getGameUI().getInventory(), new NAlias(categoryItemNames, new ArrayList<>()), itemsToBuy));
                         } else {
@@ -410,14 +401,15 @@ public class TakeItems2 implements Action
         new OpenTargetContainer(cont).run(gui);
         
         HashSet<String> itemNames = new HashSet<>();
-        if("Board".equals(item) || "Block of Wood".equals(item)) {
+        if(nurgling.tools.VSpec.categories.containsKey(item)) {
             ArrayList<org.json.JSONObject> categoryItems = nurgling.tools.VSpec.categories.get(item);
             if(categoryItems != null) {
                 for(org.json.JSONObject categoryItem : categoryItems) {
                     itemNames.add(categoryItem.getString("name"));
                 }
             }
-        } else {
+        }
+        if(itemNames.isEmpty()) {
             itemNames.add(item);
         }
         

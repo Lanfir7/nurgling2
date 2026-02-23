@@ -93,4 +93,19 @@ public class CraftPresetManager {
         list.sort(Comparator.comparing(CraftPreset::getName));
         return list;
     }
+
+    private static final String AUTO_PREFIX = "auto_";
+
+    public void saveAutoPreset(String recipeResource, CraftPreset preset) {
+        if (recipeResource == null) return;
+        preset.setId(AUTO_PREFIX + recipeResource);
+        preset.setName("[auto] " + (preset.getRecipeName() != null ? preset.getRecipeName() : ""));
+        presets.put(preset.getId(), preset);
+        savePresets();
+    }
+
+    public CraftPreset getAutoPreset(String recipeResource) {
+        if (recipeResource == null) return null;
+        return presets.get(AUTO_PREFIX + recipeResource);
+    }
 }

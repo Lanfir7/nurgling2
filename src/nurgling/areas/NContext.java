@@ -676,7 +676,7 @@ public class NContext {
             }
             
             // Проверяем, является ли item категорией
-            if("Board".equals(item) || "Block of Wood".equals(item)) {
+            if(nurgling.tools.VSpec.categories.containsKey(item)) {
                 // Сначала проверяем все зоны напрямую через findIn (это найдет зоны с категорией)
                 NArea categoryArea = findIn(item);
                 if(categoryArea != null) {
@@ -743,7 +743,32 @@ public class NContext {
             NArea area = areas.get(id);
             if(area != null) {
                 NArea.Ingredient ingredient = area.getInput(item);
+                if(ingredient == null && nurgling.tools.VSpec.categories.containsKey(item)) {
+                    ArrayList<org.json.JSONObject> members = nurgling.tools.VSpec.categories.get(item);
+                    if(members != null) {
+                        for(org.json.JSONObject m : members) {
+                            String mName = m.optString("name");
+                            if(mName != null) {
+                                ingredient = area.getInput(mName);
+                                if(ingredient != null) break;
+                            }
+                        }
+                    }
+                }
                 if(ingredient == null) {
+                    for (Gob gob : Finder.findGobs(area, new NAlias(new ArrayList<String>(contcaps.keySet()), new ArrayList<>()))) {
+                        String hash = gob.ngob.hash;
+                        if(containers.containsKey(hash)) {
+                            inputs.add(containers.get(hash));
+                        } else {
+                            Container ic = new Container(gob, contcaps.get(gob.ngob.name), area);
+                            containers.put(gob.ngob.hash, ic);
+                            inputs.add(ic);
+                        }
+                    }
+                    for (Gob gob : Finder.findGobs(area, new NAlias("stockpile"))) {
+                        inputs.add(new Pile(gob));
+                    }
                 } else {
                     switch (ingredient.type) {
                     case BARTER:
@@ -1036,7 +1061,7 @@ public class NContext {
 
     public boolean isInBarrel(String item) {
         // Доски и блоки обычно не хранятся в бочках
-        if("Board".equals(item) || "Block of Wood".equals(item)) {
+        if(nurgling.tools.VSpec.categories.containsKey(item)) {
             return false;
         }
         NArea area = findIn(item);
@@ -1066,6 +1091,19 @@ public class NContext {
         if (loadsimg!=null && area == null) {
             inAreas.put(name, createArea("Please select area with:" + name, Resource.loadsimg("baubles/custom"), loadsimg));
         }
+    }
+
+    public void addInItemWithArea(String name, NArea area) {
+        areas.put(String.valueOf(area.id), area);
+        inAreas.put(name, String.valueOf(area.id));
+    }
+
+    public void addOutItemWithArea(String name, NArea area, double th) {
+        if(!outAreas.containsKey(name)) {
+            outAreas.put(name, new TreeMap<>());
+        }
+        areas.put(String.valueOf(area.id), area);
+        outAreas.get(name).put(Math.abs(th), String.valueOf(area.id));
     }
 
     public boolean addOutItem(String name, BufferedImage loadsimg, double th) throws InterruptedException {
@@ -1169,6 +1207,38 @@ public class NContext {
                             results.add(test);
                         }
                     }
+                }
+            }
+        }
+        return results;
+    }
+
+    public static ArrayList<NArea> findAllIn(String name) {
+        ArrayList<NArea> results = new ArrayList<>();
+        NAlias alias = new NAlias(name);
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null
+                && NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
+            for(Map.Entry<Integer, NArea> entry : NUtils.getGameUI().map.glob.map.areas.entrySet()) {
+                int id = entry.getKey();
+                NArea test = entry.getValue();
+                if(id > 0 && test != null
+                        && (test.containIn(name) || test.containIn(alias))) {
+                    results.add(test);
+                }
+            }
+        }
+        return results;
+    }
+
+    public static ArrayList<NArea> findAllOut(String name) {
+        ArrayList<NArea> results = new ArrayList<>();
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null
+                && NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
+            for(Map.Entry<Integer, NArea> entry : NUtils.getGameUI().map.glob.map.areas.entrySet()) {
+                int id = entry.getKey();
+                NArea test = entry.getValue();
+                if(id > 0 && test != null && test.containOut(name)) {
+                    results.add(test);
                 }
             }
         }

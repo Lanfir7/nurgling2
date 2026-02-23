@@ -61,7 +61,9 @@ public class ChunkNavPlanner {
 
     /**
      * Plan a path from player's current position to a target area.
-     * Uses the unified tile pathfinder to build a complete path through all chunks.
+     * Tries all grids that contain the area and picks the shortest truncated path.
+     * This ensures the nearest portal/entry point is chosen when multiple exist
+     * (e.g. two mine entrances leading to the same underground area).
      */
     public ChunkPath planToArea(NArea area) {
         if (area == null) return null;
@@ -74,26 +76,56 @@ public class ChunkNavPlanner {
         long startChunkId = playerLoc.gridId;
         Coord playerLocal = playerLoc.localCoord;
 
-        TargetLocation target = findTargetLocation(area);
-        if (target == null) {
-            return null;
+        ChunkPath bestPath = null;
+        float bestCost = Float.MAX_VALUE;
+
+        // Try all grids that contain the area, compare truncated paths
+        if (area.space != null && area.space.space != null && !area.space.space.isEmpty()) {
+            for (Map.Entry<Long, NArea.VArea> entry : area.space.space.entrySet()) {
+                long gridId = entry.getKey();
+                NArea.VArea varea = entry.getValue();
+                if (varea == null || varea.area == null) continue;
+
+                ChunkNavData chunk = graph.getChunk(gridId);
+                if (chunk == null) continue;
+
+                Coord walkableNearArea = findWalkableNearAreaEdge(area, chunk);
+                if (walkableNearArea == null) continue;
+
+                UnifiedTilePathfinder.UnifiedPath unifiedPath = unifiedPathfinder.findPath(
+                    startChunkId, playerLocal,
+                    gridId, walkableNearArea
+                );
+
+                if (unifiedPath != null && unifiedPath.reachable) {
+                    ChunkPath path = new ChunkPath();
+                    unifiedPath.populateChunkPath(path, graph);
+                    truncatePathAtAreaEntry(path, area);
+                    path.recalculateCost();
+
+                    if (path.totalCost < bestCost) {
+                        bestPath = path;
+                        bestCost = path.totalCost;
+                    }
+                }
+            }
         }
+
+        if (bestPath != null) return bestPath;
+
+        // Fallback: single target (for areas without stored grid references)
+        TargetLocation target = findTargetLocation(area);
+        if (target == null) return null;
 
         UnifiedTilePathfinder.UnifiedPath unifiedPath = unifiedPathfinder.findPath(
             startChunkId, playerLocal,
             target.chunkId, target.localCoord
         );
 
-        if (unifiedPath == null || !unifiedPath.reachable) {
-            return null;
-        }
+        if (unifiedPath == null || !unifiedPath.reachable) return null;
 
-        // Convert to ChunkPath with segments
         ChunkPath path = new ChunkPath();
         unifiedPath.populateChunkPath(path, graph);
-
-        // Truncate path at first tile that enters the target area
-        // This prevents walking through the entire area to reach the far corner
         truncatePathAtAreaEntry(path, area);
 
         return path;

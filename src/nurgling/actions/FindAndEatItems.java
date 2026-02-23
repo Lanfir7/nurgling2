@@ -41,8 +41,20 @@ public class FindAndEatItems implements Action
     {
         if (nArea != null)
             NUtils.navigateToArea(nArea);
-        Coord2d center = area.a.add(area.b).div(2);
-        new PathFinder(center).run(gui);
+
+        Coord2d playerPos = NUtils.player().rc;
+        Coord2d[] corners = {
+            area.a,
+            new Coord2d(area.b.x, area.a.y),
+            area.b,
+            new Coord2d(area.a.x, area.b.y)
+        };
+        Coord2d nearest = corners[0];
+        for (Coord2d c : corners) {
+            if (playerPos.dist(c) < playerPos.dist(nearest))
+                nearest = c;
+        }
+        new PathFinder(nearest).run(gui);
 
         NAlias foodAlias = new NAlias(items);
         while (needFood()) {

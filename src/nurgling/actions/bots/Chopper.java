@@ -49,6 +49,12 @@ public class Chopper implements Action {
 
         String treeArea = context.createArea("Please select area for deforestation", Resource.loadsimg("baubles/chopperArea"));
 
+        Pair<Coord2d, Coord2d> waterRCArea = null;
+        if (prop.autorefill) {
+            String waterAreaId = context.createArea("Please select area with water", Resource.loadsimg("baubles/waterRefiller"));
+            waterRCArea = context.getRCArea(waterAreaId);
+        }
+
         NAlias pattern = prop.stumps ? new NAlias(new ArrayList<String>(List.of("gfx/terobjs/tree")),new ArrayList<String>(Arrays.asList("log","oldtrunk"))) :
                 new NAlias(new ArrayList<String>(List.of("gfx/terobjs/tree")),new ArrayList<String>(Arrays.asList("log", "oldtrunk", "stump")));
 
@@ -135,7 +141,7 @@ public class Chopper implements Action {
                     case TIMEFORDRINK:
                     case TIMEFOREAT: {
                         context.setLastPos(tree.rc);
-                        if (!new RestoreResources().run(gui).IsSuccess()) {
+                        if (!new RestoreResources(waterRCArea).run(gui).IsSuccess()) {
                             return Results.ERROR("No Drink or Eat");
                         }
                         tree = context.getGobLocal(treeArea, treeId);

@@ -7,6 +7,7 @@ import nurgling.actions.Action;
 import nurgling.actions.Results;
 import nurgling.scenarios.CraftPreset;
 import nurgling.scenarios.CraftPresetManager;
+import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.tasks.NTask;
 import nurgling.tools.VSpec;
@@ -101,9 +102,6 @@ public class AutocraftBot implements Action {
 
         // Enable auto mode FIRST - this is needed for tick() to populate categories
         mwnd.autoMode = true;
-        if (mwnd.noTransfer != null) {
-            mwnd.noTransfer.visible = true;
-        }
 
         // Wait for inputs to be fully populated (names loaded and categories checked)
         // In headless mode, skip sprite check since sprites won't render
@@ -149,30 +147,62 @@ public class AutocraftBot implements Action {
      * Configures the NMakewindow ingredients based on preset preferences.
      */
     private void configureIngredients(NMakewindow mwnd, CraftPreset preset) {
-        // Match preset inputs to mwnd inputs and set ingredient preferences
         for (CraftPreset.InputSpec presetInput : preset.getInputs()) {
-            if (!presetInput.isCategory()) {
-                continue; // Only categories need configuration
-            }
-
-            // Find matching spec in mwnd.inputs
             for (NMakewindow.Spec spec : mwnd.inputs) {
                 if (spec.name != null && spec.name.equals(presetInput.getName())) {
-                    if (presetInput.isIgnored()) {
-                        // Mark as ignored
-                        spec.ing = mwnd.new Ingredient(
-                            Resource.loadsimg("nurgling/hud/autocraft/ignore"),
-                            "Ignore ingredient",
-                            true
-                        );
-                    } else if (presetInput.getPreferredIngredient() != null) {
-                        // Set preferred ingredient
-                        setPreferredIngredient(mwnd, spec, presetInput.getPreferredIngredient());
+                    spec.isSubCraft = presetInput.isSubCraft();
+                    spec.isLocalZone = presetInput.isLocalZone();
+                    spec.useCategory = presetInput.isUseCategory();
+
+                    if (presetInput.getSelectedZoneId() > 0) {
+                        spec.selectedZoneId = presetInput.getSelectedZoneId();
+                        NArea zone = findAreaById(presetInput.getSelectedZoneId());
+                        if (zone != null) {
+                            spec.selectedZone = zone;
+                        }
+                    }
+
+                    if (presetInput.isCategory()) {
+                        if (presetInput.isIgnored()) {
+                            spec.ing = mwnd.new Ingredient(
+                                Resource.loadsimg("nurgling/hud/autocraft/ignore"),
+                                "Ignore ingredient",
+                                true
+                            );
+                        } else if (presetInput.getPreferredIngredient() != null) {
+                            setPreferredIngredient(mwnd, spec, presetInput.getPreferredIngredient());
+                        }
                     }
                     break;
                 }
             }
         }
+        for (int i = 0; i < preset.getOutputs().size() && i < mwnd.outputs.size(); i++) {
+            CraftPreset.OutputSpec presetOutput = preset.getOutputs().get(i);
+            NMakewindow.Spec outSpec = mwnd.outputs.get(i);
+            outSpec.isInventory = presetOutput.isInventory();
+            outSpec.isLocalZone = presetOutput.isLocalZone();
+
+            if (presetOutput.getSelectedZoneId() > 0) {
+                outSpec.selectedZoneId = presetOutput.getSelectedZoneId();
+                NArea zone = findAreaById(presetOutput.getSelectedZoneId());
+                if (zone != null) {
+                    outSpec.selectedZone = zone;
+                }
+            }
+        }
+    }
+
+    private NArea findAreaById(int areaId) {
+        try {
+            for (java.util.Map.Entry<Integer, NArea> entry :
+                    NUtils.getGameUI().map.glob.map.areas.entrySet()) {
+                if (entry.getKey() == areaId) {
+                    return entry.getValue();
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     /**

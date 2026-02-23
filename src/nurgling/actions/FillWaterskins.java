@@ -19,17 +19,24 @@ import java.util.ArrayList;
  */
 public class FillWaterskins implements Action {
 
-    public FillWaterskins() {}
+    private Pair<Coord2d, Coord2d> preSelectedArea;
+
+    public FillWaterskins() { this.preSelectedArea = null; }
+
+    public FillWaterskins(Pair<Coord2d, Coord2d> preSelectedArea) {
+        this.preSelectedArea = preSelectedArea;
+    }
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-        Pair<Coord2d, Coord2d> area = null;
-        
-        // Always prompt user to select an area
-        SelectArea insa;
-        NUtils.getGameUI().msg("Please, select area with cistern or barrel");
-        (insa = new SelectArea(Resource.loadsimg("baubles/waterRefiller"))).run(gui);
-        area = insa.getRCArea();
+        Pair<Coord2d, Coord2d> area = preSelectedArea;
+
+        if (area == null) {
+            SelectArea insa;
+            NUtils.getGameUI().msg("Please, select area with cistern or barrel");
+            (insa = new SelectArea(Resource.loadsimg("baubles/waterRefiller"))).run(gui);
+            area = insa.getRCArea();
+        }
 
         Gob target = null;
         String targetContent = null; // Track what's in the target (water or tea)

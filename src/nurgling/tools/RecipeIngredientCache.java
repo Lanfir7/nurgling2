@@ -42,6 +42,7 @@ public class RecipeIngredientCache {
     /** Mapping type constants matching DB column values */
     public static final String TYPE_INPUT = "input";
     public static final String TYPE_OUTPUT = "output";
+    public static final String TYPE_SPEC = "spec";
 
     /** item used AS INGREDIENT -> recipes that consume it */
     private static final Map<String, Set<RecipeEntry>> inputCache = new ConcurrentHashMap<>();
@@ -49,6 +50,49 @@ public class RecipeIngredientCache {
     private static final Map<String, Set<RecipeEntry>> outputCache = new ConcurrentHashMap<>();
 
     private static volatile boolean dbLoaded = false;
+
+    /** recipe paginaResource -> original ingredient specs (name + count, before VSpec expansion) */
+    private static final Map<String, List<IngredientSpec>> recipeSpecs = new ConcurrentHashMap<>();
+
+    public static class IngredientSpec {
+        public final String name;
+        public final int count;
+        public IngredientSpec(String name, int count) {
+            this.name = name;
+            this.count = count;
+        }
+    }
+
+    public static void setRecipeSpecs(String paginaResource, List<IngredientSpec> specs) {
+        if(paginaResource != null && specs != null) {
+            recipeSpecs.put(paginaResource, new ArrayList<>(specs));
+            persistSpecsAsync(paginaResource, specs);
+        }
+    }
+
+    /** Load specs from DB without re-persisting (used at startup) */
+    public static void setRecipeSpecsFromDB(String paginaResource, List<IngredientSpec> specs) {
+        if(paginaResource != null && specs != null && !specs.isEmpty()) {
+            recipeSpecs.putIfAbsent(paginaResource, new ArrayList<>(specs));
+        }
+    }
+
+    public static List<IngredientSpec> getRecipeSpecs(String paginaResource) {
+        if(paginaResource == null) return Collections.emptyList();
+        return recipeSpecs.getOrDefault(paginaResource, Collections.emptyList());
+    }
+
+    private static void persistSpecsAsync(String paginaResource, List<IngredientSpec> specs) {
+        if(NCore.databaseManager != null && NCore.databaseManager.isReady()
+                && NCore.databaseManager.getCraftRecipeService() != null) {
+            List<String> encoded = new ArrayList<>();
+            for(IngredientSpec s : specs) {
+                encoded.add(s.name + ":" + s.count);
+            }
+            NCore.databaseManager.getCraftRecipeService()
+                .saveMappingsAsync(encoded, paginaResource, "", TYPE_SPEC);
+        }
+    }
 
     /**
      * Add a mapping to the input cache (item is used as ingredient).
@@ -121,6 +165,32 @@ public class RecipeIngredientCache {
     }
 
     /**
+     * Find recipes that PRODUCE a single item.
+     */
+    public static Set<RecipeEntry> findOutputRecipesForItem(String itemName) {
+        if(itemName == null) return Collections.emptySet();
+        return new HashSet<>(outputCache.getOrDefault(itemName, Collections.emptySet()));
+    }
+
+    /**
+     * Find all ingredient names for a given recipe (by paginaResource).
+     * Scans the inputCache to find items mapped to this recipe.
+     */
+    public static List<String> findIngredientsForRecipe(String paginaResource) {
+        if(paginaResource == null) return Collections.emptyList();
+        List<String> result = new ArrayList<>();
+        for(Map.Entry<String, Set<RecipeEntry>> entry : inputCache.entrySet()) {
+            for(RecipeEntry re : entry.getValue()) {
+                if(paginaResource.equals(re.paginaResource)) {
+                    result.add(entry.getKey());
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * Load all mappings from the database into the in-memory cache.
      * Called once when the database becomes ready.
      */
@@ -128,15 +198,13 @@ public class RecipeIngredientCache {
         if(dbLoaded) return;
         if(NCore.databaseManager != null && NCore.databaseManager.isReady()
                 && NCore.databaseManager.getCraftRecipeService() != null) {
-            NCore.databaseManager.getCraftRecipeService().loadAllIntoCacheAsync()
-                .thenRun(() -> {
-                    dbLoaded = true;
-                    System.out.println("RecipeIngredientCache: loaded from database");
-                })
-                .exceptionally(ex -> {
-                    System.err.println("RecipeIngredientCache: failed to load from DB: " + ex.getMessage());
-                    return null;
-                });
+            try {
+                NCore.databaseManager.getCraftRecipeService().loadAllIntoCache();
+                dbLoaded = true;
+                System.out.println("RecipeIngredientCache: loaded from database");
+            } catch (Exception ex) {
+                System.err.println("RecipeIngredientCache: failed to load from DB: " + ex.getMessage());
+            }
         }
     }
 

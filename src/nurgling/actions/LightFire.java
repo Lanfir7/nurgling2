@@ -44,7 +44,6 @@ public class LightFire implements Action {
         MenuGrid.Pagina pagina;
         String recipeName;
         boolean autoMode;
-        boolean noTransfer;
         // Map of spec index to ingredient info (name, isIgnored)
         Map<Integer, IngredientInfo> inputIngredients = new HashMap<>();
         Map<Integer, IngredientInfo> outputIngredients = new HashMap<>();
@@ -99,7 +98,6 @@ public class LightFire implements Action {
         savedState = new CraftState();
         savedState.recipeName = mw.rcpnm;
         savedState.autoMode = mw.autoMode;
-        savedState.noTransfer = mw.noTransfer != null && mw.noTransfer.a;
         
         // Save selected ingredients for inputs
         for (int i = 0; i < mw.inputs.size(); i++) {
@@ -164,12 +162,6 @@ public class LightFire implements Action {
         
         // Restore autoMode
         newMw.autoMode = savedState.autoMode;
-        
-        // Restore noTransfer
-        if (newMw.noTransfer != null) {
-            newMw.noTransfer.a = savedState.noTransfer;
-            newMw.noTransfer.visible = savedState.autoMode;
-        }
         
         // Restore input ingredients
         for (Map.Entry<Integer, CraftState.IngredientInfo> entry : savedState.inputIngredients.entrySet()) {

@@ -107,5 +107,27 @@ public class CraftRecipeService {
                 RecipeIngredientCache.addOutputMapping(entry.getKey(), re.paginaResource, re.recipeName);
             }
         }
+
+        // Load spec mappings (original ingredient name:count per recipe)
+        Map<String, Set<RecipeIngredientCache.RecipeEntry>> specs =
+            all.getOrDefault(RecipeIngredientCache.TYPE_SPEC, Collections.emptyMap());
+        Map<String, List<RecipeIngredientCache.IngredientSpec>> specsByRecipe = new HashMap<>();
+        for(Map.Entry<String, Set<RecipeIngredientCache.RecipeEntry>> entry : specs.entrySet()) {
+            String encoded = entry.getKey(); // "Name:Count"
+            int colonIdx = encoded.lastIndexOf(':');
+            if(colonIdx <= 0) continue;
+            String name = encoded.substring(0, colonIdx);
+            int count;
+            try {
+                count = Integer.parseInt(encoded.substring(colonIdx + 1));
+            } catch(NumberFormatException e) { continue; }
+            for(RecipeIngredientCache.RecipeEntry re : entry.getValue()) {
+                specsByRecipe.computeIfAbsent(re.paginaResource, k -> new ArrayList<>())
+                    .add(new RecipeIngredientCache.IngredientSpec(name, count));
+            }
+        }
+        for(Map.Entry<String, List<RecipeIngredientCache.IngredientSpec>> entry : specsByRecipe.entrySet()) {
+            RecipeIngredientCache.setRecipeSpecsFromDB(entry.getKey(), entry.getValue());
+        }
     }
 }

@@ -206,15 +206,15 @@ public class UnifiedTilePathfinder {
                 }
 
                 if (tentativeG < neighborNode.g) {
+                    // Remove from PQ before updating f — Java PriorityQueue
+                    // does NOT re-sort when element fields change in-place.
+                    openSet.remove(neighborNode);
                     neighborNode.parent = current;
-                    neighborNode.viaPortalFromParent = neighborTile.viaPortal;  // Store how we got here
+                    neighborNode.viaPortalFromParent = neighborTile.viaPortal;
                     neighborNode.g = tentativeG;
                     neighborNode.h = heuristic(neighborTile, targetTile);
                     neighborNode.f = neighborNode.g + neighborNode.h;
-
-                    if (!openSet.contains(neighborNode)) {
-                        openSet.add(neighborNode);
-                    }
+                    openSet.add(neighborNode);
                 }
             }
         }
@@ -471,31 +471,20 @@ public class UnifiedTilePathfinder {
             return 1000.0; // Unknown chunk
         }
 
-        // Check if same layer - if not, add portal traversal cost estimate
-        if (!fromChunk.layer.equals(toChunk.layer)) {
-            int depth = getPortalPathDepth(fromChunk, toChunk, new HashSet<>());
-            if (depth >= 0) {
-                return 100.0 + (depth - 1) * 400.0;
-            }
-            // No direct portal chain — try portal exit + walking estimate
-            double crossEst = estimateCrossInstanceHeuristic(fromChunk, from, toChunk, to);
-            if (crossEst >= 0) return crossEst;
-            return 999999.0;
-        }
+        // Cross-layer or cross-instance: requires portal traversal
+        boolean needsPortal = !fromChunk.layer.equals(toChunk.layer) ||
+            (fromChunk.instanceId != 0 && toChunk.instanceId != 0
+                && fromChunk.instanceId != toChunk.instanceId);
 
-        // Check if different instances on same layer (e.g., surface vs mine, both "outside")
-        // Different instances require portal traversal, not walking
-        if (fromChunk.instanceId != 0 && toChunk.instanceId != 0
-                && fromChunk.instanceId != toChunk.instanceId) {
+        if (needsPortal) {
             int depth = getPortalPathDepth(fromChunk, toChunk, new HashSet<>());
             if (depth >= 0) {
-                return 100.0 + (depth - 1) * 400.0;
+                // Admissible: each portal hop costs at least PORTAL_TRAVERSAL_COST
+                return depth * ChunkNavConfig.PORTAL_TRAVERSAL_COST;
             }
-            // No portal chain to target — common case: mine → portal → surface → walk.
-            // Estimate: portal cost + walking distance from portal exit to target.
             double crossEst = estimateCrossInstanceHeuristic(fromChunk, from, toChunk, to);
             if (crossEst >= 0) return crossEst;
-            // Ultimate fallback: portal cost alone (admissible underestimate)
+            // Admissible fallback: at least one portal traversal needed
             return ChunkNavConfig.PORTAL_TRAVERSAL_COST;
         }
 
@@ -507,30 +496,28 @@ public class UnifiedTilePathfinder {
             return fromWorld.dist(toWorld);
         }
 
-        // Fallback: estimate based on neighbor-based distance
-        // BFS to find shortest path through neighbor relationships
+        // Fallback: BFS neighbor distance with conservative factor for admissibility
         int neighborDist = getNeighborDistance(from.chunkId, to.chunkId);
         if (neighborDist >= 0) {
-            // Each chunk is CHUNK_SIZE tiles, estimate walking across half of each
-            Coord chunkCenter = new Coord(CHUNK_SIZE / 2, CHUNK_SIZE / 2);
-            return neighborDist * CHUNK_SIZE + from.localCoord.dist(chunkCenter) + to.localCoord.dist(chunkCenter);
+            // 0.7 ≈ 1/√2 accounts for diagonal chunk arrangements in BFS
+            return neighborDist * CHUNK_SIZE * 0.7;
         }
 
         // No path through neighbors - might need portal
-        // Return large but not infinite estimate
-        return 5000.0;
+        return ChunkNavConfig.PORTAL_TRAVERSAL_COST;
     }
 
     /**
      * Estimate heuristic for cross-instance paths: portal cost + walking in target instance.
-     * Looks for a portal on fromChunk (or reachable from it) that exits to toChunk's instance,
-     * then estimates walking distance from portal exit to target via neighbor BFS.
+     * Tries ALL portals on fromChunk and returns the MINIMUM admissible estimate.
+     * Prefers exact Euclidean distance (worldTileOrigin) over BFS-based estimate.
      * Returns -1 if no portal to target's instance is found.
      */
     private double estimateCrossInstanceHeuristic(ChunkNavData fromChunk, TileNode from,
                                                    ChunkNavData toChunk, TileNode to) {
         long targetInstance = toChunk.instanceId;
         double portalCost = ChunkNavConfig.PORTAL_TRAVERSAL_COST;
+        double bestEstimate = Double.MAX_VALUE;
 
         for (ChunkPortal portal : fromChunk.portals) {
             if (portal.connectsToGridId == -1) continue;
@@ -538,16 +525,30 @@ public class UnifiedTilePathfinder {
             if (exitChunk == null) continue;
             if (exitChunk.instanceId != targetInstance && targetInstance != 0) continue;
 
-            int walkDist = getNeighborDistance(exitChunk.gridId, to.chunkId);
-            if (walkDist >= 0) {
-                return portalCost + walkDist * CHUNK_SIZE;
-            }
+            double estimate;
+
+            // Prefer exact Euclidean distance (admissible, tight)
             if (exitChunk.worldTileOrigin != null && toChunk.worldTileOrigin != null) {
-                return portalCost + exitChunk.worldTileOrigin.dist(toChunk.worldTileOrigin);
+                Coord exitLocal = portal.exitLocalCoord != null
+                    ? portal.exitLocalCoord
+                    : new Coord(CHUNK_SIZE / 2, CHUNK_SIZE / 2);
+                Coord exitWorld = exitChunk.worldTileOrigin.add(exitLocal);
+                Coord toWorld = toChunk.worldTileOrigin.add(to.localCoord);
+                estimate = portalCost + exitWorld.dist(toWorld);
+            } else {
+                // BFS fallback with conservative factor (0.7 ≈ 1/√2) for admissibility
+                int walkDist = getNeighborDistance(exitChunk.gridId, to.chunkId);
+                if (walkDist >= 0) {
+                    estimate = portalCost + walkDist * CHUNK_SIZE * 0.7;
+                } else {
+                    estimate = portalCost;
+                }
             }
-            return portalCost;
+
+            bestEstimate = Math.min(bestEstimate, estimate);
         }
-        return -1;
+
+        return bestEstimate < Double.MAX_VALUE ? bestEstimate : -1;
     }
 
     /**
@@ -637,22 +638,22 @@ public class UnifiedTilePathfinder {
      */
     private double moveCost(TileNode from, TileNode to) {
         if (from.chunkId == to.chunkId) {
-            // Same chunk - distance-based cost
             return from.localCoord.dist(to.localCoord);
         }
 
-        // Cross-chunk movement
         ChunkNavData fromChunk = graph.getChunk(from.chunkId);
         ChunkNavData toChunk = graph.getChunk(to.chunkId);
 
         if (fromChunk != null && toChunk != null) {
-            if (!fromChunk.layer.equals(toChunk.layer)) {
-                // Portal traversal - use config cost
+            // Portal traversal: different layer OR different instance (e.g. surface → mine)
+            if (!fromChunk.layer.equals(toChunk.layer) ||
+                (fromChunk.instanceId != 0 && toChunk.instanceId != 0
+                    && fromChunk.instanceId != toChunk.instanceId)) {
                 return ChunkNavConfig.PORTAL_TRAVERSAL_COST;
             }
         }
 
-        // Edge crossing - small cost
+        // Edge crossing between neighbor chunks
         return 1.5;
     }
 
