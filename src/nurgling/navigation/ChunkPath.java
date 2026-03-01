@@ -91,28 +91,6 @@ public class ChunkPath {
     }
 
     /**
-     * Recalculate totalCost from actual segment data.
-     * Used after path truncation to get the real truncated path cost.
-     */
-    public void recalculateCost() {
-        totalCost = 0;
-        for (PathSegment seg : segments) {
-            if (seg.type == SegmentType.PORTAL) {
-                totalCost += ChunkNavConfig.PORTAL_TRAVERSAL_COST;
-            }
-            for (int i = 1; i < seg.steps.size(); i++) {
-                Coord2d prev = seg.steps.get(i - 1).worldCoord;
-                Coord2d curr = seg.steps.get(i).worldCoord;
-                if (prev != null && curr != null) {
-                    totalCost += (float) prev.dist(curr);
-                } else {
-                    totalCost += 1.0f;
-                }
-            }
-        }
-    }
-
-    /**
      * Check if this path has detailed tile-level segments.
      */
     public boolean hasDetailedPath() {

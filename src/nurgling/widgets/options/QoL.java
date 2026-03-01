@@ -51,6 +51,7 @@ public class QoL extends Panel {
     private CheckBox alwaysObfuscate;
     private CheckBox randomAreaColor;
     private CheckBox treeScaleDisableZoomHide;
+    private CheckBox syncCamera;
     private TextEntry treeScaleMinThresholdEntry;
     private CheckBox diabloLikeRun;
 
@@ -293,6 +294,7 @@ public class QoL extends Panel {
         rightPrev = verboseCal = rightColumn.add(new CheckBox(L10n.get("qol.verbose_cal")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = disableDrugEffects = rightColumn.add(new CheckBox(L10n.get("qol.disable_drugs")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = randomAreaColor = rightColumn.add(new CheckBox(L10n.get("qol.random_area_color")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = syncCamera = rightColumn.add(new CheckBox("Sync camera across sessions"), rightPrev.pos("bl").adds(0, 5));
 
         rightPrev = rightColumn.add(new Label("● " + L10n.get("qol.section.debug")), rightPrev.pos("bl").adds(0, 15));
         rightPrev = debug = rightColumn.add(new CheckBox(L10n.get("qol.debug")), rightPrev.pos("bl").adds(0, 5));
@@ -386,6 +388,7 @@ public class QoL extends Panel {
         randomAreaColor.a = getBool(NConfig.Key.randomAreaColor);
         treeScaleDisableZoomHide.a = getBool(NConfig.Key.treeScaleDisableZoomHide);
         diabloLikeRun.a = getBool(NConfig.Key.diabloLikeRun);
+        syncCamera.a = getBool(NConfig.Key.sync_camera);
         
         Object minThreshold = NConfig.get(NConfig.Key.treeScaleMinThreshold);
         treeScaleMinThresholdEntry.settext(minThreshold == null ? "0" : minThreshold.toString());
@@ -570,6 +573,7 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.randomAreaColor, randomAreaColor.a);
         NConfig.set(NConfig.Key.treeScaleDisableZoomHide, treeScaleDisableZoomHide.a);
         NConfig.set(NConfig.Key.diabloLikeRun, diabloLikeRun.a);
+        NConfig.set(NConfig.Key.sync_camera, syncCamera.a);
         
         int minThreshold = parseIntOrDefault(treeScaleMinThresholdEntry.text(), 0);
         NConfig.set(NConfig.Key.treeScaleMinThreshold, minThreshold);

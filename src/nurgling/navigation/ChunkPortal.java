@@ -84,7 +84,7 @@ public class ChunkPortal {
         // Gates are NOT portals - they're just openings in walls.
         // Walkability grid handles whether you can walk through them.
 
-        // Doors (interior "-door" gobs)
+        // Doors
         if (name.contains("door")) {
             return PortalType.DOOR;
         }
@@ -99,10 +99,8 @@ public class ChunkPortal {
 
     /**
      * Check if a gob name represents a building exterior (whole-building gob).
-     * These are large structure gobs that the player clicks to enter.
-     * They differ from interior doors (which have "-door" suffix).
-     * Building exteriors can create "phantom" portals on adjacent chunks
-     * because their large footprint is visible from neighboring chunks.
+     * These gobs represent the building structure from outside - you click them to enter.
+     * Their center position is inside the building footprint and not walkable.
      */
     public static boolean isBuildingExterior(String gobName) {
         if (gobName == null) return false;

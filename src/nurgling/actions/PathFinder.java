@@ -410,7 +410,7 @@ public class PathFinder implements Action {
     }
 
     public static boolean isAvailable(Gob target) throws InterruptedException {
-        if(NUtils.player() == null)
+        if(NUtils.player() == null || target == null)
             return false;
         PathFinder pf = new PathFinder(target);
         LinkedList<Graph.Vertex> res = pf.construct(true);
@@ -426,7 +426,7 @@ public class PathFinder implements Action {
     }
 
     public static boolean isAvailable(Gob target, boolean hardMode) throws InterruptedException {
-        if(NUtils.player() == null)
+        if(NUtils.player() == null || target == null)
             return false;
         PathFinder pf = new PathFinder(target);
         pf.isHardMode = true;

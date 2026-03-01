@@ -14,6 +14,7 @@ import nurgling.areas.NArea;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.equipment.EquipmentPresetManager;
 import nurgling.scenarios.ScenarioManager;
+import nurgling.sessions.BotExecutor;
 import nurgling.tasks.*;
 import nurgling.tools.NSearchItem;
 import org.json.JSONArray;
@@ -270,15 +271,16 @@ public class NCore extends Widget
 
         if(autoDrink == null && (Boolean)NConfig.get(NConfig.Key.autoDrink))
         {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
+            autoDrink = new AutoDrink();
+            BotExecutor.runTask("AutoDrink", () -> {
+                NGameUI gui = NUtils.getGameUI();
+                if (gui != null) {
                     try {
-                        (autoDrink = new AutoDrink()).run(NUtils.getGameUI());
+                        autoDrink.run(gui);
                     } catch (InterruptedException ignored) {
                     }
                 }
-            }).start();
+            });
         }
         else
         {
@@ -290,15 +292,16 @@ public class NCore extends Widget
 
         if(autoSaveTableware == null && (Boolean)NConfig.get(NConfig.Key.autoSaveTableware))
         {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
+            autoSaveTableware = new AutoSaveTableware();
+            BotExecutor.runTask("AutoSaveTableware", () -> {
+                NGameUI gui = NUtils.getGameUI();
+                if (gui != null) {
                     try {
-                        (autoSaveTableware = new AutoSaveTableware()).run(NUtils.getGameUI());
+                        autoSaveTableware.run(gui);
                     } catch (InterruptedException ignored) {
                     }
                 }
-            }).start();
+            });
         }
         else
         {

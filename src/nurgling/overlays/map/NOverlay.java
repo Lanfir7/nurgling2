@@ -4,7 +4,6 @@ import haven.*;
 import haven.render.*;
 import nurgling.*;
 import nurgling.areas.*;
-import nurgling.widgets.NMiniMap;
 
 import java.awt.*;
 import java.util.*;
@@ -31,64 +30,20 @@ public class NOverlay extends MapView.MapRaster
 
     public NOverlay(Integer id) {
         super(NUtils.getGameUI().map.glob.map, NUtils.getGameUI().map.view);
-        if(id >= 0) {
-            NArea a = NUtils.getArea(id);
-            bc = (a != null && a.color != null) ? a.color : new Color(194, 194, 65, 56);
-        } else {
-            // Для кастомных оверлеев цвет обычно задаётся в наследниках,
-            // но на всякий случай оставим дефолт.
-            bc = new Color(194, 194, 65, 56);
+        if(id>=0) {
+            NArea area = NUtils.getArea(id);
+            bc = (area != null) ? area.color : java.awt.Color.GRAY;
         }
         this.id = id;
     }
 
     public void tick() {
         super.tick();
-        // ВАЖНО: Проверяем, что area инициализирован перед использованием
-        // area инициализируется в super.tick(), но может быть null если NUtils.getGameUI() == null
-        if (area == null) {
-            return;
+        if(area != null) {
+            base.tick();
+            outl.tick();
         }
-        
-        // ВАЖНО: Оверлеи зон (визуальное выделение) отображаются ВСЕГДА
-        // Проверяем только локальное скрытие зоны (hide) с учетом тоггла
-        if (id >= 0) {
-            // ВАЖНО: Проверяем что GameUI доступен перед вызовом getArea()
-            if (NUtils.getGameUI() == null) {
-                return;
-            }
-            NArea zoneArea = NUtils.getArea(id);
-            if (zoneArea != null && zoneArea.hide) {
-                // Проверяем тоггл "показывать все зоны" для скрытых зон
-                NGameUI gui = NUtils.getGameUI();
-                boolean showAllZones = false;
-                if (gui != null) {
-                    // Пробуем через mmapw.miniMap (это более надежный способ, так как miniMap точно является NMiniMap)
-                    if (gui.mmapw != null && gui.mmapw.miniMap != null && gui.mmapw.miniMap instanceof NMiniMap) {
-                        showAllZones = ((NMiniMap) gui.mmapw.miniMap).showAllZonesAlways;
-                    }
-                    // Запасной вариант через mmap
-                    else if (gui.mmap != null && gui.mmap instanceof NMiniMap) {
-                        showAllZones = ((NMiniMap) gui.mmap).showAllZonesAlways;
-                    }
-                }
-                
-                // Скрываем оверлей только если зона скрыта локально И тоггл не включен
-                if (!showAllZones) {
-                    return;
-                }
-            }
-        }
-        
-        // Сбрасываем requpdate2 только у оверлеев зон (id >= 0). Кастомные оверлеи (mining, rock tile и т.д.)
-        // сами выставляют requpdate2 в переопределённом tick() до super.tick() — иначе тоггл и перерисовка не работают.
-        if (id >= 0)
-            requpdate2 = false;
-        
-        // ВАЖНО: Вызываем base.tick() и outl.tick() только если area инициализирован
-        // base и outl используют area через this.this$0.area, поэтому нужна проверка
-        base.tick();
-        outl.tick();
+        requpdate2 = false;
     }
 
     public void added(RenderTree.Slot slot) {
@@ -133,19 +88,8 @@ public class NOverlay extends MapView.MapRaster
         }
         Coord t = new Coord();
         Buf buf = new Buf();
-        NArea a = NUtils.getArea(id);
-        if (a == null || a.space == null || a.space.space == null) {
-            return null;
-        }
-        NArea.VArea space = a.space.space.get(grid_id);
-        if (space == null || space.area == null) {
-            // Зона не содержит текущий grid_id (или данные обновляются/удалены) — просто ничего не рисуем.
-            return null;
-        }
+        NArea.VArea space = NUtils.getArea(id).space.space.get(grid_id);
         Area curArea = space.area.xl(grid_ul);
-        if (curArea == null) {
-            return null;
-        }
         for(t.y = 0; t.y < mm.sz.y; t.y++) {
             for(t.x = 0; t.x < mm.sz.x; t.x++) {
                 Coord gc = t.add(mm.ul);

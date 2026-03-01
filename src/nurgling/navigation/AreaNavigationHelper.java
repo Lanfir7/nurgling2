@@ -3,9 +3,11 @@ package nurgling.navigation;
 import haven.Coord2d;
 import haven.Pair;
 import nurgling.NMapView;
+import nurgling.NUI;
 import nurgling.NUtils;
 import nurgling.actions.PathFinder;
 import nurgling.areas.NArea;
+import nurgling.sessions.ThreadLocalUI;
 
 /**
  * Helper utilities for area navigation.
@@ -125,15 +127,24 @@ public class AreaNavigationHelper {
         if (area == null || area.space == null || area.space.space == null || area.space.space.isEmpty()) {
             return chunkNav.planToArea(area);
         }
-        
+
+        // Capture current UI for thread-local binding in spawned threads
+        final NUI boundUI = NUtils.getUI();
+
         // Plan paths to all 4 corners in parallel using planToAreaCorner (gridId + local coords)
         final ChunkPath[] paths = new ChunkPath[4];
         Thread[] threads = new Thread[4];
-        
+
         for (int i = 0; i < 4; i++) {
             final int idx = i;
             threads[i] = new Thread(() -> {
-                paths[idx] = chunkNav.planToAreaCorner(area, idx);
+                // Bind thread-local UI so planner uses correct session
+                ThreadLocalUI.set(boundUI);
+                try {
+                    paths[idx] = chunkNav.planToAreaCorner(area, idx);
+                } finally {
+                    ThreadLocalUI.clear();
+                }
             });
             threads[i].start();
         }
@@ -163,57 +174,69 @@ public class AreaNavigationHelper {
     }
     
     /**
-     * Check if player is already inside or very close to the area.
+     * Check if any corner of the area is reachable via local pathfinding.
      * 
-     * This is NOT about "can PathFinder reach it" - it's about "are we already there".
-     * If we're not inside or close, we need ChunkNav to navigate there first.
-     * 
-     * Returns true only if:
-     * 1. Area is visible (grid loaded)
-     * 2. Player is inside the area bounds OR within 3 tiles of the area edge
+     * Two-stage check:
+     * 1. If grid is NOT in MCache (not loaded) → return false immediately, use ChunkNav
+     * 2. If grid IS in MCache → check with PathFinder, return true only if actually reachable
      */
     public static boolean isAreaReachableByLocalPF(NArea area) throws InterruptedException {
         if (area == null || NUtils.player() == null) return false;
         
         // STAGE 1: Check if grid is loaded in MCache
+        // If not loaded → local PF is impossible, must use ChunkNav
         if (!area.isVisible()) {
             return false;
         }
         
-        // STAGE 2: Get area coordinates
+        // STAGE 2: Grid is in cache, get real coordinates and check with PathFinder
         Pair<Coord2d, Coord2d> rcArea = area.getRCArea();
         if (rcArea == null) {
             return false;
         }
         
-        // STAGE 3: Check if player is inside or very close to the area
-        Coord2d playerPos = NUtils.player().rc;
-        
-        // Check if player is inside the area bounds
-        if (playerPos.x >= rcArea.a.x && playerPos.x <= rcArea.b.x &&
-            playerPos.y >= rcArea.a.y && playerPos.y <= rcArea.b.y) {
-            return true;  // Player is inside the area
+        // Get 4 corners from live data
+        Coord2d[] corners = new Coord2d[] {
+            rcArea.a,                                        // top-left
+            rcArea.b,                                        // bottom-right
+            Coord2d.of(rcArea.a.x, rcArea.b.y),             // bottom-left
+            Coord2d.of(rcArea.b.x, rcArea.a.y)              // top-right
+        };
+
+        // Capture current UI for thread-local binding in spawned threads
+        final NUI boundUI = NUtils.getUI();
+
+        // Test all corners in parallel with PathFinder
+        final boolean[] reachable = new boolean[4];
+        Thread[] threads = new Thread[4];
+
+        for (int i = 0; i < 4; i++) {
+            final int idx = i;
+            final Coord2d corner = corners[i];
+            threads[i] = new Thread(() -> {
+                // Bind thread-local UI so PathFinder uses correct session
+                ThreadLocalUI.set(boundUI);
+                try {
+                    reachable[idx] = PathFinder.isAvailable(corner);
+                } catch (InterruptedException e) {
+                    reachable[idx] = false;
+                } finally {
+                    ThreadLocalUI.clear();
+                }
+            });
+            threads[i].start();
         }
         
-        // Check if player is within 3 tiles of any edge
-        double tileSize = haven.MCache.tilesz.x;
-        double closeDistance = tileSize * 3;
+        // Wait for all threads
+        for (Thread t : threads) {
+            t.join();
+        }
         
-        // Expand area bounds by closeDistance and check if player is within
-        double expandedMinX = rcArea.a.x - closeDistance;
-        double expandedMinY = rcArea.a.y - closeDistance;
-        double expandedMaxX = rcArea.b.x + closeDistance;
-        double expandedMaxY = rcArea.b.y + closeDistance;
-        
-        if (playerPos.x >= expandedMinX && playerPos.x <= expandedMaxX &&
-            playerPos.y >= expandedMinY && playerPos.y <= expandedMaxY) {
-            // Player is close - now verify with PathFinder that we can actually reach
-            // Check center of area
-            Coord2d center = new Coord2d((rcArea.a.x + rcArea.b.x) / 2, (rcArea.a.y + rcArea.b.y) / 2);
-            return PathFinder.isAvailable(center);
+        // Check if any corner is reachable
+        for (boolean r : reachable) {
+            if (r) return true;
         }
 
-        // Player is too far - need ChunkNav
         return false;
     }
 
@@ -243,6 +266,9 @@ public class AreaNavigationHelper {
             Coord2d.of(rcArea.b.x, rcArea.a.y)              // top-right
         };
 
+        // Capture current UI for thread-local binding in spawned threads
+        final NUI boundUI = NUtils.getUI();
+
         // Test all corners in parallel and get path costs
         final double[] pathCosts = new double[4];
         final boolean[] reachable = new boolean[4];
@@ -255,6 +281,8 @@ public class AreaNavigationHelper {
             reachable[idx] = false;
 
             threads[i] = new Thread(() -> {
+                // Bind thread-local UI so PathFinder uses correct session
+                ThreadLocalUI.set(boundUI);
                 try {
                     int cost = PathFinder.getPathCost(corner);
                     if (cost >= 0) {
@@ -263,6 +291,8 @@ public class AreaNavigationHelper {
                     }
                 } catch (InterruptedException e) {
                     // Leave as unreachable
+                } finally {
+                    ThreadLocalUI.clear();
                 }
             });
             threads[i].start();

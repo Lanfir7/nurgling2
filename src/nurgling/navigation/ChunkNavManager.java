@@ -55,13 +55,6 @@ public class ChunkNavManager {
 
     // Guard flag to prevent saves during initialization (prevents Bug #3 - empty graph race condition)
     private volatile boolean initializationInProgress = false;
-    
-    // Flag to track if async loading is in progress
-    private volatile boolean loadingInProgress = false;
-    
-    // Whether currentInstanceId has been restored from the player's chunk after load.
-    // Prevents re-detection on every tick.
-    private volatile boolean instanceIdRestoredFromPlayer = false;
 
     // Current world instance context.
     // All chunks recorded while this value is active belong to the same instance.
@@ -112,7 +105,6 @@ public class ChunkNavManager {
 
     /**
      * Initialize the navigation system for a specific world.
-     * Heavy data loading is performed asynchronously to avoid blocking startup.
      */
     public void initialize(String genus) {
         if (genus == null || genus.isEmpty()) {
@@ -127,41 +119,32 @@ public class ChunkNavManager {
         // Set guard flag BEFORE any state changes to prevent saves during init
         initializationInProgress = true;
 
-        // Always start with recording disabled - user must enable manually
-        NConfig.set(NConfig.Key.chunkNavOverlay, false);
-        NConfig.needUpdate();
-
-        // Save previous world data if switching
-        if (initialized && currentGenus != null) {
-            save();
-        }
-
-        // Clear renderer cache to avoid stale textures from previous genus
-        MinimapChunkNavRenderer.clearCache();
-
-        this.currentGenus = genus;
-        this.graph = new ChunkNavGraph();
-        this.recorder = new ChunkNavRecorder(graph);
-        this.recorder.setManager(this);
-        this.planner = new ChunkNavPlanner(graph);
-        this.portalTracker = new PortalTraversalTracker(graph, recorder, this);
-        this.fileStore = new ChunkNavFileStore(genus);
-
-        // Mark as initialized immediately so tick() can work with empty graph
-        this.initialized = true;
-        this.instanceIdRestoredFromPlayer = false;
-        this.currentInstanceId = SURFACE_INSTANCE;
-        
-        // Load saved data asynchronously to avoid blocking game startup
-        loadingInProgress = true;
-        recordingExecutor.submit(() -> {
-            try {
-                load();
-            } finally {
-                loadingInProgress = false;
-                initializationInProgress = false;
+        try {
+            // Save previous world data if switching
+            if (initialized && currentGenus != null) {
+                save();
             }
-        });
+
+            // Clear renderer cache to avoid stale textures from previous genus
+            MinimapChunkNavRenderer.clearCache();
+
+            this.currentGenus = genus;
+            this.graph = new ChunkNavGraph();
+            this.recorder = new ChunkNavRecorder(graph);
+            this.recorder.setManager(this);
+            this.planner = new ChunkNavPlanner(graph);
+            this.portalTracker = new PortalTraversalTracker(graph, recorder, this);
+            this.fileStore = new ChunkNavFileStore(genus);
+            this.currentInstanceId = SURFACE_INSTANCE;
+
+            // Load saved data (with migration if needed)
+            load();
+
+            this.initialized = true;
+        } finally {
+            // Clear guard flag AFTER load completes (even if exception occurs)
+            initializationInProgress = false;
+        }
     }
 
     /**
@@ -171,17 +154,12 @@ public class ChunkNavManager {
     public void tick() {
         if (!enabled || !initialized) return;
 
-        // After loading, restore currentInstanceId from the player's saved chunk.
-        // This handles the case when the player restarts the client while in a mine:
-        // without this, currentInstanceId stays at SURFACE_INSTANCE=1 and mine chunks
-        // would get wrong instanceId if re-recorded before a portal traversal updates it.
-        if (!instanceIdRestoredFromPlayer && !loadingInProgress) {
-            restoreInstanceIdFromPlayerChunk();
-        }
-
         portalTracker.tick();
+
+        // Save after portal tracking (throttled - won't save every tick)
         saveThrottled();
 
+        // Periodically record all visible grids (not just newly loaded ones)
         long now = System.currentTimeMillis();
         if (now - lastRecordTime >= RECORD_THROTTLE_MS) {
             lastRecordTime = now;
@@ -201,6 +179,12 @@ public class ChunkNavManager {
      * Runs in a background thread to avoid FPS drops.
      */
     private void recordVisibleGrids() {
+        // Skip if ChunkNav overlay is disabled
+        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
+        if (!(val instanceof Boolean) || !(Boolean) val) {
+            return;
+        }
+
         // Skip if recording is already in progress
         if (recordingInProgress) {
             return;
@@ -208,8 +192,15 @@ public class ChunkNavManager {
 
         // Capture grid data on main thread (quick), then process in background
         try {
-            MCache mcache = NUtils.getGameUI().map.glob.map;
+            NGameUI gui = NUtils.getGameUI();
+            if (gui == null || gui.map == null || gui.map.glob == null) return;
+
+            MCache mcache = gui.map.glob.map;
             if (mcache == null) return;
+
+            // Capture the glob reference for background thread - this ensures
+            // the recorder uses the correct session's gob data
+            final Glob capturedGlob = gui.map.glob;
 
             // Capture list of grids to record (quick operation on main thread)
             List<MCache.Grid> gridsToRecord = new ArrayList<>();
@@ -223,12 +214,12 @@ public class ChunkNavManager {
 
             if (gridsToRecord.isEmpty()) return;
 
-            // Submit recording task to background thread
+            // Submit recording task to background thread with captured glob
             recordingInProgress = true;
             recordingExecutor.submit(() -> {
                 try {
                     for (MCache.Grid grid : gridsToRecord) {
-                        recorder.recordGrid(grid);
+                        recorder.recordGrid(grid, capturedGlob);
                     }
                     saveThrottled();
                 } catch (Exception e) {
@@ -247,9 +238,14 @@ public class ChunkNavManager {
      * Ensure the player's current chunk is recorded in the graph.
      * This is called before path planning to handle cases where the player
      * teleported (e.g., via Hearth Fire skill) to an unrecorded chunk.
-     * Note: Recording always works - chunkNavOverlay toggle only controls visualization.
      */
     private void ensurePlayerChunkRecorded() {
+        // Skip if ChunkNav overlay is disabled
+        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
+        if (!(val instanceof Boolean) || !(Boolean) val) {
+            return;
+        }
+
         try {
             NGameUI gui = NUtils.getGameUI();
             if (gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) {
@@ -441,7 +437,6 @@ public class ChunkNavManager {
 
     /**
      * Navigate to an area using the chunk navigation system.
-     * Includes retry logic for cases when the map is still loading.
      */
     public nurgling.actions.Results navigateToArea(NArea area, NGameUI gui) throws InterruptedException {
         if (!enabled || !initialized) {
@@ -593,10 +588,6 @@ public class ChunkNavManager {
             }
 
             // One-time migration: wipe ALL neighbor data from legacy V1 format.
-            // Legacy data can contain false cross-instance neighbor links
-            // (e.g., mine chunks falsely connected to surface chunks) that were created
-            // before instanceId was introduced. These links cause the pathfinder to route
-            // through mines instead of houses. The wipe forces re-discovery with instanceId protection.
             if (fileStore.needsInstanceMigration() && !loadedChunks.isEmpty()) {
                 int cleared = wipeAllNeighborData();
                 System.out.println("ChunkNav: Instance migration - wiped " + cleared +
@@ -607,185 +598,26 @@ public class ChunkNavManager {
             }
 
             // Repair: remove false cross-instance neighbor links
-            // (for data that accumulated after migration but with incorrect instanceIds)
             int repaired = repairCrossInstanceLinks();
             if (repaired > 0) {
                 System.out.println("ChunkNav: Repaired " + repaired + " false cross-instance neighbor links");
             }
 
-            // Repair: infer correct layer for chunks that have portals
-            // detectLayer is unreliable (uses global gob visibility), so portal types
-            // are the most trustworthy source for layer classification.
-            int layerFromPortals = repairLayersFromPortalTypes();
-            if (layerFromPortals > 0) {
-                System.out.println("ChunkNav: Fixed " + layerFromPortals + " chunk layers from portal types");
-            }
-
-            // Repair: fix surface chunks wrongly tagged as "inside" or "cellar"
-            // due to a bug where detectLayer looked at all visible gobs globally
-            int layerFixes = repairSurfaceChunkLayers();
-            if (layerFixes > 0) {
-                System.out.println("ChunkNav: Fixed " + layerFixes + " surface chunks with wrong layer");
+            // Repair: invalidate stale portal connections
+            int stalePortals = invalidateStalePortalConnections();
+            if (stalePortals > 0) {
+                System.out.println("ChunkNav: Invalidated " + stalePortals + " stale portal connections");
             }
 
             // Rebuild connections after loading all chunks
             graph.rebuildAllConnections();
 
-            // Diagnostic: dump portal summary after loading
-            int totalPortals = 0, connectedPortals = 0;
-            for (ChunkNavData c : graph.getAllChunks()) {
-                for (ChunkPortal p : c.portals) {
-                    totalPortals++;
-                    if (p.connectsToGridId != -1) connectedPortals++;
-                }
-            }
-            System.out.println("ChunkNav: Loaded " + loadedChunks.size() + " chunks, " +
-                totalPortals + " portals (" + connectedPortals + " connected) from binary format");
+            System.out.println("ChunkNav: Loaded " + loadedChunks.size() + " chunks from binary format");
 
         } catch (Exception e) {
             System.err.println("ChunkNav: Failed to load data: " + e.getMessage());
             e.printStackTrace();
         }
-    }
-
-    /**
-     * Wipe ALL neighbor data from the graph.
-     * Used as a one-time migration when upgrading from V1 to V2 binary format.
-     * After wipe, neighbors will be re-discovered correctly (with instanceId protection)
-     * as the player explores.
-     */
-    private int wipeAllNeighborData() {
-        int cleared = 0;
-        for (ChunkNavData chunk : graph.getAllChunks()) {
-            if (chunk.neighborNorth != -1) { chunk.neighborNorth = -1; cleared++; }
-            if (chunk.neighborSouth != -1) { chunk.neighborSouth = -1; cleared++; }
-            if (chunk.neighborEast != -1) { chunk.neighborEast = -1; cleared++; }
-            if (chunk.neighborWest != -1) { chunk.neighborWest = -1; cleared++; }
-            chunk.connectedChunks.clear();
-        }
-        return cleared;
-    }
-
-    /**
-     * Infer correct layer for chunks based on the portal types they contain.
-     * Portal types are set during traversal recording and are much more reliable
-     * than detectLayer (which uses global gob visibility and is easily wrong).
-     *
-     * Rules:
-     * - Chunk has cellarstairs → "cellar"
-     * - Chunk has -door, downstairs, upstairs, cellardoor → "inside"
-     * - Chunk has minehole, ladder, building exterior → "outside"
-     */
-    private int repairLayersFromPortalTypes() {
-        int fixed = 0;
-        for (ChunkNavData chunk : graph.getAllChunks()) {
-            if (chunk.portals.isEmpty()) continue;
-
-            String inferred = inferLayerFromPortals(chunk);
-            if (inferred != null && !inferred.equals(chunk.layer)) {
-                chunk.layer = inferred;
-                fixed++;
-            }
-        }
-        return fixed;
-    }
-
-    /**
-     * Infer layer from portal types present on a chunk.
-     * The EXIT portal (what you see after arriving) determines the layer.
-     */
-    private static String inferLayerFromPortals(ChunkNavData chunk) {
-        boolean hasCellarStairs = false;
-        boolean hasInsideDoor = false;
-        boolean hasOutsideIndicator = false;
-
-        for (ChunkPortal portal : chunk.portals) {
-            if (portal.gobName == null) continue;
-            String lower = portal.gobName.toLowerCase();
-
-            if (lower.contains("cellarstairs")) {
-                hasCellarStairs = true;
-            } else if (lower.endsWith("-door") || lower.contains("downstairs") ||
-                       lower.contains("upstairs") || lower.contains("cellardoor")) {
-                hasInsideDoor = true;
-            } else if (lower.contains("minehole") || lower.contains("ladder")) {
-                hasOutsideIndicator = true;
-            } else if (isBuildingExterior(lower)) {
-                hasOutsideIndicator = true;
-            }
-        }
-
-        if (hasCellarStairs) return "cellar";
-        if (hasInsideDoor) return "inside";
-        if (hasOutsideIndicator) return "outside";
-        return null;
-    }
-
-    private static boolean isBuildingExterior(String lower) {
-        return (lower.contains("stonemansion") || lower.contains("logcabin") ||
-                lower.contains("timberhouse") || lower.contains("stonestead") ||
-                lower.contains("greathall") || lower.contains("stonetower") ||
-                lower.contains("windmill")) && !lower.contains("-door");
-    }
-
-    /**
-     * Fix surface chunks that were wrongly tagged as "inside" or "cellar".
-     * Old detectLayer bug: it looked at ALL visible gobs (global), so a door
-     * on a nearby building could mark surface chunks as "inside".
-     * Surface instance chunks must always be "outside".
-     */
-    private int repairSurfaceChunkLayers() {
-        int fixed = 0;
-        for (ChunkNavData chunk : graph.getAllChunks()) {
-            if (chunk.instanceId == SURFACE_INSTANCE && !"outside".equals(chunk.layer)) {
-                chunk.layer = "outside";
-                fixed++;
-            }
-        }
-        return fixed;
-    }
-
-    /**
-     * Repair cross-instance neighbor links in loaded chunk data.
-     * Legacy data (before instanceId was introduced) may contain false neighbor
-     * connections between chunks from different instances (e.g., mine chunk linked
-     * to surface chunk). This method removes those false links.
-     * 
-     * Only repairs links where BOTH chunks have a known instanceId (!= 0).
-     * Chunks with instanceId=0 (legacy, not yet visited) are left untouched.
-     */
-    private int repairCrossInstanceLinks() {
-        int repaired = 0;
-        for (ChunkNavData chunk : graph.getAllChunks()) {
-            if (chunk.instanceId == 0) continue;
-
-            // Check each neighbor link
-            long[] neighbors = {chunk.neighborNorth, chunk.neighborSouth, chunk.neighborEast, chunk.neighborWest};
-            for (int i = 0; i < 4; i++) {
-                if (neighbors[i] == -1) continue;
-                ChunkNavData neighbor = graph.getChunk(neighbors[i]);
-                if (neighbor == null || neighbor.instanceId == 0) continue;
-
-                if (chunk.instanceId != neighbor.instanceId) {
-                    // False cross-instance link - remove it
-                    switch (i) {
-                        case 0: chunk.neighborNorth = -1; break;
-                        case 1: chunk.neighborSouth = -1; break;
-                        case 2: chunk.neighborEast = -1; break;
-                        case 3: chunk.neighborWest = -1; break;
-                    }
-                    repaired++;
-                }
-            }
-
-            // Also clean connectedChunks
-            chunk.connectedChunks.removeIf(connectedId -> {
-                ChunkNavData connected = graph.getChunk(connectedId);
-                return connected != null && connected.instanceId != 0
-                        && chunk.instanceId != connected.instanceId;
-            });
-        }
-        return repaired;
     }
 
     /**
@@ -873,12 +705,36 @@ public class ChunkNavManager {
         // Delete the chunk file from disk
         fileStore.deleteChunkFile(gridId);
 
-        // Repair any asymmetric links left after deletion
-        int repaired = graph.repairNeighborConsistency();
-
-        System.out.println("ChunkNav: Deleted chunk " + gridId + " (modified " + modifiedChunks.size() +
-            " neighbors" + (repaired > 0 ? ", repaired " + repaired + " links" : "") + ")");
+        System.out.println("ChunkNav: Deleted chunk " + gridId + " (modified " + modifiedChunks.size() + " neighbors)");
         return true;
+    }
+
+    /**
+     * Delete ALL chunks from memory and disk.
+     * This is a destructive operation that clears all navigation data.
+     * @return The number of chunks deleted
+     */
+    public int deleteAllChunks() {
+        if (!initialized || fileStore == null) {
+            return 0;
+        }
+
+        // Get count before clearing
+        int count = graph.getAllChunks().size();
+
+        // Clear all chunks from memory
+        graph.clear();
+
+        // Delete all chunk files from disk
+        int filesDeleted = fileStore.deleteAllChunkFiles();
+
+        // Reset the portal tracker to clear any cached state
+        if (portalTracker != null) {
+            portalTracker.reset();
+        }
+
+        System.out.println("ChunkNav: Deleted all chunks (" + count + " from memory, " + filesDeleted + " files)");
+        return count;
     }
 
     /**
@@ -922,53 +778,6 @@ public class ChunkNavManager {
     }
 
     /**
-     * Get the current world instance context.
-     * Used by ChunkNavRecorder to assign instanceId to newly recorded chunks.
-     */
-    public long getCurrentInstanceId() {
-        return currentInstanceId;
-    }
-
-    /**
-     * Set the current world instance context.
-     * Called by PortalTraversalTracker when player traverses a portal.
-     */
-    public void setCurrentInstanceId(long instanceId) {
-        this.currentInstanceId = instanceId;
-        this.instanceIdRestoredFromPlayer = true;
-    }
-
-    /**
-     * Restore currentInstanceId from the player's saved chunk data.
-     * Called once after loading to handle client restart inside a mine.
-     */
-    private void restoreInstanceIdFromPlayerChunk() {
-        instanceIdRestoredFromPlayer = true;
-        try {
-            Gob player = NUtils.player();
-            if (player == null) return;
-
-            MCache mcache = NUtils.getGameUI().map.glob.map;
-            if (mcache == null) return;
-
-            Coord tileCoord = player.rc.floor(MCache.tilesz);
-            MCache.Grid playerGrid = mcache.getgridt(tileCoord);
-            if (playerGrid == null) return;
-
-            ChunkNavData chunk = graph.getChunk(playerGrid.id);
-            if (chunk != null && chunk.instanceId != 0) {
-                this.currentInstanceId = chunk.instanceId;
-                if (chunk.instanceId != SURFACE_INSTANCE) {
-                    System.out.println("ChunkNav: Restored instanceId=" + chunk.instanceId +
-                        " from player chunk " + playerGrid.id + " (player is inside mine/building)");
-                }
-            }
-        } catch (Exception e) {
-            // Player not ready yet — will stay at SURFACE_INSTANCE
-        }
-    }
-
-    /**
      * Shutdown the executor (for explicit cleanup if needed).
      * Note: No automatic save here - we save every 2 seconds via tick(),
      * so losing at most 2 seconds of data is acceptable.
@@ -976,7 +785,7 @@ public class ChunkNavManager {
     public void shutdown() {
         initialized = false;
 
-        // Shutdown recording executor (stops thread leak on character switch)
+        // Shutdown recording executor
         if (recordingExecutor != null) {
             recordingExecutor.shutdown();
             try {
@@ -986,11 +795,6 @@ public class ChunkNavManager {
             } catch (InterruptedException e) {
                 recordingExecutor.shutdownNow();
             }
-            recordingExecutor = null;
-        }
-        graph.clear();
-        if (instance == this) {
-            instance = null;
         }
     }
 
@@ -1005,6 +809,107 @@ public class ChunkNavManager {
             }
         } catch (Exception e) {
             // Ignore - UI might not be ready
+        }
+    }
+
+    // ============== Instance ID Management ==============
+
+    public long getCurrentInstanceId() {
+        return currentInstanceId;
+    }
+
+    public void setCurrentInstanceId(long id) {
+        this.currentInstanceId = id;
+    }
+
+    /**
+     * Wipe ALL neighbor data from all chunks.
+     * Used during V1->V2 migration to clear potentially false cross-instance neighbor links.
+     */
+    private int wipeAllNeighborData() {
+        int cleared = 0;
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            if (chunk.neighborNorth != -1 || chunk.neighborSouth != -1 ||
+                chunk.neighborEast != -1 || chunk.neighborWest != -1) {
+                chunk.neighborNorth = -1;
+                chunk.neighborSouth = -1;
+                chunk.neighborEast = -1;
+                chunk.neighborWest = -1;
+                chunk.connectedChunks.clear();
+                cleared++;
+            }
+        }
+        return cleared;
+    }
+
+    /**
+     * Remove neighbor links between chunks with different non-zero instanceIds.
+     */
+    private int repairCrossInstanceLinks() {
+        int repaired = 0;
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            if (chunk.instanceId == 0) continue;
+            long[] neighbors = {chunk.neighborNorth, chunk.neighborSouth, chunk.neighborEast, chunk.neighborWest};
+            for (int i = 0; i < neighbors.length; i++) {
+                if (neighbors[i] == -1) continue;
+                ChunkNavData other = graph.getChunk(neighbors[i]);
+                if (other != null && other.instanceId != 0 && other.instanceId != chunk.instanceId) {
+                    switch (i) {
+                        case 0: chunk.neighborNorth = -1; break;
+                        case 1: chunk.neighborSouth = -1; break;
+                        case 2: chunk.neighborEast = -1; break;
+                        case 3: chunk.neighborWest = -1; break;
+                    }
+                    chunk.connectedChunks.remove(other.gridId);
+                    repaired++;
+                }
+            }
+        }
+        return repaired;
+    }
+
+    /**
+     * Remove portal connections where portal type is incompatible with target chunk layer.
+     */
+    private int invalidateStalePortalConnections() {
+        int invalidated = 0;
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            Iterator<ChunkPortal> it = chunk.portals.iterator();
+            while (it.hasNext()) {
+                ChunkPortal portal = it.next();
+                if (portal.connectsToGridId == -1) continue;
+                ChunkNavData target = graph.getChunk(portal.connectsToGridId);
+                if (target == null) continue;
+                if (!isPortalTargetLayerValid(portal.type, target.layer)) {
+                    portal.connectsToGridId = -1;
+                    portal.exitLocalCoord = null;
+                    invalidated++;
+                }
+            }
+        }
+        return invalidated;
+    }
+
+    /**
+     * Check if a portal type is compatible with a target chunk layer.
+     */
+    static boolean isPortalTargetLayerValid(ChunkPortal.PortalType type, String targetLayer) {
+        if (type == null || targetLayer == null) return true;
+        switch (type) {
+            case MINEHOLE:
+            case MINE_ENTRANCE:
+                return "outside".equals(targetLayer);
+            case CELLAR:
+                return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
+            case LADDER:
+                return "outside".equals(targetLayer);
+            case STAIRS_UP:
+            case STAIRS_DOWN:
+                return "inside".equals(targetLayer);
+            case DOOR:
+                return "inside".equals(targetLayer) || "outside".equals(targetLayer);
+            default:
+                return true;
         }
     }
 }

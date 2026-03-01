@@ -182,11 +182,6 @@ public class ChunkNavExecutor implements Action {
             tickPortalTracker();
         }
 
-        // Verify player actually reached the target area (same as followWaypointPath does)
-        if (targetArea != null) {
-            return navigateToTargetArea(gui);
-        }
-
         return Results.SUCCESS();
     }
 
@@ -254,8 +249,6 @@ public class ChunkNavExecutor implements Action {
 
         for (ChunkPortal portal : portals) {
             // CRITICAL: Skip portals whose type is incompatible with the target layer.
-            // E.g., a minehole (MINEHOLE) should never be used to reach "inside" layer.
-            // Re-classify type from gobName for safety (legacy data may have wrong types).
             ChunkPortal.PortalType effectiveType = portal.type;
             if (effectiveType == null && portal.gobName != null) {
                 effectiveType = ChunkPortal.classifyPortal(portal.gobName);
@@ -290,31 +283,6 @@ public class ChunkNavExecutor implements Action {
         }
 
         return scored.stream().sorted().collect(Collectors.toList());
-    }
-
-    /**
-     * Check if a portal type is compatible with a target layer.
-     * Same rules as UnifiedTilePathfinder.isPortalTargetLayerValid().
-     */
-    private static boolean isPortalTypeCompatible(ChunkPortal.PortalType type, String targetLayer) {
-        if (type == null || targetLayer == null) return true;
-
-        switch (type) {
-            case MINEHOLE:
-            case MINE_ENTRANCE:
-                return "outside".equals(targetLayer);
-            case CELLAR:
-                return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
-            case LADDER:
-                return "outside".equals(targetLayer);
-            case STAIRS_UP:
-            case STAIRS_DOWN:
-                return "inside".equals(targetLayer);
-            case DOOR:
-                return "inside".equals(targetLayer) || "outside".equals(targetLayer);
-            default:
-                return true;
-        }
     }
 
     private Gob findNearestPortalGob(NGameUI gui, Gob player, String expectedType) {
@@ -465,39 +433,6 @@ public class ChunkNavExecutor implements Action {
         return traversePortalGob(gui, portalGob, targetGridId);
     }
 
-    /**
-     * Check if a gob name is a building exterior (whole-building gob, not a door).
-     * These gobs represent the building structure from outside - you click them to enter.
-     * Their center position is inside the building footprint and not walkable.
-     */
-    private boolean isBuildingExteriorGob(String gobName) {
-        return ChunkPortal.isBuildingExterior(gobName);
-    }
-
-    /**
-     * Check if a tile is confirmed blocked in recorded data.
-     * A tile is only considered blocked if ALL cells in the 2x2 block
-     * have been observed AND are marked as blocked (walkability=2).
-     * Unobserved cells (default=2 but never actually seen) are treated
-     * as potentially walkable to avoid false positives from partial exploration.
-     */
-    private boolean isTileConfirmedBlocked(ChunkNavData chunk, int tileX, int tileY) {
-        if (chunk == null) return false;
-        int baseCellX = tileX * CELLS_PER_TILE;
-        int baseCellY = tileY * CELLS_PER_TILE;
-        for (int dx = 0; dx < CELLS_PER_TILE; dx++) {
-            for (int dy = 0; dy < CELLS_PER_TILE; dy++) {
-                int cx = baseCellX + dx;
-                int cy = baseCellY + dy;
-                // If any cell is unobserved or walkable, the tile is NOT confirmed blocked
-                if (!chunk.isObserved(cx, cy) || chunk.getWalkability(cx, cy) != 2) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
     private Gob findGobByName(NGameUI gui, String gobName, Coord2d center, double maxDist) {
         Gob closest = null;
         double closestDist = maxDist;
@@ -552,11 +487,7 @@ public class ChunkNavExecutor implements Action {
         long playerGridAfter = graph.getPlayerChunkId();
 
         if (playerGridBefore != -1 && playerGridAfter != -1 && playerGridAfter == playerGridBefore) {
-            return Results.FAIL();
-        }
-
-        // Verify we arrived at the EXPECTED grid, not some other portal's destination
-        if (targetGridId != -1 && playerGridAfter != -1 && playerGridAfter != targetGridId) {
+            // Player's grid didn't change - portal traversal failed
             return Results.FAIL();
         }
 
@@ -577,6 +508,37 @@ public class ChunkNavExecutor implements Action {
                lower.contains("stonetower") ||
                lower.contains("windmill") ||
                lower.contains("primitivetent");
+    }
+
+    /**
+     * Check if a gob name is a building exterior (whole-building gob, not a door).
+     */
+    private boolean isBuildingExteriorGob(String gobName) {
+        return ChunkPortal.isBuildingExterior(gobName);
+    }
+
+    /**
+     * Check if a portal type is compatible with a target layer.
+     */
+    private static boolean isPortalTypeCompatible(ChunkPortal.PortalType type, String targetLayer) {
+        if (type == null || targetLayer == null) return true;
+
+        switch (type) {
+            case MINEHOLE:
+            case MINE_ENTRANCE:
+                return "outside".equalsIgnoreCase(targetLayer);
+            case CELLAR:
+                return "cellar".equalsIgnoreCase(targetLayer) || "inside".equalsIgnoreCase(targetLayer);
+            case LADDER:
+                return "outside".equalsIgnoreCase(targetLayer);
+            case STAIRS_UP:
+            case STAIRS_DOWN:
+                return "inside".equalsIgnoreCase(targetLayer);
+            case DOOR:
+                return "inside".equalsIgnoreCase(targetLayer) || "outside".equalsIgnoreCase(targetLayer);
+            default:
+                return true;
+        }
     }
 
     /**
@@ -679,41 +641,81 @@ public class ChunkNavExecutor implements Action {
     }
 
     private SegmentWalkResult followSegmentTiles(ChunkPath.PathSegment segment, NGameUI gui, long targetGridId) throws InterruptedException {
+        System.out.println("[ChunkNavExecutor] followSegmentTiles called:");
+        System.out.println("  - Segment gridId: " + segment.gridId);
+        System.out.println("  - Segment type: " + segment.type);
+        System.out.println("  - Segment steps count: " + (segment.steps != null ? segment.steps.size() : 0));
+        System.out.println("  - Segment worldTileOrigin: " + segment.worldTileOrigin);
+        System.out.println("  - Target gridId: " + targetGridId);
+
         if (segment.isEmpty()) {
+            System.out.println("[ChunkNavExecutor] Segment is empty, returning success");
             return SegmentWalkResult.success();
         }
 
         ChunkNavData segmentChunk = graph.getChunk(segment.gridId);
+        System.out.println("[ChunkNavExecutor] SegmentChunk from graph: " + (segmentChunk != null ? "found" : "NOT FOUND"));
+        if (segmentChunk != null) {
+            System.out.println("  - Layer: " + segmentChunk.layer);
+            System.out.println("  - Stored worldTileOrigin: " + segmentChunk.worldTileOrigin);
+        }
 
         // Get LIVE worldTileOrigin from MCache
         Coord liveWorldTileOrigin = null;
         try {
             MCache mcache = gui.map.glob.map;
             synchronized (mcache.grids) {
+                System.out.println("[ChunkNavExecutor] Searching MCache for gridId " + segment.gridId + " (loaded grids: " + mcache.grids.size() + ")");
                 for (MCache.Grid grid : mcache.grids.values()) {
                     if (grid.id == segment.gridId) {
                         liveWorldTileOrigin = grid.ul;
+                        System.out.println("[ChunkNavExecutor] FOUND in MCache! liveWorldTileOrigin = " + liveWorldTileOrigin);
                         break;
                     }
                 }
+                if (liveWorldTileOrigin == null) {
+                    System.out.println("[ChunkNavExecutor] NOT FOUND in MCache - grid not loaded");
+                }
             }
         } catch (Exception e) {
-            // Ignore
+            System.out.println("[ChunkNavExecutor] Exception accessing MCache: " + e.getMessage());
         }
 
         // Get player position for reference
         Gob player = gui.map.player();
+        if (player != null) {
+            System.out.println("[ChunkNavExecutor] Player position: " + player.rc);
+        }
 
         // Determine which worldTileOrigin to use
         Coord currentWorldTileOrigin = liveWorldTileOrigin;
+        String originSource = "LIVE";
         if (currentWorldTileOrigin == null && segmentChunk != null && segmentChunk.worldTileOrigin != null) {
             currentWorldTileOrigin = segmentChunk.worldTileOrigin;
+            originSource = "STORED_CHUNK";
         } else if (currentWorldTileOrigin == null && segment.worldTileOrigin != null) {
             currentWorldTileOrigin = segment.worldTileOrigin;
+            originSource = "SEGMENT";
         }
 
+        System.out.println("[ChunkNavExecutor] Using worldTileOrigin: " + currentWorldTileOrigin + " (source: " + originSource + ")");
+
         if (currentWorldTileOrigin == null) {
+            System.out.println("[ChunkNavExecutor] ERROR: No worldTileOrigin available!");
             return SegmentWalkResult.fail();
+        }
+
+        // Show first waypoint calculation
+        if (!segment.steps.isEmpty()) {
+            ChunkPath.TileStep firstStep = segment.steps.get(0);
+            Coord worldTile = currentWorldTileOrigin.add(firstStep.localCoord);
+            Coord2d waypoint = worldTile.mul(MCache.tilesz).add(MCache.tilehsz);
+            System.out.println("[ChunkNavExecutor] First step localCoord: " + firstStep.localCoord);
+            System.out.println("[ChunkNavExecutor] First step worldTile: " + worldTile);
+            System.out.println("[ChunkNavExecutor] First step waypoint: " + waypoint);
+            if (player != null) {
+                System.out.println("[ChunkNavExecutor] Distance to first waypoint: " + player.rc.dist(waypoint));
+            }
         }
 
         // For PORTAL segments, check if we should look for portal gob during walking
@@ -769,25 +771,30 @@ public class ChunkNavExecutor implements Action {
             }
 
             // Check walkability before attempting PathFinder to avoid wasting time on blocked tiles
-            // Only skip tiles that are CONFIRMED blocked (all cells observed AND blocked)
-            if (isTileConfirmedBlocked(segmentChunk, targetStep.localCoord.x, targetStep.localCoord.y)) {
-                // Target tile is blocked - scan backwards to find nearest walkable step
-                boolean foundWalkable = false;
-                for (int scanIdx = targetIndex - 1; scanIdx > currentStepIndex; scanIdx--) {
-                    ChunkPath.TileStep scanStep = segment.steps.get(scanIdx);
-                    if (!isTileConfirmedBlocked(segmentChunk, scanStep.localCoord.x, scanStep.localCoord.y)) {
-                        targetIndex = scanIdx;
-                        targetStep = scanStep;
-                        waypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
-                            segmentChunk, targetStep.localCoord.x, targetStep.localCoord.y, currentWorldTileOrigin);
-                        foundWalkable = true;
-                        break;
+            if (segmentChunk != null) {
+                int cellX = targetStep.localCoord.x * CELLS_PER_TILE;
+                int cellY = targetStep.localCoord.y * CELLS_PER_TILE;
+                if (segmentChunk.getWalkability(cellX, cellY) == 2) {
+                    // Target tile is blocked - scan backwards to find nearest walkable step
+                    boolean foundWalkable = false;
+                    for (int scanIdx = targetIndex - 1; scanIdx > currentStepIndex; scanIdx--) {
+                        ChunkPath.TileStep scanStep = segment.steps.get(scanIdx);
+                        int scanCellX = scanStep.localCoord.x * CELLS_PER_TILE;
+                        int scanCellY = scanStep.localCoord.y * CELLS_PER_TILE;
+                        if (segmentChunk.getWalkability(scanCellX, scanCellY) == 0) {
+                            targetIndex = scanIdx;
+                            targetStep = scanStep;
+                            waypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
+                                segmentChunk, targetStep.localCoord.x, targetStep.localCoord.y, currentWorldTileOrigin);
+                            foundWalkable = true;
+                            break;
+                        }
                     }
-                }
-                if (!foundWalkable) {
-                    // No walkable tile in this interval - skip ahead
-                    currentStepIndex = targetIndex + 1;
-                    continue;
+                    if (!foundWalkable) {
+                        // No walkable tile in this interval - skip ahead
+                        currentStepIndex = targetIndex + 1;
+                        continue;
+                    }
                 }
             }
 
@@ -805,8 +812,12 @@ public class ChunkNavExecutor implements Action {
             for (int midIndex = currentStepIndex + 5; midIndex < targetIndex; midIndex += 5) {
                 ChunkPath.TileStep midStep = segment.steps.get(midIndex);
 
-                // Skip confirmed blocked tiles
-                if (isTileConfirmedBlocked(segmentChunk, midStep.localCoord.x, midStep.localCoord.y)) continue;
+                // Skip blocked tiles
+                if (segmentChunk != null) {
+                    int midCellX = midStep.localCoord.x * CELLS_PER_TILE;
+                    int midCellY = midStep.localCoord.y * CELLS_PER_TILE;
+                    if (segmentChunk.getWalkability(midCellX, midCellY) == 2) continue;
+                }
 
                 // Compute targeting walkable cell within tile (not tile center)
                 Coord2d midWaypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
@@ -828,8 +839,12 @@ public class ChunkNavExecutor implements Action {
                 for (int singleIndex = currentStepIndex + 1; singleIndex <= targetIndex; singleIndex++) {
                     ChunkPath.TileStep singleStep = segment.steps.get(singleIndex);
 
-                    // Skip confirmed blocked tiles
-                    if (isTileConfirmedBlocked(segmentChunk, singleStep.localCoord.x, singleStep.localCoord.y)) continue;
+                    // Skip blocked tiles
+                    if (segmentChunk != null) {
+                        int sCellX = singleStep.localCoord.x * CELLS_PER_TILE;
+                        int sCellY = singleStep.localCoord.y * CELLS_PER_TILE;
+                        if (segmentChunk.getWalkability(sCellX, sCellY) == 2) continue;
+                    }
 
                     // Compute targeting walkable cell within tile (not tile center)
                     Coord2d singleWaypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
@@ -857,7 +872,6 @@ public class ChunkNavExecutor implements Action {
 
         return SegmentWalkResult.success();
     }
-
 
     /**
      * Unified method for incremental navigation toward a target.
@@ -972,16 +986,6 @@ public class ChunkNavExecutor implements Action {
             return Results.FAIL();
         }
 
-        Gob currentPlayer = gui.map.player();
-        if (currentPlayer == null) {
-            return Results.FAIL();
-        }
-
-        // Check if player is already inside the area
-        if (targetArea.checkHit(currentPlayer.rc)) {
-            return Results.SUCCESS();
-        }
-
         Pair<Coord2d, Coord2d> areaBounds = targetArea.getRCArea();
         Coord2d areaCenter = targetArea.getCenter2d();
 
@@ -1020,7 +1024,7 @@ public class ChunkNavExecutor implements Action {
             return Results.FAIL();
         }
 
-        currentPlayer = gui.map.player();
+        Gob currentPlayer = gui.map.player();
         if (currentPlayer == null) {
             return Results.FAIL();
         }

@@ -98,15 +98,25 @@ public class TunnelingDialog extends Window {
         }
     }
 
-    // Current selections (loaded from persistent config)
-    private Direction selectedDirection;
-    private TunnelSide selectedTunnelSide;
-    private TunnelSide selectedWingSide;
-    private SupportType selectedSupportType;
-    private boolean wingNorth;
-    private boolean wingSouth;
-    private boolean wingEast;
-    private boolean wingWest;
+    // Session-persistent selections (static to survive dialog close/reopen)
+    private static Direction savedDirection = Direction.NORTH;
+    private static TunnelSide savedTunnelSide = TunnelSide.WEST;
+    private static TunnelSide savedWingSide = TunnelSide.NORTH;
+    private static SupportType savedSupportType = SupportType.STONE_COLUMN;
+    private static boolean savedWingNorth = false;
+    private static boolean savedWingSouth = false;
+    private static boolean savedWingEast = false;
+    private static boolean savedWingWest = false;
+
+    // Current selections (initialized from saved values)
+    private Direction selectedDirection = savedDirection;
+    private TunnelSide selectedTunnelSide = savedTunnelSide;
+    private TunnelSide selectedWingSide = savedWingSide;
+    private SupportType selectedSupportType = savedSupportType;
+    private boolean wingNorth = savedWingNorth;
+    private boolean wingSouth = savedWingSouth;
+    private boolean wingEast = savedWingEast;
+    private boolean wingWest = savedWingWest;
     private boolean doubleTunnel;
 
     // Reference arrays for communication with bot

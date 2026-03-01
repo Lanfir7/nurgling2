@@ -126,6 +126,21 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
 	public String stats() {return("N/A");}
 
+	/**
+	 * Capture current camera state for syncing across sessions.
+	 * Override in subclasses to capture camera-specific state.
+	 */
+	public nurgling.sessions.CameraState captureState() {
+	    return null; // Default: no state to capture
+	}
+
+	/**
+	 * Apply camera state from another session.
+	 * Override in subclasses to apply camera-specific state.
+	 */
+	public void applyState(nurgling.sessions.CameraState state) {
+	    // Default: do nothing
+	}
 
 	protected Coord inversion(Coord c, Coord o) {
 		Boolean invertHor = (Boolean)NConfig.get(NConfig.Key.invert_hor);
@@ -238,6 +253,24 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	public String stats() {
 	    return(String.format("%f %f %f", elev, dist(elev), field(elev)));
 	}
+
+	@Override
+	public nurgling.sessions.CameraState captureState() {
+	    return new nurgling.sessions.CameraState("FollowCam", telev, tangl);
+	}
+
+	@Override
+	public void applyState(nurgling.sessions.CameraState state) {
+	    if (state == null) return;
+	    // Apply rotation regardless of camera type (set both target and current for instant change)
+	    this.tangl = state.rotation;
+	    this.angl = state.rotation;
+	    // Only apply zoom if camera types match
+	    if ("FollowCam".equals(state.cameraType)) {
+		this.telev = state.zoom;
+		this.elev = state.zoom;
+	    }
+	}
     }
     static {camtypes.put("follow", FollowCam.class);}
 
@@ -279,6 +312,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		d = 5;
 	    dist = d;
 	    return(true);
+	}
+
+	@Override
+	public nurgling.sessions.CameraState captureState() {
+	    return new nurgling.sessions.CameraState("SimpleCam", dist, angl);
+	}
+
+	@Override
+	public void applyState(nurgling.sessions.CameraState state) {
+	    if (state == null) return;
+	    // Apply rotation (SimpleCam doesn't have separate target/current for rotation)
+	    this.angl = state.rotation;
+	    // Only apply zoom if camera types match (SimpleCam doesn't have separate target/current for dist)
+	    if ("SimpleCam".equals(state.cameraType)) {
+		this.dist = state.zoom;
+	    }
 	}
     }
     static {camtypes.put("worse", SimpleCam.class);}
@@ -339,6 +388,25 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    tdist = d;
 	    return(true);
 	}
+
+	@Override
+	public nurgling.sessions.CameraState captureState() {
+	    return new nurgling.sessions.CameraState("FreeCam", tdist, tangl, cc);
+	}
+
+	@Override
+	public void applyState(nurgling.sessions.CameraState state) {
+	    if (state == null) return;
+	    // Apply rotation regardless of camera type (set both target and current for instant change)
+	    this.tangl = state.rotation;
+	    this.angl = state.rotation;
+	    // Only apply zoom if camera types match
+	    if ("FreeCam".equals(state.cameraType)) {
+		this.tdist = state.zoom;
+		this.dist = state.zoom;
+		// Skip position sync - let camera reset to current player position
+	    }
+	}
     }
     static {camtypes.put("bad", FreeCam.class);}
     
@@ -393,6 +461,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
 	public String stats() {
 	    return(String.format("%.1f %.2f %.2f %.1f", dist, elev / Math.PI, angl / Math.PI, field));
+	}
+
+	@Override
+	public nurgling.sessions.CameraState captureState() {
+	    return new nurgling.sessions.CameraState("OrthoCam", field, angl);
+	}
+
+	@Override
+	public void applyState(nurgling.sessions.CameraState state) {
+	    if (state == null) return;
+	    // Apply rotation (OrthoCam doesn't have separate target/current for rotation)
+	    this.angl = state.rotation;
+	    // Only apply zoom if camera types match (OrthoCam doesn't have separate target/current for field)
+	    if ("OrthoCam".equals(state.cameraType)) {
+		this.field = state.zoom;
+	    }
 	}
     }
 
@@ -507,6 +591,25 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		return(true);
 	    }
 	    return(false);
+	}
+
+	@Override
+	public nurgling.sessions.CameraState captureState() {
+	    return new nurgling.sessions.CameraState("SOrthoCam", tfield, tangl);
+	}
+
+	@Override
+	public void applyState(nurgling.sessions.CameraState state) {
+	    if (state == null) return;
+	    // Apply rotation regardless of camera type (set both target and current for instant change)
+	    this.tangl = state.rotation;
+	    this.angl = state.rotation;
+	    this.anglorig = state.rotation; // Also set origin to prevent snap-back
+	    // Only apply zoom if camera types match
+	    if ("SOrthoCam".equals(state.cameraType)) {
+		this.tfield = state.zoom;
+		this.field = state.zoom;
+	    }
 	}
     }
     static {camtypes.put("ortho", SOrthoCam.class);}

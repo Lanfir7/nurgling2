@@ -6,6 +6,7 @@ import nurgling.actions.*;
 import nurgling.actions.bots.CatchBugsAround;
 import nurgling.actions.bots.registry.BotDescriptor;
 import nurgling.actions.bots.registry.BotRegistry;
+import nurgling.sessions.BotExecutor;
 
 import java.awt.image.BufferedImage;
 import java.util.*;
@@ -50,9 +51,9 @@ public class NBotsMenu extends Widget
             NLayout layout = layouts.get(groupType);
             if (layout == null) continue;
             if (bot.clazz == CatchBugsAround.class) {
-                layout.elements.add(new NToggleNButton(bot, bot.instantiate(Map.of()), bot.disStacks));
+                layout.elements.add(new NToggleNButton(bot.iconPath, bot.instantiate(Map.of()), bot.disStacks));
             } else {
-                layout.elements.add(new NButton(bot, bot.instantiate(Map.of()), bot.disStacks));
+                layout.elements.add(new NButton(bot.iconPath, bot.instantiate(Map.of()), bot.disStacks));
             }
         }
 
@@ -215,59 +216,20 @@ public class NBotsMenu extends Widget
     public class NButton
     {
         public final IButton btn;
-        public final BotDescriptor descriptor;
         public String path;
         public boolean disStacks;
-        NButton(BotDescriptor descriptor, Action action) {
-            this.descriptor = descriptor;
-            this.path = descriptor.id;
-            String iconPath = descriptor.iconPath;
-            Resource res = null;
-            try {
-                res = Resource.remote().loadwait(dir_path + iconPath + "/u");
-            } catch (Exception e) {
-                // Если иконка не найдена, используем дефолтную иконку "back"
-                iconPath = "back";
-                try {
-                    res = Resource.remote().loadwait(dir_path + iconPath + "/u");
-                } catch (Exception e2) {
-                    // Если и дефолтная не найдена, создаем пустую
-                    res = null;
-                }
-            }
-            final String finalPath = iconPath;
-            final Resource finalRes = res;
-            btn = new IButton(Resource.loadsimg(dir_path + finalPath + "/u"), Resource.loadsimg(dir_path + finalPath + "/d"), Resource.loadsimg(dir_path + finalPath + "/h")) {
+        NButton(String path, Action action) {
+            this.path = path;
+            Resource res = Resource.remote().loadwait(dir_path + path + "/u");
+            btn = new IButton(Resource.loadsimg(dir_path + path + "/u"), Resource.loadsimg(dir_path + path + "/d"), Resource.loadsimg(dir_path + path + "/h")) {
                 TexI rtip;
 
                 @Override
                 public Object tooltip(Coord c, Widget prev) {
-                    // Для prospect_mine создаем tooltip с названием и описанием
-                    if (descriptor != null && "prospect_mine".equals(descriptor.id)) {
-                        List<ItemInfo> info = new ArrayList<>();
-                        String displayName = descriptor.getDisplayName();
-                        if (displayName != null && !displayName.isEmpty()) {
-                            info.add(new ItemInfo.Tip(null) {
-                                @Override
-                                public BufferedImage tipimg() {
-                                    return Text.render(displayName).img;
-                                }
-                            });
-                        }
-                        String description = descriptor.getDescription();
-                        if (description != null && !description.isEmpty()) {
-                            info.add(new ItemInfo.Pagina(null, description));
-                        }
-                        BufferedImage img = ItemInfo.longtip(info);
-                        if (img != null) {
-                            return new TexI(img);
-                        }
-                    }
-                    // Для остальных ботов сначала проверяем tooltip из ресурса
-                    if (rtip == null && finalRes != null && finalRes.layers(Resource.Tooltip.class) != null) {
+                    if (rtip == null && res.layers(Resource.Tooltip.class) != null) {
                         List<ItemInfo> info = new ArrayList<>();
                         int count = 0;
-                        for (Resource.Tooltip tt : finalRes.layers(Resource.Tooltip.class)) {
+                        for (Resource.Tooltip tt : res.layers(Resource.Tooltip.class)) {
                             if(count == 0)
                             {
                                 info.add(new ItemInfo.Tip(null) {
@@ -285,13 +247,6 @@ public class NBotsMenu extends Widget
                         BufferedImage img = ItemInfo.longtip(info);
                         if(img!=null)
                             rtip = new TexI(img);
-                    }
-                    // Fallback: если нет tooltip в ресурсе, используем описание из descriptor
-                    if (rtip == null && descriptor != null) {
-                        String description = descriptor.getDescription();
-                        if (description != null && !description.isEmpty()) {
-                            rtip = new TexI(Text.render(description).img);
-                        }
                     }
                     return (rtip);
                 }
@@ -316,23 +271,20 @@ public class NBotsMenu extends Widget
                             new Runnable() {
                                 @Override
                                 public void run() {
-                                    start(NButton.this.path, action);
+                                    start(path, action);
                                 }
                             });
 
         }
 
-        NButton(BotDescriptor descriptor, Action action, Boolean disStacks)
+        NButton(String path, Action action, Boolean disStacks)
         {
-            this(descriptor, action);
+            this(path, action);
             this.disStacks = disStacks;
         }
 
         private NButton()
         {
-            this.descriptor = null;
-            this.path = "back";
-            this.disStacks = false;
             btn = new IButton(Resource.loadsimg(dir_path + "back" + "/u"), Resource.loadsimg(dir_path +  "back" + "/d"), Resource.loadsimg(dir_path +  "back" + "/h")){
                 @Override
                 public void click() {
@@ -359,86 +311,26 @@ public class NBotsMenu extends Widget
 
         void start(String path, Action action)
         {
-            NGameUI gui = NUtils.getGameUI();
+            NUI boundUI = NUtils.getUI();
+            NGameUI gui = (boundUI != null) ? boundUI.gui : null;
+
             if (gui != null && gui.recentActionsPanel != null) {
-                   gui.recentActionsPanel.addBotAction(path, action);
-               }
-
-            Thread t;
-            t = new Thread(new BotRunnable(path, action), path);
-            if(disStacks)
-                NUtils.getGameUI().biw.addObserve(t, true);
-            else
-                NUtils.getGameUI().biw.addObserve(t);
-            t.start();
-        }
-
-        private class BotRunnable implements Runnable {
-            private final String path;
-            private final Action action;
-            private final ArrayList<Thread> supports = new ArrayList<>();
-
-            BotRunnable(String path, Action action) {
-                this.path = path;
-                this.action = action;
+                gui.recentActionsPanel.addBotAction(path, action);
             }
 
-            @Override
-            public void run()
-            {
-                try
+            // Callback to run showLayouts and handle ActionWithFinal
+            Runnable onComplete = () -> {
+                if(action instanceof ActionWithFinal)
                 {
-                    showLayouts();
-                    NGameUI gui = NUtils.getGameUI();
-                    if(gui!=null) {
-                        for (Action sup : action.getSupp()) {
-                            Thread st;
-                            supports.add(st = new Thread(new SupportRunnable(sup, gui)));
-                            st.start();
-                        }
-                        action.run(gui);
-                    }
+                    ((ActionWithFinal)action).endAction();
                 }
-                catch (InterruptedException e)
-                {
-                    System.out.println("=== NBotsMenu: InterruptedException caught! Bot stopped. ===");
-                    NUtils.getGameUI().msg(path + ":" + "STOPPED");
-                }
-                catch (Exception e)
-                {
-                    System.out.println("=== NBotsMenu: Other exception: " + e.getClass().getName() + " - " + e.getMessage() + " ===");
-                    e.printStackTrace();
-                }
-                finally
-                {
-                    if(action instanceof ActionWithFinal)
-                    {
-                        ((ActionWithFinal)action).endAction();
-                    }
-                    for(Thread st: supports)
-                    {
-                        st.interrupt();
-                    }
-                }
-            }
-        }
+            };
 
-        private class SupportRunnable implements Runnable {
-            private final Action sup;
-            private final NGameUI gui;
+            // Show layouts before starting
+            showLayouts();
 
-            SupportRunnable(Action sup, NGameUI gui) {
-                this.sup = sup;
-                this.gui = gui;
-            }
-
-            @Override
-            public void run() {
-                try {
-                    sup.run(gui);
-                } catch (InterruptedException e) {
-                }
-            }
+            // Use BotExecutor with support threads
+            BotExecutor.runWithSupports(path, action, disStacks, onComplete);
         }
 
 
@@ -448,38 +340,33 @@ public class NBotsMenu extends Widget
         private boolean active = false;
         private Thread thread;
 
-        NToggleNButton(BotDescriptor descriptor, Action action, boolean disStacks) {
-            super(descriptor, action, disStacks);
+        NToggleNButton(String path, Action action, boolean disStacks) {
+            super(path, action, disStacks);
 
             btn.action(new Runnable() {
                 @Override
                 public void run() {
-                    NGameUI gui = NUtils.getGameUI();
+                    NUI boundUI = NUtils.getUI();
+                    NGameUI gui = (boundUI != null) ? boundUI.gui : null;
+
                     if (!active) {
                         if (gui != null && gui.recentActionsPanel != null) {
                             gui.recentActionsPanel.addBotAction(path, action);
                         }
 
-                        thread = new Thread(() -> {
-                            try {
-                                action.run(gui);
-                            } catch (InterruptedException e) {
-                                gui.msg(path + ": STOPPED");
-                            }
-                        }, path + "-ToggleThread");
-                        if (disStacks)
-                            gui.biw.addObserve(thread, true);
-                        else
-                            gui.biw.addObserve(thread);
-                        thread.start();
-                        gui.msg("Started: " + path);
+                        thread = BotExecutor.runAsync(path + "-ToggleThread", action, disStacks);
+                        if (gui != null) {
+                            gui.msg("Started: " + path);
+                        }
                     } else {
                         if (thread != null && thread.isAlive()) {
                             if (action instanceof ActionWithFinal) {
                                 ((ActionWithFinal)action).endAction();
                             }
                             thread.interrupt();
-                            gui.msg("Stopped: " + path);
+                            if (gui != null) {
+                                gui.msg("Stopped: " + path);
+                            }
                         }
                     }
                     active = !active;

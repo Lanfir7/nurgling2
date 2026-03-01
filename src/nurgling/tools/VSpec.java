@@ -1605,7 +1605,7 @@ public class VSpec {
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-plumpudding\",\"name\":\"Unbaked Plum Pudding\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-poultrypotpie\",\"name\":\"Unbaked Poultry Pot Pie\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-pumpkinbread\",\"name\":\"Unbaked Pumpkin Bread\"}"));
-        doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-pumpkinpie\",\"name\":\"Unbaked Pumpkin Pie\"}"));
+        doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-pumpkinpie\",\"name\":\"Pumpkin Pie Dough\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-pirozhki\",\"name\":\"Mushroom & Onion Pirozhki Dough\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-raisinbuttercake\",\"name\":\"Unbaked Raisin Butter-Cake\"}"));
         doughs.add(new JSONObject("{\"static\":\"gfx/invobjs/dough-ringofbrodgar\",\"name\":\"Unbaked Ring of Brodgar\"}"));
@@ -2722,8 +2722,6 @@ public class VSpec {
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/dolomite\",\"name\":\"Dolomite\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/dross\",\"name\":\"Dross\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/eclogite\",\"name\":\"Eclogite\"}"));
-        nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/feldspar\",\"name\":\"Feldspar\"}"));
-        nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/flint\",\"name\":\"Flint\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/fluorospar\",\"name\":\"Fluorospar\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/gabbro\",\"name\":\"Gabbro\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/gneiss\",\"name\":\"Gneiss\"}"));
@@ -2747,12 +2745,10 @@ public class VSpec {
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/quarryquartz\",\"name\":\"Quarryartz\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/quartz\",\"name\":\"Quartz\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/rhyolite\",\"name\":\"Rhyolite\"}"));
-        nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/rockcrystal\",\"name\":\"Rock Crystal\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/halite\",\"name\":\"Rock Salt\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/sandstone\",\"name\":\"Sandstone\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/schist\",\"name\":\"Schist\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/serpentine\",\"name\":\"Serpentine\"}"));
-        nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/conchshard\",\"name\":\"Shard of Conch\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/slag\",\"name\":\"Slag\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/slate\",\"name\":\"Slate\"}"));
         nonOreStones.add(new JSONObject("{\"static\":\"gfx/invobjs/soapstone\",\"name\":\"Soapstone\"}"));

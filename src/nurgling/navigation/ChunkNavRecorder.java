@@ -19,6 +19,11 @@ public class ChunkNavRecorder {
     private final ChunkNavGraph graph;
     private ChunkNavManager manager; // Set after construction to avoid circular dependency
 
+    // Thread-local glob reference for background recording threads.
+    // This allows recording threads to use the correct session's gob data
+    // without depending on NUtils.getGameUI() which may return wrong session.
+    private static final ThreadLocal<Glob> recordingGlob = new ThreadLocal<>();
+
     // Blocked tile patterns
     // NOTE: "nil" = void/nothing, must be blocked (areas outside playable space)
     private static final Set<String> BLOCKED_TILES = new HashSet<>(Arrays.asList(
@@ -27,6 +32,12 @@ public class ChunkNavRecorder {
             "gfx/tiles/rocks",
             "gfx/tiles/deep",
             "gfx/tiles/odeep"
+    ));
+
+    // Walkable cave tiles (exceptions to the cave blocking pattern)
+    // These are cave FLOORS (walkable ground inside caves), not cave WALLS
+    private static final Set<String> WALKABLE_CAVE_TILES = new HashSet<>(Arrays.asList(
+            "gfx/tiles/deepcave"  // Cave floor - players can walk on this
     ));
 
     /**
@@ -71,6 +82,28 @@ public class ChunkNavRecorder {
      * Re-samples every time to accumulate walkability as player moves around.
      */
     public void recordGrid(MCache.Grid grid) {
+        recordGridInternal(grid);
+    }
+
+    /**
+     * Record navigation data for a grid using a specific Glob reference.
+     * Used by background recording threads to ensure correct session's gob data is used.
+     * @param grid The grid to record
+     * @param glob The glob to use for gob lookups (from the correct session)
+     */
+    public void recordGrid(MCache.Grid grid, Glob glob) {
+        try {
+            recordingGlob.set(glob);
+            recordGridInternal(grid);
+        } finally {
+            recordingGlob.remove();
+        }
+    }
+
+    /**
+     * Internal implementation of recordGrid.
+     */
+    private void recordGridInternal(MCache.Grid grid) {
         if (grid == null || grid.ul == null) return;
 
         try {
@@ -93,27 +126,22 @@ public class ChunkNavRecorder {
                 sampleWalkability(grid, chunk);
             }
 
-            // Assign instanceId from current world context (only if not yet set).
-            // Existing instanceId is preserved to avoid overwriting mine chunks
-            // with SURFACE_INSTANCE after client restart (currentInstanceId defaults to 1).
-            // The mergeInstanceIds logic in discoverNeighbors handles mine re-entry
-            // where old chunks have a stale instanceId from a previous session.
-            if (chunk.instanceId == 0 && manager != null) {
+            // Assign instanceId from current world context
+            if (manager != null) {
                 long currentInstance = manager.getCurrentInstanceId();
-                if (currentInstance != 0) {
+                if (chunk.instanceId == 0 && currentInstance != 0) {
                     chunk.instanceId = currentInstance;
                 }
             }
 
+            // Portals are recorded only when traversed (via PortalTraversalTracker)
+            // This eliminates phantom portal bugs from proximity-based detection
             detectLayer(chunk);
             updateEdgeWalkability(chunk);
+            discoverNeighbors(grid, chunk);
             chunk.markUpdated();
 
-            // Add chunk to graph BEFORE neighbor discovery so that other grids
-            // processed in the same batch can find this chunk via graph.getChunk().
             graph.addChunk(chunk);
-
-            discoverNeighbors(grid, chunk);
             graph.updateConnections(chunk);
 
         } catch (Exception e) {
@@ -174,17 +202,6 @@ public class ChunkNavRecorder {
                 }
             }
         }
-
-        // Force-update cells blocked by gobs even outside visibility radius.
-        // Gob data from glob.oc is always current, so this is safe.
-        for (Long cellKey : gobBlockedCells) {
-            int cx = (int)(cellKey >> 32);
-            int cy = (int)(cellKey & 0xFFFFFFFFL);
-            if (cx >= 0 && cx < CELLS_PER_EDGE && cy >= 0 && cy < CELLS_PER_EDGE) {
-                chunk.walkability[cx][cy] = 2;
-                chunk.setObserved(cx, cy, true);
-            }
-        }
     }
 
     /**
@@ -206,12 +223,6 @@ public class ChunkNavRecorder {
      * Discover and record neighbor relationships by examining all currently loaded grids.
      * When multiple grids are loaded, we can see their spatial relationship through gc coordinates.
      * These relationships are persistent because grid IDs never change.
-     * 
-     * IMPORTANT: This method only ADDS neighbor relationships, never removes them.
-     * This ensures that neighbors discovered during earlier navigation are preserved
-     * even when those chunks are no longer visible.
-     * 
-     * Also updates the reverse relationship on the neighbor chunk if it exists in the graph.
      */
     private void discoverNeighbors(MCache.Grid grid, ChunkNavData chunk) {
         try {
@@ -224,143 +235,40 @@ public class ChunkNavRecorder {
                 for (MCache.Grid other : mcache.grids.values()) {
                     if (other.id == grid.id) continue;
 
-                    // Only process immediate neighbors (exactly 1 grid apart)
+                    // CRITICAL: Prevent cross-instance false connections.
+                    // During portal transitions, MCache can hold grids from both
+                    // the old and new instance simultaneously.
+                    ChunkNavData otherChunk = graph.getChunk(other.id);
+                    if (chunk.instanceId != 0) {
+                        if (otherChunk == null || otherChunk.instanceId != chunk.instanceId) {
+                            continue; // Unknown or different instance - skip
+                        }
+                    } else if (otherChunk != null && otherChunk.instanceId != 0) {
+                        continue;
+                    }
+
                     Coord otherGc = other.gc;
                     int dx = otherGc.x - myGc.x;
                     int dy = otherGc.y - myGc.y;
-                    if (Math.abs(dx) + Math.abs(dy) != 1) continue;
 
-                    ChunkNavData otherChunk = graph.getChunk(other.id);
-
-                    // Instance safety check
-                    if (!canConnect(chunk, otherChunk)) continue;
-
-                    // MCache gc data is authoritative within a session.
-                    int direction = -1;
-                    if (dx == 0 && dy == -1) direction = 0;      // north
-                    else if (dx == 0 && dy == 1) direction = 1;   // south
-                    else if (dx == 1 && dy == 0) direction = 2;   // east
-                    else if (dx == -1 && dy == 0) direction = 3;  // west
-
-                    if (direction >= 0) {
-                        setNeighborPair(chunk, grid.id, otherChunk, other.id, direction);
+                    // Check if this grid is an immediate neighbor (exactly 1 grid apart)
+                    if (dx == 0 && dy == -1) {
+                        // Other is to the north
+                        chunk.neighborNorth = other.id;
+                    } else if (dx == 0 && dy == 1) {
+                        // Other is to the south
+                        chunk.neighborSouth = other.id;
+                    } else if (dx == 1 && dy == 0) {
+                        // Other is to the east
+                        chunk.neighborEast = other.id;
+                    } else if (dx == -1 && dy == 0) {
+                        // Other is to the west
+                        chunk.neighborWest = other.id;
                     }
                 }
             }
         } catch (Exception e) {
             // Ignore errors during neighbor discovery
-        }
-    }
-
-    /**
-     * Check if two chunks can be connected as neighbors.
-     * Rules:
-     * - Both must have known instanceId (or otherChunk not yet in graph → allow)
-     * - Same instanceId → always OK
-     * - Different instanceId but NEITHER is surface → merge (same mine, different sessions)
-     * - One is surface, other is not → block (portal transition artifact)
-     */
-    private boolean canConnect(ChunkNavData chunk, ChunkNavData otherChunk) {
-        if (otherChunk == null) {
-            // Other grid not in graph yet. Since we moved addChunk before
-            // discoverNeighbors, this means it truly hasn't been recorded.
-            // Allow connection — gc adjacency in same MCache is reliable.
-            // The chunk will get its instanceId when it's recorded.
-            return chunk.instanceId == 0;
-        }
-
-        long myInst = chunk.instanceId;
-        long otherInst = otherChunk.instanceId;
-
-        // Both unknown — allow
-        if (myInst == 0 && otherInst == 0) return true;
-        // One unknown — skip (can't verify)
-        if (myInst == 0 || otherInst == 0) return false;
-        // Same — OK
-        if (myInst == otherInst) return true;
-
-        // Different instanceIds. Allow only if NEITHER is surface.
-        // This handles: same mine entered in different sessions → different instanceIds.
-        // Block: surface ↔ mine/building (portal transition artifact).
-        if (myInst == ChunkNavManager.SURFACE_INSTANCE ||
-            otherInst == ChunkNavManager.SURFACE_INSTANCE) {
-            return false;
-        }
-
-        // Both non-surface with different instanceIds → same mine, merge.
-        mergeInstanceIds(otherInst, myInst);
-        return true;
-    }
-
-    /**
-     * Merge two instanceIds: all chunks with oldId get newId.
-     * Used when the same mine has different instanceIds from different sessions.
-     */
-    private void mergeInstanceIds(long keepId, long replaceId) {
-        if (keepId == replaceId) return;
-        int merged = 0;
-        for (ChunkNavData c : graph.getAllChunks()) {
-            if (c.instanceId == replaceId) {
-                c.instanceId = keepId;
-                merged++;
-            }
-        }
-        if (merged > 0) {
-            System.out.println("[ChunkNav] Merged instanceId " + replaceId +
-                " → " + keepId + " (" + merged + " chunks)");
-        }
-    }
-
-    /**
-     * Set a bidirectional neighbor pair, cleaning up any old stale references.
-     * @param direction 0=north, 1=south, 2=east, 3=west
-     */
-    private void setNeighborPair(ChunkNavData chunk, long chunkId,
-                                  ChunkNavData otherChunk, long otherId, int direction) {
-        int reverse = direction ^ 1; // 0↔1 (N↔S), 2↔3 (E↔W)
-
-        long oldForward = getNeighborField(chunk, direction);
-        if (oldForward != otherId) {
-            // Clean up old reverse: if old neighbor pointed back to us, clear it
-            if (oldForward != -1) {
-                ChunkNavData oldNeighbor = graph.getChunk(oldForward);
-                if (oldNeighbor != null && getNeighborField(oldNeighbor, reverse) == chunkId) {
-                    setNeighborField(oldNeighbor, reverse, -1);
-                }
-            }
-            setNeighborField(chunk, direction, otherId);
-        }
-
-        if (otherChunk != null) {
-            long oldReverse = getNeighborField(otherChunk, reverse);
-            if (oldReverse != chunkId) {
-                if (oldReverse != -1) {
-                    ChunkNavData oldReverseChunk = graph.getChunk(oldReverse);
-                    if (oldReverseChunk != null && getNeighborField(oldReverseChunk, direction) == otherId) {
-                        setNeighborField(oldReverseChunk, direction, -1);
-                    }
-                }
-                setNeighborField(otherChunk, reverse, chunkId);
-            }
-        }
-    }
-
-    private static long getNeighborField(ChunkNavData chunk, int dir) {
-        switch (dir) {
-            case 0: return chunk.neighborNorth;
-            case 1: return chunk.neighborSouth;
-            case 2: return chunk.neighborEast;
-            case 3: return chunk.neighborWest;
-            default: return -1;
-        }
-    }
-
-    private static void setNeighborField(ChunkNavData chunk, int dir, long value) {
-        switch (dir) {
-            case 0: chunk.neighborNorth = value; break;
-            case 1: chunk.neighborSouth = value; break;
-            case 2: chunk.neighborEast = value; break;
-            case 3: chunk.neighborWest = value; break;
         }
     }
 
@@ -432,17 +340,6 @@ public class ChunkNavRecorder {
                 }
             }
         }
-
-        // Force-update cells blocked by gobs even outside visibility radius.
-        // Gob data from glob.oc is always current, so this is safe.
-        for (Long cellKey : gobBlockedCells) {
-            int cx = (int)(cellKey >> 32);
-            int cy = (int)(cellKey & 0xFFFFFFFFL);
-            if (cx >= 0 && cx < CELLS_PER_EDGE && cy >= 0 && cy < CELLS_PER_EDGE) {
-                chunk.walkability[cx][cy] = 2;
-                chunk.setObserved(cx, cy, true);
-            }
-        }
     }
 
     /**
@@ -453,6 +350,14 @@ public class ChunkNavRecorder {
             String tileName = mcache.tilesetname(mcache.gettile(tileCoord));
             if (tileName == null) return true;  // Unknown tile = blocked (safer default)
 
+            // Check whitelist first - explicitly walkable tiles
+            for (String walkable : WALKABLE_CAVE_TILES) {
+                if (tileName.startsWith(walkable) || tileName.equals(walkable)) {
+                    return false;  // Explicitly walkable
+                }
+            }
+
+            // Then check blacklist - blocked tiles
             for (String blocked : BLOCKED_TILES) {
                 if (tileName.startsWith(blocked) || tileName.equals(blocked)) {
                     return true;
@@ -474,7 +379,16 @@ public class ChunkNavRecorder {
         Set<Long> blockedCells = new HashSet<>();
 
         try {
-            Glob glob = NUtils.getGameUI().ui.sess.glob;
+            // Use thread-local glob if available (for background recording threads),
+            // otherwise fall back to NUtils.getGameUI() for main/tick threads
+            Glob glob = recordingGlob.get();
+            if (glob == null) {
+                NGameUI gui = NUtils.getGameUI();
+                if (gui == null || gui.ui == null || gui.ui.sess == null) {
+                    return blockedCells;
+                }
+                glob = gui.ui.sess.glob;
+            }
             long playerId = NUtils.player() != null ? NUtils.player().id : -1;
 
             // Grid bounds in world coordinates
@@ -615,30 +529,19 @@ public class ChunkNavRecorder {
 
     /**
      * Detect the layer (outside/inside/cellar).
-     * 
-     * Surface instance chunks are ALWAYS "outside".
-     * Non-surface chunks: if layer was already set to "inside" or "cellar" by
-     * PortalTraversalTracker (reliable source), do NOT overwrite with gob-based detection.
-     * Gob-based detection is unreliable (uses global visibility, misses gobs).
+     * - "cellar" if we see cellarstairs
+     * - "inside" if we see a door but no building exterior (we're inside a building)
+     * - "outside" for everything else (surface, mines, etc.)
      */
     private void detectLayer(ChunkNavData chunk) {
-        if (chunk.instanceId == ChunkNavManager.SURFACE_INSTANCE) {
-            chunk.layer = "outside";
-            return;
-        }
-
-        // If portal traversal already set a specific layer, trust it
-        if ("inside".equals(chunk.layer) || "cellar".equals(chunk.layer)) {
-            return;
-        }
-
         try {
             NGameUI gui = NUtils.getGameUI();
             if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
-                return;
+                return; // GUI not ready, layer will be detected on next recording
             }
             Glob glob = gui.ui.sess.glob;
 
+            // Quick copy of gob names while holding lock
             List<String> gobNames = new ArrayList<>();
             synchronized (glob.oc) {
                 for (Gob gob : glob.oc) {
@@ -648,20 +551,24 @@ public class ChunkNavRecorder {
                 }
             }
 
+            // Process WITHOUT holding the lock
             boolean hasCellarStairs = false;
             boolean hasInsideIndicator = false;
+            boolean hasBuildingExterior = false;
 
             for (String name : gobNames) {
                 if (name.contains("cellarstairs")) {
                     hasCellarStairs = true;
                 } else if (name.endsWith("-door") || name.contains("downstairs")) {
                     hasInsideIndicator = true;
+                } else if (isBuildingExterior(name)) {
+                    hasBuildingExterior = true;
                 }
             }
 
             if (hasCellarStairs) {
                 chunk.layer = "cellar";
-            } else if (hasInsideIndicator) {
+            } else if (hasInsideIndicator && !hasBuildingExterior) {
                 chunk.layer = "inside";
             } else {
                 chunk.layer = "outside";
@@ -759,11 +666,19 @@ public class ChunkNavRecorder {
 
     /**
      * Get the MCache safely.
+     * Uses thread-local glob if available (for background recording threads).
      */
     private MCache getMCache() {
         try {
-            if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null) return null;
-            return NUtils.getGameUI().map.glob.map;
+            // Use thread-local glob if available (for background recording threads)
+            Glob glob = recordingGlob.get();
+            if (glob != null) {
+                return glob.map;
+            }
+            // Fall back to NUtils.getGameUI() for main/tick threads
+            NGameUI gui = NUtils.getGameUI();
+            if (gui == null || gui.map == null || gui.map.glob == null) return null;
+            return gui.map.glob.map;
         } catch (Exception e) {
             return null;
         }

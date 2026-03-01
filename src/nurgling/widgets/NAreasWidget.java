@@ -12,6 +12,8 @@ import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
 import nurgling.overlays.map.*;
 import nurgling.tools.*;
+import nurgling.sessions.BotExecutor;
+import nurgling.sessions.ThreadLocalUI;
 import org.json.*;
 
 import javax.swing.*;
@@ -40,17 +42,7 @@ public class NAreasWidget extends Window
     final static Tex folderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/d"));
     final static Tex openfolderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/u"));
     NCatSelection catSelection;
-    
-    // Состояние раскрытия правой панели (Take и Put вместе)
-    private boolean showRightPanel = true;
-    private Frame in_frame;
-    private Frame out_frame;
-    private Widget takeLabel;
-    private Widget putLabel;
-    private Widget takeRuleButton;
-    private Widget putRuleButton;
-    private ICheckBox rightPanelToggleButton;
-    static class Folder
+    class Folder
     {
         public String name;
         public String rootPath;
@@ -165,29 +157,10 @@ public class NAreasWidget extends Window
         }, createNewFolder.pos("bl").adds(0, 10));
         searchField.settip(get("area.search.placeholder"));
 
-        prev = add(al = new AreaList(UI.scale(new Coord(400,280))), searchField.pos("bl").adds(0, 25));
-        
-        // Кнопка для скрытия/показа всей правой панели (Take и Put) - стрелка типа 1
-        // Используем стрелки cookbook left/right, для dh используем ту же текстуру что и для h
-        rightPanelToggleButton = add(new ICheckBox(
-            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/left/u")),
-            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/right/u")),
-            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/left/h")),
-            new TexI(Resource.loadsimg("nurgling/hud/buttons/cookbook/right/u"))
-        ) {
-            @Override
-            public void changed(boolean val) {
-                super.changed(val);
-                showRightPanel = val;
-                updateRightPanelVisibility();
-            }
-        }, prev.pos("ur").adds(UI.scale(5, 0)));
-        rightPanelToggleButton.a = true; // Начальное состояние - показано (стрелка влево = скрыто, стрелка вправо = показано)
-        rightPanelToggleButton.settip("Скрыть/Показать правую панель");
-        
-        Widget lab = add(new Label(get("area.label.specialisation"),NStyle.areastitle), prev.pos("bl").add(UI.scale(0,10)));
+        prev = add(al = new AreaList(UI.scale(new Coord(400,170))), searchField.pos("bl").adds(0, 25));
+        Widget lab = add(new Label(get("area.label.specialisation"),NStyle.areastitle), prev.pos("bl").add(UI.scale(0,5)));
 
-        add(csl = new CurrentSpecialisationList(UI.scale(164,90)),lab.pos("bl").add(UI.scale(0,5)));
+        add(csl = new CurrentSpecialisationList(UI.scale(164,190)),lab.pos("bl").add(UI.scale(0,5)));
         add(new IButton(NStyle.add[0].back,NStyle.add[1].back,NStyle.add[2].back){
             @Override
             public void click()
@@ -225,28 +198,12 @@ public class NAreasWidget extends Window
             }
         },prev.pos("br").sub(UI.scale(17,-5)));
 
-        // Создаем правую часть (Take и Put)
-        in_items = new IngredientContainer("in");
-        in_frame = add(Frame.with(in_items, true), prev.pos("ur").add(UI.scale(5,-5)));
-        takeLabel = add(new Label(get("area.label.take"),NStyle.areastitle), in_frame.pos("ul").sub(UI.scale(-5,20)));
-        takeRuleButton = add(new IngredientContainer.RuleButton(in_items), in_frame.pos("ur").sub(UI.scale(30,20)));
-        
-        out_items = new IngredientContainer("out");
-        out_frame = add(Frame.with(out_items, true), in_frame.pos("ur").adds(UI.scale(5, 0)));
-        putLabel = add(new Label(get("area.label.put"),NStyle.areastitle), out_frame.pos("ul").sub(UI.scale(-5,20)));
-        putRuleButton = add(new IngredientContainer.RuleButton(out_items), out_frame.pos("ur").sub(UI.scale(30,20)));
-        
-        pack();
-    }
-    
-    private void updateRightPanelVisibility() {
-        boolean visible = showRightPanel;
-        if (in_frame != null) in_frame.show(visible);
-        if (out_frame != null) out_frame.show(visible);
-        if (takeLabel != null) takeLabel.show(visible);
-        if (putLabel != null) putLabel.show(visible);
-        if (takeRuleButton != null) takeRuleButton.show(visible);
-        if (putRuleButton != null) putRuleButton.show(visible);
+        prev = add(Frame.with(in_items = new IngredientContainer("in"),true), prev.pos("ur").add(UI.scale(5,-5)));
+        add(new Label(get("area.label.take"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20)));
+        add(new IngredientContainer.RuleButton(in_items ),prev.pos("ur").sub(UI.scale(30,20)));
+        prev = add(Frame.with(out_items = new IngredientContainer("out"),true), prev.pos("ur").adds(UI.scale(5, 0)));
+        add(new Label(get("area.label.put"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20)));
+        add(new IngredientContainer.RuleButton(out_items ),prev.pos("ur").sub(UI.scale(30,20)));
         pack();
     }
 
@@ -254,16 +211,9 @@ public class NAreasWidget extends Window
     {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
         {
-            nurgling.NMapView mapView = (nurgling.NMapView) NUtils.getGameUI().map;
-            
-            // Удаляем overlay (как в старом коде - просто удаляем без проверки на null)
-            synchronized (mapView.nols) {
-                nurgling.overlays.map.NOverlay nol = mapView.nols.get(id);
-                if (nol != null) {
-                    nol.remove();
-                }
-                mapView.nols.remove(id);
-            }
+            NOverlay nol = NUtils.getGameUI().map.nols.get(id);
+            nol.remove();
+            NUtils.getGameUI().map.nols.remove(id);
         }
         showPath(currentPath);
     }
@@ -283,43 +233,6 @@ public class NAreasWidget extends Window
                 area.path = area.path.replace(path,newpath);
             }
         }
-    }
-
-    /**
-     * Устанавливает hide для всех зон в папке (включая вложенные)
-     */
-    public void setFolderHide(String folderPath, boolean hide) {
-        NMapView mapView = (NMapView) NUtils.getGameUI().map;
-        int count = 0;
-        for (NArea area : mapView.glob.map.areas.values()) {
-            // Проверяем: зона находится в этой папке или в подпапках
-            if (area.path.equals(folderPath) || area.path.startsWith(folderPath + "/")) {
-                mapView.disableArea(area.name, area.path, hide);
-                count++;
-            }
-        }
-        NConfig.needAreasUpdate();
-        NUtils.getGameUI().msg((hide ? "Hidden " : "Shown ") + count + " areas in folder");
-    }
-
-    /**
-     * Возвращает текущее состояние hide для папки
-     * true если ВСЕ зоны в папке скрыты, false если хотя бы одна видима
-     */
-    public boolean getFolderHideState(String folderPath) {
-        NMapView mapView = (NMapView) NUtils.getGameUI().map;
-        boolean allHidden = true;
-        boolean hasAreas = false;
-        for (NArea area : mapView.glob.map.areas.values()) {
-            if (area.path.equals(folderPath) || area.path.startsWith(folderPath + "/")) {
-                hasAreas = true;
-                if (!area.hide) {
-                    allHidden = false;
-                    break;
-                }
-            }
-        }
-        return hasAreas && allHidden;
     }
 
     public void showPath(String path) {
@@ -390,30 +303,13 @@ public class NAreasWidget extends Window
             }
 
     }
-
-    /**
-     * Обновляет текущий путь без потери выделения
-     * Используется при синхронизации зон
-     */
-    public void refreshCurrentPath() {
-        // Сохраняем текущее выделение
-        AreaItem currentSel = al.sel;
-        int selectedAreaId = -1;
-        if (currentSel != null && currentSel.area != null) {
-            selectedAreaId = currentSel.area.id;
-        }
-        
-        // Обновляем список
-        showPath(currentPath);
-        
-        // Восстанавливаем выделение, если возможно
-        if (selectedAreaId >= 0) {
-            for (AreaItem item : items) {
-                if (item.area != null && item.area.id == selectedAreaId) {
-                    al.sel = item;
-                    select(selectedAreaId);
-                    return;
-                }
+    
+    public void selectAreaById(int areaId) {
+        for(AreaItem item : items) {
+            if(item.area != null && item.area.id == areaId) {
+                al.sel = item;
+                select(areaId);
+                return;
             }
         }
     }
@@ -500,16 +396,11 @@ public class NAreasWidget extends Window
             if(remove!=null) {
                 remove.move(new Coord(sz.x - NStyle.removei[0].sz().x - UI.scale(5), remove.c.y));
             }
-            if(hide!=null) {
-                hide.move(new Coord(sz.x - 2*NStyle.removei[0].sz().x-UI.scale(2), hide.c.y).sub(UI.scale(5),0));
-            }
             super.resize(sz);
         }
 
         public AreaItem(String text, NArea area){
-            // Ограничиваем ширину текста, чтобы он не выходил за границы при масштабировании
-            int textMaxWidth = al.sz.x - 2*NStyle.removei[0].sz().x - UI.scale(2) - UI.scale(10);
-            this.text = add(new Label(text, textMaxWidth));
+            this.text = add(new Label(text));
             this.area = area;
             this.settip(text);
             hide = add(new CheckBox(""){
@@ -525,12 +416,8 @@ public class NAreasWidget extends Window
             remove = add(new IButton(NStyle.removei[0].back,NStyle.removei[1].back,NStyle.removei[2].back){
                 @Override
                 public void click() {
-                    // Используем ID зоны вместо имени, чтобы удалять именно ту зону, на которую кликнули
-                    // (имена могут совпадать, но ID уникальны)
-                    if (AreaItem.this.area != null) {
-                        ((NMapView)NUtils.getGameUI().map).removeArea(AreaItem.this.area.id);
-                        NConfig.needAreasUpdate();
-                    }
+                    ((NMapView)NUtils.getGameUI().map).removeAreaById(AreaItem.this.area.id);
+                    NConfig.needAreasUpdate();
                 }
             },new Coord(al.sz.x - NStyle.removei[0].sz().x, 0).sub(UI.scale(5),UI.scale(1) ));
             remove.settip(get("area.btn.remove"));
@@ -540,8 +427,6 @@ public class NAreasWidget extends Window
                     add(L10n.get("area.menu.select_space"));
                     add(L10n.get("area.menu.set_color"));
                     add(L10n.get("area.menu.edit_name"));
-                    add(L10n.get("area.menu.edit_folder"));
-                    add("Duplicate");
                     add(L10n.get("area.menu.scan"));
                 }
             };
@@ -550,36 +435,18 @@ public class NAreasWidget extends Window
         }
 
         public AreaItem(String text, boolean isDir){
-            // Для папок сдвигаем Label вправо, чтобы оставить место для иконки
-            // Ограничиваем ширину текста, чтобы он не выходил за границы при масштабировании
-            int textMaxWidth = al.sz.x - 2*NStyle.removei[0].sz().x - UI.scale(2) - UI.scale(10) - UI.scale(21);
-            this.text = add(new Label(text, textMaxWidth), new Coord(UI.scale(21), 0));
+            this.text = add(new Label(text));
             this.area = null;
             this.isDir = isDir;
-            final String folderPath = currentPath + "/" + text;
-            hide = add(new CheckBox(""){
-                @Override
-                public void changed(boolean val) {
-                    // Массово изменяем hide для всех зон в этой папке
-                    setFolderHide(folderPath, val);
-                    super.changed(val);
-                }
-            },new Coord(al.sz.x - 2*NStyle.removei[0].sz().x-UI.scale(2), 0).sub(UI.scale(5),0 ));
-            hide.a = getFolderHideState(folderPath);
-            hide.settip("Hide/Show all areas in this folder");
             remove = add(new IButton(NStyle.removei[0].back,NStyle.removei[1].back,NStyle.removei[2].back){
                 @Override
                 public void click() {
-                    removeFolderContent(folderPath);
                 }
             },new Coord(al.sz.x - NStyle.removei[0].sz().x, 0).sub(UI.scale(5),UI.scale(1) ));
-            remove.settip(get("area.btn.remove"));
             opt = new ArrayList<String>(){
                 {
                     add(L10n.get("area.menu.edit_folder"));
                     add(L10n.get("area.menu.remove_content"));
-                    add("Show all in folder");
-                    add("Hide all in folder");
                 }
             };
             pack();
@@ -601,16 +468,13 @@ public class NAreasWidget extends Window
 
         @Override
         public void draw(GOut g) {
-            if (rootPath != null) {
-                // Кнопка "вверх" (..) - просто иконка и текст (без super.draw)
+            if (rootPath!=null) {
                 g.image(openfolderIcon, Coord.z, UI.scale(16,16));
-                g.text(text.text(), new Coord(UI.scale(21), 0));
-            } else if (isDir) {
-                // Папка - иконка вручную, остальное через super.draw
+                g.text(text.text(), new Coord(UI.scale(21), 0)); // Text next to icon
+            }else if (area == null) {
                 g.image(folderIcon, Coord.z, UI.scale(16,16));
-                super.draw(g);
-            } else if (area != null) {
-                // Зона - полная отрисовка
+                g.text(text.text(), new Coord(UI.scale(21), 0)); // Text next to icon
+            } else {
                 super.draw(g);
             }
         }
@@ -623,79 +487,20 @@ public class NAreasWidget extends Window
                 return true;
             }
             else if (ev.b == 1) {
-                // SHIFT + LMB - auto-rename zone
-                if (ui.modshift && area != null && !isDir) {
-                    String newName = getAutoNameForZone(area);
-                    if (newName != null && !newName.isEmpty()) {
-                        ((NMapView)NUtils.getGameUI().map).changeAreaName(area.id, newName);
-                        text.settext(newName);
-                        NConfig.needAreasUpdate();
-                        return true;
-                    }
-                }
-
-                if (isDir) {
-                    // For folders: let buttons (remove/hide) handle event first
-                    if (super.mousedown(ev))
-                        return true;
-                    showPath(currentPath + "/" + text.text());
-                    return true;
-                } else {
-                    // For areas: select then dispatch to children (original behavior)
-                    if (area != null) {
+                if (!isDir)
+                    if(area != null)
+                    {
                         NAreasWidget.this.select(area.id);
-                    } else {
+                    }
+                    else
+                    {
                         NAreasWidget.this.showPath(rootPath);
                     }
-                }
+
+                else
+                    showPath(currentPath + "/" + text.text());
             }
             return super.mousedown(ev);
-        }
-        
-        /**
-         * Получает автоматическое название для зоны из INPUT, OUTPUT или специализации
-         * Приоритет: INPUT > OUTPUT > специализация
-         */
-        private String getAutoNameForZone(NArea area) {
-            // 1. Проверяем INPUT (jin)
-            if (area.jin != null && area.jin.length() > 0) {
-                try {
-                    JSONObject firstInput = area.jin.getJSONObject(0);
-                    if (firstInput.has("name")) {
-                        String name = firstInput.getString("name");
-                        if (name != null && !name.isEmpty()) {
-                            return name;
-                        }
-                    }
-                } catch (Exception e) {
-                    // Игнорируем ошибки парсинга
-                }
-            }
-            
-            // 2. Проверяем OUTPUT (jout)
-            if (area.jout != null && area.jout.length() > 0) {
-                try {
-                    JSONObject firstOutput = area.jout.getJSONObject(0);
-                    if (firstOutput.has("name")) {
-                        String name = firstOutput.getString("name");
-                        if (name != null && !name.isEmpty()) {
-                            return name;
-                        }
-                    }
-                } catch (Exception e) {
-                    // Игнорируем ошибки парсинга
-                }
-            }
-            
-            // 3. Проверяем специализацию (spec)
-            if (area.spec != null && !area.spec.isEmpty()) {
-                NArea.Specialisation firstSpec = area.spec.get(0);
-                if (firstSpec != null && firstSpec.name != null && !firstSpec.name.isEmpty()) {
-                    return firstSpec.name;
-                }
-            }
-            
-            return null; // Не найдено подходящее название
         }
 
 
@@ -723,24 +528,23 @@ public class NAreasWidget extends Window
                         {
                             if (option.name.equals(get("area.menu.navigate")))
                             {
-                                Thread t = new Thread(() -> {
-                                        ChunkNavManager chunkNav = ((NMapView)NUtils.getGameUI().map).getChunkNavManager();
-                                        if (chunkNav != null && chunkNav.isInitialized())
+                                final NArea navArea = area;
+                                BotExecutor.runTracked("AreaNavigator", (gui) -> {
+                                    ChunkNavManager chunkNav = ((NMapView)gui.map).getChunkNavManager();
+                                    if (chunkNav != null && chunkNav.isInitialized())
+                                    {
+                                        ChunkPath path = chunkNav.planToArea(navArea);
+                                        if (path != null)
                                         {
-                                            ChunkPath path = chunkNav.planToArea(area);
-                                            if (path != null)
+                                            try
                                             {
-                                                try
-                                                {
-                                                    chunkNav.navigateToArea(area, NUtils.getGameUI());
+                                                chunkNav.navigateToArea(navArea, gui);
                                             } catch (InterruptedException ignored)
                                             {
                                             }
                                         }
                                     }
-                                }, "AreaNavigator");
-                                t.start();
-                                NUtils.getGameUI().biw.addObserve(t);
+                                });
                             }
                             else if (option.name.equals(get("area.menu.select_space")))
                             {
@@ -800,37 +604,56 @@ public class NAreasWidget extends Window
                             {
                                 NEditAreaName.changeName(area, AreaItem.this);
                             }
-                            else if (option.name.equals(get("area.menu.edit_folder")))
-                            {
-                                if (area != null) {
-                                    ui.gui.add(new NFolderSelectWindow(area, NAreasWidget.this), ui.mc);
-                                } else if (isDir) {
-                                    NEditFolderName.changeName(currentPath, AreaItem.this.text.text());
-                                }
-                            }
-                            else if (option.name.equals("Duplicate"))
-                            {
-                                duplicateArea(area);
-                            }
                             else if (option.name.equals(get("area.menu.scan")))
                             {
                                 Scaner.startScan(area);
                             }
+                            else if (option.name.equals(get("area.menu.edit_folder")))
+                            {
+                                NEditFolderName.changeName(currentPath, AreaItem.this.text.text());
+                            }
                             else if (option.name.equals(get("area.menu.remove_content")))
                             {
-                                removeFolderContent(currentPath + "/" + text.text());
-                            }
-                            else if (option.name.equals("Show all in folder"))
-                            {
-                                String folderPath = currentPath + "/" + text.text();
-                                setFolderHide(folderPath, false);
-                                if (hide != null) hide.a = false;
-                            }
-                            else if (option.name.equals("Hide all in folder"))
-                            {
-                                String folderPath = currentPath + "/" + text.text();
-                                setFolderHide(folderPath, true);
-                                if (hide != null) hide.a = true;
+                                ArrayList<Integer> forRemove = new ArrayList<>();
+                                for (NArea area : ((NMapView) NUtils.getGameUI().map).glob.map.areas.values()) {
+                                    if(area.path.startsWith(currentPath + "/" + text.text())) {
+                                        forRemove.add(area.id);
+                                    }
+                                }
+                                synchronized (((NMapView) NUtils.getGameUI().map).glob.map.areas)
+                                {
+                                    for(Integer key:forRemove)
+                                    {
+                                        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
+                                        {
+                                            NOverlay nol = NUtils.getGameUI().map.nols.get(key);
+                                            nol.remove();
+                                            NUtils.getGameUI().map.nols.remove(key);
+                                            NMapView mapView = (NMapView) NUtils.getGameUI().map;
+                                            synchronized (mapView.dummys) {
+                                                Gob dummy = mapView.dummys.get(mapView.glob.map.areas.get(key).gid);
+                                                if(dummy!=null) {
+                                                    mapView.glob.oc.remove(dummy);
+                                                    mapView.dummys.remove(dummy.id);
+                                                }
+                                            }
+                                            mapView.glob.map.areas.remove(key);
+                                            
+                                            // Delete from database if enabled
+                                            if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
+                                                nurgling.NCore.databaseManager != null && 
+                                                nurgling.NCore.databaseManager.isReady()) {
+                                                String profile = NUtils.getGameUI().getGenus();
+                                                if (profile == null || profile.isEmpty()) {
+                                                    profile = "global";
+                                                }
+                                                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(key, profile);
+                                            }
+                                        }
+                                    }
+                                    NConfig.needAreasUpdate();
+                                    NAreasWidget.this.showPath(NAreasWidget.this.currentPath);
+                                }
                             }
                         }
                         uimsg("cancel");
@@ -854,53 +677,6 @@ public class NAreasWidget extends Window
         }
     }
 
-    private void removeFolderContent(String folderPath) {
-        ArrayList<Integer> forRemove = new ArrayList<>();
-        NMapView mapView = (NMapView) NUtils.getGameUI().map;
-        for (NArea area : mapView.glob.map.areas.values()) {
-            if (area.path.startsWith(folderPath)) {
-                forRemove.add(area.id);
-            }
-        }
-        if (forRemove.isEmpty()) return;
-
-        synchronized (mapView.glob.map.areas) {
-            String profile = NUtils.getGameUI().getGenus();
-            if (profile == null || profile.isEmpty()) {
-                profile = "global";
-            }
-            final String finalProfile = profile;
-
-            for (Integer key : forRemove) {
-                mapView.locallyDeletedAreas.add(key);
-
-                nurgling.overlays.map.NOverlay nol = mapView.nols.get(key);
-                if (nol != null) {
-                    nol.remove();
-                }
-                mapView.nols.remove(key);
-                NArea area = mapView.glob.map.areas.get(key);
-                if (area != null) {
-                    Gob dummy = mapView.dummys.get(area.gid);
-                    if (dummy != null) {
-                        mapView.glob.oc.remove(dummy);
-                        mapView.dummys.remove(dummy.id);
-                    }
-                }
-                mapView.glob.map.areas.remove(key);
-
-                if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
-                    nurgling.NCore.databaseManager != null &&
-                    nurgling.NCore.databaseManager.isReady()) {
-                    final int finalKey = key;
-                    nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(finalKey, finalProfile);
-                }
-            }
-            NConfig.needAreasUpdate();
-            showPath(currentPath);
-        }
-    }
-
     public void select(int id)
     {
         in_items.load(id);
@@ -913,39 +689,6 @@ public class NAreasWidget extends Window
         in_items.items.clear();
         out_items.items.clear();
         specItems.clear();
-    }
-
-    /**
-     * Выбирает зону по ID и устанавливает на неё фокус
-     */
-    public void selectAreaById(int areaId) {
-        synchronized (items) {
-            for (int i = 0; i < items.size(); i++) {
-                AreaItem item = items.get(i);
-                if (item.area != null && item.area.id == areaId) {
-                    al.sel = item;
-                    select(areaId);
-                    // Прокрутка к выбранному элементу
-                    int scrollPos = i * (al.itemh + al.marg);
-                    al.scrollval(scrollPos);
-                    return;
-                }
-            }
-        }
-    }
-
-    /**
-     * Обновляет имя зоны в списке без перестроения всего списка
-     */
-    public void updateAreaName(int areaId, String newName) {
-        synchronized (items) {
-            for (AreaItem item : items) {
-                if (item.area != null && item.area.id == areaId) {
-                    item.text.settext(newName);
-                    return;
-                }
-            }
-        }
     }
 
     public void set(int id)
@@ -1312,19 +1055,8 @@ public class NAreasWidget extends Window
     @Override
     public void hide() {
         super.hide();
-        // ВАЖНО: Не удаляем лейблы зон при закрытии окна, если включен тоггл "показывать все зоны"
-        // Лейблы будут скрыты через проверку в NAreaLabel.draw()
-        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null && !createMode) {
-            NGameUI gui = NUtils.getGameUI();
-            boolean showAllZones = false;
-            if (gui.mmapw != null && gui.mmapw.miniMap != null && gui.mmapw.miniMap instanceof nurgling.widgets.NMiniMap) {
-                showAllZones = ((nurgling.widgets.NMiniMap) gui.mmapw.miniMap).showAllZonesAlways;
-            }
-            // Удаляем лейблы только если тоггл не включен
-            if (!showAllZones) {
-                ((NMapView)NUtils.getGameUI().map).destroyDummys();
-            }
-        }
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null && !createMode)
+            ((NMapView)NUtils.getGameUI().map).destroyDummys();
     }
 
     @Override
@@ -1335,70 +1067,6 @@ public class NAreasWidget extends Window
             ((NMapView)NUtils.getGameUI().map).initDummys();
         }
         return super.show(show);
-    }
-
-    /**
-     * Import areas from server JSON file to database.
-     * Supports old server structure with uuid, zone_sync, last_update fields.
-     */
-    private void importAreasFromJsonFile() {
-        if (nurgling.NCore.databaseManager == null) {
-            NUtils.getGameUI().msg("Database is not connected");
-            return;
-        }
-
-        if (!nurgling.NCore.databaseManager.isReady()) {
-            NUtils.getGameUI().msg("Database is not ready");
-            return;
-        }
-
-        java.awt.EventQueue.invokeLater(() -> {
-            JFileChooser fc = new JFileChooser();
-            fc.setFileFilter(new FileNameExtensionFilter("JSON files", "json"));
-            if (fc.showOpenDialog(null) != JFileChooser.APPROVE_OPTION)
-                return;
-
-            java.io.File selectedFile = fc.getSelectedFile();
-            if (selectedFile == null)
-                return;
-
-            // Get current profile/genus
-            String profile = "global";
-            if (NUtils.getGameUI() != null) {
-                String genus = NUtils.getGameUI().getGenus();
-                if (genus != null && !genus.isEmpty()) {
-                    profile = genus;
-                }
-            }
-
-            final String finalProfile = profile;
-            final java.io.File finalFile = selectedFile;
-
-            // Import asynchronously
-            NUtils.getGameUI().msg("Importing areas from " + finalFile.getName() + "...");
-            
-            nurgling.NCore.databaseManager.getAreaService().importAreasFromServerJsonAsync(finalFile, finalProfile)
-                .thenAccept(result -> {
-                    NUtils.getGameUI().msg("Imported " + result.getImportedCount() + " areas, " + 
-                        result.getSkippedCount() + " skipped, " + result.getErrorCount() + " errors");
-                    // Reload areas from database
-                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                        try {
-                            haven.MCache cache = NUtils.getGameUI().map.glob.map;
-                            if (cache != null) {
-                                cache.loadAreasIfNeeded();
-                            }
-                        } catch (Exception e) {
-                            System.err.println("Failed to reload areas after import: " + e.getMessage());
-                        }
-                    }
-                })
-                .exceptionally(e -> {
-                    NUtils.getGameUI().error("Failed to import areas: " + e.getMessage());
-                    e.printStackTrace();
-                    return null;
-                });
-        });
     }
 
     /**
@@ -1479,141 +1147,4 @@ public class NAreasWidget extends Window
                 return null;
             });
     }
-
-    /**
-     * Дублирует зону со всеми параметрами (инпут, аутпут, специализации, цвет, space и т.д.)
-     * Название новой зоны = старое название + " 1"
-     */
-    private void duplicateArea(NArea sourceArea) {
-        if (sourceArea == null) {
-            NUtils.getGameUI().error("Cannot duplicate: area is null");
-            return;
-        }
-
-        NMapView mapView = (NMapView) NUtils.getGameUI().map;
-        synchronized (mapView.glob.map.areas) {
-            // Находим следующий доступный ID
-            int newId = 1;
-            for (NArea area : mapView.glob.map.areas.values()) {
-                if (area.id >= newId) {
-                    newId = area.id + 1;
-                }
-            }
-
-            // Создаем новое название: старое название + " 1"
-            String newName = sourceArea.name + " 1";
-            HashSet<String> names = new HashSet<>();
-            for (NArea area : mapView.glob.map.areas.values()) {
-                names.add(area.name);
-            }
-            // Если название уже существует, добавляем (2), (3) и т.д.
-            int counter = 1;
-            String finalName = newName;
-            while (names.contains(finalName)) {
-                counter++;
-                finalName = sourceArea.name + " " + counter;
-            }
-
-            // Создаем новую зону
-            NArea newArea = new NArea(finalName);
-            newArea.id = newId;
-            newArea.path = sourceArea.path;
-            newArea.color = new Color(sourceArea.color.getRed(), sourceArea.color.getGreen(), 
-                                     sourceArea.color.getBlue(), sourceArea.color.getAlpha());
-            newArea.hide = sourceArea.hide;
-            newArea.lastLocalChange = System.currentTimeMillis();
-
-            // Копируем space (глубокая копия)
-            newArea.space = new NArea.Space();
-            if (sourceArea.space != null && sourceArea.space.space != null) {
-                for (Long gridId : sourceArea.space.space.keySet()) {
-                    NArea.VArea vArea = sourceArea.space.space.get(gridId);
-                    if (vArea != null && vArea.area != null) {
-                        haven.Area sourceAreaObj = vArea.area;
-                        newArea.space.space.put(gridId, new NArea.VArea(
-                            new haven.Area(sourceAreaObj.ul, sourceAreaObj.br)
-                        ));
-                    }
-                }
-            }
-            newArea.grids_id.clear();
-            newArea.grids_id.addAll(sourceArea.grids_id);
-
-            // Копируем jin (JSONArray) - создаем новый объект
-            if (sourceArea.jin != null) {
-                try {
-                    newArea.jin = new JSONArray(sourceArea.jin.toString());
-                } catch (Exception e) {
-                    newArea.jin = new JSONArray();
-                    for (int i = 0; i < sourceArea.jin.length(); i++) {
-                        newArea.jin.put(sourceArea.jin.get(i));
-                    }
-                }
-            } else {
-                newArea.jin = new JSONArray();
-            }
-
-            // Копируем jout (JSONArray) - создаем новый объект
-            if (sourceArea.jout != null) {
-                try {
-                    newArea.jout = new JSONArray(sourceArea.jout.toString());
-                } catch (Exception e) {
-                    newArea.jout = new JSONArray();
-                    for (int i = 0; i < sourceArea.jout.length(); i++) {
-                        newArea.jout.put(sourceArea.jout.get(i));
-                    }
-                }
-            } else {
-                newArea.jout = new JSONArray();
-            }
-
-            // Копируем spec (ArrayList) - создаем новый список с копиями объектов
-            newArea.spec = new ArrayList<>();
-            if (sourceArea.spec != null) {
-                for (NArea.Specialisation spec : sourceArea.spec) {
-                    if (spec.subtype != null) {
-                        newArea.spec.add(new NArea.Specialisation(spec.name, spec.subtype));
-                    } else {
-                        newArea.spec.add(new NArea.Specialisation(spec.name));
-                    }
-                }
-            }
-
-            // Копируем jspec если есть
-            if (sourceArea.jspec != null) {
-                try {
-                    newArea.jspec = new JSONArray(sourceArea.jspec.toString());
-                } catch (Exception e) {
-                    newArea.jspec = new JSONArray();
-                    for (int i = 0; i < sourceArea.jspec.length(); i++) {
-                        newArea.jspec.put(sourceArea.jspec.get(i));
-                    }
-                }
-            } else {
-                newArea.jspec = new JSONArray();
-            }
-
-            // Добавляем зону в карту
-            mapView.glob.map.areas.put(newId, newArea);
-
-            // Помечаем зону как созданную локально
-            nurgling.areas.AllowedZonesManager.getInstance().markAsLocallyCreated(newId, newArea.uuid);
-            newArea.hide = false; // Локально созданные зоны всегда видны
-
-            // Создаем лейбл зоны
-            mapView.createAreaLabel(newId);
-
-            // Обновляем конфигурацию
-            NConfig.needAreasUpdate();
-
-            // Обновляем список зон
-            showPath(currentPath);
-
-            // Выбираем новую зону
-            select(newId);
-
-            NUtils.getGameUI().msg("Зона '" + finalName + "' создана");
-        }
-    }
-
 }

@@ -15,6 +15,7 @@ import nurgling.tools.*;
 import nurgling.widgets.*;
 import nurgling.widgets.options.AutoSelection;
 import nurgling.widgets.options.QuickActions;
+import nurgling.sessions.ThreadLocalUI;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
@@ -40,14 +41,14 @@ public class NUtils
             System.err.println("[NUtils] Failed to load NCaveTile: " + e.getMessage());
         }
     }
-    
+
     // Static FPS value updated from render loop
     private static volatile int currentFps = 0;
-    
+
     public static int getFps() {
         return currentFps;
     }
-    
+
     public static void setFps(int fps) {
         currentFps = fps;
     }
@@ -60,10 +61,17 @@ public class NUtils
     }
 
     public static NGameUI getGameUI(){
-        return getUI().gui;
+        NUI ui = getUI();
+        return (ui != null) ? ui.gui : null;
     }
 
     public static NUI getUI(){
+        // First check if this thread has a bound UI (bot threads)
+        NUI threadUI = ThreadLocalUI.get();
+        if (threadUI != null) {
+            return threadUI;
+        }
+        // Fall back to active UI (main thread, render thread)
         return (NUI)UI.getInstance();
     }
 
@@ -466,15 +474,8 @@ public class NUtils
         return 0;
     }
 
-    /** Сбросить весь предмет/стак на землю. */
     public static void drop(WItem item) {
         item.item.wdgmsg("drop", item.sz, getGameUI().map.player().rc, 0);
-    }
-
-    /** Сбросить один предмет из стака на землю (как Ctrl+клик: координата клика + количество 1). */
-    public static void dropOne(WItem item) {
-        haven.Coord clickCoord = item.sz.div(2);
-        item.item.wdgmsg("drop", clickCoord, getGameUI().map.player().rc, 1);
     }
     
     public static void itemact(WItem item) throws InterruptedException {
@@ -502,7 +503,7 @@ public class NUtils
     public static void setQuestConds(int id, Object... args)
     {
         NGameUI gui = getGameUI();
-        if(gui!=null && gui.questinfo != null)
+        if(gui!=null)
         {
             gui.questinfo.updateConds(id, args);
         }
@@ -510,14 +511,14 @@ public class NUtils
 
     public static void removeQuest(int id) {
         NGameUI gui = getGameUI();
-        if(gui!=null && gui.questinfo != null) {
+        if(gui!=null) {
             gui.questinfo.removeQuest(id);
         }
     }
 
     public static void addQuest(int id) {
         NGameUI gui = getGameUI();
-        if(gui!=null && gui.questinfo != null) {
+        if(gui!=null) {
             gui.questinfo.addQuest(id);
         }
     }
@@ -595,67 +596,6 @@ public class NUtils
             }
         }
         return false;
-    }
-
-    /**
-     * Re-evaluates and (re)applies tree harvest overlays for currently loaded gobs.
-     * Used when toggling the feature from UI.
-     */
-    public static void refreshTreeHarvestOverlays() {
-        NGameUI gui = getGameUI();
-        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null)
-            return;
-
-        boolean enabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.treeHarvestOverlay));
-        // When natural objects are hidden in this client, trees/bushes themselves are hidden;
-        // ensure overlays are also removed.
-        boolean showNature = Boolean.TRUE.equals(NConfig.get(NConfig.Key.hideNature));
-
-        ArrayList<Gob> snapshot = new ArrayList<>();
-        try {
-            synchronized (gui.ui.sess.glob.oc) {
-                for (Gob gob : gui.ui.sess.glob.oc) {
-                    snapshot.add(gob);
-                }
-            }
-        } catch (Exception e) {
-            return;
-        }
-
-        for (Gob gob : snapshot) {
-            if (gob == null) continue;
-            try {
-                synchronized (gob) {
-                    Gob.Overlay ol = gob.findol(nurgling.overlays.NTreeHarvestOl.class);
-
-                    if (!enabled || !showNature) {
-                        if (ol != null) ol.remove(true);
-                        continue;
-                    }
-
-                    if (gob.ngob == null || gob.ngob.name == null || !nurgling.overlays.NTreeHarvestOl.isTreeOrBushRes(gob.ngob.name)) {
-                        if (ol != null) ol.remove(true);
-                        continue;
-                    }
-
-                    // Create/refresh only when there is something to show
-                    TexI label = nurgling.overlays.NTreeHarvestOl.computeLabel(gob);
-                    if (label == null) {
-                        if (ol != null) ol.remove(true);
-                        continue;
-                    }
-
-                    if (ol == null) {
-                        gob.addcustomol(new nurgling.overlays.NTreeHarvestOl(gob));
-                    } else if (ol.spr instanceof nurgling.overlays.NTreeHarvestOl) {
-                        ((nurgling.overlays.NTreeHarvestOl) ol.spr).refresh();
-                    }
-                }
-            } catch (Loading l) {
-                // Ignore objects still loading
-            } catch (Exception ignored) {
-            }
-        }
     }
 
     public static Coord2d findMountain(Pair<Coord2d, Coord2d> rcArea)
@@ -866,8 +806,6 @@ public class NUtils
     {
         if (area == null) return false;
 
-        String zoneName = (area.name != null) ? area.name : ("#" + area.id);
-
         // Check if any corner of the area is reachable via local pathfinding
         // If yes - we're already close enough, no need to use global navigation
         if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
@@ -876,63 +814,18 @@ public class NUtils
 
         // Area is not reachable by local PF, use chunk navigation
         // Plan to all 4 corners in parallel and choose the shortest path
-        ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
-        if (chunkNav == null) {
-            NUtils.getGameUI().msg("ChunkNav not available for zone '" + zoneName + "'", java.awt.Color.ORANGE);
-            return false;
-        }
-        
-        if (!chunkNav.isInitialized()) {
-            NUtils.getGameUI().msg("ChunkNav not initialized for zone '" + zoneName + "'", java.awt.Color.ORANGE);
-            return false;
-        }
-        
-        // Force record visible grids before planning to ensure fresh data
-        chunkNav.forceRecordVisibleGrids();
-        
-        ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
-        if (bestPath != null)
+        // IMPORTANT: Capture GUI once and reuse to avoid multi-session issues
+        NGameUI currentGui = NUtils.getGameUI();
+        if (currentGui == null || currentGui.map == null) return false;
+
+        ChunkNavManager chunkNav = ((NMapView) currentGui.map).getChunkNavManager();
+        if (chunkNav != null && chunkNav.isInitialized())
         {
-            return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
-        }
-        else
-        {
-            // Path not found - add diagnostic info
-            // Check if area grids are in ChunkNav
-            boolean hasGridsInNav = false;
-            if (area.space != null && area.space.space != null) {
-                for (Long gridId : area.space.space.keySet()) {
-                    if (chunkNav.getGraph().hasChunk(gridId)) {
-                        hasGridsInNav = true;
-                        break;
-                    }
-                }
+            ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
+            if (bestPath != null)
+            {
+                return chunkNav.navigateWithPath(bestPath, area, currentGui).IsSuccess();
             }
-            
-            // Check player location
-            boolean playerLocFound = false;
-            try {
-                Gob player = NUtils.player();
-                if (player != null) {
-                    haven.MCache mcache = NUtils.getGameUI().map.glob.map;
-                    haven.Coord playerTile = player.rc.floor(haven.MCache.tilesz);
-                    haven.MCache.Grid grid = mcache.getgridt(playerTile);
-                    playerLocFound = (grid != null);
-                }
-            } catch (Exception e) {
-                // ignore
-            }
-            
-            String diagMsg = "Can't find path to '" + zoneName + "'. ";
-            if (!playerLocFound) {
-                diagMsg += "Player grid not loaded. ";
-            }
-            if (!hasGridsInNav) {
-                diagMsg += "Zone grids not in ChunkNav. ";
-            }
-            diagMsg += "Try walking closer first.";
-            
-            NUtils.getGameUI().msg(diagMsg, java.awt.Color.ORANGE);
         }
         return false;
     }
@@ -950,21 +843,17 @@ public class NUtils
 
         // Area is not reachable by local PF, use chunk navigation
         // Plan to all 4 corners in parallel and choose the shortest path
-        ChunkNavManager chunkNav = ((NMapView) NUtils.getGameUI().map).getChunkNavManager();
+        // IMPORTANT: Capture GUI once and reuse to avoid multi-session issues
+        NGameUI currentGui = NUtils.getGameUI();
+        if (currentGui == null || currentGui.map == null) return false;
+
+        ChunkNavManager chunkNav = ((NMapView) currentGui.map).getChunkNavManager();
         if (chunkNav != null && chunkNav.isInitialized())
         {
             ChunkPath bestPath = nurgling.navigation.AreaNavigationHelper.findShortestPathToAreaCorners(area, chunkNav);
             if (bestPath != null)
             {
-                return chunkNav.navigateWithPath(bestPath, area, NUtils.getGameUI()).IsSuccess();
-            }
-            else
-            {
-                // Path not found - zone is too far or unexplored
-                String zoneName = (area.name != null) ? area.name : ("#" + area.id);
-                NUtils.getGameUI().msg("Cannot find path to zone '" + zoneName + "'. " +
-                    "The zone may be too far away or the path has not been explored yet. " +
-                    "Try walking closer to the zone first.", java.awt.Color.ORANGE);
+                return chunkNav.navigateWithPath(bestPath, area, currentGui).IsSuccess();
             }
         }
         return false;
@@ -981,7 +870,7 @@ public class NUtils
         for (String pathElement: pathElements) {
             path = path.resolve(pathElement);
         }
-        
+        System.out.println("generated path for" + path);
         return path;
     }
 

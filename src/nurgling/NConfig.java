@@ -58,7 +58,6 @@ public class NConfig
         blueprintplanterprop,
         autofloweractionprop,
         carrierprop,
-        filltreepotsprop,
         prepblockprop,
         prepboardprop,
         sheepsprop,
@@ -92,8 +91,6 @@ public class NConfig
         showInventoryNums,
         hidecredo,
         autoDrink,
-        autoDrinkThreshold,
-        autoDrinkTimeout,
         autoSaveTableware,
         chipperprop,
         animalrad,
@@ -124,6 +121,7 @@ public class NConfig
         useSolidBackground,
         windowBackgroundColor,
         picklingBeetroots,
+        sync_camera,
         picklingCarrots,
         picklingEggs,
         picklingHerring,
@@ -132,7 +130,6 @@ public class NConfig
         picklingRedOnion,
         picklingYellowOnion,
         openInventoryOnLogin,
-        lowMemoryMode,
         bbDisplayMode,
         showBeehiveRadius,
         showTroughRadius,
@@ -158,25 +155,13 @@ public class NConfig
         boughbeeprop,
         foragerprop,
         buttonStyle,
-        treeFinderEnabled,
-        treeFinderSaveToMap,
-        treeFinderSaveToMapMinGrowth,
-        treeFinderShowNotification,
-        treeFinderShowNotificationMinGrowth,
-        treeFinderNotificationAutoCloseTime,
         showQuestGiverNames,
         showThingwallNames,
         showPartyMemberNames,
-        showProspectingIcons,
-        showQuarryartzIcons,
-        showOreSpotIcons,
-        showGemstoneIcons,
-        showAnimalIcons,
         trackingVectors,
         randomAreaColor,
         treeScaleDisableZoomHide,
         treeScaleMinThreshold,
-        treeHarvestOverlay,
         thinOutlines,
         itemQualityOverlay,
         stackQualityOverlay,
@@ -184,16 +169,7 @@ public class NConfig
         studyInfoOverlay,
         progressOverlay,
         volumeOverlay,
-        masterminerprop,
-        tunnelingprop,
-        masterminermarkingconfig,
         equipProxySlots,
-        diabloLikeRun,
-        treeResizeEnabled,
-        treeResizePercentage,
-        permIconScale,
-        prospectIconScale,
-        syncZoneSync,
         equipmentBotConfig,
         // Starvation alert settings
         starvationAlertEnabled,
@@ -204,17 +180,7 @@ public class NConfig
         starvationSoundThreshold,
         starvationSoundInterval,
         // Localization
-        language,
-        // Simple Routes tracking
-        simpleRoutesDiscordNotify,
-        simpleRoutesTrackedObjects,
-        // Animal markers (макрос маркеров животных: список regex-паттернов)
-        animal_marker_patterns,
-        // Animal markers enabled (ставить метки на животных автоматически)
-        animal_marker_enabled,
-        // Disable gob animations (отключение анимации для выбранных гобов)
-        disableGobAnimEnabled,
-        disableGobAnimPatterns
+        language
     }
 
     public enum BBDisplayMode
@@ -271,7 +237,7 @@ public class NConfig
         conf.put(Key.showView, false);
         conf.put(Key.disableWinAnim, true);
         conf.put(Key.disableMenugridKeys, false);
-        conf.put(Key.baseurl, "https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ver");
+        conf.put(Key.baseurl, "https://raw.githubusercontent.com/aleksandrsvoboda/nurgling-release/stable/ver");
         conf.put(Key.miningol, true);
         conf.put(Key.crime, false);
         conf.put(Key.tracking, false);
@@ -290,8 +256,6 @@ public class NConfig
         conf.put(Key.sendOverlays, false);
         conf.put(Key.showInventoryNums, true);
         conf.put(Key.autoDrink, false);
-        conf.put(Key.autoDrinkThreshold, 0.51);
-        conf.put(Key.autoDrinkTimeout, 5.0);
         conf.put(Key.autoSaveTableware, true);
         conf.put(Key.endpoint, "");
         conf.put(Key.questNotified, false);
@@ -370,35 +334,6 @@ public class NConfig
         qpresets.add(QuickActionPreset.createDefault());
         conf.put(Key.q_presets, qpresets);
 
-        // Animal markers: по умолчанию все криттеры (gfx/kritter/.*)
-        ArrayList<HashMap<String, Object>> animalMarkerPatterns = new ArrayList<>();
-        HashMap<String, Object> amp = new HashMap<>();
-        amp.put("type", "NPattern");
-        amp.put("name", "gfx/kritter/.*");
-        amp.put("enabled", true);
-        animalMarkerPatterns.add(amp);
-        conf.put(Key.animal_marker_patterns, animalMarkerPatterns);
-        // По умолчанию метки на животных включены
-        conf.put(Key.animal_marker_enabled, true);
-
-        // Disable gob animations: default list of animated gobs
-        conf.put(Key.disableGobAnimEnabled, false);
-        ArrayList<HashMap<String, Object>> animGobPatterns = new ArrayList<>();
-        for (String aname : new String[]{
-            "gfx/terobjs/kilntar", "gfx/terobjs/kiln", "gfx/terobjs/fineryforge",
-            "gfx/terobjs/smelter", "gfx/terobjs/primsmelter", "gfx/terobjs/candle",
-            "gfx/terobjs/brazier", "gfx/terobjs/oven", "gfx/terobjs/cauldron",
-            "gfx/terobjs/crucible", "gfx/terobjs/steelcrucible",
-            "gfx/terobjs/smokeshed", "gfx/terobjs/torch"
-        }) {
-            HashMap<String, Object> am = new HashMap<>();
-            am.put("type", "NPattern");
-            am.put("name", aname);
-            am.put("enabled", true);
-            animGobPatterns.add(am);
-        }
-        conf.put(Key.disableGobAnimPatterns, animGobPatterns);
-
         ArrayList<HashMap<String, Object>> petal = new ArrayList<>();
         HashMap<String, Object> pres1 = new HashMap<>();
         pres1.put("type", "NPetal");
@@ -476,7 +411,6 @@ public class NConfig
 
         // Login settings
         conf.put(Key.openInventoryOnLogin, false);  // Default to closed (current behavior)
-        conf.put(Key.lowMemoryMode, false);  // Reduce in-memory caches to lower RAM use (~8 GB -> less)
 
         // Object radius overlays - simple boolean flags
         conf.put(Key.showBeehiveRadius, false);
@@ -506,23 +440,10 @@ public class NConfig
         // Auth obfuscation - bypass firewall blocks
         conf.put(Key.alwaysObfuscate, false);
         
-        // Tree Finder settings
-        conf.put(Key.treeFinderEnabled, false);
-        conf.put(Key.treeFinderSaveToMap, true);
-        conf.put(Key.treeFinderSaveToMapMinGrowth, 100);  // Default 100%
-        conf.put(Key.treeFinderShowNotification, true);
-        conf.put(Key.treeFinderShowNotificationMinGrowth, 100);  // Default 100%
-        conf.put(Key.treeFinderNotificationAutoCloseTime, 30);  // Default 30 seconds
-        
         // Map marker name display settings
         conf.put(Key.showQuestGiverNames, true);
         conf.put(Key.showThingwallNames, true);
         conf.put(Key.showPartyMemberNames, true);
-        conf.put(Key.showProspectingIcons, true);
-        conf.put(Key.showQuarryartzIcons, true);
-        conf.put(Key.showOreSpotIcons, true);
-        conf.put(Key.showGemstoneIcons, true);
-        conf.put(Key.showAnimalIcons, true);
         
         // Map tracking vectors
         conf.put(Key.trackingVectors, false);
@@ -533,18 +454,7 @@ public class NConfig
         // Tree scale overlay settings
         conf.put(Key.treeScaleDisableZoomHide, false);  // If true, always show full label (don't hide on zoom out)
         conf.put(Key.treeScaleMinThreshold, 0);  // Minimum growth % to display tree scale (0 = show all)
-        
-        // Tree resize settings (QOL Lanfir)
-        conf.put(Key.treeResizeEnabled, false);  // Enable/disable tree resizing
-        conf.put(Key.treeResizePercentage, 100);  // Tree resize percentage (0-200, default 100)
-        
-        // Icon scale settings (QOL Lanfir)
-        conf.put(Key.permIconScale, 100);  // Permanent icon scale (1-200, default 100)
-        conf.put(Key.prospectIconScale, 100);  // Prospect icon scale (1-200, default 100)
-        
-        // Tree harvest (leaf/seed/fruit) overlay settings
-        conf.put(Key.treeHarvestOverlay, false);
-        
+
         // Outline rendering settings
         conf.put(Key.thinOutlines, false);  // If true, use thinner object outlines
 
@@ -586,12 +496,6 @@ public class NConfig
         defaultEquipProxySlots.add(7);  // HAND_RIGHT
         defaultEquipProxySlots.add(5);  // BELT
         conf.put(Key.equipProxySlots, defaultEquipProxySlots);
-        
-        // Diablo-like running (auto-click on ground while LMB held)
-        conf.put(Key.diabloLikeRun, false);
-        
-        // Zone sync setting for area synchronization
-        conf.put(Key.syncZoneSync, "");
 
         // Starvation alert settings
         conf.put(Key.starvationAlertEnabled, true);
@@ -601,19 +505,11 @@ public class NConfig
         conf.put(Key.starvationVignetteCriticalThreshold, 2000);  // Vignette intensifies (0 to disable)
         conf.put(Key.starvationSoundThreshold, 2000);  // Sound alarm threshold (0 to disable)
         conf.put(Key.starvationSoundInterval, 10000);  // Sound interval in milliseconds
-        
-        // Simple Routes tracking settings
-        conf.put(Key.simpleRoutesDiscordNotify, false);
-        conf.put(Key.simpleRoutesTrackedObjects, new ArrayList<HashMap<String, Object>>());
     }
 
 
     HashMap<Key, Object> conf = new HashMap<>();
     private boolean isUpd = false;
-    // Tracks which keys were modified by this client instance since last write.
-    // Only these keys will be merged into the on-disk file, preserving changes from other clients.
-    private final Set<Key> dirtyKeys = new HashSet<>();
-    private boolean allKeysDirty = false; // fallback when caller uses needUpdate() without specifying keys
     private boolean isAreasUpd = false;
     private long lastAreasChangeTime = 0;
     private static final long AREAS_DEBOUNCE_MS = 3000; // 3 seconds debounce for area changes
@@ -671,7 +567,6 @@ public class NConfig
         if (current != null)
         {
             current.isUpd = true;
-            current.dirtyKeys.add(key);
             current.conf.put(key, val);
         }
     }
@@ -681,7 +576,6 @@ public class NConfig
         if (current != null)
         {
             current.isUpd = true;
-            current.allKeysDirty = true;
         }
     }
 
@@ -879,13 +773,6 @@ public class NConfig
     }
 
     /**
-     * Gets the dynamic path for prospecting locations configuration file
-     */
-    public String getProspectingLocationsPath() {
-        return getProfileAwarePath("prospecting_locations.nurgling.json");
-    }
-
-    /**
      * Gets the dynamic path for resource timers configuration file
      */
     public String getResourceTimersPath() {
@@ -990,15 +877,6 @@ public class NConfig
                             case "NChipperProp":
                                 res.add(new NChipperProp(obj));
                                 break;
-                            case "NMasterMinerProp":
-                                res.add(new NMasterMinerProp(obj));
-                                break;
-                            case "NTunnelingProp":
-                                res.add(new NTunnelingProp(obj));
-                                break;
-                            case "NMasterMinerMarkingConfig":
-                                res.add(new NMasterMinerMarkingConfig(obj));
-                                break;
                             case "NPrepBProp":
                                 res.add(new NPrepBlocksProp(obj));
                                 break;
@@ -1022,9 +900,6 @@ public class NConfig
                                 break;
                             case "NCarrierProp":
                                 res.add(new NCarrierProp(obj));
-                                break;
-                            case "NFillTreePotsProp":
-                                res.add(new NFillTreePotsProp(obj));
                                 break;
                             case "QuickActionPreset":
                                 res.add(new QuickActionPreset(obj));
@@ -1054,37 +929,6 @@ public class NConfig
         return new ArrayList<>();
     }
 
-    /**
-     * Совместимый аналог {@code JSONObject#toMap()} для старых версий org.json.
-     * Возвращает структуру из HashMap/ArrayList/примитивов.
-     */
-    private static Map<String, Object> toMapCompat(JSONObject obj) {
-        HashMap<String, Object> out = new HashMap<>();
-        for (Iterator<String> it = obj.keys(); it.hasNext(); ) {
-            String k = it.next();
-            Object v = obj.get(k);
-            out.put(k, fromJsonCompat(v));
-        }
-        return out;
-    }
-
-    private static ArrayList<Object> toListCompat(JSONArray arr) {
-        ArrayList<Object> out = new ArrayList<>();
-        for (int i = 0; i < arr.length(); i++) {
-            out.add(fromJsonCompat(arr.get(i)));
-        }
-        return out;
-    }
-
-    private static Object fromJsonCompat(Object v) {
-        if (v instanceof JSONObject) {
-            return toMapCompat((JSONObject) v);
-        } else if (v instanceof JSONArray) {
-            return toListCompat((JSONArray) v);
-        }
-        return v;
-    }
-
     @SuppressWarnings("unchecked")
     public void read() {
         current = this;
@@ -1098,11 +942,10 @@ public class NConfig
         {
         }
 
-        String content = contentBuilder.toString().trim();
-        if (!content.isEmpty() && content.startsWith("{"))
+        if (!contentBuilder.toString().isEmpty())
         {
-            JSONObject main = new JSONObject(content);
-            Map<String, Object> map = toMapCompat(main);
+            JSONObject main = new JSONObject(contentBuilder.toString());
+            Map<String, Object> map = main.toMap();
             for (Map.Entry<String, Object> entry : map.entrySet())
             {
                 try {
@@ -1173,6 +1016,16 @@ public class NConfig
             conf.put(Key.showSpeedometer, true);
         }
 
+        // Migration: Replace old Katodiy baseurl with new aleksandrsvoboda URL
+        if (conf.containsKey(Key.baseurl)) {
+            String currentUrl = (String) conf.get(Key.baseurl);
+            if (currentUrl != null && currentUrl.toLowerCase().contains("katodiy")) {
+                conf.put(Key.baseurl, "https://raw.githubusercontent.com/aleksandrsvoboda/nurgling-release/stable/ver");
+                isUpd = true; // Mark config as updated so it gets saved
+                System.out.println("[NConfig] Migrated baseurl from Katodiy to aleksandrsvoboda");
+            }
+        }
+
         conf.put(Key.showCSprite,conf.get(Key.nextshowCSprite));
         conf.put(Key.flatsurface,conf.get(Key.nextflatsurface));
     }
@@ -1206,65 +1059,45 @@ public class NConfig
         return objs;
     }
 
-    /**
-     * Prepares a single config value for JSON serialization.
-     */
-    @SuppressWarnings("unchecked")
-    private Object prepareValue(Object value) {
-        if (value instanceof JConf) {
-            return ((JConf) value).toJson();
-        } else if (value instanceof ArrayList<?>) {
-            return prepareArray((ArrayList<Object>) value);
-        } else if (value instanceof Color) {
-            Color color = (Color) value;
-            Map<String, Object> colorMap = new HashMap<>();
-            colorMap.put("type", "Color");
-            colorMap.put("red", color.getRed());
-            colorMap.put("green", color.getGreen());
-            colorMap.put("blue", color.getBlue());
-            colorMap.put("alpha", color.getAlpha());
-            return colorMap;
-        } else {
-            return value;
-        }
-    }
-
-    /**
-     * Saves configuration using read-merge-write strategy to support multiple client instances.
-     * Only the keys modified by this client (dirtyKeys) are written over the current on-disk state,
-     * so changes made by other clients are preserved.
-     * Uses file locking to prevent concurrent write corruption.
-     */
     @SuppressWarnings("unchecked")
     public void write()
     {
+        Map<String, Object> prep = new HashMap<>();
+        for (Map.Entry<Key, Object> entry : conf.entrySet())
+        {
+            if (entry.getValue() instanceof JConf)
+            {
+                prep.put(entry.getKey().toString(), ((JConf) entry.getValue()).toJson());
+            }
+            else if (entry.getValue() instanceof ArrayList<?>)
+            {
+                prep.put(entry.getKey().toString(), prepareArray((ArrayList<Object>) entry.getValue()));
+            }
+            else if (entry.getValue() instanceof Color)
+            {
+                // Convert Color objects back to Map format for JSON serialization
+                Color color = (Color) entry.getValue();
+                Map<String, Object> colorMap = new HashMap<>();
+                colorMap.put("type", "Color");
+                colorMap.put("red", color.getRed());
+                colorMap.put("green", color.getGreen());
+                colorMap.put("blue", color.getBlue());
+                colorMap.put("alpha", color.getAlpha());
+                prep.put(entry.getKey().toString(), colorMap);
+            }
+            else
+            {
+                prep.put(entry.getKey().toString(), entry.getValue());
+            }
+        }
+
+        JSONObject main = new JSONObject(prep);
         try
         {
-            if (allKeysDirty || dirtyKeys.isEmpty()) {
-                // Full write: all keys are dirty (needUpdate() was called) or first save
-                Map<String, Object> prep = new HashMap<>();
-                for (Map.Entry<Key, Object> entry : conf.entrySet())
-                {
-                    prep.put(entry.getKey().toString(), prepareValue(entry.getValue()));
-                }
-                JSONObject main = new JSONObject(prep);
-                nurgling.util.SafeJsonWriter.writeAtomic(path, main);
-            } else {
-                // Partial merge-write: only dirty keys are merged into the on-disk file
-                Map<String, Object> prep = new HashMap<>();
-                for (Key key : dirtyKeys)
-                {
-                    Object value = conf.get(key);
-                    if (value != null) {
-                        prep.put(key.toString(), prepareValue(value));
-                    }
-                }
-                JSONObject dirtyData = new JSONObject(prep);
-                nurgling.util.SafeJsonWriter.mergeAndWrite(path, dirtyData);
-            }
-            isUpd = false;
-            dirtyKeys.clear();
-            allKeysDirty = false;
+            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
+            main.write(f);
+            f.close();
+            current.isUpd = false;
         }
         catch (IOException e)
         {
@@ -1337,7 +1170,9 @@ public class NConfig
         main.put("areas",jareas);
         try
         {
-            nurgling.util.SafeJsonWriter.writeAtomic(path, main);
+            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
+            main.write(f);
+            f.close();
             this.isAreasUpd = false;
             this.lastAreasChangeTime = 0;
         }
@@ -1426,10 +1261,12 @@ public class NConfig
                     }
                     NArea area = mapView.glob.map.areas.get(areaId);
                     if (area != null) {
-                        Gob dummy = mapView.dummys.get(area.gid);
-                        if (dummy != null) {
-                            mapView.glob.oc.remove(dummy);
-                            mapView.dummys.remove(area.gid);
+                        synchronized (mapView.dummys) {
+                            Gob dummy = mapView.dummys.get(area.gid);
+                            if (dummy != null) {
+                                mapView.glob.oc.remove(dummy);
+                                mapView.dummys.remove(area.gid);
+                            }
                         }
                     }
                 }
@@ -1484,10 +1321,12 @@ public class NConfig
                         mapView.nols.get(existingArea.id).remove();
                         mapView.nols.remove(existingArea.id);
                     }
-                    Gob dummy = mapView.dummys.get(existingArea.gid);
-                    if (dummy != null) {
-                        mapView.glob.oc.remove(dummy);
-                        mapView.dummys.remove(existingArea.gid);
+                    synchronized (mapView.dummys) {
+                        Gob dummy = mapView.dummys.get(existingArea.gid);
+                        if (dummy != null) {
+                            mapView.glob.oc.remove(dummy);
+                            mapView.dummys.remove(existingArea.gid);
+                        }
                     }
                     
                     // Replace with new area using same id
@@ -1519,8 +1358,9 @@ public class NConfig
             main.put("scenarios", jscenarios);
 
             try {
-                nurgling.util.SafeJsonWriter.writeAtomic(
-                        customPath == null ? getScenariosPath() : customPath, main);
+                FileWriter f = new FileWriter(customPath == null ? getScenariosPath() : customPath, StandardCharsets.UTF_8);
+                main.write(f);
+                f.close();
                 current.isScenariosUpd = false;
             } catch (IOException e) {
                 throw new RuntimeException(e);

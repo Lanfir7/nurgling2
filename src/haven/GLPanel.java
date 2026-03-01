@@ -33,12 +33,14 @@ import java.awt.Cursor;
 import java.awt.Toolkit;
 import haven.JOGLPanel.SyncMode;
 import nurgling.*;
+import nurgling.styles.TooltipStyle;
 
 public interface GLPanel extends UIPanel, UI.Context {
     public GLEnvironment env();
     public Area shape();
     public Pipe basestate();
     public void glswap(GL gl);
+    public Loop getLoop();
 
     public static class Loop implements Console.Directory {
 	public static boolean gldebug = false;
@@ -54,6 +56,16 @@ public interface GLPanel extends UIPanel, UI.Context {
 	protected UI lockedui, ui;
 	private final Dispatcher ed;
 	private final Object uilock = new Object();
+	/** Lifecycle listener for UI creation/destruction events */
+	private UILifecycleListener lifecycleListener;
+
+	public void setUILifecycleListener(UILifecycleListener l) {
+	    this.lifecycleListener = l;
+	}
+
+	public UILifecycleListener getUILifecycleListener() {
+	    return lifecycleListener;
+	}
 
 	public Loop(GLPanel p) {
 	    this.p = p;
@@ -201,10 +213,10 @@ public interface GLPanel extends UIPanel, UI.Context {
 		if(pos.y < 0)
 		    pos.y = 0;
 		Coord br = pos.add(sz);
-		Coord m = UI.scale(2, 2);
-		g.chcolor(244, 247, 21, 192);
+		Coord m = UI.scale(TooltipStyle.GLPANEL_MARGIN, TooltipStyle.GLPANEL_MARGIN);
+		g.chcolor(TooltipStyle.COLOR_TOOLTIP_BORDER);
 		g.rect2(pos.sub(m).sub(1, 1), br.add(m).add(1, 1));
-		g.chcolor(35, 35, 35, 192);
+		g.chcolor(TooltipStyle.COLOR_TOOLTIP_BG);
 		g.frect2(pos.sub(m), br.add(m));
 		g.chcolor();
 		g.image(tex, pos);
@@ -471,18 +483,40 @@ public interface GLPanel extends UIPanel, UI.Context {
 	}
 
 	public UI newui(UI.Runner fun) {
-	    // Clear only nurgling static caches when switching sessions.
-	    // Resource caches (local + remote) are NOT cleared — matching original client behavior.
-	    // Clearing resource caches caused GOBs to not render on first login because
-	    // all resources had to be re-loaded, overwhelming the Loader with Loading exceptions.
-	    if (fun != null && fun instanceof RemoteUI) {
+	    if (fun instanceof RemoteUI) {
 		nurgling.NCore.clearSessionCaches();
 		if (nurgling.NGameUI.gobIdToKinName != null)
 		    nurgling.NGameUI.gobIdToKinName.clear();
 	    }
-	    UI prevui, newui = new NUI(p, new Coord(p.getSize()), fun);
+
+	    if (lifecycleListener != null) {
+		UI reuse = lifecycleListener.beforeNewUI(fun, this.ui, p);
+		if (reuse != null) {
+		    // Reuse existing UI instead of creating new
+		    synchronized(uilock) {
+			UI prevui = this.ui;
+			ui = reuse;
+			ui.root.guprof = uprof;
+			ui.root.grprof = rprof;
+			ui.root.ggprof = gprof;
+			while((this.lockedui != null) && (this.lockedui == prevui)) {
+			    try {
+				uilock.wait();
+			    } catch(InterruptedException e) {
+				Thread.currentThread().interrupt();
+				break;
+			    }
+			}
+		    }
+		    return reuse;
+		}
+	    }
+
+	    // Create new UI
+	    UI prevui;
+	    NUI newui = new NUI(p, new Coord(p.getSize()), fun);
 	    newui.env = p.env();
-		UI.ui = (NUI) newui;
+	    UI.ui = newui;
 	    if(p.getParent() instanceof Console.Directory)
 		newui.cons.add((Console.Directory)p.getParent());
 	    if(p instanceof Console.Directory)
@@ -503,12 +537,28 @@ public interface GLPanel extends UIPanel, UI.Context {
 		    }
 		}
 	    }
+
+	    // Lifecycle hook for destruction decision
 	    if(prevui != null) {
-		synchronized(prevui) {
-		    prevui.destroy();
+		boolean shouldDestroy = (lifecycleListener == null) ||
+					lifecycleListener.afterNewUI(newui, prevui);
+		if (shouldDestroy) {
+		    synchronized(prevui) {
+			prevui.destroy();
+		    }
 		}
 	    }
 	    return(newui);
+	}
+
+	/**
+	 * Request a new session to be started.
+	 * Used for multi-session support when adding accounts.
+	 */
+	public void requestNewSession() {
+	    if (lifecycleListener != null) {
+		lifecycleListener.onNewSessionRequested(p);
+	    }
 	}
 
 	private Map<String, Console.Command> cmdmap = new TreeMap<String, Console.Command>();

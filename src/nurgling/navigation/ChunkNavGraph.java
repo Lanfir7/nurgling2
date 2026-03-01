@@ -300,12 +300,12 @@ public class ChunkNavGraph {
         // STRICT: Only use worldTileOrigin when BOTH chunks have the SAME known instanceId.
         // worldTileOrigin from different instances lives in independent coordinate spaces,
         // so comparing them is meaningless and creates false cross-instance connections.
-        // Chunks with instanceId=0 (legacy/unknown) are excluded from this fallback.
         if (chunk.worldTileOrigin != null && chunk.instanceId != 0) {
             for (ChunkNavData other : chunks.values()) {
                 if (other.gridId == chunk.gridId) continue;
+                if (chunk.connectedChunks.contains(other.gridId)) continue; // Already connected
                 if (!chunk.layer.equals(other.layer)) continue;
-                if (other.instanceId != chunk.instanceId) continue;
+                if (other.instanceId != chunk.instanceId) continue; // Must be same known instance
                 if (other.worldTileOrigin == null) continue;
 
                 int dx = other.worldTileOrigin.x - chunk.worldTileOrigin.x;
@@ -315,30 +315,10 @@ public class ChunkNavGraph {
                                      (dx == 0 && Math.abs(dy) == CHUNK_SIZE);
 
                 if (isAdjacent) {
-                    // Always establish persistent neighbor relationships so
-                    // UnifiedTilePathfinder can cross chunk boundaries.
-                    // discoverNeighbors (MCache-based) may have missed this pair
-                    // if they were never in MCache simultaneously.
-                    if (dx == CHUNK_SIZE && dy == 0) {
-                        if (chunk.neighborEast == -1) chunk.neighborEast = other.gridId;
-                        if (other.neighborWest == -1) other.neighborWest = chunk.gridId;
-                    } else if (dx == -CHUNK_SIZE && dy == 0) {
-                        if (chunk.neighborWest == -1) chunk.neighborWest = other.gridId;
-                        if (other.neighborEast == -1) other.neighborEast = chunk.gridId;
-                    } else if (dx == 0 && dy == CHUNK_SIZE) {
-                        if (chunk.neighborSouth == -1) chunk.neighborSouth = other.gridId;
-                        if (other.neighborNorth == -1) other.neighborNorth = chunk.gridId;
-                    } else if (dx == 0 && dy == -CHUNK_SIZE) {
-                        if (chunk.neighborNorth == -1) chunk.neighborNorth = other.gridId;
-                        if (other.neighborSouth == -1) other.neighborSouth = chunk.gridId;
-                    }
-
-                    if (!chunk.connectedChunks.contains(other.gridId)) {
-                        EdgeCrossing crossing = findBestCrossing(chunk, other);
-                        if (crossing != null) {
-                            chunk.connectedChunks.add(other.gridId);
-                            other.connectedChunks.add(chunk.gridId);
-                        }
+                    EdgeCrossing crossing = findBestCrossing(chunk, other);
+                    if (crossing != null) {
+                        chunk.connectedChunks.add(other.gridId);
+                        other.connectedChunks.add(chunk.gridId);
                     }
                 }
             }
@@ -350,9 +330,6 @@ public class ChunkNavGraph {
      * Call this after loading chunks from storage to ensure connectivity is up to date.
      */
     public void rebuildAllConnections() {
-        // Repair inconsistent neighbor links before rebuilding
-        repairNeighborConsistency();
-
         // Clear existing connections
         for (ChunkNavData chunk : chunks.values()) {
             chunk.connectedChunks.clear();
@@ -361,76 +338,6 @@ public class ChunkNavGraph {
         // Rebuild connections for all chunks
         for (ChunkNavData chunk : chunks.values()) {
             updateConnections(chunk);
-        }
-    }
-
-    /**
-     * Repair inconsistent neighbor relationships.
-     * Fixes:
-     * 1. References to non-existent chunks
-     * 2. Asymmetric links (A.north=B but B.south≠A) — clears the stale side
-     * 3. Self-references
-     */
-    public int repairNeighborConsistency() {
-        int repairs = 0;
-
-        for (ChunkNavData chunk : chunks.values()) {
-            long[] neighbors = {chunk.neighborNorth, chunk.neighborSouth,
-                                chunk.neighborEast, chunk.neighborWest};
-            // reverse direction indices: N↔S (0↔1), E↔W (2↔3)
-
-            for (int dir = 0; dir < 4; dir++) {
-                long neighborId = neighbors[dir];
-                if (neighborId == -1) continue;
-
-                // Self-reference
-                if (neighborId == chunk.gridId) {
-                    setField(chunk, dir, -1);
-                    repairs++;
-                    continue;
-                }
-
-                // Reference to non-existent chunk
-                ChunkNavData neighbor = chunks.get(neighborId);
-                if (neighbor == null) {
-                    setField(chunk, dir, -1);
-                    repairs++;
-                    continue;
-                }
-
-                // Asymmetric: chunk→neighbor in dir, but neighbor→chunk not in reverse
-                int reverseDir = dir ^ 1;
-                long reverseRef = getField(neighbor, reverseDir);
-                if (reverseRef != chunk.gridId) {
-                    // The link is one-directional — stale. Clear it.
-                    setField(chunk, dir, -1);
-                    repairs++;
-                }
-            }
-        }
-
-        if (repairs > 0) {
-            System.out.println("[ChunkNav] Repaired " + repairs + " inconsistent neighbor links");
-        }
-        return repairs;
-    }
-
-    private static long getField(ChunkNavData c, int dir) {
-        switch (dir) {
-            case 0: return c.neighborNorth;
-            case 1: return c.neighborSouth;
-            case 2: return c.neighborEast;
-            case 3: return c.neighborWest;
-            default: return -1;
-        }
-    }
-
-    private static void setField(ChunkNavData c, int dir, long val) {
-        switch (dir) {
-            case 0: c.neighborNorth = val; break;
-            case 1: c.neighborSouth = val; break;
-            case 2: c.neighborEast = val; break;
-            case 3: c.neighborWest = val; break;
         }
     }
 

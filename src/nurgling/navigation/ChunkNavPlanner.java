@@ -61,13 +61,13 @@ public class ChunkNavPlanner {
 
     /**
      * Plan a path from player's current position to a target area.
-     * Tries all grids that contain the area and picks the shortest truncated path.
-     * This ensures the nearest portal/entry point is chosen when multiple exist
-     * (e.g. two mine entrances leading to the same underground area).
+     * Uses the unified tile pathfinder to build a complete path through all chunks.
      */
     public ChunkPath planToArea(NArea area) {
         if (area == null) return null;
 
+        // Get player's current chunk and local position using direct MCache lookup
+        // This is more reliable than ngob.grid_id which can be stale
         PlayerLocation playerLoc = getPlayerLocation();
         if (playerLoc == null) {
             return null;
@@ -76,56 +76,28 @@ public class ChunkNavPlanner {
         long startChunkId = playerLoc.gridId;
         Coord playerLocal = playerLoc.localCoord;
 
-        ChunkPath bestPath = null;
-        float bestCost = Float.MAX_VALUE;
-
-        // Try all grids that contain the area, compare truncated paths
-        if (area.space != null && area.space.space != null && !area.space.space.isEmpty()) {
-            for (Map.Entry<Long, NArea.VArea> entry : area.space.space.entrySet()) {
-                long gridId = entry.getKey();
-                NArea.VArea varea = entry.getValue();
-                if (varea == null || varea.area == null) continue;
-
-                ChunkNavData chunk = graph.getChunk(gridId);
-                if (chunk == null) continue;
-
-                Coord walkableNearArea = findWalkableNearAreaEdge(area, chunk);
-                if (walkableNearArea == null) continue;
-
-                UnifiedTilePathfinder.UnifiedPath unifiedPath = unifiedPathfinder.findPath(
-                    startChunkId, playerLocal,
-                    gridId, walkableNearArea
-                );
-
-                if (unifiedPath != null && unifiedPath.reachable) {
-                    ChunkPath path = new ChunkPath();
-                    unifiedPath.populateChunkPath(path, graph);
-                    truncatePathAtAreaEntry(path, area);
-                    path.recalculateCost();
-
-                    if (path.totalCost < bestCost) {
-                        bestPath = path;
-                        bestCost = path.totalCost;
-                    }
-                }
-            }
+        // Find target chunk and local coord using STORED data (not live visibility)
+        TargetLocation target = findTargetLocation(area);
+        if (target == null) {
+            return null;
         }
 
-        if (bestPath != null) return bestPath;
-
-        // Fallback: single target (for areas without stored grid references)
-        TargetLocation target = findTargetLocation(area);
-        if (target == null) return null;
-
+        // Use unified pathfinder to get complete tile-level path
         UnifiedTilePathfinder.UnifiedPath unifiedPath = unifiedPathfinder.findPath(
             startChunkId, playerLocal,
             target.chunkId, target.localCoord
         );
 
-        if (unifiedPath == null || !unifiedPath.reachable) return null;
+        if (unifiedPath == null || !unifiedPath.reachable) {
+            return null;
+        }
 
+        // Convert to ChunkPath with segments
         ChunkPath path = new ChunkPath();
         unifiedPath.populateChunkPath(path, graph);
+
+        // Truncate path at first tile that enters the target area
+        // This prevents walking through the entire area to reach the far corner
         truncatePathAtAreaEntry(path, area);
 
         return path;
@@ -312,29 +284,6 @@ public class ChunkNavPlanner {
         );
 
         if (unifiedPath == null || !unifiedPath.reachable) {
-            // Diagnostic: dump start and target chunk info
-            ChunkNavData startChunk = graph.getChunk(startChunkId);
-            System.out.println("[planToGridCoord] NO PATH: start=" + startChunkId +
-                " (layer=" + (startChunk != null ? startChunk.layer : "?") +
-                " inst=" + (startChunk != null ? startChunk.instanceId : "?") +
-                " portals=" + (startChunk != null ? startChunk.portals.size() : 0) + ")" +
-                " -> target=" + gridId +
-                " (layer=" + chunk.layer + " inst=" + chunk.instanceId +
-                " portals=" + chunk.portals.size() + ")");
-            if (startChunk != null && !startChunk.portals.isEmpty()) {
-                for (ChunkPortal p : startChunk.portals) {
-                    System.out.println("[planToGridCoord]   startPortal: '" + p.gobName +
-                        "' type=" + p.type + " -> grid=" + p.connectsToGridId +
-                        " at=(" + (p.localCoord != null ? p.localCoord.x + "," + p.localCoord.y : "null") + ")");
-                }
-            }
-            if (!chunk.portals.isEmpty()) {
-                for (ChunkPortal p : chunk.portals) {
-                    System.out.println("[planToGridCoord]   targetPortal: '" + p.gobName +
-                        "' type=" + p.type + " -> grid=" + p.connectsToGridId +
-                        " at=(" + (p.localCoord != null ? p.localCoord.x + "," + p.localCoord.y : "null") + ")");
-                }
-            }
             return null;
         }
 
@@ -682,7 +631,6 @@ public class ChunkNavPlanner {
 
     /**
      * Get player's current grid ID and local coordinate using direct MCache lookup.
-     * Falls back to searching ChunkNav by worldTileOrigin if MCache lookup fails.
      * This is more reliable than ngob.grid_id which can be stale after teleports.
      */
     private PlayerLocation getPlayerLocation() {
@@ -698,7 +646,7 @@ public class ChunkNavPlanner {
             MCache mcache = gui.map.glob.map;
             Coord playerTile = player.rc.floor(MCache.tilesz);
 
-            // Strategy 1: Direct MCache lookup - most reliable
+            // Direct lookup - most reliable
             MCache.Grid grid = mcache.getgridt(playerTile);
             if (grid != null) {
                 Coord localCoord = playerTile.sub(grid.ul);
@@ -706,18 +654,6 @@ public class ChunkNavPlanner {
                 if (localCoord.x >= 0 && localCoord.x < CHUNK_SIZE &&
                     localCoord.y >= 0 && localCoord.y < CHUNK_SIZE) {
                     return new PlayerLocation(grid.id, localCoord);
-                }
-            }
-
-            // Strategy 2: Fallback - search recorded chunks by worldTileOrigin
-            // This handles cases where MCache lookup fails but we have recorded data
-            for (ChunkNavData chunk : graph.getAllChunks()) {
-                if (chunk.worldTileOrigin == null) continue;
-                
-                Coord localCoord = playerTile.sub(chunk.worldTileOrigin);
-                if (localCoord.x >= 0 && localCoord.x < CHUNK_SIZE &&
-                    localCoord.y >= 0 && localCoord.y < CHUNK_SIZE) {
-                    return new PlayerLocation(chunk.gridId, localCoord);
                 }
             }
 

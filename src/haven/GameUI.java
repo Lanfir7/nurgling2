@@ -589,32 +589,15 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public void addchild(Widget child, Object... args) {
 	String place = ((String)args[0]).intern();
 	if(place == "mapview") {
-	    MapView oldMap = map;
 	    child.resize(sz);
 	    map = add((MapView)child, Coord.z);
 	    map.lower();
-	    MapFile oldMapFile = null;
-	    if(mmap != null) {
-		if(mmap instanceof MiniMap)
-		    oldMapFile = ((MiniMap)mmap).file;
+	    if(mmap != null)
 		ui.destroy(mmap);
-	    }
 	    if(mapfile != null) {
-		if(oldMapFile == null)
-		    oldMapFile = mapfile.view.file;
 		ui.destroy(mapfile);
 		mapfile = null;
 	    }
-	    if(oldMapFile != null) {
-		try { oldMapFile.dispose(); } catch(Exception e) {}
-	    }
-	    if(oldMap != null) {
-		try {
-		    if(oldMap.glob != null && oldMap.glob.map != null)
-			oldMap.glob.map.trimall();
-		} catch(Exception e) {}
-	    }
-	    try { Resource.remote().clearCache(); } catch(Exception e) {}
 	    ResCache mapstore = ResCache.global;
 	    if(MapFile.mapbase.get() != null)
 		mapstore = HashDirCache.get(MapFile.mapbase.get());
@@ -622,8 +605,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		MapFile file;
 		try {
 		    file = MapFile.load(mapstore, mapfilename());
-			Object am = NConfig.get(NConfig.Key.autoMapper);
-			if(am instanceof Boolean && (Boolean) am) {
+			if((Boolean) NConfig.get(NConfig.Key.autoMapper)) {
 				NUtils.getUI().core.mappingClient.requestor.processMap(file, (m) -> {
 					if(m instanceof MapFile.PMarker) {
 						return (Boolean) NConfig.get(NConfig.Key.unloadgreen) && ((MapFile.PMarker)m).color.equals(Color.GREEN);
@@ -1300,7 +1282,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public static final KeyBinding kb_chr = KeyBinding.get("chr", KeyMatch.forchar('T', KeyMatch.C));
     public static final KeyBinding kb_bud = KeyBinding.get("bud", KeyMatch.forchar('B', KeyMatch.C));
     public static final KeyBinding kb_areas = KeyBinding.get("areas", KeyMatch.forchar('L', KeyMatch.C));
-    public static final KeyBinding kb_cookbook = KeyBinding.get("areas", KeyMatch.forchar('L', KeyMatch.C));
+    public static final KeyBinding kb_cookbook = KeyBinding.get("cookbook", KeyMatch.forchar('K', KeyMatch.C));
 	public static final KeyBinding kb_searchWidget = KeyBinding.get("searchWidget", KeyMatch.forchar('F', KeyMatch.C));
 	public static final KeyBinding kb_blueprints = KeyBinding.get("treegarden", KeyMatch.forchar('P', KeyMatch.C));
 	public static final KeyBinding kb_storage = KeyBinding.get("storage", KeyMatch.forchar('I', KeyMatch.C));
@@ -1318,34 +1300,6 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		// Bottom row - buttons: Areas, Cook Book, Blueprints, Storage, Encyclopedia
 		int secondRowY = firstButton.sz.y + UI.scale(5);
 		prev = add(new MenuCheckBox("rbtn/areas/", kb_areas, L10n.get("area.title")), 0, secondRowY).state(() -> wndstate(areas)).click(() -> togglewnd(areas));
-		// Simple Routes button (only if NGameUI) - check dynamically
-		Widget simpleRoutesBtn = null;
-		try {
-			// Check if this is NGameUI by checking if simpleRoutesWidget field exists
-			if (GameUI.this.getClass().getName().equals("nurgling.NGameUI") || GameUI.this instanceof nurgling.NGameUI) {
-				simpleRoutesBtn = add(new MenuCheckBox("rbtn/routes/", null, "Simple Routes"), prev.pos("ur").add(UI.scale(10),0));
-				((MenuCheckBox)simpleRoutesBtn).state(() -> {
-					try {
-						nurgling.widgets.SimpleRoutesWidget simpleRoutes = ((nurgling.NGameUI) GameUI.this).simpleRoutesWidget;
-						return simpleRoutes != null && wndstate(simpleRoutes);
-					} catch (Exception e) {
-						return false;
-					}
-				}).click(() -> {
-					try {
-						nurgling.widgets.SimpleRoutesWidget simpleRoutes = ((nurgling.NGameUI) GameUI.this).simpleRoutesWidget;
-						if (simpleRoutes != null) {
-							togglewnd(simpleRoutes);
-						}
-					} catch (Exception e) {
-						// Ignore
-					}
-				});
-				prev = simpleRoutesBtn;
-			}
-		} catch (Exception e) {
-			// If check fails, skip button
-		}
 		prev = add(new MenuCheckBox("rbtn/cookbook/", kb_cookbook, L10n.get("cookbook.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(cookBook)).click(() -> togglewnd(cookBook));
 		prev = add(new MenuCheckBox("rbtn/blueprints/", kb_blueprints, L10n.get("blueprint.manager_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(blueprintWidget)).click(() -> togglewnd(blueprintWidget));
 		prev = add(new MenuCheckBox("rbtn/storage/", kb_storage, L10n.get("storage.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(storageItemsWidget)).click(() -> togglewnd(storageItemsWidget));

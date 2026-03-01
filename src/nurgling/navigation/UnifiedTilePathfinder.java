@@ -136,7 +136,13 @@ public class UnifiedTilePathfinder {
      * @return UnifiedPath containing the complete tile-level path, or null if no path exists
      */
     public UnifiedPath findPath(long startChunkId, Coord startLocal, long targetChunkId, Coord targetLocal) {
+        // System.out.println("[UnifiedTilePathfinder] findPath called:");
+        // System.out.println("  - Start: chunk " + startChunkId + " local " + startLocal);
+        // System.out.println("  - Target: chunk " + targetChunkId + " local " + targetLocal);
+
         if (startChunkId == targetChunkId && startLocal.equals(targetLocal)) {
+            // Already at target
+            // System.out.println("[UnifiedTilePathfinder] Already at target!");
             UnifiedPath path = new UnifiedPath();
             path.reachable = true;
             path.steps.add(new TileNode(startChunkId, startLocal));
@@ -147,13 +153,30 @@ public class UnifiedTilePathfinder {
         ChunkNavData targetChunk = graph.getChunk(targetChunkId);
 
         if (startChunk == null) {
-            System.out.println("[UnifiedTilePathfinder] ERROR: Start chunk " + startChunkId + " not in graph!");
+            // System.out.println("[UnifiedTilePathfinder] ERROR: Start chunk " + startChunkId + " not in graph!");
             return null;
         }
         if (targetChunk == null) {
-            System.out.println("[UnifiedTilePathfinder] ERROR: Target chunk " + targetChunkId + " not in graph!");
+            // System.out.println("[UnifiedTilePathfinder] ERROR: Target chunk " + targetChunkId + " not in graph!");
             return null;
         }
+
+        // System.out.println("[UnifiedTilePathfinder] Start chunk info:");
+        // System.out.println("  - Layer: " + startChunk.layer);
+        // System.out.println("  - Neighbors: N=" + startChunk.neighborNorth + " S=" + startChunk.neighborSouth +
+        //                   " E=" + startChunk.neighborEast + " W=" + startChunk.neighborWest);
+        // System.out.println("  - Portals: " + startChunk.portals.size());
+
+        // System.out.println("[UnifiedTilePathfinder] Target chunk info:");
+        // System.out.println("  - Layer: " + targetChunk.layer);
+        // System.out.println("  - Neighbors: N=" + targetChunk.neighborNorth + " S=" + targetChunk.neighborSouth +
+        //                   " E=" + targetChunk.neighborEast + " W=" + targetChunk.neighborWest);
+        // System.out.println("  - Portals: " + targetChunk.portals.size());
+
+        // Check if same layer
+        // if (!startChunk.layer.equals(targetChunk.layer)) {
+        //     System.out.println("[UnifiedTilePathfinder] DIFFERENT LAYERS: " + startChunk.layer + " -> " + targetChunk.layer);
+        // }
 
         // A* data structures
         PriorityQueue<AStarNode> openSet = new PriorityQueue<>(Comparator.comparingDouble(n -> n.f));
@@ -175,13 +198,21 @@ public class UnifiedTilePathfinder {
         int iterations = 0;
         int maxIterations = 500000; // Safety limit - increased for large maps
 
+        // Track unique chunks explored for diagnostics
+        Set<Long> chunksExplored = new HashSet<>();
+
+        // System.out.println("[UnifiedTilePathfinder] Starting A* search...");
+        // long searchStartTime = System.currentTimeMillis();
+
         while (!openSet.isEmpty() && iterations < maxIterations) {
             iterations++;
 
             AStarNode current = openSet.poll();
+            chunksExplored.add(current.tile.chunkId);
 
             if (current.tile.equals(targetTile)) {
                 // Found path - reconstruct it
+                // System.out.println("[UnifiedTilePathfinder] PATH FOUND! Iterations: " + iterations + ", chunks: " + chunksExplored.size());
                 return reconstructPath(current);
             }
 
@@ -206,18 +237,24 @@ public class UnifiedTilePathfinder {
                 }
 
                 if (tentativeG < neighborNode.g) {
-                    // Remove from PQ before updating f — Java PriorityQueue
-                    // does NOT re-sort when element fields change in-place.
-                    openSet.remove(neighborNode);
                     neighborNode.parent = current;
-                    neighborNode.viaPortalFromParent = neighborTile.viaPortal;
+                    neighborNode.viaPortalFromParent = neighborTile.viaPortal;  // Store how we got here
                     neighborNode.g = tentativeG;
                     neighborNode.h = heuristic(neighborTile, targetTile);
                     neighborNode.f = neighborNode.g + neighborNode.h;
-                    openSet.add(neighborNode);
+
+                    if (!openSet.contains(neighborNode)) {
+                        openSet.add(neighborNode);
+                    }
                 }
             }
         }
+
+        // Path not found
+        // System.out.println("[UnifiedTilePathfinder] NO PATH FOUND! Iterations: " + iterations + ", chunks explored: " + chunksExplored.size());
+        // if (openSet.isEmpty()) {
+        //     System.out.println("[UnifiedTilePathfinder] Search exhausted - no connection to target");
+        // }
 
         return null;
     }
@@ -260,23 +297,25 @@ public class UnifiedTilePathfinder {
         }
 
         // Portal connections
-        // Skip portals on chunks that are blacklisted (portal traversal failed there before)
         boolean chunkExcluded = !excludedPortalChunks.isEmpty() && excludedPortalChunks.contains(tile.chunkId);
         for (ChunkPortal portal : chunk.portals) {
             if (portal.localCoord != null && portal.connectsToGridId != -1) {
                 double dist = tile.localCoord.dist(portal.localCoord);
-                // Building exteriors (greathall, stonemansion, etc.) are large structures.
-                // Their portal coord is recorded near the building center, but those tiles
-                // are often blocked by the building's footprint. Use larger proximity.
+                // Building exteriors use larger proximity (6 tiles vs 2)
                 int portalProximity = ChunkPortal.isBuildingExterior(portal.gobName) ? 6 : 2;
                 if (dist <= portalProximity) {
                     if (chunkExcluded) continue;
 
-                    // Phantom building portals at chunk edges are prevented at recording
-                    // time by PortalTraversalTracker (uses building's actual grid).
-                    // No edge-based filtering here — real buildings CAN be near chunk edges.
+                    // Skip "phantom" building exterior portals at chunk edges
+                    if (ChunkPortal.isBuildingExterior(portal.gobName) && isAtChunkEdge(portal.localCoord, 5)) {
+                        continue;
+                    }
                     ChunkNavData destChunk = graph.getChunk(portal.connectsToGridId);
                     if (destChunk != null) {
+                        // Validate portal type vs target layer
+                        if (!isPortalTargetLayerValid(portal.type, destChunk.layer)) {
+                            continue; // Stale connection - skip
+                        }
                         Coord exitCoord = findPortalExitCoord(destChunk, portal, tile.chunkId);
                         if (exitCoord != null) {
                             neighbors.add(new TileNode(portal.connectsToGridId, exitCoord, true));
@@ -340,8 +379,7 @@ public class UnifiedTilePathfinder {
         // Must be same layer
         if (!fromChunk.layer.equals(neighborChunk.layer)) return null;
 
-        // Must be same known instance (prevents cross-instance walking through false neighbors)
-        // Block if either has unknown instanceId (0) - can't trust the link
+        // Must be same known instance (prevents cross-instance walking)
         if (fromChunk.instanceId == 0 || neighborChunk.instanceId == 0) return null;
         if (fromChunk.instanceId != neighborChunk.instanceId) return null;
 
@@ -471,84 +509,43 @@ public class UnifiedTilePathfinder {
             return 1000.0; // Unknown chunk
         }
 
-        // Cross-layer or cross-instance: requires portal traversal
-        boolean needsPortal = !fromChunk.layer.equals(toChunk.layer) ||
-            (fromChunk.instanceId != 0 && toChunk.instanceId != 0
-                && fromChunk.instanceId != toChunk.instanceId);
-
-        if (needsPortal) {
+        // Check if same layer - if not, add portal traversal cost estimate
+        if (!fromChunk.layer.equals(toChunk.layer)) {
             int depth = getPortalPathDepth(fromChunk, toChunk, new HashSet<>());
-            if (depth >= 0) {
-                // Admissible: each portal hop costs at least PORTAL_TRAVERSAL_COST
-                return depth * ChunkNavConfig.PORTAL_TRAVERSAL_COST;
+            if (depth == -1) {
+                return 999999.0; // Dead end - this building doesn't connect to target
             }
-            double crossEst = estimateCrossInstanceHeuristic(fromChunk, from, toChunk, to);
-            if (crossEst >= 0) return crossEst;
-            // Admissible fallback: at least one portal traversal needed
-            return ChunkNavConfig.PORTAL_TRAVERSAL_COST;
+            return 100.0 + (depth - 1) * 400.0;
+        }
+
+        // Check if different instances on same layer
+        if (fromChunk.instanceId != 0 && toChunk.instanceId != 0
+                && fromChunk.instanceId != toChunk.instanceId) {
+            int depth = getPortalPathDepth(fromChunk, toChunk, new HashSet<>());
+            if (depth == -1) return 999999.0;
+            return 100.0 + (depth - 1) * 400.0;
         }
 
         // Try world coordinates if both chunks have been seen this session
-        // ONLY valid when chunks are in the same instance (same coordinate space)
+        // ONLY valid when chunks are in the same instance
         if (fromChunk.worldTileOrigin != null && toChunk.worldTileOrigin != null) {
             Coord fromWorld = fromChunk.worldTileOrigin.add(from.localCoord);
             Coord toWorld = toChunk.worldTileOrigin.add(to.localCoord);
             return fromWorld.dist(toWorld);
         }
 
-        // Fallback: BFS neighbor distance with conservative factor for admissibility
+        // Fallback: estimate based on neighbor-based distance
+        // BFS to find shortest path through neighbor relationships
         int neighborDist = getNeighborDistance(from.chunkId, to.chunkId);
         if (neighborDist >= 0) {
-            // 0.7 ≈ 1/√2 accounts for diagonal chunk arrangements in BFS
-            return neighborDist * CHUNK_SIZE * 0.7;
+            // Each chunk is CHUNK_SIZE tiles, estimate walking across half of each
+            Coord chunkCenter = new Coord(CHUNK_SIZE / 2, CHUNK_SIZE / 2);
+            return neighborDist * CHUNK_SIZE + from.localCoord.dist(chunkCenter) + to.localCoord.dist(chunkCenter);
         }
 
         // No path through neighbors - might need portal
-        return ChunkNavConfig.PORTAL_TRAVERSAL_COST;
-    }
-
-    /**
-     * Estimate heuristic for cross-instance paths: portal cost + walking in target instance.
-     * Tries ALL portals on fromChunk and returns the MINIMUM admissible estimate.
-     * Prefers exact Euclidean distance (worldTileOrigin) over BFS-based estimate.
-     * Returns -1 if no portal to target's instance is found.
-     */
-    private double estimateCrossInstanceHeuristic(ChunkNavData fromChunk, TileNode from,
-                                                   ChunkNavData toChunk, TileNode to) {
-        long targetInstance = toChunk.instanceId;
-        double portalCost = ChunkNavConfig.PORTAL_TRAVERSAL_COST;
-        double bestEstimate = Double.MAX_VALUE;
-
-        for (ChunkPortal portal : fromChunk.portals) {
-            if (portal.connectsToGridId == -1) continue;
-            ChunkNavData exitChunk = graph.getChunk(portal.connectsToGridId);
-            if (exitChunk == null) continue;
-            if (exitChunk.instanceId != targetInstance && targetInstance != 0) continue;
-
-            double estimate;
-
-            // Prefer exact Euclidean distance (admissible, tight)
-            if (exitChunk.worldTileOrigin != null && toChunk.worldTileOrigin != null) {
-                Coord exitLocal = portal.exitLocalCoord != null
-                    ? portal.exitLocalCoord
-                    : new Coord(CHUNK_SIZE / 2, CHUNK_SIZE / 2);
-                Coord exitWorld = exitChunk.worldTileOrigin.add(exitLocal);
-                Coord toWorld = toChunk.worldTileOrigin.add(to.localCoord);
-                estimate = portalCost + exitWorld.dist(toWorld);
-            } else {
-                // BFS fallback with conservative factor (0.7 ≈ 1/√2) for admissibility
-                int walkDist = getNeighborDistance(exitChunk.gridId, to.chunkId);
-                if (walkDist >= 0) {
-                    estimate = portalCost + walkDist * CHUNK_SIZE * 0.7;
-                } else {
-                    estimate = portalCost;
-                }
-            }
-
-            bestEstimate = Math.min(bestEstimate, estimate);
-        }
-
-        return bestEstimate < Double.MAX_VALUE ? bestEstimate : -1;
+        // Return large but not infinite estimate
+        return 5000.0;
     }
 
     /**
@@ -609,7 +606,11 @@ public class UnifiedTilePathfinder {
         for (ChunkPortal portal : fromChunk.portals) {
             if (portal.connectsToGridId == -1) continue;
 
+            // Validate portal type vs target layer (skip stale connections)
             ChunkNavData targetChunk = graph.getChunk(portal.connectsToGridId);
+            if (targetChunk != null && !isPortalTargetLayerValid(portal.type, targetChunk.layer)) {
+                continue;
+            }
 
             if (portal.connectsToGridId == toChunk.gridId) {
                 return 1; // Direct connection - best case
@@ -638,22 +639,22 @@ public class UnifiedTilePathfinder {
      */
     private double moveCost(TileNode from, TileNode to) {
         if (from.chunkId == to.chunkId) {
+            // Same chunk - distance-based cost
             return from.localCoord.dist(to.localCoord);
         }
 
+        // Cross-chunk movement
         ChunkNavData fromChunk = graph.getChunk(from.chunkId);
         ChunkNavData toChunk = graph.getChunk(to.chunkId);
 
         if (fromChunk != null && toChunk != null) {
-            // Portal traversal: different layer OR different instance (e.g. surface → mine)
-            if (!fromChunk.layer.equals(toChunk.layer) ||
-                (fromChunk.instanceId != 0 && toChunk.instanceId != 0
-                    && fromChunk.instanceId != toChunk.instanceId)) {
+            if (!fromChunk.layer.equals(toChunk.layer)) {
+                // Portal traversal - use config cost
                 return ChunkNavConfig.PORTAL_TRAVERSAL_COST;
             }
         }
 
-        // Edge crossing between neighbor chunks
+        // Edge crossing - small cost
         return 1.5;
     }
 
@@ -808,6 +809,29 @@ public class UnifiedTilePathfinder {
             }
 
             chunkPath.totalCost = (float) cost;
+        }
+    }
+
+    /**
+     * Validate that a portal type is compatible with the target chunk's layer.
+     */
+    private boolean isPortalTargetLayerValid(ChunkPortal.PortalType type, String targetLayer) {
+        if (type == null || targetLayer == null) return true;
+        switch (type) {
+            case MINEHOLE:
+            case MINE_ENTRANCE:
+                return "outside".equals(targetLayer);
+            case CELLAR:
+                return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
+            case LADDER:
+                return "outside".equals(targetLayer);
+            case STAIRS_UP:
+            case STAIRS_DOWN:
+                return "inside".equals(targetLayer);
+            case DOOR:
+                return "inside".equals(targetLayer) || "outside".equals(targetLayer);
+            default:
+                return true;
         }
     }
 }

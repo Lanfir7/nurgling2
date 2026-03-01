@@ -57,7 +57,7 @@ public class NHitBox
             put("gfx/terobjs/pclaim", new NHitBox(new Coord(-3,-3),new Coord(3,3)));
             put("gfx/terobjs/iconsign", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
             put("gfx/terobjs/candelabrum", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
-            put("gfx/terobjs/gardenpot", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
+            put("gfx/terobjs/gardenpot", new NHitBox(new Coord2d(-2.5,-2.5), new Coord2d(2.5,2.5), true));
             put("gfx/terobjs/cupboard", new NHitBox(new Coord2d(-5.5,-5.5),new Coord2d(5.5,5.5)));
             put("gfx/terobjs/htable", new NHitBox(new Coord2d(-3.5,-7.0),new Coord2d(3.5,7.0), true));
             put("gfx/terobjs/lanternpost", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
@@ -143,6 +143,11 @@ public class NHitBox
             put("gfx/terobjs/dovecote", new NHitBox(new Coord(-7,-7),new Coord(7,7)));
             put("gfx/terobjs/anvil", new NHitBox(new Coord(-7,-2),new Coord(5,2)));
             put("gfx/terobjs/moundbed", new NHitBox(new Coord2d(-15.4, -10.45),new Coord2d(15.4, 10.45)));
+            put("gfx/terobjs/producesack-closed1", new NHitBox(new Coord2d(-4,-4),new Coord2d(4,4)));
+            put("gfx/terobjs/producesack-closed2", new NHitBox(new Coord2d(-4,-4),new Coord2d(4,4)));
+            put("gfx/terobjs/producesack-closed3", new NHitBox(new Coord2d(-4,-4),new Coord2d(4,4)));
+            put("gfx/terobjs/arch/belltower", new NHitBox(new Coord2d(-15,-19),new Coord2d(15,19)));
+            put("gfx/terobjs/still", new NHitBox(new Coord2d(-12,-6),new Coord2d(5,6)));
         }
     };
     static NHitBox fromObstacle(Coord2d[][] p)

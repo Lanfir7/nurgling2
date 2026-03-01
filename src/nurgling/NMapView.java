@@ -5,7 +5,6 @@ import haven.render.RenderTree;
 
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
-import static haven.OCache.posres;
 
 import haven.Composite;
 import haven.res.ui.gobcp.Gobcopy;
@@ -14,6 +13,7 @@ import nurgling.actions.QuickActionBot;
 import nurgling.actions.bots.ScenarioRunner;
 import nurgling.areas.*;
 import nurgling.conf.QuickActionPreset;
+import nurgling.sessions.ThreadLocalUI;
 import nurgling.widgets.options.QuickActions;
 import nurgling.overlays.*;
 import nurgling.overlays.map.*;
@@ -28,7 +28,10 @@ import nurgling.tools.*;
 import nurgling.widgets.NAreasWidget;
 import nurgling.widgets.NMiniMap;
 import nurgling.widgets.NZoneMeasureTool;
+import nurgling.NConfig;
+import nurgling.styles.TooltipStyle;
 
+import java.awt.Color;
 import java.awt.event.KeyEvent;
 import java.awt.image.*;
 import java.util.*;
@@ -52,14 +55,14 @@ public class NMapView extends MapView
 
     public final List<NMiniMap.TempMark> tempMarkList = new ArrayList<NMiniMap.TempMark>();
 
+    // Route point dragging state
+    private UI.Grab dragGrab = null;
     // Chunk navigation manager - owned by NMapView, not a singleton
     private ChunkNavManager chunkNavManager;
 
-    // Simple route manager for walking routes (not related to zone routes)
-    public nurgling.routes.SimpleRouteManager simpleRouteManager;
-
     // Track areas that were deleted locally to prevent restoration during sync
-    public final Set<Integer> locallyDeletedAreas = new HashSet<>();
+    private final Set<Integer> locallyDeletedAreas = new HashSet<>();
+    
     public NMapView(Coord sz, Glob glob, Coord2d cc, long plgob)
     {
         super(sz, glob, cc, plgob);
@@ -82,51 +85,7 @@ public class NMapView extends MapView
         } catch(Exception e) {
             System.err.println("NMapView: Error initializing ChunkNavManager: " + e.getMessage());
         }
-        
-        // Initialize SimpleRouteManager for walking routes
-        try {
-            if (simpleRouteManager == null) {
-                simpleRouteManager = new nurgling.routes.SimpleRouteManager(genus);
-            } else {
-                simpleRouteManager.initializeForProfile(genus);
-            }
-        } catch(Exception e) {
-            System.err.println("NMapView: Error initializing SimpleRouteManager: " + e.getMessage());
-        }
     }
-
-    final HashMap<String, String> ttip = new HashMap<>();
-    final ArrayList<String> tlays = new ArrayList<>();
-    final HashMap<String, BufferedImage> cachedImages = new HashMap<>();
-    long lastTooltipUpdate = 0;
-    final long tooltipThrottleTime = 100; // milliseconds for throttling
-    TexI oldttip = null;
-    public AtomicBoolean isAreaSelectionMode = new AtomicBoolean(false);
-    public AtomicBoolean isGobSelectionMode = new AtomicBoolean(false);
-    public AtomicBoolean isChatAreaSharingMode = new AtomicBoolean(false); // For Alt+Ctrl+LMB chat sharing
-    public NArea.Space areaSpace = null;
-    public Pair<Coord, Coord> currentSelectionCoords = null;  // Current selection coords during dragging
-    public boolean rotationRequested = false;  // Flag to request rotation during area selection
-    public boolean gridMode = false;  // Grid mode: place objects at tile centers
-    public boolean gridModeRequested = false;  // Flag to request grid mode toggle during area selection
-    public Gob selectedGob = null;
-
-    // Zone measure tool state
-    public boolean zoneMeasureMode = false;
-    public boolean zoneClearMode = false;
-    public NZoneMeasureTool zoneMeasureTool = null;
-    public static boolean isRecordingRoutePoint = false;
-    
-    /**
-     * Get grid mode state
-     */
-    public boolean getGridMode() {
-        return gridMode;
-    }
-
-    public HashMap<Long, Gob> dummys = new HashMap<>();
-    public HashMap<Long, Gob> routeDummys = new HashMap<>();
-    public HashMap<Long, Gob> portalDummys = new HashMap<>();
 
     /**
      * Get the chunk navigation manager for this map view.
@@ -135,6 +94,34 @@ public class NMapView extends MapView
     public ChunkNavManager getChunkNavManager() {
         return chunkNavManager;
     }
+
+    final HashMap<String, String> ttip = new HashMap<>();
+    final ArrayList<String> tlays = new ArrayList<>();
+    final HashMap<String, BufferedImage> cachedImages = new HashMap<>();
+    long lastTooltipUpdate = 0;
+    final long tooltipThrottleTime = 100; // milliseconds for throttling
+    TexI oldttip = null;
+
+    // Cached foundries for inspect tooltip
+    private static Text.Foundry inspectLabelFoundry = null;
+    private static Text.Foundry inspectValueFoundry = null;
+    public AtomicBoolean isAreaSelectionMode = new AtomicBoolean(false);
+    public AtomicBoolean isGobSelectionMode = new AtomicBoolean(false);
+    public AtomicBoolean isChatAreaSharingMode = new AtomicBoolean(false); // For Alt+Ctrl+LMB chat sharing
+    public NArea.Space areaSpace = null;
+    public Pair<Coord, Coord> currentSelectionCoords = null;  // Current selection coords during dragging
+    public boolean rotationRequested = false;  // Flag to request rotation during area selection
+    public Gob selectedGob = null;
+
+    // Zone measure tool state
+    public boolean zoneMeasureMode = false;
+    public boolean zoneClearMode = false;
+    public NZoneMeasureTool zoneMeasureTool = null;
+    public static boolean isRecordingRoutePoint = false;
+
+    public HashMap<Long, Gob> dummys = new HashMap<>();
+    public HashMap<Long, Gob> routeDummys = new HashMap<>();
+    public HashMap<Long, Gob> portalDummys = new HashMap<>();
 
 
     // Destination point for path line (set by click)
@@ -157,21 +144,9 @@ public class NMapView extends MapView
 
     public static boolean hitNWidgetsInfo(Coord pc) {
         boolean isFound = false;
-        // ВАЖНО: Клики по лейблам зон работают только при открытом окне редактирования зон
-        NGameUI gui = NUtils.getGameUI();
-        if (gui == null || gui.areas == null || !gui.areas.visible()) {
-            return false;
-        }
-        
-        // ВАЖНО: Создаем копию keySet для безопасной итерации
-        // чтобы избежать ConcurrentModificationException при модификации из других потоков
         NMapView mapView = (NMapView)NUtils.getGameUI().map;
-        Set<Long> dummysKeys;
         synchronized (mapView.dummys) {
-            dummysKeys = new HashSet<>(mapView.dummys.keySet());
-        }
-        
-        for(Long gobid: dummysKeys)
+        for(Long gobid: mapView.dummys.keySet())
         {
             Gob gob = Finder.findGob(gobid);
             Gob.Overlay ol;
@@ -180,12 +155,7 @@ public class NMapView extends MapView
                 NAreaLabel al = (NAreaLabel) ol.spr;
                 if(al.isect(pc)) {
                     isFound = true;
-                    // ВАЖНО: Создаем копию areas.values() для безопасной итерации
-                    Collection<NArea> areasCopy;
-                    synchronized (mapView.glob.map.areas) {
-                        areasCopy = new ArrayList<>(mapView.glob.map.areas.values());
-                    }
-                    for (NArea area : areasCopy) {
+                    for (NArea area : ((NMapView) NUtils.getGameUI().map).glob.map.areas.values()) {
                         if(area.gid == gobid)
                         {
                             NUtils.getGameUI().areas.showPath(area.path);
@@ -204,6 +174,7 @@ public class NMapView extends MapView
                 }
             }
         }
+        } // synchronized (mapView.dummys)
         return isFound;
     }
 
@@ -212,27 +183,15 @@ public class NMapView extends MapView
         // Initialize overlays only once on first draw (when GameUI is ready)
         if (!overlaysInitialized) {
             getRockTileOverlay(); // Initialize rock tile highlighting overlay
-            getMiningOl(); // Mining support zones — создаём сразу, чтобы тоггл под картой работал
             // getShortWallCapOverlay(); // No longer needed - NCaveTile renders caps directly
             overlaysInitialized = true;
         }
 
         super.draw(g);
-        // ВАЖНО: Создаем копию коллекции для безопасной итерации,
-        // чтобы избежать ConcurrentModificationException при модификации из других потоков
-        // Используем toArray() который более устойчив к concurrent modifications
-        try {
-            Gob[] dummysArray;
-            synchronized (dummys) {
-                dummysArray = dummys.values().toArray(new Gob[0]);
+        synchronized (dummys) {
+            for (Gob dummy : dummys.values()) {
+                dummy.gtick(g.out);
             }
-            for (Gob dummy : dummysArray) {
-                if (dummy != null) {
-                    dummy.gtick(g.out);
-                }
-            }
-        } catch (Exception e) {
-            // Ignore concurrent modification errors during iteration
         }
         
         // Draw path line from player to click destination
@@ -301,72 +260,19 @@ public class NMapView extends MapView
 
     public void createAreaLabel(Integer id) {
         NArea area = glob.map.areas.get(id);
-        if (area == null) {
-            //System.out.println("NMapView.createAreaLabel: Zone " + id + " not found in glob.map.areas");
-            return; // Зона не найдена
-        }
-        
-        // ВАЖНО: Создаем overlay ВСЕГДА, даже если зона скрыта (hide == true)
-        // Это нужно чтобы зона была в nols для макросов
-        // Проверка hide будет в методах поиска зон (findIn, findOut и т.д.)
-        // ConcurrentHashMap - атомарная проверка и добавление
-        if (!nols.containsKey(id)) {
-            addCustomOverlay(id);
-        }
-        
-        // Проверяем, не создан ли уже dummy для этой зоны
-        if (area.gid != Long.MIN_VALUE && dummys.containsKey(area.gid)) {
-            // Dummy уже существует, проверяем overlay
-            Gob existingDummy = dummys.get(area.gid);
-            if (existingDummy != null && existingDummy.findol(NAreaLabel.class) != null) {
-                // Overlay уже существует, не создаем заново
-                return;
-            }
-        }
-        
-        // ВАЖНО: Используем getRawRCArea() для получения координат независимо от hide
-        // Это нужно чтобы overlay создавался для всех зон, включая скрытые
-        // getRCArea() возвращает null для скрытых зон, что мешает созданию overlay
-        // ВАЖНО: Если grid еще не загружен (isVisible() == false), все равно создаем overlay
-        // чтобы зона была видна ботам даже до загрузки grid
-        Pair<Coord2d,Coord2d> space = area.getRawRCArea();
-        
-        // Если getRawRCArea() вернул null (grid не загружен), пытаемся получить координаты из space напрямую
-        if (space == null && area.space != null && area.space.space != null && !area.space.space.isEmpty()) {
-            // Пытаемся получить координаты из первого доступного grid
-            Long firstGridId = area.space.space.keySet().iterator().next();
-            NArea.VArea vArea = area.space.space.get(firstGridId);
-            if (vArea != null && vArea.area != null) {
-                // Используем координаты из space, даже если grid еще не загружен
-                Coord begin = vArea.area.ul;
-                Coord end = vArea.area.br;
-                if (begin != null && end != null) {
-                    space = new Pair<Coord2d, Coord2d>(
-                        begin.mul(MCache.tilesz), 
-                        end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz)
-                    );
-                }
-            }
-        }
+        Pair<Coord2d,Coord2d> space = area.getRCArea();
 
         if(space!=null)
         {
-            // Удаляем старый dummy если он есть
-            if (area.gid != Long.MIN_VALUE && dummys.containsKey(area.gid)) {
-                Gob oldDummy = dummys.get(area.gid);
-                if (oldDummy != null && glob.oc.getgob(oldDummy.id) != null) {
-                    glob.oc.remove(oldDummy);
-                }
-                dummys.remove(area.gid);
-            }
-            
             Coord2d pos = (space.a.add(space.b)).div(2);
 
             OCache.Virtual dummy = glob.oc.new Virtual(pos, 0);
             dummy.virtual = true;
             area.gid = dummy.id;
             dummy.addcustomol(new NAreaLabel(dummy, area));
-            dummys.put(dummy.id, dummy);
+            synchronized (dummys) {
+                dummys.put(dummy.id, dummy);
+            }
             glob.oc.add(dummy);
         }
     }
@@ -374,8 +280,7 @@ public class NMapView extends MapView
     public void destroyDummys()
     {
         synchronized (dummys) {
-            // Создаем копию коллекции для безопасной итерации
-            for(Gob d: new ArrayList<>(dummys.values()))
+            for(Gob d: dummys.values())
             {
                 if(glob.oc.getgob(d.id)!=null)
                     glob.oc.remove(d);
@@ -386,37 +291,22 @@ public class NMapView extends MapView
 
     public void destroyRouteDummys()
     {
-        synchronized (routeDummys) {
-            // Создаем копию коллекции для безопасной итерации
-            for(Gob d: new ArrayList<>(routeDummys.values()))
-            {
-                if(glob.oc.getgob(d.id)!=null)
-                    glob.oc.remove(d);
-            }
-            routeDummys.clear();
+        for(Gob d: routeDummys.values())
+        {
+            if(glob.oc.getgob(d.id)!=null)
+                glob.oc.remove(d);
         }
+        routeDummys.clear();
     }
 
     public void destroyPortalDummys()
     {
-        synchronized (portalDummys) {
-            // Создаем копию коллекции для безопасной итерации
-            for(Gob d: new ArrayList<>(portalDummys.values()))
-            {
-                if(glob.oc.getgob(d.id)!=null)
-                    glob.oc.remove(d);
-            }
-            portalDummys.clear();
+        for(Gob d: portalDummys.values())
+        {
+            if(glob.oc.getgob(d.id)!=null)
+                glob.oc.remove(d);
         }
-    }
-
-    @Override
-    public void dispose() {
-        if (chunkNavManager != null) {
-            chunkNavManager.shutdown();
-            chunkNavManager = null;
-        }
-        super.dispose();
+        portalDummys.clear();
     }
 
     /**
@@ -511,6 +401,32 @@ public class NMapView extends MapView
         return false;
     }
 
+    private static Text.Foundry getInspectLabelFoundry() {
+        if (inspectLabelFoundry == null) {
+            inspectLabelFoundry = TooltipStyle.createFoundry(true, 11, Color.WHITE);  // Semibold 11px
+        }
+        return inspectLabelFoundry;
+    }
+
+    private static Text.Foundry getInspectValueFoundry() {
+        if (inspectValueFoundry == null) {
+            inspectValueFoundry = TooltipStyle.createFoundry(false, 11, Color.WHITE);  // Regular 11px
+        }
+        return inspectValueFoundry;
+    }
+
+    /**
+     * Render a label:value pair for inspect tooltip with custom fonts.
+     * Label uses colored text, value uses white text.
+     */
+    private static BufferedImage[] renderInspectField(String label, String value, Color labelColor) {
+        // Render label with color
+        BufferedImage labelImg = getInspectLabelFoundry().render(label + ":", labelColor).img;
+        // Render value in white
+        BufferedImage valueImg = getInspectValueFoundry().render(value, Color.WHITE).img;
+        return new BufferedImage[]{labelImg, valueImg};
+    }
+
     public Object tooltip(Coord c, Widget prev) {
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastTooltipUpdate < tooltipThrottleTime) {
@@ -532,132 +448,119 @@ public class NMapView extends MapView
 
             // For simple inspect, only show gob and tile
             if (simpleInspect && !debugMode) {
-                // Show tree/bush name first if available
-                String nameValue = ttip.get("name");
-                if (nameValue != null && !nameValue.isEmpty()) {
-                    BufferedImage name = RichText.render(String.format("$col[128,128,255]{%s}:", "Name"), 0).img;
-                    imgs.add(name);
-                    imgs.add(RichText.render(nameValue, 0).img);
-                }
                 String gobValue = ttip.get("gob");
                 if (gobValue != null && !gobValue.isEmpty()) {
-                    BufferedImage gob = RichText.render(String.format("$col[128,128,255]{%s}:", "Gob"), 0).img;
-                    imgs.add(gob);
-                    imgs.add(RichText.render(gobValue, 0).img);
+                    BufferedImage[] parts = renderInspectField("Gob", gobValue, new Color(128, 128, 255));
+                    imgs.add(parts[0]);
+                    imgs.add(parts[1]);
                 }
                 String tileValue = ttip.get("tile");
                 if (tileValue != null && !tileValue.isEmpty()) {
-                    BufferedImage tile = RichText.render(String.format("$col[128,128,255]{%s}:", "Tile"), 0).img;
-                    imgs.add(tile);
-                    imgs.add(RichText.render(tileValue, 0).img);
+                    BufferedImage[] parts = renderInspectField("Tile", tileValue, new Color(128, 128, 255));
+                    imgs.add(parts[0]);
+                    imgs.add(parts[1]);
                 }
             } else {
                 // Debug mode - show all info
                 for (String key : ttip.keySet()) {
                     String value = ttip.get(key);
                     if (value == null) continue;
-                    
-                    String text = String.format("$col[128,128,255]{%s}:", key);
-                    BufferedImage img = cachedImages.get(text);
-                    if (img == null) {
-                        img = RichText.render(text, 0).img;
-                        cachedImages.put(text, img);
-                    }
 
-                    imgs.add(img);
-                    imgs.add(RichText.render(value, 0).img);
+                    BufferedImage[] parts = renderInspectField(key, value, new Color(128, 128, 255));
+                    imgs.add(parts[0]);
+                    imgs.add(parts[1]);
                 }
-                    BufferedImage mc = RichText.render(String.format("$col[128,128,255]{%s}:", "MouseCoord"), 0).img;
-                    imgs.add(mc);
-                    imgs.add(RichText.render(getLCoord().toString(), 0).img);
+                BufferedImage[] mcParts = renderInspectField("MouseCoord", getLCoord().toString(), new Color(128, 128, 255));
+                imgs.add(mcParts[0]);
+                imgs.add(mcParts[1]);
                 String rcValue = ttip.get("rc");
                 if (rcValue != null && !rcValue.isEmpty()) {
-                    BufferedImage gob = RichText.render(String.format("$col[128,128,128]{%s}:", "Coord"), 0).img;
-                    imgs.add(gob);
-                    imgs.add(RichText.render(rcValue, 0).img);
+                    BufferedImage[] parts = renderInspectField("Coord", rcValue, new Color(128, 128, 128));
+                    imgs.add(parts[0]);
+                    imgs.add(parts[1]);
                 }
                 String idValue = ttip.get("id");
                 if (idValue != null && !idValue.isEmpty()) {
-                    BufferedImage gob = RichText.render(String.format("$col[255,128,255]{%s}:", "id"), 0).img;
-                    imgs.add(gob);
-                    imgs.add(RichText.render(idValue, 0).img);
+                    BufferedImage[] parts = renderInspectField("id", idValue, new Color(255, 128, 255));
+                    imgs.add(parts[0]);
+                    imgs.add(parts[1]);
                 }
             }
             String tagsValue = ttip.get("tags");
             if (tagsValue != null && !tagsValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,128,128]{%s}:", "Tags"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(tagsValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Tags", tagsValue, new Color(255, 128, 128));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String statusValue = ttip.get("status");
             if (statusValue != null && !statusValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,128,128]{%s}:", "Status"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(statusValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Status", statusValue, new Color(255, 128, 128));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String hitBoxValue = ttip.get("HitBox");
             if (hitBoxValue != null && !hitBoxValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,128,255]{%s}:", "HitBox"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(hitBoxValue, 0).img);
+                BufferedImage[] parts = renderInspectField("HitBox", hitBoxValue, new Color(255, 128, 255));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String distValue = ttip.get("dist");
             if (distValue != null && !distValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,128,105]{%s}:", "dist"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(distValue, 0).img);
+                BufferedImage[] parts = renderInspectField("dist", distValue, new Color(255, 128, 105));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String isDynamicValue = ttip.get("isDynamic");
             if (isDynamicValue != null && !isDynamicValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,83,83]{%s}:", "isDynamic"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(isDynamicValue, 0).img);
+                BufferedImage[] parts = renderInspectField("isDynamic", isDynamicValue, new Color(255, 83, 83));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String markerValue = ttip.get("marker");
             if (markerValue != null && !markerValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,83,83]{%s}:", "Marker"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(markerValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Marker", markerValue, new Color(255, 83, 83));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String contValue = ttip.get("cont");
             if (contValue != null && !contValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[83,255,83]{%s}:", "Container"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(contValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Container", contValue, new Color(83, 255, 83));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String olsValue = ttip.get("ols");
             if (olsValue != null && !olsValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[83,255,155]{%s}:", "Overlays"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(olsValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Overlays", olsValue, new Color(83, 255, 155));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String poseValue = ttip.get("pose");
             if (poseValue != null && !poseValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,145,200]{%s}:", "Pose"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(poseValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Pose", poseValue, new Color(255, 145, 200));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             String attrValue = ttip.get("attr");
             if (attrValue != null && !attrValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[155,255,83]{%s}:", "Attr"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(attrValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Attr", attrValue, new Color(155, 255, 83));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             if (!tlays.isEmpty() && false) {
-                BufferedImage gob = RichText.render(String.format("$col[155,32,176]{%s}:", "Layers"), 0).img;
-                imgs.add(gob);
+                BufferedImage layerLabel = getInspectLabelFoundry().render("Layers:", new Color(155, 32, 176)).img;
+                imgs.add(layerLabel);
                 for(String s: tlays)
                 {
                     if (s != null && !s.isEmpty()) {
-                        imgs.add(RichText.render(s, 0).img);
+                        imgs.add(getInspectValueFoundry().render(s, Color.WHITE).img);
                     }
                 }
             }
             String posesValue = ttip.get("poses");
             if (posesValue != null && !posesValue.isEmpty()) {
-                BufferedImage gob = RichText.render(String.format("$col[255,128,128]{%s}:", "Poses"), 0).img;
-                imgs.add(gob);
-                imgs.add(RichText.render(posesValue, 0).img);
+                BufferedImage[] parts = renderInspectField("Poses", posesValue, new Color(255, 128, 128));
+                imgs.add(parts[0]);
+                imgs.add(parts[1]);
             }
             return (oldttip = new TexI((ItemInfo.catimgs(0, imgs.toArray(new BufferedImage[0])))));
         }
@@ -687,25 +590,7 @@ public class NMapView extends MapView
                 if (inf != null) {
                     Gob gob = Gob.from(inf.ci);
                     if (gob != null && gob.ngob.name != null) {
-                        String resourceName = gob.ngob.name;
-                        ttip.put("gob", resourceName);
-                        
-                        // Check if it's a tree or bush and add friendly name
-                        if (resourceName.startsWith("gfx/terobjs/trees/") || resourceName.startsWith("gfx/terobjs/bushes/")) {
-                            // Exclude logs and stumps
-                            if (!resourceName.contains("log") && !resourceName.contains("stump") && !resourceName.contains("trunk")) {
-                                NGameUI gui = NUtils.getGameUI();
-                                if (gui != null && gui.treeLocationService != null) {
-                                    String treeName = gui.treeLocationService.getTreeName(resourceName);
-                                    if (treeName != null && !treeName.equals("Unknown")) {
-                                        ttip.put("name", treeName);
-                                    }
-                                }
-                            }
-                        }
-                        // Чтобы при ответе сервера "Quality: XX" знать, какую тушу инспектировали
-                        clickedGob = new MapView.ClickedGob(gob, 1);
-                        tryUpdateAnimalMarkerQuality(gob);
+                        ttip.put("gob", gob.ngob.name);
                     }
                 }
                 
@@ -807,10 +692,6 @@ public class NMapView extends MapView
                             ttip.put("marker", String.valueOf(gob.ngob.getModelAttribute()));
                         }
 
-                        // Чтобы при ответе сервера "Quality: XX" знать, какую тушу инспектировали
-                        clickedGob = new MapView.ClickedGob(gob, 1);
-                        tryUpdateAnimalMarkerQuality(gob);
-
 //                        if(gob.getattr(Drawable.class)!=null && gob.getattr(Drawable.class) instanceof Composite && ((Composite)gob.getattr(Drawable.class)).oldposes!=null)
 //                        {
 //                            StringBuilder poses = new StringBuilder();
@@ -845,108 +726,14 @@ public class NMapView extends MapView
         }.run();
     }
 
-    /**
-     * Применить качество к маркеру животного (вызывается при инспекции туши).
-     * Качество может прийти из ResDrawable.sdt или из сообщения сервера "Quality: XX".
-     */
-    public void applyAnimalMarkerQuality(Gob gob, double quality) {
-        if (gob == null || NCore.databaseManager == null) return;
-        nurgling.db.service.AnimalMarkerService animalMarkerService = NCore.databaseManager.getAnimalMarkerService();
-        if (animalMarkerService == null || !animalMarkerService.isAvailable()) return;
-        NGameUI gui = NUtils.getGameUI();
-        if (gui == null || gui.labeledMarkService == null) return;
-        String profile = gui.getGenus();
-        if (profile == null || profile.isEmpty()) return;
-        double q = quality;
-        if (q <= 0 || q > 10000) return; // Качество в игре может быть от 1 до ~999+
-        final double fQ = q;
-        final int qRounded = (int) Math.round(q);
-        // Тушу на земле и живого зверя могут представлять разные gob с разными id — ищем маркер по позиции в первую очередь
-        String locationId = "animal_" + gob.id;
-        nurgling.widgets.LabeledMinimapMark mark = null;
-        if (gui.map != null && gui.map.glob != null && gui.map.glob.map != null && gui.mapfile != null && gui.mapfile.file != null) {
-            try {
-                haven.Coord tc = gob.rc.floor(haven.MCache.tilesz);
-                haven.MCache.Grid obg = gui.map.glob.map.getgrid(tc.div(haven.MCache.cmaps));
-                haven.MapFile.GridInfo info = gui.mapfile.file.gridinfo.get(obg.id);
-                if (info != null) {
-                    haven.Coord sc = tc.add(info.sc.sub(obg.gc).mul(haven.MCache.cmaps));
-                    mark = gui.labeledMarkService.findAnimalMarkerAt(info.seg, sc, 5);
-                    if (mark != null) locationId = mark.getLocationId();
-                }
-            } catch (Exception ignored) { }
-        }
-        if (mark == null) mark = gui.labeledMarkService.getMark(locationId);
-        if (mark != null) {
-            final String fProfile = profile;
-            long gobIdForDb = gob.id;
-            if (locationId.startsWith("animal_")) {
-                try { gobIdForDb = Long.parseLong(locationId.substring("animal_".length())); } catch (NumberFormatException ignored) { }
-            }
-            final long fGobIdForDb = gobIdForDb;
-            // Ник игрока: prsname() (отображаемое имя персонажа) или sessInfo.username
-            String killerName = null;
-            try {
-                if (gui.ui != null && gui.ui.sess != null && gui.ui.sess.user != null) {
-                    killerName = gui.ui.sess.user.prsname(); // метод: prsname != null ? prsname : name
-                    if (killerName == null || killerName.isEmpty()) killerName = gui.ui.sess.user.name;
-                }
-                if ((killerName == null || killerName.isEmpty()) && gui.ui instanceof nurgling.NUI) {
-                    nurgling.NUI.NSessInfo si = ((nurgling.NUI) gui.ui).sessInfo;
-                    if (si != null && si.username != null) killerName = si.username;
-                }
-            } catch (Exception ignored) { }
-            final String fKilledBy = killerName != null && !killerName.isEmpty() ? killerName : "";
-            System.err.println("[NMapView] applyAnimalMarkerQuality: profile=" + fProfile + " gobId=" + fGobIdForDb + " quality=" + fQ + " killedBy=" + fKilledBy + " locationId=" + locationId);
-            new Thread(() -> animalMarkerService.updateQualityByGobId(fProfile, fGobIdForDb, fQ, fKilledBy), "NMapView-UpdateAnimalMarkerQuality").start();
-            gui.labeledMarkService.updateAnimalMarkerLabel(locationId, "q" + qRounded);
-        } else {
-            System.err.println("[NMapView] applyAnimalMarkerQuality: mark not found for gob.id=" + gob.id + " locationId=" + locationId + " — quality not saved to DB");
-        }
-    }
 
-    /**
-     * When inspecting a gob that has ResDrawable with quality in sdt (e.g. carcass),
-     * update the corresponding animal marker in Postgres so the quality shows on the shared map.
-     */
-    private void tryUpdateAnimalMarkerQuality(Gob gob) {
-        if (gob == null) return;
-        String gobName = gob.ngob != null ? gob.ngob.name : null;
-        if (gobName == null || !gobName.contains("gfx/kritter/")) {
-            return;
-        }
-        haven.ResDrawable rd = gob.getattr(haven.ResDrawable.class);
-        if (rd == null || rd.sdt == null) {
-            return;
-        }
-        try {
-            MessageBuf buf = rd.sdt.clone();
-            int rem = buf.rt - buf.rh;
-            if (rem >= 4) {
-                double q = buf.float32();
-                if (q <= 0 || q > 100) {
-                    if (rem >= 5) {
-                        buf = rd.sdt.clone();
-                        buf.uint8();
-                        q = buf.float32();
-                    }
-                }
-                if (q > 0 && q <= 100) {
-                    applyAnimalMarkerQuality(gob, q);
-                }
-            }
-        } catch (Exception e) {
-        }
-    }
-
-    public int addArea(NArea.Space result)
+    public String addArea(NArea.Space result)
     {
         String key;
-        int id;
         synchronized (glob.map.areas)
         {
             HashSet<String> names = new HashSet<String>();
-            id = 1;
+            int id = 1;
             for(NArea area : glob.map.areas.values())
             {
                 if(area.id >= id)
@@ -979,34 +766,19 @@ public class NMapView extends MapView
             }
             
             glob.map.areas.put(id, newArea);
-            
-            // Помечаем зону как созданную локально (без hide)
-            nurgling.areas.AllowedZonesManager.getInstance().markAsLocallyCreated(id, newArea.uuid);
-            newArea.hide = false;
-            
+
             createAreaLabel(id);
         }
-        return id;
+        return key;
     }
 
     boolean botsInit = false;
     private static final long BOT_DELAY_MS = 15 * 1000;
-    private static final long MAP_LOAD_TIMEOUT_MS = 90 * 1000;
-    private static final int MAP_LOAD_MAX_RETRIES = 3;
 
     @Override
     public void tick(double dt)
     {
         checkTempMarks();
-        
-        // Tick ChunkNav system for recording and portal tracking
-        if (chunkNavManager != null) {
-            try {
-                chunkNavManager.tick();
-            } catch (Exception e) {
-            }
-        }
-        
         synchronized (glob.map.areas)
         {
             for (NArea area : glob.map.areas.values())
@@ -1014,34 +786,73 @@ public class NMapView extends MapView
                 area.tick(dt);
             }
         }
+        // Update marker line overlay (follows player)
         if(markerLineOverlay != null) {
             markerLineOverlay.tick();
         }
+
+        // Tick chunk navigation system for recording
+        if (chunkNavManager != null) {
+            chunkNavManager.tick();
+        }
+        ArrayList<Long> forRemove = new ArrayList<>();
+//        for(Gob dummy : dummys.values())
+//        {
+//            if(NUtils.findGob(dummy.id)==null)
+//            {
+//                forRemove.add(dummy.id);
+//                for (NArea area : glob.map.areas.values())
+//                {
+//                    if(area.gid == dummy.id)
+//                        createAreaLabel(area.id);
+//                }
+//
+//            }
+//        }
+//        for(Long id : forRemove)
+//            dummys.remove(id);
         super.tick(dt);
 
         if(NConfig.botmod != null && !botsInit) {
-            NGameUI gui = NUtils.getGameUI();
-            if (gui == null || gui.biw == null)
-                return;
+            System.out.println("[NMapView] botmod check: scenarioId=" + NConfig.botmod.scenarioId + ", gui=" + (NUtils.getGameUI() != null));
             Scenario scenario = NUtils.getUI().core.scenarioManager.getScenarios().getOrDefault(NConfig.botmod.scenarioId, null);
-            if (scenario != null || gui != null) {
+            System.out.println("[NMapView] Scenario lookup: " + (scenario != null ? scenario.getName() : "null") + ", available scenarios: " + NUtils.getUI().core.scenarioManager.getScenarios().keySet());
+            if (scenario != null || !(NUtils.getGameUI() == null)) {
+                System.out.println("[NMapView] Starting bot thread, scenario=" + (scenario != null));
                 botsInit = true;
-                Thread t = new Thread(() -> {
+
+                // Capture UI reference for thread-local binding
+                final NUI boundUI = NUtils.getUI();
+                final NGameUI boundGui = (boundUI != null) ? boundUI.gui : null;
+                if (boundGui == null) return;
+
+                Thread t;
+                t = new Thread(() -> {
+                    ThreadLocalUI.set(boundUI);
                     try {
                         System.out.println("[NMapView] Bot thread started, waiting " + BOT_DELAY_MS + "ms...");
                         Thread.sleep(BOT_DELAY_MS);
+                        System.out.println("[NMapView] Wait complete, starting bot initialization...");
                         NConfig.botmod = null;
-
-                        if (!waitForMapWithTimeout()) {
-                            System.err.println("[NMapView] Map failed to load after all retries. Exiting.");
-                            System.exit(1);
-                            return;
+                        // In headless mode, use grid-only wait (no mesh/fog rendering checks)
+                        if (Headless.isHeadless()) {
+                            System.out.println("[NMapView] Headless mode - waiting for map grid data only...");
+                            boundUI.core.addTask(new WaitForMapGridLoad(boundGui));
+                            System.out.println("[NMapView] Map grid data loaded");
+                        } else {
+                            System.out.println("[NMapView] Adding WaitForMapLoadNoCoord task...");
+                            boundUI.core.addTask(new WaitForMapLoadNoCoord(boundGui));
+                            System.out.println("[NMapView] WaitForMapLoadNoCoord completed");
                         }
-                        System.out.println("[NMapView] Map loaded successfully");
 
-                        ChatUI.Channel systemChat = NUtils.getGameUI().chat.findSystemChat();
+                        // Switch to System chat for autorunner
+                        System.out.println("[NMapView] Looking for system chat...");
+                        ChatUI.Channel systemChat = boundGui.chat.findSystemChat();
                         if (systemChat != null) {
-                            NUtils.getGameUI().chat.select(systemChat, false);
+                            boundGui.chat.select(systemChat, false);
+                            System.out.println("[NMapView] System chat selected");
+                        } else {
+                            System.out.println("[NMapView] No system chat found");
                         }
 
                         if (scenario == null) {
@@ -1050,88 +861,23 @@ public class NMapView extends MapView
                         }
                         System.out.println("[NMapView] Running scenario: " + scenario.getName());
                         ScenarioRunner runner = new ScenarioRunner(scenario);
-                        runner.run(NUtils.getGameUI());
+                        runner.run(boundGui);
                         System.out.println("[NMapView] Scenario completed, logging out...");
 
-                        NUtils.getGameUI().act("lo");
+                        boundGui.act("lo");
                         System.exit(0);
                     } catch (InterruptedException e) {
                         System.out.println("[NMapView] Bot interrupted");
                     } catch (Exception e) {
                         System.err.println("[NMapView] ERROR in bot thread: " + e.getMessage());
                         e.printStackTrace();
+                    } finally {
+                        ThreadLocalUI.clear();
                     }
                 });
-                gui.biw.addObserve(t);
+                boundGui.biw.addObserve(t);
                 t.start();
             }
-        }
-    }
-
-    private boolean waitForMapWithTimeout() throws InterruptedException {
-        for (int attempt = 1; attempt <= MAP_LOAD_MAX_RETRIES; attempt++) {
-            System.out.println("[NMapView] Map load attempt " + attempt + "/" + MAP_LOAD_MAX_RETRIES);
-            long deadline = System.currentTimeMillis() + MAP_LOAD_TIMEOUT_MS;
-
-            NGameUI gui = NUtils.getGameUI();
-            if (gui == null) {
-                System.err.println("[NMapView] GameUI is null, cannot wait for map");
-                return false;
-            }
-
-            while (System.currentTimeMillis() < deadline) {
-                if (isMapReady(gui)) {
-                    return true;
-                }
-                Thread.sleep(500);
-            }
-
-            System.err.println("[NMapView] Map load timeout on attempt " + attempt);
-            if (attempt < MAP_LOAD_MAX_RETRIES) {
-                System.out.println("[NMapView] Retrying in 5 seconds...");
-                Thread.sleep(5000);
-            }
-        }
-        return false;
-    }
-
-    private boolean isMapReady(NGameUI gui) {
-        try {
-            if (NUtils.player() == null || NUtils.player().rc == null)
-                return false;
-
-            haven.Coord2d rc = NUtils.player().rc;
-            haven.Coord tc = rc.div(haven.MCache.tilesz).floor();
-
-            if (Headless.isHeadless()) {
-                haven.Coord gc = tc.div(gui.ui.sess.glob.map.cmaps);
-                try {
-                    gui.ui.sess.glob.map.getgrid(gc);
-                    return true;
-                } catch (haven.MCache.LoadingMap e) {
-                    return false;
-                }
-            }
-
-            haven.Coord gc = tc.div(gui.ui.sess.glob.map.cmaps);
-            if (gui.ui.sess.glob.map.grids.get(gc) == null)
-                return false;
-
-            haven.MCache.Grid currentGrid = gui.ui.sess.glob.map.getgridt(tc);
-            long currentGridId = currentGrid.id;
-
-            for (haven.MCache.Grid grid : gui.map.glob.map.grids.values()) {
-                if (grid.id == currentGridId) {
-                    for (haven.MCache.Grid.Cut cut : grid.cuts) {
-                        if (!cut.mesh.isReady() || !cut.fo.isReady())
-                            return false;
-                    }
-                    return true;
-                }
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
         }
     }
 
@@ -1139,12 +885,8 @@ public class NMapView extends MapView
     protected void oltick()
     {
         super.oltick();
-        // ВАЖНО: Создаем копию коллекции для безопасной итерации,
-        // так как nols может изменяться из фонового потока синхронизации
-        // ConcurrentHashMap итерация потокобезопасна
-        for(NOverlay ol : nols.values()) {
+        for(NOverlay ol : nols.values())
             ol.tick();
-        }
     }
 
     public void toggleol(String tag, boolean a)
@@ -1279,24 +1021,33 @@ public class NMapView extends MapView
         
         // Fallback to legacy keybindings
         if(kb_quickaction.key().match(ev) || kb_quickignaction.key().match(ev) || kb_mousequickaction.key().match(ev)) {
+            final NUI boundUI = NUtils.getUI();
+            final NGameUI boundGui = (boundUI != null) ? boundUI.gui : null;
+            if (boundGui == null) return super.keydown(ev);
+
             Thread t;
             (t = new Thread(new Runnable()
             {
                 @Override
                 public void run()
                 {
+                    ThreadLocalUI.set(boundUI);
                     try
                     {
                         if(kb_quickaction.key().match(ev))
-                            new QuickActionBot(false, false).run(NUtils.getGameUI());
+                            new QuickActionBot(false, false).run(boundGui);
                         else if(kb_quickignaction.key().match(ev))
-                            new QuickActionBot(true, false).run(NUtils.getGameUI());
+                            new QuickActionBot(true, false).run(boundGui);
                         else if(kb_mousequickaction.key().match(ev))
-                            new QuickActionBot(false, true).run(NUtils.getGameUI());
+                            new QuickActionBot(false, true).run(boundGui);
                     }
                     catch (InterruptedException e)
                     {
-                        NUtils.getGameUI().msg("quick action error" + ":" + "STOPPED");
+                        boundGui.msg("quick action error" + ":" + "STOPPED");
+                    }
+                    finally
+                    {
+                        ThreadLocalUI.clear();
                     }
                 }
             }, "quick action")).start();
@@ -1307,23 +1058,6 @@ public class NMapView extends MapView
         // Handle R key for rotation during area selection
         if(ev.code == 82 && isAreaSelectionMode.get()) {  // R key
             rotationRequested = true;
-            return true;
-        }
-        
-        // Handle C key for grid mode toggle during area selection
-        if(ev.code == 67 && isAreaSelectionMode.get()) {  // C key
-            gridMode = !gridMode;
-            gridModeRequested = true;
-            
-            // Update ghost preview if it exists
-            Gob player = NUtils.player();
-            if (player != null) {
-                BuildGhostPreview ghostPreview = player.getattr(BuildGhostPreview.class);
-                if (ghostPreview != null) {
-                    ghostPreview.setGridMode(gridMode);
-                }
-            }
-            
             return true;
         }
         
@@ -1472,11 +1206,18 @@ public class NMapView extends MapView
      * Run quick action with patterns from the specified preset
      */
     private void runQuickActionForPreset(QuickActionPreset preset, boolean ignorePattern, boolean useMouse) {
+        final NUI boundUI = NUtils.getUI();
+        final NGameUI boundGui = (boundUI != null) ? boundUI.gui : null;
+        if (boundGui == null) return;
+
         Thread t = new Thread(() -> {
+            ThreadLocalUI.set(boundUI);
             try {
-                new QuickActionBot(ignorePattern, useMouse, preset).run(NUtils.getGameUI());
+                new QuickActionBot(ignorePattern, useMouse, preset).run(boundGui);
             } catch (InterruptedException e) {
-                NUtils.getGameUI().msg("quick action error: STOPPED");
+                boundGui.msg("quick action error: STOPPED");
+            } finally {
+                ThreadLocalUI.clear();
             }
         }, "quick action - " + preset.name);
         t.start();
@@ -1689,35 +1430,33 @@ public class NMapView extends MapView
         return null;
     }
 
-    public void removeArea(int id)
+    public void removeArea(String name)
     {
-        NArea area = glob.map.areas.get(id);
-        if (area != null)
-        {
+        NArea area = findArea(name);
+        if (area != null) {
+            removeAreaById(area.id);
+        }
+    }
+
+    public void removeAreaById(int areaId)
+    {
+        NArea area = glob.map.areas.get(areaId);
+        if (area != null) {
             area.inWork = true;
-            final int areaId = area.id;
             glob.map.areas.remove(areaId);
             // Track locally deleted areas to prevent restoration during sync
             locallyDeletedAreas.add(areaId);
             System.out.println("Area deleted locally: " + areaId + " (" + area.name + ")");
-            Gob dummy = dummys.get(area.gid);
-            if(dummy != null) {
-                glob.oc.remove(dummy);
-                dummys.remove(area.gid);
-            }
-            
-            // Удаляем overlay
-            synchronized (nols) {
-                nurgling.overlays.map.NOverlay nol = nols.get(areaId);
-                if (nol != null) {
-                    nol.remove();
+            synchronized (dummys) {
+                Gob dummy = dummys.get(area.gid);
+                if(dummy != null) {
+                    glob.oc.remove(dummy);
+                    dummys.remove(area.gid);
                 }
-                nols.remove(areaId);
             }
-            
             NUtils.getGameUI().areas.removeArea(areaId);
 
-            // Delete from database using async service (uses connection pool properly)
+            // Delete from database if enabled
             if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable) &&
                 nurgling.NCore.databaseManager != null && 
                 nurgling.NCore.databaseManager.isReady()) {
@@ -1725,25 +1464,7 @@ public class NMapView extends MapView
                 if (profile == null || profile.isEmpty()) {
                     profile = "global";
                 }
-                final int finalAreaId = areaId;
-                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(finalAreaId, profile)
-                    .thenRun(() -> System.out.println("Area " + finalAreaId + " deleted from database"))
-                    .exceptionally(e -> {
-                        System.err.println("Failed to delete area " + finalAreaId + " from database: " + e.getMessage());
-                        return null;
-                    });
-            }
-        }
-    }
-
-    public void removeArea(String name)
-    {
-        for(NArea area : glob.map.areas.values())
-        {
-            if(area.name.equals(name))
-            {
-                removeArea(area.id);
-                break;
+                nurgling.NCore.databaseManager.getAreaService().deleteAreaAsync(areaId, profile);
             }
         }
     }
@@ -1769,24 +1490,6 @@ public class NMapView extends MapView
             {
                 area.hide = val;
                 area.lastLocalChange = System.currentTimeMillis();
-                
-                // ВАЖНО: Синхронизируем с локальным списком разрешённых зон по ID
-                // hide=true означает disallow, hide=false означает allow
-                if (val) {
-                    nurgling.areas.AllowedZonesManager.getInstance().disallowById(area.id);
-                } else {
-                    nurgling.areas.AllowedZonesManager.getInstance().allowById(area.id);
-                }
-                
-                // Также обновляем по UUID если есть
-                if (area.uuid != null && !area.uuid.isEmpty()) {
-                    if (val) {
-                        nurgling.areas.AllowedZonesManager.getInstance().disallow(area.uuid);
-                    } else {
-                        nurgling.areas.AllowedZonesManager.getInstance().allow(area.uuid);
-                    }
-                }
-                
                 NConfig.needAreasUpdate();
                 return;
             }
@@ -1816,13 +1519,14 @@ public class NMapView extends MapView
                 NOverlay nol = NUtils.getGameUI().map.nols.get(area.id);
                 if (nol != null)
                     nol.remove();
-                Gob dummy = dummys.get(area.gid);
-                if(dummy != null) {
-                    glob.oc.remove(dummy);
-                    dummys.remove(area.gid);
+                synchronized (dummys) {
+                    Gob dummy = dummys.get(area.gid);
+                    if(dummy != null) {
+                        glob.oc.remove(dummy);
+                        dummys.remove(area.gid);
+                    }
                 }
                 NUtils.getGameUI().map.nols.remove(area.id);
-                // routeGraphManager удален в текущей версии, вызов deleteAreaFromRoutePoints не нужен
             }
             NAreaSelector.changeArea(area);
         }
@@ -1834,46 +1538,6 @@ public class NMapView extends MapView
         area.name = new_name;
         area.lastLocalChange = System.currentTimeMillis();
         NConfig.needAreasUpdate();
-    }
-
-    /**
-     * Add a new simple route for walking
-     */
-    public void addSimpleRoute() {
-        if (simpleRouteManager == null) {
-            System.err.println("NMapView: SimpleRouteManager not initialized");
-            return;
-        }
-        
-        // Find next available ID
-        int nextId = 1;
-        for (nurgling.routes.SimpleRoute route : simpleRouteManager.getRoutes().values()) {
-            if (route.id >= nextId) {
-                nextId = route.id + 1;
-            }
-        }
-        
-        nurgling.routes.SimpleRoute newRoute = new nurgling.routes.SimpleRoute("Route " + nextId);
-        newRoute.id = nextId;
-        simpleRouteManager.addRoute(newRoute);
-        simpleRouteManager.save();
-    }
-
-    /**
-     * Change simple route name
-     */
-    public void changeSimpleRouteName(int routeId, String newName) {
-        if (simpleRouteManager == null) {
-            System.err.println("NMapView: SimpleRouteManager not initialized");
-            return;
-        }
-        
-        nurgling.routes.SimpleRoute route = simpleRouteManager.getRoute(routeId);
-        if (route != null) {
-            route.name = newName;
-            simpleRouteManager.updateRoute(route);
-            simpleRouteManager.save();
-        }
     }
 
     void getGob(Coord c) {

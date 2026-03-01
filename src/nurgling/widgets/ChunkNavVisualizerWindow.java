@@ -40,7 +40,6 @@ public class ChunkNavVisualizerWindow extends Window {
     private static final Color COLOR_PATH_START = new Color(0, 255, 0);
     private static final Color COLOR_PATH_END = new Color(255, 0, 0);
     private static final Color COLOR_GRID = new Color(100, 100, 100);
-    private static final Color COLOR_PLAYER = new Color(50, 120, 255);
 
     // UI State
     private boolean showPortals = true;
@@ -84,6 +83,7 @@ public class ChunkNavVisualizerWindow extends Window {
     private final CheckBox gridCb;
     private final CheckBox cellLinesCb;
     private final Button deleteChunkBtn;
+    private final Button deleteAllBtn;
 
     public ChunkNavVisualizerWindow() {
         super(new Coord(UI.scale(WINDOW_WIDTH), UI.scale(WINDOW_HEIGHT)), "ChunkNav Visualizer");
@@ -166,6 +166,15 @@ public class ChunkNavVisualizerWindow extends Window {
             }
         }, new Coord(UI.scale(10), y));
         deleteChunkBtn.disable(true);  // Disabled until a chunk is selected
+        y += UI.scale(30);
+
+        deleteAllBtn = add(new Button(UI.scale(SETTINGS_WIDTH - 20), "Delete All") {
+            @Override
+            public void click() {
+                super.click();
+                deleteAllChunks();
+            }
+        }, new Coord(UI.scale(10), y));
         y += UI.scale(40);
 
         statusLabel = add(new Label("Ready"), new Coord(UI.scale(10), y));
@@ -210,71 +219,13 @@ public class ChunkNavVisualizerWindow extends Window {
 
         // Get all chunks
         chunks = new ArrayList<>(manager.getGraph().getAllChunks());
+        statusLabel.settext("Loaded " + chunks.size() + " chunks");
 
         // Get last planned path
         lastPath = manager.getLastPlannedPath();
 
         // Build positions from neighbor relationships
         buildPositions();
-
-        // Diagnostic: check player grid, count orphans
-        String playerInfo = "";
-        int orphanCount = 0;
-        try {
-            for (ChunkNavData c : chunks) {
-                if (c.neighborNorth == -1 && c.neighborSouth == -1 &&
-                    c.neighborEast == -1 && c.neighborWest == -1 && c.portals.isEmpty()) {
-                    orphanCount++;
-                }
-            }
-
-            Gob player = NUtils.player();
-            if (player != null) {
-                NGameUI gui = NUtils.getGameUI();
-                if (gui != null && gui.map != null && gui.map.glob != null && gui.map.glob.map != null) {
-                    MCache mcache = gui.map.glob.map;
-                    Coord playerTile = player.rc.floor(MCache.tilesz);
-                    MCache.Grid grid = mcache.getgridt(playerTile);
-                    if (grid != null) {
-                        boolean inGraph = manager.getGraph().hasChunk(grid.id);
-                        boolean inPositions = positions.containsKey(grid.id);
-                        playerInfo = " | Grid " + grid.id +
-                            (inGraph ? " IN" : " NOT") +
-                            (inPositions ? " VIS" : " HID");
-                        if (!inGraph) {
-                            System.out.println("[ChunkNavVis] Player grid " + grid.id +
-                                " NOT in graph! Is recording enabled? instanceId=" +
-                                manager.getCurrentInstanceId());
-                        }
-                    }
-
-                    // Check how many visible grids are in the graph
-                    int visibleGrids = 0, inGraphCount = 0;
-                    synchronized (mcache.grids) {
-                        for (MCache.Grid g : mcache.grids.values()) {
-                            if (g != null && g.ul != null) {
-                                visibleGrids++;
-                                if (manager.getGraph().hasChunk(g.id)) inGraphCount++;
-                            }
-                        }
-                    }
-                    boolean recordingOn = (Boolean) NConfig.get(NConfig.Key.chunkNavOverlay);
-                    System.out.println("[ChunkNavVis] Visible grids: " + visibleGrids +
-                        ", in graph: " + inGraphCount +
-                        ", recording: " + (recordingOn ? "ON" : "OFF") +
-                        ", total chunks: " + chunks.size());
-                }
-            }
-        } catch (Exception e) {
-            // Ignore diagnostic errors
-        }
-
-        if (orphanCount > 0) {
-            System.out.println("[ChunkNavVis] " + orphanCount + " orphan chunks (no neighbors, no portals) out of " + chunks.size());
-        }
-
-        statusLabel.settext(chunks.size() + " chunks" +
-            (orphanCount > 0 ? " (" + orphanCount + " orphan)" : "") + playerInfo);
 
         // Generate textures
         regenerateTextures();
@@ -389,7 +340,6 @@ public class ChunkNavVisualizerWindow extends Window {
 
     /**
      * Build positions for chunks in a single layer using BFS.
-     * Handles contradictory neighbor links by skipping placements that would overlap.
      */
     private Map<Long, Coord> buildLayerPositions(List<ChunkNavData> layerChunks) {
         Map<Long, Coord> layerPositions = new HashMap<>();
@@ -400,9 +350,6 @@ public class ChunkNavVisualizerWindow extends Window {
         for (ChunkNavData chunk : layerChunks) {
             chunksById.put(chunk.gridId, chunk);
         }
-
-        // Track occupied positions to prevent overlaps from contradictory links
-        Set<Long> occupiedPositions = new HashSet<>();
 
         Set<Long> positioned = new HashSet<>();
         int componentOffsetX = 0;
@@ -419,10 +366,8 @@ public class ChunkNavVisualizerWindow extends Window {
             }
             if (start == null) break;
 
-            Coord startPos = new Coord(componentOffsetX, 0);
-            layerPositions.put(start.gridId, startPos);
+            layerPositions.put(start.gridId, new Coord(componentOffsetX, 0));
             positioned.add(start.gridId);
-            occupiedPositions.add(posKey(startPos));
 
             // BFS to assign positions
             Queue<Long> queue = new LinkedList<>();
@@ -448,16 +393,8 @@ public class ChunkNavVisualizerWindow extends Window {
                 for (int i = 0; i < 4; i++) {
                     long neighborId = neighbors[i];
                     if (neighborId != -1 && chunksById.containsKey(neighborId) && !positioned.contains(neighborId)) {
-                        Coord candidatePos = pos.add(offsets[i][0], offsets[i][1]);
-                        long key = posKey(candidatePos);
-                        if (occupiedPositions.contains(key)) {
-                            // Position already taken — contradictory link, skip this neighbor.
-                            // It will be placed as a separate component later.
-                            continue;
-                        }
-                        layerPositions.put(neighborId, candidatePos);
+                        layerPositions.put(neighborId, pos.add(offsets[i][0], offsets[i][1]));
                         positioned.add(neighborId);
-                        occupiedPositions.add(key);
                         queue.add(neighborId);
                     }
                 }
@@ -468,10 +405,6 @@ public class ChunkNavVisualizerWindow extends Window {
         }
 
         return layerPositions;
-    }
-
-    private static long posKey(Coord c) {
-        return ((long) c.x << 32) | (c.y & 0xFFFFFFFFL);
     }
 
     private void regenerateTextures() {
@@ -912,10 +845,8 @@ public class ChunkNavVisualizerWindow extends Window {
             }
             int obsPct = observedCount * 100 / (CELLS_PER_EDGE * CELLS_PER_EDGE);
             String layer = chunk.layer != null ? chunk.layer : "outside";
-            selectedLabel.settext(String.format("%s inst=%d\nID: %d\nPortals: %d\nObs: %d%%\nN:%d S:%d\nE:%d W:%d",
-                    layer, chunk.instanceId, chunk.gridId, portalCount, obsPct,
-                    chunk.neighborNorth, chunk.neighborSouth,
-                    chunk.neighborEast, chunk.neighborWest));
+            selectedLabel.settext(String.format("%s\nID: %d\nPortals: %d\nObs: %d%%",
+                    layer, chunk.gridId, portalCount, obsPct));
             deleteChunkBtn.disable(false);  // Enable delete button
         } else {
             selectedLabel.settext("None");
@@ -950,6 +881,24 @@ public class ChunkNavVisualizerWindow extends Window {
         } else {
             statusLabel.settext("Failed to delete chunk");
         }
+    }
+
+    /**
+     * Delete ALL chunks from memory and disk.
+     */
+    private void deleteAllChunks() {
+        ChunkNavManager manager = getChunkNavManager();
+        if (manager == null) {
+            statusLabel.settext("Error: ChunkNav not available");
+            return;
+        }
+
+        int count = manager.deleteAllChunks();
+        statusLabel.settext("Deleted " + count + " chunks");
+
+        // Clear selection and reload data
+        selectedChunkIdx = -1;
+        reloadData();
     }
 
     @Override
@@ -995,9 +944,6 @@ public class ChunkNavVisualizerWindow extends Window {
                 int drawY = (int) ((sz.y - drawH) / 2 + panY);
 
                 g.image(worldTex, new Coord(drawX, drawY), new Coord(drawW, drawH));
-
-                // Draw player position cross (live overlay)
-                drawPlayerCross(g, drawX, drawY, drawW, drawH);
 
                 // Draw zoom level indicator
                 g.chcolor(Color.WHITE);
@@ -1058,7 +1004,7 @@ public class ChunkNavVisualizerWindow extends Window {
             // Zoom centered on mouse position
             float oldZoom = zoom;
             if (ev.a < 0) {
-                zoom = Math.min(50.0f, zoom * 1.2f);
+                zoom = Math.min(10.0f, zoom * 1.2f);
             } else {
                 zoom = Math.max(0.1f, zoom / 1.2f);
             }
@@ -1073,67 +1019,6 @@ public class ChunkNavVisualizerWindow extends Window {
             }
 
             return true;
-        }
-
-        /**
-         * Draw a blue cross at the player's current position on the world map.
-         * Fixed pixel size on screen regardless of zoom level.
-         */
-        private void drawPlayerCross(GOut g, int drawX, int drawY, int drawW, int drawH) {
-            try {
-                Gob player = NUtils.player();
-                if (player == null) return;
-
-                NGameUI gui = NUtils.getGameUI();
-                if (gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) return;
-
-                MCache mcache = gui.map.glob.map;
-                Coord playerTile = player.rc.floor(MCache.tilesz);
-                MCache.Grid grid = mcache.getgridt(playerTile);
-                if (grid == null) return;
-
-                Coord gridPos = positions.get(grid.id);
-                if (gridPos == null) return;
-
-                Coord localTile = playerTile.sub(grid.ul);
-
-                int gridWidth = worldBoundsMax.x - worldBoundsMin.x + 1;
-                int gridHeight = worldBoundsMax.y - worldBoundsMin.y + 1;
-                if (gridWidth <= 0 || gridHeight <= 0) return;
-
-                float chunkPixW = (float) drawW / gridWidth;
-                float chunkPixH = (float) drawH / gridHeight;
-
-                int cx = drawX + (int) ((gridPos.x - worldBoundsMin.x) * chunkPixW
-                        + localTile.x * chunkPixW / CHUNK_SIZE);
-                int cy = drawY + (int) ((gridPos.y - worldBoundsMin.y) * chunkPixH
-                        + localTile.y * chunkPixH / CHUNK_SIZE);
-
-                // Fixed screen-space size (does NOT scale with zoom)
-                int arm = 12;
-                int thick = 3;
-                int half = thick / 2;
-
-                // Cross
-                g.chcolor(COLOR_PLAYER);
-                g.frect(new Coord(cx - arm, cy - half), new Coord(arm * 2 + 1, thick));
-                g.frect(new Coord(cx - half, cy - arm), new Coord(thick, arm * 2 + 1));
-
-                // Outline for visibility on any background
-                g.chcolor(Color.BLACK);
-                g.frect(new Coord(cx - arm - 1, cy - half - 1), new Coord(arm * 2 + 3, 1));
-                g.frect(new Coord(cx - arm - 1, cy + half + 1), new Coord(arm * 2 + 3, 1));
-                g.frect(new Coord(cx - half - 1, cy - arm - 1), new Coord(1, arm * 2 + 3));
-                g.frect(new Coord(cx + half + 1, cy - arm - 1), new Coord(1, arm * 2 + 3));
-                g.chcolor();
-
-                // Show grid ID near cross
-                g.chcolor(Color.WHITE);
-                g.atext("g" + grid.id, new Coord(cx + arm + 4, cy), 0, 0.5);
-                g.chcolor();
-            } catch (Exception e) {
-                // Player or map not available
-            }
         }
 
         /**
