@@ -109,13 +109,12 @@ public class ObjectTracker {
      * Помечает все объекты, которые уже видны при старте бота
      */
     private void markInitiallyVisibleObjects() {
-        if (NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || 
-            NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
             return;
         }
         
-        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
-            for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
                 if (gob instanceof OCache.Virtual || gob.attr.isEmpty() || 
                     gob.getClass().getName().contains("GlobEffector")) {
                     continue;
@@ -170,13 +169,12 @@ public class ObjectTracker {
             return; // Не логируем, чтобы не спамить
         }
 
-        if (NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || 
-            NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
             return; // Не логируем, чтобы не спамить
         }
 
-        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
-            for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
                 if (gob instanceof OCache.Virtual || gob.attr.isEmpty() || 
                     gob.getClass().getName().contains("GlobEffector")) {
                     continue;

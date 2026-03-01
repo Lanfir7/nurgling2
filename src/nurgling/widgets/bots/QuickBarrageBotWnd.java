@@ -10,6 +10,7 @@ import haven.Widget;
 import haven.Window;
 import nurgling.NGameUI;
 import nurgling.actions.bots.QuickBarrageBotRunner;
+import nurgling.sessions.BotExecutor;
 
 import java.awt.Color;
 
@@ -82,9 +83,7 @@ public class QuickBarrageBotWnd extends Window {
         isRunning = true;
         startStopButton.change("Stop");
         botRunner = new QuickBarrageBotRunner(gui, threshold, this);
-        botThread = new Thread(botRunner, "QuickBarrageBot");
-        botThread.start();
-        gui.biw.addObserve(botThread);
+        botThread = BotExecutor.runTask("QuickBarrageBot", botRunner);
     }
 
     public void stopBot() {

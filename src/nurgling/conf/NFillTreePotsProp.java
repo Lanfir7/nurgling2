@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 
 public class NFillTreePotsProp implements JConf {
 
@@ -34,17 +35,13 @@ public class NFillTreePotsProp implements JConf {
     }
 
     public static void set(NFillTreePotsProp prop) {
-        ArrayList<NFillTreePotsProp> props = ((ArrayList<NFillTreePotsProp>) NConfig.get(NConfig.Key.filltreepotsprop));
-        if (props != null) {
-            for (Iterator<NFillTreePotsProp> i = props.iterator(); i.hasNext(); ) {
-                NFillTreePotsProp old = i.next();
-                if (old.username.equals(prop.username) && old.chrid.equals(prop.chrid)) {
-                    i.remove();
-                    break;
-                }
+        ArrayList<NFillTreePotsProp> props = getNormalizedProps();
+        for (Iterator<NFillTreePotsProp> i = props.iterator(); i.hasNext(); ) {
+            NFillTreePotsProp old = i.next();
+            if (old.username.equals(prop.username) && old.chrid.equals(prop.chrid)) {
+                i.remove();
+                break;
             }
-        } else {
-            props = new ArrayList<>();
         }
         props.add(prop);
         NConfig.set(NConfig.Key.filltreepotsprop, props);
@@ -70,14 +67,34 @@ public class NFillTreePotsProp implements JConf {
         if (sessInfo == null || NUtils.getGameUI() == null || NUtils.getGameUI().getCharInfo() == null)
             return null;
         String chrid = NUtils.getGameUI().getCharInfo().chrid;
-        ArrayList<NFillTreePotsProp> props = ((ArrayList<NFillTreePotsProp>) NConfig.get(NConfig.Key.filltreepotsprop));
-        if (props == null)
-            props = new ArrayList<>();
+        ArrayList<NFillTreePotsProp> props = getNormalizedProps();
         for (NFillTreePotsProp prop : props) {
             if (prop.username.equals(sessInfo.username) && prop.chrid.equals(chrid)) {
                 return prop;
             }
         }
         return new NFillTreePotsProp(sessInfo.username, chrid);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArrayList<NFillTreePotsProp> getNormalizedProps() {
+        Object raw = NConfig.get(NConfig.Key.filltreepotsprop);
+        ArrayList<NFillTreePotsProp> result = new ArrayList<>();
+        if (!(raw instanceof List<?>)) {
+            return result;
+        }
+        List<?> rawList = (List<?>) raw;
+        for (Object item : rawList) {
+            if (item instanceof NFillTreePotsProp) {
+                result.add((NFillTreePotsProp) item);
+            } else if (item instanceof HashMap<?, ?>) {
+                try {
+                    HashMap<?, ?> map = (HashMap<?, ?>) item;
+                    result.add(new NFillTreePotsProp((HashMap<String, Object>) map));
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return result;
     }
 }

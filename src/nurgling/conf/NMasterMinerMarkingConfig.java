@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,7 +56,7 @@ public class NMasterMinerMarkingConfig implements JConf {
     }
 
     public static void set(NMasterMinerMarkingConfig config) {
-        ArrayList<NMasterMinerMarkingConfig> configs = (ArrayList<NMasterMinerMarkingConfig>) NConfig.get(NConfig.Key.masterminermarkingconfig);
+        ArrayList<NMasterMinerMarkingConfig> configs = getNormalizedConfigs();
         if (configs != null) {
             for (Iterator<NMasterMinerMarkingConfig> i = configs.iterator(); i.hasNext(); ) {
                 NMasterMinerMarkingConfig old = i.next();
@@ -107,13 +108,7 @@ public class NMasterMinerMarkingConfig implements JConf {
             return null;
         }
         String chrid = NUtils.getGameUI().getCharInfo().chrid;
-        Object configsObj = NConfig.get(NConfig.Key.masterminermarkingconfig);
-        ArrayList<NMasterMinerMarkingConfig> configs;
-        if (configsObj instanceof ArrayList) {
-            configs = (ArrayList<NMasterMinerMarkingConfig>) configsObj;
-        } else {
-            configs = new ArrayList<>();
-        }
+        ArrayList<NMasterMinerMarkingConfig> configs = getNormalizedConfigs();
         for (NMasterMinerMarkingConfig config : configs) {
             if (config.username.equals(sessInfo.username) && config.chrid.equals(chrid)) {
                 return config;
@@ -136,5 +131,28 @@ public class NMasterMinerMarkingConfig implements JConf {
 
     public void setThreshold(String itemName, double threshold) {
         thresholdMap.put(itemName, threshold);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArrayList<NMasterMinerMarkingConfig> getNormalizedConfigs() {
+        Object raw = NConfig.get(NConfig.Key.masterminermarkingconfig);
+        ArrayList<NMasterMinerMarkingConfig> result = new ArrayList<>();
+        if (!(raw instanceof List<?>)) {
+            return result;
+        }
+        List<?> rawList = (List<?>) raw;
+        for (Object item : rawList) {
+            if (item instanceof NMasterMinerMarkingConfig) {
+                result.add((NMasterMinerMarkingConfig) item);
+            } else if (item instanceof HashMap<?, ?>) {
+                try {
+                    HashMap<?, ?> map = (HashMap<?, ?>) item;
+                    result.add(new NMasterMinerMarkingConfig((HashMap<String, Object>) map));
+                } catch (Exception ignored) {
+                    // Skip malformed legacy entries
+                }
+            }
+        }
+        return result;
     }
 }

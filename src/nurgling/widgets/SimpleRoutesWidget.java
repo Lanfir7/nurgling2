@@ -11,6 +11,7 @@ import nurgling.actions.Action;
 import nurgling.routes.SimpleRoute;
 import nurgling.routes.SimpleRouteManager;
 import nurgling.routes.SimpleRoutePoint;
+import nurgling.sessions.BotExecutor;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -155,19 +156,17 @@ public class SimpleRoutesWidget extends Window {
         }
         
         trackerRunning = true;
-        objectTrackerThread = new Thread(() -> {
+        objectTrackerThread = BotExecutor.runTracked("SimpleRoutesObjectTracker", (gui) -> {
             while (trackerRunning) {
                 try {
                     if (discordNotifyEnabled != null && discordNotifyEnabled.a) {
                         ArrayList<String> enabledObjects = getEnabledTrackedObjects();
-                        if (!enabledObjects.isEmpty() && NUtils.getGameUI() != null) {
+                        if (!enabledObjects.isEmpty() && gui != null) {
                             // Создаем или обновляем ObjectTracker
                             if (objectTrackerInstance == null) {
                                 objectTrackerInstance = new nurgling.actions.ObjectTracker(
-                                    NUtils.getGameUI(), enabledObjects, true);
-                                if (NUtils.getGameUI() != null) {
-                                    NUtils.getGameUI().msg("ObjectTracker started with " + enabledObjects.size() + " patterns");
-                                }
+                                    gui, enabledObjects, true);
+                                gui.msg("ObjectTracker started with " + enabledObjects.size() + " patterns");
                             } else {
                                 // Обновляем настройки если они изменились
                                 objectTrackerInstance.updateSettings(enabledObjects, true);
@@ -178,8 +177,8 @@ public class SimpleRoutesWidget extends Window {
                             }
                         } else {
                             // Если настройки изменились, сбрасываем tracker
-                            if (objectTrackerInstance != null && NUtils.getGameUI() != null) {
-                                NUtils.getGameUI().msg("ObjectTracker stopped: no enabled objects or empty list");
+                            if (objectTrackerInstance != null && gui != null) {
+                                gui.msg("ObjectTracker stopped: no enabled objects or empty list");
                             }
                             objectTrackerInstance = null;
                         }
@@ -192,14 +191,12 @@ public class SimpleRoutesWidget extends Window {
                     break;
                 } catch (Exception e) {
                     // Логируем ошибки для отладки
-                    if (NUtils.getGameUI() != null) {
-                        NUtils.getGameUI().msg("ObjectTracker error: " + e.getMessage());
+                    if (gui != null) {
+                        gui.msg("ObjectTracker error: " + e.getMessage());
                     }
                 }
             }
-        }, "SimpleRoutesObjectTracker");
-        objectTrackerThread.setDaemon(true);
-        objectTrackerThread.start();
+        });
     }
     
     /**
@@ -280,9 +277,7 @@ public class SimpleRoutesWidget extends Window {
                 public void click() {
                     // Start recording
                     recorder[0] = new SimpleRouteAutoRecorder(route);
-                    thread[0] = new Thread(recorder[0], "SimpleRouteAutoRecorder");
-                    thread[0].start();
-                    NUtils.getGameUI().biw.addObserve(thread[0]);
+                    thread[0] = BotExecutor.runTask("SimpleRouteAutoRecorder", recorder[0]);
                     NUtils.getGameUI().msg("Started simple route recording for: " + route.name);
                     active[0] = true;
                     // Swap to active button
@@ -339,28 +334,26 @@ public class SimpleRoutesWidget extends Window {
                     NUtils.getGameUI().msg("Route is empty");
                     return;
                 }
-                Thread t = new Thread(() -> {
+                Thread t = BotExecutor.runTracked("SimpleRouteNavigator", (gui) -> {
                     try {
                         // Запускаем отслеживание объектов при старте маршрута
                         startObjectTracker();
-                        NUtils.getGameUI().msg("Starting navigation to end of route: " + route.name);
+                        gui.msg("Starting navigation to end of route: " + route.name);
                         // Используем SimpleRouteWorker, который автоматически определяет waterMode
                         new SimpleRouteWorker(new Action() {
                             @Override
                             public nurgling.actions.Results run(NGameUI gui) throws InterruptedException {
                                 return nurgling.actions.Results.SUCCESS();
                             }
-                        }, route, false).run(NUtils.getGameUI());
-                        NUtils.getGameUI().msg("Finished navigation to end of route: " + route.name);
+                        }, route, false).run(gui);
+                        gui.msg("Finished navigation to end of route: " + route.name);
                     } catch (InterruptedException e) {
-                        NUtils.getGameUI().msg("Navigation interrupted");
+                        gui.msg("Navigation interrupted");
                     } finally {
                         // Останавливаем отслеживание объектов при завершении маршрута
                         stopObjectTracker();
                     }
-                }, "SimpleRouteNavigator");
-                t.start();
-                NUtils.getGameUI().biw.addObserve(t);
+                });
             }
         }, new Coord(0, UI.scale(36))).settip("Navigate through entire route to end");
 
@@ -372,23 +365,23 @@ public class SimpleRoutesWidget extends Window {
                     NUtils.getGameUI().msg("Route is empty");
                     return;
                 }
-                Thread t = new Thread(() -> {
+                Thread t = BotExecutor.runTracked("SimpleRouteToStart", (gui) -> {
                     try {
                         // Запускаем отслеживание объектов при старте маршрута
                         startObjectTracker();
-                        NUtils.getGameUI().msg("Starting navigation to start of route: " + route.name);
+                        gui.msg("Starting navigation to start of route: " + route.name);
                         
                         // Получаем текущую позицию (игрока или корабля)
                         Coord2d currentPos = getCurrentPosition();
                         if (currentPos == null) {
-                            NUtils.getGameUI().msg("Cannot determine current position");
+                            gui.msg("Cannot determine current position");
                             return;
                         }
                         
                         // Находим ближайшую точку маршрута к текущей позиции
                         int nearestIndex = findNearestWaypointIndex(route, currentPos);
                         if (nearestIndex < 0) {
-                            NUtils.getGameUI().msg("Cannot find nearest waypoint");
+                            gui.msg("Cannot find nearest waypoint");
                             return;
                         }
                         
@@ -401,16 +394,14 @@ public class SimpleRoutesWidget extends Window {
                             }
                         }
                         
-                        NUtils.getGameUI().msg("Arrived at start of route: " + route.name);
+                        gui.msg("Arrived at start of route: " + route.name);
                     } catch (InterruptedException e) {
-                        NUtils.getGameUI().msg("Navigation interrupted");
+                        gui.msg("Navigation interrupted");
                     } finally {
                         // Останавливаем отслеживание объектов при завершении маршрута
                         stopObjectTracker();
                     }
-                }, "SimpleRouteToStart");
-                t.start();
-                NUtils.getGameUI().biw.addObserve(t);
+                });
             }
         }, new Coord(UI.scale(85), UI.scale(36))).settip("Navigate to start of route");
 
@@ -714,18 +705,16 @@ public class SimpleRoutesWidget extends Window {
         NFlowerMenu menu;
 
                 private void startNavigation(SimpleRoutePoint point) {
-            Thread t = new Thread(() -> {
+            Thread t = BotExecutor.runTracked("SimpleRoutePointNavigator", (gui) -> {
                 try {
                     Coord2d target = SimpleRoutesWidget.this.getWaypointCoord(point);
                     if (target != null) {
                         SimpleRoutesWidget.this.navigateToPoint(target);
                     }
                 } catch (InterruptedException e) {
-                    NUtils.getGameUI().error("Navigation interrupted by the user");
+                    gui.error("Navigation interrupted by the user");
                 }
-            }, "SimpleRoutePointNavigator");
-            t.start();
-            NUtils.getGameUI().biw.addObserve(t);
+            });
         }
 
         @Override
@@ -754,16 +743,16 @@ public class SimpleRoutesWidget extends Window {
                             public void nchoose(NPetal option) {
                                 if (option != null) {
                                     if (option.name.equals("Navigate To")) {
-                                        new Thread(() -> {
+                                        BotExecutor.runTracked("SimpleRoutePointNavigator", (gui) -> {
                                             try {
                                                 Coord2d target = SimpleRoutesWidget.this.getWaypointCoord(rp);
                                                 if (target != null) {
                                                     SimpleRoutesWidget.this.navigateToPoint(target);
                                                 }
                                             } catch (InterruptedException e) {
-                                                NUtils.getGameUI().error("Navigation interrupted: " + e.getMessage());
+                                                gui.error("Navigation interrupted: " + e.getMessage());
                                             }
-                                        }, "SimpleRoutePointNavigator").start();
+                                        });
                                     } else if (option.name.equals("Delete")) {
                                         SimpleRouteManager manager = ((NMapView) NUtils.getGameUI().map).simpleRouteManager;
                                         if (manager != null) {

@@ -20,6 +20,8 @@ import nurgling.overlays.map.*;
 import nurgling.navigation.ChunkNavData;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPortal;
+import nurgling.routes.SimpleRoute;
+import nurgling.routes.SimpleRouteManager;
 import nurgling.scenarios.Scenario;
 import nurgling.headless.Headless;
 import nurgling.tasks.WaitForMapGridLoad;
@@ -30,6 +32,7 @@ import nurgling.widgets.NMiniMap;
 import nurgling.widgets.NZoneMeasureTool;
 import nurgling.NConfig;
 import nurgling.styles.TooltipStyle;
+import org.json.JSONObject;
 
 import java.awt.Color;
 import java.awt.event.KeyEvent;
@@ -59,6 +62,8 @@ public class NMapView extends MapView
     private UI.Grab dragGrab = null;
     // Chunk navigation manager - owned by NMapView, not a singleton
     private ChunkNavManager chunkNavManager;
+    // Backward-compatible simple routes manager (used by SimpleRoutesWidget and bots)
+    public SimpleRouteManager simpleRouteManager;
 
     // Track areas that were deleted locally to prevent restoration during sync
     private final Set<Integer> locallyDeletedAreas = new HashSet<>();
@@ -66,6 +71,7 @@ public class NMapView extends MapView
     public NMapView(Coord sz, Glob glob, Coord2d cc, long plgob)
     {
         super(sz, glob, cc, plgob);
+        this.simpleRouteManager = new SimpleRouteManager();
         for(int i = 0 ; i < MCache.customolssize; i++)
         toggleol("hareas", true);
         toggleol("minesup", true);
@@ -85,6 +91,14 @@ public class NMapView extends MapView
         } catch(Exception e) {
             System.err.println("NMapView: Error initializing ChunkNavManager: " + e.getMessage());
         }
+        try {
+            this.simpleRouteManager = new SimpleRouteManager(genus);
+        } catch (Exception e) {
+            System.err.println("NMapView: Error initializing SimpleRouteManager: " + e.getMessage());
+            if (this.simpleRouteManager == null) {
+                this.simpleRouteManager = new SimpleRouteManager();
+            }
+        }
     }
 
     /**
@@ -93,6 +107,40 @@ public class NMapView extends MapView
      */
     public ChunkNavManager getChunkNavManager() {
         return chunkNavManager;
+    }
+
+    public SimpleRouteManager getSimpleRouteManager() {
+        return simpleRouteManager;
+    }
+
+    public void addSimpleRoute() {
+        if (simpleRouteManager == null) {
+            simpleRouteManager = new SimpleRouteManager();
+        }
+        int nextId = 1;
+        for (Integer id : simpleRouteManager.getRoutes().keySet()) {
+            if (id != null && id >= nextId) {
+                nextId = id + 1;
+            }
+        }
+        String name = "Route " + nextId;
+        SimpleRoute route = new SimpleRoute(name);
+        route.id = nextId;
+        simpleRouteManager.addRoute(route);
+        simpleRouteManager.save();
+    }
+
+    public void changeSimpleRouteName(int routeId, String newName) {
+        if (simpleRouteManager == null || newName == null || newName.trim().isEmpty()) {
+            return;
+        }
+        SimpleRoute route = simpleRouteManager.getRoute(routeId);
+        if (route == null) {
+            return;
+        }
+        route.name = newName.trim();
+        simpleRouteManager.updateRoute(route);
+        simpleRouteManager.save();
     }
 
     final HashMap<String, String> ttip = new HashMap<>();
@@ -727,9 +775,10 @@ public class NMapView extends MapView
     }
 
 
-    public String addArea(NArea.Space result)
+    public int addArea(NArea.Space result)
     {
         String key;
+        int createdId;
         synchronized (glob.map.areas)
         {
             HashSet<String> names = new HashSet<String>();
@@ -749,6 +798,7 @@ public class NMapView extends MapView
             }
             NArea newArea = new NArea(key);
             newArea.id = id;
+            createdId = id;
             newArea.space = result;
             newArea.lastLocalChange = System.currentTimeMillis();
             newArea.grids_id.addAll(newArea.space.space.keySet());
@@ -769,7 +819,49 @@ public class NMapView extends MapView
 
             createAreaLabel(id);
         }
-        return key;
+        return createdId;
+    }
+
+    public int duplicateArea(int sourceId) {
+        synchronized (glob.map.areas) {
+            NArea source = glob.map.areas.get(sourceId);
+            if (source == null) {
+                return -1;
+            }
+
+            int newId = 1;
+            HashSet<String> names = new HashSet<String>();
+            for (NArea area : glob.map.areas.values()) {
+                if (area.id >= newId) {
+                    newId = area.id + 1;
+                }
+                names.add(area.name);
+            }
+
+            // Deep-copy through JSON string to avoid shared JSONArray/JSONObject references
+            // (otherwise jin/jout can be linked between original and duplicate).
+            NArea copy = new NArea(new JSONObject(source.toJson().toString()));
+            copy.id = newId;
+            copy.gid = Long.MIN_VALUE;
+            copy.uuid = null;
+            copy.synced = false;
+            copy.lastUpdated = 0;
+            copy.lastLocalChange = System.currentTimeMillis();
+            copy.syncGridIdsFromSpace();
+
+            String baseName = source.name + " (copy)";
+            String newName = baseName;
+            int suffix = 1;
+            while (names.contains(newName)) {
+                newName = baseName + " " + suffix++;
+            }
+            copy.name = newName;
+
+            glob.map.areas.put(newId, copy);
+            createAreaLabel(newId);
+            NConfig.needAreasUpdate();
+            return newId;
+        }
     }
 
     boolean botsInit = false;

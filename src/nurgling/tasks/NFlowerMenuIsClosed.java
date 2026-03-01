@@ -12,6 +12,7 @@ public class NFlowerMenuIsClosed extends NTask
     @Override
     public boolean check()
     {
-        return NUtils.getUI().findInRoot(NFlowerMenu.class) == null;
+        NFlowerMenu menu = (NFlowerMenu) NUtils.getUI().findInRoot(NFlowerMenu.class);
+        return menu == null || !menu.visible();
     }
 }

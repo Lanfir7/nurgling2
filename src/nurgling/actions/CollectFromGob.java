@@ -3,6 +3,7 @@ package nurgling.actions;
 import haven.*;
 import nurgling.NFlowerMenu;
 import nurgling.NGameUI;
+import nurgling.NInventory;
 import nurgling.NUtils;
 import nurgling.tasks.NFlowerMenuIsClosed;
 import nurgling.tasks.WaitCollectState;
@@ -62,9 +63,11 @@ public class CollectFromGob implements Action{
         WaitCollectState wcs = null;
         do {
             if(!withoutTransfer) {
-                if (NUtils.getGameUI().getInventory().getNumberFreeCoord(targetSize) == 0) {
-                    if (withPiles)
+                NInventory inv = (gui != null) ? gui.getInventory() : null;
+                if (inv != null && targetSize != null && inv.getNumberFreeCoord(targetSize) == 0) {
+                    if (withPiles) {
                         new TransferToPiles(pileArea, targetItems).run(gui);
+                    }
                 }
             }
             if(marker!=-1)

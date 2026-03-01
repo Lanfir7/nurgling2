@@ -177,6 +177,25 @@ public class NUtils
         return fnf.getResult();
     }
 
+    /**
+     * Force-close all flower menus in the provided UI root.
+     * Used during session switch to avoid stuck invisible menus
+     * that keep mouse/keyboard grabs and freeze bot interactions.
+     */
+    public static void closeAllFlowerMenus(NUI targetUI) {
+        if (targetUI == null) {
+            return;
+        }
+        int guard = 0;
+        while (guard++ < 32) {
+            NFlowerMenu menu = (NFlowerMenu) targetUI.findInRoot(NFlowerMenu.class);
+            if (menu == null) {
+                break;
+            }
+            targetUI.destroy(menu);
+        }
+    }
+
     public static NArea getArea(int id)
     {
         if (getGameUI() == null || getGameUI().map == null || 

@@ -27,17 +27,21 @@ public class SelectAreaWithRotation implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        if (gui == null || gui.map == null || gui.ui == null) {
+            return Results.FAIL();
+        }
+        NMapView map = (NMapView) gui.map;
 
-        if (!((NMapView) NUtils.getGameUI().map).isAreaSelectionMode.get()) {
+        if (!map.isAreaSelectionMode.get()) {
             Gob player = NUtils.player();
-            ((NMapView) NUtils.getGameUI().map).isAreaSelectionMode.set(true);
+            map.isAreaSelectionMode.set(true);
 
             // Add direction dialog to the UI
             dirDialog = new TrellisDirectionDialog();
             gui.add(dirDialog, UI.scale(200, 200));
 
             if(image!=null && player!=null) {
-                player.addcustomol(new NCustomBauble(player,image, spr,((NMapView) NUtils.getGameUI().map).isAreaSelectionMode));
+                player.addcustomol(new NCustomBauble(player,image, spr, map.isAreaSelectionMode));
             }
 
             // Use appropriate task based on whether we have a hitbox (for ghost previews)
@@ -57,7 +61,7 @@ public class SelectAreaWithRotation implements Action {
                 }
             } else {
                 nurgling.tasks.SelectArea sa;
-                NUtils.getUI().core.addTask(sa = new nurgling.tasks.SelectArea());
+                gui.ui.core.addTask(sa = new nurgling.tasks.SelectArea(gui));
                 if (sa.getResult() != null) {
                     result = sa.getResult();
                     orientation = 0;
@@ -77,10 +81,17 @@ public class SelectAreaWithRotation implements Action {
     }
 
     public Pair<Coord2d,Coord2d> getRCArea() {
+        NGameUI gui = NUtils.getGameUI();
+        if (result == null || gui == null || gui.map == null) {
+            return null;
+        }
         Coord begin = null;
         Coord end = null;
         for (Long id : result.space.keySet()) {
-            MCache.Grid grid = NUtils.getGameUI().map.glob.map.findGrid(id);
+            MCache.Grid grid = gui.map.glob.map.findGrid(id);
+            if (grid == null) {
+                continue;
+            }
             haven.Area area = result.space.get(id).area;
             Coord b = area.ul.add(grid.ul);
             Coord e = area.br.add(grid.ul);

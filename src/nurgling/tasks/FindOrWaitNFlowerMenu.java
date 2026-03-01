@@ -15,7 +15,8 @@ public class FindOrWaitNFlowerMenu extends NTask
     public boolean check()
     {
         count++;
-        res = (NFlowerMenu) NUtils.getUI().findInRoot(NFlowerMenu.class);
+        NFlowerMenu found = (NFlowerMenu) NUtils.getUI().findInRoot(NFlowerMenu.class);
+        res = (found != null && found.visible()) ? found : null;
         return res != null && res.opts.length>0 || count > 50;
     }
 

@@ -20,6 +20,7 @@ import nurgling.widgets.LocalizedResourceTimersWindow;
 import nurgling.widgets.LocalizedResourceTimerDialog;
 import nurgling.widgets.StudyDeskPlannerWidget;
 import nurgling.widgets.FishingWindowExtension;
+import nurgling.sessions.BotExecutor;
 import haven.MapFile;
 import haven.MiniMap;
 import haven.MCache;
@@ -115,8 +116,13 @@ public class NGameUI extends GameUI
             return;
         }
         animalMarkerMacroRunning = true;
-        animalMarkerMacroThread = new Thread(() -> {
-            while (animalMarkerMacroRunning && NGameUI.this.ui != null) {
+        animalMarkerMacroThread = BotExecutor.runTask("AnimalMarkerMacro", () -> {
+            nurgling.NGameUI gui = nurgling.NUtils.getGameUI();
+            if (gui == null) {
+                animalMarkerMacroRunning = false;
+                return;
+            }
+            while (animalMarkerMacroRunning && gui.ui != null) {
                 try {
                     // Проверяем настройку каждую итерацию
                     if (!nurgling.widgets.nsettings.AnimalMarkersSettings.isMarkerEnabled()) {
@@ -125,22 +131,19 @@ public class NGameUI extends GameUI
                     }
                     if (animalMarkerMacroTracker == null) {
                         // filterKritterOnly = true: только kritter + пропускаем трупы (knock)
-                        animalMarkerMacroTracker = new nurgling.actions.ObjectTracker(NGameUI.this, getAnimalMarkerMacroPatterns(), false, false, true);
-                        msg("Макрос: маркеры животных включён — при первой встрече криттер будет отмечен на карте; ткни лупой по трупу для качества.");
+                        animalMarkerMacroTracker = new nurgling.actions.ObjectTracker(gui, getAnimalMarkerMacroPatterns(), false, false, true);
                     }
                     if (animalMarkerMacroTracker != null)
                         animalMarkerMacroTracker.checkObjects();
                 } catch (Exception e) {
-                    if (animalMarkerMacroRunning) msg("Макрос маркеров животных: " + e.getMessage());
+                    if (animalMarkerMacroRunning) gui.msg("Макрос маркеров животных: " + e.getMessage());
                 }
                 for (int i = 0; i < 20 && animalMarkerMacroRunning; i++) {
                     try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
                 }
             }
             animalMarkerMacroTracker = null;
-        }, "AnimalMarkerMacro");
-        animalMarkerMacroThread.setDaemon(true);
-        animalMarkerMacroThread.start();
+        });
     }
     
     public void stopAnimalMarkerMacro() {
@@ -415,8 +418,9 @@ public class NGameUI extends GameUI
         heavyWidgetsThread.setDaemon(true);
         heavyWidgetsThread.start();
         
-        // Initialize SimpleRoutesWidget after SimpleRouteManager is ready
-        if (map instanceof NMapView && ((NMapView) map).simpleRouteManager != null) {
+        // Initialize SimpleRoutesWidget when NMapView is available.
+        // Some branches don't expose simpleRouteManager field directly.
+        if (map instanceof NMapView) {
             if (simpleRoutesWidget == null) {
                 simpleRoutesWidget = new SimpleRoutesWidget();
                 add(simpleRoutesWidget, new Coord(100, 200));
@@ -1162,24 +1166,34 @@ public class NGameUI extends GameUI
             }
             else
             {
+                Object customObj = null;
                 if(path.startsWith("scenario:")) {
                     String scenarioName = path.substring("scenario:".length());
                     for(nurgling.scenarios.Scenario scenario : ui.core.scenarioManager.getScenarios().values()) {
                         if(scenario.getName().equals(scenarioName)) {
-                            return new NScenarioButton(scenario);
+                            customObj = new NScenarioButton(scenario);
+                            break;
                         }
                     }
-                    return null;
                 } else if(path.startsWith("equippreset:")) {
                     String presetId = path.substring("equippreset:".length());
                     nurgling.equipment.EquipmentPreset preset = ui.core.equipmentPresetManager.getPreset(presetId);
                     if(preset != null) {
-                        return new nurgling.widgets.NEquipmentPresetButton(preset);
+                        customObj = new nurgling.widgets.NEquipmentPresetButton(preset);
                     }
-                    return null;
                 } else {
-                    return botsMenu.find(path);
+                    customObj = botsMenu.find(path);
                 }
+
+                // Fallback to account hotbelt slot if custom mapping is stale or missing.
+                if (customObj != null) {
+                    return customObj;
+                }
+
+                GameUI.BeltSlot res = null;
+                if (ui != null && belt[slot] != null)
+                    res = belt[slot];
+                return res;
             }
         }
 
@@ -1342,7 +1356,12 @@ public class NGameUI extends GameUI
                         // Обновить маркер животного на карте (качество приходит сообщением от сервера, не из sdt)
                         if (map instanceof nurgling.NMapView) {
                             System.err.println("[NGameUI] Calling applyAnimalMarkerQuality for gob " + map.clickedGob.gob.id + " quality=" + quality);
-                            ((nurgling.NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, quality);
+                            try {
+                                java.lang.reflect.Method mth = map.getClass().getMethod("applyAnimalMarkerQuality", Gob.class, int.class);
+                                mth.invoke(map, map.clickedGob.gob, quality);
+                            } catch (Exception ignored) {
+                                // Method may be absent in some merged branches; keep quality overlay only.
+                            }
                         } else {
                             System.err.println("[NGameUI] map is NOT NMapView: " + (map != null ? map.getClass().getName() : "null"));
                         }

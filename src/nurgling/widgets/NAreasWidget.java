@@ -218,6 +218,18 @@ public class NAreasWidget extends Window
         showPath(currentPath);
     }
 
+    public void updateAreaName(int areaId, String newName) {
+        synchronized (items) {
+            for (AreaItem item : items) {
+                if (item != null && item.area != null && item.area.id == areaId) {
+                    item.text.settext(newName);
+                    item.settip(newName);
+                    break;
+                }
+            }
+        }
+    }
+
     @Override
     public void show()
     {
@@ -427,6 +439,7 @@ public class NAreasWidget extends Window
                     add(L10n.get("area.menu.select_space"));
                     add(L10n.get("area.menu.set_color"));
                     add(L10n.get("area.menu.edit_name"));
+                    add(L10n.get("area.menu.duplicate"));
                     add(L10n.get("area.menu.scan"));
                 }
             };
@@ -603,6 +616,13 @@ public class NAreasWidget extends Window
                             else if (option.name.equals(get("area.menu.edit_name")))
                             {
                                 NEditAreaName.changeName(area, AreaItem.this);
+                            }
+                            else if (option.name.equals(get("area.menu.duplicate")))
+                            {
+                                int duplicatedId = ((NMapView) NUtils.getGameUI().map).duplicateArea(area.id);
+                                if (duplicatedId != -1) {
+                                    NAreasWidget.this.showPath(currentPath, duplicatedId);
+                                }
                             }
                             else if (option.name.equals(get("area.menu.scan")))
                             {

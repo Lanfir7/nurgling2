@@ -364,7 +364,7 @@ public class QoL extends Panel {
         crime.a = getBool(NConfig.Key.crime);
         swimming.a = getBool(NConfig.Key.swimming);
         openInventoryOnLogin.a = getBool(NConfig.Key.openInventoryOnLogin);
-        lowMemoryMode.a = getBool(NConfig.Key.lowMemoryMode);
+        lowMemoryMode.a = false;
         disableMenugridKeys.a = getBool(NConfig.Key.disableMenugridKeys);
         questNotified.a = getBool(NConfig.Key.questNotified);
         lpassistent.a = getBool(NConfig.Key.lpassistent);
@@ -483,7 +483,6 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.crime, crime.a);
         NConfig.set(NConfig.Key.swimming, swimming.a);
         NConfig.set(NConfig.Key.openInventoryOnLogin, openInventoryOnLogin.a);
-        NConfig.set(NConfig.Key.lowMemoryMode, lowMemoryMode.a);
         NConfig.set(NConfig.Key.disableMenugridKeys, disableMenugridKeys.a);
         NConfig.set(NConfig.Key.questNotified, questNotified.a);
 

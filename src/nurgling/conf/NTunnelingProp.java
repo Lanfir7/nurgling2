@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 
 public class NTunnelingProp implements JConf {
     private final String username;
@@ -55,7 +56,7 @@ public class NTunnelingProp implements JConf {
     }
 
     public static void set(NTunnelingProp prop) {
-        ArrayList<NTunnelingProp> props = (ArrayList<NTunnelingProp>) NConfig.get(NConfig.Key.tunnelingprop);
+        ArrayList<NTunnelingProp> props = getNormalizedProps();
         if (props != null) {
             for (Iterator<NTunnelingProp> i = props.iterator(); i.hasNext(); ) {
                 NTunnelingProp old = i.next();
@@ -75,7 +76,7 @@ public class NTunnelingProp implements JConf {
         if (sessInfo == null || NUtils.getGameUI() == null || NUtils.getGameUI().getCharInfo() == null)
             return null;
         String chrid = NUtils.getGameUI().getCharInfo().chrid;
-        ArrayList<NTunnelingProp> props = (ArrayList<NTunnelingProp>) NConfig.get(NConfig.Key.tunnelingprop);
+        ArrayList<NTunnelingProp> props = getNormalizedProps();
         if (props == null)
             props = new ArrayList<>();
         for (NTunnelingProp prop : props) {
@@ -107,5 +108,28 @@ public class NTunnelingProp implements JConf {
     @Override
     public String toString() {
         return "NTunnelingProp[" + username + "|" + chrid + "]";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArrayList<NTunnelingProp> getNormalizedProps() {
+        Object raw = NConfig.get(NConfig.Key.tunnelingprop);
+        ArrayList<NTunnelingProp> result = new ArrayList<>();
+        if (!(raw instanceof List<?>)) {
+            return result;
+        }
+        List<?> rawList = (List<?>) raw;
+        for (Object item : rawList) {
+            if (item instanceof NTunnelingProp) {
+                result.add((NTunnelingProp) item);
+            } else if (item instanceof HashMap<?, ?>) {
+                try {
+                    HashMap<?, ?> map = (HashMap<?, ?>) item;
+                    result.add(new NTunnelingProp((HashMap<String, Object>) map));
+                } catch (Exception ignored) {
+                    // Skip malformed legacy entries
+                }
+            }
+        }
+        return result;
     }
 }

@@ -23,11 +23,14 @@ public class FillTreePots implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        if (gui == null || gui.ui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) {
+            return Results.FAIL();
+        }
         nurgling.widgets.bots.FillTreePotsWidget w = null;
         NFillTreePotsProp prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable(
-                NUtils.getGameUI().add((w = new nurgling.widgets.bots.FillTreePotsWidget()), UI.scale(200, 200))
+            gui.ui.core.addTask(new WaitCheckable(
+                gui.add((w = new nurgling.widgets.bots.FillTreePotsWidget()), UI.scale(200, 200))
             ));
             prop = w.prop;
         } catch (InterruptedException e) {
@@ -40,7 +43,7 @@ public class FillTreePots implements Action {
             return Results.FAIL();
         }
 
-        NArea mulchArea = NUtils.getArea(prop.mulchZoneId);
+        NArea mulchArea = gui.map.glob.map.areas.get(prop.mulchZoneId);
         if (mulchArea == null) {
             return Results.ERROR("Selected mulch zone not found.");
         }
@@ -193,7 +196,7 @@ public class FillTreePots implements Action {
                 if (soil == null) break;
                 NUtils.takeItemToHand(soil);
                 pot.item.wdgmsg("itemact", 0);
-                NUtils.getUI().core.addTask(new HandIsFree(gui.getInventory()));
+                gui.ui.core.addTask(new HandIsFree(gui.getInventory()));
             }
         }
 
@@ -233,9 +236,9 @@ public class FillTreePots implements Action {
         while ((pot = findPotNeedingWater(gui.getInventory().getItems(POT))) != null) {
             NUtils.takeItemToHand(pot);
             NUtils.activateItem(waterBarrel);
-            NUtils.getUI().core.addTask(new WaitPotFilled(NUtils.getGameUI().vhand, 1.0));
+            gui.ui.core.addTask(new WaitPotFilled(gui.vhand, 1.0));
             NUtils.dropToInv();
-            NUtils.getUI().core.addTask(new HandIsFree(gui.getInventory()));
+            gui.ui.core.addTask(new HandIsFree(gui.getInventory()));
         }
 
         return Results.SUCCESS();

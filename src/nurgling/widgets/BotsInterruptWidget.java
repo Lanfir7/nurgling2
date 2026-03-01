@@ -1,6 +1,7 @@
 package nurgling.widgets;
 
 import haven.*;
+import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NStyle;
 import nurgling.NUtils;
@@ -103,10 +104,14 @@ public class BotsInterruptWidget extends Widget {
         {
             if(stackObs.isEmpty())
             {
-                 if(((NInventory) NUtils.getGameUI().maininv).bundle.a) {
-                     oldStackState = true;
-                     NUtils.stackSwitch(false);
-                 }
+                NGameUI gui = NUtils.getGameUI();
+                if (gui != null && gui.maininv instanceof NInventory) {
+                    NInventory inv = (NInventory) gui.maininv;
+                    if (inv.bundle != null && inv.bundle.a) {
+                        oldStackState = true;
+                        NUtils.stackSwitch(false);
+                    }
+                }
             }
             if(oldStackState)
                 stackObs.add(t);

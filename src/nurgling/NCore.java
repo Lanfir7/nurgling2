@@ -433,12 +433,10 @@ public class NCore extends Widget
     private static final int MAX_QUICK_CACHE_SIZE_LOW = 500;
 
     private static int getMaxRecipeCacheSize() {
-        Object v = NConfig.get(NConfig.Key.lowMemoryMode);
-        return (v instanceof Boolean && (Boolean) v) ? MAX_RECIPE_CACHE_SIZE_LOW : MAX_RECIPE_CACHE_SIZE_NORMAL;
+        return MAX_RECIPE_CACHE_SIZE_NORMAL;
     }
     private static int getMaxQuickCacheSize() {
-        Object v = NConfig.get(NConfig.Key.lowMemoryMode);
-        return (v instanceof Boolean && (Boolean) v) ? MAX_QUICK_CACHE_SIZE_LOW : MAX_QUICK_CACHE_SIZE_NORMAL;
+        return MAX_QUICK_CACHE_SIZE_NORMAL;
     }
     
     // Pending recipe tasks counter for debug

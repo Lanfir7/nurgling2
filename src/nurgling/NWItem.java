@@ -9,7 +9,7 @@ import nurgling.tools.RecipeIngredientCache;
 import nurgling.tools.VSpec;
 import org.json.*;
 
-import java.awt.*;
+import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.util.*;
 

@@ -5,21 +5,28 @@ import nurgling.areas.*;
 
 public class SelectArea extends NTask
 {
+    private final NGameUI boundGui;
 
     public SelectArea()
     {
+        this.boundGui = null;
+    }
+
+    public SelectArea(NGameUI gui) {
+        this.boundGui = gui;
     }
 
     @Override
     public boolean check()
     {
-        if (NUtils.getGameUI().map!=null )
-            if(!((NMapView)NUtils.getGameUI().map).isAreaSelectionMode.get())
+        NGameUI gui = (boundGui != null) ? boundGui : NUtils.getGameUI();
+        if (gui != null && gui.map != null )
+            if(!((NMapView)gui.map).isAreaSelectionMode.get())
             {
-                if (((NMapView) NUtils.getGameUI().map).areaSpace != null)
+                if (((NMapView) gui.map).areaSpace != null)
                 {
-                    result = ((NMapView) NUtils.getGameUI().map).areaSpace;
-                    ((NMapView) NUtils.getGameUI().map).areaSpace = null;
+                    result = ((NMapView) gui.map).areaSpace;
+                    ((NMapView) gui.map).areaSpace = null;
                 }
                 return true;
             }

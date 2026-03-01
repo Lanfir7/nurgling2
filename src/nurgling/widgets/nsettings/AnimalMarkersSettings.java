@@ -25,34 +25,8 @@ public class AnimalMarkersSettings extends Panel {
     private static final List<String> DEFAULT_PATTERNS;
     static {
         ArrayList<String> def = new ArrayList<>();
-        def.add("gfx/kritter/.*");
-        def.add("gfx/kritter/boar/.*");
-        def.add("gfx/kritter/deer/.*");
-        def.add("gfx/kritter/moose/.*");
-        def.add("gfx/kritter/bear/.*");
-        def.add("gfx/kritter/wolf/.*");
-        def.add("gfx/kritter/lynx/.*");
-        def.add("gfx/kritter/fox/.*");
-        def.add("gfx/kritter/rabbit/.*");
-        def.add("gfx/kritter/rat/.*");
-        def.add("gfx/kritter/pheasant/.*");
-        def.add("gfx/kritter/roe/.*");
-        def.add("gfx/kritter/elk/.*");
-        def.add("gfx/kritter/mammoth/.*");
-        def.add("gfx/kritter/wolverine/.*");
-        def.add("gfx/kritter/badger/.*");
-        def.add("gfx/kritter/adder/.*");
-        def.add("gfx/kritter/wildgoat/.*");
-        def.add("gfx/kritter/walrus/.*");
-        def.add("gfx/kritter/orca/.*");
-        def.add("gfx/kritter/troll/.*");
-        def.add("gfx/kritter/bat/.*");
-        def.add("gfx/kritter/eagle/.*");
-        def.add("gfx/kritter/eagleowl/.*");
-        def.add("gfx/kritter/goldeneagle/.*");
-        def.add("gfx/kritter/goat/.*");
-        def.add("gfx/kritter/cavelouse/.*");
-        def.add("gfx/kritter/boreworm/.*");
+        def.add("gfx/kritter/orca/orca");
+        def.add("gfx/kritter/mammoth/mammoth");
         DEFAULT_PATTERNS = Collections.unmodifiableList(def);
     }
 
@@ -178,7 +152,10 @@ public class AnimalMarkersSettings extends Panel {
                 }
             }
         }
-        if (out.isEmpty()) out.add("gfx/kritter/.*");
+        if (out.isEmpty()) {
+            out.add("gfx/kritter/orca/orca");
+            out.add("gfx/kritter/mammoth/mammoth");
+        }
         return out;
     }
 

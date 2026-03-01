@@ -2,6 +2,7 @@ package nurgling.sessions;
 
 import haven.*;
 import nurgling.NConfig;
+import nurgling.NUtils;
 import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NUI;
@@ -179,6 +180,10 @@ public class SessionContext {
             return; // Already headless
         }
 
+        // Force close any stale flower menus in this session before demotion.
+        // Otherwise invisible menus may keep input grabs and freeze bots.
+        NUtils.closeAllFlowerMenus(this.ui);
+
         headless = true;
 
         // Clear path line visualization - prevents frozen lines when switching back
@@ -239,6 +244,9 @@ public class SessionContext {
         }
 
         headless = false;
+
+        // Ensure promoted session starts with clean UI interaction state.
+        NUtils.closeAllFlowerMenus(this.ui);
 
         // Signal background message loop to exit
         if (session != null) {

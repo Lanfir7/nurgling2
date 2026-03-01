@@ -179,6 +179,36 @@ public class NConfig
         starvationVignetteCriticalThreshold,
         starvationSoundThreshold,
         starvationSoundInterval,
+        autoDrinkThreshold,
+        autoDrinkTimeout,
+        diabloLikeRun,
+        treeFinderEnabled,
+        treeFinderSaveToMap,
+        treeFinderSaveToMapMinGrowth,
+        treeFinderShowNotification,
+        treeFinderShowNotificationMinGrowth,
+        treeFinderNotificationAutoCloseTime,
+        treeHarvestOverlay,
+        treeResizeEnabled,
+        treeResizePercentage,
+        animal_marker_enabled,
+        animal_marker_patterns,
+        disableGobAnimEnabled,
+        disableGobAnimPatterns,
+        permIconScale,
+        prospectIconScale,
+        showAnimalIcons,
+        showGemstoneIcons,
+        showOreSpotIcons,
+        showProspectingIcons,
+        showQuarryartzIcons,
+        simpleRoutesDiscordNotify,
+        simpleRoutesTrackedObjects,
+        syncZoneSync,
+        filltreepotsprop,
+        tunnelingprop,
+        masterminerprop,
+        masterminermarkingconfig,
         // Localization
         language
     }
@@ -256,6 +286,8 @@ public class NConfig
         conf.put(Key.sendOverlays, false);
         conf.put(Key.showInventoryNums, true);
         conf.put(Key.autoDrink, false);
+        conf.put(Key.autoDrinkThreshold, 0.51);
+        conf.put(Key.autoDrinkTimeout, 5.0);
         conf.put(Key.autoSaveTableware, true);
         conf.put(Key.endpoint, "");
         conf.put(Key.questNotified, false);
@@ -310,6 +342,34 @@ public class NConfig
         conf.put(Key.showPathLine, false);
         conf.put(Key.pathLineWidth, 4);
         conf.put(Key.pathLineColor, new Color(255, 255, 0));  // Yellow
+        conf.put(Key.diabloLikeRun, false);
+        conf.put(Key.treeFinderEnabled, false);
+        conf.put(Key.treeFinderSaveToMap, false);
+        conf.put(Key.treeFinderSaveToMapMinGrowth, 100);
+        conf.put(Key.treeFinderShowNotification, false);
+        conf.put(Key.treeFinderShowNotificationMinGrowth, 100);
+        conf.put(Key.treeFinderNotificationAutoCloseTime, 8);
+        conf.put(Key.treeHarvestOverlay, false);
+        conf.put(Key.treeResizeEnabled, false);
+        conf.put(Key.treeResizePercentage, 100);
+        conf.put(Key.animal_marker_enabled, false);
+        conf.put(Key.animal_marker_patterns, new ArrayList<HashMap<String, Object>>());
+        conf.put(Key.disableGobAnimEnabled, false);
+        conf.put(Key.disableGobAnimPatterns, new ArrayList<HashMap<String, Object>>());
+        conf.put(Key.permIconScale, 1.0);
+        conf.put(Key.prospectIconScale, 1.0);
+        conf.put(Key.showAnimalIcons, true);
+        conf.put(Key.showGemstoneIcons, true);
+        conf.put(Key.showOreSpotIcons, true);
+        conf.put(Key.showProspectingIcons, true);
+        conf.put(Key.showQuarryartzIcons, true);
+        conf.put(Key.simpleRoutesDiscordNotify, false);
+        conf.put(Key.simpleRoutesTrackedObjects, new ArrayList<HashMap<String, Object>>());
+        conf.put(Key.syncZoneSync, false);
+        conf.put(Key.filltreepotsprop, false);
+        conf.put(Key.tunnelingprop, false);
+        conf.put(Key.masterminerprop, false);
+        conf.put(Key.masterminermarkingconfig, false);
 
         ArrayList<HashMap<String, Object>> qpattern = new ArrayList<>();
         HashMap<String, Object> res1 = new HashMap<>();
@@ -762,6 +822,13 @@ public class NConfig
      */
     public String getTreeLocationsPath() {
         return getProfileAwarePath("tree_locations.nurgling.json");
+    }
+
+    /**
+     * Gets the dynamic path for prospecting locations configuration file
+     */
+    public String getProspectingLocationsPath() {
+        return getProfileAwarePath("prospecting_locations.nurgling.json");
     }
     
     /**
