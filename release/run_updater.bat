@@ -1,4 +1,4 @@
-java -jar nurgling_launcher.jar update https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ ^
+java -jar nurgling_launcher.jar update https://raw.githubusercontent.com/aleksandrsvoboda/nurgling-release/stable/ ^
   -Dsun.java2d.uiScale.enabled=false ^
   -Xms512m -Xmx4g -Xss2m ^
   -XX:+UseG1GC ^
