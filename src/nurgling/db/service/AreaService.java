@@ -803,7 +803,7 @@ public class AreaService {
                 // Mark locally deleted areas with MAX_VALUE so sync never tries to reload them
                 if (nurgling.NUtils.getGameUI().map instanceof nurgling.NMapView) {
                     nurgling.NMapView mapView = (nurgling.NMapView) nurgling.NUtils.getGameUI().map;
-                    for (int deletedId : mapView.locallyDeletedAreas) {
+                    for (int deletedId : mapView.getLocallyDeletedAreas()) {
                         versions.put(deletedId, Integer.MAX_VALUE);
                     }
                 }

@@ -32,8 +32,10 @@ import haven.render.sl.Type;
 import haven.render.sl.Uniform;
 import nurgling.GhostAlpha;
 import nurgling.NConfig;
+import nurgling.NFlowerMenu;
 import nurgling.NMapView;
 import nurgling.NUtils;
+import nurgling.i18n.L10n;
 import nurgling.overlays.map.NOverlay;
 import nurgling.tools.CheckGridsState;
 
@@ -2385,7 +2387,11 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		
 		if(clickb==3 && clickedGob!=null)
 		{
-			NUtils.getUI().core.setLastAction(clickedGob.gob);
+			NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
+			if (ui.modmeta && isTreeStump(clickedGob.gob)) {
+				ui.root.add(new NFlowerMenu(new String[]{L10n.get(NFlowerMenu.KEY_REMOVE_STUMP)}), ui.mc);
+				return;
+			}
 		}
 		
 		// Save click destination for path line (left click or right click on object)
@@ -2399,6 +2405,14 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		
 	    wdgmsg("click", args);
 	}
+    }
+
+    private static boolean isTreeStump(Gob gob) {
+        return (gob != null) &&
+                (gob.ngob != null) &&
+                (gob.ngob.name != null) &&
+                gob.ngob.name.startsWith("gfx/terobjs/trees/") &&
+                gob.ngob.name.contains("stump");
     }
     
     public void grab(Grabber grab) {

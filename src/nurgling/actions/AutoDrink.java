@@ -19,11 +19,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AutoDrink implements Action
 {
 
-    public final static AtomicBoolean stop = new AtomicBoolean(false);
+    private final AtomicBoolean stop = new AtomicBoolean(false);
 
     public AutoDrink()
     {
         stop.set(false);
+    }
+
+    public void requestStop() {
+        stop.set(true);
     }
 
     @Override
@@ -54,7 +58,9 @@ public class AutoDrink implements Action
                 }
             });
             if(stop.get()) {
-                NUtils.getUI().core.autoDrink = null;
+                if (gui != null && gui.ui != null && gui.ui.core != null) {
+                    gui.ui.core.autoDrink = null;
+                }
                 return Results.SUCCESS();
             }
 
@@ -170,7 +176,9 @@ public class AutoDrink implements Action
                 });
             }
         }
-        NUtils.getUI().core.autoDrink = null;
+        if (gui != null && gui.ui != null && gui.ui.core != null) {
+            gui.ui.core.autoDrink = null;
+        }
         return Results.SUCCESS();
     }
 

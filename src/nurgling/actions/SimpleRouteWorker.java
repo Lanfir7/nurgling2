@@ -50,55 +50,81 @@ public class SimpleRouteWorker implements Action {
      * Проверяет, находится ли игрок на корабле/лодке
      */
     private boolean isOnShip() {
-        Gob player = NUtils.player();
-        if (player == null) return false;
-        
-        Following following = player.getattr(Following.class);
-        if (following == null) return false;
-        
-        Gob vehicle = following.tgt();
-        if (vehicle == null) return false;
-        
+        Gob vehicle = getVehicle();
+        if (vehicle == null || vehicle.ngob == null || vehicle.ngob.name == null) return false;
         String vehicleName = vehicle.ngob.name;
-        
-        // Проверяем, является ли транспорт водным
         return NParser.checkName(vehicleName, "/vehicle/snekkja") ||
                NParser.checkName(vehicleName, "/vehicle/knarr") ||
                NParser.checkName(vehicleName, "/vehicle/rowboat") ||
                NParser.checkName(vehicleName, "/vehicle/spark") ||
                NParser.checkName(vehicleName, "/vehicle/dugout");
     }
-    
-    /**
-     * Получает корабль, на котором находится игрок
-     */
-    private Gob getShip() {
+
+    private boolean isOnWagon() {
+        Gob vehicle = getVehicle();
+        return vehicle != null && vehicle.ngob != null && vehicle.ngob.name != null &&
+                NParser.checkName(vehicle.ngob.name, "/vehicle/wagon");
+    }
+
+    private Gob getVehicle() {
         Gob player = NUtils.player();
         if (player == null) return null;
         
         Following following = player.getattr(Following.class);
         if (following == null) return null;
         
-        return following.tgt();
+        Gob vehicle = following.tgt();
+        if (vehicle == null) return null;
+        return vehicle;
+    }
+    
+    /**
+     * Получает корабль, на котором находится игрок
+     */
+    private Gob getShip() {
+        return getVehicle();
+    }
+
+    private Gob getHorseForWagon(Gob wagon) {
+        if (wagon == null || NUtils.getGameUI() == null || NUtils.getGameUI().ui == null ||
+                NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
+            return null;
+        }
+        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
+            for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+                if (gob == null || gob.ngob == null || gob.ngob.name == null) continue;
+                Following fl = gob.getattr(Following.class);
+                if (fl != null && fl.tgt == wagon.id && gob.ngob.name.contains("/kritter/horse/")) {
+                    return gob;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Для повозки ориентируемся по лошади, иначе по самому транспорту/игроку.
+     */
+    private Gob getMovementReferenceGob() {
+        Gob vehicle = getVehicle();
+        if (vehicle == null) {
+            return NUtils.player();
+        }
+        if (isOnWagon()) {
+            Gob horse = getHorseForWagon(vehicle);
+            if (horse != null) {
+                return horse;
+            }
+        }
+        return vehicle;
     }
 
     /**
      * Получает текущую позицию (игрока или корабля, если игрок на корабле)
      */
     private Coord2d getCurrentPosition() {
-        Gob player = NUtils.player();
-        if (player == null) return null;
-        
-        // Если игрок на корабле, используем координаты корабля
-        Following following = player.getattr(Following.class);
-        if (following != null) {
-            Gob vehicle = following.tgt();
-            if (vehicle != null) {
-                return vehicle.rc;
-            }
-        }
-        
-        return player.rc;
+        Gob ref = getMovementReferenceGob();
+        return ref != null ? ref.rc : null;
     }
 
     /**
@@ -112,10 +138,10 @@ public class SimpleRouteWorker implements Action {
         }
         
         // Если не получилось, пробуем использовать координаты корабля для определения gridId
-        Gob ship = getShip();
-        if (ship != null) {
+        Gob vehicle = getVehicle();
+        if (vehicle != null) {
             // Используем координаты корабля для поиска grid
-            Coord tilec = ship.rc.div(MCache.tilesz).floor();
+            Coord tilec = vehicle.rc.div(MCache.tilesz).floor();
             MCache.Grid vehicleGrid = map.getgridt(tilec);
             if (vehicleGrid != null && vehicleGrid.id == point.gridId) {
                 // Если grid совпадает, используем координаты из waypoint
@@ -131,16 +157,20 @@ public class SimpleRouteWorker implements Action {
      * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
      */
     private Results navigateToPoint(NGameUI gui, Coord2d target, ObjectTracker objectTracker) throws InterruptedException {
-        Gob ship = getShip();
+        Gob vehicle = getVehicle();
+        Gob movementRef = getMovementReferenceGob();
+        boolean wagonMode = isOnWagon();
         
-        if (isOnShip() && ship != null) {
-            // Для корабля кликаем на карту для движения
+        if ((isOnShip() || isOnWagon()) && vehicle != null) {
+            // Для корабля/повозки кликаем на карту для движения (в повозке это управление упряжкой)
             gui.map.wdgmsg("click", Coord.z, target.floor(posres), 1, 0);
             
-            // Ждем движение корабля по его координатам (универсальный способ для всех кораблей)
-            waitForShipMovement(ship, target, objectTracker);
+            // Ждем движение по опорной сущности: лошадь для повозки, сам транспорт для кораблей
+            if (movementRef != null) {
+                waitForShipMovement(movementRef, target, objectTracker, !wagonMode);
+            }
             
-            // Проверяем, достигли ли мы точки (используем координаты корабля)
+            // Проверяем, достигли ли мы точки (для повозки - по лошади)
             Coord2d currentPos = getCurrentPosition();
             if (currentPos == null || currentPos.dist(target) > 11.0) {
                 return Results.FAIL();
@@ -159,7 +189,7 @@ public class SimpleRouteWorker implements Action {
     /**
      * Ожидание движения большого корабля (snekkja, knarr) по его координатам
      */
-    private void waitForShipMovement(Gob vehicle, Coord2d target, ObjectTracker objectTracker) throws InterruptedException {
+    private void waitForShipMovement(Gob vehicle, Coord2d target, ObjectTracker objectTracker, boolean allowStopEarly) throws InterruptedException {
         // Порог достижения цели
         final double ARRIVAL_THRESHOLD = 11.0;
         // Максимальное время ожидания начала движения (мс)
@@ -199,7 +229,7 @@ public class SimpleRouteWorker implements Action {
             // Проверяем остановку корабля (координаты не меняются)
             if (currentPos.dist(lastPos) < 0.1) {
                 stoppedCount++;
-                if (stoppedCount > 10) { // Корабль остановился
+                if (allowStopEarly && stoppedCount > 10) { // Для кораблей можно завершить по длительной остановке
                     return;
                 }
             } else {

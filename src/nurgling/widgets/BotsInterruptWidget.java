@@ -292,6 +292,21 @@ public class BotsInterruptWidget extends Widget {
         return !obs.isEmpty();
     }
 
+    /**
+     * Interrupts all tracked bot threads.
+     */
+    public void interruptAllBots() {
+        java.util.ArrayList<Thread> threads = new java.util.ArrayList<>();
+        synchronized (obs) {
+            for (Gear g : obs) {
+                threads.add(g.t);
+            }
+        }
+        for (Thread t : threads) {
+            removeObserve(t);
+        }
+    }
+
 //    @Override
 //    public void draw(GOut g) {
 //        Coord pcc = null;

@@ -1,6 +1,7 @@
 package nurgling.actions.bots;
 
 import haven.Coord2d;
+import haven.Following;
 import haven.Gob;
 import nurgling.NUtils;
 import nurgling.routes.SimpleRoute;
@@ -30,7 +31,7 @@ public class SimpleRouteAutoRecorder implements Runnable {
      */
     @Override
     public void run() {
-        Coord2d playerRC = player().rc;
+        Coord2d playerRC = getRouteAnchorPosition(player());
 
         // Добавляем waypoint в начале записи
         route.addWaypoint();
@@ -49,14 +50,14 @@ public class SimpleRouteAutoRecorder implements Runnable {
             // Обновляем позицию игрока
             Gob playerGob = player();
             if(playerGob != null) {
-                playerRC = playerGob.rc;
+                playerRC = getRouteAnchorPosition(playerGob);
             } else {
                 try {
                     NUtils.getUI().core.addTask(new WaitPlayerNotNull());
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-                playerRC = player().rc;
+                playerRC = getRouteAnchorPosition(player());
             }
 
             // Добавляем обычный waypoint
@@ -68,6 +69,43 @@ public class SimpleRouteAutoRecorder implements Runnable {
                 NUtils.getGameUI().simpleRoutesWidget.updateWaypoints();
             }
         }
+    }
+
+    private Coord2d getRouteAnchorPosition(Gob player) {
+        if (player == null) {
+            return null;
+        }
+        Following following = player.getattr(Following.class);
+        if (following != null) {
+            Gob vehicle = following.tgt();
+            if (vehicle != null) {
+                if (vehicle.ngob != null && vehicle.ngob.name != null && vehicle.ngob.name.contains("/vehicle/wagon")) {
+                    Gob horse = findHorseForWagon(vehicle);
+                    if (horse != null) {
+                        return horse.rc;
+                    }
+                }
+                return vehicle.rc;
+            }
+        }
+        return player.rc;
+    }
+
+    private Gob findHorseForWagon(Gob wagon) {
+        if (wagon == null || NUtils.getGameUI() == null || NUtils.getGameUI().ui == null ||
+                NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
+            return null;
+        }
+        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
+            for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+                if (gob == null || gob.ngob == null || gob.ngob.name == null) continue;
+                Following fl = gob.getattr(Following.class);
+                if (fl != null && fl.tgt == wagon.id && gob.ngob.name.contains("/kritter/horse/")) {
+                    return gob;
+                }
+            }
+        }
+        return null;
     }
 }
 

@@ -86,6 +86,7 @@ public class NCore extends Widget
         public String petal = null;
         public WItem item = null;
         public Gob gob = null;
+        public boolean altClick = false;
     }
 
     private LastActions actions = null;
@@ -100,6 +101,7 @@ public class NCore extends Widget
         actions = new LastActions();
         actions.petal = petal;
         actions.item = item;
+        actions.altClick = false;
     }
 
     public void setLastAction(String petal, Gob gob)
@@ -107,12 +109,19 @@ public class NCore extends Widget
         actions = new LastActions();
         actions.petal = petal;
         actions.gob = gob;
+        actions.altClick = false;
     }
 
     public void setLastAction(Gob gob)
     {
+        setLastAction(gob, false);
+    }
+
+    public void setLastAction(Gob gob, boolean altClick)
+    {
         actions = new LastActions();
         actions.gob = gob;
+        actions.altClick = altClick;
     }
 
     public void setLastAction(WItem item)
@@ -286,7 +295,7 @@ public class NCore extends Widget
         {
             if(autoDrink != null && !(Boolean)NConfig.get(NConfig.Key.autoDrink))
             {
-                AutoDrink.stop.set(true);
+                autoDrink.requestStop();
             }
         }
 

@@ -2,9 +2,12 @@ package nurgling;
 
 import haven.*;
 import nurgling.actions.AutoDrink;
+import nurgling.actions.ChopAndRemoveStump;
+import nurgling.actions.RemoveStump;
 import nurgling.actions.bots.*;
 import nurgling.areas.NContext;
 import nurgling.i18n.L10n;
+import nurgling.sessions.BotExecutor;
 import nurgling.widgets.NProspecting;
 
 import java.util.*;
@@ -22,6 +25,8 @@ public class NFlowerMenu extends FlowerMenu
     // Localization keys for custom options
     public static final String KEY_SAVE_TREE = "flower.save_tree";
     public static final String KEY_SAVE_BUSH = "flower.save_bush";
+    public static final String KEY_REMOVE_STUMP = "flower.remove_stump";
+    public static final String KEY_CHOP_STUMP = "flower.chop_stump";
     
     public NPetal[] nopts;
 
@@ -73,21 +78,19 @@ public class NFlowerMenu extends FlowerMenu
         try {
             NCore.LastActions lastActions = ui.core.getLastActions();
             if(lastActions != null && lastActions.gob != null) {
+                if(!lastActions.altClick) {
+                    return opts;
+                }
                 Gob gob = lastActions.gob;
                 if(gob.ngob != null && gob.ngob.name != null) {
-                    String saveOptionKey = null;
-                    if(gob.ngob.name.startsWith("gfx/terobjs/trees/") && !gob.ngob.name.contains("log") && !gob.ngob.name.contains("trunk")) {
-                        saveOptionKey = KEY_SAVE_TREE;
-                    } else if(gob.ngob.name.startsWith("gfx/terobjs/bushes/")) {
-                        saveOptionKey = KEY_SAVE_BUSH;
+                    if(isTreeStump(gob)) {
+                        return appendOption(opts, L10n.get(KEY_REMOVE_STUMP));
                     }
-
-                    if(saveOptionKey != null) {
-                        String[] newOpts = new String[opts.length + 1];
-                        System.arraycopy(opts, 0, newOpts, 0, opts.length);
-                        // Store localized text for display, but use key marker for identification
-                        newOpts[opts.length] = L10n.get(saveOptionKey);
-                        return newOpts;
+                    if (isTree(gob)) {
+                        String[] withChopStump = insertAfterAddMarkers(opts, L10n.get(KEY_CHOP_STUMP));
+                        return appendOption(withChopStump, L10n.get(KEY_SAVE_TREE));
+                    } else if(gob.ngob.name.startsWith("gfx/terobjs/bushes/")) {
+                        return appendOption(opts, L10n.get(KEY_SAVE_BUSH));
                     }
                 }
             }
@@ -97,9 +100,49 @@ public class NFlowerMenu extends FlowerMenu
         return opts;
     }
 
+    private static boolean isTreeStump(Gob gob) {
+        String name = gob.ngob.name;
+        return name.startsWith("gfx/terobjs/trees/") && name.contains("stump");
+    }
+
+    private static boolean isTree(Gob gob) {
+        String name = gob.ngob.name;
+        return name.startsWith("gfx/terobjs/trees/") && !name.contains("log") && !name.contains("trunk") && !name.contains("stump");
+    }
+
+    private static String[] appendOption(String[] opts, String option) {
+        String[] newOpts = new String[opts.length + 1];
+        System.arraycopy(opts, 0, newOpts, 0, opts.length);
+        newOpts[opts.length] = option;
+        return newOpts;
+    }
+
+    private static String[] insertAfterAddMarkers(String[] opts, String option) {
+        int markerIdx = -1;
+        for (int i = 0; i < opts.length; i++) {
+            String lower = opts[i].toLowerCase(Locale.ROOT);
+            if (lower.contains("add marker")) {
+                markerIdx = i;
+                break;
+            }
+        }
+        if (markerIdx < 0) {
+            return appendOption(opts, option);
+        }
+        String[] newOpts = new String[opts.length + 1];
+        System.arraycopy(opts, 0, newOpts, 0, markerIdx + 1);
+        newOpts[markerIdx + 1] = option;
+        System.arraycopy(opts, markerIdx + 1, newOpts, markerIdx + 2, opts.length - markerIdx - 1);
+        return newOpts;
+    }
+
     @Override
     public void tick(double dt) {
         super.tick(dt);
+        // Never auto-choose on stump menu: user must explicitly press Remove Stump.
+        if (hasOpt(L10n.get(KEY_REMOVE_STUMP))) {
+            return;
+        }
         if(!ui.modshift && (Boolean) NConfig.get(NConfig.Key.asenable) && !NContext.waitBot.get()) {
             if ((Boolean) NConfig.get(NConfig.Key.singlePetal) && nopts.length == 1 && (NUtils.getUI().core.getLastActions()==null || NUtils.getUI().core.getLastActions().item == null)) {
                 nchoose(nopts[0]);
@@ -126,6 +169,9 @@ public class NFlowerMenu extends FlowerMenu
         {
             wdgmsg("cl", -1);
             NUtils.getUI().core.setLastAction();
+            if (isLocalStumpMenu()) {
+                ui.destroy(this);
+            }
         }
         else
         {
@@ -133,6 +179,8 @@ public class NFlowerMenu extends FlowerMenu
             // Compare against localized strings
             String saveTreeText = L10n.get(KEY_SAVE_TREE);
             String saveBushText = L10n.get(KEY_SAVE_BUSH);
+            String removeStumpText = L10n.get(KEY_REMOVE_STUMP);
+            String chopStumpText = L10n.get(KEY_CHOP_STUMP);
             if(option.name.equals(saveTreeText) || option.name.equals(saveBushText)) {
                 NCore.LastActions actions = NUtils.getUI().core.getLastActions();
                 if(actions != null && actions.gob != null) {
@@ -143,6 +191,36 @@ public class NFlowerMenu extends FlowerMenu
                 }
                 wdgmsg("cl", -1); // Close menu without sending to server
                 NUtils.getUI().core.setLastAction();
+                return;
+            }
+            if(option.name.equals(removeStumpText)) {
+                NCore.LastActions actions = NUtils.getUI().core.getLastActions();
+                if(actions != null && actions.gob != null) {
+                    BotExecutor.runAsync("RemoveStump", new RemoveStump(actions.gob.id));
+                }
+                wdgmsg("cl", -1); // Close menu without sending to server
+                NUtils.getUI().core.setLastAction();
+                ui.destroy(this);
+                return;
+            }
+            if(option.name.equals(chopStumpText)) {
+                NCore.LastActions actions = NUtils.getUI().core.getLastActions();
+                if(actions != null && actions.gob != null) {
+                    NPetal chop = findOpt("Chop");
+                    if(chop == null) {
+                        wdgmsg("cl", -1);
+                        NUtils.getUI().core.setLastAction();
+                        ui.error("No Chop option");
+                        ui.destroy(this);
+                        return;
+                    }
+                    wdgmsg("cl", chop.num, ui.modflags());
+                    NUtils.getUI().core.setLastAction("Chop", actions.gob);
+                    BotExecutor.runAsync("ChopAndStump", new ChopAndRemoveStump(actions.gob.id, actions.gob.rc));
+                    return;
+                }
+                wdgmsg("cl", -1);
+                ui.destroy(this);
                 return;
             }
 
@@ -186,6 +264,15 @@ public class NFlowerMenu extends FlowerMenu
             }
         }
         return false;
+    }
+
+    private NPetal findOpt(String action) {
+        for(NPetal petal: nopts) {
+            if(petal.name.equals(action)) {
+                return petal;
+            }
+        }
+        return null;
     }
 
     public class NPetal extends Widget {
@@ -257,6 +344,10 @@ public class NFlowerMenu extends FlowerMenu
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
+        if(isLocalStumpMenu() && !ev.propagate(this)) {
+            nchoose(null);
+            return true;
+        }
         if(sb != null && sb.vis()) {
             Coord sc = ev.c.sub(sb.c);
             if(sc.isect(Coord.z, sb.sz)) {
@@ -265,6 +356,10 @@ public class NFlowerMenu extends FlowerMenu
             }
         }
         return super.mousedown(ev);
+    }
+
+    private boolean isLocalStumpMenu() {
+        return (nopts != null) && (nopts.length == 1) && hasOpt(L10n.get(KEY_REMOVE_STUMP));
     }
 
     @Override

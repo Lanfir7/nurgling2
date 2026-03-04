@@ -156,6 +156,8 @@ public class NMapView extends MapView
     public AtomicBoolean isAreaSelectionMode = new AtomicBoolean(false);
     public AtomicBoolean isGobSelectionMode = new AtomicBoolean(false);
     public AtomicBoolean isChatAreaSharingMode = new AtomicBoolean(false); // For Alt+Ctrl+LMB chat sharing
+    public boolean gridModeRequested = false;
+    private boolean gridMode = false;
     public NArea.Space areaSpace = null;
     public Pair<Coord, Coord> currentSelectionCoords = null;  // Current selection coords during dragging
     public boolean rotationRequested = false;  // Flag to request rotation during area selection
@@ -1087,6 +1089,10 @@ public class NMapView extends MapView
         return lastCoord2d;
     }
 
+    public boolean getGridMode() {
+        return gridMode;
+    }
+
     public boolean shiftPressed = false;
 
     @Override
@@ -1150,6 +1156,16 @@ public class NMapView extends MapView
         // Handle R key for rotation during area selection
         if(ev.code == 82 && isAreaSelectionMode.get()) {  // R key
             rotationRequested = true;
+            return true;
+        }
+
+        // Handle C key for grid mode toggle during area selection
+        if(ev.code == KeyEvent.VK_C && isAreaSelectionMode.get()) {
+            gridMode = !gridMode;
+            gridModeRequested = true;
+            if(NUtils.getGameUI() != null) {
+                NUtils.getGameUI().msg("Grid mode: " + (gridMode ? "ON" : "OFF"));
+            }
             return true;
         }
         
@@ -1573,6 +1589,10 @@ public class NMapView extends MapView
      */
     public void clearLocallyDeletedAreas() {
         locallyDeletedAreas.clear();
+    }
+
+    public Set<Integer> getLocallyDeletedAreas() {
+        return new HashSet<>(locallyDeletedAreas);
     }
 
     public void disableArea(String name, String path, boolean val) {

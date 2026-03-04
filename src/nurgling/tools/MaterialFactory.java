@@ -2,7 +2,6 @@ package nurgling.tools;
 
 import haven.*;
 import haven.render.Pipe;
-import haven.res.lib.vmat.Materials;
 import nurgling.NStyle;
 
 import java.util.HashMap;
@@ -255,47 +254,15 @@ public class MaterialFactory {
         NOTFREE,
         WARNING
     }
-    public static final Map<String,Map<Status, Materials>> materialsCashe = new ConcurrentHashMap<>();
     private static final Map<String, Map<Status, Map<Integer, Material>>> getMaterialsCache = new ConcurrentHashMap<>();
 
     public static void clearCache(String name) {
-        Map<Status, Map<Integer,TexR>> statusMap = materialCashe.get(name);
-        if (statusMap != null) {
-            statusMap.clear();
-        }
-        Map<Status, Materials> materialsMap = materialsCashe.get(name);
-        if (materialsMap != null) {
-            materialsMap.clear();
-        }
+        getMaterialsCache.remove(name);
     }
 
     public static void clearAllCaches() {
         texCache.clear();
-        materialCashe.clear();
-        materialsCashe.clear();
         getMaterialsCache.clear();
-    }
-
-    public static Map<Integer,TexR> getMaterial(String name, Status status, Material.Res.Resolver resolver) {
-        if (resolver_check(name, resolver)) {
-            if (materialCashe.get(name) == null || materialCashe.get(name).get(status) == null) {
-                return tryConstruct(name, status);
-            } else
-                return materialCashe.get(name).get(status);
-        }
-        return null;
-    }
-
-    private static boolean resolver_check(String name, Material.Res.Resolver resolver) {
-        if(name.equals("gfx/terobjs/ttub"))
-        {
-            return resolver.toString().contains("mlink");
-        }
-        else if(name.equals("gfx/terobjs/map/jotunclam"))
-        {
-            return !resolver.toString().contains("mlink");
-        }
-        return true;
     }
 
     public static Status getStatus(String name, int mask) {

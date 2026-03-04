@@ -10,6 +10,7 @@ import nurgling.actions.Results;
 import nurgling.areas.*;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
+import nurgling.overlays.NTreeHarvestOl;
 import nurgling.tasks.*;
 import nurgling.tools.*;
 import nurgling.widgets.*;
@@ -495,6 +496,46 @@ public class NUtils
 
     public static void drop(WItem item) {
         item.item.wdgmsg("drop", item.sz, getGameUI().map.player().rc, 0);
+    }
+
+    public static void dropOne(WItem item) {
+        if (item == null || item.item == null) return;
+        // Fallback behavior: server-side stack splitting API varies, so use standard drop.
+        drop(item);
+    }
+
+    public static void refreshTreeHarvestOverlays() {
+        NGameUI gui = getGameUI();
+        if (gui == null || gui.map == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) return;
+        boolean enabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.treeHarvestOverlay));
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                if (gob == null || gob.ngob == null || gob.ngob.name == null) continue;
+                if (!NTreeHarvestOl.isTreeOrBushRes(gob.ngob.name)) continue;
+                Gob.Overlay ol = gob.findol(NTreeHarvestOl.class);
+                if (!enabled) {
+                    if (ol != null) ol.remove(true);
+                    continue;
+                }
+                try {
+                    Drawable drawable = gob.getattr(Drawable.class);
+                    if (!(drawable instanceof ResDrawable)) {
+                        if (ol != null) ol.remove(true);
+                        continue;
+                    }
+                    TexI label = NTreeHarvestOl.computeLabel(gob);
+                    if (label == null) {
+                        if (ol != null) ol.remove(true);
+                    } else if (ol == null) {
+                        gob.addcustomol(new NTreeHarvestOl(gob));
+                    } else if (ol.spr instanceof NTreeHarvestOl) {
+                        ((NTreeHarvestOl) ol.spr).refresh();
+                    }
+                } catch (Loading ignored) {
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
     
     public static void itemact(WItem item) throws InterruptedException {

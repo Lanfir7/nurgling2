@@ -79,6 +79,7 @@ public class NGameUI extends GameUI
     public StudyDeskPlannerWidget studyDeskPlanner = null;
     public NDraggableWidget studyReportWidget = null;
     public SimpleRoutesWidget simpleRoutesWidget = null;
+    public AgentWindow agentWindow = null;
     public DbStatsOverlay dbStatsOverlay = null;
     public AnimalMarkerSyncService animalMarkerSyncService = null;
     public LocalTimerSyncService localTimerSyncService = null;
@@ -1559,6 +1560,12 @@ public class NGameUI extends GameUI
             return true;
         }
 
+        // F10 - toggle LLM agent window
+        if (ev.code == KeyEvent.VK_F10) {
+            toggleAgentWindow();
+            return true;
+        }
+
         return super.keydown(ev);
     }
 
@@ -1602,6 +1609,17 @@ public class NGameUI extends GameUI
     
     public LocalizedResourceTimerDialog getAddResourceTimerWidget() {
         return localizedResourceTimerDialog;
+    }
+
+    public void toggleAgentWindow() {
+        if (agentWindow == null) {
+            agentWindow = add(new AgentWindow(this), new Coord(sz.x / 2 - UI.scale(260), sz.y / 2 - UI.scale(180)));
+        } else if (agentWindow.visible()) {
+            agentWindow.hide();
+        } else {
+            agentWindow.show();
+            agentWindow.raise();
+        }
     }
 
     /**

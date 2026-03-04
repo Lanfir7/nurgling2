@@ -416,15 +416,8 @@ public class SimpleRoutesWidget extends Window {
      * Проверяет, находится ли игрок на корабле/лодке
      */
     private boolean isOnShip() {
-        Gob player = NUtils.player();
-        if (player == null) return false;
-        
-        haven.Following following = player.getattr(haven.Following.class);
-        if (following == null) return false;
-        
-        Gob vehicle = following.tgt();
-        if (vehicle == null) return false;
-        
+        Gob vehicle = getVehicle();
+        if (vehicle == null || vehicle.ngob == null || vehicle.ngob.name == null) return false;
         String vehicleName = vehicle.ngob.name;
         
         // Проверяем, является ли транспорт водным
@@ -435,23 +428,57 @@ public class SimpleRoutesWidget extends Window {
                nurgling.tools.NParser.checkName(vehicleName, "/vehicle/dugout");
     }
 
+    private boolean isOnWagon() {
+        Gob vehicle = getVehicle();
+        return vehicle != null && vehicle.ngob != null && vehicle.ngob.name != null &&
+                nurgling.tools.NParser.checkName(vehicle.ngob.name, "/vehicle/wagon");
+    }
+
+    private Gob getVehicle() {
+        Gob player = NUtils.player();
+        if (player == null) return null;
+        haven.Following following = player.getattr(haven.Following.class);
+        if (following == null) return null;
+        return following.tgt();
+    }
+
+    private Gob getHorseForWagon(Gob wagon) {
+        if (wagon == null || NUtils.getGameUI() == null || NUtils.getGameUI().ui == null ||
+                NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
+            return null;
+        }
+        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
+            for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+                if (gob == null || gob.ngob == null || gob.ngob.name == null) continue;
+                haven.Following fl = gob.getattr(haven.Following.class);
+                if (fl != null && fl.tgt == wagon.id && gob.ngob.name.contains("/kritter/horse/")) {
+                    return gob;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Gob getMovementReferenceGob() {
+        Gob vehicle = getVehicle();
+        if (vehicle == null) {
+            return NUtils.player();
+        }
+        if (isOnWagon()) {
+            Gob horse = getHorseForWagon(vehicle);
+            if (horse != null) {
+                return horse;
+            }
+        }
+        return vehicle;
+    }
+
     /**
      * Получает текущую позицию (игрока или корабля, если игрок на корабле)
      */
     private Coord2d getCurrentPosition() {
-        Gob player = NUtils.player();
-        if (player == null) return null;
-        
-        // Если игрок на корабле, используем координаты корабля
-        haven.Following following = player.getattr(haven.Following.class);
-        if (following != null) {
-            Gob vehicle = following.tgt();
-            if (vehicle != null) {
-                return vehicle.rc;
-            }
-        }
-        
-        return player.rc;
+        Gob ref = getMovementReferenceGob();
+        return ref != null ? ref.rc : null;
     }
 
     /**
@@ -467,21 +494,15 @@ public class SimpleRoutesWidget extends Window {
         }
         
         // Если не получилось, пробуем использовать координаты корабля для определения gridId
-        Gob player = NUtils.player();
-        if (player != null) {
-            haven.Following following = player.getattr(haven.Following.class);
-            if (following != null) {
-                Gob vehicle = following.tgt();
-                if (vehicle != null) {
-                    // Используем координаты корабля для поиска grid
-                    Coord tilec = vehicle.rc.div(MCache.tilesz).floor();
-                    MCache.Grid vehicleGrid = map.getgridt(tilec);
-                    if (vehicleGrid != null && vehicleGrid.id == point.gridId) {
-                        // Если grid совпадает, используем координаты из waypoint
-                        Coord tilec2 = vehicleGrid.ul.add(point.localCoord);
-                        return tilec2.mul(MCache.tilesz).add(MCache.tilehsz);
-                    }
-                }
+        Gob vehicle = getVehicle();
+        if (vehicle != null) {
+            // Используем координаты транспорта для поиска grid
+            Coord tilec = vehicle.rc.div(MCache.tilesz).floor();
+            MCache.Grid vehicleGrid = map.getgridt(tilec);
+            if (vehicleGrid != null && vehicleGrid.id == point.gridId) {
+                // Если grid совпадает, используем координаты из waypoint
+                Coord tilec2 = vehicleGrid.ul.add(point.localCoord);
+                return tilec2.mul(MCache.tilesz).add(MCache.tilehsz);
             }
         }
         
@@ -514,14 +535,14 @@ public class SimpleRoutesWidget extends Window {
      * Навигация к точке - для корабля использует прямой клик, для пешего - PathFinder
      */
     private void navigateToPoint(Coord2d target) throws InterruptedException {
-        if (isOnShip()) {
-            // Для корабля используем прямой клик на карту
+        if (isOnShip() || isOnWagon()) {
+            // Для корабля/повозки используем прямой клик на карту
             NUtils.getGameUI().map.wdgmsg("click", Coord.z, target.floor(haven.OCache.posres), 1, 0);
             
             // Ждем немного для начала движения
             Thread.sleep(500);
             
-            // Ждем, пока достигнем точки (с большей погрешностью для корабля)
+            // Ждем, пока достигнем точки (для повозки ориентируемся по лошади)
             Coord2d currentPos = getCurrentPosition();
             int attempts = 0;
             while (currentPos != null && currentPos.dist(target) > 11.0 && attempts < 100) {

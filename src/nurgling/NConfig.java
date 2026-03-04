@@ -210,7 +210,15 @@ public class NConfig
         masterminerprop,
         masterminermarkingconfig,
         // Localization
-        language
+        language,
+        // LLM agent
+        agentBaseUrl,
+        agentApiKey,
+        agentModel,
+        agentTemperature,
+        agentMaxTokens,
+        agentTimeoutMs,
+        agentAutoMode
     }
 
     public enum BBDisplayMode
@@ -565,6 +573,15 @@ public class NConfig
         conf.put(Key.starvationVignetteCriticalThreshold, 2000);  // Vignette intensifies (0 to disable)
         conf.put(Key.starvationSoundThreshold, 2000);  // Sound alarm threshold (0 to disable)
         conf.put(Key.starvationSoundInterval, 10000);  // Sound interval in milliseconds
+
+        // LLM agent settings
+        conf.put(Key.agentBaseUrl, "http://127.0.0.1:1234");
+        conf.put(Key.agentApiKey, "");
+        conf.put(Key.agentModel, "gpt-4o-mini");
+        conf.put(Key.agentTemperature, 0.2);
+        conf.put(Key.agentMaxTokens, 256);
+        conf.put(Key.agentTimeoutMs, 120000);
+        conf.put(Key.agentAutoMode, true);
     }
 
 
