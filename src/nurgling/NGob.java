@@ -501,6 +501,11 @@ public class NGob
 
             if (name != null)
             {
+                // Set customMask for objects that need custom materials
+                // NOTE: ttubs use message flags, not overlays
+                if (name.contains("gfx/terobjs/barrel") || name.contains("gfx/terobjs/dframe")) {
+                    customMask = true;
+                }
                 if (name.startsWith("gfx/terobjs/arch/cellardoor") || name.startsWith("gfx/terobjs/herbs/standinggrass"))
                 {
                     return;
@@ -1065,7 +1070,7 @@ public class NGob
         {
             int maskValue = customMask ? mask() : (int) getModelAttribute();
             MaterialFactory.Status status = MaterialFactory.getStatus(name, maskValue);
-            
+
             if (status == MaterialFactory.Status.NOTDEFINED) {
                 return null;
             }
@@ -1078,7 +1083,8 @@ public class NGob
                 }
             }
 
-            return altMats.get(status);
+            Materials result = altMats.get(status);
+            return result;
         }
         return null;
     }
@@ -1096,7 +1102,7 @@ public class NGob
                 {
                     // Calculate and cache the mask value immediately
                     cachedMask = calculateMask();
-                    
+
                     altMats.clear();
                     customMask = true;
                     parent.delattr(Materials.class);
@@ -1254,6 +1260,12 @@ public class NGob
 
     public int mask()
     {
+        // Ensure customMask is set for barrel/dframe (ttubs use message flags)
+        if (name != null && (name.contains("gfx/terobjs/barrel") || name.contains("gfx/terobjs/dframe"))) {
+            if (!customMask) {
+                customMask = true;
+            }
+        }
         if (name.equals("gfx/terobjs/dframe") || name.equals("gfx/terobjs/barrel"))
         {
             // Use cached mask if available to avoid race condition
