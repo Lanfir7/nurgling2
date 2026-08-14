@@ -3,6 +3,7 @@ package nurgling.actions;
 import haven.*;
 import nurgling.NGameUI;
 import nurgling.NUtils;
+import nurgling.tasks.HandIsFree;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 
@@ -82,25 +83,20 @@ public class FillFuelTarkilns implements Action
                             TakeItemsFromPile tifp;
                             (tifp = new TakeItemsFromPile(pile, gui.getStockpile(), Math.min(target_size, gui.getInventory().getFreeSpace()))).run(gui);
                             new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);
-                            int taken = tifp.getResult();
-                            target_size = target_size - taken;
-                            if (taken == 0)
-                                break;
+                            target_size = target_size - tifp.getResult();
                         }
                     }
                     ArrayList<WItem> fueltitem = NUtils.getGameUI().getInventory().getItems(fuelname);
-                    if (needFuel.get(gob) != 0 && !fueltitem.isEmpty()) {
-                        int had = fueltitem.size();
-                        int needed = needFuel.get(gob);
-                        int transferred = Math.min(had, needed);
+                    int val = Math.min(needFuel.get(gob), fueltitem.size());
+                    if (needFuel.get(gob) != 0) {
                         new PathFinder(gob).run(gui);
-                        // Ctrl+Shift+click: transfer all of this type at once (like in-game)
-                        NUtils.takeItemToHand(fueltitem.get(0));
-                        NUtils.dropsame(gob);
-                        Thread.sleep(1500);
-                        needFuel.put(gob, needed - transferred);
-                    } else if (needFuel.get(gob) != 0 && fueltitem.isEmpty()) {
-                        break;
+
+                        for (int i = 0; i < val; i++) {
+                            NUtils.takeItemToHand(fueltitem.get(i));
+                            NUtils.activateItem(gob);
+                            NUtils.getUI().core.addTask(new HandIsFree(NUtils.getGameUI().getInventory()));
+                        }
+                        needFuel.put(gob, needFuel.get(gob) - val);
                     }
                 }
             }

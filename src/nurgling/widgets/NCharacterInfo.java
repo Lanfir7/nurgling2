@@ -2,7 +2,7 @@ package nurgling.widgets;
 
 import haven.*;
 import nurgling.*;
-import nurgling.areas.NArea;
+import nurgling.tools.NFileUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -29,11 +29,26 @@ public class NCharacterInfo extends Widget {
     public boolean newLpExplorer = false;
     String varCand = null;
     private final HashMap<String,ArrayList<String>> lpExplorer = new HashMap<>();
+    // Every value ever added to lpExplorer, across all resources - kept in lockstep with it so
+    // IsLpExplorerContainsAnywhere() (checked every tick per bark-tracked tree) is an O(1) lookup
+    // instead of scanning every resource's discovered-product list, which otherwise gets slower
+    // the longer a character has been playing.
+    private final Set<String> lpExplorerAllValues = new HashSet<>();
 
     public boolean IsLpExplorerContains(String name)
     {
         synchronized(lpExplorer) {
             return lpExplorer.containsKey(name);
+        }
+    }
+
+    // Some products (e.g. "Treebark"/"Tough Bark") are the exact same curiosity regardless of
+    // which resource produced them, unlike most products which are uniquely named per resource -
+    // for those, discovery needs checking across every resource's list, not just one.
+    public boolean IsLpExplorerContainsAnywhere(String var)
+    {
+        synchronized(lpExplorer) {
+            return lpExplorerAllValues.contains(var);
         }
     }
 
@@ -60,6 +75,7 @@ public class NCharacterInfo extends Widget {
                 lpExplorer.put(name,new ArrayList<>());
                 lpExplorer.get(name).add(var);
             }
+            lpExplorerAllValues.add(var);
         }
     }
 
@@ -135,6 +151,7 @@ public class NCharacterInfo extends Widget {
                                 lpExplorer.put(jlp.getString("name"), new ArrayList<>());
                                 lpExplorer.get(jlp.getString("name")).add(jlp.getString("key"));
                             }
+                            lpExplorerAllValues.add(jlp.getString("key"));
                         }
                     }
                 }
@@ -176,7 +193,7 @@ public class NCharacterInfo extends Widget {
 
             try
             {
-                nurgling.util.SafeJsonWriter.writeAtomic(path, main);
+                NFileUtils.writeAtomically(path, main.toString());
             }
             catch (IOException e)
             {

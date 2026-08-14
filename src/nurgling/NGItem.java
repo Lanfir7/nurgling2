@@ -4,15 +4,17 @@ import haven.*;
 import static haven.Inventory.sqsz;
 
 import haven.res.ui.stackinv.ItemStack;
+import haven.res.ui.tt.ingred.Ingredient;
 import haven.res.ui.tt.slots.ISlots;
 import haven.res.ui.tt.stackn.StackName;
 import monitoring.ItemWatcher;
 import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NFoodInfo;
-import nurgling.tools.VSpec;
+import nurgling.tools.LpExplorer;
 import nurgling.widgets.NQuestInfo;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,6 +25,7 @@ public class NGItem extends GItem
     int lastQuestUpdate = 0;
     String name = null;
     public Float quality = null;
+    public boolean autodropRequested = false; // guards against re-sending autodrop for a stacked item already being dropped
     public long meterUpdated = 0;
     public int hardArmor = 0;
     public int softArmor = 0;
@@ -32,6 +35,7 @@ public class NGItem extends GItem
     boolean addedToInventoryCache = false; // Track if item was added to container cache for DB sync
     boolean isStackContainer = false; // True if this item is a stack container (holds other items)
     ItemWatcher.ItemInfo cachedItemInfo = null; // Reference to ItemInfo in cache for removal
+
     public NGItem(Indir<Resource> res, Message sdt)
     {
         super(res, sdt);
@@ -61,6 +65,16 @@ public class NGItem extends GItem
             }
         }
         return false;
+    }
+
+    public void consumedLongtip()
+    {
+        for (ItemInfo inf : info()) {
+            if (inf instanceof NFoodInfo) {
+                ((NFoodInfo) inf).consumedTooltip();
+                return;
+            }
+        }
     }
 
     public ArrayList<NContent> content(){
@@ -143,15 +157,11 @@ public class NGItem extends GItem
             }
             if(name!=null)
             {
-                if(NUtils.getGameUI().map.clickedGob!=null)
-                {
-                    // Exclude tools from LPExplorer tracking
-                    if(!name.contains(" Axe") && !name.contains(" Saw"))
-                    {
-                        VSpec.checkLpExplorer(NUtils.getGameUI().map.clickedGob.gob, name);
-                    }
-                }
-                
+                // Looks up which resource tracks this name directly from VSpec.object - no gob
+                // reference needed at all, since discovery is tracked per resource, not per the
+                // specific gob instance that happened to produce it. See its own diagnostic
+                // logging for unrecognized names/tool exclusions.
+                LpExplorer.checkLpExplorer(name);
             }
 
         }
@@ -181,14 +191,21 @@ public class NGItem extends GItem
             if((Boolean)NConfig.get(NConfig.Key.ndbenable)) {
                 // Optimization: only check NFoodInfo once per item after info is loaded
                 // checkedForFood prevents repeated getInfo() calls every tick
-                if (!sent && !checkedForFood && info != null) {
+                // infoseq > 0 means the server has actually sent a "tt" tooltip message at least
+                // once; info defaults to an empty (non-null) list before that, so without this
+                // guard a food item could be misclassified as "not food" on the very first tick,
+                // before its real tooltip data (and NFoodInfo) ever arrives.
+                if (!sent && !checkedForFood && info != null && infoseq > 0) {
                     NFoodInfo foodInfo = getInfo(NFoodInfo.class);
                     if (foodInfo != null) {
                         checkedForFood = true;
                         
-                        // Early cache check using quick key (name + energy)
-                        // This prevents creating tasks for recipes we've already seen
-                        String quickKey = name + "|" + (int)(foodInfo.energy() * 100);
+                        // Early cache check using quick key (name + ingredient composition).
+                        // Energy alone is not distinctive: every item sharing the same name
+                        // reports the same energy value regardless of what it was actually made
+                        // from, so two genuinely different recipes with the same name would
+                        // collide and the second one would be silently skipped.
+                        String quickKey = name + "|" + buildIngredientSignature();
                         if (NCore.isRecipeQuickCached(quickKey)) {
                             sent = true; // Already processed, skip
                             nurgling.db.DatabaseManager.incrementSkippedRecipe();
@@ -331,6 +348,25 @@ public class NGItem extends GItem
             }
         }
         return null;
+    }
+
+    // Builds a stable "name/percentage" signature of this item's ingredient composition,
+    // used to tell apart recipes that share a name but differ in what they're made from.
+    private String buildIngredientSignature() {
+        if (info == null) {
+            return "";
+        }
+        List<String> parts = new ArrayList<>();
+        for (ItemInfo inf : info) {
+            if (inf instanceof Ingredient) {
+                Ingredient ing = (Ingredient) inf;
+                String key = ing.resName != null ? ing.resName : ing.name;
+                int pct = ing.val != null ? (int) (ing.val * 100) : 0;
+                parts.add(key + ":" + pct);
+            }
+        }
+        java.util.Collections.sort(parts);
+        return String.join(",", parts);
     }
     
     /**

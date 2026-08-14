@@ -3,12 +3,31 @@
 <project name="hafen" default="deftgt" xmlns:if="ant:if">
   <property file="build.properties" />
   <property name="ext-lib-base" value="http://www.havenandhearth.com/java" />
+  <property name="junit-platform.version" value="1.14.2" />
+  <property name="junit-platform.jar" location="lib/ext/junit/junit-platform-console-standalone-${junit-platform.version}.jar" />
+  <property name="junit-platform.sha256" value="5566ffe2aa48263867bca745925f73bf7b01591b30d9a60f191c0b16fa0955e9" />
+
+  <path id="client.classpath">
+	<pathelement path="lib/ext/jogl/jogl-all.jar" />
+	<pathelement path="lib/ext/jogl/gluegen-rt.jar" />
+	<pathelement path="lib/ext/lwjgl/lwjgl-fat.jar" />
+	<pathelement path="lib/ext/lwjgl/lwjgl-awt.jar" />
+	<pathelement path="lib/ext/lwjgl/lwjgl-opengl-fat.jar" />
+	<pathelement path="lib/ext/steamworks/steamworks4j.jar" />
+    <pathelement path="etc/json-java.jar" />
+    <pathelement path="etc/postgresql-42.7.5.jar" />
+    <pathelement path="etc/sqlite-jdbc-3.49.1.0.jar" />
+	<pathelement path="lib/jglob.jar" />
+  </path>
 
   <target name="build-env">
     <mkdir dir="build" />
     <mkdir dir="build/classes" />
     <available property="has-res-jar" file="bin/builtin-res.jar" />
     <available property="unpacked-lib" file="build/classes-lib" />
+    <condition property="has-panama">
+      <javaversion atleast="22" />
+    </condition>
   </target>
 
   <target name="make-buildinfo" depends="build-env">
@@ -101,18 +120,7 @@
 	   source="1.8" target="1.8" includeantruntime="no"
            encoding="UTF-8"
 	   bootclasspath="${boot-classpath}">
-      <classpath>
-	<pathelement path="lib/ext/jogl/jogl-all.jar" />
-	<pathelement path="lib/ext/jogl/gluegen-rt.jar" />
-	<pathelement path="lib/ext/lwjgl/lwjgl-fat.jar" />
-	<pathelement path="lib/ext/lwjgl/lwjgl-awt.jar" />
-	<pathelement path="lib/ext/lwjgl/lwjgl-opengl-fat.jar" />
-	<pathelement path="lib/ext/steamworks/steamworks4j.jar" />
-    <pathelement path="etc/json-java.jar" />
-    <pathelement path="etc/postgresql-42.7.5.jar" />
-    <pathelement path="etc/sqlite-jdbc-3.49.1.0.jar" />
-	<pathelement path="lib/jglob.jar" />
-      </classpath>
+      <classpath refid="client.classpath" />
       <compilerarg if:set="explicit-annotations" value="-proc:full" />
       <compilerarg value="-Xlint:unchecked" />
       <compilerarg value="-Xlint:deprecation" />
@@ -130,6 +138,23 @@
     <copy file="local-boot.properties" tofile="build/classes/haven/boot-props" failonerror="false" quiet="true" />
   </target>
 
+  <target name="opt/panama" if="has-panama" depends="build-env, hafen-client">
+    <mkdir dir="build/opt/panama" />
+    <javac srcdir="opt/panama" destdir="build/opt/panama" release="22"
+	   debug="on" includeantruntime="no">
+      <classpath>
+	<pathelement path="build/classes" />
+	<pathelement path="lib/jglob.jar" />
+      </classpath>
+      <compilerarg value="-proc:full" />
+      <compilerarg value="-Xlint:unchecked" />
+      <compilerarg value="-Xlint:deprecation" />
+    </javac>
+    <jar destfile="build/hafen-panama.jar" update="true">
+      <fileset dir="build/opt/panama" />
+    </jar>
+  </target>
+
   <target name="lib-classes" depends="build-env" unless="unpacked-lib">
     <mkdir dir="build/classes-lib" />
     <unjar src="lib/jglob.jar" dest="build/classes-lib">
@@ -144,7 +169,9 @@
       <fileset dir="build/classes-lib" />
       <manifest>
 	<attribute name="Main-Class" value="haven.MainFrame" />
-	<attribute name="Class-Path" value="jogl-all.jar gluegen-rt.jar lwjgl-fat.jar lwjgl-awt.jar lwjgl-opengl-fat.jar steamworks4j.jar builtin-res.jar hafen-res.jar nurgling-res.jar json-java.jar postgresql-42.7.5.jar sqlite-jdbc-3.49.1.0.jar" />
+	<attribute name="Class-Path" value="hafen-panama.jar jogl-all.jar gluegen-rt.jar lwjgl-fat.jar lwjgl-awt.jar lwjgl-opengl-fat.jar steamworks4j.jar builtin-res.jar hafen-res.jar nurgling-res.jar json-java.jar postgresql-42.7.5.jar sqlite-jdbc-3.49.1.0.jar" />
+	<attribute name="Add-Exports" value="java.base/java.lang java.desktop/sun.awt java.desktop/sun.java2d" />
+	<attribute name="Enable-Native-Access" value="ALL-UNNAMED" />
       </manifest>
     </jar>
     <chmod file="build/hafen.jar" perm="a+x" />
@@ -193,11 +220,16 @@
     <copy file="etc/json-java.jar" tofile="bin/json-java.jar" />
     <copy file="etc/postgresql-42.7.5.jar" tofile="bin/postgresql-42.7.5.jar" />
     <copy file="etc/sqlite-jdbc-3.49.1.0.jar" tofile="bin/sqlite-jdbc-3.49.1.0.jar" />
+    <copy todir="bin" failonerror="false" quiet="true">
+      <fileset dir="build">
+	<include name="hafen-panama.jar" />
+      </fileset>
+    </copy>
     <copy file="etc/ansgar-config.properties" tofile="bin/haven-config.properties" />
     <chmod file="bin/hafen.jar" perm="a+x" />
   </target>
 
-  <target name="deftgt" depends="jars, bin" />
+  <target name="deftgt" depends="jars, opt/panama, bin" />
 
   <target name="run" depends="bin">
     <condition property="jogl-exports">
@@ -223,6 +255,62 @@
       <jvmarg if:set="jogl-exports" value="--add-exports=java.desktop/sun.java2d=ALL-UNNAMED" />
       <jvmarg if:set="jogl-access" value="--enable-native-access=ALL-UNNAMED" />
       <!-- <sysproperty key="haven.renderer" value="lwjgl" /> -->
+    </java>
+  </target>
+
+  <target name="test-env">
+    <mkdir dir="lib/ext/junit" />
+    <available property="test/junit-present" file="${junit-platform.jar}" />
+  </target>
+
+  <target name="test-verify" depends="test-env" if="test/junit-present">
+    <checksum file="${junit-platform.jar}" algorithm="SHA-256"
+              property="${junit-platform.sha256}" verifyproperty="test/junit-valid" />
+    <condition property="test/has-junit">
+      <istrue value="${test/junit-valid}" />
+    </condition>
+  </target>
+
+  <target name="test-deps" depends="test-verify" unless="test/has-junit">
+    <delete file="${junit-platform.jar}" />
+    <get src="https://repo.maven.apache.org/maven2/org/junit/platform/junit-platform-console-standalone/${junit-platform.version}/junit-platform-console-standalone-${junit-platform.version}.jar"
+         dest="${junit-platform.jar}" maxtime="60" retries="3" />
+    <checksum file="${junit-platform.jar}" algorithm="SHA-256"
+              property="${junit-platform.sha256}" verifyproperty="test/junit-download-valid" />
+    <fail message="Downloaded JUnit jar has an unexpected checksum">
+      <condition>
+        <not><istrue value="${test/junit-download-valid}" /></not>
+      </condition>
+    </fail>
+  </target>
+
+  <target name="test-compile" depends="hafen-client, test-deps">
+    <delete dir="build/test-classes" />
+    <mkdir dir="build/test-classes" />
+    <javac srcdir="test" destdir="build/test-classes" debug="on"
+           source="1.8" target="1.8" includeantruntime="no" encoding="UTF-8">
+      <classpath>
+        <pathelement path="build/classes" />
+        <path refid="client.classpath" />
+        <pathelement location="${junit-platform.jar}" />
+      </classpath>
+      <compilerarg value="-Xlint:-options" />
+    </javac>
+  </target>
+
+  <target name="test" depends="test-compile" description="Run local tests">
+    <java classname="org.junit.platform.console.ConsoleLauncher" fork="true" failonerror="true">
+      <classpath>
+        <pathelement path="build/classes" />
+        <pathelement path="build/test-classes" />
+        <path refid="client.classpath" />
+        <pathelement location="${junit-platform.jar}" />
+      </classpath>
+      <arg value="execute" />
+      <arg value="--disable-banner" />
+      <arg value="--scan-class-path=build/test-classes" />
+      <arg value="--fail-if-no-tests" />
+      <arg value="--details=summary" />
     </java>
   </target>
 

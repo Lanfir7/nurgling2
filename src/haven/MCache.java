@@ -38,6 +38,7 @@ import haven.render.*;
 import nurgling.*;
 import nurgling.areas.*;
 import nurgling.overlays.map.*;
+import nurgling.tools.NFileUtils;
 import nurgling.profiles.ConfigFactory;
 import nurgling.tasks.GridsFilled;
 import nurgling.tasks.NTask;
@@ -69,14 +70,14 @@ public class MCache implements MapSource {
     public Map<Coord, Grid> grids = new HashMap<Coord, Grid>();
     public final HashMap<Integer, NArea> areas = new HashMap<>();
     Session sess;
-    Set<Overlay> ols = new HashSet<Overlay>();
-    public int olseq = 0, chseq = 0;
+    Set<LocalOverlay> ols = new HashSet<>();
+    public volatile int olseq = 0, chseq = 0;
     Map<Integer, Defrag> fragbufs = new TreeMap<Integer, Defrag>();
 
     /**
      * Get the appropriate areas path based on current profile context
      */
-    private String getAreasPath() {
+    public String getAreasPath() {
         try {
             // Try to get the current genus from NGameUI if available
             String genus = getCurrentGenus();
@@ -112,6 +113,37 @@ public class MCache implements MapSource {
 
 	public boolean areasLoaded = false;
 
+	// Per-session area-save dirty tracking. Lives here (on the per-session
+	// MCache), NOT on the genus-shared NConfig, so that two same-world sessions
+	// in one client don't share - and clobber - each other's save trigger.
+	// Each session persists its own edited areas map.
+	public volatile boolean isAreasUpd = false;
+	public volatile long lastAreasChangeTime = 0;
+	private static final long AREAS_DEBOUNCE_MS = 3000; // 3s debounce, batches rapid edits
+
+	// File mode only: mtime of the shared per-genus areas file at last load/save.
+	// Used to detect edits another in-process session wrote to the same file so
+	// this session can self-reload (DB mode uses the sync worker instead).
+	public volatile long areasFileMtime = 0;
+
+	public void markAreasDirty() {
+		this.isAreasUpd = true;
+		this.lastAreasChangeTime = System.currentTimeMillis();
+	}
+
+	public void clearAreasDirty() {
+		this.isAreasUpd = false;
+		this.lastAreasChangeTime = 0;
+	}
+
+	/** True when areas changed locally AND the debounce window has elapsed. */
+	public boolean isAreasUpdated() {
+		if (isAreasUpd && lastAreasChangeTime > 0) {
+			return System.currentTimeMillis() - lastAreasChangeTime >= AREAS_DEBOUNCE_MS;
+		}
+		return false;
+	}
+
 	void init()
 	{
 		// Delay areas loading until genus is available
@@ -125,67 +157,34 @@ public class MCache implements MapSource {
 			((nurgling.NMapView)nurgling.NUtils.getGameUI().map).clearLocallyDeletedAreas();
 		}
 
-		// If DB is enabled - ONLY use DB, no fallback to file
+		// In DB mode the AreaService owns the bulk load: its first sync tick
+		// fires loadAreas + onFullSync on the sync worker thread. Loading here
+		// would race against that tick on a different thread.
 		if ((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.ndbenable)) {
-			if (nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady()) {
-				try {
-					String profile = getCurrentGenus();
-					if (profile == null || profile.isEmpty()) {
-						profile = "global";
-					}
-					java.util.Map<Integer, NArea> dbAreas = nurgling.NCore.databaseManager.getAreaService().loadAreas(profile);
-					if (dbAreas != null) {
-						// ВАЖНО: Применяем локальный hide статус для каждой зоны из БД
-						// По умолчанию все зоны из БД скрыты (hide=true), кроме тех что в локальном списке разрешённых
-						nurgling.areas.AllowedZonesManager allowedZonesManager = nurgling.areas.AllowedZonesManager.getInstance();
-						for (NArea area : dbAreas.values()) {
-							allowedZonesManager.applyLocalHideStatus(area);
-							areas.put(area.id, area);
-						}
-						System.out.println("Loaded " + dbAreas.size() + " areas from database");
-					}
-				} catch (Exception e) {
-					System.err.println("Failed to load areas from database: " + e.getMessage());
-				}
-			}
-			// DB enabled - mark as loaded even if DB not ready (sync will handle it later)
 			areasLoaded = true;
 			return;
 		}
 
 		// DB not enabled - load from file (legacy support)
 		String areasPath = getAreasPath();
+		try { areasFileMtime = new java.io.File(areasPath).lastModified(); }
+		catch (Exception e) { areasFileMtime = 0; }
 
-		if(new java.io.File(areasPath).exists())
+		String content = NFileUtils.readWithBackupFallback(areasPath);
+		if (content != null && !content.isEmpty())
 		{
-			StringBuilder contentBuilder = new StringBuilder();
-			try (java.util.stream.Stream<String> stream = Files.lines(Paths.get(areasPath), StandardCharsets.UTF_8))
-			{
-				stream.forEach(s -> contentBuilder.append(s).append("\n"));
-			}
-			catch (IOException ignore)
-			{
-			}
-
-			String content = contentBuilder.toString().trim();
-			if (!content.isEmpty() && content.startsWith("{"))
-			{
-				try {
-					JSONObject main = new JSONObject(content);
-					JSONArray array = (JSONArray) main.get("areas");
-					for (int i = 0; i < array.length(); i++)
-					{
-						NArea a = new NArea((JSONObject) array.get(i));
-						// ВАЖНО: Применяем локальный hide статус для зон из JSON
-						// Если зона была сохранена с hide=false в JSON, но не в локальном списке разрешённых,
-						// она будет скрыта (hide=true)
-						nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(a);
-						areas.put(a.id, a);
-					}
-					System.out.println("Loaded " + areas.size() + " areas from file");
-				} catch (org.json.JSONException e) {
-					// Ignore invalid JSON files
+			try {
+				JSONObject main = new JSONObject(content);
+				JSONArray array = (JSONArray) main.get("areas");
+				for (int i = 0; i < array.length(); i++)
+				{
+					NArea a = new NArea((JSONObject) array.get(i));
+					nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(a);
+					areas.put(a.id, a);
 				}
+				System.out.println("Loaded " + areas.size() + " areas from file");
+			} catch (org.json.JSONException e) {
+				System.err.println("[MCache] Failed to parse areas file (corrupt JSON): " + e.getMessage());
 			}
 		}
 		areasLoaded = true;
@@ -366,13 +365,58 @@ public class MCache implements MapSource {
 	}
     }
 
-    public class Overlay {
-	private Area a;
-	private OverlayInfo id;
+    public static interface LocalOverlay {
+	public OverlayInfo id();
+	public void fill(Area a, boolean[] buf);
+	public default boolean filter(Area a) {return(false);}
+	public default void tick() {}
+    }
 
-	public Overlay(Area a, OverlayInfo id) {
-	    this.a = a;
+    public void add(LocalOverlay ol) {
+	ols.add(ol);
+	olseq++;
+    }
+
+    public void remove(LocalOverlay ol) {
+	ols.remove(ol);
+	olseq++;
+    }
+
+    public class RectOverlay implements LocalOverlay {
+	public final OverlayInfo id;
+	public Area a;
+
+	public RectOverlay(OverlayInfo id, Area a) {
 	    this.id = id;
+	    this.a = a;
+	}
+
+	public OverlayInfo id() {return(id);}
+
+	public boolean filter(Area b) {
+	    return(b.overlap(a) == null);
+	}
+
+	public void fill(Area b, boolean[] buf) {
+	    Area ol = a.overlap(b);
+	    if(ol != null) {
+		for(Coord lc : ol)
+		    buf[b.ri(lc)] = true;
+	    }
+	}
+
+	public void update(Area a) {
+	    if(!a.equals(this.a)) {
+		this.a = a;
+		olseq++;
+	    }
+	}
+    }
+
+    @Deprecated
+    public class Overlay extends RectOverlay {
+	public Overlay(Area a, OverlayInfo id) {
+	    super(id, a);
 	    ols.add(this);
 	    olseq++;
 	}
@@ -380,13 +424,6 @@ public class MCache implements MapSource {
 	public void destroy() {
 	    ols.remove(this);
 	    olseq++;
-	}
-
-	public void update(Area a) {
-	    if(!a.equals(this.a)) {
-		olseq++;
-		this.a = a;
-	    }
 	}
     }
 
@@ -1066,6 +1103,8 @@ public class MCache implements MapSource {
 	}
 	for(Grid g : copy)
 	    g.tick(dt);
+	for(LocalOverlay lol : new ArrayList<>(ols))
+	    lol.tick();
     }
 
     public void gtick(Render g) {
@@ -1290,9 +1329,9 @@ public class MCache implements MapSource {
 		    ret.add(id);
 	    }
 	}
-	for(Overlay lol : ols) {
-	    if((lol.a.overlap(a) != null) && !ret.contains(lol.id))
-		ret.add(lol.id);
+	for(LocalOverlay lol : ols) {
+	    if(!lol.filter(a) && !ret.contains(lol.id()))
+		ret.add(lol.id());
 	}
 	return(ret);
     }
@@ -1312,14 +1351,10 @@ public class MCache implements MapSource {
 		    buf[a.ri(tc)] = gbuf[(tc.x - gt.ul.x) + ((tc.y - gt.ul.y) * cmaps.x)];
 	    }
 	}
-	for(Overlay lol : ols) {
-	    if(lol.id != id)
+	for(LocalOverlay lol : ols) {
+	    if(lol.id() != id)
 		continue;
-	    Area la = lol.a.overlap(a);
-	    if(la != null) {
-		for(Coord lc : la)
-		    buf[a.ri(lc)] = true;
-	    }
+	    lol.fill(a, buf);
 	}
     }
     

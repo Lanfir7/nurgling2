@@ -45,10 +45,12 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
     public static Pagina lastPagina = null;
     public final static Tex bg = Inventory.invsq;
     public final static Coord bgsz = Inventory.sqsz;
+    public static boolean drawCellBg = false;
     public final static RichText.Foundry ttfnd = new RichText.Foundry(TextAttribute.FAMILY, "SansSerif", TextAttribute.SIZE, UI.scale(10f));
     private static Coord gsz = new Coord(8, 4);
     public final Set<Pagina> paginae = new HashSet<Pagina>();
     public Pagina cur;
+    public int pagseq = 0;
     private final Map<Object, Pagina> pmap = new CacheMap<>(CacheMap.RefType.WEAK);
     private Pagina dragging;
     private Collection<PagButton> curbtns = Collections.emptyList();
@@ -452,7 +454,8 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 	for(int y = 0; y < gsz.y; y++) {
 	    for(int x = 0; x < gsz.x; x++) {
 		Coord p = bgsz.mul(new Coord(x, y));
-		g.image(bg, p);
+		if(drawCellBg)
+		    g.image(bg, p);
 		PagButton btn = layout[x][y];
 		if(btn != null) {
 		    GSprite spr;
@@ -611,6 +614,7 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 	boolean criminalIsInstall = false;
 	boolean trackingIsInstall = false;
 	boolean swimmingIsInstall = false;
+	boolean siegeEnginesIsInstall = false;
 
     public void uimsg(String msg, Object... args) {
 	if(msg == "goto") {
@@ -672,6 +676,11 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 					pag.button().use(new Interaction());
 					swimmingIsInstall = (Boolean) NConfig.get(NConfig.Key.swimming);
 				}
+				else if((Boolean) NConfig.get(NConfig.Key.autoShowSiegeEngines) != siegeEnginesIsInstall && (Boolean) NConfig.get(NConfig.Key.autoShowSiegeEngines) && ref.equals("paginae/act/siegeptr"))
+				{
+					pag.button().use(new Interaction());
+					siegeEnginesIsInstall = (Boolean) NConfig.get(NConfig.Key.autoShowSiegeEngines);
+				}
 
 				// Delegate toggle handling to NMenuGridWdg if it exists (for swimming, tracking, crime, and nopeace)
 				if (parent instanceof nurgling.widgets.NMenuGridWdg && 
@@ -684,6 +693,7 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 			paginae.remove(pag);
 		    }
 		}
+		pagseq++;
 		updlayout();
 	    }
 	} else {

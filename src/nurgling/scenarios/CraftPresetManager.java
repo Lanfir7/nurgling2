@@ -1,10 +1,12 @@
 package nurgling.scenarios;
 
 import nurgling.NConfig;
+import nurgling.tools.NFileUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -33,24 +35,17 @@ public class CraftPresetManager {
 
     public void loadPresets() {
         presets.clear();
-        File file = new File(NConfig.current.getCraftPresetsPath());
-        if (file.exists()) {
-            StringBuilder contentBuilder = new StringBuilder();
-            try (Stream<String> stream = Files.lines(Paths.get(NConfig.current.getCraftPresetsPath()), StandardCharsets.UTF_8)) {
-                stream.forEach(s -> contentBuilder.append(s).append("\n"));
-            } catch (IOException ignore) {}
-
-            if (!contentBuilder.toString().isEmpty()) {
-                try {
-                    JSONObject main = new JSONObject(contentBuilder.toString());
-                    JSONArray array = main.getJSONArray("presets");
-                    for (int i = 0; i < array.length(); i++) {
-                        CraftPreset preset = new CraftPreset(array.getJSONObject(i));
-                        presets.put(preset.getId(), preset);
-                    }
-                } catch (Exception e) {
-                    System.err.println("Error loading craft presets: " + e.getMessage());
+        String content = NFileUtils.readWithBackupFallback(NConfig.current.getCraftPresetsPath());
+        if (content != null && !content.isEmpty()) {
+            try {
+                JSONObject main = new JSONObject(content);
+                JSONArray array = main.getJSONArray("presets");
+                for (int i = 0; i < array.length(); i++) {
+                    CraftPreset preset = new CraftPreset(array.getJSONObject(i));
+                    presets.put(preset.getId(), preset);
                 }
+            } catch (Exception e) {
+                System.err.println("Error loading craft presets: " + e.getMessage());
             }
         }
     }
@@ -64,7 +59,7 @@ public class CraftPresetManager {
         main.put("presets", jpresets);
 
         try {
-            nurgling.util.SafeJsonWriter.writeAtomic(NConfig.current.getCraftPresetsPath(), main);
+            NFileUtils.writeAtomically(NConfig.current.getCraftPresetsPath(), main.toString());
         } catch (IOException e) {
             System.err.println("Error saving craft presets: " + e.getMessage());
         }
@@ -92,20 +87,5 @@ public class CraftPresetManager {
         List<CraftPreset> list = new ArrayList<>(presets.values());
         list.sort(Comparator.comparing(CraftPreset::getName));
         return list;
-    }
-
-    private static final String AUTO_PREFIX = "auto_";
-
-    public void saveAutoPreset(String recipeResource, CraftPreset preset) {
-        if (recipeResource == null) return;
-        preset.setId(AUTO_PREFIX + recipeResource);
-        preset.setName("[auto] " + (preset.getRecipeName() != null ? preset.getRecipeName() : ""));
-        presets.put(preset.getId(), preset);
-        savePresets();
-    }
-
-    public CraftPreset getAutoPreset(String recipeResource) {
-        if (recipeResource == null) return null;
-        return presets.get(AUTO_PREFIX + recipeResource);
     }
 }

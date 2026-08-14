@@ -341,7 +341,8 @@ public class NArea
     }
 
     /**
-     * Update this area's fields from another area (for sync without replacing object reference)
+     * Update this area's fields from another area (for sync without replacing object reference).
+     * Also copies the uuid/presence metadata when present.
      */
     public void updateFrom(NArea other) {
         this.name = other.name;
@@ -357,13 +358,45 @@ public class NArea
         this.jspec = other.jspec;
         this.spec.clear();
         this.spec.addAll(other.spec);
+        // Copy sync metadata if the incoming area carries it.
+        if (other.uuid != null) this.uuid = other.uuid;
+        this.lastTouchedBy = other.lastTouchedBy;
+        this.lastTouchedAt = other.lastTouchedAt;
         // Don't copy lastLocalChange - keep our own timestamp
+        // After sync, our local state matches server state for all groups.
+        this.baselineVersion = other.version;
+        this.baselineSnapshot = AreaSnapshot.of(this);
+        this.dirtyGroups.clear();
+    }
+
+    /**
+     * Mark a field group as locally dirty. Called from the touch sites that
+     * already update lastLocalChange.
+     */
+    public synchronized void markDirty(AreaFieldGroup group) {
+        if (group != null) {
+            dirtyGroups.add(group);
+        }
+        this.lastLocalChange = System.currentTimeMillis();
+    }
+
+    /**
+     * Snapshot the current state as the baseline (what we last knew the
+     * server to hold). Clears the dirty-group set.
+     */
+    public synchronized void captureBaseline() {
+        this.baselineSnapshot = AreaSnapshot.of(this);
+        this.baselineVersion = this.version;
+        this.dirtyGroups.clear();
     }
 
     public NArea(JSONObject obj)
     {
         this.name = (String) obj.get("name");
         this.id = (Integer) obj.get("id");
+        if(obj.has("uuid")) {
+            this.uuid = obj.getString("uuid");
+        }
         if(obj.has("path"))
         {
             this.path = obj.getString("path");
@@ -455,6 +488,14 @@ public class NArea
     public long lastLocalChange = 0;  // Timestamp of last local change (to prevent sync overwrite)
     public Color color = new Color(194,194,65,56);
     public final ArrayList<Long> grids_id = new ArrayList<>();
+
+    // Sync metadata - Phase 1/2/3/5 area-sync refactor
+    public String uuid = null;                 // stable identifier across clients (Phase 3)
+    public int baselineVersion = 0;            // last server version we synced from (Phase 1)
+    public AreaSnapshot baselineSnapshot = null; // last server state we synced from (Phase 2)
+    public final java.util.EnumSet<AreaFieldGroup> dirtyGroups = java.util.EnumSet.noneOf(AreaFieldGroup.class);
+    public String lastTouchedBy = null;        // last editor name from server (Phase 5)
+    public long lastTouchedAt = 0;             // server timestamp of last edit (Phase 5)
 
     public ArrayList<Specialisation> spec = new ArrayList<>();
     public boolean inWork = false;
@@ -564,6 +605,13 @@ public class NArea
 
     public Pair<Coord2d,Coord2d> getRCArea()
     {
+        return getRCArea(true);
+    }
+
+    // respectHide=false computes the geometry even for hidden areas; used to place
+    // the name label so disabled areas can still show a (grayed-out) label.
+    public Pair<Coord2d,Coord2d> getRCArea(boolean respectHide)
+    {
         if(isVisible())
         {
             Coord begin = null;
@@ -572,7 +620,7 @@ public class NArea
             for (Long id : space.space.keySet())
             {
                 MCache.Grid grid = NUtils.getGameUI().map.glob.map.findGrid(id);
-                if(grid==null || hide)
+                if(grid==null || (respectHide && hide))
                     return null;
                 Area area = space.space.get(id).area;
                 Coord b = area.ul.add(grid.ul);
@@ -711,6 +759,7 @@ public class NArea
         JSONObject res = new JSONObject();
         res.put("name", name);
         res.put("id", id);
+        if (uuid != null) res.put("uuid", uuid);
         res.put("path", path);
         JSONObject jcolor = new JSONObject();
         jcolor.put("r", color.getRed());

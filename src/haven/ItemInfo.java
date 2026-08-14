@@ -223,6 +223,8 @@ public abstract class ItemInfo implements Comparable<ItemInfo> {
 	@Resource.PublishedCode.Builtin(type = InfoFactory.class, name = "defn")
 	public static class Default implements InfoFactory {
 	    public static String get(Owner owner) {
+		if(owner instanceof Dynamic)
+		    return(((Dynamic)owner).name());
 		if(owner instanceof SpriteOwner) {
 		    GSprite spr = ((SpriteOwner)owner).sprite();
 		    if(spr instanceof Dynamic)
@@ -245,15 +247,18 @@ public abstract class ItemInfo implements Comparable<ItemInfo> {
     }
 
     public static class Pagina extends Tip {
-	public final String str;
+	public final RichText.Document doc;
 
-	public Pagina(Owner owner, String str) {
+	public Pagina(Owner owner, RichText.Document doc) {
 	    super(owner);
-	    this.str = str;
+	    this.doc = doc;
+	}
+	public Pagina(Owner owner, String str) {
+	    this(owner, new RichText.Document(str));
 	}
 
 	public BufferedImage tipimg(int w) {
-	    return(RichText.render(str, w).img);
+	    return(RichText.render(doc, w).img);
 	}
 
 	public void layout(Layout l) {
@@ -410,7 +415,8 @@ public abstract class ItemInfo implements Comparable<ItemInfo> {
 	List<ItemInfo> ret = new ArrayList<ItemInfo>();
 	Resource.Resolver rr = owner.context(Resource.Resolver.class);
 	for(Object o : raw.data) {
-	    if(o instanceof Object[]) {
+	    if(o == null) {
+	    } else if(o instanceof Object[]) {
 		Object[] a = (Object[])o;
 		ItemInfo inf;
 		if(a[0] instanceof InfoFactory) {
@@ -439,6 +445,8 @@ public abstract class ItemInfo implements Comparable<ItemInfo> {
 		{
 			ret.add(new WellMined(owner));
 		}
+	    } else if(o instanceof ItemInfo) {
+		ret.add((ItemInfo)o);
 	    } else {
 		throw(new ClassCastException("Unexpected object type " + o.getClass() + " in item info array."));
 	    }

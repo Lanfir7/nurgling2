@@ -3,7 +3,6 @@ package nurgling.overlays;
 import haven.*;
 import haven.render.*;
 import nurgling.*;
-import nurgling.widgets.nsettings.World;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
@@ -62,6 +61,122 @@ public class NModelBox extends Sprite implements RenderTree.Node {
         }
     }
 
+    public static final Color DEF_FILL = new Color(227, 28, 1, 195);
+    public static final Color DEF_EDGE = new Color(224, 193, 79, 255);
+    public static final int DEF_LINE_WIDTH = 4;
+    public static final String DEF_MODE = "FILLED";
+
+    /**
+     * How a box should look and behave right now.
+     *
+     * <p>There are two independent reasons a box can be on screen, and they are styled from
+     * different config keys: the object is <i>hidden</i> (the box is its only remaining click
+     * target, so it must stay clickable), or the global "show object boundaries" overlay is on
+     * (the model is still there, so the box must NOT steal clicks from it). When both apply,
+     * hidden wins.
+     */
+    public static class BoxStyle {
+        public final String mode;
+        public final Color fill;
+        public final Color edge;
+        public final int lineWidth;
+        public final boolean clickable;
+
+        BoxStyle(String mode, Color fill, Color edge, int lineWidth, boolean clickable) {
+            this.mode = (mode == null) ? DEF_MODE : mode;
+            this.fill = fill;
+            this.edge = edge;
+            this.lineWidth = lineWidth;
+            this.clickable = clickable;
+        }
+
+        public boolean filled() {
+            return mode.equals("FILLED") || mode.equals("FILLED_ALWAYS");
+        }
+
+        public boolean outlined() {
+            return mode.equals("OUTLINE") || mode.equals("OUTLINE_ALWAYS");
+        }
+
+        public boolean depthTested() {
+            return !mode.equals("OUTLINE_ALWAYS") && !mode.equals("FILLED_ALWAYS");
+        }
+
+        public boolean equals(Object o) {
+            if (!(o instanceof BoxStyle))
+                return false;
+            BoxStyle that = (BoxStyle) o;
+            return this.clickable == that.clickable && this.lineWidth == that.lineWidth
+                    && this.mode.equals(that.mode)
+                    && this.fill.equals(that.fill) && this.edge.equals(that.edge);
+        }
+
+        public int hashCode() {
+            return Objects.hash(mode, fill, edge, lineWidth, clickable);
+        }
+    }
+
+    private static int intConf(NConfig.Key key, int def) {
+        Object o = NConfig.get(key);
+        return (o instanceof Number) ? ((Number) o).intValue() : def;
+    }
+
+    private static String strConf(NConfig.Key key, String def) {
+        Object o = NConfig.get(key);
+        return (o instanceof String) ? (String) o : def;
+    }
+
+    // Both styles are resolved once per settings change rather than per box per frame: tick()
+    // consults them every frame for every visible box, and NConfig.getColor allocates a fresh Color
+    // whenever the value is still in its serialized Map form.
+    private static volatile int styleVersion = 1;
+    private static volatile BoxStyle cachedHidden = null;
+    private static volatile int cachedHiddenVer = 0;
+    private static volatile BoxStyle cachedBoundary = null;
+    private static volatile int cachedBoundaryVer = 0;
+
+    /** Call after changing any of the box config keys so the cached styles are rebuilt. */
+    public static void invalidateStyles() {
+        styleVersion++;
+    }
+
+    /** Style used for gobs the hiding system has removed from the world. Always clickable. */
+    public static BoxStyle hiddenStyle() {
+        int v = styleVersion;
+        BoxStyle s = cachedHidden;
+        if (s == null || cachedHiddenVer != v) {
+            s = new BoxStyle(strConf(NConfig.Key.hideBoxDisplayMode, DEF_MODE),
+                    NConfig.getColor(NConfig.Key.hideBoxFillColor, DEF_FILL),
+                    NConfig.getColor(NConfig.Key.hideBoxEdgeColor, DEF_EDGE),
+                    intConf(NConfig.Key.hideBoxLineWidth, DEF_LINE_WIDTH),
+                    true);
+            cachedHidden = s;
+            cachedHiddenVer = v;
+        }
+        return s;
+    }
+
+    /** Style used by the general "show object boundaries" overlay. Never clickable. */
+    public static BoxStyle boundaryStyle() {
+        int v = styleVersion;
+        BoxStyle s = cachedBoundary;
+        if (s == null || cachedBoundaryVer != v) {
+            s = new BoxStyle(strConf(NConfig.Key.bbDisplayMode, DEF_MODE),
+                    NConfig.getColor(NConfig.Key.boxFillColor, DEF_FILL),
+                    NConfig.getColor(NConfig.Key.boxEdgeColor, DEF_EDGE),
+                    intConf(NConfig.Key.boxLineWidth, DEF_LINE_WIDTH),
+                    false);
+            cachedBoundary = s;
+            cachedBoundaryVer = v;
+        }
+        return s;
+    }
+
+    private static BoxStyle styleFor(Gob gob) {
+        if (gob.ngob != null && gob.ngob.isHidden())
+            return hiddenStyle();
+        return boundaryStyle();
+    }
 
     public static class HidePol extends Sprite implements RenderTree.Node {
         private Pipe.Op lmat;
@@ -84,56 +199,40 @@ public class NModelBox extends Sprite implements RenderTree.Node {
             Model.Indices indb = new Model.Indices(5, NumberFormat.UINT16, DataBuffer.Usage.STATIC, DataBuffer.Filler.of(iarr));
             this.emod = new Model(Model.Mode.TRIANGLE_FAN, va, null);
             this.lmod = new Model(Model.Mode.LINE_STRIP, va, indb);
-            
-            updateMaterials();
+
+            updateMaterials(boundaryStyle());
         }
 
-        public void updateMaterials() {
-            updateMaterials((String) NConfig.get(NConfig.Key.bbDisplayMode));
-        }
-        
-        public void updateMaterials(String mode) {
-            if (mode == null) mode = "FILLED";
-            
-            Color fillColor = NConfig.getColor(NConfig.Key.boxFillColor, new Color(227, 28, 1, 195));
-            Color edgeColor = NConfig.getColor(NConfig.Key.boxEdgeColor, new Color(224, 193, 79, 255));
-            
-            // Determine depth test for outline and fill separately
-            boolean outlineDepthTest = !mode.equals("OUTLINE_ALWAYS") && !mode.equals("FILLED_ALWAYS");
-            boolean fillDepthTest = true; // Fill always has depth test
-
-            // Outline material
-            if (outlineDepthTest) {
-                // Outline with depth test
-                this.lmat = Pipe.Op.compose(
-                    new Rendered.Order.Default(6000),
-                    FragColor.blend(new BlendMode(BlendMode.Function.ADD, BlendMode.Factor.SRC_ALPHA, BlendMode.Factor.INV_SRC_ALPHA,
-                            BlendMode.Function.ADD, BlendMode.Factor.ONE, BlendMode.Factor.INV_SRC_ALPHA)),
-                    new States.Facecull(),
-                    new States.LineWidth((Integer) NConfig.get(NConfig.Key.boxLineWidth)),
-                    Clickable.No,
-                    new BaseColor(edgeColor));
-            } else {
-                // Outline without depth test (always visible)
-                this.lmat = Pipe.Op.compose(
-                    new Rendered.Order.Default(6000),
-                    States.Depthtest.none,
-                    States.maskdepth,
-                    FragColor.blend(new BlendMode(BlendMode.Function.ADD, BlendMode.Factor.SRC_ALPHA, BlendMode.Factor.INV_SRC_ALPHA,
-                            BlendMode.Function.ADD, BlendMode.Factor.ONE, BlendMode.Factor.INV_SRC_ALPHA)),
-                    new States.Facecull(),
-                    new States.LineWidth((Integer) NConfig.get(NConfig.Key.boxLineWidth)),
-                    Clickable.No,
-                    new BaseColor(edgeColor));
+        public void updateMaterials(BoxStyle style) {
+            // Build outline material
+            ArrayList<Pipe.Op> lineOps = new ArrayList<>();
+            lineOps.add(new Rendered.Order.Default(6000));
+            if (!style.depthTested()) {
+                lineOps.add(States.Depthtest.none);
+                lineOps.add(States.maskdepth);
             }
-            
-            // Fill material (always with depth test)
-            this.emat = Pipe.Op.compose(
-                new Rendered.Order.Default(6000),
-                FragColor.blend(new BlendMode(BlendMode.Function.ADD, BlendMode.Factor.SRC_ALPHA, BlendMode.Factor.INV_SRC_ALPHA,
-                        BlendMode.Function.ADD, BlendMode.Factor.ONE, BlendMode.Factor.INV_SRC_ALPHA)),
-                Clickable.No,
-                new BaseColor(fillColor));
+            lineOps.add(FragColor.blend(new BlendMode(BlendMode.Function.ADD,
+                    BlendMode.Factor.SRC_ALPHA, BlendMode.Factor.INV_SRC_ALPHA,
+                    BlendMode.Function.ADD, BlendMode.Factor.ONE, BlendMode.Factor.INV_SRC_ALPHA)));
+            lineOps.add(new States.Facecull());
+            lineOps.add(new States.LineWidth(style.lineWidth));
+            if (!style.clickable) {
+                lineOps.add(Clickable.No);
+            }
+            lineOps.add(new BaseColor(style.edge));
+            this.lmat = Pipe.Op.compose(lineOps.toArray(new Pipe.Op[0]));
+
+            // Build fill material
+            ArrayList<Pipe.Op> fillOps = new ArrayList<>();
+            fillOps.add(new Rendered.Order.Default(6000));
+            fillOps.add(FragColor.blend(new BlendMode(BlendMode.Function.ADD,
+                    BlendMode.Factor.SRC_ALPHA, BlendMode.Factor.INV_SRC_ALPHA,
+                    BlendMode.Function.ADD, BlendMode.Factor.ONE, BlendMode.Factor.INV_SRC_ALPHA)));
+            if (!style.clickable) {
+                fillOps.add(Clickable.No);
+            }
+            fillOps.add(new BaseColor(style.fill));
+            this.emat = Pipe.Op.compose(fillOps.toArray(new Pipe.Op[0]));
         }
 
         private FillBuffer fill(VertexArray.Buffer dst, Environment env) {
@@ -155,16 +254,12 @@ public class NModelBox extends Sprite implements RenderTree.Node {
 
         public void added(RenderTree.Slot slot) {
             try {
-                String mode = (String) NConfig.get(NConfig.Key.bbDisplayMode);
-                if (mode == null) mode = "FILLED";
-                
-                // Update materials for current mode
-                updateMaterials(mode);
-                
-                if (mode.equals("FILLED") || mode.equals("FILLED_ALWAYS")) {
+                BoxStyle style = boundaryStyle();
+                updateMaterials(style);
+                if (style.filled()) {
                     slot.add(emod, emat);
                     slot.add(lmod, lmat);
-                } else if (mode.equals("OUTLINE") || mode.equals("OUTLINE_ALWAYS")) {
+                } else if (style.outlined()) {
                     slot.add(lmod, lmat);
                 }
             } catch (haven.Defer.NotDoneException e) {
@@ -186,7 +281,6 @@ public class NModelBox extends Sprite implements RenderTree.Node {
         super(null, null);
         this.gob = gob;
         this.bb = NBoundingBox.getBoundingBox(gob.ngob.hitBox);
-
     }
 
     Collection<RenderTree.Node> nodes = new ArrayList<>();
@@ -209,48 +303,48 @@ public class NModelBox extends Sprite implements RenderTree.Node {
      * Updates materials for rendering the bounding box with new colors.
      */
     public void updateMaterials() {
+        currentStyle = null;
         if (isVisible && slot != null) {
-            // Clear current slots and re-add with updated materials
-            slot.clear();
-            for (RenderTree.Node n : nodes) {
-                try {
-                    if (n instanceof HidePol) {
-                        ((HidePol) n).updateMaterials();
-                    }
-                    slot.add(n);
-                } catch (RenderTree.SlotRemoved e) {
-                    // Ignore removed slots
-                } catch (haven.Defer.NotDoneException e) {
-                    // Texture not ready yet, will retry on next tick
-                }
-            }
+            refreshDisplay();
         }
-        // If not visible, materials will be initialized when box becomes visible
     }
 
-    String currentDisplayMode = null;
+    BoxStyle currentStyle = null;
+    float currentGobScale = 1f;
+
+    /**
+     * Gobs shrunk for display (e.g. hide stockpiles) scale their whole render subtree,
+     * hitbox included. Undo that here so the box keeps showing the real footprint.
+     */
+    private float gobScale() {
+        nurgling.gattrr.NHideStockpileScale s = gob.getattr(nurgling.gattrr.NHideStockpileScale.class);
+        return (s != null && s.scale > 0) ? s.scale : 1f;
+    }
+
+    private Pipe.Op withScale(Pipe.Op mat, float scale) {
+        return (scale == 1f) ? mat : Pipe.Op.compose(mat, Location.scale(1f / scale));
+    }
 
     private void refreshDisplay() {
         if (!isVisible || slot == null) return;
-        
+
         slot.clear();
-        
-        String mode = (String) NConfig.get(NConfig.Key.bbDisplayMode);
-        if (mode == null) mode = "FILLED";
-        
+
+        BoxStyle style = styleFor(gob);
+        currentStyle = style;
+        float scale = gobScale();
+
         for (RenderTree.Node n : nodes) {
             try {
                 if (n instanceof HidePol) {
                     HidePol hidePol = (HidePol) n;
-                    // Update materials for current mode
-                    hidePol.updateMaterials(mode);
-                    
-                    // Add appropriate models based on mode
-                    if (mode.equals("FILLED") || mode.equals("FILLED_ALWAYS")) {
-                        slot.add(hidePol.emod, hidePol.emat);
-                        slot.add(hidePol.lmod, hidePol.lmat);
-                    } else if (mode.equals("OUTLINE") || mode.equals("OUTLINE_ALWAYS")) {
-                        slot.add(hidePol.lmod, hidePol.lmat);
+                    hidePol.updateMaterials(style);
+
+                    if (style.filled()) {
+                        slot.add(hidePol.emod, withScale(hidePol.emat, scale));
+                        slot.add(hidePol.lmod, withScale(hidePol.lmat, scale));
+                    } else if (style.outlined()) {
+                        slot.add(hidePol.lmod, withScale(hidePol.lmat, scale));
                     }
                 }
             } catch (RenderTree.SlotRemoved e) {
@@ -263,32 +357,38 @@ public class NModelBox extends Sprite implements RenderTree.Node {
 
     @Override
     public boolean tick(double dt) {
-        boolean newShowState = ((Boolean) NConfig.get(NConfig.Key.showBB) ||
-                (!(Boolean) NConfig.get(NConfig.Key.hideNature) && NUtils.isNatureObject(gob.ngob.name)));
+        boolean newShowState = ((Boolean) NConfig.get(NConfig.Key.showBB)
+                || (gob.ngob != null && gob.ngob.isHidden()));
 
-        String mode = (String) NConfig.get(NConfig.Key.bbDisplayMode);
-        if (mode == null) mode = "FILLED";
-        
-        // Check if display mode changed
-        if (currentDisplayMode != null && !currentDisplayMode.equals(mode)) {
-            currentDisplayMode = mode;
-            if (isVisible) {
-                refreshDisplay();
+        // Re-resolve the style every tick: the box can flip between the hidden and the boundary
+        // style without the show state changing at all (e.g. showBB on, then the gob gets hidden).
+        boolean needsRefresh = false;
+        if (newShowState) {
+            BoxStyle style = styleFor(gob);
+            if (!style.equals(currentStyle)) {
+                currentStyle = style;
+                needsRefresh = true;
             }
-        } else if (currentDisplayMode == null) {
-            currentDisplayMode = mode;
+        }
+        float scale = gobScale();
+        if (scale != currentGobScale) {
+            currentGobScale = scale;
+            needsRefresh = true;
+        }
+        if (needsRefresh && isVisible) {
+            refreshDisplay();
         }
 
         if (newShowState != isShow) {
             isShow = newShowState;
-            if (isShow && slot.parent() != null) {
+            if (isShow && slot != null && slot.parent() != null) {
                 if (!isVisible) {
                     isVisible = true;
                     refreshDisplay();
                 }
             } else {
                 isVisible = false;
-                slot.clear();
+                if (slot != null) slot.clear();
             }
         }
         return super.tick(dt);

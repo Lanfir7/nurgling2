@@ -24,7 +24,7 @@ public class RedOnionFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Red Onion");
+        nContext.goToArea(Specialisation.SpecName.crop, "Red Onion");
 
         ArrayList<NArea.Specialisation> req = new ArrayList<>();
         req.add(field);
@@ -59,7 +59,7 @@ public class RedOnionFarmer implements Action {
             if (NContext.findSpec(redOnionAsSeed) != null)
                 new CollectItemsToPile(NContext.findSpec(field).getRCArea(), NContext.findSpec(redOnionAsSeed).getRCArea(), new NAlias("items/redonion", "Red Onion")).run(gui);
 
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(redOnionAsSeed), new NAlias("plants/redonion"), new NAlias("Red Onion"), true).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(redOnionAsSeed), new NAlias("plants/redonion")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

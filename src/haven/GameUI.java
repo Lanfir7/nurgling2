@@ -32,8 +32,10 @@ import java.awt.event.KeyEvent;
 import java.awt.image.WritableRaster;
 import haven.render.Location;
 import static haven.Inventory.invsq;
+import static haven.PType.*;
 
 import nurgling.*;
+import nurgling.actions.SortInventory;
 import nurgling.i18n.L10n;
 import nurgling.widgets.*;
 
@@ -47,6 +49,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public GobIcon.Settings iconconf;
     public MiniMap mmap;
     public Fightview fv;
+    public NFightsess fsess;
     private NDraggableWidget fightBuffsInfoWdg;
     private NDraggableWidget fightActionsWdg;
     final protected List<Widget> meters = new LinkedList<Widget>();
@@ -71,7 +74,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	public NStorageItemsWidget storageItemsWidget;
 	public EncyclopediaWindow encyclopediaWindow;
 	public BlueprintWidget blueprintWidget;
-    public final Collection<Polity> polities = new ArrayList<Polity>();
+	public nurgling.widgets.NBasePlannerWidget basePlanner;
     public HelpWnd help;
     public OptWnd opts;
     public Collection<DraggedItem> hand = new LinkedList<DraggedItem>();
@@ -279,8 +282,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	setcanfocus(true);
 	setfocusctl(true);
 
-	chat = new ChatUI();
-	chatwdg = new NResizableWidget(chat,"ChatUI",new Coord(400,200));
+	chat = new nurgling.NChatUI();
+	chatwdg = new NResizableWidget(chat,"ChatUI",new Coord(918,175));
 	add(chatwdg);
 	add(new MapMenu(), 0, 0);
 	minimapc = new Coord(UI.scale(4), UI.scale(34));
@@ -314,6 +317,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	encyclopediaWindow.hide();
 	add(blueprintWidget = new BlueprintWidget(), new Coord(sz.x/2 - NGUIInfo.xs/2,sz.y/5 ));
 	blueprintWidget.hide();
+	add(basePlanner = new nurgling.widgets.NBasePlannerWidget(), new Coord(sz.x/2 - NGUIInfo.xs/2, sz.y/5));
+	basePlanner.hide();
     }
 
     protected void attached() {
@@ -326,19 +331,12 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     private void menubuttons(Widget bg) {
 	add(new MenuButton("csearch", kb_srch, "Search actions...") {
 		public void click() {
-		    if(menu == null)
+		    if(srchwnd == null)
 			return;
-		    if(srchwnd == null) {
-			srchwnd = new MenuSearch(menu);
-			fitwdg(GameUI.this.add(srchwnd, Utils.getprefc("wndc-srch", new Coord(200, 200))));
-		    } else {
-			if(!srchwnd.hasfocus) {
-			    this.setfocus(srchwnd);
-			} else {
-			    ui.destroy(srchwnd);
-			    srchwnd = null;
-			}
-		    }
+		    if(srchwnd.visible() && !srchwnd.hasfocus)
+			this.setfocus(srchwnd);
+		    else
+			togglewnd(srchwnd);
 		}
 	    }, bg.c);
     }
@@ -387,36 +385,145 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    super(sz, cap);
 	}
 
-	public void wdgmsg(Widget sender, String msg, Object... args) {
-	    if((sender == this) && msg.equals("close")) {
-		this.hide();
-		return;
-	    }
-	    super.wdgmsg(sender, msg, args);
+	public void reqclose() {
+	    hide();
 	}
     }
 
-    static class Zergwnd extends Hidewnd {
-	Tabs tabs = new Tabs(Coord.z, Coord.z, this);
-	final TButton kin, pol, pol2;
+    public static class Zergwnd extends Hidewnd {
+	public final Tabs tabs = new Tabs(Coord.z, Coord.z, this);
+	public final TButton kin;
+	public final Collection<PTab<Category>> types = new ArrayList<>();
 
-	class TButton extends IButton {
-	    Tabs.Tab tab = null;
-	    final Tex inv;
+	public static class Category extends Widget {
+	    public final String id;
+	    public final List<Polity> pols = new ArrayList<>();
+	    public final Widget cap;
+	    public Widget sel = null;
+	    private Coord polc = Coord.z;
 
-	    TButton(String nm, boolean g) {
-		super("gfx/hud/buttons/" + nm, "u", "d", null);
-		if(g)
-		    inv = Resource.loadtex("gfx/hud/buttons/" + nm + "g");
-		else
-		    inv = null;
+	    public Category(String id, String name) {
+		this.id = id;
+		cap = add(new Img(CharWnd.catf.render(name).tex()));
 	    }
 
-	    public void draw(GOut g) {
-		if((tab == null) && (inv != null))
-		    g.image(inv, Coord.z);
-		else
-		    super.draw(g);
+	    public class Selector extends SDropBox<Polity, Widget> {
+		public Selector() {
+		    super(BuddyWnd.width, UI.scale(75), Polity.nmf.height());
+		    for(Widget ch : Category.this.children()) {
+			if((ch instanceof Polity) && ch.visible()) {
+			    super.change((Polity)ch);
+			    break;
+			}
+		    }
+		}
+
+		protected List<Polity> items() {return(pols);}
+		protected Widget makeitem(Polity pol, int idx, Coord sz) {
+		    return(TextItem.of(sz, Polity.nmf, () -> pol.name));
+		}
+
+		public void change(Polity pol) {
+		    super.change(pol);
+		    select(pol);
+		}
+	    }
+
+	    private void updsel() {
+		if(sel != null)
+		    sel.destroy();
+		if(pols.isEmpty()) {
+		    sel = null;
+		} else if(pols.size() == 1) {
+		    sel = new Label(pols.get(0).name, Polity.nmf);
+		} else {
+		    sel = new Selector();
+		}
+		Coord c = cap.pos("bl").adds(0, 2);
+		if(sel != null)
+		    c = add(sel, c).pos("bl").adds(0, 5);
+		if(!Utils.eq(c, polc)) {
+		    polc = c;
+		    for(Polity pol : pols)
+			pol.move(polc);
+		    pack();
+		}
+	    }
+
+	    public void select(Polity sel) {
+		for(Polity pol : pols)
+		    pol.show(pol == sel);
+		pack();
+	    }
+
+	    public void cresize(Widget ch) {
+		pack();
+	    }
+
+	    public void addpol(Polity p) {
+		pols.add(add(p));
+		if(sel != null)
+		    p.move(polc);
+		select(p);
+		updsel();
+	    }
+
+	    public void cdestroy(Widget w) {
+		if(pols.contains(w)) {
+		    pols.remove(w);
+		    updsel();
+		    if(pols.isEmpty()) {
+			destroy();
+		    } else {
+			if(w.visible) {
+			    if(pols.size() > 1)
+				((Selector)sel).change(pols.get(0));
+			    else
+				pols.get(0).show(true);
+			}
+		    }
+		}
+	    }
+	}
+
+	class PTab<W extends Widget> extends Tabs.Tab {
+	    public final W main;
+	    public final TButton tb;
+
+	    public PTab(W main, TButton tb) {
+		tabs.super();
+		this.main = main;
+		this.tb = tb;
+	    }
+
+	    public void cdestroy(Widget w) {
+		if(w == main) {
+		    destroy();
+		    tb.destroy();
+		    Zergwnd.this.types.remove(this);
+		    repack();
+		    if(tabs.curtab == this) {
+			tabs.showtab(kin.tab);
+			repack();
+		    }
+		}
+	    }
+
+	    public void cresize(Widget ch) {
+		repack();
+	    }
+	}
+
+	class TButton extends IButton {
+	    public final Resource.Image upimg;
+	    public PTab tab = null;
+
+	    TButton(String nm) {
+		super("gfx/hud/buttons/" + nm, "u", "d", null);
+		upimg = Resource.loadrimg("gfx/hud/buttons/" + nm + "u");
+		Resource.Tooltip tt = upimg.getres().layer(Resource.tooltip);
+		if(tt != null)
+		    settip(tt.t);
 	    }
 
 	    public void click() {
@@ -425,47 +532,73 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		    repack();
 		}
 	    }
+
+	    protected void depress() {
+		ui.sfx(Button.clbtdown.stream());
+	    }
+
+	    protected void unpress() {
+		ui.sfx(Button.clbtup.stream());
+	    }
 	}
 
 	Zergwnd() {
 	    super(Coord.z, "Kith & Kin", true);
-	    kin = add(new TButton("kin", false));
+	    kin = add(new TButton("kin"));
 	    kin.tooltip = Text.render("Kin");
-	    pol = add(new TButton("pol", true));
-	    pol2 = add(new TButton("rlm", true));
 	}
 
 	private void repack() {
 	    tabs.indpack();
-	    kin.c = new Coord(0, tabs.curtab.contentsz().y + UI.scale(20));
-	    pol.c = new Coord(kin.c.x + kin.sz.x + UI.scale(10), kin.c.y);
-	    pol2.c = new Coord(pol.c.x + pol.sz.x + UI.scale(10), pol.c.y);
+	    kin.move(Coord.of(0, tabs.curtab.contentsz().y + UI.scale(20)));
+	    List<TButton> pbtns = new ArrayList<>();
+	    for(Widget ch : children()) {
+		if((ch instanceof TButton) && (ch != kin))
+		    pbtns.add((TButton)ch);
+	    }
+	    pbtns.sort((a, b) -> a.upimg.z - b.upimg.z);
+	    Widget lf = kin, prev = lf;
+	    int x = 1;
+	    for(TButton pbtn : pbtns) {
+		if(x < 3) {
+		    pbtn.move(prev.pos("ur").adds(10, 0));
+		    prev = pbtn;
+		    x++;
+		} else {
+		    pbtn.move(lf.pos("bl").adds(0, 10));
+		    lf = prev = pbtn;
+		    x = 0;
+		}
+	    }
 	    this.pack();
 	}
 
-	Tabs.Tab ntab(Widget ch, TButton btn) {
-	    Tabs.Tab tab = add(tabs.new Tab() {
-		    public void cresize(Widget ch) {
-			repack();
-		    }
-		}, tabs.c);
+	public <W extends Widget> PTab<W> ntab(W ch, TButton tb) {
+	    PTab<W> tab = add(new PTab<>(ch, tb), tabs.c);
 	    tab.add(ch, Coord.z);
-	    btn.tab = tab;
+	    tb.tab = tab;
 	    repack();
 	    return(tab);
 	}
 
-	void dtab(TButton btn) {
-	    btn.tab.destroy();
-	    btn.tab = null;
-	    repack();
+	private PTab<Category> getptab(String name) {
+	    PTab<Category> tab = null;
+	    for(PTab<Category> cur : types) {
+		if(Utils.eq(cur.main.id, name)) {
+		    tab = cur;
+		    break;
+		}
+	    }
+	    if(tab == null) {
+		TButton tb = add(new TButton(name));
+		tab = ntab(new Category(name, tb.upimg.getres().flayer(Resource.tooltip).t), tb);
+		types.add(tab);
+	    }
+	    return(tab);
 	}
 
-	void addpol(Polity p) {
-	    /* This isn't very nice. :( */
-	    TButton btn = p.cap.equals("Village")?pol:pol2;
-	    ntab(p, btn);
-	    btn.tooltip = Text.render(p.cap);
+	public void addpol(Polity p) {
+	    getptab(p.type()).main.addpol(p);
 	}
     }
 
@@ -606,12 +739,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		try {
 		    file = MapFile.load(mapstore, mapfilename());
 			if((Boolean) NConfig.get(NConfig.Key.autoMapper)) {
-				NUtils.getUI().core.mappingClient.requestor.processMap(file, (m) -> {
-					if(m instanceof MapFile.PMarker) {
-						return (Boolean) NConfig.get(NConfig.Key.unloadgreen) && ((MapFile.PMarker)m).color.equals(Color.GREEN);
-					}
-					return true;
-				});
+				NUtils.getUI().core.mappingClient.requestor.processMap(file, mapv4.Requestor::uploadable);
 			}
 		} catch(java.io.IOException e) {
 		    /* XXX: Not quite sure what to do here. It's
@@ -623,6 +751,10 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		mmap = mmapw.miniMap;
 		mmap.lower();
 		mapfile = new NMapWnd(file, map, Utils.getprefc("wndsz-map", UI.scale(new Coord(700, 500))), "Map");
+		mapfile.reqclose(() -> {
+		    Utils.setprefb("wndvis-map", false);
+		    mapfile.hide();
+		});
 		mapfile.show(Utils.getprefb("wndvis-map", false));
 		add(mapfile, Utils.getprefc("wndc-map", new Coord(50, 50)));
 	    }
@@ -630,10 +762,13 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    NMenuGridWdg mwdg = new NMenuGridWdg();
 		menu = mwdg.setMenuGrid((MenuGrid)child);
 		add(new NDraggableWidget(mwdg,"menugrid",new Coord(mwdg.sz).add(NDraggableWidget.delta)));
+	    fitwdg(srchwnd = GameUI.this.add(new MenuSearch.Main(menu), Utils.getprefc("wndc-srch", UI.scale(200, 200))));
+	    srchwnd.reqclose(srchwnd::hide).hide();
 	} else if(place == "fight") {
 	   add(new NDraggableWidget( fv = (Fightview)child,"Fightview",UI.scale(230,380)));
 	} else if(place == "fsess") {
 	    NFightsess fsess = (NFightsess)child;
+	    this.fsess = fsess;
 	    add(fsess);
 	    // Destroy old widgets if they exist to ensure only one instance
 	    if(fightBuffsInfoWdg != null) {
@@ -680,7 +815,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    updhand();
 	} else if(place == "chr") {
 	    chrwdg = add((CharWnd)child, Utils.getprefc("wndc-chr", new Coord(300, 50)));
-	    chrwdg.hide();
+	    chrwdg.reqclose(chrwdg::hide).hide();
 	} else if(place == "craft") {
 	    String cap = "";
 	    Widget mkwdg = child;
@@ -713,9 +848,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	} else if(place == "buddy") {
 	    zerg.ntab(buddies = (BuddyWnd)child, zerg.kin);
 	} else if(place == "pol") {
-	    Polity p = (Polity)child;
-	    polities.add(p);
-	    zerg.addpol(p);
+	    zerg.addpol((Polity)child);
 	} else if(place == "chat") {
 	    chat.addchild(child);
 	} else if(place == "party") {
@@ -845,9 +978,6 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		    updhand();
 		}
 	    }
-	} else if(polities.contains(w)) {
-	    polities.remove(w);
-	    zerg.dtab(zerg.pol);
 	} else if(w == chrwdg) {
 	    chrwdg = null;
 	}
@@ -1182,17 +1312,23 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    polowners.put(id, o);
 	} else if(msg == "showhelp") {
 	    Indir<Resource> res = ui.sess.getresv(args[0]);
-	    if(help == null)
-		help = adda(new HelpWnd(res), 0.5, 0.25);
-	    else
-		help.res = res;
+	    if(help == null) {
+		(help = adda(new HelpWnd(res), 0.5, 0.25)).reqclose(() -> {
+		    if(help != null)
+		        help.reqdestroy();
+		    help = null;
+		});
+	    } else {
+		help.set(res);
+	    }
 	} else if(msg == "map-mark") {
-	    long gobid = Utils.uiv(args[0]);
-	    long oid = ((Number)args[1]).longValue();
+	    long gobid = UINT.of(args[0]);
+	    UID oid = UNIQID.of(args[1]);
 	    Indir<Resource> res = ui.sess.getresv(args[2]);
-	    String nm = (String)args[3];
+	    String nm = STR.of(args[3]);
+	    byte[] data = BYTES.opt(args, 4).or(new byte[0]);
 	    if(mapfile != null)
-		mapfile.markobj(gobid, oid, res, nm);
+		mapfile.markobj(gobid, oid, res, data, nm);
 	} else if(msg == "map-icons") {
 	    GobIcon.Settings conf = this.iconconf;
 	    int tag = Utils.iv(args[0]);
@@ -1205,30 +1341,6 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	} else {
 	    super.uimsg(msg, args);
 	}
-    }
-
-    public void wdgmsg(Widget sender, String msg, Object... args) {
-	if((sender == chrwdg) && (msg == "close")) {
-	    chrwdg.hide();
-	    return;
-	} else if((sender == mapfile) && (msg == "close")) {
-	    mapfile.hide();
-	    Utils.setprefb("wndvis-map", false);
-	    return;
-	} else if((sender == help) && (msg == "close")) {
-	    ui.destroy(help);
-	    help = null;
-	    return;
-	} else if((sender == srchwnd) && (msg == "close")) {
-	    ui.destroy(srchwnd);
-	    srchwnd = null;
-	    return;
-	} else if((sender == iconwnd) && (msg == "close")) {
-	    ui.destroy(iconwnd);
-	    iconwnd = null;
-	    return;
-	}
-	super.wdgmsg(sender, msg, args);
     }
 
     private static final int fitmarg = UI.scale(100);
@@ -1285,6 +1397,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public static final KeyBinding kb_cookbook = KeyBinding.get("cookbook", KeyMatch.forchar('K', KeyMatch.C));
 	public static final KeyBinding kb_searchWidget = KeyBinding.get("searchWidget", KeyMatch.forchar('F', KeyMatch.C));
 	public static final KeyBinding kb_blueprints = KeyBinding.get("treegarden", KeyMatch.forchar('P', KeyMatch.C));
+	public static final KeyBinding kb_baseplanner = KeyBinding.get("baseplanner", KeyMatch.nil);
 	public static final KeyBinding kb_storage = KeyBinding.get("storage", KeyMatch.forchar('I', KeyMatch.C));
 	public static final KeyBinding kb_opt = KeyBinding.get("opt", KeyMatch.forchar('O', KeyMatch.C));
     public class MainMenu extends Widget {
@@ -1297,13 +1410,13 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    prev = add(new MenuCheckBox("rbtn/bud/", kb_bud, L10n.get("opt.keybind.kith_kin")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(zerg)).click(() -> togglewnd(zerg));
 	    prev = add(new MenuCheckBox("rbtn/opt/", kb_opt, L10n.get("opt.keybind.options")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(opts)).click(() -> togglewnd(opts));
 
-		// Bottom row - buttons: Areas, Cook Book, Blueprints, Storage, Encyclopedia
+		// Bottom row - buttons: Areas, Cook Book, Blueprints, Base Planner, Storage
 		int secondRowY = firstButton.sz.y + UI.scale(5);
 		prev = add(new MenuCheckBox("rbtn/areas/", kb_areas, L10n.get("area.title")), 0, secondRowY).state(() -> wndstate(areas)).click(() -> togglewnd(areas));
 		prev = add(new MenuCheckBox("rbtn/cookbook/", kb_cookbook, L10n.get("cookbook.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(cookBook)).click(() -> togglewnd(cookBook));
 		prev = add(new MenuCheckBox("rbtn/blueprints/", kb_blueprints, L10n.get("blueprint.manager_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(blueprintWidget)).click(() -> togglewnd(blueprintWidget));
+		prev = add(new MenuCheckBox("rbtn/baseplanner/", kb_baseplanner, "Base planner"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(basePlanner)).click(() -> togglewnd(basePlanner));
 		prev = add(new MenuCheckBox("rbtn/storage/", kb_storage, L10n.get("storage.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(storageItemsWidget)).click(() -> togglewnd(storageItemsWidget));
-        add(new MenuCheckBox("rbtn/encyclopedia/", null, L10n.get("encyclopedia.title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(encyclopediaWindow)).click(() -> togglewnd(encyclopediaWindow));
 		pack();
 	}
 
@@ -1361,6 +1474,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public static final KeyBinding kb_logout = KeyBinding.get("logout", KeyMatch.nil);
     public static final KeyBinding kb_switchchr = KeyBinding.get("logout-cs", KeyMatch.nil);
     public static final KeyBinding kb_instantLogout = KeyBinding.get("instantLogoutKB", KeyMatch.forchar('L', KeyMatch.C));
+    public static final KeyBinding kb_sort = KeyBinding.get("sort-inv", KeyMatch.nil);
     public boolean globtype(GlobKeyEvent ev) {
 	if(ev.c == ':') {
 	    entercmd();
@@ -1385,6 +1499,17 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    return(true);
 	} else if(kb_searchWidget.key().match(ev)) {
 		openSearchWidget();
+		return true;
+	} else if(kb_sort.key().match(ev)) {
+		for(Widget w = lchild; w != null; w = w.prev) {
+		    if(w instanceof Window && w.visible) {
+			NInventory inv = w.getchild(NInventory.class);
+			if(inv != null) {
+			    SortInventory.sort(inv);
+			    break;
+			}
+		    }
+		}
 		return true;
 	}
 	return(super.globtype(ev));

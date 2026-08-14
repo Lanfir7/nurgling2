@@ -33,28 +33,28 @@ import static haven.PUtils.*;
 import nurgling.i18n.L10n;
 
 public class SkillWnd extends Widget {
-    public final SkillGrid skg;
-    public final CredoGrid credos;
-    public final ExpGrid exps;
-    private CharWnd chr;
-    private Widget skill, credo, expls;
+    public SkillGrid skg;
+    public CredoGrid credos;
+    public ExpGrid exps;
+    protected CharWnd chr;
+    protected Widget skill, credo, expls;
 
     @RName("skill")
     public static class $skill implements Factory {
 	public Widget create(UI ui, Object[] args) {
-	    return(new TabProxy(SkillWnd.class, "skill"));
+	    return(new TabProxy(nurgling.NSkillWnd.class, "skill"));
 	}
     }
     @RName("credo")
     public static class $credo implements Factory {
 	public Widget create(UI ui, Object[] args) {
-	    return(new TabProxy(SkillWnd.class, "credo"));
+	    return(new TabProxy(nurgling.NSkillWnd.class, "credo"));
 	}
     }
     @RName("expls")
     public static class $expls implements Factory {
 	public Widget create(UI ui, Object[] args) {
-	    return(new TabProxy(SkillWnd.class, "expls"));
+	    return(new TabProxy(nurgling.NSkillWnd.class, "expls"));
 	}
     }
 
@@ -74,15 +74,15 @@ public class SkillWnd extends Widget {
 	    this.sortkey = nm;
 	}
 
-	public String rendertext() {
+	public RichText.Document rendertext() {
 	    StringBuilder buf = new StringBuilder();
 	    Resource res = this.res.get();
-	    buf.append("$img[" + res.name + "]\n\n");
-	    buf.append("$b{$font[serif,16]{" + res.flayer(Resource.tooltip).text() + "}}\n\n\n");
+	    buf.append("$img[self]\n\n");
+	    buf.append("$b{$font[serif,16]{" + res.flayer(Resource.tooltip).t + "}}\n\n\n");
 	    if(cost > 0)
 		buf.append("Cost: " + cost + "\n\n");
 	    buf.append(res.flayer(Resource.pagina).text);
-	    return(buf.toString());
+	    return(resdoc(res, buf.toString()));
 	}
 
 	private Text tooltip = null;
@@ -107,13 +107,13 @@ public class SkillWnd extends Widget {
 	    this.sortkey = nm;
 	}
 
-	public String rendertext() {
+	public RichText.Document rendertext() {
 	    StringBuilder buf = new StringBuilder();
 	    Resource res = this.res.get();
-	    buf.append("$img[" + res.name + "]\n\n");
-	    buf.append("$b{$font[serif,16]{" + res.flayer(Resource.tooltip).text() + "}}\n\n\n");
+	    buf.append("$img[self]\n\n");
+	    buf.append("$b{$font[serif,16]{" + res.flayer(Resource.tooltip).t + "}}\n\n\n");
 	    buf.append(res.flayer(Resource.pagina).text);
-	    return(buf.toString());
+	    return(resdoc(res, buf.toString()));
 	}
 
 	private Text tooltip = null;
@@ -136,15 +136,15 @@ public class SkillWnd extends Widget {
 	    this.score = score;
 	}
 
-	public String rendertext() {
+	public RichText.Document rendertext() {
 	    StringBuilder buf = new StringBuilder();
 	    Resource res = this.res.get();
-	    buf.append("$img[" + res.name + "]\n\n");
-	    buf.append("$b{$font[serif,16]{" + res.flayer(Resource.tooltip).text() + "}}\n\n\n");
+	    buf.append("$img[self]\n\n");
+	    buf.append("$b{$font[serif,16]{" + res.flayer(Resource.tooltip).t + "}}\n\n\n");
 	    if(score > 0)
 		buf.append(String.format(L10n.get("char.skill.exp_points"), Utils.thformat(score)) + "\n\n");
 	    buf.append(res.flayer(Resource.pagina).text);
-	    return(buf.toString());
+	    return(resdoc(res, buf.toString()));
 	}
 
 	private Text tooltip = null;
@@ -204,14 +204,14 @@ public class SkillWnd extends Widget {
 	public final int btnw = UI.scale(100);
 	public final Tex credoufr = new TexI(convolvedown(Resource.loadimg("gfx/hud/chr/yrkirframe"), crsz, iconfilter));
 	public final Tex credosfr = new TexI(convolvedown(Resource.loadimg("gfx/hud/chr/yrkirsframe"), crsz, iconfilter));
-	public final Text.Foundry prsf = new Text.Foundry(Text.fraktur, 15).aa(true);
-	public final int m = UI.scale(5);
+	public Text.Foundry prsf = new Text.Foundry(Text.fraktur, 15).aa(true);
+	public int m = UI.scale(5);
 	public List<Credo> ncr = Collections.emptyList(), ccr = Collections.emptyList();
 	public Credo pcr = null;
 	public int pcl, pclt, pcql, pcqlt, pqid, cost;
 	public Credo sel = null;
-	private final Img pcrc, ncrc, ccrc;
-	private final Button pbtn, qbtn;
+	protected Img pcrc, ncrc, ccrc;
+	protected final Button pbtn, qbtn;
 	private boolean loading = false;
 
 	public CredoGrid(Coord sz) {
@@ -279,17 +279,29 @@ public class SkillWnd extends Widget {
 	    Collections.sort(buf, Comparator.comparing(cr -> cr.res.get().flayer(Resource.tooltip).text()));
 	}
 
+	protected int topPad() { return 0; }
+	protected int labelGap() { return m; }
+	protected int textYAdj() { return 0; }
+
+	protected int layoutPursue(Widget cont, int mx, int y) {
+	    cont.add(pbtn, mx, y);
+	    if(cost > 0)
+		cont.adda(new Label(String.format(L10n.get("char.skill.credo_cost"), cost)), pbtn.c.x + pbtn.sz.x + UI.scale(10), pbtn.c.y + (pbtn.sz.y / 2), 0, 0.5);
+	    return pbtn.sz.y;
+	}
+
 	private void update() {
 	    sort(ccr); sort(ncr);
 	    for(Widget ch = cont.child; ch != null; ch = cont.child)
 		ch.destroy();
-	    int y = 0;
+	    int y = topPad();
 	    if(pcr != null) {
 		cont.add(pcrc, m, y);
-		y += pcrc.sz.y + m;
+		y += pcrc.sz.y + labelGap();
 		Widget pcrim = cont.add(new CredoImg(pcr), m, y);
-		cont.add(new Label(String.format(L10n.get("char.skill.level"), pcl, pclt), prsf), pcrim.c.x + pcrim.sz.x + m, y);
-		cont.add(new Label(String.format(L10n.get("char.skill.quest_progress"), pcql, pcqlt), prsf), pcrim.c.x + pcrim.sz.x + m, y + UI.scale(20));
+		int tya = textYAdj();
+		cont.add(new Label(String.format(L10n.get("char.skill.level"), pcl, pclt), prsf), pcrim.c.x + pcrim.sz.x + m, y - tya);
+		cont.add(new Label(String.format(L10n.get("char.skill.quest_progress"), pcql, pcqlt), prsf), pcrim.c.x + pcrim.sz.x + m, y + UI.scale(20) - tya);
 		cont.adda(qbtn, pcrim.c.x + pcrim.sz.x + m, y + pcrim.sz.y, 0, 1);
 		y += pcrim.sz.y;
 		y += UI.scale(10);
@@ -300,10 +312,7 @@ public class SkillWnd extends Widget {
 		y += ncrc.sz.y + 5;
 		y = crgrid(y, ncr);
 		if(pcr == null) {
-		    cont.add(pbtn, m, y);
-		    if(cost > 0)
-			cont.adda(new Label(String.format(L10n.get("char.skill.credo_cost"), cost)), pbtn.c.x + pbtn.sz.x + UI.scale(10), pbtn.c.y + (pbtn.sz.y / 2), 0, 0.5);
-		    y += pbtn.sz.y;
+		    y += layoutPursue(cont, m, y);
 		}
 		y += UI.scale(10);
 	    }
@@ -403,10 +412,14 @@ public class SkillWnd extends Widget {
     }
 
     public SkillWnd() {
+	buildLayout();
+    }
+
+    protected void buildLayout() {
 	Widget prev;
 
 	prev = add(CharWnd.settip(new Img(catf.render(L10n.get("char.skill.title")).tex()), "gfx/hud/chr/tips/skills"), Coord.z);
-	LoadingTextBox info = add(new LoadingTextBox(new Coord(attrw, height), "", ifnd), prev.pos("bl").adds(5, 0).add(wbox.btloff()));
+	RichTextBox info = add(new RichTextBox(new Coord(attrw, height), ifnd, null), prev.pos("bl").adds(5, 0).add(wbox.btloff()));
 	info.bg = new Color(0, 0, 0, 128);
 	Frame.around(this, Collections.singletonList(info));
 
@@ -424,9 +437,9 @@ public class SkillWnd extends Widget {
 			SkillWnd.this.exps.sel = null;
 			SkillWnd.this.credos.sel = null;
 			if (sk != null)
-			    info.settext(sk::rendertext);
+			    info.set(sk::rendertext);
 			else if (p != null)
-			    info.settext("");
+			    info.set(() -> null);
 		    }
 		});
 	    Widget bf = sktab.adda(new Frame(new Coord(f.sz.x, UI.scale(44)), false), f.c.x, gh, 0.0, 1.0);
@@ -451,9 +464,9 @@ public class SkillWnd extends Widget {
 			SkillWnd.this.skg.sel = null;
 			SkillWnd.this.exps.sel = null;
 			if (cr != null)
-			    info.settext(cr::rendertext);
+			    info.set(cr::rendertext);
 			else if (p != null)
-			    info.settext("");
+			    info.set(() -> null);
 		    }
 		});
 	}
@@ -468,9 +481,9 @@ public class SkillWnd extends Widget {
 			SkillWnd.this.skg.sel = null;
 			SkillWnd.this.credos.sel = null;
 			if (exp != null)
-			    info.settext(exp::rendertext);
+			    info.set(exp::rendertext);
 			else if (p != null)
-			    info.settext("");
+			    info.set(() -> null);
 		    }
 		});
 	}

@@ -8,13 +8,13 @@ import static haven.Inventory.*;
 
 import haven.render.Render;
 import haven.res.lib.itemtex.*;
+import static haven.PType.*;
 import nurgling.*;
 import nurgling.actions.bots.*;
 import nurgling.areas.*;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
 import nurgling.tools.*;
-import nurgling.actions.bots.SubRecipeResolver;
 import org.json.*;
 
 import java.awt.*;
@@ -56,364 +56,6 @@ public class NMakewindow extends Widget {
     public CheckBox noTransfer = null;
     public boolean autoMode = false;
     private IButton savePresetBtn = null;
-    private int pendingRecipeIdx = -1;
-    private boolean recipeCached = false;
-
-    static final NArea CRAFT_SENTINEL = new NArea("[Craft]");
-    static final NArea LOCAL_SENTINEL = new NArea("[Local Zone]");
-    static final NArea INVENTORY_SENTINEL = new NArea("[Leave in Inventory]");
-    private List<AutoSpecRow> autoInputRows = null;
-    private List<AutoSpecRow> autoOutputRows = null;
-    private Label inputLabel, resultLabel;
-    private Widget craftBtn, craftAllBtn;
-    private static final int AUTO_ROW_H = 42;
-    private static final int AUTO_SUB_ROW_H = 30;
-    private static final int AUTO_DROPBOX_W = 180;
-    private static final int AUTO_DROPBOX_X = 230;
-    private static final int AUTO_SUB_INDENT = 30;
-
-    private class AutoSubRow {
-        String name;
-        int count;
-        Dropbox<NArea> zoneDropbox;
-        List<NArea> zones = new ArrayList<>();
-        NArea selectedZone;
-        int yPos;
-        Spec parentSpec;
-
-        AutoSubRow(String name, int count, int y, Spec parentSpec) {
-            this.name = name;
-            this.count = count;
-            this.yPos = y;
-            this.parentSpec = parentSpec;
-            final AutoSubRow sub = this;
-            zoneDropbox = new Dropbox<NArea>(UI.scale(AUTO_DROPBOX_W), 8, UI.scale(16)) {
-                @Override
-                protected NArea listitem(int i) {
-                    return i < sub.zones.size() ? sub.zones.get(i) : null;
-                }
-                @Override
-                protected int listitems() {
-                    return Math.max(1, sub.zones.size());
-                }
-                @Override
-                protected void drawitem(GOut g, NArea item, int i) {
-                    if(item != null) {
-                        g.text(item.name != null ? item.name : "#" + item.id, Coord.z);
-                    } else {
-                        g.text("---", Coord.z);
-                    }
-                }
-                @Override
-                public void change(NArea item) {
-                    super.change(item);
-                    sub.selectedZone = item;
-                    if(sub.parentSpec != null && item != null) {
-                        sub.parentSpec.subIngredientZones.put(sub.name, item);
-                    }
-                }
-            };
-            NMakewindow.this.add(zoneDropbox, new Coord(UI.scale(AUTO_DROPBOX_X), y));
-            refreshZones();
-        }
-
-        void refreshZones() {
-            zones.clear();
-            Set<Integer> seenIds = new HashSet<>();
-            for(NArea a : NContext.findAllIn(name)) {
-                if(seenIds.add(a.id)) zones.add(a);
-            }
-            ArrayList<JSONObject> members = VSpec.categories.get(name);
-            if(members != null) {
-                for(JSONObject obj : members) {
-                    String memberName = obj.optString("name");
-                    if(memberName != null) {
-                        for(NArea a : NContext.findAllIn(memberName)) {
-                            if(seenIds.add(a.id)) zones.add(a);
-                        }
-                    }
-                }
-            }
-            if(!zones.isEmpty()) {
-                zoneDropbox.change(zones.get(0));
-            }
-        }
-
-        void destroy() {
-            zoneDropbox.destroy();
-        }
-
-        void setY(int y) {
-            this.yPos = y;
-            zoneDropbox.c = new Coord(UI.scale(AUTO_DROPBOX_X), y);
-        }
-    }
-
-    private class AutoSpecRow {
-        Spec spec;
-        Dropbox<NArea> zoneDropbox;
-        List<NArea> zones = new ArrayList<>();
-        boolean isOutput;
-        boolean zonesLoaded = false;
-        boolean canSubCraft = false;
-        int yPos;
-        List<AutoSubRow> subRows = null;
-
-        private int extraCount() {
-            int n = 0;
-            if(!isOutput) {
-                if(canSubCraft) n++;
-                n++; // [Local Zone]
-            } else {
-                n++; // [Leave in Inventory]
-                n++; // [Local Zone]
-            }
-            return n;
-        }
-
-        AutoSpecRow(Spec spec, boolean isOutput, int y) {
-            this.spec = spec;
-            this.isOutput = isOutput;
-            this.yPos = y;
-            final AutoSpecRow row = this;
-            zoneDropbox = new Dropbox<NArea>(UI.scale(AUTO_DROPBOX_W), 8, UI.scale(16)) {
-                @Override
-                protected NArea listitem(int i) {
-                    if(i < row.zones.size()) return row.zones.get(i);
-                    int extra = i - row.zones.size();
-                    if(!row.isOutput) {
-                        if(row.canSubCraft && extra == 0) return CRAFT_SENTINEL;
-                        int localIdx = row.canSubCraft ? 1 : 0;
-                        if(extra == localIdx) return LOCAL_SENTINEL;
-                    } else {
-                        if(extra == 0) return INVENTORY_SENTINEL;
-                        if(extra == 1) return LOCAL_SENTINEL;
-                    }
-                    return null;
-                }
-                @Override
-                protected int listitems() {
-                    return row.zones.size() + row.extraCount();
-                }
-                @Override
-                protected void drawitem(GOut g, NArea item, int i) {
-                    if(item == CRAFT_SENTINEL) {
-                        g.chcolor(255, 165, 0, 255);
-                        g.text("[Craft]", Coord.z);
-                        g.chcolor();
-                    } else if(item == INVENTORY_SENTINEL) {
-                        g.chcolor(180, 255, 180, 255);
-                        g.text("[Leave in Inventory]", Coord.z);
-                        g.chcolor();
-                    } else if(item == LOCAL_SENTINEL) {
-                        g.chcolor(100, 200, 255, 255);
-                        g.text("[Local Zone]", Coord.z);
-                        g.chcolor();
-                    } else if(item != null) {
-                        String label = getZoneDisplayLabel(item, row.spec, row.isOutput);
-                        g.text(label, Coord.z);
-                    } else {
-                        g.text("---", Coord.z);
-                    }
-                }
-                @Override
-                public void change(NArea item) {
-                    super.change(item);
-                    if(item == CRAFT_SENTINEL) {
-                        row.spec.selectedZone = null;
-                        row.spec.isSubCraft = true;
-                        row.spec.isLocalZone = false;
-                        row.spec.isInventory = false;
-                        expandSubCraft();
-                    } else if(item == INVENTORY_SENTINEL) {
-                        row.spec.selectedZone = null;
-                        row.spec.isSubCraft = false;
-                        row.spec.isLocalZone = false;
-                        row.spec.isInventory = true;
-                        collapseSubCraft();
-                    } else if(item == LOCAL_SENTINEL) {
-                        row.spec.selectedZone = null;
-                        row.spec.isSubCraft = false;
-                        row.spec.isLocalZone = true;
-                        row.spec.isInventory = false;
-                        collapseSubCraft();
-                    } else {
-                        row.spec.selectedZone = item;
-                        row.spec.isSubCraft = false;
-                        row.spec.isLocalZone = false;
-                        row.spec.isInventory = false;
-                        collapseSubCraft();
-                    }
-                    autoSaveZoneSelections();
-                }
-            };
-            int dropboxCenterY = y + (invsq.sz().y - zoneDropbox.sz.y) / 2;
-            NMakewindow.this.add(zoneDropbox, new Coord(UI.scale(AUTO_DROPBOX_X), dropboxCenterY));
-        }
-
-        void expandSubCraft() {
-            collapseSubCraft();
-            String itemName = getEffectiveItemName(spec);
-            if(itemName == null) return;
-            Set<RecipeIngredientCache.RecipeEntry> recipes = RecipeIngredientCache.findOutputRecipesForItem(itemName);
-            if(recipes.isEmpty()) return;
-            RecipeIngredientCache.RecipeEntry recipe = recipes.iterator().next();
-
-            List<RecipeIngredientCache.IngredientSpec> specs = RecipeIngredientCache.getRecipeSpecs(recipe.paginaResource);
-            if(specs.isEmpty()) return;
-            spec.subIngredientZones.clear();
-            subRows = new ArrayList<>();
-            int subY = yPos + UI.scale(AUTO_ROW_H);
-            for(RecipeIngredientCache.IngredientSpec is : specs) {
-                subRows.add(new AutoSubRow(is.name, is.count, subY, spec));
-                subY += UI.scale(AUTO_SUB_ROW_H);
-            }
-            repositionAllRows();
-        }
-
-        void collapseSubCraft() {
-            if(subRows != null) {
-                for(AutoSubRow sr : subRows) sr.destroy();
-                subRows = null;
-                repositionAllRows();
-            }
-        }
-
-        int getTotalHeight() {
-            int h = UI.scale(AUTO_ROW_H);
-            if(subRows != null) {
-                h += subRows.size() * UI.scale(AUTO_SUB_ROW_H);
-            }
-            return h;
-        }
-
-        void refreshZones() {
-            String itemName = getEffectiveItemName(spec);
-            if(itemName == null) return;
-            zonesLoaded = true;
-            List<NArea> found;
-            if(isOutput) {
-                found = NContext.findAllOut(itemName);
-            } else {
-                found = NContext.findAllIn(itemName);
-            }
-            zones.clear();
-            zones.addAll(found);
-            canSubCraft = !isOutput && SubRecipeResolver.canSubCraft(itemName);
-
-            NArea prevSel = spec.selectedZone;
-            if(spec.selectedZoneId > 0 && prevSel == null) {
-                for(NArea a : zones) {
-                    if(a.id == spec.selectedZoneId) {
-                        spec.selectedZone = a;
-                        zoneDropbox.change(a);
-                        break;
-                    }
-                }
-            } else if(prevSel != null && zones.contains(prevSel)) {
-                zoneDropbox.change(prevSel);
-            } else if(spec.isInventory && isOutput) {
-                zoneDropbox.change(INVENTORY_SENTINEL);
-            } else if(spec.isLocalZone) {
-                zoneDropbox.change(LOCAL_SENTINEL);
-            } else if(!zones.isEmpty()) {
-                zoneDropbox.change(zones.get(0));
-            } else if(canSubCraft) {
-                zoneDropbox.change(CRAFT_SENTINEL);
-            } else if(isOutput) {
-                zoneDropbox.change(INVENTORY_SENTINEL);
-            }
-        }
-
-        void setY(int y) {
-            this.yPos = y;
-            int dropboxCenterY = y + (invsq.sz().y - zoneDropbox.sz.y) / 2;
-            zoneDropbox.c = new Coord(UI.scale(AUTO_DROPBOX_X), dropboxCenterY);
-            if(subRows != null) {
-                int subY = y + UI.scale(AUTO_ROW_H);
-                for(AutoSubRow sr : subRows) {
-                    sr.setY(subY);
-                    subY += UI.scale(AUTO_SUB_ROW_H);
-                }
-            }
-        }
-
-        void destroy() {
-            collapseSubCraft();
-            zoneDropbox.destroy();
-        }
-    }
-
-    private void repositionAllRows() {
-        int y = UI.scale(28);
-        if(autoInputRows != null) {
-            for(AutoSpecRow row : autoInputRows) {
-                row.setY(y);
-                y += row.getTotalHeight();
-            }
-        }
-        autoQmodY = y + UI.scale(2);
-        if(!qmod.isEmpty()) {
-            y = autoQmodY + UI.scale(22);
-        }
-        resultLabel.c = new Coord(0, y + UI.scale(4));
-        y += UI.scale(20);
-        if(autoOutputRows != null) {
-            for(AutoSpecRow row : autoOutputRows) {
-                row.setY(y);
-                y += row.getTotalHeight();
-            }
-        }
-        int btnY = y + UI.scale(8);
-        craftBtn.c = new Coord(UI.scale(230), btnY);
-        craft_num.c = new Coord(UI.scale(165), btnY + UI.scale(7));
-        craftAllBtn.c = new Coord(UI.scale(325), btnY);
-        if(savePresetBtn != null) {
-            savePresetBtn.c = UI.scale(new Coord(340, 5));
-        }
-        pack();
-        if(parent != null) parent.pack();
-    }
-
-    private String getEffectiveItemName(Spec s) {
-        if(s.ing != null && !s.ing.isIgnored) return s.ing.name;
-        return s.name;
-    }
-
-    private static String findCategoryFor(String itemName) {
-        if(VSpec.categories.containsKey(itemName)) return itemName;
-        for(Map.Entry<String, ArrayList<JSONObject>> entry : VSpec.categories.entrySet()) {
-            for(JSONObject obj : entry.getValue()) {
-                if(itemName.equals(obj.optString("name"))) {
-                    return entry.getKey();
-                }
-            }
-        }
-        return null;
-    }
-
-    private static String getZoneDisplayLabel(NArea area, Spec spec, boolean isOutput) {
-        String label = area.name != null ? area.name : "#" + area.id;
-        if(isOutput && area.jout != null) {
-            String itemName = spec.ing != null ? spec.ing.name : spec.name;
-            if(itemName != null) {
-                for(int i = 0; i < area.jout.length(); i++) {
-                    try {
-                        JSONObject item = area.jout.getJSONObject(i);
-                        if(itemName.equals(item.optString("name"))) {
-                            Object thObj = item.opt("th");
-                            if(thObj instanceof Number) {
-                                int th = ((Number) thObj).intValue();
-                                if(th > 0) label += " (q" + th + "+)";
-                            }
-                            break;
-                        }
-                    } catch(Exception ignored) {}
-                }
-            }
-        }
-        return label;
-    }
 
     private static final OwnerContext.ClassResolver<NMakewindow> ctxr = new OwnerContext.ClassResolver<NMakewindow>()
             .add(Glob.class, wdg -> wdg.ui.sess.glob)
@@ -421,6 +63,7 @@ public class NMakewindow extends Widget {
     public class Spec implements GSprite.Owner, ItemInfo.SpriteOwner {
         public Indir<Resource> res;
         public MessageBuf sdt;
+        public ResData constraint = null;
         public Tex num;
         public String name;
         public int count;
@@ -429,6 +72,10 @@ public class NMakewindow extends Widget {
         private List<ItemInfo> info;
 
         public Ingredient ing = null;
+
+        public int using = 0;
+        public List<MenuGrid.Pagina> rpag = null;
+        public Coord rcc = null;
 
         public Spec(Indir<Resource> res, Message sdt, int num, Object[] info) {
             this.res = res;
@@ -451,52 +98,15 @@ public class NMakewindow extends Widget {
             try {
                 if(ing==null || !autoMode)
                 {
-                    // Если это категория блоков или досок, показываем стандартную иконку
-                    if(name != null && (name.equals("Block of Wood") || name.equals("Board"))) {
-                        BufferedImage categoryIcon = getCategoryIcon(name);
-                        if(categoryIcon != null) {
-                            g.image(new TexI(categoryIcon), Coord.z, UI.scale(32,32));
-                        } else {
-                            sprite().draw(g);
-                        }
-                    } else {
-                        sprite().draw(g);
-                    }
+                    sprite().draw(g);
                 }
                 else
                 {
-                    // В режиме автокрафта также проверяем категории
-                    if(ing != null && ing.name != null && (ing.name.equals("Block of Wood") || ing.name.equals("Board"))) {
-                        BufferedImage categoryIcon = getCategoryIcon(ing.name);
-                        if(categoryIcon != null) {
-                            g.image(new TexI(categoryIcon), Coord.z, UI.scale(32,32));
-                        } else {
-                            g.image(new TexI(ing.img), Coord.z, UI.scale(32,32));
-                        }
-                    } else {
-                        g.image(new TexI(ing.img), Coord.z, UI.scale(32,32));
-                    }
+                    g.image(new TexI(ing.img), Coord.z, UI.scale(32,32));
                 }
             } catch(Loading e) {}
             if(num != null)
                 g.aimage(num, Inventory.sqsz, 1.0, 1.0);
-        }
-        
-        /**
-         * Получает стандартную иконку для категории блоков или досок
-         * Использует ванильные иконки из игры
-         */
-        private BufferedImage getCategoryIcon(String categoryName) {
-            try {
-                if("Block of Wood".equals(categoryName)) {
-                    return Resource.loadsimg("gfx/invobjs/wblock-oak");
-                } else if("Board".equals(categoryName)) {
-                    return Resource.loadsimg("gfx/invobjs/board-oak");
-                }
-            } catch (Exception e) {
-                // Если не удалось загрузить, вернем null
-            }
-            return null;
         }
 
         private int opt = 0;
@@ -588,33 +198,16 @@ public class NMakewindow extends Widget {
                 if(!logisticin)
                 {
                     categories = (VSpec.categories.get(name)!=null);
-                    if (!categories) {
-                        subCraftable = SubRecipeResolver.canSubCraft(name);
-                    } else {
-                        subCraftable = false;
-                    }
-                }
-                else
-                {
-                    subCraftable = false;
                 }
                 logisticout = (NContext.findOut(name,1) != null);
                 if(!logisticout)
                 {
                     categories = (VSpec.categories.get(name)!=null);
                 }
-                if("Block of Wood".equals(name) || "Board".equals(name)) {
-                    categories = true;
-                }
                 for(Spec s : inputs) {
                     if(s.categories && s.ing!=null)
                     {
                         s.ing.logistic = (NContext.findIn(s.ing.name) != null);
-                        if (!s.ing.logistic && !s.ing.isIgnored) {
-                            s.ing.subCraftable = SubRecipeResolver.canSubCraft(s.ing.name);
-                        } else {
-                            s.ing.subCraftable = false;
-                        }
                     }
                 }
                 for(Spec s : outputs) {
@@ -634,14 +227,7 @@ public class NMakewindow extends Widget {
         public boolean logisticin = false;
         public boolean logisticout = false;
         public boolean categories = false;
-        public boolean useCategory = false;
-        public boolean subCraftable = false;
-        public NArea selectedZone = null;
-        public boolean isSubCraft = false;
-        public boolean isLocalZone = false;
-        public boolean isInventory = false;
-        public int selectedZoneId = -1;
-        public Map<String, NArea> subIngredientZones = new HashMap<>();
+
 
     }
 
@@ -650,6 +236,15 @@ public class NMakewindow extends Widget {
             if(s.spr != null)
                 s.spr.tick(dt);
             s.tick(dt);
+            if((s.rcc != null) && (s.rpag != null)) {
+                if(!s.rpag.isEmpty()) {
+                    SListMenu.of(UI.scale(250, 120), s.rpag,
+                                 pag -> pag.button().name(), pag -> pag.button().img(),
+                                 pag -> pag.button().use(new MenuGrid.Interaction(1, ui.modflags())))
+                        .addat(this, s.rcc.add(UI.scale(5, 5))).tick(dt);
+                }
+                s.rcc = null;
+            }
         }
         for(Spec s : outputs) {
             if(s.spr != null)
@@ -665,55 +260,6 @@ public class NMakewindow extends Widget {
         if (savePresetBtn != null) {
             savePresetBtn.visible = autoMode && allInputsConfigured();
         }
-
-        // Refresh zone lists for auto mode dropboxes
-        if(autoMode) {
-            if(autoInputRows != null) {
-                for(AutoSpecRow row : autoInputRows) {
-                    if(!row.zonesLoaded && getEffectiveItemName(row.spec) != null) {
-                        row.refreshZones();
-                    }
-                }
-            }
-            if(autoOutputRows != null) {
-                for(AutoSpecRow row : autoOutputRows) {
-                    if(!row.zonesLoaded && getEffectiveItemName(row.spec) != null) {
-                        row.refreshZones();
-                    }
-                }
-            }
-        }
-
-        // Cache ingredient/output -> recipe mapping and persist to DB
-        // inputCache: item used AS ingredient (for Alt+RMB)
-        // outputCache: item PRODUCED by recipe (for Shift+Click "how to make")
-        if(!recipeCached && recipeResource != null && !inputs.isEmpty()) {
-            boolean allNamed = true;
-            for(Spec s : inputs) {
-                if(s.name == null) { allNamed = false; break; }
-            }
-            for(Spec s : outputs) {
-                if(s.name == null) { allNamed = false; break; }
-            }
-            if(allNamed) {
-                List<String> ingredientNames = new ArrayList<>();
-                List<RecipeIngredientCache.IngredientSpec> specs = new ArrayList<>();
-                for(Spec s : inputs) {
-                    ingredientNames.add(s.name);
-                    specs.add(new RecipeIngredientCache.IngredientSpec(s.name, s.count));
-                }
-                RecipeIngredientCache.addInputsAndPersist(ingredientNames, recipeResource, rcpnm);
-                RecipeIngredientCache.setRecipeSpecs(recipeResource, specs);
-                List<String> outputNames = new ArrayList<>();
-                for(Spec s : outputs) {
-                    outputNames.add(s.name);
-                }
-                if(!outputNames.isEmpty()) {
-                    RecipeIngredientCache.addOutputsAndPersist(outputNames, recipeResource, rcpnm);
-                }
-                recipeCached = true;
-            }
-        }
     }
 
     /**
@@ -721,207 +267,50 @@ public class NMakewindow extends Widget {
      */
     private boolean allInputsConfigured() {
         for (Spec s : inputs) {
+            // If it's a category input, it needs to have an ingredient selected (or be ignored)
             if (s.categories && s.ing == null) {
-                if (s.isSubCraft || s.selectedZone != null || s.isLocalZone || s.useCategory) continue;
                 return false;
             }
         }
         return true;
     }
 
-    void autoSaveZoneSelections() {
-        if (recipeResource == null || !autoMode) return;
-        try {
-            nurgling.scenarios.CraftPreset preset = new nurgling.scenarios.CraftPreset();
-            preset.setRecipeName(rcpnm);
-            preset.setRecipeResource(recipeResource);
-
-            java.util.List<nurgling.scenarios.CraftPreset.InputSpec> pInputs = new java.util.ArrayList<>();
-            for (Spec s : inputs) {
-                nurgling.scenarios.CraftPreset.InputSpec pi = new nurgling.scenarios.CraftPreset.InputSpec();
-                pi.setName(s.name);
-                pi.setCategory(s.categories);
-                pi.setCount(s.count);
-                pi.setSubCraft(s.isSubCraft);
-                pi.setLocalZone(s.isLocalZone);
-                pi.setUseCategory(s.useCategory);
-                if (s.selectedZone != null) {
-                    pi.setSelectedZoneId(s.selectedZone.id);
-                    pi.setZoneName(s.selectedZone.name);
-                }
-                if (s.ing != null) {
-                    pi.setPreferredIngredient(s.ing.name);
-                    pi.setIgnored(s.ing.isIgnored);
-                }
-                pInputs.add(pi);
-            }
-            preset.setInputs(pInputs);
-
-            java.util.List<nurgling.scenarios.CraftPreset.OutputSpec> pOutputs = new java.util.ArrayList<>();
-            for (Spec s : outputs) {
-                nurgling.scenarios.CraftPreset.OutputSpec po = new nurgling.scenarios.CraftPreset.OutputSpec();
-                po.setName(s.name);
-                po.setCount(s.count);
-                po.setInventory(s.isInventory);
-                po.setLocalZone(s.isLocalZone);
-                if (s.selectedZone != null) {
-                    po.setSelectedZoneId(s.selectedZone.id);
-                    po.setZoneName(s.selectedZone.name);
-                }
-                pOutputs.add(po);
-            }
-            preset.setOutputs(pOutputs);
-
-            nurgling.scenarios.CraftPresetManager.getInstance().saveAutoPreset(recipeResource, preset);
-        } catch (Exception e) {
-            System.err.println("Auto-save zone selections failed: " + e.getMessage());
-        }
-    }
-
-    void autoRestoreZoneSelections() {
-        if (recipeResource == null) return;
-        try {
-            nurgling.scenarios.CraftPreset auto =
-                    nurgling.scenarios.CraftPresetManager.getInstance().getAutoPreset(recipeResource);
-            if (auto == null) return;
-
-            for (nurgling.scenarios.CraftPreset.InputSpec pi : auto.getInputs()) {
-                for (Spec s : inputs) {
-                    if (s.name != null && s.name.equals(pi.getName())) {
-                        s.isSubCraft = pi.isSubCraft();
-                        s.isLocalZone = pi.isLocalZone();
-                        s.useCategory = pi.isUseCategory();
-                        if (pi.getSelectedZoneId() > 0) {
-                            s.selectedZoneId = pi.getSelectedZoneId();
-                            try {
-                                for (java.util.Map.Entry<Integer, nurgling.areas.NArea> entry :
-                                        NUtils.getGameUI().map.glob.map.areas.entrySet()) {
-                                    if (entry.getKey() == pi.getSelectedZoneId()) {
-                                        s.selectedZone = entry.getValue();
-                                        break;
-                                    }
-                                }
-                            } catch (Exception ignored) {}
-                        }
-                        break;
-                    }
-                }
-            }
-            for (int i = 0; i < auto.getOutputs().size() && i < outputs.size(); i++) {
-                nurgling.scenarios.CraftPreset.OutputSpec po = auto.getOutputs().get(i);
-                Spec s = outputs.get(i);
-                s.isInventory = po.isInventory();
-                s.isLocalZone = po.isLocalZone();
-                if (po.getSelectedZoneId() > 0) {
-                    s.selectedZoneId = po.getSelectedZoneId();
-                    try {
-                        for (java.util.Map.Entry<Integer, nurgling.areas.NArea> entry :
-                                NUtils.getGameUI().map.glob.map.areas.entrySet()) {
-                            if (entry.getKey() == po.getSelectedZoneId()) {
-                                s.selectedZone = entry.getValue();
-                                break;
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Auto-restore zone selections failed: " + e.getMessage());
-        }
-    }
-
     @Override
     public boolean mousedown(MouseDownEvent ev) {
-        // Shift+Click on INPUT: "how to make this ingredient" (server findrcps + outputCache)
-        if(ev.b == 1 && (ui.modflags() & UI.MOD_SHIFT) != 0) {
-            int idx = findInputIdx(ev.c);
-            if(idx >= 0) {
-                pendingRecipeIdx = idx;
-                wdgmsg("findrcps", idx);
-                return true;
-            }
-            // Shift+Click on OUTPUT: "where is this result used as ingredient" (inputCache)
-            int outIdx = findOutputIdx(ev.c);
-            if(outIdx >= 0 && outIdx < outputs.size()) {
-                String outName = outputs.get(outIdx).name();
-                if(outName != null) {
-                    showUsageRecipes(outName);
-                }
-                return true;
-            }
-        }
         if(autoMode)
         {
-            // Проверяем клик по чекбоксу "all" для категорий в inputs
             Coord sc = new Coord(xoff, 0);
             boolean popt = false;
-            for(Spec s : inputs) {
-                boolean opt = s.opt();
-                if (opt != popt)
-                    sc = sc.add(10, 0);
-                if(s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
-                    Coord checkboxPos = sc.add(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
-                    if(ev.c.isect(checkboxPos, UI.scale(10, 10))) {
-                        s.useCategory = !s.useCategory;
-                        return true;
-                    }
-                }
-                sc = sc.add(Inventory.sqsz.x, 0);
-                popt = opt;
-            }
-            
-            // Проверяем клик по чекбоксу "all" для категорий в outputs
-            sc = new Coord(xoff, outy);
-            popt = false;
-            for(Spec s : outputs) {
-                boolean opt = s.opt();
-                if (opt != popt)
-                    sc = sc.add(10, 0);
-                if(s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
-                    Coord checkboxPos = sc.add(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
-                    if(ev.c.isect(checkboxPos, UI.scale(10, 10))) {
-                        s.useCategory = !s.useCategory;
-                        return true;
-                    }
-                }
-                sc = sc.add(Inventory.sqsz.x, 0);
-                popt = opt;
-            }
-            
-            sc = new Coord(xoff, 0);
-            popt = false;
             if (clickForCategories(inputs, popt, sc, ev.c)) return true;
             sc = new Coord(xoff, outy);
             if (clickForCategories(outputs, popt, sc, ev.c)) return true;
         }
+        else
+        {
+            Coord sc = new Coord(xoff, 0);
+            boolean popt = false;
+            int idx = 0;
+            for(Spec s : inputs) {
+                boolean opt = s.opt();
+                if(opt != popt)
+                    sc = sc.add(10, 0);
+                if(ev.c.isect(sc, Inventory.sqsz)) {
+                    if(ev.b == 1) {
+                        wdgmsg("choose", idx, ui.modflags());
+                        return true;
+                    } else if(ev.b == 3) {
+                        if(s.rpag == null)
+                            wdgmsg("findrcps", idx);
+                        s.rcc = ev.c;
+                        return true;
+                    }
+                }
+                sc = sc.add(Inventory.sqsz.x, 0);
+                popt = opt;
+                idx++;
+            }
+        }
         return super.mousedown(ev);
-    }
-
-    private int findInputIdx(Coord c) {
-        Coord sc = new Coord(xoff, 0);
-        boolean popt = false;
-        int idx = 0;
-        for(Spec s : inputs) {
-            boolean opt = s.opt();
-            if(opt != popt)
-                sc = sc.add(10, 0);
-            if(c.isect(sc, Inventory.sqsz))
-                return idx;
-            sc = sc.add(Inventory.sqsz.x, 0);
-            popt = opt;
-            idx++;
-        }
-        return -1;
-    }
-
-    private int findOutputIdx(Coord c) {
-        Coord sc = new Coord(xoff, outy);
-        for(int idx = 0; idx < outputs.size(); idx++) {
-            if(c.isect(sc, Inventory.sqsz))
-                return idx;
-            sc = sc.add(Inventory.sqsz.x, 0);
-        }
-        return -1;
     }
 
     private boolean clickForCategories(List<Spec> outputs, boolean popt, Coord sc, Coord c) {
@@ -958,39 +347,31 @@ public class NMakewindow extends Widget {
     public static final KeyBinding kb_make = KeyBinding.get("make/one", KeyMatch.forcode(java.awt.event.KeyEvent.VK_ENTER, 0));
     public static final KeyBinding kb_makeall = KeyBinding.get("make/all", KeyMatch.forcode(java.awt.event.KeyEvent.VK_ENTER, KeyMatch.C));
     public NMakewindow(String rcpnm) {
-        inputLabel = add(new Label(L10n.get("craft.input")), new Coord(0, UI.scale(8)));
-        int inputW = inputLabel.sz.x;
-        resultLabel = add(new Label(L10n.get("craft.result")), new Coord(0, outy + UI.scale(8)));
-        int resultW = resultLabel.sz.x;
+        int inputW = add(new Label(L10n.get("craft.input")), new Coord(0, UI.scale(8))).sz.x;
+        int resultW = add(new Label(L10n.get("craft.result")), new Coord(0, outy + UI.scale(8))).sz.x;
         xoff = Math.max(inputW, resultW) + UI.scale(10);
 
-        craftBtn = add(new Button(UI.scale(85), L10n.get("craft.craft")), UI.scale(new Coord(230, 75)));
-        ((Button)craftBtn).action(() -> craft());
-        craftBtn.setgkey(kb_make);
+        add(new Button(UI.scale(85), L10n.get("craft.craft")), UI.scale(new Coord(230, 75))).action(() -> craft()).setgkey(kb_make);
         add(craft_num = new TextEntry(UI.scale(55), ""), UI.scale(new Coord(165, 82)));
-        craftAllBtn = add(new Button(UI.scale(85), L10n.get("craft.craft_all")), UI.scale(new Coord(325, 75)));
-        ((Button)craftAllBtn).action(() -> craftAll());
-        craftAllBtn.setgkey(kb_makeall);
+        add(new Button(UI.scale(85), L10n.get("craft.craft_all")), UI.scale(new Coord(325, 75))).action(() -> craftAll()).setgkey(kb_makeall);
         add(new ICheckBox(NStyle.auto[0],NStyle.auto[1],NStyle.auto[2],NStyle.auto[3]){
             @Override
             public void changed(boolean val)
             {
                 super.changed(val);
                 autoMode = val;
-                if(val) {
-                    if(!RecipeIngredientCache.isDbLoaded()) {
-                        RecipeIngredientCache.loadFromDatabase();
-                    }
-                    autoRestoreZoneSelections();
-                    rebuildAutoLayout();
-                } else {
-                    clearAutoLayout();
-                }
+                noTransfer.visible = val;
             }
         }, UI.scale(new Coord(365, 5)));
 
-        noTransfer = new CheckBox("");
-        noTransfer.a = false;
+        add(noTransfer = new CheckBox(L10n.get("craft.no_transfer"))
+        {
+            @Override
+            public void changed(boolean val) {
+                super.changed(val);
+            }
+        }, UI.scale(new Coord(325, 38)));
+        noTransfer.visible = false;
 
         // Save Preset button - only visible in auto mode when all inputs are configured
         // Scale icons to 2/3 size and position left of quantity input
@@ -1025,33 +406,54 @@ public class NMakewindow extends Widget {
         NUtils.getGameUI().add(new SaveCraftPresetDialog(this), UI.scale(new Coord(200, 200)));
     }
 
+    // Parse one make-window spec (protocol v31: modular message format).
+    private Spec parsespec(Object[] desc) {
+        int a = 0;
+        Indir<Resource> res = ui.sess.getresv(desc[a++]);
+        Message sdt = BYTES.is(desc, a) ? new MessageBuf(BYTES.of(desc, a++)) : MessageBuf.nil;
+        int num = INT.of(desc, a++);
+        Object[] info = OBJS.is(desc, a) ? OBJS.of(desc, a++) : new Object[0];
+        Spec ret = new Spec(res, sdt, num, info);
+        while(a < desc.length) {
+            Object[] arg = OBJS.of(desc[a++]);
+            switch(STR.of(arg[0])) {
+            case "constraint":
+                ResData cst = new ResData(ui.sess.getresv(arg[1]), Message.nil);
+                if(BYTES.is(arg, 2))
+                    cst.sdt = new MessageBuf(BYTES.of(arg, 2));
+                ret.constraint = cst;
+                break;
+            }
+        }
+        return ret;
+    }
+
     public void uimsg(String msg, Object... args) {
         if(msg == "inpop") {
-            List<Spec> inputs = new LinkedList<Spec>();
-            for(int i = 0; i < args.length;) {
-                int resid = (Integer)args[i++];
-                Message sdt = (args[i] instanceof byte[])?new MessageBuf((byte[])args[i++]):MessageBuf.nil;
-                int num = (Integer)args[i++];
-                Object[] info = {};
-                if((i < args.length) && (args[i] instanceof Object[]))
-                    info = (Object[])args[i++];
-                inputs.add(new Spec(ui.sess.getres(resid), sdt, num, info));
+            List<Spec> inputs;
+            if(INT.is(args, 0)) {
+                // Indexed update: reuse existing specs, replace by index.
+                inputs = new ArrayList<>(this.inputs);
+                for(int i = 0; i < args.length; i += 2)
+                    inputs.set(INT.of(args, i), parsespec(OBJS.of(args, i + 1)));
+            } else {
+                inputs = new ArrayList<>();
+                for(int i = 0; i < args.length; i++)
+                    inputs.add(parsespec(OBJS.of(args[i])));
             }
             this.inputs = inputs;
-            if(autoMode) rebuildAutoLayout();
         } else if(msg == "opop") {
-            List<Spec> outputs = new LinkedList<Spec>();
-            for(int i = 0; i < args.length;) {
-                int resid = (Integer)args[i++];
-                Message sdt = (args[i] instanceof byte[])?new MessageBuf((byte[])args[i++]):MessageBuf.nil;
-                int num = (Integer)args[i++];
-                Object[] info = {};
-                if((i < args.length) && (args[i] instanceof Object[]))
-                    info = (Object[])args[i++];
-                outputs.add(new Spec(ui.sess.getres(resid), sdt, num, info));
+            List<Spec> outputs;
+            if(INT.is(args, 0)) {
+                outputs = new ArrayList<>(this.outputs);
+                for(int i = 0; i < args.length; i += 2)
+                    outputs.set(INT.of(args, i), parsespec(OBJS.of(args, i + 1)));
+            } else {
+                outputs = new ArrayList<>();
+                for(int i = 0; i < args.length; i++)
+                    outputs.add(parsespec(OBJS.of(args[i])));
             }
             this.outputs = outputs;
-            if(autoMode) rebuildAutoLayout();
         } else if(msg == "qmod") {
             List<Indir<Resource>> qmod = new ArrayList<Indir<Resource>>();
             for(Object arg : args)
@@ -1059,142 +461,20 @@ public class NMakewindow extends Widget {
             this.qmod = qmod;
         } else if(msg == "tool") {
             tools.add(ui.sess.getres((Integer)args[0]));
+        } else if(msg == "use") {
+            inputs.get(Utils.iv(args[0])).using = Utils.iv(args[1]);
         } else if(msg == "inprcps") {
             int idx = Utils.iv(args[0]);
             List<MenuGrid.Pagina> rcps = new ArrayList<>();
             GameUI gui = getparent(GameUI.class);
-            if(gui != null && gui.menu != null) {
+            if((gui != null) && (gui.menu != null)) {
                 for(int a = 1; a < args.length; a++)
-                    rcps.add(gui.menu.paginafor(ui.sess.getresv(args[a])));
+                    rcps.add(gui.menu.paginafor(ui.sess.getres((Integer)args[a])));
             }
-            if(idx == pendingRecipeIdx) {
-                // Supplement server results with OUTPUT cache only
-                // (recipes that PRODUCE this ingredient — "how to make it")
-                if(gui != null && gui.menu != null && idx >= 0 && idx < inputs.size()) {
-                    String ingName = inputs.get(idx).name();
-                    if(ingName != null) {
-                        List<String> searchNames = new ArrayList<>();
-                        searchNames.add(ingName);
-                        searchNames.addAll(VSpec.getCategory(ingName));
-                        // Search output cache: recipes that produce this item
-                        Set<RecipeIngredientCache.RecipeEntry> cached =
-                            RecipeIngredientCache.findOutputRecipes(searchNames);
-                        // DB fallback — search output type only
-                        if(cached.isEmpty() && NCore.databaseManager != null
-                                && NCore.databaseManager.isReady()
-                                && NCore.databaseManager.getCraftRecipeService() != null) {
-                            try {
-                                cached = NCore.databaseManager.getCraftRecipeService()
-                                    .findByProducts(searchNames);
-                            } catch(Exception e) {}
-                        }
-                        // Merge: add cache results not already in server results
-                        Set<String> existing = new HashSet<>();
-                        for(MenuGrid.Pagina p : rcps) {
-                            try { existing.add(p.res().name); } catch(Loading e) {}
-                        }
-                        Set<String> cacheRes = new HashSet<>();
-                        for(RecipeIngredientCache.RecipeEntry entry : cached) {
-                            cacheRes.add(entry.paginaResource);
-                        }
-                        for(MenuGrid.Pagina pag : gui.menu.paginae) {
-                            try {
-                                String rn = pag.res().name;
-                                if(cacheRes.contains(rn) && !existing.contains(rn)) {
-                                    rcps.add(pag);
-                                    existing.add(rn);
-                                }
-                            } catch(Loading e) {}
-                        }
-                    }
-                }
-                showRecipeMenu(rcps);
-                pendingRecipeIdx = -1;
-            }
+            inputs.get(idx).rpag = rcps;
         } else {
             super.uimsg(msg, args);
         }
-    }
-
-    /**
-     * Show recipes where the given item is used AS INGREDIENT (inputCache).
-     * Called on Shift+Click on OUTPUT items.
-     */
-    private void showUsageRecipes(String itemName) {
-        GameUI gui = getparent(GameUI.class);
-        if(gui == null || gui.menu == null) return;
-
-        // Trigger DB load on first use
-        if(!RecipeIngredientCache.isDbLoaded()) {
-            RecipeIngredientCache.loadFromDatabase();
-        }
-
-        // Search names: item name + VSpec category groups it belongs to
-        List<String> searchNames = new ArrayList<>();
-        searchNames.add(itemName);
-        searchNames.addAll(VSpec.getCategory(itemName));
-
-        // Search input cache: recipes that CONSUME this item
-        Set<RecipeIngredientCache.RecipeEntry> cached =
-            RecipeIngredientCache.findInputRecipes(searchNames);
-
-        // DB fallback — input type only
-        if(cached.isEmpty() && NCore.databaseManager != null
-                && NCore.databaseManager.isReady()
-                && NCore.databaseManager.getCraftRecipeService() != null) {
-            try {
-                cached = NCore.databaseManager.getCraftRecipeService()
-                    .findByIngredients(searchNames);
-            } catch(Exception e) {}
-        }
-        if(cached.isEmpty()) return;
-
-        // Match against available paginae
-        Set<String> cacheRes = new HashSet<>();
-        for(RecipeIngredientCache.RecipeEntry entry : cached) {
-            cacheRes.add(entry.paginaResource);
-        }
-        List<MenuGrid.Pagina> available = new ArrayList<>();
-        for(MenuGrid.Pagina pag : gui.menu.paginae) {
-            try {
-                if(cacheRes.contains(pag.res().name)) {
-                    available.add(pag);
-                }
-            } catch(Loading e) {}
-        }
-
-        showRecipeMenu(available);
-    }
-
-    private void showRecipeMenu(List<MenuGrid.Pagina> recipes) {
-        if(recipes.isEmpty()) return;
-        if(recipes.size() == 1) {
-            recipes.get(0).button().use(new MenuGrid.Interaction(1, ui.modflags()));
-            return;
-        }
-        recipes.sort((a, b) -> {
-            try {
-                return a.button().name().compareTo(b.button().name());
-            } catch(Loading e) { return 0; }
-        });
-        SListMenu.of(UI.scale(250, 120), recipes,
-                pag -> pag.button().name(),
-                pag -> pag.button().img(),
-                pag -> pag.button().use(new MenuGrid.Interaction(1, ui.modflags())))
-            .addat(this, ui.mc.sub(rootpos(Coord.z)));
-    }
-
-    /**
-     * Draws an orange indicator for ingredients that can be sub-crafted.
-     */
-    private void drawSubCraftIndicator(GOut sg) {
-        int sz = UI.scale(8);
-        Coord pos = new Coord(UI.scale(1), UI.scale(1));
-        sg.chcolor(255, 165, 0, 220);
-        sg.frect(pos, new Coord(sz, sz));
-        sg.chcolor(200, 120, 0, 255);
-        sg.rect(pos, new Coord(sz, sz));
-        sg.chcolor();
     }
 
     public static final Coord qmodsz = UI.scale(20, 20);
@@ -1206,10 +486,6 @@ public class NMakewindow extends Widget {
     }
 
     public void draw(GOut g) {
-        if(autoMode && autoInputRows != null && !autoInputRows.isEmpty()) {
-            drawAutoMode(g);
-            return;
-        }
         Coord c = new Coord(xoff, 0);
         boolean popt = false;
         for(Spec s : inputs) {
@@ -1225,26 +501,11 @@ public class NMakewindow extends Widget {
                 sg.image(invsq, Coord.z);
             }
             s.draw(sg);
-            
-            // Рисуем чекбокс "all" для категорий
-            if(autoMode && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
-                Coord checkboxPos = new Coord(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
-                // Рисуем простой чекбокс
-                if(s.useCategory) {
-                    sg.chcolor(0, 255, 0, 255);
-                    sg.frect(checkboxPos, UI.scale(10, 10));
-                    sg.chcolor();
-                    sg.chcolor(255, 255, 255, 255);
-                    sg.line(checkboxPos.add(UI.scale(2), UI.scale(5)), checkboxPos.add(UI.scale(4), UI.scale(7)), 1);
-                    sg.line(checkboxPos.add(UI.scale(4), UI.scale(7)), checkboxPos.add(UI.scale(8), UI.scale(2)), 1);
-                    sg.chcolor();
-                } else {
-                    sg.chcolor(255, 255, 255, 128);
-                    sg.frect(checkboxPos, UI.scale(10, 10));
-                    sg.chcolor();
-                }
+            if(!autoMode && !opt && (s.count > 0) && (s.using < s.count)) {
+                sg.chcolor(255, 0, 0, 64);
+                sg.frect2(Coord.of(0, (invsq.sz().y * s.using) / s.count), invsq.sz());
+                sg.chcolor();
             }
-            
             c = c.add(Inventory.sqsz.x, 0);
             popt = opt;
             if(autoMode)
@@ -1269,19 +530,11 @@ public class NMakewindow extends Widget {
                             {
                                 sg.image(aready, Coord.z);
                             }
-                            else if(s.ing.subCraftable)
-                            {
-                                drawSubCraftIndicator(sg);
-                            }
                             else
                             {
                                 sg.image(anotfound, Coord.z);
                             }
                         }
-                    }
-                    else if(s.subCraftable)
-                    {
-                        drawSubCraftIndicator(sg);
                     }
                     else
                     {
@@ -1359,26 +612,6 @@ public class NMakewindow extends Widget {
             GOut sg = g.reclip(c, invsq.sz());
             sg.image(invsq, Coord.z);
             s.draw(sg);
-            
-            // Рисуем чекбокс "all" для категорий
-            if(autoMode && s.categories && (s.name != null && (s.name.equals("Board") || s.name.equals("Block of Wood")))) {
-                Coord checkboxPos = new Coord(Inventory.sqsz.x - UI.scale(12), UI.scale(2));
-                // Рисуем простой чекбокс
-                if(s.useCategory) {
-                    sg.chcolor(0, 255, 0, 255);
-                    sg.frect(checkboxPos, UI.scale(10, 10));
-                    sg.chcolor();
-                    sg.chcolor(255, 255, 255, 255);
-                    sg.line(checkboxPos.add(UI.scale(2), UI.scale(5)), checkboxPos.add(UI.scale(4), UI.scale(7)), 1);
-                    sg.line(checkboxPos.add(UI.scale(4), UI.scale(7)), checkboxPos.add(UI.scale(8), UI.scale(2)), 1);
-                    sg.chcolor();
-                } else {
-                    sg.chcolor(255, 255, 255, 128);
-                    sg.frect(checkboxPos, UI.scale(10, 10));
-                    sg.chcolor();
-                }
-            }
-            
             c = c.add(Inventory.sqsz.x, 0);
             if(autoMode)
             {
@@ -1416,145 +649,6 @@ public class NMakewindow extends Widget {
             }
         }
         super.draw(g);
-    }
-
-    private void drawAutoMode(GOut g) {
-        for(AutoSpecRow row : autoInputRows) {
-            drawAutoRow(g, row);
-            if(row.subRows != null) {
-                for(AutoSubRow sub : row.subRows) {
-                    drawAutoSubRow(g, sub);
-                }
-            }
-        }
-        if(!qmod.isEmpty()) {
-            int x = 0;
-            x += getQmodl().sz().x + UI.scale(5);
-            x = Math.max(x, xoff);
-            qmx = x;
-            int count = 0;
-            double product = 1.0;
-            for(Indir<Resource> qm : qmod) {
-                try {
-                    Tex t = buildQTex(qm);
-                    g.image(t, new Coord(x, autoQmodY));
-                    x += t.sz().x + UI.scale(1);
-                    for(BAttrWnd.Attr attr: ui.gui.chrwdg.battr.attrs) {
-                        if(attr.attr.nm.equals(qm.get().basename())) {
-                            count++;
-                            product = product * attr.attr.comp;
-                            BufferedImage texVal = fnd2.render(String.valueOf(attr.attr.comp)).img;
-                            g.image(texVal, new Coord(x, autoQmodY + UI.scale(1)));
-                            x += texVal.getWidth() + UI.scale(1);
-                            break;
-                        }
-                    }
-                    for(SAttrWnd.SAttr attr: ui.gui.chrwdg.sattr.attrs) {
-                        if(attr.attr.nm.equals(qm.get().basename())) {
-                            count++;
-                            product = product * attr.attr.comp;
-                            BufferedImage texVal = fnd2.render(String.valueOf(attr.attr.comp)).img;
-                            g.image(texVal, new Coord(x, autoQmodY + UI.scale(1)));
-                            x += texVal.getWidth() + UI.scale(1);
-                            break;
-                        }
-                    }
-                } catch(Loading l) {}
-            }
-            if(count > 0) {
-                drawSoftcap(g, new Coord(x, autoQmodY), product, count);
-            }
-        }
-        if(autoOutputRows != null) {
-            for(AutoSpecRow row : autoOutputRows) {
-                drawAutoRow(g, row);
-            }
-        }
-        super.draw(g);
-    }
-
-    private void drawAutoRow(GOut g, AutoSpecRow row) {
-        Spec s = row.spec;
-        int y = row.yPos;
-        int iconX = UI.scale(5);
-        Coord iconSz = invsq.sz();
-        GOut sg = g.reclip(new Coord(iconX, y), iconSz);
-        sg.image(invsq, Coord.z);
-        s.draw(sg);
-
-        if(!row.isOutput) {
-            if(s.selectedZone != null) {
-                sg.image(aready, Coord.z);
-            } else if(s.isSubCraft) {
-                drawSubCraftIndicator(sg);
-            } else if(s.logisticin || (s.ing != null && s.ing.logistic)) {
-                sg.image(aready, Coord.z);
-            } else if(row.zones.isEmpty() && !row.canSubCraft) {
-                sg.image(anotfound, Coord.z);
-            }
-        } else {
-            if(s.selectedZone != null) {
-                sg.image(aready, Coord.z);
-            } else if(s.logisticout || (s.ing != null && s.ing.logistic)) {
-                sg.image(aready, Coord.z);
-            } else {
-                sg.image(anotfound, Coord.z);
-            }
-        }
-
-        String displayName = s.name;
-        if(s.ing != null) displayName = s.ing.name;
-        if(displayName != null) {
-            int craftCount = getCraftCount();
-            String text = displayName;
-            if(s.count > 0) {
-                text += " x" + s.count;
-                if(craftCount > 1) {
-                    text += " [" + (s.count * craftCount) + "]";
-                }
-            }
-            BufferedImage nameImg = fnd2.render(text).img;
-            int nameX = iconX + iconSz.x + UI.scale(5);
-            int nameY = y + (iconSz.y - nameImg.getHeight()) / 2;
-            g.image(nameImg, new Coord(nameX, nameY));
-        }
-    }
-
-    private void drawAutoSubRow(GOut g, AutoSubRow sub) {
-        int y = sub.yPos;
-        int indentX = UI.scale(AUTO_SUB_INDENT);
-
-        g.chcolor(180, 180, 180, 200);
-        int midY = y + UI.scale(AUTO_SUB_ROW_H) / 2;
-        g.line(new Coord(indentX - UI.scale(14), y - UI.scale(4)), new Coord(indentX - UI.scale(14), midY), 1);
-        g.line(new Coord(indentX - UI.scale(14), midY), new Coord(indentX - UI.scale(4), midY), 1);
-        g.chcolor();
-
-        if(sub.selectedZone != null) {
-            g.chcolor(100, 255, 100, 255);
-        } else if(sub.zones.isEmpty()) {
-            g.chcolor(255, 100, 100, 255);
-        }
-        int craftCount = getCraftCount();
-        String text = "\u2022 " + sub.name;
-        if(sub.count > 0) {
-            text += " x" + sub.count;
-            if(craftCount > 1) {
-                text += " [" + (sub.count * craftCount) + "]";
-            }
-        }
-        BufferedImage nameImg = fnd2.render(text).img;
-        int nameY = y + (UI.scale(AUTO_SUB_ROW_H) - nameImg.getHeight()) / 2;
-        g.image(nameImg, new Coord(indentX, nameY));
-        g.chcolor();
-    }
-
-    private int getCraftCount() {
-        try {
-            String cand = craft_num.text();
-            if(!cand.isEmpty()) return Math.max(1, Integer.parseInt(cand));
-        } catch(NumberFormatException e) {}
-        return 1;
     }
 
     private int drawSoftcap(GOut g, Coord p, double product, int count) {
@@ -1728,6 +822,25 @@ public class NMakewindow extends Widget {
         return(super.globtype(ev));
     }
 
+    /**
+     * Current text of the target-quantity field, or "" if unavailable. Used to
+     * carry the requested craft count across a recipe re-open (which builds a fresh
+     * widget with an empty field).
+     */
+    public String getCraftCount()
+    {
+        return (craft_num != null) ? craft_num.text() : "";
+    }
+
+    /**
+     * Restore the target-quantity field text (see {@link #getCraftCount()}).
+     */
+    public void setCraftCount(String value)
+    {
+        if (craft_num != null && value != null)
+            craft_num.settext(value);
+    }
+
     void craft()
     {
         if(!autoMode)
@@ -1765,51 +878,7 @@ public class NMakewindow extends Widget {
         }
     }
 
-    void rebuildAutoLayout() {
-        clearAutoLayout();
-        autoInputRows = new ArrayList<>();
-        autoOutputRows = new ArrayList<>();
-        int y = UI.scale(28);
-        for(Spec s : inputs) {
-            AutoSpecRow row = new AutoSpecRow(s, false, y);
-            autoInputRows.add(row);
-            y += UI.scale(AUTO_ROW_H);
-        }
-        autoQmodY = y + UI.scale(2);
-        if(!qmod.isEmpty()) {
-            y = autoQmodY + UI.scale(22);
-        }
-        resultLabel.c = new Coord(0, y + UI.scale(4));
-        y += UI.scale(20);
-        for(Spec s : outputs) {
-            AutoSpecRow row = new AutoSpecRow(s, true, y);
-            autoOutputRows.add(row);
-            y += UI.scale(AUTO_ROW_H);
-        }
-        repositionAllRows();
-    }
 
-    void clearAutoLayout() {
-        if(autoInputRows != null) {
-            for(AutoSpecRow row : autoInputRows) row.destroy();
-            autoInputRows = null;
-        }
-        if(autoOutputRows != null) {
-            for(AutoSpecRow row : autoOutputRows) row.destroy();
-            autoOutputRows = null;
-        }
-        resultLabel.c = new Coord(0, outy + UI.scale(8));
-        craftBtn.c = UI.scale(new Coord(230, 75));
-        craft_num.c = UI.scale(new Coord(165, 82));
-        craftAllBtn.c = UI.scale(new Coord(325, 75));
-        if(savePresetBtn != null) {
-            savePresetBtn.c = UI.scale(new Coord(340, 5));
-        }
-        pack();
-        if(parent != null) parent.pack();
-    }
-
-    private int autoQmodY = 0;
 
     public static class Optional extends ItemInfo.Tip {
         public static Text text = null;
@@ -1846,7 +915,6 @@ public class NMakewindow extends Widget {
         public String name;
         boolean logistic;
         public boolean isIgnored = false;
-        public boolean subCraftable = false;
 
         public Ingredient(JSONObject obj)
         {
@@ -1881,11 +949,6 @@ public class NMakewindow extends Widget {
         ).add(UI.scale(20,18));
     }
     
-    private static Coord calculateCategoriesSize(int itemCount, boolean isOptional) {
-        int totalSize = itemCount + (isOptional ? 1 : 0);
-        return calculateSize(totalSize);
-    }
-    
     public class Categories extends Widget
     {
 
@@ -1899,7 +962,7 @@ public class NMakewindow extends Widget {
         
         public Categories(ArrayList<JSONObject> objs, Spec s, boolean isOptional)
         {
-            super(calculateCategoriesSize(objs.size(), isOptional));
+            super(calculateSize(objs.size() + (isOptional ? 1 : 0)));
             this.s = s;
             this.isOptional = isOptional;
             add(fr = new Frame(sz.sub(catend),true));
@@ -1913,8 +976,6 @@ public class NMakewindow extends Widget {
                     System.out.println("Failed to load ignore resource: " + e.getMessage());
                 }
             }
-            
-            // Больше не добавляем опцию категории - используем чекбокс "all" вместо этого
             
             for(JSONObject obj: objs)
             {

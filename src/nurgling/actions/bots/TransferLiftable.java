@@ -15,13 +15,18 @@ import nurgling.widgets.Specialisation;
 import java.util.ArrayList;
 
 /**
- * Transfers liftable objects by always prompting user to select zones.
- * Always prompts for input zone selection.
- * Uses global CarrierOut zone if exists, otherwise prompts for output zone selection.
- * For automatic global zone navigation, use TransferLiftableGlobal instead.
+ * Transfers liftable objects between zones.
+ * Two modes:
+ * - requireGlobalZones=false (default): prompts user for both input and output zones every run
+ * - requireGlobalZones=true: requires global CarrierOut zone (errors if not found), uses global sorting zone for input with prompt fallback
  */
 public class TransferLiftable implements Action
 {
+    protected final boolean requireGlobalZones;
+
+    public TransferLiftable() { this.requireGlobalZones = false; }
+    public TransferLiftable(boolean requireGlobalZones) { this.requireGlobalZones = requireGlobalZones; }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
@@ -44,26 +49,26 @@ public class TransferLiftable implements Action
             return Results.ERROR("No config");
         }
 
-        // Create context for transfer
         NContext context = new NContext(gui);
 
-        // Always prompt for input area selection
-        String insaId = context.createArea("Please, select input area", Resource.loadsimg("baubles/inputArea"));
-        NArea inarea = context.getAreaById(insaId);
+        NArea carrierOutArea;
+        NArea inarea;
 
-        // Find CarrierOut area for output: use selected zone from settings, else global, else prompt
-        NArea carrierOutArea = null;
-        if (prop.targetZoneId != null) {
-            carrierOutArea = NUtils.getArea(prop.targetZoneId);
-        }
-        if (carrierOutArea == null) {
-            NArea.Specialisation carrierOutSpec = new NArea.Specialisation(Specialisation.SpecName.carrierout.toString());
-            carrierOutArea = NContext.findSpecGlobal(carrierOutSpec);
-        }
-        if (carrierOutArea == null)
-        {
+        if (requireGlobalZones) {
+            carrierOutArea = context.findArea(Specialisation.SpecName.carrierout);
+            if (carrierOutArea == null) {
+                return Results.ERROR("No CarrierOut zone found! Please create a global zone with 'carrierout' specialization.");
+            }
+            inarea = context.findArea(Specialisation.SpecName.sorting);
+            if (inarea == null) {
+                String insaId = context.createArea("Please, select input area", Resource.loadsimg("baubles/inputArea"));
+                inarea = context.goToAreaById(insaId);
+            }
+        } else {
+            String insaId = context.createArea("Please, select input area", Resource.loadsimg("baubles/inputArea"));
+            inarea = context.goToAreaById(insaId);
             String outsaId = context.createArea("Please, select output area", Resource.loadsimg("baubles/outputArea"));
-            carrierOutArea = context.getAreaById(outsaId);
+            carrierOutArea = context.goToAreaById(outsaId);
         }
 
 
@@ -88,27 +93,15 @@ public class TransferLiftable implements Action
             // Lift the item
             new LiftObject(item).run(gui);
 
-            // Navigate to output area - check if navigation succeeded
-            if (!NUtils.navigateToArea(carrierOutArea)) {
-                String zoneName = (carrierOutArea.name != null) ? carrierOutArea.name : ("#" + carrierOutArea.id);
-                return Results.ERROR("Cannot navigate to output zone '" + zoneName + "'. " +
-                    "The zone may be too far away. Try walking closer to it first.");
-            }
-            
-            // Move to output area and place the item
-            // Use NArea constructor so FindPlaceAndAction can navigate to zone if needed
+            // Move to output area and place the item. FindPlaceAndAction walks
+            // onto the area first (it has the NArea) so the whole zone is loaded
+            // before a drop cell is chosen.
             new FindPlaceAndAction(null, carrierOutArea).run(gui);
 
             // Move away from the placed item
             Coord2d shift = item.rc.sub(NUtils.player().rc).norm().mul(2);
             new GoTo(NUtils.player().rc.sub(shift)).run(gui);
-            
-            // Navigate back to input area - check if navigation succeeded
-            if (!NUtils.navigateToArea(inarea)) {
-                String zoneName = (inarea.name != null) ? inarea.name : ("#" + inarea.id);
-                return Results.ERROR("Cannot navigate back to input zone '" + zoneName + "'. " +
-                    "The zone may be too far away. Try walking closer to it first.");
-            }
+            NUtils.navigateToArea(inarea);
         }
 
         return Results.SUCCESS();

@@ -96,7 +96,13 @@ public class Specialisation extends Window
         gardenPotSeeds,
         rawfish,
         candelabrum,
-        buildMaterials;
+        buildMaterials,
+        extractionPress,
+        trufflePig,
+        thicket,
+        beeSkep,
+        soilDump,
+        paving;
     }
 
     private static ArrayList<SpecialisationItem> specialisation = new ArrayList<>();
@@ -193,6 +199,24 @@ public class Specialisation extends Window
         // Construction materials (with subtypes: Block, Board, Stone, String, Nugget, etc.)
         specialisation.add(new SpecialisationItem(SpecName.buildMaterials.toString(),"Construction Materials",Resource.loadsimg("nurgling/categories/consmaterials")));
 
+        // Extraction press
+        specialisation.add(new SpecialisationItem(SpecName.extractionPress.toString(),"Extraction Press",Resource.loadsimg("nurgling/categories/extraction_press")));
+
+        // Truffle pig hunting area
+        specialisation.add(new SpecialisationItem(SpecName.trufflePig.toString(),"Truffle Pig",Resource.loadsimg("nurgling/categories/truffle_pig")));
+
+        // Thicket area for tick gathering
+        specialisation.add(new SpecialisationItem(SpecName.thicket.toString(),"Thicket",Resource.loadsimg("nurgling/categories/tick")));
+
+        // Bee skep area
+        specialisation.add(new SpecialisationItem(SpecName.beeSkep.toString(),"Bee Skep",Resource.loadsimg("nurgling/categories/bee")));
+
+        // Paved soil dump zone for Leveler bot
+        specialisation.add(new SpecialisationItem(SpecName.soilDump.toString(),"Soil Dump (paved)",Resource.loadsimg("nurgling/categories/tsoil")));
+
+        // Stone paving zone (subtype = stone type to lay, e.g. Soapstone, Diabase)
+        specialisation.add(new SpecialisationItem(SpecName.paving.toString(),"Stone Paving",Resource.loadsimg("nurgling/categories/paving")));
+
         specialisation.sort(new Comparator<SpecialisationItem>() {
             @Override
             public int compare(SpecialisationItem o1, SpecialisationItem o2) {
@@ -252,6 +276,7 @@ public class Specialisation extends Window
                         }
                         
                         area.spec.add(new NArea.Specialisation(value));
+                        area.markDirty(nurgling.areas.AreaFieldGroup.ROUTING);
                         NConfig.needAreasUpdate();
                         NUtils.getGameUI().areas.loadSpec(area.id);
                         Specialisation.this.hide();

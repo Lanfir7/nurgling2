@@ -12,7 +12,7 @@ import nurgling.tools.NAlias;
 import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
-
+import java.util.Arrays;
 
 public class TurnipsFarmer implements Action {
     @Override
@@ -25,7 +25,7 @@ public class TurnipsFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Turnip");
+        nContext.goToArea(Specialisation.SpecName.crop, "Turnip");
 
         NArea turnipArea = NContext.findOut("Turnip", 1);
 
@@ -61,8 +61,8 @@ public class TurnipsFarmer implements Action {
             }
             
             if (turnipArea != null)
-                new CollectItemsToPile(NContext.findSpec(field).getRCArea(), turnipArea.getRCArea(), new NAlias("items/turnip", "Turnip")).run(gui);
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/turnip"), new NAlias("Turnip"), false).run(gui);
+                new CollectItemsToPile(NContext.findSpec(field).getRCArea(), turnipArea.getRCArea(), new NAlias(new ArrayList<>(Arrays.asList("items/turnip", "Turnip")), new ArrayList<>(Arrays.asList("seed")))).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/turnip"), turnipArea).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

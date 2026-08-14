@@ -7,14 +7,12 @@ import nurgling.NWItem;
 import nurgling.areas.NArea;
 import nurgling.tasks.*;
 import nurgling.tools.Container;
-import nurgling.tools.Context;
+import nurgling.areas.NContext;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LettuceAndPumpkinCollector implements Action {
     NArea input;
@@ -42,7 +40,18 @@ public class LettuceAndPumpkinCollector implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
 
-        NAlias collected_items = new NAlias(items.keys, new ArrayList<>(Arrays.asList("stockpile", "barrel")));
+        // Preserve any exceptions the caller passed (e.g. "flesh" to keep the by-product
+        // out of the search) and add the standard container exclusions.
+        ArrayList<String> exceptions = new ArrayList<>(items.exceptions);
+        exceptions.add("stockpile");
+        exceptions.add("barrel");
+        // A growing crop and the item it yields share a name - "gfx/terobjs/plants/pumpkin"
+        // vs "gfx/terobjs/items/pumpkin" - so an item alias like "Pumpkin" (substring match)
+        // also hits the planted crop. Picking up from the earth can never apply to a plant,
+        // so exclude the plant path outright: on a partially planted field takeFromEarth
+        // would otherwise wait forever for a gob that never goes away.
+        exceptions.add("plants/");
+        NAlias collected_items = new NAlias(items.keys, exceptions);
         ArrayList<WItem> testItems;
 
         int totalItemsThatCanFit = 0;
@@ -97,8 +106,8 @@ public class LettuceAndPumpkinCollector implements Action {
         if (isQualityGrid) {
             // Quality mode: transfer seeds to containers
             ArrayList<Container> containers = new ArrayList<>();
-            for (Gob sm : Finder.findGobs(seedOutput.getRCArea(), new NAlias(new ArrayList<>(Context.contcaps.keySet())))) {
-                Container cand = new Container(sm, Context.contcaps.get(sm.ngob.name), null);
+            for (Gob sm : Finder.findGobs(seedOutput.getRCArea(), new NAlias(new ArrayList<>(NContext.contcaps.keySet())))) {
+                Container cand = new Container(sm, NContext.contcaps.get(sm.ngob.name), null);
                 cand.initattr(Container.Space.class);
                 containers.add(cand);
             }

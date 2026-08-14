@@ -34,7 +34,7 @@ import nurgling.widgets.EncyclopediaWindow;
 import nurgling.widgets.NMiniMapWnd;
 import nurgling.widgets.NSettingsWindow;
 import nurgling.widgets.options.*;
-
+import java.util.function.*;
 import java.awt.event.KeyEvent;
 import java.util.*;
 
@@ -58,17 +58,27 @@ public class OptWnd extends Window {
     }
 
     public class PButton extends Button {
-	public final Panel tgt;
+	public final Supplier<Panel> tgt;
 	public final int key;
+	private Panel actual = null;
 
-	public PButton(int w, String title, int key, Panel tgt) {
+	public PButton(int w, String title, int key, Supplier<Panel> tgt) {
 	    super(w, title, false);
 	    this.tgt = tgt;
 	    this.key = key;
 	}
 
+	public PButton(int w, String title, int key, Panel tgt) {
+	    super(w, title, false);
+	    this.tgt = null;
+	    this.key = key;
+	    this.actual = tgt;
+	}
+
 	public void click() {
-	    chpanel(tgt);
+	    if(actual == null)
+		actual = OptWnd.this.add(tgt.get(), Coord.z);
+	    chpanel(actual);
 	}
 
 	public boolean keydown(KeyDownEvent ev) {
@@ -97,9 +107,10 @@ public class OptWnd extends Window {
 	private final Widget back;
 	private CPanel curcf;
 
-	public VideoPanel(Panel prev) {
+	public VideoPanel(UI ui, Panel prev) {
 	    super();
 	    back = add(new PButton(UI.scale(200), L10n.get("opt.back"), 27, prev));
+	    resetcf(ui);
 	}
 
 	public class CPanel extends Widget {
@@ -237,7 +248,7 @@ public class OptWnd extends Window {
 				    error(e.getMessage());
 				    return;
 				}
-				resetcf();
+				resetcf(ui);
 			    }
 			};
 		    prev = grp.add(L10n.get("opt.video.lighting_global"), prev.pos("bl").adds(5, 2));
@@ -300,7 +311,7 @@ public class OptWnd extends Window {
 				if(!done[0])
 				    return;
 				try {
-				    ui.setgprefs(prefs = prefs.update(null, prefs.syncmode, JOGLPanel.SyncMode.values()[btn]));
+				    ui.setgprefs(prefs = prefs.update(null, prefs.syncmode, GSettings.SyncMode.values()[btn]));
 				} catch(GSettings.SettingException e) {
 				    error(e.getMessage());
 				    return;
@@ -373,11 +384,11 @@ public class OptWnd extends Window {
 
 	public void draw(GOut g) {
 	    if((curcf == null) || (ui.gprefs != curcf.prefs))
-		resetcf();
+		resetcf(ui);
 	    super.draw(g);
 	}
 
-	private void resetcf() {
+	private void resetcf(UI ui) {
 	    if(curcf != null)
 		curcf.destroy();
 	    curcf = add(new CPanel(ui.gprefs), 0, 0);
@@ -387,11 +398,12 @@ public class OptWnd extends Window {
     }
 
     public class AudioPanel extends Panel {
-	public AudioPanel(Panel back) {
-	prev = add(new Label(L10n.get("opt.audio.master")), 0, 0);
-	    prev = add(new HSlider(UI.scale(200), 0, 1000, (int)(Audio.volume * 1000)) {
+	public AudioPanel(UI ui, Panel back) {
+	    Audio.Root sys = ui.audio.sys;
+	    prev = add(new Label(L10n.get("opt.audio.master")), 0, 0);
+	    prev = add(new HSlider(UI.scale(200), 0, 1000, (int)(sys.volume() * 1000)) {
 		    public void changed() {
-			Audio.setvolume(val / 1000.0);
+			sys.volume(val / 1000.0);
 		    }
 		}, prev.pos("bl").adds(0, 2));
 	    prev = add(new Label(L10n.get("opt.audio.interface")), prev.pos("bl").adds(0, 15));
@@ -428,15 +440,15 @@ public class OptWnd extends Window {
 	    {
 		Label dpy = new Label("");
 		addhlp(prev.pos("bl").adds(0, 2), UI.scale(5),
-		       prev = new HSlider(UI.scale(160), 128, Math.round(Audio.fmt.getSampleRate() / 4), Audio.bufsize()) {
+		       prev = new HSlider(UI.scale(160), 128, Math.round(Audio.SAMPLE_RATE / 4), sys.bufsize()) {
 			       protected void added() {
 				   dpy();
 			       }
 			       void dpy() {
-				   dpy.settext(Math.round((this.val * 1000) / Audio.fmt.getSampleRate()) + " ms");
+				   dpy.settext(Math.round((this.val * 1000) / Audio.SAMPLE_RATE) + " ms");
 			       }
 			       public void changed() {
-				   Audio.bufsize(val, true);
+				   sys.bufsize(val);
 				   dpy();
 			       }
 			   }, dpy);
@@ -538,7 +550,7 @@ public class OptWnd extends Window {
 		final double smin = 1, smax = Math.floor(UI.maxscale() / gran) * gran;
 		final int steps = (int)Math.round((smax - smin) / gran);
 		addhlp(prev.pos("bl").adds(0, 2), UI.scale(5),
-		       prev = new HSlider(UI.scale(160), 0, steps, (int)Math.round(steps * (Utils.getprefd("uiscale", 1.0) - smin) / (smax - smin))) {
+		       prev = new HSlider(UI.scale(160), 0, steps, (int)Math.round(steps * (UI.scale(1.0) - smin) / (smax - smin))) {
 			       protected void added() {
 				   dpy();
 			       }
@@ -752,13 +764,10 @@ public class OptWnd extends Window {
 	}
     }
 
-    private static final Text kbtt = RichText.render("$col[255,255,0]{Escape}: Cancel input\n" +
-						     "$col[255,255,0]{Backspace}: Revert to default\n" +
-						     "$col[255,255,0]{Delete}: Disable keybinding", 0);
     public class BindingPanel extends Panel {
 	private int addbtn(Widget cont, String nm, KeyBinding cmd, int y) {
 	    return(cont.addhl(new Coord(0, y), cont.sz.x,
-			      new Label(nm), new SetButton(UI.scale(175), cmd))
+			      new Label(nm), new nurgling.widgets.NKeyBindButton(UI.scale(175), cmd))
 		   + UI.scale(2));
 	}
 
@@ -812,8 +821,9 @@ public class OptWnd extends Window {
 		y = cont.adda(new Label(L10n.get("opt.keybind.special")), cont.sz.x / 2, y + UI.scale(10), 0.5, 0.0).pos("bl").adds(0, 5).y;
 		y = addbtn(cont, L10n.get("opt.keybind.quick_action"), NMapView.kb_quickaction, y);
 		y = addbtn(cont, L10n.get("opt.keybind.quick_action_alt"), NMapView.kb_quickignaction, y);
-		y = addbtn(cont, L10n.get("opt.keybind.nature"), NMiniMapWnd.kb_nature, y);
+		y = addbtn(cont, L10n.get("opt.keybind.nature"), NMapView.kb_togglenature, y);
 		y = addbtn(cont, L10n.get("opt.keybind.night"), NMiniMapWnd.kb_night, y);
+		y = addbtn(cont, L10n.get("opt.keybind.sort_inventory"), GameUI.kb_sort, y);
 		y = cont.adda(new Label("Session Hotkeys"), cont.sz.x / 2, y + UI.scale(10), 0.5, 0.0).pos("bl").adds(0, 5).y;
 		y = addbtn(cont, "Previous Session", nurgling.sessions.SessionTabBar.kb_session_prev, y);
 		y = addbtn(cont, "Next Session", nurgling.sessions.SessionTabBar.kb_session_next, y);
@@ -829,8 +839,9 @@ public class OptWnd extends Window {
 		y = addbtn(cont, "Switch to Session 10", nurgling.sessions.SessionTabBar.kb_session10, y);
 //		y = addbtn(cont, "Player grid box", NMapView.kb_displaypbox, y);
 //		y = addbtn(cont, "Player FOV box", NMapView.kb_displayfov, y);
-//		y = addbtn(cont, "Grid box", NMapView.kb_displaygrid, y);
+		y = addbtn(cont, L10n.get("opt.keybind.grid_walls"), NMapView.kb_displaygrid, y);
 		y = addbtn(cont, L10n.get("opt.keybind.toggle_bb"), NMapView.kb_togglebb, y);
+		y = addbtn(cont, L10n.get("opt.keybind.cycle_bb_mode"), NMapView.kb_cyclebbmode, y);
 		y = addbtn(cont, L10n.get("opt.keybind.clear_dmg"), NMapView.kb_cleardmg, y);
 
 		y = cont.adda(new Label(L10n.get("opt.keybind.belt")), cont.sz.x / 2, y + UI.scale(10), 0.5, 0.0).pos("bl").adds(0, 5).y;
@@ -849,43 +860,6 @@ public class OptWnd extends Window {
 	    pack();
 	}
 
-	public class SetButton extends KeyMatch.Capture {
-	    public final KeyBinding cmd;
-
-	    public SetButton(int w, KeyBinding cmd) {
-		super(w, cmd.key());
-		this.cmd = cmd;
-	    }
-
-	    public void set(KeyMatch key) {
-		super.set(key);
-		cmd.set(key);
-		NConfig.needUpdate();
-	    }
-
-	    public void draw(GOut g) {
-		if(cmd.key() != key)
-		    super.set(cmd.key());
-		super.draw(g);
-	    }
-
-	    protected KeyMatch mkmatch(KeyEvent ev) {
-		return(KeyMatch.forevent(ev, ~cmd.modign));
-	    }
-
-	    protected boolean handle(KeyEvent ev) {
-		if(ev.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
-		    cmd.set(null);
-		    super.set(cmd.key());
-		    return(true);
-		}
-		return(super.handle(ev));
-	    }
-
-	    public Object tooltip(Coord c, Widget prev) {
-		return(kbtt.tex());
-	    }
-	}
     }
 
 
@@ -996,23 +970,17 @@ public class OptWnd extends Window {
     public OptWnd(boolean gopts) {
 	super(Coord.z, "Options", true);
 	main = add(new Panel());
-	Panel video = add(new VideoPanel(main));
-	Panel audio = add(new AudioPanel(main));
-	Panel iface = add(new InterfacePanel(main));
-	Panel keybind = add(new BindingPanel(main));
 	nqolwnd = add(new NSettingsPanel(main));
-
 
 	int y = 0;
 	int x = 0;
 	Widget prev;
-	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.interface"), 'v', iface), 0, y)).pos("bl").adds(0, 5).y;
+	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.interface"), 'v', () -> new InterfacePanel(main)), 0, y)).pos("bl").adds(0, 5).y;
 	x = prev.pos("ur").adds(10, 0).x;
 	main.add(new PButton(UI.scale(200), L10n.get("opt.main.nurgling"), 'k', nqolwnd), x, prev.pos("ur").y);
-	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.video"), 'v', video), 0, y)).pos("bl").adds(0, 5).y;
-	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.audio"), 'a', audio), 0, y)).pos("bl").adds(0, 5).y;
-	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.keybind"), 'k', keybind), 0, y)).pos("bl").adds(0, 5).y;
-
+	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.video"), 'v', () -> new VideoPanel(ui, main)), 0, y)).pos("bl").adds(0, 5).y;
+	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.audio"), 'a', () -> new AudioPanel(ui, main)), 0, y)).pos("bl").adds(0, 5).y;
+	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.keybind"), 'k', () -> new BindingPanel(main)), 0, y)).pos("bl").adds(0, 5).y;
 	y += UI.scale(60);
 	if(gopts) {
 	    if((SteamStore.steamsvc.get() != null) && (Steam.get() != null)) {
@@ -1039,12 +1007,8 @@ public class OptWnd extends Window {
 	this(true);
     }
 
-    public void wdgmsg(Widget sender, String msg, Object... args) {
-	if((sender == this) && (msg == "close")) {
-	    hide();
-	} else {
-	    super.wdgmsg(sender, msg, args);
-	}
+    public void reqclose() {
+	hide();
     }
 
     public void show() {

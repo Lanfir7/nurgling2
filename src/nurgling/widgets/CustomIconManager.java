@@ -1,10 +1,12 @@
 package nurgling.widgets;
 
 import nurgling.NConfig;
+import nurgling.tools.NFileUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -33,20 +35,17 @@ public class CustomIconManager {
 
     public void loadIcons() {
         icons.clear();
-        File file = new File(NConfig.current.getCustomIconsPath());
-        if (file.exists()) {
-            StringBuilder contentBuilder = new StringBuilder();
-            try (Stream<String> stream = Files.lines(Paths.get(NConfig.current.getCustomIconsPath()), StandardCharsets.UTF_8)) {
-                stream.forEach(s -> contentBuilder.append(s).append("\n"));
-            } catch (IOException ignore) {}
-
-            if (!contentBuilder.toString().isEmpty()) {
-                JSONObject main = new JSONObject(contentBuilder.toString());
+        String content = NFileUtils.readWithBackupFallback(NConfig.current.getCustomIconsPath());
+        if (content != null && !content.isEmpty()) {
+            try {
+                JSONObject main = new JSONObject(content);
                 JSONArray array = main.getJSONArray("icons");
                 for (int i = 0; i < array.length(); i++) {
                     CustomIcon icon = new CustomIcon(array.getJSONObject(i));
                     icons.put(icon.getId(), icon);
                 }
+            } catch (org.json.JSONException e) {
+                System.err.println("[CustomIconManager] Failed to parse icons file (corrupt JSON): " + e.getMessage());
             }
         }
     }
@@ -60,7 +59,7 @@ public class CustomIconManager {
         main.put("icons", jicons);
 
         try {
-            nurgling.util.SafeJsonWriter.writeAtomic(NConfig.current.getCustomIconsPath(), main);
+            NFileUtils.writeAtomically(NConfig.current.getCustomIconsPath(), main.toString());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

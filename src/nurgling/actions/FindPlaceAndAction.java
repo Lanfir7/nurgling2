@@ -4,9 +4,6 @@ import haven.*;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
-import nurgling.pf.CellsArray;
-import nurgling.pf.NPFMap;
-import nurgling.pf.Utils;
 import nurgling.tools.Finder;
 
 import static nurgling.tools.Finder.findLiftedbyPlayer;
@@ -24,24 +21,20 @@ public class FindPlaceAndAction implements Action {
         if(placed == null)
             placed = findLiftedbyPlayer();
         if ( placed != null ) {
-            // ВАЖНО: Если зона не видна, навигируем к ней через ChunkNav перед использованием PathFinder
-            // PathFinder не может найти путь к координатам в невидимых зонах (grid не загружен)
-            if (targetArea != null && !targetArea.isVisible()) {
-                // Навигируем к зоне через ChunkNav
-                NUtils.navigateToArea(targetArea);
-                // После навигации зона должна стать видимой, получаем координаты
-                area = targetArea.getRCArea();
+            // Stream in the whole target area before choosing a drop cell.
+            // getFreePlace only sees loaded gobs, so a partially-visible area
+            // could otherwise hand back a cell that is actually occupied by an
+            // object that has not loaded yet. Only possible when we know the NArea.
+            if (narea != null) {
+                NUtils.navigateToArea(narea, true);
+                // Recompute now that we've navigated there: at construction time the
+                // area's grids may not have been loaded yet (or it was >1000 tiles
+                // away), which makes getRCArea() return null and would otherwise leave
+                // the stale null captured in the constructor.
+                area = narea.getRCArea();
             }
-            
-            // Если area все еще null, пытаемся получить из сохраненных данных
-            if (area == null && targetArea != null) {
-                area = targetArea.getRCAreaFromStoredData();
-            }
-            
-            if (area == null) {
-                return Results.ERROR("Area coordinates not available");
-            }
-            
+            if (area == null)
+                return Results.ERROR("Area not available");
             Coord2d pos = Finder.getFreePlace(area, placed);
             if(pos!=null) {
 
@@ -62,8 +55,8 @@ public class FindPlaceAndAction implements Action {
             NArea area)
     {
         this.placed = gob;
+        this.narea = area;
         this.area = area.getRCArea();
-        this.targetArea = area;
     }
 
     public FindPlaceAndAction(
@@ -72,9 +65,9 @@ public class FindPlaceAndAction implements Action {
             boolean dynamicPf)
     {
         this.placed = gob;
+        this.narea = area;
         this.area = area.getRCArea();
         this.dynamicPf = dynamicPf;
-        this.targetArea = area;
     }
 
     public Gob getPlaced() {
@@ -83,5 +76,7 @@ public class FindPlaceAndAction implements Action {
 
     Gob placed = null;
     Pair<Coord2d, Coord2d> area = null;
-    NArea targetArea = null;
+    // Non-null when the area was supplied as an NArea; enables the "stream in
+    // the whole area before placing" walk in run(). Null for raw-rectangle callers.
+    NArea narea = null;
 }

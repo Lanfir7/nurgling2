@@ -6,6 +6,10 @@ import nurgling.conf.*;
 import nurgling.conf.QuickActionPreset;
 import nurgling.profiles.ProfileManager;
 import nurgling.scenarios.Scenario;
+import nurgling.sessions.SessionContext;
+import nurgling.sessions.SessionManager;
+import nurgling.sessions.ThreadLocalUI;
+import nurgling.tools.NFileUtils;
 import nurgling.widgets.NCornerMiniMap;
 import org.json.*;
 
@@ -27,8 +31,9 @@ public class NConfig
         minimapVilol, minimapClaimol, minimapRealmol,
         selectedWorld,
         showVarity,
-        autoFlower,
         autoSplitter,
+        showGilding,
+        showStackOverlay,
         autoDropper,
         is_real_time,
         baseurl,
@@ -45,8 +50,15 @@ public class NConfig
         flatsurface,
         nextshowCSprite,
         showCSprite,
+        // Legacy, migration-only: folded into hideConf on load (see read()). Kept as a constant
+        // purely so old config files still parse into something we can migrate from.
         hideNature,
         hideEarthworm,
+        hideConf,
+        hideBoxFillColor,
+        hideBoxEdgeColor,
+        hideBoxLineWidth,
+        hideBoxDisplayMode,
         invert_hor,
         invert_ver,
         kinprop,
@@ -88,6 +100,7 @@ public class NConfig
         automaptrack,
         unloadgreen,
         sendOverlays,
+        kamiCompatMapper,
         showInventoryNums,
         hidecredo,
         autoDrink,
@@ -98,10 +111,12 @@ public class NConfig
         worldexplorerprop,
         questNotified, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, dbStatsOverlay, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, simplecrops,
-        temsmarktime, exploredAreaEnable, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
+        temsmarktime, exploredAreaEnable, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         areaRankPresets,  // Map of areaId -> Map of animalType -> presetName
         shortCupboards,
+        shortPalisades,
         shortWalls,
+        hideStockpileScale,
         decalsOnTop,
         fillCompostWithSwill,
         ignoreStrawInFarmers,
@@ -111,9 +126,13 @@ public class NConfig
         inventoryRightPanelMode,
         showTerrainName,
         validateAllCropsBeforeHarvest,
+        skipButcherInKFC,
+        skipPluckingCocksInKFC,
         studyDeskLayout,
         waypointRetryOnStuck,
         verboseCal,
+        pluginsAllowUnsigned,  // Dev only: load external plugin jars without signature verification
+        pluginsDir,            // Optional override for the plugin drop-folder (default: "plugins")
         highlightRockTiles,
         preferredMovementSpeed,
         preferredHorseSpeed,
@@ -130,7 +149,10 @@ public class NConfig
         picklingRedOnion,
         picklingYellowOnion,
         openInventoryOnLogin,
+        autoShowSiegeEngines,
         bbDisplayMode,
+        showCritterCircles,
+        critterCircleSettings,
         showBeehiveRadius,
         showTroughRadius,
         showMoundBedRadius,
@@ -154,6 +176,7 @@ public class NConfig
         alwaysObfuscate,
         boughbeeprop,
         foragerprop,
+        trufflepigprop,
         buttonStyle,
         showQuestGiverNames,
         showThingwallNames,
@@ -162,6 +185,16 @@ public class NConfig
         randomAreaColor,
         treeScaleDisableZoomHide,
         treeScaleMinThreshold,
+        treeHarvestOverlay,
+        treeHarvestSeeds,
+        treeHarvestLeaves,
+        treeHarvestBoughs,
+        treeHarvestBark,
+        bushHarvestOverlay,
+        logHarvestOverlay,
+        stoneHarvestOverlay,
+        oldtrunkHarvestOverlay,
+        treeDisplayScale,
         thinOutlines,
         itemQualityOverlay,
         stackQualityOverlay,
@@ -188,7 +221,6 @@ public class NConfig
         treeFinderShowNotification,
         treeFinderShowNotificationMinGrowth,
         treeFinderNotificationAutoCloseTime,
-        treeHarvestOverlay,
         treeResizeEnabled,
         treeResizePercentage,
         animal_marker_enabled,
@@ -209,6 +241,12 @@ public class NConfig
         tunnelingprop,
         masterminerprop,
         masterminermarkingconfig,
+        autoLogoutEnabled,
+        autoLogoutThreshold,
+        autoLogoutCountdown,
+        autoLogoutDelay,
+        showBotPathOnMinimap,
+        showBotPathOnGround,
         // Localization
         language,
         // LLM agent
@@ -251,9 +289,11 @@ public class NConfig
         conf.put(Key.minimapRealmol, false);
         conf.put(Key.selectedWorld, null);
         conf.put(Key.showVarity, false);
-        conf.put(Key.autoFlower, false);
         conf.put(Key.autoSplitter, false);
+        conf.put(Key.showGilding, false);
+        conf.put(Key.showStackOverlay, true);
         conf.put(Key.autoDropper, false);
+        conf.put(Key.dropConf, new JSONArray());
         conf.put(Key.is_real_time, true);
         conf.put(Key.numbelts, 3);
         conf.put(Key.showCropStage, false);
@@ -265,8 +305,15 @@ public class NConfig
         conf.put(Key.flatsurface, false);
         conf.put(Key.nextshowCSprite, false);
         conf.put(Key.showCSprite, true);
-        conf.put(Key.hideNature, false);
         conf.put(Key.hideEarthworm, true);  // true = show earthworms (checkbox unchecked by default)
+        conf.put(Key.hideConf, nurgling.tools.GobHide.defaults());
+        // Hidden-object boxes are styled independently of the general showBB boxes; these defaults
+        // match the old shared values so upgrading users see no visual change.
+        conf.put(Key.hideBoxFillColor, new Color(227, 28, 1, 195));
+        conf.put(Key.hideBoxEdgeColor, new Color(224, 193, 79, 255));
+        conf.put(Key.hideBoxLineWidth, 4);
+        conf.put(Key.hideBoxDisplayMode, "FILLED");
+        conf.put(Key.pluginsAllowUnsigned, false);  // default: only load signed plugins
         conf.put(Key.invert_hor, false);
         conf.put(Key.invert_ver, false);
         conf.put(Key.show_drag_menu, true);
@@ -292,6 +339,7 @@ public class NConfig
         conf.put(Key.automaptrack, false);
         conf.put(Key.unloadgreen, false);
         conf.put(Key.sendOverlays, false);
+        conf.put(Key.kamiCompatMapper, false);
         conf.put(Key.showInventoryNums, true);
         conf.put(Key.autoDrink, false);
         conf.put(Key.autoDrinkThreshold, 0.51);
@@ -330,10 +378,14 @@ public class NConfig
         conf.put(Key.ropeAfterFeeding, false);
         conf.put(Key.ropeAfterTaiming, true);
         conf.put(Key.shortCupboards, false);
+        conf.put(Key.shortPalisades, true);
         conf.put(Key.shortWalls, false);
+        conf.put(Key.hideStockpileScale, 50);  // Hide stockpile display size percentage (25-100)
         conf.put(Key.decalsOnTop, false);
         conf.put(Key.fillCompostWithSwill, false);
         conf.put(Key.ignoreStrawInFarmers, false);
+        conf.put(Key.skipButcherInKFC, false);
+        conf.put(Key.skipPluckingCocksInKFC, false);
         conf.put(Key.printpfmap, false);
         conf.put(Key.boxLineWidth, 4);
         conf.put(Key.persistentBarrelLabels, false);
@@ -437,6 +489,7 @@ public class NConfig
         arearadprop.add(new NAreaRad("gfx/kritter/bat/bat", 50));
         arearadprop.add(new NAreaRad("gfx/kritter/boar/boar", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/bear/bear", 100));
+        arearadprop.add(new NAreaRad("gfx/kritter/bear/polarbear", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/adder/adder", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/wildgoat/wildgoat", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/badger/badger", 100));
@@ -455,6 +508,9 @@ public class NConfig
         arearadprop.add(new NAreaRad("gfx/kritter/eagle/eagle", 200));
         arearadprop.add(new NAreaRad("gfx/kritter/cavelouse/cavelouse", 200));
         arearadprop.add(new NAreaRad("gfx/kritter/boreworm/boreworm", 200));
+        arearadprop.add(new NAreaRad("gfx/kritter/woodscorpion/woodscorpion", 50));
+        arearadprop.add(new NAreaRad("gfx/kritter/rat/caverat", 100));
+        arearadprop.add(new NAreaRad("gfx/kritter/ooze/greenooze", 100));
         conf.put(Key.animalrad, arearadprop);
 
         // Movement speed setting (0=Crawl, 1=Walk, 2=Run, 3=Sprint)
@@ -464,7 +520,7 @@ public class NConfig
         // UI Opacity settings
         conf.put(Key.uiOpacity, 1.0f);  // Default to fully opaque
         conf.put(Key.useSolidBackground, false);  // Default to texture mode
-        conf.put(Key.windowBackgroundColor, new java.awt.Color(32, 32, 32));  // Default dark gray
+        conf.put(Key.windowBackgroundColor, new java.awt.Color(0x1C, 0x25, 0x26));  // #1C2526
         conf.put(Key.buttonStyle, "tbtn");  // Default button style
 
         // Pickling settings
@@ -479,6 +535,11 @@ public class NConfig
 
         // Login settings
         conf.put(Key.openInventoryOnLogin, false);  // Default to closed (current behavior)
+        conf.put(Key.autoShowSiegeEngines, true);   // Default to on per user request
+
+        // Critter circles - colored discs under small critters for easier clicking
+        conf.put(Key.showCritterCircles, true);
+        conf.put(Key.critterCircleSettings, nurgling.overlays.NCritterCircle.buildDefaultConfigs());
 
         // Object radius overlays - simple boolean flags
         conf.put(Key.showBeehiveRadius, false);
@@ -522,6 +583,16 @@ public class NConfig
         // Tree scale overlay settings
         conf.put(Key.treeScaleDisableZoomHide, false);  // If true, always show full label (don't hide on zoom out)
         conf.put(Key.treeScaleMinThreshold, 0);  // Minimum growth % to display tree scale (0 = show all)
+        conf.put(Key.treeHarvestOverlay, false);  // Show harvest icons on mature trees (master toggle)
+        conf.put(Key.treeHarvestSeeds, true);     // Sub-filter: show seed/fruit icons
+        conf.put(Key.treeHarvestLeaves, true);    // Sub-filter: show leaf icons
+        conf.put(Key.treeHarvestBoughs, true);    // Sub-filter: show bough icons
+        conf.put(Key.treeHarvestBark, true);      // Sub-filter: show bark icons
+        conf.put(Key.bushHarvestOverlay, false);  // Show harvest icons on mature bushes
+        conf.put(Key.logHarvestOverlay, false);   // Show harvest icons on felled logs (Board/Block)
+        conf.put(Key.stoneHarvestOverlay, false); // Show harvest icons on mineable stones
+        conf.put(Key.oldtrunkHarvestOverlay, false); // Show harvest icons on old trunks
+        conf.put(Key.treeDisplayScale, 100);       // Tree display size percentage (25-100)
 
         // Outline rendering settings
         conf.put(Key.thinOutlines, false);  // If true, use thinner object outlines
@@ -582,14 +653,17 @@ public class NConfig
         conf.put(Key.agentMaxTokens, 256);
         conf.put(Key.agentTimeoutMs, 120000);
         conf.put(Key.agentAutoMode, true);
+        conf.put(Key.autoLogoutEnabled, false);
+        conf.put(Key.autoLogoutThreshold, 0);
+        conf.put(Key.autoLogoutCountdown, 30);
+        conf.put(Key.autoLogoutDelay, 60);
+        conf.put(Key.showBotPathOnMinimap, false);
+        conf.put(Key.showBotPathOnGround, false);
     }
 
 
     HashMap<Key, Object> conf = new HashMap<>();
     private boolean isUpd = false;
-    private boolean isAreasUpd = false;
-    private long lastAreasChangeTime = 0;
-    private static final long AREAS_DEBOUNCE_MS = 3000; // 3 seconds debounce for area changes
     private boolean isExploredUpd = false;
     private long lastExploredChangeTime = 0;
     private static final long EXPLORED_DEBOUNCE_MS = 5000; // 5 seconds debounce for explored area changes
@@ -600,17 +674,6 @@ public class NConfig
     public boolean isUpdated()
     {
         return isUpd;
-    }
-
-    public boolean isAreasUpdated()
-    {
-        // Only return true if areas changed AND debounce period has passed
-        // This batches multiple rapid changes into a single DB update
-        if (isAreasUpd && lastAreasChangeTime > 0) {
-            long elapsed = System.currentTimeMillis() - lastAreasChangeTime;
-            return elapsed >= AREAS_DEBOUNCE_MS;
-        }
-        return false;
     }
 
     public boolean isRoutesUpdated() {
@@ -631,22 +694,80 @@ public class NConfig
         return false;
     }
 
+    /**
+     * Resolves the correct NConfig instance for the current thread's session.
+     * Uses ThreadLocalUI to find the session context, falls back to global current.
+     */
+    private static NConfig resolveConfig() {
+        NUI boundUI = ThreadLocalUI.get();
+        if (boundUI != null) {
+            // Fast path: use cached config on NUI (no locks needed)
+            if (boundUI.sessionConfig != null) {
+                return boundUI.sessionConfig;
+            }
+            // Lazy-init: create session config on first access
+            NGameUI gui = boundUI.gui instanceof NGameUI ? (NGameUI) boundUI.gui : null;
+            if (gui != null && gui.getGenus() != null) {
+                boundUI.sessionConfig = createForSession(gui.getGenus());
+                return boundUI.sessionConfig;
+            }
+        }
+        return current;
+    }
+
     public static Object get(Key key)
     {
-        if (current == null)
+        NConfig cfg = resolveConfig();
+        if (cfg == null)
             return null;
-        else
-            return current.conf.get(key);
+        synchronized (cfg.conf) {
+            return cfg.conf.get(key);
+        }
+    }
+
+    /**
+     * Get a value directly from the global config, bypassing session resolution.
+     * Use for settings where reads and writes must always target the same instance
+     * regardless of which thread (tick vs mouse event) is calling.
+     */
+    public static Object getGlobal(Key key) {
+        NConfig cur = current;
+        if (cur == null) return null;
+        synchronized (cur.conf) {
+            return cur.conf.get(key);
+        }
     }
 
     public static void set(Key key, Object val)
     {
-        if (current != null)
+        // Set on global config
+        NConfig cur = current;
+        if (cur != null)
         {
-            current.isUpd = true;
-            current.conf.put(key, val);
+            synchronized (cur.conf) {
+                cur.conf.put(key, val);
+            }
+            cur.isUpd = true;
+        }
+        // Propagate to all session configs so every session sees the same value
+        for (SessionContext ctx : SessionManager.getInstance().getAllSessions())
+        {
+            if (ctx.config != null)
+            {
+                synchronized (ctx.config.conf) {
+                    ctx.config.conf.put(key, val);
+                }
+            }
+            NConfig sc = (ctx.ui != null) ? ctx.ui.sessionConfig : null;
+            if (sc != null)
+            {
+                synchronized (sc.conf) {
+                    sc.conf.put(key, val);
+                }
+            }
         }
     }
+
 
     public static void needUpdate()
     {
@@ -658,21 +779,26 @@ public class NConfig
 
     public static void needAreasUpdate()
     {
-        // Only update profile-specific config (areas are per-world)
-        // Record timestamp for debouncing - actual save happens after AREAS_DEBOUNCE_MS of inactivity
-        long now = System.currentTimeMillis();
+        // Mark the EDITING session's own areas map as dirty. The flag lives on
+        // the per-session MCache (glob.map), not on the genus-shared NConfig, so
+        // that same-world sessions in one client don't clear each other's save
+        // trigger and strand edits before they reach the DB.
         try {
-            if (nurgling.NUtils.getGameUI() != null && nurgling.NUtils.getUI() != null && nurgling.NUtils.getUI().core != null) {
-                nurgling.NUtils.getUI().core.config.isAreasUpd = true;
-                nurgling.NUtils.getUI().core.config.lastAreasChangeTime = now;
+            if (nurgling.NUtils.getGameUI() != null && nurgling.NUtils.getGameUI().map != null) {
+                haven.MCache mc = ((nurgling.NMapView) nurgling.NUtils.getGameUI().map).glob.map;
+                if (mc != null) mc.markAreasDirty();
             }
         } catch (Exception e) {
-            // Fallback to global config if profile config not available
-            if (current != null)
-            {
-                current.isAreasUpd = true;
-                current.lastAreasChangeTime = now;
+            // No session UI available - nothing to mark.
+        }
+        // Notify sync layer that the local user is actively editing so it can
+        // bias pull cadence / surface presence info (Phase 5).
+        try {
+            if (nurgling.NCore.databaseManager != null
+                && nurgling.NCore.databaseManager.getAreaService() != null) {
+                nurgling.NCore.databaseManager.getAreaService().markLocalEdit();
             }
+        } catch (Exception ignore) {
         }
     }
 
@@ -744,12 +870,28 @@ public class NConfig
         return result;
     }
 
-    public static NConfig current;
+    public static volatile NConfig current;
 
     // Profile management - World-specific configurations
     private static final Map<String, NConfig> profileInstances = new HashMap<>();
     private ProfileManager profileManager;
     private String genus;
+
+    /**
+     * Creates an independent NConfig instance for a session.
+     * Unlike getProfileInstance(), this does NOT share the instance
+     * between sessions on the same world, and does NOT set the global current.
+     */
+    public static NConfig createForSession(String genus) {
+        if (genus == null || genus.isEmpty()) {
+            return new NConfig();
+        }
+        NConfig cfg = new NConfig(genus);
+        NConfig prev = current;
+        cfg.read();
+        current = prev;
+        return cfg;
+    }
 
     /**
      * Gets a profile-specific NConfig instance for the given genus
@@ -825,6 +967,22 @@ public class NConfig
      */
     public String getCheeseOrdersPath() {
         return getProfileAwarePath("cheese_orders.nurgling.json");
+    }
+
+    /**
+     * Gets the dynamic path for planning layer ghosts configuration file
+     */
+    public String getPlanningLayerPath() {
+        return getProfileAwarePath("planning_layer.nurgling.json");
+    }
+
+    /**
+     * Gets the dynamic path for the local-only Base planner view state
+     * (active layer + per-user visibility map). Written in both file mode
+     * and DB mode because visibility is never synced.
+     */
+    public String getPlanningViewPath() {
+        return getProfileAwarePath("planning_view.nurgling.json");
     }
 
     /**
@@ -952,6 +1110,9 @@ public class NConfig
                             case "NForagerProp":
                                 res.add(new NForagerProp(obj));
                                 break;
+                            case "NTrufflePigProp":
+                                res.add(new NTrufflePigProp(obj));
+                                break;
                             case "NBlueprintPlanterProp":
                                 res.add(new NBlueprintPlanterProp(obj));
                                 break;
@@ -972,6 +1133,9 @@ public class NConfig
                                 break;
                             case "NAreaRad":
                                 res.add(new NAreaRad(obj));
+                                break;
+                            case "NCritterCircleConf":
+                                res.add(new nurgling.conf.NCritterCircleConf(obj));
                                 break;
                             case "NSmokeProp":
                                 res.add(new NSmokProp(obj));
@@ -1015,20 +1179,30 @@ public class NConfig
 
     @SuppressWarnings("unchecked")
     public void read() {
-        current = this;
-        StringBuilder contentBuilder = new StringBuilder();
+        // NOTE: do NOT publish `current = this` here. Publishing a half-built
+        // instance (constructor defaults only, before the file is parsed) opened
+        // a race: a concurrent NConfig.set() from another thread would mark this
+        // defaults-only instance dirty and the tick-thread write() would flush it
+        // to disk, erasing keys that hadn't been loaded yet (e.g. dropConf). We
+        // now publish `current` only once `conf` is fully populated (see below).
+        String content = NFileUtils.readWithBackupFallback(path);
 
-        try (Stream<String> stream = Files.lines(Paths.get(path), StandardCharsets.UTF_8))
-        {
-            stream.forEach(s -> contentBuilder.append(s).append("\n"));
-        }
-        catch (IOException ignore)
-        {
-        }
+        // The constructor already seeded a default hideConf, so "does conf contain it" cannot tell
+        // us whether the user's file had one. Track what the file actually carried instead.
+        boolean fileHadHideConf = false;
+        boolean hadConfigFile = (content != null && !content.isEmpty());
 
-        if (!contentBuilder.toString().isEmpty())
+        if (hadConfigFile)
         {
-            JSONObject main = new JSONObject(contentBuilder.toString());
+            JSONObject main;
+            try {
+                main = new JSONObject(content);
+            } catch (org.json.JSONException e) {
+                System.err.println("[NConfig] Failed to parse config file (corrupt JSON), using defaults: " + path);
+                current = this;
+                return;
+            }
+            fileHadHideConf = main.has(Key.hideConf.name());
             Map<String, Object> map = main.toMap();
             for (Map.Entry<String, Object> entry : map.entrySet())
             {
@@ -1100,6 +1274,35 @@ public class NConfig
             conf.put(Key.showSpeedometer, true);
         }
 
+        // Migration: fold the legacy inverted `hideNature` flag into the categorised hideConf.
+        // Only for configs that predate hideConf - a fresh install keeps the constructor defaults.
+        if (hadConfigFile && !fileHadHideConf) {
+            Object legacy = conf.get(Key.hideNature);
+            // Inverted semantics: hideNature == false meant nature was hidden.
+            boolean natureWasHidden = (legacy instanceof Boolean) && !((Boolean) legacy);
+            conf.put(Key.hideConf, nurgling.tools.GobHide.legacyMigration(natureWasHidden));
+            System.out.println("[NConfig] Migrated hideNature into hideConf (hiding was "
+                    + (natureWasHidden ? "enabled" : "disabled") + ")");
+
+            // Hidden-object boxes used to share the general bounding-box style. Seed the new keys
+            // from whatever the user already had, so upgrading changes nothing on screen until they
+            // deliberately give the two styles different values. The depth-tested/always-visible
+            // distinction is not carried over: the hidden-box mode only has FILLED and OUTLINE.
+            if (conf.get(Key.bbDisplayMode) instanceof String) {
+                String mode = ((String) conf.get(Key.bbDisplayMode));
+                conf.put(Key.hideBoxDisplayMode, mode.startsWith("OUTLINE") ? "OUTLINE" : "FILLED");
+            }
+            if (conf.get(Key.boxFillColor) != null)
+                conf.put(Key.hideBoxFillColor, conf.get(Key.boxFillColor));
+            if (conf.get(Key.boxEdgeColor) != null)
+                conf.put(Key.hideBoxEdgeColor, conf.get(Key.boxEdgeColor));
+            if (conf.get(Key.boxLineWidth) instanceof Number)
+                conf.put(Key.hideBoxLineWidth, conf.get(Key.boxLineWidth));
+
+            isUpd = true;
+        }
+        conf.remove(Key.hideNature);
+
         // Migration: Replace old Katodiy baseurl with new aleksandrsvoboda URL
         if (conf.containsKey(Key.baseurl)) {
             String currentUrl = (String) conf.get(Key.baseurl);
@@ -1110,8 +1313,33 @@ public class NConfig
             }
         }
 
+        // Migration: Ensure new animal radii entries are present in existing configs
+        if (conf.containsKey(Key.animalrad)) {
+            ArrayList<NAreaRad> savedRads = (ArrayList<NAreaRad>) conf.get(Key.animalrad);
+            java.util.Set<String> existingNames = new java.util.HashSet<>();
+            for (NAreaRad r : savedRads) existingNames.add(r.name);
+
+            // New animals to add if missing
+            String[][] newAnimals = {
+                {"gfx/kritter/bear/polarbear", "100"},
+                {"gfx/kritter/woodscorpion/woodscorpion", "50"},
+                {"gfx/kritter/rat/caverat", "100"},
+                {"gfx/kritter/ooze/greenooze", "100"},
+            };
+            for (String[] entry : newAnimals) {
+                if (!existingNames.contains(entry[0])) {
+                    savedRads.add(new NAreaRad(entry[0], Integer.parseInt(entry[1])));
+                    isUpd = true;
+                }
+            }
+        }
+
         conf.put(Key.showCSprite,conf.get(Key.nextshowCSprite));
         conf.put(Key.flatsurface,conf.get(Key.nextflatsurface));
+
+        // Publish only now that conf is fully populated, so no other thread can
+        // observe (and flush) a partially-loaded config as the global current.
+        current = this;
     }
 
     @SuppressWarnings("unchecked")
@@ -1146,8 +1374,14 @@ public class NConfig
     @SuppressWarnings("unchecked")
     public void write()
     {
+        // Snapshot under lock so we never iterate the map while another thread
+        // mutates it via set(); serialization/IO then happens off the lock.
+        Map<Key, Object> snapshot;
+        synchronized (conf) {
+            snapshot = new HashMap<>(conf);
+        }
         Map<String, Object> prep = new HashMap<>();
-        for (Map.Entry<Key, Object> entry : conf.entrySet())
+        for (Map.Entry<Key, Object> entry : snapshot.entrySet())
         {
             if (entry.getValue() instanceof JConf)
             {
@@ -1178,14 +1412,13 @@ public class NConfig
         JSONObject main = new JSONObject(prep);
         try
         {
-            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
-            current.isUpd = false;
+            NFileUtils.writeAtomically(path, main.toString());
+            this.isUpd = false;
         }
         catch (IOException e)
         {
-            throw new RuntimeException(e);
+            // Don't crash the UI thread — isUpd stays true so we retry next tick
+            System.err.println("[NConfig] Warning: failed to save config, will retry: " + e.getMessage());
         }
     }
 
@@ -1200,21 +1433,23 @@ public class NConfig
                 return;
             }
 
+            // Area-save dirty state lives on the per-session MCache, not on this
+            // (genus-shared) NConfig - so same-world sessions don't clobber each
+            // other's save trigger.
+            final haven.MCache mcache = ((NMapView)NUtils.getGameUI().map).glob.map;
+
             // If DB is enabled - ONLY use DB, never fallback to file
             if ((Boolean) NConfig.get(NConfig.Key.ndbenable)) {
-                // Reset flags to prevent repeated calls (use 'this' not 'current' - they may be different instances)
-                this.isAreasUpd = false;
-                this.lastAreasChangeTime = 0;
-                
+                // Clear optimistically to prevent repeated calls; re-armed on failure.
+                mcache.clearAreasDirty();
+
                 if (NCore.databaseManager != null && NCore.databaseManager.isReady()) {
                     try {
                         String profile = NUtils.getGameUI().getGenus();
                         if (profile == null || profile.isEmpty()) {
                             profile = "global";
                         }
-                        java.util.Map<Integer, NArea> areas = ((NMapView)NUtils.getGameUI().map).glob.map.areas;
-                        // Capture 'this' for use in async callback
-                        final NConfig self = this;
+                        java.util.Map<Integer, NArea> areas = mcache.areas;
                         NCore.databaseManager.getAreaService().exportAreasToDatabaseAsync(areas, profile)
                             .thenAccept(count -> {
                                 // Silent save - no spam
@@ -1224,15 +1459,13 @@ public class NConfig
                                 if (e.getCause() != null) {
                                     e.getCause().printStackTrace();
                                 }
-                                // Set flag back to retry later (with timestamp for debounce)
-                                self.isAreasUpd = true;
-                                self.lastAreasChangeTime = System.currentTimeMillis();
+                                // Re-arm so the save retries on a later tick.
+                                mcache.markAreasDirty();
                                 return null;
                             });
                     } catch (Exception e) {
                         System.err.println("Failed to save areas to database: " + e.getMessage());
-                        this.isAreasUpd = true;
-                        this.lastAreasChangeTime = System.currentTimeMillis();
+                        mcache.markAreasDirty();
                     }
                 }
                 // DB enabled but not ready - just skip, will retry on next tick
@@ -1240,7 +1473,13 @@ public class NConfig
             }
 
             // DB not enabled - write to file
-            writeAreasToFile(getAreasPath());
+            String areasPath = getAreasPath();
+            writeAreasToFile(areasPath);
+            mcache.clearAreasDirty();
+            // Record the mtime we just wrote so our own write isn't mistaken for
+            // another session's edit on the next reload check.
+            try { mcache.areasFileMtime = new java.io.File(areasPath).lastModified(); }
+            catch (Exception e) { /* leave mtime as-is */ }
         }
     }
 
@@ -1254,11 +1493,7 @@ public class NConfig
         main.put("areas",jareas);
         try
         {
-            FileWriter f = new FileWriter(path, StandardCharsets.UTF_8);
-            main.write(f);
-            f.close();
-            this.isAreasUpd = false;
-            this.lastAreasChangeTime = 0;
+            NFileUtils.writeAtomically(path, main.toString());
         }
         catch (IOException e)
         {
@@ -1442,9 +1677,7 @@ public class NConfig
             main.put("scenarios", jscenarios);
 
             try {
-                FileWriter f = new FileWriter(customPath == null ? getScenariosPath() : customPath, StandardCharsets.UTF_8);
-                main.write(f);
-                f.close();
+                NFileUtils.writeAtomically(customPath == null ? getScenariosPath() : customPath, main.toString());
                 current.isScenariosUpd = false;
             } catch (IOException e) {
                 throw new RuntimeException(e);

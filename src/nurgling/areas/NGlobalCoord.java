@@ -48,4 +48,16 @@ public class NGlobalCoord {
         }
         return null;
     }
+
+    /**
+     * Returns the grid-local tile coordinate of this bookmark.
+     * Computed directly from the stored posres offset, so it works even when
+     * the bookmarked grid is no longer in glob.map.grids. This lets chunk-nav
+     * route to bookmarks whose destination chunk has been unloaded.
+     */
+    public Coord getLocalTile()
+    {
+        if(oldCoord == null) return null;
+        return oldCoord.mul(posres).floor(MCache.tilesz);
+    }
 }

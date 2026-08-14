@@ -39,12 +39,12 @@ public class TunnelingBot implements Action {
         int[] supportTypeRef = new int[]{0};
         int[] wingOptionRef = new int[]{0};
         int[] wingSideRef = new int[]{0};
+        int[] maxLateralRef = new int[]{5};
         boolean[] confirmRef = new boolean[]{false};
         boolean[] cancelRef = new boolean[]{false};
-        boolean[] doubleTunnelRef = new boolean[]{false};
 
         TunnelingDialog dialog = new TunnelingDialog();
-        dialog.setReferences(directionRef, tunnelSideRef, supportTypeRef, wingOptionRef, wingSideRef, confirmRef, cancelRef, doubleTunnelRef);
+        dialog.setReferences(directionRef, tunnelSideRef, supportTypeRef, wingOptionRef, wingSideRef, maxLateralRef, confirmRef, cancelRef);
         gui.add(dialog, UI.scale(200, 200));
 
         // Wait for user input
@@ -63,15 +63,19 @@ public class TunnelingBot implements Action {
 
         // Get configuration
         Direction direction = TunnelingDialog.getDirection(directionRef[0]);
-        TunnelSide tunnelSide = TunnelingDialog.getTunnelSide(directionRef[0], tunnelSideRef[0]);
         SupportType supportType = TunnelingDialog.getSupportType(supportTypeRef[0]);
+
+        // Dispatch to MinesweeperMiner if no support selected
+        if (supportType == SupportType.NONE) {
+            return new MinesweeperMiner(direction, maxLateralRef[0]).run(gui);
+        }
+
+        TunnelSide tunnelSide = TunnelingDialog.getTunnelSide(directionRef[0], tunnelSideRef[0]);
         WingOption wingOption = TunnelingDialog.getWingOption(directionRef[0], wingOptionRef[0]);
         TunnelSide wingSide = TunnelingDialog.getWingSide(directionRef[0], wingSideRef[0]);
-        boolean doubleTunnel = doubleTunnelRef[0];
 
         gui.msg("Tunneling: " + direction.name + ", Side: " + tunnelSide.name +
-                ", Support: " + supportType.menuName + ", Wings: " + wingOption.name +
-                ", Wing Side: " + wingSide.name + (doubleTunnel ? ", x2 Tunnel" : ""));
+                ", Support: " + supportType.menuName + ", Wings: " + wingOption.name + ", Wing Side: " + wingSide.name);
 
         // Find nearest support of ANY type as starting point
         Gob startSupport = findNearestSupport(gui);
@@ -106,15 +110,6 @@ public class TunnelingBot implements Action {
             Results mineResult = mineTunnelPath(gui, currentSupportPos, nextSupportPos, direction, tunnelOffset);
             if (!mineResult.IsSuccess()) {
                 return mineResult;
-            }
-
-            // Mine second tunnel row if x2 mode enabled (further from support)
-            if (doubleTunnel) {
-                Coord2d tunnelOffset2 = new Coord2d(tunnelSide.dx * TILE_SIZE * 2, tunnelSide.dy * TILE_SIZE * 2);
-                Results mineResult2 = mineTunnelPath(gui, currentSupportPos, nextSupportPos, direction, tunnelOffset2);
-                if (!mineResult2.IsSuccess()) {
-                    return mineResult2;
-                }
             }
 
             // Mine the tile where support will be placed
@@ -361,19 +356,11 @@ public class TunnelingBot implements Action {
         return 100; // Default for minesupport, ladder, towercap
     }
 
-    private boolean hasSupportAt(Coord2d pos) throws InterruptedException {
-        ArrayList<Gob> supports = Finder.findGobs(ALL_SUPPORTS);
-        for (Gob s : supports) {
-            if (s.rc.dist(pos) < 15) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private Results placeSupport(NGameUI gui, Coord2d pos, SupportType supportType)
             throws InterruptedException {
-        if (hasSupportAt(pos)) {
+        // Check if there's already a support at this location
+        Gob existingSupport = Finder.findGob(pos);
+        if (existingSupport != null && NParser.isIt(existingSupport, ALL_SUPPORTS)) {
             gui.msg("Support already exists at this location, skipping placement");
             return Results.SUCCESS();
         }
@@ -485,9 +472,13 @@ public class TunnelingBot implements Action {
             while (bumling != null && Finder.findGob(bumling.id) != null && attempts < maxAttempts) {
                 attempts++;
 
+                if(NUtils.getGameUI().vhand != null) {
+                    NUtils.drop(NUtils.getGameUI().vhand);
+                }
+
                 new SelectFlowerAction("Chip stone", bumling).run(gui);
 
-                WaitChipperState wcs = new WaitChipperState(bumling);
+                WaitChipperState wcs = new WaitChipperState(bumling, true);
                 NUtils.getUI().core.addTask(wcs);
 
                 switch (wcs.getState()) {
@@ -500,9 +491,6 @@ public class TunnelingBot implements Action {
                         break;
                     case DANGER:
                         gui.msg("Warning: Low energy while chipping stones");
-                        return;
-                    case TIMEFORPILE:
-                        gui.msg("Inventory full, stopping stone chipping");
                         return;
                 }
 

@@ -357,6 +357,258 @@ For the next hafen integration:
 
 ---
 
-**Last Updated:** 2026-02-27
-**Last Integration:** hafen-integration-proper-v2 (57d9570b2)
-**Hafen Commits Integrated:** 20 commits through d58dcb242
+**Last Updated:** 2026-07-24
+**Last Integration:** hafen-integration-2026-07-polity (merge commit 57b811005, branch off master)
+**Hafen Commits Integrated:** 26 commits (merge-base 592d4d5ac → hafen/master 9bba2bb9d)
+
+> Note: The Feb 2026 reference above (57d9570b2 / d58dcb242) is historical and is
+> NOT in the current master's ancestry — a later, undocumented integration brought
+> hafen history up to merge-base `20dc6f473` ("Handle cached icon resources more
+> robustly", 2026-05-03). Always derive the real merge-base with
+> `git merge-base HEAD hafen/master` rather than trusting this footer.
+
+### May 2026 integration notes (37 commits)
+
+- **Conflicts (3, the rest auto-merged):**
+  - `Makewindow.java` — took hafen's rewrite, re-added the `NMakewindow` factory override + import.
+  - `WItem.java` — took hafen's reusable `GItem.RStateInfo.combine` (nurgling side was the old inline copy).
+  - `GLPanel.java` — adopted hafen's `import haven.GSettings.SyncMode` (enum moved from `JOGLPanel`), kept nurgling imports.
+- **Compile fix after merge:** hafen converted cameras to fine-scrolling, changing
+  `Camera.wheel(Coord, int)` → `wheel(MouseWheelEvent)` (uses `ev.s`). Updated nurgling's
+  custom cameras `NOrthoCam` and `RSTCam` in `MapView.java`. (`mmousewheel(Coord, int)` is a
+  separate, unchanged interface — left alone.)
+- **MiniMap redisplay moved into `tick()`** (with `DisplayMarker.dispupdate()`); `NMiniMap`
+  still works because its `tick()` calls `super.tick()` and it computes marker positions itself.
+- **Make-window feature port (NMakewindow):** ported hafen's two new features into nurgling's
+  reimplementation — server `use` msg (in-use red overlay on inputs) and `inprcps` msg +
+  `choose`/`findrcps` clicks (input recipe-choice popup). Split cleanly: autoMode = nurgling
+  automation, normal mode = hafen input-choice.
+- **Verified safe (no nurgling refs):** GSettings `SyncMode` move, profiling-switch removal,
+  `SListBox` fine-scroll (internal `cury` int→double, public API unchanged).
+
+### June 2026 integration notes (159 commits — the "iosys" rewrite) — MAJOR
+
+This was hafen's `iosys` branch: a ground-up rewrite of the client I/O layer. Far
+larger than a normal integration. Full port design + recovery info:
+`docs/hafen-integration-2026-06-port-design.md`. Merge commit `9852d1b92`.
+
+- **Architecture change:** `MainFrame`(AWT Frame) + `UIPanel`/`GLPanel`/`JOGLPanel`/
+  `LWJGLPanel` + `UI.Context` were **deleted**, replaced by `Client` +
+  `haven.iosys.tk.Toolkit`/`Windeye` + abstract `UILoop`. `MainFrame` is now a
+  6-line `Client.main()` shim upstream. Panama FFI lives in `opt/panama` (compiled
+  only on JDK ≥ 22 via `has-panama`); the main client still builds on the current JDK.
+- **Conflicts (11):** README, build.xml (kept nurgling Main-Class=MainFrame + extra
+  jars, added hafen-panama.jar + Add-Exports/Enable-Native-Access), Utils
+  (kept public `imgsz` + hafen `initlocale`), GobIcon (imports), UI
+  (`UI.Context`→added `UILoop loop` back-ref; kept get/setInstance; took hafen
+  CommandQueue.drain), OptWnd (took hafen ui-param panels + audio API, re-grafted
+  L10n + nqolwnd), MainFrame, and modify/delete on the 4 panel classes.
+- **The real work (git couldn't flag it — classes vanished):** nurgling's
+  multi-session + headless subsystems were built on the deleted classes.
+  - Added to `UILoop`: a `mkui()` factory (so every loop builds `NUI` not `UI`), a
+    `UI.loop` back-reference, and the multi-session lifecycle hooks
+    (`beforeNewUI`/`afterNewUI`) that formerly lived on `GLPanel.Loop.newui()`.
+  - `MainFrame` rebuilt as a pure nurgling **launcher** (config/l10n/logging/error-
+    handling/headless-dispatch/NBootstrap factory) delegating windowing to `Client`.
+    Kept `MainFrame.config` (NConfig) + `setupres()`→`Client.setupres()` so NCore /
+    HeadlessMain were untouched. Edited the merged `Client.java` in place
+    (Option A): `ClientLoop.mkui()`→`NUI`, `Client.Main`→`NBootstrap.create()`.
+  - Multi-session (`NRemoteUI`/`NUILifecycleListener`/`SessionUIController`/
+    `UILifecycleListener`): retargeted `UIPanel`/`GLPanel`/`ui.getContext()` →
+    `UILoop`/`ui.getLoop()`/`loop.env`.
+  - **Headless rebuilt on hafen infra:** new `NHeadlessLoop extends UILoop` backed by
+    `DummyToolkit.DummyWindow.of(size, new HeadlessEnvironment(), null)`. Kept the
+    GL-free `HeadlessEnvironment`/`HeadlessRender`/… stub (no GPU/Acephal needed —
+    headless never used real GL). Deleted `HeadlessPanel`; `HeadlessMain` drives the
+    loop via `task.run(loop.newui(task))` (UI ctor calls `fun.init`).
+- **Compile-fix ripples after merge (caught by `ant clean`, not incremental):**
+  - Audio rewrite removed static `Audio.play`/`Audio.volume` → `ui.sfx(...)` /
+    `ui.audio.sys.volume()` (NAlarmManager routes through `UI.getInstance()`).
+  - `WebBrowser` deleted → `ui.wnd.toolkit().browse(URI)` (NMappingClient, NLoginScreen).
+- **Deferred (recorded, not lost):** LWJGLPanel's GL-cleanup hardening (shutdown
+  hook / swapBuffers guard / env-dispose). LWJGL-backend only; JOGL is default.
+- **Status:** `ant clean` builds; ancestry verified. Runtime testing (visual login,
+  multi-session switch/demote, headless `-bots`) still pending at time of writing.
+
+### June 2026 round 2 (49 commits — make-window v31 + MenuSearch refactor)
+
+Normal-size integration on top of the iosys merge (merge-base `e16dcf24b` →
+hafen/master `dcb2e1b70`). Merge commit `f924bf54d`, branch
+`hafen-integration-2026-06b`. Only **3 git conflicts** — but the real risk was a
+nurgling-only file that auto-merged clean yet would break at runtime.
+
+- **⚠ Hidden runtime break — NMakewindow (no git conflict).** Hafen bumped
+  `Session.PVER` 30 → 31 and rewrote the make-window `inpop`/`opop` wire format
+  (modular: each spec wrapped in an `OBJS` array; indexed updates when first arg is
+  an INT; new `constraint` sub-arg; `Spec` ctor → `ResData`). Nurgling's
+  `NMakewindow` is a parallel reimplementation (`extends Widget`, its own `Spec`,
+  its own flat-format parser) — git/ant can't flag it, but the v31 server would
+  send the new format and crafting/autocraft/presets would misparse. **Ported**
+  `parsespec()` + dual-form `inpop`/`opop` + `constraint` field; added
+  `ui.modflags()` to the `choose` send. Category detection is name-based
+  (`VSpec.categories.get(s.name)`), unaffected by the constraint change.
+- **Conflicts (3):**
+  - `MenuSearch.java` — hafen made it `abstract` (base + `Main` subclass + abstract
+    `generate()` + `recons`/`tvisible()`/`pagseq` + `reqclose();settext();refilter()`
+    in `activate`). Re-grafted nurgling features onto the new shape: `Result.bot`,
+    `Fuzzy.fuzzyFilterAndSort` in `refilter()`, drag-drop+grab+`draw()`+`tooltip()`
+    in `Results`, bots from `BotRegistry.allowedInBotMenu()` in base `updlist()`,
+    and global-paginae accumulation moved into `Main.generate()` (uses `menu.pagseq`
+    to retrigger; nurgling search stays global, ignoring the current category root).
+  - `GameUI.java` — hafen replaced `wdgmsg("close")` listening with per-window
+    `reqclose(Runnable)` callbacks and made the search window always-present
+    (`MenuSearch.Main` created at `place=="menu"`). The old close-router `wdgmsg`
+    override auto-merged away; csearch button auto-merged to the toggle form. Kept
+    nurgling's `NMapWnd`/`NMenuGridWdg`/`NMiniMapWnd` and the intentionally
+    commented-out `MapMenu` buttons; added the always-present srchwnd alongside the
+    nurgling menu-grid widget; added the map-window `reqclose` callback to `NMapWnd`.
+  - `MainFrame.java` — modify/delete: hafen deleted its own 7-line compatibility
+    shim (`092e98b92`); nurgling's MainFrame is our launcher → kept ours.
+- **Auto-merged, verified intact:** Makewindow (3-line nurgling delta), Window
+  (`reqclose(Runnable)` setter), GobIcon, Audio/JavaSound/DummyAudio (NAlarmManager
+  already uses `ui.sfx()`), Session (injectMessage/CachedRes), Material
+  (MaterialFactory), container-color customMask. All `opt/panama/**` additions
+  (DBus/desktop-portal/OSX/ALSA FFI) are JDK ≥ 22-only and don't touch the main build.
+- **Status:** `ant clean` builds; ancestry verified (`f924bf54d` two-parent merge,
+  hafen tip `dcb2e1b70` is an ancestor of HEAD). **Runtime testing pending** —
+  especially crafting/autocraft/craft-presets (NMakewindow v31 port), action search
+  incl. bot drag-drop, window close behavior, and audio/alarms. Not pushed.
+
+### July 2026 integration (31 commits — "rekey" + new authd protocol) — SMALL
+
+Merge-base `dcb2e1b70` → hafen/master `592d4d5ac`. Merge commit `fecdd698c`, branch
+`hafen-integration-2026-07` (branched off **origin/master**, which was ahead of local
+master). Only **1 conflict**, and — unlike the last two rounds — **no hidden runtime
+break**: `Session.PVER` stayed at 31, so no wire format changed under a nurgling
+reimplementation.
+
+- **Theme 1 — "rekey" (physical keys vs. key symbols).** `Key.Std` is no longer a
+  `Key`; it now implements a new nested `Key.Sym`. `Key` loses `nm()` and gains
+  `primary()` / `primary(Collection)` / `is(Sym)`; `KeyDownEvent` gains `sym()`.
+  Std constants gained `char ch` values and the list constants were renamed
+  (`NUMKEYS`→`NUMBERS`, `NUMPADKEYS`→`PADNUMBERS`, `ALPHAKEYS`→`LATIN`, plus `ALL`).
+  **Zero nurgling impact** — every nurgling keybind site (`NMapView`, `SessionTabBar`,
+  `NToolBeltProp`, `QuickActionPreset`, `NGameUI`) uses the AWT-era API
+  (`KeyMatch.forcode`, `java.awt.event.KeyEvent`, `ev.code`, `ev.awt`), which the
+  compat layer still exposes. Nothing in `src/nurgling` references `haven.iosys.tk.Key`.
+  ⚠ Note for future: the `Key.Std` id prefix changed `"std."` → `"std:"`. That is a
+  *persisted* id — hafen-side keybinds stored under old ids won't resolve. Harmless
+  today because nurgling doesn't persist those ids, but don't build on `Key.Std.id()`.
+- **Theme 2 — new authd protocol.** `AuthClient.cmd()`/`esendmsg()` changed from a
+  positional arg list to a command name plus keyword pairs (sends `cmd + "*"`;
+  `TokenInfo.encode()` returns a `Map` instead of `Object[]`).
+  `Credentials.name()` → `authname()`, and **`tryauth()` now returns `Session.User`
+  instead of `String`** (it also canonicalizes: `authname` is updated to the account
+  name the server returns). `Bootstrap.settoken` now no-ops on a null user and writes
+  `null` rather than `""` to clear a pref.
+- **Conflict (1): `Bootstrap.java`.** Nurgling owns this file (factory +
+  `setFactory`/`create`, `preRun`/`createRemoteUI` hooks, and the `authmech` switch
+  that picks `NLoginScreen` for "native"). Hafen rewrote the auth flow inside `run()`.
+  The conflict was only the adjacent login-widget + `loginname` lines: **kept
+  nurgling's `authmech` switch, took hafen's `String loginname = null`** — hafen now
+  derives it from `creds.authname()` after auth and only persists it when non-null.
+  Everything else in `run()` auto-merged; `createRemoteUI(sess)` at the tail survived.
+- **Compile fix (1):** `nurgling/headless/SimpleAuthClient` assigned `tryauth()` to a
+  `String` → now takes `Session.User` and reads `.name`. This was the *only* fallout,
+  and javac caught it because the signature changed (contrast with June's NMakewindow
+  wire-format break, which nothing could catch statically).
+- **Auto-merged, verified intact:** `AuthClient` (nurgling's `alwaysObfuscate`
+  connect logic — hafen's edits were in `esendmsg`/`Credentials`, well away from the
+  ctor), `Client` (`mkui()`→`NUI`, `NBootstrap.create()`, Nurgling II window titles),
+  `HashDirCache` (public `base`), `Widget` (nurgling hunks at lines ~45/65/702/2018 vs
+  hafen's `key_tab.match(ev.awt, KeyMatch.S)` at ~1358 — no overlap).
+- **Checked and clear:** `NBootstrap` is the only nurgling subclass of a rewritten
+  hafen class, and it only overrides the two nurgling-added hooks (it does *not*
+  duplicate `run()`, so the auth-flow rewrite flows through automatically).
+  `NLoginScreen` keeps its own token store (`saveLoginToken`), independent of
+  `Bootstrap`'s `savedtoken-*` prefs, so `settoken`'s null-vs-empty change can't
+  corrupt it. No nurgling toolkit subclasses, so the large `AWTToolkit` /
+  `NEWTContext` / `opt/panama` GLX-WGL diffs are inert.
+- **Status:** `ant clean` + full build succeeds (5336 classes, jar built); ancestry
+  verified (`fecdd698c` two-parent, hafen tip `592d4d5ac` is an ancestor).
+  **Runtime testing pending** — login is the area to exercise: native login via
+  `NLoginScreen`, saved-token login, headless `-bots` auth, and multi-session
+  switch/demote (which re-enters `NBootstrap.preRun`). Not pushed.
+
+### July 2026 round 2 (26 commits — multi-polity / Kith & Kin) — SMALL
+
+Merge-base `592d4d5ac` → hafen/master `9bba2bb9d`. Merge commit `57b811005`, branch
+`hafen-integration-2026-07-polity`. **4 conflicts**, all small.
+
+**Why this one was found from a symptom, not from `git log`.** The Village tab in
+Kith & Kin showed `"Please update your client!"` and had lost its village dropdown.
+That string is in *neither* client — it lives in the **server-distributed resource
+code** `ui/vlg`, whose constructor probes the client and degrades gracefully:
+
+```java
+Widget prev = add(new AuthMeter(new Coord(width, UI.scale(20))), Coord.z);
+try {
+    new Member(new Member(0));            // needs Polity.Member(Member)
+} catch(LinkageError e) {
+    prev = add(new Label("Please update your client!", nmf), prev.pos("bl").adds(0, 15));
+```
+
+`Polity.Member(Member)` arrived in hafen `44b7c8eab`, which we hadn't merged, so the
+probe threw `NoSuchMethodError` and the fallback label rendered.
+
+> **Diagnostic technique worth reusing.** When a server-side resource widget
+> misbehaves and the string isn't in our source, dump it from the client's res cache.
+> `HashDirCache` writes the resource name into each file's header as **plain**
+> modified-UTF-8, so the name greps even though the body doesn't:
+> ```bash
+> D="$APPDATA/Haven and Hearth/data"
+> grep -rhoa "res/[a-z0-9/]*vlg[a-z0-9/]*" "$D" | sort -u   # find the resource
+> grep -rla "res/ui/vlg" "$D"                               # find its cache files
+> strings -n 3 "$D/<file>"                                  # read the source layer
+> ```
+> Multiple hits are normal — one cache file per `haven.cachebase`/pool. The live one
+> is the file whose header URI matches `haven.cachebase` in `etc/*-config.properties`
+> (`http://game.havenandhearth.com/render/`); check mtime to confirm.
+
+- **Theme — multiple polities of the same type.** `Polity` is now **abstract** with
+  `public abstract String type()` (the concrete subclasses live in resource code:
+  `ui/vlg` returns `"pol"`, `ui/realm` returns `"rlm"`). `Zergwnd` no longer hardcodes
+  two tab buttons; `Zergwnd.Category` holds a `List<Polity>` per type and renders a
+  plain `Label` when you're in one, a `Category.Selector extends SDropBox<Polity, Widget>`
+  when you're in several. Tab buttons are created on demand from the type string
+  (`gfx/hud/buttons/<type>`), sorted by the up-image's `z`, and the Category caption
+  comes from that resource's tooltip layer. `GameUI.polities` and `Zergwnd.dtab()` are
+  gone — destruction is handled by `Category.cdestroy` / `PTab.cdestroy`.
+  `Polity.Member` also gained `rname()`/`name()`/`order` and a copy ctor, `memb`
+  became a `Map` guarded by `mseq`, and `parsememb` takes the previous member.
+- **⚠ The real work — `NZergwnd` (no git conflict).** Nurgling replaced
+  `GameUI.Zergwnd` with a **fork**, `src/nurgling/widgets/NZergwnd.java` (`GameUI.zerg`
+  is an `NZergwnd`; `GameUI.Zergwnd` is dead code kept only so upstream diffs apply
+  cleanly). Git merged upstream's rewrite into the dead class and left the fork
+  untouched — it still had `pol`/`pol2`/`dtab` and dispatched on `p.cap`. **Rewritten**
+  against the new `Category`/`PTab`/`TButton` shape, keeping the two nurgling deltas:
+  `L10n.get("opt.keybind.kith_kin")` window title and `L10n.get("kin.window_title")`
+  Kin tooltip. From `nurgling.widgets` the only source change needed vs. upstream is
+  `TextItem` → `SListWidget.TextItem`. **If you ever touch `GameUI.Zergwnd`, mirror it
+  into `NZergwnd` — nothing enforces this and javac won't notice.**
+- **Conflicts (4):**
+  - `Polity.java` — took hafen's `rname()`/`name()` refactor of `Member.draw`, kept
+    nurgling's `UI.scale(5, 10)` name offset (upstream uses 0). `unk = "?Unknown?"`
+    auto-merged. Note `ui/vlg`'s `VMember.draw` overrides this anyway; the offset only
+    shows for generic polities.
+  - `BuddyWnd.java` — hafen moved `Text rname` down next to `rname()` and made it
+    private. Kept nurgling's `atime`/`lastOnline`/`upTime` and **deleted** the local
+    `Text rname` field, else it'd shadow-duplicate the relocated one.
+  - `MenuSearch.java` — hafen changed `Main.tick(double)` → `tick(TickEvent)` /
+    `ev.visible` in the same hunk where nurgling had removed `root`/`setroot()` (June
+    round 2's global-search change). Kept nurgling's shape, took hafen's signature.
+  - `GameUI.java` — field block only: kept nurgling's widget fields and
+    `public final NZergwnd zerg`, dropped `polities` as upstream did. The `addchild`
+    `place=="pol"` branch and the `cdestroy` polity branch auto-merged to upstream's.
+- **Auto-merged, verified intact:** `Widget` (`TickEvent.visible` + `dispatch`
+  override), `Composited`, `Debug`, `LoginScreen`, `MapMesh`, all of `iosys/**`
+  (new `Providers` discovery for toolkits/audio; nurgling has no toolkit subclasses),
+  `render/**` GL debug-message plumbing, `opt/panama/**` (JDK ≥ 22 only).
+- **No `Session.PVER` change**, so no nurgling wire-format reimplementation is at
+  risk this round (contrast June's `NMakewindow`).
+- **Status:** `ant clean` + full build succeeds; ancestry verified
+  (`git merge-base --is-ancestor hafen/master HEAD` → 0). **Runtime testing pending** —
+  open Kith & Kin and confirm the Village tab renders the panel (not the update
+  message), that the name shows as a label with one village and a dropdown with two
+  or more, that switching villages swaps the panel, and that the Realm tab still
+  works. Not pushed.

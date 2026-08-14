@@ -374,10 +374,12 @@ public class NMapWnd extends MapWnd {
     public Coord2d findMarkerPosition(String name) {
         MiniMap.Location sessloc = view.sessloc;
         if(sessloc == null) {return null;}
-        for (Map.Entry<Long, MapFile.SMarker> e : file.smarkers.entrySet()) {
-            MapFile.SMarker m = e.getValue();
-            if(m.seg == sessloc.seg.id && m.nm!= null && name!=null && m.nm.contains(name)) {
-                return m.tc.sub(sessloc.tc).mul(tilesz);
+        for (MapFile.Marker mark : file.markers) {
+            if(mark instanceof MapFile.SMarker) {
+                MapFile.SMarker m = (MapFile.SMarker) mark;
+                if(m.seg == sessloc.seg.id && m.nm != null && name != null && m.nm.contains(name)) {
+                    return m.tc.sub(sessloc.tc).mul(tilesz);
+                }
             }
         }
         return null;
@@ -489,36 +491,36 @@ public class NMapWnd extends MapWnd {
     }
 
     private boolean handleForagerRecordingClick(Coord c) {
-        // Check if Forager window is open and in recording mode
+        // Check if a PathRecordable window is open and in recording mode
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui == null) return false;
-        
-        // Find the Forager window
-        nurgling.widgets.bots.Forager foragerWnd = null;
+
+        // Find a PathRecordable window (Forager or TrufflePigHunter)
+        nurgling.widgets.bots.PathRecordable pathWnd = null;
         for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-            if(wdg instanceof nurgling.widgets.bots.Forager) {
-                foragerWnd = (nurgling.widgets.bots.Forager) wdg;
+            if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
+                pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
                 break;
             }
         }
-        
-        if(foragerWnd == null || !foragerWnd.isRecording()) {
+
+        if(pathWnd == null || !pathWnd.isRecording()) {
             return false; // Not recording, don't consume the event
         }
-        
+
         // Get the location at the clicked position
         MiniMap.Location clickLoc = view.xlate(c);
         if(clickLoc == null || view.sessloc == null) return false;
-        
+
         // Only handle if in same segment
         if(clickLoc.seg.id != view.sessloc.seg.id) return false;
-        
+
         // Create ForagerWaypoint from MiniMap.Location
         nurgling.routes.ForagerWaypoint waypoint = new nurgling.routes.ForagerWaypoint(clickLoc);
-        
+
         // Add waypoint to the recording path
-        foragerWnd.addWaypointToRecording(waypoint);
-        
+        pathWnd.addWaypointToRecording(waypoint);
+
         return true; // Consume the event
     }
     

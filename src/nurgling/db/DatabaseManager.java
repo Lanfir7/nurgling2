@@ -26,9 +26,7 @@ public class DatabaseManager {
     private ContainerService containerService;
     private StorageItemService storageItemService;
     private AreaService areaService;
-    private AnimalMarkerService animalMarkerService;
-    private LocalTimerService localTimerService;
-    private CraftRecipeService craftRecipeService;
+    private nurgling.db.service.PlanningService planningService;
 
     // Task queue for retry logic
     private final BlockingQueue<QueuedTask<?>> taskQueue = new LinkedBlockingQueue<>(1000);
@@ -181,13 +179,8 @@ public class DatabaseManager {
         }, "DB-Shutdown-Hook"));
     }
     
-    private volatile long queueProcessorDelayMs = 1000;
-    private static final long QUEUE_MIN_DELAY_MS = 1000;
-    private static final long QUEUE_MAX_DELAY_MS = 10000;
-
     /**
-     * Start the background queue processor with adaptive interval.
-     * When idle, backs off up to 10s. Resets to 1s when tasks appear.
+     * Start the background queue processor
      */
     private void startQueueProcessor() {
         queueProcessor = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -196,34 +189,22 @@ public class DatabaseManager {
             return t;
         });
         
-        scheduleNextQueueRun();
-    }
-
-    private void scheduleNextQueueRun() {
-        if (shutdown) return;
-        queueProcessor.schedule(() -> {
-            if (shutdown || !initialized) {
-                scheduleNextQueueRun();
-                return;
-            }
+        queueProcessor.scheduleWithFixedDelay(() -> {
+            if (shutdown || !initialized) return;
+            
             try {
                 processQueuedTasks();
             } catch (Exception e) {
                 System.err.println("[DatabaseManager] Queue processor error: " + e.getMessage());
             }
-            scheduleNextQueueRun();
-        }, queueProcessorDelayMs, TimeUnit.MILLISECONDS);
+        }, 1, 1, TimeUnit.SECONDS);
     }
     
     /**
      * Process queued tasks that are ready for retry
      */
     private void processQueuedTasks() {
-        if (taskQueue.isEmpty()) {
-            queueProcessorDelayMs = Math.min(queueProcessorDelayMs * 2, QUEUE_MAX_DELAY_MS);
-            return;
-        }
-        queueProcessorDelayMs = QUEUE_MIN_DELAY_MS;
+        if (taskQueue.isEmpty()) return;
         
         long now = System.currentTimeMillis();
         int processed = 0;
@@ -292,17 +273,28 @@ public class DatabaseManager {
             if (conn != null) {
                 this.adapter = DatabaseAdapterFactory.createAdapter(conn);
 
-                // Run migrations FIRST using this connection
-                runMigrations(conn);
+                try {
+                    // Run migrations FIRST using this connection
+                    runMigrations(conn);
 
-                // Initialize services after migrations
-                initializeServices();
+                    // Initialize services after migrations
+                    initializeServices();
 
-                connectionPoolManager.returnConnection(conn);
-                initialized = true;
-
-                System.out.println("DatabaseManager initialized successfully with " +
-                                 DatabaseAdapterFactory.getDatabaseType());
+                    initialized = true;
+                    System.out.println("DatabaseManager initialized successfully with " +
+                                     DatabaseAdapterFactory.getDatabaseType());
+                } catch (nurgling.db.migration.MigrationManager.SchemaTooNewException stne) {
+                    // Schema mismatch - leave manager uninitialized so sync skips itself.
+                    // Surface the error to any active game UI.
+                    try {
+                        if (nurgling.NUtils.getGameUI() != null) {
+                            nurgling.NUtils.getGameUI().msg("Area sync disabled: " + stne.getMessage(),
+                                java.awt.Color.RED);
+                        }
+                    } catch (Exception ignore) {}
+                } finally {
+                    connectionPoolManager.returnConnection(conn);
+                }
             } else {
                 System.err.println("Failed to initialize DatabaseManager: cannot get database connection");
             }
@@ -321,15 +313,13 @@ public class DatabaseManager {
         this.containerService = new ContainerService(this);
         this.storageItemService = new StorageItemService(this);
         this.areaService = new AreaService(this);
-        this.animalMarkerService = new AnimalMarkerService(this);
-        this.localTimerService = new LocalTimerService(this);
-        this.craftRecipeService = new CraftRecipeService(this);
+        this.planningService = new nurgling.db.service.PlanningService(this);
     }
 
     /**
      * Run database migrations using the provided connection
      */
-    private void runMigrations(Connection conn) {
+    private void runMigrations(Connection conn) throws SQLException {
         System.out.println("DatabaseManager: Starting migration check...");
         try {
             // Create adapter for this specific connection
@@ -339,6 +329,11 @@ public class DatabaseManager {
             migrationManager.runMigrations();
             conn.commit();
             System.out.println("DatabaseManager: Migrations completed");
+        } catch (nurgling.db.migration.MigrationManager.SchemaTooNewException stne) {
+            // Hard stop: do not initialize services, do not allow sync.
+            System.err.println("ABORT: " + stne.getMessage());
+            try { conn.rollback(); } catch (SQLException ignore) {}
+            throw stne;
         } catch (SQLException e) {
             System.err.println("Failed to run database migrations: " + e.getMessage());
             e.printStackTrace();
@@ -346,6 +341,7 @@ public class DatabaseManager {
                 conn.rollback();
             } catch (SQLException ignore) {
             }
+            throw e;
         }
     }
 
@@ -534,24 +530,10 @@ public class DatabaseManager {
     }
 
     /**
-     * Get animal marker service (Postgres only)
+     * Get planning service (folders / layers / ghosts for the Base planner).
      */
-    public AnimalMarkerService getAnimalMarkerService() {
-        return animalMarkerService;
-    }
-
-    /**
-     * Get local timer service (Postgres only)
-     */
-    public LocalTimerService getLocalTimerService() {
-        return localTimerService;
-    }
-
-    /**
-     * Get craft recipe service (ingredient-to-recipe lookup)
-     */
-    public CraftRecipeService getCraftRecipeService() {
-        return craftRecipeService;
+    public nurgling.db.service.PlanningService getPlanningService() {
+        return planningService;
     }
 
     /**

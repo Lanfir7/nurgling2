@@ -1,5 +1,6 @@
 package nurgling.conf;
 
+import nurgling.tools.NFileUtils;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -32,10 +33,9 @@ public class IconRingConfig {
      */
     private void load() {
         try {
-            if (Files.exists(configFile)) {
-                String content = new String(Files.readAllBytes(configFile));
+            String content = NFileUtils.readWithBackupFallback(configFile.toString());
+            if (content != null && !content.isEmpty()) {
                 JSONObject json = new JSONObject(content);
-                
                 for (String key : json.keySet()) {
                     ringSettings.put(key, json.getBoolean(key));
                 }
@@ -50,14 +50,17 @@ public class IconRingConfig {
      */
     public void save() {
         try {
+            // Create directory if needed
+            Files.createDirectories(configFile.getParent());
+            
             // Build JSON
             JSONObject json = new JSONObject();
             for (Map.Entry<String, Boolean> entry : ringSettings.entrySet()) {
                 json.put(entry.getKey(), entry.getValue());
             }
             
-            // Write atomically with file locking
-            nurgling.util.SafeJsonWriter.writeAtomic(configFile.toString(), json);
+            // Write to file
+            NFileUtils.writeAtomically(configFile.toString(), json.toString(2));
         } catch (IOException e) {
             e.printStackTrace();
         }

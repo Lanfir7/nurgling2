@@ -36,6 +36,7 @@ import java.util.function.*;
 import java.io.*;
 import java.nio.file.*;
 import java.awt.image.*;
+import haven.iosys.tk.*;
 import java.awt.Color;
 import java.util.regex.Pattern;
 import javax.swing.JFileChooser;
@@ -72,9 +73,12 @@ public class GobIcon extends GAttrib {
 	public abstract BufferedImage image();
 	public abstract void draw(GOut g, Coord cc);
 	public abstract boolean checkhit(Coord c);
+	public Object[] info(ItemInfo.Owner owner) {return(new Object[] {new Object[] {new ItemInfo.Name.Default()}});}
 	public Object[] id() {return(nilid);}
 	public int z() {return(0);}
 	public Markable markable() {return(Markable.UNMARKABLE);}
+
+	public boolean hover(Coord c, boolean hovering) {return(false);}
 
 	@Resource.PublishedCode(name = "mapicon")
 	public static interface Factory {
@@ -96,7 +100,7 @@ public class GobIcon extends GAttrib {
 	    Resource.Image rimg = res.layer(Resource.imgc);
 	    BufferedImage img = rimg.scaled();
 	    Tex tex = rimg.tex();
-	    if ((tex.sz().x > size) || (tex.sz().y > size)) {
+	    if(((tex.sz().x > size) || (tex.sz().y > size)) && !Utils.bv(rimg.info.getOrDefault("mm/noscale", 0))) {
 		BufferedImage buf = rimg.img;
 		buf = PUtils.rasterimg(PUtils.blurmask2(buf.getRaster(), 1, 1, Color.BLACK));
 		Coord tsz;
@@ -420,9 +424,14 @@ public class GobIcon extends GAttrib {
 	    public boolean save = false, adv = false;
 	    public Integer tag = null;
 	    private final Collection<Icon> advbuf = new ArrayList<>();
+	    private final boolean cached;
 	    private ResID r = null;
 	    private Loader next = null;
 	    private Map<Setting.ID, Setting> nset = null;
+
+	    public Loader(boolean cached) {
+		this.cached = cached;
+	    }
 
 	    private void merge(Setting set, Setting conf) {
 		set.show    = conf.show;
@@ -447,43 +456,45 @@ public class GobIcon extends GAttrib {
 			r = null;
 			continue;
 		    }
-		    Icon.Factory fac = getfac(res);
-		    Map<Setting.ID, Icon> iconMap = new HashMap<>();
-		    for(Icon icon : fac.enumerate(Settings.this, res, new MessageBuf(r.data))) {
-			Setting set = new Setting(icon, r);
-			iconMap.put(set.id, icon);
-			Setting def = defaults.get(r);
-			if(def != null)
-			    merge(set, def);
-			Setting prev = nset.get(set.id);
-			if((prev == null) || (prev.res.ver < set.res.ver)) {
-			    if(prev != null)
-				merge(set, prev);
-			    else
-				advbuf.add(icon);
-			    // Устанавливаем звук по умолчанию для агрессивных животных, если звук еще не установлен
-			    if(isAggressiveAnimal(icon.res.name) && set.filens == null && set.resns == null) {
-				Path defaultSound = getDefaultSoundForAnimal(icon.res.name);
-				if(defaultSound != null) {
-				    set.filens = defaultSound;
-				    // Включаем оповещение по умолчанию для агрессивных животных
-				    set.notify = true;
+		    try {
+			fac = getfac(res);
+			for(Icon icon : fac.enumerate(Settings.this, res, new MessageBuf(r.data))) {
+			    Setting set = new Setting(icon, r);
+			    iconMap.put(set.id, icon);
+			    Setting def = defaults.get(r);
+			    if(def != null)
+				merge(set, def);
+			    Setting prev = nset.get(set.id);
+			    if((prev == null) || (prev.res.ver < set.res.ver)) {
+				if(prev != null)
+				    merge(set, prev);
+				else
+				    advbuf.add(icon);
+				if(isAggressiveAnimal(icon.res.name) && set.filens == null && set.resns == null) {
+				    Path defaultSound = getDefaultSoundForAnimal(icon.res.name);
+				    if(defaultSound != null) {
+					set.filens = defaultSound;
+					set.notify = true;
+				    }
 				}
-			    }
-			    nset.put(set.id, set);
-			} else if(prev.icon == null) {
-			    // Update icon if prev version matches but icon wasn't loaded yet
-			    prev.icon = icon;
-			    // Устанавливаем звук по умолчанию для агрессивных животных, если звук еще не установлен
-			    if(isAggressiveAnimal(icon.res.name) && prev.filens == null && prev.resns == null) {
-				Path defaultSound = getDefaultSoundForAnimal(icon.res.name);
-				if(defaultSound != null) {
-				    prev.filens = defaultSound;
-				    // Включаем оповещение по умолчанию для агрессивных животных
-				    prev.notify = true;
+				nset.put(set.id, set);
+			    } else if(prev.icon == null) {
+				prev.icon = icon;
+				if(isAggressiveAnimal(icon.res.name) && prev.filens == null && prev.resns == null) {
+				    Path defaultSound = getDefaultSoundForAnimal(icon.res.name);
+				    if(defaultSound != null) {
+					prev.filens = defaultSound;
+					prev.notify = true;
+				    }
 				}
 			    }
 			}
+		    } catch(Resource.BadVersionException | LinkageError e) {
+			if(!cached)
+			    throw(e);
+			new Warning(e, "Could not re-load saved icon " + res).issue();
+			r = null;
+			continue;
 		    }
 		    Collection<Setting> sets = resolve.remove(r);
 		    if(sets != null) {
@@ -555,7 +566,7 @@ public class GobIcon extends GAttrib {
 		ResID id = new ResID(res, data);
 		Setting def = new Setting(res, Icon.nilid);
 		def.show = def.defshow = Utils.bv(args[a++]);
-		Loader l = new Loader();
+		Loader l = new Loader(false);
 		l.save = true;
 		l.adv = true;
 		l.tag = tag;
@@ -565,7 +576,7 @@ public class GobIcon extends GAttrib {
 	    } else if(args[1] instanceof Object[]) {
 		Object[] sub = (Object[])args[1];
 		int a = 0;
-		Loader l = new Loader();
+		Loader l = new Loader(false);
 		l.save = true;
 		l.tag = tag;
 		Collection<GobIcon.Setting> csets = new ArrayList<>();
@@ -657,7 +668,7 @@ public class GobIcon extends GAttrib {
 	    Map<Object, Object> root = Utils.mapdecn(blob.tto());
 	    this.tag = Utils.iv(root.get("tag"));
 	    this.notify = Utils.bv(root.getOrDefault("notify", 0));
-	    Loader l = new Loader();
+	    Loader l = new Loader(true);
 	    for(Object eicon : (Object[])root.get("icons")) {
 		Map<Object, Object> icon = Utils.mapdecn(eicon);
 		Object[] eres = (Object[])icon.get("res");
@@ -705,6 +716,10 @@ public class GobIcon extends GAttrib {
 	}
 
 	public void dsave() {
+	    // Icon settings live outside hideConf, but the "don't hide objects that have their map
+	    // icon enabled" exception depends on them, so nothing else would re-evaluate the gobs
+	    // this just affected.
+	    nurgling.tools.GobHide.onIconSettingsChanged();
 	    synchronized(this) {
 		if(!saving) {
 		    Defer.later(this::dsave0, null);
@@ -1044,27 +1059,31 @@ public class GobIcon extends GAttrib {
 		protected List<NotificationSetting> items() {return(items);}
 		protected Widget makeitem(NotificationSetting item, int idx, Coord sz) {return(SListWidget.TextItem.of(sz, Text.std, () -> item.name));}
 
-		private void selectwav() {
-		    java.awt.EventQueue.invokeLater(() -> {
-			    JFileChooser fc = new JFileChooser();
-			    fc.setFileFilter(new FileNameExtensionFilter("PCM wave file", "wav"));
-			    if(fc.showOpenDialog(null) != JFileChooser.APPROVE_OPTION)
-				return;
+		private void selectwav(NotificationSetting prev) {
+		    FilePicker dialog = ui.wnd.toolkit().picker().make(FilePicker.Mode.OPEN, ui.wnd);
+		    dialog.filter("PCM wave file", "wav");
+		    dialog.show().map(path -> {
+			Debug.dump(path, prev.name);
+			if(path == null) {
+			    super.change(prev);
+			} else {
 			    for(Iterator<NotificationSetting> i = items.iterator(); i.hasNext();) {
 				NotificationSetting item = i.next();
 				if(item.wav != null)
 				    i.remove();
 			    }
-			    NotificationSetting ws = new NotificationSetting(fc.getSelectedFile().toPath());
+			    NotificationSetting ws = new NotificationSetting(path);
 			    items.add(items.indexOf(NotificationSetting.other), ws);
 			    change(ws);
-			});
+			}
+		    }).report(ui);
 		}
 
 		public void change(NotificationSetting item) {
+		    NotificationSetting prev = sel;
 		    super.change(item);
 		    if(item == NotificationSetting.other) {
-			selectwav();
+			selectwav(prev);
 		    } else {
 			conf.resns = item.res;
 			conf.filens = item.wav;
@@ -1092,7 +1111,7 @@ public class GobIcon extends GAttrib {
 			patterns.put("Herbs",Pattern.compile("gfx/invobjs/herbs/.*"));
 			patterns.put("Bushes",Pattern.compile("gfx/terobjs/mm/bushes/.*"));
 			patterns.put("Trees",Pattern.compile("gfx/terobjs/mm/trees/.*"));
-			patterns.put("Bumblings",Pattern.compile("(gfx/invobjs/.*).*(ore|mineral|arkose|mica|diorite|gneiss|microlite|obsidian|sodalite|olivine|rock|metal|flint|coal|galena|ilmenite|argentite|leadglance|graywacke|cuprite|limonite|diabase|pegmatite|pumice|cassiterite|sylvanite|corund|zincspar|orthoclase|hornsilver|eclogite|gabbro|malachite|granite|dolomite|schist|quartz|calcite|cinnabar|serpentine|basalt|tremolite|rhyolite|feldspar|soapstone|bauxite|chert|pyrite|hematite|alabaster|apatite|fluorite|jasper|scoria|agates|tuff|zeolite|hornblende|magnetite|pyrophyllite|bentonite|marble|muscovite|phyllite|taconite|wollastonite|talc|siltstone|slate|diatomite|tufa|limestone)"));
+			patterns.put("Bumblings",Pattern.compile("(gfx/invobjs/.*).*(ore|mineral|arkose|mica|diorite|gneiss|microlite|obsidian|sodalite|olivine|rock|metal|flint|coal|galena|ilmenite|argentite|leadglance|graywacke|cuprite|limonite|diabase|pegmatite|pumice|cassiterite|sylvanite|corund|zincspar|orthoclase|hornsilver|eclogite|gabbro|malachite|granite|dolomite|schist|quartz|calcite|cinnabar|serpentine|basalt|tremolite|rhyolite|feldspar|soapstone|bauxite|chert|pyrite|hematite|alabaster|apatite|fluorite|jasper|scoria|agates|tuff|zeolite|hornblende|magnetite|pyrophyllite|bentonite|marble|muscovite|phyllite|taconite|wollastonite|talc|siltstone|slate|diatomite|tufa|limestone|sandstone)"));
 			patterns.put("Players",Pattern.compile("gfx/hud/mmap/plo"));
 			patterns.put("Display",null);
 			patterns.put("Notify",null);

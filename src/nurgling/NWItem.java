@@ -2,16 +2,19 @@ package nurgling;
 
 import haven.*;
 import haven.res.lib.itemtex.*;
+import haven.res.ui.stackinv.ItemStack;
 import nurgling.iteminfo.NSearchable;
 import nurgling.styles.TooltipStyle;
 import nurgling.tools.NSearchItem;
-import nurgling.tools.RecipeIngredientCache;
-import nurgling.tools.VSpec;
+import nurgling.widgets.DropContainer;
 import org.json.*;
 
-import java.awt.Graphics;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.*;
+import java.util.List;
 
 public class NWItem extends WItem
 {
@@ -70,6 +73,8 @@ public class NWItem extends WItem
     private PaddedTip nlongtip = null;
     private List<ItemInfo> nttinfo = null;
     private boolean nlastModshift = false;
+    private double nlastLongtipBuild = 0;
+    private static final double NLONGTIP_REBUILD_INTERVAL = 0.5;
 
     @Override
     public Object tooltip(Coord c, Widget prev) {
@@ -85,10 +90,15 @@ public class NWItem extends WItem
             nlongtip = null;
             nttinfo = info;
         }
-        if (nlongtip == null || ((NGItem) item).needlongtip()) {
+        double now = Utils.rtime();
+        boolean wantRebuild = (nlongtip == null) || ((NGItem) item).needlongtip();
+        boolean throttled = (nlongtip != null) && (now - nlastLongtipBuild < NLONGTIP_REBUILD_INTERVAL);
+        if (wantRebuild && !throttled) {
             BufferedImage img = NTooltip.build(info);
             if (img != null) {
                 nlongtip = new PaddedTip(info, img);
+                ((NGItem) item).consumedLongtip();
+                nlastLongtipBuild = now;
             }
         }
         return nlongtip;
@@ -112,11 +122,106 @@ public class NWItem extends WItem
         
         search();
         
-        if((Boolean)NConfig.get(NConfig.Key.autoDropper) && ((NGItem) item).isSearched) {
-            if(parent instanceof NInventory && NUtils.getGameUI() !=null && NUtils.getGameUI().maininv == parent) {
-                NUtils.drop(this);
+        if((Boolean)NConfig.get(NConfig.Key.autoDropper)) {
+            if(parent instanceof NInventory && NUtils.getGameUI() != null && NUtils.getGameUI().maininv == parent) {
+                autoDrop();
             }
         }
+    }
+
+    // Server flood protection: dropping many items in the same instant (after
+    // picking up a big batch, or trimming a large stack) sends a burst of
+    // "drop" messages that trips the server's spam protection and disconnects
+    // the client. Auto-drops are throttled to at most one item per interval,
+    // shared statically across every item so the COMBINED drop rate -- loose
+    // items and stacked items together -- stays under the threshold.
+    private static final long AUTODROP_INTERVAL_MS = 150;
+    private static long lastAutodropMs = 0;
+
+    // Returns true (and consumes the slot) only when enough time has passed
+    // since the last auto-drop. Call this immediately before actually dropping,
+    // and only once it is certain the item will be dropped, so slots are never
+    // wasted.
+    private static boolean autodropAllowed()
+    {
+        long now = System.currentTimeMillis();
+        if (now - lastAutodropMs >= AUTODROP_INTERVAL_MS) {
+            lastAutodropMs = now;
+            return true;
+        }
+        return false;
+    }
+
+    private void autoDrop()
+    {
+        NGItem ngitem = (NGItem) item;
+        String name = ngitem.name();
+        if (name == null) return;
+        HashMap<String, Integer> props = DropContainer.getDropProps();
+        if (!props.containsKey(name)) return;
+        int threshold = props.get(name);
+
+        // No threshold configured -> the user wants every item of this name
+        // gone, whatever its quality. Drop it as a whole, which also covers a
+        // stack container (dropping the container drops the whole stack, which
+        // is exactly what "drop all of these" means) and items whose quality
+        // never resolves. No quality is needed, so nothing can stall here.
+        if (threshold == DropContainer.ALWAYS) {
+            if (ngitem.autodropRequested) return;
+            if (!autodropAllowed()) return;
+            ngitem.autodropRequested = true;
+            NUtils.drop(this);
+            return;
+        }
+
+        // Stack container: trim only the sub-threshold items out of the stack
+        // instead of dropping the whole thing. The container itself carries no
+        // quality (quality lives on each stacked child), so dropping it would
+        // discard everything regardless of the threshold. Each child is an
+        // independent GItem, so dropping it is the same hand-free "drop"
+        // message used for loose items.
+        //
+        // NOTE: the container's tooltip (which is what makes its quality
+        // resolve to null) and its contents widget arrive in separate server
+        // messages, in no guaranteed order. Until contents has attached we must
+        // NOT fall through to the loose branch below -- that would drop the
+        // whole stack. The loose branch only drops items with a concrete
+        // quality, and a stack container's quality is always null, so a stack
+        // is safe in either branch; it simply gets trimmed on a later tick once
+        // contents is present.
+        if (ngitem.contents instanceof ItemStack) {
+            ItemStack stack = (ItemStack) ngitem.contents;
+            // Snapshot the order so the live list isn't touched while drops fire.
+            for (GItem gi : new ArrayList<>(stack.order)) {
+                if (!(gi instanceof NGItem)) continue;
+                NGItem child = (NGItem) gi;
+                Float q = child.quality;
+                if (q == null) continue;             // quality not loaded yet -> re-check next tick
+                if (q >= threshold) continue;        // keep items at/above the threshold
+                if (child.autodropRequested) continue; // already asked to drop -> no duplicate messages
+                if (!autodropAllowed()) return;      // throttled -> drop it on a later tick
+                child.autodropRequested = true;
+                // Drop exactly this one item to the ground -- the same hand-free
+                // message the client sends when you ctrl-click a single item in
+                // a stack (WItem.mousedown: wdgmsg("drop", coord, count)).
+                gi.wdgmsg("drop", Coord.z, 1);
+                return;                              // one drop per throttle slot
+            }
+            return;
+        }
+
+        // Loose item: drop only when it has a concrete quality below the
+        // threshold. A null quality is NEVER dropped here -- it may be an item
+        // whose tooltip has not loaded yet, or a stack container whose contents
+        // widget has not attached yet (the container carries no quality of its
+        // own). Dropping on a null quality is exactly what caused whole stacks
+        // to be discarded, so it is deliberately not done.
+        if (ngitem.autodropRequested) return;        // already asked to drop -> no repeated messages
+        Float q = ngitem.quality;
+        if (q == null || q >= threshold) return;     // keep: unknown quality, or at/above threshold
+        if (!autodropAllowed()) return;              // throttled -> drop it on a later tick
+        ngitem.autodropRequested = true;
+        NUtils.drop(this);
     }
 
     private void search()
@@ -203,14 +308,6 @@ public class NWItem extends WItem
     @Override
     public boolean mousedown(MouseDownEvent ev)
     {
-        // Alt+RMB (only Alt, no Shift/Ctrl): show recipes using this item
-        if(ui.modmeta && !ui.modshift && !ui.modctrl && ev.b == 3) {
-            String name = ((NGItem) item).name();
-            if(name != null) {
-                showRecipesForItem(name);
-            }
-            return true;
-        }
         // Alt+Shift+Click: transfer all same items sorted by quality
         // Right-click (button 3): ascending order (lowest quality first)
         // Left-click (button 1): descending order (highest quality first)
@@ -240,76 +337,5 @@ public class NWItem extends WItem
             }
         }
         return super.mousedown(ev);
-    }
-
-    private void showRecipesForItem(String itemName) {
-        NGameUI gui = NUtils.getGameUI();
-        if(gui == null || gui.menu == null) return;
-
-        // Trigger DB load on first use if not yet loaded
-        if(!RecipeIngredientCache.isDbLoaded()) {
-            RecipeIngredientCache.loadFromDatabase();
-        }
-
-        // Collect search names: item name + VSpec category groups
-        List<String> searchNames = new ArrayList<>();
-        searchNames.add(itemName);
-        searchNames.addAll(VSpec.getCategory(itemName));
-
-        // Find cached recipes where this item is used AS INGREDIENT (input cache)
-        Set<RecipeIngredientCache.RecipeEntry> entries = RecipeIngredientCache.findInputRecipes(searchNames);
-
-        // If in-memory cache is empty, try direct DB query as fallback (input type only)
-        if(entries.isEmpty() && NCore.databaseManager != null
-                && NCore.databaseManager.isReady()
-                && NCore.databaseManager.getCraftRecipeService() != null) {
-            try {
-                entries = NCore.databaseManager.getCraftRecipeService().findByIngredients(searchNames);
-            } catch(Exception e) {
-                // DB query failed, proceed with empty results
-            }
-        }
-        if(entries.isEmpty()) return;
-
-        // Collect pagina resource paths from cache
-        Set<String> recipeResources = new HashSet<>();
-        Map<String, String> resourceToName = new HashMap<>();
-        for(RecipeIngredientCache.RecipeEntry entry : entries) {
-            recipeResources.add(entry.paginaResource);
-            resourceToName.put(entry.paginaResource, entry.recipeName);
-        }
-
-        // Match against available paginae
-        List<MenuGrid.Pagina> available = new ArrayList<>();
-        for(MenuGrid.Pagina pag : gui.menu.paginae) {
-            try {
-                if(recipeResources.contains(pag.res().name)) {
-                    available.add(pag);
-                }
-            } catch(Loading e) {
-                // Resource not loaded yet, skip
-            }
-        }
-
-        if(available.isEmpty()) return;
-
-        if(available.size() == 1) {
-            available.get(0).button().use(new MenuGrid.Interaction(1, ui.modflags()));
-            return;
-        }
-
-        // Sort alphabetically
-        available.sort((a, b) -> {
-            try {
-                return a.button().name().compareTo(b.button().name());
-            } catch(Loading e) { return 0; }
-        });
-
-        // Multiple recipes -> show SListMenu with icons
-        SListMenu.of(UI.scale(250, 200), available,
-                pag -> pag.button().name(),
-                pag -> pag.button().img(),
-                pag -> pag.button().use(new MenuGrid.Interaction(1, ui.modflags())))
-            .addat(this, ui.mc.sub(rootpos(Coord.z)));
     }
 }

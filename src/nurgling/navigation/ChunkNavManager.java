@@ -6,6 +6,7 @@ import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
 import nurgling.overlays.map.MinimapChunkNavRenderer;
+import nurgling.tools.NFileUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -428,7 +429,7 @@ public class ChunkNavManager {
 
             // Write to file next to chunknav directory
             Path pathFile = fileStore.getChunkDirectory().getParent().resolve("chunknav_path.json");
-            Files.write(pathFile, pathJson.toString(2).getBytes(StandardCharsets.UTF_8));
+            NFileUtils.writeAtomically(pathFile.toString(), pathJson.toString(2));
 
         } catch (Exception e) {
             // Ignore export errors
@@ -476,6 +477,74 @@ public class ChunkNavManager {
         }
 
         return result;
+    }
+
+    /**
+     * Fast check: is there a chunk-level path from the player's chunk to any of the area's chunks?
+     * Uses BFS through connectedChunks and portal connections.
+     * If this returns false, tile-level A* will also fail.
+     */
+    public boolean isAreaReachableByChunks(NArea area) {
+        if (!enabled || !initialized || area == null) return false;
+        if (area.space == null || area.space.space == null || area.space.space.isEmpty()) return false;
+
+        // Collect area chunk IDs that are in our graph
+        Set<Long> targetChunks = new HashSet<>();
+        for (Long gridId : area.space.space.keySet()) {
+            if (graph.getChunk(gridId) != null) {
+                targetChunks.add(gridId);
+            }
+        }
+        if (targetChunks.isEmpty()) return false;
+
+        // Get player's current chunk
+        try {
+            Gob player = NUtils.player();
+            if (player == null) return false;
+            NGameUI gui = NUtils.getGameUI();
+            if (gui == null || gui.map == null || gui.map.glob == null) return false;
+            MCache mcache = gui.map.glob.map;
+            Coord playerTile = player.rc.floor(MCache.tilesz);
+            MCache.Grid playerGrid = mcache.getgridt(playerTile);
+            if (playerGrid == null) return false;
+            long playerChunkId = playerGrid.id;
+            if (targetChunks.contains(playerChunkId)) return true;
+            // Player's chunk isn't recorded yet (just entered, teleported, or within the
+            // record throttle window). Don't prune here — fall through to the full pathfinder,
+            // which calls forceRecordVisibleGrids() before searching and can still find a path.
+            if (graph.getChunk(playerChunkId) == null) return true;
+
+            // BFS from player chunk through connectedChunks and portals
+            Set<Long> visited = new HashSet<>();
+            Queue<Long> queue = new LinkedList<>();
+            queue.add(playerChunkId);
+            visited.add(playerChunkId);
+
+            while (!queue.isEmpty()) {
+                long current = queue.poll();
+                ChunkNavData chunk = graph.getChunk(current);
+                if (chunk == null) continue;
+
+                for (long connected : chunk.connectedChunks) {
+                    if (visited.contains(connected)) continue;
+                    if (targetChunks.contains(connected)) return true;
+                    visited.add(connected);
+                    queue.add(connected);
+                }
+                for (ChunkPortal portal : chunk.portals) {
+                    long target = portal.connectsToGridId;
+                    if (target == -1 || visited.contains(target)) continue;
+                    if (targetChunks.contains(target)) return true;
+                    if (graph.getChunk(target) != null) {
+                        visited.add(target);
+                        queue.add(target);
+                    }
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -902,6 +971,8 @@ public class ChunkNavManager {
             case CELLAR:
                 return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
             case LADDER:
+            case CAVEIN:
+            case CAVEOUT:
                 return "outside".equals(targetLayer);
             case STAIRS_UP:
             case STAIRS_DOWN:

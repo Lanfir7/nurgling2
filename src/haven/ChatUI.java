@@ -31,17 +31,17 @@ import nurgling.tools.Finder;
 import nurgling.widgets.*;
 
 import java.util.*;
+import java.text.*;
+import java.util.regex.*;
+import haven.iosys.tk.*;
+import java.io.IOException;
+import java.net.URI;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.font.TextAttribute;
 import java.awt.font.TextHitInfo;
 import java.awt.image.BufferedImage;
-import java.text.*;
 import java.text.AttributedCharacterIterator.Attribute;
-import java.net.URI;
-import java.util.regex.*;
-import java.io.IOException;
-import java.awt.datatransfer.*;
 
 public class ChatUI extends Widget
 {
@@ -58,7 +58,7 @@ public class ChatUI extends Widget
     };
     public Channel sel = null;
     public int urgency = 0;
-    private final Selector chansel;
+    protected final Selector chansel;
     private Coord base = Coord.z;
     private QuickLine qline = null;
     private final LinkedList<Notification> notifs = new LinkedList<Notification>();
@@ -130,7 +130,9 @@ public class ChatUI extends Widget
 	public final List<RenderedMessage> rmsgs = new ArrayList<>();
 	public int urgency = 0;
 	private final Scrollbar sb;
-	private final IButton cb;
+	public final IButton cb;
+
+	public boolean closable() { return cb != null; }
 	private double dy;
 
 	public boolean process(String msg) {
@@ -471,10 +473,14 @@ public class ChatUI extends Widget
 	    }
 	}
 
-	public void draw(GOut g) {
+	protected void drawChannelBg(GOut g) {
 	    g.chcolor(0, 0, 0, 128);
 	    g.frect(Coord.z, sz);
 	    g.chcolor();
+	}
+
+	public void draw(GOut g) {
+	    drawChannelBg(g);
 	    int sy = (int)Math.round(dy), h = ih(), w = iw();
 	    boolean sel = false;
 	    synchronized(rmsgs) {
@@ -515,7 +521,7 @@ public class ChatUI extends Widget
 	}
 
 	public boolean mousewheel(MouseWheelEvent ev) {
-	    sb.ch(ev.a * 45);
+	    sb.ch(ev.s * 45);
 	    return(true);
 	}
 
@@ -740,19 +746,18 @@ public class ChatUI extends Widget
 			buf.append('\n');
 		}
 	    }
-	    Clipboard cl;
-	    if((cl = java.awt.Toolkit.getDefaultToolkit().getSystemSelection()) == null)
-		cl = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
-	    try {
-		final CharPos ownsel = selstart;
-		cl.setContents(new StringSelection(buf.toString()),
-			       new ClipboardOwner() {
-			public void lostOwnership(Clipboard cl, Transferable tr) {
-			    if(selstart == ownsel)
-				selstart = selend = null;
-			}
-		    });
-	    } catch(IllegalStateException e) {}
+	    CharPos ownsel = selstart;
+	    Clipboard.Item<CharSequence> item = new Clipboard.Item<>(Clipboard.Format.TEXT, buf);
+	    Runnable lost = ()-> {
+		if(selstart == ownsel)
+		    selstart = selend = null;
+	    };
+	    /* XXX: Putting on CLIPBOARD should be from eg. C-c, but
+	     * that requires Channel as a whole to accept keyobard
+	     * focus... */
+	    for(Object id : new Object[] {Clipboard.Std.PRIMARY, Clipboard.Std.CLIPBOARD}) {
+		ui.wnd.clipboard(id).put(new Clipboard.Contents(item), lost);
+	    }
 	}
 
 	protected boolean clicked(CharPos pos, int btn) {
@@ -762,11 +767,11 @@ public class ChatUI extends Widget
 		URI uri = (URI)inf.getAttribute(ChatAttribute.HYPERLINK);
 		if(uri != null) {
 		    try {
-			WebBrowser.sshow(uri.toURL());
+			ui.wnd.toolkit().browse(uri);
 		    } catch(java.net.MalformedURLException e) {
 			getparent(GameUI.class).error("Could not follow link.");
-		    } catch(WebBrowser.BrowserException e) {
-			getparent(GameUI.class).error("Could not launch web browser.");
+		    } catch(IOException e) {
+			getparent(GameUI.class).error("Could not launch web browser: " + e.getMessage());
 		    }
 		}
 		return(true);
@@ -1291,7 +1296,7 @@ public class ChatUI extends Widget
 //		show(si);
 //	}
 
-	private class DarkChannel {
+	public class DarkChannel {
 	    public final Channel chan;
 	    public Text rname;
 	    public Tex ricon;
@@ -1824,6 +1829,8 @@ public class ChatUI extends Widget
 	    qgrab.remove();
 	}
 	
+	public UI ui() {return(ui);}
+
 	public void done(ReadLine buf) {
 	    if(!buf.empty())
 		chan.send(buf.line());

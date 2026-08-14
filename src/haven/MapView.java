@@ -108,7 +108,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 	public void drag(Coord sc) {}
 	public void release() {}
-	public boolean wheel(Coord sc, int amount) {
+	public boolean wheel(MouseWheelEvent ev) {
 	    return(false);
 	}
 	
@@ -242,9 +242,9 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	
 	private static final float maxang = (float)(Math.PI / 2 - 0.1);
 	private static final float mindist = 50.0f;
-	public boolean wheel(Coord c, int amount) {
+	public boolean wheel(MouseWheelEvent ev) {
 	    float fe = telev;
-	    telev += amount * telev * 0.02f;
+	    telev += ev.s * telev * 0.02f;
 	    if(telev > maxang)
 		telev = maxang;
 	    if(dist(telev) < mindist)
@@ -308,8 +308,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    angl = angl % ((float)Math.PI * 2.0f);
 	}
 
-	public boolean wheel(Coord c, int amount) {
-	    float d = dist + (amount * 25);
+	public boolean wheel(MouseWheelEvent ev) {
+	    float d = dist + (float)(ev.s * 25);
 	    if(d < 5)
 		d = 5;
 	    dist = d;
@@ -383,8 +383,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    tangl = anglorig + ((float)(c.x - dragorig.x) / 100.0f);
 	}
 
-	public boolean wheel(Coord c, int amount) {
-	    float d = tdist + (amount * 25);
+	public boolean wheel(MouseWheelEvent ev) {
+	    float d = tdist + (float)(ev.s * 25);
 	    if(d < 5)
 		d = 5;
 	    tdist = d;
@@ -569,8 +569,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		release();
 	}
 
-	public boolean wheel(Coord c, int amount) {
-	    chfield(tfield + amount * 10);
+	public boolean wheel(MouseWheelEvent ev) {
+	    chfield(tfield + (float)ev.s * 10);
 	    return(true);
 	}
 
@@ -1857,9 +1857,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    initload = now;
 	}
 	if((terrain.loading() == null) && (gobs.loading() == null) && initdraw) {
-	    wdgmsg("initload", now - initload);
+	    initload(now - initload);
 	    initload = -1;
 	}
+    }
+
+    protected void initload(double time) {
+	wdgmsg("initload", time);
     }
 
     public void tick(double dt) {
@@ -1904,7 +1908,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
     public static interface PlobAdjust {
 	public void adjust(Plob plob, Coord pc, Coord2d mc, int modflags);
-	public boolean rotate(Plob plob, int amount, int modflags);
+	public default boolean rotate(Plob plob, MouseWheelEvent data, int modflags) {return(rotate(plob, data.a, modflags));}
+	@Deprecated public default boolean rotate(Plob plob, int amount, int modflags) {return(false);}
     }
 
     public static class StdPlace implements PlobAdjust {
@@ -1947,9 +1952,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    if((mv == null) || (mv.glob == null) || (mv.glob.oc == null))
 		return(pos);
 
-	    /* Try to get hitbox for the thing being placed.
-	     * For lifted objects, placement preview is often a Gobcopy, and the hitbox lives on the copied gob.
-	     */
 	    nurgling.NHitBox hb0 = plob.ngob.hitBox;
 	    if(hb0 == null) {
 		try {
@@ -1971,7 +1973,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    if(hb == null)
 		return(pos);
 
-	    /* Search radius and snap distance are in world units (tile is ~11). */
 	    final double snapMax = Math.max(6.0, MCache.tilesz.x * 1.1);
 	    final double searchPad = Math.max(80.0, MCache.tilesz.x * 8.0);
 
@@ -2004,7 +2005,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    nurgling.pf.NHitBoxD ob = new nurgling.pf.NHitBoxD(ghb.begin, ghb.end, gob.rc, gob.a);
 		    Coord2d oul = ob.getCircumscribedUL();
 		    Coord2d obr = ob.getCircumscribedBR();
-		    /* Quick reject: only keep obstacles near our current AABB. */
 		    if((obr.x < baseUL.x - searchPad) || (oul.x > baseBR.x + searchPad) ||
 		       (obr.y < baseUL.y - searchPad) || (oul.y > baseBR.y + searchPad))
 			continue;
@@ -2021,7 +2021,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		Coord2d oul = ob.getCircumscribedUL();
 		Coord2d obr = ob.getCircumscribedBR();
 
-		/* Helper: validate candidate by checking non-overlap with nearby obstacles. */
 		java.util.function.Predicate<Coord2d> valid = candPos -> {
 		    nurgling.pf.NHitBoxD cand = new nurgling.pf.NHitBoxD(hb.begin, hb.end, candPos, angle);
 		    for(nurgling.pf.NHitBoxD other : obstacles) {
@@ -2031,19 +2030,17 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    return(true);
 		};
 
-		/* Side snapping requires overlap on the perpendicular axis. */
 		boolean yOver = (Math.min(baseBR.y, obr.y) - Math.max(baseUL.y, oul.y)) > 0.0;
 		boolean xOver = (Math.min(baseBR.x, obr.x) - Math.max(baseUL.x, oul.x)) > 0.0;
 
-		/* Snap our left/right edge to obstacle right/left edge. */
 		if(yOver) {
-		    double dx1 = obr.x - baseUL.x; // our left  -> obstacle right
+		    double dx1 = obr.x - baseUL.x;
 		    if(Math.abs(dx1) <= snapMax) {
 			Coord2d cand = pos.add(dx1, 0);
 			double dist = Math.abs(dx1);
 			if((dist < bestDist) && valid.test(cand)) { bestDist = dist; best = cand; }
 		    }
-		    double dx2 = oul.x - baseBR.x; // our right -> obstacle left
+		    double dx2 = oul.x - baseBR.x;
 		    if(Math.abs(dx2) <= snapMax) {
 			Coord2d cand = pos.add(dx2, 0);
 			double dist = Math.abs(dx2);
@@ -2051,15 +2048,14 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    }
 		}
 
-		/* Snap our top/bottom edge to obstacle bottom/top edge. */
 		if(xOver) {
-		    double dy1 = obr.y - baseUL.y; // our top    -> obstacle bottom
+		    double dy1 = obr.y - baseUL.y;
 		    if(Math.abs(dy1) <= snapMax) {
 			Coord2d cand = pos.add(0, dy1);
 			double dist = Math.abs(dy1);
 			if((dist < bestDist) && valid.test(cand)) { bestDist = dist; best = cand; }
 		    }
-		    double dy2 = oul.y - baseBR.y; // our bottom -> obstacle top
+		    double dy2 = oul.y - baseBR.y;
 		    if(Math.abs(dy2) <= snapMax) {
 			Coord2d cand = pos.add(0, dy2);
 			double dist = Math.abs(dy2);
@@ -2067,7 +2063,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    }
 		}
 
-		/* Corner snapping: if we're already close in both axes, allow combined snap. */
 		double[] dxs = {obr.x - baseUL.x, oul.x - baseBR.x};
 		double[] dys = {obr.y - baseUL.y, oul.y - baseBR.y};
 		for(double dx : dxs) for(double dy : dys) {
@@ -2082,15 +2077,15 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    return(best);
 	}
 
-	public boolean rotate(Plob plob, int amount, int modflags) {
+	public boolean rotate(Plob plob, MouseWheelEvent data, int modflags) {
 	    if((modflags & (UI.MOD_CTRL | UI.MOD_SHIFT)) == 0)
 		return(false);
 	    freerot = true;
 	    double na;
 	    if((modflags & UI.MOD_SHIFT) == 0)
-		na = (Math.PI / 4) * Math.round((plob.a + (amount * Math.PI / 4)) / (Math.PI / 4));
+		na = (Math.PI / 4) * (Math.round(plob.a / (Math.PI / 4)) + data.a);
 	    else
-		na = plob.a + amount * Math.PI / plobagran;
+		na = plob.a + data.s * Math.PI / plobagran;
 	    na = Utils.cangle(na);
 	    plob.move(na);
 	    return(true);
@@ -2147,6 +2142,17 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
     }
 
+    /**
+     * Public factory so subclasses outside the haven package (e.g. NMapView)
+     * can construct a Plob for client-local placement scenarios. The Plob's
+     * protected constructor isn't reachable through Java protected-access
+     * rules from foreign-package subclasses (protected applies to the
+     * declaring class Plob, not to its outer class MapView).
+     */
+    public Plob createPlob(Indir<Resource> res, Message sdt) {
+	return(new Plob(res, sdt));
+    }
+
     private Collection<String> olflash = null;
     private double olftimer;
 
@@ -2173,6 +2179,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    Plob ob = placing.get();
 		    synchronized(ob) {
 			ob.slot.remove();
+			ob.removed();
 		    }
 		}
 		this.placing = null;
@@ -2213,6 +2220,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    Plob ob = placing.get();
 		    synchronized(ob) {
 			ob.slot.remove();
+			ob.removed();
 		    }
 		}
 		this.placing = null;
@@ -2336,7 +2344,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 	
 	protected void hit(Coord pc, Coord2d mc, ClickData inf) {
-		if(NMapView.hitNWidgetsInfo(pc))
+		if(NMapView.hitNWidgetsInfo(pc, clickb))
 			return;
 		if(NMapView.isRecordingRoutePoint) {
 			return;
@@ -2487,10 +2495,10 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    return(true);
 	if((placing_l != null) && placing_l.done()) {
 	    Plob placing = placing_l.get();
-	    if(placing.adjust.rotate(placing, ev.a, ui.modflags()))
+	    if(placing.adjust.rotate(placing, ev, ui.modflags()))
 		return(true);
 	}
-	return(camera.wheel(ev.c, ev.a));
+	return(camera.wheel(ev));
     }
     
     public boolean drop(final Coord cc, Coord ul) {
@@ -2519,9 +2527,9 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	Loader.Future<Plob> placing_l = this.placing;
 	if((placing_l != null) && placing_l.done()) {
 	    Plob placing = placing_l.get();
-	    if((ev.code == KeyEvent.VK_LEFT) && placing.adjust.rotate(placing, -1, ui.modflags()))
+	    if((ev.code == KeyEvent.VK_LEFT) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, -1, -1), ui.modflags()))
 		return(true);
-	    if((ev.code == KeyEvent.VK_RIGHT) && placing.adjust.rotate(placing, 1, ui.modflags()))
+	    if((ev.code == KeyEvent.VK_RIGHT) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, 1, 1), ui.modflags()))
 		return(true);
 	}
 	if(camera.keydown(ev))
@@ -2602,11 +2610,11 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    public Material mat() {return(mat);}
 	};
     public class Selector implements Grabber {
-    public final Coord max;
-    public Coord sc;
-	protected MCache.Overlay ol;
+	public final Coord max;
+	public Coord sc;
+	public int modflags;
+	protected MCache.RectOverlay ol;
 	protected UI.Grab mgrab;
-    public int modflags;
 	protected Text tt;
 	protected final GrabXL xl = new GrabXL(this) {
 		public boolean mmousedown(Coord cc, int button) {
@@ -2632,14 +2640,15 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		if(selection != this)
 		    return(false);
 		if(sc != null) {
-		    ol.destroy();
+		    glob.map.remove(ol);
 		    mgrab.remove();
 		}
 		sc = mc.div(MCache.tilesz2);
 		modflags = ui.modflags();
 		xl.mv = true;
 		mgrab = ui.grabmouse(MapView.this);
-		ol = glob.map.new Overlay(Area.sized(sc, new Coord(1, 1)), selol);
+		ol = glob.map.new RectOverlay(selol, Area.sized(sc, new Coord(1, 1)));
+		glob.map.add(ol);
 		return(true);
 	    }
 	}
@@ -2660,7 +2669,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    Coord ec = getec(mc);
 		    xl.mv = false;
 		    tt = null;
-		    ol.destroy();
+		    glob.map.remove(ol);
 		    mgrab.remove();
 		    wdgmsg("sel", sc, ec, modflags);
 		    sc = null;
@@ -2688,7 +2697,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	public void destroy() {
 	    synchronized(MapView.this) {
 		if(sc != null) {
-		    ol.destroy();
+		    glob.map.remove(ol);
 		    mgrab.remove();
 		}
 		release(xl);
@@ -2805,11 +2814,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		}
 
 		@Override
-		public boolean wheel (
-				Coord c,
-				int amount
-		) {
-			chfield ( super.tfield + amount * 10 );
+		public boolean wheel(MouseWheelEvent ev) {
+			chfield ( super.tfield + (float)ev.s * 10 );
 			return ( true );
 		}
 	}
@@ -2846,8 +2852,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			angl = angl % ((float)Math.PI * 2.0f);
 		}
 
-		public boolean wheel(Coord c, int amount) {
-			float d = dist + (amount * 25);
+		public boolean wheel(MouseWheelEvent ev) {
+			float d = dist + (float)(ev.s * 25);
 			if(d < 5)
 				d = 5;
 			dist = d;

@@ -41,6 +41,10 @@ public class StackSupporter {
         customStackSizes.put("Cattail Roots", 4);
         customStackSizes.put("Heartwood Leaves", 4);
         customStackSizes.put("Oyster", 4);
+        customStackSizes.put("Petrified Seashell", 3);
+        // gfx/invobjs/branch. Sits in "Wicker" for what it crafts into, but the server
+        // stacks it 5 deep, not 3 like the rest of that category.
+        customStackSizes.put("Branch", 5);
 
         putAll(3,
                 "Tuber", "Onion", "Beetroot", "Carrot", "Cucumber",
@@ -64,14 +68,14 @@ public class StackSupporter {
                 "Forageable", "Bug", "Miscellaneous",
                 "Bark", "Shellfish", "Fish Fresh Water", "Fish Ocean",
                 "Fish Cave", "Fish", "Cured Tea", "Stackable Curiosities",
-                "Chitin"
+                "Chitin", "Olive"
         );
 
         putAll(5,
                 "Entrails", "Feather", "Fine Feather", " Meat",
                 "Raw Meat", "Bollock", "Filet of ", "Raw Chevon",
                 "Raw Beef", "Raw Mutton", "Raw Pork", "Raw Horsemeat",
-                "Raw ", "Crab Meat", "Poultry", "Soil", "Nuts"
+                "Raw ", "Crab Meat", "Poultry", "Soil", "Mulch", "Nuts"
         );
 
         putAll(10,
@@ -98,6 +102,8 @@ public class StackSupporter {
         catExceptions.add("Silkworm");
         catExceptions.add("Female Silkmoth");
         catExceptions.add("Male Silkmoth");
+        catExceptions.add("Tick");
+        catExceptions.add("Bloated Tick");
         catExceptions.add("Bog Turtle Shell");
         catExceptions.add("Mole's Pawbone");
         catExceptions.add("Lobster");
@@ -113,11 +119,13 @@ public class StackSupporter {
         catExceptions.add("Boiled River Pearl Mussel");
         catExceptions.add("Mammoth Tusk");
         catExceptions.add("Troll Mushrooms");
+        catExceptions.add("Boreworm Beak");
     }
 
     private static final NAlias unstackableContainers = new NAlias(
             "Smith's Smelter", "Ore Smelter", "Herbalist Table", "Tub",
-            "Oven", "Steelbox", "Frame", "Kiln", "Smoke Shed", "Stack furnace"
+            "Oven", "Steelbox", "Frame", "Kiln", "Smoke Shed", "Stack furnace",
+            "Extraction Press"
     );
 
     public static boolean isStackable(NInventory inv, String name) {
@@ -126,6 +134,7 @@ public class StackSupporter {
             if (NParser.checkName(win.cap, unstackableContainers)
                 || NParser.checkName(name, new NAlias("Lynx Claws"))
                 || name.equals("Silkworm")
+                || name.equals("Tick")
                 || name.contains("Dried Filet")
                 || catExceptions.contains(name)) {
                 return false;

@@ -42,11 +42,11 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
     public long id;
     public boolean removed = false;
     public final Glob glob;
-    public Map<Class<? extends GAttrib>, GAttrib> attr = new java.util.concurrent.ConcurrentHashMap<Class<? extends GAttrib>, GAttrib>();
+    public Map<Class<? extends GAttrib>, GAttrib> attr = new HashMap<Class<? extends GAttrib>, GAttrib>();
     public final Collection<Overlay> ols = new CopyOnWriteArrayList<Overlay>();
     public final Collection<RenderTree.Slot> slots = new ArrayList<>(1);
     public int updateseq = 0, lastolid = 0;
-    private final Collection<SetupMod> setupmods = new CopyOnWriteArrayList<>();
+    private final Collection<SetupMod> setupmods = new ArrayList<>();
     private final LinkedList<Runnable> deferred = new LinkedList<>();
     private Loader.Future<?> deferral = null;
     public NGob ngob;
@@ -123,6 +123,14 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 		gob.defer(() -> remove(false));
 		return;
 	    }
+	    /* Nurgling: an overlay that self-removed from ctick() (which calls remove0() and
+	     * drops it from gob.ols itself) can still have a remove(true) in flight from the
+	     * same frame, deferred behind it. !added means exactly that case - already fully
+	     * removed - so returning here skips only work ctick() has done, and spares
+	     * remove0()'s IllegalStateException. An overlay is never in gob.ols with added
+	     * false: addol() sets it before ols.add(), and only remove0() clears it. */
+	    if(!added)
+		return;
 	    remove0();
 	    gob.ols.remove(this);
 		gob.ngob.removeol(this);
@@ -236,8 +244,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	}
 
 	private float getz(Coord2d rc, double ra) {
-		Object fs = NConfig.get(NConfig.Key.flatsurface);
-		if(fs instanceof Boolean && (Boolean) fs)
+		if((Boolean) NConfig.get(NConfig.Key.flatsurface))
 			return 0;
 	    Coord2d[][] no = this.obst, ro = new Coord2d[no.length][];
 	    {
@@ -459,16 +466,9 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
     public void ctick(double dt) {
 	for(GAttrib a : new ArrayList<>(attr.values()))
 		a.ctick(dt);
-	boolean animDisabled = nurgling.widgets.nsettings.DisableGobAnimSettings.isAnimDisabled(ngob.name);
 	List<Overlay> toRemove = new ArrayList<>();
 	for(Overlay ol : ols) {
-	    if(animDisabled) {
-		// Hide overlay from render tree when animation is disabled
-		if(ol.slots != null) {
-		    RUtils.multirem(new ArrayList<>(ol.slots));
-		    ol.slots = null;
-		}
-	    } else if(ol.slots == null) {
+	    if(ol.slots == null) {
 		try {
 		    ol.init();
 		} catch(Loading e) {}
@@ -492,12 +492,9 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	Drawable d = getattr(Drawable.class);
 	if(d != null)
 	    d.gtick(g);
-	boolean animDisabled = nurgling.widgets.nsettings.DisableGobAnimSettings.isAnimDisabled(ngob.name);
-	if(!animDisabled) {
-	    for(Overlay ol : ols) {
-		if(ol.spr != null)
-		    ol.spr.gtick(g);
-	    }
+	for(Overlay ol : ols) {
+	    if(ol.spr != null)
+		ol.spr.gtick(g);
 	}
     }
 
@@ -597,6 +594,17 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 		return(null);
 	}
 
+	public int delol(Class<? extends Sprite> spr) {
+		int n = 0;
+		for (Overlay ol : new ArrayList<>(ols)) {
+			if (spr.isInstance(ol.spr)) {
+				ol.remove();
+				n++;
+			}
+		}
+		return n;
+	}
+
 	public void findoraddol(Overlay ol) {
 		if (findol(ol.spr.getClass()) == null)
 			addol(ol, true);
@@ -616,7 +624,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	    m.move(c);
 	this.rc = c;
 	if(NUtils.playerID()!=-1 && id == NUtils.playerID())  {
-		CheckGridsState.submit();
+		new Thread(new CheckGridsState(), "plgob_move").start();
 	}
 	this.a = a;
     }
@@ -676,8 +684,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	if(a != null) {
 	    if(a instanceof RenderTree.Node) {
 		try {
-			Boolean hideNature = (Boolean)NConfig.get(NConfig.Key.hideNature);
-			if (hideNature == null || hideNature || ngob.name==null || !NUtils.isNatureObject(ngob.name))
+			if (!ngob.isHidden())
 		    	RUtils.multiadd(this.slots, (RenderTree.Node)a);
 		} catch(Loading l) {
 		    if(prev instanceof RenderTree.Node) {
@@ -793,7 +800,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	return(curstate);
     }
 
-    private void updstate() {
+    public void updstate() {
 	GobState nst;
 	try {
 	    nst = new GobState();
@@ -817,11 +824,9 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 		slot.add(ol);
 	}
 	for(GAttrib a : attr.values()) {
-	    if(a instanceof RenderTree.Node) {
-		Boolean hideNature = (Boolean)NConfig.get(NConfig.Key.hideNature);
-		if (hideNature == null || hideNature || ngob.name==null || !NUtils.isNatureObject(ngob.name))
-		    slot.add((RenderTree.Node)a);
-	    }
+	    if(a instanceof RenderTree.Node)
+			if (!ngob.isHidden())
+				slot.add((RenderTree.Node)a);
 	}
 	slots.add(slot);
     }
@@ -1066,12 +1071,13 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
     }
 
     public void show() {
+        if (slots == null || slots.isEmpty())
+            return;
         for (GAttrib a : attr.values()) {
-
             if (a instanceof RenderTree.Node) {
-                synchronized (this) {
-                    Loading.waitfor(() -> RUtils.multiadd(slots, (RenderTree.Node) a));
-                }
+                if (a.slots != null && !a.slots.isEmpty())
+                    continue;
+                Loading.waitfor(() -> RUtils.multiadd(slots, (RenderTree.Node) a));
             }
         }
     }
@@ -1079,9 +1085,9 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
     public void hide() {
         for (GAttrib a : attr.values()) {
             if (a instanceof RenderTree.Node) {
-                synchronized (slots) {
-                    RUtils.multirem(new ArrayList<>(a.slots));
-                }
+                if (a.slots == null || a.slots.isEmpty())
+                    continue;
+                RUtils.multirem(new ArrayList<>(a.slots));
             }
         }
     }

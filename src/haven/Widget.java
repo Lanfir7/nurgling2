@@ -279,6 +279,10 @@ public class Widget {
 	    ch.attached();
     }
 
+    public UI ui() {
+	return(ui);
+    }
+
     private <T extends Widget> T add0(T child) {
 	if((child.ui == null) && (this.ui != null))
 	    ((Widget)child).attach(this.ui);
@@ -564,6 +568,8 @@ public class Widget {
 	    focused.hasfocus = true;
 	    focused.gotfocus();
 	}
+	if(ui != null)
+	    ui.dispatch(this, new GotFocusEvent());
     }
 
     public void dispose() {
@@ -610,6 +616,8 @@ public class Widget {
 	    focused.hasfocus = false;
 	    focused.lostfocus();
 	}
+	if(ui != null)
+	    ui.dispatch(this, new LostFocusEvent());
     }
 
     public void setfocus(Widget w) {
@@ -758,6 +766,11 @@ public class Widget {
 			cursor = ui.sess.getresv(args[0]);
 			if(cursor instanceof Resource.Named)
 				cursorRes = ((Resource.Named)cursor).name;
+			else if(cursor instanceof Session.CachedRes.Ref) {
+				String nm = ((Session.CachedRes.Ref)cursor).resnm();
+				if(nm != null)
+					cursorRes = nm;
+			}
 		}
 	} else if(msg == "tip") {
 	    int a = 0;
@@ -946,6 +959,7 @@ public class Widget {
 
     public static class TickEvent extends Event {
 	public final double dt;
+	public boolean visible = true;
 
 	public TickEvent(double dt) {
 	    this.dt = dt;
@@ -957,6 +971,17 @@ public class Widget {
 		dispatch(wdg);
 	    }
 	    return(true);
+	}
+
+	public boolean dispatch(Widget w) {
+	    boolean pv = visible;
+	    try {
+		if(!w.visible)
+		    visible = false;
+		return(super.dispatch(w));
+	    } finally {
+		visible = pv;
+	    }
 	}
 
 	protected boolean shandle(Widget w) {
@@ -1115,14 +1140,17 @@ public class Widget {
 
     public static class MouseWheelEvent extends MouseActionEvent {
 	public final int a;
+	public final double s;
 
-	public MouseWheelEvent(Coord c, int a) {
+	public MouseWheelEvent(Coord c, int a, double s) {
 	    super(c);
 	    this.a = a;
+	    this.s = s;
 	}
 	public MouseWheelEvent(MouseWheelEvent from, Coord c) {
 	    super(from, c);
 	    this.a = from.a;
+	    this.s = from.s;
 	}
 
 	public MouseWheelEvent derive(Coord c) {return(new MouseWheelEvent(this, c));}
@@ -1263,6 +1291,15 @@ public class Widget {
 	}
     }
 
+    public static abstract class FocusChangeEvent extends Event {
+	public boolean propagation(Widget from) {
+	    return(false);
+	}
+    }
+
+    public static class GotFocusEvent extends FocusChangeEvent {}
+    public static class LostFocusEvent extends FocusChangeEvent {}
+
     public static abstract class QueryEvent<R> extends PointerEvent {
 	public final QueryEvent<R> root;
 	public R ret;
@@ -1398,7 +1435,7 @@ public class Widget {
 	    return(true);
 	if(focusctl && focustab) {
 	    Widget f = focused;
-	    if(key_tab.match(ev.awt) && (f != null)) {
+	    if(key_tab.match(ev.awt, KeyMatch.S) && (f != null)) {
 		while(true) {
 		    if((ev.mods & KeyMatch.S) == 0) {
 			Widget n = f.rnext();

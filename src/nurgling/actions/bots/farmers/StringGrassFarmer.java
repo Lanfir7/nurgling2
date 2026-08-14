@@ -24,7 +24,7 @@ public class StringGrassFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "String Grass");
+        nContext.goToArea(Specialisation.SpecName.crop, "String Grass");
 
         NArea stringGrassArea = NContext.findOut("Wildfibre", 1);
 
@@ -64,7 +64,7 @@ public class StringGrassFarmer implements Action {
             
             if (stringGrassArea != null)
                 new CollectItemsToPile(NContext.findSpec(field).getRCArea(), stringGrassArea.getRCArea(), new NAlias("wildfibre", "Wildfibre")).run(gui);
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/stringgrass"), new NAlias("String Grass"), false).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/stringgrass")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

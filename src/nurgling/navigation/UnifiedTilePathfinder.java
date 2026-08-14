@@ -205,14 +205,15 @@ public class UnifiedTilePathfinder {
         // long searchStartTime = System.currentTimeMillis();
 
         while (!openSet.isEmpty() && iterations < maxIterations) {
+            if (Thread.currentThread().isInterrupted()) {
+                return null;
+            }
             iterations++;
 
             AStarNode current = openSet.poll();
             chunksExplored.add(current.tile.chunkId);
 
             if (current.tile.equals(targetTile)) {
-                // Found path - reconstruct it
-                // System.out.println("[UnifiedTilePathfinder] PATH FOUND! Iterations: " + iterations + ", chunks: " + chunksExplored.size());
                 return reconstructPath(current);
             }
 
@@ -251,10 +252,7 @@ public class UnifiedTilePathfinder {
         }
 
         // Path not found
-        // System.out.println("[UnifiedTilePathfinder] NO PATH FOUND! Iterations: " + iterations + ", chunks explored: " + chunksExplored.size());
-        // if (openSet.isEmpty()) {
-        //     System.out.println("[UnifiedTilePathfinder] Search exhausted - no connection to target");
-        // }
+        // Path not found
 
         return null;
     }
@@ -306,10 +304,6 @@ public class UnifiedTilePathfinder {
                 if (dist <= portalProximity) {
                     if (chunkExcluded) continue;
 
-                    // Skip "phantom" building exterior portals at chunk edges
-                    if (ChunkPortal.isBuildingExterior(portal.gobName) && isAtChunkEdge(portal.localCoord, 5)) {
-                        continue;
-                    }
                     ChunkNavData destChunk = graph.getChunk(portal.connectsToGridId);
                     if (destChunk != null) {
                         // Validate portal type vs target layer
@@ -452,7 +446,7 @@ public class UnifiedTilePathfinder {
 
         // Use GateDetector's door pair lookup (same as routes system)
         String expectedPair = GateDetector.getDoorPair(entryGobName);
-        if (expectedPair != null && expectedPair.equals(exitGobName)) {
+        if (GateDetector.isSameDoor(exitGobName, expectedPair)) {
             return true;
         }
 
@@ -824,6 +818,8 @@ public class UnifiedTilePathfinder {
             case CELLAR:
                 return "cellar".equals(targetLayer) || "inside".equals(targetLayer);
             case LADDER:
+            case CAVEIN:
+            case CAVEOUT:
                 return "outside".equals(targetLayer);
             case STAIRS_UP:
             case STAIRS_DOWN:

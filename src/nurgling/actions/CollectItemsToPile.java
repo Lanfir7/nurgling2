@@ -2,7 +2,6 @@ package nurgling.actions;
 
 import haven.*;
 import nurgling.NGameUI;
-import nurgling.NHitBox;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
 import nurgling.tools.Finder;
@@ -32,7 +31,18 @@ public class CollectItemsToPile implements Action{
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
 
-        NAlias collected_items = new NAlias(items.keys, new ArrayList<>( Arrays.asList ( "stockpile" , "barrel") ));
+        // Preserve any exceptions the caller passed (e.g. "seed" to keep seeds out of a
+        // vegetable pile) and add the standard container exclusions on top.
+        ArrayList<String> exceptions = new ArrayList<>(items.exceptions);
+        exceptions.add("stockpile");
+        exceptions.add("barrel");
+        // A growing crop and the item it yields share a name - "gfx/terobjs/plants/garlic"
+        // vs "gfx/terobjs/items/garlic" - so an item alias like "Garlic" (substring match)
+        // also hits the planted crop. Picking up from the earth can never apply to a plant,
+        // so exclude the plant path outright: on a partially planted field takeFromEarth
+        // would otherwise wait forever for a gob that never goes away.
+        exceptions.add("plants/");
+        NAlias collected_items = new NAlias(items.keys, exceptions);
 
         while ( !Finder.findGobs (in,collected_items ).isEmpty () ){
             ArrayList<WItem> testItems = null;

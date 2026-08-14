@@ -30,10 +30,8 @@ import java.util.*;
 import java.util.function.*;
 import java.util.concurrent.*;
 import haven.Widget.*;
+import haven.iosys.tk.*;
 import java.awt.Font;
-import java.awt.GraphicsEnvironment;
-import java.awt.GraphicsDevice;
-import java.awt.DisplayMode;
 import java.awt.Color;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
@@ -80,6 +78,7 @@ public class UI {
 		ui = instance;
 	}
     public static int MOD_SHIFT = KeyMatch.S, MOD_CTRL = KeyMatch.C, MOD_META = KeyMatch.M, MOD_SUPER = KeyMatch.SUPER;
+    public final Windeye wnd;
     public RootWidget root;
     public final List<Grab> grabs = new CopyOnWriteArrayList<Grab>();
     protected final Map<Integer, Widget> widgets = new TreeMap<Integer, Widget>();
@@ -94,11 +93,13 @@ public class UI {
     public Widget mouseon;
     public Console cons = new WidgetConsole();
     private Collection<AfterDraw> afterdraws = new LinkedList<AfterDraw>();
-    private final Context uictx;
-    public Context getContext() { return uictx; }
+    /* nurgling: back-reference to the owning loop (replaces the old UI.Context),
+     * set by UILoop.newui(). Used by multi-session code (NRemoteUI etc.). */
+    public UILoop loop;
+    public UILoop getLoop() { return loop; }
     public GSettings gprefs = GSettings.load(true);
     private boolean gprefsdirty = false;
-    public final ActAudio.Root audio = new ActAudio.Root();
+    public final ActAudio.Root audio;
     public final Loader loader;
     public final CommandQueue queue = new CommandQueue();
     private static final double scalef;
@@ -130,10 +131,6 @@ public class UI {
 	}
     }
 
-    public interface Context {
-	void setmousepos(Coord c);
-    }
-
     public interface AfterDraw {
 	public void draw(GOut g);
     }
@@ -149,11 +146,6 @@ public class UI {
 
     private class WidgetConsole extends Console {
 	{
-	    setcmd("q", new Command() {
-		    public void run(Console cons, String[] args) {
-			HackThread.tg().interrupt();
-		    }
-		});
 	    setcmd("lo", new Command() {
 		    public void run(Console cons, String[] args) {
 			sess.close();
@@ -220,11 +212,16 @@ public class UI {
 	}
     }
 
-    public UI(Context uictx, Coord sz, Runner fun) {
-	this.uictx = uictx;
+    public UI(Windeye wnd, Audio.Root audio, Coord sz, Runner fun) {
+	this.wnd = wnd;
 	root = new RootWidget(this, sz);
+	this.audio = new ActAudio.Root(audio);
+	cons.add(audio);
 	widgets.put(0, root);
 	rwidgets.put(root, 0);
+	/* nurgling: make the owning loop visible to fun.init() (NRemoteUI.onInit needs
+	 * ui.getLoop()); set before init since newui() can only assign loop afterwards. */
+	this.loop = UILoop.constructing();
 	if(fun != null)
 	    fun.init(this);
 	if(sess == null) {
@@ -289,8 +286,20 @@ public class UI {
     private static final boolean cmddump = false;
     public class CommandQueue {
 	private final Map<Integer, Command> score = new HashMap<>();
+	private int inflight = 0;
 
 	private CommandQueue() {}
+
+	/**
+	 * Returns true when no widget commands are pending or in-flight.
+	 * Every command registers in score on submit() and is removed on finish(),
+	 * so an empty score means all dependency chains have fully completed.
+	 */
+	public boolean isIdle() {
+	    synchronized(this) {
+		return score.isEmpty();
+	    }
+	}
 
 	private void run(Command cmd) {
 	    if(cmdjitter) {
@@ -305,6 +314,11 @@ public class UI {
 	    } catch(Loading l) {
 		throw(l);
 	    } catch(RuntimeException | Error e) {
+		// Always release the barrier on failure so that subsequent
+		// commands for the same widget ID are not permanently blocked.
+		// Without this, a single failed command (e.g. from headless
+		// rendering state) starves all future messages to that widget.
+		finish(cmd);
 		throw(new CommandException(cmd, e));
 	    }
 	    finish(cmd);
@@ -336,6 +350,7 @@ public class UI {
 			wait.add(p.id);
 		    System.err.printf("wait: %s on %s\n", cmd, wait);
 		}
+		inflight++;
 	    }
 	    if(ready)
 		execute(cmd);
@@ -355,11 +370,29 @@ public class UI {
 		    if(score.get(bar) == cmd)
 			score.remove(bar);
 		}
+		if(--inflight == 0)
+		    notifyAll();
 	    }
 	    for(Command next : ready)
 		execute(next);
 	}
+
+	public void drain() {
+	    boolean irq = false;
+	    synchronized(this) {
+		while(inflight > 0) {
+		    double st = Utils.rtime();
+		    try {
+			wait();
+		    } catch(InterruptedException e) {
+			irq = true;
+		    }
+		}
+	    }
+	    if(irq)
+		Thread.currentThread().interrupt();
 	}
+    }
 
     public void setreceiver(Receiver rcvr) {
 	this.rcvr = rcvr;
@@ -469,7 +502,7 @@ public class UI {
 	}
 
 	public String toString() {
-	    return(String.format("#<newwdg %d %s %s>", id, (typenm == null) ? type : typenm, Arrays.asList(cargs)));
+	    return(String.format("#<newwdg %d %s %s>", id, (typenm == null) ? type : typenm, Arrays.deepToString(cargs)));
 	}
     }
 
@@ -507,7 +540,7 @@ public class UI {
 	}
 
 	public String toString() {
-	    return(String.format("#<addwdg %d @ %d %s>", id, parent, Arrays.asList(pargs)));
+	    return(String.format("#<addwdg %d @ %d %s>", id, parent, Arrays.deepToString(pargs)));
 	}
     }
 
@@ -723,7 +756,7 @@ public class UI {
 	}
 
 	public String toString() {
-	    return(String.format("#<wdgmsg %d %s %s>", id, msg, Arrays.asList(args)));
+	    return(String.format("#<wdgmsg %d %s %s>", id, msg, Arrays.deepToString(args)));
 	}
     }
 
@@ -885,8 +918,8 @@ public class UI {
 	setmods(ev);
 	// Обработка F8 для переключения рендеринга
 	if(ev.getKeyCode() == KeyEvent.VK_F8) {
-	    GLPanel.Loop.renderDisabled = !GLPanel.Loop.renderDisabled;
-	    msg("Рендеринг " + (GLPanel.Loop.renderDisabled ? "отключен" : "включен"));
+	    UILoop.renderDisabled = !UILoop.renderDisabled;
+	    msg("Рендеринг " + (UILoop.renderDisabled ? "отключен" : "включен"));
 	    return;
 	}
 	if(!dispatch(root, new KeyDownEvent(ev)))
@@ -919,15 +952,11 @@ public class UI {
     public void mousehover(Coord c) {
 	dispatch(root, new Widget.MouseHoverEvent(c));
     }
-
-    public void setmousepos(Coord c) {
-	uictx.setmousepos(c);
-    }
 	
-    public void mousewheel(MouseEvent ev, Coord c, int amount) {
+    public void mousewheel(MouseEvent ev, Coord c, int ia, double sa) {
 	setmods(ev);
 	mc = c;
-	dispatch(root, new Widget.MouseWheelEvent(c, amount));
+	dispatch(root, new Widget.MouseWheelEvent(c, ia, sa));
     }
 
     public static enum Cursor {
@@ -968,8 +997,11 @@ public class UI {
     }
 
     public void destroy() {
-	root.destroy();
-	audio.clear();
+	queue.drain();
+	synchronized(this) {
+	    root.destroy();
+	    audio.clear();
+	}
     }
 
     public void sfx(Audio.CS clip) {
@@ -992,6 +1024,10 @@ public class UI {
 		lastmsgsfx.put(clip, now);
 	    }
 	}
+    }
+
+    public Resource.Pool pool() {
+	return(Resource.remote());
     }
 
     public static double scale(double v) {
@@ -1055,32 +1091,43 @@ public class UI {
     }
 
     private static double maxscale = -1;
-    public static double maxscale() {
+    private static double defscale;
+    private static void initscale() {
 	synchronized(UI.class) {
 	    if(maxscale < 0) {
 		double fscale = 1.25;
+		double sscale = 1.00;
 		try {
-		    GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
-		    for(GraphicsDevice dev : env.getScreenDevices()) {
-			DisplayMode mode = dev.getDisplayMode();
-			double scale = Math.min(mode.getWidth() / 800.0, mode.getHeight() / 600.0);
+		    /* XXX: This ain't right, but arguably so isn't
+		     * scaling being static to begin with...? */
+		    Toolkit tk = Toolkit.instance();
+		    for(Monitor dev : tk.monitors()) {
+			Coord res = dev.resolution();
+			double scale = Math.min(res.x / 800.0, res.y / 600.0);
 			fscale = Math.max(fscale, scale);
+			sscale = Math.max(sscale, Math.rint(dev.density() / 5.0) * 0.05);
 		    }
 		} catch(Exception exc) {
 		    new Warning(exc, "could not determine maximum scaling factor").issue();
 		}
 		maxscale = fscale;
+		defscale = Math.min(sscale, fscale);
 	    }
-	    return(maxscale);
 	}
+    }
+
+    public static double maxscale() {
+	initscale();
+	return(maxscale);
     }
 
     public static final Config.Variable<Double> uiscale = Config.Variable.propf("haven.uiscale", null);
     private static double loadscale() {
 	if(uiscale.get() != null)
 	    return(uiscale.get());
-	double scale = Utils.getprefd("uiscale", 1.0);
-	scale = Math.max(Math.min(scale, maxscale()), 1.0);
+	initscale();
+	double scale = Utils.getprefd("uiscale", defscale);
+	scale = Math.max(Math.min(scale, maxscale), 1.0);
 	return(scale);
     }
 

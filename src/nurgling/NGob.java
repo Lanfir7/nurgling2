@@ -16,6 +16,8 @@ import haven.res.ui.obj.buddy.Buddy;
 import haven.BuddyWnd;
 import monitoring.NGlobalSearchItems;
 import nurgling.gattrr.NCustomScale;
+import nurgling.gattrr.NHideStockpileScale;
+import nurgling.gattrr.NTreeDisplayScale;
 import nurgling.overlays.*;
 import nurgling.overlays.NSpeedometerOverlay;
 import nurgling.pf.*;
@@ -28,6 +30,7 @@ import nurgling.widgets.NQuestInfo;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.*;
+import java.lang.reflect.Field;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -40,6 +43,13 @@ import static haven.OCache.posres;
 public class NGob
 {
     public boolean effector = false;
+    /** Cached answer to "should this gob be hidden", refreshed when {@link GobHide#version()} moves. */
+    public volatile boolean hidden = false;
+    /** Whether {@link Gob#hide()} has actually been called, so the sweep never double-applies. */
+    public volatile boolean hideApplied = false;
+    /** Resolved once when the resource name becomes known; null for almost every gob. */
+    public volatile GobHide.HideCategory hideCat = null;
+    private volatile int hideVersion = 0;
     public NHitBox hitBox = null;
     public String name = null;
     public boolean isQuested = true;
@@ -57,6 +67,52 @@ public class NGob
     public long grid_id;
     public Coord gcoord;
     private final Queue<DelayedOverlayTask> delayedOverlayTasks = new ConcurrentLinkedQueue<>();
+
+    // The HarvestSpec (if any) covering this gob's resource, cached here since resolving it
+    // (HarvestSpecs.forResource's 4-way match scan) is only actually needed when the gob's
+    // Drawable/name changes (see updateHarvestOverlay()) - both this class's own tick() and
+    // NLPassistant's tick() check it every frame, so re-resolving it there too would repeat that
+    // scan far more often than necessary.
+    private HarvestSpec cachedHarvestSpec = null;
+
+    public HarvestSpec harvestSpec() {
+        return cachedHarvestSpec;
+    }
+
+    /**
+     * Whether this gob should currently be hidden from the world view.
+     *
+     * <p>Called from {@link Gob#setattr} and {@link Gob#added}, two of the hottest paths in the
+     * client, so the answer is cached against {@link GobHide#version()}: gobs with no category
+     * (the vast majority) return immediately, and the rest only re-evaluate after a settings change.
+     */
+    public boolean isHidden() {
+        if (hideCat == null)
+            return false;
+        int v = GobHide.version();
+        if (v != hideVersion) {
+            boolean h = GobHide.shouldHide(parent, hideCat);
+            hidden = h;
+            // Published last: a reader that sees this version must also see the decision above,
+            // otherwise GobHide.apply() can conclude "already applied" from a stale answer.
+            hideVersion = v;
+            return h;
+        }
+        return hidden;
+    }
+
+    /** Drops the cached decision so the next {@link #isHidden()} re-evaluates from scratch. */
+    public void invalidateHidden() {
+        hideVersion = 0;
+    }
+
+    /**
+     * Whether hiding this gob would leave a clickable box behind. Without one the object would be
+     * both invisible and unreachable, so {@link GobHide} refuses to hide it.
+     */
+    public boolean hasClickBox() {
+        return hitBox != null;
+    }
     
     // Cached values for performance
     private static final Set<String> ANIMAL_NAMES = Set.of(
@@ -64,6 +120,7 @@ public class NGob
         "gfx/kritter/reindeer/reindeer", "gfx/kritter/sheep/sheep"
     );
     private static final NAlias WALL_TRELLIS_ALIAS = new NAlias("wall", "trellis");
+    public static final String HIDE_STOCKPILE_RES = "gfx/terobjs/stockpile-hide";
     private static final NAlias BORKA_ALIAS = new NAlias("borka");
     private static final NAlias PLANTS_ALIAS = new NAlias("plants");
     private static final NAlias GARDEN_POT_ALIAS = new NAlias("gardenpot");
@@ -79,8 +136,11 @@ public class NGob
     // Config cache to reduce NConfig.get calls
     private boolean cachedShowCropStage = false;
     private boolean cachedShortCupboards = false;
+    private boolean cachedShortPalisades = false;
     private boolean cachedQuestNotified = false;
     private boolean cachedLpassistent = false;
+    private int cachedTreeDisplayScale = 100;
+    private int cachedHideStockpileScale = 100;
     private int configCacheCounter = 0;
     private static final int CONFIG_CACHE_INTERVAL = 30;
     
@@ -162,10 +222,16 @@ public class NGob
             cachedShowCropStage = val instanceof Boolean ? (Boolean) val : false;
             val = NConfig.get(NConfig.Key.shortCupboards);
             cachedShortCupboards = val instanceof Boolean ? (Boolean) val : false;
+            val = NConfig.get(NConfig.Key.shortPalisades);
+            cachedShortPalisades = val instanceof Boolean ? (Boolean) val : false;
             val = NConfig.get(NConfig.Key.questNotified);
             cachedQuestNotified = val instanceof Boolean ? (Boolean) val : false;
             val = NConfig.get(NConfig.Key.lpassistent);
             cachedLpassistent = val instanceof Boolean ? (Boolean) val : false;
+            Object treeScale = NConfig.get(NConfig.Key.treeDisplayScale);
+            cachedTreeDisplayScale = treeScale instanceof Number ? ((Number) treeScale).intValue() : 100;
+            Object pileScale = NConfig.get(NConfig.Key.hideStockpileScale);
+            cachedHideStockpileScale = pileScale instanceof Number ? ((Number) pileScale).intValue() : 100;
             configCacheCounter = 1;
         }
     }
@@ -432,7 +498,7 @@ public class NGob
                     {
                         // Try creating temp mark again (will skip if already exists)
                         tryCreateTempMark((GobIcon) a, gob);
-                        
+
                         // Add ring overlay if enabled in settings
                         if (nurgling.overlays.NGobIconRing.shouldShowRing(gob))
                         {
@@ -440,6 +506,15 @@ public class NGob
                             {
                                 gob.addcustomol(nurgling.overlays.NGobIconRing.createAutoSize(gob));
                             }
+                        }
+
+                        // Icon settings resolve asynchronously, so the "don't hide objects with a
+                        // map icon" exception cannot be answered when the gob first appears. Now
+                        // that the icon is actually ready, re-decide.
+                        if (hideCat != null && GobHide.respectMapIcons())
+                        {
+                            invalidateHidden();
+                            GobHide.apply(gob);
                         }
                     }
             ));
@@ -465,7 +540,88 @@ public class NGob
             // Note: Tree Finder check is done in NTreeScaleOl constructor to avoid duplicate calls
         }
     }
-    
+
+    public void refreshHarvestOverlay() {
+        if (parent.getattr(Drawable.class) != null) updateHarvestOverlay();
+    }
+
+    private void updateHarvestOverlay()
+    {
+        try
+        {
+            Gob.Overlay ol = parent.findol(nurgling.overlays.NObjHarvestOl.class);
+
+            // computeLabel() re-derives the drawable/ResDrawable from the gob itself and already
+            // checks the spec's master toggle, so a null spec here or a null label below are the
+            // only two things this method needs to react to - no need to duplicate those checks.
+            HarvestSpec spec = name == null ? null : HarvestSpecs.forResource(name);
+            cachedHarvestSpec = spec;
+            TexI label = spec == null ? null : nurgling.overlays.NObjHarvestOl.computeLabel(parent, spec);
+            if (label == null)
+            {
+                if (ol != null) ol.remove(true);
+                return;
+            }
+
+            if (ol == null)
+            {
+                parent.addcustomol(new nurgling.overlays.NObjHarvestOl(parent, spec));
+            }
+            else if (ol.spr instanceof nurgling.overlays.NObjHarvestOl)
+            {
+                nurgling.overlays.NObjHarvestOl existing = (nurgling.overlays.NObjHarvestOl) ol.spr;
+                if (existing.spec() == spec)
+                {
+                    existing.refresh();
+                }
+                else
+                {
+                    // The gob's type changed (e.g. a tree felled into a log) - the attached
+                    // overlay was built for the old spec, so replace it rather than reuse it.
+                    ol.remove(true);
+                    parent.addcustomol(new nurgling.overlays.NObjHarvestOl(parent, spec));
+                }
+            }
+        }
+        catch (Loading l)
+        {
+            // Resources still loading, ignore
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    private void updateTreeDisplayScale() {
+        if (name == null || !name.startsWith("gfx/terobjs/trees"))
+            return;
+        if (name.endsWith("log") || name.endsWith("stump") || name.endsWith("oldtrunk"))
+            return;
+        if (cachedTreeDisplayScale < 100) {
+            float s = cachedTreeDisplayScale / 100.0f;
+            NTreeDisplayScale existing = parent.getattr(NTreeDisplayScale.class);
+            if (existing == null || existing.scale != s)
+                parent.setattr(new NTreeDisplayScale(parent, s));
+        } else {
+            if (parent.getattr(NTreeDisplayScale.class) != null)
+                parent.delattr(NTreeDisplayScale.class);
+        }
+    }
+
+    private void updateHideStockpileScale() {
+        if (name == null || !name.equals(HIDE_STOCKPILE_RES))
+            return;
+        if (cachedHideStockpileScale < 100) {
+            float s = cachedHideStockpileScale / 100.0f;
+            NHideStockpileScale existing = parent.getattr(NHideStockpileScale.class);
+            if (existing == null || existing.scale != s)
+                parent.setattr(new NHideStockpileScale(parent, s));
+        } else {
+            if (parent.getattr(NHideStockpileScale.class) != null)
+                parent.delattr(NHideStockpileScale.class);
+        }
+    }
+
     /**
      * Checks if temporary ring should be added (for objects without GobIcon)
      */
@@ -495,6 +651,7 @@ public class NGob
      */
     private void processDrawable(Drawable drawable)
     {
+        boolean explicitCustomHitBox = false;
         if (drawable.getres() != null)
         {
             name = drawable.getres().name;
@@ -511,12 +668,17 @@ public class NGob
                     return;
                 }
 
-                if (name.contains("bumlings"))
-                {
-                    name = name.replaceAll("\\d+$", "");
+                name = HarvestState.normalizeBumlingRes(name);
+
+                // Resolved once per name change. The hide decision itself is deferred to the end of
+                // this method, because it depends on hitBox, which is only worked out further down.
+                GobHide.HideCategory cat = GobHide.categoryOf(name);
+                if (cat != hideCat) {
+                    hideCat = cat;
+                    invalidateHidden();
                 }
 
-                if (name.contains("palisade"))
+                if (name.contains("palisade") && cachedShortPalisades)
                 {
                     if (parent.getattr(NCustomScale.class) == null)
                         parent.setattr(new NCustomScale(parent));
@@ -533,6 +695,9 @@ public class NGob
                 
                 // Check for temporary rings (session-only, for objects without GobIcon)
                 checkTempRing();
+                updateHarvestOverlay();
+                updateTreeDisplayScale();
+                updateHideStockpileScale();
             }
 
             // Tree/bush harvest overlay (leaf/seed/fruit) reacts to sdt updates via ResDrawable.$cres -> checkattr
@@ -711,7 +876,7 @@ public class NGob
                             }
                         } else if (name.contains("gfx/terobjs/items/gems/gemstone"))
                         {
-                            parent.addcustomol(new NTexMarker(parent, new TexI(Resource.loadsimg("marks/gem")), () -> false));
+                            parent.addcustomol(new NTexMarker(parent, new TexI(Resource.loadsimg("marks/gem")), () -> false, true));
                         }
 
                         if (name.equals("gfx/borka/body"))
@@ -734,11 +899,12 @@ public class NGob
                         if (custom != null)
                         {
                             hitBox = custom;
+                            explicitCustomHitBox = true;
                         }
                     }
                 if (hitBox != null)
                 {
-                    if (NParser.checkName(name, MOUNDBED_ALIAS) || NParser.checkName(name, IGNORED_ARCH))
+                    if (!explicitCustomHitBox && (NParser.checkName(name, MOUNDBED_ALIAS) || NParser.checkName(name, IGNORED_ARCH)))
                     {
                         hitBox = null;
                     } else
@@ -779,6 +945,23 @@ public class NGob
                         }
                 ));
             }
+
+            // Add clickable circle under small critters for easier targeting
+            if (NCritterCircle.isCritter(name))
+            {
+                delayedOverlayTasks.add(new DelayedOverlayTask(
+                        gob ->
+                        {
+                            if (gob.findol(NCritterCircle.class) != null)
+                                return false;
+                            String pose = gob.pose();
+                            // For composite critters, wait for pose and check alive
+                            // For non-composite (insects), pose is null — show immediately
+                            return pose == null || !NParser.checkName(pose, "dead", "knock");
+                        },
+                        gob -> gob.addcustomol(new NCritterCircle(gob, NCritterCircle.getColorForCritter(name), NCritterCircle.getRadiusForCritter(name), name))
+                ));
+            }
             
             // Add radius overlays for beehives and troughs
             // Overlays react to config changes automatically
@@ -797,6 +980,14 @@ public class NGob
                     parent.addcustomol(new nurgling.overlays.NMoundBedRadius(parent));
                 }
             }
+
+            // Now that name and hitBox are both settled, reconcile the gob's visibility. This also
+            // covers drawable changes that move a gob between categories (a felled tree becoming a
+            // log), where the render node was dropped under the old category's rules.
+            if (hideCat != null || hideApplied)
+                // Deferred onto the loader: this runs inside Gob.setattr on the session's message
+                // thread, and GobHide.apply -> Gob.show() blocks in Loading.waitfor.
+                parent.defer(() -> GobHide.apply(parent));
         }
     }
 
@@ -1020,15 +1211,25 @@ public class NGob
             }
             if (cachedLpassistent)
             {
-                if (name != null && name.startsWith("gfx/terobjs"))
+                // NObjHarvestOl handles display itself (tints its own icon(s)) once this gob
+                // type's always-visible harvest overlay is on - don't show a second marker.
+                boolean covered = cachedHarvestSpec != null && Boolean.TRUE.equals(NConfig.get(cachedHarvestSpec.masterToggle()));
+                // Test for an existing marker before running the discovery scan, not after:
+                // addcustomol() discards a duplicate, but only once we've already paid for the
+                // scan and for constructing the marker (which resolves its icon). NLPassistant
+                // takes itself off again from its own tick() once nothing is left to find.
+                if (!covered && parent.findol(NLPassistant.class) == null)
                 {
-                    if (NUtils.getGameUI() != null && NUtils.getGameUI().getCharInfo() != null)
+                    try
                     {
-                        if (VSpec.object.containsKey(name))
-                            if (VSpec.object.get(name).size() != NUtils.getGameUI().getCharInfo().LpExplorerGetSize(name))
-                            {
-                                parent.addcustomol(new NLPassistant(parent));
-                            }
+                        if (LpExplorer.hasUndiscoveredProduct(parent))
+                        {
+                            parent.addcustomol(new NLPassistant(parent));
+                        }
+                    }
+                    catch (Loading l)
+                    {
+                        // Sprite still loading, try again next tick.
                     }
                 }
             }
@@ -1318,5 +1519,80 @@ public class NGob
             return 0;
         }
         return -1;
+    }
+
+    private String getEquedResource(Gob.Overlay ol)
+    {
+        if (ol.spr instanceof Equed)
+        {
+            try
+            {
+                Field esprField = Equed.class.getDeclaredField("espr");
+                esprField.setAccessible(true);
+                Sprite espr = (Sprite) esprField.get(ol.spr);
+                if (espr != null && espr.res != null)
+                {
+                    return espr.res.name;
+                }
+            }
+            catch (Exception e)
+            {
+                return "ERR:" + e.getMessage();
+            }
+        }
+        return "N/A";
+    }
+
+    private String getEquedDetails(Gob.Overlay ol)
+    {
+        StringBuilder sb = new StringBuilder();
+        // Extract raw sdt bytes from OlSprite
+        if (ol.sm instanceof OCache.OlSprite)
+        {
+            OCache.OlSprite os = (OCache.OlSprite) ol.sm;
+            sb.append("olSdt=[");
+            for (int i = 0; i < os.sdt.length; i++)
+            {
+                if (i > 0) sb.append(",");
+                sb.append(os.sdt[i] & 0xFF);
+            }
+            sb.append("]");
+        }
+        // Extract espr details
+        if (ol.spr instanceof Equed)
+        {
+            try
+            {
+                Field esprField = Equed.class.getDeclaredField("espr");
+                esprField.setAccessible(true);
+                Sprite espr = (Sprite) esprField.get(ol.spr);
+                if (espr != null)
+                {
+                    sb.append(" esprClass=").append(espr.getClass().getName());
+                    sb.append(" esprRes=").append(espr.res != null ? espr.res.name : "null");
+                    // Dump all fields on the espr
+                    for (Field f : espr.getClass().getDeclaredFields())
+                    {
+                        f.setAccessible(true);
+                        try
+                        {
+                            Object val = f.get(espr);
+                            String valStr = (val != null) ? val.toString() : "null";
+                            if (valStr.length() > 100) valStr = valStr.substring(0, 100) + "...";
+                            sb.append(" espr.").append(f.getName()).append("=").append(valStr);
+                        }
+                        catch (Exception e)
+                        {
+                            sb.append(" espr.").append(f.getName()).append("=ERR");
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                sb.append(" esprERR=").append(e.getMessage());
+            }
+        }
+        return sb.toString();
     }
 }

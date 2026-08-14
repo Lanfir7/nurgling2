@@ -31,7 +31,7 @@ import java.util.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
-public class TestClient implements Runnable, UI.Context {
+public class TestClient implements Runnable {
     public Session sess;
     public InetSocketAddress addr;
     public String user;
@@ -63,7 +63,7 @@ public class TestClient implements Runnable, UI.Context {
     }
     
     public void connect() throws InterruptedException {
-	sess = new Session(addr, new Session.User(user), false, cookie);
+	sess = Session.connect(addr, new Session.User(user), false, cookie);
     }
     
     public void addbot(Robot bot) {
@@ -83,7 +83,7 @@ public class TestClient implements Runnable, UI.Context {
 
     public class TestUI extends UI {
 	public TestUI(Coord sz, Session sess) {
-	    super(TestClient.this, sz, null);
+	    super(null, new Audio.Root(haven.iosys.audio.DummyAudio.DummySink.instance), sz, null);
 	    this.sess = sess;
 	}
 	

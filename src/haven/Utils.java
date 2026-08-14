@@ -48,6 +48,21 @@ public class Utils {
     public static final java.awt.image.ColorModel rgbm = java.awt.image.ColorModel.getRGBdefault();
     private static Preferences prefs = null;
 
+    public static void initlocale() {
+	try {
+	    /* XXX? Localization is nice and all, but the game as a
+	     * whole currently isn't internationalized, so using the
+	     * local settings for things like number formatting just
+	     * leads to inconsistency.
+	     *
+	     * The locale still seems to influence AWT default font
+	     * selection, though. This should be investigated. */
+	    Locale.setDefault(Locale.US);
+	} catch(Exception e) {
+	    new Warning(e, "locale initialization failed").issue();
+	}
+    }
+
     public static Coord imgsz(BufferedImage img) {
 	return(new Coord(img.getWidth(), img.getHeight()));
     }
@@ -118,29 +133,103 @@ public class Utils {
 	}
     }
 
+    public static <T> T nonconst(T val) {
+	return(val);
+    }
+
     public static SocketChannel connect(String host, int port) throws IOException {
-	IOException lerr = null;
-	for(InetAddress haddr : InetAddress.getAllByName(host)) {
-	    SocketChannel sk = null;
-	    boolean fin = false;
-	    try {
-		sk = SocketChannel.open();
-		sk.socket().setSoTimeout(5000);
-		sk.connect(new InetSocketAddress(haddr, port));
-		fin = true;
-		return(sk);
-	    } catch(IOException e) {
-		if(lerr != null)
-		    e.addSuppressed(lerr);
-		lerr = e;
-	    } finally {
-		if(!fin && (sk != null))
-		    sk.close();
+	double DELAY = 0.25, TIMEOUT = 5;
+	InetAddress[] haddrs = InetAddress.getAllByName(host);
+	if(haddrs.length == 0)
+	    throw(new UnknownHostException(host + " has no address"));
+	int na = haddrs.length;
+	SocketChannel[] cur = new SocketChannel[na];
+	SelectionKey[] keys = new SelectionKey[na];
+	IOException[] errors = new IOException[na];
+	double[] started = new double[na];
+	int[] act = new int[na];
+	int ca = 0, nc = 0;
+	double last = 0, first = Double.POSITIVE_INFINITY, now = rtime();
+	SocketChannel ret = null;
+	try(Selector sel = Selector.open()) {
+	    outer: while(true) {
+		if((ca == na) && (nc == 0)) {
+		    IOException err = null;
+		    for(int i = 0; i < na; i++) {
+			if(errors[i] != null) {
+			    if(err == null)
+				err = errors[i];
+			    else
+				err.addSuppressed(errors[i]);
+			}
+		    }
+		    throw((err != null) ? err : new IOException("?!"));
+		}
+		if((ca < na) && ((nc == 0) || (now - last > DELAY))) {
+		    int a = ca++;
+		    try {
+			cur[a] = SocketChannel.open();
+			cur[a].configureBlocking(false);
+			if(cur[a].connect(new InetSocketAddress(haddrs[a], port))) {
+			    ret = cur[a];
+			    break outer;
+			}
+			keys[a] = cur[a].register(sel, SelectionKey.OP_CONNECT, a);
+		    } catch(IOException e) {
+			errors[a] = e;
+			continue;
+		    }
+		    started[a] = last = now;
+		    first = Math.min(first, now);
+		    act[nc++] = a;
+		}
+		double next = first + TIMEOUT;
+		if(ca < na)
+		    next = Math.min(next, last + DELAY);
+		sel.selectedKeys().clear();
+		sel.select(Math.max((long)Math.ceil((next - now) * 1000), 1l));
+		now = Utils.rtime();
+		first = Double.POSITIVE_INFINITY;
+		for(int i = 0; i < nc; i++) {
+		    int a = act[i];
+		    if(keys[a].isConnectable()) {
+			try {
+			    if(cur[a].finishConnect()) {
+				ret = cur[a];
+				break outer;
+			    }
+			} catch(IOException e) {
+			    keys[a].cancel();
+			    errors[a] = e;
+			    act[i--] = act[--nc];
+			    continue;
+			}
+		    }
+		    if(now - started[a] > TIMEOUT) {
+			try {
+			    keys[a].cancel();
+			    cur[a].close();
+			    errors[a] = new SocketTimeoutException("Connection timed out");
+			} catch(IOException e) {
+			    errors[a] = e;
+			}
+			act[i--] = act[--nc];
+			continue;
+		    }
+		    first = Math.min(first, started[a]);
+		}
+		if(Thread.currentThread().isInterrupted())
+		    throw(new ClosedByInterruptException());
+	    }
+	} finally {
+	    for(int a = 0; a < na; a++) {
+		if((cur[a] != null) && (cur[a] != ret))
+		    cur[a].close();
 	    }
 	}
-	if(lerr != null)
-	    throw(lerr);
-	throw(new UnknownHostException(host));
+	ret.configureBlocking(true);
+	ret.socket().setSoTimeout(5000);
+	return(ret);
     }
 
     public static SocketChannel connect(NamedSocketAddress addr) throws IOException {
@@ -776,7 +865,7 @@ public class Utils {
 		StringBuilder buf = new StringBuilder();
 		for(byte b : in) {
 		    if((char)b == '\\') {
-			buf.append("\\\\'");
+			buf.append("\\\\");
 		    } else if((b >= 33) && (b < 127)) {
 			buf.append((char)b);
 		    } else {
@@ -1389,6 +1478,20 @@ public class Utils {
     public static <E extends Comparable<? super E>> E max(Collection<E> from) {return(max(from, Function.identity()));}
     public static <E extends Comparable<? super E>> E min(Collection<E> from) {return(min(from, Function.identity()));}
 
+    public static long gcd(long a, long b) {
+	a = Math.abs(a); b = Math.abs(b);
+	while(b != 0) {
+	    long t = b;
+	    b = a % b;
+	    a = t;
+	}
+	return(a);
+    }
+
+    public static long lcm(long a, long b) {
+	return(Math.abs(a * b) / gcd(a, b));
+    }
+
     public static float gcd(float x, float y, float E) {
 	float a = Math.max(x, y), b = Math.min(x, y);
 	while(b > E) {
@@ -1562,6 +1665,14 @@ public class Utils {
 
     public static boolean eq(Object a, Object b) {
 	return((a == b) || ((a != null) && a.equals(b)));
+    }
+
+    public static <T> T ifnull(T value, T orelse) {
+	return((value != null) ? value : orelse);
+    }
+
+    public static <T> T ifnull(T value, Supplier<? extends T> orelse) {
+	return((value != null) ? value : orelse.get());
     }
 
     public static boolean parsebool(String s, boolean def) {
@@ -1814,6 +1925,28 @@ public class Utils {
 	return(map.remove(key));
     }
 
+    public static <E> Set<E> union(Set<? extends E> a, Set<? extends E> b) {
+	Set<E> ret = new HashSet<>(a);
+	ret.addAll(b);
+	return(ret);
+    }
+
+    public static <E> Set<E> isect(Set<? extends E> a, Set<?> b) {
+	Set<E> ret = new HashSet<>(a);
+	ret.retainAll(b);
+	return(ret);
+    }
+
+    public static <E> Set<E> setdiff(Set<? extends E> a, Set<?> b) {
+	Set<E> ret = new HashSet<>(a);
+	ret.removeAll(b);
+	return(ret);
+    }
+
+    public static <E> Set<E> symdiff(Set<? extends E> a, Set<? extends E> b) {
+	return(setdiff(union(a, b), isect(a, b)));
+    }
+
     public static <T> List<T> reversed(List<T> ls) {
 	return(new AbstractList<T>() {
 		public int size() {
@@ -1899,6 +2032,31 @@ public class Utils {
 	for(T item : c)
 	    clean.accept(item);
 	c.clear();
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T waitfor(Consumer<Consumer<? super T>> promise) {
+	Object[] buf = {null, null};
+	promise.accept(value -> {
+	    synchronized(buf) {
+		buf[0] = value;
+		buf[1] = true;
+		buf.notifyAll();
+	    }
+	});
+	synchronized(buf) {
+	    boolean irq = false;
+	    while(buf[1] == null) {
+		try {
+		    buf.wait();
+		} catch(InterruptedException e) {
+		    irq = true;
+		}
+	    }
+	    if(irq)
+		Thread.currentThread().interrupt();
+	    return((T)buf[0]);
+	}
     }
 
     public static <T> T construct(Constructor<T> cons, Object... args) {
@@ -2012,6 +2170,54 @@ public class Utils {
     private static final long rtimeoff = System.nanoTime();
     public static double rtime() {
 	return((System.nanoTime() - rtimeoff) / 1e9);
+    }
+
+    public static interface CheckedSupplier<T> {
+	public T get() throws Exception;
+    }
+
+    public static <T> Supplier<T> uncheck(CheckedSupplier<T> ch) {
+	return(() -> {
+	    try {
+		return(ch.get());
+	    } catch(Exception t) {
+		if(t instanceof RuntimeException)
+		    throw((RuntimeException)t);
+		throw(new RuntimeException(t));
+	    }
+	});
+    }
+
+    public static interface CheckedConsumer<T> {
+	public void accept(T val) throws Exception;
+    }
+
+    public static <T> Consumer<T> uncheck(CheckedConsumer<T> ch) {
+	return(val -> {
+	    try {
+		ch.accept(val);
+	    } catch(Exception t) {
+		if(t instanceof RuntimeException)
+		    throw((RuntimeException)t);
+		throw(new RuntimeException(t));
+	    }
+	});
+    }
+
+    public static interface CheckedFunction<P, R> {
+	public R apply(P par) throws Exception;
+    }
+
+    public static <P, R> Function<P, R> uncheck(CheckedFunction<P, R> ch) {
+	return(par -> {
+	    try {
+		return(ch.apply(par));
+	    } catch(Exception t) {
+		if(t instanceof RuntimeException)
+		    throw((RuntimeException)t);
+		throw(new RuntimeException(t));
+	    }
+	});
     }
 
     public static class MapBuilder<K, V> {

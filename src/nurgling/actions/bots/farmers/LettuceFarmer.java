@@ -24,7 +24,7 @@ public class LettuceFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Lettuce");
+        nContext.goToArea(Specialisation.SpecName.crop, "Lettuce");
 
         NArea lettuceLeaf = NContext.findOut(new NAlias("Lettuce Leaf"), 1);
 
@@ -65,7 +65,7 @@ public class LettuceFarmer implements Action {
             
             if (lettuceLeaf != null)
                 new LettuceAndPumpkinCollector(NContext.findSpec(field), NContext.findSpec(seed), lettuceLeaf, new NAlias("items/lettucehead", "Head of Lettuce"), NContext.findSpec(trough)).run(gui);
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/lettuce"), new NAlias("Lettuce"), false).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/lettuce")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

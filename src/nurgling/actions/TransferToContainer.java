@@ -2,7 +2,6 @@ package nurgling.actions;
 
 import haven.*;
 import haven.res.ui.stackinv.ItemStack;
-import haven.res.ui.tt.stackn.Stack;
 import nurgling.*;
 import nurgling.tasks.*;
 import nurgling.tools.*;
@@ -22,6 +21,8 @@ public class TransferToContainer implements Action
 
     // When set, use exact name matching instead of NAlias substring matching
     String exactName = null;
+
+    boolean needsSorting = false;
 
     public TransferToContainer(Container container, NAlias items)
     {
@@ -163,57 +164,6 @@ public class TransferToContainer implements Action
                     int oldSpace = gui.getInventory(container.cap).getItems(items).size();
                     int transferred = 0;
 
-                    // Проверяем, нужно ли переносить по одному предмету для проверки качества
-                    // ВАЖНО: Если th > 1, значит зона настроена на разделение по качеству - ВСЕГДА переносим по одному
-                    // Также проверяем качество даже если th = -1, если есть предметы с разным качеством
-                    // Это нужно для правильного разделения по зонам (например, wine glance)
-                    boolean needQualityCheck = false;
-                    if (th > 1) {
-                        // Если есть порог качества в зоне, ВСЕГДА переносим по одному для проверки качества
-                        needQualityCheck = true;
-                    } else {
-                        // Проверяем, есть ли предметы с разным качеством в инвентаре (включая стаки)
-                        try {
-                            ArrayList<WItem> allItems = gui.getInventory().getItems(items);
-                            if (allItems.size() > 1) {
-                                Float firstQuality = null;
-                                for (WItem witem : allItems) {
-                                    if (NGItem.validateItem(witem)) {
-                                        NGItem gi = (NGItem) witem.item;
-                                        Float quality = null;
-                                        
-                                        // Проверяем качество стака, если предмет в стаке
-                                        if (witem.parent instanceof ItemStack) {
-                                            Stack stackInfo = gi.getInfo(Stack.class);
-                                            if (stackInfo != null && stackInfo.quality > 0) {
-                                                quality = (float)stackInfo.quality;
-                                            }
-                                        }
-                                        
-                                        // Если не нашли качество стака, используем качество предмета
-                                        if (quality == null) {
-                                            quality = gi.quality;
-                                        }
-                                        
-                                        if (quality != null) {
-                                            if (firstQuality == null) {
-                                                firstQuality = quality;
-                                            } else if (!firstQuality.equals(quality)) {
-                                                // Нашли предметы/стаки с разным качеством
-                                                needQualityCheck = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (InterruptedException e) {
-                            throw e; // Don't swallow interrupt!
-                        } catch (Exception e) {
-                            // Игнорируем ошибки
-                        }
-                    }
-
                     while (!availableItems.isEmpty() && transferred < transfer_size)
                     {
                         WItem currentItem = availableItems.get(0);
@@ -226,9 +176,7 @@ public class TransferToContainer implements Action
 
                         // Calculate remaining items we can transfer
                         int remainingToTransfer = transfer_size - transferred;
-                        // Если нужно проверять качество, ограничиваем до 1
-                        int currentTransferSize = needQualityCheck ? 1 : remainingToTransfer;
-                        int itemsTransferred = transfer(currentItem, gui.getInventory(container.cap), currentTransferSize, itemName);
+                        int itemsTransferred = transfer(currentItem, gui.getInventory(container.cap), remainingToTransfer, needsSorting);
 
                         if (itemsTransferred > 0)
                         {
@@ -364,19 +312,17 @@ public class TransferToContainer implements Action
 
     public static int transfer(WItem item, NInventory targetInv, int transfer_size) throws InterruptedException
     {
-        return transfer(item, targetInv, transfer_size, null);
+        return transfer(item, targetInv, transfer_size, false);
     }
 
-    public static int transfer(WItem item, NInventory targetInv, int transfer_size, String itemName) throws InterruptedException
+    public static int transfer(WItem item, NInventory targetInv, int transfer_size, boolean needsSorting) throws InterruptedException
     {
         if (!NGItem.validateItem(item))
         {
             return 0;
         }
 
-        if (itemName == null) {
-            itemName = ((NGItem) item.item).name();
-        }
+        String itemName = ((NGItem) item.item).name();
 
         // Check if stacking is disabled (bundle.a == false) OR item is not stackable
         boolean stackingDisabled = !((NInventory) NUtils.getGameUI().maininv).bundle.a;
@@ -472,8 +418,7 @@ public class TransferToContainer implements Action
                     int oldstacksize = sourceStack.wmap.size();
                     if (targetInv.getFreeSpace() > 0)
                     {
-                        // Если размер стака превышает лимит переноса, переносим по одному
-                        if (oldstacksize > transfer_size)
+                        if (oldstacksize > transfer_size || needsSorting)
                         {
                             int originalStackSize = sourceStack.wmap.size();
 

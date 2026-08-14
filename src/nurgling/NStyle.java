@@ -8,9 +8,65 @@ import java.awt.image.*;
 import java.util.*;
 
 public class NStyle {
+    // === Theme colors ===
+    public static final Color rowOdd   = new Color(0x28, 0x30, 0x31); // #283031
+    public static final Color rowEven  = new Color(0x1C, 0x25, 0x26); // #1C2526
+    public static final Color infoBg   = new Color(0x1C, 0x25, 0x26); // #1C2526
+    public static final Color border   = new Color(233, 156, 84);     // #E99C54
+    public static final Color windowBg = new Color(40, 52, 54, 245);  // content area bg
+    public static final Color titleBg  = new Color(0x1C, 0x25, 0x26); // title bar bg
+    public static final Color separator = new Color(40, 52, 54);      // #283436
+
+    /**
+     * Resolves the window content-area background color, honoring the user's
+     * runtime solid-background / opacity / color settings when running under NUI.
+     * Single source of truth shared by NWindowDeco and the menu grid so they
+     * never visually drift apart.
+     */
+    public static Color resolveWindowBg(haven.UI ui) {
+	if(ui instanceof NUI) {
+	    NUI nui = (NUI)ui;
+	    if(nui.getUseSolidBackground()) {
+		Color c = nui.getWindowBackgroundColor();
+		return new Color(c.getRed(), c.getGreen(), c.getBlue(),
+				 (int)(255 * nui.getUIOpacity()));
+	    }
+	}
+	return windowBg;
+    }
+
+    // === Fonts (nurgling replacements for CharWnd.catf / CharWnd.attrf) ===
+    public static final Text.Foundry ncatf = new Text.Foundry(
+	nurgling.conf.FontSettings.getOpenSansSemibold(), 16, Color.WHITE).aa(true);
+    public static final Text.Foundry nattrf = new Text.Foundry(
+	nurgling.conf.FontSettings.getOpenSansSemibold().deriveFont(
+	    (float)Math.floor(haven.UI.scale(14.0)))).aa(true);
+
+    static {
+	haven.Scrollbar.customWidth = haven.UI.scale(8);
+	haven.Scrollbar.customDraw = (sb, g) -> {
+	    if(!sb.vis()) return;
+	    int w = sb.sz.x;
+	    int x = 0;
+	    // Fill full widget width with track color (eliminates gap between list items and scrollbar)
+	    g.chcolor(0x33, 0x3E, 0x40, 0xFF);
+	    g.frect(haven.Coord.of(0, 0), new haven.Coord(sb.sz.x, sb.sz.y));
+	    g.chcolor();
+	    // Handle (right-aligned, 8px wide)
+	    int handleH = haven.UI.scale(10);
+	    double a = (sb.max > sb.min) ? (double)sb.val / (double)(sb.max - sb.min) : 0;
+	    int fy = (int)((sb.sz.y - handleH) * a);
+	    g.chcolor(border);
+	    g.frect(haven.Coord.of(x, fy), new haven.Coord(w, handleH));
+	    g.chcolor();
+	};
+	haven.Dropbox.bgColor = infoBg;
+    }
+
     public static Text.Foundry fcomboitems = new Text.Foundry(Text.sans, 16).aa(true);
     public static Text.Furnace meter = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 12, Color.WHITE).aa(true), 2, 1, new Color(60, 30, 30));
     public static Text.Furnace gmeter = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 12, new Color(102, 178, 12)).aa(true), 2, 1, new Color(60, 30, 30));
+    public static Text.Furnace cmeter = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 12, new Color(0, 255, 255)).aa(true), 2, 1, new Color(0, 0, 0));
     public static Text.Foundry areastitle = new Text.Foundry(Text.serif, 15, Color.WHITE);
     public static Text.Foundry flower = new Text.Foundry(Text.sans, 12, new Color(255, 250, 205)).aa(true);
     public static Text.Foundry iiqual = new Text.Foundry(Text.sans, 12, new Color(0, 0, 0)).aa(true);
@@ -18,6 +74,7 @@ public class NStyle {
     public static final RichText.Foundry nifnd = new RichText.Foundry(Resource.remote(), java.awt.font.TextAttribute.FAMILY, "SansSerif", java.awt.font.TextAttribute.SIZE, UI.scale(14)).aa(true);
     public static Text.Furnace openings = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(16)), 16, Color.WHITE).aa(true), 1, 1, new Color(60, 30, 30));
     public static Text.Furnace selopenings = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(16)), 16, Color.GREEN).aa(true), 1, 1, new Color(60, 30, 30));
+    public static Text.Furnace disabledopenings = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(16)), 16, Color.GRAY).aa(true), 1, 1, new Color(60, 30, 30));
     public static Text.Furnace slotnums = new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(16)), 16, new Color(119, 153, 116,255)).aa(true);
     public static Text.Furnace mip = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(16)), 16, Color.GREEN).aa(true), 1, 1, new Color(60, 30, 30));
     public static Text.Furnace eip = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(16)), 16, Color.RED).aa(true), 1, 1, new Color(60, 30, 30));
@@ -28,9 +85,19 @@ public class NStyle {
             new TexI(Resource.loadsimg("nurgling/hud/buttons/removeItem/h"))};
 
     public static final BufferedImage[] cbtni = new BufferedImage[]{
-            Resource.loadsimg("nurgling/hud/wnd/cbtnu"),
-            Resource.loadsimg("nurgling/hud/wnd/cbtnd"),
-            Resource.loadsimg("nurgling/hud/wnd/cbtnh")};
+            Resource.loadsimg("nurgling/hud/icons/close/cross"),
+            Resource.loadsimg("nurgling/hud/icons/close/cross_push"),
+            Resource.loadsimg("nurgling/hud/icons/close/cross_hover")};
+
+    public static final BufferedImage[] plusbtni = new BufferedImage[]{
+            Resource.loadsimg("nurgling/hud/icons/ability/plus"),
+            Resource.loadsimg("nurgling/hud/icons/ability/plus_push"),
+            Resource.loadsimg("nurgling/hud/icons/ability/plus_hover")};
+
+    public static final BufferedImage[] minusbtni = new BufferedImage[]{
+            Resource.loadsimg("nurgling/hud/icons/ability/minus"),
+            Resource.loadsimg("nurgling/hud/icons/ability/minus_push"),
+            Resource.loadsimg("nurgling/hud/icons/ability/minus_hover")};
 
     public static final TexI[] settingsi = new TexI[]{
             new TexI(Resource.loadsimg("nurgling/hud/buttons/settings/u")),
@@ -107,6 +174,11 @@ public class NStyle {
             new TexI(Resource.loadsimg("nurgling/hud/buttons/sort/sbtnu")),
             new TexI(Resource.loadsimg("nurgling/hud/buttons/sort/sbtnd")),
             new TexI(Resource.loadsimg("nurgling/hud/buttons/sort/sbtnh"))};
+
+    public static final TexI[] stacksorti = new TexI[]{
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/sort/stacksbtnu")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/sort/stacksbtnd")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/sort/stacksbtnh"))};
 
     public static final TexI[] addarea = new TexI[]{
             new TexI(Resource.loadsimg("nurgling/hud/buttons/addarea/u")),
@@ -336,21 +408,13 @@ public class NStyle {
         iconMap.put("gfx/terobjs/map/cavepuddle",new Resource.Saved(Resource.remote(),"mm/clay-cave",-1));
         iconMap.put("gfx/terobjs/minehole",new Resource.Saved(Resource.remote(),"mm/down",-1));
         iconMap.put("gfx/terobjs/ladder",new Resource.Saved(Resource.remote(),"mm/up",-1));
-        // Животные: kritter -> mm/ иконки (как в Icon Settings)
-        iconMap.put("gfx/kritter/boar/boar", new Resource.Saved(Resource.remote(), "mm/boar", -1));
-        iconMap.put("gfx/kritter/mammoth/mammoth", new Resource.Saved(Resource.remote(), "mm/mammoth", -1));
-        iconMap.put("gfx/kritter/deer/deer", new Resource.Saved(Resource.remote(), "mm/deer", -1));
-        iconMap.put("gfx/kritter/horse/stallion", new Resource.Saved(Resource.remote(), "mm/horse", -1));
-        iconMap.put("gfx/kritter/horse/mare", new Resource.Saved(Resource.remote(), "mm/horse", -1));
-        iconMap.put("gfx/kritter/goat/goat", new Resource.Saved(Resource.remote(), "mm/goat", -1));
-        iconMap.put("gfx/kritter/sheep/sheep", new Resource.Saved(Resource.remote(), "mm/sheep", -1));
-        iconMap.put("gfx/kritter/aurochs/aurochs", new Resource.Saved(Resource.remote(), "mm/aurochs", -1));
-        iconMap.put("gfx/kritter/fox/fox", new Resource.Saved(Resource.remote(), "mm/fox", -1));
-        iconMap.put("gfx/kritter/wolf/wolf", new Resource.Saved(Resource.remote(), "mm/wolf", -1));
-        iconMap.put("gfx/kritter/bear/bear", new Resource.Saved(Resource.remote(), "mm/bear", -1));
-        iconMap.put("gfx/kritter/moose/moose", new Resource.Saved(Resource.remote(), "mm/moose", -1));
-        iconMap.put("gfx/kritter/lynx/lynx", new Resource.Saved(Resource.remote(), "mm/lynx", -1));
-        iconMap.put("gfx/kritter/badger/badger", new Resource.Saved(Resource.remote(), "mm/badger", -1));
+        iconMap.put("gfx/terobjs/plants/stringgrass",new Resource.Saved(Resource.remote(),"gfx/invobjs/wildfibre",-1));
+        iconMap.put("gfx/terobjs/plants/wildonion",new Resource.Saved(Resource.remote(),"gfx/invobjs/preonion",-1));
+        iconMap.put("gfx/terobjs/plants/tuber",new Resource.Saved(Resource.remote(),"gfx/invobjs/pretuber",-1));
+        iconMap.put("gfx/terobjs/plants/wildgourd",new Resource.Saved(Resource.remote(),"gfx/invobjs/pregourd",-1));
+        iconMap.put("gfx/terobjs/plants/wildflower",new Resource.Saved(Resource.remote(),"gfx/invobjs/flower-wild",-1));
+        iconMap.put("gfx/terobjs/plants/wildbrassica",new Resource.Saved(Resource.remote(),"gfx/invobjs/seed-brassica",-1));
+        iconMap.put("gfx/terobjs/plants/cereal",new Resource.Saved(Resource.remote(),"gfx/invobjs/seed-cereal",-1));
     }
 
     public static HashMap<String, String> iconName = new HashMap<>();
@@ -378,5 +442,12 @@ public class NStyle {
         iconName.put("mm/coracle", "Coracle");
         iconName.put("mm/plow", "Plow");
         iconName.put("mm/clay-cave", "Cave clay");
+        iconName.put("gfx/invobjs/wildfibre", "Wild Fibre");
+        iconName.put("gfx/invobjs/seed-brassica", "Wild Kale");
+        iconName.put("gfx/invobjs/preonion", "Wild Onion");
+        iconName.put("gfx/invobjs/pretuber", "Wild Tuber");
+        iconName.put("gfx/invobjs/pregourd", "Wild Gourd");
+        iconName.put("gfx/invobjs/flower-wild", "Wild Flower");
+        iconName.put("gfx/invobjs/seed-cereal", "Wild Corn Grass");
     }
 }

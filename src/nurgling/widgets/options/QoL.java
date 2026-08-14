@@ -6,6 +6,8 @@ import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NLPassistant;
+import nurgling.overlays.NObjHarvestOl;
+import nurgling.tools.HarvestSpecs;
 import nurgling.widgets.nsettings.Panel;
 
 public class QoL extends Panel {
@@ -20,15 +22,15 @@ public class QoL extends Panel {
     private HSlider autoDrinkTimeoutSlider;
     private Label autoDrinkTimeoutLabel;
     private CheckBox autoSaveTableware;
-    private CheckBox showBB;
+    private CheckBox showCritterCircles;
     private CheckBox showCSprite;
-    private CheckBox hideNature;
     private CheckBox miningOL;
     private CheckBox tracking;
     private CheckBox crime;
     private CheckBox swimming;
     private CheckBox openInventoryOnLogin;
     private CheckBox lowMemoryMode;
+    private CheckBox autoShowSiegeEngines;
     private CheckBox disableMenugridKeys;
     private CheckBox questNotified;
     private CheckBox lpassistent;
@@ -36,6 +38,7 @@ public class QoL extends Panel {
     private CheckBox tempmark;
     private CheckBox tempmarkIgnoreDist;
     private CheckBox shortCupboards;
+    private CheckBox shortPalisades;
     private CheckBox shortWalls;
     private CheckBox decalsOnTop;
     private CheckBox thinOutlines;
@@ -51,9 +54,27 @@ public class QoL extends Panel {
     private CheckBox alwaysObfuscate;
     private CheckBox randomAreaColor;
     private CheckBox treeScaleDisableZoomHide;
+    private CheckBox treeHarvestOverlay;
+    private CheckBox treeHarvestSeeds;
+    private CheckBox treeHarvestLeaves;
+    private CheckBox treeHarvestBoughs;
+    private CheckBox treeHarvestBark;
+    private CheckBox bushHarvestOverlay;
+    private CheckBox logHarvestOverlay;
+    private CheckBox stoneHarvestOverlay;
+    private CheckBox oldtrunkHarvestOverlay;
     private CheckBox syncCamera;
+    private CheckBox invGilding;
+    private CheckBox invVarOverlay;
+    private CheckBox invSlotNumbers;
+    private CheckBox invStackOverlay;
+    private CheckBox invAutoSplit;
     private TextEntry treeScaleMinThresholdEntry;
     private CheckBox diabloLikeRun;
+    private HSlider treeDisplayScaleSlider;
+    private Label treeDisplayScaleLabel;
+    private HSlider hideStockpileScaleSlider;
+    private Label hideStockpileScaleLabel;
 
     private Dropbox<String> preferredSpeedDropbox;
     private Dropbox<String> preferredHorseSpeedDropbox;
@@ -122,21 +143,55 @@ public class QoL extends Panel {
             leftColumn.addhlp(leftPrev.pos("bl").adds(0, 2), UI.scale(5), nightVisionBrightnessSlider, nightVisionBrightnessLabel);
             leftPrev = nightVisionBrightnessSlider;
         }
-        leftPrev = showBB = leftColumn.add(new CheckBox(L10n.get("qol.bounding_boxes")), leftPrev.pos("bl").adds(-10, 5));
+        leftPrev = showCritterCircles = leftColumn.add(new CheckBox(L10n.get("qol.critter_circles")), leftPrev.pos("bl").adds(-10, 5));
         leftPrev = showCSprite = leftColumn.add(new CheckBox(L10n.get("qol.show_decorative")), leftPrev.pos("bl").adds(0, 5));
-        leftPrev = hideNature = leftColumn.add(new CheckBox(L10n.get("qol.hide_nature")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = uniformBiomeColors = leftColumn.add(new CheckBox(L10n.get("qol.uniform_biome")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = showTerrainName = leftColumn.add(new CheckBox(L10n.get("qol.show_terrain_name")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = simpleInspect = leftColumn.add(new CheckBox(L10n.get("qol.simple_inspect")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = shortCupboards = leftColumn.add(new CheckBox(L10n.get("qol.short_cupboards")), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = shortPalisades = leftColumn.add(new CheckBox(L10n.get("qol.short_palisades")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = shortWalls = leftColumn.add(new CheckBox(L10n.get("qol.short_walls")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = decalsOnTop = leftColumn.add(new CheckBox(L10n.get("qol.decals_on_top")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = thinOutlines = leftColumn.add(new CheckBox(L10n.get("qol.thin_outlines")), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = leftColumn.add(new Label(L10n.get("qol.hide_stockpile_scale")), leftPrev.pos("bl").adds(10, 3));
+        {
+            hideStockpileScaleLabel = new Label("50%");
+            hideStockpileScaleSlider = new HSlider(UI.scale(150), 25, 100, 50) {
+                public void changed() {
+                    hideStockpileScaleLabel.settext(String.format("%d%%", this.val));
+                }
+            };
+            leftColumn.addhlp(leftPrev.pos("bl").adds(0, 2), UI.scale(5), hideStockpileScaleSlider, hideStockpileScaleLabel);
+            leftPrev = hideStockpileScaleSlider;
+        }
 
-        leftPrev = leftColumn.add(new Label("● " + L10n.get("qol.section.tree_growth")), leftPrev.pos("bl").adds(0, 15));
+        leftPrev = leftColumn.add(new Label("● " + L10n.get("qol.section.tree_growth")), leftPrev.pos("bl").adds(-10, 15));
         leftPrev = treeScaleDisableZoomHide = leftColumn.add(new CheckBox(L10n.get("qol.tree_always_show")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = leftColumn.add(new Label(L10n.get("qol.tree_min_threshold")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = treeScaleMinThresholdEntry = leftColumn.add(new TextEntry.NumberValue(50, "0"), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = treeHarvestOverlay = leftColumn.add(new CheckBox(L10n.get("qol.tree_harvest_overlay")), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = treeHarvestSeeds = leftColumn.add(new CheckBox(L10n.get("qol.tree_harvest_seeds")), leftPrev.pos("bl").adds(10, 3));
+        leftPrev = treeHarvestLeaves = leftColumn.add(new CheckBox(L10n.get("qol.tree_harvest_leaves")), leftPrev.pos("bl").adds(0, 3));
+        leftPrev = treeHarvestBoughs = leftColumn.add(new CheckBox(L10n.get("qol.tree_harvest_boughs")), leftPrev.pos("bl").adds(0, 3));
+        leftPrev = treeHarvestBark = leftColumn.add(new CheckBox(L10n.get("qol.tree_harvest_bark")), leftPrev.pos("bl").adds(0, 3));
+        leftPrev = bushHarvestOverlay = leftColumn.add(new CheckBox(L10n.get("qol.bush_harvest_overlay")), leftPrev.pos("bl").adds(-10, 8));
+        leftPrev = logHarvestOverlay = leftColumn.add(new CheckBox(L10n.get("qol.log_harvest_overlay")), leftPrev.pos("bl").adds(0, 3));
+        leftPrev = stoneHarvestOverlay = leftColumn.add(new CheckBox(L10n.get("qol.stone_harvest_overlay")), leftPrev.pos("bl").adds(0, 3));
+        leftPrev = oldtrunkHarvestOverlay = leftColumn.add(new CheckBox(L10n.get("qol.oldtrunk_harvest_overlay")), leftPrev.pos("bl").adds(0, 3));
+        // No de-indent here: bushHarvestOverlay above already stepped back out of the harvest
+        // sub-options, so subtracting another 10 put this label - and, since the column positions
+        // each widget relative to the previous one, everything below it - at a negative x.
+        leftPrev = leftColumn.add(new Label(L10n.get("qol.tree_display_scale")), leftPrev.pos("bl").adds(0, 8));
+        {
+            treeDisplayScaleLabel = new Label("100%");
+            treeDisplayScaleSlider = new HSlider(UI.scale(150), 25, 100, 100) {
+                public void changed() {
+                    treeDisplayScaleLabel.settext(String.format("%d%%", this.val));
+                }
+            };
+            leftColumn.addhlp(leftPrev.pos("bl").adds(0, 2), UI.scale(5), treeDisplayScaleSlider, treeDisplayScaleLabel);
+            leftPrev = treeDisplayScaleSlider;
+        }
 
         leftPrev = leftColumn.add(new Label("● " + L10n.get("qol.section.network")), leftPrev.pos("bl").adds(0, 15));
         leftPrev = alwaysObfuscate = leftColumn.add(new CheckBox(L10n.get("qol.always_obfuscate")), leftPrev.pos("bl").adds(0, 5));
@@ -147,6 +202,7 @@ public class QoL extends Panel {
         leftPrev = swimming = leftColumn.add(new CheckBox(L10n.get("qol.swimming")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = openInventoryOnLogin = leftColumn.add(new CheckBox(L10n.get("qol.open_inventory")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = lowMemoryMode = leftColumn.add(new CheckBox(L10n.get("qol.low_memory")), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = autoShowSiegeEngines = leftColumn.add(new CheckBox(L10n.get("qol.auto_show_siege_engines")), leftPrev.pos("bl").adds(0, 5));
 
         leftPrev = leftColumn.add(new Label(L10n.get("qol.preferred_speed")), leftPrev.pos("bl").adds(0, 10));
         leftPrev = preferredSpeedDropbox = leftColumn.add(new Dropbox<String>(UI.scale(150), 4, UI.scale(16)) {
@@ -296,6 +352,13 @@ public class QoL extends Panel {
         rightPrev = randomAreaColor = rightColumn.add(new CheckBox(L10n.get("qol.random_area_color")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = syncCamera = rightColumn.add(new CheckBox("Sync camera across sessions"), rightPrev.pos("bl").adds(0, 5));
 
+        rightPrev = rightColumn.add(new Label("● " + L10n.get("qol.section.inventory")), rightPrev.pos("bl").adds(0, 15));
+        rightPrev = invGilding = rightColumn.add(new CheckBox(L10n.get("qol.inv_gilding_overlay")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = invVarOverlay = rightColumn.add(new CheckBox(L10n.get("qol.inv_var_overlay")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = invSlotNumbers = rightColumn.add(new CheckBox(L10n.get("qol.inv_slot_numbers")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = invStackOverlay = rightColumn.add(new CheckBox(L10n.get("qol.inv_stack_overlay")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = invAutoSplit = rightColumn.add(new CheckBox(L10n.get("qol.inv_auto_split")), rightPrev.pos("bl").adds(0, 5));
+
         rightPrev = rightColumn.add(new Label("● " + L10n.get("qol.section.debug")), rightPrev.pos("bl").adds(0, 15));
         rightPrev = debug = rightColumn.add(new CheckBox(L10n.get("qol.debug")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = printpfmap = rightColumn.add(new CheckBox(L10n.get("qol.printpfmap")), rightPrev.pos("bl").adds(0, 5));
@@ -355,16 +418,16 @@ public class QoL extends Panel {
         autoDrinkTimeoutLabel.settext(String.format("%.1fs", (double) timeoutValue));
         
         autoSaveTableware.a = getBool(NConfig.Key.autoSaveTableware);
-        showBB.a = getBool(NConfig.Key.showBB);
+        showCritterCircles.a = getBool(NConfig.Key.showCritterCircles);
         showCSprite.a = getBool(NConfig.Key.nextshowCSprite);
 
-        hideNature.a = !getBool(NConfig.Key.hideNature);
         miningOL.a = getBool(NConfig.Key.miningol);
         tracking.a = getBool(NConfig.Key.tracking);
         crime.a = getBool(NConfig.Key.crime);
         swimming.a = getBool(NConfig.Key.swimming);
         openInventoryOnLogin.a = getBool(NConfig.Key.openInventoryOnLogin);
         lowMemoryMode.a = false;
+        autoShowSiegeEngines.a = getBool(NConfig.Key.autoShowSiegeEngines);
         disableMenugridKeys.a = getBool(NConfig.Key.disableMenugridKeys);
         questNotified.a = getBool(NConfig.Key.questNotified);
         lpassistent.a = getBool(NConfig.Key.lpassistent);
@@ -373,6 +436,7 @@ public class QoL extends Panel {
         tempmark.a = getBool(NConfig.Key.tempmark);
         tempmarkIgnoreDist.a = getBool(NConfig.Key.tempmarkIgnoreDist);
         shortCupboards.a = getBool(NConfig.Key.shortCupboards);
+        shortPalisades.a = getBool(NConfig.Key.shortPalisades);
         shortWalls.a = getBool(NConfig.Key.shortWalls);
         decalsOnTop.a = getBool(NConfig.Key.decalsOnTop);
         thinOutlines.a = getBool(NConfig.Key.thinOutlines);
@@ -388,8 +452,39 @@ public class QoL extends Panel {
         randomAreaColor.a = getBool(NConfig.Key.randomAreaColor);
         treeScaleDisableZoomHide.a = getBool(NConfig.Key.treeScaleDisableZoomHide);
         diabloLikeRun.a = getBool(NConfig.Key.diabloLikeRun);
+        treeHarvestOverlay.a = getBool(NConfig.Key.treeHarvestOverlay);
+        treeHarvestSeeds.a = getBool(NConfig.Key.treeHarvestSeeds);
+        treeHarvestLeaves.a = getBool(NConfig.Key.treeHarvestLeaves);
+        treeHarvestBoughs.a = getBool(NConfig.Key.treeHarvestBoughs);
+        treeHarvestBark.a = getBool(NConfig.Key.treeHarvestBark);
+        bushHarvestOverlay.a = getBool(NConfig.Key.bushHarvestOverlay);
+        logHarvestOverlay.a = getBool(NConfig.Key.logHarvestOverlay);
+        stoneHarvestOverlay.a = getBool(NConfig.Key.stoneHarvestOverlay);
+        oldtrunkHarvestOverlay.a = getBool(NConfig.Key.oldtrunkHarvestOverlay);
         syncCamera.a = getBool(NConfig.Key.sync_camera);
-        
+
+        invGilding.a = getBool(NConfig.Key.showGilding);
+        invVarOverlay.a = getBool(NConfig.Key.showVarity);
+        invSlotNumbers.a = getBool(NConfig.Key.showInventoryNums);
+        invStackOverlay.a = getBool(NConfig.Key.showStackOverlay);
+        invAutoSplit.a = getBool(NConfig.Key.autoSplitter);
+
+        Object treeScalePref = NConfig.get(NConfig.Key.treeDisplayScale);
+        int treeScaleValue = 100;
+        if (treeScalePref instanceof Number) {
+            treeScaleValue = ((Number) treeScalePref).intValue();
+        }
+        treeDisplayScaleSlider.val = treeScaleValue;
+        treeDisplayScaleLabel.settext(String.format("%d%%", treeScaleValue));
+
+        Object hideStockpilePref = NConfig.get(NConfig.Key.hideStockpileScale);
+        int hideStockpileValue = 50;
+        if (hideStockpilePref instanceof Number) {
+            hideStockpileValue = ((Number) hideStockpilePref).intValue();
+        }
+        hideStockpileScaleSlider.val = hideStockpileValue;
+        hideStockpileScaleLabel.settext(String.format("%d%%", hideStockpileValue));
+
         Object minThreshold = NConfig.get(NConfig.Key.treeScaleMinThreshold);
         treeScaleMinThresholdEntry.settext(minThreshold == null ? "0" : minThreshold.toString());
 
@@ -432,26 +527,12 @@ public class QoL extends Panel {
         temsmarktimeEntry.settext(time == null ? "" : time.toString());
     }
 
-    public void syncShowBB() {
-        showBB.a = getBool(NConfig.Key.showBB);
-    }
-
-    public void syncHideNature() {
-        hideNature.a = !getBool(NConfig.Key.hideNature);
-    }
-
     public void syncMiningOverlay() {
         miningOL.a = getBool(NConfig.Key.miningol);
     }
 
     @Override
     public void save() {
-        boolean oldHideNature = false;
-        if (NConfig.get(NConfig.Key.hideNature) instanceof Boolean) {
-            oldHideNature = (Boolean) NConfig.get(NConfig.Key.hideNature);
-        }
-        boolean newHideNature = !hideNature.a;
-
         NConfig.set(NConfig.Key.showCropStage, showCropStage.a);
         NConfig.set(NConfig.Key.simplecrops, simpleCrops.a);
         NConfig.set(NConfig.Key.nightVision, nightVision.a);
@@ -466,9 +547,8 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.autoDrinkThreshold, autoDrinkThresholdSlider.val / 100.0);
         NConfig.set(NConfig.Key.autoDrinkTimeout, (double) autoDrinkTimeoutSlider.val);
         NConfig.set(NConfig.Key.autoSaveTableware, autoSaveTableware.a);
-        NConfig.set(NConfig.Key.showBB, showBB.a);
+        NConfig.set(NConfig.Key.showCritterCircles, showCritterCircles.a);
         NConfig.set(NConfig.Key.nextshowCSprite, showCSprite.a);
-        NConfig.set(NConfig.Key.hideNature, newHideNature);
         
         // Save mining overlay and sync with minimap button
         boolean oldMiningOL = getBool(NConfig.Key.miningol);
@@ -483,6 +563,7 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.crime, crime.a);
         NConfig.set(NConfig.Key.swimming, swimming.a);
         NConfig.set(NConfig.Key.openInventoryOnLogin, openInventoryOnLogin.a);
+        NConfig.set(NConfig.Key.autoShowSiegeEngines, autoShowSiegeEngines.a);
         NConfig.set(NConfig.Key.disableMenugridKeys, disableMenugridKeys.a);
         NConfig.set(NConfig.Key.questNotified, questNotified.a);
 
@@ -533,6 +614,13 @@ public class QoL extends Panel {
             rebuildCupboards();
         }
 
+        // Save palisade settings and rebuild palisades if changed
+        boolean oldShortPalisades = getBool(NConfig.Key.shortPalisades);
+        NConfig.set(NConfig.Key.shortPalisades, shortPalisades.a);
+        if(oldShortPalisades != shortPalisades.a) {
+            rebuildPalisades();
+        }
+
         NConfig.set(NConfig.Key.thinOutlines, thinOutlines.a);
 
         // Save shortWalls and trigger map re-render if changed
@@ -572,8 +660,63 @@ public class QoL extends Panel {
         NConfig.set(NConfig.Key.randomAreaColor, randomAreaColor.a);
         NConfig.set(NConfig.Key.treeScaleDisableZoomHide, treeScaleDisableZoomHide.a);
         NConfig.set(NConfig.Key.diabloLikeRun, diabloLikeRun.a);
+
+        // Capture old harvest-overlay settings before saving
+        boolean oldTreeHarvestOverlay = getBool(NConfig.Key.treeHarvestOverlay);
+        boolean oldTreeHarvestSeeds = getBool(NConfig.Key.treeHarvestSeeds);
+        boolean oldTreeHarvestLeaves = getBool(NConfig.Key.treeHarvestLeaves);
+        boolean oldTreeHarvestBoughs = getBool(NConfig.Key.treeHarvestBoughs);
+        boolean oldTreeHarvestBark = getBool(NConfig.Key.treeHarvestBark);
+        boolean oldBushHarvestOverlay = getBool(NConfig.Key.bushHarvestOverlay);
+        boolean oldLogHarvestOverlay = getBool(NConfig.Key.logHarvestOverlay);
+        boolean oldStoneHarvestOverlay = getBool(NConfig.Key.stoneHarvestOverlay);
+        boolean oldOldtrunkHarvestOverlay = getBool(NConfig.Key.oldtrunkHarvestOverlay);
+
+        NConfig.set(NConfig.Key.treeHarvestOverlay, treeHarvestOverlay.a);
+        NConfig.set(NConfig.Key.treeHarvestSeeds, treeHarvestSeeds.a);
+        NConfig.set(NConfig.Key.treeHarvestLeaves, treeHarvestLeaves.a);
+        NConfig.set(NConfig.Key.treeHarvestBoughs, treeHarvestBoughs.a);
+        NConfig.set(NConfig.Key.treeHarvestBark, treeHarvestBark.a);
+        NConfig.set(NConfig.Key.bushHarvestOverlay, bushHarvestOverlay.a);
+        NConfig.set(NConfig.Key.logHarvestOverlay, logHarvestOverlay.a);
+        NConfig.set(NConfig.Key.stoneHarvestOverlay, stoneHarvestOverlay.a);
+        NConfig.set(NConfig.Key.oldtrunkHarvestOverlay, oldtrunkHarvestOverlay.a);
+
+        // Rebuild harvest overlays if any setting changed
+        if (oldTreeHarvestOverlay != treeHarvestOverlay.a
+                || oldTreeHarvestSeeds != treeHarvestSeeds.a
+                || oldTreeHarvestLeaves != treeHarvestLeaves.a
+                || oldTreeHarvestBoughs != treeHarvestBoughs.a
+                || oldTreeHarvestBark != treeHarvestBark.a
+                || oldBushHarvestOverlay != bushHarvestOverlay.a
+                || oldLogHarvestOverlay != logHarvestOverlay.a
+                || oldStoneHarvestOverlay != stoneHarvestOverlay.a
+                || oldOldtrunkHarvestOverlay != oldtrunkHarvestOverlay.a) {
+            rebuildHarvestOverlays();
+        }
+
         NConfig.set(NConfig.Key.sync_camera, syncCamera.a);
-        
+
+        int oldTreeDisplayScale = 100;
+        Object oldTreeDisplayScaleObj = NConfig.get(NConfig.Key.treeDisplayScale);
+        if (oldTreeDisplayScaleObj instanceof Number) {
+            oldTreeDisplayScale = ((Number) oldTreeDisplayScaleObj).intValue();
+        }
+        NConfig.set(NConfig.Key.treeDisplayScale, treeDisplayScaleSlider.val);
+        if (oldTreeDisplayScale != treeDisplayScaleSlider.val) {
+            rebuildTreeScale();
+        }
+
+        int oldHideStockpileScale = 50;
+        Object oldHideStockpileScaleObj = NConfig.get(NConfig.Key.hideStockpileScale);
+        if (oldHideStockpileScaleObj instanceof Number) {
+            oldHideStockpileScale = ((Number) oldHideStockpileScaleObj).intValue();
+        }
+        NConfig.set(NConfig.Key.hideStockpileScale, hideStockpileScaleSlider.val);
+        if (oldHideStockpileScale != hideStockpileScaleSlider.val) {
+            rebuildHideStockpiles();
+        }
+
         int minThreshold = parseIntOrDefault(treeScaleMinThresholdEntry.text(), 0);
         NConfig.set(NConfig.Key.treeScaleMinThreshold, minThreshold);
 
@@ -610,17 +753,23 @@ public class QoL extends Panel {
         if(NUtils.getGameUI() != null) {
             if(NUtils.getGameUI().mmapw != null) {
                 NUtils.getGameUI().mmapw.nightvision.a = nightVision.a;
-                NUtils.getGameUI().mmapw.natura.a = hideNature.a;
             }
         }
         if(NUtils.getUI() != null && NUtils.getUI().core != null)
             NUtils.getUI().core.debug = debug.a;
 
-        if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-            if (oldHideNature != newHideNature) {
-                NUtils.showHideNature();
-            }
-        }
+        // Inventory overlays / behavior (moved out of the inventory window).
+        // For the three overlay flags backed by static fields, mirror the value so
+        // the change takes effect immediately without reopening inventories.
+        NConfig.set(NConfig.Key.showGilding, invGilding.a);
+        haven.res.ui.tt.slot.Slotted.show = invGilding.a;
+        NConfig.set(NConfig.Key.showVarity, invVarOverlay.a);
+        nurgling.iteminfo.NFoodInfo.show = invVarOverlay.a;
+        NConfig.set(NConfig.Key.showInventoryNums, invSlotNumbers.a);
+        NConfig.set(NConfig.Key.showStackOverlay, invStackOverlay.a);
+        haven.res.ui.tt.stackn.Stack.show = invStackOverlay.a;
+        NConfig.set(NConfig.Key.autoSplitter, invAutoSplit.a);
+
         NConfig.needUpdate();
     }
 
@@ -632,6 +781,68 @@ public class QoL extends Panel {
         try { return Integer.parseInt(s.trim()); } catch(Exception e) { return def; }
     }
     
+    private void rebuildTreeScale() {
+        if(NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || NUtils.getGameUI().ui.sess == null) {
+            return;
+        }
+        int scale = treeDisplayScaleSlider.val;
+        OCache oc = NUtils.getGameUI().ui.sess.glob.oc;
+        synchronized(oc) {
+            for(Gob gob : oc) {
+                if(gob != null && gob.ngob != null && gob.ngob.name != null
+                    && gob.ngob.name.startsWith("gfx/terobjs/trees")
+                    && !gob.ngob.name.endsWith("log") && !gob.ngob.name.endsWith("stump") && !gob.ngob.name.endsWith("oldtrunk")) {
+                    gob.ngob.updateConfigCache(true);
+                    if(scale < 100) {
+                        gob.setattr(new nurgling.gattrr.NTreeDisplayScale(gob, scale / 100.0f));
+                    } else {
+                        gob.delattr(nurgling.gattrr.NTreeDisplayScale.class);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Applies a changed hide-stockpile display size to every hide stockpile already in view.
+     */
+    private void rebuildHideStockpiles() {
+        if(NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || NUtils.getGameUI().ui.sess == null) {
+            return;
+        }
+        int scale = hideStockpileScaleSlider.val;
+        OCache oc = NUtils.getGameUI().ui.sess.glob.oc;
+        synchronized(oc) {
+            for(Gob gob : oc) {
+                if(gob != null && gob.ngob != null && gob.ngob.name != null
+                    && gob.ngob.name.equals(nurgling.NGob.HIDE_STOCKPILE_RES)) {
+                    gob.ngob.updateConfigCache(true);
+                    if(scale < 100) {
+                        gob.setattr(new nurgling.gattrr.NHideStockpileScale(gob, scale / 100.0f));
+                    } else {
+                        gob.delattr(nurgling.gattrr.NHideStockpileScale.class);
+                    }
+                }
+            }
+        }
+    }
+
+    private void rebuildHarvestOverlays() {
+        if(NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || NUtils.getGameUI().ui.sess == null) {
+            return;
+        }
+        NObjHarvestOl.clearLabelCache();
+        OCache oc = NUtils.getGameUI().ui.sess.glob.oc;
+        synchronized(oc) {
+            for(Gob gob : oc) {
+                if(gob != null && gob.ngob != null && gob.ngob.name != null
+                    && HarvestSpecs.forResource(gob.ngob.name) != null) {
+                    gob.ngob.refreshHarvestOverlay();
+                }
+            }
+        }
+    }
+
     /**
      * Rebuilds all cupboard gobs to apply changed settings (shortCupboards, decalsOnTop).
      * Updates NCustomScale attribute and recreates decal overlays.
@@ -675,6 +886,35 @@ public class QoL extends Panel {
                         // Create new overlay with same data - bone offset will be re-evaluated
                         Gob.Overlay newOl = new Gob.Overlay(gob, olid, new OCache.OlSprite(os.res, os.sdt));
                         gob.addol(newOl, false);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Rebuilds all palisade gobs to apply changed settings (shortPalisades).
+     * Updates NCustomScale attribute.
+     */
+    private void rebuildPalisades() {
+        if(NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || NUtils.getGameUI().ui.sess == null) {
+            return;
+        }
+        OCache oc = NUtils.getGameUI().ui.sess.glob.oc;
+        synchronized(oc) {
+            for(Gob gob : oc) {
+                if(gob != null && gob.ngob != null && gob.ngob.name != null
+                    && gob.ngob.name.contains("palisade")) {
+                    // Update config cache to reflect new settings
+                    gob.ngob.updateConfigCache(true);
+
+                    // Update NCustomScale for short palisades
+                    if(shortPalisades.a) {
+                        if(gob.getattr(nurgling.gattrr.NCustomScale.class) == null) {
+                            gob.setattr(new nurgling.gattrr.NCustomScale(gob));
+                        }
+                    } else {
+                        gob.delattr(nurgling.gattrr.NCustomScale.class);
                     }
                 }
             }

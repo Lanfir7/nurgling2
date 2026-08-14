@@ -138,7 +138,7 @@ public class Window extends Widget {
     }
 
     protected Deco makedeco() {
-	return(new DefaultDeco(this.large));
+	return(new nurgling.NWindowDeco(this.large));
     }
 
     protected void added() {
@@ -406,7 +406,7 @@ public class Window extends Widget {
 
 	@Override
 	public void draw(GOut g, boolean strict) {
-		if(deco!=null && deco instanceof DefaultDeco) {
+		if(deco!=null) {
 			if(!this.cancelb.visible)
 				this.cancelb.show();
 
@@ -635,8 +635,13 @@ public class Window extends Widget {
 	return(super.keydown(ev));
     }
 
+    private Runnable reqclose = () -> wdgmsg("close");
+    public Window reqclose(Runnable reqclose) {
+	this.reqclose = reqclose;
+	return(this);
+    }
     public void reqclose() {
-	wdgmsg("close");
+	reqclose.run();
     }
 
     public static interface Animation {
@@ -825,12 +830,23 @@ public class Window extends Widget {
 	return(FadeAnim.trans);
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
 	Window wnd = new Window(new Coord(300, 200), "Inventory", true);
-	new haven.rs.DrawBuffer(haven.rs.Context.getdefault().env(), new Coord(512, 512))
+	boolean[] done = {false};
+	new haven.rs.DrawBuffer(haven.iosys.tk.Acephal.instance().env(), new Coord(512, 512))
 	    .draw(g -> {
 		    wnd.draw(g);
-		    g.getimage(img -> Debug.dumpimage(img, args[0]));
+		    g.getimage(img -> {
+			Debug.dumpimage(img, args[0]);
+			synchronized(done) {
+			    done[0] = true;
+			    done.notifyAll();
+			}
+		    });
 	    });
+	synchronized(done) {
+	    while(!done[0])
+		done.wait();
+	}
     }
 }

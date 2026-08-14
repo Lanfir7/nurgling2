@@ -13,7 +13,6 @@ import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
 
-
 public class HempFarmer implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
@@ -25,7 +24,7 @@ public class HempFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Hemp");
+        nContext.goToArea(Specialisation.SpecName.crop, "Hemp");
 
         NArea hempFibersArea = NContext.findOut("Hemp Fibres", 1);
 
@@ -66,7 +65,7 @@ public class HempFarmer implements Action {
             
             if (hempFibersArea != null)
                 new CollectItemsToPile(NContext.findSpec(field).getRCArea(), hempFibersArea.getRCArea(), new NAlias("hempfibre", "Hemp Fibres")).run(gui);
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/hemp"), new NAlias("Hemp"), false).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/hemp")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

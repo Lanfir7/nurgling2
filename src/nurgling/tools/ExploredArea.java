@@ -28,8 +28,7 @@ import java.util.stream.Stream;
  * and deleted without affecting the main persistent explored area.
  */
 public class ExploredArea {
-    // Global version tracking for cache invalidation (similar to TileHighlight.seq)
-    // Note: This is only used for full reloads/clears, not for per-tile updates
+    // Version tracking for cache invalidation (similar to TileHighlight.seq)
     public static volatile long seq = 0;
     // Separate version tracking for session layer
     public static volatile long sessionSeq = 0;
@@ -38,42 +37,13 @@ public class ExploredArea {
     private static final int MASK_SIZE = GRID_SIZE * GRID_SIZE;
     
     /**
-     * Wrapper for grid mask with per-grid version tracking and cached hasAny.
-     * This allows renderers to only regenerate textures for changed grids.
-     */
-    public static class GridMask {
-        public final boolean[] mask;
-        public volatile long seq;       // Per-grid version, incremented when this grid changes
-        public volatile boolean hasAny; // Cached result of "does this mask have any true values"
-        
-        public GridMask() {
-            this.mask = new boolean[MASK_SIZE];
-            this.seq = 0;
-            this.hasAny = false;
-        }
-        
-        public GridMask(boolean[] existingMask) {
-            this.mask = existingMask;
-            this.seq = 0;
-            this.hasAny = computeHasAny(existingMask);
-        }
-        
-        private static boolean computeHasAny(boolean[] m) {
-            for (boolean b : m) {
-                if (b) return true;
-            }
-            return false;
-        }
-    }
-    
-    /**
      * Key for identifying a grid in a specific segment.
      */
-    public static class GridKey {
-        public final long segmentId;
-        public final Coord gridCoord;  // Grid coordinate at data level 0
+    private static class GridKey {
+        final long segmentId;
+        final Coord gridCoord;  // Grid coordinate at data level 0
         
-        public GridKey(long segmentId, Coord gridCoord) {
+        GridKey(long segmentId, Coord gridCoord) {
             this.segmentId = segmentId;
             this.gridCoord = gridCoord;
         }
@@ -94,11 +64,11 @@ public class ExploredArea {
     
     final NMiniMap miniMap;
     
-    // Main storage: grid-based masks with per-grid seq (persistent)
-    private final ConcurrentHashMap<GridKey, GridMask> gridMasks = new ConcurrentHashMap<>();
+    // Main storage: grid-based masks (persistent)
+    private final ConcurrentHashMap<GridKey, boolean[]> gridMasks = new ConcurrentHashMap<>();
     
-    // Session layer storage: grid-based masks with per-grid seq (temporary, not saved)
-    private final ConcurrentHashMap<GridKey, GridMask> sessionGridMasks = new ConcurrentHashMap<>();
+    // Session layer storage: grid-based masks (temporary, not saved)
+    private final ConcurrentHashMap<GridKey, boolean[]> sessionGridMasks = new ConcurrentHashMap<>();
     
     // Flag indicating if session layer is active
     private volatile boolean sessionActive = false;
@@ -133,8 +103,6 @@ public class ExploredArea {
      * This is called every tick when player moves.
      * Very fast - just sets bits in the mask, no complex Rectangle operations.
      * Also updates session layer if active.
-     * 
-     * Optimization: Uses per-grid seq tracking so only changed grids need texture regeneration.
      */
     public void updateExploredTiles(Coord tileUL, Coord tileBR, long segmentId) {
         // Skip if same as last update
@@ -150,8 +118,8 @@ public class ExploredArea {
         Coord gridUL = tileUL.div(GRID_SIZE);
         Coord gridBR = tileBR.sub(1, 1).div(GRID_SIZE); // Inclusive end
         
-        boolean anyChanged = false;
-        boolean anySessionChanged = false;
+        boolean changed = false;
+        boolean sessionChanged = false;
         
         // Update each affected grid
         for (int gy = gridUL.y; gy <= gridBR.y; gy++) {
@@ -160,15 +128,12 @@ public class ExploredArea {
                 GridKey key = new GridKey(segmentId, gridCoord);
                 
                 // Get or create mask for this grid (main persistent layer)
-                GridMask gridMask = gridMasks.computeIfAbsent(key, k -> new GridMask());
-                boolean[] mask = gridMask.mask;
+                boolean[] mask = gridMasks.computeIfAbsent(key, k -> new boolean[MASK_SIZE]);
                 
                 // Get or create mask for session layer if active
-                GridMask sessionGridMask = null;
                 boolean[] sessionMask = null;
                 if (sessionActive) {
-                    sessionGridMask = sessionGridMasks.computeIfAbsent(key, k -> new GridMask());
-                    sessionMask = sessionGridMask.mask;
+                    sessionMask = sessionGridMasks.computeIfAbsent(key, k -> new boolean[MASK_SIZE]);
                 }
                 
                 // Calculate tile bounds within this grid
@@ -178,9 +143,6 @@ public class ExploredArea {
                 int localBRX = Math.min(GRID_SIZE, tileBR.x - gridTileStart.x);
                 int localBRY = Math.min(GRID_SIZE, tileBR.y - gridTileStart.y);
                 
-                boolean gridChanged = false;
-                boolean sessionGridChanged = false;
-                
                 // Mark tiles as explored
                 for (int y = localULY; y < localBRY; y++) {
                     for (int x = localULX; x < localBRX; x++) {
@@ -188,36 +150,23 @@ public class ExploredArea {
                         // Update main layer
                         if (!mask[idx]) {
                             mask[idx] = true;
-                            gridChanged = true;
+                            changed = true;
                         }
                         // Update session layer if active
                         if (sessionMask != null && !sessionMask[idx]) {
                             sessionMask[idx] = true;
-                            sessionGridChanged = true;
+                            sessionChanged = true;
                         }
                     }
-                }
-                
-                // Update per-grid seq only if this specific grid changed
-                if (gridChanged) {
-                    gridMask.seq++;
-                    gridMask.hasAny = true; // If we added tiles, hasAny is definitely true
-                    anyChanged = true;
-                }
-                if (sessionGridChanged && sessionGridMask != null) {
-                    sessionGridMask.seq++;
-                    sessionGridMask.hasAny = true;
-                    anySessionChanged = true;
                 }
             }
         }
         
-        // Only update global seq on actual changes (for file save tracking)
-        if (anyChanged) {
+        if (changed) {
             seq++;
             NConfig.needExploredUpdate();
         }
-        if (anySessionChanged) {
+        if (sessionChanged) {
             sessionSeq++;
             needSessionUpdate = true;
         }
@@ -229,21 +178,16 @@ public class ExploredArea {
     private static final long SESSION_SAVE_INTERVAL = 5000; // Save every 5 seconds max
     
     /**
-     * Get explored GridMask for a specific grid at base level (dataLevel 0).
+     * Get explored mask for a specific grid at base level (dataLevel 0).
      * Used by MinimapExploredAreaRenderer for rendering.
-     * Very fast - just returns the stored GridMask.
-     * 
-     * GridMask contains:
-     * - mask: the boolean array
-     * - seq: per-grid version for cache invalidation
-     * - hasAny: cached result of whether mask has any true values
+     * Very fast - just returns the stored mask.
      * 
      * @param gridCoord Grid coordinate at base level
      * @param segmentId Segment ID
      * @param dataLevel Must be 0 (aggregation is done by renderer)
-     * @return GridMask or null if no data
+     * @return boolean[] mask or null if no data
      */
-    public GridMask getExploredMaskForGrid(Coord gridCoord, long segmentId, int dataLevel) {
+    public boolean[] getExploredMaskForGrid(Coord gridCoord, long segmentId, int dataLevel) {
         GridKey key = new GridKey(segmentId, gridCoord);
         return gridMasks.get(key);
     }
@@ -257,7 +201,7 @@ public class ExploredArea {
             lastTileUL = null;
             lastTileBR = null;
             lastSegmentId = -1;
-            seq++; // Global seq for full clear
+            seq++;
             NConfig.needExploredUpdate();
         }
     }
@@ -281,7 +225,7 @@ public class ExploredArea {
         lastTileUL = null;
         lastTileBR = null;
         lastSegmentId = -1;
-        sessionSeq++; // Global seq for session clear
+        sessionSeq++;
         // Save session state
         saveSessionToFile();
     }
@@ -293,20 +237,20 @@ public class ExploredArea {
     public void endSession() {
         sessionGridMasks.clear();
         sessionActive = false;
-        sessionSeq++; // Global seq for session clear
+        sessionSeq++;
         // Delete session file
         deleteSessionFile();
     }
     
     /**
-     * Get session GridMask for a specific grid at base level (dataLevel 0).
+     * Get session mask for a specific grid at base level (dataLevel 0).
      * Used by MinimapExploredAreaRenderer for rendering session overlay.
      * 
      * @param gridCoord Grid coordinate at base level
      * @param segmentId Segment ID
-     * @return GridMask or null if no data or session not active
+     * @return boolean[] mask or null if no data or session not active
      */
-    public GridMask getSessionMaskForGrid(Coord gridCoord, long segmentId) {
+    public boolean[] getSessionMaskForGrid(Coord gridCoord, long segmentId) {
         if (!sessionActive) {
             return null;
         }
@@ -329,115 +273,56 @@ public class ExploredArea {
         }
     }
     
-    private volatile boolean loadingInProgress = false;
-    
-    private static final java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ExecutorService> loadExecutorRef =
-        new java.util.concurrent.atomic.AtomicReference<>(createLoadExecutor());
-
-    private static java.util.concurrent.ExecutorService createLoadExecutor() {
-        return java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "ExploredArea-Loader");
-            t.setDaemon(true);
-            t.setPriority(Thread.MIN_PRIORITY);
-            return t;
-        });
-    }
-
-    public boolean isLoadingInProgress() {
-        return loadingInProgress;
-    }
-
-    public static void resetExecutor() {
-        java.util.concurrent.ExecutorService old = loadExecutorRef.getAndSet(createLoadExecutor());
-        if (old != null) old.shutdownNow();
-    }
-    
-    public void reloadFromFileAsync() {
-        loadingInProgress = true;
-        java.util.concurrent.ExecutorService ex = loadExecutorRef.get();
-        if (ex == null || ex.isShutdown()) return;
-        ex.submit(() -> {
-            try {
-                reloadFromFileInternal();
-            } finally {
-                loadingInProgress = false;
-            }
-        });
-    }
-    
     /**
-     * Reload explored area data from file (synchronous version).
+     * Reload explored area data from file.
      * Call this after profile initialization to load profile-specific data.
      * Merges file data with any in-memory data (in case exploration happened before profile init).
      */
     public void reloadFromFile() {
-        reloadFromFileInternal();
-    }
-    
-    /**
-     * Internal implementation of file reload.
-     * Builds a complete merged dataset in a temp map, then swaps it in atomically
-     * to avoid race conditions with the render thread reading gridMasks.
-     */
-    private void reloadFromFileInternal() {
-        Map<GridKey, GridMask> currentData = new HashMap<>(gridMasks);
+        // Save current in-memory data before loading
+        Map<GridKey, boolean[]> currentData = new HashMap<>(gridMasks);
         
-        Map<GridKey, GridMask> loaded = new HashMap<>();
-        loadFromFileInto(loaded);
+        // Load from file
+        gridMasks.clear();
+        loadFromFile();
         
-        for (Map.Entry<GridKey, GridMask> entry : currentData.entrySet()) {
+        // Merge in-memory data back (OR operation - keep explored tiles from both)
+        for (Map.Entry<GridKey, boolean[]> entry : currentData.entrySet()) {
             GridKey key = entry.getKey();
-            GridMask memoryGridMask = entry.getValue();
-            boolean[] memoryMask = memoryGridMask.mask;
+            boolean[] memoryMask = entry.getValue();
             
-            GridMask fileGridMask = loaded.get(key);
-            if (fileGridMask == null) {
-                loaded.put(key, memoryGridMask);
+            boolean[] fileMask = gridMasks.get(key);
+            if (fileMask == null) {
+                // Grid only in memory, add it
+                gridMasks.put(key, memoryMask);
             } else {
-                boolean changed = false;
+                // Merge: OR the masks
                 for (int i = 0; i < MASK_SIZE; i++) {
-                    if (memoryMask[i] && !fileGridMask.mask[i]) {
-                        fileGridMask.mask[i] = true;
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    fileGridMask.seq++;
-                    fileGridMask.hasAny = true;
+                    fileMask[i] = fileMask[i] || memoryMask[i];
                 }
             }
         }
         
-        gridMasks.clear();
-        gridMasks.putAll(loaded);
-        
-        ConcurrentHashMap<GridKey, GridMask> newSession = new ConcurrentHashMap<>();
-        loadSessionFromFileInto(newSession);
+        // Also reload session data (session doesn't need merge - it's temporary)
         sessionGridMasks.clear();
-        sessionGridMasks.putAll(newSession);
+        loadSessionFromFile();
         
         seq++;
-        
-        nurgling.overlays.map.MinimapExploredAreaRenderer.clearCaches();
     }
     
     /**
-     * Load explored area from JSON file into the provided map.
+     * Load explored area from JSON file.
      */
-    private void loadFromFileInto(Map<GridKey, GridMask> target) {
+    private void loadFromFile() {
+        // Use profile-specific config from NCore if available, otherwise fallback to global
         NConfig config = getConfig();
-        File file = new File(config.getExploredPath());
-        if (!file.exists()) {
-            return;
-        }
-        
+
         try {
-            String content = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())), StandardCharsets.UTF_8);
-            
-            if (content.trim().isEmpty()) {
+            String content = NFileUtils.readWithBackupFallback(config.getExploredPath());
+            if (content == null || content.isEmpty()) {
                 return;
             }
-            
+
             JSONObject json = new JSONObject(content);
             if (!json.has("grids")) {
                 return;
@@ -453,17 +338,16 @@ public class ExploredArea {
                 
                 GridKey key = new GridKey(segmentId, new Coord(gx, gy));
                 
+                // Decode RLE compressed mask
                 String rle = gridJson.getString("mask");
                 boolean[] mask = decodeRLE(rle);
                 
                 if (mask != null) {
-                    target.put(key, new GridMask(mask));
-                }
-                
-                if (i % 200 == 199) {
-                    Thread.yield();
+                    gridMasks.put(key, mask);
                 }
             }
+            
+            seq++;
         } catch (Exception e) {
             // Ignore load errors
         }
@@ -475,12 +359,12 @@ public class ExploredArea {
     public JSONObject toJson() {
         JSONArray gridsArray = new JSONArray();
         
-        for (Map.Entry<GridKey, GridMask> entry : gridMasks.entrySet()) {
+        for (Map.Entry<GridKey, boolean[]> entry : gridMasks.entrySet()) {
             GridKey key = entry.getKey();
-            GridMask gridMask = entry.getValue();
+            boolean[] mask = entry.getValue();
             
-            // Skip empty masks (use cached hasAny for efficiency)
-            if (!gridMask.hasAny) {
+            // Skip empty masks
+            if (!hasAnyExploredTiles(mask)) {
                 continue;
             }
             
@@ -490,7 +374,7 @@ public class ExploredArea {
             gridJson.put("gy", key.gridCoord.y);
             
             // Encode mask with RLE compression
-            gridJson.put("mask", encodeRLE(gridMask.mask));
+            gridJson.put("mask", encodeRLE(mask));
             
             gridsArray.put(gridJson);
         }
@@ -506,12 +390,12 @@ public class ExploredArea {
     private JSONObject sessionToJson() {
         JSONArray gridsArray = new JSONArray();
         
-        for (Map.Entry<GridKey, GridMask> entry : sessionGridMasks.entrySet()) {
+        for (Map.Entry<GridKey, boolean[]> entry : sessionGridMasks.entrySet()) {
             GridKey key = entry.getKey();
-            GridMask gridMask = entry.getValue();
+            boolean[] mask = entry.getValue();
             
-            // Skip empty masks (use cached hasAny for efficiency)
-            if (!gridMask.hasAny) {
+            // Skip empty masks
+            if (!hasAnyExploredTiles(mask)) {
                 continue;
             }
             
@@ -521,7 +405,7 @@ public class ExploredArea {
             gridJson.put("gy", key.gridCoord.y);
             
             // Encode mask with RLE compression
-            gridJson.put("mask", encodeRLE(gridMask.mask));
+            gridJson.put("mask", encodeRLE(mask));
             
             gridsArray.put(gridJson);
         }
@@ -538,33 +422,27 @@ public class ExploredArea {
     private void saveSessionToFile() {
         NConfig config = getConfig();
         try {
-            FileWriter f = new FileWriter(config.getSessionExploredPath(), StandardCharsets.UTF_8);
-            sessionToJson().write(f);
-            f.close();
+            NFileUtils.writeAtomically(config.getSessionExploredPath(), sessionToJson().toString());
         } catch (IOException e) {
             // Ignore save errors
         }
     }
     
     /**
-     * Load session data from file into the provided target map.
+     * Load session data from file.
      */
-    private void loadSessionFromFileInto(Map<GridKey, GridMask> target) {
+    private void loadSessionFromFile() {
         NConfig config = getConfig();
-        File file = new File(config.getSessionExploredPath());
-        if (!file.exists()) {
-            return;
-        }
-        
+
         try {
-            String content = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())), StandardCharsets.UTF_8);
-            
-            if (content.trim().isEmpty()) {
+            String content = NFileUtils.readWithBackupFallback(config.getSessionExploredPath());
+            if (content == null || content.isEmpty()) {
                 return;
             }
-            
+
             JSONObject json = new JSONObject(content);
             
+            // Load active state
             if (json.has("active")) {
                 sessionActive = json.getBoolean("active");
             }
@@ -583,11 +461,12 @@ public class ExploredArea {
                 
                 GridKey key = new GridKey(segmentId, new Coord(gx, gy));
                 
+                // Decode RLE compressed mask
                 String rle = gridJson.getString("mask");
                 boolean[] mask = decodeRLE(rle);
                 
                 if (mask != null) {
-                    target.put(key, new GridMask(mask));
+                    sessionGridMasks.put(key, mask);
                 }
             }
             
@@ -610,6 +489,16 @@ public class ExploredArea {
         } catch (Exception e) {
             // Ignore delete errors
         }
+    }
+    
+    /**
+     * Check if mask has any explored tiles.
+     */
+    private boolean hasAnyExploredTiles(boolean[] mask) {
+        for (boolean tile : mask) {
+            if (tile) return true;
+        }
+        return false;
     }
     
     /**
@@ -732,9 +621,9 @@ public class ExploredArea {
                 }
                 
                 // Then, merge in-memory data
-                for (Map.Entry<GridKey, GridMask> entry : gridMasks.entrySet()) {
+                for (Map.Entry<GridKey, boolean[]> entry : gridMasks.entrySet()) {
                     GridKey key = entry.getKey();
-                    boolean[] memoryMask = entry.getValue().mask;
+                    boolean[] memoryMask = entry.getValue();
                     
                     boolean[] existingMask = mergedData.get(key);
                     if (existingMask == null) {
@@ -752,32 +641,22 @@ public class ExploredArea {
                 
                 // Write merged result to file
                 JSONObject doc = toJsonFromData(mergedData);
-                try (FileWriter f = new FileWriter(filePath, StandardCharsets.UTF_8)) {
-                    doc.write(f);
-                }
+                NFileUtils.writeAtomically(filePath, doc.toString());
                 
                 // Update in-memory data with merged result (so we have the latest data)
                 // This is important to prevent re-saving stale data
                 for (Map.Entry<GridKey, boolean[]> entry : mergedData.entrySet()) {
                     GridKey key = entry.getKey();
                     boolean[] mergedMask = entry.getValue();
-                    GridMask currentGridMask = gridMasks.get(key);
+                    boolean[] currentMask = gridMasks.get(key);
                     
-                    if (currentGridMask == null) {
+                    if (currentMask == null) {
                         // Grid from disk that we didn't have
-                        gridMasks.put(key, new GridMask(mergedMask));
+                        gridMasks.put(key, mergedMask);
                     } else {
                         // Update our mask with merged data
-                        boolean changed = false;
                         for (int i = 0; i < MASK_SIZE; i++) {
-                            if (mergedMask[i] && !currentGridMask.mask[i]) {
-                                currentGridMask.mask[i] = true;
-                                changed = true;
-                            }
-                        }
-                        if (changed) {
-                            currentGridMask.seq++;
-                            currentGridMask.hasAny = true;
+                            currentMask[i] = mergedMask[i];
                         }
                     }
                 }
@@ -802,9 +681,7 @@ public class ExploredArea {
      * Simple save without merge (fallback when locking fails).
      */
     private void saveWithoutMerge(String filePath) throws IOException {
-        try (FileWriter f = new FileWriter(filePath, StandardCharsets.UTF_8)) {
-            toJson().write(f);
-        }
+        NFileUtils.writeAtomically(filePath, toJson().toString());
     }
     
     /**
@@ -812,23 +689,14 @@ public class ExploredArea {
      */
     private Map<GridKey, boolean[]> readFromDisk(String filePath) {
         Map<GridKey, boolean[]> result = new HashMap<>();
-        
-        File file = new File(filePath);
-        if (!file.exists()) {
-            return result;
-        }
-        
+
         try {
-            StringBuilder contentBuilder = new StringBuilder();
-            try (Stream<String> stream = Files.lines(Paths.get(file.getAbsolutePath()), StandardCharsets.UTF_8)) {
-                stream.forEach(s -> contentBuilder.append(s).append("\n"));
-            }
-            
-            if (contentBuilder.length() == 0) {
+            String content = NFileUtils.readWithBackupFallback(filePath);
+            if (content == null || content.isEmpty()) {
                 return result;
             }
-            
-            JSONObject json = new JSONObject(contentBuilder.toString());
+
+            JSONObject json = new JSONObject(content);
             if (!json.has("grids")) {
                 return result;
             }
@@ -869,11 +737,7 @@ public class ExploredArea {
             boolean[] mask = entry.getValue();
             
             // Skip empty masks
-            boolean hasAny = false;
-            for (boolean b : mask) {
-                if (b) { hasAny = true; break; }
-            }
-            if (!hasAny) {
+            if (!hasAnyExploredTiles(mask)) {
                 continue;
             }
             
@@ -893,4 +757,3 @@ public class ExploredArea {
         return doc;
     }
 }
-

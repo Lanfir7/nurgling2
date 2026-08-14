@@ -34,14 +34,14 @@ import nurgling.i18n.L10n;
 
 public class WoundWnd extends Widget {
     public static final Text.Foundry namef = new Text.Foundry(Text.serif.deriveFont(java.awt.Font.BOLD), 16).aa(true);
-    public final Widget woundbox;
-    public final WoundList wounds;
+    public Widget woundbox;
+    public WoundList wounds;
     public Wound.Info wound;
 
     @RName("wounds")
     public static class $_ implements Factory {
 	public Widget create(UI ui, Object[] args) {
-	    return(new WoundWnd());
+	    return(new nurgling.NWoundWnd());
 	}
     }
 
@@ -60,15 +60,18 @@ public class WoundWnd extends Widget {
     }
 
     public static class WoundPagina extends ItemInfo.Tip {
-	public final String str;
+	public final RichText.Document doc;
 
-	public WoundPagina(Owner owner, String str) {
+	public WoundPagina(Owner owner, RichText.Document doc) {
 	    super(owner);
-	    this.str = str;
+	    this.doc = doc;
+	}
+	public WoundPagina(Owner owner, Resource.Pagina pag) {
+	    this(owner, resdoc(pag.getres(), pag.text));
 	}
 
 	public void layout(Layout l) {
-	    BufferedImage t = ifnd.render(str, l.width).img;
+	    BufferedImage t = ifnd.render(doc, l.width).img;
 	    if(t != null) {
 		l.cmp.add(t, Coord.of(0, l.cmp.sz.y));
 		l.cmp.sz = l.cmp.sz.add(0, UI.scale(10));
@@ -106,7 +109,7 @@ public class WoundWnd extends Widget {
 		List<ItemInfo> info = ItemInfo.buildinfo(this, rawinfo);
 		Resource.Pagina pag = res.get().layer(Resource.pagina);
 		if(pag != null)
-		    info.add(new WoundPagina(this, pag.text));
+		    info.add(new WoundPagina(this, pag));
 		this.info = info;
 	    }
 	    return(info);
@@ -143,11 +146,11 @@ public class WoundWnd extends Widget {
 	}
 
 	public void tick(double dt) {
-	    super.tick(dt);
 	    try {
 		if(this.info != wound().info())
 		    set(() -> new TexI(renderinfo(sz.x - Scrollbar.width - (marg().x * 2))));
 	    } catch(Loading l) {}
+	    super.tick(dt);
 	}
 
 	public void drawbg(GOut g) {}
@@ -176,7 +179,7 @@ public class WoundWnd extends Widget {
     public static class $wound implements Factory {
 	public Widget create(UI ui, Object[] args) {
 	    int id = Utils.iv(args[0]);
-	    return(new WoundBox(id));
+	    return(new nurgling.NWoundBox(id));
 	}
     }
 
@@ -189,8 +192,12 @@ public class WoundWnd extends Widget {
 	    }
 	};
 
-	private WoundList(Coord sz) {
+	protected WoundList(Coord sz) {
 	    super(sz, attrf.height() + UI.scale(2));
+	}
+
+	protected WoundList(Coord sz, int itemh) {
+	    super(sz, itemh);
 	}
 
 	protected List<Wound> items() {return(wounds);}
@@ -264,7 +271,7 @@ public class WoundWnd extends Widget {
 		QuickInfo qdata = getqdat(info);
 		int nw = sz.x;
 		if(qdata != null) {
-		    qd = adda(qdata.qwdg(sz.y), sz.x - UI.scale(1), sz.y / 2, 1.0, 0.5);
+		    qd = adda(qdata.qwdg(sz.y), sz.x - UI.scale(6), sz.y / 2, 1.0, 0.5);
 		    nw = qd.c.x - UI.scale(5);
 		}
 		int x = w.level * itemh;
@@ -343,6 +350,10 @@ public class WoundWnd extends Widget {
     }
 
     public WoundWnd() {
+	buildLayout();
+    }
+
+    protected void buildLayout() {
 	Widget prev;
 
 	prev = add(CharWnd.settip(new Img(catf.render(L10n.get("char.wound.title")).tex()), "gfx/hud/chr/tips/wounds"), 0, 0);

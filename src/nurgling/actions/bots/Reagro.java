@@ -1,13 +1,11 @@
 package nurgling.actions.bots;
 
-import haven.Coord;
 import haven.Fightview;
 import haven.Gob;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.Results;
-import nurgling.tasks.GetCurs;
 import nurgling.tasks.WaitAnyEscaper;
 import nurgling.tasks.WaitBattleWindow;
 import nurgling.tasks.WaitRelationState;
@@ -17,8 +15,6 @@ import nurgling.tools.NParser;
 
 import java.util.ArrayList;
 
-import static haven.OCache.posres;
-
 public class Reagro implements Action {
     boolean isEnabled = true;
 
@@ -27,15 +23,14 @@ public class Reagro implements Action {
         while (isEnabled) {
             NUtils.addTask(new WaitBattleWindow());
             ArrayList<Long> ids = new ArrayList<>();
-            synchronized (NUtils.getGameUI().fv.lsrel) {
-                for (Fightview.Relation rel : NUtils.getGameUI().fv.lsrel) {
-                    if (rel.gobid >= 0) {
-                        ids.add(rel.gobid);
-                    }
-                    if (rel.gst != 1) {
-                        NUtils.getGameUI().fv.wdgmsg("give", (int) rel.gobid, 1);
-                        NUtils.addTask(new WaitRelationState(rel.gobid, 1));
-                    }
+            ArrayList<Fightview.Relation> rels = new ArrayList<>(NUtils.getGameUI().fv.lsrel);
+            for (Fightview.Relation rel : rels) {
+                if (rel.gobid >= 0) {
+                    ids.add(rel.gobid);
+                }
+                if (rel.gst != 1) {
+                    NUtils.getGameUI().fv.wdgmsg("give", (int) rel.gobid, 1);
+                    NUtils.addTask(new WaitRelationState(rel.gobid, 1));
                 }
             }
             WaitAnyEscaper wae = new WaitAnyEscaper(ids);

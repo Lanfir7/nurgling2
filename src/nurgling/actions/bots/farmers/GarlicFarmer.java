@@ -24,7 +24,7 @@ public class GarlicFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Garlic");
+        nContext.goToArea(Specialisation.SpecName.crop, "Garlic");
 
         ArrayList<NArea.Specialisation> req = new ArrayList<>();
         req.add(field);
@@ -60,7 +60,7 @@ public class GarlicFarmer implements Action {
             if (NContext.findSpec(garlicAsSeed) != null)
                 new CollectItemsToPile(NContext.findSpec(field).getRCArea(), NContext.findSpec(garlicAsSeed).getRCArea(), new NAlias("items/garlic", "Garlic")).run(gui);
 
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(garlicAsSeed), new NAlias("plants/garlic"), new NAlias("Garlic"), true).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(garlicAsSeed), new NAlias("plants/garlic")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

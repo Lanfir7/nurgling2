@@ -9,6 +9,7 @@ import nurgling.navigation.ChunkPath;
 import nurgling.areas.NArea;
 import nurgling.overlays.map.MinimapChunkNavRenderer;
 import nurgling.overlays.map.MinimapClaimRenderer;
+import nurgling.overlays.map.MinimapDiscoveryRenderer;
 import nurgling.overlays.map.MinimapExploredAreaRenderer;
 import nurgling.tools.ExploredArea;
 import nurgling.tools.NParser;
@@ -52,6 +53,18 @@ NMiniMap extends MiniMap {
     public boolean showGemstoneIcons = true; // Видимость маркеров драгоценных камней
     public boolean showAnimalIcons = true; // Видимость маркеров животных (ObjectTracker + БД)
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
+
+    // Cached waypoint number labels to avoid per-frame Text.render() allocations
+    private static Text[] waypointNumCache = new Text[128];
+    public static Text getWaypointLabel(int num) {
+        int idx = num - 1;
+        if(idx >= 0 && idx < waypointNumCache.length) {
+            if(waypointNumCache[idx] == null)
+                waypointNumCache[idx] = Text.render(String.valueOf(num));
+            return waypointNumCache[idx];
+        }
+        return Text.render(String.valueOf(num));
+    }
 
     private static final Coord2d sgridsz = new Coord2d(new Coord(100,100));
 
@@ -250,6 +263,9 @@ NMiniMap extends MiniMap {
         // Render ChunkNav exploration overlay (checks config internally)
         MinimapChunkNavRenderer.renderChunkNav(this, g);
 
+        // Render undiscovered-LP gob markers (shares NConfig.Key.lpassistent toggle with NLPassistant)
+        MinimapDiscoveryRenderer.renderDiscoveryMarkers(this, g);
+
         boolean playerSegment = (sessloc != null) && ((curloc == null) || (sessloc.seg.id == curloc.seg.id));
         // Show grid when zoomed in enough (scale >= 0.25, i.e. not too far out)
         if(currentScale >= 0.25f && (Boolean) NConfig.get(NConfig.Key.showGrid)) {drawgrid(g);}
@@ -314,21 +330,22 @@ NMiniMap extends MiniMap {
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || sessloc == null || dloc == null) return;
         
-        // Find the Forager window
-        nurgling.widgets.bots.Forager foragerWnd = null;
+        // Find a PathRecordable window (Forager or TrufflePigHunter)
+        nurgling.widgets.bots.PathRecordable pathWnd = null;
         for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-            if(wdg instanceof nurgling.widgets.bots.Forager) {
-                foragerWnd = (nurgling.widgets.bots.Forager) wdg;
+            if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
+                pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
                 break;
             }
         }
-        
-        if(foragerWnd == null) {
-            return;
+
+        // Get current path: from bot settings window, or from active bot execution
+        nurgling.routes.ForagerPath recordingPath = null;
+        if(pathWnd != null) {
+            recordingPath = pathWnd.getCurrentLoadedPath();
+        } else if((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.showBotPathOnMinimap) && gui.activeBotPath != null) {
+            recordingPath = gui.activeBotPath;
         }
-        
-        // Get current path (either recording or loaded)
-        nurgling.routes.ForagerPath recordingPath = foragerWnd.getCurrentLoadedPath();
         if(recordingPath == null || recordingPath.waypoints.isEmpty()) {
             return;
         }
@@ -375,9 +392,7 @@ NMiniMap extends MiniMap {
                 
                 // Draw black number
                 g.chcolor(0, 0, 0, 255); // Black text
-                Text numText = Text.render(String.valueOf(num));
-                g.aimage(numText.tex(), c, 0.5, 0.5);
-                numText.dispose();
+                g.aimage(getWaypointLabel(num).tex(), c, 0.5, 0.5);
             }
             num++;
         }
@@ -892,6 +907,7 @@ NMiniMap extends MiniMap {
             display = nd;
             dseg = loc.seg;
             dlvl = zoomlevel;
+            dmag = maglevel;
             dgext = next;
             dtext = Area.sized(next.ul.mul(gridTileSize), next.sz().mul(gridTileSize));
         }
@@ -904,7 +920,7 @@ NMiniMap extends MiniMap {
                 if(currentLevelCache != null && currentLevelCache.display != null) {
                     for(Coord c : dgext) {
                         if(currentLevelCache.display[dgext.ri(c)] == null) {
-                            currentLevelCache.display[dgext.ri(c)] = new DisplayGrid(dloc.seg, c, dataLevel, dloc.seg.grid(dataLevel, c.mul(1 << dataLevel)));
+                            currentLevelCache.display[dgext.ri(c)] = new DisplayGrid(this, dloc.seg, c, dataLevel, dloc.seg.grid(dataLevel, c.mul(1 << dataLevel)));
                         }
                     }
                     display = currentLevelCache.display;
@@ -928,7 +944,7 @@ NMiniMap extends MiniMap {
                     int loaded = 0;
                     for(Coord c : nextArea) {
                         if(loaded++ > 4) break; // Don't load too many at once to avoid lag
-                        nextDisplay[nextArea.ri(c)] = new DisplayGrid(dloc.seg, c, nextLevel, dloc.seg.grid(nextLevel, c.mul(1 << nextLevel)));
+                        nextDisplay[nextArea.ri(c)] = new DisplayGrid(this, dloc.seg, c, nextLevel, dloc.seg.grid(nextLevel, c.mul(1 << nextLevel)));
                     }
                     nextLevelCache = new LevelCache(nextDisplay, nextArea, nextLevel);
                 }
@@ -951,7 +967,7 @@ NMiniMap extends MiniMap {
                     int loaded = 0;
                     for(Coord c : prevArea) {
                         if(loaded++ > 4) break; // Don't load too many at once
-                        prevDisplay[prevArea.ri(c)] = new DisplayGrid(dloc.seg, c, prevLevel, dloc.seg.grid(prevLevel, c.mul(1 << prevLevel)));
+                        prevDisplay[prevArea.ri(c)] = new DisplayGrid(this, dloc.seg, c, prevLevel, dloc.seg.grid(prevLevel, c.mul(1 << prevLevel)));
                     }
                     previousLevelCache = new LevelCache(prevDisplay, prevArea, prevLevel);
                 }
@@ -1142,6 +1158,10 @@ NMiniMap extends MiniMap {
     @Override
     public void mousemove(MouseMoveEvent ev) {
         super.mousemove(ev);
+        // Base class drag uses private d2lscale which doesn't match our zoom - recompute with scalef()
+        if(drag != null && dragging) {
+            curloc = new Location(curloc.seg, dmc.add(dsc.sub(ev.c).mul(scalef())));
+        }
         if((Boolean)NConfig.get(NConfig.Key.showTerrainName)) {
             updateCurrentTerrainName(ev.c);
         }
@@ -1164,8 +1184,8 @@ NMiniMap extends MiniMap {
         }
         
         // Update zoomlevel for compatibility with base class
-        zoomlevel = (int)(Math.log(1.0f / targetScale) / Math.log(2) * 10);
-        if(targetScale > 1.0f) zoomlevel = 0;
+        // Must be small (0-5) since base class uses it in bit shifts: 1 << zoomlevel
+        zoomlevel = Utils.clip((int)(Math.log(1.0 / targetScale) / Math.log(2)), 0, 5);
         
         return(true);
     }
@@ -1180,6 +1200,23 @@ NMiniMap extends MiniMap {
         int dataLevel = getDataLevel();
         float scaleFactor = getScaleFactor();
         return(UI.unscale((float)(1 << dataLevel) / scaleFactor));
+    }
+
+    @Override
+    public Coord xlate(Location loc) {
+        Location dloc = this.dloc;
+        if((dloc == null) || (dloc.seg != loc.seg))
+            return(null);
+        return(loc.tc.sub(dloc.tc).div(scalef()).add(sz.div(2)));
+    }
+
+    @Override
+    public Location xlate(Coord sc) {
+        Location dloc = this.dloc;
+        if(dloc == null)
+            return(null);
+        Coord tc = sc.sub(sz.div(2)).mul(scalef()).add(dloc.tc);
+        return(new Location(dloc.seg, tc));
     }
 
     @Override
@@ -1523,6 +1560,13 @@ NMiniMap extends MiniMap {
                     mark.draw(g, markPos);
                 }
                 
+                // This custom drawmarkers draws at markPos instead of mark.sc, but
+                // MiniMap.mousehover() still hit-tests hover against mark.sc (and skips
+                // markers whose sc is null). Keep sc in sync with where we actually draw
+                // so marker hover -- e.g. thingwall province lines -- works.
+                mark.sc = markPos;
+                mark.draw(g, markPos);
+
                 // Draw name for quest giver markers (bush/bumling)
                 if(mark.m instanceof MapFile.SMarker) {
                     MapFile.SMarker sm = (MapFile.SMarker)mark.m;
@@ -1533,7 +1577,7 @@ NMiniMap extends MiniMap {
                     }
 
                     if((Boolean)NConfig.get(NConfig.Key.showThingwallNames) && NParser.checkName(sm.res.name, "thingwall") && mark.m.nm != null && !mark.m.nm.isEmpty()) {
-                        Text nameText = NStyle.gmeter.render(mark.m.nm);
+                        Text nameText = NStyle.cmeter.render(mark.m.nm);
                         Coord textPos = markPos.add(0, UI.scale(10));
                         g.aimage(nameText.tex(), textPos, 0.5, 0);
                     }
@@ -1727,7 +1771,9 @@ NMiniMap extends MiniMap {
             Coord tc = c.sub(sz.div(2)).mul(scalef()).add(dloc.tc);
             DisplayMarker mark = markerat(tc);
             if(mark != null) {
-                return(mark.tip);
+                try {
+                    return(new TexI(mark.tooltip()));
+                } catch(Loading l) {}
             }
 
             // Get terrain type tooltip
@@ -2738,17 +2784,17 @@ NMiniMap extends MiniMap {
         if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
-                // Find the Forager window
-                nurgling.widgets.bots.Forager foragerWnd = null;
+                // Find a PathRecordable window (Forager or TrufflePigHunter)
+                nurgling.widgets.bots.PathRecordable pathWnd = null;
                 for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-                    if(wdg instanceof nurgling.widgets.bots.Forager) {
-                        foragerWnd = (nurgling.widgets.bots.Forager) wdg;
+                    if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
+                        pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
                         break;
                     }
                 }
-                
+
                 // If recording, consume the event to prevent player movement
-                if(foragerWnd != null && foragerWnd.isRecording()) {
+                if(pathWnd != null && pathWnd.isRecording()) {
                     return true; // Consume mousedown to prevent movement
                 }
             }
@@ -2828,6 +2874,17 @@ NMiniMap extends MiniMap {
             }
         }
         
+
+        // Check for right-click on an undiscovered-LP marker. Our marker isn't a real
+        // DisplayIcon, so without this check, base MiniMap.mousedown() falls through to its own
+        // clickloc(..., press=true), which fires mvclick() with no gob immediately on press -
+        // walking the player to the coarse clicked tile before our (correct, gob-precise)
+        // mouseup handler ever runs. Consume here; actual handling happens in mouseup.
+        if(ev.b == 3 && dloc != null && sessloc != null) {
+            if(MinimapDiscoveryRenderer.gobAt(this, ev.c) != null) {
+                return true;
+            }
+        }
         return super.mousedown(ev);
     }
 
@@ -2837,24 +2894,24 @@ NMiniMap extends MiniMap {
         if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
-                // Find the Forager window
-                nurgling.widgets.bots.Forager foragerWnd = null;
+                // Find a PathRecordable window (Forager or TrufflePigHunter)
+                nurgling.widgets.bots.PathRecordable pathWnd = null;
                 for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-                    if(wdg instanceof nurgling.widgets.bots.Forager) {
-                        foragerWnd = (nurgling.widgets.bots.Forager) wdg;
+                    if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
+                        pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
                         break;
                     }
                 }
-                
-                if(foragerWnd != null && foragerWnd.isRecording()) {
+
+                if(pathWnd != null && pathWnd.isRecording()) {
                     try {
                         // Get the MiniMap.Location at clicked position
                         MiniMap.Location clickLoc = xlate(ev.c);
-                        
+
                         if(clickLoc != null && sessloc != null && clickLoc.seg.id == sessloc.seg.id) {
                             // Create ForagerWaypoint from MiniMap.Location
                             nurgling.routes.ForagerWaypoint wp = new nurgling.routes.ForagerWaypoint(clickLoc);
-                            foragerWnd.addWaypointToRecording(wp);
+                            pathWnd.addWaypointToRecording(wp);
                         }
                     } catch(Loading e) {
                         // Grid not loaded, ignore
@@ -3014,6 +3071,36 @@ NMiniMap extends MiniMap {
                         }
                         return true;
                     }
+                }
+            }
+        }
+        // Handle right-click release on an undiscovered-LP marker - open the same flower
+        // menu a real gob icon would. mvclick() derives its click destination from the clicked
+        // MINIMAP TILE (coarse, tile-granularity) rather than the gob itself, which walked the
+        // player near the tree but not precisely to it, and didn't reliably register as an
+        // interact-click on arrival. Use the same fix NMapView already applies for the analogous
+        // "clicked a small floating icon, redirect to the actual gob" case (its
+        // findClickThroughIconGob() handling): send the gob's own exact position as the click
+        // destination instead of the imprecise clicked location.
+        if(ev.b == 3 && dloc != null && sessloc != null) {
+            Gob gob = MinimapDiscoveryRenderer.gobAt(this, ev.c);
+            if(gob != null) {
+                NGameUI gui = NUtils.getGameUI();
+                if(gui != null && gui.map != null) {
+                    Coord pres = gob.rc.floor(OCache.posres);
+                    // Register this as a real gob click the same way MapView.Click.hit() does for a
+                    // 3D-world click. LpExplorer.recentHarvestClick() gates discovery recording on
+                    // map.clickedGob being a freshly-clicked harvestable gob; the raw wdgmsg below
+                    // goes straight to the server and never touches clickedGob, so without this the
+                    // gate reads whatever stale gob the last 3D click left there - and the harvest
+                    // gets recorded only if that happened to be harvestable and recent.
+                    gui.map.clickedGob = new MapView.ClickedGob(gob, ev.b);
+                    // ui.mc (current absolute mouse position) rather than Coord.z, so a resulting
+                    // flower menu opens where the cursor actually is - matches what
+                    // MiniMap.mvclick() itself falls back to when its own mc param is null.
+                    gui.map.wdgmsg("click", ui.mc, pres, ev.b, ui.modflags(),
+                        0, (int) gob.id, pres, 0, -1);
+                    return true;
                 }
             }
         }

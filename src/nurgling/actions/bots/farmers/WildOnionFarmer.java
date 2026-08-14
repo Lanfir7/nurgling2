@@ -24,12 +24,13 @@ public class WildOnionFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Wild Onion");
+        nContext.goToArea(Specialisation.SpecName.crop, "Wild Onion");
 
         ArrayList<NArea.Specialisation> req = new ArrayList<>();
         req.add(field);
         req.add(wildOnionAsSeed);
         ArrayList<NArea.Specialisation> opt = new ArrayList<>();
+        opt.add(trough);
         opt.add(swill);
 
         if (new Validator(req, opt).run(gui).IsSuccess()) {
@@ -58,7 +59,7 @@ public class WildOnionFarmer implements Action {
             if (NContext.findSpec(wildOnionAsSeed) != null)
                 new CollectItemsToPile(NContext.findSpec(field).getRCArea(), NContext.findSpec(wildOnionAsSeed).getRCArea(), new NAlias("items/preonion", "Wild Onion")).run(gui);
 
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(wildOnionAsSeed), new NAlias("plants/wildonion"), new NAlias("Wild Onion"), true).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(wildOnionAsSeed), new NAlias("plants/wildonion")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

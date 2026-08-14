@@ -39,9 +39,10 @@ import static haven.Inventory.invsq;
 public class NGameUI extends GameUI
 {
     public boolean nomadMod = false;
-    NBotsMenu botsMenu;
+    public NBotsMenu botsMenu;
     public NAlarmWdg alarmWdg;
     public StarvationAlertWidget starvationAlertWidget;
+    public AutoLogoutWidget autoLogoutWidget;
     public NQuestInfo questinfo;
     public NGUIInfo guiinfo;
     public NSearchItem itemsForSearch = null;
@@ -156,7 +157,9 @@ public class NGameUI extends GameUI
         animalMarkerMacroTracker = null;
         msg("Макрос: маркеры животных выключен.");
     }
-    
+
+    public nurgling.routes.ForagerPath activeBotPath = null;
+
     // Local storage for ring settings
     public IconRingConfig iconRingConfig;
     private boolean ringSettingsApplied = false;
@@ -288,11 +291,13 @@ public class NGameUI extends GameUI
             Coord calPos = oldCalendarWidget.c;
             oldCalendarWidget.destroy();
             calendar = new NCal();
-            add(new NDraggableWidget(calendar, "Calendar", UI.scale(400,90)), calPos);
+            add(new NDraggableWidget(calendar, "Calendar", NCal.COMPACT_SZ), calPos);
         }
         add(new NDraggableWidget(alarmWdg = new NAlarmWdg(),"alarm",NStyle.alarm[0].sz().add(NDraggableWidget.delta)));
         // Starvation alert widget - monitors energy and shows warnings
         add(starvationAlertWidget = new StarvationAlertWidget());
+        // Auto-logout widget - logs out when energy is critically low
+        add(autoLogoutWidget = new AutoLogoutWidget());
         nep = new NEquipProxy(getEquipProxySlotsFromConfig());
         add(new NDraggableWidget(nep, "EquipProxy", nep.sz.add(NDraggableWidget.delta)));
         add(new NDraggableWidget(nbp = new NBeltProxy(), "BeltProxy", UI.scale(825, 55)));
@@ -356,8 +361,11 @@ public class NGameUI extends GameUI
         // Will be added in attached() method
 
         // Profile-aware components are now initialized in attached() before super.attached()
+
+        // Load external plugins and let them attach to this session's UI.
+        nurgling.plugins.NPluginManager.onGameUIReady(this);
     }
-    
+
     @Override
     protected void attached() {
         // Initialize profile-aware components BEFORE calling super.attached()
@@ -782,7 +790,7 @@ public class NGameUI extends GameUI
                 }
             }
 
-            if (maininv != null && ((NInventory) maininv).searchwdg == null)
+            if (maininv != null && !((NInventory) maininv).mainInvInstalled)
             {
                 ((NInventory) maininv).installMainInv();
             }

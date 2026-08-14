@@ -7,6 +7,7 @@ import haven.WItem;
 import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NInventory;
+import nurgling.NConfig;
 import nurgling.NUtils;
 import nurgling.actions.*;
 import nurgling.areas.NArea;
@@ -93,11 +94,11 @@ public class KFC implements Action {
             return Results.FAIL();
         }
         
-        // Find areas globally
-        NArea chickenArea = NContext.findSpecGlobal(Specialisation.SpecName.chicken.toString());
-        NArea incubatorArea = NContext.findSpecGlobal(Specialisation.SpecName.incubator.toString());
-        NArea swillArea = NContext.findSpecGlobal(Specialisation.SpecName.swill.toString());
-        NArea waterArea = NContext.findSpecGlobal(Specialisation.SpecName.water.toString());
+        // Resolve areas (local first, then global) without navigating — bot navigates explicitly below
+        NArea chickenArea = context.findArea(Specialisation.SpecName.chicken);
+        NArea incubatorArea = context.findArea(Specialisation.SpecName.incubator);
+        NArea swillArea = context.findArea(Specialisation.SpecName.swill);
+        NArea waterArea = context.findArea(Specialisation.SpecName.water);
         
         if (chickenArea == null) {
             return Results.ERROR("Chicken area not found!");
@@ -221,7 +222,7 @@ public class KFC implements Action {
             return Results.ERROR("No chicken coops found!");
         }
         
-        context.getSpecArea(Specialisation.SpecName.chicken);
+        context.goToArea(Specialisation.SpecName.chicken);
         Gob bestCoopGob = Finder.findGob(coopInfos.get(0).gobHash);
         if (bestCoopGob == null) {
             return Results.ERROR("Best coop not found!");
@@ -271,7 +272,7 @@ public class KFC implements Action {
         NAlias chickAlias = new NAlias(new ArrayList<>(List.of("Chick")), new ArrayList<>(List.of("Egg")));
         
         // Collect chicks from chicken coops
-        context.getSpecArea(Specialisation.SpecName.chicken);
+        context.goToArea(Specialisation.SpecName.chicken);
         for (String hash : coopHashes) {
             Gob gob = Finder.findGob(hash);
             if (gob == null) continue;
@@ -292,7 +293,7 @@ public class KFC implements Action {
             // If inventory getting full, transfer to incubators (don't kill yet)
             if (shouldDropOffItems(gui)) {
                 transferChicksToIncubators(gui, incubatorHashes);
-                context.getSpecArea(Specialisation.SpecName.chicken);
+                context.goToArea(Specialisation.SpecName.chicken);
             }
         }
         
@@ -308,7 +309,7 @@ public class KFC implements Action {
         ArrayList<WItem> chicks = gui.getInventory().getItems(chickAlias);
         if (chicks.isEmpty()) return;
         
-        context.getSpecArea(Specialisation.SpecName.incubator);
+        context.goToArea(Specialisation.SpecName.incubator);
         for (String hash : incubatorHashes) {
             chicks = gui.getInventory().getItems(chickAlias);
             if (chicks.isEmpty()) break;
@@ -392,7 +393,7 @@ public class KFC implements Action {
      * Good quality eggs stay in coops for hatching.
      */
     private void collectAndDisposeLowQualityEggs(NGameUI gui, ArrayList<String> coopHashes, double qualityThreshold) throws InterruptedException {
-        context.getSpecArea(Specialisation.SpecName.chicken);
+        context.goToArea(Specialisation.SpecName.chicken);
         for (String hash : coopHashes) {
             Gob gob = Finder.findGob(hash);
             if (gob == null) continue;
@@ -415,7 +416,7 @@ public class KFC implements Action {
             // If inventory getting full, dispose via FreeInventory2 and return to chicken area
             if (shouldDropOffItems(gui)) {
                 new FreeInventory2(context).run(gui);
-                context.getSpecArea(Specialisation.SpecName.chicken);
+                context.goToArea(Specialisation.SpecName.chicken);
             }
         }
     }
@@ -427,7 +428,7 @@ public class KFC implements Action {
 
         for (IncubatorInfo roosterInfo : qcocks) {
             // Navigate to incubator area and open the coop with rooster
-            context.getSpecArea(Specialisation.SpecName.incubator);
+            context.goToArea(Specialisation.SpecName.incubator);
             
             Gob roosterGob = Finder.findGob(roosterInfo.gobHash);
             if (roosterGob == null) continue;
@@ -459,11 +460,11 @@ public class KFC implements Action {
             // Find coop with worse rooster and replace it
             for (CoopInfo coopInfo : coopInfos) {
                 if (coopInfo.roosterQuality < roosterQuality && coopInfo.roosterQuality != -1) {
-                    rooster = gui.getInventory().getItem(new NAlias("Cock"));
+                    rooster = gui.getInventory().getItem(new NAlias(Collections.singletonList("Cock"), Collections.singletonList("Dead")));
                     if (rooster == null) break;
 
                     // Navigate to chicken area and open coop for replacement
-                    context.getSpecArea(Specialisation.SpecName.chicken);
+                    context.goToArea(Specialisation.SpecName.chicken);
                     
                     Gob coopGob = Finder.findGob(coopInfo.gobHash);
                     if (coopGob == null) continue;
@@ -502,7 +503,7 @@ public class KFC implements Action {
             }
 
             // Process the rooster (butcher it)
-            rooster = gui.getInventory().getItem(new NAlias("Cock"));
+            rooster = gui.getInventory().getItem(new NAlias(Collections.singletonList("Cock"), Collections.singletonList("Dead")));
             if (rooster != null) {
                 butcherChicken(gui, rooster, "Cock", "Dead Cock");
             }
@@ -517,7 +518,7 @@ public class KFC implements Action {
 
         for (IncubatorInfo henInfo : qhens) {
             // Navigate to incubator area and open coop with hen
-            context.getSpecArea(Specialisation.SpecName.incubator);
+            context.goToArea(Specialisation.SpecName.incubator);
             
             Gob henGob = Finder.findGob(henInfo.gobHash);
             if (henGob == null) continue;
@@ -554,7 +555,7 @@ public class KFC implements Action {
                         if (hen == null) break;
 
                         // Navigate to chicken area and open coop for replacement
-                        context.getSpecArea(Specialisation.SpecName.chicken);
+                        context.goToArea(Specialisation.SpecName.chicken);
                         
                         Gob coopGob = Finder.findGob(coopInfo.gobHash);
                         if (coopGob == null) continue;
@@ -619,30 +620,39 @@ public class KFC implements Action {
 
         WItem deadChicken = gui.getInventory().getItem(new NAlias(deadType));
         if (deadChicken == null) return;
-        
-        new SelectFlowerAction("Pluck", deadChicken).run(gui);
-        NUtils.addTask(new WaitItems((NInventory) gui.maininv, new NAlias("Plucked Chicken"), 1));
 
-        WItem plucked = gui.getInventory().getItem(new NAlias("Plucked Chicken"));
-        if (plucked == null) return;
-        
-        new SelectFlowerAction("Clean", plucked).run(gui);
-        NUtils.addTask(new WaitItems((NInventory) gui.maininv, new NAlias("Cleaned Chicken"), 1));
+        Boolean skipPluckCocks = (Boolean) NConfig.get(NConfig.Key.skipPluckingCocksInKFC);
+        boolean isCock = "Dead Cock".equals(deadType);
+        if (skipPluckCocks != null && skipPluckCocks && isCock) {
+            // Leave as Dead Cock for creamy cock recipe
+        } else {
+            new SelectFlowerAction("Pluck", deadChicken).run(gui);
+            NUtils.addTask(new WaitItems((NInventory) gui.maininv, new NAlias("Plucked Chicken"), 1));
 
-        WItem cleaned = gui.getInventory().getItem(new NAlias("Cleaned Chicken"));
-        if (cleaned == null) return;
-        
-        new SelectFlowerAction("Butcher", cleaned).run(gui);
-        NUtils.addTask(new NTask() {
-            @Override
-            public boolean check() {
-                try {
-                    return gui.getInventory().getItems(new NAlias("Cleaned Chicken")).isEmpty();
-                } catch (InterruptedException e) {
-                    return false;
-                }
+            WItem plucked = gui.getInventory().getItem(new NAlias("Plucked Chicken"));
+            if (plucked == null) return;
+
+            new SelectFlowerAction("Clean", plucked).run(gui);
+            NUtils.addTask(new WaitItems((NInventory) gui.maininv, new NAlias("Cleaned Chicken"), 1));
+
+            WItem cleaned = gui.getInventory().getItem(new NAlias("Cleaned Chicken"));
+            if (cleaned == null) return;
+
+            Boolean skipButcher = (Boolean) NConfig.get(NConfig.Key.skipButcherInKFC);
+            if (skipButcher == null || !skipButcher) {
+                new SelectFlowerAction("Butcher", cleaned).run(gui);
+                NUtils.addTask(new NTask() {
+                    @Override
+                    public boolean check() {
+                        try {
+                            return gui.getInventory().getItems(new NAlias("Cleaned Chicken")).isEmpty();
+                        } catch (InterruptedException e) {
+                            return false;
+                        }
+                    }
+                });
             }
-        });
+        }
 
         // Drop off if insufficient space for another chicken
         if (shouldDropOffItems(gui)) {

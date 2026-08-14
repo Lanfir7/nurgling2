@@ -3,7 +3,6 @@ package nurgling.actions;
 import haven.*;
 import nurgling.NGameUI;
 import nurgling.NUtils;
-import nurgling.areas.NArea;
 import nurgling.tasks.*;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
@@ -36,7 +35,7 @@ public class DiggingResources implements Action
         ArrayList<Coord2d> tiles = null;
         if (NParser.checkName("clay", items)) {
             tiles = Finder.findTilesInArea(new NAlias(new ArrayList<String>(Arrays.asList("water",
-                    "dirt")), new ArrayList<String>()), res);
+                    "dirt", "acre")), new ArrayList<String>()), res);
         } else if (NParser.checkName("sand", items)) {
             tiles = Finder.findTilesInArea(new NAlias(new ArrayList<String>(Arrays.asList("beach")), new ArrayList<String>()), res);
         }
@@ -56,8 +55,8 @@ public class DiggingResources implements Action
                     new TransferToPiles(out, items).run(gui);
                 }
                 else if(wds.getState() == WaitDiggerState.State.TIMEFORDRINK) {
-                    if(!(new Drink(0.9,false).run(gui)).IsSuccess())
-                        return Results.ERROR("Drink is not found");
+                    if(!new RestoreResources().run(gui).IsSuccess())
+                        return Results.ERROR("Failed to restore resources");
                 }
                 else if(wds.getState()== WaitDiggerState.State.DANGER)
                     return Results.ERROR("no energy");

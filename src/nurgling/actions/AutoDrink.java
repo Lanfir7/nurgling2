@@ -1,7 +1,5 @@
 package nurgling.actions;
 
-import haven.Coord;
-import haven.Gob;
 import haven.MenuGrid;
 import haven.WItem;
 import nurgling.*;
@@ -19,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AutoDrink implements Action
 {
 
-    private final AtomicBoolean stop = new AtomicBoolean(false);
+    public final AtomicBoolean stop = new AtomicBoolean(false);
 
     public AutoDrink()
     {
@@ -54,7 +52,9 @@ public class AutoDrink implements Action
                     double stamina = NUtils.getStamina();
                     if(stamina < 0)
                         return false;
-                    return (!NContext.waitBot.get() && stamina < threshold) || stop.get();
+                    NGameUI g = NUtils.getGameUI();
+                    boolean botRunning = (g != null && g.biw != null && g.biw.waitBot.get()) || NContext.waitBot.get();
+                    return (!botRunning && stamina < threshold) || stop.get();
                 }
             });
             if(stop.get()) {

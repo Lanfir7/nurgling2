@@ -7,6 +7,8 @@ import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NUI;
 
+import java.util.concurrent.ForkJoinPool;
+
 /**
  * Holds all state for a single game session.
  * A session can be in either visual mode (rendered on screen) or headless mode (bot only).
@@ -50,6 +52,12 @@ public class SessionContext {
 
     /** Current bot name if running (for status display) */
     private volatile String currentBotName = null;
+
+    /** Dedicated ForkJoinPool for headless tick processing.
+     *  Prevents parallel streams in OCache.ctick() from using the common pool,
+     *  which would cause cross-session task interference with the UI thread.
+     *  Uses 2 threads — headless sessions don't render and need minimal parallelism. */
+    private final ForkJoinPool headlessTickPool = new ForkJoinPool(2);
 
     private static int sessionCounter = 0;
 
@@ -265,7 +273,12 @@ public class SessionContext {
             // Only re-attach if not already attached
             if (mapView.glob != null && mapView.glob.oc != null &&
                 !mapView.glob.oc.paths.isAttachedToRenderTree()) {
-                mapView.basic.add(mapView.glob.oc.paths);
+                try {
+                    mapView.basic.add(mapView.glob.oc.paths);
+                } catch (haven.render.RenderTree.SlotRemoved e) {
+                    // Slot was removed during session transition - ignore
+                    // The visualizer will be re-attached when map is fully initialized
+                }
             }
         }
     }
@@ -288,21 +301,29 @@ public class SessionContext {
 
                 if (ui != null) {
                     synchronized (ui) {
+                        // Tick glob separately — rendering-related failures (NPE from null env,
+                        // SlotRemoved from stale render tree, ConcurrentModification from parallel
+                        // gob iteration) must NOT prevent ui.tick() from running, because NCore
+                        // task processing lives there. Without it, bot threads hang on task.wait().
                         try {
-                            // Tick the session (network, glob, etc.)
                             if (ui.sess != null) {
-                                ui.sess.glob.ctick();
-                                // Send pending map requests
+                                headlessTickPool.submit(() -> {
+                                    ui.sess.glob.ctick();
+                                }).join();
                                 ui.sess.glob.map.sendreqs();
                             }
+                        } catch (Exception e) {
+                            // Glob tick failed — non-fatal, gob state may be stale this tick
+                        }
 
-                            // Tick the UI (processes widget state, bot actions, etc.)
+                        // Tick the UI (processes widget state, bot actions, etc.)
+                        // This MUST run even when glob.ctick() fails above, otherwise
+                        // NCore never checks tasks and all bot threads hang indefinitely.
+                        try {
                             ui.tick();
                             ui.lastevent = now;
-                        } catch (NullPointerException e) {
-                            // Some widgets may throw NPE in headless mode - ignore and continue
-                        } catch (haven.render.RenderTree.SlotRemoved e) {
-                            // Widgets trying to update render state in headless mode - ignore
+                        } catch (Exception e) {
+                            // Widget tick failed — non-fatal
                         }
                     }
                 }
@@ -358,10 +379,10 @@ public class SessionContext {
             if (gui.chrid != null) {
                 this.characterName = gui.chrid;
             }
-            // Get genus for config
-            if (gui.getGenus() != null) {
+            // Get genus for config — each session gets its own independent copy
+            if (gui.getGenus() != null && this.config == null) {
                 this.genus = gui.getGenus();
-                this.config = NConfig.getProfileInstance(this.genus);
+                this.config = NConfig.createForSession(this.genus);
             }
         }
     }

@@ -1,12 +1,12 @@
 package nurgling.widgets;
 
 import haven.*;
-import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NStyle;
 import nurgling.NUtils;
-import nurgling.areas.NContext;
 import nurgling.NConfig;
+import nurgling.NCore;
+import haven.res.ui.croster.Entry;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,6 +19,10 @@ import java.util.ArrayList;
 
 public class BotsInterruptWidget extends Widget {
     boolean oldStackState = false;
+
+    /** Per-session flag: true when this session has bots running.
+     *  Used to suppress auto-petal selection (NFlowerMenu) and gate AutoDrink. */
+    public final java.util.concurrent.atomic.AtomicBoolean waitBot = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     // Stack trace writing for autorunner debugging
     private static String autorunnerStackTraceFile = null;
@@ -87,7 +91,7 @@ public class BotsInterruptWidget extends Widget {
     {
         if(obs.isEmpty())
         {
-            NContext.waitBot.set(true);
+            waitBot.set(true);
         }
 
         if(obs.size()>=6)
@@ -104,14 +108,10 @@ public class BotsInterruptWidget extends Widget {
         {
             if(stackObs.isEmpty())
             {
-                NGameUI gui = NUtils.getGameUI();
-                if (gui != null && gui.maininv instanceof NInventory) {
-                    NInventory inv = (NInventory) gui.maininv;
-                    if (inv.bundle != null && inv.bundle.a) {
-                        oldStackState = true;
-                        NUtils.stackSwitch(false);
-                    }
-                }
+                 if(((NInventory) NUtils.getGameUI().maininv).bundle.a) {
+                     oldStackState = true;
+                     NUtils.stackSwitch(false);
+                 }
             }
             if(oldStackState)
                 stackObs.add(t);
@@ -135,30 +135,8 @@ public class BotsInterruptWidget extends Widget {
     public void removeObserve(Thread t)
     {
         t.interrupt();
-        
-        try {
-            if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                NUtils.getGameUI().map.wdgmsg("click", haven.Coord.z, 
-                    NUtils.getGameUI().map.player().rc.floor(haven.OCache.posres), 3, 0);
-            }
-        } catch (Exception e) {
-        }
         // Clear kill list highlight when bot stops
-        // Используем рефлексию для безопасного доступа к Entry.killList
-        // чтобы избежать ExceptionInInitializerError при устаревших ресурсах
-        try {
-            Class<?> entryClass = Class.forName("haven.res.ui.croster.Entry");
-            java.lang.reflect.Field killListField = entryClass.getField("killList");
-            @SuppressWarnings("unchecked")
-            java.util.Set<?> killList = (java.util.Set<?>) killListField.get(null);
-            killList.clear();
-        } catch (ExceptionInInitializerError e) {
-            // Игнорируем ошибки инициализации класса (устаревшие ресурсы)
-        } catch (LinkageError e) {
-            // Игнорируем ошибки загрузки класса
-        } catch (Exception e) {
-            // Ignore errors when clearing kill list (e.g., class not found, reflection errors)
-        }
+        Entry.killList.clear();
         synchronized (obs)
         {
             for(Gear g: obs)
@@ -181,7 +159,7 @@ public class BotsInterruptWidget extends Widget {
         }
         repack();
         if(obs.isEmpty())
-            NContext.waitBot.set(false);
+            waitBot.set(false);
     }
 
     @Override
@@ -201,21 +179,7 @@ public class BotsInterruptWidget extends Widget {
                 if(g.t.isInterrupted() || !g.t.isAlive())
                 {
                     // Clear kill list highlight when bot stops
-                    // Используем рефлексию для безопасного доступа к Entry.killList
-                    // чтобы избежать ExceptionInInitializerError при устаревших ресурсах
-                    try {
-                        Class<?> entryClass = Class.forName("haven.res.ui.croster.Entry");
-                        java.lang.reflect.Field killListField = entryClass.getField("killList");
-                        @SuppressWarnings("unchecked")
-                        java.util.Set<?> killList = (java.util.Set<?>) killListField.get(null);
-                        killList.clear();
-                    } catch (ExceptionInInitializerError e) {
-                        // Игнорируем ошибки инициализации класса (устаревшие ресурсы)
-                    } catch (LinkageError e) {
-                        // Игнорируем ошибки загрузки класса
-                    } catch (Exception e) {
-                        // Ignore errors when clearing kill list (e.g., class not found, reflection errors)
-                    }
+                    Entry.killList.clear();
                     if(stackObs.contains(g.t))
                     {
                         stackObs.remove(g.t);
@@ -228,7 +192,7 @@ public class BotsInterruptWidget extends Widget {
                     g.remove();
                     obs.remove(g);
                     if(obs.isEmpty())
-                        NContext.waitBot.set(false);
+                        waitBot.set(false);
                     break;
                 }
             }
@@ -293,18 +257,25 @@ public class BotsInterruptWidget extends Widget {
     }
 
     /**
-     * Interrupts all tracked bot threads.
+     * Interrupt and remove all running bots.
      */
-    public void interruptAllBots() {
-        java.util.ArrayList<Thread> threads = new java.util.ArrayList<>();
+    public void interruptAll() {
         synchronized (obs) {
-            for (Gear g : obs) {
-                threads.add(g.t);
+            for (Gear g : new ArrayList<>(obs)) {
+                g.t.interrupt();
+                Entry.killList.clear();
+                if (stackObs.contains(g.t)) {
+                    stackObs.remove(g.t);
+                }
+                g.remove();
+            }
+            obs.clear();
+            if (oldStackState && stackObs.isEmpty()) {
+                NUtils.stackSwitch(true);
             }
         }
-        for (Thread t : threads) {
-            removeObserve(t);
-        }
+        waitBot.set(false);
+        repack();
     }
 
 //    @Override

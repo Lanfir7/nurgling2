@@ -562,6 +562,10 @@ public class GLRender implements Render, Disposable {
 	gl().bglCreate(new GLTimestamp(env, ts -> env.callback(() -> callback.accept(ts))));
     }
 
+    public void finish() {
+	gl().glFinish();
+    }
+
     public void fence(Runnable callback) {
 	gl().bglSubmit(new BGL.Request() {
 		public void run(GL g) {env.callback(callback);}
@@ -570,6 +574,10 @@ public class GLRender implements Render, Disposable {
 			env.callback(() -> ((Abortable)callback).abort());
 		}
 	    });
+    }
+
+    public void marker(String name) {
+	gl().glDebugMessageInsert(GL.GL_DEBUG_SOURCE_APPLICATION, GL.GL_DEBUG_TYPE_MARKER, 0, GL.GL_DEBUG_SEVERITY_NOTIFICATION, name);
     }
 
     public void submit(BGL.Request req) {

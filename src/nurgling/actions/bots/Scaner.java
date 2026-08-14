@@ -6,12 +6,8 @@ import haven.res.ui.barterbox.*;
 import nurgling.*;
 import nurgling.actions.*;
 import nurgling.areas.*;
-import nurgling.tasks.*;
 import nurgling.tools.*;
-import nurgling.widgets.*;
 import org.json.*;
-
-import java.util.*;
 
 public class Scaner implements Action
 {
@@ -94,6 +90,7 @@ public class Scaner implements Action
                 }
             }
         }
+        area.markDirty(nurgling.areas.AreaFieldGroup.ROUTING);
         NConfig.needAreasUpdate();
         NUtils.getGameUI().areas.set(area.id);
 

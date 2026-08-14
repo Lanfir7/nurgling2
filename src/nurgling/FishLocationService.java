@@ -3,12 +3,14 @@ package nurgling;
 import haven.*;
 import nurgling.profiles.ConfigFactory;
 import nurgling.profiles.ProfileAwareService;
+import nurgling.tools.NFileUtils;
 import nurgling.tools.VSpec;
 import nurgling.widgets.NEquipory;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -215,27 +217,17 @@ public class FishLocationService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             fishLocations.clear();
-            File file = new File(dataFile);
-            if (file.exists()) {
-                StringBuilder contentBuilder = new StringBuilder();
-                try (Stream<String> stream = Files.lines(Paths.get(dataFile), StandardCharsets.UTF_8)) {
-                    stream.forEach(s -> contentBuilder.append(s).append("\n"));
-                } catch (IOException e) {
-                    System.err.println("Failed to load fish locations: " + e.getMessage());
-                    return;
-                }
-
-                if (!contentBuilder.toString().trim().isEmpty()) {
-                    try {
-                        JSONObject main = new JSONObject(contentBuilder.toString());
-                        JSONArray array = main.getJSONArray("fishLocations");
-                        for (int i = 0; i < array.length(); i++) {
-                            FishLocation location = new FishLocation(array.getJSONObject(i));
-                            fishLocations.put(location.getLocationId(), location);
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Failed to parse fish locations JSON: " + e.getMessage());
+            String content = NFileUtils.readWithBackupFallback(dataFile);
+            if (content != null && !content.isEmpty()) {
+                try {
+                    JSONObject main = new JSONObject(content);
+                    JSONArray array = main.getJSONArray("fishLocations");
+                    for (int i = 0; i < array.length(); i++) {
+                        FishLocation location = new FishLocation(array.getJSONObject(i));
+                        fishLocations.put(location.getLocationId(), location);
                     }
+                } catch (Exception e) {
+                    System.err.println("Failed to parse fish locations JSON: " + e.getMessage());
                 }
             }
         } finally {
@@ -258,7 +250,7 @@ public class FishLocationService implements ProfileAwareService {
             main.put("version", 1);
             main.put("lastSaved", java.time.Instant.now().toString());
 
-            nurgling.util.SafeJsonWriter.writeAtomic(dataFile, main);
+            NFileUtils.writeAtomically(dataFile, main.toString(2));
         } catch (IOException e) {
             System.err.println("Failed to save fish locations: " + e.getMessage());
         }

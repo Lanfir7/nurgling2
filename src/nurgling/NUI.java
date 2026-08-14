@@ -1,6 +1,8 @@
 package nurgling;
 
 import haven.*;
+import haven.iosys.tk.*;
+import haven.render.Render;
 import nurgling.sessions.ThreadLocalUI;
 import nurgling.widgets.*;
 
@@ -12,6 +14,8 @@ import java.util.Map;
 /** NUI class extends the main UI to provide customized functionality and integrate with Nurgling's advanced features */
 public class NUI extends UI
 {
+    /** Session-specific NConfig, set during session initialization. Lock-free access for resolveConfig(). */
+    public volatile NConfig sessionConfig;
     /** Current tick identifier to track time-based operations within the UI */
     public long tickId = 0;
     /** Data tables for various functionalities */
@@ -34,7 +38,7 @@ public class NUI extends UI
     /** Window background mode (true = solid color, false = textures) */
     private boolean useSolidBackground = false;
     /** Window background color for solid mode */
-    private java.awt.Color windowBackgroundColor = new java.awt.Color(32, 32, 32);
+    private java.awt.Color windowBackgroundColor = new java.awt.Color(0x1C, 0x25, 0x26);
 
     /** Static verification flags - persist across NUI instances */
     private static boolean staticIsVerified = false;
@@ -90,13 +94,14 @@ public class NUI extends UI
     /**
      * Constructor for NUI.
      *
-     * @param uictx The context for the UI.
+     * @param wnd   The toolkit window backing the UI.
+     * @param audio The audio root for the UI.
      * @param sz    The size of the UI.
      * @param fun   The runner function for the UI.
      */
-    public NUI(Context uictx, Coord sz, Runner fun)
+    public NUI(Windeye wnd, Audio.Root audio, Coord sz, Runner fun)
     {
-        super(uictx, sz, fun);
+        super(wnd, audio, sz, fun);
         if (fun != null)
         {
             root.add(core = new NCore());
@@ -169,64 +174,152 @@ public class NUI extends UI
                 return;
             }
         }
-        super.keydown(ev);
+        NUI previousUI = ThreadLocalUI.get();
+        ThreadLocalUI.set(this);
+        try {
+            super.keydown(ev);
+        } finally {
+            if (previousUI != null)
+                ThreadLocalUI.set(previousUI);
+            else
+                ThreadLocalUI.clear();
+        }
+    }
+
+    @Override
+    public void draw(GOut g) {
+        NUI previousUI = ThreadLocalUI.get();
+        ThreadLocalUI.set(this);
+        try {
+            super.draw(g);
+        } finally {
+            if (previousUI != null)
+                ThreadLocalUI.set(previousUI);
+            else
+                ThreadLocalUI.clear();
+        }
+    }
+
+    @Override
+    public void gtick(Render out) {
+        NUI previousUI = ThreadLocalUI.get();
+        ThreadLocalUI.set(this);
+        try {
+            super.gtick(out);
+        } finally {
+            if (previousUI != null)
+                ThreadLocalUI.set(previousUI);
+            else
+                ThreadLocalUI.clear();
+        }
+    }
+
+    @Override
+    public void mousedown(MouseEvent ev, Coord c, int button) {
+        NUI previousUI = ThreadLocalUI.get();
+        ThreadLocalUI.set(this);
+        try {
+            super.mousedown(ev, c, button);
+        } finally {
+            if (previousUI != null)
+                ThreadLocalUI.set(previousUI);
+            else
+                ThreadLocalUI.clear();
+        }
+    }
+
+    @Override
+    public void mouseup(MouseEvent ev, Coord c, int button) {
+        NUI previousUI = ThreadLocalUI.get();
+        ThreadLocalUI.set(this);
+        try {
+            super.mouseup(ev, c, button);
+        } finally {
+            if (previousUI != null)
+                ThreadLocalUI.set(previousUI);
+            else
+                ThreadLocalUI.clear();
+        }
+    }
+
+    @Override
+    public void mousewheel(MouseEvent ev, Coord c, int ia, double sa) {
+        NUI previousUI = ThreadLocalUI.get();
+        ThreadLocalUI.set(this);
+        try {
+            super.mousewheel(ev, c, ia, sa);
+        } finally {
+            if (previousUI != null)
+                ThreadLocalUI.set(previousUI);
+            else
+                ThreadLocalUI.clear();
+        }
     }
 
     @Override
     public void mousemove(MouseEvent ev, Coord c)
     {
-        if (gui != null && gui.map != null)
-        {
-            if (core != null && core.isinspect)
+        NUI previousUI = ThreadLocalUI.get();
+        ThreadLocalUI.set(this);
+        try {
+            if (gui != null && gui.map != null)
             {
-                NMapView mapView = (NMapView) gui.map;
-                if (modshift)
+                if (core != null && core.isinspect)
                 {
-                    // Apply throttling for inspect calls
-                    long currentTime = System.currentTimeMillis();
-                    boolean shouldInspect = false;
-                    
-                    // Check time since last inspect
-                    if (currentTime - lastInspectTime >= INSPECT_THROTTLE_MS) {
-                        shouldInspect = true;
-                    }
-                    
-                    // Check distance from last inspect position
-                    if (lastInspectCoord != null && c.dist(lastInspectCoord) >= INSPECT_MIN_DISTANCE) {
-                        shouldInspect = true;
-                    }
-                    
-                    // If first inspect or conditions met
-                    if (lastInspectCoord == null || shouldInspect) {
-                        // Check which inspect mode to use
-                        boolean debugMode = core.debug;
-                        
-                        if (debugMode) {
-                            // Debug mode takes priority - show full info
-                            mapView.inspect(c);
-                        } else {
-                            // Check simpleInspect only if debug is off
-                            boolean simpleInspect = (Boolean) NConfig.get(NConfig.Key.simpleInspect);
-                            if (simpleInspect) {
-                                // Simple inspect mode - show only gob and tile
-                                mapView.inspectSimple(c);
-                            }
+                    NMapView mapView = (NMapView) gui.map;
+                    if (modshift)
+                    {
+                        // Apply throttling for inspect calls
+                        long currentTime = System.currentTimeMillis();
+                        boolean shouldInspect = false;
+
+                        // Check time since last inspect
+                        if (currentTime - lastInspectTime >= INSPECT_THROTTLE_MS) {
+                            shouldInspect = true;
                         }
-                        
-                        lastInspectTime = currentTime;
-                        lastInspectCoord = c;
+
+                        // Check distance from last inspect position
+                        if (lastInspectCoord != null && c.dist(lastInspectCoord) >= INSPECT_MIN_DISTANCE) {
+                            shouldInspect = true;
+                        }
+
+                        // If first inspect or conditions met
+                        if (lastInspectCoord == null || shouldInspect) {
+                            // Check which inspect mode to use
+                            boolean debugMode = core.debug;
+
+                            if (debugMode) {
+                                // Debug mode takes priority - show full info
+                                mapView.inspect(c);
+                            } else {
+                                // Check simpleInspect only if debug is off
+                                boolean simpleInspect = (Boolean) NConfig.get(NConfig.Key.simpleInspect);
+                                if (simpleInspect) {
+                                    // Simple inspect mode - show only gob and tile
+                                    mapView.inspectSimple(c);
+                                }
+                            }
+
+                            lastInspectTime = currentTime;
+                            lastInspectCoord = c;
+                        }
+                    } else
+                    {
+                        core.isinspect = false;
+                        mapView.ttip.clear();
+                        // Reset throttling when Shift is released
+                        lastInspectCoord = null;
+                        lastInspectTime = 0;
                     }
-                } else
-                {
-                    core.isinspect = false;
-                    mapView.ttip.clear();
-                    // Reset throttling when Shift is released
-                    lastInspectCoord = null;
-                    lastInspectTime = 0;
                 }
             }
+            super.mousemove(ev, c);
+        } finally {
+            if (previousUI != null)
+                ThreadLocalUI.set(previousUI);
+            else
+                ThreadLocalUI.clear();
         }
-        super.mousemove(ev, c);
     }
 
     /**
@@ -315,6 +408,47 @@ public class NUI extends UI
     public void disableMonitor()
     {
 
+    }
+
+    public volatile String province = null;
+    public volatile String realm = null;
+
+    private boolean loggedProvince = false;
+
+    @Override
+    public void newwidgetp(int id, String type, int parent, Object[] pargs, Object... cargs) throws InterruptedException
+    {
+        super.newwidgetp(id, type, parent, pargs, cargs);
+        if (type.startsWith("ui/province"))
+            setProvince(id, cargs);
+    }
+
+    private void setProvince(int id, Object[] cargs)
+    {
+        if (!loggedProvince)
+        {
+            loggedProvince = true;
+            StringBuilder buf = new StringBuilder("[NUI] ui/provinces cargs[" + cargs.length + "]:");
+            for (int i = 0; i < cargs.length; i++)
+                buf.append(" #").append(i).append('=').append(cargs[i])
+                   .append('(').append(cargs[i] == null ? "null" : cargs[i].getClass().getSimpleName()).append(')');
+            System.out.println(buf);
+        }
+        /* Index layout: [province, ?, ?, realm] in a realm, [province, ?, ?]
+         * outside one.
+         *
+         * These are deliberately never cleared again. The server tears this
+         * widget down and rebuilds it as the registry changes, so clearing on
+         * destroy leaves the HUD blank for good; keeping the last known values
+         * is what upstream does and what actually stays populated. */
+        String prov = (cargs.length > 0 && cargs[0] != null) ? String.valueOf(cargs[0]) : null;
+        String rlm = (cargs.length > 3 && cargs[3] != null) ? String.valueOf(cargs[3]) : null;
+        if (prov != null)
+            province = prov;
+        if (rlm != null)
+            realm = rlm;
+        System.out.println("[NUI] province=" + province + " realm=" + realm + " on ui@"
+                           + Integer.toHexString(System.identityHashCode(this)));
     }
 
     @Override
@@ -575,7 +709,7 @@ public class NUI extends UI
     private void loadOpacitySettings() {
         Object configOpacityObj = NConfig.get(NConfig.Key.uiOpacity);
         Boolean configUseSolid = (Boolean) NConfig.get(NConfig.Key.useSolidBackground);
-        java.awt.Color configColor = NConfig.getColor(NConfig.Key.windowBackgroundColor, new java.awt.Color(32, 32, 32));
+        java.awt.Color configColor = NConfig.getColor(NConfig.Key.windowBackgroundColor, new java.awt.Color(0x1C, 0x25, 0x26));
 
         // Handle opacity with proper type conversion (JSON may return BigDecimal)
         float opacity = 1.0f; // default

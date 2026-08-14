@@ -12,6 +12,7 @@ import nurgling.tools.NAlias;
 import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class PumpkinFarmer implements Action {
     @Override
@@ -24,7 +25,7 @@ public class PumpkinFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Pumpkin");
+        nContext.goToArea(Specialisation.SpecName.crop, "Pumpkin");
 
         NArea pumpkinFlesh = NContext.findOut(new NAlias("Pumpkin Flesh"), 1);
 
@@ -64,8 +65,8 @@ public class PumpkinFarmer implements Action {
             }
             
             if (pumpkinFlesh != null)
-                new LettuceAndPumpkinCollector(NContext.findSpec(field), NContext.findSpec(seed), pumpkinFlesh, new NAlias("items/pumpkin", "Pumpkin"), NContext.findSpec(trough)).run(gui);
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/pumpkin"), new NAlias("Pumpkin"), false).run(gui);
+                new LettuceAndPumpkinCollector(NContext.findSpec(field), NContext.findSpec(seed), pumpkinFlesh, new NAlias(Arrays.asList("items/pumpkin", "Pumpkin"), Arrays.asList("plants", "seed", "flesh")), NContext.findSpec(trough)).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/pumpkin")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

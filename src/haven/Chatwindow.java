@@ -123,8 +123,8 @@ public class Chatwindow extends Window implements Console.Host {
 	    }
 	    out.append((String)args[0]);
 	} else if(msg == "show") {
-	    super.uimsg(msg, args);
-	    stdio(!visible);
+	    show(Utils.bv(args[0]));
+	    stdio(!Utils.bv(args[0]));
 	} else {
 	    super.uimsg(msg, args);
 	}

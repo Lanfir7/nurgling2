@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.*;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NModelBox;
+import nurgling.tools.GobHide;
 import nurgling.widgets.NColorWidget;
 import java.awt.Color;
 import java.util.ConcurrentModificationException;
@@ -13,13 +14,13 @@ public class World extends Panel {
     private static class WorldSettings {
         boolean flatSurface;
         boolean decorativeObjects;
-        boolean hideNature;
         boolean hideEarthworm;
         boolean showBB;
         boolean showBeehiveRadius;
         boolean showTroughRadius;
         boolean showMoundBedRadius;
         boolean showDamageShields;
+        boolean showGridWalls;
         boolean persistentBarrelLabels;
         boolean disableTileSmoothing;
         boolean disableTileTransitions;
@@ -28,23 +29,25 @@ public class World extends Panel {
         Color boxFillColor = new Color(227, 28, 1, 195);
         Color boxEdgeColor = new Color(224, 193, 79, 255);
         int boxLineWidth = 4;
+        Color gridWallColor = new Color(255, 140, 0, 217);
     }
 
     private final WorldSettings tempSettings = new WorldSettings();
     private CheckBox flatSurface;
     private CheckBox decorativeObjects;
-    private CheckBox natura;
     private CheckBox earthworm;
     private CheckBox boundingBoxes;
     private CheckBox beehiveRadius;
     private CheckBox troughRadius;
     private CheckBox moundBedRadius;
     private CheckBox damageShields;
+    private CheckBox gridWalls;
     private CheckBox persistentBarrels;
     private CheckBox disableTileSmoothing;
     private CheckBox disableTileTransitions;
     private CheckBox disableCloudShadows;
     private CheckBox darkenDeepOcean;
+    private NColorWidget gridWallColorWidget;
     private NColorWidget fillColorWidget;
     private NColorWidget edgeColorWidget;
     private HSlider lineWidthSlider;
@@ -119,13 +122,6 @@ public class World extends Panel {
 
         // Objects section
         prev = content.add(new Label("● " + L10n.get("world.section.objects")), prev.pos("bl").adds(0, 15));
-        prev = natura = content.add(new CheckBox(L10n.get("world.hide_nature")) {
-            public void set(boolean val) {
-                tempSettings.hideNature = !val;
-                a = val;
-            }
-        }, prev.pos("bl").adds(0, 5));
-
         prev = earthworm = content.add(new CheckBox(L10n.get("world.hide_earthworms")) {
             public void set(boolean val) {
                 tempSettings.hideEarthworm = !val;
@@ -167,13 +163,25 @@ public class World extends Panel {
                 a = val;
             }
         }, prev.pos("bl").adds(0, 5));
-        
+
+        prev = gridWalls = content.add(new CheckBox(L10n.get("world.show_grid_walls")) {
+            public void set(boolean val) {
+                tempSettings.showGridWalls = val;
+                a = val;
+            }
+        }, prev.pos("bl").adds(0, 5));
+
+        prev = gridWallColorWidget = content.add(new NColorWidget(L10n.get("world.grid_wall_color")), prev.pos("bl").adds(20, 5));
+        gridWallColorWidget.color = tempSettings.gridWallColor;
+
+        // -20 on x undoes the +20 indent applied to gridWallColorWidget above so
+        // subsequent widgets return to the normal Objects-section left margin.
         prev = persistentBarrels = content.add(new CheckBox(L10n.get("world.persistent_barrels")) {
             public void set(boolean val) {
                 tempSettings.persistentBarrelLabels = val;
                 a = val;
             }
-        }, prev.pos("bl").adds(0, 5));
+        }, prev.pos("bl").adds(-20, 5));
 
         // Bounding box colors section
         prev = content.add(new Label("● " + L10n.get("world.section.bbox_colors")), prev.pos("bl").adds(0, 15));
@@ -200,9 +208,10 @@ public class World extends Panel {
         pack();
     }
 
-    public void setNatureStatus(Boolean a) {
-        tempSettings.hideNature = a;
-        natura.a = !a;
+    /** Re-reads showBB after the Ctrl+N hotkey changed it while this panel was already open. */
+    public void syncShowBB() {
+        tempSettings.showBB = (Boolean) NConfig.get(NConfig.Key.showBB);
+        boundingBoxes.a = tempSettings.showBB;
     }
 
     @Override
@@ -210,13 +219,13 @@ public class World extends Panel {
         // Load current settings into temporary structure
         tempSettings.flatSurface = (Boolean) NConfig.get(NConfig.Key.nextflatsurface);
         tempSettings.decorativeObjects = (Boolean) NConfig.get(NConfig.Key.nextshowCSprite);
-        tempSettings.hideNature = (Boolean) NConfig.get(NConfig.Key.hideNature);
         tempSettings.hideEarthworm = (Boolean) NConfig.get(NConfig.Key.hideEarthworm);
         tempSettings.showBB = (Boolean) NConfig.get(NConfig.Key.showBB);
         tempSettings.showBeehiveRadius = (Boolean) NConfig.get(NConfig.Key.showBeehiveRadius);
         tempSettings.showTroughRadius = (Boolean) NConfig.get(NConfig.Key.showTroughRadius);
         tempSettings.showMoundBedRadius = (Boolean) NConfig.get(NConfig.Key.showMoundBedRadius);
         tempSettings.showDamageShields = (Boolean) NConfig.get(NConfig.Key.showDamageShields);
+        tempSettings.showGridWalls = (Boolean) NConfig.get(NConfig.Key.gridbox);
         tempSettings.persistentBarrelLabels = (Boolean) NConfig.get(NConfig.Key.persistentBarrelLabels);
         tempSettings.disableTileSmoothing = (Boolean) NConfig.get(NConfig.Key.disableTileSmoothing);
         tempSettings.disableTileTransitions = (Boolean) NConfig.get(NConfig.Key.disableTileTransitions);
@@ -226,6 +235,7 @@ public class World extends Panel {
         // Load colors if they exist in config
         tempSettings.boxFillColor = NConfig.getColor(NConfig.Key.boxFillColor, new Color(227, 28, 1, 195));
         tempSettings.boxEdgeColor = NConfig.getColor(NConfig.Key.boxEdgeColor, new Color(224, 193, 79, 255));
+        tempSettings.gridWallColor = NConfig.getColor(NConfig.Key.gridWallColor, new Color(255, 140, 0, 217));
         
         // Load line width
         Object lineWidthObj = NConfig.get(NConfig.Key.boxLineWidth);
@@ -235,13 +245,13 @@ public class World extends Panel {
         // Update UI components
         flatSurface.a = tempSettings.flatSurface;
         decorativeObjects.a = tempSettings.decorativeObjects;
-        natura.a = !tempSettings.hideNature;
         earthworm.a = !tempSettings.hideEarthworm;
         boundingBoxes.a = tempSettings.showBB;
         beehiveRadius.a = tempSettings.showBeehiveRadius;
         troughRadius.a = tempSettings.showTroughRadius;
         moundBedRadius.a = tempSettings.showMoundBedRadius;
         damageShields.a = tempSettings.showDamageShields;
+        gridWalls.a = tempSettings.showGridWalls;
         persistentBarrels.a = tempSettings.persistentBarrelLabels;
         disableTileSmoothing.a = tempSettings.disableTileSmoothing;
         disableTileTransitions.a = tempSettings.disableTileTransitions;
@@ -249,6 +259,7 @@ public class World extends Panel {
         darkenDeepOcean.a = tempSettings.darkenDeepOcean;
         fillColorWidget.color = tempSettings.boxFillColor;
         edgeColorWidget.color = tempSettings.boxEdgeColor;
+        gridWallColorWidget.color = tempSettings.gridWallColor;
         lineWidthSlider.val = tempSettings.boxLineWidth;
         lineWidthLabel.settext(L10n.get("world.line_width") + " " + tempSettings.boxLineWidth);
     }
@@ -266,7 +277,8 @@ public class World extends Panel {
         NConfig.set(NConfig.Key.showTroughRadius, tempSettings.showTroughRadius);
         NConfig.set(NConfig.Key.showMoundBedRadius, tempSettings.showMoundBedRadius);
         NConfig.set(NConfig.Key.showDamageShields, tempSettings.showDamageShields);
-        
+        NConfig.set(NConfig.Key.gridbox, tempSettings.showGridWalls);
+
         NConfig.set(NConfig.Key.persistentBarrelLabels, tempSettings.persistentBarrelLabels);
         
         // Save tile rendering settings
@@ -290,14 +302,12 @@ public class World extends Panel {
             }
         }
         
-        // Save hideNature setting
-        NConfig.set(NConfig.Key.hideNature, tempSettings.hideNature);
-
-        // Save hideEarthworm setting
+        // Earthworms predate the categorised hiding system and keep their own config key, but
+        // the sweep that applies them is now the shared one.
         boolean oldHideEarthworm = (Boolean) NConfig.get(NConfig.Key.hideEarthworm);
-        NConfig.set(NConfig.Key.hideEarthworm, tempSettings.hideEarthworm);
         if (oldHideEarthworm != tempSettings.hideEarthworm) {
-            NUtils.showHideEarthworm();
+            GobHide.setCategory(GobHide.HideCategory.EARTHWORMS, !tempSettings.hideEarthworm);
+            GobHide.applyAll();
         }
 
         // Update colors from UI widgets
@@ -305,28 +315,14 @@ public class World extends Panel {
         tempSettings.boxEdgeColor = edgeColorWidget.color;
         NConfig.setColor(NConfig.Key.boxFillColor, tempSettings.boxFillColor);
         NConfig.setColor(NConfig.Key.boxEdgeColor, tempSettings.boxEdgeColor);
+        tempSettings.gridWallColor = gridWallColorWidget.color;
+        NConfig.setColor(NConfig.Key.gridWallColor, tempSettings.gridWallColor);
         
         // Save line width setting
         NConfig.set(NConfig.Key.boxLineWidth, tempSettings.boxLineWidth);
 
-        if ((Boolean) NConfig.get(NConfig.Key.hideNature) != tempSettings.hideNature) {
-            // Sync with mini map
-            if (NUtils.getGameUI() != null && NUtils.getGameUI().mmapw != null) {
-                NUtils.getGameUI().mmapw.natura.a = !tempSettings.hideNature;
-            }
-            
-            // Sync with QoL panel
-            if (NUtils.getGameUI() != null && NUtils.getGameUI().opts != null && NUtils.getGameUI().opts.nqolwnd instanceof OptWnd.NSettingsPanel) {
-                OptWnd.NSettingsPanel panel = (OptWnd.NSettingsPanel) NUtils.getGameUI().opts.nqolwnd;
-                if (panel.settingsWindow != null && panel.settingsWindow.qol != null) {
-                    panel.settingsWindow.qol.syncHideNature();
-                }
-            }
-            
-            NUtils.showHideNature();
-        }
-
-        // Force update of all NModelBox instances
+        // Rebuild the cached box styles once, then refresh the live boxes.
+        NModelBox.invalidateStyles();
         try {
             if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null)
             {

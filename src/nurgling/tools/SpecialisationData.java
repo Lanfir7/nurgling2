@@ -15,13 +15,13 @@ public class SpecialisationData {
         data.put("fuel",fuel);
         ArrayList<String> htable = new ArrayList<>(Arrays.asList("Pipeweed", "Green Tea Leaves", "Black Tea Leaves", "Silkworm Egg", "Trees"));
         data.put("htable",htable);
-        ArrayList<String> barrel = new ArrayList<>(Arrays.asList("Quicksilver", "Honey", "Pickling Brine", "Tar"));
+        ArrayList<String> barrel = new ArrayList<>(Arrays.asList("Quicksilver", "Honey", "Pickling Brine", "Grape Juice"));
         data.put("barrel",barrel);
         data.put("cropQ",crops);
         data.put("seedQ",crops);
         ArrayList<String> cheeseRacks = new ArrayList<>(Arrays.asList("Inside", "Cellar", "Outside", "Mine"));
         data.put("cheeseRacks", cheeseRacks);
-        ArrayList<String> cistern = new ArrayList<>(Arrays.asList("Cow Milk", "Goat Milk", "Sheep Milk"));
+        ArrayList<String> cistern = new ArrayList<>(Arrays.asList("Cow Milk", "Goat Milk", "Sheep Milk", "Honey"));
         data.put("cistern", cistern);
         ArrayList<String> picklingJars = new ArrayList<>(Arrays.asList("Beetroots", "Carrots", "Eggs", "Herring", "Olives", "Cucumbers", "Red Onion", "Yellow Onion"));
         data.put("picklingJars", picklingJars);
@@ -39,9 +39,24 @@ public class SpecialisationData {
         
         // Construction materials subtypes
         ArrayList<String> buildMaterials = new ArrayList<>(Arrays.asList(
-            "Block", "Board", "Bone Glue", "Stone", "String", "Nugget", "Metal Bar", "Rope",  
-            "Clay", "Brick", "Thatch", "Branch", "Bough", "Log", "Leather", "Fibre"
+            "Block", "Board", "Stone", "String", "Nugget", "Metal Bar",
+            "Clay", "Brick", "Thatch", "Branch", "Bough", "Log", "Fibre"
         ));
         data.put("buildMaterials", buildMaterials);
+
+        // Stone types selectable for the Paving specialisation (matches Chipper.stones)
+        ArrayList<String> paving = new ArrayList<>(Arrays.asList(
+            "Alabaster", "Apatite", "Arkose", "Basalt", "Bat Rock", "Black Coal", "Black Ore",
+            "Bloodstone", "Breccia", "Cassiterite", "Cat Gold", "Chalcopyrite", "Chert", "Cinnabar",
+            "Diabase", "Diorite", "Direvein", "Dolomite", "Dross", "Eclogite", "Feldspar", "Flint",
+            "Fluorospar", "Gabbro", "Galena", "Gneiss", "Granite", "Graywacke", "Greenschist",
+            "Heavy Earth", "Horn Silver", "Hornblende", "Iron Ochre", "Jasper", "Korund", "Kyanite",
+            "Lava Rock", "Lead Glance", "Leaf Ore", "Limestone", "Malachite", "Marble", "Meteorite",
+            "Mica", "Microlite", "Obsidian", "Olivine", "Orthoclase", "Peacock Ore", "Pegmatite",
+            "Porphyry", "Pumice", "Quarryartz", "Quartz", "Rhyolite", "Rock Crystal", "Sandstone",
+            "Schist", "Schrifterz", "Serpentine", "Shard of Conch", "Silvershine", "Slag", "Slate",
+            "Soapstone", "Sodalite", "Sunstone", "Wine Glance", "Zincspar"
+        ));
+        data.put("paving", paving);
     }
 }

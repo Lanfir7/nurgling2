@@ -13,6 +13,25 @@ import java.util.List;
  * Database migration manager that handles schema updates
  */
 public class MigrationManager {
+    /**
+     * The highest schema version this client knows about. If the database
+     * has a higher version it means a newer client has already migrated it
+     * and this older client may not understand the new columns/tables; we
+     * refuse to sync in that case rather than write incompatible rows.
+     */
+    public static final int CLIENT_MAX_SCHEMA_VERSION = 8;
+
+    public static class SchemaTooNewException extends SQLException {
+        public final int clientVersion;
+        public final int dbVersion;
+        public SchemaTooNewException(int clientVersion, int dbVersion) {
+            super("Database schema version " + dbVersion + " is newer than this client supports ("
+                + clientVersion + "). Update your client to sync with this database.");
+            this.clientVersion = clientVersion;
+            this.dbVersion = dbVersion;
+        }
+    }
+
     private final Connection connection;
     private final DatabaseAdapter adapter;
 
@@ -27,6 +46,10 @@ public class MigrationManager {
 
         if (versionTableExists) {
             currentVersion = getCurrentVersion();
+        }
+
+        if (currentVersion > CLIENT_MAX_SCHEMA_VERSION) {
+            throw new SchemaTooNewException(CLIENT_MAX_SCHEMA_VERSION, currentVersion);
         }
 
         List<Migration> migrations = getMigrations();
@@ -269,185 +292,165 @@ public class MigrationManager {
             }
         });
 
-        migrations.add(new Migration(6, "Add deleted column to areas table for soft delete support") {
+        migrations.add(new Migration(6, "Add uuid + tombstone columns to areas table for stable identity and converged deletes") {
             @Override
             public void run(DatabaseAdapter adapter) throws SQLException {
-                // Check if column already exists
-                boolean columnExists = false;
-                if (adapter instanceof nurgling.db.PostgresAdapter) {
-                    // PostgreSQL: use information_schema with explicit schema
-                    try (ResultSet rs = adapter.executeQuery(
-                            "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'areas' AND column_name = 'deleted'")) {
-                        columnExists = rs.next();
-                    }
-                } else {
-                    // SQLite: use pragma
-                    try (ResultSet rs = adapter.executeQuery("PRAGMA table_info(areas)")) {
-                        while (rs.next()) {
-                            if ("deleted".equals(rs.getString("name"))) {
-                                columnExists = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                if (columnExists) {
-                    System.out.println("deleted column already exists in areas table");
-                } else {
-                    // Add deleted column with default value
-                    if (adapter instanceof nurgling.db.PostgresAdapter) {
-                        adapter.executeUpdate("ALTER TABLE areas ADD COLUMN deleted BOOLEAN DEFAULT FALSE NOT NULL");
-                    } else {
-                        adapter.executeUpdate("ALTER TABLE areas ADD COLUMN deleted INTEGER DEFAULT 0 NOT NULL");
-                    }
-                    System.out.println("Added deleted column to areas table");
-                }
-            }
-        });
+                addColumnIfMissing(adapter, "areas", "uuid", "VARCHAR(36)");
+                addColumnIfMissing(adapter, "areas", "deleted_at", "TIMESTAMP");
 
-        migrations.add(new Migration(7, "Create animal_markers table for Postgres (animal discovery markers)") {
-            @Override
-            public void run(DatabaseAdapter adapter) throws SQLException {
-                if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
-                    return;
+                // Backfill uuid for any rows that lack one. Per-row generation
+                // keeps this database-agnostic (no gen_random_uuid() on SQLite).
+                java.util.List<Integer> pendingIds = new java.util.ArrayList<>();
+                java.util.List<String> pendingProfiles = new java.util.ArrayList<>();
+                try (ResultSet rs = adapter.executeQuery("SELECT id, profile FROM areas WHERE uuid IS NULL")) {
+                    while (rs.next()) {
+                        pendingIds.add(rs.getInt("id"));
+                        pendingProfiles.add(rs.getString("profile"));
+                    }
                 }
-                if (adapter.tableExists("animal_markers")) {
-                    System.out.println("animal_markers table already exists");
-                    return;
+                for (int i = 0; i < pendingIds.size(); i++) {
+                    String uuid = java.util.UUID.randomUUID().toString();
+                    adapter.executeUpdate("UPDATE areas SET uuid = ? WHERE id = ? AND profile = ?",
+                        uuid, pendingIds.get(i), pendingProfiles.get(i));
                 }
-                String createSql = "CREATE TABLE animal_markers (" +
-                    "id SERIAL PRIMARY KEY, " +
-                    "profile VARCHAR(255) NOT NULL, " +
-                    "gob_id BIGINT NOT NULL, " +
-                    "animal_type VARCHAR(128), " +
-                    "display_name VARCHAR(255), " +
-                    "segment_id BIGINT NOT NULL, " +
-                    "tile_x INTEGER NOT NULL, " +
-                    "tile_y INTEGER NOT NULL, " +
-                    "grid_id BIGINT, " +
-                    "local_tile_x INTEGER, " +
-                    "local_tile_y INTEGER, " +
-                    "quality DOUBLE PRECISION, " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "UNIQUE (profile, gob_id)" +
-                    ")";
-                adapter.executeUpdate(createSql);
-                adapter.executeUpdate("CREATE INDEX idx_animal_markers_profile ON animal_markers (profile)");
-                adapter.executeUpdate("CREATE INDEX idx_animal_markers_profile_gob ON animal_markers (profile, gob_id)");
-                System.out.println("Created animal_markers table");
-            }
-        });
+                if (!pendingIds.isEmpty()) {
+                    System.out.println("Backfilled " + pendingIds.size() + " UUIDs for existing areas");
+                }
 
-        migrations.add(new Migration(8, "Add killed_at, killed_by to animal_markers") {
-            @Override
-            public void run(DatabaseAdapter adapter) throws SQLException {
-                if (!(adapter instanceof nurgling.db.PostgresAdapter)) return;
-                if (!adapter.tableExists("animal_markers")) return;
                 try {
-                    adapter.executeUpdate("ALTER TABLE animal_markers ADD COLUMN IF NOT EXISTS killed_at TIMESTAMP");
-                    adapter.executeUpdate("ALTER TABLE animal_markers ADD COLUMN IF NOT EXISTS killed_by VARCHAR(255)");
-                    System.out.println("Added killed_at, killed_by to animal_markers");
+                    adapter.executeUpdate("CREATE UNIQUE INDEX idx_areas_uuid ON areas (uuid)");
                 } catch (SQLException e) {
-                    if (e.getMessage() != null && !e.getMessage().contains("already exists"))
-                        throw e;
+                    if (!isAlreadyExists(e)) throw e;
                 }
-            }
-        });
-
-        migrations.add(new Migration(9, "Add icon_path to animal_markers (saved icon path for reload)") {
-            @Override
-            public void run(DatabaseAdapter adapter) throws SQLException {
-                if (!(adapter instanceof nurgling.db.PostgresAdapter)) return;
-                if (!adapter.tableExists("animal_markers")) return;
                 try {
-                    adapter.executeUpdate("ALTER TABLE animal_markers ADD COLUMN IF NOT EXISTS icon_path VARCHAR(512)");
-                    System.out.println("Added icon_path to animal_markers");
+                    adapter.executeUpdate("CREATE INDEX idx_areas_deleted_at ON areas (deleted_at)");
                 } catch (SQLException e) {
-                    if (e.getMessage() != null && !e.getMessage().contains("already exists"))
-                        throw e;
+                    if (!isAlreadyExists(e)) throw e;
                 }
             }
         });
 
-        migrations.add(new Migration(10, "Create local_timers table for Postgres (resource timers like tar pit, clay pit)") {
+        migrations.add(new Migration(7, "Add presence columns (last_touched_by, last_touched_at) to areas table") {
             @Override
             public void run(DatabaseAdapter adapter) throws SQLException {
-                if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
-                    return;
-                }
-                if (adapter.tableExists("local_timers")) {
-                    System.out.println("local_timers table already exists");
-                    return;
-                }
-                // All times stored as UTC milliseconds to avoid timezone issues
-                // Server is GMT+0, clients may be GMT+2 or other timezones
-                String createSql = "CREATE TABLE local_timers (" +
-                    "id SERIAL PRIMARY KEY, " +
-                    "profile VARCHAR(255) NOT NULL, " +
-                    "resource_id VARCHAR(512) NOT NULL, " +  // Unique ID: res_segmentId_x_y_resourceType
-                    "segment_id BIGINT NOT NULL, " +
-                    "tile_x INTEGER NOT NULL, " +
-                    "tile_y INTEGER NOT NULL, " +
-                    "resource_name VARCHAR(255), " +
-                    "resource_type VARCHAR(512), " +  // e.g., gfx/terobjs/map/tarpit
-                    "start_time_utc BIGINT NOT NULL, " +  // Unix timestamp in milliseconds (UTC)
-                    "duration_ms BIGINT NOT NULL, " +  // Duration in milliseconds
-                    "description VARCHAR(512), " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "UNIQUE (profile, resource_id)" +
-                    ")";
-                adapter.executeUpdate(createSql);
-                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile ON local_timers (profile)");
-                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile_resource ON local_timers (profile, resource_id)");
-                adapter.executeUpdate("CREATE INDEX idx_local_timers_expiration ON local_timers (profile, start_time_utc, duration_ms)");
-                System.out.println("Created local_timers table");
+                addColumnIfMissing(adapter, "areas", "last_touched_by", "VARCHAR(255)");
+                addColumnIfMissing(adapter, "areas", "last_touched_at", "TIMESTAMP");
             }
         });
 
-        migrations.add(new Migration(11, "Create craft_recipes table for ingredient-to-recipe lookup") {
+        migrations.add(new Migration(8, "Create planning_folders / planning_layers / planning_ghosts tables for Base planner") {
             @Override
             public void run(DatabaseAdapter adapter) throws SQLException {
-                if (adapter.tableExists("craft_recipes")) {
-                    System.out.println("craft_recipes table already exists");
-                    return;
+                // NOTE: visibility intentionally NOT a column — it's a local
+                // per-user preference stored alongside the DB in
+                // planning_view.nurgling.json.
+                if (!adapter.tableExists("planning_folders")) {
+                    adapter.executeUpdate(
+                        "CREATE TABLE planning_folders (" +
+                        "id VARCHAR(36) PRIMARY KEY, " +
+                        "name VARCHAR(255) NOT NULL, " +
+                        "order_index INTEGER NOT NULL DEFAULT 0, " +
+                        "profile VARCHAR(255) NOT NULL DEFAULT 'global', " +
+                        "version INTEGER NOT NULL DEFAULT 1, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "last_touched_by VARCHAR(255), " +
+                        "last_touched_at TIMESTAMP, " +
+                        "deleted_at TIMESTAMP" +
+                        ")");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pf_profile ON planning_folders (profile)");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pf_deleted ON planning_folders (deleted_at)");
+                    System.out.println("Created planning_folders table");
                 }
-                String createSql = "CREATE TABLE craft_recipes (" +
-                    "ingredient_name VARCHAR(255) NOT NULL, " +
-                    "pagina_resource VARCHAR(512) NOT NULL, " +
-                    "recipe_name VARCHAR(255) NOT NULL, " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "PRIMARY KEY (ingredient_name, pagina_resource)" +
-                    ")";
-                adapter.executeUpdate(createSql);
-                adapter.executeUpdate("CREATE INDEX idx_craft_recipes_ingredient ON craft_recipes (ingredient_name)");
-                System.out.println("Created craft_recipes table");
-            }
-        });
 
-        migrations.add(new Migration(12, "Recreate craft_recipes with mapping_type (input/output separation)") {
-            @Override
-            public void run(DatabaseAdapter adapter) throws SQLException {
-                // Drop old table — it's a cache, will be repopulated when recipes are opened
-                adapter.executeUpdate("DROP TABLE IF EXISTS craft_recipes");
-                adapter.executeUpdate("DROP INDEX IF EXISTS idx_craft_recipes_ingredient");
-                String createSql = "CREATE TABLE craft_recipes (" +
-                    "item_name VARCHAR(255) NOT NULL, " +
-                    "pagina_resource VARCHAR(512) NOT NULL, " +
-                    "recipe_name VARCHAR(255) NOT NULL, " +
-                    "mapping_type VARCHAR(10) NOT NULL DEFAULT 'input', " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "PRIMARY KEY (item_name, pagina_resource, mapping_type)" +
-                    ")";
-                adapter.executeUpdate(createSql);
-                adapter.executeUpdate("CREATE INDEX idx_craft_recipes_item_type ON craft_recipes (item_name, mapping_type)");
-                System.out.println("Recreated craft_recipes table with mapping_type column");
+                if (!adapter.tableExists("planning_layers")) {
+                    adapter.executeUpdate(
+                        "CREATE TABLE planning_layers (" +
+                        "id VARCHAR(36) PRIMARY KEY, " +
+                        "parent_folder_id VARCHAR(36), " +
+                        "name VARCHAR(255) NOT NULL, " +
+                        "order_index INTEGER NOT NULL DEFAULT 0, " +
+                        "profile VARCHAR(255) NOT NULL DEFAULT 'global', " +
+                        "version INTEGER NOT NULL DEFAULT 1, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "last_touched_by VARCHAR(255), " +
+                        "last_touched_at TIMESTAMP, " +
+                        "deleted_at TIMESTAMP" +
+                        ")");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pl_profile ON planning_layers (profile)");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pl_parent ON planning_layers (parent_folder_id)");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pl_deleted ON planning_layers (deleted_at)");
+                    System.out.println("Created planning_layers table");
+                }
+
+                if (!adapter.tableExists("planning_ghosts")) {
+                    adapter.executeUpdate(
+                        "CREATE TABLE planning_ghosts (" +
+                        "id VARCHAR(36) PRIMARY KEY, " +
+                        "layer_id VARCHAR(36) NOT NULL, " +
+                        "res_name VARCHAR(512) NOT NULL, " +
+                        "sdt_b64 TEXT, " +
+                        "grid_id BIGINT NOT NULL, " +
+                        "ox DOUBLE PRECISION NOT NULL, " +
+                        "oy DOUBLE PRECISION NOT NULL, " +
+                        "angle DOUBLE PRECISION NOT NULL, " +
+                        "profile VARCHAR(255) NOT NULL DEFAULT 'global', " +
+                        "version INTEGER NOT NULL DEFAULT 1, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "last_touched_by VARCHAR(255), " +
+                        "last_touched_at TIMESTAMP, " +
+                        "deleted_at TIMESTAMP" +
+                        ")");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pg_profile ON planning_ghosts (profile)");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pg_layer ON planning_ghosts (layer_id)");
+                    safeCreateIndex(adapter, "CREATE INDEX idx_pg_deleted ON planning_ghosts (deleted_at)");
+                    System.out.println("Created planning_ghosts table");
+                }
             }
         });
 
         return migrations;
+    }
+
+    private static void safeCreateIndex(DatabaseAdapter adapter, String sql) throws SQLException {
+        try {
+            adapter.executeUpdate(sql);
+        } catch (SQLException e) {
+            if (!isAlreadyExists(e)) throw e;
+        }
+    }
+
+    /** Helper: ALTER TABLE ADD COLUMN unless the column already exists. */
+    private static void addColumnIfMissing(DatabaseAdapter adapter, String table, String column, String type)
+            throws SQLException {
+        boolean exists = false;
+        if (adapter instanceof nurgling.db.PostgresAdapter) {
+            try (ResultSet rs = adapter.executeQuery(
+                    "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
+                    table, column)) {
+                exists = rs.next();
+            }
+        } else {
+            try (ResultSet rs = adapter.executeQuery("PRAGMA table_info(" + table + ")")) {
+                while (rs.next()) {
+                    if (column.equals(rs.getString("name"))) {
+                        exists = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!exists) {
+            adapter.executeUpdate("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
+            System.out.println("Added column " + table + "." + column);
+        }
+    }
+
+    private static boolean isAlreadyExists(SQLException e) {
+        if (e.getSQLState() != null && (e.getSQLState().equals("42P07") || e.getSQLState().equals("42S11"))) {
+            return true;
+        }
+        String msg = e.getMessage();
+        return msg != null && msg.toLowerCase().contains("already exists");
     }
 
     private void ensureSqliteUniqueConstraints(DatabaseAdapter adapter) throws SQLException {

@@ -4,14 +4,13 @@ import haven.*;
 import haven.res.ui.tt.wear.Wear;
 import nurgling.*;
 import nurgling.tasks.*;
-import nurgling.tools.NAlias;
 
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AutoSaveTableware implements Action
 {
-    public final static AtomicBoolean stop = new AtomicBoolean(false);
+    public final AtomicBoolean stop = new AtomicBoolean(false);
     NInventory tableInv = null;
     NInventory scInv = null;
     public AutoSaveTableware()
@@ -37,7 +36,6 @@ public class AutoSaveTableware implements Action
 
             if (stop.get())
             {
-                NUtils.getUI().core.autoSaveTableware = null;
                 return Results.SUCCESS();
             }
 
@@ -56,7 +54,11 @@ public class AutoSaveTableware implements Action
                         if (w.m - w.d <= 1)
                         {
                             witem.item.wdgmsg("transfer", haven.Coord.z);
-                            NUtils.addTask(new nurgling.tasks.ISRemoved(witem.item.wdgid()));
+                            try {
+                                NUtils.addTask(new nurgling.tasks.ISRemoved(witem.item.wdgid()));
+                            } catch (InterruptedException e) {
+                                if (stop.get()) throw e;
+                            }
                         }
                     }
                 }
@@ -64,7 +66,6 @@ public class AutoSaveTableware implements Action
         }
 
 
-        NUtils.getUI().core.autoSaveTableware = null;
         return Results.SUCCESS();
     }
 

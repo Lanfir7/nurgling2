@@ -36,18 +36,34 @@ public class NFlowerMenu extends FlowerMenu
 
     int len = 0;
     public boolean shiftMode = false;
+    // Whether ctrl was held when this menu was opened (the originating right-click).
+    // Captured at construction because the user releases ctrl before picking a petal.
+    // Used to trigger the auto action selector (apply chosen action to all matching items).
+    public boolean ctrlMode = false;
 
-    // Constructor called by FlowerMenu Factory - includes tree/bush detection
     public NFlowerMenu(String[] opts, UI ui)
     {
-        this(processOptions(opts, ui));
+        super();
+        // Use the factory-provided ui parameter — this constructor runs on a Loader
+        // thread which has no ThreadLocalUI, so NUtils.getGameUI() would return the
+        // wrong (active visual) session's GUI or null, causing NPE or cross-session state.
+        shiftMode = ui.gui != null && ui.gui.map instanceof NMapView && ((NMapView) ui.gui.map).shiftPressed;
+        ctrlMode = ui.modctrl;
+        initOpts(opts);
     }
 
     // Constructor for custom menus - no tree/bush detection
     public NFlowerMenu(String[] opts)
     {
         super();
-        shiftMode = ((NMapView)NUtils.getGameUI().map).shiftPressed;
+        NGameUI gui = NUtils.getGameUI();
+        shiftMode = gui != null && gui.map instanceof NMapView && ((NMapView) gui.map).shiftPressed;
+        ctrlMode = gui != null && gui.ui != null && gui.ui.modctrl;
+        initOpts(opts);
+    }
+
+    private void initOpts(String[] opts)
+    {
         nopts = new NPetal[opts.length];
         itemHeight = bl.sz().y + UI.scale(2);
         int y = 0;
@@ -144,6 +160,10 @@ public class NFlowerMenu extends FlowerMenu
             return;
         }
         if(!ui.modshift && (Boolean) NConfig.get(NConfig.Key.asenable) && !NContext.waitBot.get()) {
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        if(!ui.modshift && (Boolean) NConfig.get(NConfig.Key.asenable) && (ui.gui == null || ui.gui.biw == null || !ui.gui.biw.waitBot.get())) {
             if ((Boolean) NConfig.get(NConfig.Key.singlePetal) && nopts.length == 1 && (NUtils.getUI().core.getLastActions()==null || NUtils.getUI().core.getLastActions().item == null)) {
                 nchoose(nopts[0]);
             } else {
@@ -234,12 +254,12 @@ public class NFlowerMenu extends FlowerMenu
                 }
             }
         }
-        if(!ui.modshift && !NUtils.getUI().core.isBotmod() && (Boolean)NConfig.get(NConfig.Key.autoFlower))
+        if(!ui.modshift && !NUtils.getUI().core.isBotmod() && ctrlMode)
         {
             if (option != null && NUtils.getUI().core.getLastActions()!=null)
             {
                 if (NUtils.getUI().core.getLastActions().item != null && NUtils.getUI().core.getLastActions().item.parent instanceof NInventory && ((NGItem)NUtils.getUI().core.getLastActions().item.item).name()!=null) {
-                    if (!option.name.equals("Split") || ((NGItem)NUtils.getUI().core.getLastActions().item.item).name().startsWith("Block") || ((NGItem)NUtils.getUI().core.getLastActions().item.item).name().startsWith("Head of")) {
+                    if (!option.name.equals("Split") || ((NGItem)NUtils.getUI().core.getLastActions().item.item).name().startsWith("Block") || ((NGItem)NUtils.getUI().core.getLastActions().item.item).name().startsWith("Head of") || ((NGItem)NUtils.getUI().core.getLastActions().item.item).name().equals("Garlic")) {
                         AutoChooser.enable((NInventory) NUtils.getUI().core.getLastActions().item.parent,((NGItem)NUtils.getUI().core.getLastActions().item.item).name(), option.name);
                     }
                 }

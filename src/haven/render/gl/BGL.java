@@ -484,12 +484,6 @@ public abstract class BGL {
 	    });
     }
 
-    public void glDisableClientState(final int cap) {
-	add(new Command() {
-		public void run(GL gl) {gl.glDisableClientState(cap);}
-	    });
-    }
-
     public void glDisableVertexAttribArray(final ID location) {
 	add(new Command() {
 		public void run(GL gl) {gl.glDisableVertexAttribArray(location.glid());}
@@ -556,12 +550,6 @@ public abstract class BGL {
 	    });
     }
 
-    public void glEnableClientState(final int cap) {
-	add(new Command() {
-		public void run(GL gl) {gl.glEnableClientState(cap);}
-	    });
-    }
-
     public void glEnableVertexAttribArray(final ID location) {
 	add(new Command() {
 		public void run(GL gl) {gl.glEnableVertexAttribArray(location.glid());}
@@ -574,9 +562,33 @@ public abstract class BGL {
 	    });
     }
 
+    public void glDebugMessageInsert(final int source, final int type, final int id, final int severity, final String message) {
+	add(new Command() {
+		public void run(GL gl) {gl.glDebugMessageInsert(source, type, id, severity, message);}
+	    });
+    }
+
+    public void glPushDebugGroup(final int source, final int id, final String message) {
+	add(new Command() {
+		public void run(GL gl) {gl.glPushDebugGroup(source, id, message);}
+	    });
+    }
+
+    public void glPopDebugGroup() {
+	add(new Command() {
+		public void run(GL gl) {gl.glPopDebugGroup();}
+	    });
+    }
+
     public void glDeleteSync(final long id) {
 	add(new Command() {
 		public void run(GL gl) {gl.glDeleteSync(id);}
+	    });
+    }
+
+    public void glFinish() {
+	add(new Command() {
+		public void run(GL gl) {gl.glFinish();}
 	    });
     }
 

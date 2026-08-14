@@ -24,7 +24,7 @@ public class WildTuberFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Wild Tuber");
+        nContext.goToArea(Specialisation.SpecName.crop, "Wild Tuber");
 
         ArrayList<NArea.Specialisation> req = new ArrayList<>();
         req.add(field);
@@ -59,7 +59,7 @@ public class WildTuberFarmer implements Action {
             if (NContext.findSpec(wildTuberAsSeed) != null)
                 new CollectItemsToPile(NContext.findSpec(field).getRCArea(), NContext.findSpec(wildTuberAsSeed).getRCArea(), new NAlias("items/pretuber", "Wild Tuber")).run(gui);
 
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(wildTuberAsSeed), new NAlias("plants/tuber"), new NAlias("Wild Tuber"), true).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(wildTuberAsSeed), new NAlias("plants/tuber")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 

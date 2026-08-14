@@ -34,6 +34,7 @@ public class NCore extends Widget
     public AutoSaveTableware autoSaveTableware = null;
     public ScenarioManager scenarioManager = new ScenarioManager();
     public EquipmentPresetManager equipmentPresetManager = new EquipmentPresetManager();
+    public nurgling.planning.PlanningLayerManager planningLayer = new nurgling.planning.PlanningLayerManager();
 
     public static volatile nurgling.db.DatabaseManager databaseManager = null;
     public boolean isInspectMode()
@@ -59,11 +60,22 @@ public class NCore extends Widget
     {
         synchronized (tasks)
         {
+            for (final PendingTask pt : pending_notify)
+            {
+                synchronized (pt.task)
+                {
+                    pt.task.notify();
+                }
+            }
+            pending_notify.clear();
             if(tasks.size()>0)
             {
                 for (final NTask task : tasks)
                 {
-                    task.notify();
+                    synchronized (task)
+                    {
+                        task.notify();
+                    }
                 }
                 tasks.clear();
             }
@@ -160,6 +172,21 @@ public class NCore extends Widget
 
     private final LinkedList<NTask> for_remove = new LinkedList<>();
     private final ConcurrentLinkedQueue<NTask> tasks = new ConcurrentLinkedQueue<>();
+
+    // Deferred notification: tasks wait here after their condition becomes true
+    // until all widget commands have been processed (UI CommandQueue idle).
+    // This ensures container contents, inventory items, etc. are fully loaded
+    // before the bot acts on them.
+    private static final long PENDING_SAFETY_TIMEOUT_MS = 2000;
+    private static class PendingTask {
+        final NTask task;
+        final long completedAt;
+        PendingTask(NTask task) {
+            this.task = task;
+            this.completedAt = System.currentTimeMillis();
+        }
+    }
+    private final LinkedList<PendingTask> pending_notify = new LinkedList<>();
     
     // Throttling и дедупликация для сохранения рецептов
     private final Map<String, Long> lastSavedRecipes = new ConcurrentHashMap<>();
@@ -233,6 +260,7 @@ public class NCore extends Widget
     public void updateConfigForProfile(String genus) {
         if (genus != null && !genus.isEmpty()) {
             config = nurgling.profiles.ConfigFactory.getConfig(genus);
+            planningLayer.initializeForProfile(genus);
         }
     }
 
@@ -245,22 +273,18 @@ public class NCore extends Widget
         if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager == null && !dbInitInProgress)
         {
             synchronized (dbLock) {
-                if (databaseManager == null && !dbInitInProgress) {  // Double-check inside lock
+                if (databaseManager == null && !dbInitInProgress) {
                     dbInitInProgress = true;
-                    // Инициализируем DatabaseManager в отдельном потоке, чтобы не блокировать главный цикл
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                databaseManager = new nurgling.db.DatabaseManager(1);
-                                // Start area and route sync after database is initialized
-                                startAreaSync();
-                            } catch (Exception e) {
-                                System.err.println("Failed to initialize DatabaseManager in background: " + e.getMessage());
-                                e.printStackTrace();
-                            } finally {
-                                dbInitInProgress = false;
-                            }
+                    new Thread(() -> {
+                        try {
+                            databaseManager = new nurgling.db.DatabaseManager(1);
+                            startAreaSync();
+                            startPlanningSync();
+                        } catch (Exception e) {
+                            System.err.println("Failed to initialize DatabaseManager in background: " + e.getMessage());
+                            e.printStackTrace();
+                        } finally {
+                            dbInitInProgress = false;
                         }
                     }, "DatabaseManager-Init").start();
                 }
@@ -272,6 +296,7 @@ public class NCore extends Widget
             synchronized (dbLock) {
                 if (databaseManager != null) {
                     stopAreaSync();
+                    stopPlanningSync();
                     databaseManager.shutdown();
                     databaseManager = null;
                 }
@@ -282,12 +307,14 @@ public class NCore extends Widget
         {
             autoDrink = new AutoDrink();
             BotExecutor.runTask("AutoDrink", () -> {
-                NGameUI gui = NUtils.getGameUI();
-                if (gui != null) {
-                    try {
+                try {
+                    NGameUI gui = NUtils.getGameUI();
+                    if (gui != null) {
                         autoDrink.run(gui);
-                    } catch (InterruptedException ignored) {
                     }
+                } catch (InterruptedException ignored) {
+                } finally {
+                    autoDrink = null;
                 }
             });
         }
@@ -303,12 +330,14 @@ public class NCore extends Widget
         {
             autoSaveTableware = new AutoSaveTableware();
             BotExecutor.runTask("AutoSaveTableware", () -> {
-                NGameUI gui = NUtils.getGameUI();
-                if (gui != null) {
-                    try {
+                try {
+                    NGameUI gui = NUtils.getGameUI();
+                    if (gui != null) {
                         autoSaveTableware.run(gui);
-                    } catch (InterruptedException ignored) {
                     }
+                } catch (InterruptedException ignored) {
+                } finally {
+                    autoSaveTableware = null;
                 }
             });
         }
@@ -316,7 +345,7 @@ public class NCore extends Widget
         {
             if(autoSaveTableware != null && !(Boolean)NConfig.get(NConfig.Key.autoSaveTableware))
             {
-                AutoSaveTableware.stop.set(true);
+                autoSaveTableware.stop.set(true);
             }
         }
         super.tick(dt);
@@ -332,9 +361,19 @@ public class NCore extends Widget
         {
             config.write();
         }
-        if (config.isAreasUpdated())
+        // Area-save trigger is now per-session: check THIS session's own MCache
+        // dirty flag (not the genus-shared NConfig) so a same-world session can't
+        // clear our flag before our edit is written.
+        if (ui != null && ui.gui != null && ui.gui.map != null)
         {
-            config.writeAreas(null);
+            nurgling.NMapView amap = (nurgling.NMapView) ui.gui.map;
+            if (amap.glob.map.isAreasUpdated())
+            {
+                config.writeAreas(null);
+            }
+            // File mode: pick up area edits another in-process session wrote to
+            // the shared per-genus file (no-op in DB mode, which uses the sync worker).
+            amap.reloadAreasFromFileIfChanged();
         }
         if (config.isExploredUpdated())
         {
@@ -344,18 +383,46 @@ public class NCore extends Widget
         {
             config.writeScenarios(null);
         }
+        planningLayer.tick();
+        if (planningLayer.isDirty())
+        {
+            planningLayer.save();
+        }
         synchronized (tasks)
         {
+            // Phase 1: Notify pending tasks when all widget commands have
+            // been processed (CommandQueue score is empty). This means every
+            // NewWidget, AddWidget, and UiMessage in the dependency chain
+            // has finished — windows, inventories, and items are fully created.
+            if(!pending_notify.isEmpty())
+            {
+                boolean queueIdle = ui.queue.isIdle();
+                long now = System.currentTimeMillis();
+                Iterator<PendingTask> pit = pending_notify.iterator();
+                while(pit.hasNext())
+                {
+                    PendingTask pt = pit.next();
+                    if(queueIdle || (now - pt.completedAt >= PENDING_SAFETY_TIMEOUT_MS))
+                    {
+                        synchronized (pt.task)
+                        {
+                            pt.task.notify();
+                        }
+                        pit.remove();
+                    }
+                }
+            }
+
+            // Phase 2: Check active tasks. Completed ones are moved to
+            // pending_notify. baseCheck() is called exactly once per task
+            // (no counter double-counting).
             for(final NTask task: tasks)
             {
                 try
                 {
                     if(task.baseCheck())
                     {
-                        synchronized (task)
-                        {
-                            task.notify();
-                        }
+                        pending_notify.add(new PendingTask(task));
                         for_remove.add(task);
                     }
                 }
@@ -377,15 +444,14 @@ public class NCore extends Widget
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException("Thread was interrupted before addTask");
         }
-        
-        if(!task.check())
+        synchronized (task)
         {
-            synchronized (tasks)
+            if(!task.check())
             {
-                tasks.add(task);
-            }
-            synchronized (task)
-            {
+                synchronized (tasks)
+                {
+                    tasks.add(task);
+                }
                 try {
                     task.wait();
                     if(task.criticalExit)
@@ -398,10 +464,10 @@ public class NCore extends Widget
                     synchronized (tasks)
                     {
                         tasks.remove(task);
+                        pending_notify.removeIf(pt -> pt.task == task);
                         throw e;
                     }
                 }
-
             }
         }
         if(task.criticalExit)
@@ -826,6 +892,7 @@ public class NCore extends Widget
     }
 
     private static volatile boolean areaSyncStarted = false;
+    private static volatile boolean planningSyncStarted = false;
     private static volatile boolean routeSyncStarted = false;
 
     /**
@@ -851,99 +918,72 @@ public class NCore extends Widget
 
         final String syncProfile = profile;
 
-        // Start sync with 4 second interval
+        // Start sync with 4 second interval. Conflict resolution (OCC + 3-way
+        // merge) happens in AreaService; this callback just applies results.
         databaseManager.getAreaService().startSync(syncProfile, 4,
             new nurgling.db.service.AreaService.AreaSyncCallback() {
                 @Override
                 public void onAreasUpdated(java.util.List<nurgling.areas.NArea> updatedAreas) {
-                    // Update areas in map cache
-                    if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null &&
-                        NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
-                        long now = System.currentTimeMillis();
-                        int skipped = 0;
-                        int updated = 0;
-                        boolean needsWidgetRefresh = false;
+                    if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null ||
+                        NUtils.getGameUI().map.glob == null || NUtils.getGameUI().map.glob.map == null) {
+                        return;
+                    }
+                    int updated = 0;
+                    boolean needsWidgetRefresh = false;
+                    java.util.Map<Integer, nurgling.areas.NArea> areasMap = NUtils.getGameUI().map.glob.map.areas;
+                    // Same lock NMapView.tick uses when iterating areas (line ~865).
+                    synchronized (areasMap) {
                         for (nurgling.areas.NArea newArea : updatedAreas) {
-                            // Check if this area was deleted locally - don't restore it
-                            boolean isLocallyDeleted = ((NMapView)NUtils.getGameUI().map).isLocallyDeleted(newArea.id);
-                            if (isLocallyDeleted) {
-                                System.out.println("Area sync: Skipping locally deleted area " + newArea.id + " (" + newArea.name + ")");
-                                skipped++;
+                            if (((NMapView)NUtils.getGameUI().map).isLocallyDeleted(newArea.id)) {
                                 continue;
                             }
-
-                            // Check if this area was modified locally recently
-                            // Window = debounce(3s) + save time(2s) + buffer(5s) = 10s
-                            nurgling.areas.NArea localArea = NUtils.getGameUI().map.glob.map.areas.get(newArea.id);
-                            if (localArea != null && (now - localArea.lastLocalChange) < 10000) {
-                                // Skip - local changes are still pending save
-                                skipped++;
-                                continue;
-                            }
-
-                            // Also skip if local version >= DB version (we just saved it)
-                            if (localArea != null && localArea.version >= newArea.version) {
-                                skipped++;
-                                continue;
-                            }
-
+                            nurgling.areas.NArea localArea = areasMap.get(newArea.id);
                             if (localArea != null) {
-                                // Update existing area object (preserves references in labels/lists)
                                 localArea.updateFrom(newArea);
                             } else {
-                                // New area - add it
-                                NUtils.getGameUI().map.glob.map.areas.put(newArea.id, newArea);
+                                areasMap.put(newArea.id, newArea);
                             }
                             needsWidgetRefresh = true;
-                            
-                            // Force overlay to redraw
                             try {
                                 nurgling.overlays.map.NOverlay overlay = NUtils.getGameUI().map.nols.get(newArea.id);
-                                if (overlay != null) {
-                                    overlay.requpdate2 = true;
-                                }
-                            } catch (Exception e) {
-                                // Ignore overlay refresh errors
-                            }
+                                if (overlay != null) overlay.requpdate2 = true;
+                            } catch (Exception ignore) {}
                             updated++;
                         }
-                        
-                        // Refresh area labels and widget
-                        if (needsWidgetRefresh) {
-                            refreshAreaLabelsAndWidget();
-                        }
-                        
-                        if (updated > 0) {
-                            System.out.println("Updated " + updated + " areas from database" + (skipped > 0 ? " (skipped " + skipped + " with pending local changes)" : ""));
-                        }
+                    }
+                    if (needsWidgetRefresh) {
+                        refreshAreaLabelsAndWidget();
+                    }
+                    if (updated > 0) {
+                        System.out.println("Sync: applied " + updated + " merged area update(s)");
                     }
                 }
 
                 @Override
                 public void onAreaDeleted(int areaId) {
-                    // Remove area from map cache
                     if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null &&
                         NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
-                        NUtils.getGameUI().map.glob.map.areas.remove(areaId);
+                        java.util.Map<Integer, nurgling.areas.NArea> areasMap = NUtils.getGameUI().map.glob.map.areas;
+                        synchronized (areasMap) {
+                            areasMap.remove(areaId);
+                        }
                         refreshAreaLabelsAndWidget();
-                        System.out.println("Deleted area " + areaId + " from database sync");
+                        System.out.println("Sync: area " + areaId + " was tombstoned by another client");
                     }
                 }
 
                 @Override
                 public void onFullSync(java.util.Map<Integer, nurgling.areas.NArea> allAreas) {
-                    // Replace all areas in map cache, but filter out locally deleted areas
                     if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null &&
                         NUtils.getGameUI().map.glob != null && NUtils.getGameUI().map.glob.map != null) {
-                        NUtils.getGameUI().map.glob.map.areas.clear();
-                        for (java.util.Map.Entry<Integer, nurgling.areas.NArea> entry : allAreas.entrySet()) {
-                            // Skip areas that were deleted locally
-                            boolean isLocallyDeleted = ((NMapView)NUtils.getGameUI().map).isLocallyDeleted(entry.getKey());
-                            if (isLocallyDeleted) {
-                                System.out.println("Full sync: Skipping locally deleted area " + entry.getKey() + " (" + entry.getValue().name + ")");
-                                continue;
+                        java.util.Map<Integer, nurgling.areas.NArea> areasMap = NUtils.getGameUI().map.glob.map.areas;
+                        synchronized (areasMap) {
+                            areasMap.clear();
+                            for (java.util.Map.Entry<Integer, nurgling.areas.NArea> entry : allAreas.entrySet()) {
+                                boolean isLocallyDeleted = ((NMapView)NUtils.getGameUI().map).isLocallyDeleted(entry.getKey());
+                                if (isLocallyDeleted) continue;
+                                areasMap.put(entry.getKey(), entry.getValue());
                             }
-                            NUtils.getGameUI().map.glob.map.areas.put(entry.getKey(), entry.getValue());
                         }
                         refreshAreaLabelsAndWidget();
                         System.out.println("Full sync: loaded " + allAreas.size() + " areas from database");
@@ -1004,6 +1044,69 @@ public class NCore extends Widget
             databaseManager.getAreaService().stopSync();
         }
         areaSyncStarted = false;
+    }
+
+    /**
+     * Start Base planner DB sync. Pushes the current in-memory tree to DB
+     * once (so existing local content survives the toggle), then lets the
+     * service's scheduler take over.
+     */
+    private void startPlanningSync() {
+        if (planningSyncStarted || databaseManager == null || !databaseManager.isReady()) {
+            return;
+        }
+        nurgling.db.service.PlanningService svc = databaseManager.getPlanningService();
+        if (svc == null) return;
+
+        // One-shot push of whatever the manager has in memory so the toggle
+        // doesn't appear to drop user content. The subsequent bulk-load from
+        // sync will merge in anything other clients added.
+        try {
+            if (planningLayer != null) planningLayer.exportTreeToDatabase();
+        } catch (Exception e) {
+            System.err.println("Planning sync: initial export failed: " + e.getMessage());
+        }
+
+        // Adapter callback that resolves the current session's PlanningLayerManager
+        // dynamically on each invocation. NUI lifecycle (login screen + game)
+        // creates more than one NCore over the app's life, and `this.planningLayer`
+        // captured at startSync time can become stale. Resolving each time via
+        // NUtils.getUI() (which honors ThreadLocalUI bound by syncTick) sends the
+        // event to whichever NCore the current session actually uses. Same pattern
+        // as AreaService's onAreasUpdated.
+        svc.startSync(4, new nurgling.db.service.PlanningService.PlanningSyncCallback() {
+            private nurgling.planning.PlanningLayerManager current() {
+                try {
+                    NUI ui = NUtils.getUI();
+                    if (ui != null && ui.core != null) {
+                        return ui.core.planningLayer;
+                    }
+                } catch (Exception ignore) {}
+                return null;
+            }
+            @Override
+            public void onFullSync(nurgling.db.service.PlanningService.TreeSnapshot snap) {
+                nurgling.planning.PlanningLayerManager mgr = current();
+                if (mgr != null) mgr.onFullSync(snap);
+            }
+            @Override
+            public void onSyncDelta(nurgling.db.service.PlanningService.SyncDelta delta) {
+                nurgling.planning.PlanningLayerManager mgr = current();
+                if (mgr != null) mgr.onSyncDelta(delta);
+            }
+        });
+        planningSyncStarted = true;
+        System.out.println("Planning sync started");
+    }
+
+    /**
+     * Stop Base planner DB sync.
+     */
+    private void stopPlanningSync() {
+        if (databaseManager != null && databaseManager.getPlanningService() != null) {
+            databaseManager.getPlanningService().stopSync();
+        }
+        planningSyncStarted = false;
     }
 
 }

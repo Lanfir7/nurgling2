@@ -26,7 +26,7 @@ public class WildFlowerFarmer implements Action {
         NArea.Specialisation trough = new NArea.Specialisation(Specialisation.SpecName.trough.toString());
         NArea.Specialisation swill = new NArea.Specialisation(Specialisation.SpecName.swill.toString());
 
-        nContext.getSpecArea(Specialisation.SpecName.crop, "Wild Flower");
+        nContext.goToArea(Specialisation.SpecName.crop, "Wild Flower");
 
         NArea wildFlowerArea = NContext.findOut("Wildflower", 1);
 
@@ -66,7 +66,7 @@ public class WildFlowerFarmer implements Action {
             
             if (wildFlowerArea != null)
                 new CollectItemsToPile(NContext.findSpec(field).getRCArea(), wildFlowerArea.getRCArea(), new NAlias(new ArrayList<>(Arrays.asList("flower-wild", "Wildflower")), new ArrayList<>(Arrays.asList("seed")))).run(gui);
-            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/wildflower"), new NAlias("Wildflower Seeds"), false).run(gui);
+            new SeedCrop(NContext.findSpec(field), NContext.findSpec(seed), new NAlias("plants/wildflower")).run(gui);
 
             NUtils.stackSwitch(oldStackingValue);
 
