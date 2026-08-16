@@ -278,6 +278,10 @@ public class BotsInterruptWidget extends Widget {
         repack();
     }
 
+    public void interruptAllBots() {
+        interruptAll();
+    }
+
 //    @Override
 //    public void draw(GOut g) {
 //        Coord pcc = null;

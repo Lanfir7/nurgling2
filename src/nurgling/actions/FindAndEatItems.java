@@ -24,6 +24,11 @@ public class FindAndEatItems implements Action
         this.level = level;
     }
 
+    public FindAndEatItems(NContext context, ArrayList<String> items, int level, Pair<Coord2d, Coord2d> area, NArea nArea)
+    {
+        this(context, items, level);
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {

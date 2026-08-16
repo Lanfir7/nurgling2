@@ -177,6 +177,24 @@ public class ExploredArea {
     private long lastSessionSaveTime = 0;
     private static final long SESSION_SAVE_INTERVAL = 5000; // Save every 5 seconds max
     
+    public static class GridMask {
+        public final boolean[] mask;
+        public volatile long seq;
+        public volatile boolean hasAny;
+
+        public GridMask(boolean[] existingMask) {
+            this.mask = existingMask;
+            this.seq = ExploredArea.seq;
+            boolean any = false;
+            if (existingMask != null) {
+                for (boolean b : existingMask) {
+                    if (b) { any = true; break; }
+                }
+            }
+            this.hasAny = any;
+        }
+    }
+
     /**
      * Get explored mask for a specific grid at base level (dataLevel 0).
      * Used by MinimapExploredAreaRenderer for rendering.
@@ -187,9 +205,10 @@ public class ExploredArea {
      * @param dataLevel Must be 0 (aggregation is done by renderer)
      * @return boolean[] mask or null if no data
      */
-    public boolean[] getExploredMaskForGrid(Coord gridCoord, long segmentId, int dataLevel) {
+    public GridMask getExploredMaskForGrid(Coord gridCoord, long segmentId, int dataLevel) {
         GridKey key = new GridKey(segmentId, gridCoord);
-        return gridMasks.get(key);
+        boolean[] mask = gridMasks.get(key);
+        return mask == null ? null : new GridMask(mask);
     }
     
     /**
@@ -250,12 +269,13 @@ public class ExploredArea {
      * @param segmentId Segment ID
      * @return boolean[] mask or null if no data or session not active
      */
-    public boolean[] getSessionMaskForGrid(Coord gridCoord, long segmentId) {
+    public GridMask getSessionMaskForGrid(Coord gridCoord, long segmentId) {
         if (!sessionActive) {
             return null;
         }
         GridKey key = new GridKey(segmentId, gridCoord);
-        return sessionGridMasks.get(key);
+        boolean[] mask = sessionGridMasks.get(key);
+        return mask == null ? null : new GridMask(mask);
     }
     
     /**
@@ -278,6 +298,17 @@ public class ExploredArea {
      * Call this after profile initialization to load profile-specific data.
      * Merges file data with any in-memory data (in case exploration happened before profile init).
      */
+    public boolean isLoadingInProgress() {
+        return false;
+    }
+
+    public void reloadFromFileAsync() {
+        new Thread(this::reloadFromFile, "ExploredArea-Reload").start();
+    }
+
+    public static void resetExecutor() {
+    }
+
     public void reloadFromFile() {
         // Save current in-memory data before loading
         Map<GridKey, boolean[]> currentData = new HashMap<>(gridMasks);

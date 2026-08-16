@@ -324,10 +324,10 @@ public class ProspectingLocationService implements ProfileAwareService {
                     
                     // Создаем маркер с правильной иконкой ресурса
                     MapFile.SMarker marker = new MapFile.SMarker(
+                        mapFile,
                         segmentId, 
                         segmentCoord, 
                         markerName, 
-                        0, 
                         new Resource.Saved(Resource.remote(), markerResourceName, resVer)
                     );
                     

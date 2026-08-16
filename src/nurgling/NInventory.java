@@ -2026,7 +2026,8 @@ public class NInventory extends Inventory
             int pendingCount = pendingCacheRemovals.size();
             pendingCacheRemovals.clear();
             
-            if ((Boolean) NConfig.get(NConfig.Key.ndbenable)) {
+            if ((Boolean) NConfig.get(NConfig.Key.ndbenable)
+                    && nurgling.tools.ClaimLand.isOnClaimOrVillage(parentGob)) {
                 System.out.println("NInventory.reqdestroy: Syncing " + iis.size() + " items for container " + containerHash + " (cleared " + pendingCount + " pending)");
                 ui.core.writeItemInfoForContainer(iis, containerHash);
             }

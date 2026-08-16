@@ -16,19 +16,19 @@ public class SelectAreaWithLiveGhosts extends NTask {
     private NHitBox currentHitBox;
 
     public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource) {
-        this(hitBox, resource, Message.nil, 0);
+        this(hitBox, resource, Message.nil);
     }
-
+    
     public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt) {
-        this(hitBox, resource, sdt, 0);
-    }
-
-    public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt, int initialRotation) {
         this.originalHitBox = hitBox;
+        this.currentHitBox = hitBox;
         this.buildingResource = resource;
         this.spriteData = sdt;
-        this.rotationCount = initialRotation & 3;
-        this.currentHitBox = getRotatedHitBox();
+    }
+
+    public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt, int rotationCount) {
+        this(hitBox, resource, sdt);
+        this.rotationCount = rotationCount;
     }
 
     @Override

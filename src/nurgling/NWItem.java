@@ -308,6 +308,12 @@ public class NWItem extends WItem
     @Override
     public boolean mousedown(MouseDownEvent ev)
     {
+        // Alt+RMB: recipes that use or produce this item
+        if(ev.b == 3 && ui.modmeta && !ui.modshift && !ui.modctrl)
+        {
+            if(showCraftRecipes(ev.c))
+                return true;
+        }
         // Alt+Shift+Click: transfer all same items sorted by quality
         // Right-click (button 3): ascending order (lowest quality first)
         // Left-click (button 1): descending order (highest quality first)
@@ -337,5 +343,19 @@ public class NWItem extends WItem
             }
         }
         return super.mousedown(ev);
+    }
+
+    private boolean showCraftRecipes(Coord click) {
+        if(!(item instanceof NGItem))
+            return false;
+        NGItem gi = (NGItem) item;
+        List<String> names = new ArrayList<>();
+        if(gi.name() != null)
+            names.add(gi.name());
+        for(NGItem.NContent content : gi.content()) {
+            if(content.name() != null && !names.contains(content.name()))
+                names.add(content.name());
+        }
+        return nurgling.tools.CraftRecipeLookup.show(this, click, names);
     }
 }

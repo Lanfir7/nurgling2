@@ -456,6 +456,8 @@ public class GobIcon extends GAttrib {
 			r = null;
 			continue;
 		    }
+		    Icon.Factory fac;
+		    Map<Setting.ID, Icon> iconMap = new HashMap<>();
 		    try {
 			fac = getfac(res);
 			for(Icon icon : fac.enumerate(Settings.this, res, new MessageBuf(r.data))) {

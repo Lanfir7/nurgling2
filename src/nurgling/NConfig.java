@@ -256,7 +256,10 @@ public class NConfig
         agentTemperature,
         agentMaxTokens,
         agentTimeoutMs,
-        agentAutoMode
+        agentAutoMode,
+        floorOverlayEnable,
+        floorOverlayAlpha,
+        floorOverlaySegId
     }
 
     public enum BBDisplayMode
@@ -367,6 +370,9 @@ public class NConfig
         conf.put(Key.serverUser, "");
         conf.put(Key.exploredAreaEnable, false);
         conf.put(Key.chunkNavOverlay, false);
+        conf.put(Key.floorOverlayEnable, false);
+        conf.put(Key.floorOverlayAlpha, 120);
+        conf.put(Key.floorOverlaySegId, 0L);
         conf.put(Key.player_box, false);
         conf.put(Key.player_fov, false);
         conf.put(Key.gridbox, false);

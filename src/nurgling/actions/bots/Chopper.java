@@ -151,7 +151,7 @@ public class Chopper implements Action {
                     case TIMEFORDRINK:
                     case TIMEFOREAT: {
                         context.setLastPos(tree.rc);
-                        if (!new RestoreResources(waterRCArea).run(gui).IsSuccess()) {
+                        if (!new RestoreResources().run(gui).IsSuccess()) {
                             return Results.ERROR("No Drink or Eat");
                         }
                         tree = context.getGobLocal(treeArea, treeId);

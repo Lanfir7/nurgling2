@@ -18,6 +18,10 @@ public class NTabStrip<T> extends Widget {
         return buttons.indexOf(selected);
     }
 
+    public Button<T> getSelectedButton() {
+        return selected;
+    }
+
     public int getButtonCount() {
         return buttons.size();
     }

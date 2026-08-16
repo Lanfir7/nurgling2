@@ -267,6 +267,17 @@ public class NMiniMapWnd extends Widget{
         }
         buttons.add(animals);
 
+        ACheckBox floorOl = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/gridnav", KeyBinding.get("ol-flooroverlay", KeyMatch.nil), "Floor overlay (cave/mine)");
+        floorOl.state(() -> {
+            Object val = NConfig.get(NConfig.Key.floorOverlayEnable);
+            return val instanceof Boolean && (Boolean) val;
+        });
+        floorOl.set(a -> {
+            NConfig.set(NConfig.Key.floorOverlayEnable, a);
+            NConfig.needUpdate();
+        });
+        buttons.add(floorOl);
+
         // Layout buttons with wrapping
         layoutButtons(buttons);
 

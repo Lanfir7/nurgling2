@@ -341,31 +341,40 @@ public class StudyDeskInventoryExtension {
 
         private Map<String, CurioInfo> calculateCurioInfo() {
             Map<String, CurioInfo> curioInfo = new HashMap<>();
+            if (inventory == null) {
+                return curioInfo;
+            }
 
-            try {
-                ArrayList<WItem> items = inventory.getItems();
+            // Walk children directly. inventory.getItems() uses NCore.addTask/wait
+            // and deadlocks if called from Widget.tick on the UI thread.
+            for (Widget widget = inventory.child; widget != null; widget = widget.next) {
+                if (!(widget instanceof WItem)) {
+                    continue;
+                }
+                WItem witem = (WItem) widget;
+                if (witem.item == null) {
+                    continue;
+                }
 
-                for (WItem witem : items) {
-                    if (witem.item == null) continue;
-
-                    // Get item info
+                try {
                     List<ItemInfo> itemInfos = witem.item.info();
-                    if (itemInfos == null) continue;
+                    if (itemInfos == null) {
+                        continue;
+                    }
 
-                    // Check if this is a curio
                     Curiosity curiosity = ItemInfo.find(Curiosity.class, itemInfos);
-                    if (curiosity == null) continue;
+                    if (curiosity == null) {
+                        continue;
+                    }
 
-                    // Get resource name for grouping
                     String resourceName = null;
                     String displayName = "Unknown";
                     Resource resource = null;
 
-                    if (witem.item.getres() != null) {
-                        resource = witem.item.getres();
-                        resourceName = resource.name;
-
-                        // Try to get display name
+                    Resource res = witem.item.getres();
+                    if (res != null) {
+                        resource = res;
+                        resourceName = res.name;
                         if (witem.item instanceof NGItem) {
                             String name = ((NGItem) witem.item).name();
                             if (name != null && !name.isEmpty()) {
@@ -375,8 +384,6 @@ public class StudyDeskInventoryExtension {
                     }
 
                     String key = resourceName != null ? resourceName : displayName;
-
-                    // Add or update curio info
                     CurioInfo info = curioInfo.get(key);
                     if (info == null) {
                         info = new CurioInfo(displayName, resource, curiosity.time, curiosity.exp, curiosity.mw, curiosity.enc);
@@ -387,9 +394,9 @@ public class StudyDeskInventoryExtension {
                         info.totalLP += curiosity.exp;
                         info.totalExpCost += curiosity.enc;
                     }
+                } catch (Loading e) {
+                    // Item/resource not ready yet; retry on a later tick.
                 }
-            } catch (Exception e) {
-                // Silently fail if we can't get items
             }
 
             return curioInfo;

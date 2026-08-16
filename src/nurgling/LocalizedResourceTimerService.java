@@ -4,13 +4,11 @@ import haven.*;
 import haven.Locked;
 import nurgling.profiles.ConfigFactory;
 import nurgling.profiles.ProfileAwareService;
-import nurgling.tools.NFileUtils;
 import nurgling.widgets.LocalizedResourceTimerDialog;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -220,10 +218,12 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
     }
     
     /**
-     * Check if a resource type supports timers
+     * Check if a resource type supports timers.
+     * Supports both minimap markers (gfx/terobjs/mm/...) and direct terobjs
+     * (e.g. gfx/terobjs/crystalpatch, gfx/terobjs/bumlings/...) that send "Will refill in" when inspected.
      */
     public boolean isTimerSupportedResource(String resourceType) {
-        return resourceType != null && resourceType.startsWith("gfx/terobjs/mm");
+        return resourceType != null && resourceType.startsWith("gfx/terobjs/");
     }
     
     /**
@@ -269,20 +269,30 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             timers.clear();
-            String content = NFileUtils.readWithBackupFallback(dataFile);
-            if (content != null && !content.isEmpty()) {
-                try {
-                    JSONObject main = new JSONObject(content);
-                    JSONArray array = main.getJSONArray("timers");
-                    for (int i = 0; i < array.length(); i++) {
-                        LocalizedResourceTimer timer = new LocalizedResourceTimer(array.getJSONObject(i));
-                        // Only load non-expired timers
-                        if (!timer.isExpired()) {
-                            timers.put(timer.getResourceId(), timer);
+            File file = new File(dataFile);
+            if (file.exists()) {
+                StringBuilder contentBuilder = new StringBuilder();
+                try (Stream<String> stream = Files.lines(Paths.get(dataFile), StandardCharsets.UTF_8)) {
+                    stream.forEach(s -> contentBuilder.append(s).append("\n"));
+                } catch (IOException e) {
+                    System.err.println("Failed to load resource timers: " + e.getMessage());
+                    return;
+                }
+                
+                if (!contentBuilder.toString().trim().isEmpty()) {
+                    try {
+                        JSONObject main = new JSONObject(contentBuilder.toString());
+                        JSONArray array = main.getJSONArray("timers");
+                        for (int i = 0; i < array.length(); i++) {
+                            LocalizedResourceTimer timer = new LocalizedResourceTimer(array.getJSONObject(i));
+                            // Only load non-expired timers
+                            if (!timer.isExpired()) {
+                                timers.put(timer.getResourceId(), timer);
+                            }
                         }
+                    } catch (Exception e) {
+                        System.err.println("Failed to parse resource timers JSON: " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    System.err.println("Failed to parse resource timers JSON: " + e.getMessage());
                 }
             }
         } finally {
@@ -308,7 +318,7 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
             main.put("version", 1);
             main.put("lastSaved", java.time.Instant.now().toString());
             
-            NFileUtils.writeAtomically(dataFile, main.toString(2));
+            nurgling.util.SafeJsonWriter.writeAtomic(dataFile, main);
         } catch (IOException e) {
             System.err.println("Failed to save resource timers: " + e.getMessage());
         }
@@ -325,5 +335,69 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
         } finally {
             lock.writeLock().unlock();
         }
+    }
+    
+    // ========== Database Sync Methods ==========
+    
+    /**
+     * Add a timer loaded from database (called by LocalTimerSyncService).
+     * Does not trigger save to file or DB (to avoid infinite loops).
+     */
+    public void addTimerFromDb(String resourceId, long segmentId, haven.Coord tileCoords,
+                               String resourceName, String resourceType,
+                               long startTimeUtc, long durationMs, String description) {
+        lock.writeLock().lock();
+        try {
+            LocalizedResourceTimer timer = new LocalizedResourceTimer(
+                resourceId, segmentId, tileCoords, resourceName, resourceType,
+                startTimeUtc, durationMs, description);
+            
+            // Only add if not expired
+            if (!timer.isExpired()) {
+                timers.put(resourceId, timer);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Update an existing timer with data from database.
+     * Creates a new timer instance with updated values.
+     */
+    public void updateTimerFromDb(String resourceId, long startTimeUtc, long durationMs, String description) {
+        lock.writeLock().lock();
+        try {
+            LocalizedResourceTimer existing = timers.get(resourceId);
+            if (existing != null) {
+                // Create new timer with updated values
+                LocalizedResourceTimer updated = new LocalizedResourceTimer(
+                    resourceId,
+                    existing.getSegmentId(),
+                    existing.getTileCoords(),
+                    existing.getResourceName(),
+                    existing.getResourceType(),
+                    startTimeUtc,
+                    durationMs,
+                    description
+                );
+                
+                // Only update if not expired
+                if (!updated.isExpired()) {
+                    timers.put(resourceId, updated);
+                } else {
+                    timers.remove(resourceId);
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Refresh timer window from sync (called on UI thread).
+     */
+    public void refreshTimerWindowFromSync() {
+        refreshTimerWindow();
     }
 }

@@ -27,6 +27,9 @@ public class DatabaseManager {
     private StorageItemService storageItemService;
     private AreaService areaService;
     private nurgling.db.service.PlanningService planningService;
+    private AnimalMarkerService animalMarkerService;
+    private LocalTimerService localTimerService;
+    private CraftRecipeService craftRecipeService;
 
     // Task queue for retry logic
     private final BlockingQueue<QueuedTask<?>> taskQueue = new LinkedBlockingQueue<>(1000);
@@ -283,6 +286,7 @@ public class DatabaseManager {
                     initialized = true;
                     System.out.println("DatabaseManager initialized successfully with " +
                                      DatabaseAdapterFactory.getDatabaseType());
+                    nurgling.tools.RecipeIngredientCache.loadFromDatabase();
                 } catch (nurgling.db.migration.MigrationManager.SchemaTooNewException stne) {
                     // Schema mismatch - leave manager uninitialized so sync skips itself.
                     // Surface the error to any active game UI.
@@ -314,6 +318,9 @@ public class DatabaseManager {
         this.storageItemService = new StorageItemService(this);
         this.areaService = new AreaService(this);
         this.planningService = new nurgling.db.service.PlanningService(this);
+        this.animalMarkerService = new AnimalMarkerService(this);
+        this.localTimerService = new LocalTimerService(this);
+        this.craftRecipeService = new CraftRecipeService(this);
     }
 
     /**
@@ -534,6 +541,18 @@ public class DatabaseManager {
      */
     public nurgling.db.service.PlanningService getPlanningService() {
         return planningService;
+    }
+
+    public AnimalMarkerService getAnimalMarkerService() {
+        return animalMarkerService;
+    }
+
+    public LocalTimerService getLocalTimerService() {
+        return localTimerService;
+    }
+
+    public CraftRecipeService getCraftRecipeService() {
+        return craftRecipeService;
     }
 
     /**

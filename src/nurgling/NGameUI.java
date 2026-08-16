@@ -1531,7 +1531,7 @@ public class NGameUI extends GameUI
                         // Ignore errors, use default values
                     }
                     
-                    marker = new MapFile.SMarker(info.seg, sc, displayName, 0, 
+                    marker = new MapFile.SMarker(mapfile.file, info.seg, sc, displayName,
                         new Resource.Saved(Resource.remote(), gob.ngob.name, resVer));
                     mapfile.file.add(marker);
                 }

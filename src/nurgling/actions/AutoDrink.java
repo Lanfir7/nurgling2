@@ -1,5 +1,6 @@
 package nurgling.actions;
 
+import haven.Gob;
 import haven.MenuGrid;
 import haven.WItem;
 import nurgling.*;

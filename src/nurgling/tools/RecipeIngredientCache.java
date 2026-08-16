@@ -146,6 +146,7 @@ public class RecipeIngredientCache {
      * Find recipes where the item is used AS INGREDIENT (for Alt+RMB).
      */
     public static Set<RecipeEntry> findInputRecipes(List<String> names) {
+        loadFromDatabase();
         Set<RecipeEntry> result = new HashSet<>();
         for(String name : names) {
             result.addAll(inputCache.getOrDefault(name, Collections.emptySet()));
@@ -157,6 +158,7 @@ public class RecipeIngredientCache {
      * Find recipes that PRODUCE the item (for Shift+Click: "how to make this").
      */
     public static Set<RecipeEntry> findOutputRecipes(List<String> names) {
+        loadFromDatabase();
         Set<RecipeEntry> result = new HashSet<>();
         for(String name : names) {
             result.addAll(outputCache.getOrDefault(name, Collections.emptySet()));
@@ -169,6 +171,7 @@ public class RecipeIngredientCache {
      */
     public static Set<RecipeEntry> findOutputRecipesForItem(String itemName) {
         if(itemName == null) return Collections.emptySet();
+        loadFromDatabase();
         return new HashSet<>(outputCache.getOrDefault(itemName, Collections.emptySet()));
     }
 

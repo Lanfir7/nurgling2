@@ -22,7 +22,7 @@ import java.awt.image.*;
 import java.util.List;
 import java.util.*;
 
-public class NMakewindow extends Widget {
+public class NMakewindow extends Widget implements DTarget {
 //    public static final Text.Foundry fnd = new Text.Foundry(Text.sans, 12);
 
     public static Text.Furnace fnd = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(java.awt.Font.BOLD), 12).aa(true), UI.scale(1), UI.scale(1), Color.BLACK);
@@ -56,8 +56,10 @@ public class NMakewindow extends Widget {
     public CheckBox noTransfer = null;
     public boolean autoMode = false;
     private IButton savePresetBtn = null;
+    private boolean recipesPersisted = false;
 
     private static final OwnerContext.ClassResolver<NMakewindow> ctxr = new OwnerContext.ClassResolver<NMakewindow>()
+            .add(NMakewindow.class, wdg -> wdg)
             .add(Glob.class, wdg -> wdg.ui.sess.glob)
             .add(Session.class, wdg -> wdg.ui.sess);
     public class Spec implements GSprite.Owner, ItemInfo.SpriteOwner {
@@ -72,6 +74,14 @@ public class NMakewindow extends Widget {
         private List<ItemInfo> info;
 
         public Ingredient ing = null;
+        public boolean categories = false;
+        public boolean useCategory = false;
+        public NArea selectedZone = null;
+        public boolean isSubCraft = false;
+        public boolean isLocalZone = false;
+        public boolean isInventory = false;
+        public int selectedZoneId = -1;
+        public Map<String, NArea> subIngredientZones = new java.util.HashMap<>();
 
         public int using = 0;
         public List<MenuGrid.Pagina> rpag = null;
@@ -88,9 +98,17 @@ public class NMakewindow extends Widget {
             this.count = num;
         }
 
+        private ResData display() {
+            if(constraint != null)
+                return(constraint);
+            return(new ResData(res, sdt));
+        }
+
         public GSprite sprite() {
-            if(spr == null)
-                spr = GSprite.create(this, res.get(), sdt.clone());;
+            if(spr == null) {
+                ResData d = display();
+                spr = GSprite.create(this, d.res.get(), d.sdt.clone());
+            }
             return(spr);
         }
 
@@ -166,7 +184,7 @@ public class NMakewindow extends Widget {
                 rnd = new Random();
             return(rnd);
         }
-        public Resource getres() {return(res.get());}
+        public Resource getres() {return(display().res.get());}
         public <T> T context(Class<T> cl) {return(ctxr.context(cl, NMakewindow.this));}
         @Deprecated
         public Glob glob() {return(ui.sess.glob);}
@@ -226,7 +244,6 @@ public class NMakewindow extends Widget {
 
         public boolean logisticin = false;
         public boolean logisticout = false;
-        public boolean categories = false;
 
 
     }
@@ -260,6 +277,74 @@ public class NMakewindow extends Widget {
         if (savePresetBtn != null) {
             savePresetBtn.visible = autoMode && allInputsConfigured();
         }
+        persistRecipeMappings();
+    }
+
+    private String resolveRecipeResource() {
+        if(recipeResource != null)
+            return recipeResource;
+        if(MenuGrid.lastPagina != null) {
+            try {
+                recipeResource = MenuGrid.lastPagina.res().name;
+                return recipeResource;
+            } catch(Loading l) {
+            }
+        }
+        if(parent instanceof NCraftWindow) {
+            NTabStrip.Button<MenuGrid.Pagina> sel =
+                    ((NCraftWindow)parent).tabStrip.getSelectedButton();
+            if(sel != null && sel.tag != null) {
+                try {
+                    recipeResource = sel.tag.res().name;
+                } catch(Loading l) {
+                }
+            }
+        }
+        return recipeResource;
+    }
+
+    private void persistRecipeMappings() {
+        if(recipesPersisted)
+            return;
+        String pagina = resolveRecipeResource();
+        if(pagina == null || rcpnm == null)
+            return;
+        List<String> inNames = new ArrayList<>();
+        List<RecipeIngredientCache.IngredientSpec> specs = new ArrayList<>();
+        for(Spec s : inputs) {
+            if(s.name == null) {
+                try {
+                    String rn = s.res.get().name;
+                    if(rn != null && !rn.contains("coin"))
+                        return;
+                } catch(Loading l) {
+                    return;
+                }
+            } else {
+                inNames.add(s.name);
+                specs.add(new RecipeIngredientCache.IngredientSpec(s.name, s.count));
+            }
+        }
+        List<String> outNames = new ArrayList<>();
+        for(Spec s : outputs) {
+            if(s.name == null) {
+                try {
+                    String rn = s.res.get().name;
+                    if(rn != null && !rn.contains("coin"))
+                        return;
+                } catch(Loading l) {
+                    return;
+                }
+            } else {
+                outNames.add(s.name);
+            }
+        }
+        if(inNames.isEmpty() && outNames.isEmpty())
+            return;
+        RecipeIngredientCache.addInputsAndPersist(inNames, pagina, rcpnm);
+        RecipeIngredientCache.addOutputsAndPersist(outNames, pagina, rcpnm);
+        RecipeIngredientCache.setRecipeSpecs(pagina, specs);
+        recipesPersisted = true;
     }
 
     /**
@@ -275,8 +360,63 @@ public class NMakewindow extends Widget {
         return true;
     }
 
+    private int inputIndexAt(Coord c) {
+        Coord sc = new Coord(xoff, 0);
+        boolean popt = false;
+        int idx = 0;
+        for(Spec s : inputs) {
+            boolean opt = s.opt();
+            if(opt != popt)
+                sc = sc.add(UI.scale(10), 0);
+            if(c.isect(sc, Inventory.sqsz))
+                return idx;
+            sc = sc.add(Inventory.sqsz.x, 0);
+            popt = opt;
+            idx++;
+        }
+        return -1;
+    }
+
+    private Spec specAt(Coord c) {
+        int idx = inputIndexAt(c);
+        if(idx >= 0)
+            return inputs.get(idx);
+        Coord sc = new Coord(xoff, outy);
+        for(Spec s : outputs) {
+            if(c.isect(sc, Inventory.sqsz))
+                return s;
+            sc = sc.add(Inventory.sqsz.x, 0);
+        }
+        return null;
+    }
+
+    private boolean itemactAt(Coord c) {
+        if(autoMode)
+            return false;
+        int idx = inputIndexAt(c);
+        if(idx < 0)
+            return false;
+        wdgmsg("itemact", idx, ui.modflags());
+        return true;
+    }
+
+    @Override
+    public boolean drop(Coord cc, Coord ul) {
+        return itemactAt(cc);
+    }
+
+    @Override
+    public boolean iteminteract(Coord cc, Coord ul) {
+        return itemactAt(cc);
+    }
+
     @Override
     public boolean mousedown(MouseDownEvent ev) {
+        if(ev.b == 3 && ui.modmeta && !ui.modshift && !ui.modctrl) {
+            Spec s = specAt(ev.c);
+            if(s != null && s.name != null && CraftRecipeLookup.show(this, ev.c, s.name))
+                return true;
+        }
         if(autoMode)
         {
             Coord sc = new Coord(xoff, 0);
@@ -287,27 +427,18 @@ public class NMakewindow extends Widget {
         }
         else
         {
-            Coord sc = new Coord(xoff, 0);
-            boolean popt = false;
-            int idx = 0;
-            for(Spec s : inputs) {
-                boolean opt = s.opt();
-                if(opt != popt)
-                    sc = sc.add(10, 0);
-                if(ev.c.isect(sc, Inventory.sqsz)) {
-                    if(ev.b == 1) {
-                        wdgmsg("choose", idx, ui.modflags());
-                        return true;
-                    } else if(ev.b == 3) {
-                        if(s.rpag == null)
-                            wdgmsg("findrcps", idx);
-                        s.rcc = ev.c;
-                        return true;
-                    }
+            int idx = inputIndexAt(ev.c);
+            if(idx >= 0) {
+                Spec s = inputs.get(idx);
+                if(ev.b == 1) {
+                    wdgmsg("choose", idx, ui.modflags());
+                    return true;
+                } else if(ev.b == 3) {
+                    if(s.rpag == null)
+                        wdgmsg("findrcps", idx);
+                    s.rcc = ev.c;
+                    return true;
                 }
-                sc = sc.add(Inventory.sqsz.x, 0);
-                popt = opt;
-                idx++;
             }
         }
         return super.mousedown(ev);
@@ -317,7 +448,7 @@ public class NMakewindow extends Widget {
         for (Spec s : outputs) {
             boolean opt = s.opt();
             if (opt != popt)
-                sc = sc.add(10, 0);
+                sc = sc.add(UI.scale(10), 0);
             if (s.categories) {
                 if (c.isect(sc, Inventory.sqsz)) {
                     boolean isOpt = s.opt();
@@ -457,10 +588,10 @@ public class NMakewindow extends Widget {
         } else if(msg == "qmod") {
             List<Indir<Resource>> qmod = new ArrayList<Indir<Resource>>();
             for(Object arg : args)
-                qmod.add(ui.sess.getres((Integer)arg));
+                qmod.add(ui.sess.getresv(arg));
             this.qmod = qmod;
         } else if(msg == "tool") {
-            tools.add(ui.sess.getres((Integer)args[0]));
+            tools.add(ui.sess.getresv(args[0]));
         } else if(msg == "use") {
             inputs.get(Utils.iv(args[0])).using = Utils.iv(args[1]);
         } else if(msg == "inprcps") {
@@ -469,7 +600,7 @@ public class NMakewindow extends Widget {
             GameUI gui = getparent(GameUI.class);
             if((gui != null) && (gui.menu != null)) {
                 for(int a = 1; a < args.length; a++)
-                    rcps.add(gui.menu.paginafor(ui.sess.getres((Integer)args[a])));
+                    rcps.add(gui.menu.paginafor(ui.sess.getresv(args[a])));
             }
             inputs.get(idx).rpag = rcps;
         } else {
@@ -491,7 +622,7 @@ public class NMakewindow extends Widget {
         for(Spec s : inputs) {
             boolean opt = s.opt();
             if(opt != popt)
-                c = c.add(10, 0);
+                c = c.add(UI.scale(10), 0);
             GOut sg = g.reclip(c, invsq.sz());
             if(opt) {
                 sg.chcolor(0, 255, 0, 255);

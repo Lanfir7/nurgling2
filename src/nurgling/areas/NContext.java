@@ -61,6 +61,7 @@ public class NContext {
         contcaps.put("gfx/terobjs/wbasket", "Basket");
         contcaps.put("gfx/terobjs/thatchbasket", "Basket");
         contcaps.put("gfx/terobjs/map/stonekist", "Stonekist");
+        contcaps.put("gfx/terobjs/map/hiddenhollow", "Hidden Hollow");
         contcaps.put("gfx/terobjs/exquisitechest", "Exquisite Chest");
         contcaps.put("gfx/terobjs/furn/table-stone", "Table");
         contcaps.put("gfx/terobjs/furn/table-rustic", "Table");
@@ -1011,6 +1012,19 @@ public class NContext {
         }
     }
 
+    public void addInItemWithArea(String name, NArea area) {
+        areas.put(String.valueOf(area.id), area);
+        inAreas.put(name, String.valueOf(area.id));
+    }
+
+    public void addOutItemWithArea(String name, NArea area, double th) {
+        if(!outAreas.containsKey(name)) {
+            outAreas.put(name, new TreeMap<>());
+        }
+        areas.put(String.valueOf(area.id), area);
+        outAreas.get(name).put(Math.abs(th), String.valueOf(area.id));
+    }
+
     public boolean addOutItem(String name, BufferedImage loadsimg, double th) throws InterruptedException {
         TreeMap<Double,String> thmap = outAreas.get(name);
         if(thmap == null)
@@ -1599,6 +1613,28 @@ public class NContext {
         return findAllSpec(name, null);
     }
 
+    public static ArrayList<NArea> findVisibleCarrierOutZones() {
+        ArrayList<NArea> all = findAllSpec(Specialisation.SpecName.carrierout.toString());
+        ArrayList<NArea> visible = new ArrayList<>();
+        for (NArea a : all) {
+            if (!a.hide) {
+                visible.add(a);
+            }
+        }
+        return visible;
+    }
+
+    public static ArrayList<NArea> findVisibleSoilForTreesZones() {
+        ArrayList<NArea> all = findAllSpec(Specialisation.SpecName.soilForTrees.toString());
+        ArrayList<NArea> visible = new ArrayList<>();
+        for (NArea a : all) {
+            if (!a.hide) {
+                visible.add(a);
+            }
+        }
+        return visible;
+    }
+
     /**
      * Find swill delivery areas (areas with swill or trough specialization).
      * Returns areas prioritized by distance from player.
@@ -1619,5 +1655,33 @@ public class NContext {
         }
 
         return areas;
+    }
+
+    public NArea getSpecArea(NContext.Workstation workstation) throws InterruptedException {
+        if (workstation == null || workstation.station == null) return null;
+        Specialisation.SpecName spec = workstation_spec_map.get(workstation.station);
+        if (spec == null) return null;
+        return goToArea(spec);
+    }
+
+    public NArea getSpecArea(Specialisation.SpecName name) throws InterruptedException {
+        return goToArea(name);
+    }
+
+    public NArea getSpecArea(Specialisation.SpecName name, String sub) throws InterruptedException {
+        return goToArea(name, sub);
+    }
+
+    public ArrayList<Gob> getGobsLocal(String areaId, NAlias pattern) throws InterruptedException {
+        NArea area = areas.get(areaId);
+        return area == null ? new ArrayList<Gob>() : Finder.findGobs(area, pattern);
+    }
+
+    public Gob getGobLocal(String areaId, long id) {
+        return Finder.findGob(id);
+    }
+
+    public Coord2d getLastPosCoordLocal() {
+        return lastcoord == null ? null : lastcoord.getCurrentCoord();
     }
 }

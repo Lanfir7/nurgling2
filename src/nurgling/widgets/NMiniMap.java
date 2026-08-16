@@ -11,6 +11,8 @@ import nurgling.overlays.map.MinimapChunkNavRenderer;
 import nurgling.overlays.map.MinimapClaimRenderer;
 import nurgling.overlays.map.MinimapDiscoveryRenderer;
 import nurgling.overlays.map.MinimapExploredAreaRenderer;
+import nurgling.overlays.map.MinimapFloorOverlayRenderer;
+import nurgling.map.FloorOverlayAligner;
 import nurgling.tools.ExploredArea;
 import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
@@ -53,6 +55,11 @@ NMiniMap extends MiniMap {
     public boolean showGemstoneIcons = true; // Видимость маркеров драгоценных камней
     public boolean showAnimalIcons = true; // Видимость маркеров животных (ObjectTracker + БД)
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
+    public java.util.List<FloorOverlayAligner.FloorLink> floorLinks = java.util.Collections.emptyList();
+    public FloorOverlayAligner.FloorLink selectedFloorLink = null;
+    private final MinimapFloorOverlayRenderer floorOverlayRenderer = new MinimapFloorOverlayRenderer();
+    private long lastFloorLinkRefresh = 0;
+    private long lastFloorSegId = Long.MIN_VALUE;
 
     // Cached waypoint number labels to avoid per-frame Text.render() allocations
     private static Text[] waypointNumCache = new Text[128];
@@ -692,6 +699,39 @@ NMiniMap extends MiniMap {
         if(gui != null && gui.waypointMovementService != null) {
             gui.waypointMovementService.processMovementQueue(file, sessloc);
         }
+
+        refreshFloorLinks(false);
+    }
+
+    public void refreshFloorLinks(boolean forceCompute) {
+        if (dloc == null || file == null) {
+            floorLinks = java.util.Collections.emptyList();
+            selectedFloorLink = null;
+            lastFloorSegId = Long.MIN_VALUE;
+            return;
+        }
+        if (dloc.seg != null && dloc.seg.id != lastFloorSegId) {
+            lastFloorSegId = dloc.seg.id;
+            selectedFloorLink = null;
+            lastFloorLinkRefresh = 0;
+        }
+        if (!forceCompute && !MinimapFloorOverlayRenderer.enabled()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastFloorLinkRefresh < 500) {
+            return;
+        }
+        lastFloorLinkRefresh = now;
+        java.util.List<FloorOverlayAligner.FloorLink> computed = MinimapFloorOverlayRenderer.computeLinks(this);
+        if (computed == null) {
+            return;
+        }
+        floorLinks = computed;
+        selectedFloorLink = MinimapFloorOverlayRenderer.pickLink(floorLinks);
+        if (selectedFloorLink != null && selectedFloorLink.toSegId == dloc.seg.id) {
+            selectedFloorLink = null;
+        }
     }
 
     // Linear scale factor - this is the actual zoom level
@@ -1318,6 +1358,7 @@ NMiniMap extends MiniMap {
                 drawgrid(g, ul, disp, size);
             }
         }
+        floorOverlayRenderer.render(this, g);
     }
 
     public void drawgrid(GOut g, Coord ul, DisplayGrid disp, Coord size) {
@@ -3352,7 +3393,7 @@ NMiniMap extends MiniMap {
                                 }
                             }
                             
-                            mid = new MapFile.SMarker(info.seg, sc, tt.t, 0, new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
+                            mid = new MapFile.SMarker(file, info.seg, sc, tt.t, new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
                             file.add(mid);
                             isNew = true;
                             

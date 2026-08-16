@@ -326,6 +326,10 @@ public class MapFile {
 	    this.data = data;
 	}
 
+	public SMarker(MapFile file, long seg, Coord tc, String nm, Resource.Saved res) {
+	    this(file, seg, tc, nm, UID.nil, res, new byte[0]);
+	}
+
 	public String toString() {
 	    return(String.format("#<smarker \"%s\" %s %s %s>", nm, oid, res.name, seq));
 	}
@@ -396,6 +400,9 @@ public class MapFile {
 	}
 	fp.adduint8(4);
 	fp.addtto(enc);
+    }
+
+    public void dispose() {
     }
 
     public void add(Marker mark) {

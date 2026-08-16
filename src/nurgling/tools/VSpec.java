@@ -3212,7 +3212,27 @@ public class VSpec {
         return res;
     }
 
+    public static HashMap<String, String> kritterToInvobjsIcon = new HashMap<>();
+    static {
+        kritterToInvobjsIcon.put("gfx/kritter/boar/boar", "gfx/invobjs/kritter/wildboar");
+        kritterToInvobjsIcon.put("gfx/kritter/mammoth/mammoth", "gfx/invobjs/kritter/mammoth");
+        kritterToInvobjsIcon.put("gfx/kritter/deer/deer", "gfx/invobjs/kritter/deer");
+        kritterToInvobjsIcon.put("gfx/kritter/horse/horse", "gfx/invobjs/kritter/wildhorse");
+        kritterToInvobjsIcon.put("gfx/kritter/goat/goat", "gfx/invobjs/kritter/wildgoat");
+        kritterToInvobjsIcon.put("gfx/kritter/sheep/sheep", "gfx/invobjs/kritter/mouflon");
+        kritterToInvobjsIcon.put("gfx/kritter/aurochs/aurochs", "gfx/invobjs/kritter/aurochs");
+        kritterToInvobjsIcon.put("gfx/kritter/fox/fox", "gfx/invobjs/kritter/fox");
+        kritterToInvobjsIcon.put("gfx/kritter/wolf/wolf", "gfx/invobjs/kritter/wolf");
+        kritterToInvobjsIcon.put("gfx/kritter/bear/bear", "gfx/invobjs/kritter/bear");
+    }
+
+    public static String getKritterIconPath(String kritterResourcePath) {
+        if (kritterResourcePath == null) return null;
+        return kritterToInvobjsIcon.get(kritterResourcePath);
+    }
+
     public static HashMap<NStyle.Container, Integer> chest_state = new HashMap<>();
+    public static HashMap<NStyle.Container, Integer> largechest_state = chest_state;
 
     static {
         chest_state.put(NStyle.Container.FREE, 3);

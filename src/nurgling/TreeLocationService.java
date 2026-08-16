@@ -80,6 +80,31 @@ public class TreeLocationService implements ProfileAwareService {
     /**
      * Save a tree/bush location from a tree or bush gob on the map
      */
+    public void saveTreeLocation(Gob treeGob, int growthPercent) {
+        saveTreeLocation(treeGob);
+    }
+
+    public boolean treeLocationExists(Gob treeGob) {
+        try {
+            if (gui.map == null) return false;
+            String res = treeGob.ngob.name;
+            if (res == null || (!res.startsWith("gfx/terobjs/trees/") && !res.startsWith("gfx/terobjs/bushes/"))) {
+                return false;
+            }
+            String treeName = getTreeName(res);
+            MCache mcache = gui.map.glob.map;
+            Coord tc = treeGob.rc.floor(MCache.tilesz);
+            Coord gridCoord = tc.div(MCache.cmaps);
+            MCache.Grid grid = mcache.getgrid(gridCoord);
+            MapFile.GridInfo info = gui.mmap.file.gridinfo.get(grid.id);
+            if (info == null) return false;
+            Coord segmentCoord = tc.add(info.sc.sub(grid.gc).mul(MCache.cmaps));
+            return treeLocations.containsKey(TreeLocation.generateLocationId(info.seg, segmentCoord, treeName));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void saveTreeLocation(Gob treeGob) {
         try {
             if (gui.map == null) return;
@@ -142,7 +167,7 @@ public class TreeLocationService implements ProfileAwareService {
      * e.g., "gfx/terobjs/trees/oak" -> "Oak Tree"
      * e.g., "gfx/terobjs/bushes/arrowwood" -> "Arrowwood Bush"
      */
-    private String getTreeName(String resourcePath) {
+    public String getTreeName(String resourcePath) {
         boolean isTree = resourcePath.startsWith("gfx/terobjs/trees/");
         boolean isBush = resourcePath.startsWith("gfx/terobjs/bushes/");
 

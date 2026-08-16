@@ -19,7 +19,7 @@ public class MigrationManager {
      * and this older client may not understand the new columns/tables; we
      * refuse to sync in that case rather than write incompatible rows.
      */
-    public static final int CLIENT_MAX_SCHEMA_VERSION = 8;
+    public static final int CLIENT_MAX_SCHEMA_VERSION = 14;
 
     public static class SchemaTooNewException extends SQLException {
         public final int clientVersion;
@@ -404,6 +404,211 @@ public class MigrationManager {
                     safeCreateIndex(adapter, "CREATE INDEX idx_pg_layer ON planning_ghosts (layer_id)");
                     safeCreateIndex(adapter, "CREATE INDEX idx_pg_deleted ON planning_ghosts (deleted_at)");
                     System.out.println("Created planning_ghosts table");
+                }
+            }
+        });
+
+        migrations.add(new Migration(9, "Create animal_markers table for Postgres (animal discovery markers)") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
+                    return;
+                }
+                if (adapter.tableExists("animal_markers")) {
+                    System.out.println("animal_markers table already exists");
+                    return;
+                }
+                adapter.executeUpdate("CREATE TABLE animal_markers (" +
+                    "id SERIAL PRIMARY KEY, " +
+                    "profile VARCHAR(255) NOT NULL, " +
+                    "gob_id BIGINT NOT NULL, " +
+                    "animal_type VARCHAR(128), " +
+                    "display_name VARCHAR(255), " +
+                    "segment_id BIGINT NOT NULL, " +
+                    "tile_x INTEGER NOT NULL, " +
+                    "tile_y INTEGER NOT NULL, " +
+                    "grid_id BIGINT, " +
+                    "local_tile_x INTEGER, " +
+                    "local_tile_y INTEGER, " +
+                    "quality DOUBLE PRECISION, " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "UNIQUE (profile, gob_id)" +
+                    ")");
+                adapter.executeUpdate("CREATE INDEX idx_animal_markers_profile ON animal_markers (profile)");
+                adapter.executeUpdate("CREATE INDEX idx_animal_markers_profile_gob ON animal_markers (profile, gob_id)");
+                System.out.println("Created animal_markers table");
+            }
+        });
+
+        migrations.add(new Migration(10, "Add killed_at, killed_by to animal_markers") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) return;
+                if (!adapter.tableExists("animal_markers")) return;
+                addColumnIfMissing(adapter, "animal_markers", "killed_at", "TIMESTAMP");
+                addColumnIfMissing(adapter, "animal_markers", "killed_by", "VARCHAR(255)");
+            }
+        });
+
+        migrations.add(new Migration(11, "Add icon_path to animal_markers") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) return;
+                if (!adapter.tableExists("animal_markers")) return;
+                addColumnIfMissing(adapter, "animal_markers", "icon_path", "VARCHAR(512)");
+            }
+        });
+
+        migrations.add(new Migration(12, "Create local_timers table for Postgres") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
+                    return;
+                }
+                if (adapter.tableExists("local_timers")) {
+                    System.out.println("local_timers table already exists");
+                    return;
+                }
+                adapter.executeUpdate("CREATE TABLE local_timers (" +
+                    "id SERIAL PRIMARY KEY, " +
+                    "profile VARCHAR(255) NOT NULL, " +
+                    "resource_id VARCHAR(512) NOT NULL, " +
+                    "segment_id BIGINT NOT NULL, " +
+                    "tile_x INTEGER NOT NULL, " +
+                    "tile_y INTEGER NOT NULL, " +
+                    "resource_name VARCHAR(255), " +
+                    "resource_type VARCHAR(512), " +
+                    "start_time_utc BIGINT NOT NULL, " +
+                    "duration_ms BIGINT NOT NULL, " +
+                    "description VARCHAR(512), " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "UNIQUE (profile, resource_id)" +
+                    ")");
+                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile ON local_timers (profile)");
+                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile_resource ON local_timers (profile, resource_id)");
+                adapter.executeUpdate("CREATE INDEX idx_local_timers_expiration ON local_timers (profile, start_time_utc, duration_ms)");
+                System.out.println("Created local_timers table");
+            }
+        });
+
+        migrations.add(new Migration(13, "Ensure craft_recipes table with mapping_type") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                boolean hasMappingType = false;
+                if (adapter.tableExists("craft_recipes")) {
+                    if (adapter instanceof nurgling.db.PostgresAdapter) {
+                        try (ResultSet rs = adapter.executeQuery(
+                                "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'craft_recipes' AND column_name = 'mapping_type'")) {
+                            hasMappingType = rs.next();
+                        }
+                    } else {
+                        try (ResultSet rs = adapter.executeQuery("PRAGMA table_info(craft_recipes)")) {
+                            while (rs.next()) {
+                                if ("mapping_type".equals(rs.getString("name"))) {
+                                    hasMappingType = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (hasMappingType) {
+                        System.out.println("craft_recipes already has mapping_type");
+                        return;
+                    }
+                    adapter.executeUpdate("DROP TABLE IF EXISTS craft_recipes");
+                }
+                adapter.executeUpdate("CREATE TABLE craft_recipes (" +
+                    "item_name VARCHAR(255) NOT NULL, " +
+                    "pagina_resource VARCHAR(512) NOT NULL, " +
+                    "recipe_name VARCHAR(255) NOT NULL, " +
+                    "mapping_type VARCHAR(10) NOT NULL DEFAULT 'input', " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "PRIMARY KEY (item_name, pagina_resource, mapping_type)" +
+                    ")");
+                try {
+                    adapter.executeUpdate("CREATE INDEX idx_craft_recipes_item_type ON craft_recipes (item_name, mapping_type)");
+                } catch (SQLException e) {
+                    if (!isAlreadyExists(e)) throw e;
+                }
+                System.out.println("Created craft_recipes table with mapping_type");
+            }
+        });
+
+        migrations.add(new Migration(14, "Bridge next-schema DBs: uuid/planning columns from upstream") {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                addColumnIfMissing(adapter, "areas", "uuid", "VARCHAR(36)");
+                addColumnIfMissing(adapter, "areas", "deleted_at", "TIMESTAMP");
+                addColumnIfMissing(adapter, "areas", "last_touched_by", "VARCHAR(255)");
+                addColumnIfMissing(adapter, "areas", "last_touched_at", "TIMESTAMP");
+                if (adapter.tableExists("areas")) {
+                    java.util.List<Integer> pendingIds = new java.util.ArrayList<>();
+                    java.util.List<String> pendingProfiles = new java.util.ArrayList<>();
+                    try (ResultSet rs = adapter.executeQuery("SELECT id, profile FROM areas WHERE uuid IS NULL")) {
+                        while (rs.next()) {
+                            pendingIds.add(rs.getInt("id"));
+                            pendingProfiles.add(rs.getString("profile"));
+                        }
+                    }
+                    for (int i = 0; i < pendingIds.size(); i++) {
+                        adapter.executeUpdate("UPDATE areas SET uuid = ? WHERE id = ? AND profile = ?",
+                            java.util.UUID.randomUUID().toString(), pendingIds.get(i), pendingProfiles.get(i));
+                    }
+                    try {
+                        adapter.executeUpdate("CREATE UNIQUE INDEX idx_areas_uuid ON areas (uuid)");
+                    } catch (SQLException e) {
+                        if (!isAlreadyExists(e)) throw e;
+                    }
+                }
+                if (!adapter.tableExists("planning_folders")) {
+                    adapter.executeUpdate(
+                        "CREATE TABLE planning_folders (" +
+                        "id VARCHAR(36) PRIMARY KEY, " +
+                        "name VARCHAR(255) NOT NULL, " +
+                        "order_index INTEGER NOT NULL DEFAULT 0, " +
+                        "profile VARCHAR(255) NOT NULL DEFAULT 'global', " +
+                        "version INTEGER NOT NULL DEFAULT 1, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "last_touched_by VARCHAR(255), " +
+                        "last_touched_at TIMESTAMP, " +
+                        "deleted_at TIMESTAMP" +
+                        ")");
+                }
+                if (!adapter.tableExists("planning_layers")) {
+                    adapter.executeUpdate(
+                        "CREATE TABLE planning_layers (" +
+                        "id VARCHAR(36) PRIMARY KEY, " +
+                        "parent_folder_id VARCHAR(36), " +
+                        "name VARCHAR(255) NOT NULL, " +
+                        "order_index INTEGER NOT NULL DEFAULT 0, " +
+                        "profile VARCHAR(255) NOT NULL DEFAULT 'global', " +
+                        "version INTEGER NOT NULL DEFAULT 1, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "last_touched_by VARCHAR(255), " +
+                        "last_touched_at TIMESTAMP, " +
+                        "deleted_at TIMESTAMP" +
+                        ")");
+                }
+                if (!adapter.tableExists("planning_ghosts")) {
+                    adapter.executeUpdate(
+                        "CREATE TABLE planning_ghosts (" +
+                        "id VARCHAR(36) PRIMARY KEY, " +
+                        "layer_id VARCHAR(36) NOT NULL, " +
+                        "res_name VARCHAR(512) NOT NULL, " +
+                        "sdt_b64 TEXT, " +
+                        "grid_id BIGINT NOT NULL, " +
+                        "ox DOUBLE PRECISION NOT NULL, " +
+                        "oy DOUBLE PRECISION NOT NULL, " +
+                        "angle DOUBLE PRECISION NOT NULL, " +
+                        "profile VARCHAR(255) NOT NULL DEFAULT 'global', " +
+                        "version INTEGER NOT NULL DEFAULT 1, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "last_touched_by VARCHAR(255), " +
+                        "last_touched_at TIMESTAMP, " +
+                        "deleted_at TIMESTAMP" +
+                        ")");
                 }
             }
         });

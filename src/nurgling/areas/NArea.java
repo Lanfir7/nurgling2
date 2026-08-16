@@ -490,7 +490,6 @@ public class NArea
     public final ArrayList<Long> grids_id = new ArrayList<>();
 
     // Sync metadata - Phase 1/2/3/5 area-sync refactor
-    public String uuid = null;                 // stable identifier across clients (Phase 3)
     public int baselineVersion = 0;            // last server version we synced from (Phase 1)
     public AreaSnapshot baselineSnapshot = null; // last server state we synced from (Phase 2)
     public final java.util.EnumSet<AreaFieldGroup> dirtyGroups = java.util.EnumSet.noneOf(AreaFieldGroup.class);

@@ -665,7 +665,9 @@ public class NCore extends Widget
                 }
                 sentRecipeHashes.add(recipeHash);
 
-                // Save recipe using service (handles duplicates gracefully)
+                if (databaseManager.getRecipeService() == null) {
+                    return;
+                }
                 databaseManager.getRecipeService().saveRecipeAsync(recipe)
                     .exceptionally(ex -> {
                         System.err.println("Failed to save recipe: " + ex.getMessage());
@@ -841,7 +843,8 @@ public class NCore extends Widget
     }
 
     public void writeContainerInfo(Gob gob) {
-        if (gob != null && databaseManager != null && databaseManager.isReady()) {
+        if (gob != null && databaseManager != null && databaseManager.isReady()
+                && nurgling.tools.ClaimLand.isOnClaimOrVillage(gob)) {
             ContainerWatcher cw = new ContainerWatcher(gob, databaseManager);
             databaseManager.submitTask(cw);
         }

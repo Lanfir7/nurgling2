@@ -182,6 +182,7 @@ public class FetchStorageItemBot implements Action {
         // Open container
         String containerName = getContainerWindowName(containerGob);
         if (containerName == null) {
+            gui.msg("[DBG] no window name for " + (containerGob.ngob != null ? containerGob.ngob.name : "unknown"), java.awt.Color.ORANGE);
             return 0;
         }
         NUtils.rclickGob(containerGob);
