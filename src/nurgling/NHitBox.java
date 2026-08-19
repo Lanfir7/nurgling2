@@ -144,6 +144,8 @@ public class NHitBox
             put("gfx/terobjs/trees/driftwood2", new NHitBox(new Coord(-10,-2),new Coord(10,2)));
             put("gfx/terobjs/stockpile-orange", new NHitBox(new Coord(-4,-4),new Coord(4,4)));
             put("gfx/terobjs/map/squirrelcache", new NHitBox(new Coord(-4,-4),new Coord(4,4)));
+            put("gfx/terobjs/map/hiddenhollow", new NHitBox(new Coord2d(-16.5,-16.5),new Coord2d(16.5,16.5)));
+            put("gfx/terobjs/map/stonekist", new NHitBox(new Coord2d(-5.5,-5.5),new Coord2d(5.5,5.5)));
             put("gfx/terobjs/vehicle/wagon", new NHitBox(new Coord(-14,-8),new Coord(12,8)));
             put("gfx/terobjs/dovecote", new NHitBox(new Coord(-7,-7),new Coord(7,7)));
             put("gfx/terobjs/anvil", new NHitBox(new Coord(-7,-2),new Coord(5,2)));

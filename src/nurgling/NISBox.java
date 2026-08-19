@@ -8,6 +8,7 @@ import java.util.*;
 
 public class NISBox extends ISBox
 {
+    public Gob parentGob = null;
     private TextEntry.NumberValue value;
     private TakeButton take;
 
@@ -121,6 +122,12 @@ public class NISBox extends ISBox
 
                 parent.add(take, UI.scale(87, 44));
                 take.canactivate = true;
+                if (parentGob == null && ui != null && ui.core.getLastActions() != null) {
+                    parentGob = ui.core.getLastActions().gob;
+                }
+                if (parentGob != null) {
+                    monitoring.StockpileStorageTracker.onGob(parentGob);
+                }
             }
         }
     }

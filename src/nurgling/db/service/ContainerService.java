@@ -63,6 +63,13 @@ public class ContainerService {
     }
 
     /**
+     * Load containers on a map grid synchronously
+     */
+    public List<ContainerDao.ContainerData> loadContainersByGrid(long gridId) throws SQLException {
+        return databaseManager.executeOperation(adapter -> containerDao.loadContainersByGrid(adapter, gridId));
+    }
+
+    /**
      * Load container by hash asynchronously
      */
     public CompletableFuture<ContainerDao.ContainerData> loadContainerAsync(String hash) {

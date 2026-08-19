@@ -80,8 +80,8 @@ public class TreeLocationService implements ProfileAwareService {
     /**
      * Save a tree/bush location from a tree or bush gob on the map
      */
-    public void saveTreeLocation(Gob treeGob, int growthPercent) {
-        saveTreeLocation(treeGob);
+    public void saveTreeLocation(Gob treeGob) {
+        saveTreeLocation(treeGob, 0);
     }
 
     public boolean treeLocationExists(Gob treeGob) {
@@ -99,13 +99,14 @@ public class TreeLocationService implements ProfileAwareService {
             MapFile.GridInfo info = gui.mmap.file.gridinfo.get(grid.id);
             if (info == null) return false;
             Coord segmentCoord = tc.add(info.sc.sub(grid.gc).mul(MCache.cmaps));
-            return treeLocations.containsKey(TreeLocation.generateLocationId(info.seg, segmentCoord, treeName));
+            TreeLocation existing = treeLocations.get(TreeLocation.generateLocationId(info.seg, segmentCoord, treeName));
+            return existing != null && existing.getGrowthPercent() > 0;
         } catch (Exception e) {
             return false;
         }
     }
 
-    public void saveTreeLocation(Gob treeGob) {
+    public void saveTreeLocation(Gob treeGob, int growthPercent) {
         try {
             if (gui.map == null) return;
 
@@ -133,15 +134,15 @@ public class TreeLocationService implements ProfileAwareService {
             // Calculate segment-relative coordinate (same as SMarker creation in MiniMap.java:773)
             Coord segmentCoord = tc.add(info.sc.sub(grid.gc).mul(MCache.cmaps));
 
-            // Count nearby trees/bushes of the same type
             int quantity = countNearbyTrees(treeGob, treeResource);
 
             lock.writeLock().lock();
             try {
-                TreeLocation location = new TreeLocation(segmentId, segmentCoord, treeName, treeResource, quantity);
+                TreeLocation location = new TreeLocation(segmentId, segmentCoord, treeName, treeResource, quantity, growthPercent);
                 treeLocations.put(location.getLocationId(), location);
                 saveTreeLocations();
-                gui.msg("Saved " + treeName + " location (quantity: " + quantity + ")", java.awt.Color.GREEN);
+                String savedLabel = location.getListLabel();
+                gui.msg("Saved " + savedLabel + " location", java.awt.Color.GREEN);
             } finally {
                 lock.writeLock().unlock();
             }

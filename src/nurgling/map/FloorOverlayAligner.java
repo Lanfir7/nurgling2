@@ -166,7 +166,7 @@ public final class FloorOverlayAligner {
     private static Map<Long, List<SegEdge>> buildAdjacency(Collection<ChunkNavData> chunks, GridLookup lookup) {
         Map<Long, SegEdge> byPair = new LinkedHashMap<>();
         for (ChunkNavData chunk : chunks) {
-            if (chunk == null) {
+            if (chunk == null || !hasVerticalLink(chunk)) {
                 continue;
             }
             GridRef src = lookup.find(chunk.gridId);
@@ -196,6 +196,18 @@ public final class FloorOverlayAligner {
             adj.computeIfAbsent(edge.fromSegId, k -> new ArrayList<>()).add(edge);
         }
         return adj;
+    }
+
+    private static boolean hasVerticalLink(ChunkNavData chunk) {
+        if (chunk.portals == null) {
+            return false;
+        }
+        for (ChunkPortal portal : chunk.portals) {
+            if (portal != null && isVertical(portal.type) && portal.connectsToGridId != -1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean disagrees(Coord a, Coord b) {

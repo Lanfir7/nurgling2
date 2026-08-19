@@ -9,6 +9,8 @@ import haven.res.ui.tt.slot.Slotted;
 import haven.res.ui.tt.stackn.Stack;
 import monitoring.ItemWatcher;
 import nurgling.actions.SortInventory;
+import nurgling.areas.NContext;
+import nurgling.db.ContainerInventorySync;
 import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.tasks.*;
@@ -88,6 +90,7 @@ public class NInventory extends Inventory
         "Kiln",
         "Ore Smelter",
         "Smith's Smelter",
+        "Primsmelter",
         "Oven",
         "Pane mold",
         "Rack",
@@ -112,30 +115,26 @@ public class NInventory extends Inventory
         if (isIndexable != null) {
             return isIndexable;
         }
-        
-        isIndexable = false;
-        
-        // Skip main inventory
+
         NGameUI gui = NUtils.getGameUI();
         if (gui != null && this == gui.maininv) {
+            isIndexable = false;
             return false;
         }
-        
-        // Must be inside a window to be indexable
+
         Window wnd = getparent(Window.class);
         if (wnd == null || wnd.cap == null) {
             return false;
         }
-        
-        // Check against blacklist of non-storage windows
+
         String title = wnd.cap;
         for (String excluded : NON_INDEXABLE_WINDOWS) {
             if (title.contains(excluded)) {
+                isIndexable = false;
                 return false;
             }
         }
-        
-        // Everything else is considered a storage container
+
         isIndexable = true;
         return true;
     }
@@ -536,6 +535,8 @@ public class NInventory extends Inventory
         {
             lastUpdate = NUtils.getTickId();
         }
+        bindParentGobIfNeeded();
+        iisPeak = Math.max(iisPeak, iis.size());
         // Note: removed old iis.clear() logic - in new design iis is managed by
         // tryAddToInventoryCache (add) and reqdestroy (sync)
         
@@ -2003,6 +2004,7 @@ public class NInventory extends Inventory
     }
 
     public ArrayList<ItemWatcher.ItemInfo> iis = new ArrayList<>();
+    private int iisPeak = 0;
     
     /**
      * Generate a hash for an item for cache identification
@@ -2013,26 +2015,152 @@ public class NInventory extends Inventory
         return NUtils.calculateSHA256(data);
     }
 
+    /**
+     * Bind this window to the gob it actually belongs to. Last-action is often
+     * a previously clicked chest while Hidden Hollow is the window on screen.
+     */
+    private void bindParentGobIfNeeded() {
+        Window wnd = getparent(Window.class);
+        if (wnd == null || wnd.cap == null) {
+            return;
+        }
+        if (!isIndexable()) {
+            return;
+        }
+        String cap = wnd.cap;
+        if (parentGob != null && gobMatchesWindow(parentGob, cap)) {
+            return;
+        }
+        Gob last = (ui != null && ui.core.getLastActions() != null)
+                ? ui.core.getLastActions().gob : null;
+        boolean lastMatches = gobMatchesWindow(last, cap);
+        Gob nearest = findGobForWindowCap(cap);
+        Gob picked = ContainerInventorySync.pickGob(
+                parentGob, false, last, lastMatches, nearest);
+        if (picked != null && picked != parentGob) {
+            parentGob = picked;
+            if (parentGob.ngob != null && parentGob.ngob.hash != null) {
+                ItemWatcher.invalidateContainerCache(parentGob.ngob.hash);
+            }
+        }
+    }
+
+    private static boolean gobMatchesWindow(Gob gob, String cap) {
+        String res = gob != null && gob.ngob != null ? gob.ngob.name : null;
+        return ContainerInventorySync.gobMatchesWindow(res, cap, NContext.contcaps);
+    }
+
+    private Gob findGobForWindowCap(String cap) {
+        List<String> names = ContainerInventorySync.resourceNamesForCap(cap, NContext.contcaps);
+        if (names.isEmpty() || NUtils.player() == null) {
+            return null;
+        }
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
+            return null;
+        }
+        Coord2d pc = NUtils.player().rc;
+        Gob best = null;
+        double bestDist = Double.MAX_VALUE;
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                if (gob.ngob == null || gob.ngob.name == null || gob.rc == null) {
+                    continue;
+                }
+                if (!names.contains(gob.ngob.name)) {
+                    continue;
+                }
+                double d = gob.rc.dist(pc);
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = gob;
+                }
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Replace the event-sourced cache with what is actually in the window so
+     * items taken by another client disappear from DB without sorting.
+     */
+    private void rebuildIisFromLiveItems() {
+        if (parentGob == null || parentGob.ngob == null || parentGob.ngob.hash == null) {
+            return;
+        }
+        String hash = parentGob.ngob.hash;
+        ArrayList<ItemWatcher.ItemInfo> live = new ArrayList<>();
+        Map<Coord, List<ItemWatcher.ItemInfo>> cachedBySlot = new HashMap<>();
+        for (ItemWatcher.ItemInfo info : iis) {
+            cachedBySlot.computeIfAbsent(info.c, k -> new ArrayList<>()).add(info);
+        }
+        List<WItem> slots = getTopLevelItems();
+        for (WItem w : slots) {
+            if (!(w.item instanceof NGItem)) {
+                continue;
+            }
+            collectLiveItem((NGItem) w.item, w.c, hash, cachedBySlot.get(w.c), live);
+        }
+        iis = new ArrayList<>(ContainerInventorySync.itemsToPersist(iis, live, slots.size()));
+    }
+
+    private static void collectLiveItem(NGItem item, Coord slot, String hash,
+                                        List<ItemWatcher.ItemInfo> cachedAtSlot,
+                                        List<ItemWatcher.ItemInfo> live) {
+        if (item.contents instanceof ItemStack) {
+            ItemStack stack = (ItemStack) item.contents;
+            int idx = 0;
+            for (GItem child : stack.wmap.keySet()) {
+                if (child instanceof NGItem) {
+                    addIfQualified((NGItem) child, slot, hash, idx, live);
+                }
+                idx++;
+            }
+            return;
+        }
+        GItem.Amount amount = item.getInfo(GItem.Amount.class);
+        if (amount != null && (item.quality == null || item.quality <= 0)) {
+            int n = amount.itemnum();
+            int cached = cachedAtSlot == null ? 0 : cachedAtSlot.size();
+            if (ContainerInventorySync.keepUnexpandedStackEntries(cached, n)) {
+                live.addAll(cachedAtSlot);
+            }
+            return;
+        }
+        addIfQualified(item, slot, hash, -1, live);
+    }
+
+    private static void addIfQualified(NGItem item, Coord slot, String hash, int stackIndex,
+                                       List<ItemWatcher.ItemInfo> live) {
+        if (item.name() == null || item.quality == null || item.quality <= 0) {
+            return;
+        }
+        live.add(new ItemWatcher.ItemInfo(item.name(), item.quality, slot, hash, stackIndex));
+    }
+
     @Override
     public void reqdestroy() {
         // Mark as closing
         isClosing = true;
-        
+
+        bindParentGobIfNeeded();
         // Only process if this is an indexable container
         if (isIndexable() && parentGob != null && parentGob.ngob != null && parentGob.ngob.hash != null) {
             String containerHash = parentGob.ngob.hash;
-            
-            // Clear pending cache removals - container closed, so items weren't consumed
-            int pendingCount = pendingCacheRemovals.size();
+
+            iisPeak = Math.max(iisPeak, iis.size());
+            rebuildIisFromLiveItems();
+            iisPeak = Math.max(iisPeak, iis.size());
             pendingCacheRemovals.clear();
-            
-            if ((Boolean) NConfig.get(NConfig.Key.ndbenable)
+            ItemWatcher.invalidateContainerCache(containerHash);
+
+            if (ContainerInventorySync.shouldWrite(iis.size(), iisPeak)
+                    && (Boolean) NConfig.get(NConfig.Key.ndbenable)
                     && nurgling.tools.ClaimLand.isOnClaimOrVillage(parentGob)) {
-                System.out.println("NInventory.reqdestroy: Syncing " + iis.size() + " items for container " + containerHash + " (cleared " + pendingCount + " pending)");
+                System.out.println("NInventory.reqdestroy: Syncing " + iis.size() + " items for container " + containerHash);
                 ui.core.writeItemInfoForContainer(iis, containerHash);
             }
         }
-        // For non-indexable containers, just clear without logging
         pendingCacheRemovals.clear();
 
         // Close Study Desk Planner if this is a study desk inventory

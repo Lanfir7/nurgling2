@@ -71,4 +71,12 @@ public class TreeLocation {
     public long getTimestamp() { return timestamp; }
     public int getQuantity() { return quantity; }
     public int getGrowthPercent() { return growthPercent; }
+
+    public String getMapLabel() {
+        return growthPercent > 0 ? growthPercent + "%" : "";
+    }
+
+    public String getListLabel() {
+        return growthPercent > 0 ? treeName + " (" + growthPercent + "%)" : treeName;
+    }
 }

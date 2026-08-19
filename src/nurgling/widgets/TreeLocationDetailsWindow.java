@@ -27,8 +27,10 @@ public class TreeLocationDetailsWindow extends Window {
         content.add(new Label(treeLocation.getTreeName()), 0, y);
         y += lineHeight;
 
-        // Quantity label
-        content.add(new Label("Quantity: " + treeLocation.getQuantity()), 0, y);
+        String growthLabel = treeLocation.getMapLabel();
+        if (!growthLabel.isEmpty()) {
+            content.add(new Label("Growth: " + growthLabel), 0, y);
+        }
         y += lineHeight + UI.scale(10);
 
         // Buttons at the bottom

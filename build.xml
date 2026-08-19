@@ -97,7 +97,7 @@
 
     <target name="extlib/jogl-arm" depends="extlib/jogl">
         <mkdir dir="lib/ext/jogl" />
-        <get dest="lib/ext/jogl/" verbose="true">
+        <get dest="lib/ext/jogl/" usetimestamp="true" retries="3" verbose="true">
             <url url="https://jogamp.org/deployment/v2.5.0/jar/jogl-all.jar" />
             <url url="https://jogamp.org/deployment/v2.5.0/jar/jogl-all-natives-macosx-universal.jar" />
             <url url="https://jogamp.org/deployment/v2.5.0/jar/gluegen-rt.jar" />
@@ -213,9 +213,11 @@
 	<include name="hafen-res.jar" />
 	<include name="builtin-res.jar" />
       </fileset>
-      <fileset dir="lib/ext/jogl"><include name="*.jar" /></fileset>
       <fileset dir="lib/ext/lwjgl"><include name="*.jar" /></fileset>
       <fileset dir="lib/ext/steamworks"><include name="*.jar" /></fileset>
+    </copy>
+    <copy todir="bin" overwrite="true">
+      <fileset dir="lib/ext/jogl"><include name="*.jar" /></fileset>
     </copy>
     <copy file="etc/json-java.jar" tofile="bin/json-java.jar" />
     <copy file="etc/postgresql-42.7.5.jar" tofile="bin/postgresql-42.7.5.jar" />

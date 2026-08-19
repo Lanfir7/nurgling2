@@ -8,6 +8,7 @@ import mapv4.NMappingClient;
 import monitoring.ContainerWatcher;
 import monitoring.ItemWatcher;
 import monitoring.NGlobalSearchItems;
+import monitoring.StorageOrphanCleaner;
 import nurgling.actions.AutoDrink;
 import nurgling.actions.AutoSaveTableware;
 import nurgling.areas.NArea;
@@ -37,6 +38,7 @@ public class NCore extends Widget
     public nurgling.planning.PlanningLayerManager planningLayer = new nurgling.planning.PlanningLayerManager();
 
     public static volatile nurgling.db.DatabaseManager databaseManager = null;
+    private final StorageOrphanCleaner storageOrphanCleaner = new StorageOrphanCleaner();
     public boolean isInspectMode()
     {
         if(debug)
@@ -301,6 +303,11 @@ public class NCore extends Widget
                     databaseManager = null;
                 }
             }
+        }
+
+        if (databaseManager != null && databaseManager.isReady()) {
+            storageOrphanCleaner.tick(databaseManager);
+            monitoring.StockpileStorageTracker.tick(databaseManager);
         }
 
         if(autoDrink == null && (Boolean)NConfig.get(NConfig.Key.autoDrink))

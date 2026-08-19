@@ -2393,6 +2393,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			}
 		}
 		
+		if(clickedGob != null) {
+			monitoring.StockpileStorageTracker.onGob(clickedGob.gob);
+			if (nurgling.db.StockpileStoragePolicy.isStockpileRes(
+					clickedGob.gob.ngob != null ? clickedGob.gob.ngob.name : null)) {
+				NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
+			}
+		}
 		if(clickb==3 && clickedGob!=null)
 		{
 			NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
@@ -2448,8 +2455,10 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    }
 	} else if((placing_l != null) && placing_l.done()) {
 	    Plob placing = placing_l.get();
-	    if(placing.lastmc != null)
+	    if(placing.lastmc != null) {
+		monitoring.StockpileStorageTracker.onPlace(placing);
 		wdgmsg("place", placing.rc.floor(posres), (int)Math.round(placing.a * 32768 / Math.PI), ev.b, ui.modflags());
+	    }
 	} else if((grab != null) && grab.mmousedown(ev.c, ev.b)) {
 	} else {
 	    new Click(ev.c, ev.b).run();
@@ -2514,6 +2523,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
     public boolean iteminteract(Coord cc, Coord ul) {
 	new Hittest(cc) {
 	    public void hit(Coord pc, Coord2d mc, ClickData inf) {
+		monitoring.StockpileStorageTracker.onClickData(inf);
 		Object[] args = {pc, mc.floor(posres), ui.modflags()};
 		if(inf != null)
 		    args = Utils.extend(args, inf.clickargs());

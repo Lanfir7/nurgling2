@@ -6,7 +6,11 @@ import haven.Label;
 import haven.Window;
 import nurgling.*;
 import nurgling.actions.bots.FetchStorageItemBot;
+import nurgling.db.StorageOrphanPolicy;
+import nurgling.db.StorageTableInfo;
+import nurgling.db.dao.ContainerDao;
 import nurgling.db.dao.StorageItemDao;
+import nurgling.db.service.ContainerService;
 import nurgling.db.service.StorageItemService;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
@@ -27,13 +31,15 @@ import java.util.stream.Collectors;
 public class NStorageItemsWidget extends Window {
 
     private static final int PAGE_SIZE = 25;
-    private static final int WINDOW_WIDTH = 550;
+    private static final int WINDOW_WIDTH = 720;
     private static final int WINDOW_HEIGHT = 500;
 
     // Column positions
     private static final int COL_NAME = UI.scale(10);
-    private static final int COL_QUALITY = UI.scale(320);
-    private static final int COL_COUNT = UI.scale(420);
+    private static final int COL_QUALITY = UI.scale(250);
+    private static final int COL_COUNT = UI.scale(340);
+    private static final int COL_DIST = UI.scale(410);
+    private static final int COL_STORAGE = UI.scale(490);
 
     private int currentPage = 0;
     private List<GroupedItem> allItems = new ArrayList<>();
@@ -58,7 +64,7 @@ public class NStorageItemsWidget extends Window {
     }
     
     public enum SortColumn {
-        NAME, QUALITY, COUNT
+        NAME, QUALITY, COUNT, DIST, STORAGE
     }
 
     private StorageItemsList itemsList;
@@ -76,6 +82,8 @@ public class NStorageItemsWidget extends Window {
     private Label nameHeaderLabel;
     private Label qualityHeaderLabel;
     private Label countHeaderLabel;
+    private Label distHeaderLabel;
+    private Label storageHeaderLabel;
 
     /**
      * Grouped item representation for display
@@ -86,15 +94,20 @@ public class NStorageItemsWidget extends Window {
         public final double minQuality;
         public final double maxQuality;
         public final int count;
+        public final int distanceTiles;
+        public final String storageName;
         public final List<StorageItemDao.StorageItemData> items;
 
-        public GroupedItem(String name, double quality, int count, List<StorageItemDao.StorageItemData> items) {
+        public GroupedItem(String name, double quality, int count, List<StorageItemDao.StorageItemData> items,
+                           int distanceTiles, String storageName) {
             this.name = name;
             this.quality = quality;
             this.minQuality = items.stream().mapToDouble(StorageItemDao.StorageItemData::getQuality).min().orElse(0);
             this.maxQuality = items.stream().mapToDouble(StorageItemDao.StorageItemData::getQuality).max().orElse(0);
             this.count = count;
             this.items = items;
+            this.distanceTiles = distanceTiles;
+            this.storageName = storageName != null ? storageName : "—";
         }
 
         public String getQualityDisplay() {
@@ -217,6 +230,28 @@ public class NStorageItemsWidget extends Window {
                 return super.mousedown(ev);
             }
         }, new Coord(COL_COUNT, headerY));
+
+        distHeaderLabel = add(new Label(L10n.get("storage.col_dist") + " ▼") {
+            @Override
+            public boolean mousedown(MouseDownEvent ev) {
+                if (ev.b == 1) {
+                    toggleSort(SortColumn.DIST);
+                    return true;
+                }
+                return super.mousedown(ev);
+            }
+        }, new Coord(COL_DIST, headerY));
+
+        storageHeaderLabel = add(new Label(L10n.get("storage.col_storage") + " ▼") {
+            @Override
+            public boolean mousedown(MouseDownEvent ev) {
+                if (ev.b == 1) {
+                    toggleSort(SortColumn.STORAGE);
+                    return true;
+                }
+                return super.mousedown(ev);
+            }
+        }, new Coord(COL_STORAGE, headerY));
         
         updateHeaderLabels();
 
@@ -269,19 +304,24 @@ public class NStorageItemsWidget extends Window {
     }
     
     private void updateHeaderLabels() {
-        if (nameHeaderLabel == null || qualityHeaderLabel == null || countHeaderLabel == null) {
+        if (nameHeaderLabel == null || qualityHeaderLabel == null || countHeaderLabel == null
+                || distHeaderLabel == null || storageHeaderLabel == null) {
             return; // Not yet initialized
         }
         
         String nameText = L10n.get("storage.col_name");
         String qualityText = L10n.get("storage.col_quality");
         String countText = L10n.get("storage.col_count");
+        String distText = L10n.get("storage.col_dist");
+        String storageText = L10n.get("storage.col_storage");
         
         String arrow = sortDescending ? " ▼" : " ▲";
         
         nameHeaderLabel.settext(nameText + (currentSortColumn == SortColumn.NAME ? arrow : ""));
         qualityHeaderLabel.settext(qualityText + (currentSortColumn == SortColumn.QUALITY ? arrow : ""));
         countHeaderLabel.settext(countText + (currentSortColumn == SortColumn.COUNT ? arrow : ""));
+        distHeaderLabel.settext(distText + (currentSortColumn == SortColumn.DIST ? arrow : ""));
+        storageHeaderLabel.settext(storageText + (currentSortColumn == SortColumn.STORAGE ? arrow : ""));
     }
     
     private void parseQualityFilter() {
@@ -334,6 +374,7 @@ public class NStorageItemsWidget extends Window {
 
         isLoading = true;
         StorageItemService storageService = new StorageItemService(ui.core.databaseManager);
+        ContainerService containerService = new ContainerService(ui.core.databaseManager);
 
         // Use a dedicated Thread instead of ForkJoinPool.commonPool() (via CompletableFuture)
         // to avoid ClassLoader issues — ForkJoinPool threads may use a different ClassLoader
@@ -341,11 +382,15 @@ public class NStorageItemsWidget extends Window {
         Thread loader = new Thread(() -> {
             try {
                 List<StorageItemDao.StorageItemData> items = storageService.loadAllStorageItems();
+                Map<String, ContainerDao.ContainerData> containers = new HashMap<>();
+                for (ContainerDao.ContainerData container : containerService.loadAllContainers()) {
+                    containers.put(container.getHash(), container);
+                }
                 // Filter out items with negative quality (shouldn't be in DB, but just in case)
                 List<StorageItemDao.StorageItemData> validItems = items.stream()
                     .filter(item -> item.getQuality() >= 0)
                     .collect(Collectors.toList());
-                processLoadedItems(validItems);
+                processLoadedItems(validItems, containers);
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
@@ -356,12 +401,15 @@ public class NStorageItemsWidget extends Window {
         loader.start();
     }
 
-    private void processLoadedItems(List<StorageItemDao.StorageItemData> items) {
+    private void processLoadedItems(List<StorageItemDao.StorageItemData> items,
+                                    Map<String, ContainerDao.ContainerData> containers) {
         this.rawItems = items;
+        this.containersByHash = containers != null ? containers : new HashMap<>();
         processItems();
     }
 
     private List<StorageItemDao.StorageItemData> rawItems = new ArrayList<>();
+    private Map<String, ContainerDao.ContainerData> containersByHash = new HashMap<>();
 
     private void processItems() {
         if (rawItems == null || rawItems.isEmpty()) {
@@ -420,11 +468,15 @@ public class NStorageItemsWidget extends Window {
                 quality = -1;
             }
 
+            StorageLocation location = resolveGroupLocation(itemGroup);
+
             result.add(new GroupedItem(
                     first.getName(),
                     quality,
                     itemGroup.size(),
-                    itemGroup
+                    itemGroup,
+                    location.distanceTiles,
+                    location.storageName
             ));
         }
 
@@ -453,6 +505,7 @@ public class NStorageItemsWidget extends Window {
 
         // Sort
         Comparator<GroupedItem> comparator;
+        boolean reverse = sortDescending;
         switch (currentSortColumn) {
             case NAME:
                 comparator = Comparator.comparing(a -> a.name.toLowerCase());
@@ -460,13 +513,28 @@ public class NStorageItemsWidget extends Window {
             case COUNT:
                 comparator = Comparator.comparingInt(a -> a.count);
                 break;
+            case DIST:
+                if (sortDescending) {
+                    comparator = Comparator
+                            .comparingInt((GroupedItem a) -> a.distanceTiles < 0 ? 1 : 0)
+                            .thenComparing(Comparator.comparingInt((GroupedItem a) -> a.distanceTiles).reversed());
+                } else {
+                    comparator = Comparator
+                            .comparingInt((GroupedItem a) -> a.distanceTiles < 0 ? 1 : 0)
+                            .thenComparingInt(a -> a.distanceTiles);
+                }
+                reverse = false;
+                break;
+            case STORAGE:
+                comparator = Comparator.comparing(a -> a.storageName.toLowerCase());
+                break;
             case QUALITY:
             default:
                 comparator = Comparator.comparingDouble(a -> a.quality >= 0 ? a.quality : a.maxQuality);
                 break;
         }
         
-        if (sortDescending) {
+        if (reverse) {
             comparator = comparator.reversed();
         }
         
@@ -492,6 +560,107 @@ public class NStorageItemsWidget extends Window {
         updatePageLabel();
     }
 
+    private static final class StorageLocation {
+        final int distanceTiles;
+        final String storageName;
+
+        StorageLocation(int distanceTiles, String storageName) {
+            this.distanceTiles = distanceTiles;
+            this.storageName = storageName;
+        }
+    }
+
+    private StorageLocation resolveGroupLocation(List<StorageItemDao.StorageItemData> itemGroup) {
+        Map<String, String> liveNames = liveStorageNames();
+        int bestDist = StorageTableInfo.UNKNOWN_DIST;
+        String nearestName = "—";
+        List<String> names = new ArrayList<>();
+        for (StorageItemDao.StorageItemData item : itemGroup) {
+            String hash = item.getContainer();
+            String name = liveNames.getOrDefault(hash, "—");
+            names.add(name);
+            int dist = distanceTiles(hash);
+            if (dist >= 0 && (bestDist < 0 || dist < bestDist)) {
+                bestDist = dist;
+                nearestName = name;
+            }
+        }
+        return new StorageLocation(bestDist, StorageTableInfo.storageLabel(nearestName, names));
+    }
+
+    private Map<String, String> liveStorageNames() {
+        Map<String, String> names = new HashMap<>();
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
+            return names;
+        }
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                if (gob.ngob == null || gob.ngob.hash == null || gob.ngob.name == null) {
+                    continue;
+                }
+                names.put(gob.ngob.hash, StorageTableInfo.containerTitle(gob.ngob.name));
+            }
+        }
+        return names;
+    }
+
+    private int distanceTiles(String containerHash) {
+        if (containerHash == null) {
+            return StorageTableInfo.UNKNOWN_DIST;
+        }
+        ContainerDao.ContainerData data = containersByHash.get(containerHash);
+        Gob player = NUtils.player();
+        NGameUI gui = NUtils.getGameUI();
+        if (data == null || player == null || player.rc == null || gui == null
+                || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null
+                || gui.ui.sess.glob.map == null) {
+            return StorageTableInfo.UNKNOWN_DIST;
+        }
+        Coord stored = StorageOrphanPolicy.parseGcoord(data.getCoord());
+        if (stored == null) {
+            return StorageTableInfo.UNKNOWN_DIST;
+        }
+        MCache map = gui.ui.sess.glob.map;
+        try {
+            Coord pltc = new Coord2d(player.rc.x / MCache.tilesz.x, player.rc.y / MCache.tilesz.y).floor();
+            MCache.Grid playerGrid;
+            synchronized (map.grids) {
+                if (!map.grids.containsKey(pltc.div(MCache.cmaps))) {
+                    return StorageTableInfo.UNKNOWN_DIST;
+                }
+                playerGrid = map.getgridt(pltc);
+            }
+            if (playerGrid == null) {
+                return StorageTableInfo.UNKNOWN_DIST;
+            }
+            if (playerGrid.id == data.getGridId()) {
+                Coord playerGcoord = player.rc.sub(playerGrid.ul.mul(Coord2d.of(11, 11))).floor(OCache.posres);
+                return StorageTableInfo.tilesBetween(playerGcoord, stored);
+            }
+            MCache.Grid containerGrid = findGridById(map, data.getGridId());
+            if (containerGrid == null) {
+                return StorageTableInfo.UNKNOWN_DIST;
+            }
+            Coord2d containerRc = Coord2d.of(containerGrid.ul).mul(MCache.tilesz)
+                    .add(Coord2d.of(stored).mul(OCache.posres));
+            return (int) Math.round(player.rc.dist(containerRc) / MCache.tilesz.x);
+        } catch (Loading e) {
+            return StorageTableInfo.UNKNOWN_DIST;
+        }
+    }
+
+    private static MCache.Grid findGridById(MCache map, long gridId) {
+        synchronized (map.grids) {
+            for (MCache.Grid grid : map.grids.values()) {
+                if (grid != null && grid.id == gridId) {
+                    return grid;
+                }
+            }
+        }
+        return null;
+    }
+
     private final ArrayList<StorageItemWidget> itemWidgets = new ArrayList<>();
 
     /**
@@ -504,9 +673,11 @@ public class NStorageItemsWidget extends Window {
             this.item = item;
             sz = UI.scale(new Coord(WINDOW_WIDTH - 40, 20));
 
-            add(new Label(truncateName(item.name, 38)), new Coord(COL_NAME, 0));
+            add(new Label(truncateName(item.name, 28)), new Coord(COL_NAME, 0));
             add(new Label(item.getQualityDisplay()), new Coord(COL_QUALITY, 0));
             add(new Label(String.valueOf(item.count)), new Coord(COL_COUNT, 0));
+            add(new Label(StorageTableInfo.distanceLabel(item.distanceTiles)), new Coord(COL_DIST, 0));
+            add(new Label(truncateName(item.storageName, 18)), new Coord(COL_STORAGE, 0));
         }
 
         private String truncateName(String name, int maxLen) {
@@ -537,7 +708,9 @@ public class NStorageItemsWidget extends Window {
             StringBuilder sb = new StringBuilder();
             sb.append(item.name).append("\n");
             sb.append(L10n.get("storage.quality")).append(": ").append(item.getQualityDisplay()).append("\n");
-            sb.append(L10n.get("storage.count")).append(": ").append(item.count);
+            sb.append(L10n.get("storage.count")).append(": ").append(item.count).append("\n");
+            sb.append(L10n.get("storage.col_dist")).append(": ").append(StorageTableInfo.distanceLabel(item.distanceTiles)).append("\n");
+            sb.append(L10n.get("storage.col_storage")).append(": ").append(item.storageName);
             NUtils.getGameUI().msg(sb.toString());
         }
         

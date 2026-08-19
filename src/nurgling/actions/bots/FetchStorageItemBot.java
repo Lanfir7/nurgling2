@@ -5,6 +5,7 @@ import static haven.OCache.posres;
 import nurgling.*;
 import nurgling.actions.*;
 import nurgling.areas.NContext;
+import nurgling.db.StockpileStoragePolicy;
 import nurgling.db.dao.StorageItemDao;
 import nurgling.db.dao.ContainerDao;
 import nurgling.i18n.L10n;
@@ -173,10 +174,21 @@ public class FetchStorageItemBot implements Action {
             }
         }
 
-        // Move to container if not close enough
-        if (!PathFinder.isAvailable(containerGob)) {
-            PathFinder pf = new PathFinder(containerGob);
-            pf.run(gui);
+        // Approach via PF. With a hitbox, hardMode+skipDN walks around baskets
+        // to a free cell beside the gob. Map objects without a hitbox (until a
+        // custom box exists) must not use that — PathFinder has no cells to approach.
+        PathFinder pf = new PathFinder(containerGob);
+        if (containerGob.ngob != null && containerGob.ngob.hitBox != null) {
+            pf.isHardMode = true;
+            pf.skipDN = true;
+        }
+        if (!pf.run(gui).IsSuccess()) {
+            gui.msg("[DBG] pathfinder failed", java.awt.Color.ORANGE);
+            return 0;
+        }
+
+        if (containerGob.ngob != null && StockpileStoragePolicy.isStockpileRes(containerGob.ngob.name)) {
+            return fetchFromStockpile(gui, containerGob, requestedItems);
         }
 
         // Open container
@@ -232,6 +244,117 @@ public class FetchStorageItemBot implements Action {
         // Return actual count based on inventory difference
         int afterCount = countItemsInInventory(gui, itemName);
         return afterCount - beforeCount;
+    }
+
+    private int fetchFromStockpile(NGameUI gui, Gob pileGob,
+                                   List<StorageItemDao.StorageItemData> requestedItems) throws InterruptedException {
+        monitoring.StockpileStorageTracker.onGob(pileGob);
+        String oldHash = pileGob.ngob != null ? pileGob.ngob.hash : null;
+        Coord2d pileRc = pileGob.rc;
+
+        new OpenTargetContainer("Stockpile", pileGob).run(gui);
+        NISBox pile = gui.getStockpile();
+        if (pile == null) {
+            return 0;
+        }
+        int count = pile.calcCount();
+        int free = gui.getInventory().getFreeSpace();
+        if (count <= 0) {
+            new CloseTargetContainer("Stockpile").run(gui);
+            return 0;
+        }
+        if (free < count) {
+            new CloseTargetContainer("Stockpile").run(gui);
+            return 0;
+        }
+
+        List<StockpileStoragePolicy.Item> before = monitoring.StockpileStorageTracker.captureInventory();
+        new TakeItemsFromPile(pileGob, pile, count).run(gui);
+        if (gui.getWindow("Stockpile") != null) {
+            new CloseTargetContainer("Stockpile").run(gui);
+        }
+        monitoring.StockpileStorageTracker.flush();
+
+        List<StockpileStoragePolicy.Item> dumped = StockpileStoragePolicy.appeared(
+                before, monitoring.StockpileStorageTracker.captureInventory());
+        List<StockpileStoragePolicy.Item> needed = new ArrayList<>();
+        for (StorageItemDao.StorageItemData data : requestedItems) {
+            needed.add(new StockpileStoragePolicy.Item(data.getName(), data.getQuality()));
+        }
+        StockpileStoragePolicy.FetchSplit split = StockpileStoragePolicy.splitForFetch(dumped, needed);
+
+        if (oldHash != null && Finder.findGob(oldHash) == null && NCore.databaseManager != null
+                && NCore.databaseManager.isReady()) {
+            try {
+                NCore.databaseManager.getContainerService().deleteContainer(oldHash);
+            } catch (Exception ignored) {
+            }
+        }
+
+        List<WItem> restock = matchInventory(gui, split.restock);
+        if (!restock.isEmpty()) {
+            restockStockpile(gui, pileRc, restock);
+            monitoring.StockpileStorageTracker.flush();
+        }
+
+        return split.keep.size();
+    }
+
+    private List<WItem> matchInventory(NGameUI gui, List<StockpileStoragePolicy.Item> fingerprints) {
+        List<StockpileStoragePolicy.Item> left = new ArrayList<>(fingerprints);
+        List<WItem> matched = new ArrayList<>();
+        for (WItem w : gui.getInventory().getTopLevelItems()) {
+            if (!(w.item instanceof NGItem)) {
+                continue;
+            }
+            NGItem g = (NGItem) w.item;
+            if (g.name() == null) {
+                continue;
+            }
+            double q = g.quality == null || g.quality <= 0 ? 0
+                    : Double.parseDouble(Utils.odformat2(g.quality, 2));
+            StockpileStoragePolicy.Item fp = new StockpileStoragePolicy.Item(g.name(), q);
+            int idx = left.indexOf(fp);
+            if (idx >= 0) {
+                left.remove(idx);
+                matched.add(w);
+            }
+        }
+        return matched;
+    }
+
+    private void restockStockpile(NGameUI gui, Coord2d rc, List<WItem> restock) throws InterruptedException {
+        if (NUtils.takeItemToHand(restock.get(0)) == null) {
+            return;
+        }
+        Pair<Coord2d, Coord2d> area = new Pair<>(rc.sub(11, 11), rc.add(11, 11));
+        String name = ((NGItem) restock.get(0).item).name();
+        PileMaker maker = new PileMaker(area, new NAlias(name), new NAlias("stockpile"));
+        if (!maker.run(gui).IsSuccess()) {
+            return;
+        }
+        Gob newPile = maker.getPile();
+        if (newPile == null) {
+            return;
+        }
+        monitoring.StockpileStorageTracker.onGob(newPile);
+        for (int i = 1; i < restock.size(); i++) {
+            if (stop.get()) {
+                break;
+            }
+            WItem w = restock.get(i);
+            if (w.parent == null) {
+                continue;
+            }
+            NUtils.takeItemToHand(w);
+            NUtils.activateItem(newPile, false);
+            NUtils.addTask(new NTask() {
+                @Override
+                public boolean check() {
+                    return NUtils.getGameUI().vhand == null;
+                }
+            });
+        }
     }
 
     /**

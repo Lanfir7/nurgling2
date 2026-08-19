@@ -13,6 +13,7 @@ import nurgling.overlays.map.MinimapDiscoveryRenderer;
 import nurgling.overlays.map.MinimapExploredAreaRenderer;
 import nurgling.overlays.map.MinimapFloorOverlayRenderer;
 import nurgling.map.FloorOverlayAligner;
+import nurgling.map.PermanentMarkerPath;
 import nurgling.tools.ExploredArea;
 import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
@@ -58,8 +59,8 @@ NMiniMap extends MiniMap {
     public java.util.List<FloorOverlayAligner.FloorLink> floorLinks = java.util.Collections.emptyList();
     public FloorOverlayAligner.FloorLink selectedFloorLink = null;
     private final MinimapFloorOverlayRenderer floorOverlayRenderer = new MinimapFloorOverlayRenderer();
-    private long lastFloorLinkRefresh = 0;
     private long lastFloorSegId = Long.MIN_VALUE;
+    private boolean lastFloorOverlayEnabled = false;
 
     // Cached waypoint number labels to avoid per-frame Text.render() allocations
     private static Text[] waypointNumCache = new Text[128];
@@ -708,21 +709,23 @@ NMiniMap extends MiniMap {
             floorLinks = java.util.Collections.emptyList();
             selectedFloorLink = null;
             lastFloorSegId = Long.MIN_VALUE;
+            lastFloorOverlayEnabled = false;
             return;
         }
-        if (dloc.seg != null && dloc.seg.id != lastFloorSegId) {
+        boolean enabled = MinimapFloorOverlayRenderer.enabled();
+        boolean segChanged = dloc.seg != null && dloc.seg.id != lastFloorSegId;
+        if (segChanged) {
             lastFloorSegId = dloc.seg.id;
             selectedFloorLink = null;
-            lastFloorLinkRefresh = 0;
         }
-        if (!forceCompute && !MinimapFloorOverlayRenderer.enabled()) {
+        boolean justEnabled = enabled && !lastFloorOverlayEnabled;
+        lastFloorOverlayEnabled = enabled;
+        if (!forceCompute && !enabled) {
             return;
         }
-        long now = System.currentTimeMillis();
-        if (now - lastFloorLinkRefresh < 500) {
+        if (!forceCompute && !segChanged && !justEnabled) {
             return;
         }
-        lastFloorLinkRefresh = now;
         java.util.List<FloorOverlayAligner.FloorLink> computed = MinimapFloorOverlayRenderer.computeLinks(this);
         if (computed == null) {
             return;
@@ -1445,123 +1448,7 @@ NMiniMap extends MiniMap {
                 // Для перманентных маркеров используем оригинальную логику - просто рисуем маркер
                 // Но исправляем путь к ресурсу, если маркер был создан с неправильным путем (например, "Cave Passage" с salvia)
                 Coord markPos = mark.m.tc.sub(dloc.tc).div(scalef()).add(hsz);
-                
-                // Исправляем путь к ресурсу для маркеров с неправильным путем (например, "Cave Passage" с salvia)
-                if(mark.m instanceof MapFile.SMarker) {
-                    MapFile.SMarker sm = (MapFile.SMarker)mark.m;
-                    if(sm.nm != null && sm.nm.toLowerCase().contains("cave") && sm.nm.toLowerCase().contains("passage")) {
-                        // Проверяем, правильный ли путь к ресурсу
-                        String currentPath = sm.res.name;
-                        if(currentPath != null && (currentPath.contains("salvia") || currentPath.contains("herbs"))) {
-                            // Путь неправильный, пытаемся найти правильный
-                            // Сначала пробуем найти через GobIcon в текущей сессии
-                            String correctPath = null;
-                            
-                            // Ищем GobIcon с tooltip "Cave Passage" в текущей сессии
-                            if(ui != null && ui.sess != null && ui.sess.glob != null && ui.sess.glob.oc != null) {
-                                synchronized(ui.sess.glob.oc) {
-                                    int gobCount = 0;
-                                    int iconCount = 0;
-                                    for(Gob gob : ui.sess.glob.oc) {
-                                        gobCount++;
-                                        try {
-                                            GobIcon icon = gob.getattr(GobIcon.class);
-                                            if(icon != null && icon.icon != null) {
-                                                iconCount++;
-                                                // Получаем tooltip через res.layer(Resource.tooltip)
-                                                String tooltip = null;
-                                                try {
-                                                    Resource.Tooltip tt = icon.icon.res.layer(Resource.tooltip);
-                                                    if(tt != null) {
-                                                        tooltip = tt.t;
-                                                    }
-                                                } catch (Exception e) {}
-                                                
-                                                if(tooltip != null && tooltip.equals("Cave Passage")) {
-                                                    // Нашли GobIcon с tooltip "Cave Passage"
-                                                    if(icon.icon instanceof GobIcon.ImageIcon) {
-                                                        GobIcon.ImageIcon imgIcon = (GobIcon.ImageIcon)icon.icon;
-                                                        correctPath = imgIcon.res.name;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        } catch (Exception e) {
-                                            continue;
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Если не нашли через GobIcon, пробуем найти через поиск ресурсов с tooltip "Cave Passage"
-                            if(correctPath == null) {
-                                // Пробуем известные пути для "Cave Passage" из оригинального клиента
-                                String[] knownCavePaths = {
-                                    "gfx/terobjs/mm/cave-passage",
-                                    "gfx/terobjs/mm/cavepassage",
-                                    "gfx/terobjs/mm/cave",
-                                    "gfx/invobjs/cave-passage",
-                                    "gfx/invobjs/cavepassage",
-                                    "gfx/terobjs/cave-passage",
-                                    "gfx/terobjs/cavepassage",
-                                    "gfx/terobjs/mm/cave-entrance",
-                                    "gfx/terobjs/mm/caveentrance",
-                                    "gfx/terobjs/cave-entrance",
-                                    "gfx/terobjs/caveentrance",
-                                };
-                                
-                                for(String testPath : knownCavePaths) {
-                                    try {
-                                        Resource testRes = Resource.remote().loadwait(testPath);
-                                        if(testRes != null) {
-                                            Resource.Tooltip tt = testRes.layer(Resource.tooltip);
-                                            if(tt != null && tt.t != null && tt.t.equals("Cave Passage")) {
-                                                correctPath = testPath;
-                                                break;
-                                            }
-                                        }
-                                    } catch (Exception e) {
-                                        continue;
-                                    }
-                                }
-                            }
-                            
-                            // Если не нашли через GobIcon, пробуем через getCorrectResourcePathForPermanentMarker
-                            if(correctPath == null) {
-                                correctPath = getCorrectResourcePathForPermanentMarker(sm.nm, currentPath);
-                            }
-                            
-                            if(correctPath != null && !correctPath.equals(currentPath)) {
-                                // Обновляем путь к ресурсу в маркере
-                                try {
-                                    Resource correctRes = Resource.remote().loadwait(correctPath);
-                                    if(correctRes != null && correctRes.layer(Resource.imgc) != null) {
-                                        sm.res = new Resource.Saved(Resource.remote(), correctPath, correctRes.ver);
-                                        
-                                        // Обновляем маркер в файле карты
-                                        try {
-                                            NGameUI gui = NUtils.getGameUI();
-                                            if(gui != null && gui.mapfile != null && gui.mapfile.view != null && gui.mapfile.view.file != null) {
-                                                gui.mapfile.view.file.update(sm);
-                                            }
-                                        } catch (Exception e) {}
-                                        
-                                        // Сбрасываем кэш изображения в DisplayMarker
-                                        try {
-                                            Field imgField = DisplayMarker.class.getDeclaredField("img");
-                                            imgField.setAccessible(true);
-                                            imgField.set(mark, null);
-                                            Field ccField = DisplayMarker.class.getDeclaredField("cc");
-                                            ccField.setAccessible(true);
-                                            ccField.set(mark, null);
-                                        } catch (Exception e) {}
-                                    }
-                                } catch (Exception e) {}
-                            }
-                        }
-                    }
-                }
-                
+
                 // Apply scale to permanent markers (SMarker)
                 if(mark.m instanceof MapFile.SMarker) {
                     MapFile.SMarker sm = (MapFile.SMarker)mark.m;
@@ -2145,10 +2032,8 @@ NMiniMap extends MiniMap {
                     int targetSize = UI.scale(18);
                     g.aimage(tex, screenPos, 0.5, 0.5, UI.scale(targetSize * tex.sz().x / dsz, targetSize * tex.sz().y / dsz));
 
-                    // Draw tree name and growth percentage if growth > 0
-                    int growthPercent = treeLoc.getGrowthPercent();
-                    if (growthPercent > 0) {
-                        String labelText =  growthPercent + "%";
+                    String labelText = treeLoc.getMapLabel();
+                    if (!labelText.isEmpty()) {
                         
                         // Create text with border (similar to resource timers)
                         Text.Furnace labelFurnace = new PUtils.BlurFurn(
@@ -3267,31 +3152,27 @@ NMiniMap extends MiniMap {
                     continue;
                 }
                 
-                // Получаем правильный путь к ресурсу через VSpec (как в редакторе категорий - используем JSONObject напрямую)
-                String correctResourcePath = null;
                 String tooltipName = null;
                 try {
                     Resource.Tooltip tt = micon.res.flayer(Resource.tooltip);
                     if(tt != null && tt.t != null) {
                         tooltipName = tt.t;
-                        
-                        // Ищем JSONObject в VSpec по названию (только точное совпадение для перманентных маркеров)
-                        org.json.JSONObject vspecObj = findVSpecObjectByNameForPermanentMarker(tt.t);
-                        if(vspecObj != null && vspecObj.has("static")) {
-                            correctResourcePath = vspecObj.getString("static");
-                            if(tt.t.toLowerCase().contains("wine")) {
-                                System.err.println("markobjs: Found in VSpec: name='" + tt.t + "', path='" + correctResourcePath + "'");
-                            }
-                        } else {
-                            // Fallback на метод для перманентных маркеров (только точное совпадение)
-                            correctResourcePath = getCorrectResourcePathForPermanentMarker(tt.t, micon.res.name);
-                            if(tt.t.toLowerCase().contains("wine")) {
-                                System.err.println("markobjs: Not in VSpec, fallback: name='" + tt.t + "', path='" + correctResourcePath + "'");
-                            }
-                        }
                     }
                 } catch (Exception e) {
-                    // Игнорируем ошибки
+                }
+
+                String correctResourcePath = null;
+                boolean keepOriginal = !PermanentMarkerPath.shouldProbeRemotePaths(tooltipName, micon.res.name);
+                if(!keepOriginal && tooltipName != null) {
+                    try {
+                        org.json.JSONObject vspecObj = findVSpecObjectByNameForPermanentMarker(tooltipName);
+                        if(vspecObj != null && vspecObj.has("static")) {
+                            correctResourcePath = vspecObj.getString("static");
+                        } else {
+                            correctResourcePath = getCorrectResourcePathForPermanentMarker(tooltipName, micon.res.name);
+                        }
+                    } catch (Exception e) {
+                    }
                 }
                 
                 // Используем исправленный путь к ресурсу, если найден
@@ -3314,8 +3195,7 @@ NMiniMap extends MiniMap {
                     // Сначала ищем маркер по названию (tooltip) и координатам, а не по пути к ресурсу
                     // Это нужно, чтобы найти маркер даже если он был создан с неправильным путем
                     MapFile.SMarker prev = null;
-                    if(tooltipName != null) {
-                        // Ищем маркер по названию и координатам
+                    if(!keepOriginal && tooltipName != null) {
                         for(MapFile.Marker mark : file.markers) {
                             if(mark instanceof MapFile.SMarker) {
                                 MapFile.SMarker sm = (MapFile.SMarker)mark;
@@ -3375,22 +3255,7 @@ NMiniMap extends MiniMap {
                                     }
                                 }
                             } else {
-                                // Даже для оригинального пути проверяем, что ресурс загружен правильно
-                                try {
-                                    Resource originalResLoaded = Resource.remote().loadwait(resourcePathToUse);
-                                    if(originalResLoaded != null) {
-                                        Resource.Image loadedImg = originalResLoaded.layer(Resource.imgc);
-                                        if(loadedImg != null && loadedImg.img != null) {
-                                            resVer = originalResLoaded.ver;
-                                        } else {
-                                            // Если изображение не готово, используем версию из micon.res
-                                            resVer = micon.res.ver;
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    // Если не удалось загрузить, используем версию из micon.res
-                                    resVer = micon.res.ver;
-                                }
+                                resVer = micon.res.ver;
                             }
                             
                             mid = new MapFile.SMarker(file, info.seg, sc, tt.t, new Resource.Saved(Resource.remote(), resourcePathToUse, resVer));
@@ -3558,7 +3423,11 @@ NMiniMap extends MiniMap {
         if (resourceName == null || resourceName.trim().isEmpty()) {
             return null;
         }
-        
+        if (PermanentMarkerPath.isReadyMinimapResource(currentResourcePath)
+                || PermanentMarkerPath.isCavePassage(resourceName)) {
+            return currentResourcePath;
+        }
+
         // Нормализуем название для поиска (убираем лишние пробелы, приводим к нижнему регистру)
         String normalizedName = resourceName.trim();
         String lowerName = normalizedName.toLowerCase();
@@ -3599,38 +3468,6 @@ NMiniMap extends MiniMap {
                 }
             }
         }
-        
-        // Специальная обработка для известных маркеров, которые могут иметь неправильный путь к ресурсу
-        // В оригинальном клиенте маркеры используют путь из GobIcon без исправлений
-        // Но если маркер был создан с неправильным путем, нужно найти правильный
-        
-        // Специальная обработка для "Cave Passage" - ищем правильный путь к ресурсу
-        if(lowerName.contains("cave") && lowerName.contains("passage")) {
-            // Пробуем различные варианты путей для входа в пещеру
-            String[] cavePaths = {
-                "gfx/terobjs/mm/cave-passage",
-                "gfx/terobjs/mm/cavepassage", 
-                "gfx/terobjs/mm/cave",
-                "gfx/invobjs/cave-passage",
-                "gfx/invobjs/cavepassage",
-                "gfx/terobjs/cave-passage",
-                "gfx/terobjs/cavepassage",
-            };
-            
-            for (String path : cavePaths) {
-                try {
-                    Resource res = Resource.remote().loadwait(path);
-                    if (res != null && res.layer(Resource.imgc) != null) {
-                        return path;
-                    }
-                } catch (Exception e) {
-                    continue;
-                }
-            }
-        }
-        
-        // Если не найдено в VSpec и нет специальной обработки, возвращаем null
-        // В оригинальном клиенте просто используется путь из маркера без исправлений
         
         return null;
     }

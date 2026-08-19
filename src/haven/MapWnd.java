@@ -256,6 +256,10 @@ public class MapWnd extends Window implements Console.Directory {
 			    ((NMiniMap) view).selectedFloorLink = item;
 			}
 		    }
+		    public boolean mousedown(MouseDownEvent ev) {
+			((NMiniMap) view).refreshFloorLinks(true);
+			return(super.mousedown(ev));
+		    }
 		});
 	    pmbtn = add(new Button(btnw, "Placed", false) {
 		    public void click() {
@@ -481,9 +485,8 @@ public class MapWnd extends Window implements Console.Directory {
 	    }
 	}
 	view.markobjs();
-	if(view instanceof NMiniMap) {
+	if(visible && view instanceof NMiniMap) {
 	    NMiniMap nview = (NMiniMap) view;
-	    nview.refreshFloorLinks(true);
 	    FloorOverlayAligner.FloorLink selected = nview.selectedFloorLink;
 	    FloorOverlayAligner.FloorLink dropSel = tool.floorDrop.sel;
 	    if(selected == null) {

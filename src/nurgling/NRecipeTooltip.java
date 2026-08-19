@@ -2,13 +2,16 @@ package nurgling;
 
 import haven.*;
 import haven.res.ui.tt.slot.Slotted;
+import haven.res.ui.tt.slots.ISlots;
 import nurgling.styles.TooltipStyle;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Custom tooltip builder for recipe tooltips (MenuGrid pagina).
@@ -75,6 +78,7 @@ public class NRecipeTooltip {
             Object skillsInfo = null;
             Object costInfo = null;
             Slotted slotted = null;
+            ISlots islots = null;
             String paginaStr = null;
             Object durabilityInfo = null;
             Object armorInfo = null;
@@ -100,6 +104,8 @@ public class NRecipeTooltip {
                     costInfo = ii;
                 } else if (ii instanceof Slotted) {
                     slotted = (Slotted) ii;
+                } else if (ii instanceof ISlots) {
+                    islots = (ISlots) ii;
                 } else if (ii instanceof ItemInfo.Pagina) {
                     paginaStr = ((ItemInfo.Pagina) ii).doc.text;
                 } else if (className.equals("Durability")) {
@@ -194,6 +200,10 @@ public class NRecipeTooltip {
                 if (slotted.sub != null && !slotted.sub.isEmpty()) {
                     gildingStatsResult = renderGildingStats(slotted.sub);
                 }
+            } else if (islots != null) {
+                int gildingTotal = islots.left + islots.s.size();
+                ret = TooltipStyle.cropTopOnly(renderName(name, islots.left, gildingTotal));
+                gildingChanceResult = renderGildingChanceLine(islots.pmin, islots.pmax, islots.attrs);
             }
 
             // Render Skills line
@@ -242,6 +252,9 @@ public class NRecipeTooltip {
             if (capacityInfo != null) {
                 capacityLine = TooltipStyle.cropTopOnly(renderCapacityLine(capacityInfo));
             }
+
+            // Belt inner slots / chest inventory grid (not sent in recipe info)
+            BufferedImage inventoryLine = TooltipStyle.cropTopOnly(renderInventoryLine(name));
 
             // Render Treats line (for medical items)
             BufferedImage treatsLine = null;
@@ -320,6 +333,12 @@ public class NRecipeTooltip {
                 int spacing = hasBodyContent ? (UI.scale(10) - bodyDescent) : (UI.scale(7) - nameDescent);
                 ret = ItemInfo.catimgs(spacing, ret, otherEquipmentStats);
                 prevTextBottomOffset = 0;  // Equipment stats may have icons, reset offset
+                hasBodyContent = true;
+            }
+            if (inventoryLine != null) {
+                int spacing = hasBodyContent ? (UI.scale(10) - bodyDescent) : (UI.scale(7) - nameDescent);
+                ret = ItemInfo.catimgs(spacing, ret, inventoryLine);
+                prevTextBottomOffset = 0;
                 hasBodyContent = true;
             }
             if (durabilityLine != null) {
@@ -415,7 +434,22 @@ public class NRecipeTooltip {
      * Render recipe name - all white, semibold 12px.
      */
     private static BufferedImage renderName(String name) {
-        return getNameFoundry().render(name, Color.WHITE).img;
+        return renderName(name, null, null);
+    }
+
+    /**
+     * Render recipe name, optionally with gilding slot count "(left/total)" in cyan.
+     */
+    private static BufferedImage renderName(String name, Integer gildingLeft, Integer gildingTotal) {
+        BufferedImage nameImg = getNameFoundry().render(name, Color.WHITE).img;
+        if (gildingLeft == null || gildingTotal == null || gildingTotal <= 0) {
+            return nameImg;
+        }
+        BufferedImage slotsImg = getNameFoundry().render("(" + gildingLeft + "/" + gildingTotal + ")", TooltipStyle.COLOR_LPH).img;
+        List<BufferedImage> parts = new ArrayList<>();
+        parts.add(nameImg);
+        parts.add(slotsImg);
+        return TooltipStyle.composeHorizontalWithGap(parts, UI.scale(TooltipStyle.HORIZONTAL_SPACING));
     }
 
     /**
@@ -1073,6 +1107,104 @@ public class NRecipeTooltip {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** Belt inner slot count. Recipe info does not include this. */
+    private static final Map<String, Integer> BELT_SLOTS = new HashMap<>();
+    /** Build-menu container inventory grid (width x height). Recipe info does not include this. */
+    private static final Map<String, Coord> CONTAINER_GRIDS = new HashMap<>();
+    static {
+        BELT_SLOTS.put("Reedweave Belt", 1);
+        BELT_SLOTS.put("Rope Belt", 2);
+        BELT_SLOTS.put("Poor Man's Belt", 3);
+        BELT_SLOTS.put("Hunter's Belt", 6);
+        BELT_SLOTS.put("Snakeskin Belt", 6);
+        BELT_SLOTS.put("Grand Belt", 9);
+        BELT_SLOTS.put("Exquisite Belt", 16);
+        BELT_SLOTS.put("Troll Belt", 25);
+
+        putGrid("Wicker Basket", 3, 2);
+        putGrid("Birchbark Basket", 3, 3);
+        putGrid("Birch Basket", 3, 3);
+        putGrid("Wooden Box", 3, 3);
+        putGrid("Woodbox", 3, 3);
+        putGrid("Leather Basket", 4, 3);
+        putGrid("Crate", 5, 3);
+        putGrid("Thatch Basket", 3, 5);
+        putGrid("Straw Basket", 4, 4);
+        putGrid("Bone Chest", 5, 4);
+        putGrid("Linen Crate", 4, 5);
+        putGrid("Coffer", 5, 5);
+        putGrid("Strongbox", 5, 5);
+        putGrid("Stonekist", 5, 5);
+        putGrid("Chest", 6, 6);
+        putGrid("Wooden Chest", 6, 6);
+        putGrid("Creel", 6, 6);
+        putGrid("Metal Cabinet", 6, 7);
+        putGrid("Large Chest", 6, 8);
+        putGrid("Stone Casket", 8, 4);
+        putGrid("Cupboard", 8, 8);
+        putGrid("Shed", 8, 8);
+        putGrid("Garden Shed", 8, 8);
+        putGrid("Exquisite Chest", 8, 8);
+        putGrid("Display Case", 1, 1);
+        putGrid("Wine Rack", 3, 4);
+        putGrid("Postbox", 4, 3);
+        putGrid("Wall Shelf", 5, 3);
+        putGrid("Herbalist Table", 4, 4);
+        putGrid("Smoke Shed", 4, 4);
+        putGrid("Study Desk", 7, 7);
+        putGrid("Fine Study Desk", 9, 9);
+        putGrid("Grand Study Desk", 11, 11);
+        putGrid("Alchemist's Table", 4, 2);
+        putGrid("Rustic Table", 6, 6);
+        putGrid("Stone Table", 8, 8);
+        putGrid("Cottage Table", 10, 10);
+        putGrid("Elegant Table", 12, 12);
+        putGrid("Birdhouse", 4, 4);
+        putGrid("Dovecote", 6, 8);
+        putGrid("Chicken Coop", 8, 8);
+        putGrid("Rabbit Hutch", 9, 7);
+        putGrid("Packrack", 5, 5);
+        putGrid("Extraction Press", 5, 5);
+        putGrid("Cauldron", 3, 3);
+        putGrid("Metal Cauldron", 3, 3);
+        putGrid("Clay Cauldron", 3, 3);
+        putGrid("Fireplace", 3, 3);
+        putGrid("Gridiron", 4, 4);
+        putGrid("Stack Furnace", 3, 6);
+        putGrid("Ore Smelter", 5, 5);
+        putGrid("Lobster Pot", 3, 2);
+        putGrid("Urn", 3, 5);
+        putGrid("Pot", 3, 3);
+        putGrid("Pickling Jar", 3, 5);
+        putGrid("Seedbag", 3, 3);
+    }
+
+    private static void putGrid(String name, int w, int h) {
+        CONTAINER_GRIDS.put(name, new Coord(w, h));
+    }
+
+    /**
+     * Belt: "Slots: N". Container: "Grid: W×H (total)".
+     */
+    private static BufferedImage renderInventoryLine(String name) {
+        if (name == null) return null;
+        Integer beltSlots = BELT_SLOTS.get(name);
+        if (beltSlots != null) {
+            BufferedImage labelImg = NTooltip.getBodyRegularFoundry().render("Slots: ", Color.WHITE).img;
+            BufferedImage valueImg = NTooltip.getContentFoundry().render(String.valueOf(beltSlots), TooltipStyle.COLOR_LPH).img;
+            return TooltipStyle.composePair(labelImg, valueImg);
+        }
+        Coord grid = CONTAINER_GRIDS.get(name);
+        if (grid != null) {
+            int total = grid.x * grid.y;
+            BufferedImage labelImg = NTooltip.getBodyRegularFoundry().render("Grid: ", Color.WHITE).img;
+            BufferedImage gridImg = NTooltip.getContentFoundry().render(grid.x + "\u00d7" + grid.y, TooltipStyle.COLOR_LPH).img;
+            BufferedImage totalImg = NTooltip.getContentFoundry().render(" (" + total + ")", Color.WHITE).img;
+            return TooltipStyle.composePair(TooltipStyle.composePair(labelImg, gridImg), totalImg);
+        }
+        return null;
     }
 
     /**

@@ -46,14 +46,18 @@ public class ISBox extends Widget implements DTarget {
 
     @RName("isbox")
     public static class $_ implements Factory {
-	public Widget create(UI ui, Object[] args) {
-	    Indir<Resource> res;
-	    if(args[0] instanceof String)
-		res = Resource.remote().load((String)args[0]);
-	    else
-		res = ui.sess.getresv(args[0]);
-	    return(new NISBox(res, Utils.iv(args[1]), Utils.iv(args[2]), Utils.iv(args[3])));
-	}
+		public Widget create(UI ui, Object[] args) {
+		    Indir<Resource> res;
+		    if(args[0] instanceof String)
+			res = Resource.remote().load((String)args[0]);
+		    else
+			res = ui.sess.getresv(args[0]);
+		    NISBox box = new NISBox(res, Utils.iv(args[1]), Utils.iv(args[2]), Utils.iv(args[3]));
+		    if(ui.core.getLastActions() != null) {
+			box.parentGob = ui.core.getLastActions().gob;
+		    }
+		    return box;
+		}
     }
 
     private void setlabel(int rem, int av, int bi) {

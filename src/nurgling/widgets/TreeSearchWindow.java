@@ -160,8 +160,7 @@ public class TreeSearchWindow extends Window {
                     Button panBtn = add(new Button(panButtonWidth, "") {
                         @Override
                         public void draw(GOut g) {
-                            // Custom drawing to show tree info with quantity
-                            String text = location.getTreeName() + " (Qty: " + location.getQuantity() + ")";
+                            String text = location.getListLabel();
                             g.text(text, Coord.z);
                         }
 

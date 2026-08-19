@@ -65,6 +65,24 @@ public class ContainerDao {
     }
 
     /**
+     * Load containers on a map grid
+     */
+    public List<ContainerData> loadContainersByGrid(DatabaseAdapter adapter, long gridId) throws SQLException {
+        List<ContainerData> containers = new ArrayList<>();
+        try (ResultSet rs = adapter.executeQuery("SELECT hash, grid_id, coord FROM containers WHERE grid_id = ?",
+                                                gridId)) {
+            while (rs.next()) {
+                containers.add(new ContainerData(
+                    rs.getString("hash"),
+                    rs.getLong("grid_id"),
+                    rs.getString("coord")
+                ));
+            }
+        }
+        return containers;
+    }
+
+    /**
      * Load container by hash
      */
     public ContainerData loadContainer(DatabaseAdapter adapter, String hash) throws SQLException {
@@ -85,8 +103,8 @@ public class ContainerDao {
      * Delete container
      */
     public void deleteContainer(DatabaseAdapter adapter, String hash) throws SQLException {
+        adapter.executeUpdate("DELETE FROM storageitems WHERE container = ?", hash);
         adapter.executeUpdate("DELETE FROM containers WHERE hash = ?", hash);
-        // CASCADE will handle storageitems deletion
     }
 
     /**
