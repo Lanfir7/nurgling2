@@ -72,6 +72,7 @@ public class NISBox extends ISBox
 
     public void transfer(int amount)
     {
+        monitoring.StockpileStorageTracker.touch(parentGob);
         for (int i = 0; i < amount; i++)
         {
             wdgmsg("xfer2", -1, 1);
@@ -80,6 +81,7 @@ public class NISBox extends ISBox
 
     public void put(int amount)
     {
+        monitoring.StockpileStorageTracker.touch(parentGob);
         for (int i = 0; i < amount; i++)
         {
             wdgmsg("xfer2", 1, 1);

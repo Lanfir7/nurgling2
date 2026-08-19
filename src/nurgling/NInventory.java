@@ -179,13 +179,8 @@ public class NInventory extends Inventory
         }
         
         // Skip excluded windows
-        String caption = wnd.cap;
-        if (caption != null) {
-            for (String excluded : SortInventory.EXCLUDE_WINDOWS) {
-                if (caption.contains(excluded)) {
-                    return;
-                }
-            }
+        if (SortInventory.isExcludedWindow(wnd.cap)) {
+            return;
         }
         
         // Check if deco is NWindowDeco with cbtn
@@ -536,6 +531,7 @@ public class NInventory extends Inventory
             lastUpdate = NUtils.getTickId();
         }
         bindParentGobIfNeeded();
+        nurgling.widgets.TableInventoryExtension.installIfTable(this);
         iisPeak = Math.max(iisPeak, iis.size());
         // Note: removed old iis.clear() logic - in new design iis is managed by
         // tryAddToInventoryCache (add) and reqdestroy (sync)

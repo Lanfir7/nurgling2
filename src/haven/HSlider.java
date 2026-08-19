@@ -58,7 +58,8 @@ public class HSlider extends Widget {
 	int cy = (sflarp.sz().y - schain.sz().y) / 2;
 	for(int i = 0; i < n; i++)
 	    g.image(schain, Coord.of(((ew - cw) * i) / (n - 1), cy));
-	int fx = ((sz.x - sflarp.sz().x) * (val - min)) / (max - min);
+	int span = max - min;
+	int fx = span <= 0 ? 0 : ((sz.x - sflarp.sz().x) * (val - min)) / span;
 	g.image(sflarp, new Coord(fx, 0));
     }
     

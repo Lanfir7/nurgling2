@@ -369,8 +369,6 @@ public class SortContainersInArea implements Action {
     }
 
     private static boolean isSortableContainer(String cap) {
-        for (String excluded : SortInventory.EXCLUDE_WINDOWS)
-            if (cap.contains(excluded)) return false;
-        return true;
+        return !SortInventory.isExcludedWindow(cap);
     }
 }

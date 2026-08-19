@@ -4,6 +4,7 @@ import haven.*;
 import haven.res.ui.tt.wear.Wear;
 import nurgling.*;
 import nurgling.tasks.*;
+import nurgling.widgets.TableInventoryExtension;
 
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,7 +82,7 @@ public class AutoSaveTableware implements Action
             if (w instanceof Window)
             {
                 Window wnd = (Window) w;
-                if (((Window) w).cap.contains("Table"))
+                if (((Window) w).cap != null && TableInventoryExtension.isTableWindowCap(((Window) w).cap))
                 {
                     for (Widget child : wnd.children())
                     {
@@ -94,7 +95,8 @@ public class AutoSaveTableware implements Action
                                 scCand = (NInventory) child;
                         } else if (child instanceof Button)
                         {
-                            if (((Button) child).text.text.equals("Feast!"))
+                            Button b = (Button) child;
+                            if (b.text != null && TableInventoryExtension.isFeastText(b.text.text))
                             {
                                 isFeast = true;
                             }

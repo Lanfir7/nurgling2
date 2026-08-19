@@ -12,6 +12,8 @@ import static haven.PType.*;
 import nurgling.*;
 import nurgling.actions.bots.*;
 import nurgling.areas.*;
+import nurgling.conf.FontSettings;
+import nurgling.conf.ItemQualityOverlaySettings;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
 import nurgling.tools.*;
@@ -55,6 +57,16 @@ public class NMakewindow extends Widget implements DTarget {
     private static Tex softTexLabel = null;
     public CheckBox noTransfer = null;
     public boolean autoMode = false;
+    public boolean searchMode = false;
+    private ICheckBox autoChk = null;
+    private ICheckBox searchChk = null;
+    private Button searchBtn = null;
+    private CraftIngredientSearchPanel searchPanel = null;
+    private boolean searchRan = false;
+    private boolean searching = false;
+    private final Map<Integer, CraftIngredientStock.Totals> searchTotals = new HashMap<>();
+    private final Map<Integer, Set<String>> searchFoundNames = new HashMap<>();
+    private final Map<String, Tex> stockOverlayTex = new HashMap<>();
     private IButton savePresetBtn = null;
     private boolean recipesPersisted = false;
 
@@ -114,13 +126,18 @@ public class NMakewindow extends Widget implements DTarget {
 
         public void draw(GOut g) {
             try {
-                if(ing==null || !autoMode)
+                if(ing==null || !(autoMode || searchMode))
                 {
                     sprite().draw(g);
                 }
                 else
                 {
-                    g.image(new TexI(ing.img), Coord.z, UI.scale(32,32));
+                    Tex icon = ing.iconTex();
+                    if (icon != null) {
+                        g.image(icon, Coord.z, invsq.sz());
+                    } else {
+                        g.image(new TexI(ing.img), Coord.z, invsq.sz());
+                    }
                 }
             } catch(Loading e) {}
             if(num != null)
@@ -210,29 +227,36 @@ public class NMakewindow extends Widget implements DTarget {
                     }
                 }
             }
-            if(NMakewindow.this.autoMode && name!=null)
+            if((NMakewindow.this.autoMode || NMakewindow.this.searchMode) && name!=null)
             {
-                logisticin = (NContext.findIn(name) != null);
-                if(!logisticin)
+                if(NMakewindow.this.autoMode)
                 {
-                    categories = (VSpec.categories.get(name)!=null);
-                }
-                logisticout = (NContext.findOut(name,1) != null);
-                if(!logisticout)
-                {
-                    categories = (VSpec.categories.get(name)!=null);
-                }
-                for(Spec s : inputs) {
-                    if(s.categories && s.ing!=null)
+                    logisticin = (NContext.findIn(name) != null);
+                    if(!logisticin)
                     {
-                        s.ing.logistic = (NContext.findIn(s.ing.name) != null);
+                        categories = (VSpec.categories.get(name)!=null);
+                    }
+                    logisticout = (NContext.findOut(name,1) != null);
+                    if(!logisticout)
+                    {
+                        categories = (VSpec.categories.get(name)!=null);
+                    }
+                    for(Spec s : inputs) {
+                        if(s.categories && s.ing!=null)
+                        {
+                            s.ing.logistic = (NContext.findIn(s.ing.name) != null);
+                        }
+                    }
+                    for(Spec s : outputs) {
+                        if(s.categories && s.ing!=null)
+                        {
+                            s.ing.logistic = (NContext.findOut(s.ing.name, 1) != null);
+                        }
                     }
                 }
-                for(Spec s : outputs) {
-                    if(s.categories && s.ing!=null)
-                    {
-                        s.ing.logistic = (NContext.findOut(s.ing.name, 1) != null);
-                    }
+                else
+                {
+                    categories = (VSpec.categories.get(name)!=null);
                 }
             }
         }
@@ -273,7 +297,6 @@ public class NMakewindow extends Widget implements DTarget {
             cat.tick(dt);
         }
 
-        // Update Save Preset button visibility
         if (savePresetBtn != null) {
             savePresetBtn.visible = autoMode && allInputsConfigured();
         }
@@ -391,7 +414,7 @@ public class NMakewindow extends Widget implements DTarget {
     }
 
     private boolean itemactAt(Coord c) {
-        if(autoMode)
+        if(autoMode || searchMode)
             return false;
         int idx = inputIndexAt(c);
         if(idx < 0)
@@ -417,13 +440,15 @@ public class NMakewindow extends Widget implements DTarget {
             if(s != null && s.name != null && CraftRecipeLookup.show(this, ev.c, s.name))
                 return true;
         }
-        if(autoMode)
+        if(autoMode || searchMode)
         {
             Coord sc = new Coord(xoff, 0);
             boolean popt = false;
             if (clickForCategories(inputs, popt, sc, ev.c)) return true;
-            sc = new Coord(xoff, outy);
-            if (clickForCategories(outputs, popt, sc, ev.c)) return true;
+            if (autoMode) {
+                sc = new Coord(xoff, outy);
+                if (clickForCategories(outputs, popt, sc, ev.c)) return true;
+            }
         }
         else
         {
@@ -485,13 +510,28 @@ public class NMakewindow extends Widget implements DTarget {
         add(new Button(UI.scale(85), L10n.get("craft.craft")), UI.scale(new Coord(230, 75))).action(() -> craft()).setgkey(kb_make);
         add(craft_num = new TextEntry(UI.scale(55), ""), UI.scale(new Coord(165, 82)));
         add(new Button(UI.scale(85), L10n.get("craft.craft_all")), UI.scale(new Coord(325, 75))).action(() -> craftAll()).setgkey(kb_makeall);
-        add(new ICheckBox(NStyle.auto[0],NStyle.auto[1],NStyle.auto[2],NStyle.auto[3]){
+        searchChk = add(new ICheckBox(NStyle.search[0], NStyle.search[1], NStyle.search[2], NStyle.search[3]){
+            @Override
+            public void changed(boolean val)
+            {
+                super.changed(val);
+                searchMode = val;
+                if (val && autoChk != null && autoChk.a) {
+                    autoChk.set(false);
+                }
+                applyModeUi();
+            }
+        }, UI.scale(new Coord(335, 5)));
+        autoChk = add(new ICheckBox(NStyle.auto[0],NStyle.auto[1],NStyle.auto[2],NStyle.auto[3]){
             @Override
             public void changed(boolean val)
             {
                 super.changed(val);
                 autoMode = val;
-                noTransfer.visible = val;
+                if (val && searchChk != null && searchChk.a) {
+                    searchChk.set(false);
+                }
+                applyModeUi();
             }
         }, UI.scale(new Coord(365, 5)));
 
@@ -503,9 +543,15 @@ public class NMakewindow extends Widget implements DTarget {
             }
         }, UI.scale(new Coord(325, 38)));
         noTransfer.visible = false;
+        searchBtn = add(new Button(UI.scale(85), L10n.get("craft.search")) {
+            @Override
+            public void click() {
+                runIngredientSearch();
+            }
+        }, UI.scale(new Coord(325, 38)));
+        searchBtn.visible = false;
 
         // Save Preset button - only visible in auto mode when all inputs are configured
-        // Scale icons to 2/3 size and position left of quantity input
         int scaledW = NStyle.savei[0].back.getWidth() * 2 / 3;
         int scaledH = NStyle.savei[0].back.getHeight() * 2 / 3;
         Coord scaledSz = new Coord(scaledW, scaledH);
@@ -517,10 +563,12 @@ public class NMakewindow extends Widget implements DTarget {
             public void click() {
                 openSavePresetDialog();
             }
-        }, UI.scale(new Coord(340, 5)));
+        }, UI.scale(new Coord(305, 5)));
         savePresetBtn.visible = false;
 
         pack();
+        searchPanel = add(new CraftIngredientSearchPanel(), new Coord(sz.x + UI.scale(8), 0));
+        searchPanel.visible = false;
         this.rcpnm = rcpnm;
 
         // Capture recipe resource from MenuGrid.lastPagina while it's still valid
@@ -531,6 +579,97 @@ public class NMakewindow extends Widget implements DTarget {
                 // Resource not loaded yet
             }
         }
+    }
+
+    private void applyModeUi() {
+        if (noTransfer != null) {
+            noTransfer.visible = autoMode;
+        }
+        if (searchBtn != null) {
+            searchBtn.visible = searchMode;
+        }
+        if (searchPanel != null) {
+            searchPanel.visible = searchMode;
+            if (searchMode) {
+                searchPanel.syncTabs(inputs);
+            }
+        }
+        if (savePresetBtn != null) {
+            savePresetBtn.visible = autoMode && allInputsConfigured();
+        }
+        if (!searchMode) {
+            searchRan = false;
+            searchTotals.clear();
+            searchFoundNames.clear();
+        }
+        packCraftWindow();
+    }
+
+    private void packCraftWindow() {
+        pack();
+        if (parent != null) {
+            parent.pack();
+        }
+    }
+
+    void runIngredientSearch() {
+        if (searching) {
+            return;
+        }
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null) {
+            return;
+        }
+        if (!(Boolean) NConfig.get(NConfig.Key.ndbenable)
+                || NCore.databaseManager == null
+                || !NCore.databaseManager.isReady()) {
+            gui.msg(L10n.get("storage.db_not_ready"), Color.RED);
+            return;
+        }
+        searching = true;
+        final List<Spec> snapshot = new ArrayList<>(inputs);
+        Thread loader = new Thread(() -> {
+            try {
+                Map<Integer, List<NStorageItemsWidget.GroupedItem>> byInput = new LinkedHashMap<>();
+                Map<Integer, CraftIngredientStock.Totals> totals = new HashMap<>();
+                Map<Integer, Set<String>> foundNames = new HashMap<>();
+                for (int i = 0; i < snapshot.size(); i++) {
+                    Spec s = snapshot.get(i);
+                    if (s.ing != null && s.ing.isIgnored) {
+                        continue;
+                    }
+                    boolean category = s.categories || (s.name != null && VSpec.categories.containsKey(s.name));
+                    String picked = (s.ing != null && !s.ing.isIgnored) ? s.ing.name : null;
+                    List<String> names = CraftIngredientStock.namesFor(s.name, category, picked);
+                    List<NStorageItemsWidget.GroupedItem> found = CraftIngredientStock.search(names);
+                    byInput.put(i, found);
+                    totals.put(i, CraftIngredientStock.totals(found));
+                    Set<String> nset = new HashSet<>();
+                    for (NStorageItemsWidget.GroupedItem gi : found) {
+                        nset.add(gi.name);
+                    }
+                    foundNames.put(i, nset);
+                }
+                UI ui = NMakewindow.this.ui;
+                if (ui != null) {
+                    synchronized (ui) {
+                        searchRan = true;
+                        searchTotals.clear();
+                        searchTotals.putAll(totals);
+                        searchFoundNames.clear();
+                        searchFoundNames.putAll(foundNames);
+                        if (searchPanel != null) {
+                            searchPanel.syncTabs(inputs);
+                            searchPanel.setResults(byInput);
+                        }
+                    }
+                }
+            } finally {
+                searching = false;
+            }
+        }, "CraftIngredientSearch");
+        loader.setDaemon(true);
+        loader.start();
     }
 
     private void openSavePresetDialog() {
@@ -573,6 +712,9 @@ public class NMakewindow extends Widget implements DTarget {
                     inputs.add(parsespec(OBJS.of(args[i])));
             }
             this.inputs = inputs;
+            if (searchMode && searchPanel != null) {
+                searchPanel.syncTabs(this.inputs);
+            }
         } else if(msg == "opop") {
             List<Spec> outputs;
             if(INT.is(args, 0)) {
@@ -619,6 +761,7 @@ public class NMakewindow extends Widget implements DTarget {
     public void draw(GOut g) {
         Coord c = new Coord(xoff, 0);
         boolean popt = false;
+        int inIdx = 0;
         for(Spec s : inputs) {
             boolean opt = s.opt();
             if(opt != popt)
@@ -632,7 +775,7 @@ public class NMakewindow extends Widget implements DTarget {
                 sg.image(invsq, Coord.z);
             }
             s.draw(sg);
-            if(!autoMode && !opt && (s.count > 0) && (s.using < s.count)) {
+            if(!autoMode && !searchMode && !opt && (s.count > 0) && (s.using < s.count)) {
                 sg.chcolor(255, 0, 0, 64);
                 sg.frect2(Coord.of(0, (invsq.sz().y * s.using) / s.count), invsq.sz());
                 sg.chcolor();
@@ -673,6 +816,11 @@ public class NMakewindow extends Widget implements DTarget {
                     }
                 }
             }
+            else if(searchMode)
+            {
+                drawSearchSlotOverlay(sg, s, inIdx);
+            }
+            inIdx++;
         }
         {
             int x = 0;
@@ -780,6 +928,89 @@ public class NMakewindow extends Widget implements DTarget {
             }
         }
         super.draw(g);
+    }
+
+    private void drawSearchSlotOverlay(GOut sg, Spec s, int idx) {
+        if (s.ing != null && s.ing.isIgnored) {
+            sg.image(ignoreOverlay, Coord.z);
+            return;
+        }
+        if (!searchRan) {
+            if (s.categories && s.ing == null) {
+                sg.image(categories, Coord.z);
+            }
+            return;
+        }
+        CraftIngredientStock.Totals totals = searchTotals.get(idx);
+        if (totals != null && totals.count > 0) {
+            sg.image(aready, Coord.z);
+            ItemQualityOverlaySettings qs = qualityOverlaySettings();
+            Tex countTex = overlayChip(String.valueOf(totals.count), qs.defaultColor);
+            Tex qTex = overlayChip(fmtQuality(totals.maxQuality, qs), qs.getColorForQuality(totals.maxQuality));
+            sg.image(countTex, Coord.z);
+            sg.aimage(qTex, new Coord(sg.sz().x, 0), 1, 0);
+        } else {
+            sg.image(anotfound, Coord.z);
+        }
+    }
+
+    private static String fmtQuality(double q, ItemQualityOverlaySettings qs) {
+        if (qs.showDecimal) {
+            return String.format("%.1f", q);
+        }
+        return Integer.toString((int) Math.round(q));
+    }
+
+    private ItemQualityOverlaySettings qualityOverlaySettings() {
+        Object settings = NConfig.get(NConfig.Key.itemQualityOverlay);
+        if (settings instanceof ItemQualityOverlaySettings) {
+            return (ItemQualityOverlaySettings) settings;
+        }
+        return new ItemQualityOverlaySettings();
+    }
+
+    private Tex overlayChip(String text, Color color) {
+        String key = text + "|" + color.getRGB();
+        Tex cached = stockOverlayTex.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        ItemQualityOverlaySettings qs = qualityOverlaySettings();
+        int fontPx = Math.max(UI.scale(7), UI.scale(Math.max(7, qs.fontSize - 2)));
+        Font font = new Font("SansSerif", Font.BOLD, fontPx);
+        FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
+        if (fontSettings != null) {
+            Font fromCfg = fontSettings.getFont(qs.fontFamily);
+            if (fromCfg != null) {
+                font = fromCfg.deriveFont(Font.BOLD, (float) fontPx);
+            }
+        }
+        Text.Foundry fnd = new Text.Foundry(font, color).aa(true);
+        BufferedImage textImg = fnd.render(text, color).img;
+        if (qs.showOutline) {
+            textImg = Utils.outline2(textImg, qs.outlineColor);
+        }
+        if (qs.showBackground) {
+            BufferedImage bi = new BufferedImage(textImg.getWidth(), textImg.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = bi.createGraphics();
+            g.setColor(qs.backgroundColor);
+            g.fillRect(0, 0, bi.getWidth(), bi.getHeight());
+            g.drawImage(textImg, 0, 0, null);
+            g.dispose();
+            textImg = bi;
+        }
+        Tex tex = new TexI(textImg);
+        stockOverlayTex.put(key, tex);
+        return tex;
+    }
+
+    private boolean searchHasIngredient(Spec spec, String name) {
+        int idx = inputs.indexOf(spec);
+        if (idx < 0 || name == null) {
+            return false;
+        }
+        Set<String> names = searchFoundNames.get(idx);
+        return names != null && names.contains(name);
     }
 
     private int drawSoftcap(GOut g, Coord p, double product, int count) {
@@ -1046,6 +1277,7 @@ public class NMakewindow extends Widget implements DTarget {
         public String name;
         boolean logistic;
         public boolean isIgnored = false;
+        private Tex scaledIcon = null;
 
         public Ingredient(JSONObject obj)
         {
@@ -1058,6 +1290,18 @@ public class NMakewindow extends Widget implements DTarget {
             this.img = img;
             this.name = name;
             this.isIgnored = isIgnored;
+        }
+
+        Tex iconTex() {
+            if (scaledIcon == null && img != null) {
+                Coord tsz = invsq.sz();
+                if (img.getWidth() != tsz.x || img.getHeight() != tsz.y) {
+                    scaledIcon = new TexI(PUtils.convolvedown(img, tsz, CharWnd.iconfilter));
+                } else {
+                    scaledIcon = new TexI(img);
+                }
+            }
+            return scaledIcon;
         }
 
         void tick(double dt)
@@ -1127,18 +1371,27 @@ public class NMakewindow extends Widget implements DTarget {
             for(Ingredient ing: data)
             {
                 GOut sg = g.reclip(pos, invsq.sz());
-                sg.image(new TexI(ing.img), Coord.z,UI.scale(32,32));
+                Tex icon = ing.iconTex();
+                if (icon != null) {
+                    sg.image(icon, Coord.z);
+                }
+                boolean inStock;
+                if (searchMode && searchRan && !ing.isIgnored) {
+                    inStock = searchHasIngredient(s, ing.name);
+                } else {
+                    inStock = ing.logistic;
+                }
                 if(ing.isIgnored)
                 {
-                    sg.image(ignoreOverlay, Coord.z,UI.scale(32,32));
+                    sg.image(ignoreOverlay, Coord.z);
                 }
-                else if(ing.logistic)
+                else if(inStock)
                 {
-                    sg.image(aready, Coord.z,UI.scale(32,32));
+                    sg.image(aready, Coord.z);
                 }
                 else
                 {
-                    sg.image(anotfound, Coord.z,UI.scale(32,32));
+                    sg.image(anotfound, Coord.z);
                 }
                 if(shift.x<width-1)
                 {

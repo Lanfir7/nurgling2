@@ -650,20 +650,30 @@ public class NGameUI extends GameUI
 
     public double getTableMod() {
         double table_mod = 1;
-        Window table = getWindowWithButton("Table", "Feast!");
+        Window table = getTableWindow();
         if(table!=null)
         {
-            for (Widget wdg = table.child; wdg != null; wdg = wdg.next) {
-                if (wdg instanceof Label) {
-                    Label text = (Label) wdg;
-                    if (text.text().contains("Food")) {
-                        table_mod = table_mod + Double.parseDouble(text.text().substring(text.text().indexOf(":") + 1, text.text().indexOf("%"))) / 100.;
-                        break;
-                    }
+            for (Label text : table.children(Label.class)) {
+                if (nurgling.widgets.TableInventoryExtension.isFoodEventLabel(text.text())) {
+                    table_mod = table_mod + Double.parseDouble(text.text().substring(text.text().indexOf(":") + 1, text.text().indexOf("%"))) / 100.;
+                    break;
                 }
             }
         }
         return table_mod;
+    }
+
+    private Window getTableWindow() {
+        for (Widget w = lchild; w != null; w = w.prev) {
+            if (!(w instanceof Window)) continue;
+            Window wnd = (Window) w;
+            if (!nurgling.widgets.TableInventoryExtension.isTableWindowCap(wnd.cap)) continue;
+            for (Button b : wnd.children(Button.class)) {
+                if (b.text != null && nurgling.widgets.TableInventoryExtension.isFeastText(b.text.text))
+                    return wnd;
+            }
+        }
+        return getWindowWithButton("Table", "Feast!");
     }
 
     public double getRealmMod()

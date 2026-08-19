@@ -199,6 +199,7 @@ public class NMapView extends MapView
     public HashMap<Long, Gob> dummys = new HashMap<>();
     public HashMap<Long, Gob> routeDummys = new HashMap<>();
     public HashMap<Long, Gob> portalDummys = new HashMap<>();
+    private MinesweeperDangerMarkers minesweeperDangerMarkers;
 
 
     // Destination point for path line (set by click)
@@ -1047,6 +1048,10 @@ public class NMapView extends MapView
         if (chunkNavManager != null) {
             chunkNavManager.tick();
         }
+        if (minesweeperDangerMarkers == null) {
+            minesweeperDangerMarkers = new MinesweeperDangerMarkers();
+        }
+        minesweeperDangerMarkers.tick(dt);
         ArrayList<Long> forRemove = new ArrayList<>();
 //        for(Gob dummy : dummys.values())
 //        {

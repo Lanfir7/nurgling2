@@ -619,6 +619,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	if(!hand.isEmpty() && (vhand == null)) {
 	    DraggedItem fi = hand.iterator().next();
 	    vhand = add(new ItemDrag(fi.dc, fi.item));
+	    monitoring.StockpileStorageTracker.rememberHand(vhand);
 	}
     }
 

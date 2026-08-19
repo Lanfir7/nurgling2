@@ -3,6 +3,8 @@ package nurgling.db;
 import haven.Coord;
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -62,5 +64,17 @@ class StorageOrphanPolicyTest {
         assertTrue(StorageOrphanPolicy.gobPresent(true, false));
         assertTrue(StorageOrphanPolicy.gobPresent(false, true));
         assertFalse(StorageOrphanPolicy.gobPresent(false, false));
+    }
+
+    @Test
+    void danglingItemHasNoContainerRowAndNoLiveGob() {
+        assertTrue(StorageOrphanPolicy.shouldPurgeDanglingItem(
+                "dead", Set.of("live-db"), Set.of("live-gob")));
+        assertFalse(StorageOrphanPolicy.shouldPurgeDanglingItem(
+                "live-db", Set.of("live-db"), Set.of()));
+        assertFalse(StorageOrphanPolicy.shouldPurgeDanglingItem(
+                "live-gob", Set.of(), Set.of("live-gob")));
+        assertTrue(StorageOrphanPolicy.shouldPurgeDanglingItem(null, Set.of("x"), Set.of("y")));
+        assertTrue(StorageOrphanPolicy.shouldPurgeDanglingItem("", Set.of("x"), Set.of("y")));
     }
 }

@@ -195,26 +195,57 @@ public class StorageOrphanCleaner implements OCache.ChangeCallback {
             }
         }
 
-        if (toPurge.isEmpty()) {
-            return;
-        }
-
-        ContainerService containersSvc = databaseManager.getContainerService();
-        for (String hash : toPurge) {
-            try {
-                containersSvc.deleteContainer(hash);
-                ItemWatcher.invalidateContainerCache(hash);
-                synchronized (NGlobalSearchItems.containerHashes) {
-                    NGlobalSearchItems.containerHashes.remove(hash);
-                    NGlobalSearchItems.updateVersion++;
+        if (!toPurge.isEmpty()) {
+            ContainerService containersSvc = databaseManager.getContainerService();
+            for (String hash : toPurge) {
+                try {
+                    containersSvc.deleteContainer(hash);
+                    ItemWatcher.invalidateContainerCache(hash);
+                    synchronized (NGlobalSearchItems.containerHashes) {
+                        NGlobalSearchItems.containerHashes.remove(hash);
+                        NGlobalSearchItems.updateVersion++;
+                    }
+                    NGlobalSearchItems.clearQueryCache();
+                    NSearchItem.notifyContainerDataChanged();
+                    System.out.println("StorageOrphanCleaner: purged missing container " + hash);
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
+            }
+        }
+        purgeDanglingItems(databaseManager, live.hashes);
+    }
+
+    private boolean purgeDanglingItems(DatabaseManager databaseManager, Set<String> liveHashes) {
+        List<String> itemContainers;
+        List<ContainerDao.ContainerData> allContainers;
+        try {
+            itemContainers = databaseManager.getStorageItemService().loadDistinctContainerHashes();
+            allContainers = databaseManager.getContainerService().loadAllContainers();
+        } catch (Exception e) {
+            return false;
+        }
+        Set<String> dbHashes = new HashSet<>();
+        for (ContainerDao.ContainerData container : allContainers) {
+            dbHashes.add(container.getHash());
+        }
+        boolean purged = false;
+        for (String hash : itemContainers) {
+            if (!StorageOrphanPolicy.shouldPurgeDanglingItem(hash, dbHashes, liveHashes)) {
+                continue;
+            }
+            try {
+                databaseManager.getStorageItemService().deleteStorageItemsByContainer(hash);
+                ItemWatcher.invalidateContainerCache(hash);
                 NGlobalSearchItems.clearQueryCache();
                 NSearchItem.notifyContainerDataChanged();
-                System.out.println("StorageOrphanCleaner: purged missing container " + hash);
+                purged = true;
+                System.out.println("StorageOrphanCleaner: purged dangling items for " + hash);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+        return purged;
     }
 
     private static MCache.Grid playerGrid(NGameUI gui, Gob player) {

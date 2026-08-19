@@ -186,6 +186,7 @@ public class WItem extends Widget implements DTarget {
 		int n = ui.modmeta ? -1 : 1;
 		item.wdgmsg("drop", ev.c, n);
 	    } else {
+		monitoring.StockpileStorageTracker.rememberHand(this);
 		item.wdgmsg("take", ev.c);
 	    }
 	    return(true);
@@ -204,6 +205,10 @@ public class WItem extends Widget implements DTarget {
     }
 
     public boolean iteminteract(Coord cc, Coord ul) {
+	GameUI gui = getparent(GameUI.class);
+	if (gui != null && gui.vhand != null) {
+	    monitoring.StockpileStorageTracker.rememberHand(gui.vhand);
+	}
 	item.wdgmsg("itemact", ui.modflags());
 	return(true);
     }

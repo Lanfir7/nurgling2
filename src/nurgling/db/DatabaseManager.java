@@ -420,6 +420,9 @@ public class DatabaseManager {
      * Execute database operation with automatic connection management
      */
     public <T> T executeOperation(DatabaseOperation<T> operation) throws SQLException {
+        if (shutdown || !initialized || connectionPoolManager == null) {
+            throw new SQLException("Unable to get database connection");
+        }
         pendingTasks.incrementAndGet();
         Connection conn = null;
         boolean connectionBroken = false;
@@ -614,6 +617,14 @@ public class DatabaseManager {
         
         if (executorService != null) {
             executorService.shutdown();
+            try {
+                if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                    executorService.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executorService.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
         if (connectionPoolManager != null) {
             connectionPoolManager.shutdown();

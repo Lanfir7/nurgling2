@@ -184,7 +184,7 @@ public class CharWnd extends Window {
     }
 
     public static class ImageInfoBox extends Widget {
-	private Tex img;
+	protected Tex img;
 	private Indir<Tex> loading;
 	private final Scrollbar sb;
 
@@ -219,10 +219,20 @@ public class CharWnd extends Window {
 	    super.draw(g);
 	}
 
+	protected int contentBottomPad() {return(0);}
+
+	protected void refreshScrollMax() {
+	    if(img != null) {
+		sb.max = img.sz().y + (marg().y * 2) - sz.y + contentBottomPad();
+		if(sb.val > sb.max)
+		    sb.val = Math.max(sb.max, 0);
+	    }
+	}
+
 	public void set(Tex img) {
 	    this.img = img;
 	    if(img != null) {
-		sb.max = img.sz().y + (marg().y * 2) - sz.y;
+		sb.max = img.sz().y + (marg().y * 2) - sz.y + contentBottomPad();
 		sb.val = 0;
 	    } else {
 		sb.max = sb.val = 0;

@@ -356,6 +356,13 @@ public class NWItem extends WItem
             if(content.name() != null && !names.contains(content.name()))
                 names.add(content.name());
         }
-        return nurgling.tools.CraftRecipeLookup.show(this, click, names);
+        List<String> resources = new ArrayList<>();
+        try {
+            Resource res = gi.getres();
+            if(res != null && res.name != null)
+                resources.add(res.name);
+        } catch(Loading ignored) {
+        }
+        return nurgling.tools.CraftRecipeLookup.show(this, click, names, resources);
     }
 }

@@ -80,6 +80,11 @@ public class NCraftWindow extends GameUI.Hidewnd {
     }
 
     @Override
+    public void cresize(Widget ch) {
+        pack();
+    }
+
+    @Override
     public void resize(Coord sz) {
         super.resize(sz.add(UI.scale(5, 5)));
     }

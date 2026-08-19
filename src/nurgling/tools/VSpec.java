@@ -4,8 +4,13 @@ import nurgling.NStyle;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class VSpec {
     public static HashMap<String, ArrayList<JSONObject>> categories = new HashMap<>();
@@ -3007,6 +3012,9 @@ public class VSpec {
         medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/yarrow\",\"name\":\"Yarrow\"}"));
         medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/jar-willowweep\",\"name\":\"Willow Weep\"}"));
         medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/jar-tansyextract\",\"name\":\"Tansy Extract\"}"));
+        medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/opium\",\"name\":\"Opium\"}"));
+        medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/jar-woundglue\",\"name\":\"Wound Glue\"}"));
+        medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/silksuturekit\",\"name\":\"Silk Suture Kit\"}"));
         categories.put("Medicine", medicine);
 
         // Cheese category with all cheese types
@@ -3299,6 +3307,59 @@ public class VSpec {
             result.add(res.getString("name"));
         }
         return result;
+    }
+
+    /**
+     * Groups that contain this item — by display name and/or resource path.
+     * Resource path covers VSpec aliases (Blueberry vs Blueberries).
+     */
+    public static List<String> categoriesFor(Collection<String> itemNames, Collection<String> resourcePaths) {
+        Set<String> names = toLookupSet(itemNames);
+        Set<String> paths = toLookupSet(resourcePaths);
+        if (names.isEmpty() && paths.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> result = new ArrayList<>();
+        for (Map.Entry<String, ArrayList<JSONObject>> entry : categories.entrySet()) {
+            ArrayList<JSONObject> members = entry.getValue();
+            if (members == null) {
+                continue;
+            }
+            for (JSONObject obj : members) {
+                if (obj == null) {
+                    continue;
+                }
+                if (!names.isEmpty() && names.contains(obj.optString("name", null))) {
+                    result.add(entry.getKey());
+                    break;
+                }
+                if (!paths.isEmpty() && paths.contains(obj.optString("static", null))) {
+                    result.add(entry.getKey());
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    public static List<String> categoriesForItem(String itemName) {
+        if (itemName == null || itemName.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return categoriesFor(Collections.singletonList(itemName), null);
+    }
+
+    private static Set<String> toLookupSet(Collection<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> set = new HashSet<>();
+        for (String value : values) {
+            if (value != null && !value.isEmpty()) {
+                set.add(value);
+            }
+        }
+        return set;
     }
 
     /**

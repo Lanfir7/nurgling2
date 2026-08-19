@@ -57,6 +57,8 @@ public final class StockpileStoragePolicy {
         }
     }
 
+    public enum ProbeAction { KEEP_ONE, DUMP_MAX }
+
     public static List<Item> disappeared(List<Item> before, List<Item> after) {
         return unmatched(before, after);
     }
@@ -161,5 +163,258 @@ public final class StockpileStoragePolicy {
         goneNames.sort(String::compareTo);
         gainedNames.sort(String::compareTo);
         return goneNames.equals(gainedNames);
+    }
+
+    /**
+     * Leftovers after a dump-fetch go back to the original pile point.
+     * Never a nearby free cell: an empty gob still occupies the tile,
+     * so a free-place search puts a new pile beside it.
+     */
+    public static RestockPlan restockPlan(double originalX, double originalY, boolean pileStillAtOriginal) {
+        RestockPlan.Mode mode = pileStillAtOriginal
+                ? RestockPlan.Mode.DROP_ON_EXISTING
+                : RestockPlan.Mode.PLACE_AT_ORIGINAL;
+        return new RestockPlan(mode, originalX, originalY);
+    }
+
+    public static final double TILE = 11;
+
+    public static boolean sameWorldTile(double x1, double y1, double x2, double y2) {
+        return Math.floor(x1 / TILE) == Math.floor(x2 / TILE)
+                && Math.floor(y1 / TILE) == Math.floor(y2 / TILE);
+    }
+
+    /**
+     * A newly placed pile gob sits on the same tile as the ghost, not
+     * necessarily within 0.5 of the click point.
+     */
+    public static boolean isPlacedPileAt(String resName, double placeX, double placeY,
+                                         double gobX, double gobY) {
+        return isStockpileRes(resName) && sameWorldTile(placeX, placeY, gobX, gobY);
+    }
+
+    /**
+     * Neighbor piles must not be treated as the original.
+     * Same hash only — never a nearby tile with a different gob.
+     */
+    public static boolean isOriginalPile(String originalHash, String foundHash,
+                                         double originalX, double originalY,
+                                         double foundX, double foundY) {
+        return originalHash != null && originalHash.equals(foundHash);
+    }
+
+    /**
+     * Ground itemact hits a gob within this radius. Player standing
+     * between two piles is ~5–6 units from the neighbor.
+     */
+    public static final double PILE_HIT_RADIUS = 8;
+
+    public static boolean clickHitsForeignPile(double clickX, double clickY,
+                                              double targetX, double targetY,
+                                              double pileX, double pileY) {
+        if (sameWorldTile(pileX, pileY, targetX, targetY)) {
+            return false;
+        }
+        double dx = clickX - pileX;
+        double dy = clickY - pileY;
+        return dx * dx + dy * dy <= PILE_HIT_RADIUS * PILE_HIT_RADIUS;
+    }
+
+    /**
+     * Keep-qualities often sit at the front of a mixed ore stack.
+     * Restock must pick a matching leftover, not always leaf 0.
+     */
+    public static int indexOfRestockLeaf(List<Item> leaves, List<Item> restock) {
+        if (leaves == null || restock == null) {
+            return -1;
+        }
+        for (int i = 0; i < leaves.size(); i++) {
+            if (restock.contains(leaves.get(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public static final class RestockPlan {
+        public enum Mode { DROP_ON_EXISTING, PLACE_AT_ORIGINAL }
+
+        public final Mode mode;
+        public final double x;
+        public final double y;
+
+        public RestockPlan(Mode mode, double x, double y) {
+            this.mode = mode;
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    /** A stack shell cannot be dropped into a stockpile; only inner items can. */
+    public static boolean isPuttableInStockpile(boolean stackShell) {
+        return !stackShell;
+    }
+
+    /** Stack window or Amount>1 without taking a leaf — cannot go into a pile. */
+    public static boolean isStackLike(boolean itemStackContents, int amount) {
+        return itemStackContents || amount > 1;
+    }
+
+    /**
+     * While a stockpile ghost is being placed the cursor item is gone from vhand.
+     * Keep those items in the snapshot so the place delta still sees them.
+     */
+    public static List<Item> withPlacingHeld(List<Item> invAndHand, List<Item> placingHeld,
+                                            boolean vhandPresent, boolean placingActive) {
+        if (vhandPresent || !placingActive || placingHeld == null || placingHeld.isEmpty()) {
+            return invAndHand;
+        }
+        List<Item> out = new ArrayList<>(invAndHand);
+        out.addAll(placingHeld);
+        return out;
+    }
+
+    /**
+     * Seed items used to create the stockpile ghost must stay in the place
+     * snapshot even after they have already left inventory/hand.
+     */
+    public static List<Item> mergePendingPlace(List<Item> snapshot, List<Item> pendingSeed) {
+        List<Item> base = snapshot == null ? new ArrayList<>() : new ArrayList<>(snapshot);
+        if (pendingSeed == null || pendingSeed.isEmpty()) {
+            return base;
+        }
+        List<Item> remaining = new ArrayList<>(base);
+        for (Item seed : pendingSeed) {
+            int idx = remaining.indexOf(seed);
+            if (idx >= 0) {
+                remaining.remove(idx);
+            } else {
+                base.add(seed);
+            }
+        }
+        return base;
+    }
+
+    /**
+     * Rebinding the pile gob must not replace the snapshot with post-consume
+     * inventory while the seed has already left the player's items.
+     */
+    public static boolean keepSnapshotOnRebind(List<Item> pendingSeed, List<Item> currentInv) {
+        return keepSnapshotOnRebind(pendingSeed, currentInv, true);
+    }
+
+    /**
+     * Leftover frozen-hand state must not lock the inventory snapshot
+     * when the player is just putting into an existing pile.
+     */
+    public static boolean keepSnapshotOnRebind(List<Item> pendingSeed, List<Item> currentInv,
+                                              boolean pendingNewPile) {
+        if (!pendingNewPile) {
+            return false;
+        }
+        if (pendingSeed == null || pendingSeed.isEmpty()) {
+            return false;
+        }
+        List<Item> missing = unmatched(pendingSeed, currentInv == null ? List.of() : currentInv);
+        return !missing.isEmpty();
+    }
+
+    /**
+     * Take one item first. Keep it when it matches a needed fingerprint;
+     * otherwise dump as many as inventory can hold.
+     */
+    public static ProbeAction probeThenDump(Item first, List<Item> needed) {
+        if (first != null && needed != null && needed.contains(first)) {
+            return ProbeAction.KEEP_ONE;
+        }
+        return ProbeAction.DUMP_MAX;
+    }
+
+    /**
+     * Snapshot of the cursor while it still exists. Empty captures must not
+     * wipe it: once the stockpile ghost starts, vhand is already gone.
+     */
+    public static List<Item> keepLastHand(List<Item> previous, List<Item> captured) {
+        if (captured == null || captured.isEmpty()) {
+            return previous == null ? List.of() : previous;
+        }
+        if (previous != null && !previous.isEmpty()
+                && allZeroQuality(captured) && !allZeroQuality(previous)
+                && sameNameCounts(previous, captured)) {
+            return previous;
+        }
+        return new ArrayList<>(captured);
+    }
+
+    /**
+     * Each new ghost overwrites the items that will be written when that
+     * pile is placed. One item or a whole stack.
+     */
+    public static List<Item> freezeHandForGhost(List<Item> lastHand) {
+        return freezeHandForGhost(lastHand, List.of());
+    }
+
+    /** Empty lastHand must not wipe a freeze already taken for this ghost. */
+    public static List<Item> freezeHandForGhost(List<Item> lastHand, List<Item> previousFrozen) {
+        if (lastHand == null || lastHand.isEmpty()) {
+            return previousFrozen == null ? List.of() : new ArrayList<>(previousFrozen);
+        }
+        return new ArrayList<>(lastHand);
+    }
+
+    /** Frozen hand items go straight into storageitems for a newly placed pile. */
+    public static List<Item> itemsToInsertOnNewPile(List<Item> frozenHand) {
+        return itemsToInsertOnNewPile(frozenHand, true);
+    }
+
+    /** Frozen hand is written only for a newly placed pile, never an existing one. */
+    public static List<Item> itemsToInsertOnNewPile(List<Item> frozenHand, boolean pendingNewPile) {
+        if (!pendingNewPile || frozenHand == null || frozenHand.isEmpty()) {
+            return List.of();
+        }
+        return new ArrayList<>(frozenHand);
+    }
+
+    /** How many items to dump from a pile that may be larger than inventory. */
+    public static int takeCount(int pileCount, int freeSlots, int stackSize) {
+        if (pileCount <= 0 || freeSlots <= 0) {
+            return 0;
+        }
+        int cap = freeSlots * Math.max(1, stackSize);
+        return Math.min(pileCount, cap);
+    }
+
+    /** Dump only what was asked, capped by how much inventory can hold. */
+    public static int takeCount(int pileCount, int freeSlots, int stackSize, int requested) {
+        if (requested <= 0) {
+            return 0;
+        }
+        return Math.min(requested, takeCount(pileCount, freeSlots, stackSize));
+    }
+
+    private static boolean allZeroQuality(List<Item> items) {
+        for (Item item : items) {
+            if (item.quality > 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean sameNameCounts(List<Item> a, List<Item> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        List<String> namesA = new ArrayList<>();
+        List<String> namesB = new ArrayList<>();
+        for (Item item : a) {
+            namesA.add(item.name == null ? "" : item.name);
+        }
+        for (Item item : b) {
+            namesB.add(item.name == null ? "" : item.name);
+        }
+        namesA.sort(String::compareTo);
+        namesB.sort(String::compareTo);
+        return namesA.equals(namesB);
     }
 }

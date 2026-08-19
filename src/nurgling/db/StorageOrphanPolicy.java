@@ -69,4 +69,20 @@ public final class StorageOrphanPolicy {
                                       boolean gobPresent, boolean nearbyUnhashedGob) {
         return gridLoaded && idle && nearby && !gobPresent && !nearbyUnhashedGob;
     }
+
+    /**
+     * Item rows whose container hash is not in {@code dbContainers}
+     * and not on a currently loaded gob. Dist/Storage show "—" for these.
+     */
+    public static boolean shouldPurgeDanglingItem(String containerHash,
+                                                 java.util.Collection<String> dbContainers,
+                                                 java.util.Collection<String> liveHashes) {
+        if (containerHash == null || containerHash.isEmpty()) {
+            return true;
+        }
+        if (dbContainers != null && dbContainers.contains(containerHash)) {
+            return false;
+        }
+        return liveHashes == null || !liveHashes.contains(containerHash);
+    }
 }

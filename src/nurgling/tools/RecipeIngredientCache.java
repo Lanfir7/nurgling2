@@ -144,14 +144,36 @@ public class RecipeIngredientCache {
 
     /**
      * Find recipes where the item is used AS INGREDIENT (for Alt+RMB).
+     * Also matches VSpec groups that contain the item.
      */
     public static Set<RecipeEntry> findInputRecipes(List<String> names) {
+        return findInputRecipes(names, null);
+    }
+
+    public static Set<RecipeEntry> findInputRecipes(List<String> names, Collection<String> resourcePaths) {
         loadFromDatabase();
         Set<RecipeEntry> result = new HashSet<>();
-        for(String name : names) {
+        for(String name : expandLookupNames(names, resourcePaths)) {
             result.addAll(inputCache.getOrDefault(name, Collections.emptySet()));
         }
         return result;
+    }
+
+    static List<String> expandLookupNames(Collection<String> names, Collection<String> resourcePaths) {
+        List<String> keys = new ArrayList<>();
+        if (names != null) {
+            for (String name : names) {
+                if (name != null && !name.isEmpty() && !keys.contains(name)) {
+                    keys.add(name);
+                }
+            }
+        }
+        for (String cat : VSpec.categoriesFor(names, resourcePaths)) {
+            if (!keys.contains(cat)) {
+                keys.add(cat);
+            }
+        }
+        return keys;
     }
 
     /**
@@ -224,6 +246,7 @@ public class RecipeIngredientCache {
     public static void clear() {
         inputCache.clear();
         outputCache.clear();
+        recipeSpecs.clear();
         dbLoaded = false;
     }
 

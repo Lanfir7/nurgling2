@@ -39,6 +39,27 @@ public class SortInventory implements Action {
         "Steelbox",
         "Tub"
     };
+
+    /**
+     * "Study" is the character study window and must not match "Study Desk".
+     */
+    public static boolean isExcludedWindow(String caption) {
+        if (caption == null || caption.isEmpty()) {
+            return false;
+        }
+        for (String excluded : EXCLUDE_WINDOWS) {
+            if ("Study".equals(excluded)) {
+                if (caption.equals("Study")) {
+                    return true;
+                }
+                continue;
+            }
+            if (caption.contains(excluded)) {
+                return true;
+            }
+        }
+        return false;
+    }
     
     public static final Comparator<WItem> ITEM_COMPARATOR = (a, b) -> {
         // Both items must be NGItem
@@ -393,13 +414,8 @@ public class SortInventory implements Action {
 
         Window wnd = inv.getparent(Window.class);
         if (wnd != null) {
-            String caption = wnd.cap;
-            if (caption != null) {
-                for (String excluded : EXCLUDE_WINDOWS) {
-                    if (caption.contains(excluded)) {
-                        return false;
-                    }
-                }
+            if (isExcludedWindow(wnd.cap)) {
+                return false;
             }
         }
         return true;

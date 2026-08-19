@@ -129,6 +129,8 @@ public class NConfig
         skipButcherInKFC,
         skipPluckingCocksInKFC,
         studyDeskLayout,
+        studyDeskHideLp,
+        studyDeskStockHours,
         waypointRetryOnStuck,
         verboseCal,
         pluginsAllowUnsigned,  // Dev only: load external plugin jars without signature verification
@@ -401,6 +403,8 @@ public class NConfig
         conf.put(Key.showTerrainName, false);
         conf.put(Key.validateAllCropsBeforeHarvest, false);
         conf.put(Key.studyDeskLayout, "");
+        conf.put(Key.studyDeskHideLp, false);
+        conf.put(Key.studyDeskStockHours, 168);
         conf.put(Key.waypointRetryOnStuck, true);
         conf.put(Key.verboseCal, false);
         conf.put(Key.highlightRockTiles, true);

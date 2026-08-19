@@ -29,8 +29,8 @@ import static haven.PUtils.convolve;
  * (renamed "HR:" / "FEB:"); a FEP element is placed below the food grid; and a right
  * panel (base attributes + food satiation) is placed to the right of the food grid.
  *
- * The whole custom UI is gated on the Feast button: it is shown only while the table
- * has one, and the window reverts to the vanilla server layout when it does not.
+ * The custom UI is gated on a Feast button (any label containing "feast"):
+ * shown while sitting at the table, vanilla layout otherwise.
  */
 public class TableInventoryExtension {
 
@@ -52,11 +52,41 @@ public class TableInventoryExtension {
 
     private static final int GAP = UI.scale(6);
 
+    /** Feast-table gob resource (not herbalist / study). */
+    public static boolean isTableRes(String name) {
+        if (name == null) return false;
+        if (TABLE_RES.contains(name)) return true;
+        if (name.contains("htable") || name.contains("study")) return false;
+        if (name.startsWith("gfx/terobjs/furn/table")) return true;
+        if (name.contains("cottagetable")) return true;
+        int slash = name.lastIndexOf('/');
+        String leaf = slash >= 0 ? name.substring(slash + 1) : name;
+        return leaf.startsWith("table-") || leaf.equals("table");
+    }
+
+    /** Window title used by feast tables. */
+    public static boolean isTableWindowCap(String cap) {
+        if (cap == null || cap.contains("Herbalist") || cap.contains("Study") || cap.contains("Alchemist")) return false;
+        return cap.equals("Table") || cap.endsWith(" Table");
+    }
+
+    public static boolean isFeastText(String text) {
+        return text != null && text.toLowerCase().contains("feast");
+    }
+
+    public static boolean isHungerLabel(String text) {
+        return text != null && text.toLowerCase().contains("hunger");
+    }
+
+    public static boolean isFoodEventLabel(String text) {
+        return text != null && text.toLowerCase().contains("food event");
+    }
+
     public static void installIfTable(NInventory inv) {
         if (inv == null || inv.parent == null) return;
-        if (!isTableInventory(inv)) return;
         Window wnd = inv.getparent(Window.class);
         if (wnd == null) return;
+        if (!isTableInventory(inv) && !isTableWindowCap(wnd.cap)) return;
         // Idempotent: the table has several inventories, each of which fires added();
         // only the first one installs the controller and our widgets.
         if (findController(wnd) != null) return;
@@ -84,10 +114,16 @@ public class TableInventoryExtension {
     }
 
     private static boolean isTableInventory(NInventory inv) {
-        if (inv.parentGob == null) return false;
+        return isTableRes(gobRes(inv));
+    }
+
+    private static String gobRes(NInventory inv) {
+        if (inv == null || inv.parentGob == null) return null;
+        if (inv.parentGob.ngob != null && inv.parentGob.ngob.name != null)
+            return inv.parentGob.ngob.name;
         Drawable d = inv.parentGob.getattr(Drawable.class);
-        if (d == null || d.getres() == null) return false;
-        return TABLE_RES.contains(d.getres().name);
+        if (d != null && d.getres() != null) return d.getres().name;
+        return null;
     }
 
     private static TableController findController(Widget wnd) {
@@ -127,27 +163,24 @@ public class TableInventoryExtension {
             Window wnd = getparent(Window.class);
             if (wnd == null) return;
 
-            // --- discover server widgets ---
+            // --- discover server widgets (nested children included; client may wrap them) ---
             Inventory food = null, tableware = null;
             long foodArea = -1;
             Button feast = null;
             Label srvHR = null, srvFEB = null;
-            for (Widget w = wnd.child; w != null; w = w.next) {
-                if (w instanceof Inventory) {
-                    Inventory iv = (Inventory) w;
-                    long area = (long) iv.sz.x * iv.sz.y;
-                    if (area > foodArea) { foodArea = area; food = iv; }
-                    if (iv.isz != null && iv.isz.x == 3 && iv.isz.y == 3) tableware = iv;
-                } else if (w instanceof Button) {
-                    Button b = (Button) w;
-                    if (b.text != null && "Feast!".equals(b.text.text)) feast = b;
-                } else if ((w instanceof Label) && (w != hrLabel) && (w != febLabel)) {
-                    String t = ((Label) w).text();
-                    if (t != null) {
-                        if (t.startsWith("Hunger")) srvHR = (Label) w;
-                        else if (t.startsWith("Food event")) srvFEB = (Label) w;
-                    }
-                }
+            for (Inventory iv : wnd.children(Inventory.class)) {
+                long area = (long) iv.sz.x * iv.sz.y;
+                if (area > foodArea) { foodArea = area; food = iv; }
+                if (iv.isz != null && iv.isz.x == 3 && iv.isz.y == 3) tableware = iv;
+            }
+            for (Button b : wnd.children(Button.class)) {
+                if (b.text != null && isFeastText(b.text.text)) feast = b;
+            }
+            for (Label lbl : wnd.children(Label.class)) {
+                if (lbl == hrLabel || lbl == febLabel) continue;
+                String t = lbl.text();
+                if (isHungerLabel(t)) srvHR = lbl;
+                else if (isFoodEventLabel(t)) srvFEB = lbl;
             }
             if (food == null) return;  // window not fully loaded yet
 

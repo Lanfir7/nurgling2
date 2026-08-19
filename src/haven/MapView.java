@@ -33,6 +33,7 @@ import haven.render.sl.Uniform;
 import nurgling.GhostAlpha;
 import nurgling.NConfig;
 import nurgling.NFlowerMenu;
+import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
@@ -2213,6 +2214,12 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			return(ret);
 		    }
 		});
+	    try {
+		Resource r = res.get();
+		monitoring.StockpileStorageTracker.onPlacingStart(r != null ? r.name : null);
+	    } catch (Exception e) {
+		monitoring.StockpileStorageTracker.onPlacingStart(null);
+	    }
 	} else if(msg == "unplace") {
 	    Loader.Future<Plob> placing = this.placing;
 	    if(placing != null) {
@@ -2225,6 +2232,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		}
 		this.placing = null;
 	    }
+	    monitoring.StockpileStorageTracker.onPlacingCancel();
 	} else if(msg == "move") {
 	    cc = ((Coord)args[0]).mul(posres);
 	} else if(msg == "plob") {
@@ -2521,8 +2529,15 @@ public class MapView extends PView implements DTarget, Console.Directory {
     }
     
     public boolean iteminteract(Coord cc, Coord ul) {
+	NGameUI gui = NUtils.getGameUI();
+	if (gui != null && gui.vhand != null) {
+	    monitoring.StockpileStorageTracker.rememberHand(gui.vhand);
+	}
 	new Hittest(cc) {
 	    public void hit(Coord pc, Coord2d mc, ClickData inf) {
+		if (gui != null && gui.vhand != null) {
+		    monitoring.StockpileStorageTracker.rememberHand(gui.vhand);
+		}
 		monitoring.StockpileStorageTracker.onClickData(inf);
 		Object[] args = {pc, mc.floor(posres), ui.modflags()};
 		if(inf != null)

@@ -2,13 +2,16 @@ package nurgling.widgets;
 
 import haven.*;
 import haven.Button;
+import haven.CheckBox;
 import haven.Label;
 import haven.Window;
 import haven.resutil.Curiosity;
 import nurgling.NGItem;
+import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NUtils;
+import nurgling.i18n.L10n;
 import nurgling.iteminfo.NCuriosity;
 
 import java.awt.*;
@@ -20,6 +23,9 @@ import java.util.List;
  */
 public class StudyDeskInventoryExtension {
 
+    static final int MIN_STOCK_HOURS = 6;
+    static final int MAX_STOCK_HOURS = 168;
+
     private StudyDeskInventoryExtension() {
         throw new UnsupportedOperationException("Utility class");
     }
@@ -30,8 +36,8 @@ public class StudyDeskInventoryExtension {
      */
     public static void addPlanButtonIfStudyDesk(NInventory inventory) {
         if (inventory != null && isStudyDeskInventory(inventory)) {
-            addPlanButton(inventory);
-            addDetailsPanel(inventory);
+            StudyDeskDetailsPanel detailsPanel = addDetailsPanel(inventory);
+            addPlanButtonAndSlider(inventory, detailsPanel);
         }
     }
 
@@ -76,10 +82,9 @@ public class StudyDeskInventoryExtension {
     }
 
     /**
-     * Adds the Plan button to the inventory window
-     * @param inventory The inventory to add the button to
+     * Adds the Plan button and stock-duration slider below the inventory grid.
      */
-    private static void addPlanButton(NInventory inventory) {
+    private static void addPlanButtonAndSlider(NInventory inventory, StudyDeskDetailsPanel detailsPanel) {
         if (inventory.parent == null) return;
 
         Button planButton = new Button(UI.scale(50), "Plan") {
@@ -89,11 +94,42 @@ public class StudyDeskInventoryExtension {
             }
         };
 
-        // Position the button below the inventory grid, centered
-        inventory.parent.add(planButton, new Coord(
-            inventory.sz.x / 2 - UI.scale(25),
-            inventory.sz.y + UI.scale(5)
-        ));
+        int bottomY = inventory.sz.y + UI.scale(5);
+        int planX = inventory.sz.x - planButton.sz.x;
+        inventory.parent.add(planButton, new Coord(planX, bottomY));
+
+        int stockHours = detailsPanel != null ? detailsPanel.stockHours : loadStockHours();
+        Label durationLabel = new Label("6d 23h");
+        int reservedLabelW = durationLabel.sz.x;
+        durationLabel.settext(formatTime(stockHours * 3600));
+        int labelX = planX - reservedLabelW - UI.scale(6);
+        int sliderX = UI.scale(4);
+        int sliderW = Math.max(UI.scale(40), labelX - sliderX - UI.scale(6));
+
+        HSlider slider = new HSlider(sliderW, MIN_STOCK_HOURS, MAX_STOCK_HOURS, stockHours) {
+            @Override
+            public void changed() {
+                if (detailsPanel != null) {
+                    detailsPanel.setStockHours(val);
+                }
+                durationLabel.settext(formatTime(val * 3600));
+                settip(L10n.get("study.stock_horizon") + ": " + formatTime(val * 3600));
+            }
+
+            @Override
+            public void fchanged() {
+                NConfig.set(NConfig.Key.studyDeskStockHours, val);
+            }
+        };
+        slider.settip(L10n.get("study.stock_horizon") + ": " + formatTime(stockHours * 3600));
+
+        int sliderY = bottomY + Math.max(0, (planButton.sz.y - slider.sz.y) / 2);
+        inventory.parent.add(slider, new Coord(sliderX, sliderY));
+        int labelY = bottomY + Math.max(0, (planButton.sz.y - durationLabel.sz.y) / 2);
+        inventory.parent.add(durationLabel, new Coord(labelX, labelY));
+        if (inventory.parent instanceof Window) {
+            ((Window) inventory.parent).pack();
+        }
     }
 
     /**
@@ -173,42 +209,121 @@ public class StudyDeskInventoryExtension {
     /**
      * Adds a details panel showing curio information
      */
-    private static void addDetailsPanel(NInventory inventory) {
-        if (inventory.parent == null) return;
+    private static StudyDeskDetailsPanel addDetailsPanel(NInventory inventory) {
+        if (inventory.parent == null) return null;
 
-        // Position the panel to the right of the inventory
         Coord panelPos = new Coord(inventory.sz.x + UI.scale(10), 0);
+        StudyDeskDetailsPanel detailsPanel = new StudyDeskDetailsPanel(new Coord(UI.scale(160), UI.scale(50)), inventory);
 
-        // Reserve space for Exp Cost, Mental Weight and Total LP at the bottom
-        int scrollHeight = inventory.sz.y - UI.scale(55);
-        Coord scrollSize = new Coord(UI.scale(160), scrollHeight);
+        CheckBox hideLpBox = new CheckBox(L10n.get("study.hide_lp"));
+        hideLpBox.a = detailsPanel.hideLp;
+        hideLpBox.changed(val -> {
+            detailsPanel.setHideLp(val);
+            NConfig.set(NConfig.Key.studyDeskHideLp, val);
+        });
+        inventory.parent.add(hideLpBox, panelPos);
 
-        // Create the content panel with scrolling support
-        StudyDeskDetailsPanel detailsPanel = new StudyDeskDetailsPanel(new Coord(scrollSize.x, UI.scale(50)), inventory);
+        int checkH = hideLpBox.sz.y + UI.scale(2);
+        int scrollHeight = inventory.sz.y - UI.scale(55) - checkH;
+        Coord scrollSize = new Coord(UI.scale(160), Math.max(UI.scale(40), scrollHeight));
 
-        // Wrap in a Scrollport
         Scrollport scrollport = new Scrollport(scrollSize);
         scrollport.cont.add(detailsPanel, Coord.z);
-        inventory.parent.add(scrollport, panelPos);
+        inventory.parent.add(scrollport, new Coord(panelPos.x, checkH));
 
-        // Add Exp Cost label below the scrollport
+        int statsY = checkH + scrollSize.y;
         Label expCostLabel = new Label("Exp cost: 0");
         expCostLabel.setcolor(new Color(255, 255, 192));
-        inventory.parent.add(expCostLabel, new Coord(panelPos.x, panelPos.y + scrollHeight + UI.scale(5)));
+        inventory.parent.add(expCostLabel, new Coord(panelPos.x, statsY + UI.scale(5)));
 
-        // Add Mental Weight label below exp cost
         Label mentalWeightLabel = new Label("Mental Weight: 0");
-        inventory.parent.add(mentalWeightLabel, new Coord(panelPos.x, panelPos.y + scrollHeight + UI.scale(18)));
+        inventory.parent.add(mentalWeightLabel, new Coord(panelPos.x, statsY + UI.scale(18)));
 
-        // Add Total LP label below mental weight
         Label totalLPLabel = new Label("Total LP: 0");
-        inventory.parent.add(totalLPLabel, new Coord(panelPos.x, panelPos.y + scrollHeight + UI.scale(31)));
+        inventory.parent.add(totalLPLabel, new Coord(panelPos.x, statsY + UI.scale(31)));
 
-        // Store reference for updates
         detailsPanel.expCostLabel = expCostLabel;
         detailsPanel.mentalWeightLabel = mentalWeightLabel;
         detailsPanel.totalLPLabel = totalLPLabel;
         detailsPanel.scrollport = scrollport;
+        return detailsPanel;
+    }
+
+    static boolean loadHideLp() {
+        return Boolean.TRUE.equals(NConfig.get(NConfig.Key.studyDeskHideLp));
+    }
+
+    static int loadStockHours() {
+        Object v = NConfig.get(NConfig.Key.studyDeskStockHours);
+        int hours = MAX_STOCK_HOURS;
+        if (v instanceof Number) {
+            hours = ((Number) v).intValue();
+        }
+        return clampStockHours(hours);
+    }
+
+    static int clampStockHours(int hours) {
+        return Math.max(MIN_STOCK_HOURS, Math.min(MAX_STOCK_HOURS, hours));
+    }
+
+    static int toRealSeconds(int serverTime) {
+        return (int) (serverTime / NCuriosity.server_ratio);
+    }
+
+    static final Color STOCK_SHORT = new Color(255, 80, 80);
+    static final Color STOCK_OK = new Color(80, 220, 80);
+    static final Color STOCK_LONG = Color.WHITE;
+
+    static Color stockTimeColor(int realSeconds, int stockHours) {
+        long horizon = Math.max(1, (long) stockHours) * 3600L;
+        if (realSeconds < horizon) {
+            return STOCK_SHORT;
+        }
+        if (realSeconds < horizon * 2) {
+            return STOCK_OK;
+        }
+        return STOCK_LONG;
+    }
+
+    static int lineHeight(boolean hideLp) {
+        return hideLp ? UI.scale(18) : UI.scale(30);
+    }
+
+    static String formatTime(int seconds) {
+        if (seconds <= 0) {
+            return "0s";
+        }
+
+        int days = seconds / 86400;
+        int hours = (seconds % 86400) / 3600;
+        int minutes = (seconds % 3600) / 60;
+        int secs = seconds % 60;
+
+        StringBuilder sb = new StringBuilder();
+        if (days > 0) {
+            sb.append(days).append("d");
+        }
+        if (hours > 0) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(hours).append("h");
+        }
+        if (minutes > 0) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(minutes).append("m");
+        }
+        if (secs > 0) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(secs).append("s");
+        }
+        return sb.toString();
+    }
+
+    static List<CurioInfo> visibleSorted(Collection<CurioInfo> all) {
+        List<CurioInfo> visible = new ArrayList<>(all);
+        visible.sort(Comparator
+                .comparingInt((CurioInfo a) -> a.totalTime)
+                .thenComparing(a -> a.name, String.CASE_INSENSITIVE_ORDER));
+        return visible;
     }
 
     /**
@@ -217,9 +332,11 @@ public class StudyDeskInventoryExtension {
     public static class StudyDeskDetailsPanel extends Widget {
         private final NInventory inventory;
         private static final Text.Foundry fnd = new Text.Foundry(Text.sans, 10);
-        private static final int LINE_HEIGHT = UI.scale(30);
         private Map<String, CurioInfo> cachedInfo = new HashMap<>();
-        private int lastItemCount = -1;
+        private int lastVisibleCount = -1;
+        private int lastLineHeight = -1;
+        boolean hideLp;
+        int stockHours;
         Label expCostLabel;
         Label mentalWeightLabel;
         Label totalLPLabel;
@@ -228,20 +345,39 @@ public class StudyDeskInventoryExtension {
         public StudyDeskDetailsPanel(Coord sz, NInventory inventory) {
             super(sz);
             this.inventory = inventory;
+            this.hideLp = loadHideLp();
+            this.stockHours = loadStockHours();
+        }
+
+        void setHideLp(boolean hideLp) {
+            this.hideLp = hideLp;
+            refreshLayout();
+        }
+
+        void setStockHours(int stockHours) {
+            this.stockHours = clampStockHours(stockHours);
+            refreshLayout();
+        }
+
+        private void refreshLayout() {
+            List<CurioInfo> visible = visibleSorted(cachedInfo.values());
+            lastVisibleCount = visible.size();
+            lastLineHeight = lineHeight(hideLp);
+            rebuildContent(lastVisibleCount, lastLineHeight);
         }
 
         @Override
         public void tick(double dt) {
             super.tick(dt);
 
-            // Update every 10 ticks like NInventory does
             if (NUtils.getTickId() % 10 == 0) {
                 cachedInfo = calculateCurioInfo();
-
-                // Check if we need to rebuild (item count changed)
-                if (cachedInfo.size() != lastItemCount) {
-                    lastItemCount = cachedInfo.size();
-                    rebuildContent(cachedInfo);
+                List<CurioInfo> visible = visibleSorted(cachedInfo.values());
+                int lh = lineHeight(hideLp);
+                if (visible.size() != lastVisibleCount || lh != lastLineHeight) {
+                    lastVisibleCount = visible.size();
+                    lastLineHeight = lh;
+                    rebuildContent(visible.size(), lh);
                 }
             }
         }
@@ -250,11 +386,8 @@ public class StudyDeskInventoryExtension {
         public void draw(GOut g) {
             super.draw(g);
 
-            // Sort alphabetically by item name
-            List<CurioInfo> sortedCurios = new ArrayList<>(cachedInfo.values());
-            sortedCurios.sort(Comparator.comparing(a -> a.name, String.CASE_INSENSITIVE_ORDER));
+            List<CurioInfo> sortedCurios = visibleSorted(cachedInfo.values());
 
-            // Calculate totals
             int totalLP = 0;
             int totalMentalWeight = 0;
             int totalExpCost = 0;
@@ -267,9 +400,9 @@ public class StudyDeskInventoryExtension {
             updateMentalWeight(totalMentalWeight);
             updateTotalLP(totalLP);
 
+            int lh = lineHeight(hideLp);
             int y = 0;
             for (CurioInfo info : sortedCurios) {
-                // Draw icon if available
                 if (info.resource != null) {
                     try {
                         Resource.Image img = info.resource.layer(Resource.imgc);
@@ -283,33 +416,28 @@ public class StudyDeskInventoryExtension {
                     }
                 }
 
-                // Draw quantity and time text on first line (convert to real time)
-                int realTime = (int)(info.totalTime / NCuriosity.server_ratio);
+                int realTime = toRealSeconds(info.totalTime);
                 String timeText = String.format("x%d - %s", info.count, formatTime(realTime));
-                Text t = fnd.render(timeText, Color.WHITE);
+                Text t = fnd.render(timeText, stockTimeColor(realTime, stockHours));
                 g.image(t.tex(), new Coord(UI.scale(20), y + 2));
 
-                // Draw LP text on second line
-                String lpText = String.format("LP: %,d", info.totalLP);
-                Text lpTex = fnd.render(lpText, new Color(192, 192, 255));
-                g.image(lpTex.tex(), new Coord(UI.scale(20), y + UI.scale(14)));
+                if (!hideLp) {
+                    String lpText = String.format("LP: %,d", info.totalLP);
+                    Text lpTex = fnd.render(lpText, new Color(192, 192, 255));
+                    g.image(lpTex.tex(), new Coord(UI.scale(20), y + UI.scale(14)));
+                }
 
-                y += LINE_HEIGHT;
+                y += lh;
             }
         }
 
-        private void rebuildContent(Map<String, CurioInfo> curioInfo) {
-            // Calculate required height - ensure it's enough to trigger scrollbar
-            int contentHeight = curioInfo.size() * LINE_HEIGHT + UI.scale(10);
-            // Ensure minimum height
+        private void rebuildContent(int visibleCount, int lineHeight) {
+            int contentHeight = visibleCount * lineHeight + UI.scale(10);
             contentHeight = Math.max(contentHeight, UI.scale(50));
 
-            // Force resize if different
             Coord newSize = new Coord(sz.x, contentHeight);
             if (!sz.equals(newSize)) {
                 resize(newSize);
-
-                // Update scrollport container to recalculate scrollbar
                 if (scrollport != null && scrollport.cont != null) {
                     scrollport.cont.update();
                 }
@@ -401,60 +529,35 @@ public class StudyDeskInventoryExtension {
 
             return curioInfo;
         }
+    }
 
-        private String formatTime(int seconds) {
-            if (seconds == 0) {
-                return "0s";
-            }
+    static class CurioInfo {
+        String name;
+        Resource resource;
+        int studyTime;
+        int learningPoints;
+        int mentalWeight;
+        int expCost;
+        int count = 1;
+        int totalTime;
+        int totalLP;
+        int totalExpCost;
 
-            int days = seconds / 86400;
-            int hours = (seconds % 86400) / 3600;
-            int minutes = (seconds % 3600) / 60;
-            int secs = seconds % 60;
-
-            StringBuilder sb = new StringBuilder();
-            if (days > 0) {
-                sb.append(days).append("d");
-            }
-            if (hours > 0) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(hours).append("h");
-            }
-            if (minutes > 0) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(minutes).append("m");
-            }
-            if (secs > 0) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(secs).append("s");
-            }
-
-            return sb.toString();
+        CurioInfo(String name, int totalTime) {
+            this.name = name;
+            this.totalTime = totalTime;
         }
 
-        private static class CurioInfo {
-            String name;
-            Resource resource;
-            int studyTime;
-            int learningPoints;
-            int mentalWeight;
-            int expCost;
-            int count = 1;
-            int totalTime;
-            int totalLP;
-            int totalExpCost;
-
-            CurioInfo(String name, Resource resource, int studyTime, int learningPoints, int mentalWeight, int expCost) {
-                this.name = name;
-                this.resource = resource;
-                this.studyTime = studyTime;
-                this.learningPoints = learningPoints;
-                this.mentalWeight = mentalWeight;
-                this.expCost = expCost;
-                this.totalTime = studyTime;
-                this.totalLP = learningPoints;
-                this.totalExpCost = expCost;
-            }
+        CurioInfo(String name, Resource resource, int studyTime, int learningPoints, int mentalWeight, int expCost) {
+            this.name = name;
+            this.resource = resource;
+            this.studyTime = studyTime;
+            this.learningPoints = learningPoints;
+            this.mentalWeight = mentalWeight;
+            this.expCost = expCost;
+            this.totalTime = studyTime;
+            this.totalLP = learningPoints;
+            this.totalExpCost = expCost;
         }
     }
 }

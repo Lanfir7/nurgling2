@@ -233,6 +233,13 @@ public class NStyle {
             new TexI(Resource.loadsimg("nurgling/hud/buttons/auto/dh"))
     };
 
+    public static final TexI[] search = new TexI[]{
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/search/u")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/search/d")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/search/h")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/search/d"))
+    };
+
     public static final TexI[] record = new TexI[]{
             new TexI(Resource.loadsimg("nurgling/hud/buttons/record_4states/u")),
             new TexI(Resource.loadsimg("nurgling/hud/buttons/record_4states/d")),

@@ -5,6 +5,9 @@ import nurgling.db.DatabaseAdapter;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
@@ -76,6 +79,32 @@ public class StorageItemDao {
     }
 
     /**
+     * Load storage items whose names are in the given set.
+     */
+    public List<StorageItemData> loadStorageItemsByNames(DatabaseAdapter adapter, Collection<String> names) throws SQLException {
+        List<StorageItemData> items = new ArrayList<>();
+        if (names == null || names.isEmpty()) {
+            return items;
+        }
+        List<String> unique = new ArrayList<>(new LinkedHashSet<>(names));
+        String placeholders = String.join(",", Collections.nCopies(unique.size(), "?"));
+        String sql = "SELECT item_hash, name, quality, coordinates, container FROM storageitems WHERE name IN ("
+                + placeholders + ")";
+        try (ResultSet rs = adapter.executeQuery(sql, unique.toArray())) {
+            while (rs.next()) {
+                items.add(new StorageItemData(
+                    rs.getString("item_hash"),
+                    rs.getString("name"),
+                    rs.getDouble("quality"),
+                    rs.getString("coordinates"),
+                    rs.getString("container")
+                ));
+            }
+        }
+        return items;
+    }
+
+    /**
      * Load storage items by container
      */
     public List<StorageItemData> loadStorageItemsByContainer(DatabaseAdapter adapter, String containerHash) throws SQLException {
@@ -128,6 +157,19 @@ public class StorageItemDao {
      */
     public void deleteStorageItemsByContainer(DatabaseAdapter adapter, String containerHash) throws SQLException {
         adapter.executeUpdate("DELETE FROM storageitems WHERE container = ?", containerHash);
+    }
+
+    /**
+     * Distinct container hashes referenced by storage items.
+     */
+    public List<String> loadDistinctContainerHashes(DatabaseAdapter adapter) throws SQLException {
+        List<String> hashes = new ArrayList<>();
+        try (ResultSet rs = adapter.executeQuery("SELECT DISTINCT container FROM storageitems")) {
+            while (rs.next()) {
+                hashes.add(rs.getString(1));
+            }
+        }
+        return hashes;
     }
 
     /**

@@ -4,6 +4,7 @@ import nurgling.db.DatabaseManager;
 import nurgling.db.dao.StorageItemDao;
 
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -62,6 +63,13 @@ public class StorageItemService {
      */
     public List<StorageItemDao.StorageItemData> loadAllStorageItems() throws SQLException {
         return databaseManager.executeOperation(adapter -> storageItemDao.loadAllStorageItems(adapter));
+    }
+
+    /**
+     * Load storage items by name set synchronously
+     */
+    public List<StorageItemDao.StorageItemData> loadStorageItemsByNames(Collection<String> names) throws SQLException {
+        return databaseManager.executeOperation(adapter -> storageItemDao.loadStorageItemsByNames(adapter, names));
     }
 
     /**
@@ -148,6 +156,10 @@ public class StorageItemService {
             storageItemDao.deleteStorageItemsByContainer(adapter, containerHash);
             return null;
         });
+    }
+
+    public List<String> loadDistinctContainerHashes() throws SQLException {
+        return databaseManager.executeOperation(adapter -> storageItemDao.loadDistinctContainerHashes(adapter));
     }
 
     /**

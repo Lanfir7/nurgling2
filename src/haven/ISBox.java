@@ -86,6 +86,7 @@ public class ISBox extends Widget implements DTarget {
 
     public boolean mousedown(MouseDownEvent ev) {
         if(ev.b == 1) {
+            touchPile();
             if(ui.modshift)
                 wdgmsg("xfer");
             else
@@ -96,6 +97,7 @@ public class ISBox extends Widget implements DTarget {
     }
 
     public boolean mousewheel(MouseWheelEvent ev) {
+	touchPile();
 	if(ev.a < 0)
 	    wdgmsg("xfer2", -1, ui.modflags());
 	if(ev.a > 0)
@@ -104,11 +106,13 @@ public class ISBox extends Widget implements DTarget {
     }
 
     public boolean drop(Coord cc, Coord ul) {
+        touchPile();
         wdgmsg("drop");
         return(true);
     }
 
     public boolean iteminteract(Coord cc, Coord ul) {
+        touchPile();
         wdgmsg("iact");
         return(true);
     }
@@ -116,8 +120,14 @@ public class ISBox extends Widget implements DTarget {
     public void uimsg(String msg, Object... args) {
         if(msg == "chnum") {
             setlabel(Utils.iv(args[0]), Utils.iv(args[1]), Utils.iv(args[2]));
+            touchPile();
         } else {
             super.uimsg(msg, args);
         }
+    }
+
+    private void touchPile() {
+	Gob gob = (this instanceof NISBox) ? ((NISBox) this).parentGob : null;
+	monitoring.StockpileStorageTracker.touch(gob);
     }
 }

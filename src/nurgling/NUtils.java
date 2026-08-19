@@ -103,6 +103,7 @@ public class NUtils
     {
         if(item == null)
             return null;
+        monitoring.StockpileStorageTracker.rememberHand(item);
         item.item.wdgmsg("take", Coord.z);
         WaitItemInHand tith = new WaitItemInHand(item);
         getUI().core.addTask(tith);

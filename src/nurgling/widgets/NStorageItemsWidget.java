@@ -6,6 +6,8 @@ import haven.Label;
 import haven.Window;
 import nurgling.*;
 import nurgling.actions.bots.FetchStorageItemBot;
+import nurgling.db.FetchStorageDbSync;
+import nurgling.db.StorageItemsCompress;
 import nurgling.db.StorageOrphanPolicy;
 import nurgling.db.StorageTableInfo;
 import nurgling.db.dao.ContainerDao;
@@ -73,8 +75,12 @@ public class NStorageItemsWidget extends Window {
     private Dropbox<Grouping> groupingDropbox;
     private TextEntry searchField;
     private TextEntry qualityFilterEntry;
+    private TextEntry qualityMaxFilterEntry;
+    private CheckBox compressBox;
     private String searchText = "";
     private Double minQualityFilter = null;
+    private Double maxQualityFilter = null;
+    private boolean compressByType = false;
     private Grouping currentGrouping = Grouping.Q;
     private boolean isLoading = false;
     
@@ -185,6 +191,26 @@ public class NStorageItemsWidget extends Window {
             }
         }, new Coord(qualityX + UI.scale(28), y));
         qualityFilterEntry.settip(L10n.get("storage.quality_filter_tip"));
+
+        int maxQualityX = qualityX + UI.scale(74);
+        add(new Label("Q<"), new Coord(maxQualityX, y + UI.scale(3)));
+        qualityMaxFilterEntry = add(new TextEntry(UI.scale(40), "") {
+            @Override
+            public void changed() {
+                super.changed();
+                parseQualityFilter();
+                applyFiltersAndSort();
+            }
+        }, new Coord(maxQualityX + UI.scale(18), y));
+        qualityMaxFilterEntry.settip(L10n.get("storage.quality_max_filter_tip"));
+
+        compressBox = add(new CheckBox(L10n.get("storage.compress")),
+                new Coord(maxQualityX + UI.scale(64), y));
+        compressBox.changed(val -> {
+            compressByType = val;
+            applyFiltersAndSort();
+        });
+        compressBox.settip(L10n.get("storage.compress_tip"));
 
         // Refresh button
         add(new Button(UI.scale(70), L10n.get("storage.refresh")) {
@@ -325,19 +351,22 @@ public class NStorageItemsWidget extends Window {
     }
     
     private void parseQualityFilter() {
-        if (qualityFilterEntry == null) {
-            minQualityFilter = null;
-            return;
+        minQualityFilter = parseQualityValue(qualityFilterEntry);
+        maxQualityFilter = parseQualityValue(qualityMaxFilterEntry);
+    }
+
+    private static Double parseQualityValue(TextEntry entry) {
+        if (entry == null) {
+            return null;
         }
-        String text = qualityFilterEntry.text().trim();
+        String text = entry.text().trim();
         if (text.isEmpty()) {
-            minQualityFilter = null;
-            return;
+            return null;
         }
         try {
-            minQualityFilter = Double.parseDouble(text);
+            return Double.parseDouble(text);
         } catch (NumberFormatException e) {
-            minQualityFilter = null;
+            return null;
         }
     }
 
@@ -484,6 +513,25 @@ public class NStorageItemsWidget extends Window {
         applyFiltersAndSort();
     }
 
+    private static List<StorageItemsCompress.Row> toCompressRows(List<GroupedItem> rows) {
+        List<StorageItemsCompress.Row> out = new ArrayList<>();
+        for (GroupedItem row : rows) {
+            out.add(new StorageItemsCompress.Row(
+                    row.name, row.quality, row.items, row.distanceTiles, row.storageName));
+        }
+        return out;
+    }
+
+    private static List<GroupedItem> fromCompressRows(List<StorageItemsCompress.Row> rows) {
+        List<GroupedItem> out = new ArrayList<>();
+        for (StorageItemsCompress.Row row : rows) {
+            out.add(new GroupedItem(
+                    row.name, row.quality, row.items.size(), row.items,
+                    row.distanceTiles, row.storageName));
+        }
+        return out;
+    }
+
     private void applyFiltersAndSort() {
         // Apply search filter
         List<GroupedItem> filtered = allItems;
@@ -493,13 +541,15 @@ public class NStorageItemsWidget extends Window {
                     .filter(item -> item.name.toLowerCase().contains(searchText))
                     .collect(Collectors.toList());
         }
-        
-        // Apply quality filter
-        if (minQualityFilter != null) {
-            filtered = filtered.stream()
-                    .filter(item -> item.maxQuality >= minQualityFilter)
-                    .collect(Collectors.toList());
+
+        List<StorageItemsCompress.Row> rows = toCompressRows(filtered);
+        if (minQualityFilter != null || maxQualityFilter != null) {
+            rows = StorageItemsCompress.keepQualityRange(rows, minQualityFilter, maxQualityFilter);
         }
+        if (compressByType) {
+            rows = StorageItemsCompress.byType(rows);
+        }
+        filtered = fromCompressRows(rows);
         
         displayedItems = new ArrayList<>(filtered);
 
@@ -671,7 +721,7 @@ public class NStorageItemsWidget extends Window {
 
         public StorageItemWidget(GroupedItem item) {
             this.item = item;
-            sz = UI.scale(new Coord(WINDOW_WIDTH - 40, 20));
+            sz = UI.scale(new Coord(WINDOW_WIDTH - 40, 22));
 
             add(new Label(truncateName(item.name, 28)), new Coord(COL_NAME, 0));
             add(new Label(item.getQualityDisplay()), new Coord(COL_QUALITY, 0));
@@ -697,8 +747,7 @@ public class NStorageItemsWidget extends Window {
                 showItemDetails();
                 return true;
             } else if (ev.b == 3) {
-                // Right click - show flower menu
-                showTakeMenu(ev.c);
+                showQuantitySelector();
                 return true;
             }
             return super.mousedown(ev);
@@ -714,68 +763,47 @@ public class NStorageItemsWidget extends Window {
             NUtils.getGameUI().msg(sb.toString());
         }
         
-        private NFlowerMenu menu;
-        
-        private void showTakeMenu(Coord c) {
-            if (menu != null) {
-                menu.destroy();
-                menu = null;
-            }
-            
-            String[] opts = new String[] { L10n.get("storage.menu_take") };
-            menu = new NFlowerMenu(opts) {
-                @Override
-                public boolean mousedown(MouseDownEvent ev) {
-                    if (super.mousedown(ev)) {
-                        nchoose(null);
-                    }
-                    return true;
-                }
-                
-                @Override
-                public void destroy() {
-                    menu = null;
-                    super.destroy();
-                }
-                
-                @Override
-                public void nchoose(NPetal option) {
-                    if (option != null && option.name.equals(L10n.get("storage.menu_take"))) {
-                        showQuantitySelector();
-                    }
-                    destroy();
-                }
-            };
-            
-            // Add menu to UI at cursor position
-            NUtils.getGameUI().add(menu, NUtils.getGameUI().ui.mc.sub(menu.sz.div(2)));
-        }
-        
         private void showQuantitySelector() {
-            if (item.count <= 1) {
-                // Only one item, fetch directly
-                startFetchBot(1);
-            } else {
-                // Show quantity selection dialog
-                NQuantitySelector selector = new NQuantitySelector(
-                    L10n.get("storage.select_quantity"),
-                    item.count,
-                    (selectedCount) -> startFetchBot(selectedCount)
-                );
-                NUtils.getGameUI().add(selector, NUtils.getGameUI().sz.div(2).sub(selector.sz.div(2)));
-            }
+            int max = Math.max(1, item.count);
+            NQuantitySelector selector = new NQuantitySelector(
+                L10n.get("storage.select_quantity"),
+                max,
+                this::startFetchBot,
+                this::deleteGroupedItem
+            );
+            GameUI gui = NUtils.getGameUI();
+            gui.add(selector, gui.sz.div(2).sub(selector.sz.div(2)));
+            selector.raise();
         }
         
         private void startFetchBot(int count) {
             // Get all raw items for this group
-            List<StorageItemDao.StorageItemData> matchingItems = rawItems.stream()
-                .filter(i -> i.getName().equals(item.name) &&
-                            i.getQuality() >= item.minQuality &&
-                            i.getQuality() <= item.maxQuality)
-                .collect(Collectors.toList());
-
-            FetchStorageItemBot bot = new FetchStorageItemBot(item, count, matchingItems);
+            FetchStorageItemBot bot = new FetchStorageItemBot(item, count, item.items);
             BotExecutor.runAsync("FetchStorageItemBot", bot);
+        }
+
+        private void deleteGroupedItem() {
+            if (ui == null || ui.core == null || ui.core.databaseManager == null
+                    || !ui.core.databaseManager.isReady()) {
+                NUtils.getGameUI().msg(L10n.get("storage.db_not_ready"), Color.RED);
+                return;
+            }
+            List<String> hashes = FetchStorageDbSync.hashesToDelete(item.items);
+            if (hashes.isEmpty()) {
+                return;
+            }
+            StorageItemService storageService = new StorageItemService(ui.core.databaseManager);
+            int deleted = 0;
+            for (String hash : hashes) {
+                try {
+                    storageService.deleteStorageItem(hash);
+                    deleted++;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            NUtils.getGameUI().msg(L10n.get("storage.deleted_items").replace("{0}", String.valueOf(deleted)));
+            loadItems();
         }
     }
 
@@ -800,13 +828,8 @@ public class NStorageItemsWidget extends Window {
         protected Widget makeitem(StorageItemWidget item, int idx, Coord sz) {
             return new ItemWidget<StorageItemWidget>(this, sz, item) {
                 {
+                    item.resize(sz);
                     add(item);
-                }
-
-                @Override
-                public boolean mousedown(MouseDownEvent ev) {
-                    super.mousedown(ev);
-                    return super.mousedown(ev);
                 }
             };
         }

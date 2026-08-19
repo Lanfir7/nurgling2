@@ -84,6 +84,8 @@ public class NFlowerMenu extends FlowerMenu
             int visibleHeight = MAX_VISIBLE_ITEMS * itemHeight;
             sb = add(new Scrollbar(visibleHeight, 0, opts.length - MAX_VISIBLE_ITEMS), new Coord(len, 0));
             resize(len + sb.sz.x, visibleHeight);
+        } else {
+            pack();
         }
     }
 

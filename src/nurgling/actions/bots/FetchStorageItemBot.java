@@ -5,6 +5,7 @@ import static haven.OCache.posres;
 import nurgling.*;
 import nurgling.actions.*;
 import nurgling.areas.NContext;
+import nurgling.db.FetchStorageDbSync;
 import nurgling.db.StockpileStoragePolicy;
 import nurgling.db.dao.StorageItemDao;
 import nurgling.db.dao.ContainerDao;
@@ -12,6 +13,8 @@ import nurgling.i18n.L10n;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.tasks.*;
 import nurgling.tools.*;
+import nurgling.tools.NSearchItem;
+import monitoring.ItemWatcher;
 import nurgling.widgets.NStorageItemsWidget.GroupedItem;
 
 import java.util.*;
@@ -197,57 +200,65 @@ public class FetchStorageItemBot implements Action {
             gui.msg("[DBG] no window name for " + (containerGob.ngob != null ? containerGob.ngob.name : "unknown"), java.awt.Color.ORANGE);
             return 0;
         }
-        NUtils.rclickGob(containerGob);
-        NUtils.addTask(new WaitWindow(containerName));
-
-        // Wait for inventory to load
-        Thread.sleep(500);
-
-        // Get container inventory
-        Window containerWindow = gui.getWindow(containerName);
-        if (containerWindow == null) {
-            return 0;
-        }
+        NUtils.getUI().core.setLastAction(containerGob);
+        new OpenTargetContainer(containerName, containerGob).run(gui);
 
         NInventory containerInv = gui.getInventory(containerName);
-        if (containerInv == null) {
-            containerWindow.wdgmsg("close");
+        Window containerWindow = gui.getWindow(containerName);
+        if (containerInv == null || containerWindow == null) {
+            if (containerWindow != null) {
+                containerWindow.wdgmsg("close");
+            }
             return 0;
         }
 
-        // Fetch items one by one, matching exact quality from DB records
-        int transferred = 0;
+        List<StorageItemDao.StorageItemData> taken = new ArrayList<>();
         for (StorageItemDao.StorageItemData dbItem : requestedItems) {
             if (stop.get()) break;
             if (gui.getInventory().calcFreeSpace() == 0) break;
 
-            // Find a WItem in container matching name AND exact quality
             WItem match = findItemByQuality(containerInv, dbItem.getName(), dbItem.getQuality());
             if (match == null) {
-                // No item with this exact quality in the container — skip
+                continue;
+            }
+            WItem leaf = firstLeaf(match);
+            if (leaf == null) {
+                waitStackContents(gui);
+                match = findItemByQuality(containerInv, dbItem.getName(), dbItem.getQuality());
+                leaf = firstLeaf(match);
+            }
+            if (leaf == null) {
                 continue;
             }
 
-            int oldCount = countItemsInInventory(gui, itemName);
-            TransferToContainer.transfer(match, gui.getInventory(), 1);
-
-            // Verify item was actually transferred
-            int newCount = countItemsInInventory(gui, itemName);
-            if (newCount > oldCount) {
-                transferred++;
+            int moved = TransferToContainer.transfer(leaf, gui.getInventory(), 1);
+            if (moved > 0) {
+                taken.add(dbItem);
             }
         }
 
-        // Close container window
         containerWindow.wdgmsg("close");
+        NUtils.addTask(new WindowIsClosed(containerWindow));
+        removeTakenFromDb(taken);
 
-        // Return actual count based on inventory difference
         int afterCount = countItemsInInventory(gui, itemName);
         return afterCount - beforeCount;
     }
 
     private int fetchFromStockpile(NGameUI gui, Gob pileGob,
                                    List<StorageItemDao.StorageItemData> requestedItems) throws InterruptedException {
+        boolean oldBundle = ((NInventory) gui.maininv).bundle.a;
+        NUtils.stackSwitch(true);
+        try {
+            return fetchFromStockpileBatch(gui, pileGob, requestedItems);
+        } finally {
+            NUtils.stackSwitch(oldBundle);
+        }
+    }
+
+    private int fetchFromStockpileBatch(NGameUI gui, Gob pileGob,
+                                        List<StorageItemDao.StorageItemData> requestedItems)
+            throws InterruptedException {
         monitoring.StockpileStorageTracker.onGob(pileGob);
         String oldHash = pileGob.ngob != null ? pileGob.ngob.hash : null;
         Coord2d pileRc = pileGob.rc;
@@ -258,29 +269,56 @@ public class FetchStorageItemBot implements Action {
             return 0;
         }
         int count = pile.calcCount();
-        int free = gui.getInventory().getFreeSpace();
         if (count <= 0) {
-            new CloseTargetContainer("Stockpile").run(gui);
+            closeStockpile(gui);
             return 0;
         }
-        if (free < count) {
-            new CloseTargetContainer("Stockpile").run(gui);
+        int free = gui.getInventory().getFreeSpace();
+        String stackName = requestedItems.isEmpty() ? itemName : requestedItems.get(0).getName();
+        int stackSize = Math.max(1, StackSupporter.getFullStackSize(stackName));
+        if (StockpileStoragePolicy.takeCount(count, free, stackSize, 1) <= 0) {
+            closeStockpile(gui);
             return 0;
         }
 
-        List<StockpileStoragePolicy.Item> before = monitoring.StockpileStorageTracker.captureInventory();
-        new TakeItemsFromPile(pileGob, pile, count).run(gui);
-        if (gui.getWindow("Stockpile") != null) {
-            new CloseTargetContainer("Stockpile").run(gui);
-        }
-        monitoring.StockpileStorageTracker.flush();
-
-        List<StockpileStoragePolicy.Item> dumped = StockpileStoragePolicy.appeared(
-                before, monitoring.StockpileStorageTracker.captureInventory());
         List<StockpileStoragePolicy.Item> needed = new ArrayList<>();
         for (StorageItemDao.StorageItemData data : requestedItems) {
             needed.add(new StockpileStoragePolicy.Item(data.getName(), data.getQuality()));
         }
+
+        List<StockpileStoragePolicy.Item> before = monitoring.StockpileStorageTracker.captureInventory();
+        new TakeItemsFromPile(pileGob, pile, 1).run(gui);
+        waitStackContents(gui);
+        List<StockpileStoragePolicy.Item> dumped = new ArrayList<>(StockpileStoragePolicy.appeared(
+                before, monitoring.StockpileStorageTracker.captureInventory()));
+        StockpileStoragePolicy.Item first = dumped.isEmpty() ? null : dumped.get(0);
+        StockpileStoragePolicy.ProbeAction action = StockpileStoragePolicy.probeThenDump(first, needed);
+        List<StockpileStoragePolicy.Item> remainingNeeded = new ArrayList<>(needed);
+        if (action == StockpileStoragePolicy.ProbeAction.KEEP_ONE && first != null) {
+            remainingNeeded.remove(first);
+        }
+        boolean dumpMore = action == StockpileStoragePolicy.ProbeAction.DUMP_MAX
+                || !remainingNeeded.isEmpty();
+
+        if (dumpMore && !stop.get()) {
+            pile = reopenStockpile(gui, pileGob);
+            if (pile != null) {
+                count = pile.calcCount();
+                free = gui.getInventory().getFreeSpace();
+                int take = StockpileStoragePolicy.takeCount(count, free, stackSize);
+                if (take > 0) {
+                    List<StockpileStoragePolicy.Item> beforeDump =
+                            monitoring.StockpileStorageTracker.captureInventory();
+                    new TakeItemsFromPile(pileGob, pile, take).run(gui);
+                    waitStackContents(gui);
+                    dumped.addAll(StockpileStoragePolicy.appeared(
+                            beforeDump, monitoring.StockpileStorageTracker.captureInventory()));
+                }
+            }
+        }
+        closeStockpile(gui);
+        monitoring.StockpileStorageTracker.flush();
+
         StockpileStoragePolicy.FetchSplit split = StockpileStoragePolicy.splitForFetch(dumped, needed);
 
         if (oldHash != null && Finder.findGob(oldHash) == null && NCore.databaseManager != null
@@ -291,70 +329,273 @@ public class FetchStorageItemBot implements Action {
             }
         }
 
-        List<WItem> restock = matchInventory(gui, split.restock);
-        if (!restock.isEmpty()) {
-            restockStockpile(gui, pileRc, restock);
+        if (!split.restock.isEmpty()) {
+            NUtils.stackSwitch(false);
+            restockStockpile(gui, pileGob, pileRc, split.restock);
             monitoring.StockpileStorageTracker.flush();
         }
+
+        List<StorageItemDao.StorageItemData> taken = new ArrayList<>();
+        List<StockpileStoragePolicy.Item> keepLeft = new ArrayList<>(split.keep);
+        for (StorageItemDao.StorageItemData data : requestedItems) {
+            StockpileStoragePolicy.Item fp = new StockpileStoragePolicy.Item(data.getName(), data.getQuality());
+            int idx = keepLeft.indexOf(fp);
+            if (idx >= 0) {
+                keepLeft.remove(idx);
+                taken.add(data);
+            }
+        }
+        removeTakenFromDb(taken);
 
         return split.keep.size();
     }
 
-    private List<WItem> matchInventory(NGameUI gui, List<StockpileStoragePolicy.Item> fingerprints) {
-        List<StockpileStoragePolicy.Item> left = new ArrayList<>(fingerprints);
-        List<WItem> matched = new ArrayList<>();
-        for (WItem w : gui.getInventory().getTopLevelItems()) {
-            if (!(w.item instanceof NGItem)) {
-                continue;
-            }
-            NGItem g = (NGItem) w.item;
-            if (g.name() == null) {
-                continue;
-            }
-            double q = g.quality == null || g.quality <= 0 ? 0
-                    : Double.parseDouble(Utils.odformat2(g.quality, 2));
-            StockpileStoragePolicy.Item fp = new StockpileStoragePolicy.Item(g.name(), q);
-            int idx = left.indexOf(fp);
-            if (idx >= 0) {
-                left.remove(idx);
-                matched.add(w);
-            }
+    private static void closeStockpile(NGameUI gui) throws InterruptedException {
+        if (gui.getWindow("Stockpile") != null) {
+            new CloseTargetContainer("Stockpile").run(gui);
         }
-        return matched;
     }
 
-    private void restockStockpile(NGameUI gui, Coord2d rc, List<WItem> restock) throws InterruptedException {
-        if (NUtils.takeItemToHand(restock.get(0)) == null) {
-            return;
+    private static NISBox reopenStockpile(NGameUI gui, Gob pileGob) throws InterruptedException {
+        if (gui.getStockpile() == null) {
+            Gob live = pileGob;
+            if (pileGob != null && pileGob.ngob != null && pileGob.ngob.hash != null) {
+                Gob byHash = Finder.findGob(pileGob.ngob.hash);
+                if (byHash != null) {
+                    live = byHash;
+                }
+            }
+            new OpenTargetContainer("Stockpile", live).run(gui);
         }
-        Pair<Coord2d, Coord2d> area = new Pair<>(rc.sub(11, 11), rc.add(11, 11));
-        String name = ((NGItem) restock.get(0).item).name();
-        PileMaker maker = new PileMaker(area, new NAlias(name), new NAlias("stockpile"));
-        if (!maker.run(gui).IsSuccess()) {
-            return;
+        return gui.getStockpile();
+    }
+
+    private void restockStockpile(NGameUI gui, Gob originalPile, Coord2d rc,
+                                  List<StockpileStoragePolicy.Item> restock) throws InterruptedException {
+        Gob existing = existingPileAt(originalPile, rc);
+        StockpileStoragePolicy.RestockPlan plan = StockpileStoragePolicy.restockPlan(
+                rc.x, rc.y, existing != null);
+        List<StockpileStoragePolicy.Item> left = new ArrayList<>(restock);
+        Gob pile;
+        if (plan.mode == StockpileStoragePolicy.RestockPlan.Mode.DROP_ON_EXISTING) {
+            pile = existing;
+        } else {
+            WItem first = findRestockLeaf(gui, left);
+            StockpileStoragePolicy.Item firstFp = fingerprint(first);
+            if (first == null || firstFp == null || !takeSingleToHand(gui, first)) {
+                return;
+            }
+            String name = firstFp.name;
+            Coord2d exact = new Coord2d(plan.x, plan.y);
+            PileMaker maker = new PileMaker(exact, new NAlias(name), new NAlias("stockpile"));
+            if (!maker.run(gui).IsSuccess()) {
+                if (gui.vhand != null) {
+                    NUtils.dropToInv();
+                }
+                return;
+            }
+            pile = maker.getPile();
+            if (pile == null) {
+                return;
+            }
+            left.remove(firstFp);
         }
-        Gob newPile = maker.getPile();
-        if (newPile == null) {
-            return;
+        monitoring.StockpileStorageTracker.onGob(pile);
+        dropOntoPile(gui, pile, left);
+    }
+
+    private Gob existingPileAt(Gob original, Coord2d rc) {
+        if (original == null) {
+            return null;
         }
-        monitoring.StockpileStorageTracker.onGob(newPile);
-        for (int i = 1; i < restock.size(); i++) {
-            if (stop.get()) {
+        Gob byId = Finder.findGob(original.id);
+        if (byId != null && byId.ngob != null
+                && StockpileStoragePolicy.isStockpileRes(byId.ngob.name)) {
+            return byId;
+        }
+        String originalHash = original.ngob != null ? original.ngob.hash : null;
+        if (originalHash != null) {
+            Gob byHash = Finder.findGob(originalHash);
+            if (byHash != null) {
+                return byHash;
+            }
+        }
+        return null;
+    }
+
+    private void dropOntoPile(NGameUI gui, Gob pile, List<StockpileStoragePolicy.Item> restock)
+            throws InterruptedException {
+        new OpenTargetContainer("Stockpile", pile).run(gui);
+        NISBox box = gui.getStockpile();
+        List<StockpileStoragePolicy.Item> left = new ArrayList<>(restock);
+        while (!left.isEmpty() && !stop.get()) {
+            WItem leaf = findRestockLeaf(gui, left);
+            StockpileStoragePolicy.Item fp = fingerprint(leaf);
+            if (leaf == null || fp == null) {
                 break;
             }
-            WItem w = restock.get(i);
-            if (w.parent == null) {
-                continue;
+            if (!takeSingleToHand(gui, leaf)) {
+                break;
             }
-            NUtils.takeItemToHand(w);
-            NUtils.activateItem(newPile, false);
-            NUtils.addTask(new NTask() {
-                @Override
-                public boolean check() {
-                    return NUtils.getGameUI().vhand == null;
-                }
-            });
+            if (box != null) {
+                box.wdgmsg("drop");
+            } else {
+                NUtils.activateItem(pile, false);
+            }
+            NUtils.addTask(new WaitFreeHand());
+            if (gui.vhand != null) {
+                NUtils.dropToInv();
+                break;
+            }
+            left.remove(fp);
         }
+        if (gui.getWindow("Stockpile") != null) {
+            new CloseTargetContainer("Stockpile").run(gui);
+        }
+    }
+
+    private WItem findRestockLeaf(NGameUI gui, List<StockpileStoragePolicy.Item> left)
+            throws InterruptedException {
+        waitStackContents(gui);
+        NInventory inv = gui.getInventory();
+        if (inv == null) {
+            return null;
+        }
+        List<WItem> leaves = new ArrayList<>();
+        for (WItem w : inv.getTopLevelItems()) {
+            collectLeaves(w, leaves);
+        }
+        List<StockpileStoragePolicy.Item> fps = new ArrayList<>();
+        for (WItem leaf : leaves) {
+            fps.add(fingerprint(leaf));
+        }
+        int idx = StockpileStoragePolicy.indexOfRestockLeaf(fps, left);
+        if (idx >= 0) {
+            return leaves.get(idx);
+        }
+        return null;
+    }
+
+    private void collectLeaves(WItem w, List<WItem> out) {
+        if (w == null || w.item == null) {
+            return;
+        }
+        if (w.item.contents instanceof haven.res.ui.stackinv.ItemStack) {
+            haven.res.ui.stackinv.ItemStack stack =
+                    (haven.res.ui.stackinv.ItemStack) w.item.contents;
+            if (stack.wmap == null) {
+                return;
+            }
+            for (WItem child : stack.wmap.values()) {
+                collectLeaves(child, out);
+            }
+            return;
+        }
+        if (!isStackLike(w)) {
+            out.add(w);
+        }
+    }
+
+    private void waitStackContents(NGameUI gui) throws InterruptedException {
+        NInventory inv = gui.getInventory();
+        if (inv == null) {
+            return;
+        }
+        NUtils.addTask(new NTask() {
+            int ticks;
+
+            @Override
+            public boolean check() {
+                if (ticks++ > 80) {
+                    return true;
+                }
+                for (WItem w : inv.getTopLevelItems()) {
+                    if (w == null || w.item == null) {
+                        continue;
+                    }
+                    int amount = stackAmount(w);
+                    if (amount > 1 && !(w.item.contents instanceof haven.res.ui.stackinv.ItemStack)) {
+                        return false;
+                    }
+                    if (w.item.contents instanceof haven.res.ui.stackinv.ItemStack) {
+                        haven.res.ui.stackinv.ItemStack stack =
+                                (haven.res.ui.stackinv.ItemStack) w.item.contents;
+                        if (stack.wmap == null || stack.wmap.isEmpty()) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+        });
+    }
+
+    private boolean takeSingleToHand(NGameUI gui, WItem item) throws InterruptedException {
+        if (gui.vhand != null) {
+            NUtils.dropToInv();
+        }
+        WItem leaf = firstLeaf(item);
+        if (leaf == null || leaf.parent == null
+                || !StockpileStoragePolicy.isPuttableInStockpile(isStackLike(leaf))) {
+            return false;
+        }
+        if (NUtils.takeItemToHand(leaf) == null) {
+            return false;
+        }
+        if (gui.vhand != null && isStackLike(gui.vhand)) {
+            NUtils.dropToInv();
+            return false;
+        }
+        return gui.vhand != null;
+    }
+
+    private static WItem firstLeaf(WItem w) {
+        if (w == null || w.item == null) {
+            return null;
+        }
+        if (w.item.contents instanceof haven.res.ui.stackinv.ItemStack) {
+            haven.res.ui.stackinv.ItemStack stack = (haven.res.ui.stackinv.ItemStack) w.item.contents;
+            if (stack.wmap == null) {
+                return null;
+            }
+            for (WItem child : stack.wmap.values()) {
+                WItem inner = firstLeaf(child);
+                if (inner != null) {
+                    return inner;
+                }
+            }
+            return null;
+        }
+        return isStackLike(w) ? null : w;
+    }
+
+    private static boolean isStackShell(WItem w) {
+        return w != null && w.item != null && w.item.contents instanceof haven.res.ui.stackinv.ItemStack;
+    }
+
+    private static boolean isStackLike(WItem w) {
+        return StockpileStoragePolicy.isStackLike(isStackShell(w), stackAmount(w));
+    }
+
+    private static int stackAmount(WItem w) {
+        if (w == null || !(w.item instanceof NGItem)) {
+            return 1;
+        }
+        GItem.Amount amt = ((NGItem) w.item).getInfo(GItem.Amount.class);
+        return amt != null ? amt.itemnum() : 1;
+    }
+
+    private static StockpileStoragePolicy.Item fingerprint(WItem w) {
+        if (w == null || !(w.item instanceof NGItem) || isStackLike(w)) {
+            return null;
+        }
+        NGItem g = (NGItem) w.item;
+        if (g.name() == null) {
+            return null;
+        }
+        double q = g.quality == null || g.quality <= 0 ? 0
+                : Double.parseDouble(Utils.odformat2(g.quality, 2));
+        return new StockpileStoragePolicy.Item(g.name(), q);
     }
 
     /**
@@ -399,6 +640,28 @@ public class FetchStorageItemBot implements Action {
             });
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private void removeTakenFromDb(List<StorageItemDao.StorageItemData> taken) {
+        List<String> hashes = FetchStorageDbSync.hashesToDelete(taken);
+        if (hashes.isEmpty() || NCore.databaseManager == null || !NCore.databaseManager.isReady()) {
+            return;
+        }
+        try {
+            NCore.databaseManager.executeOperation(adapter -> {
+                StorageItemDao dao = new StorageItemDao();
+                for (String hash : hashes) {
+                    dao.deleteStorageItem(adapter, hash);
+                }
+                return null;
+            });
+            String container = taken.get(0).getContainer();
+            if (container != null) {
+                ItemWatcher.invalidateContainerCache(container);
+            }
+            NSearchItem.notifyContainerDataChanged();
+        } catch (Exception ignored) {
         }
     }
 

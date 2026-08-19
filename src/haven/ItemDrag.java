@@ -57,6 +57,7 @@ public class ItemDrag extends NWItem
 		if(ui.dispatchq(parent, new Drop(ev.c.add(this.c), this)).handled)
 			return(true);
 	} else if(ev.b == 3) {
+		monitoring.StockpileStorageTracker.rememberHand(this);
 		// Alt+RightClick: Open container without using the held item
 		// Useful when you have a full inventory and hold a live animal
 		if(ui.modmeta && !ui.modctrl && !ui.modshift) {

@@ -9,9 +9,10 @@ import nurgling.NHitBox;
 import nurgling.NUtils;
 import nurgling.tasks.WaitPile;
 import nurgling.tasks.WaitPlob;
+import nurgling.NGItem;
+import nurgling.db.StockpileStoragePolicy;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
-import nurgling.NGItem;
 import haven.WItem;
 import java.util.ArrayList;
 
@@ -31,10 +32,19 @@ public class PileMaker implements Action{
     }
 
     Gob pile = null;
+    Coord2d exactPos = null;
+
     public PileMaker(Pair<Coord2d, Coord2d> out, NAlias items, NAlias pileName) {
         this.out = out;
         this.items = items;
         this.pileName = pileName;
+    }
+
+    public PileMaker(Coord2d exactPos, NAlias items, NAlias pileName) {
+        this.out = new Pair<>(exactPos, exactPos);
+        this.items = items;
+        this.pileName = pileName;
+        this.exactPos = exactPos;
     }
 
     public PileMaker(Pair<Coord2d, Coord2d> out, NAlias items, NAlias pileName, int th) {
@@ -61,12 +71,16 @@ public class PileMaker implements Action{
 
                 return Results.FAIL();
         }
-        NUtils.activateItem(out.a);
+        Coord2d itemactPos = exactPos != null ? plobClickPos(gui, exactPos) : out.a;
+        NUtils.activateItem(itemactPos);
         NUtils.getUI().core.addTask(new WaitPlob());
-        Coord2d pos = null;
+        Coord2d pos;
         NHitBox hitbox = NUtils.getGameUI().map.placing.get().ngob.hitBox;
-        if((pos = Finder.getFreePlace(out,hitbox))==null)
+        if (exactPos != null) {
+            pos = exactPos;
+        } else if ((pos = Finder.getFreePlace(out, hitbox)) == null) {
             return Results.ERROR("No free space");
+        }
 
         new PathFinder( NGob.getDummy(pos, 0, hitbox),true).run(gui);
         NUtils.addTask(new WaitStockpile(false));
@@ -94,5 +108,52 @@ public class PileMaker implements Action{
             }
         }
         return exactMatches;
+    }
+
+    /**
+     * itemact on the player (between two piles) hits the neighbor.
+     * Click the original empty tile, or a cell farther from other piles.
+     */
+    private static Coord2d plobClickPos(NGameUI gui, Coord2d target) {
+        ArrayList<Coord2d> others = new ArrayList<>();
+        if (gui.ui != null && gui.ui.sess != null && gui.ui.sess.glob != null) {
+            synchronized (gui.ui.sess.glob.oc) {
+                for (Gob gob : gui.ui.sess.glob.oc) {
+                    if (gob == null || gob.rc == null || gob.ngob == null
+                            || !StockpileStoragePolicy.isStockpileRes(gob.ngob.name)) {
+                        continue;
+                    }
+                    others.add(gob.rc);
+                }
+            }
+        }
+        if (!hitsForeignPile(target, target, others)) {
+            return target;
+        }
+        double[][] dirs = {
+                {15, 0}, {-15, 0}, {0, 15}, {0, -15},
+                {15, 15}, {15, -15}, {-15, 15}, {-15, -15}
+        };
+        for (double[] d : dirs) {
+            Coord2d cand = target.add(d[0], d[1]);
+            if (!hitsForeignPile(cand, target, others)) {
+                return cand;
+            }
+        }
+        Gob player = NUtils.player();
+        if (player != null && player.rc != null && !hitsForeignPile(player.rc, target, others)) {
+            return player.rc;
+        }
+        return target;
+    }
+
+    private static boolean hitsForeignPile(Coord2d click, Coord2d target, ArrayList<Coord2d> others) {
+        for (Coord2d pile : others) {
+            if (StockpileStoragePolicy.clickHitsForeignPile(
+                    click.x, click.y, target.x, target.y, pile.x, pile.y)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
