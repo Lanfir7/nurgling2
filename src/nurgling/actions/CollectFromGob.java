@@ -83,12 +83,12 @@ public class CollectFromGob implements Action{
                     return Results.SUCCESS();
                 }
             }
+            new PathFinder(target).run(gui);
             gui.map.wdgmsg("click", Coord.z, target.rc.floor(posres), 3, 0, 1, (int) target.id, target.rc.floor(posres),
                     0, -1);
             NFlowerMenu fm = NUtils.findFlowerMenu();
             if (fm != null) {
                 if (fm.hasOpt(action)) {
-                    new PathFinder(target).run(gui);
                     if (fm.chooseOpt(action)) {
                         NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());
                         NUtils.getUI().core.addTask(new WaitPose(NUtils.player(), pose));
@@ -98,6 +98,7 @@ public class CollectFromGob implements Action{
                         NUtils.getUI().core.addTask(wcs);
                     } else {
                         NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());
+                        return Results.FAIL();
                     }
                 } else {
                     fm.wdgmsg("cl", -1);

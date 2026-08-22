@@ -8,6 +8,7 @@ import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.Action;
+import nurgling.actions.PathFinder;
 import nurgling.actions.Results;
 import nurgling.overlays.NCustomResult;
 import nurgling.tasks.NTask;
@@ -24,6 +25,21 @@ public class FeedClover implements Action {
     static ArrayList<Long> feeded = new ArrayList<>();
     NAlias krtters =new NAlias(new ArrayList<String>(Arrays.asList("horse", "cattle", "boar", "goat", "sheep")), new ArrayList<String>(Arrays.asList("stallion", "mare")));
     NAlias clover = new NAlias("Clover");
+
+    private final Gob targetAnimal;
+
+    public FeedClover() {
+        this(null);
+    }
+
+    public FeedClover(Gob targetAnimal) {
+        this.targetAnimal = targetAnimal;
+    }
+
+    public static boolean isWildHorse(String name) {
+        return name != null && name.contains("kritter/horse/horse");
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         WItem item = gui.getInventory().getItem(clover);
@@ -31,10 +47,25 @@ public class FeedClover implements Action {
         {
             return Results.ERROR("No clover");
         }
+        Gob gob = resolveAnimal();
+        if(gob==null) {
+            if (targetAnimal != null)
+                return Results.ERROR("Animal disappeared");
+            return Results.SUCCESS();
+        }
+
+        Results walk = new PathFinder(gob).run(gui);
+        if (!walk.IsSuccess())
+            return walk;
+        gob = Finder.findGob(gob.id);
+        if (gob == null)
+            return targetAnimal != null ? Results.ERROR("Animal disappeared") : Results.SUCCESS();
+
+        item = gui.getInventory().getItem(clover);
+        if(item==null)
+            return Results.ERROR("No clover");
         NUtils.takeItemToHand(item);
-        Gob gob = Finder.findGob(krtters, feeded);
-        if(gob!=null) {
-            NUtils.activateItem(gob, false);
+        NUtils.activateItem(gob, false);
             WaitPoseOrMsg wpom1 = new WaitPoseOrMsg(NUtils.player(),"gfx/borka/animaltease", new NAlias("The animal eye"));
             NUtils.addTask(wpom1);
             if(wpom1.isError())
@@ -72,8 +103,13 @@ public class FeedClover implements Action {
                 }
             }
             feeded.add(gob.id);
-        }
 
         return Results.SUCCESS();
+    }
+
+    private Gob resolveAnimal() throws InterruptedException {
+        if (targetAnimal != null)
+            return Finder.findGob(targetAnimal.id);
+        return Finder.findGob(krtters, feeded);
     }
 }

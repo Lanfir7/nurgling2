@@ -504,8 +504,12 @@ public class Finder
     }
     
     public static Coord2d getFreePlace(Pair<Coord2d,Coord2d> area, NHitBox hitBox, double angle) {
-        Coord2d pos = null;
+        return getFreePlace(area, hitBox, angle, null);
+    }
 
+    public static Coord2d getFreePlace(Pair<Coord2d,Coord2d> area, NHitBox hitBox, double angle, Coord2d nearestTo) {
+        Coord2d pos = null;
+        double bestDist = Double.POSITIVE_INFINITY;
 
         ArrayList<NHitBoxD> significantGobs = new ArrayList<> ();
         NHitBoxD chekerOfArea = new NHitBoxD(area.a, area.b);
@@ -563,8 +567,16 @@ public class Finder
                 for ( NHitBoxD significantHitbox : significantGobs )
                     if(significantHitbox.intersects(testGobBox,false))
                         passed = false;
-                if(passed)
-                    return Coord2d.of(testGobBox.rc.x, testGobBox.rc.y);
+                if(passed) {
+                    Coord2d candidate = Coord2d.of(testGobBox.rc.x, testGobBox.rc.y);
+                    if (nearestTo == null)
+                        return candidate;
+                    double d = candidate.dist(nearestTo);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        pos = candidate;
+                    }
+                }
             }
         }
         return pos;

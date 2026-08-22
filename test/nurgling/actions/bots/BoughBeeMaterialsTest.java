@@ -1,13 +1,28 @@
 package nurgling.actions.bots;
 
+import java.util.Arrays;
+
+import haven.Coord2d;
 import nurgling.tools.HarvestState;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BoughBeeMaterialsTest {
+    @Test
+    void pyreSpotPrefersAdjacentTileOverFarCorner() {
+        Coord2d hive = new Coord2d(0, 0);
+        Coord2d twoTilesNw = new Coord2d(-22, -22);
+        Coord2d oneTileEast = new Coord2d(11, 0);
+        Coord2d picked = BoughBeeMaterials.closestSpot(hive, Arrays.asList(twoTilesNw, oneTileEast));
+        assertEquals(11.0, picked.x, 0.01);
+        assertEquals(0.0, picked.y, 0.01);
+        assertNull(BoughBeeMaterials.closestSpot(hive, Arrays.asList()));
+    }
+
     @Test
     void stackedBoughsCountAsPieces() {
         int have = BoughBeeMaterials.stackPieces(3) + BoughBeeMaterials.stackPieces(null);
@@ -29,6 +44,22 @@ class BoughBeeMaterialsTest {
         assertTrue(BoughBeeMaterials.needsBranches(0));
         assertTrue(BoughBeeMaterials.needsBranches(1));
         assertFalse(BoughBeeMaterials.needsBranches(2));
+    }
+
+    @Test
+    void lightingCollectsBranchesFromTreesWithoutFuelArea() {
+        assertTrue(BoughBeeMaterials.shouldCollectBranchesForLight(false, 0));
+        assertTrue(BoughBeeMaterials.shouldCollectBranchesForLight(true, 1));
+        assertFalse(BoughBeeMaterials.shouldCollectBranchesForLight(false, 2));
+        assertFalse(BoughBeeMaterials.shouldCollectBranchesForLight(true, 2));
+    }
+
+    @Test
+    void branchesComeFromTakeBranchNotBreakBranch() {
+        assertTrue(BoughBeeMaterials.isBranchFlowerAction("Take branch"));
+        assertFalse(BoughBeeMaterials.isBranchFlowerAction("Break branch"));
+        assertFalse(BoughBeeMaterials.isBranchFlowerAction("Take bough"));
+        assertFalse(BoughBeeMaterials.isBranchFlowerAction(null));
     }
 
     @Test
@@ -66,6 +97,15 @@ class BoughBeeMaterialsTest {
         assertFalse(BoughBeeMaterials.hasBoughsForPyre(0));
         assertFalse(BoughBeeMaterials.hasBoughsForPyre(3));
         assertTrue(BoughBeeMaterials.hasBoughsForPyre(4));
+    }
+
+    @Test
+    void wildHiveMatchesGobTooltipPath() {
+        assertTrue(BoughBeeMaterials.isWildHive("gfx/kritter/wildbees/wildbeehive"));
+        assertFalse(BoughBeeMaterials.isWildHive("gfx/terobjs/beehive"));
+        assertFalse(BoughBeeMaterials.isWildHive("gfx/terobjs/vehicle/cart"));
+        assertFalse(BoughBeeMaterials.isWildHive("gfx/terobjs/trees/oak"));
+        assertFalse(BoughBeeMaterials.isWildHive(null));
     }
 
     @Test

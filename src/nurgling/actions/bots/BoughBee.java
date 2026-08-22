@@ -25,6 +25,16 @@ public class BoughBee implements Action {
     private static final NAlias BPYRE = new NAlias("bpyre");
     private static final NAlias WILD_HIVE = new NAlias("wildbees/wildbeehive");
 
+    private final Gob targetHive;
+
+    public BoughBee() {
+        this(null);
+    }
+
+    public BoughBee(Gob targetHive) {
+        this.targetHive = targetHive;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         nurgling.widgets.bots.BoughBee w = null;
@@ -51,10 +61,19 @@ public class BoughBee implements Action {
             }
         }
 
-        Gob pyre = findNearbyPyre();
         Gob beehive = null;
+        Gob pyre;
+        if (targetHive != null) {
+            beehive = resolveTargetHive();
+            if (beehive == null)
+                return Results.ERROR("Beehive disappeared");
+            pyre = findNearbyPyre(beehive);
+        } else {
+            pyre = findNearbyPyre();
+        }
         if (pyre == null) {
-            beehive = findNearbyHive();
+            if (beehive == null)
+                beehive = findNearbyHive();
             if (beehive == null)
                 return Results.ERROR("No wild beehive within 5 tiles");
 
@@ -75,12 +94,12 @@ public class BoughBee implements Action {
             pyre = placeBoughPyre(gui, spot);
             if (pyre == null)
                 return Results.ERROR("Bough Pyre was not placed");
+        }
 
-            if (prop.harvestTrees && BoughBeeMaterials.needsBranches(countItems(gui, BRANCH_ITEMS))) {
-                Results branches = collectBranches(gui);
-                if (!branches.IsSuccess())
-                    return branches;
-            }
+        if (BoughBeeMaterials.shouldCollectBranchesForLight(prop.harvestTrees, countItems(gui, BRANCH_ITEMS))) {
+            Results branches = collectBranches(gui);
+            if (!branches.IsSuccess())
+                return branches;
         }
 
         ArrayList<Gob> toLight = new ArrayList<>();
@@ -201,9 +220,9 @@ public class BoughBee implements Action {
         for (Gob tree : trees) {
             if (!BoughBeeMaterials.needsBranches(countItems(gui, BRANCH_ITEMS)))
                 return Results.SUCCESS();
-            new CollectFromGob(tree, BoughBeeMaterials.BREAK_BRANCH, BoughBeeMaterials.TREE_PICK_POSE,
-                    new Coord(1, 2), BRANCH_ITEMS, true).run(gui);
-            break;
+            new PathFinder(tree).run(gui);
+            new CollectFromGob(tree, BoughBeeMaterials.TAKE_BRANCH, BoughBeeMaterials.TREE_PICK_POSE,
+                    new Coord(1, 2), BRANCH_ITEMS, true, BoughBeeMaterials.BRANCHES_FOR_LIGHT).run(gui);
         }
         if (BoughBeeMaterials.needsBranches(countItems(gui, BRANCH_ITEMS)))
             return Results.ERROR("Could not collect branches from nearby trees");
@@ -211,13 +230,25 @@ public class BoughBee implements Action {
     }
 
     private Gob findNearbyPyre() throws InterruptedException {
-        Gob player = NUtils.player();
-        if (player == null)
+        return findNearbyPyre(NUtils.player());
+    }
+
+    private Gob findNearbyPyre(Gob origin) throws InterruptedException {
+        if (origin == null)
             return null;
-        Gob gob = Finder.findGob(player.rc, BPYRE, null, BoughBeeMaterials.NEAR_PYRE_TILES * tilesz.x + 0.01);
+        Gob gob = Finder.findGob(origin.rc, BPYRE, null, BoughBeeMaterials.NEAR_PYRE_TILES * tilesz.x + 0.01);
         if (gob == null)
             return null;
-        return BoughBeeMaterials.isNearbyPyre(player.rc.dist(gob.rc), tilesz.x) ? gob : null;
+        return BoughBeeMaterials.isNearbyPyre(origin.rc.dist(gob.rc), tilesz.x) ? gob : null;
+    }
+
+    private Gob resolveTargetHive() {
+        if (targetHive == null)
+            return null;
+        Gob gob = Finder.findGob(targetHive.id);
+        if (gob == null || gob.ngob == null || !BoughBeeMaterials.isWildHive(gob.ngob.name))
+            return null;
+        return gob;
     }
 
     private Gob findNearbyHive() throws InterruptedException {
@@ -234,14 +265,9 @@ public class BoughBee implements Action {
         NHitBox hitBox = NHitBox.findCustom("gfx/terobjs/bpyre");
         if (hitBox == null)
             hitBox = new NHitBox(new Coord(-5, -5), new Coord(5, 5));
-        for (int tiles = 1; tiles <= BoughBeeMaterials.PLACE_NEAR_HIVE_TILES; tiles++) {
-            double r = tiles * tilesz.x;
-            Pair<Coord2d, Coord2d> area = new Pair<>(hive.rc.sub(r, r), hive.rc.add(r, r));
-            Coord2d pos = Finder.getFreePlace(area, hitBox);
-            if (pos != null)
-                return pos;
-        }
-        return null;
+        double r = BoughBeeMaterials.PLACE_NEAR_HIVE_TILES * tilesz.x;
+        Pair<Coord2d, Coord2d> area = new Pair<>(hive.rc.sub(r, r), hive.rc.add(r, r));
+        return Finder.getFreePlace(area, hitBox, 0, hive.rc);
     }
 
     private Gob placeBoughPyre(NGameUI gui, Coord2d pos) throws InterruptedException {
