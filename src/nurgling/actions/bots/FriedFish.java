@@ -14,14 +14,15 @@ import nurgling.tasks.WaitPose;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.VSpec;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.List;
 
 public class FriedFish implements Action {
 
-    NAlias powname = new NAlias(new ArrayList<String>(List.of("gfx/terobjs/pow")));
+    NAlias powname = new NAlias(new ArrayList<String>(Arrays.asList("gfx/terobjs/pow")));
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
@@ -32,68 +33,93 @@ public class FriedFish implements Action {
         String outsaId = context.createArea("Please select area for results", Resource.loadsimg("baubles/prepFish"));
         NArea outsaArea = context.goToAreaById(outsaId);
 
-        String powsaId = context.createArea("Please select area with fireplaces", Resource.loadsimg("baubles/fireplace"));
-        NArea powsaArea = context.goToAreaById(powsaId);
-
-        ArrayList<Container> containers = new ArrayList<>();
-        for (Gob sm : Finder.findGobs(outsaArea.getRCArea(), new NAlias(new ArrayList<>(NContext.contcaps.keySet())))) {
-            Container cand = new Container(sm, NContext.contcaps.get(sm.ngob.name), null);
-            cand.initattr(Container.Space.class);
-            containers.add(cand);
+        Gob player = NUtils.player();
+        if (player == null) {
+            return Results.ERROR("No player");
         }
 
-
-            ArrayList<Gob> allPow = Finder.findGobs(powsaArea.getRCArea(), powname);
-            ArrayList<Gob> pows = new ArrayList<>();
-            for (Gob gob : allPow) {
-                if ((gob.ngob.getModelAttribute() & 48) == 0) {
-                    Gob.Overlay ol = (gob.findol(Roastspit.class));
-                    if (ol != null) {
-                        pows.add(gob);
-                    }
-                }
+        ArrayList<Gob> usablePows = new ArrayList<>();
+        ArrayList<Coord2d> powSpots = new ArrayList<>();
+        for (Gob gob : Finder.findGobs(powname)) {
+            if (gob.ngob == null) {
+                continue;
             }
-            pows.sort(NUtils.y_min_comp);
-            pows.sort(NUtils.x_min_comp);
-        while (Finder.findGob(insaArea.getRCArea(), new NAlias("stockpile"))!=null) {
+            boolean hasSpit = gob.findol(Roastspit.class) != null;
+            if (!FriedFishMaterials.isUsableRoastspitPow(gob.ngob.getModelAttribute(), hasSpit)) {
+                continue;
+            }
+            usablePows.add(gob);
+            powSpots.add(gob.rc);
+        }
+        Coord2d nearestSpot = FriedFishMaterials.closestSpot(player.rc, powSpots);
+        Gob closestPow = null;
+        for (int i = 0; i < powSpots.size(); i++) {
+            if (powSpots.get(i) == nearestSpot) {
+                closestPow = usablePows.get(i);
+                break;
+            }
+        }
+        if (closestPow == null) {
+            return Results.ERROR("No fireplace with roast spit");
+        }
+        ArrayList<Gob> pows = new ArrayList<>();
+        pows.add(closestPow);
+
+        Pair<Coord2d, Coord2d> inRc = areaRc(insaArea);
+        Pair<Coord2d, Coord2d> outRc = areaRc(outsaArea);
+
+        ArrayList<Container> containers = new ArrayList<>();
+        if (outRc != null) {
+            for (Gob sm : Finder.findGobs(outRc, new NAlias(new ArrayList<>(NContext.contcaps.keySet())))) {
+                Container cand = new Container(sm, NContext.contcaps.get(sm.ngob.name), null);
+                cand.initattr(Container.Space.class);
+                containers.add(cand);
+            }
+        }
+        boolean toContainers = FriedFishMaterials.toContainers(!containers.isEmpty());
+        boolean fromInventory = FriedFishMaterials.fromInventory(inRc != null && Finder.findGob(inRc, new NAlias("stockpile")) != null);
+
+        NAlias rawFish = VSpec.getAllFish();
+        rawFish.exceptions.add("Spitroast");
+        rawFish.buildCaches();
+
+        while (shouldKeepWorking(gui, fromInventory, inRc, pows, rawFish)) {
             boolean readyToWork = false;
             for (Gob gob : pows) {
-                Gob.Overlay ol = (gob.findol(Roastspit.class));
+                Gob.Overlay ol = gob.findol(Roastspit.class);
                 String content = ((Roastspit) ol.spr).getContent();
-                if (content == null || !content.contains("raw") ||  (gob.ngob.getModelAttribute() & 5) != 5) {
+                if (FriedFishMaterials.isSpitReadyToWork(content, gob.ngob.getModelAttribute())) {
                     readyToWork = true;
                     break;
                 }
             }
-            if(!readyToWork) {
+            if (!readyToWork) {
                 ArrayList<Gob> borkas = Finder.findGobs(new NAlias("borka"));
                 for (Gob gob : pows) {
                     boolean busy = false;
-                    for(Gob borka : borkas) {
+                    for (Gob borka : borkas) {
                         Following fl;
-                        if((fl = borka.getattr(Following.class))!=null && fl.tgt == gob.id) {
+                        if ((fl = borka.getattr(Following.class)) != null && fl.tgt == gob.id) {
                             busy = true;
                             break;
                         }
                     }
-                    if(!busy) {
+                    if (!busy) {
                         new PathFinder(gob).run(gui);
-                        Gob.Overlay ol = (gob.findol(Roastspit.class));
-                        new SelectFlowerAction("Turn",gob,(Roastspit) ol.spr).run(gui);
-                        NUtils.addTask(new WaitPose(NUtils.player(),"gfx/borka/roasting"));
+                        Gob.Overlay ol = gob.findol(Roastspit.class);
+                        new SelectFlowerAction("Turn", gob, (Roastspit) ol.spr).run(gui);
+                        NUtils.addTask(new WaitPose(NUtils.player(), "gfx/borka/roasting"));
                         NUtils.addTask(new NTask() {
                             @Override
                             public boolean check() {
-                                boolean readyToWork = false;
-                                for (Gob gob : pows) {
-                                    Gob.Overlay ol = (gob.findol(Roastspit.class));
-                                    String content = ((Roastspit) ol.spr).getContent();
-                                    if (content == null || !content.contains("raw") ||  (gob.ngob.getModelAttribute() & 5) != 5) {
-                                        readyToWork = true;
-                                        break;
+                                for (Gob waiting : pows) {
+                                    Gob.Overlay waitingOl = waiting.findol(Roastspit.class);
+                                    String content = ((Roastspit) waitingOl.spr).getContent();
+                                    if (FriedFishMaterials.isSpitReadyToWork(content, waiting.ngob.getModelAttribute())) {
+                                        return true;
                                     }
                                 }
-                                return readyToWork;
+                                return false;
                             }
                         });
                         break;
@@ -102,91 +128,47 @@ public class FriedFish implements Action {
             }
 
 
-            int count = 0;
             for (Gob gob : pows) {
-                Gob.Overlay ol = (gob.findol(Roastspit.class));
+                Gob.Overlay ol = gob.findol(Roastspit.class);
                 String content = ((Roastspit) ol.spr).getContent();
                 if (content != null) {
                     while (!content.contains("raw")) {
                         new PathFinder(gob).run(gui);
                         new SelectFlowerAction("Carve", gob, ((Roastspit) ol.spr)).run(gui);
-                        NUtils.addTask(new WaitPose(NUtils.player(),"gfx/borka/carving"));
+                        NUtils.addTask(new WaitPose(NUtils.player(), "gfx/borka/carving"));
                         WaitCarveState wcs = new WaitCarveState(gob);
                         NUtils.addTask(wcs);
-                        if(wcs.getState()== WaitCarveState.State.NOCONTENT) {
-                            count++;
+                        if (wcs.getState() == WaitCarveState.State.NOCONTENT) {
                             break;
                         }
-                        if(wcs.getState()== WaitCarveState.State.NOFREESPACE)
-                        {
-                            for(Container container : containers){
-                                if(container.getattr(Container.Space.class) != null)
-                                {
-                                    Container.Space space = (Container.Space) container.getattr(Container.Space.class);
-                                    if(!space.isReady() || (Integer) space.getRes().get(Container.Space.FREESPACE) != 0)
-                                    {
-                                        new TransferToContainer(container, new NAlias("Spitrosted")).run(gui);
-                                    }
-                                }
+                        if (wcs.getState() == WaitCarveState.State.NOFREESPACE) {
+                            if (toContainers) {
+                                transferCooked(gui, containers);
+                            } else {
+                                return Results.ERROR("Inventory full");
                             }
-
-                        }
-                    }
-                } else {
-                    count++;
-                }
-            }
-
-            if(!NUtils.getGameUI().getInventory().getItems("Spitroast").isEmpty()) {
-                for (Container container : containers) {
-                    if (container.getattr(Container.Space.class) != null) {
-                        Container.Space space = (Container.Space) container.getattr(Container.Space.class);
-                        if (!space.isReady() || (Integer) space.getRes().get(Container.Space.FREESPACE) != 0) {
-                            new TransferToContainer(container, new NAlias("Spitroast")).run(gui);
                         }
                     }
                 }
             }
-            LinkedList<NGItem> targetItems = new LinkedList<>();
-            while (count != 0) {
-                for (int i = 0; i < count; i++) {
-                    if (NUtils.getGameUI().getInventory().getNumberFreeCoord(new Coord(1, 3)) > 0 && NUtils.getGameUI().getInventory().getNumberFreeCoord(new Coord(2, 1)) > 0) {
-                        Gob pile = Finder.findGob(insaArea.getRCArea(), new NAlias("stockpile"));
-                        if (pile == null) {
-                            return Results.ERROR("No raw fish");
-                        }
-                        new PathFinder(pile).run(gui);
-                        new OpenTargetContainer("Stockpile", pile).run(gui);
-                        TakeItemsFromPile tifp;
-                        (tifp = new TakeItemsFromPile(pile, gui.getStockpile(), 1)).run(gui);
-                        targetItems.addAll(tifp.newItems());
-                    } else
+
+            if (toContainers && !NUtils.getGameUI().getInventory().getItems("Spitroast").isEmpty()) {
+                transferCooked(gui, containers);
+            }
+
+            for (Gob gob : pows) {
+                Gob.Overlay ol = gob.findol(Roastspit.class);
+                String content = ((Roastspit) ol.spr).getContent();
+                if (content == null) {
+                    if (!putFishOnSpit(gui, gob, ol, fromInventory, inRc, rawFish)) {
                         break;
-                }
-
-                for (Gob gob : pows) {
-                    Gob.Overlay ol = (gob.findol(Roastspit.class));
-                    String content = ((Roastspit) ol.spr).getContent();
-                    if (content == null) {
-                        if (!targetItems.isEmpty()) {
-                            new PathFinder(gob).run(gui);
-                            NUtils.takeItemToHand(targetItems.pollFirst());
-                            NUtils.activateRoastspit(ol);
-                            NUtils.addTask(new NTask() {
-                                @Override
-                                public boolean check() {
-                                    return NUtils.getGameUI().vhand == null && ((Roastspit) ol.spr).getContent()!=null;
-                                }
-                            });
-                            count--;
-                        }
                     }
                 }
             }
 
-            if(!new FillFuelPowOrCauldron(context, pows, 1).run(gui).IsSuccess())
+            if (!new FillFuelPowOrCauldron(context, pows, 1).run(gui).IsSuccess())
                 return Results.FAIL();
-            ArrayList<String> flighted =new ArrayList<>();
+            ArrayList<String> flighted = new ArrayList<>();
             for (Gob pow : pows) {
                 flighted.add(pow.ngob.hash);
             }
@@ -195,5 +177,83 @@ public class FriedFish implements Action {
 
         }
         return Results.SUCCESS();
+    }
+
+    private static Pair<Coord2d, Coord2d> areaRc(NArea area) {
+        if (area == null || area.space == null || area.space.space == null || area.space.space.isEmpty()) {
+            return null;
+        }
+        return area.getRCArea();
+    }
+
+    private static boolean shouldKeepWorking(NGameUI gui, boolean fromInventory, Pair<Coord2d, Coord2d> inRc, ArrayList<Gob> pows, NAlias rawFish) throws InterruptedException {
+        boolean hasPiles = inRc != null && Finder.findGob(inRc, new NAlias("stockpile")) != null;
+        boolean hasInvFish = !gui.getInventory().getItems(rawFish).isEmpty();
+        boolean spitHasContent = false;
+        for (Gob gob : pows) {
+            Gob.Overlay ol = gob.findol(Roastspit.class);
+            if (ol != null && ((Roastspit) ol.spr).getContent() != null) {
+                spitHasContent = true;
+                break;
+            }
+        }
+        return FriedFishMaterials.shouldKeepWorking(fromInventory, hasPiles, hasInvFish, spitHasContent);
+    }
+
+    private static void transferCooked(NGameUI gui, ArrayList<Container> containers) throws InterruptedException {
+        for (Container container : containers) {
+            if (container.getattr(Container.Space.class) != null) {
+                Container.Space space = (Container.Space) container.getattr(Container.Space.class);
+                if (!space.isReady() || (Integer) space.getRes().get(Container.Space.FREESPACE) != 0) {
+                    new TransferToContainer(container, new NAlias("Spitroast")).run(gui);
+                }
+            }
+        }
+    }
+
+    private static boolean putFishOnSpit(NGameUI gui, Gob gob, Gob.Overlay ol, boolean fromInventory, Pair<Coord2d, Coord2d> inRc, NAlias rawFish) throws InterruptedException {
+        if (fromInventory) {
+            ArrayList<WItem> items = gui.getInventory().getItems(rawFish);
+            if (items.isEmpty()) {
+                return false;
+            }
+            new PathFinder(gob).run(gui);
+            NUtils.takeItemToHand(items.get(0));
+            NUtils.activateRoastspit(ol);
+            NUtils.addTask(new NTask() {
+                @Override
+                public boolean check() {
+                    return NUtils.getGameUI().vhand == null && ((Roastspit) ol.spr).getContent() != null;
+                }
+            });
+            return true;
+        }
+
+        if (NUtils.getGameUI().getInventory().getNumberFreeCoord(new Coord(1, 3)) <= 0
+                || NUtils.getGameUI().getInventory().getNumberFreeCoord(new Coord(2, 1)) <= 0) {
+            return false;
+        }
+        Gob pile = Finder.findGob(inRc, new NAlias("stockpile"));
+        if (pile == null) {
+            return false;
+        }
+        new PathFinder(pile).run(gui);
+        new OpenTargetContainer("Stockpile", pile).run(gui);
+        TakeItemsFromPile tifp = new TakeItemsFromPile(pile, gui.getStockpile(), 1);
+        tifp.run(gui);
+        LinkedList<NGItem> targetItems = new LinkedList<>(tifp.newItems());
+        if (targetItems.isEmpty()) {
+            return false;
+        }
+        new PathFinder(gob).run(gui);
+        NUtils.takeItemToHand(targetItems.pollFirst());
+        NUtils.activateRoastspit(ol);
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return NUtils.getGameUI().vhand == null && ((Roastspit) ol.spr).getContent() != null;
+            }
+        });
+        return true;
     }
 }

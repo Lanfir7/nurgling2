@@ -182,7 +182,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
 
             // Ask whether to add another area
             int totalPositions = accumulatedGhosts.size();
-            MultiAreaConfirm confirm = new MultiAreaConfirm(totalPositions, areasSelected);
+            MultiAreaConfirm confirm = new MultiAreaConfirm(buildingName, totalPositions, areasSelected);
             NUtils.getUI().core.addTask(new WaitCheckable(
                 NUtils.getGameUI().add(confirm,
                     new Coord(NUtils.getGameUI().sz.x / 2 - UI.scale(130),
