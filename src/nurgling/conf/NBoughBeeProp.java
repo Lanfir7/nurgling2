@@ -15,6 +15,7 @@ public class NBoughBeeProp implements JConf {
     public String onPlayerAction = "nothing";
     public String onAnimalAction = "logout";
     public String afterHarvestAction = "nothing";
+    public boolean harvestTrees = false;
 
     public NBoughBeeProp(String username, String chrid) {
         this.username = username;
@@ -30,6 +31,8 @@ public class NBoughBeeProp implements JConf {
             onAnimalAction = (String) values.get("onAnimalAction");
         if (values.get("afterHarvestAction") != null)
             afterHarvestAction = (String) values.get("afterHarvestAction");
+        if (values.get("harvestTrees") != null)
+            harvestTrees = (Boolean) values.get("harvestTrees");
     }
 
     public static void set(NBoughBeeProp prop) {
@@ -64,6 +67,7 @@ public class NBoughBeeProp implements JConf {
         jboughbee.put("onPlayerAction", onPlayerAction);
         jboughbee.put("onAnimalAction", onAnimalAction);
         jboughbee.put("afterHarvestAction", afterHarvestAction);
+        jboughbee.put("harvestTrees", harvestTrees);
         return jboughbee;
     }
 

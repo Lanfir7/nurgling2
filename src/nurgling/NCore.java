@@ -1119,4 +1119,43 @@ public class NCore extends Widget
         planningSyncStarted = false;
     }
 
+    /**
+     * Tear down the current DB manager and open a new connection.
+     * Blocking (can take several seconds) — call off the UI thread.
+     * @return true if the new manager is ready
+     */
+    public boolean reconnectDatabase() {
+        if (!Boolean.TRUE.equals(NConfig.get(NConfig.Key.ndbenable))) {
+            return false;
+        }
+        synchronized (dbLock) {
+            dbInitInProgress = true;
+            try {
+                stopAreaSync();
+                stopPlanningSync();
+                if (databaseManager != null) {
+                    try {
+                        databaseManager.shutdown();
+                    } catch (Exception e) {
+                        System.err.println("reconnectDatabase: shutdown failed: " + e.getMessage());
+                    }
+                    databaseManager = null;
+                }
+                databaseManager = new nurgling.db.DatabaseManager(1);
+                if (databaseManager.isReady()) {
+                    startAreaSync();
+                    startPlanningSync();
+                    return true;
+                }
+                return false;
+            } catch (Exception e) {
+                System.err.println("reconnectDatabase failed: " + e.getMessage());
+                e.printStackTrace();
+                return false;
+            } finally {
+                dbInitInProgress = false;
+            }
+        }
+    }
+
 }

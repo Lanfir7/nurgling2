@@ -9,10 +9,10 @@ import haven.Gob;
 import haven.Label;
 import haven.MCache;
 import haven.Pair;
+import haven.UI;
 import haven.WItem;
 import haven.Widget;
 import haven.Window;
-import haven.res.ui.stackinv.ItemStack;
 import haven.res.ui.surv.LandSurvey;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -26,6 +26,7 @@ import nurgling.actions.TakeItemsFromPile;
 import nurgling.actions.TransferToPiles;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
+import nurgling.areas.NGlobalCoord;
 import nurgling.tasks.NTask;
 import nurgling.tasks.WaitFreeHand;
 import nurgling.tasks.WaitItems;
@@ -33,7 +34,9 @@ import nurgling.tasks.WaitWindow;
 import nurgling.tasks.WindowIsClosed;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.StackSupporter;
 import nurgling.widgets.Specialisation;
+import nurgling.widgets.bots.LevelerWnd;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -41,39 +44,90 @@ import java.util.HashSet;
 public class Leveler implements Action
 {
     private static final Coord SOIL_SIZE = new Coord(1, 1);
-    private static final int MIN_FREE_SLOTS = 6;
+    private static final int MIN_FREE_SLOTS = 1;
     private static final String SOIL_ITEM = "Soil";
+    private static final String WORM_ITEM = "Earthworm";
+    private static final String TUBER_ITEM = "Odd Tuber";
     private static final NAlias SURVOBJ = new NAlias("survobj");
     private static final NAlias STOCKPILE = new NAlias("stockpile");
     private static final NAlias SOIL_PILE = new NAlias("gfx/terobjs/stockpile-soil");
-    private static final NAlias SOIL = new NAlias("Soil", "Earthworm");
+    private static final NAlias SOIL = new NAlias("Soil");
+    private static final NAlias EARTHWORM = new NAlias("Earthworm");
+    private static final NAlias ODD_TUBER = new NAlias("Odd Tuber");
     private static final String CANNOT_LEVEL_MSG = "cannot be further leveled";
+    private static final String NEED_SOIL_MSG = "need soil";
 
     private final HashSet<Coord> done = new HashSet<>();
     private final HashSet<Coord> skipped = new HashSet<>();
+    private Coord resumeTile = null;
+    private NGlobalCoord resumeAt = null;
+    private LevelerStats stats = null;
+    private LevelerWnd infoWnd = null;
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
         done.clear();
         skipped.clear();
-        while (true) {
-            Results rr = new RestoreResources().run(gui);
-            if (!rr.IsSuccess()) {
-                return Results.ERROR("Leveler: failed to restore resources");
-            }
+        resumeTile = null;
+        resumeAt = null;
+        stats = new LevelerStats();
+        infoWnd = gui.add(new LevelerWnd(), UI.scale(200, 200));
+        try {
+            while (true) {
+                Results rr = new RestoreResources().run(gui);
+                if (!rr.IsSuccess()) {
+                    return Results.ERROR("Leveler: failed to restore resources");
+                }
 
-            Gob target = pickNearestPendingSurvey();
-            if (target == null) {
-                gui.msg("Leveler: finished. Completed=" + done.size() + " skipped=" + skipped.size());
-                return Results.SUCCESS();
-            }
+                if (resumePending() && findSurveyByTile(resumeTile) == null && resumeAt != null) {
+                    if (!goToResumeFlag(gui)) {
+                        return Results.ERROR("Leveler: cannot return to survey flag");
+                    }
+                }
 
-            Results sr = handleSurvey(gui, target);
-            if (!sr.IsSuccess()) {
-                return sr;
+                Gob target = pickSurvey();
+                if (target == null) {
+                    gui.msg("Leveler: finished. Completed=" + done.size() + " skipped=" + skipped.size());
+                    return Results.SUCCESS();
+                }
+
+                Results sr = handleSurvey(gui, target);
+                if (!sr.IsSuccess()) {
+                    return sr;
+                }
+            }
+        } finally {
+            if (infoWnd != null) {
+                try { infoWnd.destroy(); } catch (Exception ignored) {}
+                infoWnd = null;
             }
         }
+    }
+
+    static Coord chooseSurveyTile(Coord resume, Coord nearest, boolean resumeStillPending) {
+        if (resume != null && resumeStillPending) return resume;
+        return nearest;
+    }
+
+    static boolean shouldKeepResume(boolean tilePending, boolean gobLoaded, boolean hasBookmark) {
+        return tilePending && (gobLoaded || hasBookmark);
+    }
+
+    private boolean resumePending() {
+        return resumeTile != null && !done.contains(resumeTile) && !skipped.contains(resumeTile);
+    }
+
+    private Gob pickSurvey()
+    {
+        if (resumePending()) {
+            Gob g = findSurveyByTile(resumeTile);
+            if (g != null)
+                return g;
+        }
+        resumeTile = null;
+        resumeAt = null;
+        return pickNearestPendingSurvey();
     }
 
     private Gob pickNearestPendingSurvey()
@@ -92,42 +146,76 @@ public class Leveler implements Action
         return best;
     }
 
+    private void markDone(Coord tile)
+    {
+        done.add(tile);
+        if (tile.equals(resumeTile)) {
+            resumeTile = null;
+            resumeAt = null;
+        }
+    }
+
+    private void markSkipped(Coord tile)
+    {
+        skipped.add(tile);
+        if (tile.equals(resumeTile)) {
+            resumeTile = null;
+            resumeAt = null;
+        }
+    }
+
     private Results handleSurvey(NGameUI gui, Gob surveyGob) throws InterruptedException
     {
         Coord tile = tileOf(surveyGob);
+        resumeTile = tile;
+        resumeAt = new NGlobalCoord(surveyGob.rc);
 
         if (NUtils.getGameUI().getWindow("Land survey") == null) {
-            new PathFinder(surveyGob.rc).run(gui);
+            if (!goToResumeFlag(gui)) {
+                return Results.ERROR("Leveler: cannot reach survey flag");
+            }
+            surveyGob = findSurveyByTile(tile);
+            if (surveyGob == null) {
+                markSkipped(tile);
+                return Results.SUCCESS();
+            }
             clearCursor(gui);
             NUtils.rclickGob(surveyGob);
             NUtils.addTask(new WaitWindow("Land survey"));
         }
         Window wnd = NUtils.getGameUI().getWindow("Land survey");
         if (!(wnd instanceof LandSurvey)) {
-            skipped.add(tile);
+            markSkipped(tile);
             return Results.SUCCESS();
         }
         LandSurvey survey = (LandSurvey) wnd;
 
         Label wlbl = findWlbl(survey);
         if (wlbl == null) {
-            skipped.add(tile);
+            markSkipped(tile);
             closeWindow(survey);
             return Results.SUCCESS();
         }
         waitForLabel(wlbl);
+        waitForDigLabel(survey);
+        refreshInfo(survey);
         int soilRequired = parseAfter(wlbl.text(), "Units of soil required:");
-        if (soilRequired > 0) {
-            int invSoil = gui.getInventory().getItems(SOIL).size();
-            int need = soilRequired - invSoil;
-            if (need > 0) {
-                closeWindow(survey);
-                Results pr = pullSoilFromTake(gui, need);
-                if (!pr.IsSuccess()) {
-                    return Results.ERROR("Leveler: insufficient soil for fill survey (need " + need + ")");
-                }
-                return Results.SUCCESS();
+        if (shouldPullSoil(soilRequired, gui.getInventory().getItems(SOIL).size())) {
+            closeWindow(survey);
+            Results dr = disposeIfNeeded(gui, false);
+            if (!dr.IsSuccess()) {
+                return dr;
             }
+            int free = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
+            int trip = tripSize(soilRequired, 0, free, StackSupporter.getFullStackSize(SOIL_ITEM));
+            if (trip <= 0) {
+                return Results.ERROR("Leveler: no inventory space for soil");
+            }
+            Results pr = pullSoilFromTake(gui, trip);
+            if (!pr.IsSuccess()) {
+                return Results.ERROR("Leveler: no soil in TAKE area");
+            }
+            return Results.SUCCESS();
         }
 
         return digLoop(gui, tile, survey);
@@ -142,23 +230,31 @@ public class Leveler implements Action
             Button digBtn = findButton(survey, "Dig");
             Button removeBtn = findButton(survey, "Remove");
             if (wlbl == null || digBtn == null || removeBtn == null) {
-                skipped.add(tile);
+                markSkipped(tile);
                 closeWindow(survey);
                 return Results.SUCCESS();
             }
             waitForLabel(wlbl);
+            waitForDigLabel(survey);
             waitForMapUpdate(survey);
+            refreshInfo(survey);
             String curLabel = wlbl.text();
             long diff = surveyDiffUnits(survey);
+
+            if (shouldFetchMoreSoil(parseAfter(curLabel, "Units of soil required:") > 0,
+                    gui.getInventory().getItems(SOIL).isEmpty())) {
+                return Results.SUCCESS();
+            }
 
             if (didDigThisCycle && prevLabel != null && prevLabel.equals(curLabel) && diff == 0) {
                 removeBtn.click();
                 NUtils.addTask(new WindowIsClosed(survey));
-                done.add(tile);
+                markDone(tile);
                 disposeIfNeeded(gui, true);
                 return Results.SUCCESS();
             }
             prevLabel = curLabel;
+            final boolean filling = parseAfter(curLabel, "Units of soil required:") > 0;
 
             NUtils.getUI().dropLastError();
             int sysSizeBefore = syslogSize(gui);
@@ -178,22 +274,32 @@ public class Leveler implements Action
                 {
                     if (player.pose().contains("idle")) idleCount++;
                     else idleCount = 0;
+                    if (filling && idleCount >= 20) return true;
                     if (idleCount >= 360) return true;
                     if (NUtils.getStamina() < 0.25 || NUtils.getEnergy() < 0.3) return true;
-                    if (gui.getInventory().calcFreeSpace() < MIN_FREE_SLOTS) return true;
+                    if (shouldDumpForFreeSpace(filling, gui.getInventory().calcFreeSpace())) return true;
                     if (syslogContainsSince(gui, sysBefore, CANNOT_LEVEL_MSG)) return true;
+                    if (syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG)) return true;
                     String err = NUtils.getUI().getLastError();
-                    return err != null && err.contains(CANNOT_LEVEL_MSG);
+                    return (err != null && err.contains(CANNOT_LEVEL_MSG)) || isNeedSoilError(err);
                 }
             });
+
+            refreshInfo(survey);
 
             String lastErr = NUtils.getUI().getLastError();
             if ((lastErr != null && lastErr.contains(CANNOT_LEVEL_MSG))
                     || syslogContainsSince(gui, sysBefore, CANNOT_LEVEL_MSG)) {
                 removeBtn.click();
                 NUtils.addTask(new WindowIsClosed(survey));
-                done.add(tile);
+                markDone(tile);
                 disposeIfNeeded(gui, true);
+                return Results.SUCCESS();
+            }
+
+            if (shouldFetchMoreSoil(filling, gui.getInventory().getItems(SOIL).isEmpty())
+                    || syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG)
+                    || isNeedSoilError(lastErr)) {
                 return Results.SUCCESS();
             }
 
@@ -203,18 +309,20 @@ public class Leveler implements Action
             }
 
             int free = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
-            if (free < MIN_FREE_SLOTS) {
+            if (shouldDumpForFreeSpace(filling, free)) {
                 closeWindow(survey);
                 Results dr = disposeIfNeeded(gui, false);
                 if (!dr.IsSuccess()) {
-                    return Results.ERROR("Leveler: no soil disposal route available");
+                    return dr;
+                }
+                if (!goToResumeFlag(gui)) {
+                    return Results.ERROR("Leveler: cannot return to survey flag");
                 }
                 Gob sg = findSurveyByTile(tile);
                 if (sg == null) {
-                    done.add(tile);
+                    markDone(tile);
                     return Results.SUCCESS();
                 }
-                new PathFinder(sg.rc).run(gui);
                 NUtils.rclickGob(sg);
                 NUtils.addTask(new WaitWindow("Land survey"));
                 Window nw = NUtils.getGameUI().getWindow("Land survey");
@@ -294,83 +402,170 @@ public class Leveler implements Action
         });
     }
 
+    static boolean shouldDumpForFreeSpace(boolean filling, int freeSlots) {
+        return shouldDumpForFreeSpace(filling, freeSlots, MIN_FREE_SLOTS);
+    }
+
+    static boolean shouldDumpForFreeSpace(boolean filling, int freeSlots, int minFree) {
+        return !filling && freeSlots >= 0 && freeSlots < minFree;
+    }
+
+    static String[] excavationDumpOrder() {
+        return new String[] { WORM_ITEM, SOIL_ITEM, TUBER_ITEM };
+    }
+
+    static boolean shouldPullSoil(int soilRequired, int invSoil) {
+        return soilRequired > 0 && invSoil <= 0;
+    }
+
+    static boolean shouldFetchMoreSoil(boolean filling, boolean soilEmpty) {
+        return filling && soilEmpty;
+    }
+
+    static boolean isNeedSoilError(String err) {
+        return err != null && err.toLowerCase().contains(NEED_SOIL_MSG);
+    }
+
+    static int tripSize(int soilRequired, int invSoil, int freeSlots, int stackSize) {
+        int need = Math.max(0, soilRequired - Math.max(0, invSoil));
+        int cap = Math.max(0, freeSlots) * Math.max(1, stackSize);
+        return Math.min(need, cap);
+    }
+
     private Results pullSoilFromTake(NGameUI gui, int need) throws InterruptedException
     {
         NArea take = NContext.findIn(SOIL_ITEM);
         if (take == null) take = NContext.findInGlobal(SOIL_ITEM);
         if (take == null) return Results.FAIL();
-        NUtils.navigateToArea(take);
+        if (!NUtils.navigateToArea(take, true))
+            return Results.FAIL();
 
-        for (Gob pile : Finder.findGobs(take, SOIL_PILE)) {
-            int invSoil = gui.getInventory().getItems(SOIL).size();
-            if (invSoil >= need) return Results.SUCCESS();
-            int free = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
-            int toTake = Math.min(need - invSoil, free);
-            if (toTake <= 0) break;
-            PathFinder pf = new PathFinder(pile);
-            pf.isHardMode = true;
-            pf.run(gui);
-            new OpenTargetContainer("Stockpile", pile).run(gui);
-            if (gui.getStockpile() != null) {
-                new TakeItemsFromPile(pile, gui.getStockpile(), toTake).run(gui);
+        int stack = Math.max(1, StackSupporter.getFullStackSize(SOIL_ITEM));
+        ArrayList<Gob> piles = Finder.findGobs(take, SOIL_PILE);
+        piles.sort(NUtils.d_comp);
+
+        for (Gob pile : piles) {
+            while (Finder.findGob(pile.id) != null) {
+                int freeSlots = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
+                if (freeSlots <= 0) {
+                    return Results.SUCCESS();
+                }
+                int invSoil = gui.getInventory().getItems(SOIL).size();
+                int toTake = tripSize(need, 0, freeSlots, stack);
+                if (toTake <= 0) {
+                    return invSoil > 0 ? Results.SUCCESS() : Results.FAIL();
+                }
+
+                PathFinder pf = new PathFinder(pile);
+                pf.isHardMode = true;
+                pf.run(gui);
+                new OpenTargetContainer("Stockpile", pile).run(gui);
+                if (gui.getStockpile() == null) {
+                    break;
+                }
+                int pileCount = gui.getStockpile().calcCount();
+                if (pileCount <= 0) {
+                    new CloseTargetContainer("Stockpile").run(gui);
+                    break;
+                }
+                TakeItemsFromPile takeAct = new TakeItemsFromPile(pile, gui.getStockpile(), Math.min(toTake, pileCount));
+                takeAct.run(gui);
                 new CloseTargetContainer("Stockpile").run(gui);
+                if (takeAct.getResult() <= 0) {
+                    break;
+                }
+            }
+            if (gui.getInventory().getNumberFreeCoord(SOIL_SIZE) <= 0) {
+                return Results.SUCCESS();
             }
         }
-        int finalInv = gui.getInventory().getItems(SOIL).size();
-        return finalInv >= need ? Results.SUCCESS() : Results.FAIL();
+        return gui.getInventory().getItems(SOIL).isEmpty() ? Results.FAIL() : Results.SUCCESS();
     }
 
     private Results disposeIfNeeded(NGameUI gui, boolean bestEffort) throws InterruptedException
     {
-        if (gui.getInventory().getItems(SOIL).isEmpty()) return Results.SUCCESS();
+        if (soilDisposalComplete(count(gui, SOIL), count(gui, EARTHWORM), count(gui, ODD_TUBER)))
+            return Results.SUCCESS();
 
-        NArea put = NContext.findOut(SOIL_ITEM, 1);
-        if (put == null) put = NContext.findOutGlobal(SOIL_ITEM, 1, gui);
-        if (put != null) {
-            NUtils.navigateToArea(put);
-            clearCursor(gui);
-            new TransferToPiles(put.getRCArea(), SOIL_ITEM, 0).run(gui);
+        for (String itemName : excavationDumpOrder()) {
+            transferToPut(gui, itemName);
         }
 
-        if (topLevelEmpty(gui)) return Results.SUCCESS();
+        if (soilDisposalComplete(count(gui, SOIL), count(gui, EARTHWORM), count(gui, ODD_TUBER)))
+            return Results.SUCCESS();
 
-        NContext ctx = new NContext(gui);
-        NArea dump = ctx.goToArea(Specialisation.SpecName.soilDump);
-        if (dump != null) {
-            Pair<Coord2d, Coord2d> rca = dump.getRCArea();
-            if (rca != null) {
-                Coord2d center = rca.b.sub(rca.a).div(2).add(rca.a);
-                new PathFinder(center).run(gui);
-                clearCursor(gui);
-                ArrayList<Widget> toDrop = new ArrayList<>();
-                for (Widget w = gui.getInventory().child; w != null; w = w.next) {
-                    if (w instanceof WItem || w instanceof ItemStack) toDrop.add(w);
+        if (count(gui, SOIL) > 0) {
+            NContext ctx = new NContext(gui);
+            NArea dump = ctx.goToArea(Specialisation.SpecName.soilDump);
+            if (dump != null && NUtils.navigateToArea(dump, true)) {
+                Pair<Coord2d, Coord2d> rca = dump.getRCArea();
+                if (rca != null) {
+                    Coord2d center = rca.b.sub(rca.a).div(2).add(rca.a);
+                    new PathFinder(center).run(gui);
+                    clearCursor(gui);
+                    dropItems(gui, SOIL);
                 }
-                for (Widget w : toDrop) {
-                    if (w instanceof WItem) NUtils.drop((WItem) w);
-                    else w.wdgmsg("drop");
-                }
-                if (!toDrop.isEmpty()) {
-                    NUtils.addTask(new NTask() {
-                        @Override
-                        public boolean check() {
-                            return topLevelEmpty(gui);
-                        }
-                    });
-                }
-                if (topLevelEmpty(gui)) return Results.SUCCESS();
             }
         }
 
-        return bestEffort ? Results.SUCCESS() : Results.FAIL();
+        int remainingSoil = count(gui, SOIL);
+        int remainingWorms = count(gui, EARTHWORM);
+        int remainingTubers = count(gui, ODD_TUBER);
+        if (soilDisposalComplete(remainingSoil, remainingWorms, remainingTubers) || bestEffort)
+            return Results.SUCCESS();
+        String err = disposalError(remainingSoil, remainingWorms, remainingTubers);
+        return err != null ? Results.ERROR(err) : Results.FAIL();
     }
 
-    private static boolean topLevelEmpty(NGameUI gui)
+    static boolean soilDisposalComplete(int remainingSoil, int remainingWorms, int remainingTubers) {
+        return remainingSoil == 0 && remainingWorms == 0 && remainingTubers == 0;
+    }
+
+    static String disposalError(int remainingSoil, int remainingWorms, int remainingTubers) {
+        if (remainingSoil > 0)
+            return "Leveler: no soil disposal route available";
+        if (remainingWorms > 0)
+            return "Leveler: no earthworm PUT area available";
+        if (remainingTubers > 0)
+            return "Leveler: no Odd Tuber PUT area available";
+        return null;
+    }
+
+    private static int count(NGameUI gui, NAlias alias) throws InterruptedException
     {
-        for (Widget w = gui.getInventory().child; w != null; w = w.next) {
-            if (w instanceof WItem || w instanceof ItemStack) return false;
+        return gui.getInventory().getItems(alias).size();
+    }
+
+    static boolean readyToUseRemoteArea(boolean navigated, boolean hasRcArea) {
+        return navigated && hasRcArea;
+    }
+
+    private void transferToPut(NGameUI gui, String itemName) throws InterruptedException
+    {
+        if (count(gui, new NAlias(itemName)) <= 0)
+            return;
+        NArea put = NContext.findOut(itemName, 1);
+        if (put == null) put = NContext.findOutGlobal(itemName, 1, gui);
+        if (put == null)
+            return;
+        if (!NUtils.navigateToArea(put, true))
+            return;
+        Pair<Coord2d, Coord2d> rc = put.getRCArea();
+        if (!readyToUseRemoteArea(true, rc != null))
+            return;
+        clearCursor(gui);
+        new TransferToPiles(rc, itemName, 1).run(gui);
+    }
+
+    private static void dropItems(NGameUI gui, NAlias alias) throws InterruptedException
+    {
+        ArrayList<WItem> items = gui.getInventory().getItems(alias);
+        for (WItem item : items) {
+            NUtils.drop(item);
         }
-        return true;
+        if (!items.isEmpty()) {
+            NUtils.addTask(new WaitItems(gui.getInventory(), alias, 0));
+        }
     }
 
     private static Coord tileOf(Gob g)
@@ -378,8 +573,32 @@ public class Leveler implements Action
         return g.rc.floor(MCache.tilesz);
     }
 
+    private boolean goToResumeFlag(NGameUI gui) throws InterruptedException
+    {
+        if (resumeAt != null && !NUtils.navigateTo(resumeAt))
+            return false;
+        final Coord tile = resumeTile;
+        NUtils.addTask(new NTask()
+        {
+            int ticks = 0;
+            @Override
+            public boolean check()
+            {
+                ticks++;
+                return findSurveyByTile(tile) != null || ticks > 80;
+            }
+        });
+        Gob sg = findSurveyByTile(resumeTile);
+        if (sg == null)
+            return false;
+        if (nurgling.actions.PathFinder.isAvailable(sg.rc))
+            new PathFinder(sg.rc).run(gui);
+        return true;
+    }
+
     private static Gob findSurveyByTile(Coord tile)
     {
+        if (tile == null) return null;
         for (Gob g : Finder.findGobs(SURVOBJ)) {
             if (tileOf(g).equals(tile)) return g;
         }
@@ -439,6 +658,49 @@ public class Leveler implements Action
             }
         }
         return null;
+    }
+
+    private static Label findDlbl(LandSurvey survey)
+    {
+        for (Widget child : survey.children()) {
+            if (child instanceof Label) {
+                String t = ((Label) child).text();
+                if (t.contains("Units of soil to dig")) {
+                    return (Label) child;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void waitForDigLabel(LandSurvey survey) throws InterruptedException
+    {
+        Label dlbl = findDlbl(survey);
+        if (dlbl != null)
+            waitForLabel(dlbl);
+    }
+
+    private void refreshInfo(LandSurvey survey)
+    {
+        if (stats == null)
+            return;
+        int required = 0;
+        int toDig = 0;
+        Label w = findWlbl(survey);
+        Label d = findDlbl(survey);
+        if (w != null)
+            required = parseAfter(w.text(), "Units of soil required:");
+        if (d != null)
+            toDig = parseAfter(d.text(), "Units of soil to dig:");
+        stats.noteRemaining(LevelerStats.remainingWork(required, toDig));
+        if (infoWnd == null || infoWnd.isClosed())
+            return;
+        long now = System.currentTimeMillis();
+        String remain = stats.lastRemaining() < 0 ? "-" : String.valueOf(stats.lastRemaining());
+        infoWnd.update(
+                LevelerStats.formatRate(stats.unitsPerMinute(now)),
+                remain,
+                LevelerStats.formatDuration(stats.etaMs(now)));
     }
 
     private static Button findButton(LandSurvey survey, String label)

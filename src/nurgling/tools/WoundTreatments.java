@@ -1,5 +1,6 @@
 package nurgling.tools;
 
+import haven.RichText;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -41,6 +42,21 @@ public final class WoundTreatments {
             return Collections.emptyList();
         List<String> items = byNorm.get(normalize(woundName));
         return items == null ? Collections.emptyList() : items;
+    }
+
+    public static boolean isStorageSearchClick(int button, boolean ctrl) {
+        return button == 1 && ctrl;
+    }
+
+    /** Recipe tooltip plus a faded click-hint footer. */
+    public static String treatTipMarkup(String itemName, String hint) {
+        String tip = CraftRecipeLookup.ingredientTooltip(itemName);
+        if(tip == null || tip.isEmpty())
+            return tip;
+        String body = tip.replace("$", "$$");
+        if(hint == null || hint.isEmpty())
+            return body;
+        return body + "\n$col[140,140,140]{" + RichText.Parser.quote(hint) + "}";
     }
 
     /** Candidate gfx/pagina paths for a treatment item icon, VSpec first then name slugs. */

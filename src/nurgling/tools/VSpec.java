@@ -3014,7 +3014,7 @@ public class VSpec {
         medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/jar-tansyextract\",\"name\":\"Tansy Extract\"}"));
         medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/opium\",\"name\":\"Opium\"}"));
         medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/jar-woundglue\",\"name\":\"Wound Glue\"}"));
-        medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/silksuturekit\",\"name\":\"Silk Suture Kit\"}"));
+        medicine.add(new JSONObject("{\"static\":\"gfx/invobjs/silksuture\",\"name\":\"Silk Suture Kit\"}"));
         categories.put("Medicine", medicine);
 
         // Cheese category with all cheese types

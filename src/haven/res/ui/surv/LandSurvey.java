@@ -19,7 +19,7 @@ import static haven.render.sl.Type.*;
 public class LandSurvey extends Window {
     public final Area area;
     public final Data data;
-    public final Label zdlbl, wlbl, dlbl;
+    public final Label zdlbl, wlbl, dlbl, tllbl;
     public Area selection;
     private boolean inited = false;
     private MapView mv;
@@ -46,8 +46,9 @@ public class LandSurvey extends Window {
 	zdlbl = add(new Label("..."), prev.pos("bl").adds(0, 1));
 	wlbl = add(new Label("..."), zdlbl.pos("bl").adds(0, 1));
 	dlbl = add(new Label("..."), wlbl.pos("bl").adds(0, 1));
+	tllbl = add(new Label("..."), dlbl.pos("bl").adds(0, 1));
 	prev = add(new Button(UI.scale(125), "Ground level", false).action(this::initsurf),
-		   dlbl.pos("bl").adds(0, 20));
+		   tllbl.pos("bl").adds(0, 20));
 	add(new Button(UI.scale(125), "Ground plane", false).action(this::initplane),
 	    prev.pos("ur").adds(10, 0));
 	prev = add(new Button(UI.scale(125), "Dig", false).action(() -> wdgmsg("lvl")),
@@ -106,11 +107,13 @@ public class LandSurvey extends Window {
     private void updmap() {
 	MCache map = mv.ui.sess.glob.map;
 	int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
+	int tmin = Integer.MAX_VALUE, tmax = Integer.MIN_VALUE;
 	int sd = 0, hn = 0;
 	for(Coord vc : data.varea) {
 	    int vz = Math.round((float)map.getfz(vc) * data.gran);
 	    int tz = data.dz[data.varea.ridx(vc)];
 	    min = Math.min(min, vz); max = Math.max(max, vz);
+	    tmin = Math.min(tmin, tz); tmax = Math.max(tmax, tz);
 	    sd += tz - vz;
 	    if(vz > tz)
 		hn += vz - tz;
@@ -121,6 +124,10 @@ public class LandSurvey extends Window {
 	else
 	    wlbl.settext(String.format("Units of soil left over: %d", -sd));
 	dlbl.settext(String.format("Units of soil to dig: %d", hn));
+	if(tmin == tmax)
+	    tllbl.settext(nurgling.i18n.L10n.get("surv.target_level", tmin));
+	else
+	    tllbl.settext(nurgling.i18n.L10n.get("surv.target_level_range", tmin, tmax));
     }
 
     private void lock(boolean enabled) {

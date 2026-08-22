@@ -10,6 +10,7 @@ public class BoughBee extends Window implements Checkable {
     Dropbox<String> onPlayerAction = null;
     Dropbox<String> onAnimalAction = null;
     Dropbox<String> afterHarvestAction = null;
+    CheckBox harvestTrees = null;
 
     // Action options
     private static final String[] PLAYER_ACTIONS = {"nothing", "logout", "travel hearth"};
@@ -122,6 +123,10 @@ public class BoughBee extends Window implements Checkable {
             }
         }
 
+        prev = add(harvestTrees = new CheckBox(L10n.get("boughbee.harvest_trees")) {
+            { a = finalStartprop.harvestTrees; }
+        }, prev.pos("bl").add(UI.scale(0, 10)));
+
         // Start button
         prev = add(new Button(UI.scale(150), L10n.get("botwnd.start")) {
             @Override
@@ -144,6 +149,8 @@ public class BoughBee extends Window implements Checkable {
                         prop.afterHarvestAction = afterHarvestAction.sel;
                     else
                         prop.afterHarvestAction = "nothing";
+
+                    prop.harvestTrees = harvestTrees != null && harvestTrees.a;
                         
                     NBoughBeeProp.set(prop);
                 }

@@ -95,7 +95,13 @@
     <extlib name="steamworks" path="lib/ext/steamworks" url="${ext-lib-base}/steamworks/current" />
   </target>
 
-    <target name="extlib/jogl-arm" depends="extlib/jogl">
+  <target name="check-os">
+    <condition property="is.mac">
+      <os family="mac" />
+    </condition>
+  </target>
+
+    <target name="extlib/jogl-arm" depends="extlib/jogl, check-os" if="is.mac">
         <mkdir dir="lib/ext/jogl" />
         <get dest="lib/ext/jogl/" usetimestamp="true" retries="3" verbose="true">
             <url url="https://jogamp.org/deployment/v2.5.0/jar/jogl-all.jar" />

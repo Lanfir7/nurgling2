@@ -2293,8 +2293,11 @@ public class NMapView extends MapView
             super(res, sdt);
             // Ctrl-held object-to-object snapping (falls back to grid without Ctrl).
             this.adjust = new NStdPlace();
-            // Add bounding box support for temporal objects
-            addPlobBoundingBox(res, sdt);
+            try {
+                addPlobBoundingBox(res, sdt);
+            } catch (Throwable t) {
+                // Overlay/sprite extras are optional; placement still works via wdgmsg.
+            }
         }
 
         // Add bounding box support for Plob objects using Gobcopy hitbox
@@ -2332,9 +2335,14 @@ public class NMapView extends MapView
             Loader.Future<Plob> placing = this.placing;
             if(placing != null) {
                 if(!placing.cancel()) {
-                    Plob ob = placing.get();
-                    synchronized(ob) {
-                        ob.slot.remove();
+                    try {
+                        Plob ob = placing.get();
+                        synchronized(ob) {
+                            if (ob.slot != null)
+                                ob.slot.remove();
+                        }
+                    } catch (RuntimeException e) {
+                        // Ghost failed to load in a background session.
                     }
                 }
                 this.placing = null;

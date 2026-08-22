@@ -32,7 +32,7 @@ public class NChipperProp implements JConf
         chrid = (String) values.get("chrid");
         username = (String) values.get("username");
         if (values.get("tool") != null)
-            tool = (String) values.get("tool");
+            tool = canonicalTool((String) values.get("tool"));
         if (values.get("autoeat") != null)
             autoeat = (Boolean) values.get("autoeat");
         if (values.get("autorefill") != null)
@@ -88,6 +88,13 @@ public class NChipperProp implements JConf
         return jchiper;
     }
 
+    static String canonicalTool(String tool)
+    {
+        if ("Tinker's Axe".equals(tool))
+            return "Tinker's Throwing Axe";
+        return tool;
+    }
+
     public static NChipperProp get(NUI.NSessInfo sessInfo)
     {
         if (sessInfo == null || NUtils.getGameUI() == null || NUtils.getGameUI().getCharInfo() == null)
@@ -100,6 +107,7 @@ public class NChipperProp implements JConf
         {
             if (prop.username.equals(sessInfo.username) && prop.chrid.equals(chrid))
             {
+                prop.tool = canonicalTool(prop.tool);
                 return prop;
             }
         }

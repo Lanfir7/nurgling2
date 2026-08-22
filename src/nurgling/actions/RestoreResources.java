@@ -16,10 +16,17 @@ public class RestoreResources implements Action
 
         double stamina = NUtils.getStamina();
         if (stamina >= 0 && stamina < 0.5) {
+            if (shouldRefillAtWaterZone(true, FillWaterskins.checkIfNeed())) {
+                navigated = true;
+                Results fill = new FillWaterskinsGlobal().run(gui);
+                if (!fill.IsSuccess()) {
+                    return Results.ERROR("Failed to restore stamina - no water available");
+                }
+            }
             if (!new Drink(0.9, false).run(gui).IsSuccess()) {
                 navigated = true;
-                new FillWaterskinsGlobal().run(gui);
-                if (!new Drink(0.9, false).run(gui).IsSuccess()) {
+                Results fill = new FillWaterskinsGlobal().run(gui);
+                if (!fill.IsSuccess() || !new Drink(0.9, false).run(gui).IsSuccess()) {
                     return Results.ERROR("Failed to restore stamina - no water available");
                 }
             }
@@ -28,8 +35,7 @@ public class RestoreResources implements Action
         double energy = NUtils.getEnergy();
         if (energy >= 0 && energy < 0.35) {
             navigated = true;
-            Eater eater = new Eater(true);
-            Results eatResult = eater.run(gui);
+            Results eatResult = new Eater(true).run(gui);
             if (!eatResult.IsSuccess()) {
                 return Results.ERROR("Failed to restore energy - no food available");
             }
@@ -40,5 +46,9 @@ public class RestoreResources implements Action
         }
 
         return Results.SUCCESS();
+    }
+
+    static boolean shouldRefillAtWaterZone(boolean staminaLow, boolean waterskinsEmpty) {
+        return staminaLow && waterskinsEmpty;
     }
 }

@@ -1,8 +1,6 @@
 package nurgling.actions.bots;
 
-import haven.Gob;
-import haven.ResDrawable;
-import haven.UI;
+import haven.*;
 import nurgling.*;
 import nurgling.actions.*;
 import nurgling.conf.NAreaRad;
@@ -10,11 +8,23 @@ import nurgling.conf.NBoughBeeProp;
 import nurgling.tasks.*;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.NParser;
 import nurgling.widgets.NAlarmWdg;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
+
+import static haven.MCache.tilesz;
+import static haven.OCache.posres;
 
 public class BoughBee implements Action {
+    private static final NAlias BOUGH_ITEMS = new NAlias("Bough", "bough");
+    private static final NAlias BRANCH_ITEMS = new NAlias("Branch", "branch");
+    private static final NAlias TREES = new NAlias("gfx/terobjs/trees");
+    private static final NAlias BPYRE = new NAlias("bpyre");
+    private static final NAlias WILD_HIVE = new NAlias("wildbees/wildbeehive");
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         nurgling.widgets.bots.BoughBee w = null;
@@ -32,7 +42,6 @@ public class BoughBee implements Action {
             return Results.ERROR("No config");
         }
 
-        // Get dangerous animal patterns from NConfig
         @SuppressWarnings("unchecked")
         ArrayList<NAreaRad> animalRads = (ArrayList<NAreaRad>) NConfig.get(NConfig.Key.animalrad);
         ArrayList<String> dangerousAnimals = new ArrayList<>();
@@ -42,31 +51,69 @@ public class BoughBee implements Action {
             }
         }
 
+        Gob pyre = findNearbyPyre();
+        Gob beehive = null;
+        if (pyre == null) {
+            beehive = findNearbyHive();
+            if (beehive == null)
+                return Results.ERROR("No wild beehive within 5 tiles");
+
+            if (!BoughBeeMaterials.hasBoughsForPyre(countItems(gui, BOUGH_ITEMS))) {
+                if (!prop.harvestTrees)
+                    return Results.ERROR("Need 4 boughs for Bough Pyre");
+                Results boughs = collectBoughs(gui);
+                if (!boughs.IsSuccess())
+                    return boughs;
+                if (!BoughBeeMaterials.hasBoughsForPyre(countItems(gui, BOUGH_ITEMS)))
+                    return Results.ERROR("Need 4 boughs for Bough Pyre");
+            }
+
+            Coord2d spot = findFreeSpotNear(beehive);
+            if (spot == null)
+                return Results.ERROR("No free tile near the beehive for Bough Pyre");
+
+            pyre = placeBoughPyre(gui, spot);
+            if (pyre == null)
+                return Results.ERROR("Bough Pyre was not placed");
+
+            if (prop.harvestTrees && BoughBeeMaterials.needsBranches(countItems(gui, BRANCH_ITEMS))) {
+                Results branches = collectBranches(gui);
+                if (!branches.IsSuccess())
+                    return branches;
+            }
+        }
+
+        ArrayList<Gob> toLight = new ArrayList<>();
+        toLight.add(pyre);
+        Results lit = new LightObject(toLight).run(gui);
+        if (!lit.IsSuccess())
+            return Results.ERROR("Failed to light Bough Pyre");
+
+        pyre = Finder.findGob(pyre.id);
+        if (pyre == null)
+            return Results.ERROR("Bough Pyre disappeared after lighting");
+        if (!LightObject.isBpyreLit(pyre.ngob.getModelAttribute(),
+                NUtils.isOverlay(pyre, new NAlias("smoke", "flame", "fire", "ember"))))
+            return Results.ERROR("Bough Pyre is not lit");
+
+        placePyreTimer(gui, pyre);
+
         final NGameUI finalGui = gui;
         final NBoughBeeProp finalProp = prop;
-        
+        final Gob finalBpyre = pyre;
+
+        if (beehive == null)
+            beehive = Finder.findGob(pyre.rc, WILD_HIVE, null, 50.0);
+        if (beehive == null) {
+            return Results.ERROR("No beehive found");
+        }
+        final Gob finalBeehive = beehive;
+
         while (true) {
-            // Find bpyre (bonfire/smoke)
-            Gob bpyre = Finder.findGob(new NAlias("bpyre"));
-            if (bpyre == null) {
-                return Results.ERROR("No bpyre found");
-            }
-
-            // Find beehive near bpyre
-            Gob beehive = Finder.findGob(bpyre.rc, new NAlias("wildbees/wildbeehive"), null, 50.0);
-            if (beehive == null) {
-                return Results.ERROR("No beehive found");
-            }
-
-            final Gob finalBpyre = bpyre;
-            final Gob finalBeehive = beehive;
-            
-            // Wait until bpyre disappears and beehive marker becomes 0
             NUtils.getUI().core.addTask(new NTask() {
                 @Override
                 public boolean check() {
                     try {
-                        // Check for dangerous players
                         if (!NAlarmWdg.borkas.isEmpty()) {
                             if (!finalProp.onPlayerAction.equals("nothing")) {
                                 performSafetyAction(finalGui, finalProp.onPlayerAction);
@@ -74,7 +121,6 @@ public class BoughBee implements Action {
                             }
                         }
 
-                        // Check for dangerous animals in radius 200
                         for (String animalPattern : dangerousAnimals) {
                             Gob animal = Finder.findGob(NUtils.player().rc, new NAlias(animalPattern), null, 200.0);
                             if (animal != null) {
@@ -83,18 +129,13 @@ public class BoughBee implements Action {
                             }
                         }
 
-                        // Check if bpyre disappeared
                         Gob currentBpyre = Finder.findGob(finalBpyre.id);
                         if (currentBpyre == null) {
-                            // Check if beehive marker is 0
                             Gob currentBeehive = Finder.findGob(finalBeehive.id);
                             if (currentBeehive != null) {
                                 ResDrawable rd = currentBeehive.getattr(ResDrawable.class);
-                                if (rd != null) {
-                                    long marker = rd.calcMarker();
-                                    if (marker == 0) {
-                                        return true;
-                                    }
+                                if (rd != null && rd.calcMarker() == 0) {
+                                    return true;
                                 }
                             }
                         }
@@ -105,7 +146,6 @@ public class BoughBee implements Action {
                 }
             });
 
-            // Check if we exited due to safety action
             if (!NAlarmWdg.borkas.isEmpty() && !finalProp.onPlayerAction.equals("nothing")) {
                 return Results.SUCCESS();
             }
@@ -116,25 +156,337 @@ public class BoughBee implements Action {
                 }
             }
 
-            // Check if beehive still exists
             Gob currentBeehive = Finder.findGob(finalBeehive.id);
             if (currentBeehive == null) {
-                // Beehive disappeared (might have been collected), perform after harvest action
                 performSafetyAction(finalGui, finalProp.afterHarvestAction);
                 return Results.SUCCESS();
             }
 
-            // Raid the beehive
             new PathFinder(currentBeehive).run(finalGui);
             new SelectFlowerAction("Raid!", currentBeehive).run(finalGui);
-
-            // Wait for beehive to disappear
             NUtils.getUI().core.addTask(new WaitGobRemoval(finalBeehive.id));
-
-            // Perform after harvest action
             performSafetyAction(finalGui, finalProp.afterHarvestAction);
             return Results.SUCCESS();
         }
+    }
+
+    private int countItems(NGameUI gui, NAlias alias) throws InterruptedException {
+        int n = 0;
+        for (WItem it : gui.getInventory().getItems(alias)) {
+            GItem.Amount amount = ((NGItem) it.item).getInfo(GItem.Amount.class);
+            n += BoughBeeMaterials.stackPieces(amount != null ? amount.itemnum() : null);
+        }
+        return n;
+    }
+
+    private Results collectBoughs(NGameUI gui) throws InterruptedException {
+        ArrayList<Gob> trees = Finder.findGobs(TREES);
+        trees.removeIf(tree -> tree.ngob == null || !BoughBeeMaterials.isBoughTree(tree.ngob.name));
+        trees.sort(NUtils.d_comp);
+        for (Gob tree : trees) {
+            if (BoughBeeMaterials.boughsNeeded(countItems(gui, BOUGH_ITEMS)) == 0)
+                return Results.SUCCESS();
+            new CollectFromGob(tree, BoughBeeMaterials.TAKE_BOUGH, BoughBeeMaterials.TREE_PICK_POSE,
+                    new Coord(2, 1), BOUGH_ITEMS, true, BoughBeeMaterials.BOUGHS_FOR_PYRE).run(gui);
+        }
+        if (BoughBeeMaterials.boughsNeeded(countItems(gui, BOUGH_ITEMS)) > 0)
+            return Results.ERROR("Could not collect 4 boughs from nearby trees");
+        return Results.SUCCESS();
+    }
+
+    private Results collectBranches(NGameUI gui) throws InterruptedException {
+        ArrayList<Gob> trees = Finder.findGobs(TREES);
+        trees.removeIf(tree -> tree.ngob == null || !BoughBeeMaterials.isLivingTree(tree.ngob.name));
+        trees.sort(NUtils.d_comp);
+        for (Gob tree : trees) {
+            if (!BoughBeeMaterials.needsBranches(countItems(gui, BRANCH_ITEMS)))
+                return Results.SUCCESS();
+            new CollectFromGob(tree, BoughBeeMaterials.BREAK_BRANCH, BoughBeeMaterials.TREE_PICK_POSE,
+                    new Coord(1, 2), BRANCH_ITEMS, true).run(gui);
+            break;
+        }
+        if (BoughBeeMaterials.needsBranches(countItems(gui, BRANCH_ITEMS)))
+            return Results.ERROR("Could not collect branches from nearby trees");
+        return Results.SUCCESS();
+    }
+
+    private Gob findNearbyPyre() throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null)
+            return null;
+        Gob gob = Finder.findGob(player.rc, BPYRE, null, BoughBeeMaterials.NEAR_PYRE_TILES * tilesz.x + 0.01);
+        if (gob == null)
+            return null;
+        return BoughBeeMaterials.isNearbyPyre(player.rc.dist(gob.rc), tilesz.x) ? gob : null;
+    }
+
+    private Gob findNearbyHive() throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null)
+            return null;
+        Gob gob = Finder.findGob(player.rc, WILD_HIVE, null, BoughBeeMaterials.HIVE_SEARCH_TILES * tilesz.x + 0.01);
+        if (gob == null)
+            return null;
+        return BoughBeeMaterials.isHiveInRange(player.rc.dist(gob.rc), tilesz.x) ? gob : null;
+    }
+
+    private Coord2d findFreeSpotNear(Gob hive) {
+        NHitBox hitBox = NHitBox.findCustom("gfx/terobjs/bpyre");
+        if (hitBox == null)
+            hitBox = new NHitBox(new Coord(-5, -5), new Coord(5, 5));
+        for (int tiles = 1; tiles <= BoughBeeMaterials.PLACE_NEAR_HIVE_TILES; tiles++) {
+            double r = tiles * tilesz.x;
+            Pair<Coord2d, Coord2d> area = new Pair<>(hive.rc.sub(r, r), hive.rc.add(r, r));
+            Coord2d pos = Finder.getFreePlace(area, hitBox);
+            if (pos != null)
+                return pos;
+        }
+        return null;
+    }
+
+    private Gob placeBoughPyre(NGameUI gui, Coord2d pos) throws InterruptedException {
+        Set<Long> beforePyre = new HashSet<>();
+        for (Gob g : Finder.findGobs(BPYRE))
+            beforePyre.add(g.id);
+        Set<Long> beforeCons = new HashSet<>();
+        for (Gob g : Finder.findGobs(new NAlias("consobj")))
+            beforeCons.add(g.id);
+
+        MenuGrid.Pagina pag = findPagina(gui, BoughBeeMaterials.PYRE_BUILD);
+        if (pag == null || pag.button() == null) {
+            gui.error("Bough Pyre build not found");
+            return null;
+        }
+
+        pag.button().use(new MenuGrid.Interaction(1, 0));
+        NUtils.addTask(WaitPlob.withSoftTimeout(false, 80));
+        if (gui.map.placing == null)
+            pag.button().use(new MenuGrid.Interaction(1, 0));
+        NUtils.addTask(WaitPlob.withSoftTimeout(false, 80));
+        if (gui.map.placing == null)
+            return null;
+
+        NHitBox hitBox = NHitBox.findCustom("gfx/terobjs/bpyre");
+        if (hitBox == null)
+            hitBox = new NHitBox(new Coord(-5, -5), new Coord(5, 5));
+        PathFinder pf = new PathFinder(NGob.getDummy(pos, 0, hitBox), true);
+        pf.run(gui);
+        gui.map.wdgmsg("place", pos.floor(posres), 0, 1, 0);
+        NUtils.addTask(new WaitConstructionObject(pos));
+
+        Gob pyre = findNewPyre(beforePyre);
+        if (pyre != null)
+            return pyre;
+        Gob cons = Finder.findGob(pos);
+        if (cons != null && cons.ngob != null && NParser.checkName(cons.ngob.name, "gfx/terobjs/consobj"))
+            return finishPyreConstruction(gui, cons);
+        cons = findNewConsobj(beforeCons);
+        if (cons != null)
+            return finishPyreConstruction(gui, cons);
+        return Finder.findGob(pos, BPYRE, null, 15);
+    }
+
+    private Gob finishPyreConstruction(NGameUI gui, Gob consobj) throws InterruptedException {
+        Coord2d pos = consobj.rc;
+        long id = consobj.id;
+
+        Gob pyre = Finder.findGob(pos, BPYRE, null, 15);
+        if (pyre != null)
+            return pyre;
+
+        Window window = findPyreBuildWindow(gui);
+        if (window == null) {
+            Gob player = NUtils.player();
+            Gob site = Finder.findGob(id);
+            if (site == null)
+                site = Finder.findGob(pos);
+            if (site != null && player != null && player.rc.dist(site.rc) > 22) {
+                new PathFinder(site).run(gui);
+                site = Finder.findGob(id);
+                if (site == null)
+                    site = Finder.findGob(pos);
+            }
+            if (site != null)
+                NUtils.rclickGob(site);
+            NUtils.addTask(new WaitPyreBuildWindow(gui, pos));
+            window = findPyreBuildWindow(gui);
+        }
+
+        pyre = Finder.findGob(pos, BPYRE, null, 15);
+        if (pyre != null)
+            return pyre;
+
+        Gob gob = Finder.findGob(id);
+        if (gob == null)
+            gob = Finder.findGob(pos);
+        int attempts = 0;
+        while (gob != null && NParser.checkName(gob.ngob.name, "gfx/terobjs/consobj") && attempts++ < 10) {
+            window = findPyreBuildWindow(gui);
+            if (window == null) {
+                NUtils.rclickGob(gob);
+                NUtils.addTask(new WaitPyreBuildWindow(gui, pos));
+                window = findPyreBuildWindow(gui);
+            }
+            if (window != null)
+                NUtils.startBuild(window);
+
+            NUtils.addTask(new WaitBuildProgress(gui));
+            WaitBuildState wbs = new WaitBuildState();
+            NUtils.addTask(wbs);
+            if (wbs.getState() == WaitBuildState.State.TIMEFORDRINK) {
+                if (!(new Drink(0.9, false).run(gui)).IsSuccess())
+                    return null;
+            } else if (wbs.getState() == WaitBuildState.State.DANGER) {
+                return null;
+            }
+            pyre = Finder.findGob(pos, BPYRE, null, 15);
+            if (pyre != null)
+                return pyre;
+            gob = Finder.findGob(id);
+            if (gob == null)
+                gob = Finder.findGob(pos);
+        }
+        return Finder.findGob(pos, BPYRE, null, 15);
+    }
+
+    private static Window findPyreBuildWindow(NGameUI gui) {
+        if (gui == null)
+            return null;
+        Window exact = gui.getWindow(BoughBeeMaterials.PYRE_BUILD);
+        if (exact != null)
+            return exact;
+        for (Widget w = gui.lchild; w != null; w = w.prev) {
+            if (!(w instanceof Window))
+                continue;
+            Window wnd = (Window) w;
+            if (BoughBeeMaterials.isPyreWindowCap(wnd.cap) || hasBuildButton(wnd))
+                return wnd;
+        }
+        return null;
+    }
+
+    private static boolean hasBuildButton(Window window) {
+        for (Widget sp = window.lchild; sp != null; sp = sp.prev) {
+            if (sp instanceof Button && ((Button) sp).text != null
+                    && "Build".equals(((Button) sp).text.text))
+                return true;
+        }
+        return false;
+    }
+
+    private static class WaitPyreBuildWindow extends NTask {
+        private final NGameUI gui;
+        private final Coord2d pos;
+
+        WaitPyreBuildWindow(NGameUI gui, Coord2d pos) {
+            this.gui = gui;
+            this.pos = pos;
+            infinite = false;
+            maxCounter = 400;
+            criticalOnTimeout = false;
+        }
+
+        @Override
+        public boolean check() {
+            if (findPyreBuildWindow(gui) != null)
+                return true;
+            try {
+                return Finder.findGob(pos, BPYRE, null, 15) != null;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return true;
+            }
+        }
+    }
+
+    private static class WaitBuildProgress extends NTask {
+        private final NGameUI gui;
+        private int count = 0;
+
+        WaitBuildProgress(NGameUI gui) {
+            this.gui = gui;
+        }
+
+        @Override
+        public boolean check() {
+            return gui.prog != null || count++ > 100;
+        }
+    }
+
+    private Gob findNewPyre(Set<Long> before) {
+        return findNewPyreStatic(NUtils.getGameUI(), before);
+    }
+
+    private Gob findNewConsobj(Set<Long> before) {
+        return findNewConsobjStatic(NUtils.getGameUI(), before);
+    }
+
+    private static Gob findNewPyreStatic(NGameUI gui, Set<Long> before) {
+        if (gui == null)
+            return null;
+        for (Gob g : Finder.findGobs(BPYRE)) {
+            if (!before.contains(g.id))
+                return g;
+        }
+        return null;
+    }
+
+    private static Gob findNewConsobjStatic(NGameUI gui, Set<Long> before) {
+        if (gui == null)
+            return null;
+        for (Gob g : Finder.findGobs(new NAlias("consobj"))) {
+            if (before.contains(g.id))
+                continue;
+            String built = consobjBuiltName(g);
+            if (built == null || BoughBeeMaterials.isPyreBuild(g.ngob.name, built))
+                return g;
+        }
+        return null;
+    }
+
+    private static String consobjBuiltName(Gob gob) {
+        if (gob == null)
+            return null;
+        ResDrawable rd = gob.getattr(ResDrawable.class);
+        if (rd == null || !(rd.spr instanceof haven.res.gfx.terobjs.consobj.Consobj))
+            return null;
+        haven.res.gfx.terobjs.consobj.Consobj cons = (haven.res.gfx.terobjs.consobj.Consobj) rd.spr;
+        if (cons.built == null || cons.built.res == null)
+            return null;
+        try {
+            Resource res = cons.built.res.get();
+            return res != null ? res.name : null;
+        } catch (Loading e) {
+            return null;
+        }
+    }
+
+    private MenuGrid.Pagina findPagina(NGameUI gui, String name) {
+        if (gui.menu == null)
+            return null;
+        for (MenuGrid.Pagina pb : gui.menu.paginae) {
+            try {
+                if (pb.button() != null && name.equals(pb.button().name()))
+                    return pb;
+            } catch (Loading ignored) {
+            }
+        }
+        return null;
+    }
+
+    private void placePyreTimer(NGameUI gui, Gob pyre) {
+        if (gui.mmap == null || gui.mmap.sessloc == null || gui.localizedResourceTimerService == null)
+            return;
+        Coord tileCoords = pyre.rc.floor(tilesz).add(gui.mmap.sessloc.tc);
+        gui.localizedResourceTimerService.createTimer(
+                gui.mmap.sessloc.seg.id,
+                tileCoords,
+                "Bough Pyre",
+                LocalizedResourceTimer.BOUGH_PYRE_TYPE,
+                LocalizedResourceTimer.BOUGH_PYRE_READY_MS,
+                "Bough Pyre",
+                LocalizedResourceTimer.BOUGH_PYRE_AUTO_REMOVE_MS,
+                LocalizedResourceTimer.BOUGH_PYRE_ICON);
     }
 
     private void performSafetyAction(NGameUI gui, String action) throws InterruptedException {
@@ -147,7 +499,6 @@ public class BoughBee implements Action {
                 break;
             case "nothing":
             default:
-                // Do nothing
                 break;
         }
     }

@@ -122,6 +122,8 @@ public class LocalTimerSyncService {
             if (timerService == null) {
                 return;
             }
+
+            timerService.reloadFromDisk();
             
             // Step 1: Upload local timers to DB
             uploadLocalTimers(profile, timerService);
@@ -151,7 +153,7 @@ public class LocalTimerSyncService {
         int uploaded = 0;
         
         for (LocalizedResourceTimer timer : localTimers) {
-            if (timer.isExpired()) {
+            if (timer.isEphemeral() || timer.isExpired()) {
                 continue;
             }
             
@@ -189,6 +191,10 @@ public class LocalTimerSyncService {
             // Check if we already have this timer locally with same or newer start time
             LocalizedResourceTimer existing = timerService.getTimer(dbTimer.getResourceId());
             
+            if (existing != null && existing.isEphemeral()) {
+                continue;
+            }
+
             if (existing == null) {
                 // Timer doesn't exist locally - add it
                 timerService.addTimerFromDb(

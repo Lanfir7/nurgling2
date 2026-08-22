@@ -180,6 +180,9 @@ public class NContext {
         }
     }
 
+    public static class FloorDump implements ObjectStorage {
+    }
+
 
     public void addCustomTool(String resName) {
         String cust = customTool.get(resName);
@@ -751,6 +754,10 @@ public class NContext {
             navigateToAreaIfNeeded(id);
 
             NArea area = areas.get(id);
+            if (SoilFloorDump.shouldDump(item, area)) {
+                outputs.add(new FloorDump());
+                return outputs;
+            }
             NArea.Ingredient ingredient = area.getOutput(item);
             if (ingredient != null) {
                 switch (ingredient.type) {

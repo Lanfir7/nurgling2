@@ -24,6 +24,9 @@ public class DatabaseSettings extends Panel {
     private TextEntry filePathEntry;
     private Label hostLabel, userLabel, passLabel, fileLabel;
     private Button initDbButton;
+    private Button reconnectBtn;
+    private Label reconnectStatus;
+    private volatile boolean reconnectInProgress = false;
     private CheckBox enableCheckbox;
     private Dropbox<String> dbType;
     private final int labelWidth = UI.scale(80); // РЁРёСЂРёРЅР° Р»РµР№Р±Р»РѕРІ
@@ -171,8 +174,19 @@ public class DatabaseSettings extends Panel {
             }
         }, new Coord(margin, firstSettingY + filePathEntry.sz.y + UI.scale(5)));
 
+        int reconnectY = Math.max(y, initDbButton.c.y + initDbButton.sz.y) + UI.scale(15);
+        reconnectBtn = add(new Button(UI.scale(200), L10n.get("database.reconnect")) {
+            @Override
+            public void click() {
+                super.click();
+                startReconnect();
+            }
+        }, new Coord(margin, reconnectY));
+        reconnectStatus = add(new Label(""), new Coord(margin + UI.scale(210), reconnectY + UI.scale(6)));
+
         load();
         updateWidgetsVisibility();
+        refreshReconnectStatus();
     }
 
     @Override
@@ -195,24 +209,13 @@ public class DatabaseSettings extends Panel {
         filePathEntry.settext(dbPath);
 
         updateWidgetsVisibility();
+        refreshReconnectStatus();
     }
 
     @Override
     public void save() {
         boolean wasEnabled = (Boolean) NConfig.get(NConfig.Key.ndbenable);
-        
-        NConfig.set(NConfig.Key.ndbenable, enabled);
-        boolean isPostgres = "PostgreSQL".equals(dbTypeStr);
-        NConfig.set(NConfig.Key.postgres, isPostgres);
-        NConfig.set(NConfig.Key.sqlite, !isPostgres);
-
-        if (isPostgres) {
-            NConfig.set(NConfig.Key.serverNode, hostEntry.text());
-            NConfig.set(NConfig.Key.serverUser, usernameEntry.text());
-            NConfig.set(NConfig.Key.serverPass, passwordEntry.text());
-        } else {
-            NConfig.set(NConfig.Key.dbFilePath, filePathEntry.text());
-        }
+        applyFormToConfig();
 
         // Handle database manager and areas reload
         if (enabled) {
@@ -228,6 +231,97 @@ public class DatabaseSettings extends Panel {
         }
 
         NConfig.needUpdate();
+    }
+
+    private void applyFormToConfig() {
+        NConfig.set(NConfig.Key.ndbenable, enabled);
+        boolean isPostgres = "PostgreSQL".equals(dbTypeStr);
+        NConfig.set(NConfig.Key.postgres, isPostgres);
+        NConfig.set(NConfig.Key.sqlite, !isPostgres);
+
+        if (isPostgres) {
+            NConfig.set(NConfig.Key.serverNode, hostEntry.text());
+            NConfig.set(NConfig.Key.serverUser, usernameEntry.text());
+            NConfig.set(NConfig.Key.serverPass, passwordEntry.text());
+        } else {
+            NConfig.set(NConfig.Key.dbFilePath, filePathEntry.text());
+        }
+        NConfig.needUpdate();
+    }
+
+    private void startReconnect() {
+        if (reconnectInProgress) {
+            return;
+        }
+        applyFormToConfig();
+        if (!enabled) {
+            setReconnectStatus(L10n.get("database.reconnect_disabled"), Color.RED);
+            return;
+        }
+        reconnectInProgress = true;
+        setReconnectStatus(L10n.get("database.reconnecting"), Color.YELLOW);
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                nurgling.NUI nui = NUtils.getUI();
+                if (nui != null && nui.core != null) {
+                    ok = nui.core.reconnectDatabase();
+                } else {
+                    ok = reconnectWithoutSession();
+                }
+            } catch (Exception e) {
+                System.err.println("Database reconnect failed: " + e.getMessage());
+                e.printStackTrace();
+            }
+            final boolean success = ok;
+            reconnectInProgress = false;
+            if (success) {
+                setReconnectStatus(L10n.get("database.reconnect_ok"), Color.GREEN);
+                reloadAreasFromDatabase();
+            } else {
+                setReconnectStatus(L10n.get("database.reconnect_fail"), Color.RED);
+            }
+            try {
+                if (NUtils.getGameUI() != null) {
+                    NUtils.getGameUI().msg(
+                        success ? L10n.get("database.reconnect_ok") : L10n.get("database.reconnect_fail"),
+                        success ? Color.GREEN : Color.RED);
+                }
+            } catch (Exception ignore) {}
+        }, "Database-Reconnect").start();
+    }
+
+    private boolean reconnectWithoutSession() {
+        if (nurgling.NCore.databaseManager != null) {
+            try {
+                nurgling.NCore.databaseManager.shutdown();
+            } catch (Exception ignore) {}
+            nurgling.NCore.databaseManager = null;
+        }
+        nurgling.NCore.databaseManager = new nurgling.db.DatabaseManager(1);
+        return nurgling.NCore.databaseManager.isReady();
+    }
+
+    private void setReconnectStatus(String text, Color color) {
+        if (reconnectStatus == null) {
+            return;
+        }
+        reconnectStatus.settext(text);
+        reconnectStatus.setcolor(color);
+    }
+
+    private void refreshReconnectStatus() {
+        if (reconnectStatus == null) {
+            return;
+        }
+        boolean ready = nurgling.NCore.databaseManager != null && nurgling.NCore.databaseManager.isReady();
+        if (ready) {
+            setReconnectStatus(L10n.get("database.connected"), Color.GREEN);
+        } else if (enabled) {
+            setReconnectStatus(L10n.get("database.disconnected"), Color.RED);
+        } else {
+            reconnectStatus.settext("");
+        }
     }
 
     /**
@@ -330,12 +424,20 @@ public class DatabaseSettings extends Panel {
             fileLabel.visible = isSQLite;
             filePathEntry.visible = isSQLite;
             initDbButton.visible = isSQLite;
-            // Don't reconnect here - it's just visibility update, not settings change
+        }
+        if (reconnectBtn != null) {
+            reconnectBtn.visible = true;
+        }
+        if (reconnectStatus != null) {
+            reconnectStatus.visible = true;
         }
 
-        // РџРµСЂРµСѓРїР°РєРѕРІС‹РІР°РµРј РІРёРґР¶РµС‚
         pack();
-        sz.y = UI.scale(200);
+        if (reconnectBtn != null) {
+            sz.y = Math.max(sz.y, reconnectBtn.c.y + reconnectBtn.sz.y + UI.scale(12));
+        } else {
+            sz.y = UI.scale(200);
+        }
     }
 
     private LinkedList<String> getDbTypes() {

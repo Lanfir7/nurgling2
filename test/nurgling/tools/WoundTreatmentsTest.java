@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WoundTreatmentsTest {
@@ -55,5 +56,33 @@ class WoundTreatmentsTest {
         List<String> glue = WoundTreatments.iconResources("Wound Glue");
         assertTrue(glue.contains("gfx/invobjs/jar-woundglue"));
         assertTrue(glue.contains("gfx/invobjs/woundglue"));
+    }
+
+    @Test
+    void silkSutureKitUsesInvobjSilksuture() {
+        List<String> paths = WoundTreatments.iconResources("Silk Suture Kit");
+        assertTrue(paths.contains("gfx/invobjs/silksuture"));
+    }
+
+    @Test
+    void treatTipMarkupAppendsFadedControlHint() {
+        String markup = WoundTreatments.treatTipMarkup("Gauze", "Click = Recipe\nCtrl + Click = Search at base");
+
+        assertTrue(markup.startsWith("Gauze"));
+        assertTrue(markup.contains("$col[140,140,140]{Click = Recipe"));
+        assertTrue(markup.contains("Ctrl + Click = Search at base}"));
+    }
+
+    @Test
+    void treatTipMarkupWithoutHintIsJustTheName() {
+        assertEquals("Yarrow", WoundTreatments.treatTipMarkup("Yarrow", null));
+        assertEquals("Yarrow", WoundTreatments.treatTipMarkup("Yarrow", ""));
+    }
+
+    @Test
+    void leftCtrlClickOpensStorageSearch() {
+        assertTrue(WoundTreatments.isStorageSearchClick(1, true));
+        assertFalse(WoundTreatments.isStorageSearchClick(1, false));
+        assertFalse(WoundTreatments.isStorageSearchClick(3, true));
     }
 }

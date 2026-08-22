@@ -383,6 +383,16 @@ public class NStorageItemsWidget extends Window {
         totalLabel.settext(L10n.get("storage.total_items", displayedItems.size()));
     }
 
+    public void showWithSearch(String query) {
+        String q = query == null ? "" : query;
+        searchText = q.toLowerCase();
+        if (searchField != null)
+            searchField.settext(q);
+        show(true);
+        raise();
+        applyFiltersAndSort();
+    }
+
     @Override
     public boolean show(boolean show) {
         if (show && (Boolean) NConfig.get(NConfig.Key.ndbenable) &&

@@ -187,15 +187,30 @@ public class LightFire implements Action {
     /**
      * Light fire using branches (alternative method)
      */
-    private Results lightWithBranches(NGameUI gui) throws InterruptedException {
-        // Find fuel area with branches
-        NArea branchArea = NContext.findSpec(Specialisation.SpecName.fuel.toString(),"Branch");
+    public static boolean needsFuelArea(int inventoryBranchPieces) {
+        return inventoryBranchPieces < 2;
+    }
 
-        if (branchArea == null) {
-            gui.error("Cannot find area with branches for fire lighting");
-            return Results.ERROR("No branch area found");
+    private int countInventoryBranches(NGameUI gui) throws InterruptedException {
+        int n = 0;
+        for (WItem it : gui.getInventory().getItems("Branch")) {
+            GItem.Amount amount = ((NGItem) it.item).getInfo(GItem.Amount.class);
+            n += (amount != null && amount.itemnum() > 0) ? amount.itemnum() : 1;
         }
-        
+        return n;
+    }
+
+    private Results lightWithBranches(NGameUI gui) throws InterruptedException {
+        int have = countInventoryBranches(gui);
+        NArea branchArea = null;
+        if (needsFuelArea(have)) {
+            branchArea = NContext.findSpec(Specialisation.SpecName.fuel.toString(), "Branch");
+            if (branchArea == null) {
+                gui.error("Cannot find area with branches for fire lighting");
+                return Results.ERROR("No branch area found");
+            }
+        }
+ 
         // Store initial state of the object to light
         long initialState = firedGob.ngob.getModelAttribute();
         
@@ -203,7 +218,7 @@ public class LightFire implements Action {
         while (attempts < MAX_ATTEMPTS) {
             attempts++;
 
-            if(NUtils.getGameUI().getInventory().getItems("Branch").size()<2)
+            if (needsFuelArea(countInventoryBranches(gui)))
             {
                 // Find stockpile with branches in the area
                 Gob branchPile = Finder.findGob(branchArea, new NAlias("stockpile-branch", "stockpile"));
@@ -298,6 +313,13 @@ public class LightFire implements Action {
             // Check if fire was lit (state changed)
             Gob updatedGob = Finder.findGob(firedGob.id);
             if (updatedGob != null && updatedGob.ngob.getModelAttribute() != initialState) {
+                return Results.SUCCESS();
+            }
+            if (updatedGob != null && firedGob.ngob != null && firedGob.ngob.name != null
+                    && firedGob.ngob.name.contains("bpyre")
+                    && nurgling.actions.bots.LightObject.isBpyreLit(
+                            updatedGob.ngob.getModelAttribute(),
+                            NUtils.isOverlay(updatedGob, new NAlias("smoke", "flame", "fire", "ember")))) {
                 return Results.SUCCESS();
             }
         }

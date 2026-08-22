@@ -112,6 +112,8 @@ public class LightObject implements Action {
             return new LightConfig("Steel Crucible", 4, 0, -1);
         } else if (gobName.contains("gfx/terobjs/crucible")) {
             return new LightConfig("Crucible", 4, 2, -1);
+        } else if (gobName.contains("bpyre")) {
+            return new LightConfig("Bough Pyre", 4, 0, -1);
         }
         return null;
     }
@@ -177,8 +179,18 @@ public class LightObject implements Action {
         return remaining.isEmpty() ? Results.SUCCESS() : Results.FAIL();
     }
 
+    public static boolean isBpyreLit(long modelAttr, boolean hasFireOverlay) {
+        return modelAttr != 0 || hasFireOverlay;
+    }
+
     private boolean isLit(Gob gob, LightConfig config) {
+        if (gob.ngob.name != null && gob.ngob.name.contains("bpyre"))
+            return isBpyreLit(gob.ngob.getModelAttribute(), hasFireOverlay(gob));
         return (gob.ngob.getModelAttribute() & config.fireFlag) != 0;
+    }
+
+    private static boolean hasFireOverlay(Gob gob) {
+        return NUtils.isOverlay(gob, new NAlias("smoke", "flame", "fire", "ember"));
     }
 
     /** Order a set of targets nearest-first from the player's current position (snapshot). */

@@ -349,8 +349,14 @@ public class NAlarmWdg extends Widget
         resourceTimerWarnings.removeIf(timerId -> 
             allTimers.stream().noneMatch(t -> t.getResourceId().equals(timerId)));
         
+        java.util.List<String> autoRemove = new java.util.ArrayList<>();
         for (LocalizedResourceTimer timer : allTimers) {
             String timerId = timer.getResourceId();
+
+            if (timer.shouldAutoRemove()) {
+                autoRemove.add(timerId);
+                continue;
+            }
             
             if (timer.isExpired()) {
                 // Timer is ready - add to alarms if not already there
@@ -364,6 +370,11 @@ public class NAlarmWdg extends Widget
                 resourceTimerAlarms.remove(timerId);
                 resourceTimerWarnings.remove(timerId);
             }
+        }
+        for (String timerId : autoRemove) {
+            NUtils.getGameUI().localizedResourceTimerService.removeTimer(timerId);
+            resourceTimerAlarms.remove(timerId);
+            resourceTimerWarnings.remove(timerId);
         }
     }
 

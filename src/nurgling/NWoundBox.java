@@ -316,25 +316,38 @@ public class NWoundBox extends WoundWnd.WoundBox {
 		g.aimage(tex, sz.div(2), 0.5, 0.5);
 	}
 
-	@Override
-	public boolean mousedown(MouseDownEvent ev) {
-	    if(ev.b == 1) {
-		CraftRecipeLookup.showProducing(this, ev.c, itemName);
-		return true;
-	    }
-	    return super.mousedown(ev);
-	}
+		@Override
+		public boolean mousedown(MouseDownEvent ev) {
+		    if(WoundTreatments.isStorageSearchClick(ev.b, ui != null && ui.modctrl)) {
+			openStorageSearch(itemName);
+			return true;
+		    }
+		    if(ev.b == 1) {
+			CraftRecipeLookup.showProducing(this, ev.c, itemName);
+			return true;
+		    }
+		    return super.mousedown(ev);
+		}
 
-	@Override
-	public Object tooltip(Coord c, Widget prev) {
-	    String tip = CraftRecipeLookup.ingredientTooltip(itemName);
-	    if(tip == null || tip.isEmpty())
-		return null;
-	    if(!tip.equals(lastTip) || tipTex == null) {
-		lastTip = tip;
-		tipTex = RichText.render(tip.replace("$", "$$"), 0).tex();
-	    }
-	    return tipTex;
-	}
+		private void openStorageSearch(String name) {
+		    GameUI gui = getparent(GameUI.class);
+		    if(gui == null || gui.storageItemsWidget == null)
+			return;
+		    gui.storageItemsWidget.showWithSearch(name);
+		    gui.fitwdg(gui.storageItemsWidget);
+		    gui.setfocus(gui.storageItemsWidget);
+		}
+
+		@Override
+		public Object tooltip(Coord c, Widget prev) {
+		    String tip = WoundTreatments.treatTipMarkup(itemName, L10n.get("char.wound.treat.hint"));
+		    if(tip == null || tip.isEmpty())
+			return null;
+		    if(!tip.equals(lastTip) || tipTex == null) {
+			lastTip = tip;
+			tipTex = RichText.render(tip, 0).tex();
+		    }
+		    return tipTex;
+		}
     }
 }

@@ -92,9 +92,25 @@ public class Chipper implements Action {
                     if (!rr.IsSuccess())
                         return Results.ERROR("Failed to restore resources");
 
+                    int space = gui.getInventory().calcFreeSpace();
+                    if (space >= 0 && space <= 1) {
+                        if(!prop.nopiles)
+                        {
+                            if(!new TransferToPiles(psaArea.getRCArea(),stones).run(gui).IsSuccess())
+                                return Results.FAIL();
+                        }
+                        else
+                            for(WItem item : NUtils.getGameUI().getInventory().getItems(stones))
+                            {
+                                NUtils.drop(item);
+                            }
+                        new PathFinder(bumling).run(gui);
+                        continue;
+                    }
+
                     new SelectFlowerAction("Chip stone", bumling).run(gui);
                     if (prop.tool.equals("Pickaxe")) {
-                        NUtils.getUI().core.addTask(new WaitPoseOrNoGob(NUtils.player(),bumling, "gfx/borka/pickan"));
+                        NUtils.getUI().core.addTask(new WaitPose(NUtils.player(), "gfx/borka/pickan"));
                     } else {
                         WItem item = NUtils.getEquipment().findItem(NEquipory.Slots.HAND_LEFT.idx);
                         if (item != null && NParser.checkName(((NGItem) item.item).name(), "Pickaxe"))
@@ -120,7 +136,10 @@ public class Chipper implements Action {
                         case TIMEFORPILE:
                         {
                             if(!prop.nopiles)
-                                new TransferToPiles(psaArea.getRCArea(),stones).run(gui);
+                            {
+                                if(!new TransferToPiles(psaArea.getRCArea(),stones).run(gui).IsSuccess())
+                                    return Results.FAIL();
+                            }
                             else
                                 for(WItem item : NUtils.getGameUI().getInventory().getItems(stones))
                                 {

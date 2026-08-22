@@ -7,6 +7,11 @@ import java.time.Instant;
  * Represents a timer for a localized resource node
  */
 public class LocalizedResourceTimer {
+    public static final long BOUGH_PYRE_READY_MS = 15 * 60 * 1000L;
+    public static final long BOUGH_PYRE_AUTO_REMOVE_MS = 30 * 60 * 1000L;
+    public static final String BOUGH_PYRE_TYPE = "nurgling/boughpyre";
+    public static final String BOUGH_PYRE_ICON = "nurgling/bots/icons/boughpyre/u";
+
     private final String resourceId;  // Unique ID combining segment + coordinates + resource type
     private final long segmentId;
     private final haven.Coord tileCoords;
@@ -15,9 +20,17 @@ public class LocalizedResourceTimer {
     private final long startTime;     // Unix timestamp when timer was set
     private final long duration;      // Duration in milliseconds
     private final String description; // User-friendly description like "Tar Pit"
+    private final long autoRemoveAfterMs;
+    private final String iconRes;
     
     public LocalizedResourceTimer(long segmentId, haven.Coord tileCoords, String resourceName,
                                   String resourceType, long duration, String description) {
+        this(segmentId, tileCoords, resourceName, resourceType, duration, description, 0L, null);
+    }
+
+    public LocalizedResourceTimer(long segmentId, haven.Coord tileCoords, String resourceName,
+                                  String resourceType, long duration, String description,
+                                  long autoRemoveAfterMs, String iconRes) {
         this.segmentId = segmentId;
         this.tileCoords = tileCoords;
         this.resourceName = resourceName;
@@ -26,6 +39,8 @@ public class LocalizedResourceTimer {
         this.description = description;
         this.startTime = Instant.now().toEpochMilli();
         this.resourceId = generateResourceId(segmentId, tileCoords, resourceType);
+        this.autoRemoveAfterMs = autoRemoveAfterMs;
+        this.iconRes = emptyToNull(iconRes);
     }
     
     /**
@@ -34,6 +49,14 @@ public class LocalizedResourceTimer {
     public LocalizedResourceTimer(String resourceId, long segmentId, haven.Coord tileCoords,
                                   String resourceName, String resourceType,
                                   long startTimeUtc, long duration, String description) {
+        this(resourceId, segmentId, tileCoords, resourceName, resourceType,
+                startTimeUtc, duration, description, 0L, null);
+    }
+
+    public LocalizedResourceTimer(String resourceId, long segmentId, haven.Coord tileCoords,
+                                  String resourceName, String resourceType,
+                                  long startTimeUtc, long duration, String description,
+                                  long autoRemoveAfterMs, String iconRes) {
         this.resourceId = resourceId;
         this.segmentId = segmentId;
         this.tileCoords = tileCoords;
@@ -42,6 +65,8 @@ public class LocalizedResourceTimer {
         this.startTime = startTimeUtc;
         this.duration = duration;
         this.description = description;
+        this.autoRemoveAfterMs = autoRemoveAfterMs;
+        this.iconRes = emptyToNull(iconRes);
     }
     
     public LocalizedResourceTimer(JSONObject json) {
@@ -53,11 +78,17 @@ public class LocalizedResourceTimer {
         this.startTime = json.getLong("startTime");
         this.duration = json.getLong("duration");
         this.description = json.getString("description");
+        this.autoRemoveAfterMs = json.optLong("autoRemoveAfterMs", 0L);
+        this.iconRes = emptyToNull(json.has("iconRes") && !json.isNull("iconRes") ? json.getString("iconRes") : null);
     }
     
     private static String generateResourceId(long segmentId, haven.Coord tileCoords, String resourceType) {
         return String.format("res_%d_%d_%d_%s", segmentId, tileCoords.x, tileCoords.y, 
                            resourceType.replaceAll("[^a-zA-Z0-9]", "_"));
+    }
+
+    private static String emptyToNull(String value) {
+        return (value == null || value.isEmpty()) ? null : value;
     }
     
     public JSONObject toJson() {
@@ -71,6 +102,10 @@ public class LocalizedResourceTimer {
         json.put("startTime", startTime);
         json.put("duration", duration);
         json.put("description", description);
+        if (autoRemoveAfterMs > 0)
+            json.put("autoRemoveAfterMs", autoRemoveAfterMs);
+        if (iconRes != null)
+            json.put("iconRes", iconRes);
         return json;
     }
     
@@ -79,6 +114,27 @@ public class LocalizedResourceTimer {
      */
     public boolean isExpired() {
         return getRemainingTime() <= 0;
+    }
+
+    public boolean isEphemeral() {
+        return autoRemoveAfterMs > 0;
+    }
+
+    public boolean shouldAutoRemove() {
+        if (!isEphemeral())
+            return false;
+        return Instant.now().toEpochMilli() - startTime >= autoRemoveAfterMs;
+    }
+
+    /**
+     * Keep until auto-remove. Countdown (0–15 min) and Ready (15–30 min) both survive relog.
+     */
+    public boolean shouldPersist() {
+        if (shouldAutoRemove())
+            return false;
+        if (isExpired() && !isEphemeral())
+            return false;
+        return true;
     }
     
     /**
@@ -119,4 +175,6 @@ public class LocalizedResourceTimer {
     public long getStartTime() { return startTime; }
     /** Duration in milliseconds */
     public long getDuration() { return duration; }
+    public long getAutoRemoveAfterMs() { return autoRemoveAfterMs; }
+    public String getIconRes() { return iconRes; }
 }

@@ -2119,9 +2119,18 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 
 	public void place() {
-	    if(ui.mc.isect(rootpos(), sz))
-		new Adjust(ui.mc.sub(rootpos()), 0).run();
-	    this.slot = basic.add(this.placed);
+	    try {
+		if((ui != null) && (ui.env != null) && ui.mc.isect(rootpos(), sz))
+		    new Adjust(ui.mc.sub(rootpos()), 0).run();
+	    } catch (Throwable t) {
+		/* Background sessions have no usable GL pick. */
+	    }
+	    try {
+		if(basic != null)
+		    this.slot = basic.add(this.placed);
+	    } catch (Throwable t) {
+		/* Stale render tree after the session is demoted to headless. */
+	    }
 	}
 
 	private class Adjust extends Maptest {
@@ -2177,10 +2186,15 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    Loader.Future<Plob> placing = this.placing;
 	    if(placing != null) {
 		if(!placing.cancel()) {
-		    Plob ob = placing.get();
-		    synchronized(ob) {
-			ob.slot.remove();
-			ob.removed();
+		    try {
+			Plob ob = placing.get();
+			synchronized(ob) {
+			    if(ob.slot != null)
+				ob.slot.remove();
+			    ob.removed();
+			}
+		    } catch (RuntimeException e) {
+			/* Ghost failed to load (typical for a headless session). */
 		    }
 		}
 		this.placing = null;
@@ -2224,10 +2238,15 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    Loader.Future<Plob> placing = this.placing;
 	    if(placing != null) {
 		if(!placing.cancel()) {
-		    Plob ob = placing.get();
-		    synchronized(ob) {
-			ob.slot.remove();
-			ob.removed();
+		    try {
+			Plob ob = placing.get();
+			synchronized(ob) {
+			    if(ob.slot != null)
+				ob.slot.remove();
+			    ob.removed();
+			}
+		    } catch (RuntimeException e) {
+			/* Ghost failed to load (typical for a headless session). */
 		    }
 		}
 		this.placing = null;

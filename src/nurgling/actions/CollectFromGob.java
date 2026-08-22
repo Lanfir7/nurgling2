@@ -53,10 +53,17 @@ public class CollectFromGob implements Action{
         this.withoutTransfer = withoutTransfer;
     }
 
+    public CollectFromGob(Gob target, String action, String pose, Coord targetSize, NAlias targetItems, boolean withoutTransfer, int stopAt)
+    {
+        this(target, action, pose, targetSize, targetItems, withoutTransfer);
+        this.stopAt = stopAt;
+    }
+
      NAlias targetItems;
     Pair<Coord2d,Coord2d> pileArea = null;
 
     boolean withoutTransfer = false;
+    int stopAt = 0;
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         WaitCollectState wcs = null;
@@ -85,7 +92,9 @@ public class CollectFromGob implements Action{
                     if (fm.chooseOpt(action)) {
                         NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());
                         NUtils.getUI().core.addTask(new WaitPose(NUtils.player(), pose));
-                        wcs = new WaitCollectState(target, targetSize);
+                        wcs = stopAt > 0
+                                ? new WaitCollectState(target, targetSize, targetItems, stopAt)
+                                : new WaitCollectState(target, targetSize);
                         NUtils.getUI().core.addTask(wcs);
                     } else {
                         NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());

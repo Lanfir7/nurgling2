@@ -39,6 +39,9 @@ public class FillWaterskins implements Action {
             if (nArea == null) {
                 return Results.ERROR("No water area found! Please create an area with 'water' specialization.");
             }
+            if (!NUtils.navigateToArea(nArea, true)) {
+                return Results.ERROR("Cannot reach water area");
+            }
             area = nArea.getRCArea();
         } else {
             SelectArea insa;

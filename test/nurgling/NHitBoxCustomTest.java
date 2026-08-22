@@ -24,4 +24,12 @@ class NHitBoxCustomTest {
     void unknownMapObjectStaysWithoutCustomHitbox() {
         assertNull(NHitBox.findCustom("gfx/terobjs/map/not-a-real-object"));
     }
+
+    @Test
+    void boughPyreHasAHitboxForPathfinding() {
+        NHitBox box = NHitBox.findCustom("gfx/terobjs/bpyre");
+        assertNotNull(box);
+        assertEquals(10.0, box.end.x - box.begin.x, 0.01);
+        assertEquals(10.0, box.end.y - box.begin.y, 0.01);
+    }
 }

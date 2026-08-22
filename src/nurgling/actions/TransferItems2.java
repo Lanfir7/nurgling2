@@ -8,6 +8,7 @@ import nurgling.areas.NContext;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.VSpec;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -132,12 +133,26 @@ public class TransferItems2 implements Action
                     processAreaTransfers(areaId, group.itemsByArea.get(areaId), gui);
                 }
             } else {
-                // Items without thresholds (threshold <= 1): use greedy nearest neighbor
+                // Items without thresholds (threshold <= 1): dump fewer same-group
+                // siblings first so the majority can batch, then greedy nearest.
                 Map<String, List<ItemTransfer>> remaining = new HashMap<>(group.itemsByArea);
+                Map<String, Integer> counts = inventoryCounts(remaining);
                 while (!remaining.isEmpty()) {
-                    String nearestAreaId = findNearestArea(remaining.keySet(), gui);
+                    Map<String, List<String>> namesByArea = namesByArea(remaining);
+                    Map<String, Double> distances = new HashMap<>();
+                    for (String areaId : remaining.keySet()) {
+                        distances.put(areaId, cnt.getDistanceToAreaById(areaId, gui));
+                    }
+                    String nearestAreaId = pickNextArea(namesByArea, counts, distances);
                     if (nearestAreaId == null) break;
-                    processAreaTransfers(nearestAreaId, remaining.get(nearestAreaId), gui);
+                    List<ItemTransfer> itemsForArea = remaining.get(nearestAreaId);
+                    ArrayList<String> allNames = new ArrayList<>();
+                    for (List<String> names : namesByArea.values()) {
+                        allNames.addAll(names);
+                    }
+                    itemsForArea.sort(Comparator.comparingInt(
+                            (ItemTransfer t) -> transferPriority(t.itemName, allNames, counts)));
+                    processAreaTransfers(nearestAreaId, itemsForArea, gui);
                     remaining.remove(nearestAreaId);
                 }
             }
@@ -154,6 +169,9 @@ public class TransferItems2 implements Action
         for (ItemTransfer itemTransfer : itemsForArea) {
             ArrayList<NContext.ObjectStorage> storages = cnt.getOutStorages(itemTransfer.itemName, itemTransfer.quality);
             for (NContext.ObjectStorage output : storages) {
+                if (output instanceof NContext.FloorDump) {
+                    new DropItemsOnFloor(cnt.getRCArea(areaId), itemTransfer.itemName).run(gui);
+                }
                 if (output instanceof NContext.Pile) {
                     new TransferToPiles(cnt.getRCArea(areaId), itemTransfer.itemName,
                         (int)itemTransfer.quality).run(gui);
@@ -177,28 +195,122 @@ public class TransferItems2 implements Action
         }
     }
 
-    /**
-     * Find the nearest area from a set of area IDs using ChunkNav path cost.
-     * Recalculates from current player position for greedy optimization.
-     */
-    private String findNearestArea(Set<String> areaIds, NGameUI gui) {
+    static List<String> orderByGroupCount(Collection<String> names, Map<String, Integer> counts) {
+        ArrayList<String> ordered = new ArrayList<String>(names);
+        ordered.sort(Comparator
+                .comparingInt((String n) -> transferPriority(n, names, counts))
+                .thenComparingInt(n -> indexOf(names, n)));
+        return ordered;
+    }
+
+    static String pickNextArea(
+            Map<String, List<String>> itemsByArea,
+            Map<String, Integer> counts,
+            Map<String, Double> distances) {
+        ArrayList<String> allNames = new ArrayList<String>();
+        for (List<String> names : itemsByArea.values()) {
+            allNames.addAll(names);
+        }
+        int minPri = Integer.MAX_VALUE;
+        for (String name : allNames) {
+            minPri = Math.min(minPri, transferPriority(name, allNames, counts));
+        }
         String nearest = null;
         double minDist = Double.MAX_VALUE;
-
-        for (String areaId : areaIds) {
-            double dist = cnt.getDistanceToAreaById(areaId, gui);
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = areaId;
+        for (Map.Entry<String, List<String>> e : itemsByArea.entrySet()) {
+            boolean candidate = false;
+            for (String name : e.getValue()) {
+                if (transferPriority(name, allNames, counts) == minPri) {
+                    candidate = true;
+                    break;
+                }
+            }
+            if (!candidate) {
+                continue;
+            }
+            Double dist = distances.get(e.getKey());
+            double d = dist != null ? dist : Double.MAX_VALUE;
+            if (d < minDist) {
+                minDist = d;
+                nearest = e.getKey();
             }
         }
-
-        // Fallback if no path found for any area
-        if (nearest == null && !areaIds.isEmpty()) {
-            nearest = areaIds.iterator().next();
+        if (nearest == null && !itemsByArea.isEmpty()) {
+            return itemsByArea.keySet().iterator().next();
         }
-
         return nearest;
+    }
+
+    static int transferPriority(String name, Collection<String> remaining, Map<String, Integer> counts) {
+        if (!hasGroupSibling(name, remaining)) {
+            return Integer.MAX_VALUE;
+        }
+        Integer c = counts.get(name);
+        return c != null ? c : 0;
+    }
+
+    static boolean hasGroupSibling(String name, Collection<String> remaining) {
+        List<String> groups = transferGroups(name);
+        if (groups.isEmpty()) {
+            return false;
+        }
+        for (String other : remaining) {
+            if (other.equals(name)) {
+                continue;
+            }
+            for (String g : transferGroups(other)) {
+                if (groups.contains(g)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static List<String> transferGroups(String name) {
+        ArrayList<String> categories = new ArrayList<String>(VSpec.getCategory(name));
+        if (categories.contains("Hide Fresh")) {
+            categories.add("Prepared Animal Hide");
+        } else if (categories.contains("Prepared Animal Hide")) {
+            categories.add("Hide Fresh");
+        }
+        return categories;
+    }
+
+    private static int indexOf(Collection<String> names, String n) {
+        int i = 0;
+        for (String x : names) {
+            if (x.equals(n)) {
+                return i;
+            }
+            i++;
+        }
+        return i;
+    }
+
+    private Map<String, Integer> inventoryCounts(Map<String, List<ItemTransfer>> remaining)
+            throws InterruptedException {
+        Map<String, Integer> counts = new HashMap<String, Integer>();
+        for (List<ItemTransfer> list : remaining.values()) {
+            for (ItemTransfer t : list) {
+                if (!counts.containsKey(t.itemName)) {
+                    counts.put(t.itemName, getItemsExactMatch(t.itemName, t.quality).size());
+                }
+            }
+        }
+        return counts;
+    }
+
+    private static Map<String, List<String>> namesByArea(Map<String, List<ItemTransfer>> remaining) {
+        Map<String, List<String>> namesByArea = new HashMap<String, List<String>>();
+        for (Map.Entry<String, List<ItemTransfer>> e : remaining.entrySet()) {
+            ArrayList<String> names = new ArrayList<String>();
+            for (ItemTransfer t : e.getValue()) {
+                names.add(t.itemName);
+            }
+            namesByArea.put(e.getKey(), names);
+        }
+        return namesByArea;
     }
 
     /**

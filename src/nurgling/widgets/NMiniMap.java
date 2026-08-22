@@ -84,6 +84,7 @@ NMiniMap extends MiniMap {
         new Text.Foundry(Text.dfont, UI.scale(9), Color.WHITE).aa(true),
         2, 1, Color.BLACK
     );
+    private final java.util.Map<String, Tex> timerIconCache = new java.util.HashMap<>();
 
     public NMiniMap(Coord sz, MapFile file) {
         super(sz, file);
@@ -1855,26 +1856,47 @@ NMiniMap extends MiniMap {
         Coord hsz = sz.div(2);
 
         for(LocalizedResourceTimer timer : timers) {
-            // Calculate screen position for the timer
+            if (timer.shouldAutoRemove())
+                continue;
+
             Coord screenPos = timer.getTileCoords().sub(dloc.tc).div(scalef()).add(hsz);
 
-            // Only draw if on screen
             if(screenPos.x >= 0 && screenPos.x <= sz.x &&
                screenPos.y >= 0 && screenPos.y <= sz.y) {
 
-                String timeText = timer.getFormattedRemainingTime();
+                int textOffsetY = 15;
+                if (timer.getIconRes() != null) {
+                    Tex icon = timerIcon(timer.getIconRes());
+                    if (icon != null) {
+                        Coord iconPos = screenPos.add(-icon.sz().x / 2, -icon.sz().y / 2);
+                        g.image(icon, iconPos);
+                        textOffsetY = icon.sz().y / 2 + UI.scale(2);
+                    }
+                }
 
-                // Use appropriate furnace based on timer state
+                String timeText = timer.getFormattedRemainingTime();
                 Text.Furnace furnace = timer.isExpired() ? readyTimerFurnace : activeTimerFurnace;
                 Text timerDisplay = furnace.render(timeText);
-
-                // Position text slightly below the resource icon
-                Coord textPos = screenPos.add(-timerDisplay.sz().x / 2, 15);
-
-                // Draw timer text with black border (no background needed)
+                Coord textPos = screenPos.add(-timerDisplay.sz().x / 2, textOffsetY);
                 g.image(timerDisplay.tex(), textPos);
             }
         }
+    }
+
+    private Tex timerIcon(String iconRes) {
+        if (timerIconCache.containsKey(iconRes))
+            return timerIconCache.get(iconRes);
+        Tex tex = null;
+        try {
+            tex = Resource.local().loadwait(iconRes).layer(Resource.imgc).tex();
+        } catch (Exception ignored) {
+            try {
+                tex = Resource.remote().loadwait(iconRes).layer(Resource.imgc).tex();
+            } catch (Exception ignored2) {
+            }
+        }
+        timerIconCache.put(iconRes, tex);
+        return tex;
     }
 
     private void drawFishLocations(GOut g) {

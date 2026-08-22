@@ -2,6 +2,7 @@ package nurgling.actions;
 
 import haven.Coord2d;
 import haven.Gob;
+import haven.MapView;
 import haven.Pair;
 import nurgling.NGameUI;
 import nurgling.NGob;
@@ -71,11 +72,15 @@ public class PileMaker implements Action{
 
                 return Results.FAIL();
         }
-        Coord2d itemactPos = exactPos != null ? plobClickPos(gui, exactPos) : out.a;
+        Coord2d itemactPos = plobClickPos(gui, exactPos != null ? exactPos : out.a);
         NUtils.activateItem(itemactPos);
-        NUtils.getUI().core.addTask(new WaitPlob());
+        // Background sessions never finish the GL ghost; wait only for the server "place" msg.
+        NUtils.getUI().core.addTask(new WaitPlob(false));
         Coord2d pos;
-        NHitBox hitbox = NUtils.getGameUI().map.placing.get().ngob.hitBox;
+        NHitBox hitbox = resolveHitbox(plobHitbox(gui), pileName);
+        if (hitbox == null) {
+            return Results.ERROR("No hitbox");
+        }
         if (exactPos != null) {
             pos = exactPos;
         } else if ((pos = Finder.getFreePlace(out, hitbox)) == null) {
@@ -90,6 +95,38 @@ public class PileMaker implements Action{
         pile = wp.getPile();
         NUtils.addTask(new WaitStockpile(true));
         return Results.SUCCESS();
+    }
+
+    static NHitBox plobHitbox(NGameUI gui) {
+        try {
+            if (gui != null && gui.map != null && gui.map.placing != null && gui.map.placing.ready()) {
+                MapView.Plob plob = gui.map.placing.get();
+                if (plob != null && plob.ngob != null) {
+                    return plob.ngob.hitBox;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * Prefer the loaded placement ghost; fall back to the known stockpile hitbox
+     * so a headless session can still pathfind and send {@code place}.
+     */
+    public static NHitBox resolveHitbox(NHitBox plobHitbox, NAlias pileName) {
+        if (plobHitbox != null) {
+            return plobHitbox;
+        }
+        if (pileName != null) {
+            for (String key : pileName.getKeys()) {
+                NHitBox custom = NHitBox.findCustom(key);
+                if (custom != null) {
+                    return custom;
+                }
+            }
+        }
+        return NHitBox.findCustom("stockpile");
     }
 
     /**

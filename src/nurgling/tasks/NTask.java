@@ -8,7 +8,8 @@ public abstract class NTask
         {
             if(counter++ >=maxCounter)
             {
-                criticalExit = true;
+                if(criticalOnTimeout)
+                    criticalExit = true;
                 return true;
             }
         }
@@ -20,4 +21,5 @@ public abstract class NTask
     protected int counter = 0;
     protected int maxCounter = 200;
     protected boolean infinite = true;
+    protected boolean criticalOnTimeout = true;
 }
