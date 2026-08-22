@@ -560,17 +560,24 @@ NMiniMap extends MiniMap {
                     // Convert tile coordinates to minimap screen coordinates
                     Coord originScreenPos = vector.originTileCoords.sub(dloc.tc).div(scalef()).add(hsz);
 
-                    // Calculate a far point along the vector direction
-                    double rayLength = 10000; // Tiles (effectively infinite on map scale)
-                    Coord2d farPointTiles = vector.getTilePointAt(rayLength);
-                    Coord farScreenPos = new Coord((int)farPointTiles.x, (int)farPointTiles.y).sub(dloc.tc).div(scalef()).add(hsz);
+                    Coord2d endTiles = vector.mapEndTile(10000);
+                    Coord endScreenPos = vector.showEndpoint
+                        ? vector.targetTileCoords.sub(dloc.tc).div(scalef()).add(hsz)
+                        : new Coord((int)endTiles.x, (int)endTiles.y).sub(dloc.tc).div(scalef()).add(hsz);
 
-                    // Clip the vector line to map bounds
-                    Coord2d[] clipped = clipLineToRect(new Coord2d(originScreenPos), new Coord2d(farScreenPos), new Coord2d(sz));
+                    Coord2d[] clipped = clipLineToRect(new Coord2d(originScreenPos), new Coord2d(endScreenPos), new Coord2d(sz));
                     if(clipped != null && vector.color != null) {
-                        // Draw the ray from origin toward far point
                         g.chcolor(vector.color.getRed(), vector.color.getGreen(), vector.color.getBlue(), vector.color.getAlpha());
                         g.line(clipped[0].floor(), clipped[1].floor(), 2);
+                        g.chcolor();
+                    }
+                    if(vector.showEndpoint && vector.color != null
+                            && endScreenPos.x >= 0 && endScreenPos.y >= 0
+                            && endScreenPos.x < sz.x && endScreenPos.y < sz.y) {
+                        int arm = UI.scale(5);
+                        g.chcolor(vector.color.getRed(), vector.color.getGreen(), vector.color.getBlue(), vector.color.getAlpha());
+                        g.line(endScreenPos.add(-arm, -arm), endScreenPos.add(arm, arm), 2);
+                        g.line(endScreenPos.add(-arm, arm), endScreenPos.add(arm, -arm), 2);
                         g.chcolor();
                     }
                 } catch(Exception e) {

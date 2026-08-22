@@ -2397,7 +2397,7 @@ public class NMapView extends MapView
         }
 
         nurgling.tools.DirectionalVector vector = new nurgling.tools.DirectionalVector(
-            originTileCoords, targetTileCoords, targetName, targetGobId
+            originTileCoords, targetTileCoords, targetName, targetGobId, true
         );
         directionalVectors.add(vector);
     }

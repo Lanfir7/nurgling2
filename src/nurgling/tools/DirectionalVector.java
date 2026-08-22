@@ -25,6 +25,9 @@ public class DirectionalVector {
     /** Color for this vector */
     public final Color color;
 
+    /** If true, map draws a finite line to targetTileCoords plus an X; otherwise an infinite ray */
+    public final boolean showEndpoint;
+
     /** Colors to cycle through for different vector pairs */
     private static final Color[] COLORS = {
         new Color(100, 150, 255, 200),  // Blue
@@ -52,17 +55,26 @@ public class DirectionalVector {
         colorIndex = 0;
     }
 
-    public DirectionalVector(Coord originTileCoords, Coord targetTileCoords, String targetName, long targetGobId, Color color) {
+    public DirectionalVector(Coord originTileCoords, Coord targetTileCoords, String targetName, long targetGobId, Color color, boolean showEndpoint) {
         this.originTileCoords = originTileCoords;
         this.targetTileCoords = targetTileCoords;
         this.targetName = targetName;
         this.targetGobId = targetGobId;
         this.color = color;
+        this.showEndpoint = showEndpoint;
+    }
+
+    public DirectionalVector(Coord originTileCoords, Coord targetTileCoords, String targetName, long targetGobId, Color color) {
+        this(originTileCoords, targetTileCoords, targetName, targetGobId, color, false);
     }
 
     /** Constructor without color (uses default blue) */
     public DirectionalVector(Coord originTileCoords, Coord targetTileCoords, String targetName, long targetGobId) {
-        this(originTileCoords, targetTileCoords, targetName, targetGobId, COLORS[0]);
+        this(originTileCoords, targetTileCoords, targetName, targetGobId, COLORS[0], false);
+    }
+
+    public DirectionalVector(Coord originTileCoords, Coord targetTileCoords, String targetName, long targetGobId, boolean showEndpoint) {
+        this(originTileCoords, targetTileCoords, targetName, targetGobId, COLORS[0], showEndpoint);
     }
 
     /**
@@ -79,5 +91,16 @@ public class DirectionalVector {
     public Coord2d getTilePointAt(double distance) {
         Coord2d dir = getDirection();
         return new Coord2d(originTileCoords).add(dir.mul(distance));
+    }
+
+    /**
+     * Tile coordinate where the map line should end.
+     * Finite quest marks stop at the target; dowsing rays extend {@code infiniteRayLength} tiles.
+     */
+    public Coord2d mapEndTile(double infiniteRayLength) {
+        if(showEndpoint) {
+            return new Coord2d(targetTileCoords);
+        }
+        return getTilePointAt(infiniteRayLength);
     }
 }
