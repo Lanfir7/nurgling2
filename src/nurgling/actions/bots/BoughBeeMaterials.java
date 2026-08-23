@@ -71,8 +71,12 @@ public final class BoughBeeMaterials {
         return best;
     }
 
+    public static boolean isBoughPyreGob(String name) {
+        return name != null && name.contains("bpyre") && !name.contains("consobj");
+    }
+
     public static boolean isPyreBuild(String gobName, String builtResName) {
-        if (gobName != null && gobName.contains("bpyre"))
+        if (isBoughPyreGob(gobName))
             return true;
         return gobName != null && gobName.contains("consobj")
                 && builtResName != null && builtResName.contains("bpyre");

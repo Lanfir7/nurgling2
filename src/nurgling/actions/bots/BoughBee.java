@@ -500,7 +500,9 @@ public class BoughBee implements Action {
         return null;
     }
 
-    private void placePyreTimer(NGameUI gui, Gob pyre) {
+    public static void placePyreTimer(NGameUI gui, Gob pyre) {
+        if (gui == null || pyre == null || pyre.rc == null)
+            return;
         if (gui.mmap == null || gui.mmap.sessloc == null || gui.localizedResourceTimerService == null)
             return;
         Coord tileCoords = pyre.rc.floor(tilesz).add(gui.mmap.sessloc.tc);

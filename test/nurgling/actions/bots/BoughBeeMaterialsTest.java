@@ -100,6 +100,15 @@ class BoughBeeMaterialsTest {
     }
 
     @Test
+    void boughPyreGobMatchesPlacedPyreNotConstruction() {
+        assertTrue(BoughBeeMaterials.isBoughPyreGob("gfx/terobjs/bpyre"));
+        assertFalse(BoughBeeMaterials.isBoughPyreGob("gfx/terobjs/consobj"));
+        assertFalse(BoughBeeMaterials.isBoughPyreGob("gfx/terobjs/pow"));
+        assertFalse(BoughBeeMaterials.isBoughPyreGob("gfx/kritter/wildbees/wildbeehive"));
+        assertFalse(BoughBeeMaterials.isBoughPyreGob(null));
+    }
+
+    @Test
     void wildHiveMatchesGobTooltipPath() {
         assertTrue(BoughBeeMaterials.isWildHive("gfx/kritter/wildbees/wildbeehive"));
         assertFalse(BoughBeeMaterials.isWildHive("gfx/terobjs/beehive"));

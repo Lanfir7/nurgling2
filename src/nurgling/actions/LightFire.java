@@ -187,8 +187,19 @@ public class LightFire implements Action {
     /**
      * Light fire using branches (alternative method)
      */
+    public static final int MAKE_ONE = 0;
+    public static final int MAKE_ALL = 1;
+
     public static boolean needsFuelArea(int inventoryBranchPieces) {
         return inventoryBranchPieces < 2;
+    }
+
+    public static boolean isLightFireRecipe(String name) {
+        return name != null && name.equalsIgnoreCase("Light fire");
+    }
+
+    public static boolean craftWaitDone(boolean hasHandItem, boolean hasProg, int ticks, int maxTicks) {
+        return hasHandItem || hasProg || ticks >= maxTicks;
     }
 
     private int countInventoryBranches(NGameUI gui) throws InterruptedException {
@@ -288,18 +299,26 @@ public class LightFire implements Action {
             NUtils.activateItem(firedGob);
 
             NUtils.addTask(new NTask() {
+                {
+                    infinite = false;
+                    maxCounter = 200;
+                    criticalOnTimeout = false;
+                }
                 @Override
                 public boolean check() {
-
-                    return (gui.prog != null) && (gui.prog.prog > 0) ;
+                    return (gui.prog != null) && (gui.prog.prog > 0);
                 }
             });
 
             NUtils.addTask(new NTask() {
+                {
+                    infinite = false;
+                    maxCounter = 400;
+                    criticalOnTimeout = false;
+                }
                 @Override
                 public boolean check() {
-
-                    return (gui.prog == null) || (gui.prog.prog <= 0) ;
+                    return (gui.prog == null) || (gui.prog.prog <= 0);
                 }
             });
             
@@ -329,46 +348,75 @@ public class LightFire implements Action {
     }
 
     private void craftLightFire(NGameUI gui) throws InterruptedException {
-        if(NUtils.getGameUI().craftwnd == null || (NUtils.getGameUI().craftwnd.makeWidget!=null && !NUtils.getGameUI().craftwnd.makeWidget.rcpnm.equals("Light fire")))
-        {
-            for (MenuGrid.Pagina pb : NUtils.getGameUI().menu.paginae)
-            {
-                if (pb.button().name().equals("Light fire"))
-                {
-                    pb.button().use(new MenuGrid.Interaction());
-                    break;
+        NMakewindow makeWidget = gui.craftwnd != null ? gui.craftwnd.makeWidget : null;
+        if (makeWidget == null || !isLightFireRecipe(makeWidget.rcpnm)) {
+            MenuGrid.Pagina lightPag = null;
+            if (gui.menu != null) {
+                for (MenuGrid.Pagina pb : gui.menu.paginae) {
+                    try {
+                        if (pb.button() != null && isLightFireRecipe(pb.button().name())) {
+                            lightPag = pb;
+                            break;
+                        }
+                    } catch (Loading ignored) {
+                    }
                 }
             }
-            NUtils.addTask(new NTask()
-            {
-                @Override
-                public boolean check()
+            if (lightPag == null || lightPag.button() == null)
+                return;
+            lightPag.button().use(new MenuGrid.Interaction());
+            NUtils.addTask(new NTask() {
                 {
-                    return NUtils.getGameUI().craftwnd != null && NUtils.getGameUI().craftwnd.makeWidget!=null &&  NUtils.getGameUI().craftwnd.makeWidget.rcpnm.equals("Light fire");
+                    infinite = false;
+                    maxCounter = 200;
+                    criticalOnTimeout = false;
+                }
+                @Override
+                public boolean check() {
+                    return gui.craftwnd != null && gui.craftwnd.makeWidget != null
+                            && isLightFireRecipe(gui.craftwnd.makeWidget.rcpnm);
                 }
             });
         }
 
-        // Additional safety check before sending make message
-        if (NUtils.getGameUI().craftwnd != null && NUtils.getGameUI().craftwnd.makeWidget != null) {
-            NUtils.getGameUI().craftwnd.makeWidget.wdgmsg("make", 1);
+        makeWidget = gui.craftwnd != null ? gui.craftwnd.makeWidget : null;
+        if (makeWidget == null || !isLightFireRecipe(makeWidget.rcpnm))
+            return;
+
+        if (gui.vhand != null) {
+            NUtils.drop(gui.vhand);
+            NUtils.addTask(new WaitFreeHand());
         }
 
+        makeWidget.wdgmsg("make", MAKE_ONE);
+
         NUtils.addTask(new NTask() {
+            {
+                infinite = false;
+                maxCounter = 200;
+                criticalOnTimeout = false;
+            }
             @Override
             public boolean check() {
-
-                return (gui.prog != null) && (gui.prog.prog > 0) ;
+                boolean hasHand = gui.vhand != null;
+                boolean hasProg = gui.prog != null && gui.prog.prog > 0;
+                return craftWaitDone(hasHand, hasProg, counter, maxCounter);
             }
         });
 
-        NUtils.addTask(new NTask() {
-            @Override
-            public boolean check() {
-
-                return (gui.prog == null) || (gui.prog.prog <= 0) ;
-            }
-        });
+        if (gui.prog != null && gui.prog.prog > 0) {
+            NUtils.addTask(new NTask() {
+                {
+                    infinite = false;
+                    maxCounter = 400;
+                    criticalOnTimeout = false;
+                }
+                @Override
+                public boolean check() {
+                    return gui.vhand != null || gui.prog == null || gui.prog.prog <= 0;
+                }
+            });
+        }
     }
 
 }
