@@ -41,4 +41,30 @@ class LightFireTest {
         assertEquals(0, LightFire.MAKE_ONE);
         assertEquals(1, LightFire.MAKE_ALL);
     }
+
+    @Test
+    void lightingClocksAreTheProgWidgetNotThePercent() {
+        assertFalse(LightFire.hasClocks(false));
+        assertTrue(LightFire.hasClocks(true));
+    }
+
+    @Test
+    void lightingIsNotDoneUntilClocksAppearedAndVanished() {
+        assertFalse(LightFire.lightingUseFinished(false, false));
+        assertFalse(LightFire.lightingUseFinished(true, true));
+        assertTrue(LightFire.lightingUseFinished(false, true));
+    }
+
+    @Test
+    void leftoverCraftClocksMustClearBeforeUse() {
+        assertFalse(LightFire.leftoverClocksCleared(true));
+        assertTrue(LightFire.leftoverClocksCleared(false));
+    }
+
+    @Test
+    void doNotDropFirebrandWhileLightingClocks() {
+        assertFalse(LightFire.shouldDropFirebrand(true, true));
+        assertTrue(LightFire.shouldDropFirebrand(true, false));
+        assertFalse(LightFire.shouldDropFirebrand(false, false));
+    }
 }

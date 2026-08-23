@@ -202,6 +202,22 @@ public class LightFire implements Action {
         return hasHandItem || hasProg || ticks >= maxTicks;
     }
 
+    public static boolean hasClocks(boolean progWidgetVisible) {
+        return progWidgetVisible;
+    }
+
+    public static boolean leftoverClocksCleared(boolean progWidgetVisible) {
+        return !hasClocks(progWidgetVisible);
+    }
+
+    public static boolean lightingUseFinished(boolean progWidgetVisible, boolean sawStart) {
+        return sawStart && leftoverClocksCleared(progWidgetVisible);
+    }
+
+    public static boolean shouldDropFirebrand(boolean hasHand, boolean progWidgetVisible) {
+        return hasHand && leftoverClocksCleared(progWidgetVisible);
+    }
+
     private int countInventoryBranches(NGameUI gui) throws InterruptedException {
         int n = 0;
         for (WItem it : gui.getInventory().getItems("Branch")) {
@@ -290,40 +306,31 @@ public class LightFire implements Action {
             
             craftLightFire(gui);
 
-            // Check if firebrand is still burning (has the right name)
+            NUtils.addTask(new NTask() {
+                @Override
+                public boolean check() {
+                    return leftoverClocksCleared(gui.prog != null);
+                }
+            });
+
             if (gui.vhand == null) {
-                continue; // Firebrand extinguished, try again
+                continue;
             }
-            
-            // Use firebrand on the object to light
+
             NUtils.activateItem(firedGob);
 
             NUtils.addTask(new NTask() {
-                {
-                    infinite = false;
-                    maxCounter = 200;
-                    criticalOnTimeout = false;
-                }
+                private boolean sawStart = false;
                 @Override
                 public boolean check() {
-                    return (gui.prog != null) && (gui.prog.prog > 0);
+                    boolean clocks = hasClocks(gui.prog != null);
+                    if (clocks)
+                        sawStart = true;
+                    return lightingUseFinished(clocks, sawStart);
                 }
             });
 
-            NUtils.addTask(new NTask() {
-                {
-                    infinite = false;
-                    maxCounter = 400;
-                    criticalOnTimeout = false;
-                }
-                @Override
-                public boolean check() {
-                    return (gui.prog == null) || (gui.prog.prog <= 0);
-                }
-            });
-            
-            // Drop item from hand if present
-            if (gui.vhand != null) {
+            if (shouldDropFirebrand(gui.vhand != null, gui.prog != null)) {
                 NUtils.drop(gui.vhand);
                 NUtils.addTask(new WaitFreeHand());
             }
