@@ -12,10 +12,18 @@ import java.util.Iterator;
 public class NBoughBeeProp implements JConf {
     final private String username;
     final private String chrid;
-    public String onPlayerAction = "nothing";
+    public String onPlayerAction = "logout";
     public String onAnimalAction = "logout";
-    public String afterHarvestAction = "nothing";
-    public boolean harvestTrees = false;
+    public String afterHarvestAction = "logout";
+    public boolean harvestTrees = true;
+
+    public static boolean useSettingsGui() {
+        return false;
+    }
+
+    public static NBoughBeeProp runDefaults() {
+        return new NBoughBeeProp("", "");
+    }
 
     public NBoughBeeProp(String username, String chrid) {
         this.username = username;

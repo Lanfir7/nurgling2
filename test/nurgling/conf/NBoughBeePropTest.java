@@ -5,14 +5,27 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NBoughBeePropTest {
     @Test
-    void harvestTreesDefaultsOff() {
+    void runDefaultsMatchSmokerGui() {
+        NBoughBeeProp prop = NBoughBeeProp.runDefaults();
+        assertEquals("logout", prop.onPlayerAction);
+        assertEquals("logout", prop.onAnimalAction);
+        assertEquals("logout", prop.afterHarvestAction);
+        assertTrue(prop.harvestTrees);
+        assertFalse(NBoughBeeProp.useSettingsGui());
+    }
+
+    @Test
+    void harvestTreesDefaultsOn() {
         NBoughBeeProp prop = new NBoughBeeProp("u", "c");
-        assertFalse(prop.harvestTrees);
+        assertTrue(prop.harvestTrees);
+        assertEquals("logout", prop.onPlayerAction);
+        assertEquals("logout", prop.afterHarvestAction);
     }
 
     @Test

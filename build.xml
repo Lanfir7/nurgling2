@@ -356,7 +356,16 @@
     <copy todir="release/" file="etc/run_updater_latest.bat" failonerror="false" quiet="true" />
     <copy todir="release/" file="etc/nurgling_launcher.jar" failonerror="false" quiet="true" />
     <copy file="etc/ansgar-config.properties" tofile="release/haven-config.properties" failonerror="false" quiet="true" />
-    <copy todir="release/AlarmSounds" failonerror="false" quiet="true">
+    <fail message="AlarmSounds/*.wav required for release">
+      <condition>
+        <not>
+          <resourcecount when="greater" count="0">
+            <fileset dir="AlarmSounds" includes="*.wav" />
+          </resourcecount>
+        </not>
+      </condition>
+    </fail>
+    <copy todir="release/AlarmSounds">
       <fileset dir="AlarmSounds" />
     </copy>
   </target>

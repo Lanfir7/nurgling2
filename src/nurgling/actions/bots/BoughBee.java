@@ -38,18 +38,22 @@ public class BoughBee implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         nurgling.widgets.bots.BoughBee w = null;
-        NBoughBeeProp prop = null;
-        try {
-            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.getGameUI().add((w = new nurgling.widgets.bots.BoughBee()), UI.scale(200, 200))));
-            prop = w.prop;
-        } catch (InterruptedException e) {
-            throw e;
-        } finally {
-            if (w != null)
-                w.destroy();
-        }
-        if (prop == null) {
-            return Results.ERROR("No config");
+        NBoughBeeProp prop;
+        if (!NBoughBeeProp.useSettingsGui()) {
+            prop = NBoughBeeProp.runDefaults();
+        } else {
+            try {
+                NUtils.getUI().core.addTask(new WaitCheckable(NUtils.getGameUI().add((w = new nurgling.widgets.bots.BoughBee()), UI.scale(200, 200))));
+                prop = w.prop;
+            } catch (InterruptedException e) {
+                throw e;
+            } finally {
+                if (w != null)
+                    w.destroy();
+            }
+            if (prop == null) {
+                return Results.ERROR("No config");
+            }
         }
 
         @SuppressWarnings("unchecked")
