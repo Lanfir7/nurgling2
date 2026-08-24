@@ -87,6 +87,23 @@ class BoughBeeMaterialsTest {
     }
 
     @Test
+    void constructionSiteIsReadyOnlyWhenNamedConsobjOrPyre() {
+        assertFalse(BoughBeeMaterials.constructionSiteReady(null));
+        assertFalse(BoughBeeMaterials.constructionSiteReady(""));
+        assertTrue(BoughBeeMaterials.constructionSiteReady("gfx/terobjs/consobj"));
+        assertTrue(BoughBeeMaterials.constructionSiteReady("gfx/terobjs/bpyre"));
+        assertFalse(BoughBeeMaterials.constructionSiteReady("gfx/kritter/wildbees/wildbeehive"));
+    }
+
+    @Test
+    void buildWindowWaitDoesNotGiveUpWhileConsobjExists() {
+        assertFalse(BoughBeeMaterials.pyreBuildWindowWaitDone(false, false, true));
+        assertTrue(BoughBeeMaterials.pyreBuildWindowWaitDone(true, false, true));
+        assertTrue(BoughBeeMaterials.pyreBuildWindowWaitDone(false, true, true));
+        assertTrue(BoughBeeMaterials.pyreBuildWindowWaitDone(false, false, false));
+    }
+
+    @Test
     void hiveMustBeWithinFiveTiles() {
         assertTrue(BoughBeeMaterials.isHiveInRange(5 * 11.0, 11.0));
         assertFalse(BoughBeeMaterials.isHiveInRange(5 * 11.0 + 0.1, 11.0));

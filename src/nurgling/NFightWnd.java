@@ -10,6 +10,7 @@ import static haven.CharWnd.*;
 import static haven.PUtils.*;
 import static haven.Inventory.invsq;
 import nurgling.i18n.L10n;
+import nurgling.tools.CombatInstructionWrite;
 
 public class NFightWnd extends FightWnd {
     private static final int DESC_W = UI.scale(267);
@@ -49,6 +50,66 @@ public class NFightWnd extends FightWnd {
 
     private static abstract class DropWidget extends Widget implements DropTarget {
 	DropWidget(Coord sz) { super(sz); }
+    }
+
+    public class MoveItem extends Widget implements DTarget {
+	private final Actions list;
+	private final Action act;
+	private UI.Grab mgrab;
+	private Coord dp;
+	private final Label use;
+	private int pu = -1, pa = -1;
+
+	public MoveItem(Coord sz, Actions list, Action act) {
+	    super(sz);
+	    this.list = list;
+	    this.act = act;
+	    use = adda(new Label("0/0", NStyle.nattrf), sz.x - UI.scale(5), sz.y / 2, 1.0, 0.5);
+	    add(SListWidget.IconText.of(Coord.of(use.c.x - UI.scale(2), sz.y), act::rendericon,
+		() -> act.res.get().flayer(Resource.tooltip).text()), Coord.z);
+	}
+
+	public void tick(double dt) {
+	    if(act.u != pu || act.a != pa)
+		use.settext(String.format("%d/%d", pu = act.u, pa = act.a));
+	    super.tick(dt);
+	}
+
+	public boolean mousedown(MouseDownEvent ev) {
+	    if(ev.propagate(this) || super.mousedown(ev)) return true;
+	    if(ev.b == 1) {
+		list.change(act);
+		mgrab = ui.grabmouse(this);
+		dp = ev.c;
+	    }
+	    return true;
+	}
+
+	public void mousemove(MouseMoveEvent ev) {
+	    super.mousemove(ev);
+	    if(mgrab != null && ev.c.dist(dp) > 5) {
+		mgrab.remove();
+		mgrab = null;
+		list.drag(act);
+	    }
+	}
+
+	public boolean mouseup(MouseUpEvent ev) {
+	    if(mgrab != null && ev.b == 1) {
+		mgrab.remove();
+		mgrab = null;
+		return true;
+	    }
+	    return super.mouseup(ev);
+	}
+
+	public boolean drop(Coord cc, Coord ul) {
+	    return false;
+	}
+
+	public boolean iteminteract(Coord cc, Coord ul) {
+	    return CombatInstructionWrite.iteminteract(NFightWnd.this, act.id(), ui.modflags());
+	}
     }
 
     private BufferedImage renderMoveInfo(Action act, int width) {
@@ -152,48 +213,7 @@ public class NFightWnd extends FightWnd {
 
 	    @Override
 	    protected Widget makeitem(Action act, int idx, Coord sz) {
-		Actions al = this;
-		return new Widget(sz) {
-		    private UI.Grab mgrab;
-		    private Coord dp;
-		    private final Label use;
-		    private int pu = -1, pa = -1;
-		    {
-			use = adda(new Label("0/0", NStyle.nattrf), sz.x - UI.scale(5), sz.y / 2, 1.0, 0.5);
-			add(IconText.of(Coord.of(use.c.x - UI.scale(2), sz.y), act::rendericon,
-			    () -> act.res.get().flayer(Resource.tooltip).text()), Coord.z);
-		    }
-		    public void tick(double dt) {
-			if(act.u != pu || act.a != pa)
-			    use.settext(String.format("%d/%d", pu = act.u, pa = act.a));
-			super.tick(dt);
-		    }
-		    public boolean mousedown(MouseDownEvent ev) {
-			if(ev.propagate(this) || super.mousedown(ev)) return true;
-			if(ev.b == 1) {
-			    al.change(act);
-			    mgrab = ui.grabmouse(this);
-			    dp = ev.c;
-			}
-			return true;
-		    }
-		    public void mousemove(MouseMoveEvent ev) {
-			super.mousemove(ev);
-			if(mgrab != null && ev.c.dist(dp) > 5) {
-			    mgrab.remove();
-			    mgrab = null;
-			    al.drag(act);
-			}
-		    }
-		    public boolean mouseup(MouseUpEvent ev) {
-			if(mgrab != null && ev.b == 1) {
-			    mgrab.remove();
-			    mgrab = null;
-			    return true;
-			}
-			return super.mouseup(ev);
-		    }
-		};
+		return new MoveItem(sz, this, act);
 	    }
 
 	    @Override

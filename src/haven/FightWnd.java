@@ -61,6 +61,8 @@ public class FightWnd extends Widget {
 
 	public Action(Indir<Resource> res, int id, int a, int u) {this.res = res; this.id = id; this.a = a; this.u = u;}
 
+	public int id() {return(id);}
+
 	public String rendertext() {
 	    StringBuilder buf = new StringBuilder();
 	    Resource res = this.res.get();

@@ -4,14 +4,20 @@ import haven.*;
 import nurgling.NUtils;
 import nurgling.conf.NPrepBoardsProp;
 import nurgling.i18n.L10n;
+import nurgling.tools.PrepQuota;
 
 public class PrepareBoards extends Window implements Checkable {
 
     public String tool = null;
 
     UsingTools usingTools = null;
+    TextEntry.NumberValue countEntry = null;
 
     public PrepareBoards() {
+        this(true);
+    }
+
+    public PrepareBoards(boolean askCount) {
         super(new Coord(200,200), L10n.get("pboards.wnd_title"));
         NPrepBoardsProp startprop = NPrepBoardsProp.get(NUtils.getUI().sessInfo);
         prev = add(new Label(L10n.get("pboards.settings")));
@@ -29,6 +35,11 @@ public class PrepareBoards extends Window implements Checkable {
 
         }
 
+        if (askCount) {
+            prev = add(new Label(L10n.get("pboards.count")), prev.pos("bl").add(UI.scale(0,5)));
+            String initial = startprop != null ? String.valueOf(startprop.count) : "0";
+            prev = add(countEntry = new TextEntry.NumberValue(UI.scale(50), initial), prev.pos("bl").add(UI.scale(0,5)));
+        }
 
         prev = add(new Button(UI.scale(150), L10n.get("botwnd.start")){
             @Override
@@ -38,6 +49,8 @@ public class PrepareBoards extends Window implements Checkable {
                 if (prop != null) {
                     if(usingTools.s!=null)
                         prop.tool = usingTools.s.name;
+                    if (countEntry != null)
+                        prop.count = PrepQuota.parse(countEntry.text());
                     NPrepBoardsProp.set(prop);
                 }
                 isReady = true;

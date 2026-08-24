@@ -89,6 +89,16 @@ public final class BoughBeeMaterials {
         return n.contains("pyre") || n.contains("bough");
     }
 
+    public static boolean constructionSiteReady(String gobName) {
+        if (gobName == null || gobName.isEmpty())
+            return false;
+        return gobName.contains("consobj") || isBoughPyreGob(gobName);
+    }
+
+    public static boolean pyreBuildWindowWaitDone(boolean hasWindow, boolean hasPyre, boolean consobjExists) {
+        return hasWindow || hasPyre || !consobjExists;
+    }
+
     public static boolean isLivingTree(String resname) {
         if (resname == null || !resname.startsWith("gfx/terobjs/trees"))
             return false;

@@ -36,8 +36,12 @@ import nurgling.NFlowerMenu;
 import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NUtils;
+import nurgling.headless.Headless;
+import nurgling.headless.HeadlessEnvironment;
 import nurgling.i18n.L10n;
 import nurgling.overlays.map.NOverlay;
+import nurgling.sessions.SessionContext;
+import nurgling.sessions.SessionManager;
 import nurgling.tools.CheckGridsState;
 
 import java.awt.*;
@@ -1907,6 +1911,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	camera.resized();
     }
 
+    private boolean isVisualPlaceSession() {
+	boolean sessionHeadless = false;
+	try {
+	    SessionContext ctx = SessionManager.getInstance().findByUI(ui);
+	    sessionHeadless = (ctx != null) && ctx.isHeadless();
+	} catch (Throwable ignored) {
+	}
+	return PlaceHologramPolicy.isVisualPlaceSession(
+	    ui != null,
+	    (ui != null) && (ui.env != null),
+	    basic != null,
+	    Headless.isHeadless(),
+	    (ui != null) && (ui.env instanceof HeadlessEnvironment),
+	    sessionHeadless);
+    }
+
     public static interface PlobAdjust {
 	public void adjust(Plob plob, Coord pc, Coord2d mc, int modflags);
 	public default boolean rotate(Plob plob, MouseWheelEvent data, int modflags) {return(rotate(plob, data.a, modflags));}
@@ -2119,16 +2139,21 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 
 	public void place() {
+	    boolean visual = isVisualPlaceSession();
 	    try {
 		if((ui != null) && (ui.env != null) && ui.mc.isect(rootpos(), sz))
 		    new Adjust(ui.mc.sub(rootpos()), 0).run();
 	    } catch (Throwable t) {
+		if(PlaceHologramPolicy.retryPlaceOn(t, visual))
+		    throw (Loading)t;
 		/* Background sessions have no usable GL pick. */
 	    }
 	    try {
 		if(basic != null)
 		    this.slot = basic.add(this.placed);
 	    } catch (Throwable t) {
+		if(PlaceHologramPolicy.retryPlaceOn(t, visual))
+		    throw (Loading)t;
 		/* Stale render tree after the session is demoted to headless. */
 	    }
 	}

@@ -285,10 +285,10 @@ public class BoughBee implements Action {
         }
 
         pag.button().use(new MenuGrid.Interaction(1, 0));
-        NUtils.addTask(WaitPlob.withSoftTimeout(false, 80));
+        NUtils.addTask(new WaitPlob(false));
         if (gui.map.placing == null)
             pag.button().use(new MenuGrid.Interaction(1, 0));
-        NUtils.addTask(WaitPlob.withSoftTimeout(false, 80));
+        NUtils.addTask(new WaitPlob(false));
         if (gui.map.placing == null)
             return null;
 
@@ -298,7 +298,7 @@ public class BoughBee implements Action {
         PathFinder pf = new PathFinder(NGob.getDummy(pos, 0, hitBox), true);
         pf.run(gui);
         gui.map.wdgmsg("place", pos.floor(posres), 0, 1, 0);
-        NUtils.addTask(new WaitConstructionObject(pos));
+        NUtils.addTask(new WaitNamedConstruction(pos));
 
         Gob pyre = findNewPyre(beforePyre);
         if (pyre != null)
@@ -346,7 +346,8 @@ public class BoughBee implements Action {
         if (gob == null)
             gob = Finder.findGob(pos);
         int attempts = 0;
-        while (gob != null && NParser.checkName(gob.ngob.name, "gfx/terobjs/consobj") && attempts++ < 10) {
+        while (gob != null && gob.ngob != null
+                && NParser.checkName(gob.ngob.name, "gfx/terobjs/consobj") && attempts++ < 10) {
             window = findPyreBuildWindow(gui);
             if (window == null) {
                 NUtils.rclickGob(gob);
@@ -400,6 +401,30 @@ public class BoughBee implements Action {
         return false;
     }
 
+    private static class WaitNamedConstruction extends NTask {
+        private final Coord2d pos;
+
+        WaitNamedConstruction(Coord2d pos) {
+            this.pos = pos;
+        }
+
+        @Override
+        public boolean check() {
+            try {
+                Gob pyre = Finder.findGob(pos, BPYRE, null, 15);
+                if (pyre != null)
+                    return true;
+                Gob gob = Finder.findGob(pos);
+                if (gob == null || gob.ngob == null)
+                    return false;
+                return BoughBeeMaterials.constructionSiteReady(gob.ngob.name);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return true;
+            }
+        }
+    }
+
     private static class WaitPyreBuildWindow extends NTask {
         private final NGameUI gui;
         private final Coord2d pos;
@@ -407,21 +432,31 @@ public class BoughBee implements Action {
         WaitPyreBuildWindow(NGameUI gui, Coord2d pos) {
             this.gui = gui;
             this.pos = pos;
-            infinite = false;
-            maxCounter = 400;
-            criticalOnTimeout = false;
         }
 
         @Override
         public boolean check() {
-            if (findPyreBuildWindow(gui) != null)
-                return true;
+            boolean hasWindow = findPyreBuildWindow(gui) != null;
+            boolean hasPyre = false;
+            boolean consobjExists = false;
             try {
-                return Finder.findGob(pos, BPYRE, null, 15) != null;
+                hasPyre = Finder.findGob(pos, BPYRE, null, 15) != null;
+                Gob gob = Finder.findGob(pos);
+                consobjExists = gob != null && gob.ngob != null
+                        && gob.ngob.name != null && gob.ngob.name.contains("consobj");
+                if (!consobjExists) {
+                    for (Gob g : Finder.findGobs(new NAlias("consobj"))) {
+                        if (g.rc != null && g.rc.dist(pos) < 15) {
+                            consobjExists = true;
+                            break;
+                        }
+                    }
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return true;
             }
+            return BoughBeeMaterials.pyreBuildWindowWaitDone(hasWindow, hasPyre, consobjExists);
         }
     }
 

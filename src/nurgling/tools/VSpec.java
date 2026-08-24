@@ -3183,6 +3183,20 @@ public class VSpec {
         pipeweed.add(new JSONObject("{\"static\":\"gfx/invobjs/tobacco-fresh\",\"name\":\"Fresh Leaf of Pipeweed\"}"));
         pipeweed.add(new JSONObject("{\"static\":\"gfx/invobjs/tobacco-cured\",\"name\":\"Cured Pipeweed\"}"));
         categories.put("Pipeweed", pipeweed);
+
+        ArrayList<JSONObject> sharpTools = new ArrayList<>();
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/bronzesword\",\"name\":\"Bronze Sword\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/butcherscleaver\",\"name\":\"Butcher's cleaver\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/ceramicknife\",\"name\":\"Ceramic Knife\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/flintknife\",\"name\":\"Flint Knife\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/fyrdssword\",\"name\":\"Fyrdsman's Sword\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/hirdssword\",\"name\":\"Hirdsman's Sword\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/axe-m\",\"name\":\"Metal Axe\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/obsidiandagger\",\"name\":\"Obsidian Dagger\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/stoneaxe\",\"name\":\"Stone Axe\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/tinkersthrowingaxe\",\"name\":\"Tinker's Throwing Axe\"}"));
+        sharpTools.add(new JSONObject("{\"static\":\"gfx/invobjs/woodsmansaxe\",\"name\":\"Woodsman's Axe\"}"));
+        categories.put("Sharp Tool", sharpTools);
     }
 
     public static NAlias getNamesInCategory(String categoryName) {

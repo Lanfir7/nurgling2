@@ -6,6 +6,7 @@ import haven.res.ui.tt.stackn.Stack;
 import nurgling.*;
 import nurgling.sessions.BotExecutor;
 import nurgling.tasks.*;
+import nurgling.tools.StackSupporter;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -186,7 +187,10 @@ public class SortInventory implements Action {
         }
         
         try {
-            doSort(gui);
+            sortLayout(gui);
+            if (!cancelled && deepSort) {
+                sortWithinStacks(gui);
+            }
         } finally {
             synchronized (lock) {
                 if (current == this) {
@@ -202,7 +206,7 @@ public class SortInventory implements Action {
         return cancelled ? Results.FAIL() : Results.SUCCESS();
     }
     
-    private void doSort(NGameUI gui) throws InterruptedException {
+    private void sortLayout(NGameUI gui) throws InterruptedException {
         // Build grid of blocked cells (including sqmask and multi-cell items)
         boolean[][] grid = new boolean[inventory.isz.x][inventory.isz.y];
         
@@ -339,11 +343,6 @@ public class SortInventory implements Action {
                 NUtils.getUI().core.addTask(new WaitFreeHand());
             }
         }
-
-        // Second pass: sort individual items across same-type stacks by quality
-        if (!cancelled && deepSort) {
-            sortWithinStacks(gui);
-        }
     }
     
     /**
@@ -444,7 +443,35 @@ public class SortInventory implements Action {
         // Wait a moment for the first-pass to fully settle in the UI
         NUtils.getUI().core.addTask(new WaitTicks(3));
 
-        // Find item names that have at least one stack
+        Set<String> names = new LinkedHashSet<>();
+        for (Widget wdg = inventory.lchild; wdg != null; wdg = wdg.prev) {
+            if (cancelled) return;
+            if (!(wdg instanceof WItem)) continue;
+            WItem w = (WItem) wdg;
+            if (!(w.item instanceof NGItem)) continue;
+            NGItem ng = (NGItem) w.item;
+            if (ng.name() == null) continue;
+            names.add(ng.name());
+        }
+        if (names.isEmpty()) return;
+
+        boolean packed = false;
+        for (String itemName : names) {
+            if (cancelled) return;
+            boolean packable = StackSupporter.isStackable(inventory, itemName)
+                    && StackSupporter.getFullStackSize(itemName) > 1;
+            if (packable) {
+                packStacks(itemName);
+                packed = true;
+            }
+        }
+
+        if (packed && !cancelled) {
+            NUtils.getUI().core.addTask(new WaitTicks(3));
+            sortLayout(gui);
+            NUtils.getUI().core.addTask(new WaitTicks(3));
+        }
+
         Set<String> namesWithStacks = new HashSet<>();
         for (Widget wdg = inventory.lchild; wdg != null; wdg = wdg.prev) {
             if (cancelled) return;
@@ -456,16 +483,17 @@ public class SortInventory implements Action {
                 namesWithStacks.add(ng.name());
             }
         }
-        if (namesWithStacks.isEmpty()) return;
 
         for (String itemName : namesWithStacks) {
             if (cancelled) return;
 
-            // Determine item size from any stack of this type
             Coord itemSize = getStackedItemSize(itemName);
             if (itemSize == null) continue;
 
-            // Find buffer slot matching this item's size
+            if (freshScan(itemName).size() < 2) {
+                continue;
+            }
+
             BufferLocation buffer = findBuffer(gui, itemSize);
             if (buffer == null) {
                 gui.msg("Need 1 free " + itemSize.x + "x" + itemSize.y
@@ -473,6 +501,177 @@ public class SortInventory implements Action {
                 continue;
             }
             performCycleSort(gui, itemName, buffer);
+        }
+    }
+
+    static List<Integer> computePackedSlotSizes(int count, int maxStackSize) {
+        List<Integer> sizes = new ArrayList<>();
+        if (count <= 0) {
+            return sizes;
+        }
+        int max = maxStackSize <= 1 ? 1 : maxStackSize;
+        if (max == 1) {
+            for (int i = 0; i < count; i++) {
+                sizes.add(1);
+            }
+            return sizes;
+        }
+        while (count > 0) {
+            int take = Math.min(max, count);
+            sizes.add(take);
+            count -= take;
+        }
+        return sizes;
+    }
+
+    private void packStacks(String itemName) throws InterruptedException {
+        int max = StackSupporter.getFullStackSize(itemName);
+        if (max <= 1) {
+            return;
+        }
+
+        int cycles = 0;
+        while (!cancelled && cycles++ < 500) {
+            List<Object[]> slots = scanSlotCounts(itemName);
+            if (slots.size() < 2) {
+                return;
+            }
+
+            List<Coord> positions = new ArrayList<>();
+            List<Integer> counts = new ArrayList<>();
+            int total = 0;
+            for (Object[] entry : slots) {
+                Coord pos = (Coord) entry[0];
+                int c = (Integer) entry[1];
+                positions.add(pos);
+                counts.add(c);
+                total += c;
+            }
+            if (total < 2) {
+                return;
+            }
+
+            List<Integer> target = computePackedSlotSizes(total, max);
+            if (counts.equals(target)) {
+                return;
+            }
+
+            if (NUtils.getGameUI().vhand != null) {
+                return;
+            }
+
+            int destIdx = -1;
+            for (int i = 0; i < target.size() && i < counts.size(); i++) {
+                if (counts.get(i) < target.get(i) && counts.get(i) < max) {
+                    destIdx = i;
+                    break;
+                }
+            }
+            if (destIdx < 0) {
+                for (int i = 0; i < counts.size() && i < target.size(); i++) {
+                    if (counts.get(i) < max) {
+                        destIdx = i;
+                        break;
+                    }
+                }
+            }
+            if (destIdx < 0) {
+                return;
+            }
+
+            int srcIdx = -1;
+            for (int i = counts.size() - 1; i >= 0; i--) {
+                if (i == destIdx || counts.get(i) <= 0) {
+                    continue;
+                }
+                boolean extra = i >= target.size() || counts.get(i) > target.get(i);
+                if (extra) {
+                    srcIdx = i;
+                    break;
+                }
+            }
+            if (srcIdx < 0) {
+                return;
+            }
+
+            takeAnyFromSlot(positions.get(srcIdx));
+            if (NUtils.getGameUI().vhand == null) {
+                return;
+            }
+            addItemToSlot(positions.get(destIdx));
+        }
+    }
+
+    private List<Object[]> scanSlotCounts(String itemName) {
+        List<Object[]> slots = new ArrayList<>();
+        for (Widget wdg = inventory.lchild; wdg != null; wdg = wdg.prev) {
+            if (!(wdg instanceof WItem)) continue;
+            WItem w = (WItem) wdg;
+            if (!(w.item instanceof NGItem)) continue;
+            if (!itemName.equals(((NGItem) w.item).name())) continue;
+            Coord pos = getItemPos(w);
+            int count = getSlotCount(pos);
+            if (count > 0) {
+                slots.add(new Object[]{pos, count});
+            }
+        }
+        slots.sort((a, b) -> {
+            Coord pa = (Coord) a[0], pb = (Coord) b[0];
+            return pa.y != pb.y ? Integer.compare(pa.y, pb.y) : Integer.compare(pa.x, pb.x);
+        });
+        return slots;
+    }
+
+    private int getSlotCount(Coord pos) {
+        WItem slotItem = findSlotItemAtPos(pos);
+        if (slotItem == null) {
+            return 0;
+        }
+        if (slotItem.item.contents instanceof ItemStack) {
+            return ((ItemStack) slotItem.item.contents).wmap.size();
+        }
+        if (slotItem.item instanceof NGItem) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private void takeAnyFromSlot(Coord pos) throws InterruptedException {
+        WItem slotItem = findSlotItemAtPos(pos);
+        if (slotItem == null) {
+            return;
+        }
+
+        if (slotItem.item.contents instanceof ItemStack) {
+            ItemStack stack = (ItemStack) slotItem.item.contents;
+            int originalSize = stack.wmap.size();
+            WItem target = null;
+            for (GItem gi : stack.order) {
+                target = stack.wmap.get(gi);
+                if (target != null) {
+                    break;
+                }
+            }
+            if (target == null) {
+                return;
+            }
+            NUtils.takeItemToHand(target);
+            if (originalSize <= 2) {
+                if (stack.parent != null) {
+                    NUtils.addTask(new ISRemovedLoftar(
+                            ((GItem.ContentsWindow) stack.parent).cont.wdgid(),
+                            stack, originalSize));
+                }
+            } else {
+                NUtils.addTask(new StackSizeChanged(stack, originalSize));
+            }
+        } else {
+            if (slotItem.item.contents != null) {
+                return;
+            }
+            int wdgid = slotItem.item.wdgid();
+            NUtils.takeItemToHand(slotItem);
+            NUtils.addTask(new ISRemoved(wdgid));
         }
     }
 

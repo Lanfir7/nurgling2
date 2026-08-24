@@ -41,5 +41,8 @@ public class GobContextRegistry {
         register(new BoughBeeAction());
         register(new BoughPyreTimerAction());
         register(new FeedCloverAction());
+        register(new ButcherAction());
+        register(new ChopBlocksAction());
+        register(new SawBoardsAction());
     }
 }

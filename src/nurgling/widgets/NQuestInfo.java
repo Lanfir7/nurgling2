@@ -2,12 +2,17 @@ package nurgling.widgets;
 
 import haven.*;
 import haven.Window;
+import haven.res.ui.locptr.Pointer;
+import haven.res.ui.obj.buddy.Buddy;
 import nurgling.NConfig;
 import static haven.PType.*;
 import nurgling.NGameUI;
 import nurgling.NGItem;
 import nurgling.NStyle;
 import nurgling.NUtils;
+import nurgling.tools.QuestGiverDistance;
+import nurgling.tools.QuestRewardFilter;
+import nurgling.tools.QuestTrackFilter;
 
 import java.awt.*;
 import java.awt.font.TextAttribute;
@@ -116,11 +121,19 @@ public class NQuestInfo extends Widget
         }
         QuestGiver credo = new QuestGiver();
         for (NQuest quest : quests.values()) {
+            if (QuestTrackFilter.isMutedTitle(helperTitle(quest)))
+                continue;
             boolean isReady = true;
+            boolean tellPending = false;
+            Condition tellCond = null;
             for (Condition cond : quest.conditions) {
                 Condition.QuestsGiver qg = null;
                 if (cond.state == Condition.State.TELL) {
                     quest.questGiver = ((Condition.QuestsGiver) cond.attrs.get(Condition.QuestsGiver.class)).name;
+                    if (!cond.ready) {
+                        tellPending = true;
+                        tellCond = cond;
+                    }
                 }
                 else if ((qg = ((Condition.QuestsGiver) cond.attrs.get(Condition.QuestsGiver.class)))!=null)
                 {
@@ -141,18 +154,11 @@ public class NQuestInfo extends Widget
                     if (cond.state != Condition.State.TELL)
                         isReady = false;
                 }
-                if(cond.state!=null)
-                {
-                    switch (cond.state) {
-                        case TELL:
-                            break;
-                        default: {
-                            if(!cond.ready)
-                                taskconds.get(cond.state).conditions.add(cond);
-                        }
-                    }
-                }
+                if(cond.state!=null && !cond.ready && cond.state != Condition.State.TELL)
+                    taskconds.get(cond.state).conditions.add(cond);
             }
+            if (QuestRewardFilter.isTurnIn(tellPending, !isReady) && tellCond != null)
+                taskconds.get(Condition.State.TELL).conditions.add(tellCond);
             if (quest.questGiver != null) {
                 QuestGiver qg;
                 if (!qgconds.containsKey(quest.questGiver)) {
@@ -169,6 +175,8 @@ public class NQuestInfo extends Widget
         }
 
         for (NQuest quest : quests.values()) {
+            if (QuestTrackFilter.isMutedTitle(helperTitle(quest)))
+                continue;
             for (Condition cond : quest.conditions) {
                 if (quest.questGiver != null) {
                     if (qgconds.containsKey(quest.questGiver)) {
@@ -223,14 +231,14 @@ public class NQuestInfo extends Widget
             for (String qname : qgconds.keySet()) {
                 QuestGiver qg = qgconds.get(qname);
                 if (!qg.myConditions.isEmpty()) {
-                    imgs.add(new QuestImage(catimgsh(5, active_title.render(qname).img, numfnd1.render(String.format("($col[128,255,128]{%d}|$col[255,128,128]{%d})", qg.completed, qg.uncompleted)).img), qg.myConditions.get(0).questId));
+                    imgs.add(new QuestImage(catimgsh(5, active_title.render(labelName(qname)).img, numfnd1.render(String.format("($col[128,255,128]{%d}|$col[255,128,128]{%d})", qg.completed, qg.uncompleted)).img), qg.myConditions.get(0).questId));
                 } else {
                     if (!qg.otherConditions.isEmpty()) {
                         for (Condition cond : qg.otherConditions)
                         {
                             if(!cond.ready)
                             {
-                                imgs.add(new QuestImage(unactive_title.render(qname).img, cond.questId));
+                                imgs.add(new QuestImage(unactive_title.render(labelName(qname)).img, cond.questId));
                                 break;
                             }
                         }
@@ -238,11 +246,11 @@ public class NQuestInfo extends Widget
                 }
                 for (Condition cond : qg.myConditions) {
                     if (cond.state != Condition.State.TELL && !cond.ready)
-                        imgs.add(new QuestImage(fnd1.render(cond.target).img, cond.questId));
+                        imgs.add(new QuestImage(fnd1.render(labelCond(cond)).img, cond.questId));
                 }
                 for (Condition cond : qg.otherConditions) {
                     if(!cond.ready)
-                        imgs.add(new QuestImage(fnd2.render(cond.target).img, cond.questId));
+                        imgs.add(new QuestImage(fnd2.render(labelCond(cond)).img, cond.questId));
                 }
             }
         } else if (mode == Mode.TASKS) {
@@ -250,6 +258,7 @@ public class NQuestInfo extends Widget
             addTargets("Foraging:", Condition.State.PICK);
             addTargets("Hunting:", Condition.State.KILL);
             addTargets("Conversation:", Condition.State.GREET, Condition.State.VISIT, Condition.State.RAGE, Condition.State.WAVE, Condition.State.LAUGH);
+            addTargets("Reward:", Condition.State.TELL);
             addTargets("Attributes:", Condition.State.GAIN);
             addTargets("Craft:", Condition.State.CREATE);
             addTargets("Other:", Condition.State.CAVE, Condition.State.LIGHT);
@@ -285,26 +294,227 @@ public class NQuestInfo extends Widget
 
     void addTargets(String name, Condition.State... states) {
         if(states.length>0) {
-            boolean notEmpty = false;
+            ArrayList<Condition> list = new ArrayList<Condition>();
             for (Condition.State state : states) {
                 Targets cand = taskconds.get(state);
-                if (cand != null && !cand.conditions.isEmpty()) {
-                    notEmpty = true;
-                    break;
-                }
+                if (cand != null)
+                    list.addAll(cand.conditions);
             }
-            if(!notEmpty)
+            if(list.isEmpty())
                 return;
-            imgs.add(new QuestImage(active_title.render(name).img, -1));
-            for (Condition.State state : states) {
-                Targets cand = taskconds.get(state);
-                if (cand != null) {
-                    for (Condition condition : cand.conditions) {
-                        imgs.add(new QuestImage(gfnd2_under.render(condition.target).img, condition.questId));
-                    }
+            Collections.sort(list, new Comparator<Condition>() {
+                public int compare(Condition a, Condition b) {
+                    return QuestGiverDistance.compareMeters(condMeters(a), condMeters(b));
                 }
+            });
+            imgs.add(new QuestImage(active_title.render(name).img, -1));
+            for (Condition condition : list) {
+                imgs.add(new QuestImage(gfnd2_under.render(labelCond(condition)).img, condition.questId));
             }
         }
+    }
+
+    private String labelCond(Condition cond) {
+        if (cond.state == Condition.State.TELL) {
+            Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
+            String name = (qg != null && qg.name != null) ? qg.name : cond.target;
+            return QuestGiverDistance.withMeters("Return to " + name, condMeters(cond));
+        }
+        return QuestGiverDistance.withMeters(cond.target, condMeters(cond));
+    }
+
+    private String labelName(String name) {
+        return QuestGiverDistance.withMeters(name, distanceTo(name));
+    }
+
+    private Double condMeters(Condition cond) {
+        Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
+        if (qg == null)
+            return null;
+        return distanceTo(qg.name);
+    }
+
+    private Double distanceTo(String name) {
+        try {
+            NGameUI gui = NUtils.getGameUI();
+            Pointer ptr = findPointer(gui, name);
+            if (ptr != null) {
+                try {
+                    double d = ptr.getDistance();
+                    if (d > 0)
+                        return d;
+                } catch (RuntimeException ignored) {
+                }
+            }
+            Coord2d at = findGiverPos(name);
+            if (at == null)
+                return null;
+            Gob player = (gui != null && gui.map != null) ? gui.map.player() : null;
+            if (player == null)
+                return null;
+            return QuestGiverDistance.meters(player.rc.dist(at));
+        } catch (Loading l) {
+            return null;
+        }
+    }
+
+    private Pointer findPointer(NGameUI gui, String name) {
+        if (gui == null || name == null || name.isEmpty())
+            return null;
+        Pointer hit = findPointerUnder(gui, name);
+        if (hit != null)
+            return hit;
+        if (gui.ui != null && gui.ui.root != null)
+            return findPointerUnder(gui.ui.root, name);
+        return null;
+    }
+
+    private Pointer findPointerUnder(Widget root, String name) {
+        for (Pointer p : root.children(Pointer.class)) {
+            if (QuestGiverDistance.namesMatch(name, p.tip()))
+                return p;
+        }
+        return null;
+    }
+
+    private Coord2d findGiverPos(String name) {
+        if (name == null || name.isEmpty())
+            return null;
+        Coord2d cached = cachedGiverPos(name);
+        if (cached != null)
+            return cached;
+        NGameUI gui = NUtils.getGameUI();
+        Pointer ptr = findPointer(gui, name);
+        if (ptr != null) {
+            try {
+                Coord2d tc = ptr.tc();
+                if (tc != null) {
+                    giverCoords.put(name, tc);
+                    return tc;
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
+        Coord2d gobAt = findGobPos(gui, name);
+        if (gobAt != null) {
+            giverCoords.put(name, gobAt);
+            return gobAt;
+        }
+        synchronized (markers) {
+            for (MarkerInfo mi : markers) {
+                if (name.equals(mi.name) && mi.coord != null)
+                    return mi.coord;
+            }
+        }
+        return findMapMarker(gui, name);
+    }
+
+    private Coord2d cachedGiverPos(String name) {
+        Coord2d exact = giverCoords.get(name);
+        if (exact != null)
+            return exact;
+        for (Map.Entry<String, Coord2d> e : giverCoords.entrySet()) {
+            if (QuestGiverDistance.namesMatch(name, e.getKey()))
+                return e.getValue();
+        }
+        return null;
+    }
+
+    private Coord2d findGobPos(NGameUI gui, String name) {
+        if (gui == null || gui.map == null || gui.map.glob == null)
+            return null;
+        synchronized (gui.map.glob.oc) {
+            for (Gob gob : gui.map.glob.oc) {
+                if (gobNamed(gob, name))
+                    return gob.rc;
+            }
+        }
+        return null;
+    }
+
+    private static boolean gobNamed(Gob gob, String name) {
+        if (gob.ngob != null && name.equals(gob.ngob.name))
+            return true;
+        String kin = NGameUI.gobIdToKinName.get(gob.id);
+        if (name.equals(kin))
+            return true;
+        Buddy buddy = gob.getattr(Buddy.class);
+        if (buddy != null) {
+            if (name.equals(buddy.rnm))
+                return true;
+            if (buddy.b != null && name.equals(buddy.b.name))
+                return true;
+        }
+        return false;
+    }
+
+    private Coord2d findMapMarker(NGameUI gui, String name) {
+        if (gui == null || gui.mapfile == null || gui.mapfile.file == null || gui.mapfile.view == null)
+            return null;
+        MiniMap.Location sessloc = gui.mapfile.view.sessloc;
+        if (sessloc == null)
+            return gui.mapfile.findMarkerPosition(name);
+        MapFile file = gui.mapfile.file;
+        if (!file.lock.readLock().tryLock())
+            return gui.mapfile.findMarkerPosition(name);
+        try {
+            Coord2d exact = null, fuzzy = null;
+            for (MapFile.Marker mark : file.markers) {
+                if (mark.nm == null || mark.seg != sessloc.seg.id)
+                    continue;
+                Coord2d pos = mark.tc.sub(sessloc.tc).mul(MCache.tilesz).add(MCache.tilesz.div(2));
+                if (name.equals(mark.nm))
+                    exact = pos;
+                else if (fuzzy == null && QuestGiverDistance.namesMatch(name, mark.nm))
+                    fuzzy = pos;
+            }
+            if (exact != null)
+                return exact;
+            if (fuzzy != null)
+                return fuzzy;
+        } finally {
+            file.lock.readLock().unlock();
+        }
+        return gui.mapfile.findMarkerPosition(name);
+    }
+
+    private void harvestPointers(NGameUI gui) {
+        if (gui == null)
+            return;
+        harvestPointersUnder(gui);
+        if (gui.ui != null && gui.ui.root != null)
+            harvestPointersUnder(gui.ui.root);
+    }
+
+    private void harvestPointersUnder(Widget root) {
+        for (Pointer p : root.children(Pointer.class)) {
+            String tip = p.tip();
+            if (tip == null || tip.isEmpty())
+                continue;
+            try {
+                Coord2d tc = p.tc();
+                if (tc != null)
+                    giverCoords.put(tip, tc);
+            } catch (RuntimeException ignored) {
+            }
+        }
+    }
+
+    private Integer nextHarvestQuest() {
+        for (NQuest q : quests.values()) {
+            if (harvestTried.contains(q.id))
+                continue;
+            for (Condition cond : q.conditions) {
+                if (cond.ready)
+                    continue;
+                Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
+                if (qg == null || qg.name == null)
+                    continue;
+                if (findGiverPos(qg.name) == null)
+                    return q.id;
+            }
+        }
+        return null;
     }
 
     private BufferedImage ncatimgs(int margin, QuestImage... imgs) {
@@ -352,6 +562,11 @@ public class NQuestInfo extends Widget
     }
 
     AtomicBoolean needUpdate = new AtomicBoolean(false);
+    private double distAcc = 0;
+    private int distKey = Integer.MIN_VALUE;
+    private final HashMap<String, Coord2d> giverCoords = new HashMap<String, Coord2d>();
+    private final HashSet<Integer> harvestTried = new HashSet<Integer>();
+    private double harvestAcc = 0;
 
     public static final HashSet<String> huntingT = new HashSet<>();
     public static final HashSet<String> forageT = new HashSet<>();
@@ -377,9 +592,47 @@ public class NQuestInfo extends Widget
                     gui.chrwdg.wdgmsg("qsel", q.id);
                 }
             }
+            harvestPointers(gui);
+            harvestAcc += dt;
+            if (harvestAcc > 0.45) {
+                harvestAcc = 0;
+                if (!gui.chrwdg.visible) {
+                    Integer hid = nextHarvestQuest();
+                    if (hid != null) {
+                        harvestTried.add(hid);
+                        gui.chrwdg.wdgmsg("qsel", hid);
+                    }
+                }
+            }
+        }
+        distAcc += dt;
+        if (distAcc > 0.5) {
+            distAcc = 0;
+            int key = distanceKey();
+            if (key != distKey) {
+                distKey = key;
+                needUpdate.set(true);
+            }
         }
         if(needUpdate.get())
             update();
+    }
+
+    private int distanceKey() {
+        int h = 1;
+        for (NQuest quest : quests.values()) {
+            for (Condition cond : quest.conditions) {
+                if (cond.ready)
+                    continue;
+                Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
+                if (qg == null || qg.name == null)
+                    continue;
+                Double m = distanceTo(qg.name);
+                h = 31 * h + qg.name.hashCode();
+                h = 31 * h + (m == null ? 0 : (int) Math.round(m));
+            }
+        }
+        return h;
     }
     Coord margin = new Coord(10,10);
     public static final IBox pbox = Window.wbox;
@@ -418,6 +671,20 @@ public class NQuestInfo extends Widget
             NUtils.getGameUI().error("NOT FOUND");
         }
         needUpdate.set(true);
+    }
+
+    public void requestUpdate() {
+        needUpdate.set(true);
+    }
+
+    private String helperTitle(NQuest quest) {
+        NGameUI gui = NUtils.getGameUI();
+        if (gui != null && gui.chrwdg != null && gui.chrwdg.quest != null) {
+            QuestWnd.Quest q = gui.chrwdg.quest.cqst.get(quest.id);
+            if (q != null)
+                return QuestTrackFilter.safeTitle(q);
+        }
+        return null;
     }
 
 

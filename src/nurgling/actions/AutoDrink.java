@@ -25,6 +25,11 @@ public class AutoDrink implements Action
         stop.set(false);
     }
 
+    /** MenuGrid.use(..., true) calls change(null) and dumps craft/build back to home. */
+    static boolean resetMenuAfterDrink() {
+        return false;
+    }
+
     public void requestStop() {
         stop.set(true);
     }
@@ -112,8 +117,11 @@ public class AutoDrink implements Action
                         continue; // Button not found, try again
                     }
                     
-                    // Use the found button (reset=true to close menu after use)
-                    gameUI.menu.use(foundButton, new MenuGrid.Interaction(1, 0), true);
+                    if (resetMenuAfterDrink()) {
+                        gameUI.menu.use(foundButton, new MenuGrid.Interaction(1, 0), true);
+                    } else {
+                        foundButton.use(new MenuGrid.Interaction(1, 0));
+                    }
                     actionUsed = true;
                 }
                 

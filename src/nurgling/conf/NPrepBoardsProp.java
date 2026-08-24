@@ -15,6 +15,7 @@ public class NPrepBoardsProp implements JConf
     final private String username;
     final private String chrid;
     public String tool = null;
+    public int count = 0;
 
     public NPrepBoardsProp(String username, String chrid) {
         this.username = username;
@@ -27,6 +28,8 @@ public class NPrepBoardsProp implements JConf
         username = (String) values.get("username");
         if (values.get("tool") != null)
             tool = (String) values.get("tool");
+        if (values.get("count") != null)
+            count = ((Number) values.get("count")).intValue();
     }
 
     public static void set(NPrepBoardsProp prop)
@@ -67,6 +70,7 @@ public class NPrepBoardsProp implements JConf
         jprepboards.put("username", username);
         jprepboards.put("chrid", chrid);
         jprepboards.put("tool", tool);
+        jprepboards.put("count", count);
         return jprepboards;
     }
 

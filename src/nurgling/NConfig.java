@@ -103,6 +103,7 @@ public class NConfig
         kamiCompatMapper,
         showInventoryNums,
         hidecredo,
+        mutedQuests,
         autoDrink,
         autoSaveTableware,
         chipperprop,
@@ -334,6 +335,7 @@ public class NConfig
         conf.put(Key.swimming, false);
         conf.put(Key.debug, false);
         conf.put(Key.hidecredo, true);
+        conf.put(Key.mutedQuests, new JSONArray());
         conf.put(Key.q_visitor, false);
         conf.put(Key.q_door, true);
         conf.put(Key.q_range, 2);

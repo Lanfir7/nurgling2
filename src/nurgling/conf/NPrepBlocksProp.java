@@ -15,6 +15,7 @@ public class NPrepBlocksProp implements JConf
     final private String username;
     final private String chrid;
     public String tool = null;
+    public int count = 0;
     public boolean checkWounds = false;
     public int woundDamageThreshold = 4;
 
@@ -29,6 +30,8 @@ public class NPrepBlocksProp implements JConf
         username = (String) values.get("username");
         if (values.get("tool") != null)
             tool = (String) values.get("tool");
+        if (values.get("count") != null)
+            count = ((Number) values.get("count")).intValue();
         if (values.get("checkWounds") != null)
             checkWounds = (Boolean) values.get("checkWounds");
         if (values.get("woundDamageThreshold") != null)
@@ -73,6 +76,7 @@ public class NPrepBlocksProp implements JConf
         jprepblocks.put("username", username);
         jprepblocks.put("chrid", chrid);
         jprepblocks.put("tool", tool);
+        jprepblocks.put("count", count);
         jprepblocks.put("checkWounds", checkWounds);
         jprepblocks.put("woundDamageThreshold", woundDamageThreshold);
         return jprepblocks;

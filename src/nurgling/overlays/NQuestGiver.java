@@ -84,6 +84,9 @@ public class NQuestGiver extends Sprite implements RenderTree.Node, PView.Render
     @Override
     public boolean tick(double dt)
     {
+        java.util.HashSet<String> prop = mi.prop;
+        if (tag != null && !tag.isEmpty() && (prop == null || prop.isEmpty()))
+            return true;
         if(mi.prop!=tag)
         {
             initMarks();

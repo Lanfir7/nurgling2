@@ -59,7 +59,7 @@ public class WaitCollectState extends NTask
         return state;
     }
 
-    static int countPieces(NAlias name) {
+    public static int countPieces(NAlias name) {
         int count = 0;
         Widget inv = NUtils.getGameUI().getInventory();
         for (Widget widget = inv.child; widget != null; widget = widget.next) {

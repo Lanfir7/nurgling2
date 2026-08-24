@@ -15,10 +15,13 @@ import nurgling.tasks.WaitPose;
 import nurgling.tasks.WaitPrepBlocksState;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.PrepQuota;
 
 import java.util.ArrayList;
 
 public class PrepareBlocks implements Action {
+    private static final NAlias BLOCKS = new NAlias("block");
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         nurgling.widgets.bots.PrepareBlocks w = null;
@@ -47,15 +50,26 @@ public class PrepareBlocks implements Action {
         String pileAreaId = context.createArea("Please select area for piles", Resource.loadsimg("baubles/prepBlockP"));
         NArea pileArea = context.goToAreaById(pileAreaId);
 
+        int piled = 0;
+        int target = prop.count;
+
         ArrayList<Gob> logs;
         while (!(logs = Finder.findGobs(logArea, new NAlias("log"))).isEmpty())
         {
             logs.sort(NUtils.d_comp);
             Gob log = logs.get(0);
             while (Finder.findGob(log.id) != null) {
+                if (PrepQuota.reached(target, gui.getInventory().getItems(BLOCKS).size(), piled)) {
+                    piled = dumpPiles(gui, pileArea, piled);
+                    if (piled < 0)
+                        return Results.FAIL();
+                    return Results.SUCCESS();
+                }
                 if (NUtils.getGameUI().getInventory().calcNumberFreeCoord(new Coord(1, 2)) == 0)
                 {
-                    new TransferToPiles(pileArea.getRCArea(),new NAlias("block")).run(gui);
+                    piled = dumpPiles(gui, pileArea, piled);
+                    if (piled < 0)
+                        return Results.FAIL();
                 }
                 new PathFinder(log).run(gui);
                 new Equip(new NAlias(prop.tool)).run(gui);
@@ -67,12 +81,14 @@ public class PrepareBlocks implements Action {
                     case LOGNOTFOUND:
                         break;
                     case TIMEFORDRINK: {
+                        new Drink(0.9, true).run(gui);
                         if(!new RestoreResources().run(gui).IsSuccess())
                             return Results.ERROR("Failed to restore resources");
                         break;
                     }
                     case NOFREESPACE: {
-                        if(!(new TransferToPiles(pileArea.getRCArea(),new NAlias("block")).run(gui).IsSuccess()))
+                        piled = dumpPiles(gui, pileArea, piled);
+                        if (piled < 0)
                             return Results.FAIL();
                         break;
                     }
@@ -82,10 +98,24 @@ public class PrepareBlocks implements Action {
                         return Results.ERROR("Scrapes & Cuts wound damage too high! Stopping for safety.");
 
                 }
+                if (PrepQuota.reached(target, gui.getInventory().getItems(BLOCKS).size(), piled)) {
+                    piled = dumpPiles(gui, pileArea, piled);
+                    if (piled < 0)
+                        return Results.FAIL();
+                    return Results.SUCCESS();
+                }
             }
         }
-        if(!(new TransferToPiles(pileArea.getRCArea(),new NAlias("block")).run(gui).IsSuccess()))
+        piled = dumpPiles(gui, pileArea, piled);
+        if (piled < 0)
             return Results.FAIL();
         return Results.SUCCESS();
+    }
+
+    private static int dumpPiles(NGameUI gui, NArea pileArea, int piled) throws InterruptedException {
+        int before = gui.getInventory().getItems(BLOCKS).size();
+        if (!new TransferToPiles(pileArea.getRCArea(), BLOCKS).run(gui).IsSuccess())
+            return -1;
+        return piled + Math.max(0, before - gui.getInventory().getItems(BLOCKS).size());
     }
 }

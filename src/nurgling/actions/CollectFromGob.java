@@ -6,8 +6,8 @@ import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NUtils;
 import nurgling.tasks.NFlowerMenuIsClosed;
+import nurgling.tasks.NTask;
 import nurgling.tasks.WaitCollectState;
-import nurgling.tasks.WaitPose;
 import nurgling.tools.NAlias;
 
 import static haven.OCache.posres;
@@ -64,10 +64,79 @@ public class CollectFromGob implements Action{
 
     boolean withoutTransfer = false;
     int stopAt = 0;
+
+    public static boolean reachedStopAt(int have, int stopAt) {
+        return stopAt > 0 && have >= stopAt;
+    }
+
+    public static boolean shouldCancelHarvest(boolean reachedStop, boolean stillPicking) {
+        return reachedStop && stillPicking;
+    }
+
+    public static boolean collectStartWaitDone(boolean hasPickPose, boolean hasClocks, boolean reachedStop, int ticks, int maxTicks) {
+        return hasPickPose || hasClocks || reachedStop || ticks >= maxTicks;
+    }
+
+    public static boolean harvestCancelWaitDone(boolean isIdle, boolean hasClocks, int ticks, int maxTicks) {
+        return isIdle || !hasClocks || ticks >= maxTicks;
+    }
+
+    private boolean inventoryReachedStop() {
+        return targetItems != null && reachedStopAt(WaitCollectState.countPieces(targetItems), stopAt);
+    }
+
+    private boolean hasPickPose(Gob player) {
+        return player != null && player.pose() != null && pose != null && player.pose().contains(pose);
+    }
+
+    private void waitCollectStart(NGameUI gui) throws InterruptedException {
+        NUtils.getUI().core.addTask(new NTask() {
+            int ticks = 0;
+            {
+                infinite = false;
+                maxCounter = 200;
+                criticalOnTimeout = false;
+            }
+            @Override
+            public boolean check() {
+                return collectStartWaitDone(hasPickPose(NUtils.player()), gui.prog != null, inventoryReachedStop(), ticks++, 200);
+            }
+        });
+    }
+
+    private void cancelHarvestIfNeeded(NGameUI gui) throws InterruptedException {
+        Gob player = NUtils.player();
+        boolean busy = hasPickPose(player) || gui.prog != null;
+        if (player == null || !shouldCancelHarvest(true, busy))
+            return;
+        NUtils.lclick(player.rc);
+        NUtils.addTask(new NTask() {
+            int ticks = 0;
+            {
+                infinite = false;
+                maxCounter = 200;
+                criticalOnTimeout = false;
+            }
+            @Override
+            public boolean check() {
+                Gob p = NUtils.player();
+                String cpose = p != null ? p.pose() : null;
+                boolean idle = cpose != null && cpose.contains("gfx/borka/idle");
+                return harvestCancelWaitDone(idle, gui.prog != null, ticks++, 200);
+            }
+        });
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        if (inventoryReachedStop())
+            return Results.SUCCESS();
         WaitCollectState wcs = null;
         do {
+            if (inventoryReachedStop()) {
+                cancelHarvestIfNeeded(gui);
+                return Results.SUCCESS();
+            }
             if(!withoutTransfer) {
                 NInventory inv = (gui != null) ? gui.getInventory() : null;
                 if (inv != null && targetSize != null && inv.getNumberFreeCoord(targetSize) == 0) {
@@ -91,11 +160,19 @@ public class CollectFromGob implements Action{
                 if (fm.hasOpt(action)) {
                     if (fm.chooseOpt(action)) {
                         NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());
-                        NUtils.getUI().core.addTask(new WaitPose(NUtils.player(), pose));
+                        waitCollectStart(gui);
+                        if (inventoryReachedStop()) {
+                            cancelHarvestIfNeeded(gui);
+                            return Results.SUCCESS();
+                        }
                         wcs = stopAt > 0
                                 ? new WaitCollectState(target, targetSize, targetItems, stopAt)
                                 : new WaitCollectState(target, targetSize);
                         NUtils.getUI().core.addTask(wcs);
+                        if (inventoryReachedStop()) {
+                            cancelHarvestIfNeeded(gui);
+                            return Results.SUCCESS();
+                        }
                     } else {
                         NUtils.getUI().core.addTask(new NFlowerMenuIsClosed());
                         return Results.FAIL();
@@ -112,7 +189,9 @@ public class CollectFromGob implements Action{
             }
 
         }
-        while (wcs!=null && wcs.getState()!= WaitCollectState.State.NOITEMSFORCOLLECT);
+        while (wcs!=null && wcs.getState()!= WaitCollectState.State.NOITEMSFORCOLLECT && !inventoryReachedStop());
+        if (inventoryReachedStop())
+            cancelHarvestIfNeeded(gui);
         return Results.SUCCESS();
     }
 }

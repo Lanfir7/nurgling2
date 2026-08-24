@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.NUtils;
 import nurgling.conf.NPrepBlocksProp;
 import nurgling.i18n.L10n;
+import nurgling.tools.PrepQuota;
 
 public class PrepareBlocks extends Window implements Checkable {
 
@@ -11,6 +12,7 @@ public class PrepareBlocks extends Window implements Checkable {
 
     UsingTools usingTools = null;
     CheckBox checkWounds = null;
+    TextEntry.NumberValue countEntry = null;
 
     public PrepareBlocks() {
         super(new Coord(200,200), L10n.get("pblocks.wnd_title"));
@@ -29,6 +31,10 @@ public class PrepareBlocks extends Window implements Checkable {
             }
 
         }
+
+        prev = add(new Label(L10n.get("pblocks.count")), prev.pos("bl").add(UI.scale(0,5)));
+        String initialCount = startprop != null ? String.valueOf(startprop.count) : "0";
+        prev = add(countEntry = new TextEntry.NumberValue(UI.scale(50), initialCount), prev.pos("bl").add(UI.scale(0,5)));
 
         final boolean initialCheckWounds = startprop != null ? startprop.checkWounds : false;
         prev = add(checkWounds = new CheckBox(L10n.get("botwnd.check_wounds"))
@@ -51,6 +57,7 @@ public class PrepareBlocks extends Window implements Checkable {
                 if (prop != null) {
                     if(usingTools.s!=null)
                         prop.tool = usingTools.s.name;
+                    prop.count = PrepQuota.parse(countEntry.text());
                     prop.checkWounds = checkWounds.a;
                     NPrepBlocksProp.set(prop);
                 }

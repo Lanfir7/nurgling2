@@ -25,6 +25,10 @@ public class Pointer extends Widget {
     private Tex licon;
 	private String tip = null;
 
+	public String tip() {
+	    return(tip);
+	}
+
     public Pointer(Indir<Resource> icon) {
 	super(Coord.z);
 	this.icon = icon;
@@ -180,7 +184,7 @@ public class Pointer extends Widget {
 		} else return (tooltip);
 	}
 
-	double getDistance() {
+	public double getDistance() {
 		MapView map = getparent(GameUI.class).map;
 		Gob target = getGob();
 		Gob player = map == null ? null : map.player();

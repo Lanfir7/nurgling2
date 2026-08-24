@@ -27,6 +27,8 @@
 package haven;
 
 import nurgling.NUtils;
+import nurgling.i18n.L10n;
+import nurgling.tools.QuestTrackFilter;
 
 import java.util.*;
 import java.awt.Color;
@@ -528,28 +530,46 @@ public class QuestWnd extends Widget {
 
     public class QuestList extends SListBox<Quest, Widget> {
 	public List<Quest> quests = new ArrayList<Quest>();
+	public final boolean helperTrack;
 	private boolean loading = false;
-	private final Comparator<Quest> comp = new Comparator<Quest>() {
+	private final Comparator<Quest> timeComp = new Comparator<Quest>() {
 	    public int compare(Quest a, Quest b) {
 		return(b.mtime - a.mtime);
 	    }
 	};
 
 	public QuestList(Coord sz) {
-	    super(sz, attrf.height() + UI.scale(2));
+	    this(sz, attrf.height() + UI.scale(2), false);
 	}
 
 	public QuestList(Coord sz, int itemh) {
+	    this(sz, itemh, false);
+	}
+
+	public QuestList(Coord sz, int itemh, boolean helperTrack) {
 	    super(sz, itemh);
+	    this.helperTrack = helperTrack;
 	}
 
 	protected List<Quest> items() {return(quests);}
 	protected Widget makeitem(Quest q, int idx, Coord sz) {return(new Item(sz, q));}
 
+	public void resort() { loading = true; }
+
 	public void tick(double dt) {
 	    if(loading) {
 		loading = false;
-		Collections.sort(quests, comp);
+		if(helperTrack) {
+		    final QuestTrackFilter f = QuestTrackFilter.load();
+		    Collections.sort(quests, new Comparator<Quest>() {
+			public int compare(Quest a, Quest b) {
+			    return(f.compareQuests(QuestTrackFilter.safeTitle(a), a.mtime,
+						   QuestTrackFilter.safeTitle(b), b.mtime));
+			}
+		    });
+		} else {
+		    Collections.sort(quests, timeComp);
+		}
 	    }
 	    super.tick(dt);
 	}
@@ -557,12 +577,34 @@ public class QuestWnd extends Widget {
 	public class Item extends Widget {
 	    public final Quest q;
 	    private final IconText nm;
+	    private final CheckBox track;
 	    private Object dres, dtit;
 
 	    public Item(Coord sz, Quest q) {
 		super(sz);
 		this.q = q;
-		this.nm = new IconText(sz) {
+		Coord textc = Coord.z;
+		Coord textsz = sz;
+		if(QuestList.this.helperTrack) {
+		    CheckBox box = new CheckBox("");
+		    box.settip(L10n.get("char.quest.track"));
+		    box.a = QuestTrackFilter.load().isTracked(QuestTrackFilter.safeTitle(q));
+		    box.changed(new java.util.function.Consumer<Boolean>() {
+			public void accept(Boolean on) {
+			    QuestTrackFilter.persistTracked(QuestTrackFilter.safeTitle(q), on);
+			    QuestList.this.resort();
+			    QuestTrackFilter.notifyHelper();
+			}
+		    });
+		    adda(box, UI.scale(2), sz.y / 2, 0, 0.5);
+		    int shift = box.sz.x + UI.scale(4);
+		    textc = new Coord(shift, 0);
+		    textsz = new Coord(Math.max(0, sz.x - shift), sz.y);
+		    this.track = box;
+		} else {
+		    this.track = null;
+		}
+		this.nm = new IconText(textsz) {
 			protected BufferedImage img() {return(q.res.get().flayer(Resource.imgc).img);}
 			protected String text() {return(q.title());}
 
@@ -573,10 +615,15 @@ public class QuestWnd extends Widget {
 			    g.chcolor();
 			}
 		    };
-		add(this.nm, Coord.z);
+		add(this.nm, textc);
 	    }
 
 	    public void draw(GOut g) {
+		if(track != null) {
+		    boolean want = QuestTrackFilter.load().isTracked(QuestTrackFilter.safeTitle(q));
+		    if(track.a != want)
+			track.a = want;
+		}
 		if((q.res != dres) || (q.title != dtit)) {
 		    nm.invalidate();
 		    dres = q.res;
