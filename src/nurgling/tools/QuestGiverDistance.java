@@ -11,6 +11,10 @@ public final class QuestGiverDistance {
         return line + " - " + Math.round(meters) + "m";
     }
 
+    public static int tileKey(double worldX, double worldY) {
+        return 31 * (int) Math.round(worldX / TILE) + (int) Math.round(worldY / TILE);
+    }
+
     public static Double meters(double worldDist) {
         if (worldDist < 0 || Double.isNaN(worldDist))
             return null;

@@ -31,6 +31,12 @@ class QuestGiverDistanceTest {
     }
 
     @Test
+    void tileKeyChangesEachMeter() {
+        assertEquals(QuestGiverDistance.tileKey(0, 0), QuestGiverDistance.tileKey(5, 5));
+        assertTrue(QuestGiverDistance.tileKey(0, 0) != QuestGiverDistance.tileKey(11, 0));
+    }
+
+    @Test
     void pointerTipMatchesGiver() {
         assertTrue(QuestGiverDistance.namesMatch("Martwief", "Martwief"));
         assertTrue(QuestGiverDistance.namesMatch("Martwief", "Martwief (597.2m)"));

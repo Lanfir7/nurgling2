@@ -10,6 +10,7 @@ import nurgling.NGameUI;
 import nurgling.NGItem;
 import nurgling.NStyle;
 import nurgling.NUtils;
+import nurgling.i18n.L10n;
 import nurgling.tools.QuestGiverDistance;
 import nurgling.tools.QuestRewardFilter;
 import nurgling.tools.QuestTrackFilter;
@@ -41,11 +42,14 @@ public class NQuestInfo extends Widget
         huntingT.clear();
         forageT.clear();
         Widget prev = add(modebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/questmode", null, "Switch mode"), UI.scale(margin.x)/2, UI.scale(margin.y)/2).changed(a -> {mode = (mode == Mode.QUESTGIVERS?Mode.TASKS:Mode.QUESTGIVERS);needUpdate.set(true);});
-        add(hidebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/eye", null, "Hide credo"), prev.pos("ur")).changed(a -> {NConfig.set(NConfig.Key.hidecredo,a);needUpdate.set(true);});
+        prev = add(hidebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/eye", null, "Hide credo"), prev.pos("ur")).changed(a -> {NConfig.set(NConfig.Key.hidecredo,a);needUpdate.set(true);});
         hidebtn.a = (boolean) NConfig.get(NConfig.Key.hidecredo);
+        refreshbtn = add(new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/inv/search", null, L10n.get("char.quest.refresh")), prev.pos("ur"));
+        refreshbtn.click(() -> refreshDistances());
     }
     NMiniMapWnd.NMenuCheckBox modebtn = null;
     NMiniMapWnd.NMenuCheckBox hidebtn = null;
+    NMiniMapWnd.NMenuCheckBox refreshbtn = null;
     enum Mode
     {
         QUESTGIVERS,
@@ -271,7 +275,8 @@ public class NQuestInfo extends Widget
         } else {
             glowon = null;
             Coord nsz = UI.scale(this.margin).mul(2).add(new Coord(0, modebtn.sz.y));
-            Coord rsz = new Coord(Math.max(nsz.x, modebtn.sz.x + margin.x * 2), Math.max(nsz.y, modebtn.sz.y + margin.y * 2));
+            int btnw = modebtn.sz.x + hidebtn.sz.x + refreshbtn.sz.x;
+            Coord rsz = new Coord(Math.max(nsz.x, btnw + margin.x * 2), Math.max(nsz.y, modebtn.sz.y + margin.y * 2));
             rsz.y = Math.min(NUtils.getGameUI().sz.y - NDraggableWidget.delta.y,rsz.y);
             resize(rsz);
         }
@@ -620,6 +625,10 @@ public class NQuestInfo extends Widget
 
     private int distanceKey() {
         int h = 1;
+        NGameUI gui = NUtils.getGameUI();
+        Gob player = (gui != null && gui.map != null) ? gui.map.player() : null;
+        if (player != null)
+            h = 31 * h + QuestGiverDistance.tileKey(player.rc.x, player.rc.y);
         for (NQuest quest : quests.values()) {
             for (Condition cond : quest.conditions) {
                 if (cond.ready)
@@ -633,6 +642,15 @@ public class NQuestInfo extends Widget
             }
         }
         return h;
+    }
+
+    private void refreshDistances() {
+        if (refreshbtn != null)
+            refreshbtn.set(false);
+        giverCoords.clear();
+        harvestTried.clear();
+        distKey = Integer.MIN_VALUE;
+        needUpdate.set(true);
     }
     Coord margin = new Coord(10,10);
     public static final IBox pbox = Window.wbox;
