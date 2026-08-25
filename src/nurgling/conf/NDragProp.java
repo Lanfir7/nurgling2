@@ -71,6 +71,25 @@ public class NDragProp implements JConf
         return new NDragProp(Coord.z, false, val);
     }
 
+    /**
+     * Whether the player has an explicitly saved placement for this widget.
+     * Widgets without one fall back to {@link NDefaultLayout}, so this must not
+     * be inferred from the coordinate value: a legitimately saved (0,0) is
+     * indistinguishable from "never placed" that way.
+     */
+    public static boolean has(String val)
+    {
+        ArrayList<NDragProp> dragProps = ((ArrayList<NDragProp>) NConfig.get(NConfig.Key.dragprop));
+        if (dragProps == null)
+            return false;
+        for (NDragProp prop : dragProps)
+        {
+            if (prop.name.equals(val))
+                return true;
+        }
+        return false;
+    }
+
     public static void set(String val, NDragProp prop)
     {
         ArrayList<NDragProp> dragProps = ((ArrayList<NDragProp>) NConfig.get(NConfig.Key.dragprop));

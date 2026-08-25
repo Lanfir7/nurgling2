@@ -63,6 +63,9 @@ public class NConfig
         invert_ver,
         kinprop,
         show_drag_menu,
+        layoutHintShown,
+        layoutPreset,
+        layoutPresetChosen,
         cowsprop,
         horseprop,
         goatsprop,
@@ -322,7 +325,14 @@ public class NConfig
         conf.put(Key.pluginsAllowUnsigned, false);  // default: only load signed plugins
         conf.put(Key.invert_hor, false);
         conf.put(Key.invert_ver, false);
-        conf.put(Key.show_drag_menu, true);
+        /* Do not open the client in HUD-edit mode: a first-time player has no
+         * idea yet what "Fightview" or "EquipProxy" are, so asking them to
+         * arrange those widgets before they have seen the game is pure noise.
+         * The mode stays one click away in Interface settings. */
+        conf.put(Key.show_drag_menu, false);
+        conf.put(Key.layoutHintShown, false);
+        conf.put(Key.layoutPreset, NDefaultLayout.Preset.CLASSIC.name());
+        conf.put(Key.layoutPresetChosen, false);
         conf.put(Key.discordWebhookUrl, "");
         conf.put(Key.showGrid, false);
         conf.put(Key.showView, false);
@@ -474,28 +484,11 @@ public class NConfig
         petal.add(pres1);
         conf.put(Key.petals, petal);
 
-        ArrayList<NDragProp> dragprop = new ArrayList<>();
-        dragprop.add(new NDragProp(new Coord(570, 108), false, true, "Fightview"));
-        dragprop.add(new NDragProp(new Coord(549, -12), false, true, "minimap"));
-        dragprop.add(new NDragProp(new Coord(524, 84), false, true, "quests"));
-        dragprop.add(new NDragProp(new Coord(493, 441), false, true, "menugrid"));
-        dragprop.add(new NDragProp(new Coord(-4, 84), false, true, "speedmeter"));
-        dragprop.add(new NDragProp(new Coord(-4, 400), false, true, "ChatUI"));
-        dragprop.add(new NDragProp(new Coord(-4, 348), false, true, "belt0"));
-        dragprop.add(new NDragProp(new Coord(-4, 318), false, true, "belt1"));
-        dragprop.add(new NDragProp(new Coord(-4, 288), false, true, "belt2"));
-        dragprop.add(new NDragProp(new Coord(508, 396), false, true, "mainmenu"));
-        dragprop.add(new NDragProp(new Coord(-4, 124), false, true, "metergfx/hud/meter/hp"));
-        dragprop.add(new NDragProp(new Coord(-4, 164), false, true, "metergfx/hud/meter/stam"));
-        dragprop.add(new NDragProp(new Coord(-4, 204), false, true, "metergfx/hud/meter/nrj"));
-        dragprop.add(new NDragProp(new Coord(-4, 244), false, true, "botsmenu"));
-        dragprop.add(new NDragProp(new Coord(-4, 300), false, true, "EquipProxy"));
-        dragprop.add(new NDragProp(new Coord(620, 212), false, true, "alarm"));
-        dragprop.add(new NDragProp(new Coord(156, -4), false, true, "Calendar"));
-        dragprop.add(new NDragProp(new Coord(428, -4), false, true, "bufflist"));
-        dragprop.add(new NDragProp(new Coord(60, 244), false, true, "party"));
-        dragprop.add(new NDragProp(new Coord(300, 550), false, true, "BeltProxy"));
-        conf.put(Key.dragprop, dragprop);
+        /* Empty by default: placement now comes from nurgling.conf.NDefaultLayout,
+         * which anchors widgets to screen edges and scales with the UI instead of
+         * hardcoding coordinates that only ever fit one window size. Entries land
+         * here as soon as the player moves something. */
+        conf.put(Key.dragprop, new ArrayList<NDragProp>());
 
         ArrayList<NAreaRad> arearadprop = new ArrayList<>();
         arearadprop.add(new NAreaRad("gfx/kritter/bat/bat", 50));

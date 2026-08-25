@@ -847,6 +847,59 @@ public class NGameUI extends GameUI
         return null;
     }
 
+    private boolean layoutHintDone = false;
+    private double layoutHintAge = 0;
+    private boolean layoutPickerDone = false;
+
+    /**
+     * A non-empty placement list means this player has already arranged their
+     * HUD, so they must not be offered a preset that would throw it away.
+     */
+    private static boolean hasCustomLayout()
+    {
+        Object v = NConfig.get(NConfig.Key.dragprop);
+        return (v instanceof Collection) && !((Collection<?>)v).isEmpty();
+    }
+
+    @Override
+    public void tick(double dt)
+    {
+        super.tick(dt);
+        if(!layoutPickerDone && sz.x > 0)
+        {
+            layoutPickerDone = true;
+            if(!Boolean.TRUE.equals(NConfig.get(NConfig.Key.layoutPresetChosen)) && !hasCustomLayout())
+            {
+                NLayoutPicker picker = new NLayoutPicker();
+                add(picker, new Coord(Math.max(0, (sz.x - picker.sz.x) / 2), sz.y / 6));
+                /* The picker explains the same thing far better than a line in
+                 * the message log, so don't say it twice. */
+                layoutHintDone = true;
+                NConfig.set(NConfig.Key.layoutHintShown, true);
+            }
+        }
+        if(!layoutHintDone)
+        {
+            Object shown = NConfig.get(NConfig.Key.layoutHintShown);
+            if(Boolean.TRUE.equals(shown))
+            {
+                layoutHintDone = true;
+            }
+            else
+            {
+                /* Wait for the login chatter to settle, otherwise the hint is
+                 * pushed out of the message log before it can be read. */
+                layoutHintAge += dt;
+                if(layoutHintAge > 5.0)
+                {
+                    layoutHintDone = true;
+                    NConfig.set(NConfig.Key.layoutHintShown, true);
+                    msg(nurgling.i18n.L10n.get("hint.layout"), new java.awt.Color(190, 220, 255));
+                }
+            }
+        }
+    }
+
     @Override
     public void resize(Coord sz)
     {

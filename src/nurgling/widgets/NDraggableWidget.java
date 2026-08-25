@@ -19,7 +19,29 @@ public class NDraggableWidget extends Widget
     protected ICheckBox btnVis;
     private boolean isFlipped = false;
     protected ICheckBox btnFlip;
+    /**
+     * True while this widget still follows the anchored default layout. It is
+     * resolved against the live screen size every tick, so the default HUD
+     * survives resolution and UI-scale changes; the first time the player
+     * touches the widget it gains an absolute saved position instead.
+     */
+    private boolean usingDefault = false;
+    /** Set in tick() while this widget overlaps another one in DRAG mode. */
+    private boolean colliding = false;
     public static final IBox box = Window.wbox;
+
+    /** Distance at which a dragged edge locks onto a neighbour's edge. */
+    private static final int SNAP = UI.scale(9);
+    /**
+     * How far apart two widgets may be on the perpendicular axis and still snap
+     * to each other. Without this, edges would magnetise to widgets on the far
+     * side of the screen, which feels like the drag is fighting back.
+     */
+    private static final int SNAP_RANGE = UI.scale(48);
+
+    /** Placement history for DRAG-mode undo, newest last. */
+    private static final java.util.ArrayDeque<Object[]> undo = new java.util.ArrayDeque<>();
+    private static final int UNDO_MAX = 32;
 
     public final static Coord off = new Coord(UI.scale(10,10));
     public final static Coord delta = new Coord(UI.scale(35,20));
@@ -37,7 +59,7 @@ public class NDraggableWidget extends Widget
 
     public NDraggableWidget(String name, Coord sz)
     {
-        label = new TexI(fnd.render(name).img);
+        label = new TexI(fnd.render(NDefaultLayout.title(name)).img);
         this.sz = sz;
         this.name = name;
         add(btnLock = new ICheckBox(NStyle.locki[0], NStyle.locki[1], NStyle.locki[2], NStyle.locki[3])
@@ -46,12 +68,7 @@ public class NDraggableWidget extends Widget
             public void changed(boolean val)
             {
                 super.changed(val);
-                if(NDraggableWidget.this.parent instanceof GameUI)
-                {
-                    NDragProp prop = new NDragProp(NDraggableWidget.this.c, val, btnVis.a, name);
-                    prop.flip = btnFlip.a;
-                    NDragProp.set(name, prop);
-                }
+                persist();
             }
         }, new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y / 2));
 
@@ -64,12 +81,7 @@ public class NDraggableWidget extends Widget
                 if(content != null) {
                     content.visible = val;
                 }
-                if(NDraggableWidget.this.parent instanceof GameUI)
-                {
-                    NDragProp prop = new NDragProp(NDraggableWidget.this.c, btnLock.a, val, name);
-                    prop.flip = btnFlip.a;
-                    NDragProp.set(name, prop);
-                }
+                persist();
             }
         }, new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y + off.y));
 
@@ -83,12 +95,7 @@ public class NDraggableWidget extends Widget
                 {
                     flipContent();
                 }
-                if(NDraggableWidget.this.parent instanceof GameUI)
-                {
-                    NDragProp prop = new NDragProp(NDraggableWidget.this.c, btnLock.a, btnVis.a, name);
-                    prop.flip = val;
-                    NDragProp.set(name, prop);
-                }
+                persist();
             }
         }, new Coord(NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y/2));
 
@@ -96,19 +103,20 @@ public class NDraggableWidget extends Widget
         btnLock.hide();
         btnFlip.hide();
 //        this.sz = sz.add(new Coord(NStyle.locki[0].sz().x, 0));
-        NDragProp prop = NDragProp.get(name);
-        if (prop.c != Coord.z)
+        if (NDragProp.has(name))
         {
+            NDragProp prop = NDragProp.get(name);
             this.c = new Coord(prop.c);
-            this.target_c = prop.c;
+            this.target_c = new Coord(prop.c);
             this.btnLock.a = prop.locked;
             this.btnVis.a = prop.vis;
             this.btnFlip.a = prop.flip;
         }
         else
         {
+            this.usingDefault = true;
             this.target_c = new Coord(Coord.z);
-            this.btnVis.a = true;
+            this.btnVis.a = NDefaultLayout.defaultVis(name);
         }
         // Apply loaded visibility state to content if it exists
         if(content != null) {
@@ -117,6 +125,176 @@ public class NDraggableWidget extends Widget
     }
 
 
+
+    /**
+     * Magnetise the dragged position onto the edges of nearby widgets so that
+     * panels line up flush without pixel-hunting. Edge-to-edge and
+     * edge-to-opposite-edge are both considered, which covers both "align these
+     * two" and "stack these two".
+     */
+    private void snapNeighbours(Coord pos) {
+        if(parent == null)
+            return;
+        int bestx = 0, besty = 0;
+        int distx = SNAP + 1, disty = SNAP + 1;
+        for(Widget wdg : parent.children()) {
+            if(!(wdg instanceof NDraggableWidget) || (wdg == this) || !wdg.visible())
+                continue;
+            NDraggableWidget o = (NDraggableWidget)wdg;
+            if(o.sz == Coord.z)
+                continue;
+            /* Only consider a neighbour that is roughly abreast of us on the
+             * other axis, otherwise every widget on screen is a snap target. */
+            if(near(pos.y, sz.y, o.c.y, o.sz.y)) {
+                for(int mine : new int[]{pos.x, pos.x + sz.x}) {
+                    for(int theirs : new int[]{o.c.x, o.c.x + o.sz.x}) {
+                        int d = theirs - mine;
+                        if(Math.abs(d) < Math.abs(distx)) {
+                            distx = d;
+                            bestx = d;
+                        }
+                    }
+                }
+            }
+            if(near(pos.x, sz.x, o.c.x, o.sz.x)) {
+                for(int mine : new int[]{pos.y, pos.y + sz.y}) {
+                    for(int theirs : new int[]{o.c.y, o.c.y + o.sz.y}) {
+                        int d = theirs - mine;
+                        if(Math.abs(d) < Math.abs(disty)) {
+                            disty = d;
+                            besty = d;
+                        }
+                    }
+                }
+            }
+        }
+        if(Math.abs(distx) <= SNAP)
+            pos.x += bestx;
+        if(Math.abs(disty) <= SNAP)
+            pos.y += besty;
+    }
+
+    private static boolean near(int a, int alen, int b, int blen) {
+        return((a < (b + blen + SNAP_RANGE)) && (b < (a + alen + SNAP_RANGE)));
+    }
+
+    private boolean isect(NDraggableWidget o) {
+        return((c.x < (o.c.x + o.sz.x)) && (o.c.x < (c.x + sz.x)) &&
+               (c.y < (o.c.y + o.sz.y)) && (o.c.y < (c.y + sz.y)));
+    }
+
+    private void pushUndo() {
+        undo.addLast(new Object[]{this, new Coord(target_c)});
+        while(undo.size() > UNDO_MAX)
+            undo.removeFirst();
+    }
+
+    /** Revert the most recent widget move. Returns false if there is nothing to undo. */
+    public static boolean undoLast() {
+        for(Object[] step = undo.pollLast(); step != null; step = undo.pollLast()) {
+            NDraggableWidget wdg = (NDraggableWidget)step[0];
+            /* History outlives widgets across relogs; skip anything detached. */
+            if(wdg.parent == null)
+                continue;
+            Coord to = (Coord)step[1];
+            wdg.target_c.x = to.x;
+            wdg.target_c.y = to.y;
+            wdg.c = new Coord(to);
+            wdg.persist();
+            return(true);
+        }
+        return(false);
+    }
+
+    @Override
+    public boolean globtype(GlobKeyEvent ev) {
+        if((ui.core.mode == NCore.Mode.DRAG) && (ev.code == java.awt.event.KeyEvent.VK_Z)
+           && ((ui.modflags() & UI.MOD_CTRL) != 0)) {
+            /* Delivered to whichever draggable widget the traversal reaches
+             * first; the history itself is shared, so it does not matter which. */
+            return(undoLast());
+        }
+        return(super.globtype(ev));
+    }
+
+    /**
+     * Store the current placement of this widget, which also opts it out of the
+     * anchored default layout: once the player has expressed an intent for this
+     * widget we must not keep moving it around on their behalf.
+     */
+    private void persist()
+    {
+        usingDefault = false;
+        if(!(parent instanceof GameUI))
+            return;
+        NDragProp prop = new NDragProp(new Coord(target_c), btnLock.a, btnVis.a, name);
+        prop.flip = btnFlip.a;
+        NDragProp.set(name, prop);
+    }
+
+    /**
+     * Discard every saved widget placement and put the whole HUD back on the
+     * anchored default layout. This is the escape hatch for a layout that has
+     * been dragged into an unusable state, or one inherited from a different
+     * resolution.
+     */
+    public static void resetLayout(GameUI gui)
+    {
+        undo.clear();
+        NConfig.set(NConfig.Key.dragprop, new java.util.ArrayList<NDragProp>());
+        for(Widget wdg : gui.children())
+        {
+            if(wdg instanceof NDraggableWidget)
+                ((NDraggableWidget)wdg).resetToDefault();
+        }
+    }
+
+    /**
+     * Re-read every widget placement from the config. Needed after the saved
+     * layout is replaced wholesale (an import), since live widgets hold their
+     * own copy of the position and would otherwise ignore it.
+     */
+    public static void reloadLayout(GameUI gui)
+    {
+        for(Widget wdg : gui.children())
+        {
+            if(wdg instanceof NDraggableWidget)
+                ((NDraggableWidget)wdg).reload();
+        }
+    }
+
+    private void reload()
+    {
+        if(!NDragProp.has(name))
+        {
+            resetToDefault();
+            return;
+        }
+        NDragProp prop = NDragProp.get(name);
+        usingDefault = false;
+        target_c.x = prop.c.x;
+        target_c.y = prop.c.y;
+        c = new Coord(prop.c);
+        btnLock.a = prop.locked;
+        btnVis.a = prop.vis;
+        if(content != null)
+            content.visible = prop.vis;
+        if(isFlipped && (btnFlip.a != prop.flip))
+        {
+            btnFlip.a = prop.flip;
+            flipContent();
+        }
+    }
+
+    /** Drop any saved placement and return to the anchored default layout. */
+    public void resetToDefault()
+    {
+        usingDefault = true;
+        btnLock.a = false;
+        btnVis.a = NDefaultLayout.defaultVis(name);
+        if(content != null)
+            content.visible = btnVis.a;
+    }
 
     @Override
     public void resize(Coord sz)
@@ -143,7 +321,15 @@ public class NDraggableWidget extends Widget
         {
             drawBg(g, sz, ui);
             box.draw(g, Coord.z, sz);
-
+            if(colliding)
+            {
+                /* Overlapping panels are the single biggest source of a HUD that
+                 * "looks broken", so make them impossible to miss while editing. */
+                g.chcolor(220, 60, 50, 255);
+                g.rect(Coord.z, sz);
+                g.rect(new Coord(1, 1), sz.sub(2, 2));
+                g.chcolor();
+            }
         }
         super.draw(g);
         if (ui.core.mode == NCore.Mode.DRAG) {
@@ -230,6 +416,7 @@ public class NDraggableWidget extends Widget
                 // Start dragging only when this widget is unlocked, nothing else
                 // is currently grabbed and it is the left mouse button.
                 if (ev.b == 1 && !btnLock.a && ui.grabs.isEmpty()) {
+                    pushUndo();
                     dm = ui.grabmouse(this);
                     doff = ev.c;
                     parent.setfocus(this);
@@ -250,11 +437,9 @@ public class NDraggableWidget extends Widget
     public boolean mouseup(MouseUpEvent ev) {
         if (dm != null && ui.core.mode == NCore.Mode.DRAG)
         {
-            NDragProp res = new NDragProp(NDraggableWidget.this.c, btnLock.a, btnVis.a, name);
-            res.flip = btnFlip.a;
-            NDragProp.set(name, res);
             target_c.x = this.c.x;
             target_c.y = this.c.y;
+            persist();
             dm.remove();
             dm = null;
             return true;
@@ -298,7 +483,8 @@ public class NDraggableWidget extends Widget
                         newc.y = screenSz.y - sz.y;
                     }
                 }
-                
+
+                snapNeighbours(newc);
                 this.c = newc;
             }
             else
@@ -338,6 +524,34 @@ public class NDraggableWidget extends Widget
                 btnVis.hide();
                 btnFlip.hide();
             }
+        }
+
+        if (ui.core.mode == NCore.Mode.DRAG)
+        {
+            colliding = false;
+            if(parent != null && sz != Coord.z && visible())
+            {
+                for(Widget wdg : parent.children())
+                {
+                    if((wdg instanceof NDraggableWidget) && (wdg != this) && wdg.visible()
+                       && (wdg.sz != Coord.z) && isect((NDraggableWidget)wdg))
+                    {
+                        colliding = true;
+                        break;
+                    }
+                }
+            }
+        }
+        else if(colliding)
+        {
+            colliding = false;
+        }
+
+        if(usingDefault && NUtils.getGameUI()!=null && NUtils.getGameUI().sz!=Coord.z && sz!=Coord.z && dm == null)
+        {
+            Coord def = NDefaultLayout.resolve(name, sz, NUtils.getGameUI().sz);
+            target_c.x = def.x;
+            target_c.y = def.y;
         }
 
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().sz!=Coord.z && dm == null)

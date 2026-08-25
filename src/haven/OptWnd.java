@@ -495,6 +495,44 @@ public class OptWnd extends Window {
 			}
 		});
 
+		prev = add(new Button(200, L10n.get("opt.interface.layout_preset")){
+			@Override
+			public void click()
+			{
+				super.click();
+				NGameUI gui = NUtils.getGameUI();
+				if(gui != null)
+				{
+					nurgling.widgets.NLayoutPicker picker = new nurgling.widgets.NLayoutPicker();
+					gui.add(picker, new Coord(Math.max(0, (gui.sz.x - picker.sz.x) / 2), gui.sz.y / 6));
+				}
+			}
+		}, prev.pos("bl").adds(0, UI.scale(5)));
+
+		prev = add(new Button(200, L10n.get("opt.interface.share_layout")){
+			@Override
+			public void click()
+			{
+				super.click();
+				NGameUI gui = NUtils.getGameUI();
+				if(gui != null)
+				{
+					nurgling.widgets.NLayoutShare share = new nurgling.widgets.NLayoutShare();
+					gui.add(share, new Coord(Math.max(0, (gui.sz.x - share.sz.x) / 2), gui.sz.y / 4));
+				}
+			}
+		}, prev.pos("bl").adds(0, UI.scale(5)));
+
+		prev = add(new Button(200, L10n.get("opt.interface.reset_layout")){
+			@Override
+			public void click()
+			{
+				super.click();
+				if(NUtils.getGameUI()!=null)
+					nurgling.widgets.NDraggableWidget.resetLayout(NUtils.getGameUI());
+			}
+		}, prev.pos("bl").adds(0, UI.scale(5)));
+
 		prev = add(new Label(L10n.get("opt.interface.num_panels")), prev.pos("bl").adds(0, UI.scale(5)));
 		prev = add(new NumToolBox(145), prev.pos("bl").adds(0, UI.scale(5)));
 		prev = add(new Label(L10n.get("opt.interface.camera")), prev.pos("bl").adds(0, UI.scale(5)));
