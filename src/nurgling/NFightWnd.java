@@ -52,6 +52,8 @@ public class NFightWnd extends FightWnd {
 	DropWidget(Coord sz) { super(sz); }
     }
 
+    /* Move-list row: must be a DTarget so that interacting with a held item
+     * (right-click with e.g. a parchment in hand) reaches the move. */
     public class MoveItem extends Widget implements DTarget {
 	private final Actions list;
 	private final Action act;

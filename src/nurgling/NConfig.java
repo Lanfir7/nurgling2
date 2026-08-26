@@ -264,6 +264,10 @@ public class NConfig
         autoLogoutDelay,
         showBotPathOnMinimap,
         showBotPathOnGround,
+        // Map tools panel
+        showTreeIcons,
+        showFishIcons,
+        prospectMarks,
         // Localization
         language,
         // LLM agent
@@ -347,6 +351,9 @@ public class NConfig
         conf.put(Key.discordWebhookUrl, "");
         conf.put(Key.showGrid, false);
         conf.put(Key.showView, false);
+        conf.put(Key.showTreeIcons, true);
+        conf.put(Key.showFishIcons, true);
+        conf.put(Key.prospectMarks, new ProspectMarkSettings());
         conf.put(Key.disableWinAnim, true);
         conf.put(Key.disableMenugridKeys, false);
         conf.put(Key.baseurl, NUpdateFeed.DEFAULT_BASEURL);
@@ -1250,6 +1257,9 @@ public class NConfig
                                 case "ItemQualityOverlaySettings":
                                     conf.put(Key.valueOf(entry.getKey()), new ItemQualityOverlaySettings(hobj));
                                     break;
+                                case "ProspectMarkSettings":
+                                    conf.put(Key.valueOf(entry.getKey()), new ProspectMarkSettings(hobj));
+                                    break;
                                 case "Color":
                                     try {
                                         int red = ((Number) hobj.get("red")).intValue();
@@ -1370,6 +1380,9 @@ public class NConfig
         }
 
         conf.put(Key.showCSprite,conf.get(Key.nextshowCSprite));
+        // Flat surface applies live now (see nurgling.tools.FlatWorld), which keeps both keys
+        // equal, so this only still does anything for a config where an older build staged a
+        // change that its restart never picked up.
         conf.put(Key.flatsurface,conf.get(Key.nextflatsurface));
 
         // Publish only now that conf is fully populated, so no other thread can

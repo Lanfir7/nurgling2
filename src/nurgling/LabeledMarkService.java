@@ -4,17 +4,14 @@ import haven.*;
 import nurgling.profiles.ConfigFactory;
 import nurgling.profiles.ProfileAwareService;
 import nurgling.tools.ForageMarkerLogic;
+import nurgling.tools.NFileUtils;
 import nurgling.widgets.LabeledMinimapMark;
 import nurgling.NGameUI;
 import nurgling.db.dao.AnimalMarkerDao;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -22,12 +19,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Stream;
 import java.awt.image.BufferedImage;
 
 /**
  * Service for managing labeled minimap marks (water/soil quality marks from Checker bots).
  * Supports persistence and world-specific profiles via ProfileAwareService.
+ *
+ * Reads are lock-free: the render thread asks for a segment's marks every frame, so
+ * {@link #segIndex} holds pre-grouped immutable lists that are swapped in on mutation.
+ * Writes to disk are coalesced onto a background thread and never run while a lock is
+ * held, so a long save cannot stall rendering.
  */
 public class LabeledMarkService implements ProfileAwareService {
     private final Map<String, LabeledMinimapMark> labeledMarks = new ConcurrentHashMap<>();
@@ -36,6 +37,8 @@ public class LabeledMarkService implements ProfileAwareService {
     // Индексы для быстрого поиска маркеров
     private final Map<String, List<LabeledMinimapMark>> resourceTypeIndex = new ConcurrentHashMap<>();
     private final Map<Long, List<LabeledMinimapMark>> segmentIndex = new ConcurrentHashMap<>();
+    /** Immutable per-segment view of {@link #labeledMarks}, replaced wholesale on change. */
+    private volatile Map<Long, List<LabeledMinimapMark>> segIndex = Collections.emptyMap();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private String dataFile;
     private final NGameUI gui;
@@ -45,7 +48,17 @@ public class LabeledMarkService implements ProfileAwareService {
         t.setDaemon(true);
         return t;
     });
-    private volatile boolean saveScheduled = false;
+
+    /* Background writer. saveQueued gates enqueuing so a burst of samples collapses
+     * into a single write; it is cleared as the write starts, so a sample taken during
+     * a write still queues the next one. */
+    private final Object writeLock = new Object();
+    /** Serializes the actual file writes so the background and shutdown writers cannot overlap. */
+    private final Object fileLock = new Object();
+    private Thread writer;
+    private boolean saveQueued = false;
+    private boolean shutdown = false;
+    private boolean suppressReindex = false;
     
     // Очередь для неблокирующего добавления маркеров (устраняет лаги UI)
     private final ConcurrentLinkedQueue<PendingMark> pendingMarks = new ConcurrentLinkedQueue<>();
@@ -116,12 +129,7 @@ public class LabeledMarkService implements ProfileAwareService {
 
     @Override
     public void save() {
-        lock.writeLock().lock();
-        try {
-            saveLabeledMarks();
-        } finally {
-            lock.writeLock().unlock();
-        }
+        writeSnapshot(snapshot());
     }
 
     /**
@@ -211,12 +219,16 @@ public class LabeledMarkService implements ProfileAwareService {
         // Обрабатываем весь батч с одной блокировкой
         lock.writeLock().lock();
         try {
+            suppressReindex = true;
             for (PendingMark mark : batch) {
                 processMarkInternal(mark);
             }
+            suppressReindex = false;
+            reindex();
             // Сохраняем один раз для всего батча
             scheduleSave();
         } finally {
+            suppressReindex = false;
             lock.writeLock().unlock();
         }
     }
@@ -258,7 +270,7 @@ public class LabeledMarkService implements ProfileAwareService {
      * Removes any existing mark at the same location.
      * Оптимизировано с использованием индексов для быстрого поиска.
      */
-    public void addLabeledMark(String label, String resourceType, long segmentId, 
+    public void addLabeledMark(String label, String resourceType, double quality, long segmentId,
                                Coord tileCoords, BufferedImage iconImage) {
         lock.writeLock().lock();
         try {
@@ -285,7 +297,7 @@ public class LabeledMarkService implements ProfileAwareService {
             }
             
             // Create and add new mark
-            LabeledMinimapMark mark = new LabeledMinimapMark(label, resourceType, segmentId, tileCoords, iconImage);
+            LabeledMinimapMark mark = new LabeledMinimapMark(label, resourceType, quality, segmentId, tileCoords, iconImage);
             labeledMarks.put(mark.getLocationId(), mark);
             addMarkToIndexes(mark);
             
@@ -338,6 +350,9 @@ public class LabeledMarkService implements ProfileAwareService {
         
         // Индекс по сегменту
         segmentIndex.computeIfAbsent(mark.segmentId, k -> new ArrayList<>()).add(mark);
+        if (!suppressReindex) {
+            reindex();
+        }
     }
     
     /**
@@ -367,6 +382,9 @@ public class LabeledMarkService implements ProfileAwareService {
         
         // Удаляем из основного хранилища
         labeledMarks.remove(locationId);
+        if (!suppressReindex) {
+            reindex();
+        }
     }
     
     /**
@@ -416,6 +434,7 @@ public class LabeledMarkService implements ProfileAwareService {
             
             // Сохраняем асинхронно
             scheduleSave();
+            reindex();
             
             return locationId;
         } finally {
@@ -469,62 +488,113 @@ public class LabeledMarkService implements ProfileAwareService {
             
             // Сохраняем асинхронно
             scheduleSave();
+            reindex();
         } finally {
             lock.writeLock().unlock();
         }
     }
-    
+
     /**
-     * Планирует асинхронное сохранение (чтобы избежать пролога при установке маркера)
-     * Оптимизировано: использует readLock для быстрого снимка, затем пишет без блокировки
+     * Rebuild the per-segment render index. Called under the write lock.
      */
-    private void scheduleSave() {
-        if (!saveScheduled) {
-            saveScheduled = true;
-            saveExecutor.submit(() -> {
-                try {
-                    Thread.sleep(500); // Увеличенная задержка для лучшего батчинга
-                    saveLabeledMarksOptimized();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (Exception e) {
-                    // Игнорируем ошибки сохранения
-                } finally {
-                    saveScheduled = false;
-                }
-            });
+    private void reindex() {
+        Map<Long, List<LabeledMinimapMark>> next = new HashMap<>();
+        for (LabeledMinimapMark mark : labeledMarks.values()) {
+            next.computeIfAbsent(mark.segmentId, k -> new ArrayList<>()).add(mark);
         }
+        for (Map.Entry<Long, List<LabeledMinimapMark>> e : next.entrySet()) {
+            e.setValue(Collections.unmodifiableList(e.getValue()));
+        }
+        segIndex = next;
     }
-    
+
     /**
-     * Оптимизированное сохранение: делает быстрый снимок с readLock, затем пишет без блокировки
+     * Take a consistent copy of the marks to serialize outside the lock.
      */
-    private void saveLabeledMarksOptimized() {
-        // Быстро копируем данные с readLock (не блокирует write операции)
-        List<LabeledMinimapMark> snapshot;
+    private List<LabeledMinimapMark> snapshot() {
         lock.readLock().lock();
         try {
-            snapshot = new ArrayList<>(labeledMarks.values());
+            return new ArrayList<>(labeledMarks.values());
         } finally {
             lock.readLock().unlock();
         }
-        
-        // Записываем в файл БЕЗ блокировки
+    }
+
+    /**
+     * Serialize and write the given marks. Must not be called while holding a lock:
+     * PNG encoding and file I/O here take long enough to stall the render thread.
+     */
+    private void writeSnapshot(List<LabeledMinimapMark> marks) {
+        synchronized (fileLock) {
         try {
             JSONObject main = new JSONObject();
             JSONArray jMarks = new JSONArray();
-            for (LabeledMinimapMark mark : snapshot) {
-                // Do not persist animal markers (synced from Postgres every 30s)
+            Set<String> types = new HashSet<>();
+            for (LabeledMinimapMark mark : marks) {
                 if (mark.getLocationId().startsWith("animal_")) continue;
                 jMarks.put(mark.toJson());
+                types.add(mark.resourceType);
+            }
+            /* One icon per resource type instead of one per mark: the old format
+             * re-encoded every icon on every save, which grew with the sample count. */
+            JSONObject icons = new JSONObject();
+            for (String type : types) {
+                String encoded = LabeledMinimapMark.iconBase64(type);
+                if (encoded != null) {
+                    icons.put(type, encoded);
+                }
             }
             main.put("labeledMarks", jMarks);
-            main.put("version", 1);
+            main.put("icons", icons);
+            main.put("version", 2);
             main.put("lastSaved", java.time.Instant.now().toString());
 
-            nurgling.util.SafeJsonWriter.writeAtomic(dataFile, main);
+            NFileUtils.writeAtomically(dataFile, main.toString());
         } catch (IOException e) {
             System.err.println("Failed to save labeled marks: " + e.getMessage());
+        }
+        }
+    }
+
+    /**
+     * Request a save. Saves are coalesced and run on a background thread so that
+     * sampling many spots in a row never blocks the game.
+     */
+    private void scheduleSave() {
+        synchronized (writeLock) {
+            if (shutdown || saveQueued) {
+                return;
+            }
+            saveQueued = true;
+            if (writer == null) {
+                writer = new Thread(this::writeLoop, "labeled-marks-writer");
+                writer.setDaemon(true);
+                writer.start();
+            }
+            writeLock.notifyAll();
+        }
+    }
+
+    /**
+     * Drains save requests until the service is disposed. Interruption ends the
+     * thread; it is a daemon and the final save happens in {@link #dispose()}.
+     */
+    private void writeLoop() {
+        while (true) {
+            synchronized (writeLock) {
+                while (!saveQueued && !shutdown) {
+                    try {
+                        writeLock.wait();
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                }
+                if (shutdown) {
+                    return;
+                }
+                saveQueued = false;
+            }
+            writeSnapshot(snapshot());
         }
     }
 
@@ -571,6 +641,7 @@ public class LabeledMarkService implements ProfileAwareService {
         if (fromDb == null) return;
         lock.writeLock().lock();
         try {
+            suppressReindex = true;
             List<String> toRemove = new ArrayList<>();
             for (String locationId : labeledMarks.keySet()) {
                 if (locationId.startsWith("animal_")) toRemove.add(locationId);
@@ -616,7 +687,10 @@ public class LabeledMarkService implements ProfileAwareService {
                 labeledMarks.put(locationId, mark);
                 addMarkToIndexes(mark);
             }
+            suppressReindex = false;
+            reindex();
         } finally {
+            suppressReindex = false;
             lock.writeLock().unlock();
         }
     }
@@ -632,6 +706,7 @@ public class LabeledMarkService implements ProfileAwareService {
         if (preloadedMarkers == null) return;
         lock.writeLock().lock();
         try {
+            suppressReindex = true;
             // Удаляем старые маркеры животных
             List<String> toRemove = new ArrayList<>();
             for (String locationId : labeledMarks.keySet()) {
@@ -650,7 +725,10 @@ public class LabeledMarkService implements ProfileAwareService {
                 labeledMarks.put(pm.locationId, mark);
                 addMarkToIndexes(mark);
             }
+            suppressReindex = false;
+            reindex();
         } finally {
+            suppressReindex = false;
             lock.writeLock().unlock();
         }
     }
@@ -711,6 +789,9 @@ public class LabeledMarkService implements ProfileAwareService {
                 }
             }
         }
+        if (!suppressReindex) {
+            reindex();
+        }
     }
 
     /**
@@ -747,21 +828,11 @@ public class LabeledMarkService implements ProfileAwareService {
     
     /**
      * Get all labeled marks for a segment (for map rendering).
-     * Оптимизировано с использованием индекса - O(1) вместо O(n).
+     * The returned list is immutable and safe to iterate without copying.
      */
     public List<LabeledMinimapMark> getMarksForSegment(long segmentId) {
-        lock.readLock().lock();
-        try {
-            // Используем индекс для мгновенного получения маркеров нужного сегмента
-            List<LabeledMinimapMark> indexed = segmentIndex.get(segmentId);
-            if (indexed != null) {
-                // Возвращаем копию списка, чтобы избежать проблем с concurrent модификациями
-                return new ArrayList<>(indexed);
-            }
-            return new ArrayList<>();
-        } finally {
-            lock.readLock().unlock();
-        }
+        List<LabeledMinimapMark> marks = segIndex.get(segmentId);
+        return (marks == null) ? Collections.emptyList() : marks;
     }
 
     /**
@@ -860,67 +931,46 @@ public class LabeledMarkService implements ProfileAwareService {
             labeledMarks.clear();
             resourceTypeIndex.clear();
             segmentIndex.clear();
-            
-            File file = new File(dataFile);
-            if (file.exists()) {
-                String content;
+            String content = NFileUtils.readWithBackupFallback(dataFile);
+            if (content != null && !content.isEmpty()) {
                 try {
-                    content = Files.readString(Paths.get(dataFile), StandardCharsets.UTF_8);
-                } catch (IOException e) {
-                    System.err.println("Failed to load labeled marks: " + e.getMessage());
-                    return;
-                }
-
-                if (!content.isEmpty()) {
-                    try {
-                        JSONObject main = new JSONObject(content);
-                        content = null; // free 74MB string early
-                        JSONArray array = main.getJSONArray("labeledMarks");
-                        int total = array.length();
-                        System.out.println("LabeledMarks: loading " + total + " marks (lazy icons)...");
-                        long t0 = System.currentTimeMillis();
-                        for (int i = 0; i < total; i++) {
-                            if (Thread.interrupted()) {
-                                System.out.println("LabeledMarks: loading interrupted at " + i + "/" + total);
-                                return;
-                            }
-                            try {
-                                LabeledMinimapMark mark = new LabeledMinimapMark(array.getJSONObject(i));
-                                labeledMarks.put(mark.getLocationId(), mark);
-                                addMarkToIndexes(mark);
-                            } catch (Exception e) {
-                                System.err.println("Failed to parse labeled mark: " + e.getMessage());
-                            }
+                    JSONObject main = new JSONObject(content);
+                    content = null; // free large string early
+                    JSONObject icons = main.optJSONObject("icons");
+                    if (icons != null) {
+                        for (String type : icons.keySet()) {
+                            LabeledMinimapMark.registerIcon(type,
+                                LabeledMinimapMark.decodeIcon(icons.optString(type, null)));
                         }
-                        System.out.println("LabeledMarks: loaded " + total + " marks in " + (System.currentTimeMillis() - t0) + "ms");
-                    } catch (Exception e) {
-                        System.err.println("Failed to parse labeled marks JSON: " + e.getMessage());
                     }
+                    JSONArray array = main.getJSONArray("labeledMarks");
+                    int total = array.length();
+                    System.out.println("LabeledMarks: loading " + total + " marks (lazy icons)...");
+                    long t0 = System.currentTimeMillis();
+                    suppressReindex = true;
+                    for (int i = 0; i < total; i++) {
+                        if (Thread.interrupted()) {
+                            System.out.println("LabeledMarks: loading interrupted at " + i + "/" + total);
+                            return;
+                        }
+                        try {
+                            LabeledMinimapMark mark = new LabeledMinimapMark(array.getJSONObject(i));
+                            labeledMarks.put(mark.getLocationId(), mark);
+                            addMarkToIndexes(mark);
+                        } catch (Exception e) {
+                            System.err.println("Failed to parse labeled mark: " + e.getMessage());
+                        }
+                    }
+                    suppressReindex = false;
+                    System.out.println("LabeledMarks: loaded " + total + " marks in " + (System.currentTimeMillis() - t0) + "ms");
+                } catch (Exception e) {
+                    System.err.println("Failed to parse labeled marks JSON: " + e.getMessage());
                 }
             }
+            reindex();
         } finally {
+            suppressReindex = false;
             lock.writeLock().unlock();
-        }
-    }
-
-    /**
-     * Save labeled marks to JSON.
-     */
-    private void saveLabeledMarks() {
-        // Called within write lock - don't lock again
-        try {
-            JSONObject main = new JSONObject();
-            JSONArray jMarks = new JSONArray();
-            for (LabeledMinimapMark mark : labeledMarks.values()) {
-                jMarks.put(mark.toJson());
-            }
-            main.put("labeledMarks", jMarks);
-            main.put("version", 1);
-            main.put("lastSaved", java.time.Instant.now().toString());
-
-            nurgling.util.SafeJsonWriter.writeAtomic(dataFile, main);
-        } catch (IOException e) {
-            System.err.println("Failed to save labeled marks: " + e.getMessage());
         }
     }
 
@@ -959,16 +1009,20 @@ public class LabeledMarkService implements ProfileAwareService {
             int removed = 0;
             // Создаем копию списка, чтобы избежать concurrent modification
             List<LabeledMinimapMark> copy = new ArrayList<>(marksToRemove);
+            suppressReindex = true;
             for (LabeledMinimapMark mark : copy) {
                 removeMarkFromIndexes(mark.getLocationId());
                 removed++;
             }
+            suppressReindex = false;
+            reindex();
             
             if (removed > 0) {
                 scheduleSave(); // Сохраняем асинхронно
             }
             return removed;
         } finally {
+            suppressReindex = false;
             lock.writeLock().unlock();
         }
     }
@@ -1018,13 +1072,20 @@ public class LabeledMarkService implements ProfileAwareService {
             saveExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        
+        synchronized (writeLock) {
+            shutdown = true;
+            writer = null;
+            writeLock.notifyAll();
+        }
+        /* Blocks on fileLock until any in-flight background write finishes, so the
+         * final state always lands last. */
+        writeSnapshot(snapshot());
         lock.writeLock().lock();
         try {
-            saveLabeledMarks();
             labeledMarks.clear();
             resourceTypeIndex.clear();
             segmentIndex.clear();
+            segIndex = Collections.emptyMap();
         } finally {
             lock.writeLock().unlock();
         }

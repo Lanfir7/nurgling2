@@ -1,6 +1,7 @@
 package nurgling.widgets;
 
 import haven.*;
+import nurgling.conf.ProspectKind;
 import org.json.JSONObject;
 
 import javax.imageio.ImageIO;
@@ -9,23 +10,32 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a labeled icon mark on the minimap.
  * Used by Checker bots (Water, Soil) to display resource quality on the map.
  * Shows an icon with a label underneath (e.g., "q20" for quality 20).
+ *
+ * Prospecting sample icons are shared per resource type so a world with thousands
+ * of samples still only holds a handful of images. Animal / unique marks keep a
+ * per-mark image for lazy load and species-specific icons.
  */
 public class LabeledMinimapMark {
-    private String locationId;     // Unique ID for this mark (can be set manually for updates)
-    public final String label;           // The text label (e.g., "q20", "q95")
-    public final String resourceType;    // Resource type (e.g., "Water", "Clay", "Soil")
+    private final String locationId;
+    public final String label;
+    public final String resourceType;
+    public final double quality;
+    public final ProspectKind kind;
     public final long segmentId;
-    public final Coord tileCoords;        // Tile coordinates within the segment
-    public final long gridId;             // Grid ID for ChunkNav navigation (stored when marker is created)
-    public final Coord localTileCoords;   // Local tile coordinates within the grid (0-99)
-    public volatile BufferedImage iconImage; // The icon to display (lazy-loaded from base64)
-    public final long timestamp;          // When it was created
-    public final Color labelColor;        // Color for the label text
+    public final Coord tileCoords;
+    public final long gridId;
+    public final Coord localTileCoords;
+    public volatile BufferedImage iconImage;
+    public final long timestamp;
+    public final Color labelColor;
     /** Для маркеров животных: когда убито (мс), кем — для тултипа "убита X дней назад", "Убийца: N" */
     public final Long killedAtMs;
     public final String killedBy;
@@ -34,88 +44,143 @@ public class LabeledMinimapMark {
     /** Тип животного для fallback-загрузки иконки (gfx/kritter/...). */
     public final String animalType;
 
-    private volatile String iconBase64;   // Deferred base64 data for lazy icon loading
+    private volatile String iconBase64;
     private volatile TexI iconTex;
-    private Text labelText;
-    
-    // Text furnace for rendering labels (like quest giver names)
-    // Уменьшенный шрифт для меток квариарца
+
     private static final Text.Furnace labelFurnace = new PUtils.BlurFurn(
-        new Text.Foundry(Text.sans, 8, Color.WHITE).aa(true), 
+        new Text.Foundry(Text.sans, 10, Color.WHITE).aa(true),
         2, 1, new Color(60, 30, 30)
     );
-    
+    private static final Text.Furnace quarryartzFurnace = new PUtils.BlurFurn(
+        new Text.Foundry(Text.sans, 8, Color.WHITE).aa(true),
+        2, 1, new Color(60, 30, 30)
+    );
+
+    /* Shared caches. Marks are built on bot and loader threads and read on the
+     * render thread, hence the concurrent maps. Nothing is evicted: there are only
+     * a few resource types and a bounded set of quality labels. */
+    private static final Map<String, Icon> icons = new ConcurrentHashMap<>();
+    private static final Map<String, Text> labelTex = new ConcurrentHashMap<>();
+    private static final Map<String, Text.Furnace> furnaces = new ConcurrentHashMap<>();
+
+    /** One image plus its lazily uploaded texture, shared by every mark of a resource type. */
+    private static class Icon {
+        final BufferedImage img;
+        private TexI tex;
+        private String encoded;
+
+        Icon(BufferedImage img) {
+            this.img = img;
+        }
+
+        synchronized TexI tex() {
+            if(tex == null && img != null)
+                tex = new TexI(img);
+            return tex;
+        }
+
+        /** PNG-encoded once and reused, so saving never re-encodes an unchanged icon. */
+        synchronized String encoded() {
+            if(encoded == null)
+                encoded = encodeIcon(img);
+            return encoded;
+        }
+    }
+
     /**
-     * Create a labeled minimap mark.
-     * 
-     * @param label The text to display under the icon (e.g., "q20")
-     * @param resourceType The type of resource (e.g., "Water", "Clay")
-     * @param segmentId The map segment ID
-     * @param tileCoords The tile coordinates within the segment
-     * @param gridId The grid ID for ChunkNav navigation (-1 if unknown)
-     * @param localTileCoords Local tile coordinates within the grid (null if unknown)
-     * @param iconImage The icon image to display
-     * @param labelColor Optional color for the label (null = white)
+     * Register the icon used by every mark of a resource type. The first
+     * registration wins, so repeated samples of the same resource reuse one image.
      */
-    public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords, 
+    public static void registerIcon(String resourceType, BufferedImage img) {
+        if(resourceType == null || img == null)
+            return;
+        icons.putIfAbsent(resourceType, new Icon(img));
+    }
+
+    /** The shared icon image for a resource type, or null if none was registered. */
+    public static BufferedImage icon(String resourceType) {
+        Icon icon = (resourceType == null) ? null : icons.get(resourceType);
+        return (icon == null) ? null : icon.img;
+    }
+
+    /** The shared icon for a resource type as a base64 PNG, encoded once and cached. */
+    public static String iconBase64(String resourceType) {
+        Icon icon = (resourceType == null) ? null : icons.get(resourceType);
+        return (icon == null) ? null : icon.encoded();
+    }
+
+    /** Resource types that currently have an icon, for persisting the shared icon table. */
+    public static Set<String> knownIconTypes() {
+        return icons.keySet();
+    }
+
+    /**
+     * Create a labeled minimap mark from a prospected sample.
+     */
+    public LabeledMinimapMark(String label, String resourceType, double quality, long segmentId, Coord tileCoords,
+                              BufferedImage iconImage, Color labelColor) {
+        this(generateLocationId(segmentId, tileCoords, label), label, resourceType, quality, segmentId, tileCoords,
+            -1, null, iconImage, labelColor, null, null, null, null, true);
+    }
+
+    public LabeledMinimapMark(String label, String resourceType, double quality, long segmentId, Coord tileCoords,
+                              BufferedImage iconImage) {
+        this(label, resourceType, quality, segmentId, tileCoords, iconImage, null);
+    }
+
+    public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords,
                               long gridId, Coord localTileCoords,
                               BufferedImage iconImage, Color labelColor) {
-        this.label = label;
-        this.resourceType = resourceType != null ? resourceType : "Unknown";
-        this.segmentId = segmentId;
-        this.tileCoords = tileCoords;
-        this.gridId = gridId;
-        this.localTileCoords = localTileCoords;
-        this.iconImage = iconImage;
-        this.labelColor = labelColor != null ? labelColor : Color.WHITE;
-        this.timestamp = System.currentTimeMillis();
-        this.locationId = generateLocationId(segmentId, tileCoords, label);
-        this.killedAtMs = null;
-        this.killedBy = null;
-        this.iconPath = null;
-        this.animalType = null;
-        if (iconImage != null) this.iconTex = new TexI(iconImage);
-        this.labelText = createLabelText();
+        this(generateLocationId(segmentId, tileCoords, label), label, resourceType, parseLabelQuality(label),
+            segmentId, tileCoords, gridId, localTileCoords, iconImage, labelColor, null, null, null, null, true);
     }
-    
-    /**
-     * Create a labeled minimap mark (legacy, without grid info).
-     */
-    public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords, 
+
+    public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords,
                               BufferedImage iconImage, Color labelColor) {
         this(label, resourceType, segmentId, tileCoords, -1, null, iconImage, labelColor);
     }
-    
-    /**
-     * Create a labeled minimap mark with a specific locationId (for updates).
-     * Used when updating an existing mark to preserve its ID.
-     */
-    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
+
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId,
                               Coord tileCoords, long gridId, Coord localTileCoords,
                               BufferedImage iconImage, Color labelColor) {
-        this(locationId, label, resourceType, segmentId, tileCoords, gridId, localTileCoords, iconImage, labelColor, null, null, null, null);
+        this(locationId, label, resourceType, parseLabelQuality(label), segmentId, tileCoords, gridId, localTileCoords,
+            iconImage, labelColor, null, null, null, null, true);
     }
 
-    /**
-     * Create a labeled minimap mark with optional killed info (for animal markers tooltip).
-     * iconPath and animalType are for lazy-loading icon after reconnect; can be null.
-     */
-    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId,
                               Coord tileCoords, long gridId, Coord localTileCoords,
                               BufferedImage iconImage, Color labelColor, Long killedAtMs, String killedBy) {
-        this(locationId, label, resourceType, segmentId, tileCoords, gridId, localTileCoords, iconImage, labelColor, killedAtMs, killedBy, null, null);
+        this(locationId, label, resourceType, parseLabelQuality(label), segmentId, tileCoords, gridId, localTileCoords,
+            iconImage, labelColor, killedAtMs, killedBy, null, null, false);
     }
 
-    /**
-     * Create a labeled minimap mark with killed info and optional iconPath/animalType for lazy icon load.
-     */
-    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId,
                               Coord tileCoords, long gridId, Coord localTileCoords,
                               BufferedImage iconImage, Color labelColor, Long killedAtMs, String killedBy,
                               String iconPath, String animalType) {
+        this(locationId, label, resourceType, parseLabelQuality(label), segmentId, tileCoords, gridId, localTileCoords,
+            iconImage, labelColor, killedAtMs, killedBy, iconPath, animalType, false);
+    }
+
+    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId,
+                              Coord tileCoords, BufferedImage iconImage, Color labelColor) {
+        this(locationId, label, resourceType, segmentId, tileCoords, -1, null, iconImage, labelColor);
+    }
+
+    public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords,
+                              BufferedImage iconImage) {
+        this(label, resourceType, segmentId, tileCoords, iconImage, null);
+    }
+
+    private LabeledMinimapMark(String locationId, String label, String resourceType, double quality,
+                               long segmentId, Coord tileCoords, long gridId, Coord localTileCoords,
+                               BufferedImage iconImage, Color labelColor, Long killedAtMs, String killedBy,
+                               String iconPath, String animalType, boolean shareIcon) {
         this.locationId = locationId;
         this.label = label;
         this.resourceType = resourceType != null ? resourceType : "Unknown";
+        this.quality = quality;
+        this.kind = ProspectKind.of(this.resourceType);
         this.segmentId = segmentId;
         this.tileCoords = tileCoords;
         this.gridId = gridId;
@@ -128,25 +193,10 @@ public class LabeledMinimapMark {
         this.iconPath = iconPath != null && !iconPath.isEmpty() ? iconPath : null;
         this.animalType = animalType != null && animalType.startsWith("gfx/kritter/") ? animalType : null;
         if (iconImage != null) this.iconTex = new TexI(iconImage);
-        this.labelText = createLabelText();
+        if (shareIcon)
+            registerIcon(this.resourceType, iconImage);
     }
-    
-    /**
-     * Create a labeled minimap mark with a specific locationId (legacy, without grid info).
-     */
-    public LabeledMinimapMark(String locationId, String label, String resourceType, long segmentId, 
-                              Coord tileCoords, BufferedImage iconImage, Color labelColor) {
-        this(locationId, label, resourceType, segmentId, tileCoords, -1, null, iconImage, labelColor);
-    }
-    
-    /**
-     * Create a labeled minimap mark with default white label color.
-     */
-    public LabeledMinimapMark(String label, String resourceType, long segmentId, Coord tileCoords, 
-                              BufferedImage iconImage) {
-        this(label, resourceType, segmentId, tileCoords, iconImage, null);
-    }
-    
+
     /**
      * Create from JSON (for loading from file).
      */
@@ -154,50 +204,81 @@ public class LabeledMinimapMark {
         this.locationId = json.getString("locationId");
         this.label = json.getString("label");
         this.resourceType = json.optString("resourceType", "Unknown");
+        this.quality = json.has("quality") ? json.getDouble("quality") : parseLabelQuality(this.label);
+        this.kind = ProspectKind.of(this.resourceType);
         this.segmentId = json.getLong("segmentId");
         this.tileCoords = new Coord(json.getInt("tileX"), json.getInt("tileY"));
         this.timestamp = json.getLong("timestamp");
-        
-        // Load grid info for ChunkNav navigation
+
         this.gridId = json.optLong("gridId", -1);
         if (json.has("localTileX") && json.has("localTileY")) {
             this.localTileCoords = new Coord(json.getInt("localTileX"), json.getInt("localTileY"));
         } else {
             this.localTileCoords = null;
         }
-        
-        // Load label color
+
         if (json.has("labelColor")) {
             this.labelColor = new Color(json.getInt("labelColor"));
         } else {
             this.labelColor = Color.WHITE;
         }
-        
+
         this.iconBase64 = json.has("iconBase64") ? json.getString("iconBase64") : null;
         this.iconImage = null;
-        this.killedAtMs = null;
-        this.killedBy = null;
-        this.iconPath = null;
-        this.animalType = null;
+        this.killedAtMs = json.has("killedAtMs") && !json.isNull("killedAtMs") ? json.getLong("killedAtMs") : null;
+        this.killedBy = json.optString("killedBy", null);
+        this.iconPath = json.optString("iconPath", null);
+        String at = json.optString("animalType", null);
+        this.animalType = at != null && at.startsWith("gfx/kritter/") ? at : null;
         this.iconTex = null;
-        this.labelText = createLabelText();
+
+        /* Legacy files stored one base64 PNG per mark. Decode it only until the
+         * resource type has an icon; every later mark of that type then costs nothing. */
+        if(!icons.containsKey(this.resourceType) && this.iconBase64 != null)
+            registerIcon(this.resourceType, decodeIcon(this.iconBase64));
     }
-    
+
+    /** Decode a base64 PNG, or null if it is unusable. */
+    public static BufferedImage decodeIcon(String base64) {
+        if(base64 == null || base64.isEmpty())
+            return null;
+        try {
+            return ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(base64)));
+        } catch(RuntimeException | java.io.IOException e) {
+            System.err.println("Failed to load icon from base64: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** Encode an icon as a base64 PNG, or null if it cannot be written. */
+    public static String encodeIcon(BufferedImage img) {
+        if(img == null)
+            return null;
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(img, "png", baos);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
+        } catch(RuntimeException | java.io.IOException e) {
+            System.err.println("Failed to save icon to base64: " + e.getMessage());
+            return null;
+        }
+    }
+
     /**
-     * Convert to JSON (for saving to file).
+     * Convert to JSON (for saving to file). The icon is not written here; it is
+     * stored once per resource type in the file's shared icon table.
      */
     public JSONObject toJson() {
         JSONObject json = new JSONObject();
         json.put("locationId", locationId);
         json.put("label", label);
         json.put("resourceType", resourceType);
+        json.put("quality", quality);
         json.put("segmentId", segmentId);
         json.put("tileX", tileCoords.x);
         json.put("tileY", tileCoords.y);
         json.put("timestamp", timestamp);
         json.put("labelColor", labelColor.getRGB());
-        
-        // Save grid info for ChunkNav navigation
         if (gridId != -1) {
             json.put("gridId", gridId);
         }
@@ -205,107 +286,98 @@ public class LabeledMinimapMark {
             json.put("localTileX", localTileCoords.x);
             json.put("localTileY", localTileCoords.y);
         }
-        
-        String b64 = iconBase64;
-        if (b64 != null) {
-            json.put("iconBase64", b64);
-        } else if (iconImage != null) {
-            try {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ImageIO.write(iconImage, "png", baos);
-                json.put("iconBase64", Base64.getEncoder().encodeToString(baos.toByteArray()));
-            } catch (Exception e) {
-                System.err.println("Failed to save icon to base64: " + e.getMessage());
-            }
-        }
-        
         return json;
     }
-    
+
+    /**
+     * Recover a quality from a legacy label such as "q40". Returns 0 when the label
+     * carries no number, which makes the mark visible at any threshold of 0.
+     */
+    private static double parseLabelQuality(String label) {
+        if(label == null)
+            return 0;
+        StringBuilder digits = new StringBuilder();
+        for(int i = 0; i < label.length(); i++) {
+            char c = label.charAt(i);
+            if((c >= '0' && c <= '9') || (c == '.' && digits.indexOf(".") < 0))
+                digits.append(c);
+            else if(digits.length() > 0)
+                break;
+        }
+        if(digits.length() == 0)
+            return 0;
+        try {
+            return Double.parseDouble(digits.toString());
+        } catch(NumberFormatException e) {
+            return 0;
+        }
+    }
+
     private static String generateLocationId(long segmentId, Coord tileCoords, String label) {
         return String.format("labeled_%d_%d_%d_%s", segmentId, tileCoords.x, tileCoords.y,
                            label.replaceAll("[^a-zA-Z0-9]", "_"));
     }
-    
+
     /**
-     * Create the text render for the label with the appropriate color.
-     */
-    private Text createLabelText() {
-        // Используем меньший шрифт для квариарца
-        int fontSize = "Quarryartz".equals(resourceType) ? 8 : 10;
-        if (labelColor.equals(Color.WHITE)) {
-            Text.Furnace furnace = new PUtils.BlurFurn(
-                new Text.Foundry(Text.sans, fontSize, Color.WHITE).aa(true), 
-                2, 1, new Color(60, 30, 30)
-            );
-            return furnace.render(label);
-        } else {
-            // Create custom furnace with the specified color
-            Text.Furnace customFurnace = new PUtils.BlurFurn(
-                new Text.Foundry(Text.sans, fontSize, labelColor).aa(true), 
-                2, 1, new Color(60, 30, 30)
-            );
-            return customFurnace.render(label);
-        }
-    }
-    
-    /**
-     * Get the icon texture for rendering.
+     * Get the icon texture for rendering. Unique (animal) marks use a per-mark
+     * image; prospecting samples share one texture per resource type.
      */
     public TexI getIconTex() {
         TexI tex = iconTex;
         if (tex != null) return tex;
+        if (iconImage != null) {
+            tex = new TexI(iconImage);
+            this.iconTex = tex;
+            return tex;
+        }
         String b64 = iconBase64;
         if (b64 != null) {
-            try {
-                byte[] imageBytes = Base64.getDecoder().decode(b64);
-                BufferedImage img = ImageIO.read(new ByteArrayInputStream(imageBytes));
-                if (img != null) {
-                    this.iconImage = img;
-                    tex = new TexI(img);
-                    this.iconTex = tex;
-                }
-            } catch (Exception e) {
-                System.err.println("Failed to lazy-load icon from base64: " + e.getMessage());
+            BufferedImage img = decodeIcon(b64);
+            if (img != null) {
+                this.iconImage = img;
+                tex = new TexI(img);
+                this.iconTex = tex;
             }
             this.iconBase64 = null;
+            if (tex != null) return tex;
         }
-        return tex;
+        Icon icon = icons.get(resourceType);
+        return (icon == null) ? null : icon.tex();
     }
-    
+
     /**
-     * Get the label text for rendering.
+     * Get the label text for rendering. Renders are shared by (colour, size, text), so the
+     * same "q40" in the same colour costs one texture no matter how many marks use it.
      */
     public Text getLabelText() {
-        return labelText;
+        if (label == null || label.isEmpty())
+            return null;
+        int rgb = labelColor.getRGB();
+        int fontSize = "Quarryartz".equals(resourceType) ? 8 : 10;
+        return labelTex.computeIfAbsent(rgb + " " + fontSize + " " + label, k -> furnace(rgb, fontSize).render(label));
     }
-    
-    /**
-     * Check if this mark is in the specified segment.
-     */
+
+    private static Text.Furnace furnace(int rgb, int fontSize) {
+        if(rgb == Color.WHITE.getRGB())
+            return fontSize == 8 ? quarryartzFurnace : labelFurnace;
+        return furnaces.computeIfAbsent(rgb + ":" + fontSize, c -> new PUtils.BlurFurn(
+            new Text.Foundry(Text.sans, fontSize, new Color(rgb)).aa(true),
+            2, 1, new Color(60, 30, 30)));
+    }
+
     public boolean isInSegment(long segId) {
         return this.segmentId == segId;
     }
-    
-    /**
-     * Get a unique identifier for this mark.
-     */
+
     public String getLocationId() {
         return locationId;
     }
-    
-    /**
-     * Check if this mark is at the same location as another.
-     * Used to avoid duplicate marks at the same spot.
-     */
+
     public boolean isSameLocation(LabeledMinimapMark other) {
-        return this.segmentId == other.segmentId && 
+        return this.segmentId == other.segmentId &&
                this.tileCoords.equals(other.tileCoords);
     }
-    
-    /**
-     * Check if a coordinate is near this mark (within given tile radius).
-     */
+
     public boolean isNear(long segId, Coord tc, int radiusTiles) {
         if (this.segmentId != segId) return false;
         int dx = Math.abs(this.tileCoords.x - tc.x);
@@ -313,4 +385,3 @@ public class LabeledMinimapMark {
         return dx <= radiusTiles && dy <= radiusTiles;
     }
 }
-

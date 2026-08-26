@@ -16,6 +16,7 @@ public class NMapWnd extends MapWnd {
     public Resource.Image searchRes = null;
     MapToggleButton treeBtn;
     MapToggleButton fishBtn;
+    MapToggleButton mapToolsBtn;
     MapToggleButton oresBtn;
     MapToggleButton prospectBtn;
     MapToggleButton quarryartzBtn;
@@ -55,22 +56,28 @@ public class NMapWnd extends MapWnd {
         int btnSpacing = UI.scale(5);
         Coord btnPos = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
         
-        // Ores button (rightmost) - opens Terrain Search Window (no icon toggle)
+        // Map tools button (rightmost) - opens the Map Tools panel (no icon toggle)
+        mapToolsBtn = add(new MapToggleButton("maptools", L10n.get("maptools.button_tip"), MapToolsWindow::toggle), btnPos);
+        mapToolsBtn.a = false; // Always show as unpressed (no toggle state)
+        mapToolsBtn.click(MapToolsWindow::toggle); // Left click opens the panel
+
+        // Ores button - opens Terrain Search Window (no icon toggle)
+        btnPos = btnPos.sub(mapToolsBtn.sz.x + btnSpacing, 0);
         oresBtn = add(new MapToggleButton("ores", "Ores Search", this::openOresSearch), btnPos);
         oresBtn.a = false; // Always show as unpressed (no toggle state)
         oresBtn.click(this::openOresSearch); // Left click opens window
         
-        // Fish button
+        // Fish button - shares its state with the Map Tools panel through NConfig
         btnPos = btnPos.sub(oresBtn.sz.x + btnSpacing, 0);
-        fishBtn = add(new MapToggleButton("fish", "Toggle fish icons (Right-click: Fish Search)", this::openFishSearch), btnPos);
-        fishBtn.a = getFishIconsState(); // Set initial state
-        fishBtn.changed(val -> setFishIconsState(val));
-        
+        fishBtn = add(new MapToggleButton("fish", "Toggle fish icons (Right-click: Fish Search)", MapToolsWindow::openFishSearch), btnPos);
+        fishBtn.state(() -> NMiniMap.showFishIcons());
+        fishBtn.set(val -> NMiniMap.showFishIcons(val));
+
         // Tree button
         btnPos = btnPos.sub(fishBtn.sz.x + btnSpacing, 0);
-        treeBtn = add(new MapToggleButton("tree", "Toggle tree icons (Right-click: Tree Search)", this::openTreeSearch), btnPos);
-        treeBtn.a = getTreeIconsState(); // Set initial state
-        treeBtn.changed(val -> setTreeIconsState(val));
+        treeBtn = add(new MapToggleButton("tree", "Toggle tree icons (Right-click: Tree Search)", MapToolsWindow::openTreeSearch), btnPos);
+        treeBtn.state(() -> NMiniMap.showTreeIcons());
+        treeBtn.set(val -> NMiniMap.showTreeIcons(val));
         
         // Prospect button
         btnPos = btnPos.sub(treeBtn.sz.x + btnSpacing, 0);
@@ -130,36 +137,6 @@ public class NMapWnd extends MapWnd {
                 return super.keydown(ev);
             }
         }, view.pos("br").sub(UI.scale(205), UI.scale(5)));
-    }
-
-    private boolean getTreeIconsState() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            return ((NMiniMap) gui.mmap).showTreeIcons;
-        return true;
-    }
-
-    private void setTreeIconsState(boolean val) {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            ((NMiniMap) gui.mmap).showTreeIcons = val;
-        if(view instanceof NMiniMap)
-            ((NMiniMap) view).showTreeIcons = val;
-    }
-
-    private boolean getFishIconsState() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            return ((NMiniMap) gui.mmap).showFishIcons;
-        return true;
-    }
-
-    private void setFishIconsState(boolean val) {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            ((NMiniMap) gui.mmap).showFishIcons = val;
-        if(view instanceof NMiniMap)
-            ((NMiniMap) view).showFishIcons = val;
     }
 
     private boolean getProspectingIconsState() {
@@ -436,10 +413,12 @@ public class NMapWnd extends MapWnd {
         super.resize(sz);
         
         // Position buttons in top-right corner (15px right, 10px down from original position)
-        if(oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null && gemstoneBtn != null && animalsBtn != null && foragingBtn != null && vectorClearBtn != null) {
+        if(mapToolsBtn != null && oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null && gemstoneBtn != null && animalsBtn != null && foragingBtn != null && vectorClearBtn != null) {
             int btnSpacing = UI.scale(5);
             Coord btnPos = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
 
+            mapToolsBtn.c = btnPos;
+            btnPos = btnPos.sub(mapToolsBtn.sz.x + btnSpacing, 0);
             oresBtn.c = btnPos;
             btnPos = btnPos.sub(oresBtn.sz.x + btnSpacing, 0);
             fishBtn.c = btnPos;

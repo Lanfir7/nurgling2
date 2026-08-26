@@ -47,9 +47,7 @@ NMiniMap extends MiniMap {
     // Cache for prospecting icon textures to avoid reloading every frame
     private final java.util.HashMap<String, TexI> prospectingIconCache = new java.util.HashMap<>();
 
-    // Visibility flags for tree and fish icons
-    public boolean showTreeIcons = true;
-    public boolean showFishIcons = true;
+    // Visibility flags for tree and fish icons live in NConfig (see showTreeIcons/showFishIcons).
     public boolean showProspectingIcons = true;
     public boolean showQuarryartzIcons = true;
     public boolean showOreSpotIcons = true; // Видимость маркеров спотов руд
@@ -62,6 +60,42 @@ NMiniMap extends MiniMap {
     private final MinimapFloorOverlayRenderer floorOverlayRenderer = new MinimapFloorOverlayRenderer();
     private long lastFloorSegId = Long.MIN_VALUE;
     private boolean lastFloorOverlayEnabled = false;
+
+    /* Visibility of tree and fish icons, and of prospected sample marks, lives in NConfig so
+     * that every minimap (corner and map window) shows the same thing and the choice survives
+     * relogging. The Map Tools panel and the map-window toolbar buttons are two views of these. */
+    public static boolean showTreeIcons() {
+        Object val = NConfig.get(NConfig.Key.showTreeIcons);
+        return !(val instanceof Boolean) || (Boolean) val;
+    }
+
+    public static void showTreeIcons(boolean val) {
+        NConfig.set(NConfig.Key.showTreeIcons, val);
+    }
+
+    public static boolean showFishIcons() {
+        Object val = NConfig.get(NConfig.Key.showFishIcons);
+        return !(val instanceof Boolean) || (Boolean) val;
+    }
+
+    public static void showFishIcons(boolean val) {
+        NConfig.set(NConfig.Key.showFishIcons, val);
+    }
+
+    public static nurgling.conf.ProspectMarkSettings prospectSettings() {
+        Object val = NConfig.get(NConfig.Key.prospectMarks);
+        if(val instanceof nurgling.conf.ProspectMarkSettings)
+            return (nurgling.conf.ProspectMarkSettings) val;
+        return null;
+    }
+
+    /** Whether a prospected sample mark passes the current kind/threshold filter. */
+    public static boolean markVisible(LabeledMinimapMark mark) {
+        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
+        if(settings == null)
+            return true;
+        return settings.shows(mark.kind, mark.quality);
+    }
 
     // Cached waypoint number labels to avoid per-frame Text.render() allocations
     private static Text[] waypointNumCache = new Text[128];
@@ -1115,109 +1149,99 @@ NMiniMap extends MiniMap {
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.labeledMarkService == null) return;
 
+        /* Looked up once per frame rather than per mark; NConfig.get is not free. */
+        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
+
         java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(dloc.seg.id);
+        if(marks.isEmpty())
+            return;
 
         Coord hsz = sz.div(2);
+        float scale = scalef();
+
+        Object scaleObj = NConfig.get(NConfig.Key.prospectIconScale);
+        int scalePercent = 100;
+        if (scaleObj instanceof Number) {
+            scalePercent = ((Number) scaleObj).intValue();
+        }
+        float scaleMultiplier = scalePercent / 100.0f;
 
         for(LabeledMinimapMark mark : marks) {
-            // Пропускаем метки квариарца, если они скрыты
             if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) {
                 continue;
             }
-            
-            // Пропускаем метки спотов руд, если они скрыты
             if(isOreSpotMark(mark) && !showOreSpotIcons) {
                 continue;
             }
-            
-            // Пропускаем метки драгоценных камней, если они скрыты
             if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
                 continue;
             }
-            // Пропускаем маркеры животных (Animals), если слой выключен
             if(isAnimalMark(mark) && !showAnimalIcons) {
                 continue;
             }
             if (skipForageMark(mark)) continue;
+            /* Prospecting samples (water/clay/soil/...) follow Map Tools kind/threshold. */
+            if (!isAnimalMark(mark) && !isForageMark(mark)
+                    && !"Quarryartz".equals(mark.resourceType)
+                    && !isOreSpotMark(mark) && !isGemstoneMark(mark.resourceType)
+                    && settings != null && !settings.shows(mark.kind, mark.quality)) {
+                continue;
+            }
 
-            // Calculate screen position
-            Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
+            int px = (int)Math.round((mark.tileCoords.x - dloc.tc.x) / (double)scale) + hsz.x;
+            int py = (int)Math.round((mark.tileCoords.y - dloc.tc.y) / (double)scale) + hsz.y;
+            if(px < 0 || px > sz.x || py < 0 || py > sz.y)
+                continue;
 
-            // Only draw if on screen
-            if(screenPos.x >= 0 && screenPos.x <= sz.x &&
-               screenPos.y >= 0 && screenPos.y <= sz.y) {
+            Coord screenPos = new Coord(px, py);
 
-                // Получаем скейлинг для иконок и текста (выносим за пределы if-else)
-                Object scaleObj = NConfig.get(NConfig.Key.prospectIconScale);
-                int scalePercent = 100; // Default
-                if (scaleObj instanceof Number) {
-                    scalePercent = ((Number) scaleObj).intValue();
+            TexI iconTex = mark.getIconTex();
+            if (iconTex == null && isAnimalMark(mark)) {
+                java.awt.image.BufferedImage lazyIcon = null;
+                if (mark.iconPath != null)
+                    lazyIcon = nurgling.actions.ObjectTracker.loadIconFromResourcePath(mark.iconPath);
+                if (lazyIcon == null && mark.animalType != null && gui != null)
+                    lazyIcon = nurgling.actions.ObjectTracker.loadIconFromIconConf(mark.animalType, gui);
+                if (lazyIcon == null && mark.animalType != null && gui != null)
+                    lazyIcon = nurgling.actions.ObjectTracker.loadAnimalIconFromPath(mark.animalType, mark.resourceType, gui);
+                if (lazyIcon == null) {
+                    try { lazyIcon = Resource.loadsimg("gfx/invobjs/kritter"); } catch (Exception ignored) { }
                 }
-                float scaleMultiplier = scalePercent / 100.0f;
-                
-                // Draw icon if available; для животных без иконки — ленивая загрузка по iconPath/animalType/iconconf
-                TexI iconTex = mark.getIconTex();
-                if (iconTex == null && isAnimalMark(mark)) {
-                    java.awt.image.BufferedImage lazyIcon = null;
-                    // 1) Пробуем загрузить по сохранённому iconPath
-                    if (mark.iconPath != null)
-                        lazyIcon = nurgling.actions.ObjectTracker.loadIconFromResourcePath(mark.iconPath);
-                    // 2) Пробуем загрузить по animalType через Icon Settings (iconconf) — всегда работает
-                    if (lazyIcon == null && mark.animalType != null && gui != null)
-                        lazyIcon = nurgling.actions.ObjectTracker.loadIconFromIconConf(mark.animalType, gui);
-                    // 3) Пробуем загрузить по animalType (gfx/kritter/... -> gfx/invobjs/kritter/...)
-                    if (lazyIcon == null && mark.animalType != null && gui != null)
-                        lazyIcon = nurgling.actions.ObjectTracker.loadAnimalIconFromPath(mark.animalType, mark.resourceType, gui);
-                    // 4) Fallback — общая иконка криттера (чтобы не показывать серый круг)
-                    if (lazyIcon == null) {
-                        try { lazyIcon = Resource.loadsimg("gfx/invobjs/kritter"); } catch (Exception ignored) { }
-                    }
-                    if (lazyIcon != null) {
-                        gui.labeledMarkService.updateAnimalMarkerIcon(mark.getLocationId(), lazyIcon);
-                        iconTex = new TexI(lazyIcon);
-                    }
+                if (lazyIcon != null) {
+                    gui.labeledMarkService.updateAnimalMarkerIcon(mark.getLocationId(), lazyIcon);
+                    iconTex = new TexI(lazyIcon);
                 }
-                if(iconTex != null) {
-                    int dsz = Math.max(iconTex.sz().y, iconTex.sz().x);
-                    // Применяем скейлинг для иконок камней, руд и квариарца (как для проспектинга)
-                    int targetSize = (int)(UI.scale(18) * scaleMultiplier);
-                    g.aimage(iconTex, screenPos, 0.5, 0.5,
-                        UI.scale(targetSize * iconTex.sz().x / dsz, targetSize * iconTex.sz().y / dsz));
+            }
+            if(iconTex != null) {
+                int dsz = Math.max(iconTex.sz().y, iconTex.sz().x);
+                int targetSize = (int)(UI.scale(18) * scaleMultiplier);
+                g.aimage(iconTex, screenPos, 0.5, 0.5,
+                    UI.scale(targetSize * iconTex.sz().x / dsz, targetSize * iconTex.sz().y / dsz));
+            } else {
+                Color iconColor;
+                if (isGemstoneMark(mark.resourceType)) {
+                    iconColor = new Color(255, 215, 0);
+                } else if (isOreSpotMark(mark)) {
+                    iconColor = new Color(255, 200, 0);
                 } else {
-                    // Fallback для маркеров без иконки (например, драгоценных камней или руд)
-                    // Рисуем цветной круг с применением скейлинга
-                    Color iconColor;
-                    if (isGemstoneMark(mark.resourceType)) {
-                        iconColor = new Color(255, 215, 0); // Золотой для драгоценных камней
-                    } else if (isOreSpotMark(mark)) {
-                        iconColor = new Color(255, 200, 0); // Золотой для руд
-                    } else {
-                        iconColor = new Color(139, 137, 137); // Серый по умолчанию
-                    }
-                    int iconSize = (int)(UI.scale(12) * scaleMultiplier);
-                    g.chcolor(iconColor);
-                    g.fellipse(screenPos, new Coord(iconSize, iconSize));
-                    g.chcolor();
+                    iconColor = new Color(139, 137, 137);
                 }
+                int iconSize = (int)(UI.scale(12) * scaleMultiplier);
+                g.chcolor(iconColor);
+                g.fellipse(screenPos, new Coord(iconSize, iconSize));
+                g.chcolor();
+            }
 
-                // Draw label under the icon (like quest giver names)
-                // Для квариарца поднимаем подпись выше и используем меньший шрифт
-                // Для животных без качества подпись пустая — не рисуем
-                Text labelText = mark.getLabelText();
-                if(labelText != null && mark.label != null && !mark.label.isEmpty()) {
-                    int offsetY = "Quarryartz".equals(mark.resourceType) ? UI.scale(6) : UI.scale(10);
-                    Coord textPos = screenPos.add(0, offsetY);
-                    
-                    // Применяем скейлинг к тексту
-                    Coord originalTextSize = labelText.sz();
-                    Coord scaledTextSize = new Coord(
-                        (int)(originalTextSize.x * scaleMultiplier),
-                        (int)(originalTextSize.y * scaleMultiplier)
-                    );
-                    
-                    // Рисуем текст с масштабированием
-                    g.aimage(labelText.tex(), textPos, 0.5, 0, scaledTextSize);
-                }
+            Text labelText = mark.getLabelText();
+            if(labelText != null && mark.label != null && !mark.label.isEmpty()) {
+                int offsetY = "Quarryartz".equals(mark.resourceType) ? UI.scale(6) : UI.scale(10);
+                Coord textPos = screenPos.add(0, offsetY);
+                Coord originalTextSize = labelText.sz();
+                Coord scaledTextSize = new Coord(
+                    (int)(originalTextSize.x * scaleMultiplier),
+                    (int)(originalTextSize.y * scaleMultiplier)
+                );
+                g.aimage(labelText.tex(), textPos, 0.5, 0, scaledTextSize);
             }
         }
     }
@@ -1559,7 +1583,7 @@ NMiniMap extends MiniMap {
 
             // Check for tree location tooltip first (check in screen space)
             NGameUI gui = NUtils.getGameUI();
-            if(gui != null && gui.treeLocationService != null && showTreeIcons) {
+            if(gui != null && gui.treeLocationService != null && showTreeIcons()) {
                 // Check if markers are hidden (respect "Hide Markers" button)
                 MapWnd mapwnd = gui.mapfile;
                 boolean markersHidden = (mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall));
@@ -1598,7 +1622,7 @@ NMiniMap extends MiniMap {
             }
 
             // Check for fish location tooltip (check in screen space)
-            if(gui != null && gui.fishLocationService != null && showFishIcons) {
+            if(gui != null && gui.fishLocationService != null && showFishIcons()) {
                 // Check if markers are hidden (respect "Hide Markers" button)
                 MapWnd mapwnd = gui.mapfile;
                 boolean markersHidden = (mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall));
@@ -1950,7 +1974,7 @@ NMiniMap extends MiniMap {
         if(sessloc == null || dloc == null) return;
 
         // Check if fish icons are hidden by checkbox
-        if(!showFishIcons) return;
+        if(!showFishIcons()) return;
 
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.fishLocationService == null) return;
@@ -2029,7 +2053,7 @@ NMiniMap extends MiniMap {
         if(sessloc == null || dloc == null) return;
 
         // Check if tree icons are hidden by checkbox
-        if(!showTreeIcons) return;
+        if(!showTreeIcons()) return;
 
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.treeLocationService == null) return;
@@ -2448,25 +2472,30 @@ NMiniMap extends MiniMap {
 
         Coord hsz = sz.div(2);
         int threshold = UI.scale(12); // Click radius
+        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
 
         for(LabeledMinimapMark mark : marks) {
-            // Пропускаем метки квариарца, если они скрыты
             if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) {
                 continue;
             }
-            // Пропускаем метки руд (споты), если они скрыты
             if(isOreSpotMark(mark) && !showOreSpotIcons) {
                 continue;
             }
-            // Пропускаем метки драгоценных камней, если они скрыты
             if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
                 continue;
             }
-            // Пропускаем маркеры животных, если слой выключен
             if(isAnimalMark(mark) && !showAnimalIcons) {
                 continue;
             }
             if (skipForageMark(mark)) continue;
+            /* A filtered-out mark is not drawn, so it must not be clickable either -
+             * otherwise it keeps an invisible hitbox that swallows right-clicks. */
+            if (!isAnimalMark(mark) && !isForageMark(mark)
+                    && !"Quarryartz".equals(mark.resourceType)
+                    && !isOreSpotMark(mark) && !isGemstoneMark(mark.resourceType)
+                    && settings != null && !settings.shows(mark.kind, mark.quality)) {
+                continue;
+            }
 
             // Calculate screen position for this mark
             Coord markScreenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
@@ -2997,7 +3026,7 @@ NMiniMap extends MiniMap {
         }
         
         // Handle right-click release on tree location - open details window
-        if(ev.b == 3 && dloc != null && sessloc != null && showTreeIcons) { // Button 3 is right-clicked
+        if(ev.b == 3 && dloc != null && sessloc != null && showTreeIcons()) { // Button 3 is right-clicked
             NGameUI gui = NUtils.getGameUI();
             if(gui != null && gui.treeLocationService != null) {
                 // Check for tree location at click position (in screen space)
@@ -3033,7 +3062,7 @@ NMiniMap extends MiniMap {
         }
 
         // Handle right-click release on fish location - open details window
-        if(ev.b == 3 && dloc != null && sessloc != null && showFishIcons) { // Button 3 is right-clicked
+        if(ev.b == 3 && dloc != null && sessloc != null && showFishIcons()) { // Button 3 is right-clicked
             NGameUI gui = NUtils.getGameUI();
             if(gui != null && gui.fishLocationService != null) {
                 // Check for fish location at click position (in screen space)

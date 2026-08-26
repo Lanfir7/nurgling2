@@ -11,8 +11,6 @@ import monitoring.ItemWatcher;
 import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.tools.LpExplorer;
-import nurgling.widgets.NQuestInfo;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -221,12 +219,10 @@ public class NGItem extends GItem
                     }
                 }
             }
-            if (lastQuestUpdate < NQuestInfo.lastUpdate.get()) {
-                NGameUI gui = NUtils.getGameUI();
-                if (gui != null && gui.questinfo != null) {
-                    isQuested = gui.questinfo.isQuestedItem(this);
-                }
-                lastQuestUpdate = NQuestInfo.lastUpdate.get();
+            NGameUI qgui = NUtils.getGameUI();
+            if (qgui != null && qgui.questinfo != null && lastQuestUpdate < qgui.questinfo.lastUpdate.get()) {
+                isQuested = qgui.questinfo.isQuestedItem(this);
+                lastQuestUpdate = qgui.questinfo.lastUpdate.get();
             }
         }
     }
@@ -401,7 +397,6 @@ public class NGItem extends GItem
         // The isStackContainer flag is set in tick() when contents is available
         // Also check: if quality is null and NOT from stack, it's likely a stack container
         if (isStackContainer && !fromStack) {
-            
             addedToInventoryCache = true;
             return;
         }
@@ -412,14 +407,12 @@ public class NGItem extends GItem
             // Double check by looking at contents
             if (contents != null && contents instanceof ItemStack) {
                 isStackContainer = true;
-                
                 addedToInventoryCache = true;
                 return;
             }
             // Also check Amount info - stacks have this
             if (getInfo(GItem.Amount.class) != null) {
                 isStackContainer = true;
-                
                 addedToInventoryCache = true;
                 return;
             }
@@ -434,7 +427,6 @@ public class NGItem extends GItem
         // Calculate quality - items with null/0 quality should not be saved
         // (they are stack containers or items without quality info)
         if (quality == null || quality <= 0) {
-            
             addedToInventoryCache = true;
             return;
         }
@@ -472,7 +464,6 @@ public class NGItem extends GItem
                             inv.iis.add(cachedItemInfo);
                             addedToInventoryCache = true;
                             inv.lastUpdate = NUtils.getTickId();
-                            
                             return;
                         }
                     }
@@ -489,7 +480,6 @@ public class NGItem extends GItem
         inv.iis.add(cachedItemInfo);
         addedToInventoryCache = true;
         inv.lastUpdate = NUtils.getTickId();
-        
     }
     
     /**
@@ -533,14 +523,12 @@ public class NGItem extends GItem
                             item.q == cachedItemInfo.q &&
                             item.stackIndex == cachedItemInfo.stackIndex
                         );
-                        System.out.println("NGItem.destroy: Immediate removal (transferred): " + name);
                     } else {
                         // Schedule cache removal with a delay
                         // If container closes (reqdestroy), pending removals are cleared and cache is synced
                         // If container stays open (item consumed), the removal will be processed in tick()
                         long removeAtTick = NUtils.getTickId() + 15; // 15 ticks delay
                         inv.pendingCacheRemovals.add(new NInventory.PendingCacheRemoval(cachedItemInfo, removeAtTick));
-                        System.out.println("NGItem.destroy: Scheduled removal: " + name + " at tick " + removeAtTick);
                     }
                 }
             }

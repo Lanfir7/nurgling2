@@ -21,6 +21,8 @@ import nurgling.gattrr.NTreeDisplayScale;
 import nurgling.overlays.*;
 import nurgling.overlays.NSpeedometerOverlay;
 import nurgling.pf.*;
+import nurgling.sessions.SessionContext;
+import nurgling.sessions.SessionManager;
 import nurgling.tools.*;
 import nurgling.widgets.NAlarmWdg;
 import nurgling.widgets.NMiniMap;
@@ -184,6 +186,19 @@ public class NGob
                 }
             }
         }
+    }
+
+    /**
+     * The game UI of the session a gob actually belongs to.
+     * Gob ticks run on pool threads that carry no session binding, so resolving through
+     * NUtils.getGameUI() would silently target whichever session is currently rendered.
+     */
+    private static NGameUI ownerGui(Gob gob)
+    {
+        if (gob == null || gob.glob == null || gob.glob.sess == null)
+            return null;
+        SessionContext ctx = SessionManager.getInstance().findBySession(gob.glob.sess);
+        return (ctx == null) ? null : ctx.getGameUI();
     }
 
     private static class DelayedOverlayTask
@@ -817,10 +832,17 @@ public class NGob
                                 {
                                     String posename = gob.pose();
                                     // Only add if not mannequin, not skeleton, and not the player
-                                    if (!(posename.contains("manneq") || posename.contains("skel")) && NUtils.playerID() != gob.id)
-                                    {
-                                        NAlarmWdg.addBorka(gob.id);
-                                    }
+                                    if (posename.contains("manneq") || posename.contains("skel"))
+                                        return;
+                                    // Resolve the session that owns this gob. This runs from Gob.ctick(),
+                                    // which for headless sessions executes on a pool thread with no UI
+                                    // binding - NUtils would resolve to whichever session is on screen.
+                                    NGameUI owner = ownerGui(gob);
+                                    if (owner == null || owner.map == null || owner.alarmWdg == null)
+                                        return;
+                                    if (owner.map.plgob == gob.id)
+                                        return;
+                                    owner.alarmWdg.addBorka(gob.id);
                                 }
                         ));
                     }
@@ -1147,27 +1169,34 @@ public class NGob
 //                }
 //            }
 
-            int nlu = NQuestInfo.lastUpdate.get();
-            if (nlu > lastUpdate)
+            // Quest highlighting is per-session: resolve the gob's OWNING session rather than
+            // NUtils.getGameUI() (the on-screen session), because gob ticks run on pool threads
+            // with no UI binding. Reading a shared/active questinfo would highlight one character's
+            // quest targets in every session.
+            NGameUI questOwner = ownerGui(parent);
+            if (questOwner != null && questOwner.questinfo != null)
             {
-
-
-                NQuestInfo.MarkerInfo markerInfo;
-                if ((markerInfo = NQuestInfo.getMarkerInfo(parent)) != null)
+                NQuestInfo qi = questOwner.questinfo;
+                int nlu = qi.lastUpdate.get();
+                if (nlu > lastUpdate)
                 {
-                    parent.addcustomol(new NQuestGiver(parent, markerInfo));
-                }
-                if (cachedQuestNotified)
-                {
-                    if (NQuestInfo.isForageTarget(name))
+                    NQuestInfo.MarkerInfo markerInfo;
+                    if ((markerInfo = qi.getMarkerInfo(questOwner, parent)) != null)
                     {
-                        parent.addcustomol(new NQuestTarget(parent, false));
-                    } else if (NQuestInfo.isHuntingTarget(name))
-                    {
-                        parent.addcustomol(new NQuestTarget(parent, true));
+                        parent.addcustomol(new NQuestGiver(parent, markerInfo));
                     }
+                    if (cachedQuestNotified)
+                    {
+                        if (qi.isForageTarget(name))
+                        {
+                            parent.addcustomol(new NQuestTarget(parent, false, qi));
+                        } else if (qi.isHuntingTarget(name))
+                        {
+                            parent.addcustomol(new NQuestTarget(parent, true, qi));
+                        }
+                    }
+                    lastUpdate = nlu;
                 }
-                lastUpdate = nlu;
             }
             if (cachedLpassistent)
             {
