@@ -688,6 +688,9 @@ public class NCore extends Widget
                 }
                 sentRecipeHashes.add(recipeHash);
 
+                /* Null whenever the database failed to initialise - an unreachable server, or a
+                 * schema this client will not touch. Recipe capture is best-effort, so it steps
+                 * aside rather than throwing on every item the player looks at. */
                 if (databaseManager.getRecipeService() == null) {
                     return;
                 }
