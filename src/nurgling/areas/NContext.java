@@ -1107,7 +1107,7 @@ public class NContext {
             for(Integer id : nids) {
                 if(id>0 && player!=null) {
                     NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (test != null && test.containIn(name)) {
+                    if (test != null && !test.isDisabled() && test.containIn(name)) {
                         Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                         if(testrc!=null) {
                             double testdist;
@@ -1131,7 +1131,7 @@ public class NContext {
             for(Integer id : nids) {
                 if(id>0) {
                     NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (test != null && test.containIn(name)) {
+                    if (test != null && !test.isDisabled() && test.containIn(name)) {
                         Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                         if(testrc!=null) {
                             double testdist;
@@ -1153,8 +1153,8 @@ public class NContext {
             Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
             for(Integer id : nids) {
                 if(id>0) {
-                    if (NUtils.getGameUI().map.glob.map.areas.get(id).containIn(name)) {
-                        NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
+                    NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
+                    if (test != null && !test.isDisabled() && test.containIn(name)) {
                         if(test.getRCArea()!=null) {
                             results.add(test);
                         }
@@ -1210,7 +1210,7 @@ public class NContext {
             for(Integer id : nids) {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (cand != null && cand.isVisible() && cand.containOut(name.getDefault(), th) && cand.getRCArea()!=null) {
+                    if (cand != null && !cand.isDisabled() && cand.isVisible() && cand.containOut(name.getDefault(), th) && cand.getRCArea()!=null) {
                         areas.add(new TestedArea(cand, cand.getOutput(name.getDefault()).th));
                     }
                 }
@@ -1258,7 +1258,7 @@ public class NContext {
             for(Integer id : nids) {
                 if (id > 0) {
                     NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                    if (cand != null && cand.isVisible() && cand.containOut(name, th) && cand.getRCArea()!=null) {
+                    if (cand != null && !cand.isDisabled() && cand.isVisible() && cand.containOut(name, th) && cand.getRCArea()!=null) {
                         areas.add(new TestedArea(cand, cand.getOutput(name).th));
                     }
                 }
@@ -1353,7 +1353,7 @@ public class NContext {
             for (Integer id : nids) {
                 if (id > 0) {
                     NArea cand = gui.map.glob.map.areas.get(id);
-                    if (cand != null && cand.containIn(name)) {
+                    if (cand != null && !cand.isDisabled() && cand.containIn(name)) {
                         double candDist = getDistanceToArea(cand, gui);
                         if (candDist < dist) {
                             res = cand;
@@ -1375,7 +1375,7 @@ public class NContext {
             for (Integer id : nids) {
                 if (id > 0) {
                     NArea area = gui.map.glob.map.areas.get(id);
-                    if (area == null) continue;
+                    if (area == null || area.isDisabled()) continue;
                     for (NArea.Specialisation s : area.spec) {
                         if (s.name.equals(name) && ((sub == null || sub.isEmpty()) || (s.subtype != null && s.subtype.equalsIgnoreCase(sub)))) {
                             double candDist = getDistanceToArea(area, gui);
@@ -1409,7 +1409,7 @@ public class NContext {
                 if (Thread.currentThread().isInterrupted()) break;
                 if (id > 0) {
                     NArea cand = gui.map.glob.map.areas.get(id);
-                    if (cand != null && cand.containOut(name)) {
+                    if (cand != null && !cand.isDisabled() && cand.containOut(name)) {
                         // Check reachability using ChunkNav or RouteGraph
                         double dist = getDistanceToArea(cand, gui);
                         if (dist < Double.MAX_VALUE) {
@@ -1465,9 +1465,9 @@ public class NContext {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
             Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
             for(Integer id : nids) {
-                if (id > 0)
-                    if (NUtils.getGameUI().map.glob.map.areas.get(id).containOut(name.getDefault())) {
-                        NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                if (id > 0) {
+                    NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                    if (cand != null && !cand.isDisabled() && cand.containOut(name.getDefault())) {
                         if(cand.getRCArea()!=null) {
                             for (int i = 0; i < cand.jout.length(); i++) {
                                 if (NParser.checkName((String) ((JSONObject) cand.jout.get(i)).get("name"), name)) {
@@ -1477,6 +1477,7 @@ public class NContext {
                             }
                         }
                     }
+                }
             }
         }
         return areas;
@@ -1487,18 +1488,17 @@ public class NContext {
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
             Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
             for(Integer id : nids) {
-                if (id > 0)
-                    if (NUtils.getGameUI().map.glob.map.areas.get(id).containOut(name)) {
-                        NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
-                        if(!cand.hide) {
-                            for (int i = 0; i < cand.jout.length(); i++) {
-                                if (NParser.checkName((String) ((JSONObject) cand.jout.get(i)).get("name"), name)) {
-                                    Integer th = (((JSONObject) cand.jout.get(i)).has("th")) ? ((Integer) ((JSONObject) cand.jout.get(i)).get("th")) : 1;
-                                    areas.put(th, cand);
-                                }
+                if (id > 0) {
+                    NArea cand = NUtils.getGameUI().map.glob.map.areas.get(id);
+                    if (cand != null && !cand.isDisabled() && cand.containOut(name)) {
+                        for (int i = 0; i < cand.jout.length(); i++) {
+                            if (NParser.checkName((String) ((JSONObject) cand.jout.get(i)).get("name"), name)) {
+                                Integer th = (((JSONObject) cand.jout.get(i)).has("th")) ? ((Integer) ((JSONObject) cand.jout.get(i)).get("th")) : 1;
+                                areas.put(th, cand);
                             }
                         }
                     }
+                }
             }
         }
         return areas;
@@ -1521,7 +1521,7 @@ public class NContext {
                     NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
                     // nols and glob.map.areas can fall briefly out of sync (e.g. after
                     // a full DB sync replaces the area set) — skip stale overlay ids.
-                    if(test == null) continue;
+                    if(test == null || test.isDisabled()) continue;
                     for (NArea.Specialisation s : test.spec) {
                         if (s.name.equals(name)) {
                             if(test.isVisible()) {
@@ -1552,7 +1552,7 @@ public class NContext {
                     NArea test = NUtils.getGameUI().map.glob.map.areas.get(id);
                     // nols and glob.map.areas can fall briefly out of sync (e.g. after
                     // a full DB sync replaces the area set) — skip stale overlay ids.
-                    if(test == null) continue;
+                    if(test == null || test.isDisabled()) continue;
                     for (NArea.Specialisation s : test.spec) {
                         if (s.name.equals(name) && s.subtype != null && s.subtype.toLowerCase().equals(sub.toLowerCase())) {
                             if(test.isVisible()) {
@@ -1588,7 +1588,7 @@ public class NContext {
             for (Integer id : nids) {
                 if (id > 0) {
                     NArea area = gui.map.glob.map.areas.get(id);
-                    if (area != null) {
+                    if (area != null && !area.isDisabled()) {
                         for (NArea.Specialisation s : area.spec) {
                             boolean nameMatch = s.name.equals(name);
                             boolean subtypeMatch = (subtype == null || subtype.isEmpty()) ||
