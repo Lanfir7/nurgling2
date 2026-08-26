@@ -31,6 +31,8 @@ public class DatabaseSettings extends Panel {
     private CheckBox enableCheckbox;
     private CheckBox shareHsCheckbox;
     private CheckBox shareMapMarksCheckbox;
+    private CheckBox sharePosCheckbox;
+    private CheckBox showPeerPosCheckbox;
     private Dropbox<String> dbType;
     private final int labelWidth = UI.scale(80); // РЁРёСЂРёРЅР° Р»РµР№Р±Р»РѕРІ
     private final int entryX = UI.scale(110);    // X-РєРѕРѕСЂРґРёРЅР°С‚Р° РґР»СЏ TextEntry (was 90, increased for better space)
@@ -39,6 +41,8 @@ public class DatabaseSettings extends Panel {
     private boolean enabled;
     private boolean shareHs;
     private boolean shareMapMarks;
+    private boolean sharePos;
+    private boolean showPeerPos;
     private String dbTypeStr;
     private String host, user, pass, dbPath;
 
@@ -74,7 +78,27 @@ public class DatabaseSettings extends Panel {
             }
         }, new Coord(margin, y));
         shareMapMarksCheckbox.tooltip = Text.render(L10n.get("database.share_map_markers_tip")).tex();
-        y += shareMapMarksCheckbox.sz.y + UI.scale(8);
+        y += shareMapMarksCheckbox.sz.y + UI.scale(5);
+
+        // Publish this character's position so everyone on this database can see it, at any distance
+        prev = sharePosCheckbox = add(new CheckBox(L10n.get("database.share_position")) {
+            public void set(boolean val) {
+                a = val;
+                sharePos = val;
+            }
+        }, new Coord(margin, y));
+        sharePosCheckbox.tooltip = Text.render(L10n.get("database.share_position_tip")).tex();
+        y += sharePosCheckbox.sz.y + UI.scale(5);
+
+        // Whether other people's published positions are drawn on this client's maps
+        prev = showPeerPosCheckbox = add(new CheckBox(L10n.get("database.show_peer_positions")) {
+            public void set(boolean val) {
+                a = val;
+                showPeerPos = val;
+            }
+        }, new Coord(margin, y));
+        showPeerPosCheckbox.tooltip = Text.render(L10n.get("database.show_peer_positions_tip")).tex();
+        y += showPeerPosCheckbox.sz.y + UI.scale(8);
 
         // Р—Р°РіРѕР»РѕРІРѕРє СЂР°Р·РґРµР»Р°
         prev = add(new Label(L10n.get("database.settings")), new Coord(margin, y));
@@ -235,6 +259,10 @@ public class DatabaseSettings extends Panel {
         shareHsCheckbox.a = shareHs;
         shareMapMarks = getBool(NConfig.Key.mapShareMarkers);
         shareMapMarksCheckbox.a = shareMapMarks;
+        sharePos = getBool(NConfig.Key.sharePosition);
+        sharePosCheckbox.a = sharePos;
+        showPeerPos = getBool(NConfig.Key.showPeerPositions);
+        showPeerPosCheckbox.a = showPeerPos;
 
         boolean isPostgres = getBool(NConfig.Key.postgres);
         dbTypeStr = isPostgres ? "PostgreSQL" : "SQLite";
@@ -257,7 +285,12 @@ public class DatabaseSettings extends Panel {
     @Override
     public void save() {
         boolean wasEnabled = (Boolean) NConfig.get(NConfig.Key.ndbenable);
+        boolean wasSharing = (Boolean) NConfig.get(NConfig.Key.sharePosition);
         applyFormToConfig();
+        if (wasSharing && !sharePos && nurgling.NCore.databaseManager != null
+            && nurgling.NCore.databaseManager.getPeerPositionService() != null) {
+            nurgling.NCore.databaseManager.getPeerPositionService().withdrawOptedOut();
+        }
 
         // Handle database manager and areas reload
         if (enabled) {
@@ -284,6 +317,8 @@ public class DatabaseSettings extends Panel {
         NConfig.set(NConfig.Key.ndbenable, enabled);
         NConfig.set(NConfig.Key.shareHearthSecret, shareHs);
         NConfig.set(NConfig.Key.mapShareMarkers, shareMapMarks);
+        NConfig.set(NConfig.Key.sharePosition, sharePos);
+        NConfig.set(NConfig.Key.showPeerPositions, showPeerPos);
         boolean isPostgres = "PostgreSQL".equals(dbTypeStr);
         NConfig.set(NConfig.Key.postgres, isPostgres);
         NConfig.set(NConfig.Key.sqlite, !isPostgres);
