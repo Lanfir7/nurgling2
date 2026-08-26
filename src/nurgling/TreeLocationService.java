@@ -236,6 +236,28 @@ public class TreeLocationService implements ProfileAwareService {
         }
     }
 
+    public void remapSegment(long srcSeg, long dstSeg, haven.Coord gridSoff) {
+        haven.Coord tileShift = gridSoff.mul(haven.MCache.cmaps);
+        lock.writeLock().lock();
+        try {
+            java.util.List<TreeLocation> moved = new ArrayList<>();
+            java.util.Iterator<java.util.Map.Entry<String, TreeLocation>> it = treeLocations.entrySet().iterator();
+            while (it.hasNext()) {
+                TreeLocation loc = it.next().getValue();
+                if (loc.getSegmentId() != srcSeg)
+                    continue;
+                it.remove();
+                moved.add(loc.relocated(dstSeg, tileShift));
+            }
+            for (TreeLocation loc : moved)
+                treeLocations.put(loc.getLocationId(), loc);
+            if (!moved.isEmpty())
+                saveTreeLocations();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     /**
      * Get all tree locations
      */

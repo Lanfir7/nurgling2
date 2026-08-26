@@ -71,6 +71,20 @@ public class AnimalMarkerService {
         }
     }
 
+    public int updateLocation(String profile, long gobId, long segmentId, int tileX, int tileY) {
+        if (!isAvailable()) {
+            return 0;
+        }
+        try {
+            return databaseManager.executeOperation(adapter ->
+                animalMarkerDao.updateLocation(adapter, profile, gobId, segmentId, tileX, tileY)
+            );
+        } catch (SQLException e) {
+            System.err.println("AnimalMarkerService: updateLocation failed: " + e.getMessage());
+            return 0;
+        }
+    }
+
     /**
      * Delete an animal marker by profile and gob_id (e.g. when user removes mark via Shift+RMB).
      */

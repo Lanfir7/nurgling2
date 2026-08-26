@@ -117,7 +117,7 @@ public class PeerPositionService {
         Coord tc;
         MCache.Grid grid;
         try {
-            Gob player = NUtils.player();
+            Gob player = (gui.map != null) ? gui.map.player() : null;
             if(player == null)
                 return(null);
             /* Every read of the player has to sit inside this guard: the gob's position is as

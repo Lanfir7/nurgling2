@@ -5,6 +5,7 @@ import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TreeLocationTest {
     @Test
@@ -48,5 +49,18 @@ class TreeLocationTest {
         assertEquals(0, loaded.getGrowthPercent());
         assertEquals("", loaded.getMapLabel());
         assertEquals("Oak Tree", loaded.getListLabel());
+    }
+
+    @Test
+    void relocatesWithSegmentMerge() {
+        TreeLocation loc = new TreeLocation(1L, new Coord(10, 20), "Oak Tree",
+                "gfx/terobjs/trees/oak", 7, 150);
+        TreeLocation moved = loc.relocated(99L, new Coord(haven.MCache.cmaps.x, 0));
+        assertEquals(99L, moved.getSegmentId());
+        assertEquals(new Coord(10 - haven.MCache.cmaps.x, 20), moved.getTileCoords());
+        assertEquals(150, moved.getGrowthPercent());
+        assertEquals(7, moved.getQuantity());
+        assertEquals(loc.getTimestamp(), moved.getTimestamp());
+        assertTrue(moved.getLocationId().contains("99"));
     }
 }

@@ -1600,6 +1600,7 @@ public class MapFile {
 	    markerseq++;
 	knownsegs.remove(src.id);
 	defersave();
+	nurgling.map.SegmentMerge.notify(this, src.id, dst.id, soff);
 	synchronized(procmon) {
 	    dirty.add(dst);
 	    process();
@@ -1885,6 +1886,8 @@ public class MapFile {
 	public boolean includegrid(ImportedGrid grid, boolean hasprev);
 	public boolean includemark(Marker mark, Marker prev);
 	public default void handleerror(RuntimeException exc, String ctx) {throw(exc);}
+	/** Write tiles to disk. Alignment anchors may be accepted without overwriting a newer local copy. */
+	public default boolean savegrid(ImportedGrid grid, boolean hasprev) {return(true);}
 
 	public static ImportFilter all = new ImportFilter() {
 		public boolean includegrid(ImportedGrid grid, boolean hasprev) {return(true);}
@@ -1963,7 +1966,8 @@ public class MapFile {
 		lock.writeLock().lock();
 		try {
 		    Grid rgrid = grid.togrid();
-		    rgrid.save(MapFile.this);
+		    if((info == null) || filter.savegrid(grid, true))
+			rgrid.save(MapFile.this);
 		    if(seg.noff == null) {
 			if(info == null) {
 			    rseg = chseg(new Segment(seg.nseg = grid.gid));

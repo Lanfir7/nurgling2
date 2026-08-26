@@ -290,6 +290,19 @@ public class LabeledMinimapMark {
     }
 
     /**
+     * Same overlay, new map-file place. Grid identity is unchanged; only the segment tile
+     * (what the minimap draws with) follows {@code MapFile.merge}.
+     */
+    public LabeledMinimapMark relocated(long newSegmentId, Coord tileShift) {
+        Coord nt = tileCoords.sub(tileShift);
+        String newId = locationId.startsWith("animal_")
+                ? locationId
+                : generateLocationId(newSegmentId, nt, label);
+        return new LabeledMinimapMark(newId, label, resourceType, quality, newSegmentId, nt,
+                gridId, localTileCoords, iconImage, labelColor, killedAtMs, killedBy, iconPath, animalType, false);
+    }
+
+    /**
      * Recover a quality from a legacy label such as "q40". Returns 0 when the label
      * carries no number, which makes the mark visible at any threshold of 0.
      */

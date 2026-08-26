@@ -386,7 +386,7 @@ NMiniMap extends MiniMap {
             return;
         if(!(Boolean)NConfig.get(NConfig.Key.showPeerPositions))
             return;
-        NGameUI gui = NUtils.getGameUI();
+        NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : NUtils.getGameUI();
         if(gui == null || gui.peerPositionService == null)
             return;
         java.util.List<PeerPosition> peers = gui.peerPositionService.snapshot();
@@ -398,14 +398,18 @@ NMiniMap extends MiniMap {
          * so nothing is actually lost by dropping the labels when they would not be readable. */
         boolean names = getDataLevel() <= 1;
         Coord playerTc = playerTile();
+        boolean sameSeg = sessloc.seg.id == dloc.seg.id;
 
         for(PeerPosition kp : peers) {
             MiniMap.Location loc = kp.ref.loc();
-            if(loc == null)
-                continue;    // their grid is in no segment we have; nothing to draw against
-            Coord c = xlate(loc);
+            Coord c = (loc != null) ? xlate(loc) : null;
+            /* Map-file segment can lag the live grid: two people standing together have wc() from
+             * MCache even when this client's map file has not placed that gid yet. xlate also
+             * returns null across segments; p2c still works while the grid is loaded here. */
+            if(c == null && sameSeg && kp.ref.wc() != null)
+                c = p2c(kp.ref.wc());
             if(c == null)
-                continue;    // resolved, but into a segment this map is not showing
+                continue;
             double alpha = kp.alpha();
             Color col = peercol(gui, kp.charName);
             String tip = peertip(kp, loc, playerTc);
@@ -515,7 +519,7 @@ NMiniMap extends MiniMap {
             sb.append(" \u00b7 ").append(kp.agestr()).append(" ago");
         /* Distance only when both ends are in the same segment - across segments the tile
          * coordinates are not comparable and any number would be invented. */
-        if((playerTc != null) && (sessloc != null) && (loc.seg.id == sessloc.seg.id)) {
+        if((playerTc != null) && (sessloc != null) && (loc != null) && (loc.seg.id == sessloc.seg.id)) {
             long d = Math.round(playerTc.dist(loc.tc));
             sb.append(" \u00b7 ").append((d >= 1000) ? (String.format("%.1fk", d / 1000.0)) : Long.toString(d))
               .append(" tiles");

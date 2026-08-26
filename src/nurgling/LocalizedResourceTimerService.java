@@ -196,6 +196,40 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
             lock.readLock().unlock();
         }
     }
+
+    /**
+     * Follow a MapFile segment merge. Same shift as {@code Marker.tc.sub(soff.mul(cmaps))}.
+     *
+     * @return resource ids that no longer exist, so the shared DB row can be dropped
+     */
+    public java.util.List<String> remapSegment(long srcSeg, long dstSeg, haven.Coord gridSoff) {
+        haven.Coord tileShift = gridSoff.mul(haven.MCache.cmaps);
+        lock.writeLock().lock();
+        try {
+            java.util.List<String> oldIds = new ArrayList<>();
+            java.util.List<LocalizedResourceTimer> moved = new ArrayList<>();
+            java.util.Iterator<java.util.Map.Entry<String, LocalizedResourceTimer>> it =
+                    timers.entrySet().iterator();
+            while (it.hasNext()) {
+                LocalizedResourceTimer t = it.next().getValue();
+                if (t.getSegmentId() != srcSeg)
+                    continue;
+                oldIds.add(t.getResourceId());
+                it.remove();
+                moved.add(t.relocated(dstSeg, tileShift));
+            }
+            for (LocalizedResourceTimer t : moved)
+                timers.put(t.getResourceId(), t);
+            if (!moved.isEmpty()) {
+                dirty = true;
+                saveTimers();
+                refreshTimerWindow();
+            }
+            return oldIds;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
     
     private static String generateResourceId(long segmentId, haven.Coord tileCoords, String resourceType) {
         return String.format("res_%d_%d_%d_%s", segmentId, tileCoords.x, tileCoords.y, 

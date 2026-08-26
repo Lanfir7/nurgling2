@@ -835,6 +835,56 @@ public class LabeledMarkService implements ProfileAwareService {
         return (marks == null) ? Collections.emptyList() : marks;
     }
 
+    public void remapSegment(long srcSeg, long dstSeg, Coord gridSoff) {
+        Coord tileShift = gridSoff.mul(MCache.cmaps);
+        List<LabeledMinimapMark> animals = new ArrayList<>();
+        lock.writeLock().lock();
+        try {
+            List<LabeledMinimapMark> src = segmentIndex.get(srcSeg);
+            if (src == null || src.isEmpty())
+                return;
+            List<LabeledMinimapMark> copy = new ArrayList<>(src);
+            suppressReindex = true;
+            try {
+                for (LabeledMinimapMark m : copy) {
+                    removeMarkFromIndexes(m.getLocationId());
+                    LabeledMinimapMark n = m.relocated(dstSeg, tileShift);
+                    labeledMarks.put(n.getLocationId(), n);
+                    addMarkToIndexes(n);
+                    if (n.getLocationId().startsWith("animal_"))
+                        animals.add(n);
+                }
+            } finally {
+                suppressReindex = false;
+            }
+            reindex();
+            scheduleSave();
+        } finally {
+            lock.writeLock().unlock();
+        }
+        for (LabeledMinimapMark n : animals)
+            updateAnimalDb(n);
+    }
+
+    private void updateAnimalDb(LabeledMinimapMark n) {
+        if (gui == null || NCore.databaseManager == null)
+            return;
+        nurgling.db.service.AnimalMarkerService svc = NCore.databaseManager.getAnimalMarkerService();
+        if (svc == null || !svc.isAvailable())
+            return;
+        String id = n.getLocationId();
+        long gobId;
+        try {
+            gobId = Long.parseLong(id.substring("animal_".length()));
+        } catch (NumberFormatException e) {
+            return;
+        }
+        String profile = gui.getGenus();
+        if (profile == null || profile.isEmpty())
+            profile = "global";
+        svc.updateLocation(profile, gobId, n.segmentId, n.tileCoords.x, n.tileCoords.y);
+    }
+
     /**
      * Get all labeled marks.
      */

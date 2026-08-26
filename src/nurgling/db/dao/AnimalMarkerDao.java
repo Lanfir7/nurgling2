@@ -119,6 +119,16 @@ public class AnimalMarkerDao {
         return rows;
     }
 
+    public int updateLocation(DatabaseAdapter adapter, String profile, long gobId,
+                              long segmentId, int tileX, int tileY) throws SQLException {
+        if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
+            return 0;
+        }
+        String sql = "UPDATE animal_markers SET segment_id = ?, tile_x = ?, tile_y = ?, updated_at = CURRENT_TIMESTAMP "
+                   + "WHERE profile = ? AND gob_id = ?";
+        return adapter.executeUpdate(sql, segmentId, tileX, tileY, profile, gobId);
+    }
+
     /**
      * Delete an animal marker by profile and gob_id (e.g. when user removes mark via Shift+RMB).
      */

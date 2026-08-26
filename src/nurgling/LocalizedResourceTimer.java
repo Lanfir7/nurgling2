@@ -108,7 +108,20 @@ public class LocalizedResourceTimer {
             json.put("iconRes", iconRes);
         return json;
     }
-    
+
+    /**
+     * Same clock and resource, new map-file place. Used when {@link haven.MapFile} merges segments:
+     * markers already do {@code tc.sub(soff.mul(cmaps))}; timers have to follow or they stay on the
+     * abandoned segment.
+     */
+    public LocalizedResourceTimer relocated(long newSegmentId, haven.Coord tileShift) {
+        haven.Coord nt = tileCoords.sub(tileShift);
+        return new LocalizedResourceTimer(
+                generateResourceId(newSegmentId, nt, resourceType),
+                newSegmentId, nt, resourceName, resourceType,
+                startTime, duration, description, autoRemoveAfterMs, iconRes);
+    }
+
     /**
      * Check if the timer has expired
      */

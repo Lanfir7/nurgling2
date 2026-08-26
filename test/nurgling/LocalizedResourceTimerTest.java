@@ -94,6 +94,21 @@ class LocalizedResourceTimerTest {
         assertFalse(loaded.shouldAutoRemove());
     }
 
+    @Test
+    void relocatesWithSegmentMergeLikeMapFileMarkers() {
+        long start = System.currentTimeMillis();
+        LocalizedResourceTimer timer = pyre(start);
+        haven.Coord soff = new haven.Coord(1, 0);
+        LocalizedResourceTimer moved = timer.relocated(99L, soff.mul(haven.MCache.cmaps));
+
+        assertEquals(99L, moved.getSegmentId());
+        assertEquals(new Coord(10 - haven.MCache.cmaps.x, 20), moved.getTileCoords());
+        assertEquals(timer.getStartTime(), moved.getStartTime());
+        assertEquals(timer.getDuration(), moved.getDuration());
+        assertEquals(timer.getIconRes(), moved.getIconRes());
+        assertTrue(moved.getResourceId().contains("99"));
+    }
+
     private static LocalizedResourceTimer pyre(long start) {
         return new LocalizedResourceTimer(
                 "res_1_10_20_nurgling_boughpyre", 1L, new Coord(10, 20), "Bough Pyre",

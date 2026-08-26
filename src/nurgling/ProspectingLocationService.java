@@ -173,6 +173,29 @@ public class ProspectingLocationService implements ProfileAwareService {
         }
     }
 
+    public void remapSegment(long srcSeg, long dstSeg, haven.Coord gridSoff) {
+        haven.Coord tileShift = gridSoff.mul(haven.MCache.cmaps);
+        lock.writeLock().lock();
+        try {
+            java.util.List<ProspectingLocation> moved = new ArrayList<>();
+            java.util.Iterator<java.util.Map.Entry<String, ProspectingLocation>> it =
+                    prospectingLocations.entrySet().iterator();
+            while (it.hasNext()) {
+                ProspectingLocation loc = it.next().getValue();
+                if (loc.getSegmentId() != srcSeg)
+                    continue;
+                it.remove();
+                moved.add(loc.relocated(dstSeg, tileShift));
+            }
+            for (ProspectingLocation loc : moved)
+                prospectingLocations.put(loc.getLocationId(), loc);
+            if (!moved.isEmpty())
+                saveProspectingLocations();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     /**
      * Get all prospecting locations
      */

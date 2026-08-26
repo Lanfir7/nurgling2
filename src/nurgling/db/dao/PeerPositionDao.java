@@ -5,7 +5,6 @@ import nurgling.db.PostgresAdapter;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -90,27 +89,38 @@ public class PeerPositionDao {
     }
 
     /**
+     * Age in milliseconds, computed by the database.
+     *
+     * <p>Do not subtract JDBC {@code Timestamp#getTime()} of {@code updated_at} and
+     * {@code CURRENT_TIMESTAMP}: on Postgres the column is {@code TIMESTAMP} and
+     * {@code CURRENT_TIMESTAMP} is timestamptz, so the JVM zone (Europe/Kiev = UTC+3) makes a
+     * live row look three hours old and {@link nurgling.PeerPosition#DROP_MS} drops it.
+     */
+    static String loadByProfileSql(boolean postgres) {
+        if (postgres) {
+            return "SELECT char_name, gid, ox, oy, angle, "
+                 + "GREATEST(0, CAST(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - updated_at)) * 1000 AS BIGINT)) AS age_ms "
+                 + "FROM peer_positions WHERE profile = ?";
+        }
+        return "SELECT char_name, gid, ox, oy, angle, "
+             + "CAST(MAX(0, (julianday('now') - julianday(updated_at)) * 86400000) AS INTEGER) AS age_ms "
+             + "FROM peer_positions WHERE profile = ?";
+    }
+
+    /**
      * Every position published for a world, each carrying its age.
      *
      * <p>The whole profile is fetched rather than filtered in SQL: there is one row per character, so
      * this is a few dozen rows of a handful of bytes, and a WHERE on {@code updated_at} would want an
-     * index the table deliberately does not have (see migration 12). {@code CURRENT_TIMESTAMP} comes
-     * back alongside so the age arithmetic never touches a client clock.
+     * index the table deliberately does not have (see migration 12). Age is an interval from the
+     * database clock, never two JDBC timestamps.
      */
     public List<Row> loadByProfile(DatabaseAdapter adapter, String profile) throws SQLException {
         List<Row> ret = new ArrayList<>();
-        String sql = "SELECT char_name, gid, ox, oy, angle, updated_at, "
-                   + "CURRENT_TIMESTAMP AS db_now FROM peer_positions WHERE profile = ?";
+        String sql = loadByProfileSql(adapter instanceof PostgresAdapter);
         try (ResultSet rs = adapter.executeQuery(sql, profile)) {
             while (rs.next()) {
-                Timestamp updated = rs.getTimestamp("updated_at");
-                Timestamp now = rs.getTimestamp("db_now");
-                if ((updated == null) || (now == null)) {
-                    continue;
-                }
-                /* A row stamped fractionally ahead of db_now is normal - the write and this read are
-                 * different statements - and must read as "brand new", not as a negative age. */
-                long age = Math.max(0L, now.getTime() - updated.getTime());
+                long age = Math.max(0L, rs.getLong("age_ms"));
                 ret.add(new Row(rs.getString("char_name"), rs.getLong("gid"),
                                 rs.getInt("ox"), rs.getInt("oy"), rs.getDouble("angle"), age));
             }

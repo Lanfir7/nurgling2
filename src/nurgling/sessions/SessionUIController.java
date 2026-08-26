@@ -48,10 +48,9 @@ public class SessionUIController implements SessionManager.SessionChangeListener
 
         // Add tab bar if we have sessions or want to show "+" button
         if (ui != null && ui.root != null) {
-            // Always create a fresh tab bar for each UI to avoid state issues
-            if (tabBar != null && tabBar.parent != null) {
-                tabBar.unlink();
-            }
+            // Always create a fresh tab bar for each UI to avoid state issues.
+            // destroy(), not unlink(): SessionAvatar is a PView with FBOs/textures.
+            dropTabBar();
             tabBar = new SessionTabBar();
             tabBar.setOnAddAccount(this::onAddAccountClicked);
 
@@ -65,11 +64,17 @@ public class SessionUIController implements SessionManager.SessionChangeListener
      * Detach from the current UI.
      */
     public void detachFromUI() {
-        if (tabBar != null && tabBar.parent != null) {
-            tabBar.unlink();
-        }
-        tabBar = null;
+        dropTabBar();
         currentUI = null;
+    }
+
+    /** Release GL portraits before dropping the widget; unlink() leaves them for GC. */
+    private void dropTabBar() {
+        if (tabBar == null)
+            return;
+        SessionTabBar bar = tabBar;
+        tabBar = null;
+        bar.destroy();
     }
 
     /**

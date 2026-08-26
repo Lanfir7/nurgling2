@@ -290,7 +290,7 @@ public class NMapWnd extends MapWnd {
                 for(nurgling.PeerPosition kp : live) {
                     if(!kp.online())
                         continue;
-                    boolean placed = kp.ref.loc() != null;
+                    boolean placed = kp.ref.loc() != null || kp.ref.wc() != null;
                     Color col = NMiniMap.peercol(gui, kp.charName);
                     rows.add(new Row(kp,
                                      fnd.render(kp.charName, placed ? Color.WHITE : new Color(158, 158, 158)),
@@ -311,7 +311,7 @@ public class NMapWnd extends MapWnd {
                 return(L10n.get("mapdb.roster_unmapped"));
             MiniMap.Location loc = kp.ref.loc();
             MiniMap.Location sessloc = view.sessloc;
-            if((ptc == null) || (sessloc == null) || (loc.seg.id != sessloc.seg.id))
+            if(loc == null || ptc == null || sessloc == null || loc.seg.id != sessloc.seg.id)
                 return(L10n.get("mapdb.roster_elsewhere"));
             long d = Math.round(ptc.dist(loc.tc));
             return((d >= 1000) ? String.format("%.1fk", d / 1000.0) : Long.toString(d));

@@ -241,12 +241,26 @@ public class MapMerge {
     }
 
     /**
+     * Incoming tiles replace local ones only when they are newer. An older grid may still be
+     * <em>accepted</em> as an alignment anchor; {@link #saveIncomingGrid} is what stops it from
+     * wiping a locally newer copy off disk.
+     */
+    static boolean saveIncomingGrid(Long localMtime, long incomingMtime) {
+        return localMtime == null || incomingMtime > localMtime;
+    }
+
+    static boolean acceptIncomingGrid(Long localMtime, long incomingMtime, boolean forced) {
+        return saveIncomingGrid(localMtime, incomingMtime) || forced;
+    }
+
+    /**
      * Accept a grid when it is genuinely newer than the local copy, or when the plan needs it as an
      * anchor.
      *
-     * <p>The freshness half matters more than it looks: {@code Importer.importgrid} saves whatever
-     * it is given without comparing timestamps, so replaying an older snapshot of a grid - a
-     * villager who mapped an area before it was built on - would quietly undo newer terrain.
+     * <p>The freshness half matters more than it looks: {@code Importer.importgrid} used to save
+     * whatever it was given. Older snapshots then undid newer terrain. {@link MapFile.ImportFilter#savegrid}
+     * is what stops that; this filter still <em>accepts</em> an older overlapping grid so alignment
+     * can run.
      *
      * <p>The anchor half is what makes the merge work at all. {@code seg.noff}, which decides
      * whether an incoming segment attaches to one of this client's or opens a new one, is assigned
@@ -256,17 +270,24 @@ public class MapMerge {
     static MapFile.ImportFilter filter(LocalIndex local, Set<Long> forced, int[] counts,
                                        String uploader, List<String> notes) {
         return new MapFile.ImportFilter() {
+            private final Set<Long> write = new HashSet<>();
+
             public boolean includegrid(MapFile.ImportedGrid grid, boolean hasprev) {
                 Long cur = local.mtime(grid.gid);
-                boolean newer = (cur == null) || (grid.mtime > cur);
-                if (!newer && !forced.contains(grid.gid))
+                if (!acceptIncomingGrid(cur, grid.mtime, forced.contains(grid.gid)))
                     return false;
-                /* Record what is now genuinely on disk, so the next player's map is planned against
-                 * it rather than against what was there when the import started. */
-                local.record(grid.gid, grid.mtime);
-                if (newer)
+                /* Record what is now genuinely on disk. Older anchors are accepted for alignment
+                 * but not written, so their mtime must not replace the local one. */
+                if (saveIncomingGrid(cur, grid.mtime)) {
+                    write.add(grid.gid);
+                    local.record(grid.gid, grid.mtime);
                     counts[0]++;
+                }
                 return true;
+            }
+
+            public boolean savegrid(MapFile.ImportedGrid grid, boolean hasprev) {
+                return write.contains(grid.gid);
             }
 
             public boolean includemark(MapFile.Marker mark, MapFile.Marker prev) {

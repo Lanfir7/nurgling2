@@ -22,25 +22,27 @@ public class TreeLocation {
     }
 
     public TreeLocation(long segmentId, Coord tileCoords, String treeName, String treeResource, int quantity, int growthPercent) {
+        this(generateLocationId(segmentId, tileCoords, treeName), segmentId, tileCoords, treeName, treeResource,
+                System.currentTimeMillis(), quantity, growthPercent);
+    }
+
+    TreeLocation(String locationId, long segmentId, Coord tileCoords, String treeName, String treeResource,
+                 long timestamp, int quantity, int growthPercent) {
         this.segmentId = segmentId;
         this.tileCoords = tileCoords;
         this.treeName = treeName;
         this.treeResource = treeResource;
         this.quantity = quantity;
         this.growthPercent = growthPercent;
-        this.timestamp = System.currentTimeMillis();
-        this.locationId = generateLocationId(segmentId, tileCoords, treeName);
+        this.timestamp = timestamp;
+        this.locationId = locationId;
     }
 
     public TreeLocation(JSONObject json) {
-        this.locationId = json.getString("locationId");
-        this.segmentId = json.getLong("segmentId");
-        this.tileCoords = new Coord(json.getInt("tileX"), json.getInt("tileY"));
-        this.treeName = json.getString("treeName");
-        this.treeResource = json.getString("treeResource");
-        this.timestamp = json.getLong("timestamp");
-        this.quantity = json.optInt("quantity", 1);  // Default to 1 for backward compatibility
-        this.growthPercent = json.optInt("growthPercent", 0);  // Default to 0 for backward compatibility
+        this(json.getString("locationId"), json.getLong("segmentId"),
+                new Coord(json.getInt("tileX"), json.getInt("tileY")),
+                json.getString("treeName"), json.getString("treeResource"),
+                json.getLong("timestamp"), json.optInt("quantity", 1), json.optInt("growthPercent", 0));
     }
 
     public static String generateLocationId(long segmentId, Coord tileCoords, String treeName) {
@@ -60,6 +62,12 @@ public class TreeLocation {
         json.put("quantity", quantity);
         json.put("growthPercent", growthPercent);
         return json;
+    }
+
+    public TreeLocation relocated(long newSegmentId, Coord tileShift) {
+        Coord nt = tileCoords.sub(tileShift);
+        return new TreeLocation(generateLocationId(newSegmentId, nt, treeName), newSegmentId, nt,
+                treeName, treeResource, timestamp, quantity, growthPercent);
     }
 
     // Getters
