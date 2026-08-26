@@ -1,484 +1,1273 @@
 package nurgling.widgets;
 
 import haven.*;
-import haven.Window;
 import haven.res.ui.locptr.Pointer;
 import haven.res.ui.obj.buddy.Buddy;
 import nurgling.NConfig;
-import static haven.PType.*;
 import nurgling.NGameUI;
 import nurgling.NGItem;
 import nurgling.NStyle;
+import nurgling.NUI;
 import nurgling.NUtils;
+import nurgling.conf.FontSettings;
+import nurgling.conf.NQuestTrackerProp;
 import nurgling.i18n.L10n;
 import nurgling.tools.QuestGiverDistance;
-import nurgling.tools.QuestRewardFilter;
 import nurgling.tools.QuestTrackFilter;
+import nurgling.widgets.nsettings.Fonts;
+import nurgling.widgets.quest.QCond;
+import nurgling.widgets.quest.QuestKind;
+import nurgling.widgets.quest.QuestMenu;
+import nurgling.widgets.quest.QuestModel;
 
-import java.awt.*;
-import java.awt.font.TextAttribute;
-import java.awt.image.BufferedImage;
+import java.awt.Color;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static haven.ItemInfo.catimgsh;
-import static nurgling.widgets.NDraggableWidget.drawBg;
-
+/**
+ * The HUD quest tracker.
+ *
+ * A header of filters over a scrollable list of real row widgets, driven by
+ * {@link QuestModel}. Groups are collapsed by default, so a character with twenty active
+ * quests gets a dozen rows rather than sixty.
+ *
+ * The world-space side of this widget - {@link #huntingT}, {@link #forageT}, the marker
+ * table and {@link #isQuestedItem} - is read from gob-tick threads by
+ * {@link nurgling.NGob}, {@link nurgling.NGItem} and {@link haven.MiniMap}, so it is kept
+ * separate from the view and published as immutable sets.
+ */
 public class NQuestInfo extends Widget
 {
+    /* ------------------------------------------------------------------ layout */
 
-    Text.Furnace fnd2 = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 14, Color.white).aa(true), 2, 1, Color.BLACK);
-    Text.Furnace fnd1 = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 14, new Color(222, 205, 171)).aa(true), 2, 1, Color.BLACK);
-    Text.Furnace gfnd2_under = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 14, new Color(222, 205, 171)).aa(true), 2, 1, Color.BLACK);
-    public static final RichText.Foundry numfnd1 = new RichText.Foundry(new ChatUI.ChatParser(TextAttribute.FONT, Text.dfont.deriveFont(UI.scale(18f)), TextAttribute.FOREGROUND, Color.YELLOW));
-    Text.Furnace active_title = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 18, new Color(217, 127, 59)).aa(true), 2, 1, new Color(94, 56, 56));
-    Text.Furnace unactive_title = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 18, new Color(147, 131, 131)).aa(true), 2, 1, new Color(94, 56, 56));
-    Text.Furnace credo_title = new PUtils.BlurFurn(new Text.Foundry(Text.sans, 18, new Color(126, 198, 194)).aa(true), 2, 1, new Color(94, 56, 56));
+    private static final Coord PAD = UI.scale(new Coord(4, 3));
+    private static final int INDENT = UI.scale(14);
+    private static final int CHEV_W = UI.scale(10);
+    private static final Coord CHIP_SZ = UI.scale(new Coord(17, 15));
+    private static final Coord DEF_SZ = UI.scale(new Coord(252, 216));
 
-    public NQuestInfo() {
-        super();
-        lastUpdate.set(0);
-        huntingT.clear();
-        forageT.clear();
-        Widget prev = add(modebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/questmode", null, L10n.get("char.quest.switch_mode")), UI.scale(margin.x)/2, UI.scale(margin.y)/2).changed(a -> {mode = (mode == Mode.QUESTGIVERS?Mode.TASKS:Mode.QUESTGIVERS);needUpdate.set(true);});
-        prev = add(hidebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/eye", null, L10n.get("char.quest.hide_credo")), prev.pos("ur")).changed(a -> {NConfig.set(NConfig.Key.hidecredo,a);needUpdate.set(true);});
-        hidebtn.a = (boolean) NConfig.get(NConfig.Key.hidecredo);
-        refreshbtn = add(new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/inv/search", null, L10n.get("char.quest.refresh")), prev.pos("ur"));
-        refreshbtn.click(() -> refreshDistances());
-    }
-    NMiniMapWnd.NMenuCheckBox modebtn = null;
-    NMiniMapWnd.NMenuCheckBox hidebtn = null;
-    NMiniMapWnd.NMenuCheckBox refreshbtn = null;
-    enum Mode
-    {
-        QUESTGIVERS,
-        TASKS
-    }
+    /* ------------------------------------------------------------------ overlay API */
 
-
-    Mode mode = Mode.QUESTGIVERS;
-    private Collection<QuestImage> imgs = new ArrayList<>();
-    HashMap<String,QuestGiver> qgconds = new HashMap<String,QuestGiver>();
-    HashMap<Condition.State,Targets> taskconds = new HashMap<Condition.State,Targets>();
-    private Tex glowon = null;
-    // Per-session: each character's quest log drives its own highlight state. Making this (and
-    // huntingT/forageT/markers below) static would let one session's quests clobber another's,
-    // since update() clears and repopulates these every time any session's quest log changes.
+    /**
+     * Bumped whenever the tracked set changes. {@link nurgling.NGob} and {@link NGItem}
+     * poll this to know when to re-evaluate their cached quest highlighting.
+     */
     public final AtomicInteger lastUpdate = new AtomicInteger(0);
-    private final Set<String> items = new HashSet<>();
-    class Targets
-    {
-        ArrayList<Condition> conditions = new ArrayList<Condition>();
-    }
 
-    class QuestGiver
-    {
-        ArrayList<Condition> myConditions = new ArrayList<Condition>();
-        ArrayList<Condition> otherConditions = new ArrayList<Condition>();
+    /** Gob-name fragments of unfinished {@code Kill} objectives. Replaced wholesale, never mutated. */
+    public volatile Set<String> huntingT = Collections.emptySet();
+    /** Gob-name fragments of unfinished {@code Pick} objectives. */
+    public volatile Set<String> forageT = Collections.emptySet();
+    /** Lowercased item names of unfinished {@code Bring} objectives. */
+    private volatile Set<String> bringItems = Collections.emptySet();
 
-        int completed = 0;
-        int uncompleted = 0;
-    }
+    /* ------------------------------------------------------------------ state */
 
-    public boolean isHuntingTarget(String target)
+    private final QuestModel model = new QuestModel();
+    private NQuestTrackerProp prop = null;
+    private NQuestTrackerProp fallback = null;
+    private boolean needRebuild = true;
+
+    private Scrollport body;
+    private ICheckBox modebtn, searchbtn, gearbtn;
+    private KindChip[] chips;
+    private TextEntry searchbox;
+    private String search = "";
+    private int headerH = 0;
+
+    private FontSettings fontsrc = null;
+    private Text.Foundry groupFnd, condFnd;
+    private int rowH = UI.scale(14);
+
+    /** Giver names whose marker props we set last rebuild, so vanished ones can be cleared. */
+    private final Set<String> markedGivers = new HashSet<>();
+    /** The prop sets we published last rebuild, to tell a real change from a rebuild. */
+    private final Map<String, HashSet<String>> markedProps = new HashMap<>();
+
+    private double distAcc = 0;
+    private int distKey = Integer.MIN_VALUE;
+    private final HashMap<String, Coord2d> giverCoords = new HashMap<String, Coord2d>();
+    private final HashSet<Integer> harvestTried = new HashSet<Integer>();
+    private double harvestAcc = 0;
+
+    public NQuestInfo()
     {
-        if(target!=null)
-            for(String ht:huntingT)
+        super(DEF_SZ);
+        fonts();
+        modebtn = add(new NMiniMapWnd.NMenuCheckBox(
+            "nurgling/hud/buttons/questmode", null, L10n.get("char.quest.switch_mode")));
+        modebtn.changed(a -> {
+            prop().mode = a ? NQuestTrackerProp.Mode.TASKS : NQuestTrackerProp.Mode.GIVERS;
+            prop().save();
+            needRebuild = true;
+        });
+        chips = new KindChip[] {
+            add(new KindChip(QuestKind.NPC, "N", NStyle.questGiver, "Quests from quest givers")),
+            add(new KindChip(QuestKind.CREDO, "C", NStyle.questCredo, "Credo quests")),
+            add(new KindChip(QuestKind.WORLD, "W", NStyle.questWorld, "World quests")),
+        };
+        searchbtn = add(new NMiniMapWnd.NMenuCheckBox(
+            "nurgling/hud/buttons/lsearch", null, "Search quests"));
+        searchbtn.changed(a -> {
+            search = "";
+            if(searchbox != null)
+                searchbox.settext("");
+            relayout();
+            needRebuild = true;
+        });
+        gearbtn = add(new NMiniMapWnd.NMenuCheckBox(
+            "nurgling/hud/buttons/settings", null, "Tracker options"));
+        gearbtn.changed(a -> {
+            gearbtn.a = false;
+            openGearMenu();
+        });
+        searchbox = add(new TextEntry(DEF_SZ.x - PAD.x * 2, "") {
+            @Override
+            protected void changed()
             {
-                if(target.contains(ht))
-                {
-                    return true;
-                }
+                super.changed();
+                NQuestInfo.this.search = text().trim().toLowerCase();
+                NQuestInfo.this.needRebuild = true;
             }
-        return false;
+        });
+        searchbox.hide();
+        body = add(new Scrollport(DEF_SZ));
+        relayout();
     }
 
-    public boolean isForageTarget(String target)
+    /* ------------------------------------------------------------------ settings */
+
+    private NQuestTrackerProp prop()
     {
-        if(target!=null)
-            for(String ht:forageT)
-            {
-                if(target.contains(ht))
-                {
-                    return true;
-                }
+        if(prop == null) {
+            prop = (ui instanceof NUI) ? NQuestTrackerProp.get((NUI)ui) : null;
+            if(prop == null) {
+                // Character not resolved yet: run on defaults (which never persist, see
+                // NQuestTrackerProp.save) and pick up the real settings once login finishes.
+                if(fallback == null)
+                    fallback = new NQuestTrackerProp("", "");
+                return fallback;
             }
-        return false;
+            modebtn.a = (prop.mode == NQuestTrackerProp.Mode.TASKS);
+            for(KindChip c : chips)
+                c.a = prop.kinds.contains(c.kind);
+            // Settings arrived after the first rebuild ran on defaults - redo it with them.
+            needRebuild = true;
+        }
+        return prop;
     }
+
+    /** Rebuild the three text roles from the user's chosen Quests font. */
+    private void fonts()
+    {
+        Object cur = NConfig.get(NConfig.Key.fonts);
+        if(!(cur instanceof FontSettings) || cur == fontsrc)
+            return;
+        fontsrc = (FontSettings)cur;
+        Text.Foundry base = fontsrc.getFoundary(Fonts.FontType.QUESTS);
+        if(base == null)
+            base = new Text.Foundry(Text.sans, 12);
+        java.awt.Font f = base.font;
+        groupFnd = new Text.Foundry(f.deriveFont(java.awt.Font.BOLD), Color.WHITE).aa(true);
+        condFnd = new Text.Foundry(f.deriveFont(Math.max(8f, f.getSize2D() - UI.scale(1f))),
+                                   NStyle.questCond).aa(true);
+        rowH = groupFnd.height() + UI.scale(3);
+        needRebuild = true;
+    }
+
+    /* ------------------------------------------------------------------ layout */
 
     @Override
-    public void dispose() {
-        markers.clear();
-        super.dispose();
+    public void resize(Coord sz)
+    {
+        super.resize(sz);
+        relayout();
+        needRebuild = true;
     }
 
-    void update() {
-        imgs.clear();
-        for (String qname : qgconds.keySet()) {
-            setMarkersProp(qname, null);
+    private void relayout()
+    {
+        int x = PAD.x, top = PAD.y;
+        modebtn.c = new Coord(x, top);
+        x += modebtn.sz.x + PAD.x;
+        for(KindChip c : chips) {
+            c.c = new Coord(x, top + (modebtn.sz.y - c.sz.y) / 2);
+            x += c.sz.x + UI.scale(2);
         }
-        qgconds.clear();
-        taskconds.clear();
-        huntingT.clear();
-        items.clear();
-        forageT.clear();
-        for(Condition.State st: Condition.State.values()) {
-            taskconds.put(st, new Targets());
-        }
-        QuestGiver credo = new QuestGiver();
-        for (NQuest quest : quests.values()) {
-            if (QuestTrackFilter.isMutedTitle(helperTitle(quest)))
-                continue;
-            boolean isReady = true;
-            boolean tellPending = false;
-            Condition tellCond = null;
-            for (Condition cond : quest.conditions) {
-                Condition.QuestsGiver qg = null;
-                if (cond.state == Condition.State.TELL) {
-                    quest.questGiver = ((Condition.QuestsGiver) cond.attrs.get(Condition.QuestsGiver.class)).name;
-                    if (!cond.ready) {
-                        tellPending = true;
-                        tellCond = cond;
-                    }
-                }
-                else if ((qg = ((Condition.QuestsGiver) cond.attrs.get(Condition.QuestsGiver.class)))!=null)
-                {
-                    if (!qgconds.containsKey(qg.name)) {
-                        qgconds.put(qg.name, new QuestGiver());
-                    }
-                }
-                if(cond.state == Condition.State.BRING && !cond.ready)
-                {
-                    items.add(((Condition.BringItem) cond.attrs.get(Condition.BringItem.class)).name);
-                }
-                if(!cond.ready) {
-                    if (cond.state == Condition.State.KILL) {
-                        huntingT.add(((Condition.HuntTarget) cond.attrs.get(Condition.HuntTarget.class)).name);
-                    } else if (cond.state == Condition.State.PICK) {
-                        forageT.add(((Condition.PickTarget) cond.attrs.get(Condition.PickTarget.class)).name);
-                    }
-                    if (cond.state != Condition.State.TELL)
-                        isReady = false;
-                }
-                if(cond.state!=null && !cond.ready && cond.state != Condition.State.TELL)
-                    taskconds.get(cond.state).conditions.add(cond);
-            }
-            if (QuestRewardFilter.isTurnIn(tellPending, !isReady) && tellCond != null)
-                taskconds.get(Condition.State.TELL).conditions.add(tellCond);
-            if (quest.questGiver != null) {
-                QuestGiver qg;
-                if (!qgconds.containsKey(quest.questGiver)) {
-                    qgconds.put(quest.questGiver, new QuestGiver());
-                }
-                qg = qgconds.get(quest.questGiver);
+        int rx = sz.x - PAD.x - gearbtn.sz.x;
+        gearbtn.c = new Coord(rx, top);
+        rx -= searchbtn.sz.x + PAD.x;
+        searchbtn.c = new Coord(rx, top);
 
-                if (isReady) {
-                    qg.completed++;
-                } else {
-                    qg.uncompleted++;
-                }
-            }
-        }
-
-        for (NQuest quest : quests.values()) {
-            if (QuestTrackFilter.isMutedTitle(helperTitle(quest)))
-                continue;
-            for (Condition cond : quest.conditions) {
-                if (quest.questGiver != null) {
-                    if (qgconds.containsKey(quest.questGiver)) {
-                        qgconds.get(quest.questGiver).myConditions.add(cond);
-                    }
-                    Condition.QuestsGiver qg = (Condition.QuestsGiver)cond.attrs.get(Condition.QuestsGiver.class);
-                    if(qg!=null && cond.state!= Condition.State.TELL)
-                    {
-                        qgconds.get(qg.name).otherConditions.add(cond);
-                    }
-                }
-                else
-                {
-                    if(!(Boolean)NConfig.get(NConfig.Key.hidecredo))
-                        credo.myConditions.add(cond);
-                }
-            }
-        }
-        for (String qname : qgconds.keySet()) {
-            QuestGiver qg = qgconds.get(qname);
-            HashSet<String> prop = new HashSet<>();
-            if(qg.completed!=0)
-            {
-                prop.add("tell");
-            }
-            for(Condition cond : qg.otherConditions) {
-                if(!cond.ready) {
-                    if (cond.state == Condition.State.BRING) {
-                        prop.add("bring");
-                    } else if (cond.state == Condition.State.GREET || cond.state == Condition.State.VISIT) {
-                        prop.add("greet");
-                    } else if (cond.state == Condition.State.RAGE) {
-                        prop.add("rage");
-                    } else if (cond.state == Condition.State.WAVE) {
-                        prop.add("wave");
-                    } else if (cond.state == Condition.State.LAUGH) {
-                        prop.add("laugh");
-                    }
-                }
-            }
-            setMarkersProp(qname, prop);
-        }
-        if (mode == Mode.QUESTGIVERS) {
-            if(!credo.myConditions.isEmpty()) {
-                imgs.add(new QuestImage(credo_title.render(L10n.get("char.quest.credo")).img, -1));
-                for (Condition cond : credo.myConditions)
-                {
-                    if(!cond.ready)
-                        imgs.add(new QuestImage(fnd1.render(QuestWnd.localizeCond(cond.target)).img, cond.questId));
-                }
-            }
-            for (String qname : qgconds.keySet()) {
-                QuestGiver qg = qgconds.get(qname);
-                if (!qg.myConditions.isEmpty()) {
-                    imgs.add(new QuestImage(catimgsh(5, active_title.render(labelName(qname)).img, numfnd1.render(String.format("($col[128,255,128]{%d}|$col[255,128,128]{%d})", qg.completed, qg.uncompleted)).img), qg.myConditions.get(0).questId));
-                } else {
-                    if (!qg.otherConditions.isEmpty()) {
-                        for (Condition cond : qg.otherConditions)
-                        {
-                            if(!cond.ready)
-                            {
-                                imgs.add(new QuestImage(unactive_title.render(labelName(qname)).img, cond.questId));
-                                break;
-                            }
-                        }
-                    }
-                }
-                for (Condition cond : qg.myConditions) {
-                    if (cond.state != Condition.State.TELL && !cond.ready)
-                        imgs.add(new QuestImage(fnd1.render(labelCond(cond)).img, cond.questId));
-                }
-                for (Condition cond : qg.otherConditions) {
-                    if(!cond.ready)
-                        imgs.add(new QuestImage(fnd2.render(labelCond(cond)).img, cond.questId));
-                }
-            }
-        } else if (mode == Mode.TASKS) {
-            addTargets(L10n.get("char.quest.section.bring"), Condition.State.BRING);
-            addTargets(L10n.get("char.quest.section.foraging"), Condition.State.PICK);
-            addTargets(L10n.get("char.quest.section.hunting"), Condition.State.KILL);
-            addTargets(L10n.get("char.quest.section.conversation"), Condition.State.GREET, Condition.State.VISIT, Condition.State.RAGE, Condition.State.WAVE, Condition.State.LAUGH);
-            addTargets(L10n.get("char.quest.section.reward"), Condition.State.TELL);
-            addTargets(L10n.get("char.quest.section.attributes"), Condition.State.GAIN);
-            addTargets(L10n.get("char.quest.section.craft"), Condition.State.CREATE);
-            addTargets(L10n.get("char.quest.section.other"), Condition.State.CAVE, Condition.State.LIGHT);
-        }
-        if (!imgs.isEmpty()) {
-            glowon = new TexI(ncatimgs(1, imgs.toArray(new QuestImage[0])));
-            Coord rsz = new Coord(glowon.sz().x, glowon.sz().y).add(UI.scale(this.margin).mul(2)).add(new Coord(0, modebtn.sz.y));
-            rsz.y = Math.min(NUtils.getGameUI().sz.y - NDraggableWidget.delta.y,rsz.y);
-            resize(rsz);
+        int y = top + modebtn.sz.y + PAD.y;
+        if(searchbtn.a) {
+            searchbox.show();
+            searchbox.resize(Math.max(UI.scale(40), sz.x - PAD.x * 2));
+            searchbox.c = new Coord(PAD.x, y);
+            y += searchbox.sz.y + PAD.y;
         } else {
-            glowon = null;
-            Coord nsz = UI.scale(this.margin).mul(2).add(new Coord(0, modebtn.sz.y));
-            int btnw = modebtn.sz.x + hidebtn.sz.x + refreshbtn.sz.x;
-            Coord rsz = new Coord(Math.max(nsz.x, btnw + margin.x * 2), Math.max(nsz.y, modebtn.sz.y + margin.y * 2));
-            rsz.y = Math.min(NUtils.getGameUI().sz.y - NDraggableWidget.delta.y,rsz.y);
-            resize(rsz);
+            searchbox.hide();
         }
-        if (parent != null)
-            parent.resize(sz.add(NDraggableWidget.delta));
-        needUpdate.set(false);
-        lastUpdate.set(lastUpdate.get()+1);
+        headerH = y;
+        body.c = new Coord(0, headerH);
+        body.resize(new Coord(sz.x, Math.max(rowH, sz.y - headerH)));
     }
 
-    static class QuestImage {
-        public Pair<Coord, Coord> area = new Pair<>(new Coord(), new Coord());
-        public BufferedImage img;
-        public int id;
+    /* ------------------------------------------------------------------ tick */
 
-        public QuestImage(BufferedImage img, int id) {
-            this.img = img;
-            this.id = id;
+    @Override
+    public void tick(double dt)
+    {
+        super.tick(dt);
+        fonts();
+        NGameUI gui = getparent(NGameUI.class);
+        if(gui == null)
+            gui = NUtils.getGameUI();
+        if(model.tick(dt, (gui != null) ? gui.chrwdg : null))
+            needRebuild = true;
+        harvestPointers(gui);
+        if(condsSweepIdle() && gui != null && gui.chrwdg != null) {
+            harvestAcc += dt;
+            if(harvestAcc > 0.45) {
+                harvestAcc = 0;
+                if(!gui.chrwdg.visible) {
+                    Integer hid = nextHarvestQuest();
+                    if(hid != null && gui.chrwdg.quest != null) {
+                        harvestTried.add(hid);
+                        gui.chrwdg.quest.wdgmsg("qsel", hid);
+                    }
+                }
+            }
+        }
+        distAcc += dt;
+        if(distAcc > 0.5) {
+            distAcc = 0;
+            int key = distanceKey();
+            if(key != distKey) {
+                distKey = key;
+                needRebuild = true;
+            }
+        }
+        if(needRebuild) {
+            needRebuild = false;
+            rebuild();
         }
     }
 
-    void addTargets(String name, Condition.State... states) {
-        if(states.length>0) {
-            ArrayList<Condition> list = new ArrayList<Condition>();
-            for (Condition.State state : states) {
-                Targets cand = taskconds.get(state);
-                if (cand != null)
-                    list.addAll(cand.conditions);
+    /* ------------------------------------------------------------------ view model */
+
+    private static class Row
+    {
+        final String text;
+        final boolean ready;
+        final int questId;
+        final boolean secondary;
+
+        Row(String text, boolean ready, int questId, boolean secondary)
+        {
+            this.text = text;
+            this.ready = ready;
+            this.questId = questId;
+            this.secondary = secondary;
+        }
+    }
+
+    private static class Group
+    {
+        String key;
+        String title;
+        QuestKind kind = QuestKind.NPC;
+        String giver;
+        String questKey;
+        int questId = -1;
+        boolean ready;
+        boolean idle;
+        boolean pinned;
+        int done, total;
+        final List<Row> rows = new ArrayList<>();
+
+        Color titleColor()
+        {
+            if(ready)
+                return NStyle.questReady;
+            if(idle)
+                return NStyle.questGiverIdle;
+            switch(kind) {
+                case CREDO: return NStyle.questCredo;
+                case WORLD: return NStyle.questWorld;
+                default:    return NStyle.questGiver;
+            }
+        }
+    }
+
+    private void rebuild()
+    {
+        NQuestTrackerProp p = prop();
+        List<Group> groups = (p.mode == NQuestTrackerProp.Mode.TASKS) ? taskGroups(p) : giverGroups(p);
+        boolean overlays = applyMarkerProps();
+        filterAndSort(groups, p);
+        layoutRows(groups, p);
+        QuestModel.Snapshot s = model.snapshot();
+        if(!s.hunt.equals(huntingT) || !s.forage.equals(forageT) || !s.bring.equals(bringItems)) {
+            huntingT = s.hunt;
+            forageT = s.forage;
+            bringItems = s.bring;
+            overlays = true;
+        }
+        // Only wake the gob overlays when what they read actually changed - collapsing a group
+        // is a view change, and should not make every gob in the world re-evaluate itself.
+        if(overlays)
+            lastUpdate.incrementAndGet();
+    }
+
+    /** Should this quest be considered at all, before per-group filtering? */
+    private boolean visible(QuestModel.TQuest q, NQuestTrackerProp p)
+    {
+        if(q.kind == QuestKind.UNKNOWN)
+            return false;
+        if(p.hiddenQuests.contains(q.key()))
+            return false;
+        if(QuestTrackFilter.isMutedTitle(q.title()))
+            return false;
+        return p.kinds.contains(q.kind) || p.pinned.contains(q.key());
+    }
+
+    private List<Group> giverGroups(NQuestTrackerProp p)
+    {
+        Map<String, Group> byGiver = new LinkedHashMap<>();
+        List<Group> out = new ArrayList<>();
+        for(QuestModel.TQuest q : model.quests()) {
+            if(!visible(q, p))
+                continue;
+            if(q.kind == QuestKind.CREDO || q.kind == QuestKind.WORLD || q.giver == null) {
+                Group g = new Group();
+                g.key = q.key();
+                g.questKey = q.key();
+                g.kind = q.kind;
+                g.questId = q.id;
+                g.title = QuestWnd.localizedTitle(q.title());
+                g.ready = q.readyToTurnIn();
+                for(QCond c : q.conds) {
+                    if(c.verb == QCond.Verb.TELL)
+                        continue;
+                    g.rows.add(condRow(c, false));
+                }
+                g.total = g.rows.size();
+                g.done = 0;
+                for(Row r : g.rows) {
+                    if(r.ready)
+                        g.done++;
+                }
+                out.add(g);
+                continue;
+            }
+            Group g = group(byGiver, q.giver);
+            g.questKey = q.key();
+            if(g.questId < 0)
+                g.questId = q.id;
+            if(q.readyToTurnIn())
+                g.ready = true;
+            for(QCond c : q.conds) {
+                if(c.verb == QCond.Verb.TELL)
+                    continue;
+                g.rows.add(condRow(c, false));
+            }
+        }
+        // Objectives that point at a giver but belong to somebody else's quest - "bring X to
+        // Jenny" shows under Jenny too, so her group tells you what she is waiting for.
+        for(QuestModel.TQuest q : model.quests()) {
+            if(!visible(q, p))
+                continue;
+            for(QCond c : q.conds) {
+                if(c.verb == QCond.Verb.TELL || c.ready || c.giver == null)
+                    continue;
+                String target = model.canonGiver(c.giver);
+                if(target.equals(q.giver))
+                    continue;
+                Group g = group(byGiver, target);
+                if(g.questId < 0)
+                    g.questId = q.id;
+                g.rows.add(condRow(c, true));
+            }
+        }
+        for(Group g : byGiver.values()) {
+            g.title = labelName(g.giver);
+            g.idle = true;
+            g.total = g.rows.size();
+            for(Row r : g.rows) {
+                if(r.ready)
+                    g.done++;
+                if(!r.secondary)
+                    g.idle = false;
+            }
+            out.add(g);
+        }
+        return out;
+    }
+
+    private Group group(Map<String, Group> byGiver, String name)
+    {
+        Group g = byGiver.get(name);
+        if(g == null) {
+            g = new Group();
+            g.key = "giver:" + name;
+            g.giver = name;
+            g.title = name;
+            g.kind = QuestKind.NPC;
+            byGiver.put(name, g);
+        }
+        return g;
+    }
+
+    private static final Object[] TASK_CATS = {
+        "Bring", "char.quest.section.bring", new QCond.Verb[] {QCond.Verb.BRING},
+        "Foraging", "char.quest.section.foraging", new QCond.Verb[] {QCond.Verb.PICK},
+        "Hunting", "char.quest.section.hunting", new QCond.Verb[] {QCond.Verb.KILL},
+        "Conversation", "char.quest.section.conversation", new QCond.Verb[] {QCond.Verb.GREET, QCond.Verb.RAGE, QCond.Verb.WAVE, QCond.Verb.LAUGH},
+        "Reward", "char.quest.section.reward", new QCond.Verb[] {QCond.Verb.TELL},
+        "Attributes", "char.quest.section.attributes", new QCond.Verb[] {QCond.Verb.GAIN},
+        "Craft", "char.quest.section.craft", new QCond.Verb[] {QCond.Verb.CREATE},
+        "Other", "char.quest.section.other", new QCond.Verb[] {QCond.Verb.CAVE, QCond.Verb.LIGHT, QCond.Verb.OTHER},
+    };
+
+    private List<Group> taskGroups(NQuestTrackerProp p)
+    {
+        List<Group> out = new ArrayList<>();
+        for(int i = 0; i < TASK_CATS.length; i += 3) {
+            String name = (String)TASK_CATS[i];
+            String l10nKey = (String)TASK_CATS[i + 1];
+            Set<QCond.Verb> verbs = new HashSet<>(Arrays.asList((QCond.Verb[])TASK_CATS[i + 2]));
+            Group g = new Group();
+            g.key = "task:" + name;
+            g.title = L10n.get(l10nKey);
+            g.kind = QuestKind.NPC;
+            List<QCond> list = new ArrayList<>();
+            for(QuestModel.TQuest q : model.quests()) {
+                if(!visible(q, p))
+                    continue;
+                for(QCond c : q.conds) {
+                    if(c.ready || !verbs.contains(c.verb))
+                        continue;
+                    if(c.verb == QCond.Verb.TELL && !q.readyToTurnIn())
+                        continue;
+                    if(g.questId < 0)
+                        g.questId = q.id;
+                    list.add(c);
+                }
             }
             if(list.isEmpty())
-                return;
-            Collections.sort(list, new Comparator<Condition>() {
-                public int compare(Condition a, Condition b) {
+                continue;
+            Collections.sort(list, new Comparator<QCond>() {
+                public int compare(QCond a, QCond b)
+                {
                     return QuestGiverDistance.compareMeters(condMeters(a), condMeters(b));
                 }
             });
-            imgs.add(new QuestImage(active_title.render(name).img, -1));
-            for (Condition condition : list) {
-                imgs.add(new QuestImage(gfnd2_under.render(labelCond(condition)).img, condition.questId));
+            for(QCond c : list)
+                g.rows.add(condRow(c, false));
+            g.total = g.rows.size();
+            out.add(g);
+        }
+        return out;
+    }
+
+    private void filterAndSort(List<Group> groups, final NQuestTrackerProp p)
+    {
+        for(Iterator<Group> i = groups.iterator(); i.hasNext(); ) {
+            Group g = i.next();
+            if(g.giver != null && p.hiddenGivers.contains(g.giver)) {
+                i.remove();
+                continue;
+            }
+            if(g.giver != null && g.rows.isEmpty() && !g.ready) {
+                i.remove();
+                continue;
+            }
+            g.pinned = p.pinned.contains(g.key);
+            if(!search.isEmpty() && !matches(g)) {
+                i.remove();
             }
         }
+        Collections.sort(groups, new Comparator<Group>() {
+            public int compare(Group a, Group b)
+            {
+                if(a.pinned != b.pinned)
+                    return a.pinned ? -1 : 1;
+                if(a.ready != b.ready)
+                    return a.ready ? -1 : 1;
+                int ka = kindOrder(a.kind), kb = kindOrder(b.kind);
+                if(ka != kb)
+                    return ka - kb;
+                if(a.idle != b.idle)
+                    return a.idle ? 1 : -1;
+                return String.CASE_INSENSITIVE_ORDER.compare(nz(a.title), nz(b.title));
+            }
+        });
     }
 
-    private String labelCond(Condition cond) {
-        if (cond.state == Condition.State.TELL) {
-            Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
-            String name = (qg != null && qg.name != null) ? qg.name : cond.target;
-            return QuestGiverDistance.withMeters(QuestWnd.returnToLabel(name), condMeters(cond));
+    private static String nz(String s)
+    {
+        return (s == null) ? "" : s;
+    }
+
+    private static int kindOrder(QuestKind k)
+    {
+        switch(k) {
+            case CREDO: return 0;
+            case NPC:   return 1;
+            default:    return 2;
         }
-        return QuestGiverDistance.withMeters(QuestWnd.localizeCond(cond.target), condMeters(cond));
     }
 
-    private String labelName(String name) {
+    private boolean matches(Group g)
+    {
+        if(nz(g.title).toLowerCase().contains(search))
+            return true;
+        for(Row r : g.rows) {
+            if(r.text.toLowerCase().contains(search))
+                return true;
+        }
+        return false;
+    }
+
+    /** Collapsed unless the player expanded it; the credo being pursued starts expanded. */
+    private boolean collapsed(Group g, NQuestTrackerProp p)
+    {
+        if(!search.isEmpty())
+            return false;
+        if(p.collapsed.contains(g.key))
+            return true;
+        if(p.expanded.contains(g.key))
+            return false;
+        return !(g.kind == QuestKind.CREDO && g.questId == model.pursuedCredoId());
+    }
+
+    private void layoutRows(List<Group> groups, NQuestTrackerProp p)
+    {
+        for(Widget w = body.cont.child; w != null; ) {
+            Widget next = w.next;
+            w.destroy();
+            w = next;
+        }
+        int w = body.cont.sz.x - PAD.x * 2;
+        int y = 0, shown = 0, hidden = 0;
+        for(Group g : groups) {
+            boolean expand = !collapsed(g, p);
+            if(!g.pinned && p.maxrows > 0 && shown >= p.maxrows) {
+                hidden += 1 + (expand ? g.rows.size() : 0);
+                continue;
+            }
+            add(new GroupRow(g, w, !expand), shown, y);
+            y += rowH;
+            shown++;
+            if(!expand)
+                continue;
+            for(Row r : g.rows) {
+                if(!g.pinned && p.maxrows > 0 && shown >= p.maxrows) {
+                    hidden++;
+                    continue;
+                }
+                add(new CondRow(r, w), shown, y);
+                y += rowH;
+                shown++;
+            }
+        }
+        boolean capped = hidden > 0;
+        if(capped)
+            add(new MoreRow(hidden, w), shown, y);
+        else if(shown == 0)
+            add(new EmptyRow(w), shown, y);
+        body.cont.update();
+    }
+
+    private void add(ARow row, int idx, int y)
+    {
+        row.idx = idx;
+        body.cont.add(row, new Coord(PAD.x, y));
+    }
+
+    /* ------------------------------------------------------------------ marker props */
+
+    /**
+     * Recompute the icon set drawn over each quest giver's map marker.
+     * Mirrors the tags {@link nurgling.overlays.NQuestGiver} draws.
+     */
+    private boolean applyMarkerProps()
+    {
+        Map<String, HashSet<String>> props = new HashMap<>();
+        for(QuestModel.TQuest q : model.quests()) {
+            if(q.giver != null && q.readyToTurnIn())
+                tag(props, q.giver, "tell");
+            for(QCond c : q.conds) {
+                if(c.ready || c.giver == null)
+                    continue;
+                String t = c.markerTag();
+                if(t != null)
+                    tag(props, model.canonGiver(c.giver), t);
+            }
+        }
+        boolean changed = false;
+        for(String gone : markedGivers) {
+            if(!props.containsKey(gone)) {
+                setMarkersProp(gone, null);
+                changed = true;
+            }
+        }
+        for(Map.Entry<String, HashSet<String>> e : props.entrySet()) {
+            if(!e.getValue().equals(markedProps.get(e.getKey())))
+                changed = true;
+            setMarkersProp(e.getKey(), e.getValue());
+        }
+        markedGivers.clear();
+        markedGivers.addAll(props.keySet());
+        markedProps.clear();
+        markedProps.putAll(props);
+        return changed;
+    }
+
+    private static void tag(Map<String, HashSet<String>> props, String giver, String tag)
+    {
+        HashSet<String> s = props.get(giver);
+        if(s == null)
+            props.put(giver, s = new HashSet<>());
+        s.add(tag);
+    }
+
+    /* ------------------------------------------------------------------ menus */
+
+    private void openGearMenu()
+    {
+        final NQuestTrackerProp p = prop();
+        List<QuestMenu.Item> items = new ArrayList<>();
+        items.add(new QuestMenu.Item("Max rows: " + ((p.maxrows > 0) ? String.valueOf(p.maxrows) : "all"),
+            () -> {
+                p.maxrows = nextCap(p.maxrows);
+                p.save();
+                needRebuild = true;
+            }));
+        items.add(new QuestMenu.Item("Expand all", () -> {
+            p.collapsed.clear();
+            expandAllGroups(p);
+            p.save();
+            needRebuild = true;
+        }));
+        items.add(new QuestMenu.Item("Collapse all", () -> {
+            p.expanded.clear();
+            collapseAllGroups(p);
+            p.save();
+            needRebuild = true;
+        }));
+        items.add(new QuestMenu.Item(L10n.get("char.quest.refresh"), () -> refreshDistances()));
+        if(!p.hiddenQuests.isEmpty() || !p.hiddenGivers.isEmpty()) {
+            items.add(new QuestMenu.Item(
+                "Unhide all (" + (p.hiddenQuests.size() + p.hiddenGivers.size()) + ")", () -> {
+                    p.hiddenQuests.clear();
+                    p.hiddenGivers.clear();
+                    p.save();
+                    needRebuild = true;
+                }));
+        }
+        if(!p.pinned.isEmpty()) {
+            items.add(new QuestMenu.Item("Clear pins (" + p.pinned.size() + ")", () -> {
+                p.pinned.clear();
+                p.save();
+                needRebuild = true;
+            }));
+        }
+        popup(items);
+    }
+
+    private void expandAllGroups(NQuestTrackerProp p)
+    {
+        for(Widget w = body.cont.child; w != null; w = w.next) {
+            if(w instanceof GroupRow)
+                p.expanded.add(((GroupRow)w).group.key);
+        }
+    }
+
+    private void collapseAllGroups(NQuestTrackerProp p)
+    {
+        for(Widget w = body.cont.child; w != null; w = w.next) {
+            if(w instanceof GroupRow)
+                p.collapsed.add(((GroupRow)w).group.key);
+        }
+    }
+
+    private void popup(List<QuestMenu.Item> items)
+    {
+        if(items.isEmpty())
+            return;
+        ui.root.add(new QuestMenu(items), ui.mc);
+    }
+
+    private static int nextCap(int cur)
+    {
+        if(cur <= 0)
+            return 8;
+        if(cur < 12)
+            return 12;
+        if(cur < 20)
+            return 20;
+        if(cur < 30)
+            return 30;
+        return 0;
+    }
+
+    private void openQuest(int questId)
+    {
+        NGameUI gui = getparent(NGameUI.class);
+        if(gui == null || gui.chrwdg == null || questId < 0)
+            return;
+        gui.chrwdg.show();
+        gui.chrwdg.raise();
+        gui.chrwdg.questtab.showtab();
+        if(gui.chrwdg.quest != null)
+            gui.chrwdg.quest.wdgmsg("qsel", questId);
+    }
+
+    private void rowMenu(final Group g)
+    {
+        final NQuestTrackerProp p = prop();
+        List<QuestMenu.Item> items = new ArrayList<>();
+        final boolean pinned = p.pinned.contains(g.key);
+        items.add(new QuestMenu.Item(pinned ? "Unpin" : "Pin to top", () -> {
+            if(pinned)
+                p.pinned.remove(g.key);
+            else
+                p.pinned.add(g.key);
+            p.save();
+            needRebuild = true;
+        }));
+        // Only offered for a group that IS one quest - a giver group can hold several, and
+        // "hide this quest" would silently pick one of them.
+        if(g.giver == null && g.questKey != null) {
+            items.add(new QuestMenu.Item("Hide this quest", () -> {
+                p.hiddenQuests.add(g.questKey);
+                p.save();
+                needRebuild = true;
+            }));
+        }
+        if(g.giver != null) {
+            items.add(new QuestMenu.Item("Hide everything from " + g.giver, () -> {
+                p.hiddenGivers.add(g.giver);
+                p.save();
+                needRebuild = true;
+            }));
+        }
+        if(g.questId >= 0)
+            items.add(new QuestMenu.Item("Open in Quest Log", () -> openQuest(g.questId)));
+        popup(items);
+    }
+
+    /* ------------------------------------------------------------------ rows */
+
+    private static String elide(Text.Foundry f, String s, int maxw)
+    {
+        if(maxw <= 0 || f.strsize(s).x <= maxw)
+            return s;
+        int lo = 0, hi = s.length();
+        while(lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if(f.strsize(s.substring(0, mid) + "…").x <= maxw)
+                lo = mid;
+            else
+                hi = mid - 1;
+        }
+        return (lo <= 0) ? "…" : (s.substring(0, lo).trim() + "…");
+    }
+
+    private abstract class ARow extends Widget
+    {
+        boolean hover = false;
+        int idx = 0;
+
+        ARow(int w)
+        {
+            super(new Coord(w, rowH));
+        }
+
+        @Override
+        public void mousemove(MouseMoveEvent ev)
+        {
+            hover = ev.c.isect(Coord.z, sz);
+            super.mousemove(ev);
+        }
+
+        void band(GOut g)
+        {
+            g.chcolor(((idx % 2) == 0) ? NStyle.rowEven : NStyle.rowOdd);
+            g.frect(Coord.z, sz);
+            if(hover) {
+                g.chcolor(NStyle.questHover);
+                g.frect(Coord.z, sz);
+            }
+            g.chcolor();
+        }
+
+        int ty(Tex t)
+        {
+            return (sz.y - t.sz().y) / 2;
+        }
+    }
+
+    private class GroupRow extends ARow
+    {
+        final Group group;
+        final boolean collapsed;
+        private final Tex chev, title, counter;
+
+        GroupRow(Group g, int w, boolean collapsed)
+        {
+            super(w);
+            this.group = g;
+            this.collapsed = collapsed;
+            this.chev = groupFnd.render(collapsed ? "▸" : "▾", NStyle.questDim).tex();
+            String pin = g.pinned ? "◆ " : "";
+            String cnt = (g.total > 0) ? (g.done + "/" + g.total) : "";
+            this.counter = cnt.isEmpty() ? null : condFnd.render(cnt, NStyle.questDim).tex();
+            int cw = (counter != null) ? counter.sz().x + UI.scale(6) : 0;
+            this.title = groupFnd.render(
+                elide(groupFnd, pin + nz(g.title), w - CHEV_W - cw), g.titleColor()).tex();
+        }
+
+        @Override
+        public void draw(GOut g)
+        {
+            band(g);
+            g.image(chev, new Coord(0, ty(chev)));
+            g.image(title, new Coord(CHEV_W, ty(title)));
+            if(counter != null)
+                g.image(counter, new Coord(sz.x - counter.sz().x, ty(counter)));
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev)
+        {
+            if(ev.b == 3) {
+                rowMenu(group);
+                return true;
+            }
+            if(ev.b == 1) {
+                NQuestTrackerProp p = prop();
+                if(collapsed) {
+                    p.collapsed.remove(group.key);
+                    p.expanded.add(group.key);
+                } else {
+                    p.expanded.remove(group.key);
+                    p.collapsed.add(group.key);
+                }
+                p.save();
+                needRebuild = true;
+                return true;
+            }
+            if(ev.b == 2) {
+                openQuest(group.questId);
+                return true;
+            }
+            return super.mousedown(ev);
+        }
+
+        @Override
+        public Object tooltip(Coord c, Widget prev)
+        {
+            return nz(group.title) + " - left-click to " + (collapsed ? "expand" : "collapse")
+                 + ", right-click for options";
+        }
+    }
+
+    private class CondRow extends ARow
+    {
+        final Row row;
+        private final Tex glyph, text;
+        private final String full;
+
+        CondRow(Row r, int w)
+        {
+            super(w);
+            this.row = r;
+            this.full = r.text;
+            Color col = r.ready ? NStyle.questCondDone
+                      : (r.secondary ? NStyle.questDim : NStyle.questCond);
+            this.glyph = condFnd.render(r.ready ? "✓" : "•", col).tex();
+            int off = INDENT + glyph.sz().x + UI.scale(4);
+            this.text = condFnd.render(elide(condFnd, r.text, w - off), col).tex();
+        }
+
+        @Override
+        public void draw(GOut g)
+        {
+            band(g);
+            g.image(glyph, new Coord(INDENT, ty(glyph)));
+            g.image(text, new Coord(INDENT + glyph.sz().x + UI.scale(4), ty(text)));
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev)
+        {
+            if(ev.b == 1) {
+                openQuest(row.questId);
+                return true;
+            }
+            return super.mousedown(ev);
+        }
+
+        @Override
+        public Object tooltip(Coord c, Widget prev)
+        {
+            return full;
+        }
+    }
+
+    private class MoreRow extends ARow
+    {
+        private final Tex text;
+
+        MoreRow(int n, int w)
+        {
+            super(w);
+            this.text = condFnd.render("+ " + n + " more…", NStyle.questDim).tex();
+        }
+
+        @Override
+        public void draw(GOut g)
+        {
+            band(g);
+            g.image(text, new Coord(INDENT, ty(text)));
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev)
+        {
+            if(ev.b == 1) {
+                NQuestTrackerProp p = prop();
+                p.maxrows = 0;
+                p.save();
+                needRebuild = true;
+                return true;
+            }
+            return super.mousedown(ev);
+        }
+
+        @Override
+        public Object tooltip(Coord c, Widget prev)
+        {
+            return "Click to show every row (max rows: unlimited)";
+        }
+    }
+
+    private class EmptyRow extends ARow
+    {
+        private final Tex text;
+
+        EmptyRow(int w)
+        {
+            super(w);
+            this.text = condFnd.render("No quests to show", NStyle.questDim).tex();
+        }
+
+        @Override
+        public void draw(GOut g)
+        {
+            g.image(text, new Coord(INDENT, ty(text)));
+        }
+    }
+
+    /** Toggle for one {@link QuestKind}. Compact on purpose - the panel can be narrow. */
+    private class KindChip extends ACheckBox
+    {
+        final QuestKind kind;
+        private final Color col;
+        private final String tip;
+        private final Tex on, off;
+        private boolean hover = false;
+
+        KindChip(QuestKind kind, String letter, Color col, String tip)
+        {
+            super(CHIP_SZ);
+            this.kind = kind;
+            this.col = col;
+            this.tip = tip;
+            this.a = true;
+            Text.Foundry f = new Text.Foundry(Text.sans.deriveFont(java.awt.Font.BOLD), 10).aa(true);
+            this.on = f.render(letter, NStyle.infoBg).tex();
+            this.off = f.render(letter, col).tex();
+        }
+
+        @Override
+        public void draw(GOut g)
+        {
+            g.chcolor(a ? col : NStyle.titleBg);
+            g.frect(Coord.z, sz);
+            g.chcolor(a ? col : NStyle.questDim);
+            g.rect(Coord.z, sz);
+            g.chcolor();
+            Tex t = a ? on : off;
+            g.image(t, sz.sub(t.sz()).div(2));
+            if(hover) {
+                g.chcolor(NStyle.questHover);
+                g.frect(Coord.z, sz);
+                g.chcolor();
+            }
+        }
+
+        @Override
+        public void mousemove(MouseMoveEvent ev)
+        {
+            hover = ev.c.isect(Coord.z, sz);
+            super.mousemove(ev);
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev)
+        {
+            if(ev.b == 1) {
+                a = !a;
+                NQuestTrackerProp p = prop();
+                if(a)
+                    p.kinds.add(kind);
+                else
+                    p.kinds.remove(kind);
+                p.save();
+                needRebuild = true;
+                return true;
+            }
+            return super.mousedown(ev);
+        }
+
+        @Override
+        public Object tooltip(Coord c, Widget prev)
+        {
+            return tip;
+        }
+    }
+
+    /* ------------------------------------------------------------------ drawing */
+
+    @Override
+    public void draw(GOut g)
+    {
+        NDraggableWidget.drawBg(g, sz, ui);
+        g.chcolor(NStyle.titleBg);
+        g.frect(Coord.z, new Coord(sz.x, headerH));
+        g.chcolor(NStyle.separator);
+        g.frect(new Coord(0, headerH - UI.scale(1)), new Coord(sz.x, UI.scale(1)));
+        g.chcolor();
+        super.draw(g);
+        int bw = Math.max(2, UI.scale(2));
+        g.chcolor(NStyle.border);
+        g.frect(Coord.z, new Coord(sz.x, bw));
+        g.frect(new Coord(0, sz.y - bw), new Coord(sz.x, bw));
+        g.frect(Coord.z, new Coord(bw, sz.y));
+        g.frect(new Coord(sz.x - bw, 0), new Coord(bw, sz.y));
+        g.chcolor();
+    }
+
+    /* ------------------------------------------------------------------ server hooks */
+
+    /** From {@code Quest.Box.uimsg("conds")} via {@link nurgling.NUtils#setQuestConds}. */
+    public void updateConds(int id, Object[] args)
+    {
+        model.setConds(id, args);
+    }
+
+    /** From {@code QuestWnd.uimsg} via {@link nurgling.NUtils#removeQuest}. */
+    public void removeQuest(int id)
+    {
+        model.removeQuest(id);
+    }
+
+    /** From {@code QuestWnd.uimsg} via {@link nurgling.NUtils#addQuest}. */
+    public void addQuest(int id)
+    {
+        model.addQuest(id);
+    }
+
+    /** From {@link QuestTrackFilter#notifyHelper}: mute set changed. */
+    public void requestUpdate()
+    {
+        needRebuild = true;
+    }
+
+    private Row condRow(QCond c, boolean secondary)
+    {
+        return new Row(displayCond(c), c.ready, c.questId, secondary);
+    }
+
+    private String displayCond(QCond c)
+    {
+        String base;
+        if(c.verb == QCond.Verb.TELL) {
+            String name = (c.giver != null) ? model.canonGiver(c.giver) : c.text;
+            base = QuestWnd.returnToLabel(name);
+        } else {
+            base = QuestWnd.localizeCond(c.text);
+        }
+        return QuestGiverDistance.withMeters(base, condMeters(c));
+    }
+
+    private String labelName(String name)
+    {
         return QuestGiverDistance.withMeters(name, distanceTo(name));
     }
 
-    private Double condMeters(Condition cond) {
-        Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
-        if (qg == null)
+    private Double condMeters(QCond cond)
+    {
+        if(cond.giver == null)
             return null;
-        return distanceTo(qg.name);
+        return distanceTo(model.canonGiver(cond.giver));
     }
 
-    private Double distanceTo(String name) {
+    private Double distanceTo(String name)
+    {
         try {
-            NGameUI gui = NUtils.getGameUI();
+            NGameUI gui = gui();
             Pointer ptr = findPointer(gui, name);
-            if (ptr != null) {
+            if(ptr != null) {
                 try {
                     double d = ptr.getDistance();
-                    if (d > 0)
+                    if(d > 0)
                         return d;
-                } catch (RuntimeException ignored) {
+                } catch(RuntimeException ignored) {
                 }
             }
             Coord2d at = findGiverPos(name);
-            if (at == null)
+            if(at == null)
                 return null;
             Gob player = (gui != null && gui.map != null) ? gui.map.player() : null;
-            if (player == null)
+            if(player == null)
                 return null;
             return QuestGiverDistance.meters(player.rc.dist(at));
-        } catch (Loading l) {
+        } catch(Loading l) {
             return null;
         }
     }
 
-    private Pointer findPointer(NGameUI gui, String name) {
-        if (gui == null || name == null || name.isEmpty())
+    private NGameUI gui()
+    {
+        NGameUI gui = getparent(NGameUI.class);
+        return (gui != null) ? gui : NUtils.getGameUI();
+    }
+
+    private Pointer findPointer(NGameUI gui, String name)
+    {
+        if(gui == null || name == null || name.isEmpty())
             return null;
         Pointer hit = findPointerUnder(gui, name);
-        if (hit != null)
+        if(hit != null)
             return hit;
-        if (gui.ui != null && gui.ui.root != null)
+        if(gui.ui != null && gui.ui.root != null)
             return findPointerUnder(gui.ui.root, name);
         return null;
     }
 
-    private Pointer findPointerUnder(Widget root, String name) {
-        for (Pointer p : root.children(Pointer.class)) {
-            if (QuestGiverDistance.namesMatch(name, p.tip()))
+    private Pointer findPointerUnder(Widget root, String name)
+    {
+        for(Pointer p : root.children(Pointer.class)) {
+            if(QuestGiverDistance.namesMatch(name, p.tip()))
                 return p;
         }
         return null;
     }
 
-    private Coord2d findGiverPos(String name) {
-        if (name == null || name.isEmpty())
+    private Coord2d findGiverPos(String name)
+    {
+        if(name == null || name.isEmpty())
             return null;
         Coord2d cached = cachedGiverPos(name);
-        if (cached != null)
+        if(cached != null)
             return cached;
-        NGameUI gui = NUtils.getGameUI();
+        NGameUI gui = gui();
         Pointer ptr = findPointer(gui, name);
-        if (ptr != null) {
+        if(ptr != null) {
             try {
                 Coord2d tc = ptr.tc();
-                if (tc != null) {
+                if(tc != null) {
                     giverCoords.put(name, tc);
                     return tc;
                 }
-            } catch (RuntimeException ignored) {
+            } catch(RuntimeException ignored) {
             }
         }
         Coord2d gobAt = findGobPos(gui, name);
-        if (gobAt != null) {
+        if(gobAt != null) {
             giverCoords.put(name, gobAt);
             return gobAt;
         }
-        synchronized (markers) {
-            for (MarkerInfo mi : markers) {
-                if (name.equals(mi.name) && mi.coord != null)
+        synchronized(markers) {
+            for(MarkerInfo mi : markers) {
+                if(name.equals(mi.name) && mi.coord != null)
                     return mi.coord;
             }
         }
         return findMapMarker(gui, name);
     }
 
-    private Coord2d cachedGiverPos(String name) {
+    private Coord2d cachedGiverPos(String name)
+    {
         Coord2d exact = giverCoords.get(name);
-        if (exact != null)
+        if(exact != null)
             return exact;
-        for (Map.Entry<String, Coord2d> e : giverCoords.entrySet()) {
-            if (QuestGiverDistance.namesMatch(name, e.getKey()))
+        for(Map.Entry<String, Coord2d> e : giverCoords.entrySet()) {
+            if(QuestGiverDistance.namesMatch(name, e.getKey()))
                 return e.getValue();
         }
         return null;
     }
 
-    private Coord2d findGobPos(NGameUI gui, String name) {
-        if (gui == null || gui.map == null || gui.map.glob == null)
+    private Coord2d findGobPos(NGameUI gui, String name)
+    {
+        if(gui == null || gui.map == null || gui.map.glob == null)
             return null;
-        synchronized (gui.map.glob.oc) {
-            for (Gob gob : gui.map.glob.oc) {
-                if (gobNamed(gob, name))
+        synchronized(gui.map.glob.oc) {
+            for(Gob gob : gui.map.glob.oc) {
+                if(gobNamed(gob, name))
                     return gob.rc;
             }
         }
         return null;
     }
 
-    private static boolean gobNamed(Gob gob, String name) {
-        if (gob.ngob != null && name.equals(gob.ngob.name))
+    private static boolean gobNamed(Gob gob, String name)
+    {
+        if(gob.ngob != null && name.equals(gob.ngob.name))
             return true;
         String kin = NGameUI.gobIdToKinName.get(gob.id);
-        if (name.equals(kin))
+        if(name.equals(kin))
             return true;
         Buddy buddy = gob.getattr(Buddy.class);
-        if (buddy != null) {
-            if (name.equals(buddy.rnm))
+        if(buddy != null) {
+            if(name.equals(buddy.rnm))
                 return true;
-            if (buddy.b != null && name.equals(buddy.b.name))
+            if(buddy.b != null && name.equals(buddy.b.name))
                 return true;
         }
         return false;
     }
 
-    private Coord2d findMapMarker(NGameUI gui, String name) {
-        if (gui == null || gui.mapfile == null || gui.mapfile.file == null || gui.mapfile.view == null)
+    private Coord2d findMapMarker(NGameUI gui, String name)
+    {
+        if(gui == null || gui.mapfile == null || gui.mapfile.file == null || gui.mapfile.view == null)
             return null;
         MiniMap.Location sessloc = gui.mapfile.view.sessloc;
-        if (sessloc == null)
+        if(sessloc == null)
             return gui.mapfile.findMarkerPosition(name);
         MapFile file = gui.mapfile.file;
-        if (!file.lock.readLock().tryLock())
+        if(!file.lock.readLock().tryLock())
             return gui.mapfile.findMarkerPosition(name);
         try {
             Coord2d exact = null, fuzzy = null;
-            for (MapFile.Marker mark : file.markers) {
-                if (mark.nm == null || mark.seg != sessloc.seg.id)
+            for(MapFile.Marker mark : file.markers) {
+                if(mark.nm == null || mark.seg != sessloc.seg.id)
                     continue;
                 Coord2d pos = mark.tc.sub(sessloc.tc).mul(MCache.tilesz).add(MCache.tilesz.div(2));
-                if (name.equals(mark.nm))
+                if(name.equals(mark.nm))
                     exact = pos;
-                else if (fuzzy == null && QuestGiverDistance.namesMatch(name, mark.nm))
+                else if(fuzzy == null && QuestGiverDistance.namesMatch(name, mark.nm))
                     fuzzy = pos;
             }
-            if (exact != null)
+            if(exact != null)
                 return exact;
-            if (fuzzy != null)
+            if(fuzzy != null)
                 return fuzzy;
         } finally {
             file.lock.readLock().unlock();
@@ -486,502 +1275,143 @@ public class NQuestInfo extends Widget
         return gui.mapfile.findMarkerPosition(name);
     }
 
-    private void harvestPointers(NGameUI gui) {
-        if (gui == null)
+    private void harvestPointers(NGameUI gui)
+    {
+        if(gui == null)
             return;
         harvestPointersUnder(gui);
-        if (gui.ui != null && gui.ui.root != null)
+        if(gui.ui != null && gui.ui.root != null)
             harvestPointersUnder(gui.ui.root);
     }
 
-    private void harvestPointersUnder(Widget root) {
-        for (Pointer p : root.children(Pointer.class)) {
+    private void harvestPointersUnder(Widget root)
+    {
+        for(Pointer p : root.children(Pointer.class)) {
             String tip = p.tip();
-            if (tip == null || tip.isEmpty())
+            if(tip == null || tip.isEmpty())
                 continue;
             try {
                 Coord2d tc = p.tc();
-                if (tc != null)
+                if(tc != null)
                     giverCoords.put(tip, tc);
-            } catch (RuntimeException ignored) {
+            } catch(RuntimeException ignored) {
             }
         }
     }
 
-    private Integer nextHarvestQuest() {
-        for (NQuest q : quests.values()) {
-            if (harvestTried.contains(q.id))
+    private boolean condsSweepIdle()
+    {
+        for(QuestModel.TQuest q : model.quests()) {
+            if(!q.condsLoaded || q.condsStale)
+                return false;
+        }
+        return true;
+    }
+
+    private Integer nextHarvestQuest()
+    {
+        for(QuestModel.TQuest q : model.quests()) {
+            if(harvestTried.contains(q.id))
                 continue;
-            for (Condition cond : q.conditions) {
-                if (cond.ready)
+            for(QCond c : q.conds) {
+                if(c.ready || c.giver == null)
                     continue;
-                Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
-                if (qg == null || qg.name == null)
-                    continue;
-                if (findGiverPos(qg.name) == null)
+                if(findGiverPos(model.canonGiver(c.giver)) == null)
                     return q.id;
             }
         }
         return null;
     }
 
-    private BufferedImage ncatimgs(int margin, QuestImage... imgs) {
-        int w = 0, h = -margin;
-        for (QuestImage img : imgs) {
-            if (img == null)
-                continue;
-            if (img.img.getWidth() > w)
-                w = img.img.getWidth();
-            h += img.img.getHeight() + margin;
-        }
-        BufferedImage ret = TexI.mkbuf(new Coord(w, h));
-        Graphics g = ret.getGraphics();
-        int y = 0;
-        for (QuestImage img : imgs) {
-            if (img == null)
-                continue;
-            img.area.a.x = 0;
-            img.area.a.y = y;
-            g.drawImage(img.img, 0, y, null);
-            y += img.img.getHeight() + margin;
-            img.area.b.x = img.img.getWidth();
-            img.area.b.y = y - margin;
-        }
-        g.dispose();
-        return (ret);
-    }
-
-    @Override
-    public boolean mousedown(MouseDownEvent ev) {
-        Coord pos = new Coord(ev.c.x, ev.c.y).sub(UI.scale(this.margin)).sub(new Coord(0,modebtn.sz.y));
-        if (imgs != null) {
-            for (QuestImage img : imgs) {
-                if (img.id >= 0) {
-                    if (img.area.a.x <= pos.x && pos.x <= img.area.b.x && img.area.a.y <= pos.y && pos.y <= img.area.b.y) {
-                        NUtils.getGameUI().chrwdg.show();
-                        NUtils.getGameUI().chrwdg.questtab.showtab();
-                        NUtils.getGameUI().chrwdg.wdgmsg("qsel", img.id);
-                        return true;
-                    }
-                }
-            }
-        }
-        return super.mousedown(ev);
-    }
-
-    AtomicBoolean needUpdate = new AtomicBoolean(false);
-    private double distAcc = 0;
-    private int distKey = Integer.MIN_VALUE;
-    private final HashMap<String, Coord2d> giverCoords = new HashMap<String, Coord2d>();
-    private final HashSet<Integer> harvestTried = new HashSet<Integer>();
-    private double harvestAcc = 0;
-
-    public final HashSet<String> huntingT = new HashSet<>();
-    public final HashSet<String> forageT = new HashSet<>();
-
-    @Override
-    public void tick(double dt) {
-        super.tick(dt);
-        if(!forRemove.isEmpty())
-        {
-            for(Integer i : forRemove)
-            {
-                quests.remove(i);
-            }
-            forRemove.clear();
-            needUpdate.set(true);
-        }
-        NGameUI gui = NUtils.getGameUI();
-        if (gui != null && gui.chrwdg != null) {
-            for(NQuest q : quests.values())
-            {
-                if(!q.request && q.conditions.isEmpty()) {
-                    q.request = true;
-                    gui.chrwdg.wdgmsg("qsel", q.id);
-                }
-            }
-            harvestPointers(gui);
-            harvestAcc += dt;
-            if (harvestAcc > 0.45) {
-                harvestAcc = 0;
-                if (!gui.chrwdg.visible) {
-                    Integer hid = nextHarvestQuest();
-                    if (hid != null) {
-                        harvestTried.add(hid);
-                        gui.chrwdg.wdgmsg("qsel", hid);
-                    }
-                }
-            }
-        }
-        distAcc += dt;
-        if (distAcc > 0.5) {
-            distAcc = 0;
-            int key = distanceKey();
-            if (key != distKey) {
-                distKey = key;
-                needUpdate.set(true);
-            }
-        }
-        if(needUpdate.get())
-            update();
-    }
-
-    private int distanceKey() {
+    private int distanceKey()
+    {
         int h = 1;
-        NGameUI gui = NUtils.getGameUI();
+        NGameUI gui = gui();
         Gob player = (gui != null && gui.map != null) ? gui.map.player() : null;
-        if (player != null)
+        if(player != null)
             h = 31 * h + QuestGiverDistance.tileKey(player.rc.x, player.rc.y);
-        for (NQuest quest : quests.values()) {
-            for (Condition cond : quest.conditions) {
-                if (cond.ready)
+        for(QuestModel.TQuest q : model.quests()) {
+            for(QCond c : q.conds) {
+                if(c.ready || c.giver == null)
                     continue;
-                Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
-                if (qg == null || qg.name == null)
-                    continue;
-                Double m = distanceTo(qg.name);
-                h = 31 * h + qg.name.hashCode();
-                h = 31 * h + (m == null ? 0 : (int) Math.round(m));
+                String nm = model.canonGiver(c.giver);
+                Double m = distanceTo(nm);
+                h = 31 * h + nm.hashCode();
+                h = 31 * h + (m == null ? 0 : (int)Math.round(m));
             }
         }
         return h;
     }
 
-    private void refreshDistances() {
-        if (refreshbtn != null)
-            refreshbtn.set(false);
+    private void refreshDistances()
+    {
         giverCoords.clear();
         harvestTried.clear();
         distKey = Integer.MIN_VALUE;
-        needUpdate.set(true);
-    }
-    Coord margin = new Coord(10,10);
-    public static final IBox pbox = Window.wbox;
-    @Override
-    public void draw(GOut g) {
-        Coord margin = UI.scale(this.margin);
-        if (glowon != null) {
-            NDraggableWidget.drawBg(g.reclip(new Coord(0,modebtn.sz.y), glowon.sz().add(margin.mul(2))), glowon.sz().add(margin.mul(2)), ui);
-            pbox.draw(g, new Coord(0,modebtn.sz.y), glowon.sz().add(margin.mul(2)));
-
-            g.image(glowon, margin.add(new Coord(0,modebtn.sz.y)));
-        }
-        super.draw(g);
+        needRebuild = true;
     }
 
-    public void updateConds(int id, Object[] args) {
-        NQuest quest = quests.get(id);
+    /* ------------------------------------------------------------------ overlay queries */
 
-        if(quest != null) {
-            quest.request = false;
-            quest.conditions.clear();
-            int a = 0;
-            while (a < args.length) {
-                String desc = STR.of(args[a++]);
-                int st = INT.of(args[a++]);
-                String status = STR.of(args[a++]);
-                Object[] wdata = null;
-                if((a < args.length) && OBJS.is(args[a]))
-                    wdata = OBJS.of(args[a++]);
-                Condition cond = new Condition(st != 0, desc, id, status);
-                quest.conditions.add(cond);
-            }
-        }
-        else
-        {
-            NUtils.getGameUI().error("NOT FOUND");
-        }
-        needUpdate.set(true);
-    }
-
-    public void requestUpdate() {
-        needUpdate.set(true);
-    }
-
-    private String helperTitle(NQuest quest) {
-        NGameUI gui = NUtils.getGameUI();
-        if (gui != null && gui.chrwdg != null && gui.chrwdg.quest != null) {
-            QuestWnd.Quest q = gui.chrwdg.quest.cqst.get(quest.id);
-            if (q != null)
-                return QuestTrackFilter.safeTitle(q);
-        }
-        return null;
-    }
-
-
-    public void removeQuest(int id) {
-        synchronized (forRemove) {
-            forRemove.add(id);
-        }
-    }
-
-    final ArrayList<Integer> forRemove = new ArrayList<>();
-    final HashMap<Integer, NQuest> quests = new HashMap<>();
-
-    public void addQuest(int id) {
-        synchronized (quests) {
-            NQuest q = quests.put(id,new NQuest(id));
-        }
-    }
-
-    static class NQuest
+    public boolean isHuntingTarget(String target)
     {
-        public boolean request = false;
-        int id;
-        ArrayList<Condition> conditions = new ArrayList<Condition>();
-        String questGiver = null;
-        public NQuest(int id) {
-            this.id = id;
-        }
+        return matchesAny(huntingT, target);
     }
 
-    static class Condition{
-        boolean ready;
-        String target;
-        State state;
-        int questId;
-        enum State
-        {
-            TELL,
-            KILL,
-            PICK,
-            BRING,
-            VISIT,
-            GREET,
-            LAUGH,
-            RAGE,
-            WAVE,
-            GAIN,
-            CAVE,
-            LIGHT,
-            CREATE
-        }
-
-        public Condition(boolean ready, String target, int questId, String status) {
-            this.ready = ready;
-            this.target = target;
-            this.questId = questId;
-
-            if (target.contains("Bring"))
-            {
-                this.state = State.BRING;
-                attrs.put(QuestsGiver.class, new QuestsGiver(target));
-                attrs.put(BringItem.class, new BringItem(target));
-//                bring_t.add(new Task(qid, c));
-            }
-            else if (target.contains("Pick"))
-            {
-                this.state = State.PICK;
-                attrs.put(PickTarget.class, new PickTarget(target));
-            }
-            else if (target.contains("Kill") || target.contains("Raid") || target.contains("Defeat") ) {
-                this.state = State.KILL;
-                attrs.put(HuntTarget.class, new HuntTarget(target));
-            }
-            else if (target.contains("Catch"))
-            {
-                this.state = State.PICK;
-                attrs.put(PickTarget.class, new PickTarget(target));
-            }
-            else if (target.contains("Greet") || (target.contains("Visit") && !target.contains("cave")) || target.contains("wave") || target.contains("laugh") || target.contains("rage"))
-            {
-                attrs.put(QuestsGiver.class, new QuestsGiver(target));
-                if(target.contains("Greet") || (target.contains("Visit") && !target.contains("cave")))
-                {
-                    this.state = State.GREET;
-                }
-                else if(target.contains("wave"))
-                {
-                    this.state = State.WAVE;
-                }
-                else if(target.contains("laugh"))
-                {
-                    this.state = State.LAUGH;
-                }
-                else if(target.contains("rage"))
-                {
-                    this.state = State.RAGE;
-                }
-            }
-            else if (target.contains("Gain"))
-            {
-                this.state = State.GAIN;
-            }
-            else if (target.contains("Create"))
-            {
-                this.state = State.CREATE;
-            }
-            else if (target.contains("Tell"))
-            {
-                this.state = State.TELL;
-                attrs.put(QuestsGiver.class,new QuestsGiver(target));
-            }
-            else if (target.contains("cave"))
-            {
-                this.state = State.CAVE;
-            }
-            else if (target.contains("Light"))
-            {
-                this.state = State.LIGHT;
-            }
-            if(status!=null)
-            {
-                this.target += " " + status;
-            }
-        }
-
-        class QuestsGiver
-        {
-            public String name;
-
-            public QuestsGiver(String info) {
-                if (info.contains("Tell") || (info.contains("Visit") && !info.contains("cave"))) {
-                    name = info.contains("Tell") ? info.substring(5, info.indexOf(" ", 6)) : info.substring(6);
-                }
-                else
-                {
-                    if (info.contains("Greet") || (info.contains("Visit") && !info.contains("cave"))) {
-                        name = info.substring(6);
-                    } else if (info.contains(" to ")) {
-                        name = info.substring(info.indexOf(" to ") + 4);
-                    } else if (info.contains(" at ")) {
-                        name = info.substring(info.indexOf(" at ") + 4);
-                    }
-                }
-            }
-        }
-
-        class BringItem
-        {
-            public String name = null;
-
-            public BringItem(String info) {
-                if( info.contains("Bring")){
-
-                    if(info.contains(" a ") || info.contains(" an ")) {
-                        if(info.contains(" a "))
-                            name = info.substring(info.indexOf(" a ") + 3, info.indexOf("to ") - 1);
-                        else
-                            name = info.substring(info.indexOf(" an ") + 4, info.indexOf("to ") - 1);
-                    }
-                    else
-                    {
-                        name = info.substring(6, info.indexOf("to ") - 1);
-                    }
-                }
-            }
-        }
-
-        class PickTarget
-        {
-            public String name;
-
-            public PickTarget(String info) {
-                info = info.toLowerCase();
-                String bufname;
-                int ind = info.indexOf(" a ");
-                if (ind != -1)
-                    bufname = info.substring(info.indexOf(" a ") + 3);
-                else {
-                    ind = info.indexOf(" an ");
-                    if (ind != -1)
-                        bufname = info.substring(info.indexOf(" an ") + 4);
-                    else
-                        bufname = info.substring(info.indexOf(" ") + 1);
-                }
-
-                if (!bufname.isEmpty()) {
-                    if (bufname.contains("blueberr"))
-                        bufname = "blueberr";
-                    else if (bufname.contains("lingon"))
-                        bufname = "lingon";
-                    else if (bufname.contains("woodgrouse hen"))
-                        bufname = "woodgrouse-f";
-                    else if (bufname.contains("morel"))
-                        bufname = "lorchel";
-                    else if (bufname.contains("yellowf"))
-                        bufname = "yellowf";
-                    else if (bufname.contains("hen"))
-                        bufname = "chicken/chicken";
-                    else if (bufname.contains("cock"))
-                        bufname = "chicken/roast";
-                    else if (bufname.contains("chantrell"))
-                        bufname = "herbs/chantrell";
-                    else if (bufname.contains("rat"))
-                        bufname = "rat/rat";
-                    name = (bufname.replaceAll("\\s+", "")).replaceAll("'+", "");
-                }
-            }
-        }
-
-        class HuntTarget {
-            public String name;
-
-            public HuntTarget(String info) {
-                info = info.toLowerCase();
-                String bufname;
-                int ind = info.indexOf(" a ");
-                if (ind != -1)
-                    bufname = info.substring(info.indexOf(" a ") + 3);
-                else {
-                    ind = info.indexOf(" an ");
-                    if (ind != -1)
-                        bufname = info.substring(info.indexOf(" an ") + 4);
-                    else
-                        bufname = info.substring(info.indexOf(" ") + 1);
-                }
-
-                if (!bufname.isEmpty()) {
-                    if (bufname.contains("mouflon"))
-                        bufname = "sheep";
-                    else if (bufname.contains("auroch"))
-                        bufname = "cattle";
-                    else if (bufname.contains("horse"))
-                        bufname = "horse/horse";
-                    else if (info.contains("raid a")) {
-                        if (bufname.contains("bird"))
-                            bufname = "birdsnest";
-                        else
-                            bufname = "anthill";
-                    }
-                    else {
-                        bufname = "kritter/"+bufname;
-                    }
-                }
-                name = (bufname.replaceAll("\\s+", "")).replaceAll("'+", "");
-            }
-        }
-
-
-        public Map<Class<?>, Object> attrs = new HashMap<>();
-
-        public <C> C getattr(Class<C> c) {
-            Object attr = this.attrs.get(c);
-            if(!c.isInstance(attr))
-                return(null);
-            return(c.cast(attr));
-        }
-
+    public boolean isForageTarget(String target)
+    {
+        return matchesAny(forageT, target);
     }
 
-    public class MarkerInfo{
+    private static boolean matchesAny(Set<String> set, String target)
+    {
+        if(target == null)
+            return false;
+        for(String s : set) {
+            if(target.contains(s))
+                return true;
+        }
+        return false;
+    }
+
+    public boolean isQuestedItem(NGItem item)
+    {
+        String nm = (item == null) ? null : item.name();
+        if(nm == null)
+            return false;
+        String lc = nm.toLowerCase();
+        for(String want : bringItems) {
+            if(lc.contains(want))
+                return true;
+        }
+        return false;
+    }
+
+    /* ------------------------------------------------------------------ markers */
+
+    public class MarkerInfo
+    {
         public String name;
         public Coord2d coord;
         public long seg;
         public HashSet<String> prop;
 
-        public MarkerInfo(String name, Coord2d coord, long seg) {
+        public MarkerInfo(String name, Coord2d coord, long seg)
+        {
             this.name = name;
             this.coord = coord;
             this.seg = seg;
         }
     }
 
-    final HashSet<MarkerInfo> markers = new HashSet<>();
-    public void addMarkerCoord(Coord2d tmp, String nm, long seg) {
-        synchronized (markers) {
-            for (MarkerInfo mi : markers) {
-                if (mi.name.equals(nm)) {
+    private final HashSet<MarkerInfo> markers = new HashSet<>();
+
+    public void addMarkerCoord(Coord2d tmp, String nm, long seg)
+    {
+        model.noteGiverName(nm);
+        synchronized(markers) {
+            for(MarkerInfo mi : markers) {
+                if(mi.name.equals(nm)) {
                     mi.coord = tmp;
                     mi.seg = seg;
                     return;
@@ -989,31 +1419,30 @@ public class NQuestInfo extends Widget
             }
             markers.add(new MarkerInfo(nm, tmp, seg));
         }
-        lastUpdate.set(lastUpdate.get()+1);
+        lastUpdate.incrementAndGet();
     }
 
     public MarkerInfo getMarkerInfo(NGameUI gui, Gob gob)
     {
-        if(gui != null && gui.mapfile != null) {
-            synchronized (markers) {
-                for (MarkerInfo mi : markers) {
-                    if (gui.mapfile.playerSegmentId() == mi.seg) {
-                        if (gob.rc.dist(mi.coord) < 1)
-                            return (mi);
-                    }
-                }
+        if(gui == null || gui.mapfile == null || gob == null)
+            return null;
+        synchronized(markers) {
+            for(MarkerInfo mi : markers) {
+                if(mi.coord != null && gui.mapfile.playerSegmentId() == mi.seg
+                   && gob.rc.dist(mi.coord) < 1)
+                    return mi;
             }
         }
-        return(null);
+        return null;
     }
 
     void setMarkersProp(String name, HashSet<String> props)
     {
-        if(name==null)
+        if(name == null)
             return;
-        synchronized (markers) {
-            for (MarkerInfo mi : markers) {
-                if (mi.name!=null && mi.name.equals(name)) {
+        synchronized(markers) {
+            for(MarkerInfo mi : markers) {
+                if(mi.name != null && mi.name.equals(name)) {
                     mi.prop = props;
                     return;
                 }
@@ -1021,17 +1450,15 @@ public class NQuestInfo extends Widget
             MarkerInfo mi = new MarkerInfo(name, null, -1);
             mi.prop = props;
             markers.add(mi);
-            lastUpdate.set(lastUpdate.get()+1);
         }
     }
 
-    public boolean isQuestedItem(NGItem item){
-        for(String name : items)
-        {
-            if(item.name()!=null && item.name().toLowerCase().contains(name))
-                return true;
+    @Override
+    public void dispose()
+    {
+        synchronized(markers) {
+            markers.clear();
         }
-
-        return false;
+        super.dispose();
     }
 }

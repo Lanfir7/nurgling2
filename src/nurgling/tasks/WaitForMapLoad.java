@@ -20,11 +20,11 @@ public class WaitForMapLoad extends NTask {
     public boolean check() {
         boolean canContinue = false;
         // Синхронизируем доступ к grids для безопасного создания копии
-        ArrayList<MCache.Grid> gridsCopy;
-        synchronized(gui.map.glob.map.grids) {
-            gridsCopy = new ArrayList<>(gui.map.glob.map.grids.values());
+        ArrayList<MCache.Grid> loaded;
+        synchronized (gui.map.glob.map.grids) {
+            loaded = new ArrayList<>(gui.map.glob.map.grids.values());
         }
-        for (MCache.Grid grid : gridsCopy) {
+        for (MCache.Grid grid : loaded) {
             if(this.coord.getGridId()==0)
                 return true;
             if (grid.id == this.coord.getGridId()) {

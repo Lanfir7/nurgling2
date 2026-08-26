@@ -27,13 +27,18 @@ public class DatabaseSettings extends Panel {
     private Button reconnectBtn;
     private Label reconnectStatus;
     private volatile boolean reconnectInProgress = false;
+    private Button seedFishButton;
     private CheckBox enableCheckbox;
+    private CheckBox shareHsCheckbox;
+    private CheckBox shareMapMarksCheckbox;
     private Dropbox<String> dbType;
     private final int labelWidth = UI.scale(80); // РЁРёСЂРёРЅР° Р»РµР№Р±Р»РѕРІ
     private final int entryX = UI.scale(110);    // X-РєРѕРѕСЂРґРёРЅР°С‚Р° РґР»СЏ TextEntry (was 90, increased for better space)
     private final int margin = UI.scale(10);
 
     private boolean enabled;
+    private boolean shareHs;
+    private boolean shareMapMarks;
     private String dbTypeStr;
     private String host, user, pass, dbPath;
 
@@ -49,7 +54,27 @@ public class DatabaseSettings extends Panel {
                 updateWidgetsVisibility();
             }
         }, new Coord(margin, y));
-        y += enableCheckbox.sz.y + UI.scale(8);
+        y += enableCheckbox.sz.y + UI.scale(5);
+
+        // Publish this character's hearth secret to the shared database
+        prev = shareHsCheckbox = add(new CheckBox(L10n.get("database.share_hearth_secret")) {
+            public void set(boolean val) {
+                a = val;
+                shareHs = val;
+            }
+        }, new Coord(margin, y));
+        shareHsCheckbox.tooltip = Text.render(L10n.get("database.share_hearth_secret_tip")).tex();
+        y += shareHsCheckbox.sz.y + UI.scale(5);
+
+        // Whether the map window's database buttons carry markers as well as terrain
+        prev = shareMapMarksCheckbox = add(new CheckBox(L10n.get("database.share_map_markers")) {
+            public void set(boolean val) {
+                a = val;
+                shareMapMarks = val;
+            }
+        }, new Coord(margin, y));
+        shareMapMarksCheckbox.tooltip = Text.render(L10n.get("database.share_map_markers_tip")).tex();
+        y += shareMapMarksCheckbox.sz.y + UI.scale(8);
 
         // Р—Р°РіРѕР»РѕРІРѕРє СЂР°Р·РґРµР»Р°
         prev = add(new Label(L10n.get("database.settings")), new Coord(margin, y));
@@ -184,6 +209,19 @@ public class DatabaseSettings extends Panel {
         }, new Coord(margin, reconnectY));
         reconnectStatus = add(new Label(""), new Coord(margin + UI.scale(210), reconnectY + UI.scale(6)));
 
+        /* The one bridge between the JSON file and the database. Fish locations are file OR database -
+         * nothing crosses automatically - so this is how spots saved before the database existed get
+         * carried over. Idempotent, because a row id is derived from the spot's position and fish. */
+        int seedY = reconnectBtn.c.y + reconnectBtn.sz.y + UI.scale(10);
+        seedFishButton = add(new Button(UI.scale(200), L10n.get("database.seed_fish")) {
+            @Override
+            public void click() {
+                super.click();
+                seedFishLocations();
+            }
+        }, new Coord(margin, seedY));
+        seedFishButton.tooltip = Text.render(L10n.get("database.seed_fish_tip")).tex();
+
         load();
         updateWidgetsVisibility();
         refreshReconnectStatus();
@@ -193,6 +231,10 @@ public class DatabaseSettings extends Panel {
     public void load() {
         enabled = getBool(NConfig.Key.ndbenable);
         enableCheckbox.a = enabled;
+        shareHs = getBool(NConfig.Key.shareHearthSecret);
+        shareHsCheckbox.a = shareHs;
+        shareMapMarks = getBool(NConfig.Key.mapShareMarkers);
+        shareMapMarksCheckbox.a = shareMapMarks;
 
         boolean isPostgres = getBool(NConfig.Key.postgres);
         dbTypeStr = isPostgres ? "PostgreSQL" : "SQLite";
@@ -225,6 +267,11 @@ public class DatabaseSettings extends Panel {
             }
             // Reload areas from database
             reloadAreasFromDatabase();
+            // Fish locations have their own sync worker; make it re-read on its next tick too.
+            if (nurgling.NCore.databaseManager != null
+                && nurgling.NCore.databaseManager.getFishLocationService() != null) {
+                nurgling.NCore.databaseManager.getFishLocationService().requestReload();
+            }
         } else if (wasEnabled) {
             // DB was enabled but now disabled - reload areas from file
             reloadAreasFromFile();
@@ -235,6 +282,8 @@ public class DatabaseSettings extends Panel {
 
     private void applyFormToConfig() {
         NConfig.set(NConfig.Key.ndbenable, enabled);
+        NConfig.set(NConfig.Key.shareHearthSecret, shareHs);
+        NConfig.set(NConfig.Key.mapShareMarkers, shareMapMarks);
         boolean isPostgres = "PostgreSQL".equals(dbTypeStr);
         NConfig.set(NConfig.Key.postgres, isPostgres);
         NConfig.set(NConfig.Key.sqlite, !isPostgres);
@@ -433,10 +482,15 @@ public class DatabaseSettings extends Panel {
         }
 
         pack();
+        /* pack() sizes to VISIBLE children only, so the panel would shrink whenever a mode hides half
+         * its widgets - hence the fixed floor. It has to stay a floor, though: assigning the height
+         * outright clips anything sitting below it, which is what hid the seed button. */
+        sz.y = Math.max(sz.y, UI.scale(200));
         if (reconnectBtn != null) {
             sz.y = Math.max(sz.y, reconnectBtn.c.y + reconnectBtn.sz.y + UI.scale(12));
-        } else {
-            sz.y = UI.scale(200);
+        }
+        if (seedFishButton != null) {
+            sz.y = Math.max(sz.y, seedFishButton.c.y + seedFishButton.sz.y + UI.scale(12));
         }
     }
 
@@ -452,5 +506,49 @@ public class DatabaseSettings extends Panel {
     }
     private String asString(Object v) {
         return v == null ? "" : v.toString();
+    }
+
+    /**
+     * Import this world's fish location file into the database.
+     *
+     * <p>Reads the file rather than the in-memory map: in database mode that map already holds database
+     * rows, and the point of the action is to bring across what the file still has.
+     */
+    private void seedFishLocations() {
+        nurgling.NGameUI gui = nurgling.NUtils.getGameUI();
+        if (gui == null || gui.fishLocationService == null) return;
+
+        if (!getBool(NConfig.Key.ndbenable) || nurgling.NCore.databaseManager == null
+            || !nurgling.NCore.databaseManager.isReady()) {
+            gui.msg(L10n.get("database.seed_fish_need_db"), Color.YELLOW);
+            return;
+        }
+
+        nurgling.db.service.FishLocationSeeder seeder =
+            nurgling.NCore.databaseManager.getFishLocationSeeder();
+        if (seeder == null) {
+            // The optional migration that creates the table was refused on this database.
+            gui.msg(L10n.get("database.seed_fish_unavailable"), Color.ORANGE);
+            return;
+        }
+
+        final String dataFile = gui.fishLocationService.getDataFile();
+        final String profile = gui.fishLocationService.profile();
+
+        seeder.seedAsync(gui, dataFile, profile)
+            .thenAccept(r -> {
+                gui.msg(L10n.get("database.seed_fish_result",
+                    r.inserted, r.alreadyPresent, r.refreshed, r.unresolvable, r.skippedDeleted),
+                    Color.GREEN);
+                // Pull the new rows into the live map instead of waiting for them to trickle in.
+                if (nurgling.NCore.databaseManager != null
+                    && nurgling.NCore.databaseManager.getFishLocationService() != null) {
+                    nurgling.NCore.databaseManager.getFishLocationService().requestReload();
+                }
+            })
+            .exceptionally(e -> {
+                gui.msg(L10n.get("database.seed_fish_failed", String.valueOf(e.getMessage())), Color.RED);
+                return null;
+            });
     }
 }

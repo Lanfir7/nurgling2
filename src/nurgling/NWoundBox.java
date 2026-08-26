@@ -3,6 +3,7 @@ package nurgling;
 import haven.*;
 import haven.WoundWnd.*;
 import haven.res.ui.tt.attrmod.*;
+import nurgling.i18n.L10n;
 import java.util.*;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -10,10 +11,7 @@ import java.awt.font.TextAttribute;
 import java.awt.image.BufferedImage;
 import static haven.CharWnd.*;
 import static haven.PUtils.*;
-import nurgling.i18n.L10n;
 import nurgling.tools.CraftRecipeLookup;
-import nurgling.tools.HarvestState;
-import nurgling.tools.RecipeIngredientCache;
 import nurgling.tools.WoundTreatments;
 
 public class NWoundBox extends WoundWnd.WoundBox {
@@ -26,39 +24,57 @@ public class NWoundBox extends WoundWnd.WoundBox {
 
     private static final Text.Foundry effectFnd = new Text.Foundry(descFont).aa(true);
 
+    /* Text.Foundry(Font, int, Color) UI-scales psz itself -- pass the unscaled size. */
+    private static final Text.Foundry captionFnd = new Text.Foundry(
+	nurgling.conf.FontSettings.getOpenSansSemibold(), 11, new Color(0x9F, 0xB0, 0xB1)).aa(true);
+
     private static final RichText.Foundry descFnd = new RichText.Foundry(
 	RichText.IMAGESRC, RichText.ImageSource.legacy,
 	TextAttribute.FONT, descFont).aa(true);
 
     private static final Coord EFFECT_ICON_SZ = UI.scale(new Coord(11, 11));
-    private static final int TREAT_GAP = UI.scale(4);
-    private static final int TREAT_PAD = UI.scale(6);
 
-    private final List<Widget> treatWidgets = new ArrayList<>();
-    private Widget treatBar;
-    private Label treatLabel;
-    private String treatKey = "";
-    private int treatPad = 0;
+    /* Treatment strip metrics */
+    private static final Coord SLOT_SZ  = UI.scale(new Coord(24, 24));
+    private static final Coord TICON_SZ = UI.scale(new Coord(20, 20));
+    private static final int SLOT_GAP   = UI.scale(6);
+    private static final int ROW_GAP    = UI.scale(3);
+    private static final int SEC_GAP    = UI.scale(11);
+    private static final int CAP_GAP    = UI.scale(6);
+    private static final int NOTE_GAP   = UI.scale(5);
+
+    private static final Color SLOT_BG     = NStyle.rowOdd;
+    private static final Color SLOT_BORDER = new Color(0x35, 0x40, 0x3F);
+    private static final Color NOTE_COL    = NStyle.border;
+    private static final Color NAME_COL    = new Color(0xE8, 0xE8, 0xE8);
+
+    /* Resolved item resources, shared across all wound boxes. */
+    private static final Map<String, Resource.Saved> icores = new HashMap<>();
+    private static final Set<String> badres = new HashSet<>();
+
+    /* Hover targets of the last render, in rendered-image coordinates. */
+    private List<Hover> hovers = Collections.emptyList();
+
+    private static class Hover {
+	final Area area;
+	final String name, note;
+
+	Hover(Area area, String name, String note) {
+	    this.area = area;
+	    this.name = name;
+	    this.note = note;
+	}
+    }
+
+    /** A treatment with its resource resolved (or known-unresolvable). */
+    private static class Treat {
+	BufferedImage icon;
+	String name;
+	String noteShort, noteLong;
+    }
 
     public NWoundBox(int id) {
 	super(id);
-    }
-
-    @Override
-    protected int contentBottomPad() {
-	return treatPad;
-    }
-
-    @Override
-    public void tick(double dt) {
-	syncTreatments();
-	super.tick(dt);
-    }
-
-    @Override
-    public void resize(Coord sz) {
-	super.resize(sz);
-	layoutTreatments();
     }
 
     @Override
@@ -66,6 +82,79 @@ public class NWoundBox extends WoundWnd.WoundBox {
 	g.chcolor(NStyle.infoBg);
 	g.frect(Coord.z, sz);
 	g.chcolor();
+    }
+
+    /**
+     * Resolve an item resource, or null when the path is bad. Loading is allowed to propagate --
+     * WoundBox.tick() catches it and retries, which is how the strip fills in as icons stream in.
+     * A missing resource is NOT a Loading, so it has to be caught here or it kills the UI thread.
+     */
+    private static Resource itemres(String path) {
+	synchronized(icores) {
+	    if(badres.contains(path))
+		return(null);
+	}
+	Resource.Saved sv;
+	synchronized(icores) {
+	    sv = icores.get(path);
+	    if(sv == null)
+		icores.put(path, sv = new Resource.Saved(Resource.remote(), path, -1));
+	}
+	try {
+	    return(sv.get());
+	} catch(Loading l) {
+	    throw(l);
+	} catch(Resource.LoadException | Resource.BadResourceException e) {
+	    synchronized(icores) {
+		badres.add(path);
+	    }
+	    System.out.println("[NWoundBox] cannot resolve treatment resource: " + path + " (" + e.getMessage() + ")");
+	    return(null);
+	}
+    }
+
+    private static Treat resolve(NWoundTreatments.Treatment tr) {
+	Treat e = new Treat();
+	if(tr.res != null) {
+	    Resource res = itemres(tr.res);
+	    if(res != null) {
+		Resource.Image img = res.layer(Resource.imgc);
+		if(img != null)
+		    e.icon = convolvedown(img.scaled(), TICON_SZ, iconfilter);
+		Resource.Tooltip tt = res.layer(Resource.tooltip);
+		e.name = (tt != null) ? tt.t : basename(tr.res);
+	    } else {
+		e.name = basename(tr.res);
+	    }
+	} else {
+	    e.name = L10n.get(tr.textKey);
+	}
+	if(tr.noteKey != null) {
+	    e.noteShort = L10n.get(tr.noteKey + ".short");
+	    e.noteLong = L10n.get(tr.noteKey + ".long");
+	}
+	return(e);
+    }
+
+    private static String basename(String path) {
+	int i = path.lastIndexOf('/');
+	return((i < 0) ? path : path.substring(i + 1));
+    }
+
+    private static void drawSlot(Graphics2D g, int x, int y, BufferedImage icon) {
+	g.setColor(SLOT_BG);
+	g.fillRect(x, y, SLOT_SZ.x, SLOT_SZ.y);
+	g.setColor(SLOT_BORDER);
+	g.drawRect(x, y, SLOT_SZ.x - 1, SLOT_SZ.y - 1);
+	if(icon != null) {
+	    g.drawImage(icon, x + ((SLOT_SZ.x - icon.getWidth()) / 2),
+			      y + ((SLOT_SZ.y - icon.getHeight()) / 2), null);
+	} else {
+	    g.setColor(new Color(0x6E, 0x7C, 0x7C));
+	    Text.Line q = effectFnd.render("?", new Color(0x6E, 0x7C, 0x7C));
+	    g.drawImage(q.img, x + ((SLOT_SZ.x - q.sz().x) / 2),
+			       y + ((SLOT_SZ.y - q.sz().y) / 2), null);
+	}
     }
 
     @Override
@@ -91,15 +180,14 @@ public class NWoundBox extends WoundWnd.WoundBox {
 	}
 
 	int titleX = iconSz.x + UI.scale(10);
-	int titleAreaW = width - titleX;
 
 	// Collect AttrMod effects — two-pass for tabular alignment
 	List<Mod> mods = new ArrayList<>();
 	for(ItemInfo inf : info) {
 	    if(inf instanceof AttrMod)
-		for(Entry e : ((AttrMod)inf).tab)
-		    if(e instanceof Mod)
-			mods.add((Mod)e);
+		for(Entry en : ((AttrMod)inf).tab)
+		    if(en instanceof Mod)
+			mods.add((Mod)en);
 	}
 
 	int iconGap = UI.scale(5);
@@ -130,20 +218,71 @@ public class NWoundBox extends WoundWnd.WoundBox {
 	if(!pagText.isEmpty())
 	    descRt = descFnd.render(resdoc(wnd.res.get(), pagText), width);
 
+	// Resolve the treatment strip. Anything still loading throws out of here and we retry
+	// next tick with `info` left unset, so the guard in WoundBox.tick() re-runs us.
+	List<NWoundTreatments.Treatment> treats = NWoundTreatments.forWound(wnd.res.get().name);
+	List<Treat> entries = null;
+	Text.Line noneLine = null;
+	if(treats != null) {
+	    entries = new ArrayList<>(treats.size());
+	    for(NWoundTreatments.Treatment tr : treats)
+		entries.add(resolve(tr));
+	    if(entries.isEmpty())
+		noneLine = effectFnd.render(L10n.get("char.wound.treat.none"), new Color(0x8F, 0xA3, 0xA4));
+	}
+
 	// Compute layout
 	int nameBottom = -nameAdj + nameLine.sz().y;
 	int nameEffectGap = 6; // ~10px visual from name baseline to effect top
 
-	// Effects below name, right of icon
 	int effectsBottom = nameBottom + nameEffectGap;
 	effectsBottom += mods.size() * eLineH;
 
-	// Body starts below whichever is taller: icon or name+effects area
 	int headerH = Math.max(iconSz.y, effectsBottom + nameAdj);
 	int y = headerH + 11;
 
 	if(descRt != null)
 	    y += descRt.sz().y;
+
+	// Treatment strip layout
+	Text.Line capLine = null;
+	Text.Line[] tNames = null, tNotes = null;
+	boolean[] tInline = null;
+	int[] tRowY = null, tRowH = null;
+	int stripTop = 0, textX = SLOT_SZ.x + SLOT_GAP;
+	int textW = width - textX;
+	if(treats != null) {
+	    capLine = captionFnd.render(L10n.get("char.wound.treatments"));
+	    stripTop = y + SEC_GAP;
+	    int ty = stripTop + 1 + CAP_GAP + capLine.sz().y + CAP_GAP;
+	    if(noneLine != null) {
+		y = ty + noneLine.sz().y;
+	    } else {
+		int n = entries.size();
+		tNames = new Text.Line[n];
+		tNotes = new Text.Line[n];
+		tInline = new boolean[n];
+		tRowY = new int[n];
+		tRowH = new int[n];
+		for(int i = 0; i < n; i++) {
+		    Treat e = entries.get(i);
+		    tNames[i] = effectFnd.render(e.name, NAME_COL);
+		    if(e.noteShort != null)
+			tNotes[i] = effectFnd.render(e.noteShort, NOTE_COL);
+		    int lineH = tNames[i].sz().y;
+		    if(tNotes[i] == null) {
+			tInline[i] = true;
+			tRowH[i] = Math.max(SLOT_SZ.y, lineH);
+		    } else {
+			tInline[i] = (tNames[i].sz().x + NOTE_GAP + tNotes[i].sz().x) <= textW;
+			tRowH[i] = Math.max(SLOT_SZ.y, tInline[i] ? lineH : (lineH * 2));
+		    }
+		    tRowY[i] = ty;
+		    ty += tRowH[i] + ROW_GAP;
+		}
+		y = ty - ROW_GAP;
+	    }
+	}
 
 	BufferedImage result = TexI.mkbuf(new Coord(width, y));
 	Graphics2D g = result.createGraphics();
@@ -176,178 +315,99 @@ public class NWoundBox extends WoundWnd.WoundBox {
 	if(descRt != null)
 	    g.drawImage(descRt.img, 0, headerH + 11, null);
 
+	// Draw the treatment strip
+	List<Hover> hv = Collections.emptyList();
+	if(treats != null) {
+	    g.setColor(NStyle.separator);
+	    g.fillRect(0, stripTop, width, 1);
+	    g.drawImage(capLine.img, 0, stripTop + 1 + CAP_GAP, null);
+	    if(noneLine != null) {
+		g.drawImage(noneLine.img, 0, stripTop + 1 + CAP_GAP + capLine.sz().y + CAP_GAP, null);
+	    } else {
+		hv = new ArrayList<>(entries.size());
+		for(int i = 0; i < entries.size(); i++) {
+		    Treat e = entries.get(i);
+		    int ry = tRowY[i], rh = tRowH[i];
+		    drawSlot(g, 0, ry + ((rh - SLOT_SZ.y) / 2), e.icon);
+		    int lineH = tNames[i].sz().y;
+		    if(tInline[i]) {
+			int ly = ry + ((rh - lineH) / 2);
+			g.drawImage(tNames[i].img, textX, ly, null);
+			if(tNotes[i] != null)
+			    g.drawImage(tNotes[i].img, textX + tNames[i].sz().x + NOTE_GAP, ly, null);
+		    } else {
+			int ly = ry + ((rh - (lineH * 2)) / 2);
+			g.drawImage(tNames[i].img, textX, ly, null);
+			g.drawImage(tNotes[i].img, textX, ly + lineH, null);
+		    }
+		    hv.add(new Hover(Area.sized(Coord.of(0, ry), Coord.of(width, rh)), e.name, e.noteLong));
+		}
+	    }
+	}
+
 	g.dispose();
+	this.hovers = hv;
+	/* Arms the re-render guard in WoundBox.tick(). Must stay last: anything above may throw
+	 * Loading, and then we want to be called again. */
+	this.info = info;
 	return result;
     }
 
-    private void syncTreatments() {
-	String key = woundKey();
-	if(Utils.eq(key, treatKey))
-	    return;
-	treatKey = key;
-	rebuildTreatments(key.isEmpty() ? Collections.emptyList() : WoundTreatments.forWound(key));
-    }
-
-    private String woundKey() {
-	try {
-	    Wound w = wound();
-	    if(w == null || w.res == null)
-		return "";
-	    Resource res = w.res.get();
-	    Resource.Tooltip tt = res.layer(Resource.tooltip);
-	    if(tt != null && tt.t != null && !tt.t.isEmpty())
-		return tt.t;
-	    return w.name();
-	} catch(Loading l) {
-	    return treatKey;
-	}
-    }
-
-    private void rebuildTreatments(List<String> items) {
-	for(Widget w : treatWidgets)
-	    w.reqdestroy();
-	treatWidgets.clear();
-	treatBar = null;
-	treatLabel = null;
-	if(items.isEmpty()) {
-	    treatPad = 0;
-	    refreshScrollMax();
-	    return;
-	}
-	treatBar = add(new TreatBar());
-	treatWidgets.add(treatBar);
-	treatLabel = add(new Label(L10n.get("char.wound.treat"), effectFnd));
-	treatWidgets.add(treatLabel);
-	for(String item : items) {
-	    treatWidgets.add(add(new TreatIcon(item)));
-	}
-	layoutTreatments();
-	refreshScrollMax();
-    }
-
-    private void layoutTreatments() {
-	if(treatWidgets.isEmpty()) {
-	    treatPad = 0;
-	    return;
-	}
-	int innerW = Math.max(UI.scale(32), sz.x - Scrollbar.width);
-	int x = TREAT_PAD;
-	int y = TREAT_PAD;
-	if(treatLabel != null) {
-	    treatLabel.c = new Coord(TREAT_PAD, TREAT_PAD);
-	    y = treatLabel.sz.y + TREAT_PAD + UI.scale(2);
-	    x = TREAT_PAD;
-	}
-	int rowH = Inventory.sqsz.y;
-	for(Widget w : treatWidgets) {
-	    if(w == treatBar || w == treatLabel)
-		continue;
-	    if(x > TREAT_PAD && x + w.sz.x + TREAT_PAD > innerW) {
-		x = TREAT_PAD;
-		y += rowH + TREAT_GAP;
+    @Override
+    public Object tooltip(Coord c, Widget prev) {
+	List<Hover> hv = this.hovers;
+	if(!hv.isEmpty()) {
+	    Coord cc = c.sub(marg()).add(0, sb.val);
+	    for(Hover h : hv) {
+		if(h.area.contains(cc))
+		    return(tiptex(h));
 	    }
-	    w.c = new Coord(x, y);
-	    x += w.sz.x + TREAT_GAP;
 	}
-	treatPad = y + rowH + TREAT_PAD;
-	int top = Math.max(0, sz.y - treatPad);
-	if(treatBar != null) {
-	    treatBar.c = new Coord(0, top);
-	    treatBar.resize(new Coord(innerW, treatPad));
-	}
-	for(Widget w : treatWidgets) {
-	    if(w == treatBar)
-		continue;
-	    w.c = new Coord(w.c.x, w.c.y + top);
-	}
+	return(super.tooltip(c, prev));
     }
 
-    private static class TreatBar extends Widget {
-	@Override
-	public void draw(GOut g) {
-	    g.chcolor(NStyle.infoBg);
-	    g.frect(Coord.z, sz);
-	    g.chcolor();
-	}
+    private static Tex tiptex(Hover h) {
+	Text.Line nl = effectFnd.render(h.name, Color.WHITE);
+	if(h.note == null)
+	    return(new TexI(nl.img));
+	Text.Line ntl = effectFnd.render(h.note, NOTE_COL);
+	int w = Math.max(nl.sz().x, ntl.sz().x);
+	BufferedImage buf = TexI.mkbuf(Coord.of(w, nl.sz().y + ntl.sz().y));
+	Graphics2D g = buf.createGraphics();
+	g.drawImage(nl.img, 0, 0, null);
+	g.drawImage(ntl.img, 0, nl.sz().y, null);
+	g.dispose();
+	return(new TexI(buf));
     }
 
-    private static class TreatIcon extends Widget {
-	private final String itemName;
-	private Tex tex;
-	private String lastTip;
-	private Tex tipTex;
-
-	TreatIcon(String itemName) {
-	    super(Inventory.sqsz);
-	    this.itemName = itemName;
-	}
-
-	@Override
-	public void tick(double dt) {
-	    if(tex == null) {
-		try {
-		    BufferedImage img = loadIconImage();
-		    if(img != null)
-			tex = new TexI(convolvedown(img, sz.sub(1, 1), iconfilter));
-		} catch(Loading l) {
-		}
-	    }
-	    super.tick(dt);
-	}
-
-	private BufferedImage loadIconImage() {
-	    for(String path : WoundTreatments.iconResources(itemName)) {
-		BufferedImage img = HarvestState.loadIcon(path, false);
-		if(img != null)
-		    return img;
-	    }
-	    for(RecipeIngredientCache.RecipeEntry entry : RecipeIngredientCache.findOutputRecipesForItem(itemName)) {
-		BufferedImage img = HarvestState.loadIcon(entry.paginaResource, false);
-		if(img != null)
-		    return img;
-	    }
-	    return null;
-	}
-
-	@Override
-	public void draw(GOut g) {
-	    g.image(Inventory.invsq, Coord.z);
-	    if(tex != null)
-		g.aimage(tex, sz.div(2), 0.5, 0.5);
-	}
-
-		@Override
-		public boolean mousedown(MouseDownEvent ev) {
+    @Override
+    public boolean mousedown(MouseDownEvent ev) {
+	List<Hover> hv = this.hovers;
+	if(!hv.isEmpty()) {
+	    Coord cc = ev.c.sub(marg()).add(0, sb.val);
+	    for(Hover h : hv) {
+		if(h.area.contains(cc)) {
 		    if(WoundTreatments.isStorageSearchClick(ev.b, ui != null && ui.modctrl)) {
-			openStorageSearch(itemName);
+			openStorageSearch(h.name);
 			return true;
 		    }
 		    if(ev.b == 1) {
-			CraftRecipeLookup.showProducing(this, ev.c, itemName);
+			CraftRecipeLookup.showProducing(this, ev.c, h.name);
 			return true;
 		    }
-		    return super.mousedown(ev);
+		    break;
 		}
+	    }
+	}
+	return super.mousedown(ev);
+    }
 
-		private void openStorageSearch(String name) {
-		    GameUI gui = getparent(GameUI.class);
-		    if(gui == null || gui.storageItemsWidget == null)
-			return;
-		    gui.storageItemsWidget.showWithSearch(name);
-		    gui.fitwdg(gui.storageItemsWidget);
-		    gui.setfocus(gui.storageItemsWidget);
-		}
-
-		@Override
-		public Object tooltip(Coord c, Widget prev) {
-		    String tip = WoundTreatments.treatTipMarkup(itemName, L10n.get("char.wound.treat.hint"));
-		    if(tip == null || tip.isEmpty())
-			return null;
-		    if(!tip.equals(lastTip) || tipTex == null) {
-			lastTip = tip;
-			tipTex = RichText.render(tip, 0).tex();
-		    }
-		    return tipTex;
-		}
+    private void openStorageSearch(String name) {
+	GameUI gui = getparent(GameUI.class);
+	if(gui == null || gui.storageItemsWidget == null)
+	    return;
+	gui.storageItemsWidget.showWithSearch(name);
+	gui.fitwdg(gui.storageItemsWidget);
+	gui.setfocus(gui.storageItemsWidget);
     }
 }

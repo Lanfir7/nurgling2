@@ -1,6 +1,5 @@
 package nurgling.actions.bots;
 
-import haven.Area;
 import haven.Button;
 import haven.ChatUI;
 import haven.Coord;
@@ -9,20 +8,18 @@ import haven.Gob;
 import haven.Label;
 import haven.MCache;
 import haven.Pair;
-import haven.UI;
 import haven.WItem;
 import haven.Widget;
 import haven.Window;
+import haven.res.ui.stackinv.ItemStack;
 import haven.res.ui.surv.LandSurvey;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.Action;
-import nurgling.actions.CloseTargetContainer;
-import nurgling.actions.OpenTargetContainer;
 import nurgling.actions.PathFinder;
 import nurgling.actions.RestoreResources;
 import nurgling.actions.Results;
-import nurgling.actions.TakeItemsFromPile;
+import nurgling.actions.TakeItems2;
 import nurgling.actions.TransferToPiles;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
@@ -49,8 +46,8 @@ public class Leveler implements Action
     private static final String WORM_ITEM = "Earthworm";
     private static final String TUBER_ITEM = "Odd Tuber";
     private static final NAlias SURVOBJ = new NAlias("survobj");
-    private static final NAlias STOCKPILE = new NAlias("stockpile");
-    private static final NAlias SOIL_PILE = new NAlias("gfx/terobjs/stockpile-soil");
+    /* Only what a survey actually counts as fill - earthworms are spoil, not soil. */
+    private static final NAlias SOIL_ONLY = new NAlias("Soil");
     private static final NAlias SOIL = new NAlias("Soil");
     private static final NAlias EARTHWORM = new NAlias("Earthworm");
     private static final NAlias ODD_TUBER = new NAlias("Odd Tuber");
@@ -63,6 +60,7 @@ public class Leveler implements Action
     private NGlobalCoord resumeAt = null;
     private LevelerStats stats = null;
     private LevelerWnd infoWnd = null;
+    private NContext context;
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException
@@ -72,6 +70,7 @@ public class Leveler implements Action
         resumeTile = null;
         resumeAt = null;
         stats = new LevelerStats();
+        context = new NContext(gui);
         infoWnd = NUtils.addCentered(gui, new LevelerWnd());
         try {
             while (true) {
@@ -200,22 +199,41 @@ public class Leveler implements Action
         waitForDigLabel(survey);
         refreshInfo(survey);
         int soilRequired = parseAfter(wlbl.text(), "Units of soil required:");
-        if (shouldPullSoil(soilRequired, gui.getInventory().getItems(SOIL).size())) {
-            closeWindow(survey);
-            Results dr = disposeIfNeeded(gui, false);
-            if (!dr.IsSuccess()) {
-                return dr;
+        if (soilRequired > 0) {
+            int have = soilCount(gui);
+            /* Capped by what still fits rather than by the outstanding requirement: a pile
+             * hands over the whole request in one go, and asking for more than the
+             * inventory can hold would leave the transfer waiting on items that can never
+             * arrive. Whatever is short of the requirement is picked up on the next pass. */
+            int want = Math.min(soilRequired, carryCapacity(gui));
+            if (have < want) {
+                NGlobalCoord spot = NUtils.bookmarkHere();
+                closeWindow(survey);
+                fetchSoil(gui, want);
+                have = soilCount(gui);
+                if (spot != null) {
+                    NUtils.navigateTo(spot);
+                } else if (!goToResumeFlag(gui)) {
+                    return Results.ERROR("Leveler: cannot return to survey flag");
+                }
+                if (have == 0) {
+                    return Results.ERROR("Leveler: no soil available (need " + soilRequired + ")");
+                }
+                /* Carrying less than the survey asks for is fine: digging spends what we
+                 * have, the requirement shrinks, and the next pass restocks. */
+                survey = reopenSurvey(gui, tile);
+                if (survey == null) {
+                    if (findSurveyByTile(tile) == null) {
+                        markDone(tile);
+                    } else {
+                        markSkipped(tile);
+                    }
+                    return Results.SUCCESS();
+                }
+            } else if (have == 0) {
+                closeWindow(survey);
+                return Results.ERROR("Leveler: no room to carry soil (need " + soilRequired + ")");
             }
-            int free = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
-            int trip = tripSize(soilRequired, 0, free, StackSupporter.getFullStackSize(SOIL_ITEM));
-            if (trip <= 0) {
-                return Results.ERROR("Leveler: no inventory space for soil");
-            }
-            Results pr = pullSoilFromTake(gui, trip);
-            if (!pr.IsSuccess()) {
-                return Results.ERROR("Leveler: no soil in TAKE area");
-            }
-            return Results.SUCCESS();
         }
 
         return digLoop(gui, tile, survey);
@@ -241,8 +259,12 @@ public class Leveler implements Action
             String curLabel = wlbl.text();
             long diff = surveyDiffUnits(survey);
 
+            /* A fill that runs dry mid-dig leaves the character idle with the survey still
+             * asking for soil. Hand back to the caller to restock instead of clicking Dig
+             * again and sitting out the idle timer on every pass. */
             if (shouldFetchMoreSoil(parseAfter(curLabel, "Units of soil required:") > 0,
-                    gui.getInventory().getItems(SOIL).isEmpty())) {
+                    soilCount(gui) == 0)) {
+                closeWindow(survey);
                 return Results.SUCCESS();
             }
 
@@ -255,6 +277,7 @@ public class Leveler implements Action
             }
             prevLabel = curLabel;
             final boolean filling = parseAfter(curLabel, "Units of soil required:") > 0;
+            int soilBefore = soilCount(gui);
 
             NUtils.getUI().dropLastError();
             int sysSizeBefore = syslogSize(gui);
@@ -277,6 +300,11 @@ public class Leveler implements Action
                     if (filling && idleCount >= 20) return true;
                     if (idleCount >= 360) return true;
                     if (NUtils.getStamina() < 0.25 || NUtils.getEnergy() < 0.3) return true;
+                    /* Running out of room is a stop condition for digging only - that is the
+                     * phase that loads the inventory up. A fill empties it, and it starts out
+                     * deliberately packed with the soil to spend, so any free-space test here
+                     * fires on the very first tick and kills the fill before it places a
+                     * single unit. A fill that jams instead falls out through the idle count. */
                     if (shouldDumpForFreeSpace(filling, gui.getInventory().calcFreeSpace())) return true;
                     if (syslogContainsSince(gui, sysBefore, CANNOT_LEVEL_MSG)) return true;
                     if (syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG)) return true;
@@ -297,7 +325,7 @@ public class Leveler implements Action
                 return Results.SUCCESS();
             }
 
-            if (shouldFetchMoreSoil(filling, gui.getInventory().getItems(SOIL).isEmpty())
+            if (shouldFetchMoreSoil(filling, soilCount(gui) == 0)
                     || syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG)
                     || isNeedSoilError(lastErr)) {
                 return Results.SUCCESS();
@@ -309,6 +337,14 @@ public class Leveler implements Action
             }
 
             int free = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
+            /* A fill that is still eating into the load is working as intended - what is
+             * in the inventory is the fill material, and hauling it to the dump only to
+             * fetch it again is the round trip this whole path exists to avoid. Dump only
+             * once the dig has stopped spending it. */
+            int soilNow = soilCount(gui);
+            if (filling && soilNow < soilBefore) {
+                continue;
+            }
             if (shouldDumpForFreeSpace(filling, free)) {
                 closeWindow(survey);
                 Results dr = disposeIfNeeded(gui, false);
@@ -318,18 +354,14 @@ public class Leveler implements Action
                 if (!goToResumeFlag(gui)) {
                     return Results.ERROR("Leveler: cannot return to survey flag");
                 }
-                Gob sg = findSurveyByTile(tile);
-                if (sg == null) {
-                    markDone(tile);
+                LandSurvey nw = reopenSurvey(gui, tile);
+                if (nw == null) {
+                    if (findSurveyByTile(tile) == null) {
+                        markDone(tile);
+                    }
                     return Results.SUCCESS();
                 }
-                NUtils.rclickGob(sg);
-                NUtils.addTask(new WaitWindow("Land survey"));
-                Window nw = NUtils.getGameUI().getWindow("Land survey");
-                if (!(nw instanceof LandSurvey)) {
-                    return Results.SUCCESS();
-                }
-                survey = (LandSurvey) nw;
+                survey = nw;
                 prevLabel = null;
                 didDigThisCycle = false;
             }
@@ -432,54 +464,59 @@ public class Leveler implements Action
         return Math.min(need, cap);
     }
 
-    private Results pullSoilFromTake(NGameUI gui, int need) throws InterruptedException
+    /**
+     * Bring back up to {@code want} soil from wherever the Take zones keep it.
+     *
+     * TakeItems2 handles the storage as a whole - piles, containers, barter - asks each
+     * source for everything still wanted rather than for a slot count, and skips a pile
+     * it cannot path to instead of clicking at a stockpile walled in by its neighbours
+     * and then waiting forever for a window that never opens.
+     */
+    private Results fetchSoil(NGameUI gui, int want) throws InterruptedException
     {
-        NArea take = NContext.findIn(SOIL_ITEM);
-        if (take == null) take = NContext.findInGlobal(SOIL_ITEM);
-        if (take == null) return Results.FAIL();
-        if (!NUtils.navigateToArea(take, true))
-            return Results.FAIL();
-
-        int stack = Math.max(1, StackSupporter.getFullStackSize(SOIL_ITEM));
-        ArrayList<Gob> piles = Finder.findGobs(take, SOIL_PILE);
-        piles.sort(NUtils.d_comp);
-
-        for (Gob pile : piles) {
-            while (Finder.findGob(pile.id) != null) {
-                int freeSlots = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
-                if (freeSlots <= 0) {
-                    return Results.SUCCESS();
-                }
-                int invSoil = gui.getInventory().getItems(SOIL).size();
-                int toTake = tripSize(need, 0, freeSlots, stack);
-                if (toTake <= 0) {
-                    return invSoil > 0 ? Results.SUCCESS() : Results.FAIL();
-                }
-
-                PathFinder pf = new PathFinder(pile);
-                pf.isHardMode = true;
-                pf.run(gui);
-                new OpenTargetContainer("Stockpile", pile).run(gui);
-                if (gui.getStockpile() == null) {
-                    break;
-                }
-                int pileCount = gui.getStockpile().calcCount();
-                if (pileCount <= 0) {
-                    new CloseTargetContainer("Stockpile").run(gui);
-                    break;
-                }
-                TakeItemsFromPile takeAct = new TakeItemsFromPile(pile, gui.getStockpile(), Math.min(toTake, pileCount));
-                takeAct.run(gui);
-                new CloseTargetContainer("Stockpile").run(gui);
-                if (takeAct.getResult() <= 0) {
-                    break;
-                }
-            }
-            if (gui.getInventory().getNumberFreeCoord(SOIL_SIZE) <= 0) {
-                return Results.SUCCESS();
-            }
+        if (want <= 0) {
+            return Results.SUCCESS();
         }
-        return gui.getInventory().getItems(SOIL).isEmpty() ? Results.FAIL() : Results.SUCCESS();
+        context.addInItem(SOIL_ITEM, null);
+        return new TakeItems2(context, SOIL_ITEM, want).run(gui);
+    }
+
+    /**
+     * How much more soil the inventory can still take.
+     *
+     * Soil stacks, so capacity is free cells times the stack depth, not the free cell
+     * count: a take of N soil gives back all but N/stack of the cells it filled, and
+     * budgeting by cells alone meant every visited pile was left half full while the bot
+     * walked to the next one with an ever smaller request.
+     */
+    private static int carryCapacity(NGameUI gui) throws InterruptedException
+    {
+        int cells = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
+        if (cells <= 0) {
+            return 0;
+        }
+        return cells * Math.max(1, StackSupporter.getFullStackSize(SOIL_ITEM));
+    }
+
+    private static int soilCount(NGameUI gui) throws InterruptedException
+    {
+        return gui.getInventory().getItems(SOIL_ONLY).size();
+    }
+
+    /** Walk back to the survey marker on {@code tile} and reopen its window. */
+    private static LandSurvey reopenSurvey(NGameUI gui, Coord tile) throws InterruptedException
+    {
+        Gob sg = findSurveyByTile(tile);
+        if (sg == null) {
+            return null;
+        }
+        if (nurgling.actions.PathFinder.isAvailable(sg.rc))
+            new PathFinder(sg.rc).run(gui);
+        clearCursor(gui);
+        NUtils.rclickGob(sg);
+        NUtils.addTask(new WaitWindow("Land survey"));
+        Window nw = NUtils.getGameUI().getWindow("Land survey");
+        return (nw instanceof LandSurvey) ? (LandSurvey) nw : null;
     }
 
     private Results disposeIfNeeded(NGameUI gui, boolean bestEffort) throws InterruptedException
@@ -494,9 +531,8 @@ public class Leveler implements Action
         if (soilDisposalComplete(count(gui, SOIL), count(gui, EARTHWORM), count(gui, ODD_TUBER)))
             return Results.SUCCESS();
 
-        if (count(gui, SOIL) > 0) {
-            NContext ctx = new NContext(gui);
-            NArea dump = ctx.goToArea(Specialisation.SpecName.soilDump);
+        if (count(gui, SOIL) > 0 || hasTopLevelStacks(gui)) {
+            NArea dump = context.goToArea(Specialisation.SpecName.soilDump);
             if (dump != null && NUtils.navigateToArea(dump, true)) {
                 Pair<Coord2d, Coord2d> rca = dump.getRCArea();
                 if (rca != null) {
@@ -504,6 +540,7 @@ public class Leveler implements Action
                     new PathFinder(center).run(gui);
                     clearCursor(gui);
                     dropItems(gui, SOIL);
+                    dropTopLevelStacks(gui);
                 }
             }
         }
@@ -565,6 +602,25 @@ public class Leveler implements Action
         }
         if (!items.isEmpty()) {
             NUtils.addTask(new WaitItems(gui.getInventory(), alias, 0));
+        }
+    }
+
+    private static boolean hasTopLevelStacks(NGameUI gui)
+    {
+        for (Widget w = gui.getInventory().child; w != null; w = w.next) {
+            if (w instanceof ItemStack) return true;
+        }
+        return false;
+    }
+
+    private static void dropTopLevelStacks(NGameUI gui) throws InterruptedException
+    {
+        ArrayList<Widget> toDrop = new ArrayList<>();
+        for (Widget w = gui.getInventory().child; w != null; w = w.next) {
+            if (w instanceof ItemStack) toDrop.add(w);
+        }
+        for (Widget w : toDrop) {
+            w.wdgmsg("drop");
         }
     }
 
@@ -636,15 +692,6 @@ public class Leveler implements Action
                 return false;
             }
         });
-    }
-
-    private static Area varea(LandSurvey survey)
-    {
-        try {
-            return survey.data != null ? survey.data.varea : null;
-        } catch (NullPointerException e) {
-            return null;
-        }
     }
 
     private static Label findWlbl(LandSurvey survey)

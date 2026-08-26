@@ -30,6 +30,16 @@ public class DatabaseManager {
     private AnimalMarkerService animalMarkerService;
     private LocalTimerService localTimerService;
     private CraftRecipeService craftRecipeService;
+    private KinSecretService kinSecretService;
+    private nurgling.db.service.FishLocationDbService fishLocationService;
+    private nurgling.db.service.FishLocationSeeder fishLocationSeeder;
+    private nurgling.db.service.MapDbService mapDbService;
+
+    /**
+     * Optional migrations the database refused, as version -> reason. Their features report
+     * themselves unavailable; everything else initialises normally.
+     */
+    private volatile java.util.Map<Integer, String> skippedMigrations = java.util.Collections.emptyMap();
 
     // Task queue for retry logic
     private final BlockingQueue<QueuedTask<?>> taskQueue = new LinkedBlockingQueue<>(1000);
@@ -278,7 +288,7 @@ public class DatabaseManager {
 
                 try {
                     // Run migrations FIRST using this connection
-                    runMigrations(conn);
+                    this.skippedMigrations = runMigrations(conn);
 
                     // Initialize services after migrations
                     initializeServices();
@@ -287,6 +297,7 @@ public class DatabaseManager {
                     System.out.println("DatabaseManager initialized successfully with " +
                                      DatabaseAdapterFactory.getDatabaseType());
                     nurgling.tools.RecipeIngredientCache.loadFromDatabase();
+                    reportSkippedMigrations();
                 } catch (nurgling.db.migration.MigrationManager.SchemaTooNewException stne) {
                     // Schema mismatch - leave manager uninitialized so sync skips itself.
                     // Surface the error to any active game UI.
@@ -312,6 +323,8 @@ public class DatabaseManager {
      * Initialize service layer
      */
     private void initializeServices() {
+        // Services whose table could not be created are left null; callers treat that as
+        // "feature unavailable" rather than "database down".
         this.recipeService = new RecipeService(this);
         this.favoriteRecipeService = new FavoriteRecipeService(this);
         this.containerService = new ContainerService(this);
@@ -321,21 +334,92 @@ public class DatabaseManager {
         this.animalMarkerService = new AnimalMarkerService(this);
         this.localTimerService = new LocalTimerService(this);
         this.craftRecipeService = new CraftRecipeService(this);
+        this.kinSecretService =
+            skippedMigrations.containsKey(nurgling.db.migration.MigrationManager.MIGRATION_KIN_SECRETS)
+                ? null : new KinSecretService(this);
+        /* Ask the database whether the table is really there rather than trusting the skipped map.
+         * Two ways it can be absent while nothing is reported as skipped:
+         *   - an earlier OPTIONAL migration failed, which breaks the migration loop, so migration 10
+         *     is deferred and never appears in skippedMigrations at all;
+         *   - on PostgreSQL the table exists but this role has no privileges on it, in which case
+         *     information_schema hides it and every query would fail anyway.
+         * Both must degrade to "fish stay on their JSON file", never to "fish silently disappear". */
+        boolean fishOk = tableUsable("fish_locations");
+        this.fishLocationService = fishOk ? new nurgling.db.service.FishLocationDbService(this) : null;
+        this.fishLocationSeeder = fishOk ? new nurgling.db.service.FishLocationSeeder(this) : null;
+        if (!fishOk) {
+            System.err.println("[DatabaseManager] fish_locations unavailable; "
+                + "fish locations stay on their JSON file");
+        }
+        /* Checked the same way as fish_locations, and for the same two reasons: an earlier optional
+         * migration failing defers this one without ever listing it as skipped, and on PostgreSQL a
+         * table this role has no privileges on is hidden rather than reported. Either way the map
+         * window keeps its file-based Export/Import and only the database buttons go quiet. */
+        boolean mapOk = tableUsable("map_grids")
+            && tableUsable("map_grid_placements")
+            && tableUsable("map_markers");
+        this.mapDbService = mapOk ? new nurgling.db.service.MapDbService(this) : null;
+        if (!mapOk) {
+            System.err.println("[DatabaseManager] shared map tables unavailable; "
+                + "map sharing stays on Export.../Import... files");
+        }
+    }
+
+    /**
+     * Whether a table is present AND reachable by this connection's role. Any failure answers "no":
+     * a feature that cannot verify its own table must not be wired up.
+     */
+    private boolean tableUsable(String table) {
+        try {
+            return adapter != null && adapter.tableExists(table);
+        } catch (SQLException e) {
+            System.err.println("[DatabaseManager] cannot check for table " + table + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** Tell the player once which feature the database would not let this client set up. */
+    private void reportSkippedMigrations() {
+        for (java.util.Map.Entry<Integer, String> e : skippedMigrations.entrySet()) {
+            String feature;
+            if (e.getKey() == nurgling.db.migration.MigrationManager.MIGRATION_KIN_SECRETS) {
+                feature = "Kin secret sync";
+            } else if (e.getKey() == nurgling.db.migration.MigrationManager.MIGRATION_FISH_LOCATIONS) {
+                feature = "Fish location sync";
+            } else if (e.getKey() == nurgling.db.migration.MigrationManager.MIGRATION_MAP_DATA) {
+                feature = "Map sharing";
+            } else {
+                feature = "Schema update " + e.getKey();
+            }
+            System.err.println("[DatabaseManager] " + feature + " unavailable: " + e.getValue());
+            try {
+                if (nurgling.NUtils.getGameUI() != null) {
+                    nurgling.NUtils.getGameUI().msg(feature + " unavailable: " + e.getValue(),
+                        java.awt.Color.ORANGE);
+                }
+            } catch (Exception ignore) {}
+        }
+    }
+
+    /** Optional migrations this database refused, as version -> reason. Empty when all applied. */
+    public java.util.Map<Integer, String> getSkippedMigrations() {
+        return skippedMigrations;
     }
 
     /**
      * Run database migrations using the provided connection
      */
-    private void runMigrations(Connection conn) throws SQLException {
+    private java.util.Map<Integer, String> runMigrations(Connection conn) throws SQLException {
         System.out.println("DatabaseManager: Starting migration check...");
         try {
             // Create adapter for this specific connection
             DatabaseAdapter migrationAdapter = DatabaseAdapterFactory.createAdapter(conn);
             System.out.println("DatabaseManager: Running migrations...");
             nurgling.db.migration.MigrationManager migrationManager = new nurgling.db.migration.MigrationManager(conn, migrationAdapter);
-            migrationManager.runMigrations();
+            java.util.Map<Integer, String> skipped = migrationManager.runMigrations();
             conn.commit();
             System.out.println("DatabaseManager: Migrations completed");
+            return skipped;
         } catch (nurgling.db.migration.MigrationManager.SchemaTooNewException stne) {
             // Hard stop: do not initialize services, do not allow sync.
             System.err.println("ABORT: " + stne.getMessage());
@@ -559,6 +643,37 @@ public class DatabaseManager {
     }
 
     /**
+     * Get kin secret service (shared hearth secrets).
+     */
+    public KinSecretService getKinSecretService() {
+        return kinSecretService;
+    }
+
+    /**
+     * Get fish location service (shared fish spots). Null when the optional migration that creates the
+     * table was refused, in which case fish locations stay on their JSON file.
+     */
+    public nurgling.db.service.FishLocationDbService getFishLocationService() {
+        return fishLocationService;
+    }
+
+    /**
+     * Get the file-to-database importer for fish locations (the manual seed action).
+     */
+    public nurgling.db.service.FishLocationSeeder getFishLocationSeeder() {
+        return fishLocationSeeder;
+    }
+
+    /**
+     * Get the shared map service. Null when the optional migration that creates the map tables was
+     * refused, or when this role cannot see them; callers treat that as "map sharing unavailable"
+     * and leave the file-based Export/Import alone.
+     */
+    public nurgling.db.service.MapDbService getMapDbService() {
+        return mapDbService;
+    }
+
+    /**
      * Reconnect to database
      */
     public synchronized void reconnect() {
@@ -572,6 +687,11 @@ public class DatabaseManager {
         }
         adapter = null;
         initialized = false;
+        skippedMigrations = java.util.Collections.emptyMap();
+        kinSecretService = null;
+        fishLocationService = null;
+        fishLocationSeeder = null;
+        mapDbService = null;
         
         // Create new executor and reinitialize
         this.executorService = Executors.newFixedThreadPool(threadPoolSize, r -> {

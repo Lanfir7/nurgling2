@@ -271,7 +271,10 @@ public class NGameUI extends GameUI
      */
     private void initCriticalWidgets() {
         // questinfo нужен сразу, так как сервер отправляет квесты при подключении
-        add(new NDraggableWidget(questinfo = new NQuestInfo(), "quests", questinfo.sz.add(NDraggableWidget.delta)));
+        NResizableWidget questwdg = new NResizableWidget(
+            questinfo = new NQuestInfo(), "quests", questinfo.sz.add(NDraggableWidget.delta));
+        questwdg.minSize = new Coord(200, 110);
+        add(questwdg);
     }
     
     /**

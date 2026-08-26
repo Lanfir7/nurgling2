@@ -116,7 +116,7 @@ public class NConfig
         smokeprop,
         worldexplorerprop,
         questNotified, lpassistent, fishingsettings,
-        serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, dbStatsOverlay, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, simplecrops,
+        serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, shareHearthSecret, autoHearthSecret, dbGrantRole, dbStatsOverlay, mapShareMarkers, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, simplecrops,
         temsmarktime, exploredAreaEnable, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         areaRankPresets,  // Map of areaId -> Map of animalType -> presetName
         shortCupboards,
@@ -138,6 +138,7 @@ public class NConfig
         studyDeskHideLp,
         studyDeskStockHours,
         waypointRetryOnStuck,
+        holdToMove,
         verboseCal,
         pluginsAllowUnsigned,  // Dev only: load external plugin jars without signature verification
         pluginsDir,            // Optional override for the plugin drop-folder (default: "plugins")
@@ -191,6 +192,7 @@ public class NConfig
         alarmDelayFrames,
         alwaysObfuscate,
         boughbeeprop,
+        questtrackerprop,
         foragerprop,
         trufflepigprop,
         buttonStyle,
@@ -399,6 +401,9 @@ public class NConfig
         conf.put(Key.simplecrops, true);
         conf.put(Key.simpleInspect, false);
         conf.put(Key.ndbenable, false);
+        conf.put(Key.shareHearthSecret, true);
+        conf.put(Key.autoHearthSecret, true);
+        conf.put(Key.dbGrantRole, "PUBLIC");
         conf.put(Key.dbStatsOverlay, false);
         conf.put(Key.harvestautorefill, false);
         conf.put(Key.cleanupQContainers, false);
@@ -408,6 +413,7 @@ public class NConfig
         conf.put(Key.useHFinGlobalPF, false);
         conf.put(Key.sqlite, false);
         conf.put(Key.postgres, false);
+        conf.put(Key.mapShareMarkers, true);
         conf.put(Key.postgresMaxConnections, 5);
         conf.put(Key.dbFilePath, "");
         conf.put(Key.serverNode, "");
@@ -449,6 +455,7 @@ public class NConfig
         conf.put(Key.studyDeskHideLp, false);
         conf.put(Key.studyDeskStockHours, 168);
         conf.put(Key.waypointRetryOnStuck, true);
+        conf.put(Key.holdToMove, false);
         conf.put(Key.verboseCal, false);
         conf.put(Key.highlightRockTiles, true);
         conf.put(Key.showSpeedometer, false);
@@ -1162,6 +1169,9 @@ public class NConfig
                                 break;
                             case "NBoughBeeProp":
                                 res.add(new NBoughBeeProp(obj));
+                                break;
+                            case "NQuestTrackerProp":
+                                res.add(new NQuestTrackerProp(obj));
                                 break;
                             case "NForagerProp":
                                 res.add(new NForagerProp(obj));
