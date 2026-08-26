@@ -713,6 +713,8 @@ public class NGob
                 updateHarvestOverlay();
                 updateTreeDisplayScale();
                 updateHideStockpileScale();
+                // Per-type size chosen through the gob context menu's Configure window.
+                GobCustomize.apply(parent);
             }
 
             if (drawable.getres().getLayers() != null)

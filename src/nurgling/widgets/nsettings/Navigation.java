@@ -19,9 +19,18 @@ public class Navigation extends Panel {
         boolean useGlobalPf;
         boolean waypointRetryOnStuck;
         boolean showPathLine;
+        boolean showWaypointsInWorld;
+        Color waypointColorActive = new Color(0, 224, 224);
+        Color waypointColorQueued = new Color(255, 212, 0);
         int pathLineWidth = 4;
         Color pathLineColor = new Color(255, 255, 0);
         boolean showSpeedometer;
+
+        // Trail to containers matching the item search
+        boolean showStorageTrail;
+        Color storageTrailColor = new Color(126, 232, 143);
+        int storageTrailMax = 3;
+        boolean recipeSearchAsItemSearch;
     }
 
     private final NavigationSettings tempSettings = new NavigationSettings();
@@ -35,10 +44,18 @@ public class Navigation extends Panel {
     private CheckBox useGlobalPf;
     private CheckBox waypointRetryOnStuck;
     private CheckBox showPathLine;
+    private CheckBox showWaypointsInWorld;
+    private NColorWidget wpActiveColorWidget;
+    private NColorWidget wpQueuedColorWidget;
     private NColorWidget pathLineColorWidget;
     private HSlider pathLineWidthSlider;
     private Label pathLineWidthLabel;
     private CheckBox showSpeedometer;
+    private CheckBox showStorageTrail;
+    private NColorWidget storageTrailColorWidget;
+    private Label storageTrailMaxLabel;
+    private HSlider storageTrailMaxSlider;
+    private CheckBox recipeSearchAsItemSearch;
     
     private Scrollport scrollport;
     private Widget content;
@@ -101,35 +118,80 @@ public class Navigation extends Panel {
             }
         }, prev.pos("bl").adds(0, 5));
 
-        // Visual indicators section
-        prev = content.add(new Label("● " + L10n.get("nav.section.visual")), prev.pos("bl").adds(0, 15));
-        
+        // Visual indicators section.
+        // Rows are positioned with an explicit x rather than by nudging the previous row's
+        // offset: relative +10/-10 hops silently drift as rows are inserted, which is how
+        // the colour pickers ended up out of line with each other.
+        final int colBase = contentMargin;
+        final int colSub = contentMargin + UI.scale(12);
+
+        prev = content.add(new Label("● " + L10n.get("nav.section.visual")), new Coord(colBase, prev.pos("bl").y + UI.scale(15)));
+
         prev = showPathLine = content.add(new CheckBox(L10n.get("nav.show_path_line")) {
             public void set(boolean val) {
                 tempSettings.showPathLine = val;
                 a = val;
             }
-        }, prev.pos("bl").adds(0, 5));
+        }, new Coord(colBase, prev.pos("bl").y + UI.scale(5)));
 
-        // Path line color
-        prev = pathLineColorWidget = content.add(new NColorWidget(L10n.get("nav.path_line_color")), prev.pos("bl").adds(10, 5));
+        prev = showWaypointsInWorld = content.add(new CheckBox(L10n.get("nav.show_waypoints_world")) {
+            public void set(boolean val) {
+                tempSettings.showWaypointsInWorld = val;
+                a = val;
+            }
+        }, new Coord(colBase, prev.pos("bl").y + UI.scale(5)));
+
+        // Waypoint colours - shared by the world view, the map window and the minimap
+        prev = wpActiveColorWidget = content.add(new NColorWidget(L10n.get("nav.waypoint_color_active")), new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
+        wpActiveColorWidget.color = tempSettings.waypointColorActive;
+        prev = wpQueuedColorWidget = content.add(new NColorWidget(L10n.get("nav.waypoint_color_queued")), new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
+        wpQueuedColorWidget.color = tempSettings.waypointColorQueued;
+
+        prev = showStorageTrail = content.add(new CheckBox(L10n.get("nav.show_storage_trail")) {
+            public void set(boolean val) {
+                tempSettings.showStorageTrail = val;
+                a = val;
+            }
+        }, new Coord(colBase, prev.pos("bl").y + UI.scale(10)));
+        showStorageTrail.settip(L10n.get("nav.show_storage_trail_tip"));
+
+        prev = storageTrailColorWidget = content.add(new NColorWidget(L10n.get("nav.storage_trail_color")), new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
+        storageTrailColorWidget.color = tempSettings.storageTrailColor;
+
+        prev = storageTrailMaxLabel = content.add(new Label(L10n.get("nav.storage_trail_max") + " 3"), new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
+        prev = storageTrailMaxSlider = content.add(new HSlider(UI.scale(100), 1, 5, tempSettings.storageTrailMax) {
+            public void changed() {
+                tempSettings.storageTrailMax = val;
+                storageTrailMaxLabel.settext(L10n.get("nav.storage_trail_max") + " " + val);
+            }
+        }, new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
+
+        prev = recipeSearchAsItemSearch = content.add(new CheckBox(L10n.get("nav.recipe_search_as_item_search")) {
+            public void set(boolean val) {
+                tempSettings.recipeSearchAsItemSearch = val;
+                a = val;
+            }
+        }, new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
+        recipeSearchAsItemSearch.settip(L10n.get("nav.recipe_search_as_item_search_tip"));
+
+        // Path line appearance
+        prev = pathLineColorWidget = content.add(new NColorWidget(L10n.get("nav.path_line_color")), new Coord(colSub, prev.pos("bl").y + UI.scale(10)));
         pathLineColorWidget.color = tempSettings.pathLineColor;
 
-        // Path line thickness
-        prev = pathLineWidthLabel = content.add(new Label(L10n.get("nav.path_line_thickness") + " 4"), prev.pos("bl").adds(0, 5));
+        prev = pathLineWidthLabel = content.add(new Label(L10n.get("nav.path_line_thickness") + " 4"), new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
         prev = pathLineWidthSlider = content.add(new HSlider(UI.scale(100), 1, 10, tempSettings.pathLineWidth) {
             public void changed() {
                 tempSettings.pathLineWidth = val;
                 pathLineWidthLabel.settext(L10n.get("nav.path_line_thickness") + " " + val);
             }
-        }, prev.pos("bl").adds(0, 5));
+        }, new Coord(colSub, prev.pos("bl").y + UI.scale(5)));
 
         prev = showSpeedometer = content.add(new CheckBox(L10n.get("nav.show_speedometer")) {
             public void set(boolean val) {
                 tempSettings.showSpeedometer = val;
                 a = val;
             }
-        }, prev.pos("bl").adds(0, 5));
+        }, new Coord(colBase, prev.pos("bl").y + UI.scale(10)));
 
         // Tools section
         prev = content.add(new Label("● Tools"), prev.pos("bl").adds(0, 15));
@@ -158,7 +220,17 @@ public class Navigation extends Panel {
         tempSettings.useGlobalPf = (Boolean) NConfig.get(NConfig.Key.useGlobalPf);
         tempSettings.waypointRetryOnStuck = (Boolean) NConfig.get(NConfig.Key.waypointRetryOnStuck);
         tempSettings.showPathLine = (Boolean) NConfig.get(NConfig.Key.showPathLine);
+        tempSettings.showWaypointsInWorld = (Boolean) NConfig.get(NConfig.Key.showWaypointsInWorld);
+        tempSettings.waypointColorActive = NConfig.getColor(NConfig.Key.waypointColorActive, new Color(0, 224, 224));
+        tempSettings.waypointColorQueued = NConfig.getColor(NConfig.Key.waypointColorQueued, new Color(255, 212, 0));
         tempSettings.showSpeedometer = (Boolean) NConfig.get(NConfig.Key.showSpeedometer);
+        Object storageTrailObj = NConfig.get(NConfig.Key.showStorageTrail);
+        tempSettings.showStorageTrail = !(storageTrailObj instanceof Boolean) || (Boolean) storageTrailObj;
+        tempSettings.storageTrailColor = NConfig.getColor(NConfig.Key.storageTrailColor, new Color(126, 232, 143));
+        Object storageTrailMaxObj = NConfig.get(NConfig.Key.storageTrailMax);
+        tempSettings.storageTrailMax = (storageTrailMaxObj instanceof Number) ? ((Number) storageTrailMaxObj).intValue() : 3;
+        Object recipeSearchObj = NConfig.get(NConfig.Key.recipeSearchAsItemSearch);
+        tempSettings.recipeSearchAsItemSearch = (recipeSearchObj instanceof Boolean) && (Boolean) recipeSearchObj;
 
         // Load path line settings
         Object pathLineWidthObj = NConfig.get(NConfig.Key.pathLineWidth);
@@ -172,6 +244,14 @@ public class Navigation extends Panel {
         useGlobalPf.a = tempSettings.useGlobalPf;
         waypointRetryOnStuck.a = tempSettings.waypointRetryOnStuck;
         showPathLine.a = tempSettings.showPathLine;
+        showWaypointsInWorld.a = tempSettings.showWaypointsInWorld;
+        wpActiveColorWidget.color = tempSettings.waypointColorActive;
+        wpQueuedColorWidget.color = tempSettings.waypointColorQueued;
+        showStorageTrail.a = tempSettings.showStorageTrail;
+        storageTrailColorWidget.color = tempSettings.storageTrailColor;
+        storageTrailMaxSlider.val = tempSettings.storageTrailMax;
+        storageTrailMaxLabel.settext(L10n.get("nav.storage_trail_max") + " " + tempSettings.storageTrailMax);
+        recipeSearchAsItemSearch.a = tempSettings.recipeSearchAsItemSearch;
         pathLineColorWidget.color = tempSettings.pathLineColor;
         pathLineWidthSlider.val = tempSettings.pathLineWidth;
         pathLineWidthLabel.settext(L10n.get("nav.path_line_thickness") + " " + tempSettings.pathLineWidth);
@@ -206,7 +286,16 @@ public class Navigation extends Panel {
         NConfig.set(NConfig.Key.useGlobalPf, tempSettings.useGlobalPf);
         NConfig.set(NConfig.Key.waypointRetryOnStuck, tempSettings.waypointRetryOnStuck);
         NConfig.set(NConfig.Key.showPathLine, tempSettings.showPathLine);
+        NConfig.set(NConfig.Key.showWaypointsInWorld, tempSettings.showWaypointsInWorld);
+        NConfig.setColor(NConfig.Key.waypointColorActive, wpActiveColorWidget.color);
+        NConfig.setColor(NConfig.Key.waypointColorQueued, wpQueuedColorWidget.color);
         NConfig.set(NConfig.Key.showSpeedometer, tempSettings.showSpeedometer);
+
+        // Save storage trail settings
+        NConfig.set(NConfig.Key.showStorageTrail, tempSettings.showStorageTrail);
+        NConfig.set(NConfig.Key.storageTrailMax, tempSettings.storageTrailMax);
+        NConfig.setColor(NConfig.Key.storageTrailColor, storageTrailColorWidget.color);
+        NConfig.set(NConfig.Key.recipeSearchAsItemSearch, tempSettings.recipeSearchAsItemSearch);
 
         // Save path line settings
         tempSettings.pathLineColor = pathLineColorWidget.color;

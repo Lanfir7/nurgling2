@@ -55,6 +55,8 @@ public class NConfig
         hideNature,
         hideEarthworm,
         hideConf,
+        /** Per-resource display settings from the gob "Configure" window; see nurgling.tools.GobCustomize. */
+        gobConf,
         hideBoxFillColor,
         hideBoxEdgeColor,
         hideBoxLineWidth,
@@ -264,6 +266,16 @@ public class NConfig
         autoLogoutDelay,
         showBotPathOnMinimap,
         showBotPathOnGround,
+        // Movement waypoints (alt+click) drawn in the 3D world
+        showWaypointsInWorld,
+        pingSound,
+        waypointColorActive,
+        waypointColorQueued,
+        // Ground trail to containers matching the item search
+        showStorageTrail,
+        storageTrailColor,
+        storageTrailMax,
+        recipeSearchAsItemSearch,
         // Map tools panel
         showTreeIcons,
         showFishIcons,
@@ -331,6 +343,7 @@ public class NConfig
         conf.put(Key.showCSprite, true);
         conf.put(Key.hideEarthworm, true);  // true = show earthworms (checkbox unchecked by default)
         conf.put(Key.hideConf, nurgling.tools.GobHide.defaults());
+        conf.put(Key.gobConf, new HashMap<String, Object>());
         // Hidden-object boxes are styled independently of the general showBB boxes; these defaults
         // match the old shared values so upgrading users see no visual change.
         conf.put(Key.hideBoxFillColor, new Color(227, 28, 1, 195));
@@ -695,6 +708,13 @@ public class NConfig
         conf.put(Key.autoLogoutDelay, 60);
         conf.put(Key.showBotPathOnMinimap, false);
         conf.put(Key.showBotPathOnGround, false);
+        conf.put(Key.showWaypointsInWorld, true);
+        conf.put(Key.pingSound, true);
+
+        // Ground trail to containers matching the item search
+        conf.put(Key.showStorageTrail, true);
+        conf.put(Key.storageTrailMax, 3);
+        conf.put(Key.recipeSearchAsItemSearch, false);
     }
 
 
