@@ -37,7 +37,7 @@ public class Chipper implements Action {
         nurgling.widgets.bots.ChipperWnd w = null;
         NChipperProp prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.getGameUI().add((w = new nurgling.widgets.bots.ChipperWnd()), UI.scale(200, 200))));
+            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.addCentered((w = new nurgling.widgets.bots.ChipperWnd()))));
             prop = w.prop;
         } catch (InterruptedException e) {
             throw e;

@@ -20,7 +20,7 @@ public class ChunkNavNavigatorBot implements Action {
 
         // Open the navigator window
         ChunkNavNavigatorWindow window = new ChunkNavNavigatorWindow();
-        gui.add(window, new Coord(gui.sz.x / 2 - window.sz.x / 2, gui.sz.y / 2 - window.sz.y / 2));
+        NUtils.addCentered(gui, window);
 
         // The bot completes immediately - the window handles navigation
         gui.msg("ChunkNav Navigator opened");

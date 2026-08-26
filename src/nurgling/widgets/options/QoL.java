@@ -6,8 +6,6 @@ import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NLPassistant;
-import nurgling.overlays.NObjHarvestOl;
-import nurgling.tools.HarvestSpecs;
 import nurgling.widgets.nsettings.Panel;
 
 public class QoL extends Panel {
@@ -828,19 +826,7 @@ public class QoL extends Panel {
     }
 
     private void rebuildHarvestOverlays() {
-        if(NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || NUtils.getGameUI().ui.sess == null) {
-            return;
-        }
-        NObjHarvestOl.clearLabelCache();
-        OCache oc = NUtils.getGameUI().ui.sess.glob.oc;
-        synchronized(oc) {
-            for(Gob gob : oc) {
-                if(gob != null && gob.ngob != null && gob.ngob.name != null
-                    && HarvestSpecs.forResource(gob.ngob.name) != null) {
-                    gob.ngob.refreshHarvestOverlay();
-                }
-            }
-        }
+        NUtils.refreshTreeHarvestOverlays();
     }
 
     /**

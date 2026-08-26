@@ -6,8 +6,11 @@ import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.GoTo;
+import nurgling.actions.LiftObject;
+import nurgling.actions.SelectFlowerAction;
 import nurgling.actions.bots.registry.BotDescriptor;
 import nurgling.actions.bots.registry.BotRegistry;
+import nurgling.agent.AgentWorldClassifier;
 import nurgling.areas.NArea;
 import nurgling.sessions.BotExecutor;
 import org.json.JSONArray;
@@ -62,6 +65,17 @@ public class ToolRouter {
                         .put("action", new JSONObject().put("type", "string")
                                 .put("enum", new JSONArray().put("click").put("rclick").put("itemact"))))
                 .put("required", new JSONArray().put("gobId").put("action"))));
+        arr.put(function("flower_action", "Open flower menu on gob and pick option (Chop, Lift, Open, Close).", new JSONObject()
+                .put("type", "object")
+                .put("properties", new JSONObject()
+                        .put("gobId", new JSONObject().put("type", "integer"))
+                        .put("option", new JSONObject().put("type", "string").put("description", "Flower menu option, e.g. Chop, Lift.")))
+                .put("required", new JSONArray().put("gobId").put("option"))));
+        arr.put(function("lift_gob", "Pathfind to gob and lift/carry it (cart, log).", new JSONObject()
+                .put("type", "object")
+                .put("properties", new JSONObject()
+                        .put("gobId", new JSONObject().put("type", "integer")))
+                .put("required", new JSONArray().put("gobId"))));
         arr.put(function("use_item", "Use item from inventory (MVP placeholder).", new JSONObject()
                 .put("type", "object")
                 .put("properties", new JSONObject()
@@ -81,6 +95,8 @@ public class ToolRouter {
             if ("navigate_to".equals(name)) return navigateTo(args).toString();
             if ("navigate_to_point".equals(name)) return navigateToPoint(args).toString();
             if ("interact_gob".equals(name)) return interactGob(args).toString();
+            if ("flower_action".equals(name)) return flowerAction(args).toString();
+            if ("lift_gob".equals(name)) return liftGob(args).toString();
             if ("use_item".equals(name)) {
                 return new JSONObject().put("ok", false).put("error", "use_item is not implemented in MVP").toString();
             }
@@ -103,6 +119,14 @@ public class ToolRouter {
         out.put("y", pl.rc.y);
         out.put("stamina", NUtils.getStamina());
         out.put("energy", NUtils.getEnergy());
+        String pose = "";
+        try {
+            String p = pl.pose();
+            pose = p == null ? "" : p;
+        } catch (Exception ignored) {
+        }
+        out.put("pose", pose);
+        out.put("carrying", pose.contains("carry"));
         out.put("sessionId", gui.ui.sess.toString());
         return out;
     }
@@ -181,6 +205,39 @@ public class ToolRouter {
         return new JSONObject().put("ok", true).put("gobId", gobId).put("action", action);
     }
 
+    private JSONObject flowerAction(JSONObject args) {
+        long gobId = args.optLong("gobId", -1);
+        String option = args.optString("option", "").trim();
+        if (option.isEmpty()) {
+            return new JSONObject().put("ok", false).put("error", "option is required");
+        }
+        Gob gob = NUtils.findGob(gobId);
+        if (gob == null) {
+            return new JSONObject().put("ok", false).put("error", "gob not found");
+        }
+        Action action = new SelectFlowerAction(option, gob);
+        Thread t = BotExecutor.runWithSupports("agent-flower", action, false, null);
+        return new JSONObject()
+                .put("ok", t != null)
+                .put("gobId", gobId)
+                .put("option", option)
+                .put("thread", t != null ? t.getName() : "");
+    }
+
+    private JSONObject liftGob(JSONObject args) {
+        long gobId = args.optLong("gobId", -1);
+        Gob gob = NUtils.findGob(gobId);
+        if (gob == null) {
+            return new JSONObject().put("ok", false).put("error", "gob not found");
+        }
+        Action action = new LiftObject(gob);
+        Thread t = BotExecutor.runWithSupports("agent-lift", action, false, null);
+        return new JSONObject()
+                .put("ok", t != null)
+                .put("gobId", gobId)
+                .put("thread", t != null ? t.getName() : "");
+    }
+
     private JSONObject stopAllActions() {
         if (gui.biw != null) {
             gui.biw.interruptAllBots();
@@ -215,12 +272,23 @@ public class ToolRouter {
                     double dist = gob.rc.dist(pl.rc);
                     if (dist > radius) continue;
                     String resName = safeGobName(gob);
+                    String kind = AgentWorldClassifier.classify(resName);
                     JSONObject entry = new JSONObject()
                             .put("id", gob.id)
                             .put("x", gob.rc.x)
                             .put("y", gob.rc.y)
                             .put("dist", dist)
-                            .put("resName", resName);
+                            .put("resName", resName)
+                            .put("kind", kind);
+                    if ("aggressive".equals(kind)) {
+                        entry.put("aggressive", true);
+                    }
+                    if ("gate".equals(kind)) {
+                        Boolean open = gateOpen(gob);
+                        if (open != null) {
+                            entry.put("open", open.booleanValue());
+                        }
+                    }
                     near.add(entry);
                 }
             }
@@ -239,6 +307,7 @@ public class ToolRouter {
         }
         out.put("nearbyGobs", gobs);
         out.put("nearbyGobCount", near.size());
+        out.put("summary", summarizeKinds(near));
 
         JSONArray areas = new JSONArray();
         if (gui != null && gui.map != null && gui.map.glob != null && gui.map.glob.map != null && gui.map.glob.map.areas != null) {
@@ -264,6 +333,42 @@ public class ToolRouter {
                     .put("description", bot.getDescription()));
         }
         return new JSONObject().put("ok", true).put("bots", arr);
+    }
+
+    private static JSONObject summarizeKinds(List<JSONObject> near) {
+        int trees = 0, logs = 0, gates = 0, carts = 0, aggressive = 0;
+        JSONObject nearestAggressive = null;
+        for (JSONObject entry : near) {
+            String kind = entry.optString("kind", "other");
+            if ("tree".equals(kind)) trees++;
+            else if ("log".equals(kind)) logs++;
+            else if ("gate".equals(kind)) gates++;
+            else if ("cart".equals(kind) || "wagon".equals(kind)) carts++;
+            else if ("aggressive".equals(kind)) {
+                aggressive++;
+                if (nearestAggressive == null) nearestAggressive = entry;
+            }
+        }
+        JSONObject summary = new JSONObject()
+                .put("trees", trees)
+                .put("logs", logs)
+                .put("gates", gates)
+                .put("carts", carts)
+                .put("aggressive", aggressive);
+        if (nearestAggressive != null) {
+            summary.put("nearestAggressive", nearestAggressive.optString("resName", ""));
+            summary.put("nearestAggressiveDist", nearestAggressive.optDouble("dist", 0));
+        }
+        return summary;
+    }
+
+    private static Boolean gateOpen(Gob gob) {
+        try {
+            if (gob.ngob == null) return null;
+            return gob.ngob.getModelAttribute() == 1;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private static String safeGobName(Gob gob) {

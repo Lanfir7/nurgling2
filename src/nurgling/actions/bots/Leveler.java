@@ -72,7 +72,7 @@ public class Leveler implements Action
         resumeTile = null;
         resumeAt = null;
         stats = new LevelerStats();
-        infoWnd = gui.add(new LevelerWnd(), UI.scale(200, 200));
+        infoWnd = NUtils.addCentered(gui, new LevelerWnd());
         try {
             while (true) {
                 Results rr = new RestoreResources().run(gui);

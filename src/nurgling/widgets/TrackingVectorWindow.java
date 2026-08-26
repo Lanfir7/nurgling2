@@ -35,7 +35,7 @@ public class TrackingVectorWindow extends Window {
             // Create instance if needed
             if (instance == null || instance.parent == null) {
                 instance = new TrackingVectorWindow();
-                gui.add(instance, UI.scale(300, 100));
+                NUtils.addCentered(gui, instance);
             }
 
             // Show if hidden

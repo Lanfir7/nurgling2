@@ -3,26 +3,27 @@ package nurgling.overlays;
 import haven.Gob;
 import haven.render.Render;
 
-import java.awt.*;
-
 public class NAreaRange extends NAreaRad {
     boolean oldState = false;
+    int lastRadius = -1;
     nurgling.conf.NAreaRad prop;
     public NAreaRange(Owner owner, nurgling.conf.NAreaRad prop) {
         super((Gob) owner, prop.radius);
         this.prop = prop;
+        this.oldState = prop.vis;
+        this.lastRadius = prop.radius;
     }
 
     @Override
     public void gtick(Render g) {
-        if(oldState!=prop.vis){
-            oldState = prop.vis;
-            if(oldState )
-                setR(g,(float)prop.radius);
-            else
-                setR(g,0);
+        boolean vis = prop.vis;
+        int rad = prop.radius;
+        if (oldState != vis || (vis && lastRadius != rad)) {
+            oldState = vis;
+            lastRadius = rad;
+            setR(g, vis ? (float) rad : 0);
         }
-        if(oldState)
+        if (oldState)
             super.gtick(g);
     }
 

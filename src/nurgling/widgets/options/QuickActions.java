@@ -158,7 +158,7 @@ public class QuickActions extends Panel {
                 presetDropbox.change(newPreset);
             }
         });
-        NUtils.getGameUI().add(inputWindow, UI.scale(200, 200));
+        NUtils.addCentered(inputWindow);
         inputWindow.show();
     }
 

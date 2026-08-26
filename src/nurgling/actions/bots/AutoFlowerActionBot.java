@@ -22,7 +22,7 @@ public class AutoFlowerActionBot implements Action {
         NAutoFlowerActionProp prop = null;
         
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.getGameUI().add((w = new AutoFlowerAction()), UI.scale(200, 200))));
+            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.addCentered((w = new AutoFlowerAction()))));
             prop = w.prop;
         } catch (InterruptedException e) {
             throw e;

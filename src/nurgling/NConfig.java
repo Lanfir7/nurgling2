@@ -160,6 +160,14 @@ public class NConfig
         showCritterCircles,
         critterCircleSettings,
         showBeehiveRadius,
+        beehiveRadius,
+        areaRadBandHeight,
+        areaRadLineWidth,
+        areaRadFillAlpha,
+        areaRadAnimalFill,
+        areaRadAnimalEdge,
+        areaRadBeehiveFill,
+        areaRadBeehiveEdge,
         showTroughRadius,
         showMoundBedRadius,
         showDamageShields,
@@ -236,6 +244,7 @@ public class NConfig
         permIconScale,
         prospectIconScale,
         showAnimalIcons,
+        showAllZonesAlways,
         showGemstoneIcons,
         showOreSpotIcons,
         showProspectingIcons,
@@ -441,6 +450,7 @@ public class NConfig
         conf.put(Key.permIconScale, 1.0);
         conf.put(Key.prospectIconScale, 1.0);
         conf.put(Key.showAnimalIcons, true);
+        conf.put(Key.showAllZonesAlways, false);
         conf.put(Key.showGemstoneIcons, true);
         conf.put(Key.showOreSpotIcons, true);
         conf.put(Key.showProspectingIcons, true);
@@ -496,7 +506,7 @@ public class NConfig
         arearadprop.add(new NAreaRad("gfx/kritter/bear/bear", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/bear/polarbear", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/adder/adder", 100));
-        arearadprop.add(new NAreaRad("gfx/kritter/wildgoat/wildgoat", 100));
+        arearadprop.add(new NAreaRad("gfx/kritter/goat/wildgoat", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/badger/badger", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/lynx/lynx", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/mammoth/mammoth", 100));
@@ -548,6 +558,14 @@ public class NConfig
 
         // Object radius overlays - simple boolean flags
         conf.put(Key.showBeehiveRadius, false);
+        conf.put(Key.beehiveRadius, NAreaRadStyle.DEF_BEEHIVE_RADIUS);
+        conf.put(Key.areaRadBandHeight, NAreaRadStyle.DEF_BAND);
+        conf.put(Key.areaRadLineWidth, NAreaRadStyle.DEF_LINE);
+        conf.put(Key.areaRadFillAlpha, NAreaRadStyle.DEF_ALPHA);
+        conf.put(Key.areaRadAnimalFill, NAreaRadStyle.DEF_ANIMAL_FILL);
+        conf.put(Key.areaRadAnimalEdge, NAreaRadStyle.DEF_ANIMAL_EDGE);
+        conf.put(Key.areaRadBeehiveFill, NAreaRadStyle.DEF_BEEHIVE_FILL);
+        conf.put(Key.areaRadBeehiveEdge, NAreaRadStyle.DEF_BEEHIVE_EDGE);
         conf.put(Key.showTroughRadius, false);
         conf.put(Key.showMoundBedRadius, false);
 
@@ -588,6 +606,7 @@ public class NConfig
         // Tree scale overlay settings
         conf.put(Key.treeScaleDisableZoomHide, false);  // If true, always show full label (don't hide on zoom out)
         conf.put(Key.treeScaleMinThreshold, 0);  // Minimum growth % to display tree scale (0 = show all)
+        conf.put(Key.showAllZonesAlways, false);
         conf.put(Key.treeHarvestOverlay, false);  // Show harvest icons on mature trees (master toggle)
         conf.put(Key.treeHarvestSeeds, true);     // Sub-filter: show seed/fruit icons
         conf.put(Key.treeHarvestLeaves, true);    // Sub-filter: show leaf icons
@@ -655,7 +674,7 @@ public class NConfig
         conf.put(Key.agentApiKey, "");
         conf.put(Key.agentModel, "gpt-4o-mini");
         conf.put(Key.agentTemperature, 0.2);
-        conf.put(Key.agentMaxTokens, 256);
+        conf.put(Key.agentMaxTokens, 1024);
         conf.put(Key.agentTimeoutMs, 120000);
         conf.put(Key.agentAutoMode, true);
         conf.put(Key.autoLogoutEnabled, false);
@@ -1337,6 +1356,8 @@ public class NConfig
                     isUpd = true;
                 }
             }
+            if (NAreaRad.migrateList(savedRads))
+                isUpd = true;
         }
 
         conf.put(Key.showCSprite,conf.get(Key.nextshowCSprite));

@@ -398,7 +398,7 @@ public abstract class PathBotWindow extends Window implements Checkable, PathRec
                 startButton.disable(true);
             }
         });
-        NUtils.getGameUI().add(inputWindow, UI.scale(200, 200));
+        NUtils.addCentered(inputWindow);
         inputWindow.show();
     }
 
@@ -431,7 +431,7 @@ public abstract class PathBotWindow extends Window implements Checkable, PathRec
                 }
             }
         });
-        NUtils.getGameUI().add(inputWindow, UI.scale(200, 200));
+        NUtils.addCentered(inputWindow);
         inputWindow.show();
     }
 

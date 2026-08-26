@@ -673,7 +673,7 @@ public class NMakewindow extends Widget implements DTarget {
     }
 
     private void openSavePresetDialog() {
-        NUtils.getGameUI().add(new SaveCraftPresetDialog(this), UI.scale(new Coord(200, 200)));
+        NUtils.addCentered(new SaveCraftPresetDialog(this));
     }
 
     // Parse one make-window spec (protocol v31: modular message format).

@@ -1130,7 +1130,8 @@ public class NAreasWidget extends Window
     @Override
     public void hide() {
         super.hide();
-        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null && !createMode)
+        if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null && !createMode
+                && !AreaLabelSync.toggleOn(NConfig.get(NConfig.Key.showAllZonesAlways)))
             ((NMapView)NUtils.getGameUI().map).destroyDummys();
     }
 

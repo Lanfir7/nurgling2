@@ -9,6 +9,7 @@ import haven.TextEntry;
 import haven.UI;
 import nurgling.NConfig;
 import nurgling.agent.runtime.AgentSessionStats;
+import nurgling.i18n.L10n;
 
 public class AgentSettings extends Panel {
     private final TextEntry baseUrl;
@@ -29,10 +30,13 @@ public class AgentSettings extends Panel {
     private double tempTemperature = 0.2;
 
     public AgentSettings() {
-        super("LLM Agent");
+        super(L10n.get("nsettings.item.llm_agent"));
         int x = UI.scale(15);
-        int y = UI.scale(40);
+        int y = UI.scale(32);
         int w = UI.scale(320);
+
+        add(new Label(L10n.get("agent.f10_hint"), UI.scale(540)), new Coord(x, y));
+        y += UI.scale(56);
 
         add(new Label("OpenAI-compatible URL:"), new Coord(x, y));
         y += UI.scale(20);

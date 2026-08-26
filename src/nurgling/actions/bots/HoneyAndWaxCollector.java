@@ -72,7 +72,7 @@ public class HoneyAndWaxCollector implements Action {
         boolean collectWax;
         try {
             NUtils.getUI().core.addTask(new WaitCheckable(
-                    getGameUI().add((w = new nurgling.widgets.bots.BeehiveManagerWnd()), UI.scale(200, 200))));
+                    NUtils.addCentered((w = new nurgling.widgets.bots.BeehiveManagerWnd()))));
             collectHoney = w.collectHoney;
             collectWax = w.collectWax;
         } catch (InterruptedException e) {

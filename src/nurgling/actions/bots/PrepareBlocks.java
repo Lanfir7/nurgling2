@@ -27,7 +27,7 @@ public class PrepareBlocks implements Action {
         nurgling.widgets.bots.PrepareBlocks w = null;
         NPrepBlocksProp prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.getGameUI().add((w = new nurgling.widgets.bots.PrepareBlocks()), UI.scale(200,200))));
+            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.addCentered((w = new nurgling.widgets.bots.PrepareBlocks()))));
             prop = w.prop;
         }
         catch (InterruptedException e)

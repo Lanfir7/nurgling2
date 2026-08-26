@@ -6,6 +6,7 @@ import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NUtils;
+import nurgling.areas.AreaLabelSync;
 import nurgling.i18n.L10n;
 import nurgling.tools.ExploredArea;
 
@@ -227,19 +228,21 @@ public class NMiniMapWnd extends Widget{
         // Show all zones always toggle
         ACheckBox showAllZones = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/ico", KeyBinding.get("ol-showzones", KeyMatch.nil), "Show all zones always");
         showAllZones.changed(a -> {
-            if (miniMap instanceof NMiniMap) {
+            NConfig.set(NConfig.Key.showAllZonesAlways, a);
+            NConfig.needUpdate();
+            if (miniMap instanceof NMiniMap)
                 ((NMiniMap) miniMap).showAllZonesAlways = a;
-                // ВАЖНО: При включении тоггла создаем лейблы зон, если они еще не созданы
-                // Это аналогично тому, что происходит при открытии окна редактирования зон
-                if (a && NUtils.getGameUI() != null && NUtils.getGameUI().map != null) {
-                    NMapView mapView = (NMapView) NUtils.getGameUI().map;
-                    mapView.initDummys();
-                }
+            NMapView mapView = (NUtils.getGameUI() != null) ? (NMapView) NUtils.getGameUI().map : null;
+            if (mapView != null) {
+                if (a)
+                    mapView.syncAreaLabels();
+                else if (!mapView.labelsNeeded())
+                    mapView.destroyDummys();
             }
         });
-        if (miniMap instanceof NMiniMap) {
-            showAllZones.a = ((NMiniMap) miniMap).showAllZonesAlways;
-        }
+        showAllZones.a = AreaLabelSync.toggleOn(NConfig.get(NConfig.Key.showAllZonesAlways));
+        if (miniMap instanceof NMiniMap)
+            ((NMiniMap) miniMap).showAllZonesAlways = showAllZones.a;
         buttons.add(showAllZones);
 
         // ChunkNav exploration overlay toggle

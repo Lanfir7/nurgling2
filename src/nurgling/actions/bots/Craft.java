@@ -1274,14 +1274,14 @@ public class Craft implements Action {
         final RecipeIngredientCache.RecipeEntry[] selected = {null};
         final boolean[] done = {false};
 
-        NUtils.getGameUI().add(new SubRecipeSelectWindow(itemName, paginae, pag -> {
+        NUtils.addCentered(new SubRecipeSelectWindow(itemName, paginae, pag -> {
             try {
                 selected[0] = resourceToEntry.get(pag.res().name);
             } catch (Loading e) {
                 // fallback
             }
             done[0] = true;
-        }, () -> done[0] = true), UI.scale(new Coord(200, 200)));
+        }, () -> done[0] = true));
 
         NUtils.addTask(new NTask() {
             @Override

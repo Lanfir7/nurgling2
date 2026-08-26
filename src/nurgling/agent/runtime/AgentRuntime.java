@@ -17,19 +17,10 @@ import java.util.List;
 import java.util.Locale;
 
 public class AgentRuntime {
-    private static final int MAX_TOOL_ROUNDS = 8;
+    private static final int MAX_TOOL_ROUNDS = 64;
     private static final int MAX_LOG_LINE_CHARS = 420;
     private static final int MAX_MEMORY_ROWS = 5000;
-    private static final String SYSTEM_PROMPT =
-            "Ты и есть игровой персонаж, которым управляешь. " +
-                    "Пользователь обращается к персонажу напрямую, а не к ЛЛМ. " +
-                    "Говори только от первого лица персонажа и не упоминай, что ты ИИ/модель/ассистент. " +
-                    "ВСЕГДА отвечай только на русском языке, без английского. " +
-                    "Никогда не показывай в тексте синтаксис вызова tools (например [tool({...})]). " +
-                    "Перед действиями используй get_player_state и get_world_state. " +
-                    "Для запуска ботов сначала используй list_available_bots и выбирай только реальные bot id из списка. " +
-                    "Если tool вернул ok=false, не заявляй об успехе, а кратко объясни ошибку. " +
-                    "Пиши кратко, по делу.";
+    private static final String SYSTEM_PROMPT = nurgling.agent.AgentInstructions.SYSTEM_PROMPT;
 
     private final NGameUI gui;
     private final OpenAIChatClient client = new OpenAIChatClient();
@@ -196,7 +187,7 @@ public class AgentRuntime {
         String apiKey = strCfg(NConfig.Key.agentApiKey, "");
         String model = strCfg(NConfig.Key.agentModel, "gpt-4o-mini");
         double temperature = numCfg(NConfig.Key.agentTemperature, 0.2);
-        int maxTokens = (int) numCfg(NConfig.Key.agentMaxTokens, 256);
+        int maxTokens = (int) numCfg(NConfig.Key.agentMaxTokens, 1024);
         int timeoutMs = (int) numCfg(NConfig.Key.agentTimeoutMs, 120000);
         List<LLMMessage> messagesSnapshot;
         synchronized (history) {

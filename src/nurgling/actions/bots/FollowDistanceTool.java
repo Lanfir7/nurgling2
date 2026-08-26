@@ -1,7 +1,7 @@
 package nurgling.actions.bots;
 
-import haven.Coord;
 import nurgling.NGameUI;
+import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.Results;
 import nurgling.widgets.NFollowDistanceTool;
@@ -20,8 +20,7 @@ public class FollowDistanceTool implements Action {
         }
 
         currentTool = new NFollowDistanceTool(gui);
-        Coord center = new Coord(gui.sz.x / 2 - currentTool.sz.x / 2, gui.sz.y / 2 - currentTool.sz.y / 2 - 200);
-        gui.add(currentTool, center);
+        NUtils.addCentered(gui, currentTool);
         currentTool.start();
 
         return Results.SUCCESS();

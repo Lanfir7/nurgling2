@@ -4,12 +4,12 @@ import haven.*;
 import haven.render.Homo3D;
 import haven.render.Pipe;
 import haven.render.RenderTree;
+import nurgling.NConfig;
 import nurgling.NGameUI;
-import nurgling.NMapView;
 import nurgling.NStyle;
 import nurgling.NUtils;
+import nurgling.areas.AreaLabelSync;
 import nurgling.areas.NArea;
-import nurgling.widgets.NMiniMap;
 import nurgling.widgets.Specialisation;
 
 import java.awt.*;
@@ -65,18 +65,14 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
 
     @Override
     public boolean tick(double dt) {
-        if(NUtils.getGameUI()!=null) {
-            isSelected =NUtils.getGameUI().areas!=null && NUtils.getGameUI().areas.al.sel != null && NUtils.getGameUI().areas.al.sel.area == area;
-            if (NUtils.getGameUI() != null) {
-                if (area.spec.size() != sizeSpec) {
-                    sizeSpec = area.spec.size();
-                    update();
-
-                }
-                return NUtils.findGob(((Gob) owner).id) == null;
-            }
+        if(NUtils.getGameUI()==null)
+            return false;
+        isSelected =NUtils.getGameUI().areas!=null && NUtils.getGameUI().areas.al.sel != null && NUtils.getGameUI().areas.al.sel.area == area;
+        if (area.spec.size() != sizeSpec) {
+            sizeSpec = area.spec.size();
+            update();
         }
-        return true;
+        return NUtils.findGob(((Gob) owner).id) == null;
     }
 
     @Override
@@ -87,20 +83,7 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
         // 2. Зона не скрыта локально (hide = false)
         NGameUI gui = NUtils.getGameUI();
         boolean areasWindowOpen = gui != null && gui.areas != null && gui.areas.visible();
-        // Проверяем тоггл "показывать все зоны"
-        // mmap может быть NMiniMap или NCornerMiniMap (который наследуется от NMiniMap)
-        // Также можно получить через mmapw.miniMap (который является NMiniMapWnd.Map extends NCornerMiniMap)
-        boolean showAllZones = false;
-        if (gui != null) {
-            // Пробуем через mmapw.miniMap (это более надежный способ, так как miniMap точно является NMiniMap)
-            if (gui.mmapw != null && gui.mmapw.miniMap != null && gui.mmapw.miniMap instanceof NMiniMap) {
-                showAllZones = ((NMiniMap) gui.mmapw.miniMap).showAllZonesAlways;
-            }
-            // Запасной вариант через mmap
-            else if (gui.mmap != null && gui.mmap instanceof NMiniMap) {
-                showAllZones = ((NMiniMap) gui.mmap).showAllZonesAlways;
-            }
-        }
+        boolean showAllZones = AreaLabelSync.toggleOn(NConfig.get(NConfig.Key.showAllZonesAlways));
         
         if (area.hide && !showAllZones) {
             // Зона скрыта и не включен режим "показывать все"
@@ -128,7 +111,10 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
     }
 
     public boolean isect(Coord pc) {
-        if(sc == null)
+        if(sc == null || label == null)
+            return false;
+        NGameUI gui = NUtils.getGameUI();
+        if (!AreaLabelSync.labelsClickable(gui != null && gui.areas != null && gui.areas.visible()))
             return false;
         Coord ul = sc.sub(label.sz().div(2));
         return pc.isect(ul, label.sz());

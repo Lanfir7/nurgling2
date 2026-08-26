@@ -71,7 +71,7 @@ public class WorldBlueprintEditor implements Action {
         player.setattr(store);
 
         widget = new nurgling.widgets.bots.WorldBlueprintEditor();
-        NUtils.getGameUI().add(widget, UI.scale(new Coord(40, 80)));
+        NUtils.addCentered(gui, widget);
 
         grabber = new EditorGrabber();
         mapView.grab(grabber);

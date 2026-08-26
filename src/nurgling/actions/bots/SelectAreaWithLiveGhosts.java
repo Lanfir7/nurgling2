@@ -184,9 +184,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
             int totalPositions = accumulatedGhosts.size();
             MultiAreaConfirm confirm = new MultiAreaConfirm(buildingName, totalPositions, areasSelected);
             NUtils.getUI().core.addTask(new WaitCheckable(
-                NUtils.getGameUI().add(confirm,
-                    new Coord(NUtils.getGameUI().sz.x / 2 - UI.scale(130),
-                              NUtils.getGameUI().sz.y / 2 - UI.scale(65)))
+                NUtils.addCentered(NUtils.getGameUI(), confirm)
             ));
             MultiAreaConfirm.State state = confirm.getState();
             confirm.destroy();

@@ -43,7 +43,7 @@ public class BoughBee implements Action {
             prop = NBoughBeeProp.runDefaults();
         } else {
             try {
-                NUtils.getUI().core.addTask(new WaitCheckable(NUtils.getGameUI().add((w = new nurgling.widgets.bots.BoughBee()), UI.scale(200, 200))));
+                NUtils.getUI().core.addTask(new WaitCheckable(NUtils.addCentered((w = new nurgling.widgets.bots.BoughBee()))));
                 prop = w.prop;
             } catch (InterruptedException e) {
                 throw e;

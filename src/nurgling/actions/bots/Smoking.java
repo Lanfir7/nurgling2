@@ -23,7 +23,7 @@ public class Smoking implements Action {
     public Results run(NGameUI gui) throws InterruptedException {
         SmokingSettings w = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.getGameUI().add((w = new SmokingSettings()), UI.scale(200,200))));
+            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.addCentered((w = new SmokingSettings()))));
         }
         catch (InterruptedException e)
         {

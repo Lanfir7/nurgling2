@@ -1,7 +1,7 @@
 package nurgling.actions.bots;
 
-import haven.Coord;
 import nurgling.NGameUI;
+import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.Results;
 import nurgling.widgets.NZoneMeasureTool;
@@ -20,13 +20,7 @@ public class ZoneMeasureTool implements Action {
 
         // Create and display new tool window
         currentTool = new NZoneMeasureTool(gui);
-
-        // Center on screen, offset up slightly
-        Coord center = new Coord(
-            gui.sz.x / 2 - currentTool.sz.x / 2,
-            gui.sz.y / 2 - currentTool.sz.y / 2 - 100
-        );
-        gui.add(currentTool, center);
+        NUtils.addCentered(gui, currentTool);
 
         return Results.SUCCESS();
     }

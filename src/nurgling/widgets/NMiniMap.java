@@ -114,6 +114,9 @@ NMiniMap extends MiniMap {
 
         Boolean animals = (Boolean) NConfig.get(NConfig.Key.showAnimalIcons);
         if (animals != null) showAnimalIcons = animals;
+
+        Boolean zones = (Boolean) NConfig.get(NConfig.Key.showAllZonesAlways);
+        if (zones != null) showAllZonesAlways = zones;
     }
 
     private static boolean isAnimalMark(LabeledMinimapMark mark) {

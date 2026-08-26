@@ -17,7 +17,7 @@ public class ClayDigger implements Action {
         nurgling.widgets.bots.ClayDigger w = null;
         NClayDiggerProp prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.getGameUI().add((w = new nurgling.widgets.bots.ClayDigger()), UI.scale(200,200))));
+            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.addCentered((w = new nurgling.widgets.bots.ClayDigger()))));
             prop = w.prop;
         }
         catch (InterruptedException e)

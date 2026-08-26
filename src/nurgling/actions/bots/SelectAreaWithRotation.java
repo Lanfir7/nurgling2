@@ -37,7 +37,7 @@ public class SelectAreaWithRotation implements Action {
 
             // Add direction dialog to the UI
             dirDialog = new TrellisDirectionDialog();
-            gui.add(dirDialog, UI.scale(200, 200));
+            NUtils.addCentered(gui, dirDialog);
 
             if(image!=null && player!=null) {
                 player.addcustomol(new NCustomBauble(player,image, spr, map.isAreaSelectionMode));

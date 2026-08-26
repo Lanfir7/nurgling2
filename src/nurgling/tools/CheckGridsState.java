@@ -60,10 +60,9 @@ public class CheckGridsState implements Runnable {
                     if (((NMapView) NUtils.getGameUI().map).lastGC ==null || newCoord.getGridId() != ((NMapView) NUtils.getGameUI().map).lastGC.getGridId()) {
                         ((NMapView) NUtils.getGameUI().map).lastGC = newCoord;
                         NUtils.addTask(new WaitForMapLoad(NUtils.getGameUI(), newCoord));
-                        if (NUtils.getGameUI().areas.visible) {
-                            ((NMapView) NUtils.getGameUI().map).destroyDummys();
-                            ((NMapView) NUtils.getGameUI().map).initDummys();
-                        }
+                        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+                        if (mapView.labelsNeeded())
+                            mapView.syncAreaLabels();
                     }
                 }
             }

@@ -84,8 +84,11 @@ public class Speedget extends Widget {
     public void uimsg(String msg, Object... args) {
 	if(msg == "cur")
 	    cur = Utils.iv(args[0]);
-	else if(msg == "max")
+	else if(msg == "max") {
 	    max = Utils.iv(args[0]);
+	    if(ui != null && ui.gui instanceof nurgling.NGameUI)
+		((nurgling.NGameUI)ui.gui).applyUserPreferredSpeed();
+	}
     }
 
     public void set(int s) {

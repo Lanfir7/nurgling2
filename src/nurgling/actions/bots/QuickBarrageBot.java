@@ -1,7 +1,7 @@
 package nurgling.actions.bots;
 
-import haven.Coord;
 import nurgling.NGameUI;
+import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.Results;
 import nurgling.widgets.bots.QuickBarrageBotWnd;
@@ -23,8 +23,7 @@ public class QuickBarrageBot implements Action {
         }
 
         currentWindow = new QuickBarrageBotWnd(gui);
-        Coord center = new Coord(gui.sz.x / 2 - currentWindow.sz.x / 2, gui.sz.y / 2 - currentWindow.sz.y / 2);
-        gui.add(currentWindow, center);
+        NUtils.addCentered(gui, currentWindow);
         currentWindow.startBot();
 
         return Results.SUCCESS();

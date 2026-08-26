@@ -3,35 +3,33 @@ package nurgling.overlays;
 import haven.Gob;
 import haven.render.Render;
 import nurgling.NConfig;
-
-import java.awt.*;
+import nurgling.conf.NAreaRadStyle;
 
 public class NBeehiveRadius extends NAreaRad {
     private boolean oldState = false;
-    
+    private int lastRadius = -1;
+
     public NBeehiveRadius(Gob owner) {
-        super(owner, (Boolean) NConfig.get(NConfig.Key.showBeehiveRadius) ? 150f : 0f, 
-              new Color(0, 163, 192, 128), 
-              new Color(0, 192, 0, 255));
-        oldState = (Boolean) NConfig.get(NConfig.Key.showBeehiveRadius);
+        super(owner, shown() ? NAreaRadStyle.beehiveRadius() : 0f, Palette.BEEHIVE);
+        oldState = shown();
+        lastRadius = NAreaRadStyle.beehiveRadius();
     }
-    
+
+    private static boolean shown() {
+        Object v = NConfig.get(NConfig.Key.showBeehiveRadius);
+        return (v instanceof Boolean) && (Boolean) v;
+    }
+
     @Override
     public void gtick(Render g) {
-        boolean currentState = (Boolean) NConfig.get(NConfig.Key.showBeehiveRadius);
-        if (oldState != currentState) {
+        boolean currentState = shown();
+        int rad = NAreaRadStyle.beehiveRadius();
+        if (oldState != currentState || (currentState && lastRadius != rad)) {
             oldState = currentState;
-            if (oldState)
-                setR(g, 150f);
-            else
-                setR(g, 0);
+            lastRadius = rad;
+            setR(g, currentState ? rad : 0);
         }
         if (oldState)
             super.gtick(g);
-    }
-    
-    @Override
-    public boolean tick(double dt) {
-        return super.tick(dt);
     }
 }

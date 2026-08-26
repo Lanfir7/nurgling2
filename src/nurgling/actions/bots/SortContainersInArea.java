@@ -88,7 +88,7 @@ public class SortContainersInArea implements Action {
         nurgling.widgets.bots.SortContainersWnd wnd = null;
         try {
             wnd = new nurgling.widgets.bots.SortContainersWnd();
-            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.getGameUI().add(wnd, UI.scale(200, 200))));
+            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.addCentered(wnd)));
             sortStacks = wnd.sortStacks;
         } finally {
             if (wnd != null) wnd.destroy();

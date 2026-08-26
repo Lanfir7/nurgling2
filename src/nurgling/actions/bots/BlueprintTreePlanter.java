@@ -62,7 +62,7 @@ public class BlueprintTreePlanter implements Action {
                 try {
                     window = new nurgling.widgets.bots.BlueprintTreePlanter();
                     NUtils.getUI().core.addTask(new WaitCheckable(
-                        NUtils.getGameUI().add(window, UI.scale(200, 200))
+                        NUtils.addCentered(window)
                     ));
                     
                     nurgling.widgets.bots.BlueprintTreePlanter.State state = window.getState();

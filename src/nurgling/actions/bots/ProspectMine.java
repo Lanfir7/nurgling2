@@ -19,7 +19,11 @@ import java.util.regex.Pattern;
 public class ProspectMine implements Action {
     private static final Pattern DETECT_PATTERN = Pattern.compile("There appears to be (.*) directly below\\.");
     private static final Pattern NO_MINERALS_PATTERN = Pattern.compile("No minerals found directly below\\.");
-    
+
+    static Coord2d snapshotRc(Coord2d rc) {
+        return rc == null ? null : Coord2d.of(rc.x, rc.y);
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         try {
@@ -27,6 +31,12 @@ public class ProspectMine implements Action {
             WItem jar = findClayJarWithRustrootExtract(gui);
             if (jar == null) {
                 return Results.ERROR("Clay Jar с rustroot extract не найден в инвентаре");
+            }
+
+            Gob player = gui.map != null ? gui.map.player() : null;
+            Coord2d startPos = snapshotRc(player != null ? player.rc : null);
+            if (startPos == null) {
+                return Results.ERROR("Игрок не найден");
             }
 
             // ПКМ по предмету и выбор опции "Prospect"
@@ -47,9 +57,9 @@ public class ProspectMine implements Action {
                 return Results.ERROR("Не удалось получить результат проспектинга");
             }
             
-            // Сохраняем маркер на карте
+            // Маркер — в месте старта макроса, а не там, где игрок оказался после ожидания
             if (gui.prospectingLocationService != null) {
-                gui.prospectingLocationService.saveProspectingLocation(resourceType);
+                gui.prospectingLocationService.saveProspectingLocation(resourceType, startPos);
             }
 
             // Закрываем окно проспектинга

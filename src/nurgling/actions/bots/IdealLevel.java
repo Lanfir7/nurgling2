@@ -40,7 +40,7 @@ public class IdealLevel implements Action {
         Wnd wnd = existing(gui);
         if (wnd == null) {
             wnd = new Wnd(gui);
-            gui.add(wnd, new Coord(gui.sz.x / 2 - UI.scale(110), UI.scale(80)));
+            NUtils.addCentered(gui, wnd);
         }
         wnd.setResult(r);
         wnd.raise();

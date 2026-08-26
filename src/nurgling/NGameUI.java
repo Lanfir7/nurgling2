@@ -6,6 +6,7 @@ import haven.res.ui.relcnt.RelCont;
 import nurgling.conf.IconRingConfig;
 import nurgling.conf.NDiscordNotification;
 import nurgling.conf.NToolBeltProp;
+import nurgling.i18n.L10n;
 import nurgling.notifications.DiscordHookObject;
 import nurgling.overlays.QualityOl;
 import nurgling.tools.NAlias;
@@ -486,18 +487,16 @@ public class NGameUI extends GameUI
     }
 
     private void initializeInventoryVisibility() {
-        Object setting = NConfig.get(NConfig.Key.openInventoryOnLogin);
-        boolean shouldOpenInventory = setting instanceof Boolean ? (Boolean) setting : false;
-
-        if (shouldOpenInventory) {
-            // Get the inventory window by its caption
-            Window inventoryWindow = getWindow("Inventory");
-            if (inventoryWindow != null) {
-                // Use togglewnd to properly show the inventory window
-                togglewnd(inventoryWindow);
-            }
+        if (!LoginPreferences.shouldOpenInventory(NConfig.get(NConfig.Key.openInventoryOnLogin))) {
+            return;
         }
-        // If shouldOpenInventory is false, inventory stays hidden (default behavior)
+        Window inventoryWindow = maininv != null ? maininv.getparent(Window.class) : null;
+        if (inventoryWindow == null) {
+            inventoryWindow = getWindow(L10n.get("inventory.window_title"));
+        }
+        if (inventoryWindow != null && !inventoryWindow.visible()) {
+            togglewnd(inventoryWindow);
+        }
     }
 
     @Override
@@ -790,6 +789,14 @@ public class NGameUI extends GameUI
             // Apply preferred movement speed when Speedget widget is loaded
             if (place != null && place.equals("meter") && child instanceof haven.Speedget) {
                 applyUserPreferredSpeed();
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(400);
+                        applyUserPreferredSpeed();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }, "PreferredSpeed-Retry").start();
             }
 
             // Add fishing extension if this is the "This is bait" window
@@ -1726,26 +1733,18 @@ public class NGameUI extends GameUI
     }
 
     /**
-     * Apply user's preferred movement speed from config
+     * Apply user's preferred movement speed from config.
+     * Called when Speedget is created and again when server raises max (login starts at crawl).
      */
-    private void applyUserPreferredSpeed() {
+    public void applyUserPreferredSpeed() {
         try {
-            Object speedPref = NConfig.get(NConfig.Key.preferredMovementSpeed);
-            if (speedPref instanceof Number) {
-                int preferredSpeed = ((Number) speedPref).intValue();
-                if (preferredSpeed >= 0 && preferredSpeed <= 3) { // Valid range
-                    // Small delay to ensure speedget is fully initialized
-                    new Thread(() -> {
-                        try {
-                            Thread.sleep(100); // Brief pause
-                            NUtils.setSpeed(preferredSpeed);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        } catch (Exception e) {
-                            System.err.println("[NGameUI] Failed to set preferred speed: " + e.getMessage());
-                        }
-                    }).start();
-                }
+            if (speedget == null) {
+                return;
+            }
+            Integer preferred = LoginPreferences.preferredSpeedFromConfig(NConfig.get(NConfig.Key.preferredMovementSpeed));
+            Integer target = LoginPreferences.speedToApply(speedget.cur, speedget.max, preferred);
+            if (target != null) {
+                NUtils.setSpeed(target);
             }
         } catch (Exception e) {
             System.err.println("[NGameUI] Failed to apply preferred movement speed: " + e.getMessage());

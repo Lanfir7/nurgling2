@@ -221,8 +221,11 @@ public class NMapView extends MapView
     private RenderTree.Slot markerLineSlot = null;
 
     public static boolean hitNWidgetsInfo(Coord pc, int button) {
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.map == null || gui.areas == null || !AreaLabelSync.labelsClickable(gui.areas.visible()))
+            return false;
         boolean isFound = false;
-        NMapView mapView = (NMapView)NUtils.getGameUI().map;
+        NMapView mapView = (NMapView)gui.map;
         synchronized (mapView.dummys) {
         for(Long gobid: mapView.dummys.keySet())
         {
@@ -397,11 +400,54 @@ public class NMapView extends MapView
 
 
 
+    private long lastAreaLabelSync = 0;
+
+    public boolean labelsNeeded() {
+        NGameUI gui = NUtils.getGameUI();
+        boolean editorOpen = gui != null && gui.areas != null && gui.areas.visible();
+        return AreaLabelSync.labelsShouldBeLive(
+                AreaLabelSync.toggleOn(NConfig.get(NConfig.Key.showAllZonesAlways)),
+                editorOpen);
+    }
+
+    private boolean dummyAlive(NArea area) {
+        if (area == null || area.gid == Long.MIN_VALUE)
+            return false;
+        if (glob.oc.getgob(area.gid) == null)
+            return false;
+        synchronized (dummys) {
+            return dummys.containsKey(area.gid);
+        }
+    }
+
     public void initDummys()
     {
-        for(Integer id : glob.map.areas.keySet())
-        {
-            createAreaLabel(id);
+        syncAreaLabels();
+    }
+
+    public void syncAreaLabels() {
+        HashSet<Long> liveGids = new HashSet<>();
+        synchronized (glob.map.areas) {
+            for (NArea area : glob.map.areas.values()) {
+                boolean locatable = area.getRCArea(false) != null;
+                boolean alive = dummyAlive(area);
+                if (AreaLabelSync.decide(true, locatable, alive) == AreaLabelSync.Action.CREATE)
+                    createAreaLabel(area.id);
+                if (dummyAlive(area))
+                    liveGids.add(area.gid);
+            }
+        }
+        synchronized (dummys) {
+            ArrayList<Long> stale = new ArrayList<>();
+            for (Long gid : dummys.keySet()) {
+                if (!liveGids.contains(gid))
+                    stale.add(gid);
+            }
+            for (Long gid : stale) {
+                Gob d = dummys.remove(gid);
+                if (d != null && glob.oc.getgob(d.id) != null)
+                    glob.oc.remove(d);
+            }
         }
     }
 
@@ -459,6 +505,10 @@ public class NMapView extends MapView
 
     public void createAreaLabel(Integer id) {
         NArea area = glob.map.areas.get(id);
+        if (area == null)
+            return;
+        if (dummyAlive(area))
+            return;
         Pair<Coord2d,Coord2d> space = area.getRCArea(false);
 
         if(space!=null)
@@ -478,13 +528,21 @@ public class NMapView extends MapView
 
     public void destroyDummys()
     {
+        HashSet<Long> destroyed = new HashSet<>();
         synchronized (dummys) {
             for(Gob d: dummys.values())
             {
+                destroyed.add(d.id);
                 if(glob.oc.getgob(d.id)!=null)
                     glob.oc.remove(d);
             }
             dummys.clear();
+        }
+        synchronized (glob.map.areas) {
+            for (NArea area : glob.map.areas.values()) {
+                if (destroyed.contains(area.gid))
+                    area.gid = Long.MIN_VALUE;
+            }
         }
     }
 
@@ -1036,6 +1094,14 @@ public class NMapView extends MapView
                 area.tick(dt);
             }
         }
+        long now = System.currentTimeMillis();
+        if (now - lastAreaLabelSync >= 500) {
+            lastAreaLabelSync = now;
+            if (labelsNeeded())
+                syncAreaLabels();
+            else if (!dummys.isEmpty())
+                destroyDummys();
+        }
         // Update marker line overlay (follows player)
         if(markerLineOverlay != null) {
             markerLineOverlay.tick();
@@ -1052,22 +1118,6 @@ public class NMapView extends MapView
             minesweeperDangerMarkers = new MinesweeperDangerMarkers();
         }
         minesweeperDangerMarkers.tick(dt);
-        ArrayList<Long> forRemove = new ArrayList<>();
-//        for(Gob dummy : dummys.values())
-//        {
-//            if(NUtils.findGob(dummy.id)==null)
-//            {
-//                forRemove.add(dummy.id);
-//                for (NArea area : glob.map.areas.values())
-//                {
-//                    if(area.gid == dummy.id)
-//                        createAreaLabel(area.id);
-//                }
-//
-//            }
-//        }
-//        for(Long id : forRemove)
-//            dummys.remove(id);
         super.tick(dt);
 
         if(NConfig.botmod != null && !botsInit) {

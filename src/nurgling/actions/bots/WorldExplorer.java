@@ -23,7 +23,7 @@ public class WorldExplorer implements Action {
         nurgling.widgets.bots.WorldExplorerWnd w = null;
         NWorldExplorerProp prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.getGameUI().add((w = new nurgling.widgets.bots.WorldExplorerWnd()), UI.scale(200,200))));
+            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.addCentered((w = new nurgling.widgets.bots.WorldExplorerWnd()))));
             prop = w.prop;
         }
         catch (InterruptedException e)

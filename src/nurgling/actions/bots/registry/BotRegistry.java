@@ -84,7 +84,7 @@ public class BotRegistry {
 
         // RESOURCES (using localization keys: bot.<id>.title and bot.<id>.desc)
         bots.add(new BotDescriptor("choper", BotDescriptor.BotType.RESOURCES, "bot.chopper.title", "bot.chopper.desc", false, true, Chopper.class, "choper", false));
-        bots.add(new BotDescriptor("prospect_mine", BotDescriptor.BotType.RESOURCES, "Prospector", "Prospects a mine and saves a marker at your position.", false, true, ProspectMine.class, "clay", false));
+        bots.add(new BotDescriptor("prospect_mine", BotDescriptor.BotType.RESOURCES, "bot.prospect_mine.title", "bot.prospect_mine.desc", false, true, ProspectMine.class, "prospect_mine", false));
         bots.add(new BotDescriptor("chipper", BotDescriptor.BotType.RESOURCES, "bot.chipper.title", "bot.chipper.desc", false, true, Chipper.class, "chipper", false));
         bots.add(new BotDescriptor("masterminer", BotDescriptor.BotType.RESOURCES, "МастерМайнер", "Майнинг с выбросом камня по реальному качеству в стене.", false, true, MasterMiner.class, "masterminer", false));
         bots.add(new BotDescriptor("pblocks", BotDescriptor.BotType.RESOURCES, "bot.pblocks.title", "bot.pblocks.desc", false, true, PrepareBlocks.class, "pblocks", false));

@@ -31,7 +31,7 @@ public class LoadVehicleAction implements GobContextAction {
             nurgling.widgets.bots.Carrier w = null;
             NCarrierProp prop = null;
             try {
-                NUtils.getUI().core.addTask(new WaitCheckable(gui.add((w = new nurgling.widgets.bots.Carrier()), UI.scale(200, 200))));
+                NUtils.getUI().core.addTask(new WaitCheckable(NUtils.addCentered(gui, (w = new nurgling.widgets.bots.Carrier()))));
                 prop = w.prop;
             } catch (InterruptedException e) {
                 throw e;

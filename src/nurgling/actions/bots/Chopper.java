@@ -27,7 +27,7 @@ public class Chopper implements Action {
         nurgling.widgets.bots.Chopper w = null;
         NChopperProp prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.getGameUI().add((w = new nurgling.widgets.bots.Chopper()), UI.scale(200,200))));
+            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.addCentered((w = new nurgling.widgets.bots.Chopper()))));
             prop = w.prop;
         }
         catch (InterruptedException e)

@@ -77,15 +77,22 @@ public class ProspectingLocationService implements ProfileAwareService {
      * Save a prospecting location at the player's current position
      */
     public void saveProspectingLocation(String resourceType) {
+        if (gui.map == null) return;
+        Gob player = gui.map.player();
+        if (player == null || player.rc == null) return;
+        saveProspectingLocation(resourceType, Coord2d.of(player.rc.x, player.rc.y));
+    }
+
+    /**
+     * Save a prospecting location at a captured world position (e.g. where the macro started).
+     */
+    public void saveProspectingLocation(String resourceType, Coord2d worldPos) {
         try {
-            if (gui.map == null) return;
+            if (gui.map == null || worldPos == null) return;
 
-            Gob player = gui.map.player();
-            if (player == null) return;
-
-            // Get current grid and segment info (same as TreeLocationService)
+            // Get grid and segment info (same as TreeLocationService)
             MCache mcache = gui.map.glob.map;
-            Coord tc = player.rc.floor(MCache.tilesz);  // Tile coordinate in world
+            Coord tc = worldPos.floor(MCache.tilesz);  // Tile coordinate in world
             Coord gridCoord = tc.div(MCache.cmaps);  // Grid coordinate
             MCache.Grid grid = mcache.getgrid(gridCoord);
 
@@ -136,9 +143,8 @@ public class ProspectingLocationService implements ProfileAwareService {
                 ProspectingLocation location = new ProspectingLocation(segmentId, segmentCoord, resourceType);
                 prospectingLocations.put(location.getLocationId(), location);
                 saveProspectingLocations();
-                
-                // Создаем маркер на карте с правильной иконкой ресурса
-                createProspectingMarker(mapFile, segmentId, segmentCoord, resourceType);
+                // Иконка рисуется NMiniMap.drawProspectingLocations — без SMarker,
+                // иначе на карте сразу два маркера в одной точке.
             } finally {
                 lock.writeLock().unlock();
             }
@@ -249,179 +255,6 @@ public class ProspectingLocationService implements ProfileAwareService {
         } catch (IOException e) {
             System.err.println("Failed to save prospecting locations: " + e.getMessage());
         }
-    }
-
-    /**
-     * Создает маркер на карте для проспектинга с правильной иконкой ресурса
-     * Использует тот же подход, что и NMiniMap.getProspectingIconPath для получения правильной иконки
-     */
-    private void createProspectingMarker(MapFile mapFile, long segmentId, Coord segmentCoord, String resourceType) {
-        try {
-            // Используем уникальное имя маркера на основе координат и типа ресурса
-            String markerName = resourceType != null ? resourceType : "Prospecting";
-            
-            // Получаем правильный путь к иконке ресурса (как в NMiniMap.getProspectingIconPath)
-            String markerResourceName = getProspectingIconResourcePath(resourceType);
-            if (markerResourceName == null) {
-                return; // Не удалось найти правильный путь к иконке
-            }
-            
-            // Пытаемся получить write lock для создания маркера
-            boolean lockAcquired = false;
-            try {
-                lockAcquired = mapFile.lock.writeLock().tryLock(500, TimeUnit.MILLISECONDS);
-                if (!lockAcquired) {
-                    return; // Не можем получить блокировку
-                }
-                
-                // Проверяем, не существует ли уже маркер проспектинга на этой позиции
-                // Проверяем по имени маркера и координатам, а также по ресурсу
-                boolean hasExistingMarker = false;
-                for (MapFile.Marker mark : mapFile.markers) {
-                    if (mark.seg == segmentId && mark.tc.equals(segmentCoord)) {
-                        // Проверяем, что это маркер проспектинга (по имени)
-                        if (mark.nm != null && mark.nm.equals(markerName)) {
-                            hasExistingMarker = true;
-                            break;
-                        }
-                        // Также проверяем по ресурсу для SMarker
-                        if (mark instanceof MapFile.SMarker) {
-                            MapFile.SMarker sm = (MapFile.SMarker) mark;
-                            try {
-                                if (sm.res != null && sm.res.name != null) {
-                                    // Проверяем, что это не маркер с Wine Glance (cuprite или wineglance)
-                                    String resName = sm.res.name.toLowerCase();
-                                    if (resName.contains("wineglance") || resName.contains("cuprite")) {
-                                        // Это маркер с Wine Glance - удаляем его, так как мы создадим правильный
-                                        mapFile.remove(mark);
-                                        break;
-                                    }
-                                    // Проверяем, что это маркер с таким же ресурсом
-                                    if (sm.res.name.equals(markerResourceName)) {
-                                        hasExistingMarker = true;
-                                        break;
-                                    }
-                                }
-                            } catch (Exception e) {
-                                // Игнорируем ошибки доступа к полю
-                            }
-                        }
-                    }
-                }
-                if (hasExistingMarker) {
-                    return; // Маркер уже существует на этой позиции, не создаем дубликат
-                }
-                
-                // Загружаем ресурс иконки и проверяем, что он существует
-                try {
-                    // Пробуем загрузить ресурс с таймаутом
-                    Resource res = Resource.remote().loadwait(markerResourceName);
-                    if (res == null) {
-                        // Ресурс не найден, не создаем маркер
-                        return;
-                    }
-                    int resVer = res.ver;
-                    
-                    // Создаем маркер с правильной иконкой ресурса
-                    MapFile.SMarker marker = new MapFile.SMarker(
-                        mapFile,
-                        segmentId, 
-                        segmentCoord, 
-                        markerName, 
-                        new Resource.Saved(Resource.remote(), markerResourceName, resVer)
-                    );
-                    
-                    mapFile.add(marker);
-                } catch (Exception e) {
-                    // Ресурс не найден или произошла ошибка загрузки, не создаем маркер
-                    // Не используем fallback на Wine Glance, чтобы избежать дубликатов
-                    System.err.println("Failed to load icon resource " + markerResourceName + " for prospecting marker: " + e.getMessage());
-                    return;
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } finally {
-                if (lockAcquired) {
-                    mapFile.lock.writeLock().unlock();
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Error creating prospecting marker: " + e);
-            e.printStackTrace();
-        }
-    }
-    
-    /**
-     * Получает правильный путь к ресурсу иконки для проспектинга
-     * Использует тот же подход, что и NMiniMap.getProspectingIconPath
-     */
-    private String getProspectingIconResourcePath(String resourceType) {
-        if (resourceType == null) return null;
-        
-        String lower = resourceType.toLowerCase().trim();
-        
-        // Специальные случаи
-        if (lower.contains("water")) {
-            return "gfx/terobjs/map/cavepuddle"; // Используем иконку воды из пещеры
-        } else if (lower.contains("void") || lower.contains("empty")) {
-            return null; // Пустота - не создаем маркер
-        }
-        
-        // Сначала пробуем найти путь в VSpec (для руд с альтернативными названиями)
-        String vSpecPath = getIconPathFromVSpec(resourceType);
-        if (vSpecPath != null) {
-            return vSpecPath;
-        }
-        
-        // Специальные случаи преобразования названий
-        String resourceName = lower;
-        if (lower.equals("rock salt") || lower.equals("rocksalt")) {
-            resourceName = "halite"; // Rock Salt использует иконку halite
-        } else if (lower.equals("iron ochre") || lower.equals("ironochre")) {
-            resourceName = "limonite"; // Iron Ochre использует иконку limonite
-        }
-        
-        // Нормализуем название: убираем пробелы (например, "lead glance" -> "leadglance")
-        String normalized = resourceName.replaceAll("\\s+", "");
-        
-        // Для камней и руд пробуем gfx/invobjs/[нормализованное название]
-        return "gfx/invobjs/" + normalized;
-    }
-    
-    /**
-     * Ищет путь к иконке в VSpec.object по названию руды
-     * Преобразует путь из gfx/terobjs/bumlings/... в gfx/invobjs/...
-     */
-    private String getIconPathFromVSpec(String resourceType) {
-        if (resourceType == null || nurgling.tools.VSpec.object == null) return null;
-        
-        String lower = resourceType.toLowerCase().trim();
-        String normalized = lower.replaceAll("\\s+", "");
-        
-        // Ищем в VSpec.object путь к иконке по названию руды
-        for (String iconPath : nurgling.tools.VSpec.object.keySet()) {
-            ArrayList<String> oreNames = nurgling.tools.VSpec.object.get(iconPath);
-            if (oreNames != null) {
-                for (String oreName : oreNames) {
-                    String lowerOreName = oreName.toLowerCase().trim();
-                    String normalizedOreName = lowerOreName.replaceAll("\\s+", "");
-                    
-                    // Проверяем точное совпадение или нормализованное
-                    if (lowerOreName.equals(lower) || normalizedOreName.equals(normalized) ||
-                        lowerOreName.equals(normalized) || normalizedOreName.equals(lower)) {
-                        // Преобразуем путь из gfx/terobjs/bumlings/... в gfx/invobjs/...
-                        if (iconPath.startsWith("gfx/terobjs/bumlings/")) {
-                            String oreType = iconPath.substring("gfx/terobjs/bumlings/".length());
-                            return "gfx/invobjs/" + oreType;
-                        }
-                        // Если путь уже в правильном формате, возвращаем как есть
-                        return iconPath;
-                    }
-                }
-            }
-        }
-        
-        return null;
     }
 
     /**

@@ -10,7 +10,7 @@ import nurgling.actions.Results;
 import nurgling.areas.*;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
-import nurgling.overlays.NTreeHarvestOl;
+import nurgling.overlays.NObjHarvestOl;
 import nurgling.tasks.*;
 import nurgling.tools.*;
 import nurgling.widgets.*;
@@ -66,6 +66,27 @@ public class NUtils
     public static NGameUI getGameUI(){
         NUI ui = getUI();
         return (ui != null) ? ui.gui : null;
+    }
+
+    public static Coord centeredPos(Coord parentSz, Coord childSz) {
+        if (parentSz == null || childSz == null)
+            return Coord.z;
+        return Coord.of(
+                Math.max(0, (parentSz.x - childSz.x) / 2),
+                Math.max(0, (parentSz.y - childSz.y) / 2));
+    }
+
+    public static <T extends Widget> T addCentered(T wdg) {
+        return addCentered(getGameUI(), wdg);
+    }
+
+    public static <T extends Widget> T addCentered(Widget parent, T wdg) {
+        if (parent == null || wdg == null)
+            return wdg;
+        parent.add(wdg, centeredPos(parent.sz, wdg.sz));
+        if (parent instanceof GameUI)
+            ((GameUI) parent).fitwdg(wdg);
+        return wdg;
     }
 
     public static NUI getUI(){
@@ -463,33 +484,13 @@ public class NUtils
 
     public static void refreshTreeHarvestOverlays() {
         NGameUI gui = getGameUI();
-        if (gui == null || gui.map == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) return;
-        boolean enabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.treeHarvestOverlay));
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) return;
+        NObjHarvestOl.clearLabelCache();
         synchronized (gui.ui.sess.glob.oc) {
             for (Gob gob : gui.ui.sess.glob.oc) {
                 if (gob == null || gob.ngob == null || gob.ngob.name == null) continue;
-                if (!NTreeHarvestOl.isTreeOrBushRes(gob.ngob.name)) continue;
-                Gob.Overlay ol = gob.findol(NTreeHarvestOl.class);
-                if (!enabled) {
-                    if (ol != null) ol.remove(true);
-                    continue;
-                }
-                try {
-                    Drawable drawable = gob.getattr(Drawable.class);
-                    if (!(drawable instanceof ResDrawable)) {
-                        if (ol != null) ol.remove(true);
-                        continue;
-                    }
-                    TexI label = NTreeHarvestOl.computeLabel(gob);
-                    if (label == null) {
-                        if (ol != null) ol.remove(true);
-                    } else if (ol == null) {
-                        gob.addcustomol(new NTreeHarvestOl(gob));
-                    } else if (ol.spr instanceof NTreeHarvestOl) {
-                        ((NTreeHarvestOl) ol.spr).refresh();
-                    }
-                } catch (Loading ignored) {
-                } catch (Exception ignored) {
+                if (HarvestSpecs.forResource(gob.ngob.name) != null) {
+                    gob.ngob.refreshHarvestOverlay();
                 }
             }
         }

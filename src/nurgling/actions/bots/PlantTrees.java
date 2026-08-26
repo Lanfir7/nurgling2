@@ -168,7 +168,7 @@ public class PlantTrees implements Action {
 
             // Create and show spacing dialog
             spacingDialog = new TreeSpacingDialog(this);
-            gui.add(spacingDialog, UI.scale(200, 200));
+            NUtils.addCentered(gui, spacingDialog);
 
             // Wait for user confirmation or cancellation
             while (!userConfirmed && !userCancelled) {

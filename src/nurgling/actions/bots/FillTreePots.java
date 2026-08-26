@@ -30,7 +30,7 @@ public class FillTreePots implements Action {
         NFillTreePotsProp prop = null;
         try {
             gui.ui.core.addTask(new WaitCheckable(
-                gui.add((w = new nurgling.widgets.bots.FillTreePotsWidget()), UI.scale(200, 200))
+                NUtils.addCentered(gui, (w = new nurgling.widgets.bots.FillTreePotsWidget()))
             ));
             prop = w.prop;
         } catch (InterruptedException e) {

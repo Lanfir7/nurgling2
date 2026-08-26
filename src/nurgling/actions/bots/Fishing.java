@@ -18,7 +18,7 @@ public class Fishing implements Action {
         nurgling.widgets.bots.Fishing w = null;
         NFishingSettings prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.getGameUI().add((w = new nurgling.widgets.bots.Fishing()), UI.scale(200,200))));
+            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.addCentered((w = new nurgling.widgets.bots.Fishing()))));
             prop = w.prop;
         }
         catch (InterruptedException e)

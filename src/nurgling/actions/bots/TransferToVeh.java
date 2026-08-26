@@ -21,7 +21,7 @@ public class TransferToVeh implements Action {
         nurgling.widgets.bots.Carrier w = null;
         NCarrierProp prop = null;
         try {
-            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.getGameUI().add((w = new nurgling.widgets.bots.Carrier()), UI.scale(200,200))));
+            NUtils.getUI().core.addTask(new WaitCheckable( NUtils.addCentered((w = new nurgling.widgets.bots.Carrier()))));
             prop = w.prop;
         }
         catch (InterruptedException e)

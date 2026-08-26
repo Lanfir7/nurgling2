@@ -364,7 +364,7 @@ public class Forager extends PathBotWindow {
                 }
             }
         });
-        NUtils.getGameUI().add(configWindow, UI.scale(200, 200));
+        NUtils.addCentered(configWindow);
         configWindow.show();
     }
 
