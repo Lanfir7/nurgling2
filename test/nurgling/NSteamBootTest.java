@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NSteamBootTest {
@@ -29,5 +30,24 @@ class NSteamBootTest {
         assertEquals("./hafen.jar", cmd.get(cmd.size() - 1));
         assertTrue(cmd.contains("--add-exports=java.desktop/sun.awt=ALL-UNNAMED"));
         assertTrue(cmd.contains("-Dhaven.authmech=steam"));
+    }
+
+    @Test
+    void statusShowsDownloadingFileFromLauncherLog() {
+        assertEquals("Downloading hafen.jar",
+                NSteamBoot.statusForLine("[LOG]Downloading hafen.jar -> tmp/hafen.jar"));
+    }
+
+    @Test
+    void statusShowsCheckAndStart() {
+        assertEquals("Checking for updates...", NSteamBoot.statusForLine("[LOG]Comparing version files"));
+        assertEquals("Already up to date", NSteamBoot.statusForLine("[LOG]No update required"));
+        assertEquals("Starting...", NSteamBoot.statusForLine("[LOG]Starting client"));
+    }
+
+    @Test
+    void hideSplashWhenClientStarts() {
+        assertTrue(NSteamBoot.isClientStarting("[LOG]Starting client"));
+        assertFalse(NSteamBoot.isClientStarting("[LOG]Downloading hafen.jar -> x"));
     }
 }

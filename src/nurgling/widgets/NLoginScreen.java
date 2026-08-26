@@ -120,7 +120,7 @@ public class NLoginScreen extends LoginScreen
                 // Compare versions and show update window on UI thread if needed
                 final String remoteVersion = remoteLine;
                 final String localVersion = localLine;
-                if (remoteVersion != null && localVersion != null && !localVersion.contains(remoteVersion)) {
+                if (NUpdateFeed.needsUpdate(localVersion, remoteVersion)) {
                     java.awt.EventQueue.invokeLater(() -> showVersionUpdateWindow());
                 }
             } catch (Exception e) {

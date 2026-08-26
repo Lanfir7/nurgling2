@@ -11,11 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NUpdateFeedTest {
     @Test
-    void defaultUrlIsLanfirReleaseStableVer() {
-        assertEquals(
-                "https://raw.githubusercontent.com/Lanfir7/nurgling-release/stable/ver",
-                NUpdateFeed.DEFAULT_BASEURL);
-        assertTrue(NUpdateFeed.DEFAULT_BASEURL.contains("Lanfir7"));
+    void defaultUrlIsLanfirNextReleaseVer() {
+        assertEquals(NUpdateFeed.SOURCE_RELEASE_DIR + "ver", NUpdateFeed.DEFAULT_BASEURL);
+        assertTrue(NUpdateFeed.DEFAULT_BASEURL.contains("/next/release/"));
         assertFalse(NUpdateFeed.DEFAULT_BASEURL.toLowerCase().contains("katodiy"));
         assertFalse(NUpdateFeed.DEFAULT_BASEURL.toLowerCase().contains("aleksandrsvoboda"));
     }
@@ -32,9 +30,23 @@ class NUpdateFeedTest {
     }
 
     @Test
-    void keepsAlreadyLanfirUrl() {
-        String own = "https://raw.githubusercontent.com/Lanfir7/nurgling-release/latest/ver";
-        assertEquals(own, NUpdateFeed.migrateBaseUrl(own));
+    void keepsAlreadyNextReleaseUrl() {
+        assertEquals(NUpdateFeed.DEFAULT_BASEURL, NUpdateFeed.migrateBaseUrl(NUpdateFeed.DEFAULT_BASEURL));
+    }
+
+    @Test
+    void migratesMasterAndReleaseRepoToNext() {
+        assertEquals(NUpdateFeed.DEFAULT_BASEURL,
+                NUpdateFeed.migrateBaseUrl("https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ver"));
+        assertEquals(NUpdateFeed.DEFAULT_BASEURL,
+                NUpdateFeed.migrateBaseUrl("https://raw.githubusercontent.com/Lanfir7/nurgling-release/latest/ver"));
+    }
+
+    @Test
+    void needsUpdateOnlyWhenVersionsDiffer() {
+        assertFalse(NUpdateFeed.needsUpdate("2.103.145", "2.103.145"));
+        assertTrue(NUpdateFeed.needsUpdate("2.103.145", "2.100.21"));
+        assertFalse(NUpdateFeed.needsUpdate(null, "2.103.145"));
     }
 
     @Test

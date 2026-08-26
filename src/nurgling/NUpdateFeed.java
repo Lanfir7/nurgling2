@@ -10,11 +10,11 @@ public final class NUpdateFeed {
     public static final String STABLE_DIR = "https://raw.githubusercontent.com/Lanfir7/nurgling-release/stable/";
     public static final String LATEST_DIR = "https://raw.githubusercontent.com/Lanfir7/nurgling-release/latest/";
     public static final String SOURCE_RELEASE_DIR = "https://raw.githubusercontent.com/Lanfir7/nurgling2/next/release/";
-    public static final String DEFAULT_BASEURL = STABLE_DIR + "ver";
+    public static final String DEFAULT_BASEURL = SOURCE_RELEASE_DIR + "ver";
 
     private NUpdateFeed() {}
 
-    /** Rewrite saved config URLs that still point at upstream Nurgling feeds. */
+    /** Rewrite saved config URLs that still point at upstream or stale feeds. */
     public static String migrateBaseUrl(String current) {
         if (current == null || current.trim().isEmpty()) {
             return DEFAULT_BASEURL;
@@ -23,6 +23,19 @@ public final class NUpdateFeed {
         if (lower.contains("katodiy") || lower.contains("aleksandrsvoboda")) {
             return DEFAULT_BASEURL;
         }
+        if (lower.contains("lanfir7/nurgling-release")) {
+            return DEFAULT_BASEURL;
+        }
+        if (lower.contains("lanfir7/nurgling2") && !lower.contains("/next/release")) {
+            return DEFAULT_BASEURL;
+        }
         return current;
+    }
+
+    public static boolean needsUpdate(String localVersion, String remoteVersion) {
+        if (localVersion == null || remoteVersion == null) {
+            return false;
+        }
+        return !localVersion.trim().equals(remoteVersion.trim());
     }
 }
