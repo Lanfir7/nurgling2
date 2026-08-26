@@ -112,6 +112,20 @@ class ExtraInvGroupTransferTest {
     }
 
     @Test
+    void itemQualityIgnoresStackAverage() {
+        assertEquals(20.0, ExtraInvGroupTransfer.itemQuality(20.0, 30.0));
+        assertEquals(20.0, ExtraInvGroupTransfer.itemQuality(20.0, null));
+        assertEquals(null, ExtraInvGroupTransfer.itemQuality(null, 30.0));
+    }
+
+    @Test
+    void qualityLabelShowsRangeWhenItemsDiffer() {
+        assertEquals("q20.0", ExtraInvGroupTransfer.qualityLabel(20.0, 20.0));
+        assertEquals("q20.0–40.0", ExtraInvGroupTransfer.qualityLabel(20.0, 40.0));
+        assertEquals("", ExtraInvGroupTransfer.qualityLabel(0, 0));
+    }
+
+    @Test
     void matchingTopLevelSendsStacksThenSolosOfThatTypeOnly() {
         List<ExtraInvGroupTransfer.Slot> slots = List.of(
                 ExtraInvGroupTransfer.Slot.stack("Pike", 32.0),

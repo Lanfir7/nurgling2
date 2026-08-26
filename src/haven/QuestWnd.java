@@ -49,6 +49,18 @@ public class QuestWnd extends Widget {
 	}
     }
 
+    public static String localizedTitle(String title) {
+	return(L10n.tr(title));
+    }
+
+    public static String statusBanner(boolean done) {
+	return(L10n.get(done ? "char.quest.completed" : "char.quest.failed"));
+    }
+
+    public static String returnToLabel(String name) {
+	return(L10n.get("char.quest.return_to", name));
+    }
+
     public static class Quest {
 	public static final int QST_PEND = 0, QST_DONE = 1, QST_FAIL = 2, QST_DISABLED = 3;
 	public static final Color[] stcol = {
@@ -71,8 +83,8 @@ public class QuestWnd extends Widget {
 
 	public String title() {
 	    if(title != null)
-		return(title);
-	    return(res.get().flayer(Resource.tooltip).t);
+		return(localizedTitle(title));
+	    return(res.get().flayer(Resource.tooltip).text());
 	}
 
 	public static class Condition {
@@ -88,8 +100,6 @@ public class QuestWnd extends Widget {
 	    }
 	}
 
-	private static final Tex qcmp = catf.render("Quest completed").tex();
-	private static final Tex qfail = failf.render("Quest failed").tex();
 	public void done(GameUI parent) {
 	    parent.add(new Widget() {
 		    double a = 0.0;
@@ -118,7 +128,7 @@ public class QuestWnd extends Widget {
 			    try {
 				title = (done == QST_DONE?catf:failf).render(title()).tex();
 				img = res.get().flayer(Resource.imgc).tex();
-				msg = (done == QST_DONE)?qcmp:qfail;
+				msg = (done == QST_DONE ? catf : failf).render(statusBanner(done == QST_DONE)).tex();
 				/*
 				resize(new Coord(Math.max(img.sz().x + 25 + title.sz().x, msg.sz().x),
 						 Math.max(img.sz().y, title.sz().y) + 25 + msg.sz().y));
@@ -164,7 +174,7 @@ public class QuestWnd extends Widget {
 	    protected void added() {
 		super.added();
 		StringBuilder buf = new StringBuilder();
-		buf.append(String.format("%s{%c %s", RichText.Parser.col2a(Quest.stcol[cond.done]), Quest.stsym[cond.done], cond.desc));
+		buf.append(String.format("%s{%c %s", RichText.Parser.col2a(Quest.stcol[cond.done]), Quest.stsym[cond.done], L10n.tr(cond.desc)));
 		if(cond.status != null) {
 		    buf.append(' ');
 		    buf.append(cond.status);
@@ -199,8 +209,8 @@ public class QuestWnd extends Widget {
 
 	    public String title() {
 		if(title != null)
-		    return(title);
-		return(res.get().flayer(Resource.tooltip).t);
+		    return(localizedTitle(title));
+		return(res.get().flayer(Resource.tooltip).text());
 	    }
 
 	    public Condition[] conds() {
@@ -232,7 +242,7 @@ public class QuestWnd extends Widget {
 		Resource.Pagina pag = res.layer(Resource.pagina);
 		if((pag != null) && !pag.text.equals("")) {
 		    buf.append("\n");
-		    buf.append(pag.text);
+		    buf.append(L10n.tr(pag.text));
 		    buf.append("\n");
 		}
 		return(buf.toString());
@@ -380,7 +390,7 @@ public class QuestWnd extends Widget {
 	    }
 
 	    private Text ct(Condition c) {
-		return(qcfnd.render(" " + stsym[c.done] + " " + c.desc + ((c.status != null)?(" " + c.status):""), stcol[c.done]));
+		return(qcfnd.render(" " + stsym[c.done] + " " + L10n.tr(c.desc) + ((c.status != null)?(" " + c.status):""), stcol[c.done]));
 	    }
 
 	    void update() {

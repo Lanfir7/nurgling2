@@ -52,6 +52,24 @@ public final class ExtraInvGroupTransfer {
         }
     }
 
+    /** Extra panel: never use stack-average overlay; only the item's own quality. */
+    public static Double itemQuality(Double itemQuality, Double stackAverage) {
+        if (itemQuality != null && itemQuality > 0) {
+            return itemQuality;
+        }
+        return null;
+    }
+
+    public static String qualityLabel(double min, double max) {
+        if (min <= 0 && max <= 0) {
+            return "";
+        }
+        if (Math.abs(max - min) < 0.05) {
+            return String.format(java.util.Locale.US, "q%.1f", min > 0 ? min : max);
+        }
+        return String.format(java.util.Locale.US, "q%.1f–%.1f", min, max);
+    }
+
     public static String groupKey(String name, Double quality, NInventory.Grouping grouping) {
         if (name == null) {
             return "";

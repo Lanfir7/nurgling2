@@ -2,6 +2,7 @@ package nurgling;
 
 import haven.*;
 import haven.QuestWnd.Quest;
+import nurgling.i18n.L10n;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.font.TextAttribute;
@@ -77,7 +78,7 @@ public class NQuestBox extends Quest.DefaultBox {
 	if(pag != null && !pag.text.equals("")) {
 	    int y = cont.contentsz().y + UI.scale(10);
 	    int width = cont.sz.x - UI.scale(20);
-	    RichText text = descFnd.render(resdoc(r, pag.text), width);
+	    RichText text = descFnd.render(resdoc(r, L10n.tr(pag.text)), width);
 	    cont.add(new Img(text.tex()), new Coord(UI.scale(10), y));
 	}
     }

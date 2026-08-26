@@ -41,8 +41,8 @@ public class NQuestInfo extends Widget
         lastUpdate.set(0);
         huntingT.clear();
         forageT.clear();
-        Widget prev = add(modebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/questmode", null, "Switch mode"), UI.scale(margin.x)/2, UI.scale(margin.y)/2).changed(a -> {mode = (mode == Mode.QUESTGIVERS?Mode.TASKS:Mode.QUESTGIVERS);needUpdate.set(true);});
-        prev = add(hidebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/eye", null, "Hide credo"), prev.pos("ur")).changed(a -> {NConfig.set(NConfig.Key.hidecredo,a);needUpdate.set(true);});
+        Widget prev = add(modebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/questmode", null, L10n.get("char.quest.switch_mode")), UI.scale(margin.x)/2, UI.scale(margin.y)/2).changed(a -> {mode = (mode == Mode.QUESTGIVERS?Mode.TASKS:Mode.QUESTGIVERS);needUpdate.set(true);});
+        prev = add(hidebtn = new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/eye", null, L10n.get("char.quest.hide_credo")), prev.pos("ur")).changed(a -> {NConfig.set(NConfig.Key.hidecredo,a);needUpdate.set(true);});
         hidebtn.a = (boolean) NConfig.get(NConfig.Key.hidecredo);
         refreshbtn = add(new NMiniMapWnd.NMenuCheckBox("nurgling/hud/buttons/inv/search", null, L10n.get("char.quest.refresh")), prev.pos("ur"));
         refreshbtn.click(() -> refreshDistances());
@@ -225,7 +225,7 @@ public class NQuestInfo extends Widget
         }
         if (mode == Mode.QUESTGIVERS) {
             if(!credo.myConditions.isEmpty()) {
-                imgs.add(new QuestImage(credo_title.render("Credo:").img, -1));
+                imgs.add(new QuestImage(credo_title.render(L10n.get("char.quest.credo")).img, -1));
                 for (Condition cond : credo.myConditions)
                 {
                     if(!cond.ready)
@@ -258,14 +258,14 @@ public class NQuestInfo extends Widget
                 }
             }
         } else if (mode == Mode.TASKS) {
-            addTargets("Bring", Condition.State.BRING);
-            addTargets("Foraging:", Condition.State.PICK);
-            addTargets("Hunting:", Condition.State.KILL);
-            addTargets("Conversation:", Condition.State.GREET, Condition.State.VISIT, Condition.State.RAGE, Condition.State.WAVE, Condition.State.LAUGH);
-            addTargets("Reward:", Condition.State.TELL);
-            addTargets("Attributes:", Condition.State.GAIN);
-            addTargets("Craft:", Condition.State.CREATE);
-            addTargets("Other:", Condition.State.CAVE, Condition.State.LIGHT);
+            addTargets(L10n.get("char.quest.section.bring"), Condition.State.BRING);
+            addTargets(L10n.get("char.quest.section.foraging"), Condition.State.PICK);
+            addTargets(L10n.get("char.quest.section.hunting"), Condition.State.KILL);
+            addTargets(L10n.get("char.quest.section.conversation"), Condition.State.GREET, Condition.State.VISIT, Condition.State.RAGE, Condition.State.WAVE, Condition.State.LAUGH);
+            addTargets(L10n.get("char.quest.section.reward"), Condition.State.TELL);
+            addTargets(L10n.get("char.quest.section.attributes"), Condition.State.GAIN);
+            addTargets(L10n.get("char.quest.section.craft"), Condition.State.CREATE);
+            addTargets(L10n.get("char.quest.section.other"), Condition.State.CAVE, Condition.State.LIGHT);
         }
         if (!imgs.isEmpty()) {
             glowon = new TexI(ncatimgs(1, imgs.toArray(new QuestImage[0])));
@@ -323,7 +323,7 @@ public class NQuestInfo extends Widget
         if (cond.state == Condition.State.TELL) {
             Condition.QuestsGiver qg = cond.getattr(Condition.QuestsGiver.class);
             String name = (qg != null && qg.name != null) ? qg.name : cond.target;
-            return QuestGiverDistance.withMeters("Return to " + name, condMeters(cond));
+            return QuestGiverDistance.withMeters(QuestWnd.returnToLabel(name), condMeters(cond));
         }
         return QuestGiverDistance.withMeters(cond.target, condMeters(cond));
     }

@@ -9,6 +9,7 @@ public final class NUpdateFeed {
     public static final String SOURCE_REPO_URL = "https://github.com/Lanfir7/nurgling2";
     public static final String STABLE_DIR = "https://raw.githubusercontent.com/Lanfir7/nurgling-release/stable/";
     public static final String LATEST_DIR = "https://raw.githubusercontent.com/Lanfir7/nurgling-release/latest/";
+    public static final String SOURCE_RELEASE_DIR = "https://raw.githubusercontent.com/Lanfir7/nurgling2/next/release/";
     public static final String DEFAULT_BASEURL = STABLE_DIR + "ver";
 
     private NUpdateFeed() {}

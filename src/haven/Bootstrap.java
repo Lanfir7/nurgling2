@@ -45,6 +45,10 @@ public class Bootstrap implements UI.Receiver, UI.Runner {
         return factory.get();
     }
 
+    static boolean usesNurglingLoginScreen(String mech) {
+	return("native".equals(mech) || "steam".equals(mech));
+    }
+
     public static final Config.Variable<String> authuser = Config.Variable.prop("haven.authuser", null);
     public static final Config.Variable<NamedSocketAddress> authserv = Config.Variable.proph("haven.server", AuthClient.DEFPORT, new NamedSocketAddress("localhost", AuthClient.DEFPORT));
     public static final Config.Variable<NamedSocketAddress> gameserv = Config.Variable.proph("haven.gameserv", 1870, null);
@@ -197,16 +201,9 @@ public class Bootstrap implements UI.Receiver, UI.Runner {
 	if (pre != null) return pre;
 
 	ui.setreceiver(this);
-	switch(authmech.get()) {
-		case "native":
-			ui.newwidgetp(1, ($1, $2) -> new NLoginScreen(confname), 0, new Object[] {Coord.z});
-			break;
-		case "steam":
-			ui.newwidgetp(1, ($1, $2) -> new LoginScreen(confname), 0, new Object[] {Coord.z});
-			break;
-		default:
-			throw(new RuntimeException("Unknown authmech: " + authmech.get()));
-	}
+	if(!usesNurglingLoginScreen(authmech.get()))
+	    throw(new RuntimeException("Unknown authmech: " + authmech.get()));
+	ui.newwidgetp(1, ($1, $2) -> new NLoginScreen(confname), 0, new Object[] {Coord.z});
 	String loginname = null;
 	boolean savepw = false;
 	NamedSocketAddress defserv = new NamedSocketAddress(server.host, gameport.get());

@@ -1255,6 +1255,8 @@ public class NInventory extends Inventory
         Double groupQuality;
         int totalQuantity = 0;
         double averageQuality = 0;
+        double minQuality = 0;
+        double maxQuality = 0;
         java.util.List<WItem> wItems = new ArrayList<>(); // Store WItems for actions
         java.util.List<NGItem> items = new ArrayList<>();
         // Curio info
@@ -1313,13 +1315,13 @@ public class NInventory extends Inventory
         }
         
         void recalculate() {
-            // Recalculate total quantity and quality
             totalQuantity = 0;
             double totalQuality = 0;
             int qualityCount = 0;
+            minQuality = 0;
+            maxQuality = 0;
             
             for (NGItem item : items) {
-                // Get proper stack count using Amount info like GetTotalAmountItems does
                 int stackSize = 1;
                 try {
                     GItem.Amount amount = item.getInfo(GItem.Amount.class);
@@ -1332,34 +1334,16 @@ public class NInventory extends Inventory
 
                 totalQuantity += stackSize;
 
-                // Calculate quality - try to get stack quality first, then fallback to item quality
-                double itemQuality = 0;
-                if(stackSize > 1) {
-                    // Try to get stack quality info for stacked items
-                    Stack stackInfo = item.getInfo(Stack.class);
-                    if (stackInfo != null && stackInfo.quality > 0) {
-                        itemQuality = stackInfo.quality;
-                    } else if (item.quality != null && item.quality > 0) {
-                        // Fallback to individual item quality if no stack quality
-                        itemQuality = item.quality;
-                    }
-                } else {
-                    // Fallback to individual item quality on any error
-                    try {
-                        if (item.quality != null && item.quality > 0) {
-                            itemQuality = item.quality;
-                        }
-                    } catch (Exception e2) {
-                        // Ignore and continue with 0 quality
-                        itemQuality = 0;
-                    }
-                }
-
-                
-                if (itemQuality > 0) {
-                    // Weight quality by stack size for accurate average
+                Double itemQuality = getItemQuality(item);
+                if (itemQuality != null && itemQuality > 0) {
                     totalQuality += itemQuality * stackSize;
                     qualityCount += stackSize;
+                    if (minQuality <= 0 || itemQuality < minQuality) {
+                        minQuality = itemQuality;
+                    }
+                    if (itemQuality > maxQuality) {
+                        maxQuality = itemQuality;
+                    }
                 }
             }
             
@@ -1380,12 +1364,8 @@ public class NInventory extends Inventory
      */
     private static Double getItemQuality(NGItem item) {
         try {
-            Stack stackInfo = item.getInfo(Stack.class);
-            if (stackInfo != null && stackInfo.quality > 0) {
-                return (double) stackInfo.quality;
-            }
             if (item.quality != null && item.quality > 0) {
-                return item.quality.doubleValue();
+                return ExtraInvGroupTransfer.itemQuality(item.quality.doubleValue(), null);
             }
         } catch (Exception e) {
             // Ignore
@@ -1405,12 +1385,27 @@ public class NInventory extends Inventory
     private void collectListedWItems(WItem wItem, java.util.function.Consumer<WItem> sink) {
         Widget contents = (wItem.item != null) ? wItem.item.contents : null;
         if (contents instanceof ItemStack) {
+            ItemStack stack = (ItemStack) contents;
+            boolean any = false;
+            for (GItem inner : stack.order) {
+                WItem innerW = stack.wmap.get(inner);
+                if (innerW != null) {
+                    collectListedWItems(innerW, sink);
+                    any = true;
+                }
+            }
+            if (any) {
+                return;
+            }
             for (Widget ch = contents.child; ch != null; ch = ch.next) {
                 if (ch instanceof WItem) {
                     collectListedWItems((WItem) ch, sink);
+                    any = true;
                 }
             }
-            return;
+            if (any) {
+                return;
+            }
         }
         sink.accept(wItem);
     }
@@ -1558,7 +1553,8 @@ public class NInventory extends Inventory
 
                 @Override
                 public Object tooltip(Coord c, Widget prev) {
-                    return group.name + (group.averageQuality > 0 ? String.format(" (q%.1f)", group.averageQuality) : "")
+                    return group.name + (ExtraInvGroupTransfer.qualityLabel(group.minQuality, group.maxQuality).isEmpty()
+                            ? "" : " (" + ExtraInvGroupTransfer.qualityLabel(group.minQuality, group.maxQuality) + ")")
                             + "\nShift+Click: transfer all of this type";
                 }
             };
@@ -1627,8 +1623,9 @@ public class NInventory extends Inventory
                 switch (dt) {
                     case Quality:
                         String qSign = (currentGrouping == Grouping.NONE || currentGrouping == Grouping.Q) ? "" : "+";
-                        if (group.averageQuality > 0) {
-                            displayText = String.format("x%d q%.1f%s", group.totalQuantity, group.averageQuality, qSign);
+                        String qLab = ExtraInvGroupTransfer.qualityLabel(group.minQuality, group.maxQuality);
+                        if (!qLab.isEmpty()) {
+                            displayText = String.format("x%d %s%s", group.totalQuantity, qLab, qSign);
                         } else {
                             displayText = "x" + group.totalQuantity + " " + group.name;
                         }
@@ -1644,8 +1641,9 @@ public class NInventory extends Inventory
                     case Name:
                     default:
                         displayText = String.format("x%d %s", group.totalQuantity, group.name);
-                        if (group.averageQuality > 0) {
-                            displayText += String.format(" (q%.1f)", group.averageQuality);
+                        String nameQ = ExtraInvGroupTransfer.qualityLabel(group.minQuality, group.maxQuality);
+                        if (!nameQ.isEmpty()) {
+                            displayText += " (" + nameQ + ")";
                         }
                         break;
                 }
@@ -1685,8 +1683,9 @@ public class NInventory extends Inventory
             public Object tooltip(Coord c, Widget prev) {
                 StringBuilder sb = new StringBuilder();
                 sb.append(group.name);
-                if (group.averageQuality > 0) {
-                    sb.append(String.format(" (q%.1f)", group.averageQuality));
+                String tipQ = ExtraInvGroupTransfer.qualityLabel(group.minQuality, group.maxQuality);
+                if (!tipQ.isEmpty()) {
+                    sb.append(" (").append(tipQ).append(")");
                 }
                 if (group.curioLph != null && group.curioMw != null) {
                     sb.append(String.format("\nLP/H: %d  MW: %d", group.curioLph, group.curioMw));
