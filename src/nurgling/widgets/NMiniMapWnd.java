@@ -216,13 +216,13 @@ public class NMiniMapWnd extends Widget{
         buttons.add(timer);
 
         // Tree harvest overlay toggle (leaf/seed/fruit) - uses existing 'path' button art
-        ACheckBox treeharv = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/path", kb_treeharv, "Tree harvest overlay (leaf/seed/fruit)");
+        ACheckBox treeharv = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/path", kb_treeharv, "Harvest overlay (per QoL settings)");
         treeharv.changed(a -> {
-            NConfig.set(NConfig.Key.treeHarvestOverlay, a);
+            NConfig.set(NConfig.Key.harvestOverlay, a);
             NConfig.needUpdate();
             NUtils.refreshTreeHarvestOverlays();
         });
-        treeharv.a = (Boolean) NConfig.get(NConfig.Key.treeHarvestOverlay);
+        treeharv.a = Boolean.TRUE.equals(NConfig.get(NConfig.Key.harvestOverlay));
         buttons.add(treeharv);
 
         // Show all zones always toggle

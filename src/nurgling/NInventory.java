@@ -132,6 +132,10 @@ public class NInventory extends Inventory
         }
 
         Window wnd = getparent(Window.class);
+        if (wnd instanceof CharWnd) {
+            isIndexable = false;
+            return false;
+        }
         if (wnd == null || wnd.cap == null) {
             return false;
         }
@@ -392,6 +396,9 @@ public class NInventory extends Inventory
     @Override
     public void addchild(Widget child, Object... args) {
         super.addchild(child, args);
+        if (child instanceof GItem) {
+            ForagePickupMarker.onNewItem((GItem) child);
+        }
     }
 
     public int getNumberFreeCoord(Coord coord) throws InterruptedException

@@ -8,6 +8,7 @@ import nurgling.actions.bots.*;
 import nurgling.areas.NContext;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
+import nurgling.tools.ForageMarkerLogic;
 import nurgling.widgets.NProspecting;
 
 import java.util.*;
@@ -252,6 +253,9 @@ public class NFlowerMenu extends FlowerMenu
                     NUtils.getUI().core.setLastAction(option.name, actions.item);
                 } else if (actions.gob != null) {
                     NUtils.getUI().core.setLastAction(option.name, actions.gob);
+                    if (ForageMarkerLogic.isPickAction(option.name)) {
+                        ForagePickupMarker.noteWorldPick(actions.gob);
+                    }
                 }
             }
         }

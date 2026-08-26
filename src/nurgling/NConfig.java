@@ -200,6 +200,7 @@ public class NConfig
         treeScaleDisableZoomHide,
         treeScaleMinThreshold,
         treeHarvestOverlay,
+        harvestOverlay,
         treeHarvestSeeds,
         treeHarvestLeaves,
         treeHarvestBoughs,
@@ -244,6 +245,7 @@ public class NConfig
         permIconScale,
         prospectIconScale,
         showAnimalIcons,
+        showForagingIcons,
         showAllZonesAlways,
         showGemstoneIcons,
         showOreSpotIcons,
@@ -441,6 +443,7 @@ public class NConfig
         conf.put(Key.treeFinderShowNotificationMinGrowth, 100);
         conf.put(Key.treeFinderNotificationAutoCloseTime, 8);
         conf.put(Key.treeHarvestOverlay, false);
+        conf.put(Key.harvestOverlay, false);
         conf.put(Key.treeResizeEnabled, false);
         conf.put(Key.treeResizePercentage, 100);
         conf.put(Key.animal_marker_enabled, false);
@@ -450,6 +453,7 @@ public class NConfig
         conf.put(Key.permIconScale, 1.0);
         conf.put(Key.prospectIconScale, 1.0);
         conf.put(Key.showAnimalIcons, true);
+        conf.put(Key.showForagingIcons, true);
         conf.put(Key.showAllZonesAlways, false);
         conf.put(Key.showGemstoneIcons, true);
         conf.put(Key.showOreSpotIcons, true);
@@ -607,7 +611,8 @@ public class NConfig
         conf.put(Key.treeScaleDisableZoomHide, false);  // If true, always show full label (don't hide on zoom out)
         conf.put(Key.treeScaleMinThreshold, 0);  // Minimum growth % to display tree scale (0 = show all)
         conf.put(Key.showAllZonesAlways, false);
-        conf.put(Key.treeHarvestOverlay, false);  // Show harvest icons on mature trees (master toggle)
+        conf.put(Key.treeHarvestOverlay, false);  // Show harvest icons on mature trees (category)
+        conf.put(Key.harvestOverlay, false);      // Minimap master: show enabled harvest overlay types
         conf.put(Key.treeHarvestSeeds, true);     // Sub-filter: show seed/fruit icons
         conf.put(Key.treeHarvestLeaves, true);    // Sub-filter: show leaf icons
         conf.put(Key.treeHarvestBoughs, true);    // Sub-filter: show bough icons
@@ -1296,6 +1301,10 @@ public class NConfig
         // Migration: Ensure new config keys have default values if not present in loaded config
         if (!conf.containsKey(Key.showSpeedometer)) {
             conf.put(Key.showSpeedometer, true);
+        }
+
+        if (!conf.containsKey(Key.harvestOverlay)) {
+            conf.put(Key.harvestOverlay, Boolean.TRUE.equals(conf.get(Key.treeHarvestOverlay)));
         }
 
         // Migration: fold the legacy inverted `hideNature` flag into the categorised hideConf.

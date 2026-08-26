@@ -142,6 +142,7 @@ public class NGItem extends GItem
     public void tick(double dt)
     {
         super.tick(dt);
+        ForagePickupMarker.onItemTick(this);
         if (name == null && spr != null)
         {
             if (!res.get().name.contains("coin"))

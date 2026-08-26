@@ -128,23 +128,33 @@ public class StackSupporter {
             "Extraction Press"
     );
 
-    public static boolean isStackable(NInventory inv, String name) {
+    public static boolean isKnownUnstackable(NInventory inv, String name) {
+        if (name == null) {
+            return true;
+        }
         Window win = inv.getparent(Window.class);
-        if (win != null) {
-            if (NParser.checkName(win.cap, unstackableContainers)
-                || NParser.checkName(name, new NAlias("Lynx Claws"))
+        if (win != null && NParser.checkName(win.cap, unstackableContainers)) {
+            return true;
+        }
+        return NParser.checkName(name, new NAlias("Lynx Claws"))
                 || name.equals("Silkworm")
                 || name.equals("Tick")
                 || name.contains("Dried Filet")
-                || catExceptions.contains(name)) {
-                return false;
-            } else {
-                ArrayList<String> categories = VSpec.getCategory(name);
-                for (String cat : categories) {
-                    if (categorySize.containsKey(cat)) {
-                        return true;
-                    }
-                }
+                || catExceptions.contains(name);
+    }
+
+    public static boolean isStackable(NInventory inv, String name) {
+        if (isKnownUnstackable(inv, name)) {
+            return false;
+        }
+        Window win = inv.getparent(Window.class);
+        if (win == null) {
+            return false;
+        }
+        ArrayList<String> categories = VSpec.getCategory(name);
+        for (String cat : categories) {
+            if (categorySize.containsKey(cat)) {
+                return true;
             }
         }
         return false;

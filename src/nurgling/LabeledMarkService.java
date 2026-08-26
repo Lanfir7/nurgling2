@@ -3,6 +3,7 @@ package nurgling;
 import haven.*;
 import nurgling.profiles.ConfigFactory;
 import nurgling.profiles.ProfileAwareService;
+import nurgling.tools.ForageMarkerLogic;
 import nurgling.widgets.LabeledMinimapMark;
 import nurgling.NGameUI;
 import nurgling.db.dao.AnimalMarkerDao;
@@ -289,6 +290,39 @@ public class LabeledMarkService implements ProfileAwareService {
             addMarkToIndexes(mark);
             
             // Сохраняем асинхронно, чтобы избежать пролога
+            scheduleSave();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void addForageMark(String label, String resourceType, long segmentId,
+                             Coord tileCoords, BufferedImage iconImage) {
+        if (resourceType == null || tileCoords == null) return;
+        lock.writeLock().lock();
+        try {
+            List<LabeledMinimapMark> sameType =
+                resourceTypeIndex.getOrDefault(resourceType, new ArrayList<LabeledMinimapMark>());
+            List<ForageMarkerLogic.Neighbor> nearby = new ArrayList<ForageMarkerLogic.Neighbor>();
+            for (LabeledMinimapMark mark : sameType) {
+                if (!ForageMarkerLogic.isForageId(mark.getLocationId())) continue;
+                if (mark.segmentId != segmentId) continue;
+                if (!mark.isNear(segmentId, tileCoords, ForageMarkerLogic.DEDUP_RADIUS)) continue;
+                nearby.add(new ForageMarkerLogic.Neighbor(
+                    mark.getLocationId(), ForageMarkerLogic.parseQuality(mark.label)));
+            }
+            ForageMarkerLogic.Dedup dedup =
+                ForageMarkerLogic.decideDedup(ForageMarkerLogic.parseQuality(label), nearby);
+            if (dedup.skip) return;
+            for (String id : dedup.removeIds) {
+                removeMarkFromIndexes(id);
+            }
+            String locationId = ForageMarkerLogic.forageLocationId(
+                segmentId, tileCoords.x, tileCoords.y, resourceType);
+            LabeledMinimapMark mark = new LabeledMinimapMark(
+                locationId, label, resourceType, segmentId, tileCoords, iconImage, null);
+            labeledMarks.put(locationId, mark);
+            addMarkToIndexes(mark);
             scheduleSave();
         } finally {
             lock.writeLock().unlock();

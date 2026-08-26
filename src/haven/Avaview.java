@@ -32,6 +32,9 @@ import haven.render.*;
 import haven.Composited.Desc;
 import haven.Composited.MD;
 import haven.Composited.ED;
+import nurgling.NStyle;
+import nurgling.overlays.NDMGOverlay;
+import nurgling.tools.CreatureHp;
 
 public class Avaview extends PView {
     public static final Tex missing = Resource.loadtex("gfx/hud/equip/missing");
@@ -269,6 +272,26 @@ public class Avaview extends PView {
 		g.image(missing, Coord.z, sz);
 	    }
 	}
+	drawCombatHp(g);
+    }
+
+    private void drawCombatHp(GOut g) {
+	if(getparent(Fightview.class) == null)
+	    return;
+	if((ui == null) || (ui.sess == null) || (avagob == -1))
+	    return;
+	Gob gob = ui.sess.glob.oc.getgob(avagob);
+	if(gob == null)
+	    return;
+	int dealt = 0;
+	Gob.Overlay gol = gob.findol(NDMGOverlay.class);
+	if((gol != null) && (gol.spr instanceof NDMGOverlay))
+	    dealt = ((NDMGOverlay)gol.spr).total();
+	String name = (gob.ngob != null) ? gob.ngob.name : null;
+	String text = CreatureHp.label(dealt, name);
+	if(text == null)
+	    return;
+	g.aimage(NStyle.meter.render(text).tex(), Coord.of(sz.x / 2, UI.scale(2)), 0.5, 0);
     }
 
     public boolean mousedown(MouseDownEvent ev) {

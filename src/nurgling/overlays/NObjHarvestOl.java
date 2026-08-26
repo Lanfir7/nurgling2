@@ -7,9 +7,9 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import nurgling.NConfig;
 import nurgling.styles.TooltipStyle;
 import nurgling.tools.HarvestSpec;
+import nurgling.tools.HarvestSpecs;
 import nurgling.tools.HarvestState;
 import nurgling.tools.LpExplorer;
 
@@ -71,7 +71,7 @@ public class NObjHarvestOl extends NObjectTexLabel {
         Drawable dr = gob.getattr(Drawable.class);
         ResDrawable d = (dr instanceof ResDrawable) ? (ResDrawable) dr : null;
         if (d == null) return null;
-        if (!Boolean.TRUE.equals(NConfig.get(spec.masterToggle())))
+        if (!HarvestSpecs.overlayEnabled(spec))
             return null;
 
         List<HarvestSpec.Part> parts = spec.parts(gob, d);

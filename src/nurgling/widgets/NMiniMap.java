@@ -55,6 +55,7 @@ NMiniMap extends MiniMap {
     public boolean showOreSpotIcons = true; // Видимость маркеров спотов руд
     public boolean showGemstoneIcons = true; // Видимость маркеров драгоценных камней
     public boolean showAnimalIcons = true; // Видимость маркеров животных (ObjectTracker + БД)
+    public boolean showForagingIcons = true;
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
     public java.util.List<FloorOverlayAligner.FloorLink> floorLinks = java.util.Collections.emptyList();
     public FloorOverlayAligner.FloorLink selectedFloorLink = null;
@@ -115,12 +116,37 @@ NMiniMap extends MiniMap {
         Boolean animals = (Boolean) NConfig.get(NConfig.Key.showAnimalIcons);
         if (animals != null) showAnimalIcons = animals;
 
+        Boolean foraging = (Boolean) NConfig.get(NConfig.Key.showForagingIcons);
+        if (foraging != null) showForagingIcons = foraging;
+
         Boolean zones = (Boolean) NConfig.get(NConfig.Key.showAllZonesAlways);
         if (zones != null) showAllZonesAlways = zones;
     }
 
     private static boolean isAnimalMark(LabeledMinimapMark mark) {
         return mark != null && mark.getLocationId() != null && mark.getLocationId().startsWith("animal_");
+    }
+
+    private static boolean isForageMark(LabeledMinimapMark mark) {
+        return mark != null && nurgling.tools.ForageMarkerLogic.isForageId(mark.getLocationId());
+    }
+
+    private boolean skipForageMark(LabeledMinimapMark mark) {
+        if (!isForageMark(mark)) return false;
+        if (!showForagingIcons) return true;
+        MapWnd mapwnd = (NUtils.getGameUI() != null) ? NUtils.getGameUI().mapfile : null;
+        if (mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall)) return true;
+        String markerSearchPattern = null;
+        Widget parentWidget = this.parent;
+        while (parentWidget != null) {
+            if (parentWidget instanceof NMapWnd) {
+                markerSearchPattern = ((NMapWnd) parentWidget).markerSearchPattern;
+                break;
+            }
+            parentWidget = parentWidget.parent;
+        }
+        return !nurgling.tools.ForageMarkerLogic.matchesMapSearch(
+            mark.resourceType, mark.label, markerSearchPattern);
     }
 
     /**
@@ -1112,6 +1138,7 @@ NMiniMap extends MiniMap {
             if(isAnimalMark(mark) && !showAnimalIcons) {
                 continue;
             }
+            if (skipForageMark(mark)) continue;
 
             // Calculate screen position
             Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
@@ -1677,6 +1704,7 @@ NMiniMap extends MiniMap {
                         if(isOreSpotMark(mark) && !showOreSpotIcons) continue;
                         if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) continue;
                         if(isAnimalMark(mark) && !showAnimalIcons) continue;
+                        if (skipForageMark(mark)) continue;
 
                         // Convert segment-relative coordinates to screen coordinates (same as drawing)
                         Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
@@ -1700,6 +1728,10 @@ NMiniMap extends MiniMap {
                                 }
                                 BufferedImage combined = ItemInfo.catimgs(0, parts.toArray(new BufferedImage[0]));
                                 return new TexI(combined);
+                            }
+                            if (isForageMark(mark)) {
+                                String lab = mark.label != null ? mark.label : "";
+                                return Text.render(resourceType + (lab.isEmpty() ? "" : " " + lab));
                             }
                             return Text.render(resourceType);
                         }
@@ -2396,6 +2428,7 @@ NMiniMap extends MiniMap {
     private boolean isOreSpotMark(LabeledMinimapMark mark) {
         if (mark == null) return false;
         if (isAnimalMark(mark)) return false;
+        if (isForageMark(mark)) return false;
         String resourceType = mark.resourceType;
         if (resourceType == null) return false;
         if ("Quarryartz".equals(resourceType)) return false;
@@ -2439,6 +2472,7 @@ NMiniMap extends MiniMap {
             if(isAnimalMark(mark) && !showAnimalIcons) {
                 continue;
             }
+            if (skipForageMark(mark)) continue;
 
             // Calculate screen position for this mark
             Coord markScreenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
@@ -2941,6 +2975,13 @@ NMiniMap extends MiniMap {
                             gui.add(searchWnd, new Coord(100, 100));
                         } else {
                             searchWnd.raise();
+                        }
+                        return true;
+                    } else if (isForageMark(labeledMark)) {
+                        if ((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                            gui.labeledMarkService.removeMark(labeledMark);
+                            gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
+                            return true;
                         }
                         return true;
                     } else if(isOreSpotMark(labeledMark)) {

@@ -22,4 +22,15 @@ class SortInventoryExcludeTest {
         assertFalse(SortInventory.isExcludedWindow("Chest"));
         assertFalse(SortInventory.isExcludedWindow(null));
     }
+
+    @Test
+    void russianCharacterSheetIsExcluded() {
+        String prev = nurgling.i18n.L10n.getLanguage();
+        try {
+            nurgling.i18n.L10n.setLanguage("ru");
+            assertTrue(SortInventory.isExcludedWindow(nurgling.i18n.L10n.get("char.window_title")));
+        } finally {
+            nurgling.i18n.L10n.setLanguage(prev);
+        }
+    }
 }

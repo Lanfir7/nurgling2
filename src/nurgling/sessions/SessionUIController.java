@@ -110,10 +110,27 @@ public class SessionUIController implements SessionManager.SessionChangeListener
 
     @Override
     public void onActiveSessionChanged(SessionContext oldSession, SessionContext newSession) {
-        // When active session changes, we need to move the tab bar to the new session's UI
-        // so it can receive click events (widgets only receive events from rendered UI)
-        if (newSession != null && newSession.ui != null) {
-            attachToUI(newSession.ui);
+        if (newSession == null || newSession.ui == null) {
+            return;
+        }
+
+        SessionContext displayed = (currentUI != null)
+                ? SessionManager.getInstance().findByUI(currentUI)
+                : null;
+
+        // Login screen is not a session. Moving the tab bar onto the headless
+        // target UI hides it, and Bootstrap is still blocked waiting for login.
+        if (currentUI != null && SessionSwitchFromLogin.keepTabBarOnDisplayedUi(displayed)) {
+            wakeLoginForSessionSwitch();
+            return;
+        }
+
+        attachToUI(newSession.ui);
+    }
+
+    private void wakeLoginForSessionSwitch() {
+        if (currentUI != null && currentUI.rcvr != null) {
+            currentUI.rcvr.rcvmsg(0, SessionSwitchFromLogin.MSG);
         }
     }
 

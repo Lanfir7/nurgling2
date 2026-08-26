@@ -1,6 +1,8 @@
 package nurgling.actions.bots;
 
+import haven.Coord2d;
 import haven.Gob;
+import haven.MCache;
 import haven.WItem;
 import haven.res.ui.tt.leashed.Leashed;
 import nurgling.NConfig;
@@ -8,7 +10,7 @@ import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.Action;
-import nurgling.actions.PathFinder;
+import nurgling.actions.DynamicPf;
 import nurgling.actions.Results;
 import nurgling.overlays.NCustomResult;
 import nurgling.tasks.NTask;
@@ -36,8 +38,14 @@ public class FeedClover implements Action {
         this.targetAnimal = targetAnimal;
     }
 
+    public static final double FEED_REACH = MCache.tilesz.x;
+
     public static boolean isWildHorse(String name) {
         return name != null && name.contains("kritter/horse/horse");
+    }
+
+    public static boolean closeEnoughToFeed(Coord2d player, Coord2d animal) {
+        return DynamicPf.isWithinReach(player, animal, FEED_REACH);
     }
 
     @Override
@@ -54,12 +62,14 @@ public class FeedClover implements Action {
             return Results.SUCCESS();
         }
 
-        Results walk = new PathFinder(gob).run(gui);
-        if (!walk.IsSuccess())
-            return walk;
-        gob = Finder.findGob(gob.id);
-        if (gob == null)
-            return targetAnimal != null ? Results.ERROR("Animal disappeared") : Results.SUCCESS();
+        if (NUtils.player() == null || !closeEnoughToFeed(NUtils.player().rc, gob.rc)) {
+            Results walk = new DynamicPf(gob).withReachDistance(FEED_REACH).run(gui);
+            if (!walk.IsSuccess())
+                return walk;
+            gob = Finder.findGob(gob.id);
+            if (gob == null)
+                return targetAnimal != null ? Results.ERROR("Animal disappeared") : Results.SUCCESS();
+        }
 
         item = gui.getInventory().getItem(clover);
         if(item==null)

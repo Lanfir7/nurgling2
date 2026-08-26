@@ -71,6 +71,10 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
         }
     }
 
+    public int total() {
+        return dmg[0] + dmg[1] + dmg[2];
+    }
+
     public void updDmg(int dmg, int type) {
         this.dmg[type] += dmg;
         dmgt[type] = new TexI(Utils.outline2(fnd.render(Integer.toString(this.dmg[type]), colt[type]).img, Utils.contrast(colt[type])));
@@ -100,6 +104,7 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
         if(sc == null || curOl == null) {
             return;
         }
+        sc = sc.add(0, curOl.getHeight() * 2);
         g.chcolor(new Color(0, 0, 0, 64));
         Coord start = new Coord(curOl.getWidth(),curOl.getHeight()).div(2);
         g.frect2(sc.sub(start), sc.add(new Coord(curOl.getWidth(),curOl.getHeight())).sub(start));

@@ -3,6 +3,7 @@ import haven.*;
 import nurgling.NConfig;
 import nurgling.conf.FontSettings;
 import nurgling.conf.ItemQualityOverlaySettings;
+import nurgling.tools.TanningRemaining;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -21,7 +22,7 @@ public class Drying extends ItemInfo implements GItem.MeterInfo, GItem.OverlayIn
     
     private Tex cachedOverlay = null;
     private long lastSettingsVersion = -1;
-    private int lastPercent = -1;
+    private String lastText = null;
 
     public Drying(Owner owner, double done) {
         super(owner);
@@ -69,33 +70,45 @@ public class Drying extends ItemInfo implements GItem.MeterInfo, GItem.OverlayIn
             return null;
         }
         
-        int currentPercent = (int)(meter() * 100);
+        String text = TanningRemaining.overlayText(meter(), windowCap());
         long currentVersion = settingsVersion;
         
         // Check cache
-        if (cachedOverlay != null && lastSettingsVersion == currentVersion && lastPercent == currentPercent) {
+        if (cachedOverlay != null && lastSettingsVersion == currentVersion && text.equals(lastText)) {
             return cachedOverlay;
         }
-        BufferedImage text = renderPercentText(currentPercent, settings);
+        BufferedImage rendered = renderPercentText(text, settings);
         
         if (settings.showBackground) {
-            BufferedImage bi = new BufferedImage(text.getWidth(), text.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            BufferedImage bi = new BufferedImage(rendered.getWidth(), rendered.getHeight(), BufferedImage.TYPE_INT_ARGB);
             Graphics2D graphics = bi.createGraphics();
             graphics.setColor(settings.backgroundColor);
             graphics.fillRect(0, 0, bi.getWidth(), bi.getHeight());
-            graphics.drawImage(text, 0, 0, null);
+            graphics.drawImage(rendered, 0, 0, null);
             graphics.dispose();
             cachedOverlay = new TexI(bi);
         } else {
-            cachedOverlay = new TexI(text);
+            cachedOverlay = new TexI(rendered);
         }
         
         lastSettingsVersion = currentVersion;
-        lastPercent = currentPercent;
+        lastText = text;
         return cachedOverlay;
     }
+
+    private String windowCap() {
+        if (!(owner instanceof GItem)) {
+            return null;
+        }
+        WItem wi = ((GItem) owner).wi;
+        if (wi == null) {
+            return null;
+        }
+        haven.Window wnd = wi.getparent(haven.Window.class);
+        return wnd != null ? wnd.cap : null;
+    }
     
-    private BufferedImage renderPercentText(int percent, ItemQualityOverlaySettings settings) {
+    private BufferedImage renderPercentText(String text, ItemQualityOverlaySettings settings) {
         FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
         Font font;
         if (fontSettings != null) {
@@ -109,7 +122,6 @@ public class Drying extends ItemInfo implements GItem.MeterInfo, GItem.OverlayIn
             font = new Font("SansSerif", Font.PLAIN, UI.scale(settings.fontSize));
         }
         
-        String text = percent + "%";
         Text.Foundry fnd = new Text.Foundry(font, settings.defaultColor).aa(true);
         BufferedImage textImg = fnd.render(text, settings.defaultColor).img;
         
@@ -183,16 +195,16 @@ public class Drying extends ItemInfo implements GItem.MeterInfo, GItem.OverlayIn
 
     @Override
     public boolean tick(double dt) {
-        int currentPercent = (int)(meter() * 100);
-        // Check if settings changed
+        String text = TanningRemaining.overlayText(meter(), windowCap());
         if (lastSettingsVersion != settingsVersion) {
             cachedOverlay = null;
             return false;
         }
-        if (lastPercent != currentPercent) {
-            lastPercent = currentPercent;
-            return false; // Need to update overlay
+        if (!text.equals(lastText)) {
+            lastText = text;
+            cachedOverlay = null;
+            return false;
         }
-        return true; // No update needed
+        return true;
     }
 }

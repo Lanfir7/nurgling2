@@ -23,6 +23,18 @@ public class HarvestSpecs {
 
     private HarvestSpecs() {}
 
+    public static boolean overlayEnabled(boolean globalOn, boolean typeOn) {
+        return globalOn && typeOn;
+    }
+
+    public static boolean overlayEnabled(HarvestSpec spec) {
+        if (spec == null)
+            return false;
+        return overlayEnabled(
+                Boolean.TRUE.equals(NConfig.get(NConfig.Key.harvestOverlay)),
+                Boolean.TRUE.equals(NConfig.get(spec.masterToggle())));
+    }
+
     /** The spec that applies to this gob resource, or null if none of the four cover it. */
     public static HarvestSpec forResource(String gobResName) {
         for (HarvestSpec spec : ALL) {

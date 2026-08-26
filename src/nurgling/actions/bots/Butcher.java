@@ -12,6 +12,7 @@ import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.Equip;
 import nurgling.actions.FreeInventory2;
+import nurgling.actions.GoTo;
 import nurgling.actions.PathFinder;
 import nurgling.actions.Results;
 import nurgling.actions.SelectFlowerAction;
@@ -19,10 +20,11 @@ import nurgling.actions.Validator;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.tasks.NFlowerMenuIsClosed;
+import nurgling.tasks.NTask;
 import nurgling.tasks.NoGob;
 import nurgling.tasks.WaitButcherState;
 import nurgling.tasks.WaitFreeHand;
-import nurgling.tasks.WaitPose;
+import nurgling.tasks.WaitTicks;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.VSpec;
@@ -73,52 +75,58 @@ public class Butcher implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-        Results equipped = new Equip(
-                VSpec.getNamesInCategory("Sharp Tool"),
-                new NAlias("Traveller's Sack", "Wanderer's Bindle", "Traveler's Sack"),
-                NInventory.QualityType.High
-        ).run(gui);
-        if (!equipped.IsSuccess()) {
-            return equipped;
-        }
-
-        NArea.Specialisation kritter_corpse = new NArea.Specialisation(Specialisation.SpecName.deadkritter.toString());
-        NArea zone = NContext.findSpec(kritter_corpse);
-        ButcherTarget.Mode mode = ButcherTarget.resolve(target != null, zone != null);
-
-        if (mode == ButcherTarget.Mode.SINGLE) {
-            Gob gob = Finder.findGob(target.id);
-            if (gob == null || !ButcherTarget.isCarcass(gob)) {
-                return Results.ERROR("No carcass");
+        HandLoadout before = HandLoadout.capture();
+        try {
+            Results equipped = new Equip(
+                    VSpec.getNamesInCategory("Sharp Tool"),
+                    new NAlias("Traveller's Sack", "Wanderer's Bindle", "Traveler's Sack"),
+                    NInventory.QualityType.High
+            ).run(gui);
+            if (!equipped.IsSuccess()) {
+                return equipped;
             }
-            return butcherGobs(gui, listOf(gob), null, false);
-        }
 
-        if (mode == ButcherTarget.Mode.ZONE) {
-            ArrayList<NArea.Specialisation> req = new ArrayList<>();
-            req.add(kritter_corpse);
-            if (!new Validator(req, new ArrayList<>()).run(gui).IsSuccess()) {
-                return Results.ERROR("No carcass area");
+            NArea.Specialisation kritter_corpse = new NArea.Specialisation(Specialisation.SpecName.deadkritter.toString());
+            NArea zone = NContext.findSpec(kritter_corpse);
+            ButcherTarget.Mode mode = ButcherTarget.resolve(target != null, zone != null);
+
+            if (mode == ButcherTarget.Mode.SINGLE) {
+                Gob gob = Finder.findGob(target.id);
+                if (gob == null || !ButcherTarget.isCarcass(gob)) {
+                    return Results.ERROR("No carcass");
+                }
+                return butcherGobs(gui, listOf(gob), null, false);
             }
-            NUtils.navigateToArea(zone);
-            return butcherGobs(gui, getGobs(zone), zone, true);
-        }
 
-        SelectArea insa = new SelectArea(Resource.loadsimg("baubles/inputArea"));
-        if (!insa.run(gui).IsSuccess() || insa.getRCArea() == null) {
-            return Results.ERROR("No area selected");
+            if (mode == ButcherTarget.Mode.ZONE) {
+                ArrayList<NArea.Specialisation> req = new ArrayList<>();
+                req.add(kritter_corpse);
+                if (!new Validator(req, new ArrayList<>()).run(gui).IsSuccess()) {
+                    return Results.ERROR("No carcass area");
+                }
+                NUtils.navigateToArea(zone);
+                return butcherGobs(gui, getGobs(zone), zone, true);
+            }
+
+            SelectArea insa = new SelectArea(Resource.loadsimg("baubles/inputArea"));
+            if (!insa.run(gui).IsSuccess() || insa.getRCArea() == null) {
+                return Results.ERROR("No area selected");
+            }
+            return butcherGobs(gui, getGobs(insa.getRCArea()), null, false);
+        } finally {
+            HandLoadout.restore(gui, before);
         }
-        return butcherGobs(gui, getGobs(insa.getRCArea()), null, false);
     }
 
     private Results butcherGobs(NGameUI gui, ArrayList<Gob> gobs, NArea area, boolean dumpInventory) throws InterruptedException {
         while (!gobs.isEmpty()) {
             gobs.sort(NUtils.d_comp);
-            Gob gob = gobs.get(0);
-            if (gob == null || Finder.findGob(gob.id) == null) {
+            Gob gob = followCarcass(gobs.get(0), gobs.get(0) != null ? gobs.get(0).rc : null, false);
+            if (gob == null) {
                 gobs.remove(0);
                 continue;
             }
+            gobs.set(0, gob);
             NContext context = dumpInventory ? new NContext(gui) : null;
             Results one = butcherOne(gui, gob, area, context, dumpInventory);
             if (!one.IsSuccess()) {
@@ -130,8 +138,8 @@ public class Butcher implements Action {
             } else {
                 gobs.remove(0);
                 for (int i = gobs.size() - 1; i >= 0; i--) {
-                    Gob left = Finder.findGob(gobs.get(i).id);
-                    if (left == null || !ButcherTarget.isCarcass(left)) {
+                    Gob left = followCarcass(gobs.get(i), gobs.get(i).rc, false);
+                    if (left == null) {
                         gobs.remove(i);
                     } else {
                         gobs.set(i, left);
@@ -146,11 +154,32 @@ public class Butcher implements Action {
     }
 
     private Results butcherOne(NGameUI gui, Gob gob, NArea area, NContext context, boolean dumpInventory) throws InterruptedException {
-        while (Finder.findGob(gob.id) != null) {
+        Coord2d lastRc = gob.rc;
+        int emptyMenus = 0;
+        while (true) {
+            Gob next = followCarcass(gob, lastRc, emptyMenus > 0);
+            if (next != null && gob != null && next.id != gob.id) {
+                emptyMenus = 0;
+            }
+            gob = next;
+            if (gob == null) {
+                if (ButcherTarget.giveUpOnEmptyMenu(++emptyMenus)) {
+                    break;
+                }
+                NUtils.addTask(new WaitTicks(8));
+                continue;
+            }
+            lastRc = gob.rc;
             NUtils.rclickGob(gob);
             NFlowerMenu fm = NUtils.getFlowerMenu();
-            if (fm == null)
-                break;
+            if (fm == null) {
+                if (ButcherTarget.giveUpOnEmptyMenu(++emptyMenus)) {
+                    break;
+                }
+                NUtils.addTask(new WaitTicks(8));
+                continue;
+            }
+            emptyMenus = 0;
             String optForSelect = null;
             for (String option : order) {
                 for (NFlowerMenu.NPetal petal : fm.nopts) {
@@ -164,7 +193,10 @@ public class Butcher implements Action {
                 if (optForSelect != null)
                     break;
             }
-            boolean optFound = optForSelect != null;
+            if (optForSelect == null) {
+                break;
+            }
+            boolean optFound = true;
             while (optFound && gob!=null) {
 
                 if (NUtils.getGameUI().getInventory().getNumberFreeCoord(options.get(optForSelect).size) < options.get(optForSelect).num) {
@@ -181,12 +213,22 @@ public class Butcher implements Action {
                         gob = Finder.findGob(gob.id);
                 }
                 if (gob != null) {
-                    new PathFinder(gob).run(gui);
+                    approach(gui, gob);
 
                     if (new SelectFlowerAction(optForSelect, gob).run(gui).IsSuccess()) {
 
                         if (!optForSelect.equals("Collect bones")) {
-                            NUtils.getUI().core.addTask(new WaitPose(NUtils.player(), "gfx/borka/butcher"));
+                            NUtils.addTask(new NTask() {
+                                int ticks;
+                                @Override
+                                public boolean check() {
+                                    Gob pl = NUtils.player();
+                                    return WaitButcherState.workStarted(
+                                            pl != null ? pl.pose() : null,
+                                            WaitButcherState.isMounted(pl),
+                                            ticks++);
+                                }
+                            });
                             WaitButcherState wbs = new WaitButcherState(options.get(optForSelect).size);
                             NUtils.addTask(wbs);
                             if (wbs.getState() == WaitButcherState.State.READY) {
@@ -208,8 +250,47 @@ public class Butcher implements Action {
                         optFound = false;
                 }
             }
+            NUtils.addTask(new WaitTicks(8));
+            if (gob != null && Finder.findGob(gob.id) == null) {
+                Gob replaced = followCarcass(gob, lastRc, true);
+                if (replaced != null) {
+                    gob = replaced;
+                    lastRc = gob.rc;
+                }
+            }
         }
         return Results.SUCCESS();
+    }
+
+    private static void approach(NGameUI gui, Gob gob) throws InterruptedException {
+        if (WaitButcherState.isMounted(NUtils.player())) {
+            Coord2d stop = ButcherTarget.mountedApproach(NUtils.player().rc, gob.rc);
+            if (stop != null) {
+                new GoTo(stop).run(gui);
+            }
+        } else {
+            new PathFinder(gob).run(gui);
+        }
+    }
+
+    /** After Skin a horse often respawns with a new gob id at the same spot. */
+    private static Gob followCarcass(Gob gob, Coord2d lastRc, boolean skipSameId) throws InterruptedException {
+        Coord2d from = lastRc != null ? lastRc : (gob != null ? gob.rc : null);
+        if (from != null) {
+            ArrayList<Long> skip = new ArrayList<>();
+            if (skipSameId && gob != null) {
+                skip.add(gob.id);
+            }
+            Gob nearby = Finder.findGob(from, new NAlias("kritter"), new NAlias("knock", "dead"),
+                    ButcherTarget.FOLLOW_RADIUS, skip);
+            if (nearby != null) {
+                return nearby;
+            }
+        }
+        if (skipSameId || gob == null) {
+            return null;
+        }
+        return Finder.findGob(gob.id);
     }
 
     private static ArrayList<Gob> listOf(Gob gob) {

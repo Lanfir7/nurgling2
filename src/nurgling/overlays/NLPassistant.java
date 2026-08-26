@@ -1,9 +1,9 @@
 package nurgling.overlays;
 
 import haven.*;
-import nurgling.NConfig;
 import nurgling.NUtils;
 import nurgling.tools.HarvestSpec;
+import nurgling.tools.HarvestSpecs;
 import nurgling.tools.LpExplorer;
 
 import java.awt.image.BufferedImage;
@@ -89,7 +89,7 @@ public class NLPassistant extends NObjectTexLabel
         // re-resolving it here, since this runs every tick for every fallback marker.
         if (gob.ngob != null) {
             HarvestSpec spec = gob.ngob.harvestSpec();
-            if (spec != null && Boolean.TRUE.equals(NConfig.get(spec.masterToggle())))
+            if (spec != null && HarvestSpecs.overlayEnabled(spec))
                 return true;
         }
 

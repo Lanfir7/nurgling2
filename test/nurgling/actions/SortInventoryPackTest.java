@@ -37,4 +37,19 @@ class SortInventoryPackTest {
     void partialSmallerThanMax() {
         assertEquals(Collections.singletonList(2), SortInventory.computePackedSlotSizes(2, 5));
     }
+
+    @Test
+    void unknownTableSizeStillTriesToPack() {
+        assertEquals(10, SortInventory.packingMaxStackSize(1, 1));
+    }
+
+    @Test
+    void knownTableSizeWinsOverUnknown() {
+        assertEquals(3, SortInventory.packingMaxStackSize(3, 1));
+    }
+
+    @Test
+    void unknownTableUsesProbeCapEvenIfAStackAlreadyExists() {
+        assertEquals(10, SortInventory.packingMaxStackSize(1, 2));
+    }
 }

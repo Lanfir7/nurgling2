@@ -48,6 +48,9 @@ public class SortInventory implements Action {
         if (caption == null || caption.isEmpty()) {
             return false;
         }
+        if (caption.equals("Character Sheet") || caption.equals(nurgling.i18n.L10n.get("char.window_title"))) {
+            return true;
+        }
         for (String excluded : EXCLUDE_WINDOWS) {
             if ("Study".equals(excluded)) {
                 if (caption.equals("Study")) {
@@ -458,9 +461,8 @@ public class SortInventory implements Action {
         boolean packed = false;
         for (String itemName : names) {
             if (cancelled) return;
-            boolean packable = StackSupporter.isStackable(inventory, itemName)
-                    && StackSupporter.getFullStackSize(itemName) > 1;
-            if (packable) {
+            if (!StackSupporter.isKnownUnstackable(inventory, itemName)
+                    && scanSlotCounts(itemName).size() >= 2) {
                 packStacks(itemName);
                 packed = true;
             }
@@ -524,8 +526,17 @@ public class SortInventory implements Action {
         return sizes;
     }
 
+    static final int UNKNOWN_PACK_CAP = 10;
+
+    static int packingMaxStackSize(int tableSize, int observedMax) {
+        if (tableSize > 1) {
+            return tableSize;
+        }
+        return UNKNOWN_PACK_CAP;
+    }
+
     private void packStacks(String itemName) throws InterruptedException {
-        int max = StackSupporter.getFullStackSize(itemName);
+        int max = packingMaxStackSize(StackSupporter.getFullStackSize(itemName), 1);
         if (max <= 1) {
             return;
         }
@@ -598,8 +609,46 @@ public class SortInventory implements Action {
             if (NUtils.getGameUI().vhand == null) {
                 return;
             }
-            addItemToSlot(positions.get(destIdx));
+            Coord destPos = positions.get(destIdx);
+            Coord srcPos = positions.get(srcIdx);
+            int destCountBefore = counts.get(destIdx);
+            boolean stacked = addItemToSlotForPack(destPos);
+            if (stacked) {
+                continue;
+            }
+            if (NUtils.getGameUI().vhand != null) {
+                inventory.wdgmsg("drop", srcPos);
+                NUtils.addTask(new WaitFreeHand(200, false));
+            }
+            if (destCountBefore <= 1) {
+                return;
+            }
+            max = destCountBefore;
         }
+    }
+
+    private boolean addItemToSlotForPack(Coord pos) throws InterruptedException {
+        if (NUtils.getGameUI().vhand == null) {
+            return true;
+        }
+        WItem slotItem = findSlotItemAtPos(pos);
+        if (slotItem == null) {
+            inventory.wdgmsg("drop", pos);
+            NUtils.addTask(new WaitFreeHand(200, false));
+            return NUtils.getGameUI().vhand == null;
+        }
+        ItemStack stack = slotItem.item.contents instanceof ItemStack
+                ? (ItemStack) slotItem.item.contents : null;
+        int oldSize = stack != null ? stack.wmap.size() : 0;
+        NUtils.itemact(slotItem);
+        NUtils.addTask(new WaitFreeHand(200, false));
+        if (NUtils.getGameUI().vhand != null) {
+            return false;
+        }
+        if (stack != null) {
+            NUtils.addTask(new StackSizeChanged(stack, oldSize));
+        }
+        return true;
     }
 
     private List<Object[]> scanSlotCounts(String itemName) {

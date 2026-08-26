@@ -86,7 +86,9 @@ public class Tabs {
 	if((curtab = tab) != null)
 	    curtab.show();
 	if(tab!=null) {
-		tab.resize(tab.contentsz());
+		Coord cs = tab.contentsz();
+		if((cs.x > 0) && (cs.y > 0))
+			tab.resize(cs);
 	}
 	changed(old, tab);
     }

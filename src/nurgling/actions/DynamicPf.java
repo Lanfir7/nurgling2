@@ -23,8 +23,11 @@ import static haven.OCache.posres;
 
 public class DynamicPf implements Action
 {
+    public static final double DEFAULT_REACH = MCache.tilesz.x * 1.5;
+
     Gob target;
     boolean isVirtual = false;
+    public double reachDistance = DEFAULT_REACH;
 
     public DynamicPf(Gob gob)
     {
@@ -136,9 +139,18 @@ public class DynamicPf implements Action
             targetPos = actualTarget.rc;
         }
         
-        // Проверяем расстояние до цели (примерно один тайл)
-        double distance = playerPos.dist(targetPos);
-        return distance <= MCache.tilesz.x * 1.5;
+        return isWithinReach(playerPos, targetPos, reachDistance);
+    }
+
+    public static boolean isWithinReach(Coord2d player, Coord2d target, double reach) {
+        if (player == null || target == null)
+            return false;
+        return player.dist(target) < reach;
+    }
+
+    public DynamicPf withReachDistance(double dist) {
+        this.reachDistance = dist;
+        return this;
     }
 
     private static void updatePath(LinkedList<Graph.Vertex> path, WorkerPf wpf, Gob target) {

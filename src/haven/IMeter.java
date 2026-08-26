@@ -108,30 +108,51 @@ public class IMeter extends LayerMeter {
 	}
     }
 
+	static String tipKey(String val) {
+		if(val == null)
+			return null;
+		int colon = val.indexOf(':');
+		if(colon < 0)
+			return null;
+		return val.substring(0, colon).trim();
+	}
+
+	static String tipValue(String val) {
+		if(val == null)
+			return null;
+		int colon = val.indexOf(':');
+		if(colon < 0)
+			return null;
+		return val.substring(colon + 1);
+	}
+
+	static boolean meterName(String key, String english, String l10nKey) {
+		if(key == null || key.isEmpty())
+			return false;
+		if(english.equals(key))
+			return true;
+		return l10nKey != null && nurgling.i18n.L10n.get(l10nKey).equals(key);
+	}
+
 	@Override
 	public void uimsg(String msg, Object... args)
 	{
 		if(msg == "tip") {
 			String val = (String) args[0];
-			if(val!=null)
+			String key = tipKey(val);
+			String rest = tipValue(val);
+			if(key != null && rest != null)
 			{
-				String key = val.substring(0, val.indexOf(":"));
-				switch (key)
-				{
-					case "Stamina":
-					case "Satiety":
-					case "Pony Power":
-					case "Seaworthiness":
-						text = NStyle.meter.render(val.substring(val.indexOf(":")+1)).tex();
-						break;
-					case "Health":
-						text = NStyle.meter.render(val.substring(val.indexOf(":")+1).replace("/", " / ")).tex();
-						break;
-					case "Energy":
-						text = NStyle.meter.render(val.substring(val.indexOf(":")+1, val.lastIndexOf("%")+1)).tex();
-						break;
-
-				}
+				if(meterName(key, "Health", "widget.hp"))
+					text = NStyle.meter.render(rest.replace("/", " / ")).tex();
+				else if(meterName(key, "Energy", "widget.energy")) {
+					int pct = rest.lastIndexOf('%');
+					text = NStyle.meter.render(pct >= 0 ? rest.substring(0, pct + 1) : rest).tex();
+				} else if(meterName(key, "Stamina", "widget.stam")
+					|| "Satiety".equals(key)
+					|| "Pony Power".equals(key)
+					|| "Seaworthiness".equals(key))
+					text = NStyle.meter.render(rest).tex();
 			}
 		}
 		super.uimsg(msg, args);

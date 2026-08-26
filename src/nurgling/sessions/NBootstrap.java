@@ -44,26 +44,27 @@ public class NBootstrap extends Bootstrap {
      */
     @Override
     protected UI.Runner preRun(UI ui) throws InterruptedException {
+        return consumePendingSwitch(ui);
+    }
+
+    @Override
+    protected UI.Runner onLoginWaitMessage(UI ui, String msgName) throws InterruptedException {
+        if (SessionSwitchFromLogin.isSwitchMessage(msgName)) {
+            return consumePendingSwitch(ui);
+        }
+        return null;
+    }
+
+    private UI.Runner consumePendingSwitch(UI ui) throws InterruptedException {
         SessionManager sm = SessionManager.getInstance();
         SessionContext switchTo = sm.consumePendingSwitchTo();
 
         if (switchTo != null && switchTo.session != null) {
-            // Promote the session from headless to visual mode
             switchTo.promoteToVisual(ui.getenv());
-
-            // Apply pending camera state if camera sync is enabled
             sm.applyPendingCameraState(switchTo);
-
-            // Give the background message loop a moment to exit cleanly
-            // The PromotedMessage will cause it to exit, but we need to wait
             Thread.sleep(100);
-
-            // Return a NRemoteUI connected to the existing session
-            // This skips the login screen and goes straight to the game
             return new NRemoteUI(switchTo.session);
         }
-
-        // No pending switch - proceed with normal bootstrap (login screen)
         return null;
     }
 }

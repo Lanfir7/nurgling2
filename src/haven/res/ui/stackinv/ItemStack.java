@@ -39,6 +39,7 @@ public class ItemStack extends Widget implements DTarget {
 	    wmap.put(i, add(new NWItem(i)));
 	    order.add(i);
 	    dirty = true;
+	    nurgling.ForagePickupMarker.onNewItem(i);
 	}
     }
 

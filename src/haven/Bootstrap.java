@@ -188,6 +188,14 @@ public class Bootstrap implements UI.Receiver, UI.Runner {
     }
 
     /**
+     * Hook called for each message received while waiting on the login screen.
+     * @return non-null Runner to abort login and continue with that runner
+     */
+    protected UI.Runner onLoginWaitMessage(UI ui, String msgName) throws InterruptedException {
+        return null;
+    }
+
+    /**
      * Hook for creating RemoteUI after successful login.
      * Override to return NRemoteUI for multi-session support.
      */
@@ -265,6 +273,9 @@ public class Bootstrap implements UI.Receiver, UI.Runner {
 		ui.uimsg(1, "login");
 		while(true) {
 		    Message msg = getmsg();
+		    UI.Runner switched = onLoginWaitMessage(ui, msg.name);
+		    if(switched != null)
+			return(switched);
 		    if(msg.id == 1) {
 			if(msg.name == "login") {
 			    creds = (AuthClient.Credentials)msg.args[0];
