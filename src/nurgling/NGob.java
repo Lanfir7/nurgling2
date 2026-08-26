@@ -1330,17 +1330,23 @@ public class NGob
                 if (res.name.equals("gfx/fx/dowse"))
                 {
                     NProspecting.overlay(parent, ol);
-                    // Also add vectors directly (overlay only adds if QUALITIES not empty)
-                    tryAddTrackingVectors(parent, ol);
                 }
-                // Also handle tracking overlays - check for any overlay with a1/a2 fields
-                else if (res.name.contains("track"))
+                if (isMapConeOverlay(res.name))
                 {
-                    // Try to extract a1/a2 and add vectors even without quality
                     tryAddTrackingVectors(parent, ol);
                 }
             }
         }
+    }
+
+    /** Minimap cone rays: any gfx/fx overlay (dowse, tracking, Sense Thingwall, …). */
+    static boolean isMapConeOverlay(String resName) {
+        if (resName == null) {
+            return false;
+        }
+        return resName.startsWith("gfx/fx/")
+                || resName.contains("track")
+                || resName.contains("sense");
     }
 
     /**
