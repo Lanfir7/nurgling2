@@ -172,6 +172,18 @@ class ExtraInvGroupTransferTest {
     }
 
     @Test
+    void extraPanelSkippedForEnderExcludedWindows() {
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", false));
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Belt", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Pouch", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Stack", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Table", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", true));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel(null, false));
+    }
+
+    @Test
     void oneItemStackCountsAsLeftover() {
         assertTrue(ExtraInvGroupTransfer.isLeftover(false, 1));
         assertTrue(ExtraInvGroupTransfer.isLeftover(true, 1));

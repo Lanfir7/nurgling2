@@ -1053,7 +1053,7 @@ public class NGameUI extends GameUI
                 webhook.addEmbed(new nurgling.notifications.DiscordHookObject.EmbedObject()
                         .setColor(java.awt.Color.RED)
                         .setThumbnail(settings.webhookIcon)
-                        .setAuthor("Nurgling2", NUpdateFeed.SOURCE_REPO_URL, "https://github.com/Lanfir7.png")
+                        .setAuthor("Nurgling Evolution", NUpdateFeed.SOURCE_REPO_URL, "https://github.com/Lanfir7.png")
                         .setUrl(NUpdateFeed.SOURCE_REPO_URL));
                 new Thread(webhook).start();
 
@@ -1377,9 +1377,16 @@ public class NGameUI extends GameUI
         KeyBinding kb;
         public NKeyBinding(KeyBinding old) {
             this.kb = old;
-            this.key = old.key;
+            this.key = effective(old);
             this.modign = old.modign;
             updateTex();
+        }
+
+        static KeyMatch effective(KeyBinding kb) {
+            KeyMatch k = kb.key();
+            if (k == null || k == KeyMatch.nil || k.code == KeyEvent.VK_UNDEFINED)
+                return null;
+            return k;
         }
 
         Tex tex;
@@ -1423,9 +1430,9 @@ public class NGameUI extends GameUI
 
         boolean tick()
         {
-            if(kb.key!=key || kb.modign!=modign)
+            if(effective(kb)!=key || kb.modign!=modign)
             {
-                key = kb.key;
+                key = effective(kb);
                 modign = kb.modign;
                 updateTex();
                 return true;

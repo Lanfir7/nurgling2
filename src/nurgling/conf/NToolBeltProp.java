@@ -9,6 +9,18 @@ import java.util.*;
 
 public class NToolBeltProp implements JConf
 {
+    static final int[] BELT0_CODES = {
+            KeyEvent.VK_1, KeyEvent.VK_2, KeyEvent.VK_3, KeyEvent.VK_4,
+            KeyEvent.VK_5, KeyEvent.VK_6, KeyEvent.VK_7, KeyEvent.VK_8,
+            KeyEvent.VK_9, KeyEvent.VK_0, KeyEvent.VK_MINUS, KeyEvent.VK_EQUALS
+    };
+
+    public static KeyMatch defaultKey(String name, int slot) {
+        if (!"belt0".equals(name) || slot < 0 || slot >= BELT0_CODES.length)
+            return KeyMatch.nil;
+        return KeyMatch.forcode(BELT0_CODES[slot], 0);
+    }
+
     String name;
     boolean isVertiacal = false;
 
@@ -27,7 +39,7 @@ public class NToolBeltProp implements JConf
         for(int i = 0 ; i < kb.size() ; i ++)
         {
             if(this.kb.get(i)==null)
-                this.kb.set(i, KeyBinding.get (name + i, KeyMatch.nil));
+                this.kb.set(i, KeyBinding.get (name + i, defaultKey(name, i)));
         }
     }
 
@@ -45,7 +57,7 @@ public class NToolBeltProp implements JConf
             }
             else
             {
-                kb.set(i, KeyBinding.get (name + i, KeyMatch.nil));
+                kb.set(i, KeyBinding.get (name + i, defaultKey(name, i)));
             }
             i++;
         }

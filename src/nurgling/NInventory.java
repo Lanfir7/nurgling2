@@ -32,6 +32,10 @@ public class NInventory extends Inventory
     private int leftoverWait;
     private static final int LEFTOVER_DELAY_TICKS = 12;
     public boolean mainInvInstalled = false;
+    private boolean extraPanelInstalled = false;
+    private boolean extraPanelResolved = false;
+    private Widget containerSortBtn;
+    private Widget containerStackSortBtn;
     public Scrollport itemListContainer;
     public Widget itemListContent;
     public ICheckBox bundle;
@@ -170,6 +174,7 @@ public class NInventory extends Inventory
         nurgling.widgets.TableInventoryExtension.installIfTable(this);
         // Add Sort button for container inventories (not main inventory)
         addSortButtonIfContainer();
+        tryInstallContainerExtraPanel();
     }
     
     /**
@@ -215,6 +220,7 @@ public class NInventory extends Inventory
         };
         sortBtn.settip("Sort Inventory");
         deco.add(sortBtn);
+        containerSortBtn = sortBtn;
 
         // Initial position left of close button
         Coord cbtnPos = deco.cbtn.c;
@@ -235,6 +241,7 @@ public class NInventory extends Inventory
             }
         }.tip("Sort Within Stacks");
         deco.add(stackSortBtn);
+        containerStackSortBtn = stackSortBtn;
         int centerY = sortBtn.c.y + sortBtn.sz.y / 2 - stackSortBtn.sz.y / 2;
         stackSortBtn.c = new Coord(sortBtn.c.x - stackSortBtn.sz.x - UI.scale(2), centerY);
     }
@@ -251,6 +258,65 @@ public class NInventory extends Inventory
         }
         
         addSortButtonToTitleBar();
+    }
+
+    private void tryInstallContainerExtraPanel() {
+        if (extraPanelInstalled || extraPanelResolved || mainInvInstalled || rightPanel != null) {
+            return;
+        }
+        NGameUI gui = NUtils.getGameUI();
+        if (gui != null && this == gui.maininv) {
+            extraPanelResolved = true;
+            return;
+        }
+        if (getparent(GItem.ContentsWindow.class) != null) {
+            extraPanelResolved = true;
+            return;
+        }
+        Window wnd = getparent(Window.class);
+        if (wnd == null || !(wnd.deco instanceof NWindowDeco) || parent == null) {
+            return;
+        }
+        if (wnd.cap == null) {
+            return;
+        }
+        if (!ExtraInvGroupTransfer.shouldInstallExtraPanel(wnd.cap, false)) {
+            extraPanelResolved = true;
+            return;
+        }
+        installContainerExtraPanel((NWindowDeco) wnd.deco);
+    }
+
+    private void installContainerExtraPanel(NWindowDeco deco) {
+        final NWindowDeco decoRef = deco;
+        eyeBtn = new NHeaderCycler("nurgling/hud/buttons/inv/eye", 3, this::setPanelState) {
+            @Override
+            public void tick(double dt) {
+                super.tick(dt);
+                Widget anchor = containerStackSortBtn != null ? containerStackSortBtn
+                        : (containerSortBtn != null ? containerSortBtn : decoRef.cbtn);
+                if (anchor != null && anchor.c != null) {
+                    int centerY = anchor.c.y + anchor.sz.y / 2 - sz.y / 2;
+                    c = new Coord(anchor.c.x - sz.x - UI.scale(2), centerY);
+                }
+            }
+        };
+        deco.add(eyeBtn);
+        if (deco.cbtn != null) {
+            Widget anchor = containerStackSortBtn != null ? containerStackSortBtn
+                    : (containerSortBtn != null ? containerSortBtn : deco.cbtn);
+            int centerY = anchor.c.y + anchor.sz.y / 2 - eyeBtn.sz.y / 2;
+            eyeBtn.c = new Coord(anchor.c.x - eyeBtn.sz.x - UI.scale(2), centerY);
+        }
+
+        attachRightPanel();
+        panelState = PANEL_CLOSED;
+        applyPanelState();
+        if (parent != null) {
+            parent.pack();
+        }
+        extraPanelInstalled = true;
+        extraPanelResolved = true;
     }
 
     public enum QualityType {
@@ -522,7 +588,9 @@ public class NInventory extends Inventory
         }
         resizeSearchToFit();
         parent.pack();
-        positionTitleBarButtons();
+        if (mainInvInstalled) {
+            positionTitleBarButtons();
+        }
     }
 
     public void movePopup(Coord c) {
@@ -537,6 +605,7 @@ public class NInventory extends Inventory
         }
         bindParentGobIfNeeded();
         nurgling.widgets.TableInventoryExtension.installIfTable(this);
+        tryInstallContainerExtraPanel();
         iisPeak = Math.max(iisPeak, iis.size());
         // Note: removed old iis.clear() logic - in new design iis is managed by
         // tryAddToInventoryCache (add) and reqdestroy (sync)
@@ -617,7 +686,9 @@ public class NInventory extends Inventory
             }
         }
         // Reposition title bar buttons on tick (window may have resized)
-        positionTitleBarButtons();
+        if (mainInvInstalled) {
+            positionTitleBarButtons();
+        }
         flushLeftoversIfDue();
     }
 
@@ -858,32 +929,13 @@ public class NInventory extends Inventory
             deco.add(dropperBtn);
         }
 
-        // --- Right panel (embedded in window, to the right of inventory grid) ---
-        int panelW = UI.scale(250);
-        int gap = UI.scale(8);
-
-        rightPanel = new Widget(new Coord(panelW, sz.y)) {
-            @Override
-            public void draw(GOut g) {
-                // Draw vertical separator on left edge
-                int bw = Math.max(1, UI.scale(1));
-                g.chcolor(NStyle.separator);
-                g.frect(Coord.z, new Coord(bw, sz.y));
-                g.chcolor();
-                super.draw(g);
-            }
-        };
-        rightPanel.visible = false;
-        parent.add(rightPanel, new Coord(sz.x + gap, 0));
+        attachRightPanel();
 
         // Apply persisted inventory display preferences to the static overlay flags.
         // These were previously toggled from the inventory panel; they now live in QoL.
         Slotted.show = (Boolean) NConfig.get(NConfig.Key.showGilding);
         Stack.show = (Boolean) NConfig.get(NConfig.Key.showStackOverlay);
         NFoodInfo.show = (Boolean) NConfig.get(NConfig.Key.showVarity);
-
-        // Setup right panel contents (dropdowns, item list)
-        setupRightPanel();
 
         // --- Search panel (below inventory, initially hidden) ---
         searchwdg = new nurgling.widgets.NSearchWidget(new Coord(sz));
@@ -906,6 +958,24 @@ public class NInventory extends Inventory
         parent.pack();
         positionTitleBarButtons();
         mainInvInstalled = true;
+    }
+
+    private void attachRightPanel() {
+        int panelW = UI.scale(250);
+        int gap = UI.scale(8);
+        rightPanel = new Widget(new Coord(panelW, sz.y)) {
+            @Override
+            public void draw(GOut g) {
+                int bw = Math.max(1, UI.scale(1));
+                g.chcolor(NStyle.separator);
+                g.frect(Coord.z, new Coord(bw, sz.y));
+                g.chcolor();
+                super.draw(g);
+            }
+        };
+        rightPanel.visible = false;
+        parent.add(rightPanel, new Coord(sz.x + gap, 0));
+        setupRightPanel();
     }
 
     private void toggleSearch(boolean show) {
@@ -942,11 +1012,17 @@ public class NInventory extends Inventory
 
     private void setPanelState(int state) {
         panelState = state;
-        NConfig.set(NConfig.Key.inventoryRightPanelShow, state);
+        if (mainInvInstalled) {
+            NConfig.set(NConfig.Key.inventoryRightPanelShow, state);
+        }
         applyPanelState();
-        resizeSearchToFit();
-        parent.pack();
-        positionTitleBarButtons();
+        if (mainInvInstalled) {
+            resizeSearchToFit();
+            parent.pack();
+            positionTitleBarButtons();
+        } else if (parent != null) {
+            parent.pack();
+        }
     }
 
     private void applyPanelState() {

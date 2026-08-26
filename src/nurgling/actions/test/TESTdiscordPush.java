@@ -9,7 +9,7 @@ public class TESTdiscordPush extends Test{
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
-        NUtils.getGameUI().msgToDiscord(NDiscordNotification.get("general"),"This is test notification from Nurgling2");
+        NUtils.getGameUI().msgToDiscord(NDiscordNotification.get("general"),"This is test notification from Nurgling Evolution");
         return Results.SUCCESS();
     }
 

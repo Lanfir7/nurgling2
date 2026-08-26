@@ -60,7 +60,7 @@ public class DiscordSettings extends Panel {
             webhookIconEntry.text().trim()
         );
         
-        ui.gui.msgToDiscord(settings, "Test notification from Nurgling2 - Discord integration is working!");
+        ui.gui.msgToDiscord(settings, "Test notification from Nurgling Evolution - Discord integration is working!");
         ui.gui.msg(L10n.get("discord.test_sent"));
     }
     

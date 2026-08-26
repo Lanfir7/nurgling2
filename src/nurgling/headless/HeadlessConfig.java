@@ -136,7 +136,7 @@ public class HeadlessConfig {
      * Print usage information.
      */
     public static void printUsage() {
-        System.out.println("Nurgling2 Headless Mode");
+        System.out.println("Nurgling Evolution Headless Mode");
         System.out.println("========================");
         System.out.println();
         System.out.println("Usage: java -jar nurgling.jar --headless [options]");

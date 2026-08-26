@@ -212,6 +212,19 @@ public final class ExtraInvGroupTransfer {
         }
     }
 
+    /** Ender ExtInventory.EXCLUDES — extra list is disabled for these window titles. */
+    private static final java.util.Set<String> EXTRA_PANEL_EXCLUDES = new java.util.HashSet<>(java.util.Arrays.asList(
+            "Steelbox", "Pouch", "Frame", "Tub", "Fireplace", "Rack",
+            "Pane mold", "Table", "Purse", "Archery Target", "Stack", "Belt"));
+
+    /** Extra panel on containers: skip stack popups and Ender-excluded titles. */
+    public static boolean shouldInstallExtraPanel(String windowTitle, boolean inContents) {
+        if (inContents || windowTitle == null || windowTitle.isEmpty()) {
+            return false;
+        }
+        return !EXTRA_PANEL_EXCLUDES.contains(windowTitle);
+    }
+
     /** Ender ExtInventory.getTransferTargets(): flags, count=1, destination widget ids. */
     public static Object[] invxf2Args(int[] destWdgIds) {
         if (destWdgIds == null || destWdgIds.length == 0) {

@@ -37,6 +37,15 @@ import java.awt.image.BufferedImage;
 
 public class Client implements Console.Directory {
     public static final Config.Variable<Boolean> initfullscreen = Config.Variable.propb("haven.fullscreen", false);
+    static final String CLIENT_NAME = "Nurgling Evolution";
+
+    public static String windowTitle(String session) {
+	String base = "Haven & Hearth (" + CLIENT_NAME + ")";
+	if(session == null || session.isEmpty())
+	    return(base);
+	return(base + " \u2013 " + session);
+    }
+
     public final Toolkit tk;
     public final Windeye wnd;
     private final EventQueue queue = new EventQueue(this);
@@ -46,7 +55,7 @@ public class Client implements Console.Directory {
     public Client(Toolkit tk) {
 	this.tk = tk;
 	this.wnd = tk.window();
-	wnd.title("Haven & Hearth (Nurgling II)");
+	wnd.title(windowTitle(null));
 	Coord fsz = Utils.getprefc("mainwnd/locksize", null);
 	if(fsz == null)
 	    wnd.sizing(new Windeye.Sizing().minsize(UI.scale(800, 600)).normsize(Utils.getprefc("mainwnd/size", UI.scale(1024, 768))));
@@ -193,10 +202,7 @@ public class Client implements Console.Directory {
 		if(fun == null)
 		    fun = nurgling.sessions.NBootstrap.create();
 		String t= fun.title();
-		if(t == null)
-		    wnd.title("Haven & Hearth (Nurgling II)");
-		else
-		    wnd.title("Haven & Hearth (Nurgling II) \u2013 " + t);
+		wnd.title(windowTitle(t));
 		fun = fun.run(newui(fun));
 	    }
 	}
