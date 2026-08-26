@@ -1,4 +1,6 @@
 /build
+/steam
+steam_appid.txt
 /local-config.properties
 /local-boot.properties
 /build.properties

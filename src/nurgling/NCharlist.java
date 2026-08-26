@@ -60,6 +60,7 @@ public class NCharlist extends Charlist {
     @Override
     protected void added() {
         super.added();
+        nurgling.sessions.SleepLogout.onCharlist(ui);
         // Add world selector to parent (ccnt container) so it's visible
         if(worldSelector.parent == null) {
             parent.add(worldSelector, c.x, c.y - worldSelector.sz.y - UI.scale(10));

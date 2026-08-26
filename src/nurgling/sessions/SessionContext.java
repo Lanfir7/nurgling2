@@ -59,6 +59,9 @@ public class SessionContext {
      *  Uses 2 threads — headless sessions don't render and need minimal parallelism. */
     private final ForkJoinPool headlessTickPool = new ForkJoinPool(2);
 
+    /** Set when the player chooses Sleep on a bed; consumed at charlist/disconnect. */
+    private volatile boolean exitAfterSleep = false;
+
     private static int sessionCounter = 0;
 
     /**
@@ -100,6 +103,16 @@ public class SessionContext {
      */
     public void setDisconnected() {
         this.connected = false;
+    }
+
+    public void markExitAfterSleep() {
+        this.exitAfterSleep = true;
+    }
+
+    public boolean consumeExitAfterSleep() {
+        boolean v = exitAfterSleep;
+        exitAfterSleep = false;
+        return v;
     }
 
     /**

@@ -387,7 +387,8 @@
         <include name="*.jar" />
       </fileset>
     </copy>
-    <copy file="etc/workshop-client.properties" tofile="steam/workshop-client.properties" failonerror="false" quiet="true" />
+    <copy file="etc/workshop-client.properties" tofile="steam/workshop-client.properties" />
+    <copy file="etc/workshop-preview.jpg" tofile="steam/workshop-preview.jpg" />
     <copy todir="steam/" file="build/nurgling-res.jar" />
     <copy todir="steam/" file="build/hafen.jar" />
   </target>

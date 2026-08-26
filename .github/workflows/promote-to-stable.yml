@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  RELEASE_REPO: aleksandrsvoboda/nurgling-release
+  RELEASE_REPO: Lanfir7/nurgling-release
 
 jobs:
   promote:

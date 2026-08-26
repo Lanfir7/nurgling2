@@ -61,4 +61,24 @@ public final class DefaultAnimalAlarms {
     public static boolean hasSound(String resName) {
         return(soundFileFor(resName) != null);
     }
+
+    public enum Play { NOW, LATER, NEVER }
+
+    public static boolean isCorpsePose(String pose) {
+        if(pose == null || pose.isEmpty())
+            return(false);
+        String p = pose.toLowerCase(Locale.ROOT);
+        return(p.contains("knock") || p.contains("dead"));
+    }
+
+    /** Skip alarms on corpses; wait until pose is known for animal icons. */
+    public static Play playForPose(String pose, String iconResName) {
+        if(isCorpsePose(pose))
+            return(Play.NEVER);
+        if(!hasSound(iconResName))
+            return(Play.NOW);
+        if(pose == null || pose.isEmpty())
+            return(Play.LATER);
+        return(Play.NOW);
+    }
 }

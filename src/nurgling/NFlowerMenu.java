@@ -245,6 +245,7 @@ public class NFlowerMenu extends FlowerMenu
             }
 
             wdgmsg("cl", option.num, ui.modflags());
+            nurgling.sessions.SleepLogout.markIfSleep(ui, option.name);
             NCore.LastActions actions = NUtils.getUI().core.getLastActions();
             if(actions!=null) {
                 if (actions.item != null) {

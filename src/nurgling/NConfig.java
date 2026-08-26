@@ -338,7 +338,7 @@ public class NConfig
         conf.put(Key.showView, false);
         conf.put(Key.disableWinAnim, true);
         conf.put(Key.disableMenugridKeys, false);
-        conf.put(Key.baseurl, "https://raw.githubusercontent.com/aleksandrsvoboda/nurgling-release/stable/ver");
+        conf.put(Key.baseurl, NUpdateFeed.DEFAULT_BASEURL);
         conf.put(Key.miningol, true);
         conf.put(Key.crime, false);
         conf.put(Key.tracking, false);
@@ -1308,13 +1308,13 @@ public class NConfig
         }
         conf.remove(Key.hideNature);
 
-        // Migration: Replace old Katodiy baseurl with new aleksandrsvoboda URL
+        // Migration: rewrite upstream Nurgling feeds to this fork's release repo
         if (conf.containsKey(Key.baseurl)) {
             String currentUrl = (String) conf.get(Key.baseurl);
-            if (currentUrl != null && currentUrl.toLowerCase().contains("katodiy")) {
-                conf.put(Key.baseurl, "https://raw.githubusercontent.com/aleksandrsvoboda/nurgling-release/stable/ver");
-                isUpd = true; // Mark config as updated so it gets saved
-                System.out.println("[NConfig] Migrated baseurl from Katodiy to aleksandrsvoboda");
+            String migrated = NUpdateFeed.migrateBaseUrl(currentUrl);
+            if (currentUrl == null || !currentUrl.equals(migrated)) {
+                conf.put(Key.baseurl, migrated);
+                isUpd = true;
             }
         }
 

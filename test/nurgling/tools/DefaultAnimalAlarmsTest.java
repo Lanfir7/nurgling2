@@ -6,6 +6,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static nurgling.tools.DefaultAnimalAlarms.Play;
 
 class DefaultAnimalAlarmsTest {
     @ParameterizedTest
@@ -46,5 +47,29 @@ class DefaultAnimalAlarmsTest {
         assertNull(DefaultAnimalAlarms.soundFileFor("gfx/terobjs/trees/oak"));
         assertNull(DefaultAnimalAlarms.soundFileFor(null));
         assertNull(DefaultAnimalAlarms.soundFileFor(""));
+    }
+
+    @Test
+    void corpsePoseNeverAlarms() {
+        assertEquals(Play.NEVER, DefaultAnimalAlarms.playForPose("knock", "gfx/kritter/bear/bear"));
+        assertEquals(Play.NEVER, DefaultAnimalAlarms.playForPose("gfx/kritter/bear/knocked", "gfx/kritter/bear/bear"));
+        assertEquals(Play.NEVER, DefaultAnimalAlarms.playForPose("dead", "gfx/kritter/wolf/wolf"));
+    }
+
+    @Test
+    void livingAnimalAlarmsNow() {
+        assertEquals(Play.NOW, DefaultAnimalAlarms.playForPose("idle", "gfx/kritter/bear/bear"));
+        assertEquals(Play.NOW, DefaultAnimalAlarms.playForPose("gfx/kritter/bear/bear", "gfx/invobjs/kritter/bear"));
+    }
+
+    @Test
+    void unknownAnimalPoseWaits() {
+        assertEquals(Play.LATER, DefaultAnimalAlarms.playForPose(null, "gfx/kritter/bear/bear"));
+        assertEquals(Play.LATER, DefaultAnimalAlarms.playForPose("", "gfx/kritter/bear/bear"));
+    }
+
+    @Test
+    void nonAnimalNullPosePlaysImmediately() {
+        assertEquals(Play.NOW, DefaultAnimalAlarms.playForPose(null, "gfx/terobjs/herbs/chantrelle"));
     }
 }

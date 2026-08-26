@@ -6,7 +6,6 @@ import haven.Window;
 import nurgling.*;
 import nurgling.conf.*;
 import nurgling.i18n.L10n;
-
 import java.io.*;
 import java.net.URL;
 import java.nio.channels.Channels;
@@ -38,7 +37,8 @@ public class NLoginScreen extends LoginScreen
     public NLoginScreen(String hostname)
     {
         super(hostname);
-        add(new LoginList(new Coord(UI.scale(200), UI.scale(bg.sz().y - marg * 2))), new Coord(marg, marg));
+        int listW = NLoginAccountLook.CARD_WIDTH + UI.scale(12);
+        add(new LoginList(new Coord(listW, UI.scale(bg.sz().y - marg * 2))), new Coord(marg, marg));
         optbtn.move(new Coord(bg.sz().x - UI.scale(130), UI.scale(30)));
 
         IButton discordBtn = new IButton("nurgling/hud/buttons/discord/", "u", "d", "h") {
@@ -389,8 +389,16 @@ public class NLoginScreen extends LoginScreen
     {
         LoginList(Coord sz)
         {
-            super(sz, UI.scale(25));
+            super(sz, NLoginAccountLook.CARD_HEIGHT, NLoginAccountLook.CARD_PADDING);
             pack();
+        }
+
+        @Override
+        protected void drawbg(GOut g, NLoginDataItem item, int idx, Area area) {
+        }
+
+        @Override
+        protected void drawsel(GOut g, NLoginDataItem item, int idx, Area area) {
         }
 
         protected List<NLoginDataItem> items()
@@ -403,22 +411,8 @@ public class NLoginScreen extends LoginScreen
             return (new ItemWidget<NLoginDataItem>(this, sz, item)
             {
                 {
-                    int len = 0;
-                    int h = 0;
-                    for (NLoginDataItem pL : loginItems)
-                    {
-                        len = Math.max(len, pL.sz.x);
-                        h = pL.sz.y;
-                    }
-                    len = Math.max(len, UI.scale(250));
-                    item.resize(new Coord(len, h));
+                    item.resize(sz);
                     add(item);
-                }
-
-                @Override
-                public boolean mousedown(MouseDownEvent ev) {
-                    boolean psel = sel == item;
-                    return super.mousedown(ev);
                 }
             });
         }
@@ -428,52 +422,55 @@ public class NLoginScreen extends LoginScreen
     public class NLoginDataItem extends Widget
     {
         NLoginData nd;
-        Label text;
-        IButton remove;
-
-        @Override
-        public void resize(Coord sz)
-        {
-            super.resize(sz);
-            int x = sz.x - NStyle.removei[0].sz().x - UI.scale(65);
-            remove.move(new Coord(x, sz.y / 2 - remove.sz.y / 2 + UI.scale(2)));
-        }
 
         public NLoginDataItem(NLoginData nd)
         {
+            super(new Coord(NLoginAccountLook.CARD_WIDTH, NLoginAccountLook.CARD_HEIGHT));
             this.nd = nd;
-            this.text = add(new Label(nd.name, NStyle.fcomboitems), new Coord(UI.scale(7), 0));
+        }
 
-            remove = add(new IButton(NStyle.removei[0].back, NStyle.removei[1].back, NStyle.removei[2].back)
-            {
-                @Override
-                public void click()
-                {
-                    ArrayList<NLoginData> ld = ((ArrayList<NLoginData>) NConfig.get(NConfig.Key.credentials));
-                    ld.remove(nd);
-                    NConfig.set(NConfig.Key.credentials, ld);
-                    loginItems.remove(NLoginDataItem.this);
-                }
-            });
-            remove.settip(Resource.remote().loadwait("nurgling/hud/buttons/removeItem/u").flayer(Resource.tooltip).text());
-            pack();
+        private boolean hovered() {
+            if (ui == null)
+                return false;
+            Coord mc = ui.mc.sub(rootpos());
+            return mc.isect(Coord.z, sz);
+        }
+
+        private boolean closeHovered() {
+            if (ui == null)
+                return false;
+            return NLoginAccountLook.inClose(ui.mc.sub(rootpos()), sz);
+        }
+
+        @Override
+        public void draw(GOut g) {
+            NLoginAccountLook.drawCard(g, sz, nd.name, hovered(), closeHovered());
+            super.draw(g);
+        }
+
+        private void forget() {
+            ArrayList<NLoginData> ld = ((ArrayList<NLoginData>) NConfig.get(NConfig.Key.credentials));
+            ld.remove(nd);
+            NConfig.set(NConfig.Key.credentials, ld);
+            loginItems.remove(this);
         }
 
         @Override
         public boolean mousedown(MouseDownEvent ev) {
-            boolean res = super.mousedown(ev);
-            if (!res)
-            {
-                msgMode = true;
-                // Reset auto-login state when user manually selects login
-                NLoginScreen.this.resetAutoLoginState();
-                if (!nd.isTokenUsed)
-                    NLoginScreen.this.wdgmsg("login", new Object[]{new AuthClient.NativeCred(nd.name, nd.pass), false});
-                else
-                    NLoginScreen.this.wdgmsg("login", new Object[]{new AuthClient.TokenCred(nd.name, Arrays.copyOf(nd.token, nd.token.length)), false});
-                msgMode = false;
+            if (ev.b != 1)
+                return super.mousedown(ev);
+            if (NLoginAccountLook.inClose(ev.c, sz)) {
+                forget();
+                return true;
             }
-            return res;
+            msgMode = true;
+            NLoginScreen.this.resetAutoLoginState();
+            if (!nd.isTokenUsed)
+                NLoginScreen.this.wdgmsg("login", new Object[]{new AuthClient.NativeCred(nd.name, nd.pass), false});
+            else
+                NLoginScreen.this.wdgmsg("login", new Object[]{new AuthClient.TokenCred(nd.name, Arrays.copyOf(nd.token, nd.token.length)), false});
+            msgMode = false;
+            return true;
         }
     }
 }

@@ -39,7 +39,7 @@ public class LoginScreen extends Widget {
 	textfs = new Text.Foundry(Text.sans, 14).aa(true);
     public static final Tex bg = Resource.loadtex("nurgling/hud/loginscr2");
     public static final Tex loadingbg = Resource.loadtex("nurgling/hud/loginscr2");
-    public static final Position bgc = new Position(UI.scale(420, 300));
+    public static final Position bgc = new Position(UI.scale(512, 230));
     public final Widget login;
     public final String confname;
     private Text error, progress;

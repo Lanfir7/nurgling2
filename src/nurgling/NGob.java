@@ -881,6 +881,13 @@ public class NGob
                             } catch (Exception e) {
                                 System.err.println("Failed to create NSquirrelCacheColor: " + e.getMessage());
                             }
+                        } else if (name.equals("gfx/terobjs/beehive"))
+                        {
+                            try {
+                                parent.setattr(new nurgling.gattrr.NBeehiveColor(parent));
+                            } catch (Exception e) {
+                                System.err.println("Failed to create NBeehiveColor: " + e.getMessage());
+                            }
                         } else if (name.contains("gfx/terobjs/items/gems/gemstone"))
                         {
                             parent.addcustomol(new NTexMarker(parent, new TexI(Resource.loadsimg("marks/gem")), () -> false, true));

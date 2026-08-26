@@ -16,7 +16,7 @@ on:
 
 env:
   JAVA_VERSION: '17'
-  RELEASE_REPO: aleksandrsvoboda/nurgling-release
+  RELEASE_REPO: Lanfir7/nurgling-release
   RELEASE_BRANCH: latest
 
 jobs:

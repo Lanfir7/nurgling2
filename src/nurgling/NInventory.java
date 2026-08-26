@@ -26,6 +26,11 @@ import java.util.List;
 
 public class NInventory extends Inventory
 {
+    private String leftoverGroupKey;
+    private Grouping leftoverGrouping;
+    private String leftoverAction;
+    private int leftoverWait;
+    private static final int LEFTOVER_DELAY_TICKS = 12;
     public boolean mainInvInstalled = false;
     public Scrollport itemListContainer;
     public Widget itemListContent;
@@ -613,6 +618,7 @@ public class NInventory extends Inventory
         }
         // Reposition title bar buttons on tick (window may have resized)
         positionTitleBarButtons();
+        flushLeftoversIfDue();
     }
 
     private static final TexI[] bundlei = new TexI[]{
@@ -1244,8 +1250,9 @@ public class NInventory extends Inventory
     // Helper class to group items by name and optionally quality
     private static class ItemGroup {
         String name;
-        String groupKey; // Key for grouping (includes quality info if grouped by quality)
-        Double groupQuality; // Quality value if grouped by quality (null for Type grouping)
+        String groupKey;
+        Grouping grouping = Grouping.NONE;
+        Double groupQuality;
         int totalQuantity = 0;
         double averageQuality = 0;
         java.util.List<WItem> wItems = new ArrayList<>(); // Store WItems for actions
@@ -1258,17 +1265,15 @@ public class NInventory extends Inventory
         ItemGroup(String name) {
             this.name = name;
             this.groupKey = name;
+            this.grouping = Grouping.NONE;
             this.groupQuality = null;
         }
         
         ItemGroup(String name, Double quality, Grouping grouping) {
             this.name = name;
             this.groupQuality = quality;
-            if (quality != null && grouping != Grouping.NONE) {
-                this.groupKey = name + "@Q" + quantifyQuality(quality, grouping);
-            } else {
-                this.groupKey = name;
-            }
+            this.grouping = grouping != null ? grouping : Grouping.NONE;
+            this.groupKey = ExtraInvGroupTransfer.groupKey(name, quality, this.grouping);
         }
         
         void addItem(NGItem item, WItem wItem) {
@@ -1304,16 +1309,7 @@ public class NInventory extends Inventory
         
         static double quantifyQuality(Double q, Grouping g) {
             if (q == null) return 0;
-            if (g == Grouping.Q1) {
-                return Math.floor(q);
-            } else if (g == Grouping.Q5) {
-                double floored = Math.floor(q);
-                return floored - (floored % 5);
-            } else if (g == Grouping.Q10) {
-                double floored = Math.floor(q);
-                return floored - (floored % 10);
-            }
-            return q;
+            return ExtraInvGroupTransfer.quantifyQuality(q, g);
         }
         
         void recalculate() {
@@ -1396,6 +1392,53 @@ public class NInventory extends Inventory
         }
         return null;
     }
+
+    /** Walk inventory slots and unpack ItemStacks into individual listed items (Ender extra-inv). */
+    private void collectInventoryGroups(Map<String, ItemGroup> itemGroupMap, boolean applyQualityFilter, Grouping grouping) {
+        for (Widget widget = this.child; widget != null; widget = widget.next) {
+            if (widget instanceof WItem) {
+                collectListedWItems((WItem) widget, wItem -> addToGroup(itemGroupMap, wItem, applyQualityFilter, grouping));
+            }
+        }
+    }
+
+    private void collectListedWItems(WItem wItem, java.util.function.Consumer<WItem> sink) {
+        Widget contents = (wItem.item != null) ? wItem.item.contents : null;
+        if (contents instanceof ItemStack) {
+            for (Widget ch = contents.child; ch != null; ch = ch.next) {
+                if (ch instanceof WItem) {
+                    collectListedWItems((WItem) ch, sink);
+                }
+            }
+            return;
+        }
+        sink.accept(wItem);
+    }
+
+    private void addToGroup(Map<String, ItemGroup> itemGroupMap, WItem wItem, boolean applyQualityFilter, Grouping grouping) {
+        if (!(wItem.item instanceof NGItem)) {
+            return;
+        }
+        NGItem nitem = (NGItem) wItem.item;
+        String itemName = nitem.name();
+        if (itemName == null) {
+            return;
+        }
+        Double quality = getItemQuality(nitem);
+        if (applyQualityFilter && minQualityFilter != null) {
+            double itemQ = quality != null ? quality : 0;
+            if (itemQ < minQualityFilter) {
+                return;
+            }
+        }
+        String groupKey = ExtraInvGroupTransfer.groupKey(itemName, quality, grouping);
+        ItemGroup group = itemGroupMap.get(groupKey);
+        if (group == null) {
+            group = new ItemGroup(itemName, quality, grouping);
+            itemGroupMap.put(groupKey, group);
+        }
+        group.addItem(nitem, wItem);
+    }
     
     private void rebuildItemList() {
         if (itemListContent == null) return;
@@ -1405,48 +1448,8 @@ public class NInventory extends Inventory
             child.destroy();
         }
         
-        // Get current inventory items and group by name + quality (depending on grouping mode)
         Map<String, ItemGroup> itemGroupMap = new HashMap<>();
-        
-        // Access parent inventory's children
-        for (Widget widget = this.child; widget != null; widget = widget.next) {
-            if (widget instanceof WItem) {
-                WItem wItem = (WItem) widget;
-                if (wItem.item instanceof NGItem) {
-                    NGItem nitem = (NGItem) wItem.item;
-                    String itemName = nitem.name();
-                    
-                    if (itemName != null) {
-                        Double quality = getItemQuality(nitem);
-                        
-                        // Apply quality filter
-                        if (minQualityFilter != null) {
-                            double itemQ = quality != null ? quality : 0;
-                            if (itemQ < minQualityFilter) {
-                                continue; // Skip items below min quality
-                            }
-                        }
-                        
-                        String groupKey;
-                        
-                        // Create group key based on grouping mode
-                        if (currentGrouping == Grouping.NONE) {
-                            groupKey = itemName;
-                        } else {
-                            double quantifiedQ = quality != null ? ItemGroup.quantifyQuality(quality, currentGrouping) : 0;
-                            groupKey = itemName + "@Q" + (int) quantifiedQ;
-                        }
-                        
-                        ItemGroup group = itemGroupMap.get(groupKey);
-                        if (group == null) {
-                            group = new ItemGroup(itemName, quality, currentGrouping);
-                            itemGroupMap.put(groupKey, group);
-                        }
-                        group.addItem(nitem, wItem);
-                    }
-                }
-            }
-        }
+        collectInventoryGroups(itemGroupMap, true, currentGrouping);
         
         // Sort the items: by name first, then by quality (descending) within same name
         List<ItemGroup> itemGroups = new ArrayList<>(itemGroupMap.values());
@@ -1486,23 +1489,7 @@ public class NInventory extends Inventory
         }
 
         Map<String, ItemGroup> itemGroupMap = new HashMap<>();
-        for (Widget widget = this.child; widget != null; widget = widget.next) {
-            if (widget instanceof WItem) {
-                WItem wItem = (WItem) widget;
-                if (wItem.item instanceof NGItem) {
-                    NGItem nitem = (NGItem) wItem.item;
-                    String itemName = nitem.name();
-                    if (itemName != null) {
-                        ItemGroup group = itemGroupMap.get(itemName);
-                        if (group == null) {
-                            group = new ItemGroup(itemName);
-                            itemGroupMap.put(itemName, group);
-                        }
-                        group.addItem(nitem, wItem);
-                    }
-                }
-            }
-        }
+        collectInventoryGroups(itemGroupMap, false, Grouping.NONE);
 
         List<ItemGroup> itemGroups = new ArrayList<>(itemGroupMap.values());
         itemGroups.sort((a, b) -> {
@@ -1571,7 +1558,8 @@ public class NInventory extends Inventory
 
                 @Override
                 public Object tooltip(Coord c, Widget prev) {
-                    return group.name + (group.averageQuality > 0 ? String.format(" (q%.1f)", group.averageQuality) : "");
+                    return group.name + (group.averageQuality > 0 ? String.format(" (q%.1f)", group.averageQuality) : "")
+                            + "\nShift+Click: transfer all of this type";
                 }
             };
             itemListContent.add(cw, new Coord(0, y));
@@ -1703,48 +1691,153 @@ public class NInventory extends Inventory
                 if (group.curioLph != null && group.curioMw != null) {
                     sb.append(String.format("\nLP/H: %d  MW: %d", group.curioLph, group.curioMw));
                 }
+                sb.append("\nShift+Click: transfer all of this type/quality");
+                sb.append("\nCtrl+Click: drop one; Ctrl+Alt: drop all");
+                sb.append("\nRMB: lowest quality first");
                 return sb.toString();
             }
         };
     }
     
     /**
-     * Process items in a group (transfer or drop), sorted by quality.
-     * Shift+Click: transfer one item (highest quality first, or lowest if reverse)
-     * Shift+Alt+Click: transfer ALL items in group
-     * Ctrl+Click: drop one item
-     * Ctrl+Alt+Click: drop ALL items in group
+     * Ender extra-inv: Shift+Click on a type/quality row.
+     * Last item of each stack is left behind by the server; send the stack
+     * wrapper once more, then flush remaining solos after a short delay.
      */
     private void processGroupItems(ItemGroup group, boolean reverse, String action) {
-        // Sort items by quality
-        List<WItem> items = new ArrayList<>(group.wItems);
-        items.sort((a, b) -> {
-            Double qa = getItemQuality((NGItem) a.item);
-            Double qb = getItemQuality((NGItem) b.item);
-            if (qa == null && qb == null) return 0;
-            if (qa == null) return 1;
-            if (qb == null) return -1;
-            // Default: higher quality first
-            int result = Double.compare(qb, qa);
-            return reverse ? -result : result;
-        });
-        
-        // Process items based on modifier
-        boolean all = ui.modmeta; // Alt key = process all items
-        
-        if (!all && !items.isEmpty()) {
-            // Just process first item
-            WItem item = items.get(0);
-            if (item != null && item.parent != null) {
-                item.item.wdgmsg(action, Coord.z);
+        java.util.Comparator<WItem> byQualityHighFirst = (a, b) -> {
+            Double qa = (a.item instanceof NGItem) ? getItemQuality((NGItem) a.item) : null;
+            Double qb = (b.item instanceof NGItem) ? getItemQuality((NGItem) b.item) : null;
+            double va = qa != null ? qa : 0;
+            double vb = qb != null ? qb : 0;
+            return -Double.compare(va, vb);
+        };
+        boolean all = !"drop".equals(action) || (ui != null && ui.modmeta);
+        List<WItem> items = ExtraInvGroupTransfer.pick(group.wItems, all, reverse, byQualityHighFirst);
+        Object[] invxf2 = "drop".equals(action) ? null : ExtraInvGroupTransfer.invxf2Args(transferTargetIds());
+        LinkedHashSet<GItem> stackWrappers = new LinkedHashSet<>();
+        for (WItem w : items) {
+            sendGroupItem(w == null ? null : w.item, action, invxf2);
+            GItem wrapper = stackOuterGItem(w);
+            if (wrapper != null) {
+                stackWrappers.add(wrapper);
             }
+        }
+        for (GItem wrapper : stackWrappers) {
+            sendGroupItem(wrapper, action, invxf2);
+        }
+        if (!"drop".equals(action) && all) {
+            leftoverGroupKey = group.groupKey;
+            leftoverGrouping = group.grouping;
+            leftoverAction = action;
+            leftoverWait = LEFTOVER_DELAY_TICKS;
+        }
+    }
+
+    private void sendGroupItem(GItem item, String action, Object[] invxf2) {
+        if (item == null) {
+            return;
+        }
+        Coord click = sqsz.div(2);
+        if (invxf2 != null) {
+            item.wdgmsg("invxf2", invxf2);
+        } else if ("drop".equals(action)) {
+            item.wdgmsg("drop", click, ExtraInvGroupTransfer.TRANSFER_COUNT);
         } else {
-            // Process all items
-            for (WItem item : items) {
-                if (item != null && item.parent != null) {
-                    item.item.wdgmsg(action, Coord.z);
-                }
+            item.wdgmsg("transfer", click, ExtraInvGroupTransfer.TRANSFER_COUNT);
+        }
+    }
+
+    static GItem stackOuterGItem(WItem w) {
+        if (w == null) {
+            return null;
+        }
+        if (w.parent instanceof ItemStack) {
+            GItem.ContentsWindow cw = w.getparent(GItem.ContentsWindow.class);
+            if (cw != null && cw.cont != null) {
+                return cw.cont;
             }
+        }
+        if (w.item != null && w.item.contents instanceof ItemStack) {
+            return w.item;
+        }
+        return null;
+    }
+
+    private void flushLeftoversIfDue() {
+        if (leftoverGroupKey == null) {
+            return;
+        }
+        leftoverWait--;
+        if (leftoverWait > 0) {
+            return;
+        }
+        String key = leftoverGroupKey;
+        Grouping grouping = leftoverGrouping != null ? leftoverGrouping : Grouping.NONE;
+        String action = leftoverAction != null ? leftoverAction : "transfer";
+        leftoverGroupKey = null;
+        leftoverAction = null;
+        Object[] invxf2 = ExtraInvGroupTransfer.invxf2Args(transferTargetIds());
+        for (Widget widget = this.child; widget != null; widget = widget.next) {
+            if (!(widget instanceof WItem)) {
+                continue;
+            }
+            WItem w = (WItem) widget;
+            if (!(w.item instanceof NGItem)) {
+                continue;
+            }
+            NGItem nitem = (NGItem) w.item;
+            String name = nitem.name();
+            if (name == null) {
+                continue;
+            }
+            if (!key.equals(ExtraInvGroupTransfer.groupKey(name, getItemQuality(nitem), grouping))) {
+                continue;
+            }
+            Widget contents = w.item.contents;
+            boolean stack = contents instanceof ItemStack;
+            int stackSize = stack ? ((ItemStack) contents).wmap.size() : 1;
+            if (!ExtraInvGroupTransfer.isLeftover(stack, stackSize)) {
+                continue;
+            }
+            sendGroupItem(w.item, action, invxf2);
+        }
+    }
+
+    /** Visible stockpiles first (topmost window), then other inventories except this one. */
+    private int[] transferTargetIds() {
+        GameUI gui = getparent(GameUI.class);
+        if (gui == null) {
+            return new int[0];
+        }
+        List<Widget> piles = new ArrayList<>();
+        List<Widget> invs = new ArrayList<>();
+        collectTransferTargets(gui, piles, invs);
+        List<Widget> dest = new ArrayList<>(piles.size() + invs.size());
+        dest.addAll(piles);
+        dest.addAll(invs);
+        if (dest.isEmpty()) {
+            return new int[0];
+        }
+        int[] ids = new int[dest.size()];
+        for (int i = 0; i < dest.size(); i++) {
+            ids[i] = dest.get(i).wdgid();
+        }
+        return ids;
+    }
+
+    private void collectTransferTargets(Widget w, List<Widget> piles, List<Widget> invs) {
+        if (w == null) {
+            return;
+        }
+        if (w instanceof ISBox && w.tvisible()) {
+            piles.add(w);
+        } else if (w instanceof Inventory && w != this && w.tvisible()
+                && w.getparent(GItem.ContentsWindow.class) == null) {
+            invs.add(w);
+        }
+        for (Widget ch = w.lchild; ch != null; ch = ch.prev) {
+            collectTransferTargets(ch, piles, invs);
         }
     }
     

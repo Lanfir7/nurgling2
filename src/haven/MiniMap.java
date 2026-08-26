@@ -44,6 +44,7 @@ import nurgling.NGob;
 import nurgling.NUtils;
 import nurgling.overlays.NQuestGiver;
 import nurgling.overlays.NQuestTarget;
+import nurgling.tools.DefaultAnimalAlarms;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
@@ -485,10 +486,7 @@ public class MiniMap extends Widget
 		icon.draw(g, sc);
 		g.defstate();
 	    }
-	    if(snotify != null) {
-		snotify.accept(ui);
-		snotify = null;
-	    }
+	    fireNotifyIfAlive();
 	}
 
 	public boolean force() {
@@ -497,12 +495,28 @@ public class MiniMap extends Widget
 	    return(false);
 	}
 
-	// Воспроизводит звук уведомления, если он есть (используется даже при отключенном рендеринге)
-	public void playNotification() {
-	    if(snotify != null) {
-		snotify.accept(ui);
+	private String iconResName() {
+	    return(icon != null && icon.res != null) ? icon.res.name : null;
+	}
+
+	private void fireNotifyIfAlive() {
+	    if(snotify == null)
+		return;
+	    String pose = gob.pose();
+	    DefaultAnimalAlarms.Play play = DefaultAnimalAlarms.playForPose(pose, iconResName());
+	    if(play == DefaultAnimalAlarms.Play.LATER)
+		return;
+	    if(play == DefaultAnimalAlarms.Play.NEVER) {
 		snotify = null;
+		notify = false;
+		return;
 	    }
+	    snotify.accept(ui);
+	    snotify = null;
+	}
+
+	public void playNotification() {
+	    fireNotifyIfAlive();
 	}
     }
 
@@ -864,9 +878,7 @@ public class MiniMap extends Widget
 			    if(isNew)
 				disp = new DisplayIcon(icon, conf);
 			    disp.update(gob.rc, gob.a);
-			    if(isNew) {
-				disp.playNotification();
-			    }
+			    disp.playNotification();
 			    ret.add(disp);
 			}
 		    }

@@ -1053,8 +1053,8 @@ public class NGameUI extends GameUI
                 webhook.addEmbed(new nurgling.notifications.DiscordHookObject.EmbedObject()
                         .setColor(java.awt.Color.RED)
                         .setThumbnail(settings.webhookIcon)
-                        .setAuthor("Nurgling2", "https://github.com/Katodiy/nurgling2", "https://raw.githubusercontent.com/Katodiy/nurgling2/master/resources/src/nurgling/hud/dragmode/title.res/image/image_0.png")
-                        .setUrl("https://github.com/Katodiy/nurgling2"));
+                        .setAuthor("Nurgling2", NUpdateFeed.SOURCE_REPO_URL, "https://github.com/Lanfir7.png")
+                        .setUrl(NUpdateFeed.SOURCE_REPO_URL));
                 new Thread(webhook).start();
 
             }
@@ -1121,6 +1121,31 @@ public class NGameUI extends GameUI
                 }
             }
             return (-1);
+        }
+
+        private Object curtt = null;
+        private Object curitem = null;
+        private boolean curttl = false;
+        private double hoverstart;
+
+        @Override
+        public Object tooltip(Coord c, Widget prev) {
+            int slot = beltslot(c);
+            if(slot < 0)
+                return super.tooltip(c, prev);
+            Object item = belt(slot);
+            if(item == null)
+                return super.tooltip(c, prev);
+            double now = Utils.rtime();
+            if(prev != this)
+                hoverstart = now;
+            boolean ttl = (now - hoverstart) > 0.5;
+            if((item != curitem) || (ttl != curttl)) {
+                curtt = NToolBeltTip.from(item, ttl);
+                curitem = item;
+                curttl = ttl;
+            }
+            return curtt;
         }
 
         @Override

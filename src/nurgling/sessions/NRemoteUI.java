@@ -117,6 +117,8 @@ public class NRemoteUI extends RemoteUI {
         SessionManager sm = SessionManager.getInstance();
         SessionContext ctx = sm.findByUI(ui);
 
+        SleepLogout.onSessionEnded(ui);
+
         if (ctx != null && ctx.isHeadless()) {
             // Headless sessions are cleaned up by the background thread
             return false;
