@@ -3,7 +3,6 @@ package nurgling.db;
 import nurgling.i18n.L10n;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -129,7 +128,7 @@ public class ConnectionDoctor {
         if (s == null || !s.isConfigured())
             return new Result(Problem.NOT_CONFIGURED, L10n.get("db.err.not_configured"), "");
 
-        try (Connection conn = DriverManager.getConnection(s.jdbcUrl(), s.user, s.password)) {
+        try (Connection conn = s.open()) {
             Result r = inspect(conn);
             return r;
         } catch (SQLException e) {

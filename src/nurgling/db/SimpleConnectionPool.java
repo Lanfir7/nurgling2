@@ -6,7 +6,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
-import java.util.TimeZone;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -167,22 +166,11 @@ public class SimpleConnectionPool {
         try {
             Connection conn;
             if (isPostgres) {
-                // CRITICAL: PostgreSQL JDBC driver sends JVM's default timezone to server
-                // during connection handshake. Old timezone names like "Europe/Kiev" cause errors.
-                // We must set UTC timezone BEFORE creating connection.
-                TimeZone originalTz = TimeZone.getDefault();
-                try {
-                    TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
-                    
-                    Properties props = new Properties();
-                    props.setProperty("user", user);
-                    props.setProperty("password", password);
-                    
-                    conn = DriverManager.getConnection(jdbcUrl, props);
-                } finally {
-                    // Restore original timezone after connection is established
-                    TimeZone.setDefault(originalTz);
-                }
+                Properties props = new Properties();
+                props.setProperty("user", user);
+                props.setProperty("password", password);
+                conn = DbSettings.withUtcJvmTimezone(
+                    () -> DriverManager.getConnection(jdbcUrl, props));
             } else {
                 conn = DriverManager.getConnection(jdbcUrl);
             }

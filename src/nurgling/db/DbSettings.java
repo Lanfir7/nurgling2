@@ -2,6 +2,12 @@ package nurgling.db;
 
 import nurgling.NConfig;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.Properties;
+import java.util.TimeZone;
+
 /**
  * The effective PostgreSQL connection settings, in one place.
  *
@@ -164,6 +170,38 @@ public class DbSettings {
                 return new HostPort(s.substring(0, colon), p);
         }
         return new HostPort(s, LEGACY_PORT);
+    }
+
+    private static final Object PG_CONNECT_LOCK = new Object();
+
+    @FunctionalInterface
+    interface SqlSupplier<T> {
+        T get() throws SQLException;
+    }
+
+    /**
+     * pgjdbc sends {@code TimeZone.getDefault()} in the startup packet. Windows still reports
+     * {@code Europe/Kiev}; PostgreSQL 16+ tzdata only has {@code Europe/Kyiv}, and the session is
+     * refused. Handshake as UTC, then put the JVM zone back.
+     */
+    static <T> T withUtcJvmTimezone(SqlSupplier<T> body) throws SQLException {
+        synchronized (PG_CONNECT_LOCK) {
+            TimeZone original = TimeZone.getDefault();
+            try {
+                TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+                return body.get();
+            } finally {
+                TimeZone.setDefault(original);
+            }
+        }
+    }
+
+    /** Open a PostgreSQL connection. Same handshake as the pool, including the timezone workaround. */
+    public Connection open() throws SQLException {
+        Properties props = new Properties();
+        props.setProperty("user", user);
+        props.setProperty("password", password);
+        return withUtcJvmTimezone(() -> DriverManager.getConnection(jdbcUrl(), props));
     }
 
     /** The JDBC URL. Never contains the password - that goes to the driver separately. */
