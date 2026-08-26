@@ -429,11 +429,11 @@ public class NMapView extends MapView
         HashSet<Long> liveGids = new HashSet<>();
         synchronized (glob.map.areas) {
             for (NArea area : glob.map.areas.values()) {
-                boolean locatable = area.getRCArea(false) != null;
+                boolean locatable = area.getLoadedRCArea(false) != null;
                 boolean alive = dummyAlive(area);
                 if (AreaLabelSync.decide(true, locatable, alive) == AreaLabelSync.Action.CREATE)
                     createAreaLabel(area.id);
-                if (dummyAlive(area))
+                if (locatable && dummyAlive(area))
                     liveGids.add(area.gid);
             }
         }
@@ -509,7 +509,7 @@ public class NMapView extends MapView
             return;
         if (dummyAlive(area))
             return;
-        Pair<Coord2d,Coord2d> space = area.getRCArea(false);
+        Pair<Coord2d,Coord2d> space = area.getLoadedRCArea(false);
 
         if(space!=null)
         {

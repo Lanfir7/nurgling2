@@ -4,10 +4,13 @@ import haven.Area;
 import haven.Coord;
 import haven.Coord2d;
 import haven.GOut;
+import haven.GobIcon;
 import haven.Loading;
 import haven.MapFile;
 import haven.MiniMap;
 import haven.Tex;
+import haven.TexI;
+import haven.Text;
 import haven.UI;
 import nurgling.NConfig;
 import nurgling.NGameUI;
@@ -16,6 +19,7 @@ import nurgling.NUtils;
 import nurgling.map.FloorOverlayAligner;
 import nurgling.navigation.ChunkNavGraph;
 import nurgling.navigation.ChunkNavManager;
+import nurgling.tools.FloorOverlayMarkerLogic;
 import nurgling.widgets.NMiniMap;
 
 import java.util.ArrayList;
@@ -38,13 +42,19 @@ public class MinimapFloorOverlayRenderer {
     private final Map<CacheKey, MiniMap.DisplayGrid> cache = new HashMap<>();
     private long cacheSegId = Long.MIN_VALUE;
     private int cacheLvl = -1;
+    private List<DrawItem> lastItems = Collections.emptyList();
+    private FloorOverlayAligner.FloorLink lastLink = null;
 
     public void render(NMiniMap mm, GOut g) {
         if (!enabled() || mm.dloc == null || mm.file == null) {
+            lastItems = Collections.emptyList();
+            lastLink = null;
             return;
         }
         FloorOverlayAligner.FloorLink link = mm.selectedFloorLink;
         if (link == null || mm.dloc.seg == null || link.toSegId == mm.dloc.seg.id) {
+            lastItems = Collections.emptyList();
+            lastLink = null;
             return;
         }
         int dataLevel = mm.getDataLevelPublic();
@@ -53,6 +63,8 @@ public class MinimapFloorOverlayRenderer {
         int alpha = overlayAlpha();
 
         List<DrawItem> items = collectVisible(mm, link, dataLevel);
+        lastItems = items;
+        lastLink = link;
         if (items.isEmpty()) {
             return;
         }
@@ -79,9 +91,120 @@ public class MinimapFloorOverlayRenderer {
                 } catch (Loading ignored) {
                 }
             }
+            drawOverlayMarks(mm, g, link, items, alpha);
         } finally {
             g.chcolor();
         }
+    }
+
+    private void drawOverlayMarks(NMiniMap mm, GOut g, FloorOverlayAligner.FloorLink link,
+                                 List<DrawItem> items, int alpha) {
+        if (mm.dloc == null || mm.dloc.seg == null
+                || !FloorOverlayMarkerLogic.overlayActive(true, link.toSegId, mm.dloc.seg.id)) {
+            return;
+        }
+        Coord hsz = mm.sz.div(2);
+        float uiScale = UI.scale(1f);
+        String pattern = mm.markerSearchPattern();
+        boolean hideAll = mm.markersHidden();
+
+        if (!hideAll) {
+            for (DrawItem item : items) {
+                for (MiniMap.DisplayMarker mark : item.disp.markers(true)) {
+                    if (mm.filter(mark)) {
+                        continue;
+                    }
+                    if (!FloorOverlayMarkerLogic.matchesSearch(mark.m.nm, pattern)) {
+                        continue;
+                    }
+                    Coord screen = FloorOverlayMarkerLogic.destToScreen(
+                            mark.m.tc, link.tileOffset, mm.dloc.tc, mm.scalef(),
+                            mm.getCurrentScale(), hsz, uiScale);
+                    if (!FloorOverlayMarkerLogic.onScreen(screen, mm.sz)) {
+                        continue;
+                    }
+                    try {
+                        mark.draw(g, screen);
+                    } catch (Loading ignored) {
+                    }
+                }
+            }
+        }
+
+        if (!FloorOverlayMarkerLogic.shouldShowProspecting(mm.showProspectingIcons, hideAll)) {
+            return;
+        }
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.prospectingLocationService == null) {
+            return;
+        }
+        for (nurgling.ProspectingLocation loc : gui.prospectingLocationService.getProspectingLocationsForSegment(link.toSegId)) {
+            if (!FloorOverlayMarkerLogic.matchesSearch(loc.getResourceType(), pattern)) {
+                continue;
+            }
+            Coord screen = FloorOverlayMarkerLogic.destToScreen(
+                    loc.getTileCoords(), link.tileOffset, mm.dloc.tc, mm.scalef(),
+                    mm.getCurrentScale(), hsz, uiScale);
+            if (!FloorOverlayMarkerLogic.onScreen(screen, mm.sz)) {
+                continue;
+            }
+            g.chcolor(255, 255, 255, alpha);
+            mm.drawProspectingIconAt(g, screen, loc.getResourceType());
+            g.chcolor(255, 255, 255, alpha);
+        }
+    }
+
+    public Object tooltip(NMiniMap mm, Coord c) {
+        if (mm.dloc == null || mm.dloc.seg == null || lastLink == null || lastItems.isEmpty()) {
+            return null;
+        }
+        if (!enabled() || !FloorOverlayMarkerLogic.overlayActive(true, lastLink.toSegId, mm.dloc.seg.id)) {
+            return null;
+        }
+        Coord hsz = mm.sz.div(2);
+        float uiScale = UI.scale(1f);
+        String pattern = mm.markerSearchPattern();
+        boolean hideAll = mm.markersHidden();
+        int prospectThreshold = UI.scale(10);
+
+        if (FloorOverlayMarkerLogic.shouldShowProspecting(mm.showProspectingIcons, hideAll)) {
+            NGameUI gui = NUtils.getGameUI();
+            if (gui != null && gui.prospectingLocationService != null) {
+                for (nurgling.ProspectingLocation loc : gui.prospectingLocationService.getProspectingLocationsForSegment(lastLink.toSegId)) {
+                    if (!FloorOverlayMarkerLogic.matchesSearch(loc.getResourceType(), pattern)) {
+                        continue;
+                    }
+                    Coord screen = FloorOverlayMarkerLogic.destToScreen(
+                            loc.getTileCoords(), lastLink.tileOffset, mm.dloc.tc, mm.scalef(),
+                            mm.getCurrentScale(), hsz, uiScale);
+                    if (FloorOverlayMarkerLogic.hoverHit(c, screen, prospectThreshold)) {
+                        String resourceType = loc.getResourceType();
+                        return Text.render(resourceType != null ? resourceType : "Unknown");
+                    }
+                }
+            }
+        }
+
+        if (!hideAll) {
+            for (DrawItem item : lastItems) {
+                for (MiniMap.DisplayMarker mark : item.disp.markers(false)) {
+                    if (mm.filter(mark) || !FloorOverlayMarkerLogic.matchesSearch(mark.m.nm, pattern)) {
+                        continue;
+                    }
+                    Coord screen = FloorOverlayMarkerLogic.destToScreen(
+                            mark.m.tc, lastLink.tileOffset, mm.dloc.tc, mm.scalef(),
+                            mm.getCurrentScale(), hsz, uiScale);
+                    try {
+                        GobIcon.Icon icon = mark.icon();
+                        if (icon != null && icon.checkhit(c.sub(screen))) {
+                            return new TexI(mark.tooltip());
+                        }
+                    } catch (Loading ignored) {
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public static boolean enabled() {

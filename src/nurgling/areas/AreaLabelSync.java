@@ -22,7 +22,7 @@ public final class AreaLabelSync {
             return dummyAlive ? Action.REMOVE : Action.SKIP;
         }
         if (dummyAlive) {
-            return Action.SKIP;
+            return locatable ? Action.SKIP : Action.REMOVE;
         }
         return locatable ? Action.CREATE : Action.SKIP;
     }

@@ -91,7 +91,10 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
         }
         
         if (!areasWindowOpen && !showAllZones) {
-            // Окно редактирования закрыто и не включен режим "показывать все"
+            return;
+        }
+        if (area.getLoadedRCArea(false) == null) {
+            sc = null;
             return;
         }
         

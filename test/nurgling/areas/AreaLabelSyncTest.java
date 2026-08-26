@@ -30,6 +30,7 @@ class AreaLabelSyncTest {
         assertEquals(AreaLabelSync.Action.CREATE, AreaLabelSync.decide(true, true, false));
         assertEquals(AreaLabelSync.Action.SKIP, AreaLabelSync.decide(true, true, true));
         assertEquals(AreaLabelSync.Action.SKIP, AreaLabelSync.decide(true, false, false));
+        assertEquals(AreaLabelSync.Action.REMOVE, AreaLabelSync.decide(true, false, true));
         assertEquals(AreaLabelSync.Action.REMOVE, AreaLabelSync.decide(false, true, true));
         assertEquals(AreaLabelSync.Action.REMOVE, AreaLabelSync.decide(false, false, true));
     }

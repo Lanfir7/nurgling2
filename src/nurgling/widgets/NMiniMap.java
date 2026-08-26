@@ -1747,6 +1747,11 @@ NMiniMap extends MiniMap {
                 } catch(Loading l) {}
             }
 
+            Object overlayTip = floorOverlayRenderer.tooltip(this, c);
+            if (overlayTip != null) {
+                return overlayTip;
+            }
+
             // Get terrain type tooltip
             String terrainInfo = getTerrainTooltip(c);
             if(terrainInfo != null) {
@@ -2296,108 +2301,97 @@ NMiniMap extends MiniMap {
         g.chcolor();
     }
 
+    public String markerSearchPattern() {
+        Widget parentWidget = this.parent;
+        while (parentWidget != null) {
+            if (parentWidget instanceof NMapWnd) {
+                return ((NMapWnd) parentWidget).markerSearchPattern;
+            }
+            parentWidget = parentWidget.parent;
+        }
+        return null;
+    }
+
+    public boolean markersHidden() {
+        NGameUI gui = NUtils.getGameUI();
+        MapWnd mapwnd = (gui != null) ? gui.mapfile : null;
+        return mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall);
+    }
+
+    public void drawProspectingIconAt(GOut g, Coord screenPos, String resourceType) {
+        try {
+            String iconResourcePath = getProspectingIconPath(resourceType);
+            TexI tex = null;
+            if (iconResourcePath != null) {
+                tex = prospectingIconCache.get(iconResourcePath);
+                if (tex == null) {
+                    try {
+                        Resource iconRes = Resource.remote().loadwait(iconResourcePath);
+                        BufferedImage icon = iconRes.layer(Resource.imgc).img;
+                        tex = new TexI(icon);
+                        prospectingIconCache.put(iconResourcePath, tex);
+                    } catch (Exception e) {
+                        tex = tryLoadProspectingIcon(resourceType);
+                    }
+                }
+            } else {
+                tex = tryLoadProspectingIcon(resourceType);
+            }
+            if (tex != null) {
+                Object scaleObj = NConfig.get(NConfig.Key.prospectIconScale);
+                int scalePercent = 100;
+                if (scaleObj instanceof Number) {
+                    scalePercent = ((Number) scaleObj).intValue();
+                }
+                float scaleMultiplier = scalePercent / 100.0f;
+                int dsz = Math.max(tex.sz().y, tex.sz().x);
+                int targetSize = (int) (UI.scale(18) * scaleMultiplier);
+                g.aimage(tex, screenPos, 0.5, 0.5,
+                        UI.scale(targetSize * tex.sz().x / dsz, targetSize * tex.sz().y / dsz));
+            } else {
+                drawFallbackProspectingIcon(g, screenPos, resourceType);
+            }
+        } catch (Exception e) {
+            g.chcolor(128, 128, 128, 255);
+            g.fellipse(screenPos, new Coord(UI.scale(6), UI.scale(6)));
+            g.chcolor();
+        }
+    }
+
     private void drawProspectingLocations(GOut g) {
         if(sessloc == null || dloc == null) return;
 
-        // Check if prospecting icons are hidden by checkbox
         if(!showProspectingIcons) return;
 
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.prospectingLocationService == null) return;
 
-        // Check if markers are hidden (respect "Hide Markers" button)
-        MapWnd mapwnd = gui.mapfile;
-        if(mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall)) {
-            return; // Don't draw prospecting locations when markers are hidden
+        if(markersHidden()) {
+            return;
         }
 
-        // Get marker search pattern from NMapWnd if we're inside one
-        String markerSearchPattern = null;
-        Widget parentWidget = this.parent;
-        while(parentWidget != null) {
-            if(parentWidget instanceof NMapWnd) {
-                markerSearchPattern = ((NMapWnd) parentWidget).markerSearchPattern;
-                break;
-            }
-            parentWidget = parentWidget.parent;
-        }
+        String markerSearchPattern = markerSearchPattern();
 
-        // Use sessloc.seg.id like waypoints and markers do
         java.util.List<nurgling.ProspectingLocation> prospectingLocations = gui.prospectingLocationService.getProspectingLocationsForSegment(sessloc.seg.id);
 
         Coord hsz = sz.div(2);
 
         for(nurgling.ProspectingLocation prospectingLoc : prospectingLocations) {
-            // Apply marker search pattern filter to resource types
             if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
                 String resourceType = prospectingLoc.getResourceType();
                 if(resourceType == null) {
-                    continue; // Hide prospecting locations with no type when searching
+                    continue;
                 }
-                // Show only resources that contain the marker search pattern (case-insensitive)
                 if(!resourceType.toLowerCase().contains(markerSearchPattern.toLowerCase())) {
-                    continue; // Hide resources that don't match
+                    continue;
                 }
             }
 
-            // Convert segment-relative coordinates to screen coordinates
             Coord screenPos = prospectingLoc.getTileCoords().sub(dloc.tc).div(scalef()).add(hsz);
 
-            // Only draw if on screen
             if(screenPos.x >= 0 && screenPos.x <= sz.x &&
                screenPos.y >= 0 && screenPos.y <= sz.y) {
-
-                try {
-                    String resourceType = prospectingLoc.getResourceType();
-                    
-                    // Получаем путь к иконке ресурса
-                    String iconResourcePath = getProspectingIconPath(resourceType);
-                    TexI tex = null;
-                    
-                    if (iconResourcePath != null) {
-                        tex = prospectingIconCache.get(iconResourcePath);
-                        
-                        // Load and cache if not already cached
-                        if(tex == null) {
-                            try {
-                                Resource iconRes = Resource.remote().loadwait(iconResourcePath);
-                                BufferedImage icon = iconRes.layer(Resource.imgc).img;
-                                tex = new TexI(icon);
-                                prospectingIconCache.put(iconResourcePath, tex);
-                            } catch (Exception e) {
-                                // Если не удалось загрузить первый путь, пробуем другие варианты
-                                tex = tryLoadProspectingIcon(resourceType);
-                            }
-                        }
-                    } else {
-                        // Пробуем загрузить иконку напрямую по названию
-                        tex = tryLoadProspectingIcon(resourceType);
-                    }
-                    
-                    if(tex != null) {
-                        // Get scale from config
-                        Object scaleObj = NConfig.get(NConfig.Key.prospectIconScale);
-                        int scalePercent = 100; // Default
-                        if (scaleObj instanceof Number) {
-                            scalePercent = ((Number) scaleObj).intValue();
-                        }
-                        float scaleMultiplier = scalePercent / 100.0f;
-                        
-                        // Draw scaled icon (same size as tree icons, but with scale multiplier)
-                        int dsz = Math.max(tex.sz().y, tex.sz().x);
-                        int targetSize = (int)(UI.scale(18) * scaleMultiplier);
-                        g.aimage(tex, screenPos, 0.5, 0.5, UI.scale(targetSize * tex.sz().x / dsz, targetSize * tex.sz().y / dsz));
-                    } else {
-                        // Fallback: draw colored circle if icon fails
-                        drawFallbackProspectingIcon(g, screenPos, resourceType);
-                    }
-
-                } catch (Exception e) {
-                    // Fallback: draw gray circle if icon fails
-                    g.chcolor(128, 128, 128, 255);
-                    g.fellipse(screenPos, new Coord(UI.scale(6), UI.scale(6)));
-                    g.chcolor();
-                }
+                drawProspectingIconAt(g, screenPos, prospectingLoc.getResourceType());
             }
         }
     }

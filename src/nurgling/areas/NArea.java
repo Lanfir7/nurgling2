@@ -611,6 +611,18 @@ public class NArea
     // the name label so disabled areas can still show a (grayed-out) label.
     public Pair<Coord2d,Coord2d> getRCArea(boolean respectHide)
     {
+        Pair<Coord2d,Coord2d> live = getLoadedRCArea(respectHide);
+        if (live != null)
+            return live;
+        return getRCAreaFromStoredData();
+    }
+
+    /**
+     * Geometry from grids currently loaded on this map only. No ChunkNav fallback —
+     * labels must not appear in a house/mine using outdoor coordinates.
+     */
+    public Pair<Coord2d,Coord2d> getLoadedRCArea(boolean respectHide)
+    {
         if(isVisible())
         {
             Coord begin = null;
@@ -634,8 +646,7 @@ public class NArea
                 return new Pair<Coord2d, Coord2d>(begin.mul(MCache.tilesz), end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
             }
         }
-        // Fallback: попытаться получить координаты из сохраненных данных ChunkNav
-        return getRCAreaFromStoredData();
+        return null;
     }
     
     /**
