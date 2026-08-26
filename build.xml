@@ -103,7 +103,8 @@
 
     <target name="extlib/jogl-arm" depends="extlib/jogl, check-os" if="is.mac">
         <mkdir dir="lib/ext/jogl" />
-        <get dest="lib/ext/jogl/" usetimestamp="true" retries="3" verbose="true">
+        <!-- skipexisting: pinned jogl 2.5.0; skip re-download if already present. -->
+        <get dest="lib/ext/jogl/" usetimestamp="true" retries="3" verbose="true" skipexisting="true">
             <url url="https://jogamp.org/deployment/v2.5.0/jar/jogl-all.jar" />
             <url url="https://jogamp.org/deployment/v2.5.0/jar/jogl-all-natives-macosx-universal.jar" />
             <url url="https://jogamp.org/deployment/v2.5.0/jar/gluegen-rt.jar" />
@@ -204,7 +205,6 @@
     <copy todir="build">
       <fileset dir="lib/ext/jogl"><include name="*.jar" /></fileset>
       <fileset dir="lib/ext/lwjgl"><include name="*.jar" /></fileset>
-      <fileset dir="lib/ext/steamworks"><include name="*.jar" /></fileset>
     </copy>
     <copy file="local-config.properties" tofile="build/haven-config.properties" failonerror="false" quiet="true" />
   </target>
