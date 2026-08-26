@@ -61,6 +61,62 @@ public class QuestWnd extends Widget {
 	return(L10n.get("char.quest.return_to", name));
     }
 
+    public static String localizeCond(String text) {
+	if(text == null || text.isEmpty())
+	    return(text);
+	if("en".equals(L10n.getLanguage()))
+	    return(L10n.tr(text));
+	for(String[] v : COND_VERBS) {
+	    String prefix = v[0];
+	    if(!text.startsWith(prefix))
+		continue;
+	    int n = prefix.length();
+	    if(text.length() > n && Character.isLetter(text.charAt(n)))
+		continue;
+	    String rest = stripArticle(text.substring(n).trim());
+	    String mode = v[2];
+	    if("at".equals(mode) && rest.startsWith("at "))
+		rest = rest.substring(3);
+	    if("bring".equals(mode)) {
+		int to = rest.indexOf(" to ");
+		if(to >= 0)
+		    return(L10n.get(v[1], rest.substring(0, to), rest.substring(to + 4)));
+		return(L10n.get("char.quest.verb.bring_one", rest));
+	    }
+	    return(L10n.get(v[1], rest));
+	}
+	return(L10n.tr(text));
+    }
+
+    private static String stripArticle(String rest) {
+	if(rest.startsWith("a "))
+	    return(rest.substring(2));
+	if(rest.startsWith("an "))
+	    return(rest.substring(3));
+	return(rest);
+    }
+
+    private static final String[][] COND_VERBS = {
+	{"Defeat", "char.quest.verb.defeat", ""},
+	{"Create", "char.quest.verb.create", ""},
+	{"Catch", "char.quest.verb.catch", ""},
+	{"Greet", "char.quest.verb.greet", ""},
+	{"Visit", "char.quest.verb.visit", ""},
+	{"Bring", "char.quest.verb.bring", "bring"},
+	{"Light", "char.quest.verb.light", ""},
+	{"Laugh", "char.quest.verb.laugh", "at"},
+	{"laugh", "char.quest.verb.laugh", "at"},
+	{"Wave", "char.quest.verb.wave", "at"},
+	{"wave", "char.quest.verb.wave", "at"},
+	{"Rage", "char.quest.verb.rage", "at"},
+	{"rage", "char.quest.verb.rage", "at"},
+	{"Tell", "char.quest.verb.tell", ""},
+	{"Pick", "char.quest.verb.pick", ""},
+	{"Kill", "char.quest.verb.kill", ""},
+	{"Raid", "char.quest.verb.raid", ""},
+	{"Gain", "char.quest.verb.gain", ""},
+    };
+
     public static class Quest {
 	public static final int QST_PEND = 0, QST_DONE = 1, QST_FAIL = 2, QST_DISABLED = 3;
 	public static final Color[] stcol = {
@@ -174,7 +230,7 @@ public class QuestWnd extends Widget {
 	    protected void added() {
 		super.added();
 		StringBuilder buf = new StringBuilder();
-		buf.append(String.format("%s{%c %s", RichText.Parser.col2a(Quest.stcol[cond.done]), Quest.stsym[cond.done], L10n.tr(cond.desc)));
+		buf.append(String.format("%s{%c %s", RichText.Parser.col2a(Quest.stcol[cond.done]), Quest.stsym[cond.done], localizeCond(cond.desc)));
 		if(cond.status != null) {
 		    buf.append(' ');
 		    buf.append(cond.status);
@@ -390,7 +446,7 @@ public class QuestWnd extends Widget {
 	    }
 
 	    private Text ct(Condition c) {
-		return(qcfnd.render(" " + stsym[c.done] + " " + L10n.tr(c.desc) + ((c.status != null)?(" " + c.status):""), stcol[c.done]));
+		return(qcfnd.render(" " + stsym[c.done] + " " + localizeCond(c.desc) + ((c.status != null)?(" " + c.status):""), stcol[c.done]));
 	    }
 
 	    void update() {

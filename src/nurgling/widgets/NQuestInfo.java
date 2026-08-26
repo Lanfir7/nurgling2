@@ -229,7 +229,7 @@ public class NQuestInfo extends Widget
                 for (Condition cond : credo.myConditions)
                 {
                     if(!cond.ready)
-                        imgs.add(new QuestImage(fnd1.render(cond.target).img, cond.questId));
+                        imgs.add(new QuestImage(fnd1.render(QuestWnd.localizeCond(cond.target)).img, cond.questId));
                 }
             }
             for (String qname : qgconds.keySet()) {
@@ -325,7 +325,7 @@ public class NQuestInfo extends Widget
             String name = (qg != null && qg.name != null) ? qg.name : cond.target;
             return QuestGiverDistance.withMeters(QuestWnd.returnToLabel(name), condMeters(cond));
         }
-        return QuestGiverDistance.withMeters(cond.target, condMeters(cond));
+        return QuestGiverDistance.withMeters(QuestWnd.localizeCond(cond.target), condMeters(cond));
     }
 
     private String labelName(String name) {
