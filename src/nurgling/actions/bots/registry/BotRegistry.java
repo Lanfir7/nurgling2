@@ -231,6 +231,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("loading", BotDescriptor.BotType.UTILS, "Transfer To Vehicle", "Loads vehicle.", false, true, TransferToVeh.class, "loading", false));
         bots.add(new BotDescriptor("unloading", BotDescriptor.BotType.UTILS, "Transfer From Vehicle", "Unloads vehicle.", false, true, TransferFromVeh.class, "unloading", false));
         bots.add(new BotDescriptor("swap", BotDescriptor.BotType.UTILS, "Swap Vehicles", "Swaps between vehicles.", false, true, TransferFromVehToVeh.class, "swap", false));
+        bots.add(new BotDescriptor("cartcarrier", BotDescriptor.BotType.UTILS, "Cart Carrier", "Like Transfer Liftable, but hauls with a cart: loads six objects from the selected zone, tows them to the CarrierOut zone, unloads, and repeats.", false, true, CartCarrier.class, "log", false));
         bots.add(new BotDescriptor("eater", BotDescriptor.BotType.UTILS, "Eating bot", "Eat in the food area.", true, true, Eater.class, "eater", false));
         bots.add(new BotDescriptor("emptytea", BotDescriptor.BotType.UTILS, "Empty Tea", "Empties all teapots with tea into barrels.", true, true, EmptyTeapots.class, "emptytea", false));
         bots.add(new BotDescriptor("waterfiller", BotDescriptor.BotType.UTILS, "bot.waterfiller.title", "bot.waterfiller.desc", false, true, WaterFiller.class, "waterfiller", false));
