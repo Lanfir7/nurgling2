@@ -215,14 +215,14 @@ public class BuildGhostPreview extends GAttrib {
         ghost.setattr(new GhostAlpha(ghost));
         if (buildingHitBox != null && ghost.ngob != null) {
             ghost.ngob.hitBox = buildingHitBox;
+            Coord2d boxSize = buildingHitBox.end.sub(buildingHitBox.begin);
+            ghost.addcustomol(new NBoxOverlay(ghost, boxSize, Coord2d.z));
         }
         try {
             if (buildingResource != null) {
                 ghost.setattr(new ResDrawable(ghost, buildingResource, spriteData));
             }
         } catch (Loading e) {
-            ghost.setattr(new PendingGhostModel(ghost, buildingResource, spriteData));
-        } catch (RuntimeException e) {
             ghost.setattr(new PendingGhostModel(ghost, buildingResource, spriteData));
         }
         synchronized (ghostGobs) {

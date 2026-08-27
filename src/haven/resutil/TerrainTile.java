@@ -204,11 +204,8 @@ public class TerrainTile extends Tiler implements Tiler.MCons, Tiler.CTrans {
 
 			float bv(Coord lc, float tcx, float tcy) {
 			    float icx = 1 - tcx, icy = 1 - tcy;
-			    int x = lc.x, y = lc.y;
-			    if(!vs.has(x, y) || !vs.has(x + 1, y) || !vs.has(x, y + 1) || !vs.has(x + 1, y + 1))
-				return(0);
-			    return((((bv[l][vs.o(x    , y    )] * icx) + (bv[l][vs.o(x + 1, y    )] * tcx)) * icy) +
-				   (((bv[l][vs.o(x    , y + 1)] * icx) + (bv[l][vs.o(x + 1, y + 1)] * tcx)) * tcy));
+			    return((((bv[l][vs.o(lc.x + 0, lc.y + 0)] * icx) + (bv[l][vs.o(lc.x + 1, lc.y + 0)] * tcx)) * icy) +
+				   (((bv[l][vs.o(lc.x + 0, lc.y + 1)] * icx) + (bv[l][vs.o(lc.x + 1, lc.y + 1)] * tcx)) * tcy));
 			}
 
 			public Surface.MeshVertex make(MeshBuf buf, MPart d, int i) {
@@ -323,8 +320,6 @@ public class TerrainTile extends Tiler implements Tiler.MCons, Tiler.CTrans {
 
     public void faces(MapMesh m, MPart d) {
 	Blend b = m.data(blend);
-	if(!b.es.has(d.lc))
-	    return;
 	Surface.MeshVertex[] mv = new Surface.MeshVertex[d.v.length];
 	for(int i = 0; i < var.length + 1; i++) {
 	    if(b.en[i][b.es.o(d.lc)]) {
@@ -360,8 +355,6 @@ public class TerrainTile extends Tiler implements Tiler.MCons, Tiler.CTrans {
 		transtex.put(gt, alpha = new AlphaTex(gt.img, 0.01f));
 	}
 	Blend b = m.data(blend);
-	if(!b.es.has(d.lc))
-	    return;
 	Surface.MeshVertex[] mv = new Surface.MeshVertex[d.v.length];
 	for(int i = 0; i < var.length + 1; i++) {
 	    if(b.en[i][b.es.o(d.lc)]) {

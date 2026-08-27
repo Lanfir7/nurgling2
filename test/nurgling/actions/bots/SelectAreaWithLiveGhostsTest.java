@@ -34,6 +34,13 @@ class SelectAreaWithLiveGhostsTest {
     }
 
     @Test
+    void selectionProceedsWithoutHolograms() {
+        assertTrue(SelectAreaWithLiveGhosts.selectionCanProceed(1, false));
+        assertFalse(SelectAreaWithLiveGhosts.selectionCanProceed(0, false));
+        assertFalse(SelectAreaWithLiveGhosts.selectionCanProceed(1, true));
+    }
+
+    @Test
     void activateBuildMenuSkipsUnloadedPaginae() {
         assertFalse(SelectAreaWithLiveGhosts.matchesBuildButton(null, "Cupboard"));
         assertFalse(SelectAreaWithLiveGhosts.matchesBuildButton(() -> {

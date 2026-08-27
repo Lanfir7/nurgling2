@@ -185,7 +185,13 @@ public class Build implements Action
         }
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            gui.ui.core.addTask(WaitPlob.withSoftTimeout(false, 80, gui));
+            gui.ui.core.addTask(WaitPlob.withSoftTimeout(false, 40, gui));
+            if (gui.map.placing == null)
+            {
+                SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
+                continue;
+            }
+            gui.ui.core.addTask(WaitPlob.withSoftTimeout(true, 200, gui));
             Loader.Future<MapView.Plob> snapshot = gui.map.placing;
             if (snapshot != null && snapshot.ready())
             {
@@ -206,13 +212,42 @@ public class Build implements Action
         return resolveHitBox(fromPlob, cmd.customHitBox, cmd.name);
     }
 
+    /**
+     * Enter place-mode only after the character is already at the site, then drop the building.
+     * Walking with an active hologram cancels the server session, which left the bot stuck on
+     * {@link WaitConstructionObject}.
+     */
+    private boolean placeConstruction(NGameUI gui, Coord2d pos, double rotationAngle) throws InterruptedException
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
+            MapView.Plob plob = waitAndGetPlob(gui);
+            if (plob != null)
+            {
+                plob.a = rotationAngle;
+            }
+            if (gui.map.placing == null)
+            {
+                continue;
+            }
+            gui.map.wdgmsg("place", pos.floor(posres), (int) Math.round(rotationAngle * 32768 / Math.PI), 1, 0);
+            NUtils.addTask(WaitConstructionObject.withSoftTimeout(pos, 200));
+            if (Finder.findGob(pos) != null)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Results runBuild(NGameUI gui) throws InterruptedException
     {
         // Create context for navigation and zone resolution
         Pair<Coord2d,Coord2d> area = null;
         // Navigate to build area if using NArea and resolve the RC area
         if (buildArea != null) {
-            NUtils.navigateToArea(buildArea);
+            NUtils.navigateToArea(buildArea, true);
             area = buildArea.getRCArea();
             if (area == null) {
                 return Results.ERROR("Cannot get build area coordinates");
@@ -356,23 +391,20 @@ public class Build implements Action
                 }
             }
 
-            // Activate build menu for new construction
-            SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
-            if (gui.map.placing == null)
+            NHitBox hitBox = hitBoxForPlob(null);
+            if (hitBox == null)
             {
                 SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
+                MapView.Plob plob = waitAndGetPlob(gui);
+                hitBox = hitBoxForPlob(plob);
             }
-            MapView.Plob plob = waitAndGetPlob(gui);
-            NHitBox hitBox = hitBoxForPlob(plob);
             if (hitBox == null)
             {
                 return Results.ERROR("Plob never became ready");
             }
             double rotationAngle = (rotationCount * Math.PI / 2.0);
-            if (plob != null)
-            {
-                plob.a = rotationAngle;
-            }
+            // Walking while the hologram is up cancels server place-mode; drop it until we stand at the site.
+            SelectAreaWithLiveGhosts.cancelPlacing(gui);
 
             // Now check and refill resources for new construction
             boolean isExist = false;
@@ -395,24 +427,28 @@ public class Build implements Action
                     return Results.ERROR("NO ITEMS");
                 if (buildArea != null)
                 {
-                    NUtils.navigateToArea(buildArea);
+                    NUtils.navigateToArea(buildArea, true);
                 }
             }
 
-            PathFinder pf = new PathFinder(NGob.getDummy(pos, rotationAngle, hitBox), true);
+            Gob dummy = NGob.getDummy(pos, rotationAngle, hitBox);
+            Gob playerGob = (gui.map != null) ? gui.map.player() : null;
+            PathFinder pf = (playerGob != null)
+                ? new PathFinder(playerGob.rc, dummy, true)
+                : new PathFinder(dummy, true);
             pf.isHardMode = true;
             Results pfResult = pf.run(gui);
-            if (!pfResult.IsSuccess())
+            if (!pfResult.IsSuccess() && playerGob != null && playerGob.rc.dist(pos) > 12)
             {
-                Gob playerGob = gui.map.player();
-                if (playerGob == null || playerGob.rc.dist(pos) > 32)
-                {
-                    return pfResult;
-                }
+                Coord2d delta = playerGob.rc.sub(pos);
+                Coord2d approach = (delta.abs() > 0.1) ? pos.add(delta.norm().mul(8)) : pos.add(8, 0);
+                new GoTo(approach).run(gui);
             }
 
-            gui.map.wdgmsg("place", pos.floor(posres), (int) Math.round(rotationAngle * 32768 / Math.PI), 1, 0);
-            NUtils.addTask(new WaitConstructionObject(pos));
+            if (!placeConstruction(gui, pos, rotationAngle))
+            {
+                return Results.ERROR("Failed to place construction");
+            }
 
             String windowName = cmd.windowName != null ? cmd.windowName : cmd.name;
             NUtils.addTask(new WaitWindow(windowName));

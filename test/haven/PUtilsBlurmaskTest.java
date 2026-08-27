@@ -61,7 +61,21 @@ class PUtilsBlurmaskTest {
     }
 
     @Test
-    void meshScanRejectsBlendCoordThatCrashedFriend() {
+    void mpartKeepsTileCoordWhenLoopCoordMoves() {
+        Coord loop = Coord.of(3, 4);
+        Coord gc = Coord.of(100, 200);
+        Tiler.MPart part = new Tiler.MPart(loop, gc, new Surface.Vertex[0], new float[0], new float[0], new int[0]);
+        loop.x = 25;
+        loop.y = 25;
+        gc.x = 0;
+        assertEquals(3, part.lc.x);
+        assertEquals(4, part.lc.y);
+        assertEquals(100, part.gc.x);
+        assertEquals(200, part.gc.y);
+    }
+
+    @Test
+    void meshScanIndexMatchesFriendCrashCoords() {
         MapMesh.Scan es = new MapMesh.Scan(Coord.z, Coord.of(25, 25));
         Coord lc = Coord.of(21, -5);
         assertEquals(-104, es.o(lc));

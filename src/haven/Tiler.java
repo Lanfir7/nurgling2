@@ -185,8 +185,6 @@ public abstract class Tiler {
 
     public static void flatmodel(MapMesh m, Coord lc) {
 	MapMesh.MapSurface s = m.data(m.gnd);
-	if(!s.bs.has(lc) || !s.vs.has(lc) || !s.vs.has(lc.add(1, 1)))
-	    return;
 	if(s.split[s.bs.o(lc)]) {
 	    s.new Face(s.surf[s.vs.o(lc.x, lc.y)],
 		       s.surf[s.vs.o(lc.x, lc.y + 1)],
@@ -210,8 +208,6 @@ public abstract class Tiler {
 
     public void lay(MapMesh m, Coord lc, Coord gc, MCons cons, boolean cover) {
 	MapMesh.MapSurface s = m.data(m.gnd);
-	if(!s.bs.has(lc) || !s.ts.has(lc))
-	    return;
 	cons.faces(m, MPart.splitquad(lc, gc, s.fortilea(lc), s.split[s.bs.o(lc)]));
     }
 

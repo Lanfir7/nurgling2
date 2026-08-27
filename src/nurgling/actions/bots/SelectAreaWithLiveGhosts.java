@@ -60,6 +60,11 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
         return hitBox != null && resourceName != null && !resourceName.isEmpty();
     }
 
+    /** Area is enough to build; holograms may still be loading in a second window. */
+    static boolean selectionCanProceed(int areasSelected, boolean userCancelled) {
+        return areasSelected > 0 && !userCancelled;
+    }
+
     static boolean matchesBuildButton(Supplier<String> nameSupplier, String buildingName) {
         if (nameSupplier == null || buildingName == null) {
             return false;
@@ -89,7 +94,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
         }
     }
 
-    private static void cancelPlacing(NGameUI gui) {
+    public static void cancelPlacing(NGameUI gui) {
         if (gui == null || gui.map == null || gui.map.placing == null) {
             return;
         }
@@ -249,7 +254,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
 
         mapView.isAreaSelectionMode.set(false);
 
-        if (areasSelected == 0 || userCancelled)
+        if (!selectionCanProceed(areasSelected, userCancelled))
         {
             return Results.FAIL();
         }

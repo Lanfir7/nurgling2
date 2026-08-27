@@ -120,12 +120,7 @@ public class OCache implements Iterable<Gob> {
 	}
 	Consumer<Gob> task = g -> {
 	    synchronized(g) {
-		try {
-		    g.ctick(dt);
-		} catch(Loading l) {
-		} catch(RuntimeException e) {
-		    new Warning(e, "gob tick failed " + g.id).issue();
-		}
+		g.ctick(dt);
 	    }
 	};
 	if(!Config.par.get())

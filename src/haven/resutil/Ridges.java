@@ -711,8 +711,6 @@ public class Ridges implements MapMesh.ConsHooks {
     }
 
     public boolean laygnd(Coord tc, Tiler.MCons cons) {
-	if(!ms.ts.has(tc))
-	    return(false);
 	MPart gnd = this.gnd[ms.ts.o(tc)];
 	if(gnd == null)
 	    return(false);
@@ -721,8 +719,6 @@ public class Ridges implements MapMesh.ConsHooks {
     }
 
     public boolean layridge(Coord tc, Tiler.MCons cons) {
-	if(!ms.ts.has(tc))
-	    return(false);
 	MPart ridge = this.ridge[ms.ts.o(tc)];
 	if(ridge == null)
 	    return(false);
@@ -733,8 +729,6 @@ public class Ridges implements MapMesh.ConsHooks {
     public RPart getrdesc(Coord tc) {
 	/* XXX? It is somewhat dubious that these aren't thrown away
 	 * in cleanup(), but for now they are useful. */
-	if(!ms.ts.has(tc))
-	    return(null);
 	return((RPart)this.ridge[ms.ts.o(tc)]);
     }
 

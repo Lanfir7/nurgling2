@@ -504,6 +504,11 @@ public class PathFinder implements Action {
         assert virtual;
     }
 
+    public PathFinder(Coord2d begin, Gob dummy, boolean virtual) {
+        this(dummy, virtual);
+        this.begin = begin;
+    }
+
 
     private ArrayList<Coord> findFreeNearByHB(CellsArray ca, long target_id, Gob dummy, boolean isStart) {
         ArrayList<Coord> res = new ArrayList<>();
