@@ -75,6 +75,31 @@ class PUtilsBlurmaskTest {
     }
 
     @Test
+    void waterBottomSplitSurvivesPollutedCoordZ() {
+        int ox = Coord.z.x, oy = Coord.z.y;
+        Coord.z.x = 26;
+        Coord.z.y = 25;
+        try {
+            MapMesh.Scan ts = new MapMesh.Scan(Coord.z, Coord.of(25, 25));
+            MapMesh.Scan vs = new MapMesh.Scan(Coord.of(-1, -1), Coord.of(28, 28));
+            assertEquals(0, ts.ul.x);
+            assertEquals(0, ts.ul.y);
+            assertEquals(25, ts.br.x);
+            for (int y = ts.ul.y; y < ts.br.y; y++) {
+                for (int x = ts.ul.x; x < ts.br.x; x++) {
+                    int i = vs.o(x + 1, y + 1);
+                    assertTrue(i >= 0 && i < vs.l, () -> "vs.o out of range: " + i);
+                }
+            }
+            MapMesh.Scan es = new MapMesh.Scan(Coord.z, Coord.of(25, 25));
+            assertEquals(21, es.o(21, 0));
+        } finally {
+            Coord.z.x = ox;
+            Coord.z.y = oy;
+        }
+    }
+
+    @Test
     void meshScanIndexMatchesFriendCrashCoords() {
         MapMesh.Scan es = new MapMesh.Scan(Coord.z, Coord.of(25, 25));
         Coord lc = Coord.of(21, -5);

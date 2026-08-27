@@ -92,10 +92,11 @@ public class MapMesh implements RenderTree.Node, Disposable {
         public final int l;
 
         public Scan(Coord ul, Coord sz) {
-            this.ul = ul;
-            this.sz = sz;
-            this.br = sz.add(ul);
-            this.l = sz.x * sz.y;
+	    /* Coord.z / cutsz are mutable shared objects (Widget.c = Coord.z). */
+	    this.ul = (ul == Coord.z) ? Coord.of(0, 0) : Coord.of(ul);
+	    this.sz = Coord.of(sz);
+            this.br = this.sz.add(this.ul);
+            this.l = this.sz.x * this.sz.y;
         }
 
         public int o(int x, int y) {
@@ -216,8 +217,8 @@ public class MapMesh implements RenderTree.Node, Disposable {
 
     private MapMesh(MCache map, Coord ul, Coord sz, Random rnd) {
 	this.map = map;
-	this.ul = ul;
-	this.sz = sz;
+	this.ul = Coord.of(ul);
+	this.sz = Coord.of(sz);
 	this.rnd = rnd.nextLong();
     }
 
