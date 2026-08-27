@@ -403,11 +403,6 @@ def discover_profiles() -> list:
     else:
         print("  APPDATA not set")
 
-    # Direct Windows path (fallback)
-    direct_path = Path(r"C:\Users\imbecil\AppData\Roaming\Haven and Hearth\profiles")
-    if direct_path.exists() and str(direct_path) not in [str(d[0].parent) for d in dirs]:
-        scan_profiles(direct_path)
-
     # Remove duplicates
     seen = set()
     unique_dirs = []

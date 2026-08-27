@@ -351,7 +351,7 @@ For the next hafen integration:
 ## References
 
 - Hafen upstream: https://github.com/dolda2000/hafen-client
-- Nurgling2: https://github.com/Katodiy/nurgling2
+- Nurgling2: https://github.com/Lanfir7/nurgling2
 - Material system details: `docs/material-system.md`
 - Container status colors: `docs/container-status-colors.md`
 

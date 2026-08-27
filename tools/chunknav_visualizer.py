@@ -323,26 +323,31 @@ def find_chunknav_directories(world=None):
         2: "c646473983afec09",
     }
 
+    def profile_bases(profile_id):
+        bases = []
+        appdata = os.environ.get('APPDATA', '')
+        if appdata:
+            bases.append(Path(appdata) / "Haven and Hearth" / "profiles" / profile_id)
+        wsl_users = Path("/mnt/c/Users")
+        if wsl_users.exists():
+            for user_dir in wsl_users.iterdir():
+                if user_dir.is_dir():
+                    bases.append(user_dir / "AppData" / "Roaming" / "Haven and Hearth" / "profiles" / profile_id)
+        return bases
+
     # If world is specified, use that specific profile only
     if world and world in WORLD_PROFILES:
         profile_id = WORLD_PROFILES[world]
-        hardcoded_paths = [
-            Path(rf"C:\Users\imbecil\AppData\Roaming\Haven and Hearth\profiles\{profile_id}\chunknav"),
-            Path(f"/mnt/c/Users/imbecil/AppData/Roaming/Haven and Hearth/profiles/{profile_id}/chunknav"),
-        ]
-        for p in hardcoded_paths:
-            if p.exists() and p.is_dir():
-                dirs.append((p, p.parent))
+        for base in profile_bases(profile_id):
+            chunknav = base / "chunknav"
+            if chunknav.exists() and chunknav.is_dir():
+                dirs.append((chunknav, base))
                 return dirs
 
-        # Fallback: check for old JSON file
-        json_paths = [
-            Path(rf"C:\Users\imbecil\AppData\Roaming\Haven and Hearth\profiles\{profile_id}\chunknav.nurgling.json"),
-            Path(f"/mnt/c/Users/imbecil/AppData/Roaming/Haven and Hearth/profiles/{profile_id}/chunknav.nurgling.json"),
-        ]
-        for p in json_paths:
-            if p.exists():
-                print(f"Note: Found old JSON file at {p}")
+        for base in profile_bases(profile_id):
+            json_path = base / "chunknav.nurgling.json"
+            if json_path.exists():
+                print(f"Note: Found old JSON file at {json_path}")
                 print("Run the game client to migrate to binary format, or use the JSON file directly.")
                 return []
 

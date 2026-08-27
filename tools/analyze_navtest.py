@@ -23,8 +23,13 @@ def find_latest_navtest():
     """Find the most recent navtest JSON file in AppData."""
     appdata = os.environ.get('APPDATA', '')
     if not appdata:
-        # WSL fallback
-        appdata = '/mnt/c/Users/imbecil/AppData/Roaming'
+        wsl_users = Path('/mnt/c/Users')
+        if wsl_users.exists():
+            for user_dir in wsl_users.iterdir():
+                candidate = user_dir / 'AppData' / 'Roaming'
+                if (candidate / 'Haven and Hearth').exists():
+                    appdata = str(candidate)
+                    break
 
     hnh_dir = os.path.join(appdata, 'Haven and Hearth')
     pattern = os.path.join(hnh_dir, 'navtest_*.json')

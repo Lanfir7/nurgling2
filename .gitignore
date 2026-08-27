@@ -33,6 +33,16 @@ build.bat
 /BeyondSRC
 Areas.db
 Areas.db-wal
+Areas.db-shm
+tmp_ver
+tree_garden_blueprints.json
+hs_err_pid*.log
+javac.*.args
+/assets/
+/logs/
+/.codegraph/
+/.superpowers/
+/docs/superpowers/
 AlarmSounds/AlarmSounds.7z
 AlarmSounds/ND_Ambush.wav
 AlarmSounds/ND_Badger.wav
