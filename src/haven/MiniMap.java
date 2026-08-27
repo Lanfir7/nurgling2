@@ -386,6 +386,8 @@ public class MiniMap extends Widget
 		if(!follow)
 		    setloc = null;
 	    } catch(Loading l) {
+	    } catch(RuntimeException e) {
+		new Warning(e, "could not follow map location").issue();
 	    }
 	}
 	if((sesslocator == null) && (ui != null) && (ui.sess != null))
@@ -394,6 +396,8 @@ public class MiniMap extends Widget
 	    try {
 		sessloc = resolve(sesslocator);
 	    } catch(Loading l) {
+	    } catch(RuntimeException e) {
+		new Warning(e, "could not resolve session location").issue();
 	    }
 	}
 	icons = findicons(icons);

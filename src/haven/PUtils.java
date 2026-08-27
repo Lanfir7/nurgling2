@@ -59,8 +59,9 @@ public class PUtils {
 	int w = src.getWidth(), h = src.getHeight(), b = src.getNumBands();
 	WritableRaster ret = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, w, h, b, null);
 	int[] buf = new int[w * h];
+	int minx = src.getMinX(), miny = src.getMinY();
 	for(int i = 0; i < b; i++)
-	    ret.setSamples(0, 0, w, h, i, src.getSamples(0, 0, w, h, i, buf));
+	    ret.setSamples(0, 0, w, h, i, src.getSamples(minx, miny, w, h, i, buf));
 	return(ret);
     }
 
@@ -92,7 +93,7 @@ public class PUtils {
 	int l = w, u = h, r = 0, b = 0;
 	for(int y = 0; y < h; y++) {
 	    for(int x = 0; x < w; x++) {
-		if(img.getSample(x, y, 3) > thres) {
+		if(sample(img, x, y, 3) > thres) {
 		    l = Math.min(l, x); u = Math.min(u, y);
 		    r = Math.max(r, x); b = Math.max(b, y);
 		}
@@ -106,6 +107,22 @@ public class PUtils {
 	return(alphabounds(img.getRaster(), thres));
     }
 
+    /** Raster coords from 0-based x/y; ImageIO/subimages can have minX/minY != 0. */
+    public static int sample(Raster img, int x, int y, int band) {
+	int sx = x + img.getMinX(), sy = y + img.getMinY();
+	if((x < 0) || (y < 0) || (x >= img.getWidth()) || (y >= img.getHeight()))
+	    return((band == 3) ? 255 : 0);
+	if(band >= img.getNumBands())
+	    return((band == 3) ? 255 : 0);
+	return(img.getSample(sx, sy, band));
+    }
+
+    public static void setsample(WritableRaster img, int x, int y, int band, int val) {
+	if((x < 0) || (y < 0) || (x >= img.getWidth()) || (y >= img.getHeight()) || (band >= img.getNumBands()))
+	    return;
+	img.setSample(x + img.getMinX(), y + img.getMinY(), band, val);
+    }
+
     public static WritableRaster imggrow(WritableRaster img, int rad) {
 	int h = img.getHeight(), w = img.getWidth();
 	int[] buf = new int[w * h];
@@ -117,13 +134,13 @@ public class PUtils {
 		int l = Math.max(0, x - rad), r = Math.min(w - 1, x + rad);
 		for(int y2 = u; y2 <= b; y2++) {
 		    for(int x2 = l; x2 <= r; x2++) {
-			m = Math.max(m, img.getSample(x2, y2, 0));
+			m = Math.max(m, sample(img, x2, y2, 0));
 		    }
 		}
 		buf[o++] = m;
 	    }
 	}
-	img.setSamples(0, 0, w, h, 0, buf);
+	img.setSamples(img.getMinX(), img.getMinY(), w, h, 0, buf);
 	return(img);
     }
 
@@ -146,22 +163,22 @@ public class PUtils {
 		    double v = 0;
 		    int l = Math.max(0, x - rad), r = Math.min(w - 1, x + rad);
 		    for(int x2 = l, ks = l - (x - rad); x2 <= r; x2++, ks++)
-			v += img.getSample(x2, y, band) * gk[ks];
+			v += sample(img, x2, y, band) * gk[ks];
 		    buf[o++] = (int)v;
 		}
 	    }
-	    img.setSamples(0, 0, w, h, band, buf);
+	    img.setSamples(img.getMinX(), img.getMinY(), w, h, band, buf);
 	    o = 0;
 	    for(int y = 0; y < h; y++) {
 		for(int x = 0; x < w; x++) {
 		    double v = 0;
 		    int u = Math.max(0, y - rad), b = Math.min(h - 1, y + rad);
 		    for(int y2 = u, ks = u - (y - rad); y2 <= b; y2++, ks++)
-			v += img.getSample(x, y2, band) * gk[ks];
+			v += sample(img, x, y2, band) * gk[ks];
 		    buf[o++] = (int)v;
 		}
 	    }
-	    img.setSamples(0, 0, w, h, band, buf);
+	    img.setSamples(img.getMinX(), img.getMinY(), w, h, band, buf);
 	}
 	return(img);
     }
@@ -171,12 +188,12 @@ public class PUtils {
 	int w = alpha.getWidth(), h = alpha.getHeight();
 	for(int y = 0; y < h; y++) {
 	    for(int x = 0; x < w; x++) {
-		int a = (alpha.getSample(x, y, 0) * ba) / 255;
+		int a = (sample(alpha, x, y, 0) * ba) / 255;
 		int dx = x + ul.x, dy = y + ul.y;
-		dst.setSample(dx, dy, 0, ((r * a) + (dst.getSample(dx, dy, 0) * (255 - a))) / 255);
-		dst.setSample(dx, dy, 1, ((g * a) + (dst.getSample(dx, dy, 1) * (255 - a))) / 255);
-		dst.setSample(dx, dy, 2, ((b * a) + (dst.getSample(dx, dy, 2) * (255 - a))) / 255);
-		dst.setSample(dx, dy, 3, Math.max((ba * a) / 255, dst.getSample(dx, dy, 3)));
+		setsample(dst, dx, dy, 0, ((r * a) + (sample(dst, dx, dy, 0) * (255 - a))) / 255);
+		setsample(dst, dx, dy, 1, ((g * a) + (sample(dst, dx, dy, 1) * (255 - a))) / 255);
+		setsample(dst, dx, dy, 2, ((b * a) + (sample(dst, dx, dy, 2) * (255 - a))) / 255);
+		setsample(dst, dx, dy, 3, Math.max((ba * a) / 255, sample(dst, dx, dy, 3)));
 	    }
 	}
 	return(dst);
@@ -191,7 +208,7 @@ public class PUtils {
 	    for(int x = 0; x < w; x++) {
 		int dx = x + off.x;
 		for(int i = 0; i < b; i++)
-		    dst.setSample(dx, dy, i, src.getSample(x, y, i));
+		    dst.setSample(dx + dst.getMinX(), dy + dst.getMinY(), i, sample(src, x, y, i));
 	    }
 	}
 	return(dst);
@@ -211,7 +228,7 @@ public class PUtils {
 	    int sy = y + soff.y, dy = y + doff.y;
 	    for(int x = 0; x < w; x++) {
 		int sx = x + soff.x, dx = x + doff.x;
-		dst.setSample(dx, dy, dband, (dst.getSample(dx, dy, dband) * src.getSample(sx, sy, sband)) / 255);
+		setsample(dst, dx, dy, dband, (sample(dst, dx, dy, dband) * sample(src, sx, sy, sband)) / 255);
 	    }
 	}
 	return(dst);
@@ -221,12 +238,12 @@ public class PUtils {
 	int w = src.getWidth(), h = src.getHeight();
 	for(int y = 0; y < h; y++) {
 	    for(int x = 0; x < w; x++) {
-		int a = src.getSample(x, y, 3);
+		int a = sample(src, x, y, 3);
 		int dx = x + off.x, dy = y + off.y;
-		dst.setSample(dx, dy, 0, ((src.getSample(x, y, 0) * a) + (dst.getSample(dx, dy, 0) * (255 - a))) / 255);
-		dst.setSample(dx, dy, 1, ((src.getSample(x, y, 1) * a) + (dst.getSample(dx, dy, 1) * (255 - a))) / 255);
-		dst.setSample(dx, dy, 2, ((src.getSample(x, y, 2) * a) + (dst.getSample(dx, dy, 2) * (255 - a))) / 255);
-		dst.setSample(dx, dy, 3, Math.max(src.getSample(x, y, 3), dst.getSample(dx, dy, 3)));
+		setsample(dst, dx, dy, 0, ((sample(src, x, y, 0) * a) + (sample(dst, dx, dy, 0) * (255 - a))) / 255);
+		setsample(dst, dx, dy, 1, ((sample(src, x, y, 1) * a) + (sample(dst, dx, dy, 1) * (255 - a))) / 255);
+		setsample(dst, dx, dy, 2, ((sample(src, x, y, 2) * a) + (sample(dst, dx, dy, 2) * (255 - a))) / 255);
+		setsample(dst, dx, dy, 3, Math.max(sample(src, x, y, 3), sample(dst, dx, dy, 3)));
 	    }
 	}
 	return(dst);
@@ -238,7 +255,7 @@ public class PUtils {
 	    for(int x = 0; x < w; x++) {
 		for(int b = 0; b < nb; b++) {
 		    int dx = x + off.x, dy = y + off.y;
-		    dst.setSample(dx, dy, b, ((src.getSample(x, y, b) * a) + (dst.getSample(dx, dy, b) * (255 - a))) / 255);
+		    setsample(dst, dx, dy, b, ((sample(src, x, y, b) * a) + (sample(dst, dx, dy, b) * (255 - a))) / 255);
 		}
 	    }
 	}
@@ -252,7 +269,7 @@ public class PUtils {
            for(int x = 0; x < w; x++) {
                int tx = Utils.floormod(x - off.x, tw), ty = Utils.floormod(y - off.y, th);
                for(int i = 0; i < b; i++)
-                   dst.setSample(x, y, i, (dst.getSample(x, y, i) * ((i < tb)?tile.getSample(tx, ty, i):255)) / 255);
+                   dst.setSample(x + dst.getMinX(), y + dst.getMinY(), i, (sample(dst, x, y, i) * ((i < tb)?sample(tile, tx, ty, i):255)) / 255);
            }
        }
        return(dst);
@@ -264,7 +281,7 @@ public class PUtils {
 	for(int y = 0; y < h; y++) {
 	    for(int x = 0; x < w; x++) {
 		for(int b = 0; b < 4; b++)
-		    img.setSample(x, y, b, (img.getSample(x, y, b) * bm[b]) / 255);
+		    img.setSample(x + img.getMinX(), y + img.getMinY(), b, (sample(img, x, y, b) * bm[b]) / 255);
 	    }
 	}
 	return(img);
@@ -283,10 +300,8 @@ public class PUtils {
 	return(copyband(dst, dband, Coord.z, src, sband));
     }
 
-    /** 0-origin 4-band raster. ImageIO/subimages can have minX/minY != 0; RGB has no alpha. */
+    /** Always a fresh 0-origin 4-band raster. ImageIO/subimages can have minX/minY != 0; RGB has no alpha. */
     public static Raster originrgba(Raster img) {
-	if((img.getMinX() == 0) && (img.getMinY() == 0) && (img.getNumBands() >= 4))
-	    return(img);
 	int w = img.getWidth(), h = img.getHeight();
 	int minx = img.getMinX(), miny = img.getMinY(), nb = img.getNumBands();
 	WritableRaster dst = imgraster(new Coord(w, h));
@@ -321,8 +336,8 @@ public class PUtils {
 	float max = 0;
 	for(int y = 0; y < sz.y; y++) {
 	    for(int x = 0; x < sz.x; x++) {
-		Color.RGBtoHSB(img.getSample(x, y, 0), img.getSample(x, y, 1), img.getSample(x, y, 2), hsv);
-		float a = (nb > 3)?(img.getSample(x, y, 3) / 255f):1f;
+		Color.RGBtoHSB(sample(img, x, y, 0), sample(img, x, y, 1), sample(img, x, y, 2), hsv);
+		float a = (nb > 3)?(sample(img, x, y, 3) / 255f):1f;
 		float val = ((1f - hsv[1]) * hsv[2]) * a;
 		max = Math.max(max, val);
 	    }
@@ -330,8 +345,8 @@ public class PUtils {
 	float imax = 1f / max;
 	for(int y = 0; y < sz.y; y++) {
 	    for(int x = 0; x < sz.x; x++) {
-		Color.RGBtoHSB(img.getSample(x, y, 0), img.getSample(x, y, 1), img.getSample(x, y, 2), hsv);
-		float a = (nb > 3)?(img.getSample(x, y, 3) / 255f):1f;
+		Color.RGBtoHSB(sample(img, x, y, 0), sample(img, x, y, 1), sample(img, x, y, 2), hsv);
+		float a = (nb > 3)?(sample(img, x, y, 3) / 255f):1f;
 		float val = ((1f - hsv[1]) * hsv[2]) * a;
 		ret.setSample(x, y, 0, Math.min(Math.max((int)(Math.sqrt(val * imax) * 255), 0), 255));
 	    }

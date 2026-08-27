@@ -487,22 +487,27 @@ public abstract class UILoop implements Console.Directory {
 
 	protected void tick() {
 	    synchronized(ui) {
-		CPUProfile.phase(prof, "dwait");
-		if(rprofc != null) rprofc.new Part("tick", out);
-		if(gprof  != null) gprof.part(out, "tick");
-		loop.dispatch(ui);
-		CPUProfile.phase(prof, "stick");
-		if(ui.sess != null) {
-		    ui.sess.glob.ctick();
-		    ui.sess.glob.gtick(out);
+		try {
+		    CPUProfile.phase(prof, "dwait");
+		    if(rprofc != null) rprofc.new Part("tick", out);
+		    if(gprof  != null) gprof.part(out, "tick");
+		    loop.dispatch(ui);
+		    CPUProfile.phase(prof, "stick");
+		    if(ui.sess != null) {
+			ui.sess.glob.ctick();
+			ui.sess.glob.gtick(out);
+		    }
+		    CPUProfile.phase(prof, "utick");
+		    ui.tick();
+		    ui.gtick(out);
+		    ui.mousehover(ui.mc);
+		    Coord sz = loop.wnd.size();
+		    if(!ui.root.sz.equals(sz))
+			ui.root.resize(sz);
+		} catch(Loading l) {
+		} catch(RuntimeException e) {
+		    new Warning(e, "UI tick failed").issue();
 		}
-		CPUProfile.phase(prof, "utick");
-		ui.tick();
-		ui.gtick(out);
-		ui.mousehover(ui.mc);
-		Coord sz = loop.wnd.size();
-		if(!ui.root.sz.equals(sz))
-		    ui.root.resize(sz);
 	    }
 	}
 

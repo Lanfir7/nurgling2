@@ -191,9 +191,11 @@ public class WaterTile extends Tiler {
 	    }
 	}
 
-	public Coord3f vel(Coord tc) {
-	    return(Coord3f.of(xv[vs.o(tc)], -yv[vs.o(tc)], 0));
-	}
+		public Coord3f vel(Coord tc) {
+		    if(!vs.has(tc))
+			return(Coord3f.o);
+		    return(Coord3f.of(xv[vs.o(tc)], -yv[vs.o(tc)], 0));
+		}
 
 	public static final MapMesh.DataID<FlowData> id = MapMesh.makeid(FlowData.class);
     }
@@ -336,6 +338,8 @@ public class WaterTile extends Tiler {
 	super.model(m, rnd, lc, gc);
 	Bottom b = m.data(Bottom.id);
 	MapMesh.MapSurface s = m.data(MapMesh.gnd);
+	if(!s.ts.has(lc) || !b.vs.has(lc) || !b.vs.has(lc.add(1, 1)))
+	    return;
 	if(b.split[s.ts.o(lc)]) {
 	    s.new Face(b.surf[b.vs.o(lc.x, lc.y)],
 		       b.surf[b.vs.o(lc.x, lc.y + 1)],
@@ -658,6 +662,8 @@ public class WaterTile extends Tiler {
 
     public void lay(MapMesh m, Random rnd, Coord lc, Coord gc) {
 	MapMesh.MapSurface ms = m.data(MapMesh.gnd);
+	if(!ms.bs.has(lc) || !ms.ts.has(lc) || !ms.vs.has(lc) || !ms.vs.has(lc.add(1, 1)))
+	    return;
 	MPart d = MPart.splitquad(lc, gc, ms.fortilea(lc), ms.split[ms.bs.o(lc)]);
 
 	{

@@ -103,14 +103,18 @@ public class GobIcon extends GAttrib {
 	    Tex tex = rimg.tex();
 	    if(((tex.sz().x > size) || (tex.sz().y > size)) && !Utils.bv(rimg.info.getOrDefault("mm/noscale", 0))) {
 		BufferedImage buf = rimg.img;
-		buf = PUtils.rasterimg(PUtils.blurmask2(buf.getRaster(), 1, 1, Color.BLACK));
-		Coord tsz;
-		if(buf.getWidth() > buf.getHeight())
-		    tsz = new Coord(size, (size * buf.getHeight()) / buf.getWidth());
-		else
-		    tsz = new Coord((size * buf.getWidth()) / buf.getHeight(), size);
-		buf = PUtils.convolve(buf, tsz, filter);
-		tex = new TexI(img = buf);
+		try {
+		    buf = PUtils.rasterimg(PUtils.blurmask2(buf.getRaster(), 1, 1, Color.BLACK));
+		    Coord tsz;
+		    if(buf.getWidth() > buf.getHeight())
+			tsz = new Coord(size, (size * buf.getHeight()) / buf.getWidth());
+		    else
+			tsz = new Coord((size * buf.getWidth()) / buf.getHeight(), size);
+		    buf = PUtils.convolve(buf, tsz, filter);
+		    tex = new TexI(img = buf);
+		} catch(RuntimeException e) {
+		    new Warning(e, "could not scale map icon").issue();
+		}
 	    }
 	    this.img = img;
 	    this.tex = tex;
@@ -492,8 +496,14 @@ public class GobIcon extends GAttrib {
 				}
 			    }
 			}
-		    } catch(Resource.BadVersionException | LinkageError e) {
+		    } catch(LinkageError e) {
 			if(!cached)
+			    throw(e);
+			new Warning(e, "Could not re-load saved icon " + res).issue();
+			r = null;
+			continue;
+		    } catch(RuntimeException e) {
+			if((e instanceof Resource.BadVersionException) && !cached)
 			    throw(e);
 			new Warning(e, "Could not re-load saved icon " + res).issue();
 			r = null;

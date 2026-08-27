@@ -476,7 +476,14 @@ public class MCache implements MapSource {
 			}
 			if((ret == null) || ((this.def != null) && this.def.done())) {
 			    T prev = ret;
-			    update(ret = this.def.get());
+			    T built;
+			    try {
+				built = this.def.get();
+			    } catch(Defer.DeferredException e) {
+				this.def = null;
+				throw(new Loading("Map cut failed", e));
+			    }
+			    update(ret = built);
 			    this.def = null;
 			    if((prev != null) && (prev instanceof Disposable))
 				((Disposable)prev).dispose();
