@@ -461,8 +461,9 @@ public class SortInventory implements Action {
         boolean packed = false;
         for (String itemName : names) {
             if (cancelled) return;
-            if (!StackSupporter.isKnownUnstackable(inventory, itemName)
-                    && scanSlotCounts(itemName).size() >= 2) {
+            boolean packable = StackSupporter.isStackable(inventory, itemName)
+                    && StackSupporter.getFullStackSize(itemName) > 1;
+            if (packable) {
                 packStacks(itemName);
                 packed = true;
             }
@@ -526,13 +527,11 @@ public class SortInventory implements Action {
         return sizes;
     }
 
-    static final int UNKNOWN_PACK_CAP = 10;
-
     static int packingMaxStackSize(int tableSize, int observedMax) {
         if (tableSize > 1) {
             return tableSize;
         }
-        return UNKNOWN_PACK_CAP;
+        return 1;
     }
 
     private void packStacks(String itemName) throws InterruptedException {
@@ -609,46 +608,8 @@ public class SortInventory implements Action {
             if (NUtils.getGameUI().vhand == null) {
                 return;
             }
-            Coord destPos = positions.get(destIdx);
-            Coord srcPos = positions.get(srcIdx);
-            int destCountBefore = counts.get(destIdx);
-            boolean stacked = addItemToSlotForPack(destPos);
-            if (stacked) {
-                continue;
-            }
-            if (NUtils.getGameUI().vhand != null) {
-                inventory.wdgmsg("drop", srcPos);
-                NUtils.addTask(new WaitFreeHand(200, false));
-            }
-            if (destCountBefore <= 1) {
-                return;
-            }
-            max = destCountBefore;
+            addItemToSlot(positions.get(destIdx));
         }
-    }
-
-    private boolean addItemToSlotForPack(Coord pos) throws InterruptedException {
-        if (NUtils.getGameUI().vhand == null) {
-            return true;
-        }
-        WItem slotItem = findSlotItemAtPos(pos);
-        if (slotItem == null) {
-            inventory.wdgmsg("drop", pos);
-            NUtils.addTask(new WaitFreeHand(200, false));
-            return NUtils.getGameUI().vhand == null;
-        }
-        ItemStack stack = slotItem.item.contents instanceof ItemStack
-                ? (ItemStack) slotItem.item.contents : null;
-        int oldSize = stack != null ? stack.wmap.size() : 0;
-        NUtils.itemact(slotItem);
-        NUtils.addTask(new WaitFreeHand(200, false));
-        if (NUtils.getGameUI().vhand != null) {
-            return false;
-        }
-        if (stack != null) {
-            NUtils.addTask(new StackSizeChanged(stack, oldSize));
-        }
-        return true;
     }
 
     private List<Object[]> scanSlotCounts(String itemName) {

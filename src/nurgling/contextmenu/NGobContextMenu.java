@@ -136,6 +136,7 @@ public class NGobContextMenu extends Widget {
         public final int num;
         private final Text text;
         private final Text textnum;
+        private final Tex badge;
         private boolean highlighted;
 
         public Petal(GobContextAction action, int idx) {
@@ -144,7 +145,9 @@ public class NGobContextMenu extends Widget {
             this.num = idx;
             text = NStyle.flower.render(action.label());
             textnum = NStyle.flower.render(String.valueOf(idx + 1));
-            resize(text.sz().x + bl.sz().x + br.sz().x + UI.scale(30), FlowerMenu.ph);
+            badge = action.isUiAction() ? null : MacroPetalBadge.tex();
+            int badgeW = badge != null ? badge.sz().x + UI.scale(4) : 0;
+            resize(text.sz().x + bl.sz().x + br.sz().x + UI.scale(30) + badgeW, FlowerMenu.ph);
         }
 
         @Override
@@ -155,7 +158,12 @@ public class NGobContextMenu extends Widget {
                 g.image(highlighted ? bhm : bm, pos);
             g.image(highlighted ? bhm : bm, pos, new Coord(sz.x - pos.x - br.sz().x, br.sz().y));
             g.image(textnum.tex(), new Coord(bl.sz().x / 2 - textnum.tex().sz().x / 2 - UI.scale(1), br.sz().y / 2 - textnum.tex().sz().y / 2));
-            g.image(text.tex(), new Coord(br.sz().x + bl.sz().x + UI.scale(10), br.sz().y / 2 - text.tex().sz().y / 2));
+            int contentX = br.sz().x + bl.sz().x + UI.scale(10);
+            if (badge != null) {
+                g.image(badge, new Coord(contentX, br.sz().y / 2 - badge.sz().y / 2));
+                contentX += badge.sz().x + UI.scale(4);
+            }
+            g.image(text.tex(), new Coord(contentX, br.sz().y / 2 - text.tex().sz().y / 2));
             g.image(highlighted ? bhr : br, new Coord(maxWidth - br.sz().x, 0));
         }
 

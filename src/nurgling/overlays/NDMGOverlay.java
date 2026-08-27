@@ -4,6 +4,7 @@ import haven.*;
 import haven.render.Homo3D;
 import haven.render.Pipe;
 import nurgling.NUtils;
+import nurgling.tools.CreatureHp;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -84,7 +85,7 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
     }
 
     public int total() {
-        return dmg[0] + dmg[1] + dmg[2];
+        return CreatureHp.hpDealt(dmg[0], dmg[1], dmg[2]);
     }
 
     public synchronized void updDmg(int dmg, int type) {

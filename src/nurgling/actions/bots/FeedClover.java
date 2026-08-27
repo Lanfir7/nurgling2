@@ -8,6 +8,7 @@ import haven.res.ui.tt.leashed.Leashed;
 import nurgling.NConfig;
 import nurgling.NGItem;
 import nurgling.NGameUI;
+import nurgling.NHitBox;
 import nurgling.NUtils;
 import nurgling.actions.Action;
 import nurgling.actions.DynamicPf;
@@ -38,14 +39,32 @@ public class FeedClover implements Action {
         this.targetAnimal = targetAnimal;
     }
 
-    public static final double FEED_REACH = MCache.tilesz.x;
+    public static final double FEED_REACH_FALLBACK = MCache.tilesz.x * 2;
 
     public static boolean isWildHorse(String name) {
         return name != null && name.contains("kritter/horse/horse");
     }
 
-    public static boolean closeEnoughToFeed(Coord2d player, Coord2d animal) {
-        return DynamicPf.isWithinReach(player, animal, FEED_REACH);
+    public static double maxHalfExtent(NHitBox box) {
+        if (box == null || box.begin == null || box.end == null)
+            return 0;
+        return Math.max(
+                Math.max(Math.abs(box.begin.x), Math.abs(box.end.x)),
+                Math.max(Math.abs(box.begin.y), Math.abs(box.end.y)));
+    }
+
+    public static double feedReach(NHitBox player, NHitBox animal) {
+        if (player == null || animal == null)
+            return FEED_REACH_FALLBACK;
+        return maxHalfExtent(player) + maxHalfExtent(animal) + MCache.tilehsz.x;
+    }
+
+    public static boolean closeEnoughToFeed(Coord2d playerRc, Coord2d animalRc, NHitBox player, NHitBox animal) {
+        return DynamicPf.isWithinReach(playerRc, animalRc, feedReach(player, animal));
+    }
+
+    static NHitBox hitBox(Gob gob) {
+        return gob != null && gob.ngob != null ? gob.ngob.hitBox : null;
     }
 
     @Override
@@ -62,8 +81,12 @@ public class FeedClover implements Action {
             return Results.SUCCESS();
         }
 
-        if (NUtils.player() == null || !closeEnoughToFeed(NUtils.player().rc, gob.rc)) {
-            Results walk = new DynamicPf(gob).withReachDistance(FEED_REACH).run(gui);
+        Gob player = NUtils.player();
+        NHitBox playerHb = hitBox(player);
+        NHitBox animalHb = hitBox(gob);
+        double reach = feedReach(playerHb, animalHb);
+        if (player == null || !closeEnoughToFeed(player.rc, gob.rc, playerHb, animalHb)) {
+            Results walk = new DynamicPf(gob).withReachDistance(reach).run(gui);
             if (!walk.IsSuccess())
                 return walk;
             gob = Finder.findGob(gob.id);

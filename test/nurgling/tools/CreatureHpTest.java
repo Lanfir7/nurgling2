@@ -51,4 +51,34 @@ class CreatureHpTest {
         assertNull(CreatureHp.label(0, "gfx/borka/body"));
         assertNull(CreatureHp.label(0, null));
     }
+
+    @Test
+    void armorGreenDoesNotCountAsHp() {
+        assertEquals(45, CreatureHp.hpDealt(45, 0, 20));
+        assertEquals(55, CreatureHp.hpDealt(45, 10, 20));
+        assertEquals(0, CreatureHp.hpDealt(0, 0, 50));
+    }
+
+    @Test
+    void remainingHpIsMaxMinusDealt() {
+        assertEquals(65, CreatureHp.remaining(45, 110));
+        assertEquals(0, CreatureHp.remaining(200, 110));
+        assertEquals(110, CreatureHp.remaining(0, 110));
+    }
+
+    @Test
+    void remainingLabel() {
+        assertEquals("65/110", CreatureHp.remainingLabel(45, "gfx/kritter/fox/fox"));
+        assertEquals("850/850", CreatureHp.remainingLabel(0, "gfx/kritter/bear/bear"));
+        assertEquals("45", CreatureHp.remainingLabel(45, "gfx/borka/body"));
+        assertNull(CreatureHp.remainingLabel(0, "gfx/borka/body"));
+    }
+
+    @Test
+    void remainingFraction() {
+        assertEquals(1.0f, CreatureHp.fraction(0, 100), 0.001f);
+        assertEquals(0.5f, CreatureHp.fraction(50, 100), 0.001f);
+        assertEquals(0.0f, CreatureHp.fraction(100, 100), 0.001f);
+        assertEquals(0.0f, CreatureHp.fraction(150, 100), 0.001f);
+    }
 }

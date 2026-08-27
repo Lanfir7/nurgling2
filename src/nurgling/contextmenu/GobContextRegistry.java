@@ -44,6 +44,8 @@ public class GobContextRegistry {
         register(new ButcherAction());
         register(new ChopBlocksAction());
         register(new SawBoardsAction());
+        register(new DryHidesContextAction());
+        register(new DryFishContextAction());
         // Registered last so the generic entry sits below the object-specific ones.
         register(new ConfigureGobAction());
     }

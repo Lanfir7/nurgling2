@@ -19,6 +19,7 @@ public class NMiningOverlay extends NOverlay
 
     public Gob dummy = null;
     Coord2d oldDummy = null;
+    double oldDummyA = Double.NaN;
     final ArrayList<Long> curGobs = new ArrayList<>();
 
     public NMiningOverlay()
@@ -270,11 +271,13 @@ public class NMiningOverlay extends NOverlay
         {
             res = true;
             oldDummy = null;
+            oldDummyA = Double.NaN;
         }
-        if(dummy!= null && (oldDummy==null || !oldDummy.equals(dummy.rc.x,dummy.rc.y)))
+        if(dummy!= null && (oldDummy==null || !oldDummy.equals(dummy.rc.x,dummy.rc.y) || dummy.a != oldDummyA))
         {
             res = true;
             oldDummy = new Coord2d(dummy.rc.x, dummy.rc.y);
+            oldDummyA = dummy.a;
         }
 
         if(isVisible!=(Boolean)NConfig.get(NConfig.Key.miningol))

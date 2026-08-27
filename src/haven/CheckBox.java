@@ -63,6 +63,10 @@ public class CheckBox extends ACheckBox {
 	this(lbl, false);
     }
 
+    public String label() {
+	return (this.lbl == null) ? "" : this.lbl.text;
+    }
+
     public void draw(GOut g) {
 	if(lbl != null)
 	    g.image(lbl.tex(), loff.add(box.sz().x, (sz.y - lbl.sz().y) / 2));

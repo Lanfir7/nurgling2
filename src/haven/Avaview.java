@@ -288,7 +288,7 @@ public class Avaview extends PView {
 	if((gol != null) && (gol.spr instanceof NDMGOverlay))
 	    dealt = ((NDMGOverlay)gol.spr).total();
 	String name = (gob.ngob != null) ? gob.ngob.name : null;
-	String text = CreatureHp.label(dealt, name);
+		String text = CreatureHp.remainingLabel(dealt, name);
 	if(text == null)
 	    return;
 	g.aimage(NStyle.meter.render(text).tex(), Coord.of(sz.x / 2, UI.scale(2)), 0.5, 0);

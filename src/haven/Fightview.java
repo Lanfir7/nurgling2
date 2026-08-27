@@ -438,6 +438,10 @@ public class Fightview extends Widget {
 		{
 			gob.addcustomol(new NRelation(gob));
 		}
+		if((gob = Finder.findGob(rel.gobid))!=null && gob.findol(NCombatHpBar.class)==null)
+		{
+			gob.addcustomol(new NCombatHpBar(gob));
+		}
 		if(current!=null)
 		{
 			gob = Finder.findGob(current.gobid);
@@ -472,7 +476,9 @@ public class Fightview extends Widget {
             Relation rel = new Relation(id);
             Gob g = Finder.findGob(id);
             if(g!=null)
-                g.addcustomol(new NRelation(Finder.findGob(id)));
+                g.addcustomol(new NRelation(g));
+            if(g!=null)
+                g.addcustomol(new NCombatHpBar(g));
             rel.give(Utils.iv(args[1]));
 	        rel.ip = Utils.iv(args[2]);
 	        rel.oip = Utils.iv(args[3]);

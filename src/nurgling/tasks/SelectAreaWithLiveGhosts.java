@@ -9,6 +9,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
     private final NHitBox originalHitBox;
     private final Indir<Resource> buildingResource;
     private final Message spriteData;
+    private final NGameUI boundGui;
     private BuildGhostPreview ghostPreview = null;
     private NArea.Space result = null;
     private Gob player = null;
@@ -20,21 +21,31 @@ public class SelectAreaWithLiveGhosts extends NTask {
     }
     
     public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt) {
+        this(hitBox, resource, sdt, 0, null);
+    }
+
+    public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt, int rotationCount) {
+        this(hitBox, resource, sdt, rotationCount, null);
+    }
+
+    public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt, int rotationCount, NGameUI gui) {
         this.originalHitBox = hitBox;
         this.currentHitBox = hitBox;
         this.buildingResource = resource;
         this.spriteData = sdt;
+        this.rotationCount = rotationCount;
+        this.boundGui = gui;
     }
 
-    public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt, int rotationCount) {
-        this(hitBox, resource, sdt);
-        this.rotationCount = rotationCount;
+    private NGameUI gui() {
+        return (boundGui != null) ? boundGui : NUtils.getGameUI();
     }
 
     @Override
     public boolean check() {
-        if (NUtils.getGameUI().map != null) {
-            NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        NGameUI gui = gui();
+        if (gui != null && gui.map != null) {
+            NMapView mapView = (NMapView) gui.map;
             
             // Check for rotation key (R)
             if (mapView.isAreaSelectionMode.get() && mapView.ui != null) {
@@ -75,7 +86,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
                 
                 if (currentArea != null) {
                     if (ghostPreview == null && player == null) {
-                        player = NUtils.player();
+                        player = gui.map.player();
                         if (player != null) {
                             ghostPreview = new BuildGhostPreview(player, currentArea, currentHitBox, buildingResource, rotationCount, spriteData);
                             ghostPreview.setGridMode(mapView.getGridMode());
@@ -92,7 +103,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
                 Pair<Coord2d, Coord2d> currentArea = convertAreaToCoords(mapView.areaSpace);
 
                 if (ghostPreview == null && player == null) {
-                    player = NUtils.player();
+                    player = gui.map.player();
                 if (player != null && currentArea != null) {
                         ghostPreview = new BuildGhostPreview(player, currentArea, currentHitBox, buildingResource, rotationCount, spriteData);
                         ghostPreview.setGridMode(mapView.getGridMode());
@@ -112,7 +123,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
                 Pair<Coord2d, Coord2d> finalArea = convertAreaToCoords(result);
 
                 if (ghostPreview == null && player == null) {
-                    player = NUtils.player();
+                    player = gui.map.player();
                 }
                 if (player != null && finalArea != null) {
                     if (ghostPreview != null) {
@@ -141,7 +152,11 @@ public class SelectAreaWithLiveGhosts extends NTask {
     }
     
     private boolean checkRotationKey() {
-        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        NGameUI gui = gui();
+        if (gui == null || gui.map == null) {
+            return false;
+        }
+        NMapView mapView = (NMapView) gui.map;
         if (mapView.rotationRequested) {
             mapView.rotationRequested = false;  // Reset flag
             return true;
@@ -150,7 +165,11 @@ public class SelectAreaWithLiveGhosts extends NTask {
     }
     
     private boolean checkGridModeToggle() {
-        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        NGameUI gui = gui();
+        if (gui == null || gui.map == null) {
+            return false;
+        }
+        NMapView mapView = (NMapView) gui.map;
         if (mapView.gridModeRequested) {
             mapView.gridModeRequested = false;  // Reset flag
             return true;
@@ -182,10 +201,14 @@ public class SelectAreaWithLiveGhosts extends NTask {
         if (space == null || space.space == null) {
             return null;
         }
+        NGameUI gui = gui();
+        if (gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) {
+            return null;
+        }
         Coord begin = null;
         Coord end = null;
         for (Long id : space.space.keySet()) {
-            MCache.Grid grid = NUtils.getGameUI().map.glob.map.findGrid(id);
+            MCache.Grid grid = gui.map.glob.map.findGrid(id);
             if (grid != null) {
                 haven.Area area = space.space.get(id).area;
                 Coord b = area.ul.add(grid.ul);

@@ -10,6 +10,7 @@ import nurgling.widgets.nsettings.AnimalMarkersSettings;
 import nurgling.widgets.nsettings.QOLLanfirSettings;
 import nurgling.widgets.options.*;
 
+import java.awt.event.KeyEvent;
 import java.util.*;
 
 public class NSettingsWindow extends Widget {
@@ -26,6 +27,10 @@ public class NSettingsWindow extends Widget {
     public AutoSelection as;
     public QoL qol;
     private Runnable backAction;
+    private TextEntry search;
+    private SearchDrop drop;
+    private SettingFlash flash;
+    private int contentTop = 0;
 
     public NSettingsWindow() {
         this(null);
@@ -70,6 +75,7 @@ public class NSettingsWindow extends Widget {
             }, UI.scale(480, 560));
         }
 
+        addSearch();
         fillSettings();
         container.resize(UI.scale(800, 600));
     }
@@ -209,7 +215,7 @@ public class NSettingsWindow extends Widget {
         }
     }
 
-    private static class SettingsItem {
+    private class SettingsItem {
         public Widget panel;
         private boolean expanded = false;
         private final String name;
@@ -219,7 +225,7 @@ public class NSettingsWindow extends Widget {
         public SettingsItem(String name, Widget panel, Widget container) {
             this.name = name;
             this.panel = panel;
-            container.add(panel, UI.scale(210,0));
+            container.add(panel, Coord.of(UI.scale(210), contentTop));
             panel.hide();
         }
 
@@ -236,7 +242,7 @@ public class NSettingsWindow extends Widget {
         }
     }
 
-    private static class SettingsCategory extends SettingsItem {
+    private class SettingsCategory extends SettingsItem {
         public SettingsCategory(String name, Widget panel, Widget container) {
             super(name, panel, container);
         }
@@ -250,5 +256,295 @@ public class NSettingsWindow extends Widget {
         currentPanel.load();
     }
 
+    private void addSearch() {
+        int searchW = UI.scale(250);
+        search = adda(new TextEntry(searchW, "") {
+            @Override
+            protected void changed() {
+                super.changed();
+                refreshSearch();
+            }
 
+            @Override
+            public void activate(String text) {
+                drop.pickHover();
+            }
+
+            @Override
+            public boolean keydown(KeyDownEvent ev) {
+                if(ev.code == KeyEvent.VK_DOWN) {
+                    drop.moveHover(1);
+                    return true;
+                }
+                if(ev.code == KeyEvent.VK_UP) {
+                    drop.moveHover(-1);
+                    return true;
+                }
+                if(key_esc.match(ev)) {
+                    hideDrop();
+                    return true;
+                }
+                return super.keydown(ev);
+            }
+
+            @Override
+            public void draw(GOut g) {
+                super.draw(g);
+                if(text().isEmpty()) {
+                    g.chcolor(180, 180, 180, 180);
+                    g.atext(L10n.get("nsettings.search.hint"), Coord.of(UI.scale(6), sz.y / 2), 0, 0.5);
+                    g.chcolor();
+                }
+            }
+        }, sz.x - UI.scale(10), 0, 1.0, 0.0);
+        search.z(20);
+        contentTop = search.sz.y + UI.scale(4);
+        drop = add(new SearchDrop(Coord.of(searchW, UI.scale(20))), search.c.add(0, search.sz.y + UI.scale(2)));
+        drop.z(21);
+        drop.hide();
+    }
+
+    private void refreshSearch() {
+        if(drop == null || search == null)
+            return;
+        List<BoundHit> catalog = buildCatalog();
+        List<SettingsSearch.Entry> entries = new ArrayList<>(catalog.size());
+        for(BoundHit hit : catalog)
+            entries.add(hit.entry);
+        List<SettingsSearch.Match> matches = SettingsSearch.query(entries, search.text());
+        List<BoundHit> shown = new ArrayList<>(matches.size());
+        for(SettingsSearch.Match match : matches) {
+            for(BoundHit hit : catalog) {
+                if(hit.entry == match.entry) {
+                    shown.add(hit);
+                    break;
+                }
+            }
+        }
+        drop.setItems(shown);
+    }
+
+    private List<BoundHit> buildCatalog() {
+        List<BoundHit> catalog = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for(SettingsCategory category : list.categories) {
+            addItemHits(catalog, seen, category);
+            for(SettingsItem child : category.getChildren())
+                addItemHits(catalog, seen, child);
+        }
+        return catalog;
+    }
+
+    private void addItemHits(List<BoundHit> catalog, Set<String> seen, SettingsItem item) {
+        String cat = item.parent == null ? item.getName() : item.parent.getName();
+        catalog.add(new BoundHit(SettingsSearch.tab(cat, item.getName()), item, null));
+        if(item.panel == null)
+            return;
+        for(Widget w : item.panel.children(Widget.class)) {
+            String label = labelOf(w);
+            if(!SettingsSearch.isSearchableLabel(label))
+                continue;
+            if(label.equalsIgnoreCase(item.getName()))
+                continue;
+            if(!seen.add(item.getName() + "\0" + label))
+                continue;
+            catalog.add(new BoundHit(SettingsSearch.setting(cat, item.getName(), label.trim()), item, w));
+        }
+    }
+
+    private static String labelOf(Widget w) {
+        if(w instanceof Label)
+            return ((Label)w).text();
+        if(w instanceof CheckBox)
+            return ((CheckBox)w).label();
+        if(w instanceof Button && ((Button)w).text != null)
+            return ((Button)w).text.text;
+        return null;
+    }
+
+    private void openHit(BoundHit hit) {
+        hideDrop();
+        if(hit.item.parent != null)
+            hit.item.parent.expanded = true;
+        list.update();
+        list.change(hit.item);
+        list.display(hit.item);
+        showSettings(hit.item);
+        if(hit.widget != null) {
+            revealWidget(hit.widget);
+            flashWidget(hit.widget);
+        }
+    }
+
+    private void hideDrop() {
+        if(drop != null)
+            drop.hide();
+    }
+
+    private void revealWidget(Widget w) {
+        Scrollport sp = w.getparent(Scrollport.class);
+        if(sp == null)
+            return;
+        sp.cont.update();
+        Coord pos = w.parentpos(sp.cont);
+        int margin = UI.scale(24);
+        int view = sp.cont.sz.y;
+        int top = pos.y;
+        int bottom = pos.y + w.sz.y;
+        int sy = sp.cont.sy;
+        if(top < sy + margin)
+            sp.bar.ch(top - margin - sy);
+        else if(bottom > sy + view - margin)
+            sp.bar.ch(bottom - (sy + view - margin));
+    }
+
+    private void flashWidget(Widget w) {
+        if(flash != null)
+            flash.destroy();
+        if(w.parent == null)
+            return;
+        flash = w.parent.add(new SettingFlash(w));
+    }
+
+    @Override
+    public boolean mousedown(MouseDownEvent ev) {
+        boolean r = super.mousedown(ev);
+        if(drop != null && drop.visible) {
+            Coord sc = ev.c.sub(search.c);
+            Coord dc = ev.c.sub(drop.c);
+            if(!search.checkhit(sc) && !drop.checkhit(dc))
+                hideDrop();
+        }
+        return r;
+    }
+
+    private static class BoundHit {
+        final SettingsSearch.Entry entry;
+        final SettingsItem item;
+        final Widget widget;
+
+        BoundHit(SettingsSearch.Entry entry, SettingsItem item, Widget widget) {
+            this.entry = entry;
+            this.item = item;
+            this.widget = widget;
+        }
+    }
+
+    private class SearchDrop extends Widget {
+        private List<BoundHit> items = Collections.emptyList();
+        private final List<Text> lines = new ArrayList<>();
+        private int hover = 0;
+        private final int rowH = UI.scale(20);
+
+        SearchDrop(Coord sz) {
+            super(sz);
+        }
+
+        void setItems(List<BoundHit> items) {
+            for(Text t : lines)
+                t.dispose();
+            lines.clear();
+            this.items = items;
+            for(BoundHit hit : items)
+                lines.add(Text.render(hit.entry.display()));
+            hover = 0;
+            int h = items.isEmpty() ? 0 : items.size() * rowH + UI.scale(4);
+            resize(search.sz.x, h);
+            show(!items.isEmpty());
+        }
+
+        void moveHover(int d) {
+            if(items.isEmpty())
+                return;
+            hover = Math.floorMod(hover + d, items.size());
+        }
+
+        void pickHover() {
+            if(hover >= 0 && hover < items.size())
+                openHit(items.get(hover));
+        }
+
+        @Override
+        public void draw(GOut g) {
+            g.chcolor(0, 0, 0, 235);
+            g.frect(Coord.z, sz);
+            g.chcolor(160, 160, 160, 255);
+            g.rect(Coord.z, sz);
+            g.chcolor();
+            int y = UI.scale(2);
+            for(int i = 0; i < lines.size(); i++) {
+                if(i == hover) {
+                    g.chcolor(255, 210, 40, 90);
+                    g.frect(Coord.of(1, y), Coord.of(sz.x - 2, rowH));
+                    g.chcolor();
+                }
+                g.image(lines.get(i).tex(), Coord.of(UI.scale(6), y + (rowH - lines.get(i).sz().y) / 2));
+                y += rowH;
+            }
+        }
+
+        @Override
+        public void mousemove(MouseMoveEvent ev) {
+            if(ev.c.y >= 0)
+                hover = Utils.clip(ev.c.y / rowH, 0, Math.max(0, items.size() - 1));
+            super.mousemove(ev);
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev) {
+            if(ev.b == 1 && !items.isEmpty()) {
+                hover = Utils.clip(ev.c.y / rowH, 0, items.size() - 1);
+                pickHover();
+                return true;
+            }
+            return super.mousedown(ev);
+        }
+    }
+
+    private class SettingFlash extends Widget {
+        private final Widget target;
+        private double t = 0;
+
+        SettingFlash(Widget target) {
+            this.target = target;
+            Coord pad = UI.scale(4, 3);
+            this.c = target.c.sub(pad);
+            resize(target.sz.add(pad.mul(2)));
+            z(50);
+        }
+
+        @Override
+        public boolean checkhit(Coord c) {
+            return false;
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev) {
+            return false;
+        }
+
+        @Override
+        public void tick(double dt) {
+            t += dt;
+            if(t > 2.4 || target.parent == null) {
+                if(flash == this)
+                    flash = null;
+                destroy();
+                return;
+            }
+            Coord pad = UI.scale(4, 3);
+            this.c = target.c.sub(pad);
+        }
+
+        @Override
+        public void draw(GOut g) {
+            double pulse = 0.45 + 0.45 * (0.5 + 0.5 * Math.sin(t * 10));
+            int a = (int)(pulse * 220);
+            g.chcolor(255, 196, 32, a / 4);
+            g.frect(Coord.z, sz);
+            g.chcolor(255, 210, 40, a);
+            g.rect(Coord.z, sz);
+            g.chcolor();
+        }
+    }
 }

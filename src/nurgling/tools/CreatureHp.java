@@ -1,5 +1,6 @@
 package nurgling.tools;
 
+import java.awt.Color;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -101,5 +102,57 @@ public final class CreatureHp {
         if(dealt > 0)
             return(Integer.toString(dealt));
         return(null);
+    }
+
+    /** Red + yellow are HP. Green is armor soak and does not reduce HP. */
+    public static int hpDealt(int red, int yellow, int green) {
+        return red + yellow;
+    }
+
+    public static int remaining(int dealt, int max) {
+        return Math.max(0, max - dealt);
+    }
+
+    public static float fraction(int dealt, int max) {
+        if(max <= 0)
+            return(0f);
+        float f = remaining(dealt, max) / (float)max;
+        if(f < 0f)
+            return(0f);
+        if(f > 1f)
+            return(1f);
+        return(f);
+    }
+
+    public static String remainingLabel(int dealt, String resName) {
+        Integer max = maxHp(resName);
+        if(max != null)
+            return(remaining(dealt, max) + "/" + max);
+        if(dealt > 0)
+            return(Integer.toString(dealt));
+        return(null);
+    }
+
+    public static Color fillColor(float frac) {
+        if(frac > 0.5f) {
+            float t = (frac - 0.5f) * 2f;
+            return lerp(YELLOW, GREEN, t);
+        }
+        float t = Math.max(0f, frac) * 2f;
+        return lerp(RED, YELLOW, t);
+    }
+
+    private static final Color GREEN = new Color(46, 204, 113);
+    private static final Color YELLOW = new Color(241, 196, 15);
+    private static final Color RED = new Color(231, 76, 60);
+
+    private static Color lerp(Color a, Color b, float t) {
+        if(t < 0f) t = 0f;
+        if(t > 1f) t = 1f;
+        return new Color(
+                (int)(a.getRed() + (b.getRed() - a.getRed()) * t),
+                (int)(a.getGreen() + (b.getGreen() - a.getGreen()) * t),
+                (int)(a.getBlue() + (b.getBlue() - a.getBlue()) * t),
+                230);
     }
 }

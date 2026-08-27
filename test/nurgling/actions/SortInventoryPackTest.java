@@ -39,8 +39,8 @@ class SortInventoryPackTest {
     }
 
     @Test
-    void unknownTableSizeStillTriesToPack() {
-        assertEquals(10, SortInventory.packingMaxStackSize(1, 1));
+    void unknownTableSizeDoesNotPack() {
+        assertEquals(1, SortInventory.packingMaxStackSize(1, 1));
     }
 
     @Test
@@ -49,7 +49,7 @@ class SortInventoryPackTest {
     }
 
     @Test
-    void unknownTableUsesProbeCapEvenIfAStackAlreadyExists() {
-        assertEquals(10, SortInventory.packingMaxStackSize(1, 2));
+    void unknownTableDoesNotPackEvenIfAStackAlreadyExists() {
+        assertEquals(1, SortInventory.packingMaxStackSize(1, 2));
     }
 }
