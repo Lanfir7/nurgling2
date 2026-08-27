@@ -249,7 +249,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
 
         mapView.isAreaSelectionMode.set(false);
 
-        if (areasSelected == 0 || userCancelled || accumulatedGhosts.isEmpty())
+        if (areasSelected == 0 || userCancelled)
         {
             return Results.FAIL();
         }

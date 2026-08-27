@@ -336,6 +336,8 @@ public class MapMesh implements RenderTree.Node, Disposable {
 		long ns = rnd.nextLong();
 		try {
 		    mc.tiler(mc.gettile(gc)).model(m, rnd, lc, gc);
+		} catch(Loading l) {
+		    throw(l);
 		} catch(RuntimeException e) {
 		    new Warning(e, "map tile model failed at " + lc).issue();
 		}
@@ -374,6 +376,8 @@ public class MapMesh implements RenderTree.Node, Disposable {
 		    if (disableTransitions == null || !disableTransitions) {
 			dotrans(m, rnd, lc, gc);
 		    }
+		} catch(Loading l) {
+		    throw(l);
 		} catch(RuntimeException e) {
 		    new Warning(e, "map tile lay failed at " + lc).issue();
 		}

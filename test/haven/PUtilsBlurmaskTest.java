@@ -67,6 +67,8 @@ class PUtilsBlurmaskTest {
         assertEquals(-104, es.o(lc));
         assertFalse(es.has(lc));
         assertFalse(es.has(Coord.of(25, 0)));
+        assertFalse(es.has(Coord.of(3, -4)));
+        assertEquals(-97, es.o(Coord.of(3, -4)));
     }
 
     @Test

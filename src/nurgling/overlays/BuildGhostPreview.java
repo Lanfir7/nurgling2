@@ -210,24 +210,53 @@ public class BuildGhostPreview extends GAttrib {
      * Create a ghost Gob at the specified position with building model
      */
     private void createGhostGob(Coord2d worldPos) {
+        Gob ghost = new Gob(glob, worldPos);
+        ghost.a = rotationAngle;
+        ghost.setattr(new GhostAlpha(ghost));
+        if (buildingHitBox != null && ghost.ngob != null) {
+            ghost.ngob.hitBox = buildingHitBox;
+        }
         try {
-            if (buildingResource == null) {
+            if (buildingResource != null) {
+                ghost.setattr(new ResDrawable(ghost, buildingResource, spriteData));
+            }
+        } catch (Loading e) {
+            ghost.setattr(new PendingGhostModel(ghost, buildingResource, spriteData));
+        } catch (RuntimeException e) {
+            ghost.setattr(new PendingGhostModel(ghost, buildingResource, spriteData));
+        }
+        synchronized (ghostGobs) {
+            ghostGobs.add(ghost);
+        }
+        try {
+            glob.oc.add(ghost);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * Retries attaching the building sprite once the resource finishes loading.
+     */
+    private static class PendingGhostModel extends GAttrib {
+        private final Indir<Resource> res;
+        private final Message sdt;
+
+        PendingGhostModel(Gob gob, Indir<Resource> res, Message sdt) {
+            super(gob);
+            this.res = res;
+            this.sdt = sdt;
+        }
+
+        @Override
+        public void ctick(double dt) {
+            if (res == null) {
                 return;
             }
-            
-            Gob ghost = new Gob(glob, worldPos);
-            ghost.a = rotationAngle;
-            
-            ghost.setattr(new GhostAlpha(ghost));
-            ghost.setattr(new ResDrawable(ghost, buildingResource, spriteData));
-            
-            synchronized (ghostGobs) {
-                ghostGobs.add(ghost);
+            try {
+                gob.setattr(new ResDrawable(gob, res, sdt));
+                gob.delattr(PendingGhostModel.class);
+            } catch (Loading ignored) {
             }
-            
-            glob.oc.add(ghost);
-        } catch (Exception e) {
-            // Silently ignore if can't create
         }
     }
 
@@ -276,24 +305,26 @@ public class BuildGhostPreview extends GAttrib {
         NHitBoxD areaBox = new NHitBoxD(area.a, area.b);
 
         try {
-            synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
-                for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+            if (glob == null || glob.oc == null) {
+                return obstacles;
+            }
+            long ownerId = (gob instanceof Gob) ? gob.id : -1;
+            synchronized (glob.oc) {
+                for (Gob gob : glob.oc) {
                     if (!(gob instanceof OCache.Virtual || gob.attr.isEmpty() ||
                           gob.getClass().getName().contains("GlobEffector"))) {
-                        // Skip ghost gobs from preview (they have GhostAlpha)
                         if (gob.getattr(GhostAlpha.class) != null) {
                             continue;
                         }
-                        
+
                         NHitBox effectiveHitBox = gob.ngob.hitBox;
 
-                        // If gob has no hitbox, check if there's a custom hitbox defined for it
                         if (effectiveHitBox == null && gob.ngob.name != null) {
                             effectiveHitBox = NHitBox.findCustom(gob.ngob.name);
                         }
-                        
+
                         if (effectiveHitBox != null && gob.getattr(Following.class) == null &&
-                            gob.id != NUtils.player().id) {
+                            gob.id != ownerId) {
                             NHitBoxD gobBox = new NHitBoxD(effectiveHitBox.begin, effectiveHitBox.end, gob.rc, gob.a);
                             if (gobBox.intersects(areaBox, true)) {
                                 obstacles.add(gobBox);

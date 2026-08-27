@@ -38,10 +38,22 @@ public class NPFMap
         return false;
     }
 
+    public static boolean isPathObstacle(boolean hasHitBox, boolean isPlayer, boolean isFollowing, boolean isGhost) {
+        return hasHitBox && !isPlayer && !isFollowing && !isGhost;
+    }
+
     public CellsArray addGob(Gob gob) {
         CellsArray ca;
-
-        if (gob.ngob != null && gob.ngob.hitBox != null && (ca = getCa(gob)) != null && NUtils.player() != null && gob.id != NUtils.player().id && gob.getattr(Following.class) == null) {
+        long playerId = (NUtils.player() != null) ? NUtils.player().id : Long.MIN_VALUE;
+        boolean isGhost = gob != null && gob.getattr(GhostAlpha.class) != null;
+        boolean isFollowing = gob != null && gob.getattr(Following.class) != null;
+        boolean hasHitBox = gob != null && gob.ngob != null && gob.ngob.hitBox != null;
+        if (!isPathObstacle(hasHitBox, gob != null && gob.id == playerId, isFollowing, isGhost)) {
+            return null;
+        }
+        if ((ca = getCa(gob)) == null || NUtils.player() == null) {
+            return null;
+        }
             CellsArray old = new CellsArray(ca.x_len, ca.y_len);
             old.begin = ca.begin;
             old.end = ca.end;
@@ -63,8 +75,6 @@ public class NPFMap
                     }
             }
             return old;
-        }
-        return null;
     }
 
     public void setCellArray(CellsArray ca) {

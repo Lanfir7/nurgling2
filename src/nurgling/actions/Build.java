@@ -393,11 +393,23 @@ public class Build implements Action
             {
                 if (!refillIng(gui, curings, context))
                     return Results.ERROR("NO ITEMS");
+                if (buildArea != null)
+                {
+                    NUtils.navigateToArea(buildArea);
+                }
             }
 
             PathFinder pf = new PathFinder(NGob.getDummy(pos, rotationAngle, hitBox), true);
             pf.isHardMode = true;
-            pf.run(gui);
+            Results pfResult = pf.run(gui);
+            if (!pfResult.IsSuccess())
+            {
+                Gob playerGob = gui.map.player();
+                if (playerGob == null || playerGob.rc.dist(pos) > 32)
+                {
+                    return pfResult;
+                }
+            }
 
             gui.map.wdgmsg("place", pos.floor(posres), (int) Math.round(rotationAngle * 32768 / Math.PI), 1, 0);
             NUtils.addTask(new WaitConstructionObject(pos));

@@ -24,7 +24,10 @@ public class BuildCupboard implements Action {
         NContext context = new NContext(gui);
         NUtils.getGameUI().msg("Please, select build area");
         SelectAreaWithLiveGhosts buildarea = new SelectAreaWithLiveGhosts(context, Resource.loadsimg("baubles/buildArea"), "Cupboard");
-        buildarea.run(NUtils.getGameUI());
+        Results selected = buildarea.run(gui);
+        if (!selected.IsSuccess()) {
+            return selected;
+        }
 
         // Use BuildMaterialHelper for auto-zone lookup
         BuildMaterialHelper helper = new BuildMaterialHelper(context, gui);
