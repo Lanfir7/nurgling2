@@ -37,8 +37,8 @@ public class Area implements Iterable<Coord>, java.io.Serializable {
     public Coord ul, br;
 
     public Area(Coord ul, Coord br) {
-	this.ul = ul;
-	this.br = br;
+	this.ul = origin(ul);
+	this.br = origin(br);
     }
 
     public Area(Coord ul, Coord br, boolean forced) {
@@ -66,15 +66,22 @@ public class Area implements Iterable<Coord>, java.io.Serializable {
     }
 
     public static Area sized(Coord ul, Coord sz) {
-	return(new Area(ul, ul.add(sz)));
+	Coord o = origin(ul);
+	return(new Area(o, o.add(origin(sz))));
     }
 
     public static Area sized(Coord sz) {
-	return(new Area(Coord.z, sz));
+	return(sized(Coord.z, sz));
     }
 
     public static Area sizedi(Coord szi) {
-	return(new Area(Coord.z, szi.add(1, 1)));
+	Coord o = origin(Coord.z);
+	return(new Area(o, o.add(origin(szi).add(1, 1))));
+    }
+
+    /* Coord.z is a shared mutable singleton (Widget.c = Coord.z). */
+    private static Coord origin(Coord c) {
+	return((c == Coord.z) ? Coord.of(0, 0) : Coord.of(c));
     }
 
     public Coord sz() {

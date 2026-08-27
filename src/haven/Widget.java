@@ -252,8 +252,8 @@ public class Widget {
     }
 
     public Widget(Coord sz) {
-	this.c = Coord.z;
-	this.sz = sz;
+	this.c = Coord.of(0, 0);
+	this.sz = (sz == Coord.z) ? Coord.of(0, 0) : sz;
     }
 
     public Widget() {
@@ -262,8 +262,8 @@ public class Widget {
 
     public Widget(UI ui, Coord c, Coord sz) {
 	this.ui = ui;
-	this.c = c;
-	this.sz = sz;
+	this.c = (c == Coord.z) ? Coord.of(0, 0) : c;
+	this.sz = (sz == Coord.z) ? Coord.of(0, 0) : sz;
 	this.attached = true;
     }
 
