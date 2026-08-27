@@ -40,7 +40,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
         return rotationCount;
     }
 
-    static NHitBox hitBoxForBuilding(String buildingName, NHitBox customHitBox) {
+    public static NHitBox hitBoxForBuilding(String buildingName, NHitBox customHitBox) {
         if (customHitBox != null) {
             return customHitBox;
         }
@@ -71,7 +71,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
         }
     }
 
-    private static void tryActivateBuildMenu(NGameUI gui, String buildingName) {
+    public static void tryActivateBuildMenu(NGameUI gui, String buildingName) {
         if (gui == null || gui.menu == null || buildingName == null) {
             return;
         }
@@ -134,7 +134,7 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
             if (gui.map.placing == null) {
                 tryActivateBuildMenu(gui, buildingName);
             }
-            gui.ui.core.addTask(WaitPlob.withSoftTimeout(false, 60));
+            gui.ui.core.addTask(WaitPlob.withSoftTimeout(false, 60, gui));
             Loader.Future<MapView.Plob> placing = gui.map.placing;
             if (placing != null && placing.ready()) {
                 MapView.Plob plob = placing.get();

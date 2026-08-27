@@ -5,24 +5,38 @@ import nurgling.NUtils;
 
 public class WaitPlob extends NTask {
     private final boolean requireReady;
+    private final NGameUI boundGui;
 
     public WaitPlob() {
-        this(true);
+        this(true, null);
     }
 
     public WaitPlob(boolean requireReady) {
+        this(requireReady, null);
+    }
+
+    public WaitPlob(boolean requireReady, NGameUI gui) {
         this.requireReady = requireReady;
+        this.boundGui = gui;
     }
 
     public static WaitPlob withTimeout(boolean requireReady, int ticks) {
-        WaitPlob wait = new WaitPlob(requireReady);
+        return withTimeout(requireReady, ticks, null);
+    }
+
+    public static WaitPlob withTimeout(boolean requireReady, int ticks, NGameUI gui) {
+        WaitPlob wait = new WaitPlob(requireReady, gui);
         wait.infinite = false;
         wait.maxCounter = ticks;
         return wait;
     }
 
     public static WaitPlob withSoftTimeout(boolean requireReady, int ticks) {
-        WaitPlob wait = withTimeout(requireReady, ticks);
+        return withSoftTimeout(requireReady, ticks, null);
+    }
+
+    public static WaitPlob withSoftTimeout(boolean requireReady, int ticks, NGameUI gui) {
+        WaitPlob wait = withTimeout(requireReady, ticks, gui);
         wait.criticalOnTimeout = false;
         return wait;
     }
@@ -40,7 +54,7 @@ public class WaitPlob extends NTask {
 
     @Override
     public boolean check() {
-        NGameUI gui = NUtils.getGameUI();
+        NGameUI gui = (boundGui != null) ? boundGui : NUtils.getGameUI();
         boolean hasMap = gui != null && gui.map != null;
         boolean placingExists = hasMap && gui.map.placing != null;
         boolean placingReady = placingExists && gui.map.placing.ready();

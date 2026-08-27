@@ -33,6 +33,14 @@ class WaitPlobTest {
     }
 
     @Test
+    void softTimeoutCanBindASessionGui() {
+        WaitPlob wait = WaitPlob.withSoftTimeout(false, 10, null);
+        assertFalse(wait.infinite);
+        assertFalse(wait.criticalOnTimeout);
+        assertEquals(10, wait.maxCounter);
+    }
+
+    @Test
     void missingPlaceMessageIsNotReady() {
         assertFalse(WaitPlob.isSatisfied(true, false, false, false));
         assertFalse(WaitPlob.isSatisfied(false, true, true, false));

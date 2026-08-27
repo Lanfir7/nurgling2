@@ -19,10 +19,10 @@ import java.awt.image.BufferedImage;
  */
 public class NCombatHpBar extends Sprite implements RenderTree.Node, PView.Render2D {
     private static final Coord3f POS = new Coord3f(0, 0, 13.2f);
-    private static final Coord BAR = UI.scale(new Coord(78, 20));
+    private static final Coord BAR = UI.scale(new Coord(78, 22));
     private static final int PAD = UI.scale(3);
     private static final float ARC = UI.scale(8f);
-    private static final Text.Foundry NUM = new Text.Foundry(Text.sans.deriveFont(Font.BOLD), 7, Color.WHITE).aa(true);
+    private static final Text.Foundry NUM = new Text.Foundry(Text.sans.deriveFont(Font.BOLD), 9, Color.WHITE).aa(true);
 
     private final Gob gob;
     private String lastKey;

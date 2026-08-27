@@ -4,9 +4,11 @@ import haven.*;
 import nurgling.GhostAlpha;
 import nurgling.NGameUI;
 import nurgling.NGob;
+import nurgling.NHitBox;
 import nurgling.NISBox;
 import nurgling.NMapView;
 import nurgling.NUtils;
+import nurgling.actions.bots.SelectAreaWithLiveGhosts;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.overlays.BuildGhostPreview;
@@ -156,24 +158,52 @@ public class Build implements Action
     }
     
     /**
+     * Hitbox for pathfinding/placement: live plob if the GL ghost loaded,
+     * otherwise catalog/custom. Second-window sessions often never finish the hologram.
+     */
+    static NHitBox resolveHitBox(NHitBox plobHitBox, NHitBox customHitBox, String buildingName)
+    {
+        if (plobHitBox != null)
+        {
+            return plobHitBox;
+        }
+        return SelectAreaWithLiveGhosts.hitBoxForBuilding(buildingName, customHitBox);
+    }
+
+    /**
      * Snapshot map.placing into a local before calling get(), to avoid the race where
      * placing gets reassigned to a fresh not-done Future between WaitPlob succeeding
-     * and the get() call. Retries WaitPlob if the snapshot is null/not-ready (the
-     * snapshot is stale because placing was reassigned during the original wait).
-     * Returns null if no ready Plob is available after retries.
+     * and the get() call. Retries WaitPlob if the snapshot is null (menu click missed).
+     * Returns null if the server never entered place mode, or if the GL ghost is not
+     * ready — callers must then use {@link #resolveHitBox}.
      */
-    private MapView.Plob waitAndGetPlob() throws InterruptedException
+    private MapView.Plob waitAndGetPlob(NGameUI gui) throws InterruptedException
     {
+        if (gui == null || gui.map == null)
+        {
+            return null;
+        }
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            NUtils.addTask(new WaitPlob());
-            Loader.Future<MapView.Plob> snapshot = NUtils.getGameUI().map.placing;
+            gui.ui.core.addTask(WaitPlob.withSoftTimeout(false, 80, gui));
+            Loader.Future<MapView.Plob> snapshot = gui.map.placing;
             if (snapshot != null && snapshot.ready())
             {
                 return snapshot.get();
             }
+            if (snapshot != null)
+            {
+                return null;
+            }
+            SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
         }
         return null;
+    }
+
+    private NHitBox hitBoxForPlob(MapView.Plob plob)
+    {
+        NHitBox fromPlob = (plob != null && plob.ngob != null) ? plob.ngob.hitBox : null;
+        return resolveHitBox(fromPlob, cmd.customHitBox, cmd.name);
     }
 
     private Results runBuild(NGameUI gui) throws InterruptedException
@@ -233,39 +263,21 @@ public class Build implements Action
                 pos = ghostPositions.get(ghostIndex);
             } else
             {
-                // Need to activate menu to get hitbox for finding free place
-                for (MenuGrid.Pagina pag : NUtils.getGameUI().menu.paginae)
+                SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
+                if (gui.map.placing == null)
                 {
-                    if (pag.button() != null && pag.button().name().equals(cmd.name))
-                    {
-                        pag.button().use(new MenuGrid.Interaction(1, 0));
-                        break;
-                    }
+                    SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
                 }
-
-                if (NUtils.getGameUI().map.placing == null)
-                {
-                    for (MenuGrid.Pagina pag : NUtils.getGameUI().menu.paginae)
-                    {
-                        if (pag.button() != null && pag.button().name().equals(cmd.name))
-                        {
-                            pag.button().use(new MenuGrid.Interaction(1, 0));
-                            break;
-                        }
-                    }
-                }
-                MapView.Plob plob = waitAndGetPlob();
-                if (plob == null)
+                MapView.Plob plob = waitAndGetPlob(gui);
+                NHitBox hitBox = hitBoxForPlob(plob);
+                if (hitBox == null)
                 {
                     return Results.ERROR("Plob never became ready");
                 }
                 double rotationAngle = (rotationCount * Math.PI / 2.0);
-                plob.a = rotationAngle;
-
-                nurgling.NHitBox hitBox = plob.ngob.hitBox;
-                if (hitBox == null && cmd.customHitBox != null)
+                if (plob != null)
                 {
-                    hitBox = cmd.customHitBox;
+                    plob.a = rotationAngle;
                 }
 
                 // Check if grid mode is active
@@ -345,38 +357,21 @@ public class Build implements Action
             }
 
             // Activate build menu for new construction
-            for (MenuGrid.Pagina pag : NUtils.getGameUI().menu.paginae)
+            SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
+            if (gui.map.placing == null)
             {
-                if (pag.button() != null && pag.button().name().equals(cmd.name))
-                {
-                    pag.button().use(new MenuGrid.Interaction(1, 0));
-                    break;
-                }
+                SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);
             }
-
-            if (NUtils.getGameUI().map.placing == null)
-            {
-                for (MenuGrid.Pagina pag : NUtils.getGameUI().menu.paginae)
-                {
-                    if (pag.button() != null && pag.button().name().equals(cmd.name))
-                    {
-                        pag.button().use(new MenuGrid.Interaction(1, 0));
-                        break;
-                    }
-                }
-            }
-            MapView.Plob plob = waitAndGetPlob();
-            if (plob == null)
+            MapView.Plob plob = waitAndGetPlob(gui);
+            NHitBox hitBox = hitBoxForPlob(plob);
+            if (hitBox == null)
             {
                 return Results.ERROR("Plob never became ready");
             }
             double rotationAngle = (rotationCount * Math.PI / 2.0);
-            plob.a = rotationAngle;
-
-            nurgling.NHitBox hitBox = plob.ngob.hitBox;
-            if (hitBox == null && cmd.customHitBox != null)
+            if (plob != null)
             {
-                hitBox = cmd.customHitBox;
+                plob.a = rotationAngle;
             }
 
             // Now check and refill resources for new construction

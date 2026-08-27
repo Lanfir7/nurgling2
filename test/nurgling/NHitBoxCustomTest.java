@@ -26,6 +26,15 @@ class NHitBoxCustomTest {
     }
 
     @Test
+    void wildHorseUsesSameHitboxAsStallion() {
+        NHitBox wild = NHitBox.findCustom("gfx/kritter/horse/horse");
+        NHitBox stallion = NHitBox.findCustom("gfx/kritter/horse/stallion");
+        assertNotNull(wild);
+        assertEquals(stallion.end.x - stallion.begin.x, wild.end.x - wild.begin.x, 0.01);
+        assertEquals(stallion.end.y - stallion.begin.y, wild.end.y - wild.begin.y, 0.01);
+    }
+
+    @Test
     void boughPyreHasAHitboxForPathfinding() {
         NHitBox box = NHitBox.findCustom("gfx/terobjs/bpyre");
         assertNotNull(box);

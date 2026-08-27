@@ -882,7 +882,10 @@ public class MiniMap extends Widget
 			    ret.add(disp);
 			}
 		    }
-		} catch(Loading l) {}
+		} catch(Loading l) {
+		} catch(RuntimeException e) {
+		    new Warning(e, "could not load map icon").issue();
+		}
 	    }
 	}
 	for(DisplayIcon disp : pmap.values()) {

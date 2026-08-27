@@ -276,19 +276,40 @@ public class PUtils {
     }
 
     public static WritableRaster copyband(WritableRaster dst, int dband, Coord doff, Raster src, int sband) {
-	return(copyband(dst, dband, doff, src, sband, Coord.z, imgsz(src)));
+	return(copyband(dst, dband, doff, src, sband, new Coord(src.getMinX(), src.getMinY()), imgsz(src)));
     }
 
     public static WritableRaster copyband(WritableRaster dst, int dband, Raster src, int sband) {
 	return(copyband(dst, dband, Coord.z, src, sband));
     }
 
+    /** 0-origin 4-band raster. ImageIO/subimages can have minX/minY != 0; RGB has no alpha. */
+    public static Raster originrgba(Raster img) {
+	if((img.getMinX() == 0) && (img.getMinY() == 0) && (img.getNumBands() >= 4))
+	    return(img);
+	int w = img.getWidth(), h = img.getHeight();
+	int minx = img.getMinX(), miny = img.getMinY(), nb = img.getNumBands();
+	WritableRaster dst = imgraster(new Coord(w, h));
+	for(int y = 0; y < h; y++) {
+	    for(int x = 0; x < w; x++) {
+		int sx = x + minx, sy = y + miny;
+		dst.setSample(x, y, 0, (nb > 0) ? img.getSample(sx, sy, 0) : 0);
+		dst.setSample(x, y, 1, (nb > 1) ? img.getSample(sx, sy, 1) : 0);
+		dst.setSample(x, y, 2, (nb > 2) ? img.getSample(sx, sy, 2) : 0);
+		dst.setSample(x, y, 3, (nb > 3) ? img.getSample(sx, sy, 3) : 255);
+	    }
+	}
+	return(dst);
+    }
+
     public static WritableRaster blurmask(Raster img, int grad, int brad, Color col) {
+	img = originrgba(img);
 	Coord marg = new Coord(grad + brad, grad + brad), sz = imgsz(img).add(marg.mul(2));
 	return(alphadraw(imgraster(sz), imgblur(imggrow(copyband(alpharaster(sz), 0, marg, img, 3), grad), brad, brad), Coord.z, col));
     }
 
     public static WritableRaster blurmask2(Raster img, int grad, int brad, Color col) {
+	img = originrgba(img);
 	return(alphablit(blurmask(img, grad, brad, col), img, new Coord(grad + brad, grad + brad)));
     }
 

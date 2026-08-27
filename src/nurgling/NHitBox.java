@@ -126,6 +126,7 @@ public class NHitBox
             put("gfx/kritter/horse/stallion", new NHitBox(new Coord2d(-8,-4),new Coord2d(8,4)));
             put("gfx/kritter/horse/mare", new NHitBox(new Coord2d(-8,-4),new Coord2d(8,4)));
             put("gfx/kritter/horse/foal", new NHitBox(new Coord2d(-8,-4),new Coord2d(8,4)));
+            put("gfx/kritter/horse/horse", new NHitBox(new Coord2d(-8,-4),new Coord2d(8,4)));
             put("gfx/kritter/boar/boar", new NHitBox(new Coord(-10,-4),new Coord(7,4)));
             put("gfx/kritter/pig/piglet", new NHitBox(new Coord(-6,-4),new Coord(6,4)));
             put("gfx/kritter/pig/sow", new NHitBox(new Coord(-6,-4),new Coord(6,4)));
