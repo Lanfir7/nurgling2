@@ -7,6 +7,7 @@ import nurgling.NConfig;
 import nurgling.NUtils;
 import nurgling.db.ConnectionDoctor;
 import nurgling.db.DatabaseManager;
+import nurgling.db.ConnectionString;
 import nurgling.db.DbCredentials;
 import nurgling.db.DbSettings;
 import nurgling.db.InviteCode;
@@ -509,10 +510,11 @@ public class DatabaseSettings extends Panel {
         }
     }
 
-    /** Read a pasted invite into the fields, then connect with them. */
+    /** Read a pasted invite or {@code postgresql://} string into the fields, then connect. */
     private void applyInvite() {
+        String text = inviteEntry.text();
         try {
-            InviteCode code = InviteCode.decode(inviteEntry.text());
+            InviteCode code = InviteCode.decode(text);
             hostEntry.settext(code.host);
             portEntry.settext(String.valueOf(code.port));
             dbNameEntry.settext(code.database);
@@ -530,10 +532,44 @@ public class DatabaseSettings extends Panel {
             probeText = L10n.get("database.invite_applied",
                 villageName.isEmpty() ? code.host : villageName);
             probeColor = Color.GREEN;
-        } catch (InviteCode.FormatException e) {
-            probeText = e.getMessage();
-            probeColor = Color.ORANGE;
+        } catch (InviteCode.FormatException inviteErr) {
+            try {
+                applyConnectionString(text);
+            } catch (ConnectionString.FormatException connErr) {
+                boolean looksConn = text != null && text.trim().toLowerCase().startsWith("postgres");
+                probeText = looksConn ? connErr.getMessage() : inviteErr.getMessage();
+                probeColor = Color.ORANGE;
+            }
         }
+    }
+
+    /**
+     * Fill the connection fields from a pasted {@code postgresql://} string, then save.
+     *
+     * <p>Saving straight away rather than leaving it for the OK button: pasting a connection string
+     * is a complete instruction, and the panel's own save path is what reconnects and reloads areas.
+     */
+    private void applyConnectionString(String text) throws ConnectionString.FormatException {
+        ConnectionString cs = ConnectionString.parse(text);
+        String[] parts = ConnectionString.splitNode(cs.node);
+        hostEntry.settext(parts[0]);
+        portEntry.settext(parts[1]);
+        if (!cs.database.isEmpty())
+            dbNameEntry.settext(cs.database);
+        usernameEntry.settext(cs.user);
+        passwordEntry.settext(cs.password);
+        mode = MODE_VILLAGE;
+        modes.check(MODE_VILLAGE);
+        inviteEntry.settext("");
+        updateWidgetsVisibility();
+        if (!cs.database.isEmpty()
+            && !cs.database.equals(ConnectionString.DEFAULT_DATABASE)) {
+            msg(L10n.get("database.connstring_dbname",
+                cs.database, ConnectionString.DEFAULT_DATABASE), Color.ORANGE);
+        }
+        save();
+        probeText = L10n.get("database.connstring_applied", cs.user, cs.node);
+        probeColor = Color.GREEN;
     }
 
     /**

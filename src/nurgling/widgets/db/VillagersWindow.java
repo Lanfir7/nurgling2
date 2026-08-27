@@ -7,6 +7,7 @@ import nurgling.NConfig;
 import nurgling.NCore;
 import nurgling.db.DbSettings;
 import nurgling.db.InviteCode;
+import nurgling.db.ConnectionString;
 import nurgling.db.service.VillagerService;
 
 import java.awt.Color;
@@ -248,6 +249,31 @@ public class VillagersWindow extends Window {
             });
     }
 
+    private void delete(String name) {
+        if (!ready() || busy)
+            return;
+        busy = true;
+        service().deleteAsync(name)
+            .thenAccept(outcome -> {
+                /* Said plainly rather than implied: this stops future access and nothing else.
+                 * Whatever they synced is on their disk already. */
+                if (outcome == VillagerService.DeleteOutcome.DELETED) {
+                    setStatus("Deleted " + name + ". They keep whatever they already synced to their PC.",
+                              Color.YELLOW);
+                } else {
+                    setStatus("Disabled " + name + " - the account still owns something, so it could "
+                            + "not be dropped. It can no longer log in.", Color.YELLOW);
+                }
+                busy = false;
+                refresh();
+            })
+            .exceptionally(e -> {
+                setStatus("Could not delete " + name + ": " + rootMessage(e), Color.ORANGE);
+                busy = false;
+                return null;
+            });
+    }
+
     private void repair() {
         if (!ready() || busy)
             return;
@@ -271,6 +297,23 @@ public class VillagersWindow extends Window {
         if (village == null || village.equals("null"))
             village = "";
         return VillagerService.invite(village, s, account, access).encode();
+    }
+
+    /**
+     * The string this villager pastes to connect.
+     *
+     * <p>Built from the admin's own connection, which is the point: they are already connected, so
+     * the address and port cannot be mistyped or forgotten on the way. The port in particular is
+     * the one that gets lost, because the settings field that carries it is labelled "Host".
+     */
+    private static String buildConnectionString(VillagerService.NewAccount account) {
+        return ConnectionString.build(str(NConfig.get(NConfig.Key.serverNode)),
+                                      ConnectionString.DEFAULT_DATABASE,
+                                      account.name, account.password);
+    }
+
+    private static String str(Object o) {
+        return (o == null) ? "" : o.toString();
     }
 
     // ---- ui ------------------------------------------------------------------------------
@@ -444,16 +487,16 @@ public class VillagersWindow extends Window {
                 reset.tooltip =
                     Text.render("Issue a new password. Their current invite stops working.").tex();
 
-                Button remove = add(new Button(BUTTON_W, v.canLogin ? "Remove" : "Removed") {
+                Button remove = add(new Button(BUTTON_W, v.canLogin ? "Delete" : "Disabled") {
                     public void click() {
                         super.click();
                         if (villager.canLogin)
-                            revoke(villager.name);
+                            delete(villager.name);
                     }
                 }, Coord.z);
                 remove.move(new Coord(removeX, Math.max(0, (sz.y - remove.sz.y) / 2)));
                 remove.tooltip =
-                    Text.render("Stops them connecting. Does not remove what they already synced.").tex();
+                    Text.render("Removes the account. Does not remove what they already synced.").tex();
             }
         }
 

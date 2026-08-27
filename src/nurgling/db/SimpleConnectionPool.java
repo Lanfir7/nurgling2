@@ -27,6 +27,10 @@ public class SimpleConnectionPool {
     private final String user;
     private final String password;
     private volatile SQLException lastError;
+    /* Repeated identical failures are throttled: a pool that cannot connect is retried by every
+     * sync worker on every tick, which buries everything else in the log. */
+    private volatile String lastLoggedError;
+    private final AtomicInteger suppressedErrors = new AtomicInteger();
 
     private static final long BORROW_TIMEOUT_MS = 5000; // 5 seconds timeout for borrowing
     private static final int VALIDATION_TIMEOUT_SECONDS = 2;
@@ -46,6 +50,9 @@ public class SimpleConnectionPool {
         this.isPostgres = (Boolean) NConfig.get(NConfig.Key.postgres);
 
         if (isPostgres) {
+            /* DbSettings carries SSL, host/port/database and the timezone handshake. The JDBC URL
+             * still names ConnectionString.DEFAULT_DATABASE so the pool and DatabaseBootstrap
+             * cannot disagree about which database they mean. */
             DbSettings settings = DbSettings.fromConfig();
             this.jdbcUrl = settings.jdbcUrl();
             this.user = settings.user;
@@ -55,6 +62,10 @@ public class SimpleConnectionPool {
             this.user = null;
             this.password = null;
         }
+        /* Printed on every (re)connect because it is the one fact a "I changed the address and it
+         * did not take" report needs, and the one thing the log never showed. No credentials are in
+         * the URL - the driver is handed those separately. */
+        System.out.println("[ConnectionPool] connecting to " + jdbcUrl);
     }
 
     /**
@@ -178,9 +189,20 @@ public class SimpleConnectionPool {
             return conn;
         } catch (SQLException e) {
             /* Kept rather than only logged: this is where every connection failure actually
-             * surfaces, and the settings panel has no other way to learn why it has no database. */
+             * surfaces (settings panel, and whether it says "no such database" decides bootstrap). */
             this.lastError = e;
-            System.err.println("Failed to create database connection: " + e.getMessage());
+            String message = String.valueOf(e.getMessage());
+            if (message.equals(lastLoggedError)) {
+                int n = suppressedErrors.incrementAndGet();
+                if (n % 20 == 0) {
+                    System.err.println("Failed to create database connection: " + message
+                        + " (repeated " + n + " times)");
+                }
+            } else {
+                lastLoggedError = message;
+                suppressedErrors.set(0);
+                System.err.println("Failed to create database connection: " + message);
+            }
             return null;
         }
     }

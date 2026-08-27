@@ -51,6 +51,12 @@ public class DatabaseManager {
      */
     private volatile java.util.Map<Integer, String> skippedMigrations = java.util.Collections.emptyMap();
 
+    /* Which tables this role can actually see, and the schema version, read once per connect.
+     * information_schema already filters by privilege, so membership here means the same thing the
+     * old per-table probe meant - at one round trip for all of them instead of one each. */
+    private volatile java.util.Set<String> visibleTables = java.util.Collections.emptySet();
+    private volatile int schemaVersionSeen = -1;
+
     // Task queue for retry logic
     private final BlockingQueue<QueuedTask<?>> taskQueue = new LinkedBlockingQueue<>(1000);
     private ScheduledExecutorService queueProcessor;
@@ -293,6 +299,24 @@ public class DatabaseManager {
 
             // Get a connection to create adapter and run migrations
             Connection conn = connectionPoolManager.getConnection();
+
+            if (conn == null && DatabaseAdapterFactory.isPostgres()) {
+                /* The most likely reason a first-time setup gets nowhere: the server is running and
+                 * the credentials are right, but nobody ever created the database - its name is a
+                 * constant in the URL, so only the bundled compose file creates it as a side effect.
+                 * Decided from the failure the pool already recorded, so an unreachable server costs
+                 * nothing extra on this path - which runs on the UI thread. */
+                DatabaseBootstrap boot =
+                    DatabaseBootstrap.createIfMissing(connectionPoolManager.getLastError());
+                if (boot.result == DatabaseBootstrap.Result.CREATED) {
+                    notifyPlayer("Created database " + ConnectionString.DEFAULT_DATABASE
+                        + " and setting it up", java.awt.Color.YELLOW);
+                    conn = connectionPoolManager.getConnection();
+                } else if (boot.result == DatabaseBootstrap.Result.FAILED) {
+                    notifyPlayer("Database unavailable: " + boot.detail, java.awt.Color.ORANGE);
+                }
+            }
+
             if (conn != null) {
                 this.adapter = DatabaseAdapterFactory.createAdapter(conn);
 
@@ -305,16 +329,25 @@ public class DatabaseManager {
                     this.connServerVersion = info.serverVersion;
                     this.connSslInUse = info.sslInUse;
                     this.connError = "";
+                    // One query up front; everything below reads it instead of asking per table.
+                    loadSchemaSnapshot();
 
                     // Initialize services after migrations
                     initializeServices();
 
                     initialized = true;
-                    /* After initialized = true, because the write goes through the normal task path.
-                     * This is what fills the Villagers panel's "last seen" column, which is the only
-                     * signal a host has that everyone has moved off a shared login. */
-                    if (DatabaseAdapterFactory.isPostgres() && villagerService != null) {
-                        villagerService.ensureBookkeepingAsync();
+                    reportReady();
+                    /* After initialized = true, because these writes go through the normal task path.
+                     * Bookkeeping fills the Villagers panel's "last seen" column — the signal a host
+                     * has that everyone has moved off a shared login, and whether an account is still
+                     * in use before they delete it. Permission repair still runs on every connect:
+                     * an existing village is at the latest version yet still has the ungranted
+                     * init.sql tables and sequences, just not while the player waits. */
+                    if (DatabaseAdapterFactory.isPostgres()) {
+                        repairPermissionsAsync();
+                        if (villagerService != null) {
+                            villagerService.ensureBookkeepingAsync();
+                        }
                     }
                     System.out.println("DatabaseManager initialized successfully with " +
                                      DatabaseAdapterFactory.getDatabaseType());
@@ -348,6 +381,15 @@ public class DatabaseManager {
             }
         } catch (Exception e) {
             this.connError = ConnectionDoctor.diagnose(e, DbSettings.fromConfig()).message;
+            /* The remaining way a first-time setup dies: the account can reach the database but may
+             * not create anything in it, because somebody else owns it. That reads as an ordinary
+             * migration failure in the log, and as nothing at all in the game. */
+            if (e instanceof SQLException && "42501".equals(((SQLException) e).getSQLState())) {
+                notifyPlayer("This account cannot create tables in "
+                    + ConnectionString.DEFAULT_DATABASE
+                    + ". Give it ownership of the database, or connect as the account that owns it.",
+                    java.awt.Color.ORANGE);
+            }
             System.err.println("Failed to initialize DatabaseManager: " + e.getMessage());
             e.printStackTrace();
         }
@@ -388,9 +430,10 @@ public class DatabaseManager {
     private void initializeServices() {
         // Services whose table could not be created are left null; callers treat that as
         // "feature unavailable" rather than "database down".
-        /* Always present: managing accounts must keep working on a database whose owner has not
-         * applied the optional villagers migration, and the panel that uses it is the very place a
-         * host goes to fix a half-set-up village. The service degrades internally instead. */
+        /* Always present: managing accounts must keep working on a database that is only half
+         * set up (owner has not applied the optional villagers migration), and the panel that
+         * uses it is exactly where a host goes to fix that. The service degrades internally
+         * when its bookkeeping table is absent. */
         this.villagerService = new nurgling.db.service.VillagerService(this);
         this.recipeService = new RecipeService(this);
         this.favoriteRecipeService = new FavoriteRecipeService(this);
@@ -443,15 +486,116 @@ public class DatabaseManager {
     }
 
     /**
+     * Read the whole schema in one go.
+     *
+     * <p>Called on the UI thread, so the count of round trips is what the player feels: this used to
+     * be six separate probes, which is nothing locally and over a second against a server 180ms
+     * away.
+     */
+    private void loadSchemaSnapshot() {
+        java.util.Set<String> tables = new java.util.HashSet<>();
+        int version = -1;
+        try (java.sql.ResultSet rs = adapter.executeQuery(
+                "SELECT (SELECT COALESCE(MAX(version), 0) FROM schema_version) AS ver,"
+              + "       (SELECT string_agg(table_name, ',') FROM information_schema.tables"
+              + "        WHERE table_schema = 'public') AS tabs")) {
+            if (rs.next()) {
+                version = rs.getInt(1);
+                String tabs = rs.getString(2);
+                if (tabs != null) {
+                    java.util.Collections.addAll(tables, tabs.split(","));
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseManager] could not read the schema: " + e.getMessage());
+            try {
+                for (String table : nurgling.db.migration.MigrationManager.expectedTables()) {
+                    if (adapter.tableExists(table))
+                        tables.add(table);
+                }
+                for (String extra : new String[] {
+                    "fish_locations", "peer_positions",
+                    "map_grids", "map_grid_placements", "map_markers"
+                }) {
+                    if (adapter.tableExists(extra))
+                        tables.add(extra);
+                }
+            } catch (SQLException e2) {
+                System.err.println("[DatabaseManager] cannot probe tables: " + e2.getMessage());
+            }
+        }
+        this.visibleTables = tables;
+        this.schemaVersionSeen = version;
+    }
+
+    /**
      * Whether a table is present AND reachable by this connection's role. Any failure answers "no":
      * a feature that cannot verify its own table must not be wired up.
      */
     private boolean tableUsable(String table) {
+        if (!visibleTables.isEmpty())
+            return visibleTables.contains(table);
         try {
             return adapter != null && adapter.tableExists(table);
         } catch (SQLException e) {
             System.err.println("[DatabaseManager] cannot check for table " + table + ": " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Say, once, that setup finished - and name anything that did not get made.
+     *
+     * <p>Until now the whole of setup reported itself only to stderr, so "it silently does not sync"
+     * and "it worked" looked identical from inside the game.
+     */
+    private void reportReady() {
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        for (String table : nurgling.db.migration.MigrationManager.expectedTables()) {
+            if (!visibleTables.contains(table)) {
+                missing.add(table);
+            }
+        }
+
+        if (missing.isEmpty()) {
+            String line = "Database ready - schema v" + schemaVersionSeen
+                        + ", " + visibleTables.size() + " tables";
+            System.out.println("[DatabaseManager] " + line);
+            notifyPlayer(line, java.awt.Color.GREEN);
+        } else {
+            /* Present-but-unreadable looks exactly like absent from here, because PostgreSQL hides a
+             * table this role has no privileges on. Both need the same thing said. */
+            String line = "Database set up, but " + missing.size() + " table(s) are missing or not"
+                        + " readable by this account: " + String.join(", ", missing);
+            System.err.println("[DatabaseManager] " + line);
+            notifyPlayer(line, java.awt.Color.ORANGE);
+        }
+    }
+
+    /**
+     * Bring grants up to date without making the player wait for it.
+     *
+     * <p>Fifteen round trips - every {@code guarded()} statement is a savepoint, the statement, and a
+     * release - which is nothing locally and nearly three seconds against a server 180ms away. It
+     * fixes privileges for <em>other</em> accounts, so nothing in this session needs it to have
+     * finished, and tables created during migration are granted inline by {@code createTable}
+     * regardless.
+     */
+    private void repairPermissionsAsync() {
+        executeWithRetry(adapter -> {
+            nurgling.db.migration.MigrationManager.repairPermissions(adapter);
+            return (Void) null;
+        }, "repair permissions");
+    }
+
+    /** Post a line to the game window when there is one; the console always gets it either way. */
+    private static void notifyPlayer(String text, java.awt.Color color) {
+        try {
+            if (nurgling.NUtils.getGameUI() != null) {
+                nurgling.NUtils.getGameUI().msg(text, color);
+            }
+        } catch (Exception ignore) {
+            // Reporting must never be what breaks startup.
         }
     }
 

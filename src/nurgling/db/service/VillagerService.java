@@ -221,6 +221,62 @@ public class VillagerService {
         }, "revoke villager " + role);
     }
 
+    /** What actually happened to an account we were asked to delete. */
+    public enum DeleteOutcome {
+        DELETED,
+        DISABLED
+    }
+
+    /**
+     * Remove an account for good.
+     *
+     * <p>A role cannot simply be dropped: PostgreSQL refuses while it still owns an object or holds
+     * a single grant, and after a season of play that is often the case. So the grants are cleared
+     * and anything it owns is handed back first.
+     *
+     * <p>If the drop still will not go through, the account is shut instead of being left usable,
+     * and the caller is told which of the two happened - reporting a delete that did not happen
+     * would leave a working login behind.
+     *
+     * <p>Neither outcome un-shares what that player already synced. Hearth secrets, map tiles and
+     * areas are on their machine now, and the panel says so rather than implying otherwise.
+     */
+    public CompletableFuture<DeleteOutcome> deleteAsync(String name) {
+        final String role = requireIdentifier(name);
+        return databaseManager.executeWithRetry(adapter -> {
+            if (role.equalsIgnoreCase(connectedRole(adapter))) {
+                throw new SQLException("You cannot delete the account you are connected as.");
+            }
+            revokeGroups(adapter, role);
+            if (adapter.tableExists("villagers")) {
+                adapter.executeUpdate("DELETE FROM villagers WHERE role_name = ?", role);
+            }
+
+            java.sql.Connection conn = adapter.getConnection();
+            java.sql.Savepoint sp = conn.setSavepoint("nurgling_drop");
+            try {
+                adapter.executeUpdate("REASSIGN OWNED BY " + quote(role) + " TO CURRENT_USER");
+                adapter.executeUpdate("DROP OWNED BY " + quote(role));
+                adapter.executeUpdate("DROP ROLE " + quote(role));
+                conn.releaseSavepoint(sp);
+                return DeleteOutcome.DELETED;
+            } catch (SQLException e) {
+                conn.rollback(sp);
+                System.err.println("[VillagerService] could not drop " + role
+                    + " (" + e.getMessage() + "); disabling instead");
+                adapter.executeUpdate("ALTER ROLE " + quote(role) + " NOLOGIN");
+                return DeleteOutcome.DISABLED;
+            }
+        }, "delete villager " + role);
+    }
+
+    /** The role this client is authenticated as; never deletable from here. */
+    private static String connectedRole(DatabaseAdapter adapter) throws SQLException {
+        try (ResultSet rs = adapter.executeQuery("SELECT current_user")) {
+            return rs.next() ? rs.getString(1) : "";
+        }
+    }
+
     /** Re-run the grant sweep by hand, for a host fixing up a village made before any of this. */
     public CompletableFuture<Void> repairAsync() {
         return databaseManager.executeWithRetry(adapter -> {

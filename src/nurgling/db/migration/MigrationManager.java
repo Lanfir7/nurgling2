@@ -205,7 +205,8 @@ public class MigrationManager {
                  * exists" code this migration forgives, so it rethrows - and migration 1 is not
                  * optional, so the whole DatabaseManager fails to initialise. That made
                  * etc/db/init.sql an undocumented prerequisite that only the compose entrypoint ever
-                 * applied, so pointing the client at any other PostgreSQL simply did not work. */
+                 * applied, so pointing the client at any other PostgreSQL (or a fresh install)
+                 * simply did not work. */
                 ensureBaseTables(adapter);
 
                 // Create favorite_recipes table if it doesn't exist
@@ -915,85 +916,103 @@ public class MigrationManager {
     }
 
     /**
-     * Create the five tables that used to arrive only via {@code etc/db/init.sql}.
+     * The tables that used to arrive only through {@code etc/db/init.sql}, as name to DDL.
      *
-     * <p>No-op on any database that already has them, which is every village created before this
-     * change. Routed through {@link #createTable} so a fresh database gets the grants too - the
-     * init.sql copies never had any, which is the reason no account except the owner could read
-     * them.
+     * <p>Ordered: {@code ingredients} and {@code feps} carry a foreign key onto {@code recipes}, so
+     * it has to exist first.
+     *
+     * @param postgres false for SQLite, whose autoincrement spelling differs and which cannot add a
+     *                 constraint after the fact - so its UNIQUE goes inline here instead
+     */
+    public static java.util.LinkedHashMap<String, String> baseTableDdl(boolean postgres) {
+        String serialPk = postgres ? "id SERIAL PRIMARY KEY, "
+                                   : "id INTEGER PRIMARY KEY AUTOINCREMENT, ";
+        String inlineUnique = postgres ? "" : ", UNIQUE (recipe_hash, name)";
+
+        java.util.LinkedHashMap<String, String> ddl = new java.util.LinkedHashMap<>();
+        ddl.put("recipes",
+            "CREATE TABLE recipes (" +
+            "recipe_hash VARCHAR(64) PRIMARY KEY, " +
+            "item_name VARCHAR(255) NOT NULL, " +
+            "resource_name VARCHAR(255) NOT NULL, " +
+            "hunger FLOAT NOT NULL, " +
+            "energy INT NOT NULL)");
+        ddl.put("ingredients",
+            "CREATE TABLE ingredients (" + serialPk +
+            "recipe_hash VARCHAR(64) REFERENCES recipes (recipe_hash) ON DELETE CASCADE, " +
+            "name VARCHAR(255) NOT NULL, " +
+            "percentage FLOAT NOT NULL, " +
+            "resource_name VARCHAR(512)" + inlineUnique + ")");
+        ddl.put("feps",
+            "CREATE TABLE feps (" + serialPk +
+            "recipe_hash VARCHAR(64) REFERENCES recipes (recipe_hash) ON DELETE CASCADE, " +
+            "name VARCHAR(255) NOT NULL, " +
+            "value FLOAT NOT NULL, " +
+            "weight FLOAT NOT NULL" + inlineUnique + ")");
+        ddl.put("containers",
+            "CREATE TABLE containers (" +
+            "hash VARCHAR(64) PRIMARY KEY, " +
+            "grid_id BIGINT, " +
+            "coord VARCHAR(255))");
+        ddl.put("storageitems",
+            "CREATE TABLE storageitems (" +
+            "item_hash VARCHAR(64) PRIMARY KEY, " +
+            "name VARCHAR(255) NOT NULL, " +
+            "quality DOUBLE PRECISION, " +
+            "coordinates VARCHAR(255), " +
+            "container VARCHAR(64) NOT NULL)");
+        return ddl;
+    }
+
+    /**
+     * Create the base tables when they are missing.
+     *
+     * <p>A no-op on every database that already has them, which is every village made before this
+     * change. Routed through {@link #createTable} so a fresh database gets the grants as well - the
+     * {@code init.sql} copies never had any, which is why no account but the owner could read them.
      */
     private static void ensureBaseTables(DatabaseAdapter adapter) throws SQLException {
-        boolean pg = adapter instanceof nurgling.db.PostgresAdapter;
-        String serialPk = pg ? "id SERIAL PRIMARY KEY, " : "id INTEGER PRIMARY KEY AUTOINCREMENT, ";
-        /* SQLite cannot add a constraint after the fact - ensureSqliteUniqueConstraints rebuilds the
-         * whole table to do it - so create it inline there and let PostgreSQL use its own ALTER
-         * path below, which already knows how to skip a constraint that exists. */
-        String inlineUnique = pg ? "" : ", UNIQUE (recipe_hash, name)";
+        boolean postgres = adapter instanceof nurgling.db.PostgresAdapter;
+        for (java.util.Map.Entry<String, String> e : baseTableDdl(postgres).entrySet()) {
+            if (!adapter.tableExists(e.getKey())) {
+                createTable(adapter, e.getKey(), e.getValue());
+                System.out.println("Created " + e.getKey() + " table");
+            }
+        }
+    }
 
-        if (!adapter.tableExists("recipes")) {
-            createTable(adapter, "recipes",
-                "CREATE TABLE recipes (" +
-                "recipe_hash VARCHAR(64) PRIMARY KEY, " +
-                "item_name VARCHAR(255) NOT NULL, " +
-                "resource_name VARCHAR(255) NOT NULL, " +
-                "hunger FLOAT NOT NULL, " +
-                "energy INT NOT NULL)");
-            System.out.println("Created recipes table");
-        }
-        if (!adapter.tableExists("ingredients")) {
-            createTable(adapter, "ingredients",
-                "CREATE TABLE ingredients (" + serialPk +
-                "recipe_hash VARCHAR(64) REFERENCES recipes (recipe_hash) ON DELETE CASCADE, " +
-                "name VARCHAR(255) NOT NULL, " +
-                "percentage FLOAT NOT NULL, " +
-                "resource_name VARCHAR(512)" + inlineUnique + ")");
-            System.out.println("Created ingredients table");
-        }
-        if (!adapter.tableExists("feps")) {
-            createTable(adapter, "feps",
-                "CREATE TABLE feps (" + serialPk +
-                "recipe_hash VARCHAR(64) REFERENCES recipes (recipe_hash) ON DELETE CASCADE, " +
-                "name VARCHAR(255) NOT NULL, " +
-                "value FLOAT NOT NULL, " +
-                "weight FLOAT NOT NULL" + inlineUnique + ")");
-            System.out.println("Created feps table");
-        }
-        if (!adapter.tableExists("containers")) {
-            createTable(adapter, "containers",
-                "CREATE TABLE containers (" +
-                "hash VARCHAR(64) PRIMARY KEY, " +
-                "grid_id BIGINT, " +
-                "coord VARCHAR(255))");
-            System.out.println("Created containers table");
-        }
-        if (!adapter.tableExists("storageitems")) {
-            createTable(adapter, "storageitems",
-                "CREATE TABLE storageitems (" +
-                "item_hash VARCHAR(64) PRIMARY KEY, " +
-                "name VARCHAR(255) NOT NULL, " +
-                "quality DOUBLE PRECISION, " +
-                "coordinates VARCHAR(255), " +
-                "container VARCHAR(64) NOT NULL)");
-            System.out.println("Created storageitems table");
-        }
+    /** Every table this client expects to find once setup has finished. */
+    public static java.util.List<String> expectedTables() {
+        java.util.List<String> names = new java.util.ArrayList<>(baseTableDdl(true).keySet());
+        java.util.Collections.addAll(names,
+            "favorite_recipes", "areas", "routes",
+            "planning_folders", "planning_layers", "planning_ghosts");
+        return names;
     }
 
     /**
      * Hand out the privileges every other account on this database needs, and arrange for future
      * tables to get them without anyone remembering to ask.
      *
-     * <p>Three gaps this closes, all of which forced villages onto a single shared superuser:
+     * <p>Three gaps this closes, all of which force a village onto one shared superuser:
      * <ul>
-     *   <li>Tables that came from {@code init.sql} were granted to nobody at all.</li>
-     *   <li>Sequences were never granted anywhere, so inserting a recipe ingredient failed even
-     *       where the table grant had landed - {@code SERIAL} needs {@code USAGE} on its
-     *       sequence, and PUBLIC does not get that by default.</li>
-     *   <li>Grants only ever happened inside {@code CREATE TABLE}, so a role created afterwards, or
-     *       a change of grantee, applied to nothing.</li>
+     *   <li>The five tables that come from {@code etc/db/init.sql} are granted to nobody at all -
+     *       they are owned by whoever ran the compose file, and PostgreSQL gives a new table nothing
+     *       to anyone else. {@code information_schema} even hides them, so a second account cannot
+     *       see that they exist.</li>
+     *   <li>No sequence is granted anywhere. {@code ingredients} and {@code feps} use
+     *       {@code SERIAL}, so inserting a recipe needs {@code USAGE} on their sequences, and PUBLIC
+     *       does not get that by default.</li>
+     *   <li>Grants only ever happen inside {@code CREATE TABLE}, so a role created afterwards - which
+     *       is every villager added from the panel - is covered by nothing.</li>
      * </ul>
      *
-     * <p>Idempotent, touches no data and disconnects nobody, so it is safe to run on every admin
-     * connect while people are playing. A client whose role may not grant simply logs and moves on.
+     * <p>Without this, adding a villager produces a client that syncs areas, routes and the map and
+     * then fails silently on containers, storage items and recipes. Partial success that looks like
+     * success is worse than a clean failure, so this runs on every connect.
+     *
+     * <p>Idempotent, touches no row and disconnects nobody, so it is safe while people are playing.
+     * A client whose role may not grant logs one line and moves on.
      */
     public static void repairPermissions(DatabaseAdapter adapter) {
         if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
@@ -1112,8 +1131,8 @@ public class MigrationManager {
         }
     }
 
-    /** Quote a role name for use in DDL, where it cannot go through a bound parameter. */
-    private static String quoteIdent(String ident) {
+    /** Quote a role name for DDL, where it cannot go through a bound parameter. */
+    public static String quoteIdent(String ident) {
         return "\"" + ident.replace("\"", "\"\"") + "\"";
     }
 
