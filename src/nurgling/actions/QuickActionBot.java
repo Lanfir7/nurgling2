@@ -2,6 +2,7 @@ package nurgling.actions;
 
 import haven.*;
 import nurgling.NConfig;
+import nurgling.ForageInteractionSource;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.conf.QuickActionPreset;
@@ -75,6 +76,10 @@ public class QuickActionBot implements Action {
                 }
             }
             if (gob != null) {
+                if (gui.ui != null && gui.ui.core != null) {
+                    ForageInteractionSource.remember(gob, 3,
+                        target -> gui.ui.core.setLastAction(target));
+                }
                 gui.map.wdgmsg("click", Coord.z, gob.rc.floor(posres), 3, 0, 1, (int) gob.id, gob.rc.floor(posres),
                         0, -1);
                 return Results.SUCCESS();

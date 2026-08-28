@@ -495,7 +495,7 @@ public abstract class AWTToolkit implements Toolkit {
 	    private java.awt.event.MouseEvent mousemv;
 
 	    public void windowClosing(WindowEvent e) {
-		callback(new CloseRequest() {});
+		callback(CloseEvent.INSTANCE);
 	    }
 	    public void windowActivated(WindowEvent e) {
 		focused = true;

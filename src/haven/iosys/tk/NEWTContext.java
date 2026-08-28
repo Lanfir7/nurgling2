@@ -319,7 +319,7 @@ public class NEWTContext implements Providers.Factory<Toolkit> {
 		private float[] wheelacc = {0, 0, 0};
 
 		public void windowDestroyNotify(WindowEvent ev) {
-		    callback(new CloseRequest() {});
+		    callback(CloseEvent.INSTANCE);
 		}
 		public void windowResized(WindowEvent ev) {}
 		public void windowMoved(WindowEvent ev) {}

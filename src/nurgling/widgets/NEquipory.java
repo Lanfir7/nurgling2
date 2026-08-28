@@ -39,10 +39,97 @@ public class NEquipory extends Equipory
     // Queue for pending parasite checks
     private final ArrayList<NGItem> pendingParasiteChecks = new ArrayList<>();
 
+    private static final int STATS_PANEL_WIDTH = UI.scale(220);
+    private static final int STATS_PANEL_GAP = UI.scale(16);
+    private static final int STATS_PANEL_TOP = UI.scale(8);
+    private final Coord originalSize;
+    private EquipmentStatsWidget statsWidget;
+    private ICheckBox statsToggleButton;
+    private boolean showStatsPanel;
+    private ForageHelperWindow forageHelperWindow;
+
+    private static final TexI[] statsToggle = new TexI[]{
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/u")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/d")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/h")),
+            new TexI(Resource.loadsimg("nurgling/hud/buttons/itogglec/dh"))
+    };
+    private static final TexI[] statsToggleRight = createMirroredTextures(statsToggle);
+
     public NEquipory(long gobid)
     {
         super(gobid);
+        originalSize = sz;
         initToggleButtons();
+        initStatsWidget();
+    }
+
+    private static TexI[] createMirroredTextures(TexI[] original) {
+        TexI[] mirrored = new TexI[original.length];
+        for (int i = 0; i < original.length; i++) {
+            BufferedImage source = original[i].back;
+            BufferedImage image = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D graphics = image.createGraphics();
+            graphics.drawImage(source, source.getWidth(), 0, 0, source.getHeight(), 0, 0, source.getWidth(), source.getHeight(), null);
+            graphics.dispose();
+            mirrored[i] = new TexI(image);
+        }
+        return mirrored;
+    }
+
+    private Coord statsPosition() {
+        return EquipmentStatsPanelLayout.statsPosition(ecoords, invsq.sz(), STATS_PANEL_GAP).add(0, STATS_PANEL_TOP);
+    }
+
+    private void initStatsWidget() {
+        int statsHeight = Math.max(originalSize.y - STATS_PANEL_TOP - UI.scale(10), UI.scale(200));
+        statsWidget = add(new EquipmentStatsWidget(new Coord(STATS_PANEL_WIDTH, statsHeight)), statsPosition());
+        statsWidget.hide();
+    }
+
+    @Override
+    protected void added() {
+        super.added();
+        if (statsToggleButton != null) {
+            return;
+        }
+        haven.Window window = getparent(haven.Window.class);
+        if (window == null) {
+            return;
+        }
+        statsToggleButton = new ICheckBox(statsToggleRight[0], statsToggleRight[1], statsToggleRight[2], statsToggleRight[3]) {
+            @Override
+            public void changed(boolean value) {
+                super.changed(value);
+                showStatsPanel = value;
+                updateStatsPanelVisibility();
+            }
+        };
+        statsToggleButton.a = false;
+        statsToggleButton.settip("Показать характеристики экипировки");
+        window.add(statsToggleButton, statsTogglePosition());
+    }
+
+    private Coord statsTogglePosition() {
+        return new Coord(sz.x + UI.scale(4), UI.scale(27));
+    }
+
+    private void updateStatsPanelVisibility() {
+        haven.Window window = getparent(haven.Window.class);
+        if (window == null) {
+            return;
+        }
+        if (showStatsPanel) {
+            statsWidget.updateStatsFromItems(quickslots);
+            statsWidget.show();
+            resize(EquipmentStatsPanelLayout.expandedSize(originalSize, statsPosition(), STATS_PANEL_WIDTH));
+        } else {
+            statsWidget.hide();
+            resize(originalSize);
+        }
+        window.resize(sz);
+        statsToggleButton.c = statsTogglePosition();
+        statsToggleButton.a = showStatsPanel;
     }
 
     // Custom offset for STORE_HAT slot to avoid overlapping HEAD slot's button
@@ -366,6 +453,9 @@ public class NEquipory extends Equipory
         updatePercExpText();
         updateTotalArmor();
         checkPendingParasites();
+        if (showStatsPanel) {
+            statsWidget.updateStatsFromItems(quickslots);
+        }
     }
     
     private void checkPendingParasites() {
@@ -468,9 +558,8 @@ public class NEquipory extends Equipory
     @Override
     public void draw(GOut g) {
         super.draw(g);
-        Coord textCoord = new Coord(sz.x - UI.scale(85), UI.scale(3));
+        Coord textCoord = indicatorOrigin();
         if (percExpText != null) {
-            textCoord = textCoord.sub(percExpText.getWidth(), 0);
             g.image(eye, textCoord, UI.scale(20,20));
             g.image(percExpText, textCoord.add(UI.scale(21, -1)));
         }
@@ -479,6 +568,46 @@ public class NEquipory extends Equipory
             g.image(armor, textCoord, UI.scale(20, 20));
             g.image(hardSoft, textCoord.add(UI.scale(21, -1)));
         }
+    }
+
+    private Coord indicatorOrigin() {
+        int textWidth = percExpText == null ? 0 : percExpText.getWidth();
+        return EquipmentStatsPanelLayout.indicatorOrigin(originalSize.x, textWidth, UI.scale(85), UI.scale(3));
+    }
+
+    @Override
+    public boolean mousedown(MouseDownEvent ev) {
+        if(ev.b == 1 && percExpText != null && EquipmentStatsPanelLayout.hitsIndicator(
+                ev.c, indicatorOrigin(), percExpText.getWidth(), UI.scale(20))) {
+            openForageHelper();
+            return true;
+        }
+        return super.mousedown(ev);
+    }
+
+    @Override
+    public Object tooltip(Coord c, Widget prev) {
+        if(percExpText != null && EquipmentStatsPanelLayout.hitsIndicator(
+                c, indicatorOrigin(), percExpText.getWidth(), UI.scale(20)))
+            return "Открыть помощник собирателя";
+        return super.tooltip(c, prev);
+    }
+
+    private void openForageHelper() {
+        if(forageHelperWindow != null) {
+            forageHelperWindow.show();
+            forageHelperWindow.raise();
+            return;
+        }
+        GameUI gui = getparent(GameUI.class);
+        if(gui == null)
+            return;
+        forageHelperWindow = new ForageHelperWindow(() -> percExp, () -> forageHelperWindow = null);
+        Coord position = new Coord(
+                Math.max(0, (gui.sz.x - forageHelperWindow.sz.x) / 2),
+                Math.max(0, (gui.sz.y - forageHelperWindow.sz.y) / 2));
+        gui.add(forageHelperWindow, position);
+        forageHelperWindow.show();
     }
 
     public WItem findItem(int id) throws InterruptedException {

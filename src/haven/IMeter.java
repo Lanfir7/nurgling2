@@ -90,6 +90,12 @@ public class IMeter extends LayerMeter {
 	set(meters);
     }
 
+	@Override
+	public void set(List<Meter> meters) {
+		super.set(meters);
+		PonyPowerAlert.onUpdate(name, meters);
+	}
+
     public void draw(GOut g) {
 	try {
 	    Tex bg = this.bg.get().flayer(Resource.imgc).tex();

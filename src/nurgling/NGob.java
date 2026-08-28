@@ -149,6 +149,7 @@ public class NGob
     private boolean cropMarkerAdded = false;
     // Flag to track if garden pot marker was already added
     private boolean gardenPotMarkerAdded = false;
+    private boolean forageCritterSeen = false;
 
     public void changedPose(String currentPose)
     {
@@ -198,6 +199,15 @@ public class NGob
             return null;
         SessionContext ctx = SessionManager.getInstance().findBySession(gob.glob.sess);
         return (ctx == null) ? null : ctx.getGameUI();
+    }
+
+    private void observeForageCritter()
+    {
+        if (forageCritterSeen || !NCritterCircle.isCritter(name))
+            return;
+        NGameUI gui = ownerGui(parent);
+        if (gui != null && gui.foragePickupMarker != null)
+            forageCritterSeen = gui.foragePickupMarker.noteWorldSighting(parent);
     }
 
     private static class DelayedOverlayTask
@@ -683,6 +693,7 @@ public class NGob
                 }
 
                 name = HarvestState.normalizeBumlingRes(name);
+                observeForageCritter();
 
                 // Resolved once per name change. The hide decision itself is deferred to the end of
                 // this method, because it depends on hitBox, which is only worked out further down.
@@ -1089,6 +1100,7 @@ public class NGob
 
     public void tick(double dt)
     {
+        observeForageCritter();
         if (NUtils.getGameUI() != null)
         {
             // Process delayed overlay tasks - limit to avoid performance issues

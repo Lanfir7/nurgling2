@@ -2,6 +2,7 @@ package nurgling.tools;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -16,6 +17,10 @@ public final class ForageMarkerLogic {
      * Five seconds is not enough during map/resource loading, while 15 seconds still
      * bounds a missed pick before an unrelated incoming item can be associated. */
     public static final long QUALITY_WAIT_MS = 15000L;
+    /* Moving critters can take much longer to chase down than a stationary forageable.
+     * A newer interaction with the same critter type replaces the older pending catch. */
+    public static final long CRITTER_WAIT_MS = 5 * 60 * 1000L;
+    private static final int MAX_CRITTER_SIGHTINGS = 512;
     public static final String ID_PREFIX = "forage_";
 
     private ForageMarkerLogic() {}
@@ -66,6 +71,26 @@ public final class ForageMarkerLogic {
         String base = slash >= 0 ? resName.substring(slash + 1) : resName;
         String key = base.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
         return key.isEmpty() ? null : key;
+    }
+
+    private static String critterResourceKey(String resName) {
+        if (resName == null || resName.isEmpty()) return null;
+        String prefix = "gfx/kritter/";
+        if (resName.startsWith(prefix)) {
+            String tail = resName.substring(prefix.length());
+            int slash = tail.indexOf('/');
+            return resourceKey(slash >= 0 ? tail.substring(0, slash) : tail);
+        }
+        return resourceKey(resName);
+    }
+
+    private static boolean critterItemMatches(String critterKey, String itemKey) {
+        if (critterKey == null || itemKey == null) return false;
+        if ("chicken".equals(critterKey)) {
+            return "chicken".equals(itemKey) || "chick".equals(itemKey) ||
+                "hen".equals(itemKey) || "rooster".equals(itemKey);
+        }
+        return critterKey.equals(itemKey) || itemKey.contains(critterKey) || critterKey.contains(itemKey);
     }
 
     public static boolean acceptsPickedItemInventory(boolean isMainInv, boolean hasParentGob) {
@@ -139,6 +164,8 @@ public final class ForageMarkerLogic {
         private final List<PendingPick> pending = new ArrayList<PendingPick>();
         private final List<Candidate> candidates = new ArrayList<Candidate>();
         private final Map<Object, Boolean> seen = new WeakHashMap<Object, Boolean>();
+        private final LinkedHashMap<Long, CritterSighting> critterSightings =
+            new LinkedHashMap<Long, CritterSighting>();
 
         public void notePick(long segmentId, int tileX, int tileY, long now) {
             notePick(segmentId, tileX, tileY, null, now);
@@ -153,6 +180,34 @@ public final class ForageMarkerLogic {
                 }
             }
             pending.add(new PendingPick(segmentId, tileX, tileY, key, now));
+        }
+
+        public void noteCritterSeen(long gobId, long segmentId, int tileX, int tileY,
+                                    String resourceName, long now) {
+            if (critterSightings.containsKey(gobId)) return;
+            String key = critterResourceKey(resourceName);
+            if (key == null) return;
+            critterSightings.put(gobId,
+                new CritterSighting(segmentId, tileX, tileY, key));
+            while (critterSightings.size() > MAX_CRITTER_SIGHTINGS) {
+                Long oldest = critterSightings.keySet().iterator().next();
+                critterSightings.remove(oldest);
+            }
+        }
+
+        public boolean noteCritterInteraction(long gobId, long now) {
+            prune(now);
+            CritterSighting sighting = critterSightings.get(gobId);
+            if (sighting == null) return false;
+            for (int i = pending.size() - 1; i >= 0; i--) {
+                PendingPick pick = pending.get(i);
+                if (pick.critter && critterItemMatches(pick.resourceKey, sighting.resourceKey)) {
+                    pending.remove(i);
+                }
+            }
+            pending.add(new PendingPick(sighting.segmentId, sighting.tileX, sighting.tileY,
+                sighting.resourceKey, now, true));
+            return true;
         }
 
         public boolean offerItem(Object itemKey, boolean stackContainer, boolean stackMember,
@@ -221,6 +276,7 @@ public final class ForageMarkerLogic {
             pending.clear();
             candidates.clear();
             seen.clear();
+            critterSightings.clear();
         }
 
         private Candidate findCandidate(Object itemKey) {
@@ -235,6 +291,9 @@ public final class ForageMarkerLogic {
             if (itemResourceKey != null) {
                 for (PendingPick pick : pending) {
                     if (itemResourceKey.equals(pick.resourceKey)) return pick;
+                }
+                for (PendingPick pick : pending) {
+                    if (pick.critter && critterItemMatches(pick.resourceKey, itemResourceKey)) return pick;
                 }
             }
             /* Compatibility for callers without resource identity. The latest pick
@@ -255,10 +314,15 @@ public final class ForageMarkerLogic {
 
         private void prune(long now) {
             for (int i = pending.size() - 1; i >= 0; i--) {
-                if (now - pending.get(i).createdMs > QUALITY_WAIT_MS) pending.remove(i);
+                PendingPick pick = pending.get(i);
+                long timeout = pick.critter ? CRITTER_WAIT_MS : QUALITY_WAIT_MS;
+                if (now - pick.createdMs > timeout) pending.remove(i);
             }
             for (int i = candidates.size() - 1; i >= 0; i--) {
-                if (now - candidates.get(i).watchStartMs > QUALITY_WAIT_MS) candidates.remove(i);
+                Candidate candidate = candidates.get(i);
+                long timeout = candidate.boundPick != null && candidate.boundPick.critter
+                    ? CRITTER_WAIT_MS : QUALITY_WAIT_MS;
+                if (now - candidate.watchStartMs > timeout) candidates.remove(i);
             }
         }
 
@@ -268,12 +332,31 @@ public final class ForageMarkerLogic {
             final int tileY;
             final String resourceKey;
             final long createdMs;
+            final boolean critter;
             PendingPick(long segmentId, int tileX, int tileY, String resourceKey, long createdMs) {
+                this(segmentId, tileX, tileY, resourceKey, createdMs, false);
+            }
+            PendingPick(long segmentId, int tileX, int tileY, String resourceKey, long createdMs,
+                        boolean critter) {
                 this.segmentId = segmentId;
                 this.tileX = tileX;
                 this.tileY = tileY;
                 this.resourceKey = resourceKey;
                 this.createdMs = createdMs;
+                this.critter = critter;
+            }
+        }
+
+        private static final class CritterSighting {
+            final long segmentId;
+            final int tileX;
+            final int tileY;
+            final String resourceKey;
+            CritterSighting(long segmentId, int tileX, int tileY, String resourceKey) {
+                this.segmentId = segmentId;
+                this.tileX = tileX;
+                this.tileY = tileY;
+                this.resourceKey = resourceKey;
             }
         }
 

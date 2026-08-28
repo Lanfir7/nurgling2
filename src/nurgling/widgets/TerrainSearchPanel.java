@@ -3,6 +3,7 @@ package nurgling.widgets;
 import haven.*;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
+import nurgling.tools.ForageTerrain;
 
 import java.awt.Color;
 import java.util.*;
@@ -106,35 +107,78 @@ public class TerrainSearchPanel extends Widget {
             }
         }
     }
+
+    /** Replace the current map highlight with the terrain used by one forageable. */
+    public void selectTerrains(Collection<String> terrains) {
+        if(terrains == null || terrains.isEmpty())
+            return;
+        Set<String> selected = new HashSet<>();
+        for(String terrain : terrains)
+            selected.add(terrain.toLowerCase(Locale.ROOT));
+        LinkedHashSet<String> patterns = new LinkedHashSet<>();
+        for(TerrainCategory category : TerrainCategory.ALL_CATEGORIES) {
+            for(TerrainPreset preset : category.presets) {
+                preset.enabled = selected.contains(preset.displayName.toLowerCase(Locale.ROOT));
+                if(preset.enabled)
+                    patterns.add(preset.searchPattern);
+            }
+        }
+        terrainSearchField.settext(String.join("|", patterns));
+        applyTerrainHighlight(terrains);
+        invalidateMap();
+        if(selectedCategory != null)
+            presetList.updatePresets(selectedCategory);
+    }
+
+    static void applyTerrainHighlight(Collection<String> terrains) {
+        TileHighlight.setHighlighted(ForageTerrain.resourceNames(terrains));
+    }
+
+    private static void invalidateMap() {
+        if(NUtils.getGameUI() != null && NUtils.getGameUI().mmap instanceof NMiniMap)
+            ((NMiniMap)NUtils.getGameUI().mmap).invalidateDisplayCache();
+    }
     
     /**
      * Find all tile resource names that match the search pattern
      */
     private java.util.Set<String> findMatchingTiles(String pattern) {
+        return resourceNamesForPattern(pattern);
+    }
+
+    static java.util.Set<String> resourceNamesForPattern(String pattern) {
         java.util.Set<String> result = new java.util.HashSet<>();
         String lowerPattern = pattern.toLowerCase();
-        
-        // Search through all categories
+
+        // Prefer an exact preset so "grass" does not also enable the Grassland group.
         for(TerrainCategory cat : TerrainCategory.ALL_CATEGORIES) {
             for(TerrainPreset preset : cat.presets) {
-                // Check for exact match or contains match
-                if(preset.searchPattern.toLowerCase().equals(lowerPattern) || 
-                   preset.searchPattern.toLowerCase().contains(lowerPattern)) {
-                    // Convert search pattern to full resource name
+                if(preset.searchPattern.toLowerCase().equals(lowerPattern))
                     result.addAll(presetToResourceNames(preset.searchPattern));
-                }
             }
         }
-        
+        if(!result.isEmpty())
+            return result;
+        for(TerrainCategory cat : TerrainCategory.ALL_CATEGORIES) {
+            for(TerrainPreset preset : cat.presets) {
+                if(preset.searchPattern.toLowerCase().contains(lowerPattern))
+                    result.addAll(presetToResourceNames(preset.searchPattern));
+            }
+        }
         return result;
     }
     
     /**
      * Convert preset search pattern to full tile resource names
      */
-    private java.util.Set<String> presetToResourceNames(String searchPattern) {
+    private static java.util.Set<String> presetToResourceNames(String searchPattern) {
         java.util.Set<String> result = new java.util.HashSet<>();
         String lower = searchPattern.toLowerCase();
+
+        if(ForageTerrain.known(lower)) {
+            result.addAll(ForageTerrain.resourceNames(lower));
+            return result;
+        }
         
         // Map common search patterns to resource paths
         // Ores - gfx/tiles/rocks/*
@@ -377,8 +421,14 @@ public class TerrainSearchPanel extends Widget {
         private static List<TerrainCategory> createCategories() {
             // Define all individual categories first
             TerrainCategory natural = new TerrainCategory("Natural",
+                new TerrainPreset("Forest", "forest"),
+                new TerrainPreset("Grassland", "grassland"),
+                new TerrainPreset("Water Terrain", "waterterrain"),
+                new TerrainPreset("Shallow Water", "shallowwater"),
                 new TerrainPreset("Grass", "grass"),
                 new TerrainPreset("Beach", "beach"),
+                new TerrainPreset("Acre Clay Field", "acreclayfield"),
+                new TerrainPreset("Badlands", "badlands"),
                 new TerrainPreset("Beech Grove", "beechgrove"),
                 new TerrainPreset("Black Wood", "blackwood"),
                 new TerrainPreset("Blue Sod", "bluesod"),
@@ -390,8 +440,8 @@ public class TerrainSearchPanel extends Widget {
                 new TerrainPreset("Dry Weald", "dryweald"),
                 new TerrainPreset("Fen", "fen"),
                 new TerrainPreset("Flower Meadow", "flowermeadow"),
-                new TerrainPreset("Greenbrake", "greenbrake"),
-                new TerrainPreset("Greensward", "greensward"),
+                new TerrainPreset("Green Brake", "greenbrake"),
+                new TerrainPreset("Greens Ward", "greensward"),
                 new TerrainPreset("Grove", "grove"),
                 new TerrainPreset("Hard Steppe", "hardsteppe"),
                 new TerrainPreset("Heath", "heath"),
@@ -402,6 +452,7 @@ public class TerrainSearchPanel extends Widget {
                 new TerrainPreset("Lush Field", "lushfield"),
                 new TerrainPreset("Moor", "moor"),
                 new TerrainPreset("Moss Brush", "mossbrush"),
+                new TerrainPreset("Mountain", "mountain"),
                 new TerrainPreset("Oak Wilds", "oakwilds"),
                 new TerrainPreset("Ox Pasture", "oxpasture"),
                 new TerrainPreset("Peat Moss", "peatmoss"),
@@ -410,10 +461,12 @@ public class TerrainSearchPanel extends Widget {
                 new TerrainPreset("Root Bosk", "rootbosk"),
                 new TerrainPreset("Scrub Veld", "scrubveld"),
                 new TerrainPreset("Shady Copse", "shadycopse"),
+                new TerrainPreset("Sand Cliff", "sandcliff"),
                 new TerrainPreset("Skargard", "skargard"),
                 new TerrainPreset("Sombre Bramble", "sombrebramble"),
                 new TerrainPreset("Sour Timber", "sourtimber"),
                 new TerrainPreset("Swamp", "swamp"),
+                new TerrainPreset("Tidepool", "tidepool"),
                 new TerrainPreset("Timber Land", "timberland"),
                 new TerrainPreset("Wald", "wald"),
                 new TerrainPreset("Wild Moor", "wildmoor"),

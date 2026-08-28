@@ -2444,9 +2444,14 @@ public class MapView extends PView implements DTarget, Console.Directory {
 				NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
 			}
 		}
-		if(clickb==3 && clickedGob!=null)
-		{
-			NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
+			if(clickb==3 && clickedGob!=null)
+			{
+				if (ui.gui instanceof NGameUI) {
+					NGameUI ngui = (NGameUI) ui.gui;
+					if (ngui.foragePickupMarker != null)
+						ngui.foragePickupMarker.noteCritterInteraction(clickedGob.gob);
+				}
+				NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
 			if (ui.modmeta && isTreeStump(clickedGob.gob)) {
 				ui.root.add(new NFlowerMenu(new String[]{L10n.get(NFlowerMenu.KEY_REMOVE_STUMP)}), ui.mc);
 				return;

@@ -164,11 +164,8 @@ public class NQuestInfo extends Widget
         if(!(cur instanceof FontSettings) || cur == fontsrc)
             return;
         fontsrc = (FontSettings)cur;
-        Text.Foundry base = fontsrc.getFoundary(Fonts.FontType.QUESTS);
-        if(base == null)
-            base = new Text.Foundry(Text.sans, 12);
-        java.awt.Font f = base.font;
-        groupFnd = new Text.Foundry(f.deriveFont(java.awt.Font.BOLD), Color.WHITE).aa(true);
+        groupFnd = QuestHeadingFont.from(fontsrc.getFoundary(Fonts.FontType.QUESTS));
+        java.awt.Font f = groupFnd.font;
         condFnd = new Text.Foundry(f.deriveFont(Math.max(8f, f.getSize2D() - UI.scale(1f))),
                                    NStyle.questCond).aa(true);
         rowH = groupFnd.height() + UI.scale(3);

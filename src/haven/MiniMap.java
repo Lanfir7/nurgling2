@@ -42,6 +42,7 @@ import haven.MapFile.SMarker;
 import nurgling.NGameUI;
 import nurgling.NGob;
 import nurgling.NUtils;
+import nurgling.ForageInteractionSource;
 import nurgling.overlays.NQuestGiver;
 import nurgling.overlays.NQuestTarget;
 import nurgling.tools.DefaultAnimalAlarms;
@@ -1294,10 +1295,14 @@ public class MiniMap extends Widget
 	return(super.tooltip(c, prev));
     }
 
-    public void mvclick(MapView mv, Coord mc, Location loc, Gob gob, int button) {
-	if(mc == null) mc = ui.mc;
-	if((sessloc != null) && (sessloc.seg.id == loc.seg.id)) {
-	    // Calculate world coordinates for click destination
+	public void mvclick(MapView mv, Coord mc, Location loc, Gob gob, int button) {
+		if(mc == null) mc = ui.mc;
+		if((sessloc != null) && (sessloc.seg.id == loc.seg.id)) {
+		    if(ui != null && ui.core != null) {
+			ForageInteractionSource.remember(gob, button,
+				target -> ui.core.setLastAction(target));
+		    }
+		    // Calculate world coordinates for click destination
 	    Coord2d worldPos = loc.tc.sub(sessloc.tc).mul(tilesz).add(tilesz.div(2));
 	    
 	    // Save click destination for path line

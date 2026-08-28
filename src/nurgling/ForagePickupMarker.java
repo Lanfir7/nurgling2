@@ -2,6 +2,7 @@ package nurgling;
 
 import haven.*;
 import haven.res.ui.stackinv.ItemStack;
+import nurgling.overlays.NCritterCircle;
 import nurgling.tools.ForageMarkerLogic;
 
 import java.awt.image.BufferedImage;
@@ -20,6 +21,10 @@ public final class ForagePickupMarker {
             if (gob == null) return;
             String gobName = (gob.ngob != null) ? gob.ngob.name : null;
             if (gobName == null || gobName.isEmpty()) return;
+            if (NCritterCircle.isCritter(gobName)) {
+                noteCritterInteraction(gob);
+                return;
+            }
             if (ForageMarkerLogic.isGardenPot(gobName)) return;
             MiniMap.Location sessloc = sessloc(gui);
             if (gui == null || sessloc == null) return;
@@ -43,6 +48,40 @@ public final class ForagePickupMarker {
             NGItem ng = (NGItem) item;
             ForagePickupMarker marker = markerFor(ng);
             if (marker != null) marker.acceptNewItem(ng);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Records the first map position at which a catchable critter became visible. */
+    public boolean noteWorldSighting(Gob gob) {
+        try {
+            if (gob == null) return false;
+            String gobName = (gob.ngob != null) ? gob.ngob.name : null;
+            if (!NCritterCircle.isCritter(gobName)) return false;
+            MiniMap.Location sessloc = sessloc(gui);
+            if (gui == null || sessloc == null) return false;
+            Coord tileCoords = tileCoords(gob, gui, sessloc);
+            if (tileCoords == null) return false;
+            synchronized (lock) {
+                session.noteCritterSeen(gob.id, sessloc.seg.id, tileCoords.x, tileCoords.y,
+                    gobName, System.currentTimeMillis());
+            }
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** Selects a previously sighted critter without replacing its original coordinates. */
+    public void noteCritterInteraction(Gob gob) {
+        try {
+            if (gob == null) return;
+            String gobName = (gob.ngob != null) ? gob.ngob.name : null;
+            if (!NCritterCircle.isCritter(gobName)) return;
+            noteWorldSighting(gob);
+            synchronized (lock) {
+                session.noteCritterInteraction(gob.id, System.currentTimeMillis());
+            }
         } catch (Exception ignored) {
         }
     }

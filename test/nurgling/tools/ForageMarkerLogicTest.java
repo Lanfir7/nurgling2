@@ -348,6 +348,89 @@ class ForageMarkerLogicTest {
     }
 
     @Test
+    void caughtCritterUsesWhereItWasFirstSeenInsteadOfWhereItWasCaught() {
+        ForageMarkerLogic.PickupSession s = new ForageMarkerLogic.PickupSession();
+        s.noteCritterSeen(77L, 3L, 100, 200,
+            "gfx/kritter/dragonfly/dragonfly", 0);
+        s.noteCritterSeen(77L, 3L, 140, 260,
+            "gfx/kritter/dragonfly/dragonfly", 1_000);
+        assertTrue(s.noteCritterInteraction(77L, 2_000));
+
+        assertTrue(s.offerItem("caught", false, false, 45f,
+            "gfx/invobjs/dragonfly-emerald", 10, 2_100));
+        ForageMarkerLogic.Place placed = s.placeTick("caught", false, 45f,
+            "Emerald Dragonfly", "gfx/invobjs/dragonfly-emerald", 10, 2_200);
+
+        assertNotNull(placed);
+        assertEquals(3L, placed.segmentId);
+        assertEquals(100, placed.tileX);
+        assertEquals(200, placed.tileY);
+    }
+
+    @Test
+    void interactionSelectsTheSeenAnimalAmongSeveralOfTheSameType() {
+        ForageMarkerLogic.PickupSession s = new ForageMarkerLogic.PickupSession();
+        s.noteCritterSeen(10L, 1L, 10, 20,
+            "gfx/kritter/rabbit/rabbit", 0);
+        s.noteCritterSeen(20L, 1L, 80, 90,
+            "gfx/kritter/rabbit/rabbit", 10);
+        assertTrue(s.noteCritterInteraction(20L, 20));
+
+        assertTrue(s.offerItem("rabbit", false, false, 30f,
+            "gfx/invobjs/rabbit", 10, 30));
+        ForageMarkerLogic.Place placed = s.placeTick("rabbit", false, 30f,
+            "Rabbit", "gfx/invobjs/rabbit", 10, 40);
+
+        assertNotNull(placed);
+        assertEquals(80, placed.tileX);
+        assertEquals(90, placed.tileY);
+    }
+
+    @Test
+    void caughtCritterRemainsPendingDuringAChaseLongerThanItemQualityTimeout() {
+        ForageMarkerLogic.PickupSession s = new ForageMarkerLogic.PickupSession();
+        s.noteCritterSeen(77L, 3L, 100, 200,
+            "gfx/kritter/rabbit/rabbit", 0);
+        assertTrue(s.noteCritterInteraction(77L, 1_000));
+
+        assertTrue(s.offerItem("rabbit", false, false, 30f,
+            "gfx/invobjs/rabbit", 10, 61_000));
+        ForageMarkerLogic.Place placed = s.placeTick("rabbit", false, 30f,
+            "Rabbit", "gfx/invobjs/rabbit", 10, 61_100);
+
+        assertNotNull(placed);
+        assertEquals(100, placed.tileX);
+        assertEquals(200, placed.tileY);
+    }
+
+    @Test
+    void caughtChickenMatchesSexSpecificInventoryResource() {
+        ForageMarkerLogic.PickupSession s = new ForageMarkerLogic.PickupSession();
+        s.noteCritterSeen(88L, 3L, 120, 220,
+            "gfx/kritter/chicken/chicken", 0);
+        assertTrue(s.noteCritterInteraction(88L, 1_000));
+
+        assertTrue(s.offerItem("hen", false, false, 30f,
+            "gfx/invobjs/hen", 10, 1_100));
+        ForageMarkerLogic.Place placed = s.placeTick("hen", false, 30f,
+            "Hen", "gfx/invobjs/hen", 10, 1_200);
+
+        assertNotNull(placed);
+        assertEquals(120, placed.tileX);
+        assertEquals(220, placed.tileY);
+    }
+
+    @Test
+    void merelySeeingCritterDoesNotAssociateAnUnrelatedInventoryItem() {
+        ForageMarkerLogic.PickupSession s = new ForageMarkerLogic.PickupSession();
+        s.noteCritterSeen(77L, 3L, 100, 200,
+            "gfx/kritter/dragonfly/dragonfly", 0);
+
+        assertFalse(s.offerItem("loot", false, false, 45f,
+            "gfx/invobjs/dragonfly-emerald", 10, 100));
+    }
+
+    @Test
     void snapshotNotCommittedIfMutatedOrShuttingDown() {
         assertTrue(ForageMarkerLogic.commitMarkSnapshot(3, 3, false));
         assertFalse(ForageMarkerLogic.commitMarkSnapshot(3, 4, false));

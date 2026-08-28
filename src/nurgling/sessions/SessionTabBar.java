@@ -9,6 +9,7 @@ import nurgling.NStyle;
 import nurgling.NUI;
 import nurgling.NUtils;
 import nurgling.conf.FontSettings;
+import nurgling.widgets.QuestHeadingFont;
 import nurgling.conf.NDragProp;
 
 import java.awt.Color;
@@ -197,19 +198,20 @@ public class SessionTabBar extends Widget {
             ctl = Resource.loadtex("nurgling/hud/box/tl");
 
             // Load fonts
-            Font titleFont;
+            Text.Foundry titleFoundry;
             Font bodyFont;
             try {
                 FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
-                titleFont = fontSettings.getFont("Fractur");
+                titleFoundry = QuestHeadingFont.from(fontSettings.getFoundary(
+                    nurgling.widgets.nsettings.Fonts.FontType.QUESTS));
                 bodyFont = FontSettings.getOpenSans();
             } catch (Exception e) {
-                titleFont = Text.serif;
+                titleFoundry = QuestHeadingFont.from(null);
                 bodyFont = Text.sans;
             }
             // Gilded, engraved caption in the same spirit as the game's window titles
             nameFurnace = new PUtils.BlurFurn(
-                new PUtils.TexFurn(new Text.Foundry(titleFont, 14).aa(true), Window.ctex),
+                new PUtils.TexFurn(titleFoundry, Window.ctex),
                 UI.scale(1), UI.scale(1), Color.BLACK);
             subFoundry = new Text.Foundry(bodyFont, 9, Color.WHITE).aa(true);
             plusLabel = subFoundry.render("New session").tex();

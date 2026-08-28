@@ -104,6 +104,10 @@ public class PathFinder implements Action {
         return true;
     }
 
+    static boolean shouldAdjustApproachWaypoint(boolean finalWaypoint, boolean hardMode, boolean hasDummy) {
+        return finalWaypoint && (hardMode || hasDummy);
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         while (true) {
@@ -116,7 +120,7 @@ public class PathFinder implements Action {
                 for (Graph.Vertex vert : path) {
                     Coord2d targetCoord = Utils.pfGridToWorld(vert.pos);
 
-                    if(vert == path.getLast() && isHardMode || dummy!=null) {
+                    if(shouldAdjustApproachWaypoint(vert == path.getLast(), isHardMode, dummy != null)) {
                         Coord2d tcord = dummy != null ? dummy.rc : Finder.findGob(target_id).rc;
                         if (Math.abs(targetCoord.x - tcord.x) < 4) {
                             targetCoord.x = tcord.x;

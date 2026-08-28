@@ -6,7 +6,6 @@ import nurgling.conf.FontSettings;
 import nurgling.sessions.SessionTabBar;
 
 import java.awt.Color;
-import java.awt.Font;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -56,15 +55,16 @@ public final class NLoginAccountLook {
         if (loaded)
             return;
         try {
-            Font titleFont;
+            Text.Foundry titleFoundry;
             try {
                 FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
-                titleFont = fontSettings.getFont("Fractur");
+                titleFoundry = QuestHeadingFont.from(fontSettings.getFoundary(
+                        nurgling.widgets.nsettings.Fonts.FontType.QUESTS));
             } catch (Exception e) {
-                titleFont = Text.serif;
+                titleFoundry = QuestHeadingFont.from(null);
             }
             nameFurnace = new PUtils.BlurFurn(
-                    new PUtils.TexFurn(new Text.Foundry(titleFont, 14).aa(true), Window.ctex),
+                    new PUtils.TexFurn(titleFoundry, Window.ctex),
                     UI.scale(1), UI.scale(1), Color.BLACK);
             closeNormal = Resource.loadtex("nurgling/hud/sessions/close/10x10");
             closeHover = Resource.loadtex("nurgling/hud/sessions/close/10x10_hover");

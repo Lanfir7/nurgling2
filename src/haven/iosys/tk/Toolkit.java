@@ -58,6 +58,11 @@ public interface Toolkit {
     public static interface CloseRequest extends Event {
     }
 
+    public static final class CloseEvent implements CloseRequest {
+	public static final CloseEvent INSTANCE = new CloseEvent();
+	private CloseEvent() {}
+    }
+
     public static interface KeyEvent extends Event {
 	public String string();
 	public Key key();
