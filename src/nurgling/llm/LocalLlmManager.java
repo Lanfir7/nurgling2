@@ -209,6 +209,15 @@ public class LocalLlmManager {
         return state;
     }
 
+    public LocalLlmStatus getStatus() {
+        synchronized (lock) {
+            return new LocalLlmStatus(
+                    state,
+                    endpoint == null ? Optional.<URI>empty() : Optional.of(endpoint)
+            );
+        }
+    }
+
     private void startInternal(long localGeneration) {
         LocalLlmConfig cfg;
         try {

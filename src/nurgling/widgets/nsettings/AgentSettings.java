@@ -3,10 +3,13 @@ package nurgling.widgets.nsettings;
 import haven.Button;
 import haven.CheckBox;
 import haven.Coord;
+import haven.GOut;
 import haven.HSlider;
 import haven.Label;
 import haven.TextEntry;
 import haven.UI;
+import haven.Widget.KeyDownEvent;
+import haven.Widget.MouseDownEvent;
 import nurgling.NConfig;
 import nurgling.agent.runtime.AgentSessionStats;
 import nurgling.i18n.L10n;
@@ -17,6 +20,7 @@ public class AgentSettings extends Panel {
     private final TextEntry model;
     private final TextEntry maxTokens;
     private final TextEntry timeoutMs;
+    private final CheckBox useBuiltInLlm;
     private final Label temperatureLabel;
     private final HSlider temperatureSlider;
     private final CheckBox autoMode;
@@ -38,19 +42,28 @@ public class AgentSettings extends Panel {
         add(new Label(L10n.get("agent.f10_hint"), UI.scale(540)), new Coord(x, y));
         y += UI.scale(56);
 
+        useBuiltInLlm = add(new CheckBox("Использовать встроенную LLM") {
+            @Override
+            public void set(boolean val) {
+                a = val;
+                updateExternalFields();
+            }
+        }, new Coord(x, y));
+        y += UI.scale(32);
+
         add(new Label("OpenAI-compatible URL:"), new Coord(x, y));
         y += UI.scale(20);
-        baseUrl = add(new TextEntry(w, ""), new Coord(x, y));
+        baseUrl = add(new LockableTextEntry(w), new Coord(x, y));
 
         y += UI.scale(32);
         add(new Label("API key (optional):"), new Coord(x, y));
         y += UI.scale(20);
-        apiKey = add(new TextEntry(w, ""), new Coord(x, y));
+        apiKey = add(new LockableTextEntry(w), new Coord(x, y));
 
         y += UI.scale(32);
         add(new Label("Model:"), new Coord(x, y));
         y += UI.scale(20);
-        model = add(new TextEntry(w, ""), new Coord(x, y));
+        model = add(new LockableTextEntry(w), new Coord(x, y));
 
         y += UI.scale(32);
         add(new Label("Temperature:"), new Coord(x, y));
@@ -116,6 +129,8 @@ public class AgentSettings extends Panel {
         temperatureSlider.val = Math.max(0, Math.min(100, (int) Math.round(tempTemperature * 100)));
         temperatureLabel.settext(String.format("%.2f", tempTemperature));
         autoMode.a = (Boolean) NConfig.get(NConfig.Key.agentAutoMode);
+        useBuiltInLlm.a = Boolean.TRUE.equals(NConfig.get(NConfig.Key.agentUseBuiltInLlm));
+        updateExternalFields();
         refreshSessionStats();
     }
 
@@ -126,6 +141,7 @@ public class AgentSettings extends Panel {
         NConfig.set(NConfig.Key.agentModel, model.text());
         NConfig.set(NConfig.Key.agentTemperature, tempTemperature);
         NConfig.set(NConfig.Key.agentAutoMode, autoMode.a);
+        NConfig.set(NConfig.Key.agentUseBuiltInLlm, useBuiltInLlm.a);
         try {
             NConfig.set(NConfig.Key.agentMaxTokens, Integer.parseInt(maxTokens.text().trim()));
         } catch (Exception ignored) {
@@ -148,5 +164,45 @@ public class AgentSettings extends Panel {
         totalTokensLabel.settext("Total: " + AgentSessionStats.getSessionTotalTokens());
         requestCountLabel.settext("LLM requests: " + AgentSessionStats.getLlmRequests());
         toolStatsLabel.settext("Tool success: " + AgentSessionStats.getToolSuccess() + "/" + AgentSessionStats.getToolCalls());
+    }
+
+    private void updateExternalFields() {
+        boolean locked = useBuiltInLlm.a;
+        ((LockableTextEntry) baseUrl).setLocked(locked);
+        ((LockableTextEntry) apiKey).setLocked(locked);
+        ((LockableTextEntry) model).setLocked(locked);
+    }
+
+    private static final class LockableTextEntry extends TextEntry {
+        private boolean locked;
+
+        private LockableTextEntry(int width) {
+            super(width, "");
+        }
+
+        private void setLocked(boolean locked) {
+            this.locked = locked;
+            setcanfocus(!locked);
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev) {
+            return locked || super.mousedown(ev);
+        }
+
+        @Override
+        public boolean keydown(KeyDownEvent ev) {
+            return locked || super.keydown(ev);
+        }
+
+        @Override
+        public void draw(GOut g) {
+            super.draw(g);
+            if (locked) {
+                g.chcolor(0, 0, 0, 140);
+                g.frect(Coord.z, sz);
+                g.chcolor();
+            }
+        }
     }
 }

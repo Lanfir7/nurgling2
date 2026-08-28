@@ -75,6 +75,8 @@ class LocalLlmLifecycleTest {
         assertFalse(lifecycle.isReady());
         assertEquals(Optional.empty(), lifecycle.getEndpoint());
         assertEquals(LocalLlmState.STOPPED, lifecycle.getState());
+        assertEquals(LocalLlmState.STOPPED, lifecycle.getStatus().state);
+        assertEquals(Optional.empty(), lifecycle.getStatus().endpoint);
         assertEquals(0, factory.creations.get());
     }
 
@@ -90,6 +92,9 @@ class LocalLlmLifecycleTest {
         assertTrue(lifecycle.isReady());
         assertEquals(Optional.of(endpoint), lifecycle.getEndpoint());
         assertEquals(LocalLlmState.READY, lifecycle.getState());
+        LocalLlmStatus status = lifecycle.getStatus();
+        assertEquals(LocalLlmState.READY, status.state);
+        assertEquals(Optional.of(endpoint), status.endpoint);
         assertEquals(1, factory.creations.get());
     }
 
@@ -167,6 +172,11 @@ class LocalLlmLifecycleTest {
         @Override
         public LocalLlmState getState() {
             return state;
+        }
+
+        @Override
+        public LocalLlmStatus getStatus() {
+            return new LocalLlmStatus(state, getEndpoint());
         }
 
         void setStatus(boolean available, boolean ready, URI endpoint, LocalLlmState state) {

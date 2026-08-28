@@ -9,6 +9,7 @@ import nurgling.agent.llm.LLMMessage;
 import nurgling.agent.llm.LLMResponse;
 import nurgling.agent.llm.LLMToolCall;
 import nurgling.agent.llm.OpenAIChatClient;
+import nurgling.llm.LocalLlmLifecycle;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -183,9 +184,14 @@ public class AgentRuntime {
     }
 
     private LLMResponse askModel() throws Exception {
-        String baseUrl = strCfg(NConfig.Key.agentBaseUrl, "http://127.0.0.1:1234");
-        String apiKey = strCfg(NConfig.Key.agentApiKey, "");
-        String model = strCfg(NConfig.Key.agentModel, "gpt-4o-mini");
+        LocalLlmLifecycle localLlm = LocalLlmLifecycle.global();
+        AgentLlmRoute.Target target = AgentLlmRoute.resolve(
+                boolCfg(NConfig.Key.agentUseBuiltInLlm, true),
+                localLlm.getStatus(),
+                strCfg(NConfig.Key.agentBaseUrl, "http://127.0.0.1:1234"),
+                strCfg(NConfig.Key.agentApiKey, ""),
+                strCfg(NConfig.Key.agentModel, "gpt-4o-mini")
+        );
         double temperature = numCfg(NConfig.Key.agentTemperature, 0.2);
         int maxTokens = (int) numCfg(NConfig.Key.agentMaxTokens, 1024);
         int timeoutMs = (int) numCfg(NConfig.Key.agentTimeoutMs, 120000);
@@ -202,8 +208,13 @@ public class AgentRuntime {
                 messagesSnapshot.add(new LLMMessage("system", memoryContext));
             }
         }
-        return client.chat(baseUrl, apiKey, model, messagesSnapshot, tools.toolDefinitions(),
+        return client.chat(target.baseUrl, target.apiKey, target.model, messagesSnapshot, tools.toolDefinitions(),
                 temperature, maxTokens, timeoutMs);
+    }
+
+    private static boolean boolCfg(NConfig.Key key, boolean def) {
+        Object v = NConfig.get(key);
+        return v instanceof Boolean ? (Boolean) v : def;
     }
 
     private static String strCfg(NConfig.Key key, String def) {

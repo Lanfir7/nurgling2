@@ -310,6 +310,7 @@ public class NConfig
         agentMaxTokens,
         agentTimeoutMs,
         agentAutoMode,
+        agentUseBuiltInLlm,
         llmEnabled,
         llmServerPath,
         llmModelPath,
@@ -765,6 +766,7 @@ public class NConfig
         conf.put(Key.agentMaxTokens, 1024);
         conf.put(Key.agentTimeoutMs, 120000);
         conf.put(Key.agentAutoMode, true);
+        conf.put(Key.agentUseBuiltInLlm, true);
         conf.put(Key.llmEnabled, true);
         conf.put(Key.llmServerPath, "ai/llama-server.exe");
         conf.put(Key.llmModelPath, "ai/model.gguf");

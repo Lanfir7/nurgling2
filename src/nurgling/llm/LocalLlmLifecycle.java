@@ -73,6 +73,13 @@ public class LocalLlmLifecycle {
         return current == null ? LocalLlmState.STOPPED : current.getState();
     }
 
+    public LocalLlmStatus getStatus() {
+        LocalLlmManager current = currentManagerForTests();
+        return current == null
+                ? new LocalLlmStatus(LocalLlmState.STOPPED, Optional.<URI>empty())
+                : current.getStatus();
+    }
+
     private LocalLlmManager currentManagerForStatus() {
         synchronized (lock) {
             return manager;
