@@ -31,6 +31,10 @@ public class QuestObjectiveActionButton extends Widget {
         return action != null && action.kind == QuestObjectiveAction.Kind.CRAFT ? "C" : "M";
     }
 
+    static boolean consumesClick(int button) {
+        return button == 1;
+    }
+
     @Override
     public void tick(double dt) {
         super.tick(dt);
@@ -56,8 +60,10 @@ public class QuestObjectiveActionButton extends Widget {
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
-        if(ev.b == 1 && QuestObjectiveActions.execute(this, QuestObjectiveActions.available(this, cond)))
+        if(consumesClick(ev.b)) {
+            QuestObjectiveActions.execute(this, QuestObjectiveActions.available(this, cond));
             return true;
+        }
         return super.mousedown(ev);
     }
 

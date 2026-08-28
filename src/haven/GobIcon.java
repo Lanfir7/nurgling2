@@ -369,12 +369,31 @@ public class GobIcon extends GAttrib {
 	public final UI ui;
 	public final String filename;
 	public Map<Setting.ID, Setting> settings = new HashMap<>();
+	private transient Map<Setting.ID, Boolean> showOverrides = new HashMap<>();
 	public int tag = -1;
 	public boolean notify = false;
 
 	public Settings(UI ui, String filename) {
 	    this.ui = ui;
 	    this.filename = filename;
+	}
+
+	private Map<Setting.ID, Boolean> showOverrides() {
+	    if(showOverrides == null)
+		showOverrides = new HashMap<>();
+	    return(showOverrides);
+	}
+
+	public synchronized boolean shown(Setting setting) {
+	    Boolean override = showOverrides().get(setting.id);
+	    return((override != null) ? override : setting.show);
+	}
+
+	public synchronized void setShowOverride(Setting.ID id, Boolean visible) {
+	    if(visible == null)
+		showOverrides().remove(id);
+	    else
+		showOverrides().put(id, visible);
 	}
 
 	public Setting get(Icon icon) {

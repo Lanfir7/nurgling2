@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QuestObjectiveActionButtonTest {
     @Test
@@ -16,5 +17,10 @@ class QuestObjectiveActionButtonTest {
 
         assertEquals("M", QuestObjectiveActionButton.glyphFor(map));
         assertEquals("C", QuestObjectiveActionButton.glyphFor(craft));
+    }
+
+    @Test
+    void leftClickIsConsumedEvenWhenActionBecomesUnavailable() {
+        assertTrue(QuestObjectiveActionButton.consumesClick(1));
     }
 }

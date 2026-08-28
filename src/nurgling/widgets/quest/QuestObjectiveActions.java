@@ -41,7 +41,11 @@ public final class QuestObjectiveActions {
                 if(pagina == null)
                     return false;
                 try {
-                    pagina.button().use(new MenuGrid.Interaction(1, origin.ui.modflags()));
+                    GameUI gui = gui(origin);
+                    if(gui == null || gui.menu == null)
+                        return false;
+                    gui.menu.use(pagina.button(),
+                            new MenuGrid.Interaction(1, origin.ui.modflags()), false);
                     return true;
                 } catch(Loading | Resource.BadResourceException e) {
                     return false;
@@ -59,7 +63,7 @@ public final class QuestObjectiveActions {
     private static MenuGrid.Pagina craftPagina(Widget origin, String target) {
         if(origin == null)
             return null;
-        GameUI gui = origin.getparent(GameUI.class);
+        GameUI gui = gui(origin);
         if(gui == null || gui.menu == null)
             return null;
         List<MenuGrid.Pagina> candidates = new ArrayList<>();
@@ -75,5 +79,9 @@ public final class QuestObjectiveActions {
         }
         int index = QuestCraftRecipeSelector.uniqueExactName(names, target);
         return index < 0 ? null : candidates.get(index);
+    }
+
+    private static GameUI gui(Widget origin) {
+        return origin == null ? null : origin.getparent(GameUI.class);
     }
 }

@@ -143,6 +143,20 @@ public class RockResourceMapper {
         registerRock("argyrodite");
         registerRock("canfieldite");
         registerRock("blackcoal");
+
+        // Inventory/display names used by the terrain-search ore presets.
+        registerItemAlias("Heavy Earth", "ilmenite");
+        registerItemAlias("Iron Ochre", "limonite");
+        registerItemAlias("Bloodstone", "hematite");
+        registerItemAlias("Black Ore", "magnetite");
+        registerItemAlias("Silvershine", "argentite");
+        registerItemAlias("Wine Glance", "cuprite");
+        registerItemAlias("Lead Glance", "leadglance");
+        registerItemAlias("Leaf Ore", "petzite");
+        registerItemAlias("Schrifterz", "sylvanite");
+        registerItemAlias("Direvein", "nagyagite");
+        registerItemAlias("Quarryartz", "quartz");
+        registerItemAlias("Rock Salt", "halite");
     }
 
     /**
@@ -166,6 +180,10 @@ public class RockResourceMapper {
         for (String gobPattern : gobPatterns) {
             gobToTileMap.put(gobPattern, tileResource);
         }
+    }
+
+    private static void registerItemAlias(String itemName, String rockName) {
+        itemToTileMap.put(normalize(itemName), "gfx/tiles/rocks/" + rockName);
     }
 
     /**

@@ -51,11 +51,11 @@ A per-UI `QuestTreeIconController` owns temporary quest claims. Its state is key
 
 On every authoritative active-quest condition update it computes the required tree icons, then diffs them against the prior claims:
 
-1. On the first claim for an icon, record whether `GobIcon.Setting.show` was already true.
-2. Set `show` to true and notify the icon consumers so the minimap refreshes.
-3. Do not persist this automatic transition as a user preference.
+1. Apply a session-local effective-visibility override keyed by the complete `GobIcon.Setting.ID`.
+2. Leave `GobIcon.Setting.show` unchanged so any concurrent settings save contains only the player's preference.
+3. Make minimap icon consumers read the effective visibility (temporary override first, persisted `show` otherwise).
 4. When a quest completes or is removed, release its claims.
-5. When the final claim is released, restore `show` to false only if it was false before the first claim. Previously enabled icons stay enabled.
+5. When the final claim is released, remove the override so the current persisted preference becomes effective again.
 
 The controller is session-local. After reconnect/login, the current active quest list recreates claims. It tolerates icon resources that are still loading by retrying reconciliation on later quest/model updates without blocking the UI thread.
 

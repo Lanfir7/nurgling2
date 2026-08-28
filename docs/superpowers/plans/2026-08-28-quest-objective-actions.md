@@ -4,7 +4,7 @@
 
 **Goal:** Add quest-scoped tree map icons plus forage, rock-highlight, and craft-opening buttons to objective rows in both quest interfaces.
 
-**Architecture:** Parse each server condition once into `QCond`, resolve it through a pure shared catalog, and keep UI dispatch separate from resource classification. A per-UI claim controller temporarily changes vanilla `GobIcon.Setting.show` values and restores only values it originally found disabled. Both quest views render the same immutable action specification.
+**Architecture:** Parse each server condition once into `QCond`, resolve it through a pure shared catalog, and keep UI dispatch separate from resource classification. A per-UI claim controller applies session-local effective-visibility overrides to exact vanilla `GobIcon.Setting.ID` values without mutating the saved `show` preference. Both quest views render the same immutable action specification.
 
 **Tech Stack:** Java 17, Haven widget framework, vanilla `GobIcon.Settings` and `MenuGrid`, existing `Forageables`, `VSpec`, `RockResourceMapper`, `TileHighlight`, Ant, JUnit 5.
 
@@ -179,7 +179,7 @@ git commit -m "feat: resolve quest objective actions"
 - Create: `test/nurgling/widgets/quest/QuestTreeIconClaimsTest.java`
 
 **Interfaces:**
-- Produces: `QuestTreeIconClaims.reconcile(Map<Integer, Set<String>>, Map<String, Boolean>) -> Map<String, Boolean>` as pure state logic.
+- Produces: `QuestTreeIconClaims<K>.reconcile(...)` as generic, reference-counted override state logic.
 - Produces: `QuestTreeIconController.reconcile(Collection<QuestModel.TQuest>, GobIcon.Settings)` and `restore(GobIcon.Settings)`.
 
 - [ ] **Step 1: Write failing claim-state tests**
@@ -209,7 +209,7 @@ Expected: compilation fails because `QuestTreeIconClaims` does not exist.
 
 - [ ] **Step 3: Implement reference-counted pure claim state**
 
-Track quest-to-resource requirements and the initial state captured on the first claim. Do not treat objective readiness as a release signal.
+Track quest-to-setting-id requirements and add/remove transient overrides as the shared claims change. Do not treat objective readiness as a release signal.
 
 - [ ] **Step 4: Run claim tests and verify GREEN**
 
@@ -217,7 +217,7 @@ Expected: all claim tests pass.
 
 - [ ] **Step 5: Implement the GobIcon adapter and tracker integration**
 
-`QuestTreeIconController` maps tree resources to loaded `GobIcon.Setting` objects by exact setting/icon resource name, applies pure state changes, and triggers the existing icon-setting change notification without calling `save()`. `NQuestInfo.tick` reconciles after `QuestModel.tick`; removal from `QuestModel.quests()` releases claims. Destruction/session replacement restores outstanding temporary changes.
+`QuestTreeIconController` maps tree resources to every loaded full `GobIcon.Setting.ID` by exact resource name and applies transient effective-visibility overrides. `GobIcon.Settings.save()` continues to serialize only `Setting.show`. `NQuestInfo.tick` reconciles after `QuestModel.tick`; removal from `QuestModel.quests()` releases claims. Destruction/session replacement removes outstanding overrides.
 
 - [ ] **Step 6: Compile and run quest tests**
 

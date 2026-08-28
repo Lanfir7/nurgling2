@@ -297,7 +297,7 @@ public class NGob
             if (icon.icon().image() != null)
             {
                 GobIcon.Setting conf = NUtils.getGameUI().mmap.iconconf.get(icon.icon());
-                if (conf != null && conf.show)
+                if (conf != null && NUtils.getGameUI().mmap.iconconf.shown(conf))
                 {
                     return icon.icon().image();
                 }

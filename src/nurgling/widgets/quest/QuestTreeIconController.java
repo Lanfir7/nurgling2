@@ -10,13 +10,13 @@ import java.util.Set;
 
 /** Applies quest-owned tree icon visibility without writing it to IconSettings. */
 public class QuestTreeIconController {
-    private final QuestTreeIconClaims claims = new QuestTreeIconClaims();
+    private final QuestTreeIconClaims<GobIcon.Setting.ID> claims = new QuestTreeIconClaims<>();
     private final QuestObjectiveActionResolver resolver = new QuestObjectiveActionResolver();
 
     public void reconcile(Collection<QuestModel.TQuest> quests, GobIcon.Settings settings) {
         if(settings == null)
             return;
-        Map<Integer, Set<String>> required = new HashMap<>();
+        Map<Integer, Set<String>> resourcesByQuest = new HashMap<>();
         for(QuestModel.TQuest quest : quests) {
             Set<String> resources = new LinkedHashSet<>();
             for(QCond cond : quest.conds) {
@@ -24,9 +24,9 @@ public class QuestTreeIconController {
                     resources.add(iconResourceForTree(tree));
             }
             if(!resources.isEmpty())
-                required.put(quest.id, resources);
+                resourcesByQuest.put(quest.id, resources);
         }
-        claims.reconcile(required, visibility(settings));
+        claims.reconcile(settingIds(resourcesByQuest, settings), visibility(settings));
     }
 
     public void release(GobIcon.Settings settings) {
@@ -39,23 +39,29 @@ public class QuestTreeIconController {
                 .replace("gfx/terobjs/bushes/", "gfx/terobjs/mm/bushes/");
     }
 
-    private static QuestTreeIconClaims.Visibility visibility(GobIcon.Settings settings) {
-        return new QuestTreeIconClaims.Visibility() {
-            @Override
-            public boolean isVisible(String resource) {
-                for(GobIcon.Setting setting : settings.settings.values()) {
-                    if(setting.id.res.equals(resource) && setting.show)
-                        return true;
+    static Map<Integer, Set<GobIcon.Setting.ID>> settingIds(
+            Map<Integer, Set<String>> resourcesByQuest, GobIcon.Settings settings) {
+        Map<Integer, Set<GobIcon.Setting.ID>> required = new HashMap<>();
+        Map<GobIcon.Setting.ID, GobIcon.Setting> loaded = settings.settings;
+        synchronized(loaded) {
+            for(Map.Entry<Integer, Set<String>> quest : resourcesByQuest.entrySet()) {
+                Set<GobIcon.Setting.ID> ids = new LinkedHashSet<>();
+                for(GobIcon.Setting setting : loaded.values()) {
+                    if(quest.getValue().contains(setting.id.res))
+                        ids.add(setting.id);
                 }
-                return false;
+                if(!ids.isEmpty())
+                    required.put(quest.getKey(), ids);
             }
+        }
+        return required;
+    }
 
+    private static QuestTreeIconClaims.Visibility<GobIcon.Setting.ID> visibility(GobIcon.Settings settings) {
+        return new QuestTreeIconClaims.Visibility<GobIcon.Setting.ID>() {
             @Override
-            public void setVisible(String resource, boolean visible) {
-                for(GobIcon.Setting setting : settings.settings.values()) {
-                    if(setting.id.res.equals(resource))
-                        setting.show = visible;
-                }
+            public void setOverride(GobIcon.Setting.ID id, Boolean visible) {
+                settings.setShowOverride(id, visible);
             }
         };
     }
