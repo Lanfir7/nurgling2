@@ -2,6 +2,7 @@ package nurgling.overlays;
 
 import haven.Coord;
 import haven.Coord2d;
+import haven.Gob;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,6 +84,30 @@ class NMiningSupportTest {
                 new Coord(-15, -1), new Coord(-1, 1));
         assertMask(NMiningSupport.computeRect(rc, -Math.PI / 2, 3, 15), 45,
                 new Coord(-1, -15), new Coord(1, -1));
+    }
+
+    @Test
+    void constructedTunnelStartsOneTileAheadOfPlacementGhostInEveryDirection() {
+        assertOverlay(newTunnelOverlay(-1, 0), new Coord(0, 0), new Coord(5, 1));
+        assertOverlay(newTunnelOverlay(-1, Math.PI / 2), new Coord(0, 0), new Coord(1, 5));
+        assertOverlay(newTunnelOverlay(-1, Math.PI), new Coord(-5, 0), new Coord(0, 1));
+        assertOverlay(newTunnelOverlay(-1, -Math.PI / 2), new Coord(0, -5), new Coord(1, 0));
+
+        assertOverlay(newTunnelOverlay(1, 0), new Coord(1, 0), new Coord(6, 1));
+        assertOverlay(newTunnelOverlay(1, Math.PI / 2), new Coord(0, 1), new Coord(1, 6));
+        assertOverlay(newTunnelOverlay(1, Math.PI), new Coord(-6, 0), new Coord(-1, 1));
+        assertOverlay(newTunnelOverlay(1, -Math.PI / 2), new Coord(0, -6), new Coord(1, -1));
+    }
+
+    private static NMiningSupport newTunnelOverlay(long gobId, double angle) {
+        Gob gob = new Gob(null, Coord2d.of(5.5, 5.5), gobId);
+        gob.a = angle;
+        return new NMiningSupport(gob, 1, 5);
+    }
+
+    private static void assertOverlay(NMiningSupport overlay, Coord expectedBegin, Coord expectedEnd) {
+        assertEquals(expectedBegin, overlay.begin);
+        assertEquals(expectedEnd, overlay.end);
     }
 
     private static void assertMask(NMiningSupport.Mask mask, int expectedCount,

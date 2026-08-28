@@ -80,12 +80,17 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
      * {@link Mask#end} is the inclusive last lit tile.
      */
     public static Mask computeRect(Coord2d rc, double angle, int widthTiles, int lengthTiles) {
+        return computeRect(rc, angle, widthTiles, lengthTiles, 0);
+    }
+
+    private static Mask computeRect(Coord2d rc, double angle, int widthTiles, int lengthTiles,
+                                    int forwardShiftTiles) {
         Coord origin = rc.div(MCache.tilesz).floor();
         Coord2d localFwd = Coord2d.of(1, 0).rot(angle);
         Coord2d localRight = Coord2d.of(0, 1).rot(angle);
         Coord fwd = snapCardinal(localFwd);
         Coord right = snapCardinal(localRight);
-        int i0 = (fwd.x < 0 || fwd.y < 0) ? 1 : 0;
+        int i0 = ((fwd.x < 0 || fwd.y < 0) ? 1 : 0) + forwardShiftTiles;
         int i1 = i0 + lengthTiles - 1;
         int j0 = (right.x > 0 || right.y > 0)
                 ? -Math.floorDiv(widthTiles, 2)
@@ -138,7 +143,10 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
     void calcData()
     {
         if (rect) {
-            Mask mask = computeRect(gob.rc, gob.a, widthTiles, lengthTiles);
+            // Built tunnel gobs use an anchor one tile behind the vanilla support footprint;
+            // placement ghosts already use the footprint's starting tile.
+            int forwardShiftTiles = gob.id == -1 ? 0 : 1;
+            Mask mask = computeRect(gob.rc, gob.a, widthTiles, lengthTiles, forwardShiftTiles);
             begin = mask.begin;
             // NMiningOverlay iterates [begin, end) so exclusive end lights the last tunnel tile.
             end = mask.end.add(1, 1);
