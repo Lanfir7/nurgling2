@@ -1,5 +1,7 @@
 package nurgling.widgets.quest;
 
+import java.util.Locale;
+
 /**
  * One objective line of a quest, as sent by the server in the {@code conds} message.
  *
@@ -26,6 +28,8 @@ public class QCond
     public final String giver;
     /** Lowercased item name for a {@code Bring} objective, or null. */
     public final String bringItem;
+    /** Lowercased display item for a {@code Pick}, {@code Bring}, or {@code Create} objective. */
+    public final String itemTarget;
     /** Gob-name fragment for a {@code Kill}/{@code Pick} objective, or null. */
     public final String gobTarget;
 
@@ -37,6 +41,7 @@ public class QCond
         this.verb = verb(d);
         this.giver = wantsGiver(verb) ? giver(d) : null;
         this.bringItem = (verb == Verb.BRING) ? bringItem(d) : null;
+        this.itemTarget = itemTarget(verb, d, bringItem);
         this.gobTarget = (verb == Verb.KILL) ? huntTarget(d)
                        : (verb == Verb.PICK) ? pickTarget(d) : null;
         this.text = (status == null || status.isEmpty()) ? d : (d + " " + status);
@@ -142,6 +147,18 @@ public class QCond
             return null;
         // Lowercased on purpose: NGItem matches it against item.name().toLowerCase().
         return trimToNull(info.substring(start, end).toLowerCase());
+    }
+
+    private static String itemTarget(Verb verb, String info, String bringItem)
+    {
+        if(verb == Verb.BRING)
+            return bringItem;
+        if(verb != Verb.PICK && verb != Verb.CREATE)
+            return null;
+        String target = trimToNull(tail(info));
+        if(target == null || target.equals(verb.name().toLowerCase(Locale.ROOT)))
+            return null;
+        return target.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
     }
 
     /** Text after the leading article, lowercased - the common prefix of both target parsers. */
