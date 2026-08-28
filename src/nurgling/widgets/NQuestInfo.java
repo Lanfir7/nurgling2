@@ -19,6 +19,7 @@ import nurgling.widgets.quest.QCond;
 import nurgling.widgets.quest.QuestKind;
 import nurgling.widgets.quest.QuestMenu;
 import nurgling.widgets.quest.QuestModel;
+import nurgling.widgets.quest.QuestRowTheme;
 
 import java.awt.Color;
 import java.util.*;
@@ -259,13 +260,15 @@ public class NQuestInfo extends Widget
         final boolean ready;
         final int questId;
         final boolean secondary;
+        final QuestKind kind;
 
-        Row(String text, boolean ready, int questId, boolean secondary)
+        Row(String text, boolean ready, int questId, boolean secondary, QuestKind kind)
         {
             this.text = text;
             this.ready = ready;
             this.questId = questId;
             this.secondary = secondary;
+            this.kind = kind;
         }
     }
 
@@ -347,7 +350,7 @@ public class NQuestInfo extends Widget
                 for(QCond c : q.conds) {
                     if(c.verb == QCond.Verb.TELL)
                         continue;
-                    g.rows.add(condRow(c, false));
+                    g.rows.add(condRow(c, false, q.kind));
                 }
                 g.total = g.rows.size();
                 g.done = 0;
@@ -367,7 +370,7 @@ public class NQuestInfo extends Widget
             for(QCond c : q.conds) {
                 if(c.verb == QCond.Verb.TELL)
                     continue;
-                g.rows.add(condRow(c, false));
+                g.rows.add(condRow(c, false, q.kind));
             }
         }
         // Objectives that point at a giver but belong to somebody else's quest - "bring X to
@@ -384,7 +387,7 @@ public class NQuestInfo extends Widget
                 Group g = group(byGiver, target);
                 if(g.questId < 0)
                     g.questId = q.id;
-                g.rows.add(condRow(c, true));
+                g.rows.add(condRow(c, true, q.kind));
             }
         }
         for(Group g : byGiver.values()) {
@@ -437,8 +440,8 @@ public class NQuestInfo extends Widget
             Group g = new Group();
             g.key = "task:" + name;
             g.title = L10n.get(l10nKey);
-            g.kind = QuestKind.NPC;
             List<QCond> list = new ArrayList<>();
+            Map<Integer, QuestKind> kinds = new HashMap<>();
             for(QuestModel.TQuest q : model.quests()) {
                 if(!visible(q, p))
                     continue;
@@ -450,6 +453,7 @@ public class NQuestInfo extends Widget
                     if(g.questId < 0)
                         g.questId = q.id;
                     list.add(c);
+                    kinds.put(c.questId, q.kind);
                 }
             }
             if(list.isEmpty())
@@ -461,7 +465,7 @@ public class NQuestInfo extends Widget
                 }
             });
             for(QCond c : list)
-                g.rows.add(condRow(c, false));
+                g.rows.add(condRow(c, false, kinds.get(c.questId)));
             g.total = g.rows.size();
             out.add(g);
         }
@@ -564,7 +568,7 @@ public class NQuestInfo extends Widget
                     hidden++;
                     continue;
                 }
-                add(new CondRow(r, w), shown, y);
+                add(new CondRow(r, w, g.kind), shown, y);
                 y += rowH;
                 shown++;
             }
@@ -760,7 +764,9 @@ public class NQuestInfo extends Widget
 
     private static String elide(Text.Foundry f, String s, int maxw)
     {
-        if(maxw <= 0 || f.strsize(s).x <= maxw)
+        if(maxw <= 0)
+            return "…";
+        if(f.strsize(s).x <= maxw)
             return s;
         int lo = 0, hi = s.length();
         while(lo < hi) {
@@ -775,12 +781,19 @@ public class NQuestInfo extends Widget
 
     private abstract class ARow extends Widget
     {
+        final QuestRowTheme theme;
         boolean hover = false;
         int idx = 0;
 
-        ARow(int w)
+        ARow(int w, QuestKind kind)
+        {
+            this(w, QuestRowTheme.forKind(kind));
+        }
+
+        ARow(int w, QuestRowTheme theme)
         {
             super(new Coord(w, rowH));
+            this.theme = theme;
         }
 
         @Override
@@ -794,6 +807,12 @@ public class NQuestInfo extends Widget
         {
             g.chcolor(((idx % 2) == 0) ? NStyle.rowEven : NStyle.rowOdd);
             g.frect(Coord.z, sz);
+            if(theme.emphasized) {
+                g.chcolor(theme.background);
+                g.frect(Coord.z, sz);
+                g.chcolor(theme.accent);
+                g.frect(Coord.z, new Coord(Math.max(2, UI.scale(3)), sz.y));
+            }
             if(hover) {
                 g.chcolor(NStyle.questHover);
                 g.frect(Coord.z, sz);
@@ -811,11 +830,12 @@ public class NQuestInfo extends Widget
     {
         final Group group;
         final boolean collapsed;
-        private final Tex chev, title, counter;
+        private final Tex chev, title, counter, badge;
+        private final int titleX, badgeW;
 
         GroupRow(Group g, int w, boolean collapsed)
         {
-            super(w);
+            super(w, g.kind);
             this.group = g;
             this.collapsed = collapsed;
             this.chev = groupFnd.render(collapsed ? "▸" : "▾", NStyle.questDim).tex();
@@ -823,8 +843,13 @@ public class NQuestInfo extends Widget
             String cnt = (g.total > 0) ? (g.done + "/" + g.total) : "";
             this.counter = cnt.isEmpty() ? null : condFnd.render(cnt, NStyle.questDim).tex();
             int cw = (counter != null) ? counter.sz().x + UI.scale(6) : 0;
+            this.badge = theme.emphasized
+                ? condFnd.render(L10n.get(theme.badgeKey), NStyle.infoBg).tex()
+                : null;
+            this.badgeW = (badge != null) ? badge.sz().x + UI.scale(8) : 0;
+            this.titleX = CHEV_W + badgeW + ((badge != null) ? UI.scale(5) : 0);
             this.title = groupFnd.render(
-                elide(groupFnd, pin + nz(g.title), w - CHEV_W - cw), g.titleColor()).tex();
+                elide(groupFnd, pin + nz(g.title), w - titleX - cw), g.titleColor()).tex();
         }
 
         @Override
@@ -832,7 +857,15 @@ public class NQuestInfo extends Widget
         {
             band(g);
             g.image(chev, new Coord(0, ty(chev)));
-            g.image(title, new Coord(CHEV_W, ty(title)));
+            if(badge != null) {
+                int bh = badge.sz().y + UI.scale(2);
+                int by = (sz.y - bh) / 2;
+                g.chcolor(theme.accent);
+                g.frect(new Coord(CHEV_W, by), new Coord(badgeW, bh));
+                g.chcolor();
+                g.image(badge, new Coord(CHEV_W + UI.scale(4), ty(badge)));
+            }
+            g.image(title, new Coord(titleX, ty(title)));
             if(counter != null)
                 g.image(counter, new Coord(sz.x - counter.sz().x, ty(counter)));
         }
@@ -878,13 +911,12 @@ public class NQuestInfo extends Widget
         private final Tex glyph, text;
         private final String full;
 
-        CondRow(Row r, int w)
+        CondRow(Row r, int w, QuestKind groupKind)
         {
-            super(w);
+            super(w, QuestRowTheme.forObjective(groupKind, r.kind));
             this.row = r;
             this.full = r.text;
-            Color col = r.ready ? NStyle.questCondDone
-                      : (r.secondary ? NStyle.questDim : NStyle.questCond);
+            Color col = theme.conditionColor(r.ready, r.secondary);
             this.glyph = condFnd.render(r.ready ? "✓" : "•", col).tex();
             int off = INDENT + glyph.sz().x + UI.scale(4);
             this.text = condFnd.render(elide(condFnd, r.text, w - off), col).tex();
@@ -921,7 +953,7 @@ public class NQuestInfo extends Widget
 
         MoreRow(int n, int w)
         {
-            super(w);
+            super(w, (QuestKind)null);
             this.text = condFnd.render("+ " + n + " more…", NStyle.questDim).tex();
         }
 
@@ -958,7 +990,7 @@ public class NQuestInfo extends Widget
 
         EmptyRow(int w)
         {
-            super(w);
+            super(w, (QuestKind)null);
             this.text = condFnd.render("No quests to show", NStyle.questDim).tex();
         }
 
@@ -1085,9 +1117,9 @@ public class NQuestInfo extends Widget
         needRebuild = true;
     }
 
-    private Row condRow(QCond c, boolean secondary)
+    private Row condRow(QCond c, boolean secondary, QuestKind kind)
     {
-        return new Row(displayCond(c), c.ready, c.questId, secondary);
+        return new Row(displayCond(c), c.ready, c.questId, secondary, kind);
     }
 
     private String displayCond(QCond c)

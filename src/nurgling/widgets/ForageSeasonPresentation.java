@@ -12,10 +12,10 @@ final class ForageSeasonPresentation {
     }
 
     static String glyph(String value) {
-        if("Y".equals(value))
+        if("Y".equals(value) || "(Y)".equals(value))
             return "✓";
         if("N".equals(value))
-            return "✕";
+            return "X";
         return value;
     }
 

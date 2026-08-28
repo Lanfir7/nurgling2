@@ -106,6 +106,8 @@ public class NConfig
         unloadgreen,
         sendOverlays,
         kamiCompatMapper,
+        cookbookEndpoint,
+        shareCookbookRecipes,
         showInventoryNums,
         hidecredo,
         mutedQuests,
@@ -406,6 +408,8 @@ public class NConfig
         conf.put(Key.unloadgreen, false);
         conf.put(Key.sendOverlays, false);
         conf.put(Key.kamiCompatMapper, false);
+        conf.put(Key.cookbookEndpoint, "");
+        conf.put(Key.shareCookbookRecipes, false);
         conf.put(Key.showInventoryNums, true);
         conf.put(Key.autoDrink, false);
         conf.put(Key.autoDrinkThreshold, 0.51);

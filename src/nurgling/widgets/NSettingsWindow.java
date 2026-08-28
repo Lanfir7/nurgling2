@@ -92,6 +92,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem("Disable Animations", new DisableGobAnimSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.database"), new DatabaseSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.auto_mapper"), new AutoMapper(), container));
+        general.addChild(new SettingsItem(L10n.get("nsettings.item.cookbook_upload"), new CookbookSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.auto_selection"), as = new AutoSelection(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.quick_actions"), qa = new QuickActions(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.discord"), new DiscordSettings(), container));

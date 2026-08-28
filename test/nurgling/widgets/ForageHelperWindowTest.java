@@ -13,13 +13,18 @@ class ForageHelperWindowTest {
     void yesAndNoSeasonsUseColoredSymbols() {
         assertEquals("✓", ForageSeasonPresentation.glyph("Y"));
         assertEquals(new Color(90, 220, 105), ForageSeasonPresentation.color("Y"));
-        assertEquals("✕", ForageSeasonPresentation.glyph("N"));
+        assertEquals("X", ForageSeasonPresentation.glyph("N"));
         assertEquals(new Color(235, 85, 85), ForageSeasonPresentation.color("N"));
     }
 
     @Test
-    void conditionalAndUnknownSeasonsKeepTheirWikiNotation() {
-        assertEquals("(Y)", ForageSeasonPresentation.glyph("(Y)"));
+    void conditionalYesUsesYellowCheckWithoutLeavingYText() {
+        assertEquals("✓", ForageSeasonPresentation.glyph("(Y)"));
+        assertEquals(new Color(235, 205, 95), ForageSeasonPresentation.color("(Y)"));
+    }
+
+    @Test
+    void bonusAndUnknownSeasonsKeepTheirWikiNotation() {
         assertEquals("+", ForageSeasonPresentation.glyph("+"));
         assertEquals("?", ForageSeasonPresentation.glyph("?"));
     }

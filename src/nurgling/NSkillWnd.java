@@ -72,7 +72,8 @@ public class NSkillWnd extends SkillWnd {
 
     private static final Color COST_COLOR = new Color(0xFF, 0xFF, 0x82);
 
-    private BufferedImage renderInfo(Resource res, Coord imgSz, String extra, boolean reorderBonuses, String headerSub) {
+    private BufferedImage renderInfo(Resource res, Coord imgSz, String extra, boolean reorderBonuses,
+				     String headerSub, int completedCredoLevels, boolean acquiredCredo) {
 	BufferedImage resImg = res.flayer(Resource.imgc).img;
 	BufferedImage scaledImg = convolvedown(resImg, imgSz, iconfilter);
 	String title = res.flayer(Resource.tooltip).t;
@@ -117,6 +118,7 @@ public class NSkillWnd extends SkillWnd {
 	    // Strip leading/trailing newlines inside $col[]{...} blocks
 	    if(bonuses != null) {
 		bonuses = bonuses.replace("{\n", "{").replace("\n}", "}");
+		bonuses = CredoBonusFormatter.format(bonuses, completedCredoLevels, acquiredCredo);
 	    }
 
 	    // Render bonuses block
@@ -255,7 +257,7 @@ public class NSkillWnd extends SkillWnd {
 			    info.set(() -> {
 				Resource res = sk.res.get();
 				String sub = (sk.cost > 0) ? String.format("Cost: %,d", sk.cost) : null;
-				return new TexI(renderInfo(res, SKILL_IMG_SZ, null, false, sub));
+				return new TexI(renderInfo(res, SKILL_IMG_SZ, null, false, sub, 0, false));
 			    });
 			} else if(p != null) {
 			    info.set((Tex)null);
@@ -301,7 +303,9 @@ public class NSkillWnd extends SkillWnd {
 			if(cr != null) {
 			    info.set(() -> {
 				Resource res = cr.res.get();
-				return new TexI(renderInfo(res, CREDO_IMG_SZ, null, true, null));
+                            int completed = (cr == pcr) ? CredoBonusFormatter.completedBonuses(pcl) : 0;
+				return new TexI(renderInfo(res, CREDO_IMG_SZ, null, true, null,
+					completed, cr.has));
 			    });
 			} else if(p != null) {
 			    info.set((Tex)null);
@@ -324,7 +328,7 @@ public class NSkillWnd extends SkillWnd {
 				Resource res = exp.res.get();
 				String sub = (exp.score > 0) ?
 				    String.format(L10n.get("char.skill.exp_points"), Utils.thformat(exp.score)) : null;
-				return new TexI(renderInfo(res, SKILL_IMG_SZ, null, false, sub));
+				return new TexI(renderInfo(res, SKILL_IMG_SZ, null, false, sub, 0, false));
 			    });
 			} else if(p != null) {
 			    info.set((Tex)null);

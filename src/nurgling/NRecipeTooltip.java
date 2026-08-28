@@ -253,7 +253,7 @@ public class NRecipeTooltip {
                 capacityLine = TooltipStyle.cropTopOnly(renderCapacityLine(capacityInfo));
             }
 
-            // Belt inner slots / chest inventory grid (not sent in recipe info)
+            // Belt slots, tunnel support area, and chest grid are not sent in recipe info.
             BufferedImage inventoryLine = TooltipStyle.cropTopOnly(renderInventoryLine(name));
 
             // Render Treats line (for medical items)
@@ -1113,6 +1113,8 @@ public class NRecipeTooltip {
     private static final Map<String, Integer> BELT_SLOTS = new HashMap<>();
     /** Build-menu container inventory grid (width x height). Recipe info does not include this. */
     private static final Map<String, Coord> CONTAINER_GRIDS = new HashMap<>();
+    /** Directional mine-support area (width x length). Recipe info does not include this. */
+    private static final Map<String, Coord> TUNNEL_SUPPORT_AREAS = new HashMap<>();
     static {
         BELT_SLOTS.put("Reedweave Belt", 1);
         BELT_SLOTS.put("Rope Belt", 2);
@@ -1179,6 +1181,10 @@ public class NRecipeTooltip {
         putGrid("Pot", 3, 3);
         putGrid("Pickling Jar", 3, 5);
         putGrid("Seedbag", 3, 3);
+
+        TUNNEL_SUPPORT_AREAS.put("Timber Tunnel", new Coord(1, 5));
+        TUNNEL_SUPPORT_AREAS.put("Reinforced Tunnel", new Coord(2, 8));
+        TUNNEL_SUPPORT_AREAS.put("Stone Arch Tunnel", new Coord(3, 15));
     }
 
     private static void putGrid(String name, int w, int h) {
@@ -1186,7 +1192,7 @@ public class NRecipeTooltip {
     }
 
     /**
-     * Belt: "Slots: N". Container: "Grid: W×H (total)".
+     * Belt: "Slots: N". Tunnel: "Support area: W×L". Container: "Grid: W×H (total)".
      */
     private static BufferedImage renderInventoryLine(String name) {
         if (name == null) return null;
@@ -1194,6 +1200,12 @@ public class NRecipeTooltip {
         if (beltSlots != null) {
             BufferedImage labelImg = NTooltip.getBodyRegularFoundry().render("Slots: ", Color.WHITE).img;
             BufferedImage valueImg = NTooltip.getContentFoundry().render(String.valueOf(beltSlots), TooltipStyle.COLOR_LPH).img;
+            return TooltipStyle.composePair(labelImg, valueImg);
+        }
+        String supportArea = supportAreaText(name);
+        if (supportArea != null) {
+            BufferedImage labelImg = NTooltip.getBodyRegularFoundry().render("Support area: ", Color.WHITE).img;
+            BufferedImage valueImg = NTooltip.getContentFoundry().render(supportArea, TooltipStyle.COLOR_LPH).img;
             return TooltipStyle.composePair(labelImg, valueImg);
         }
         Coord grid = CONTAINER_GRIDS.get(name);
@@ -1205,6 +1217,11 @@ public class NRecipeTooltip {
             return TooltipStyle.composePair(TooltipStyle.composePair(labelImg, gridImg), totalImg);
         }
         return null;
+    }
+
+    private static String supportAreaText(String name) {
+        Coord area = TUNNEL_SUPPORT_AREAS.get(name);
+        return (area == null) ? null : area.x + "\u00d7" + area.y;
     }
 
     /**

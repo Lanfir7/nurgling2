@@ -62,7 +62,7 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
             case "gfx/terobjs/monumentalcolumn":
                 return Spec.circle(330);
             case "gfx/terobjs/timbertunnel":
-                return Spec.rect(1, 4);
+                return Spec.rect(1, 5);
             case "gfx/terobjs/reinforcedtunnel":
                 return Spec.rect(2, 8);
             case "gfx/terobjs/stonearchtunnel":
@@ -74,9 +74,9 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
 
     /**
      * Forward is gob facing ({@code a=0} → +X), snapped to the nearest cardinal.
-     * The gob tile itself is skipped: vanilla lights the passage in front of the arch.
-     * West- and south-facing tunnels are shifted one tile north to match vanilla.
-     * Even widths are biased toward local -Y so a 2-wide tunnel is two tiles, not three.
+     * Positive directions start on the gob tile; negative directions start one tile ahead.
+     * Even widths are biased toward the negative world coordinate of the lateral axis
+     * to match vanilla's tile anchoring in every cardinal direction.
      * {@link Mask#end} is the inclusive last lit tile.
      */
     public static Mask computeRect(Coord2d rc, double angle, int widthTiles, int lengthTiles) {
@@ -85,16 +85,16 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
         Coord2d localRight = Coord2d.of(0, 1).rot(angle);
         Coord fwd = snapCardinal(localFwd);
         Coord right = snapCardinal(localRight);
-        // Vanilla lights one tile north of the gob row when facing west (-X) or south (+Y).
-        if (fwd.x < 0 || fwd.y > 0) {
-            origin = origin.add(0, -1);
-        }
-        int j0 = -Math.floorDiv(widthTiles, 2);
+        int i0 = (fwd.x < 0 || fwd.y < 0) ? 1 : 0;
+        int i1 = i0 + lengthTiles - 1;
+        int j0 = (right.x > 0 || right.y > 0)
+                ? -Math.floorDiv(widthTiles, 2)
+                : -Math.floorDiv(widthTiles - 1, 2);
         int j1 = j0 + widthTiles - 1;
         int minx = Integer.MAX_VALUE, miny = Integer.MAX_VALUE;
         int maxx = Integer.MIN_VALUE, maxy = Integer.MIN_VALUE;
         java.util.ArrayList<Coord> tiles = new java.util.ArrayList<>();
-        for (int i = 1; i <= lengthTiles; i++) {
+        for (int i = i0; i <= i1; i++) {
             for (int j = j0; j <= j1; j++) {
                 Coord t = origin.add(fwd.mul(i)).add(right.mul(j));
                 tiles.add(t);

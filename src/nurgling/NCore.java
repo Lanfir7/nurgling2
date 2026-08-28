@@ -12,6 +12,8 @@ import monitoring.StorageOrphanCleaner;
 import nurgling.actions.AutoDrink;
 import nurgling.actions.AutoSaveTableware;
 import nurgling.areas.NArea;
+import nurgling.cookbook.upload.CookbookUploadService;
+import nurgling.cookbook.upload.RecipeCaptureMode;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.equipment.EquipmentPresetManager;
 import nurgling.scenarios.ScenarioManager;
@@ -31,6 +33,7 @@ public class NCore extends Widget
     public boolean debug = false;
     boolean isinspect = false;
     public NMappingClient mappingClient;
+    public final CookbookUploadService cookbookUploader;
     public AutoDrink autoDrink = null;
     public AutoSaveTableware autoSaveTableware = null;
     public ScenarioManager scenarioManager = new ScenarioManager();
@@ -39,6 +42,13 @@ public class NCore extends Widget
 
     public static volatile nurgling.db.DatabaseManager databaseManager = null;
     private final StorageOrphanCleaner storageOrphanCleaner = new StorageOrphanCleaner();
+    private final ExecutorService recipeCaptureExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "recipe-capture");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private boolean cookbookSharingWasEnabled;
+    private volatile long cookbookSharingGeneration;
     public boolean isInspectMode()
     {
         if(debug)
@@ -252,6 +262,17 @@ public class NCore extends Widget
         config = MainFrame.config;
         mode = (Boolean) NConfig.get(NConfig.Key.show_drag_menu) ? Mode.DRAG : Mode.IDLE;
         mappingClient = new NMappingClient();
+        cookbookUploader = new CookbookUploadService(
+                () -> Boolean.TRUE.equals(NConfig.get(NConfig.Key.shareCookbookRecipes)),
+                () -> {
+                    Object value = NConfig.get(NConfig.Key.cookbookEndpoint);
+                    return value == null ? "" : value.toString();
+                },
+                () -> {
+                    NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : null;
+                    return gui == null ? "" : gui.genus;
+                });
+        cookbookSharingWasEnabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.shareCookbookRecipes));
 
     }
 
@@ -458,6 +479,16 @@ public class NCore extends Widget
             for_remove.clear();
         }
         mappingClient.tick(dt);
+        boolean cookbookSharingEnabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.shareCookbookRecipes));
+        if (cookbookSharingWasEnabled && !cookbookSharingEnabled) {
+            cookbookSharingGeneration++;
+            cookbookUploader.settingsChanged();
+            clearRemoteRecipeCaches();
+        } else if (!cookbookSharingWasEnabled && cookbookSharingEnabled) {
+            cookbookUploader.settingsChanged();
+        }
+        cookbookSharingWasEnabled = cookbookSharingEnabled;
+        cookbookUploader.tick(System.currentTimeMillis());
     }
 
 
@@ -503,6 +534,8 @@ public class NCore extends Widget
     @Override
     public void dispose() {
         mappingClient.done.set(true);
+        cookbookUploader.close();
+        recipeCaptureExecutor.shutdownNow();
         // Don't shutdown databaseManager here - it's static and should persist across UI/session changes
         // It will be shutdown only when the application exits or database is disabled
         super.dispose();
@@ -525,7 +558,7 @@ public class NCore extends Widget
     private static final int MAX_RECIPE_CACHE_SIZE_NORMAL = 5000;
     private static final int MAX_RECIPE_CACHE_SIZE_LOW = 1000;
     
-    // Quick cache for early filtering (name + energy) - checked BEFORE creating task
+    // Quick cache for early filtering (name + ingredient composition, isolated per destination)
     private static final Set<String> recipeQuickCache = ConcurrentHashMap.newKeySet();
     private static final int MAX_QUICK_CACHE_SIZE_NORMAL = 2000;
     private static final int MAX_QUICK_CACHE_SIZE_LOW = 500;
@@ -623,14 +656,51 @@ public class NCore extends Widget
         nurgling.tools.NParser.clearCache();
         nurgling.tools.NAlias.clearCache();
     }
+
+    private static void clearRemoteRecipeCaches() {
+        removeRemoteRecipeKeys(sentRecipeHashes);
+        removeRemoteRecipeKeys(recipeQuickCache);
+    }
+
+    private static void removeRemoteRecipeKeys(Set<String> keys) {
+        Iterator<String> iterator = keys.iterator();
+        while (iterator.hasNext()) {
+            if (RecipeCaptureMode.isRemoteKey(iterator.next()))
+                iterator.remove();
+        }
+    }
+
+    public void cookbookSettingsChanged() {
+        boolean sharingEnabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.shareCookbookRecipes));
+        if (cookbookSharingWasEnabled && !sharingEnabled) {
+            cookbookSharingGeneration++;
+            cookbookUploader.settingsChanged();
+            clearRemoteRecipeCaches();
+        } else {
+            cookbookUploader.settingsChanged();
+        }
+        cookbookSharingWasEnabled = sharingEnabled;
+    }
+
+    public long cookbookSharingGeneration() {
+        return cookbookSharingGeneration;
+    }
     
     public static class NGItemWriter implements Runnable {
         private final NGItem item;
         private final nurgling.db.DatabaseManager databaseManager;
+        private final CookbookUploadService cookbookUploader;
+        private final boolean saveLocal;
+        private final boolean shareRemote;
 
-        public NGItemWriter(NGItem item, nurgling.db.DatabaseManager databaseManager) {
+        public NGItemWriter(NGItem item, nurgling.db.DatabaseManager databaseManager,
+                            CookbookUploadService cookbookUploader,
+                            boolean saveLocal, boolean shareRemote) {
             this.item = item;
             this.databaseManager = databaseManager;
+            this.cookbookUploader = cookbookUploader;
+            this.saveLocal = saveLocal;
+            this.shareRemote = shareRemote;
         }
 
         @Override
@@ -651,10 +721,13 @@ public class NCore extends Widget
                 // Build recipe hash
                 String recipeHash = buildRecipeHash(fi, resourceName);
                 
-                // Check if we already sent this recipe (in-memory cache)
-                if (sentRecipeHashes.contains(recipeHash)) {
+                String localCacheKey = RecipeCaptureMode.cacheKey(recipeHash, true, false);
+                String remoteCacheKey = RecipeCaptureMode.cacheKey(recipeHash, false, true);
+                boolean writeLocal = saveLocal && !sentRecipeHashes.contains(localCacheKey);
+                boolean uploadRemote = shareRemote && !sentRecipeHashes.contains(remoteCacheKey);
+                if (!writeLocal && !uploadRemote) {
                     nurgling.db.DatabaseManager.incrementSkippedRecipe();
-                    return; // Already sent, skip DB write
+                    return;
                 }
 
                 // Extract ingredients (including smoking wood)
@@ -674,24 +747,15 @@ public class NCore extends Widget
                     feps
                 );
 
-                // Add to cache before saving (prevents duplicates during async save)
-                int maxRecipe = getMaxRecipeCacheSize();
-                if (sentRecipeHashes.size() >= maxRecipe) {
-                    // Simple eviction: clear half of the cache when full
-                    int toRemove = maxRecipe / 2;
-                    Iterator<String> it = sentRecipeHashes.iterator();
-                    while (it.hasNext() && toRemove > 0) {
-                        it.next();
-                        it.remove();
-                        toRemove--;
-                    }
-                }
-                sentRecipeHashes.add(recipeHash);
+                if (writeLocal)
+                    addRecipeToCache(localCacheKey);
+                if (uploadRemote)
+                    cookbookUploader.submit(recipe, () -> addRecipeToCache(remoteCacheKey));
 
                 /* Null whenever the database failed to initialise - an unreachable server, a
                  * wrong password, or a schema this client will not touch. Recipe capture is
                  * best-effort, so it steps aside rather than throwing on every item. */
-                if (databaseManager.getRecipeService() == null) {
+                if (!writeLocal || databaseManager == null || databaseManager.getRecipeService() == null) {
                     return;
                 }
                 databaseManager.getRecipeService().saveRecipeAsync(recipe)
@@ -858,14 +922,20 @@ public class NCore extends Widget
         }
     }
 
-    public void writeNGItem(NGItem item) {
-        if (databaseManager == null) {
+    public void writeNGItem(NGItem item, boolean saveLocal, boolean shareRemote) {
+        if (!RecipeCaptureMode.shouldCapture(saveLocal, shareRemote)) {
             return;
         }
-        
+
         pendingRecipeTasks.incrementAndGet();
-        NGItemWriter ngItemWriter = new NGItemWriter(item, databaseManager);
-        databaseManager.submitTask(ngItemWriter);
+        nurgling.db.DatabaseManager targetDatabase = saveLocal ? databaseManager : null;
+        NGItemWriter ngItemWriter = new NGItemWriter(item, targetDatabase, cookbookUploader,
+                saveLocal, shareRemote);
+        try {
+            recipeCaptureExecutor.execute(ngItemWriter);
+        } catch (RejectedExecutionException e) {
+            pendingRecipeTasks.decrementAndGet();
+        }
     }
 
     public void writeContainerInfo(Gob gob) {

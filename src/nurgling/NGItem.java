@@ -8,6 +8,7 @@ import haven.res.ui.tt.ingred.Ingredient;
 import haven.res.ui.tt.slots.ISlots;
 import haven.res.ui.tt.stackn.StackName;
 import monitoring.ItemWatcher;
+import nurgling.cookbook.upload.RecipeCaptureMode;
 import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.tools.LpExplorer;
@@ -28,8 +29,11 @@ public class NGItem extends GItem
     public int hardArmor = 0;
     public int softArmor = 0;
 
-    boolean sent = false;
     boolean checkedForFood = false; // Optimization: only check NFoodInfo once
+    boolean foodItem = false;
+    boolean localRecipeHandled = false;
+    boolean sharedRecipeHandled = false;
+    long sharedRecipeGeneration = -1;
     boolean addedToInventoryCache = false; // Track if item was added to container cache for DB sync
     boolean isStackContainer = false; // True if this item is a stack container (holds other items)
     ItemWatcher.ItemInfo cachedItemInfo = null; // Reference to ItemInfo in cache for removal
@@ -187,36 +191,52 @@ public class NGItem extends GItem
             if (!addedToInventoryCache && (Boolean) NConfig.get(NConfig.Key.ndbenable)) {
                 tryAddToInventoryCache();
             }
-            if((Boolean)NConfig.get(NConfig.Key.ndbenable)) {
-                // Optimization: only check NFoodInfo once per item after info is loaded
-                // checkedForFood prevents repeated getInfo() calls every tick
-                // infoseq > 0 means the server has actually sent a "tt" tooltip message at least
-                // once; info defaults to an empty (non-null) list before that, so without this
-                // guard a food item could be misclassified as "not food" on the very first tick,
-                // before its real tooltip data (and NFoodInfo) ever arrives.
-                if (!sent && !checkedForFood && info != null && infoseq > 0) {
-                    NFoodInfo foodInfo = getInfo(NFoodInfo.class);
-                    if (foodInfo != null) {
-                        checkedForFood = true;
-                        
-                        // Early cache check using quick key (name + ingredient composition).
-                        // Energy alone is not distinctive: every item sharing the same name
-                        // reports the same energy value regardless of what it was actually made
-                        // from, so two genuinely different recipes with the same name would
-                        // collide and the second one would be silently skipped.
-                        String quickKey = name + "|" + buildIngredientSignature();
-                        if (NCore.isRecipeQuickCached(quickKey)) {
-                            sent = true; // Already processed, skip
+            boolean localCookbook = Boolean.TRUE.equals(NConfig.get(NConfig.Key.ndbenable));
+            boolean shareCookbook = Boolean.TRUE.equals(NConfig.get(NConfig.Key.shareCookbookRecipes));
+            long currentSharingGeneration = ui != null && ui.core != null
+                    ? ui.core.cookbookSharingGeneration() : 0;
+            if (RecipeCaptureMode.isNewSharingGeneration(sharedRecipeGeneration, currentSharingGeneration)) {
+                sharedRecipeHandled = false;
+                sharedRecipeGeneration = currentSharingGeneration;
+            }
+            boolean needsLocal = localCookbook && !localRecipeHandled;
+            boolean needsSharing = shareCookbook && !sharedRecipeHandled;
+            String genus = (ui != null && ui.gui instanceof NGameUI) ? ((NGameUI) ui.gui).genus : null;
+            boolean remoteReady = RecipeCaptureMode.isRemoteReady(needsSharing, genus);
+            if (RecipeCaptureMode.shouldCapture(needsLocal, remoteReady)
+                    && RecipeCaptureMode.isReady(info != null && infoseq > 0, quality != null)) {
+                // Tooltip data may arrive after the item itself. Classify only after the first real
+                // server tooltip message, then retain the result without scanning every tick.
+                if (!checkedForFood) {
+                    foodItem = getInfo(NFoodInfo.class) != null;
+                    checkedForFood = true;
+                }
+                if (foodItem) {
+                    String quickKey = name + "|" + buildIngredientSignature();
+                    boolean saveLocal = false;
+                    boolean shareRemote = false;
+                    if (needsLocal) {
+                        localRecipeHandled = true;
+                        String localKey = RecipeCaptureMode.cacheKey(quickKey, true, false);
+                        if (NCore.isRecipeQuickCached(localKey)) {
                             nurgling.db.DatabaseManager.incrementSkippedRecipe();
                         } else {
-                            NCore.addRecipeQuickCache(quickKey);
-                            sent = true; // Set immediately to prevent duplicate submissions
-                            ui.core.writeNGItem(this);
+                            NCore.addRecipeQuickCache(localKey);
+                            saveLocal = true;
                         }
-                    } else {
-                        // Not a food item - mark as checked so we don't check every tick
-                        checkedForFood = true;
                     }
+                    if (remoteReady) {
+                        sharedRecipeHandled = true;
+                        String sharedKey = RecipeCaptureMode.cacheKey(quickKey, false, true);
+                        if (NCore.isRecipeQuickCached(sharedKey)) {
+                            nurgling.db.DatabaseManager.incrementSkippedRecipe();
+                        } else {
+                            NCore.addRecipeQuickCache(sharedKey);
+                            shareRemote = true;
+                        }
+                    }
+                    if (RecipeCaptureMode.shouldCapture(saveLocal, shareRemote))
+                        ui.core.writeNGItem(this, saveLocal, shareRemote);
                 }
             }
             NGameUI qgui = NUtils.getGameUI();

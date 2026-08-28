@@ -27,7 +27,7 @@ class NMiningSupportTest {
         NMiningSupport.Spec timber = NMiningSupport.specFor("gfx/terobjs/timbertunnel");
         assertTrue(timber.isRect());
         assertEquals(1, timber.widthTiles);
-        assertEquals(4, timber.lengthTiles);
+        assertEquals(5, timber.lengthTiles);
 
         NMiningSupport.Spec reinf = NMiningSupport.specFor("gfx/terobjs/reinforcedtunnel");
         assertTrue(reinf.isRect());
@@ -47,59 +47,51 @@ class NMiningSupportTest {
     }
 
     @Test
-    void timberTunnelLightsOneByFourInFrontOfSupport() {
+    void timberTunnelMatchesVanillaInEveryDirection() {
         Coord2d rc = Coord2d.of(5.5, 5.5);
-        NMiningSupport.Mask mask = NMiningSupport.computeRect(rc, 0, 1, 4);
-        assertEquals(4, count(mask));
-        assertFalse(lit(mask, 0, 0));
-        assertTrue(lit(mask, 1, 0));
-        assertTrue(lit(mask, 2, 0));
-        assertTrue(lit(mask, 3, 0));
-        assertTrue(lit(mask, 4, 0));
-        assertFalse(lit(mask, 5, 0));
-        assertFalse(lit(mask, 0, 1));
+        assertMask(NMiningSupport.computeRect(rc, 0, 1, 5), 5,
+                new Coord(0, 0), new Coord(4, 0));
+        assertMask(NMiningSupport.computeRect(rc, Math.PI / 2, 1, 5), 5,
+                new Coord(0, 0), new Coord(0, 4));
+        assertMask(NMiningSupport.computeRect(rc, Math.PI, 1, 5), 5,
+                new Coord(-5, 0), new Coord(-1, 0));
+        assertMask(NMiningSupport.computeRect(rc, -Math.PI / 2, 1, 5), 5,
+                new Coord(0, -5), new Coord(0, -1));
     }
 
     @Test
-    void timberTunnelNorthAndEastStayOnGobRow() {
+    void reinforcedTunnelMatchesVanillaInEveryDirection() {
         Coord2d rc = Coord2d.of(5.5, 5.5);
-        NMiningSupport.Mask north = NMiningSupport.computeRect(rc, -Math.PI / 2, 1, 4);
-        assertEquals(4, count(north));
-        assertTrue(lit(north, 0, -1));
-        assertTrue(lit(north, 0, -4));
-        assertFalse(lit(north, 1, -1));
-        assertFalse(lit(north, 0, 0));
+        assertMask(NMiningSupport.computeRect(rc, 0, 2, 8), 16,
+                new Coord(0, -1), new Coord(7, 0));
+        assertMask(NMiningSupport.computeRect(rc, Math.PI / 2, 2, 8), 16,
+                new Coord(-1, 0), new Coord(0, 7));
+        assertMask(NMiningSupport.computeRect(rc, Math.PI, 2, 8), 16,
+                new Coord(-8, -1), new Coord(-1, 0));
+        assertMask(NMiningSupport.computeRect(rc, -Math.PI / 2, 2, 8), 16,
+                new Coord(-1, -8), new Coord(0, -1));
     }
 
     @Test
-    void timberTunnelWestAndSouthShiftOneTileNorth() {
+    void stoneArchTunnelMatchesVanillaInEveryDirection() {
         Coord2d rc = Coord2d.of(5.5, 5.5);
-        NMiningSupport.Mask west = NMiningSupport.computeRect(rc, Math.PI, 1, 4);
-        assertEquals(4, count(west));
-        assertTrue(lit(west, -1, -1));
-        assertTrue(lit(west, -4, -1));
-        assertFalse(lit(west, -1, 0));
-
-        NMiningSupport.Mask south = NMiningSupport.computeRect(rc, Math.PI / 2, 1, 4);
-        assertEquals(4, count(south));
-        assertTrue(lit(south, 0, 0));
-        assertTrue(lit(south, 0, 3));
-        assertFalse(lit(south, 0, 4));
-        assertFalse(lit(south, 1, 0));
+        assertMask(NMiningSupport.computeRect(rc, 0, 3, 15), 45,
+                new Coord(0, -1), new Coord(14, 1));
+        assertMask(NMiningSupport.computeRect(rc, Math.PI / 2, 3, 15), 45,
+                new Coord(-1, 0), new Coord(1, 14));
+        assertMask(NMiningSupport.computeRect(rc, Math.PI, 3, 15), 45,
+                new Coord(-15, -1), new Coord(-1, 1));
+        assertMask(NMiningSupport.computeRect(rc, -Math.PI / 2, 3, 15), 45,
+                new Coord(-1, -15), new Coord(1, -1));
     }
 
-    @Test
-    void reinforcedTunnelLightsTwoByEightInFrontOfSupport() {
-        Coord2d rc = Coord2d.of(5.5, 5.5);
-        NMiningSupport.Mask mask = NMiningSupport.computeRect(rc, 0, 2, 8);
-        assertEquals(16, count(mask));
-        assertFalse(lit(mask, 0, 0));
-        assertTrue(lit(mask, 1, 0));
-        assertTrue(lit(mask, 1, -1));
-        assertTrue(lit(mask, 8, 0));
-        assertTrue(lit(mask, 8, -1));
-        assertFalse(lit(mask, 0, 1));
-        assertFalse(lit(mask, 9, 0));
+    private static void assertMask(NMiningSupport.Mask mask, int expectedCount,
+                                   Coord expectedBegin, Coord expectedEnd) {
+        assertEquals(expectedCount, count(mask));
+        assertEquals(expectedBegin, mask.begin);
+        assertEquals(expectedEnd, mask.end);
+        assertTrue(lit(mask, expectedBegin.x, expectedBegin.y));
+        assertTrue(lit(mask, expectedEnd.x, expectedEnd.y));
     }
 
     private static int count(NMiningSupport.Mask mask) {
