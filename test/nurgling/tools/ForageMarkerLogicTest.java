@@ -159,7 +159,7 @@ class ForageMarkerLogicTest {
     @Test
     void stackContainerIsNotWatched() {
         assertTrue(ForageMarkerLogic.isLikelyStackContainer(false, true, false, null));
-        assertFalse(ForageMarkerLogic.isLikelyStackContainer(false, false, true, null));
+        assertTrue(ForageMarkerLogic.isLikelyStackContainer(false, false, true, null));
         assertFalse(ForageMarkerLogic.isLikelyStackContainer(true, false, false, 25f));
         assertFalse(ForageMarkerLogic.isLikelyStackContainer(false, false, false, 25f));
     }
@@ -287,6 +287,29 @@ class ForageMarkerLogicTest {
         assertNotNull(placed);
         assertEquals(7, placed.tileX);
         assertEquals(8, placed.tileY);
+    }
+
+    @Test
+    void rebuiltStackUsesNewMemberInsteadOfOldQuality() {
+        ForageMarkerLogic.PickupSession s = new ForageMarkerLogic.PickupSession();
+        s.notePick(1, 207, 208, "gfx/terobjs/herbs/dandelion", 0);
+
+        assertTrue(s.offerItem("wrap", false, false, 47f,
+            "gfx/invobjs/dandelion", 10, 10));
+        assertTrue(s.offerItem("old-member", false, true, 47f,
+            "gfx/invobjs/dandelion", 10, 20));
+        assertTrue(s.offerItem("new-member", false, true, 16f,
+            "gfx/invobjs/dandelion", 10, 30));
+
+        assertNull(s.placeTick("wrap", true, 47f, "Dandelion",
+            "gfx/invobjs/dandelion", 10, 40));
+        assertNull(s.placeTick("old-member", false, 47f, "Dandelion",
+            "gfx/invobjs/dandelion", 10, 40));
+        ForageMarkerLogic.Place placed = s.placeTick("new-member", false, 16f, "Dandelion",
+            "gfx/invobjs/dandelion", 10, 40);
+        assertNotNull(placed);
+        assertEquals(207, placed.tileX);
+        assertEquals(208, placed.tileY);
     }
 
     @Test

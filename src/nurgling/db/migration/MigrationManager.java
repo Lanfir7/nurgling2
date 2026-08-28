@@ -21,7 +21,7 @@ public class MigrationManager {
      * and this older client may not understand the new columns/tables; we
      * refuse to sync in that case rather than write incompatible rows.
      */
-    public static final int CLIENT_MAX_SCHEMA_VERSION = 19;
+    public static final int CLIENT_MAX_SCHEMA_VERSION = 20;
 
     /** Version of the migration that creates kin_secrets; optional, see {@link Migration#optional}. */
     public static final int MIGRATION_KIN_SECRETS = 15;
@@ -34,6 +34,9 @@ public class MigrationManager {
 
     /** Version of the migration that creates peer_positions; optional, see {@link Migration#optional}. */
     public static final int MIGRATION_PEER_POSITIONS = 19;
+
+    /** Repairs databases where schema version 12 meant peer_positions instead of local_timers. */
+    public static final int MIGRATION_LOCAL_TIMERS_REPAIR = 20;
 
     /** Group role holding read/write on everything. Villagers are members of it. */
     public static final String ROLE_MEMBER = "nurgling_member";
@@ -538,33 +541,7 @@ public class MigrationManager {
         migrations.add(new Migration(12, "Create local_timers table for Postgres") {
             @Override
             public void run(DatabaseAdapter adapter) throws SQLException {
-                if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
-                    return;
-                }
-                if (adapter.tableExists("local_timers")) {
-                    System.out.println("local_timers table already exists");
-                    return;
-                }
-                adapter.executeUpdate("CREATE TABLE local_timers (" +
-                    "id SERIAL PRIMARY KEY, " +
-                    "profile VARCHAR(255) NOT NULL, " +
-                    "resource_id VARCHAR(512) NOT NULL, " +
-                    "segment_id BIGINT NOT NULL, " +
-                    "tile_x INTEGER NOT NULL, " +
-                    "tile_y INTEGER NOT NULL, " +
-                    "resource_name VARCHAR(255), " +
-                    "resource_type VARCHAR(512), " +
-                    "start_time_utc BIGINT NOT NULL, " +
-                    "duration_ms BIGINT NOT NULL, " +
-                    "description VARCHAR(512), " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "UNIQUE (profile, resource_id)" +
-                    ")");
-                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile ON local_timers (profile)");
-                adapter.executeUpdate("CREATE INDEX idx_local_timers_profile_resource ON local_timers (profile, resource_id)");
-                adapter.executeUpdate("CREATE INDEX idx_local_timers_expiration ON local_timers (profile, start_time_utc, duration_ms)");
-                System.out.println("Created local_timers table");
+                ensureLocalTimersTable(adapter);
             }
         });
 
@@ -912,6 +889,18 @@ public class MigrationManager {
             }
         });
 
+        /* Version 12 collided across two historical branches: one created local_timers, the other
+         * peer_positions. A database from the latter branch can therefore reach version 19 without
+         * ever running the local timer DDL. Retry it at a fresh version and keep it optional because
+         * timers are not a prerequisite for the rest of database sync. */
+        migrations.add(new Migration(MIGRATION_LOCAL_TIMERS_REPAIR,
+            "Repair missing local_timers table from schema-v12 collision", true) {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                ensureLocalTimersTable(adapter);
+            }
+        });
+
         return migrations;
     }
 
@@ -1145,6 +1134,36 @@ public class MigrationManager {
      * at creation time is what lets a single privileged launch set the schema up for the whole
      * village instead of someone having to run SQL by hand after every schema change.
      */
+    private static void ensureLocalTimersTable(DatabaseAdapter adapter) throws SQLException {
+        if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
+            return;
+        }
+        if (!adapter.tableExists("local_timers")) {
+            createTable(adapter, "local_timers", "CREATE TABLE local_timers (" +
+                "id SERIAL PRIMARY KEY, " +
+                "profile VARCHAR(255) NOT NULL, " +
+                "resource_id VARCHAR(512) NOT NULL, " +
+                "segment_id BIGINT NOT NULL, " +
+                "tile_x INTEGER NOT NULL, " +
+                "tile_y INTEGER NOT NULL, " +
+                "resource_name VARCHAR(255), " +
+                "resource_type VARCHAR(512), " +
+                "start_time_utc BIGINT NOT NULL, " +
+                "duration_ms BIGINT NOT NULL, " +
+                "description VARCHAR(512), " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "UNIQUE (profile, resource_id)" +
+                ")");
+            System.out.println("Created local_timers table");
+        } else {
+            grantDml(adapter, "local_timers");
+        }
+        safeCreateIndex(adapter, "CREATE INDEX idx_local_timers_profile ON local_timers (profile)");
+        safeCreateIndex(adapter, "CREATE INDEX idx_local_timers_profile_resource ON local_timers (profile, resource_id)");
+        safeCreateIndex(adapter, "CREATE INDEX idx_local_timers_expiration ON local_timers (profile, start_time_utc, duration_ms)");
+    }
+
     private static void createTable(DatabaseAdapter adapter, String table, String ddl) throws SQLException {
         adapter.executeUpdate(ddl);
         grantDml(adapter, table);

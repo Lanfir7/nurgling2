@@ -290,6 +290,9 @@ public class NGItem extends GItem
                                     case "ui/tt/q/quality":
                                         if (a.length >= 2) quality = (Float) a[1];
                                         break;
+                                    case "ui/tt/stackn":
+                                        isStackContainer = true;
+                                        break;
                                     case "ui/tt/armor":
                                         if (a.length >= 3) {
                                             hardArmor = (Integer) a[1];  // Р–РµСЃС‚РєР°СЏ Р±СЂРѕРЅСЏ

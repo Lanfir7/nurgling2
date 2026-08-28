@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Service layer for shared fish locations.
@@ -38,6 +39,7 @@ public class FishLocationDbService {
 
     private volatile boolean syncEnabled = false;
     private ScheduledExecutorService syncScheduler = null;
+    private final Supplier<ScheduledExecutorService> syncSchedulerFactory;
 
     /** Sessions that have had their bulk load. Clearing forces every session to bulk-load again. */
     private final Set<String> bulkLoadedSessions =
@@ -47,7 +49,21 @@ public class FishLocationDbService {
     private final ConcurrentHashMap<String, Map<String, Integer>> knownVersions = new ConcurrentHashMap<>();
 
     public FishLocationDbService(DatabaseManager databaseManager) {
+        this(databaseManager, FishLocationDbService::newSyncScheduler);
+    }
+
+    FishLocationDbService(DatabaseManager databaseManager,
+                          Supplier<ScheduledExecutorService> syncSchedulerFactory) {
         this.databaseManager = databaseManager;
+        this.syncSchedulerFactory = syncSchedulerFactory;
+    }
+
+    private static ScheduledExecutorService newSyncScheduler() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "Fish-Sync-Worker");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     // -------------------- Write path --------------------
@@ -101,21 +117,17 @@ public class FishLocationDbService {
 
     // -------------------- Sync --------------------
 
-    public void startSync(long intervalSeconds) {
+    public synchronized void startSync(long intervalSeconds) {
         if (syncEnabled) stopSync();
         this.syncEnabled = true;
         this.bulkLoadedSessions.clear();
         this.knownVersions.clear();
-        this.syncScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "Fish-Sync-Worker");
-            t.setDaemon(true);
-            return t;
-        });
+        this.syncScheduler = syncSchedulerFactory.get();
         syncScheduler.scheduleAtFixedRate(this::syncTick, 1, intervalSeconds, TimeUnit.SECONDS);
         System.out.println("Fish location sync started, interval=" + intervalSeconds + "s (multi-session)");
     }
 
-    public void stopSync() {
+    public synchronized void stopSync() {
         syncEnabled = false;
         bulkLoadedSessions.clear();
         knownVersions.clear();

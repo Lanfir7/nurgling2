@@ -442,7 +442,11 @@ public class DatabaseManager {
         this.areaService = new AreaService(this);
         this.planningService = new nurgling.db.service.PlanningService(this);
         this.animalMarkerService = new AnimalMarkerService(this);
-        this.localTimerService = new LocalTimerService(this);
+        boolean localTimersOk = tableUsable("local_timers");
+        this.localTimerService = localTimersOk ? new LocalTimerService(this) : null;
+        if (!localTimersOk && DatabaseAdapterFactory.isPostgres()) {
+            System.err.println("[DatabaseManager] local_timers unavailable; local timers stay file-only");
+        }
         this.craftRecipeService = new CraftRecipeService(this);
         this.kinSecretService =
             skippedMigrations.containsKey(nurgling.db.migration.MigrationManager.MIGRATION_KIN_SECRETS)

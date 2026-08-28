@@ -154,15 +154,10 @@ public final class ForagePickupMarker {
 
     private static boolean isStackContainer(NGItem item) {
         if (item == null) return false;
-        boolean hasAmount = false;
-        try {
-            hasAmount = item.getInfo(GItem.Amount.class) != null;
-        } catch (Exception ignored) {
-        }
         return ForageMarkerLogic.isLikelyStackContainer(
             item.parent instanceof ItemStack,
             item.contents instanceof ItemStack,
-            hasAmount,
+            item.isStackContainer,
             item.quality);
     }
 

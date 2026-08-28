@@ -98,9 +98,9 @@ public final class ForageMarkerLogic {
     }
 
     public static boolean isLikelyStackContainer(boolean parentIsItemStack, boolean contentsIsItemStack,
-                                                 boolean hasAmount, Float quality) {
+                                                 boolean hasStackInfo, Float quality) {
         if (parentIsItemStack) return false;
-        return contentsIsItemStack;
+        return contentsIsItemStack || hasStackInfo;
     }
 
     public static boolean shouldWatchIncoming(boolean incomingIsStackContainer, boolean incomingIsStackMember,
@@ -220,12 +220,20 @@ public final class ForageMarkerLogic {
             prune(now);
             if (itemKey == null || seen.containsKey(itemKey)) return false;
             seen.put(itemKey, Boolean.TRUE);
-            if (pending.isEmpty()) return false;
             if (stackContainer) return false;
             String key = resourceKey(resourceName);
             PendingPick boundPick = findPending(key);
-            if (key != null && boundPick == null) return false;
-            if (boundPick != null) pending.remove(boundPick);
+            Candidate replaced = null;
+            if (boundPick == null && stackMember) {
+                replaced = findBoundCandidate(key);
+                if (replaced != null) boundPick = replaced.boundPick;
+            }
+            if (boundPick == null && (key != null || pending.isEmpty())) return false;
+            if (replaced != null) {
+                candidates.remove(replaced);
+            } else if (boundPick != null) {
+                pending.remove(boundPick);
+            }
             candidates.add(new Candidate(itemKey, key, boundPick, now));
             return true;
         }
@@ -283,6 +291,17 @@ public final class ForageMarkerLogic {
             if (itemKey == null) return null;
             for (Candidate candidate : candidates) {
                 if (itemKey == candidate.itemKey) return candidate;
+            }
+            return null;
+        }
+
+        private Candidate findBoundCandidate(String itemResourceKey) {
+            for (int i = candidates.size() - 1; i >= 0; i--) {
+                Candidate candidate = candidates.get(i);
+                if (candidate.boundPick == null) continue;
+                if (itemResourceKey == null || itemResourceKey.equals(candidate.resourceKey)) {
+                    return candidate;
+                }
             }
             return null;
         }
