@@ -822,6 +822,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    add(equwnd, Utils.getprefc("wndc-equ", new Coord(400, 10)));
 	} else if(place == "hand") {
 	    GItem g = add((GItem)child);
+	    nurgling.ForagePickupMarker.onNewItem(g);
 	    Coord lc = (Coord)args[1];
 	    hand.add(new DraggedItem(g, lc));
 	    updhand();

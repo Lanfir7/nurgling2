@@ -265,6 +265,7 @@ public class NConfig
         prospectIconScale,
         showAnimalIcons,
         showForagingIcons,
+        forageMarkerMinQuality,
         showAllZonesAlways,
         showGemstoneIcons,
         showOreSpotIcons,
@@ -509,6 +510,7 @@ public class NConfig
         conf.put(Key.prospectIconScale, 1.0);
         conf.put(Key.showAnimalIcons, true);
         conf.put(Key.showForagingIcons, true);
+        conf.put(Key.forageMarkerMinQuality, 40);
         conf.put(Key.showAllZonesAlways, false);
         conf.put(Key.showGemstoneIcons, true);
         conf.put(Key.showOreSpotIcons, true);

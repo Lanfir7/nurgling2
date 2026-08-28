@@ -2,6 +2,7 @@ package nurgling.widgets;
 
 import haven.*;
 import nurgling.conf.ProspectKind;
+import nurgling.tools.ForageMarkerLogic;
 import org.json.JSONObject;
 
 import javax.imageio.ImageIO;
@@ -201,7 +202,9 @@ public class LabeledMinimapMark {
      * Create from JSON (for loading from file).
      */
     public LabeledMinimapMark(JSONObject json) {
-        this.locationId = json.getString("locationId");
+        String rawId = json.getString("locationId");
+        boolean forage = json.optBoolean("forage", ForageMarkerLogic.isForageId(rawId));
+        this.locationId = ForageMarkerLogic.persistForageId(rawId, forage);
         this.label = json.getString("label");
         this.resourceType = json.optString("resourceType", "Unknown");
         this.quality = json.has("quality") ? json.getDouble("quality") : parseLabelQuality(this.label);
@@ -279,6 +282,9 @@ public class LabeledMinimapMark {
         json.put("tileY", tileCoords.y);
         json.put("timestamp", timestamp);
         json.put("labelColor", labelColor.getRGB());
+        if (ForageMarkerLogic.isForageId(locationId)) {
+            json.put("forage", true);
+        }
         if (gridId != -1) {
             json.put("gridId", gridId);
         }
@@ -295,9 +301,14 @@ public class LabeledMinimapMark {
      */
     public LabeledMinimapMark relocated(long newSegmentId, Coord tileShift) {
         Coord nt = tileCoords.sub(tileShift);
-        String newId = locationId.startsWith("animal_")
-                ? locationId
-                : generateLocationId(newSegmentId, nt, label);
+        String newId;
+        if (locationId.startsWith("animal_")) {
+            newId = locationId;
+        } else if (ForageMarkerLogic.isForageId(locationId)) {
+            newId = ForageMarkerLogic.relocatedForageId(locationId, newSegmentId, nt.x, nt.y);
+        } else {
+            newId = generateLocationId(newSegmentId, nt, label);
+        }
         return new LabeledMinimapMark(newId, label, resourceType, quality, newSegmentId, nt,
                 gridId, localTileCoords, iconImage, labelColor, killedAtMs, killedBy, iconPath, animalType, false);
     }

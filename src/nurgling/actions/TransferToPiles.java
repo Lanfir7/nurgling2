@@ -1,8 +1,11 @@
 package nurgling.actions;
 
 import haven.*;
+import nurgling.ExtraInvGroupTransfer;
 import nurgling.NGItem;
 import nurgling.NGameUI;
+import nurgling.NInventory;
+import nurgling.NISBox;
 import nurgling.NUtils;
 import nurgling.tasks.*;
 import nurgling.tools.Finder;
@@ -20,6 +23,50 @@ public class TransferToPiles implements Action{
     Pair<Coord2d,Coord2d> out;
 
     int th = 0;
+
+    enum PileMode {
+        GOB_SHIFT_BULK,
+        TYPE_BULK,
+        ONE_BY_ONE
+    }
+
+    static PileMode pileMode(int th, boolean mixedCategory) {
+        if (th > 1) {
+            return PileMode.ONE_BY_ONE;
+        }
+        if (mixedCategory) {
+            return PileMode.TYPE_BULK;
+        }
+        return PileMode.GOB_SHIFT_BULK;
+    }
+
+    /** Stack dump leaves the last item; WaitTargetSize(fullSize - N) hangs at the pile. */
+    static boolean useExactInventoryWait(PileMode mode) {
+        return mode == PileMode.ONE_BY_ONE;
+    }
+
+    static boolean waitsForInventoryUpdate(PileMode mode) {
+        return false;
+    }
+
+    /** After a stack dump, one Gob Shift-click replaces a packet per loose leftover. */
+    static boolean typeBulkUsesGobShift(boolean hasStackEntries) {
+        return !hasStackEntries;
+    }
+
+    static boolean stockpileFillChanged(int freeBefore, int freeNow) {
+        return freeBefore >= 0 && freeNow >= 0 && freeNow < freeBefore;
+    }
+
+    static boolean stockpileTransferFinished(boolean sourceGone, boolean pileFull,
+                                             int freeBefore, int freeNow) {
+        return sourceGone || pileFull || stockpileFillChanged(freeBefore, freeNow);
+    }
+
+    /** Macro transfers must not fall back to a previously opened, possibly full stockpile. */
+    static int[] typeBulkDestination(int pileWdgId) {
+        return new int[]{pileWdgId};
+    }
 
     // When set, use exact name matching instead of NAlias substring matching
     String exactName = null;
@@ -57,19 +104,16 @@ public class TransferToPiles implements Action{
                             pf.run(gui);
                             if(NUtils.getGameUI().vhand!=null) {
                                 NUtils.activateItem(target, false);
-                                NUtils.addTask(new NTask() {
-                                    @Override
-                                    public boolean check() {
-                                        return NUtils.getGameUI().vhand == null;
-                                    }
-                                });
+                                NUtils.addTask(new WaitFreeHand(80, false));
                             }
                             witems = getMatchingItems(gui);
                             int size = witems.size();
                             new OpenTargetContainer("Stockpile", target).run(gui);
                             int target_size = Math.min(size,gui.getStockpile().getFreeSpace());
                             if(target_size>0) {
-                                transfer(gui, target_size);
+                                if (!transfer(gui, target_size)) {
+                                    return Results.FAIL();
+                                }
                             }
                             if((witems = getMatchingItems(gui)).isEmpty())
                             {
@@ -95,7 +139,9 @@ public class TransferToPiles implements Action{
                         new OpenTargetContainer("Stockpile", pile).run(gui);
                         int target_size = Math.min(size, gui.getStockpile().getFreeSpace());
                         if (target_size > 0) {
-                            transfer(gui, target_size);
+                            if (!transfer(gui, target_size)) {
+                                return Results.FAIL();
+                            }
                         }
                         else
                         {
@@ -107,39 +153,140 @@ public class TransferToPiles implements Action{
         return Results.SUCCESS();
         }
 
-    private void transfer(NGameUI gui, int target_size) throws InterruptedException {
-        ArrayList<WItem> witems;
-        NUtils.addTask(new WaitStockpile(true));
+    private boolean transfer(NGameUI gui, int target_size) throws InterruptedException {
+        NUtils.addTask(new WaitStockpile(true, 80, false));
         int fullSize = gui.getInventory().getItems().size();
-        if(th>1 || sameCategoryItemPresent(gui)) {
-            for (int i = 0; i < target_size; i++) {
-                {
-                    witems = getMatchingItems(gui);
-                    witems.sort(new Comparator<WItem>() {
-                        @Override
-                        public int compare(WItem o1, WItem o2) {
-                            Float q1 = ((NGItem)o1.item).quality;
-                            Float q2 = ((NGItem)o2.item).quality;
-                            if(q1 == null || q2 == null)
-                                return 0;
-                            return Float.compare(q1,q2);
-                        }
-                    });
-                    if (witems.isEmpty()) {
-                        break;
-                    }
-                    NUtils.takeItemToHand(witems.get(0));
-                    gui.getStockpile().wdgmsg("drop");
-                    NUtils.addTask(new WaitFreeHand());
-                }
-            }
+        PileMode mode = pileMode(th, sameCategoryItemPresent(gui));
+        boolean accepted = true;
+        if (mode == PileMode.ONE_BY_ONE) {
+            transferOneByOne(gui, target_size);
+        } else if (mode == PileMode.TYPE_BULK) {
+            accepted = transferTypeBulk(gui, target_size);
+        } else {
+            accepted = transferHeldTypeToStockpileGob(gui, target_size);
         }
-        else
-        {
-            gui.getStockpile().put(target_size);
+        if (!accepted) {
+            return false;
         }
 
-        NUtils.getUI().core.addTask(new WaitTargetSize(NUtils.getGameUI().getInventory(), fullSize - target_size));
+        if (useExactInventoryWait(mode)) {
+            NUtils.getUI().core.addTask(new WaitTargetSize(NUtils.getGameUI().getInventory(), fullSize - target_size));
+        }
+        return true;
+    }
+
+    private void transferOneByOne(NGameUI gui, int target_size) throws InterruptedException {
+        for (int i = 0; i < target_size; i++) {
+            ArrayList<WItem> witems = getMatchingItems(gui);
+            witems.sort(new Comparator<WItem>() {
+                @Override
+                public int compare(WItem o1, WItem o2) {
+                    Float q1 = ((NGItem)o1.item).quality;
+                    Float q2 = ((NGItem)o2.item).quality;
+                    if(q1 == null || q2 == null)
+                        return 0;
+                    return Float.compare(q1,q2);
+                }
+            });
+            if (witems.isEmpty()) {
+                break;
+            }
+            NUtils.takeItemToHand(witems.get(0));
+            gui.getStockpile().wdgmsg("drop");
+            NUtils.addTask(new WaitFreeHand());
+        }
+    }
+
+    /** Mixed types cannot use Stockpile.put (server picks any sibling). */
+    private boolean transferTypeBulk(NGameUI gui, int target_size) throws InterruptedException {
+        NISBox pile = gui.getStockpile();
+        if (pile == null || target_size < 1) {
+            return false;
+        }
+        if (pile.parentGob != null) {
+            monitoring.StockpileStorageTracker.touch(pile.parentGob);
+        }
+        int[] dest = typeBulkDestination(pile.wdgid());
+        Object[] invxf2 = ExtraInvGroupTransfer.invxf2Args(dest);
+        if (invxf2 == null) {
+            return false;
+        }
+        ArrayList<WItem> matching = getMatchingItems(gui);
+        if (typeBulkUsesGobShift(hasStackEntries(matching))) {
+            return transferHeldTypeToStockpileGob(gui, target_size);
+        }
+        int sent = 0;
+        for (WItem w : matching) {
+            if (sent >= target_size) {
+                break;
+            }
+            if (w != null && w.item != null) {
+                w.item.wdgmsg(ExtraInvGroupTransfer.EXTRA_SHIFT_MSG, invxf2);
+                sent++;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasStackEntries(ArrayList<WItem> items) {
+        for (WItem item : items) {
+            if (NInventory.stackOuterGItem(item) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Matches taking an item in hand and Shift-clicking the stockpile gob. */
+    private boolean transferHeldTypeToStockpileGob(NGameUI gui, int targetSize) throws InterruptedException {
+        NISBox pile = gui.getStockpile();
+        if (pile == null || targetSize < 1) {
+            return false;
+        }
+        if (pile.parentGob == null) {
+            pile.put(targetSize);
+            return true;
+        }
+        ArrayList<WItem> matching = getMatchingItems(gui);
+        if (matching.isEmpty()) {
+            return true;
+        }
+        int freeBefore = pile.calcFreeSpace();
+        if (freeBefore < 0) {
+            return false;
+        }
+        monitoring.StockpileStorageTracker.touch(pile.parentGob);
+        WItem source = matching.get(0);
+        NUtils.takeItemToHand(source);
+        NUtils.activateItem(pile.parentGob, true);
+        NUtils.addTask(new WaitFreeHand(80, false));
+        WaitStockpileFillChanged wait = new WaitStockpileFillChanged(pile, source, freeBefore);
+        NUtils.addTask(wait);
+        return wait.changed;
+    }
+
+    private static final class WaitStockpileFillChanged extends NTask {
+        private final NISBox pile;
+        private final WItem source;
+        private final int freeBefore;
+        boolean changed;
+
+        WaitStockpileFillChanged(NISBox pile, WItem source, int freeBefore) {
+            this.pile = pile;
+            this.source = source;
+            this.freeBefore = freeBefore;
+            this.infinite = false;
+            this.maxCounter = 80;
+            this.criticalOnTimeout = false;
+        }
+
+        @Override
+        public boolean check() {
+            boolean sourceGone = source == null || source.parent == null;
+            boolean pileFull = pile.parentGob != null && pile.parentGob.ngob.getModelAttribute() == 31;
+            changed = stockpileTransferFinished(sourceGone, pileFull, freeBefore, pile.calcFreeSpace());
+            return changed;
+        }
     }
 
 

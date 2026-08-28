@@ -4,13 +4,13 @@ import haven.*;
 import haven.render.*;
 import haven.render.Model.Indices;
 import haven.render.gl.GLState;
+import nurgling.tools.FlatWorld;
 
 import java.awt.*;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 public class NBoxOverlay extends Sprite {
     static final Pipe.Op blacc = Pipe.Op.compose(new BaseColor(new Color(0, 0, 0, 140)), new States.LineWidth(6));
@@ -19,6 +19,7 @@ public class NBoxOverlay extends Sprite {
     VertexBuf vbuf;
     Model smod, emod;
     private Coord2d lc;
+    private boolean lastFlat;
     private Coord2d size = new Coord2d(100,100);
     private Coord2d fixator;
     float height = 6f;
@@ -117,10 +118,11 @@ public class NBoxOverlay extends Sprite {
         FloatBuffer pa = posa.data;
         int p = posa.size() / 2;
         try {
-            float rz = (float) glob.map.getcz(rc);
+            float rz = (float) FlatWorld.visualCz(glob.map.getcz(rc));
             pos = Location.xlate(new Coord3f((float) rc.x, -(float) rc.y, rz));
+            boolean flat = FlatWorld.isEnabled();
             for (int i = 0; i < p; i++) {
-                float z = (float) glob.map.getcz(rc.x + pa.get(i * 3), rc.y - pa.get(i * 3 + 1)) - rz;
+                float z = FlatWorld.overlayRelZ(flat, glob.map.getcz(rc.x + pa.get(i * 3), rc.y - pa.get(i * 3 + 1)), rz);
                 pa.put(i * 3 + 2, z + height);
                 pa.put((p + i) * 3 + 2, z - height);
             }
@@ -133,18 +135,18 @@ public class NBoxOverlay extends Sprite {
         Coord2d cc = ((Gob) owner).rc;
         if (fixator != null)
             cc = cc.floor(fixator).mul(fixator).add(fixator.div(2));
-        if ((lc == null) || !lc.equals(cc)) {
+        boolean flat = FlatWorld.isEnabled();
+        if ((lc == null) || !lc.equals(cc) || flat != lastFlat) {
             setz(g, owner.context(Glob.class), cc);
-            if (!Objects.equals(lc, cc)){
-                lc = cc;
-                for (RenderTree.Slot sl:slots){
-                    sl.ostate(Pipe.Op.compose(Rendered.postpfx,
-                                    new States.Facecull(States.Facecull.Mode.NONE),
-                                    //Location.goback("gobx")
-                                    p -> p.put(Homo3D.loc, null), pos
-                            )
-                    );
-                }
+            lastFlat = flat;
+            lc = cc;
+            for (RenderTree.Slot sl:slots){
+                sl.ostate(Pipe.Op.compose(Rendered.postpfx,
+                                new States.Facecull(States.Facecull.Mode.NONE),
+                                //Location.goback("gobx")
+                                p -> p.put(Homo3D.loc, null), pos
+                        )
+                );
             }
         }
     }

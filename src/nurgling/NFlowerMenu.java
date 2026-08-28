@@ -41,6 +41,8 @@ public class NFlowerMenu extends FlowerMenu
     // Captured at construction because the user releases ctrl before picking a petal.
     // Used to trigger the auto action selector (apply chosen action to all matching items).
     public boolean ctrlMode = false;
+    private Gob forageSourceGob;
+    private NGameUI forageSourceGui;
 
     public NFlowerMenu(String[] opts, UI ui)
     {
@@ -50,6 +52,7 @@ public class NFlowerMenu extends FlowerMenu
         // wrong (active visual) session's GUI or null, causing NPE or cross-session state.
         shiftMode = ui.gui != null && ui.gui.map instanceof NMapView && ((NMapView) ui.gui.map).shiftPressed;
         ctrlMode = ui.modctrl;
+        captureForageSource(ui);
         initOpts(opts);
     }
 
@@ -60,7 +63,16 @@ public class NFlowerMenu extends FlowerMenu
         NGameUI gui = NUtils.getGameUI();
         shiftMode = gui != null && gui.map instanceof NMapView && ((NMapView) gui.map).shiftPressed;
         ctrlMode = gui != null && gui.ui != null && gui.ui.modctrl;
+        captureForageSource(gui != null ? gui.ui : null);
         initOpts(opts);
+    }
+
+    private void captureForageSource(UI sourceUi) {
+        if (sourceUi == null || !(sourceUi.gui instanceof NGameUI) || sourceUi.core == null) return;
+        NCore.LastActions actions = sourceUi.core.getLastActions();
+        if (actions == null || actions.gob == null) return;
+        forageSourceGob = actions.gob;
+        forageSourceGui = (NGameUI) sourceUi.gui;
     }
 
     private void initOpts(String[] opts)
@@ -249,15 +261,17 @@ public class NFlowerMenu extends FlowerMenu
 
             wdgmsg("cl", option.num, ui.modflags());
             nurgling.sessions.SleepLogout.markIfSleep(ui, option.name);
-            NCore.LastActions actions = NUtils.getUI().core.getLastActions();
-            if(actions!=null) {
+            NCore.LastActions actions = ui.core.getLastActions();
+            if (ForageMarkerLogic.isPickAction(option.name) && forageSourceGob != null) {
+                ui.core.setLastAction(option.name, forageSourceGob);
+                if (forageSourceGui != null && forageSourceGui.foragePickupMarker != null) {
+                    forageSourceGui.foragePickupMarker.noteWorldPick(forageSourceGob);
+                }
+            } else if(actions!=null) {
                 if (actions.item != null) {
-                    NUtils.getUI().core.setLastAction(option.name, actions.item);
+                    ui.core.setLastAction(option.name, actions.item);
                 } else if (actions.gob != null) {
-                    NUtils.getUI().core.setLastAction(option.name, actions.gob);
-                    if (ForageMarkerLogic.isPickAction(option.name)) {
-                        ForagePickupMarker.noteWorldPick(actions.gob);
-                    }
+                    ui.core.setLastAction(option.name, actions.gob);
                 }
             }
         }

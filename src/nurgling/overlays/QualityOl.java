@@ -1,7 +1,6 @@
 package nurgling.overlays;
 
 import haven.*;
-import haven.render.Homo3D;
 import haven.render.Pipe;
 
 import java.awt.*;
@@ -30,7 +29,7 @@ public class QualityOl extends NObjectTexLabel {
     @Override
     public void draw(GOut g, Pipe state)
     {
-        Coord sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
+        Coord sc = projectBillboard(g, state, owner, pos);
         g.aimage(qIcon, sc, 0.5,0.5);
         g.aimage(img, sc.add(UI.scale(20,0)), 0.5,0.5);
     }

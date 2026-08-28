@@ -7,6 +7,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExtraInvGroupTransferTest {
@@ -172,6 +173,81 @@ class ExtraInvGroupTransferTest {
     }
 
     @Test
+    void leftoverIncludesOneItemStacksAfterUnpack() {
+        List<ExtraInvGroupTransfer.Slot> after = List.of(
+                ExtraInvGroupTransfer.Slot.solo("Pike", 32.0),
+                ExtraInvGroupTransfer.Slot.oneItemStack("Pike", 40.0),
+                ExtraInvGroupTransfer.Slot.stack("Pike", 41.0),
+                ExtraInvGroupTransfer.Slot.solo("Bream", 20.0));
+
+        List<ExtraInvGroupTransfer.Slot> leftover =
+                ExtraInvGroupTransfer.matchingLeftovers(after, "Pike", NInventory.Grouping.NONE);
+
+        assertEquals(2, leftover.size());
+        assertTrue(leftover.stream().anyMatch(s -> !s.stack));
+        assertTrue(leftover.stream().anyMatch(s -> s.stack && s.stackSize <= 1));
+    }
+
+    @Test
+    void leftoverWatchKeepsGoingUntilUnpackThenStops() {
+        assertFalse(ExtraInvGroupTransfer.leftoverWatchDone(1, 0));
+        assertTrue(ExtraInvGroupTransfer.leftoverWatchDone(2, 0));
+        assertFalse(ExtraInvGroupTransfer.leftoverWatchDone(2, 3));
+        assertTrue(ExtraInvGroupTransfer.leftoverWatchDone(
+                ExtraInvGroupTransfer.LEFTOVER_MAX_PASSES, 3));
+    }
+
+    @Test
+    void exactQualityGroupingKeepsDifferentDecimalsSeparate() {
+        String q321 = ExtraInvGroupTransfer.groupKey("Pike", 32.1, NInventory.Grouping.Q);
+        String q329 = ExtraInvGroupTransfer.groupKey("Pike", 32.9, NInventory.Grouping.Q);
+        assertNotEquals(q321, q329);
+
+        Map<String, List<ExtraInvGroupTransfer.Listed>> groups = ExtraInvGroupTransfer.group(
+                List.of(
+                        ExtraInvGroupTransfer.Listed.item("Pike", 32.1),
+                        ExtraInvGroupTransfer.Listed.item("Pike", 32.9)),
+                NInventory.Grouping.Q, null);
+        assertEquals(2, groups.size());
+        assertEquals(1, groups.get(q321).size());
+        assertEquals(1, groups.get(q329).size());
+    }
+
+    @Test
+    void mixedStackWrapperMustNotTransferOtherQuality() {
+        List<ExtraInvGroupTransfer.Listed> mixed = List.of(
+                ExtraInvGroupTransfer.Listed.item("Pike", 40.0),
+                ExtraInvGroupTransfer.Listed.item("Pike", 20.0));
+        String q40 = ExtraInvGroupTransfer.groupKey("Pike", 40.0, NInventory.Grouping.Q);
+        assertFalse(ExtraInvGroupTransfer.stackWrapperSafe(mixed, q40, NInventory.Grouping.Q));
+        assertTrue(ExtraInvGroupTransfer.stackWrapperSafe(
+                List.of(ExtraInvGroupTransfer.Listed.item("Pike", 40.0),
+                        ExtraInvGroupTransfer.Listed.item("Pike", 40.0)),
+                q40, NInventory.Grouping.Q));
+    }
+
+    @Test
+    void typeBulkAllowsMixedQualityInSameStack() {
+        List<ExtraInvGroupTransfer.Listed> mixed = List.of(
+                ExtraInvGroupTransfer.Listed.item("Granite", 40.0),
+                ExtraInvGroupTransfer.Listed.item("Granite", 20.0));
+        assertTrue(ExtraInvGroupTransfer.stackWrapperSafe(mixed, "Granite", NInventory.Grouping.NONE));
+        assertFalse(ExtraInvGroupTransfer.bulkByType(NInventory.Grouping.Q));
+        assertFalse(ExtraInvGroupTransfer.bulkByType(NInventory.Grouping.Q1));
+        assertFalse(ExtraInvGroupTransfer.bulkByType(NInventory.Grouping.Q5));
+        assertTrue(ExtraInvGroupTransfer.bulkByType(NInventory.Grouping.NONE));
+    }
+
+    @Test
+    void invxf2BulkCountGoesOnStackWrapper() {
+        Object[] args = ExtraInvGroupTransfer.invxf2Args(new int[]{42}, 12);
+        assertEquals(3, args.length);
+        assertEquals(0, args[0]);
+        assertEquals(12, args[1]);
+        assertEquals(42, args[2]);
+    }
+
+    @Test
     void extraPanelSkippedForEnderExcludedWindows() {
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", false));
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
@@ -188,6 +264,21 @@ class ExtraInvGroupTransferTest {
         assertTrue(ExtraInvGroupTransfer.isLeftover(false, 1));
         assertTrue(ExtraInvGroupTransfer.isLeftover(true, 1));
         assertFalse(ExtraInvGroupTransfer.isLeftover(true, 3));
+    }
+
+    @Test
+    void extraShiftClickOnTypeSendsOneInvxf2PerItem() {
+        List<ExtraInvGroupTransfer.Op<String>> ops = ExtraInvGroupTransfer.plan(
+                List.of("sA-1", "sA-2", "sA-3", "sA-4"), ExtraInvGroupTransferTest::stackOf);
+        List<Object[]> msgs = ExtraInvGroupTransfer.extraShiftClickInvxf2(99, ops);
+
+        assertEquals("invxf2", ExtraInvGroupTransfer.EXTRA_SHIFT_MSG);
+        assertEquals(4, msgs.size());
+        for (Object[] msg : msgs) {
+            assertEquals(0, msg[0]);
+            assertEquals(1, msg[1]);
+            assertEquals(99, msg[2]);
+        }
     }
 
     @Test

@@ -32,6 +32,7 @@ import java.util.function.*;
 import haven.render.*;
 import nurgling.*;
 import nurgling.tools.CheckGridsState;
+import nurgling.tools.FlatWorld;
 import nurgling.tools.NParser;
 
 public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, EquipTarget, RandomSource {
@@ -210,6 +211,8 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	}
 
 	public Matrix4f getr(Coord2d rc, double ra) {
+	    if(FlatWorld.isEnabled())
+		return(super.getr(rc, ra));
 	    Matrix4f ret = super.getr(rc, ra);
 	    Coord3f norm = map.getnorm(surf, rc);
 	    norm.y = -norm.y;

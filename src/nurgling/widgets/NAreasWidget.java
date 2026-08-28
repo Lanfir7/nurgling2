@@ -166,10 +166,10 @@ public class NAreasWidget extends Window
         }, createNewFolder.pos("bl").adds(0, 10));
         searchField.settip(get("area.search.placeholder"));
 
-        prev = add(al = new AreaList(UI.scale(new Coord(400,170))), searchField.pos("bl").adds(0, 25));
+        prev = add(al = new AreaList(UI.scale(new Coord(400,289))), searchField.pos("bl").adds(0, 25));
         Widget lab = add(new Label(get("area.label.specialisation"),NStyle.areastitle), prev.pos("bl").add(UI.scale(0,5)));
 
-        add(csl = new CurrentSpecialisationList(UI.scale(164,190)),lab.pos("bl").add(UI.scale(0,5)));
+        add(csl = new CurrentSpecialisationList(UI.scale(164,71)),lab.pos("bl").add(UI.scale(0,5)));
         add(new IButton(NStyle.add[0].back,NStyle.add[1].back,NStyle.add[2].back){
             @Override
             public void click()

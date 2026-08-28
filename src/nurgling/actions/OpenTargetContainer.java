@@ -64,8 +64,8 @@ public class OpenTargetContainer implements Action
      * Whether an already open window is the one belonging to gob, and so may be reused
      * instead of being closed and reopened.
      *
-     * Only NInventory-backed containers carry the binding. Windows without one (stockpiles
-     * and other ISBoxes, barter stands) are left alone and keep the previous behaviour.
+     * NInventory-backed containers and stockpiles carry the gob binding. Other ISBoxes and
+     * barter stands are left alone and keep the previous behaviour.
      *
      * Barrels are the exception: their window holds only a RelCont, so there is nothing to match
      * against, and TakeFromBarrel leaves its window open. An area with several barrels then had
@@ -75,6 +75,7 @@ public class OpenTargetContainer implements Action
     private static boolean isOwnedBy(NGameUI gui, Window wnd, Gob gob)
     {
         NInventory inv = null;
+        NISBox stockpile = null;
         for(Widget w = wnd.lchild; w != null; w = w.prev)
         {
             if(w instanceof NInventory)
@@ -82,10 +83,20 @@ public class OpenTargetContainer implements Action
                 inv = (NInventory) w;
                 break;
             }
+            if(w instanceof NISBox)
+                stockpile = (NISBox) w;
         }
-        if(inv == null)
+        if(inv == null) {
+            if ("Stockpile".equals(wnd.cap))
+                return stockpile != null && stockpile.parentGob != null && gob != null
+                        && sameGobId(stockpile.parentGob.id, gob.id);
             return !"Barrel".equals(wnd.cap);
-        return inv.parentGob != null && gob != null && inv.parentGob.id == gob.id;
+        }
+        return inv.parentGob != null && gob != null && sameGobId(inv.parentGob.id, gob.id);
+    }
+
+    static boolean sameGobId(long ownerGobId, long requestedGobId) {
+        return ownerGobId >= 0 && ownerGobId == requestedGobId;
     }
 
     public OpenTargetContainer(String name, Gob gob)

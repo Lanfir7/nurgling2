@@ -4,6 +4,11 @@ import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.sessions.SessionContext;
 import nurgling.sessions.SessionManager;
+import haven.Coord3f;
+import haven.Matrix4f;
+import haven.render.Homo3D;
+import haven.render.Location;
+import haven.render.Pipe;
 
 /**
  * The single authority on the flat-world terrain toggle.
@@ -21,6 +26,62 @@ public class FlatWorld {
     public static boolean isEnabled() {
         Object v = NConfig.get(NConfig.Key.flatsurface);
         return (v instanceof Boolean) && (Boolean) v;
+    }
+
+    /**
+     * Visual ground height for drawing. {@link haven.MCache#getcz} stays the real
+     * heightmap (survey math, pathfinding); overlays that sit on the drawn terrain
+     * have to go through here or they drape over hills the mesh no longer has.
+     */
+    public static double visualCz(boolean flat, double realCz) {
+        return flat ? 0.0 : realCz;
+    }
+
+    public static double visualCz(double realCz) {
+        return visualCz(isEnabled(), realCz);
+    }
+
+    /**
+     * Overlay vertex Z relative to an origin that already sits on visual ground.
+     * On a hidden slope {@code pointCz - originCz} buries the downhill side; when
+     * the world is drawn flat the overlay stays on the visual plane.
+     */
+    public static float overlayRelZ(boolean flat, double pointCz, double originCz) {
+        return flat ? 0f : (float)(pointCz - originCz);
+    }
+
+    public static float overlayRelZ(double pointCz, double originCz) {
+        return overlayRelZ(isEnabled(), pointCz, originCz);
+    }
+
+    /**
+     * Object-space Z for a gob-parented billboard (harvest pillars, labels).
+     * {@code obj2view} applies the gob location, whose translation still carries the
+     * real heightmap; undo that so the sprite sits {@code localZ} above the visual plane.
+     * {@code m10}/{@code m14} are the location matrix's Z-row scale and translation
+     * ({@code Matrix4f.get(2,2)} / {@code get(3,2)}).
+     */
+    public static float flattenBillboardLocalZ(boolean flat, float localZ, float m10, float m14) {
+        if(!flat || m10 == 0f)
+            return localZ;
+        return (localZ - m14) / m10;
+    }
+
+    /**
+     * Rewrite a gob-local billboard so {@code obj2view} lands on the visual plane.
+     * No-op when flat world is off or the location has no extra Z.
+     */
+    public static Coord3f flattenBillboard(Coord3f local, Pipe state) {
+        if(!isEnabled() || local == null || state == null)
+            return local;
+        Location.Chain loc = state.get(Homo3D.loc);
+        if(loc == null)
+            return local;
+        Matrix4f m = loc.fin(Matrix4f.id);
+        float z = flattenBillboardLocalZ(true, local.z, m.get(2, 2), m.get(3, 2));
+        if(z == local.z)
+            return local;
+        return new Coord3f(local.x, local.y, z);
     }
 
     public static void toggle() {

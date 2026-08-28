@@ -73,6 +73,16 @@ public class ChunkNavExecutor implements Action {
         }
     }
 
+    private static class VisiblePortal {
+        final ChunkPortal recorded;
+        final Gob gob;
+
+        VisiblePortal(ChunkPortal recorded, Gob gob) {
+            this.recorded = recorded;
+            this.gob = gob;
+        }
+    }
+
     public ChunkNavExecutor(ChunkPath path, NArea targetArea, ChunkNavManager manager) {
         this.path = path;
         this.targetArea = targetArea;
@@ -224,7 +234,7 @@ public class ChunkNavExecutor implements Action {
 
             // Try portals in priority order
             for (ScoredPortal scored : rankedPortals) {
-                Results result = tryTraversePortal(gui, player, scored.portal, targetGridId);
+                Results result = tryTraversePortal(gui, player, scored.portal, segment.gridId, targetGridId);
                 if (result != null) return result;
             }
         }
@@ -332,7 +342,7 @@ public class ChunkNavExecutor implements Action {
      * Returns the gob if it's currently visible to the player.
      * Matches by gobHash (name + gridId + position) for accuracy.
      */
-    private Gob findVisiblePortalForTargetGrid(NGameUI gui, long currentGridId, long targetGridId) {
+    private VisiblePortal findVisiblePortalForTargetGrid(NGameUI gui, long currentGridId, long targetGridId) {
         if (targetGridId == -1) return null;
 
         ChunkNavData currentChunk = graph.getChunk(currentGridId);
@@ -355,7 +365,7 @@ public class ChunkNavExecutor implements Action {
                     if (gob.ngob.hash.equals(portal.gobHash)) {
                         double dist = player.rc.dist(gob.rc);
                         if (dist < MCache.tilesz.x * 25) {
-                            return gob;
+                            return new VisiblePortal(portal, gob);
                         }
                     }
                 }
@@ -390,7 +400,8 @@ public class ChunkNavExecutor implements Action {
         return null;
     }
 
-    private Results tryTraversePortal(NGameUI gui, Gob player, ChunkPortal recordedPortal, long targetGridId) throws InterruptedException {
+    private Results tryTraversePortal(NGameUI gui, Gob player, ChunkPortal recordedPortal,
+                                      long sourceGridId, long targetGridId) throws InterruptedException {
         // Find portal by its unique hash to avoid ambiguity with multiple identical buildings
         Gob portalGob = findGobByHash(gui, recordedPortal.gobHash);
         if (portalGob == null) {
@@ -407,8 +418,16 @@ public class ChunkNavExecutor implements Action {
             return traversePortalGob(gui, portalGob, targetGridId);
         }
 
-        // For buildings/doors, navigate to access point first
-        Coord2d accessPoint = getPortalAccessPoint(portalGob);
+        // Interior door localCoord is recorded at the reachable landing tile inside the building.
+        // Prefer it over a direction inferred from the door angle, which can point through a wall.
+        Coord2d recordedAccessPoint = getPortalAccessPoint(recordedPortal, sourceGridId, gui);
+        Coord2d accessPoint;
+        if (PortalApproachPolicy.usesRecordedTile(
+                portalName, recordedAccessPoint, portalGob.rc, MCache.tilesz.x)) {
+            accessPoint = recordedAccessPoint;
+        } else {
+            accessPoint = getPortalAccessPoint(portalGob);
+        }
         if (accessPoint != null) {
             PathFinder accessPf = new PathFinder(accessPoint);
             Results accessResult = accessPf.run(gui);
@@ -715,23 +734,29 @@ public class ChunkNavExecutor implements Action {
 
             // For PORTAL segments, check if portal gob is now visible
             if (isPortalSegment) {
-                Gob visiblePortal = findVisiblePortalForTargetGrid(gui, segment.gridId, targetGridId);
-                if (visiblePortal != null) {
+                VisiblePortal visiblePortal = findVisiblePortalForTargetGrid(gui, segment.gridId, targetGridId);
+                Coord2d recordedAccessPoint = visiblePortal != null
+                        ? getPortalAccessPoint(visiblePortal.recorded, segment.gridId, gui)
+                        : null;
+                boolean useRecordedPoint = visiblePortal != null && PortalApproachPolicy.usesRecordedTile(
+                        visiblePortal.gob.ngob != null ? visiblePortal.gob.ngob.name : null,
+                        recordedAccessPoint, visiblePortal.gob.rc, tileSize);
+                if (visiblePortal != null && !useRecordedPoint) {
                     // For buildings, navigate to door access point instead of gob center
-                    Coord2d accessPoint = getPortalAccessPoint(visiblePortal);
+                    Coord2d accessPoint = getPortalAccessPoint(visiblePortal.gob);
                     if (accessPoint != null) {
                         PathFinder accessPf = new PathFinder(accessPoint);
                         Results accessResult = accessPf.run(gui);
                         if (accessResult.IsSuccess()) {
-                            return SegmentWalkResult.successWithPortal(visiblePortal);
+                            return SegmentWalkResult.successWithPortal(visiblePortal.gob);
                         }
                         // Failed to reach access point, continue with coordinate-based walk
                     } else {
                         // Non-building portal - pathfind directly to gob
-                        PathFinder portalPf = new PathFinder(visiblePortal);
+                        PathFinder portalPf = new PathFinder(visiblePortal.gob);
                         Results portalResult = portalPf.run(gui);
                         if (portalResult.IsSuccess()) {
-                            return SegmentWalkResult.successWithPortal(visiblePortal);
+                            return SegmentWalkResult.successWithPortal(visiblePortal.gob);
                         }
                         // PathFinder failed, continue with coordinate-based walk
                     }

@@ -3,6 +3,7 @@ package nurgling.widgets.nsettings;
 import haven.*;
 import nurgling.NConfig;
 import nurgling.NUtils;
+import nurgling.tools.ForageMarkerLogic;
 
 public class QOLLanfirSettings extends Panel {
     
@@ -14,6 +15,8 @@ public class QOLLanfirSettings extends Panel {
     private Label permIconScaleLabel;
     private HSlider prospectIconScaleSlider;
     private Label prospectIconScaleLabel;
+    private HSlider forageMarkerMinQualitySlider;
+    private Label forageMarkerMinQualityLabel;
     
     public QOLLanfirSettings() {
         super("QOL Lanfir");
@@ -76,6 +79,21 @@ public class QOLLanfirSettings extends Panel {
         };
         
         addhlp(Coord.of(margin, y), UI.scale(5), prospectIconScaleSlider, prospectIconScaleLabel);
+        y += UI.scale(50);
+
+        add(new Label("Forage marker min quality:"), margin, y);
+        y += UI.scale(20);
+
+        forageMarkerMinQualityLabel = new Label("40");
+        forageMarkerMinQualitySlider = new HSlider(UI.scale(300), 10, 100, 40) {
+            @Override
+            public void changed() {
+                forageMarkerMinQualityLabel.settext(String.valueOf(this.val));
+                NConfig.set(NConfig.Key.forageMarkerMinQuality, this.val);
+                NConfig.needUpdate();
+            }
+        };
+        addhlp(Coord.of(margin, y), UI.scale(5), forageMarkerMinQualitySlider, forageMarkerMinQualityLabel);
         
         pack();
     }
@@ -117,6 +135,11 @@ public class QOLLanfirSettings extends Panel {
         }
         prospectIconScaleSlider.val = prospectScaleValue;
         prospectIconScaleLabel.settext(String.format("%d%%", prospectScaleValue));
+
+        Object forageMinQ = NConfig.get(NConfig.Key.forageMarkerMinQuality);
+        int forageMinQValue = ForageMarkerLogic.minQualityFromConfig(forageMinQ);
+        forageMarkerMinQualitySlider.val = forageMinQValue;
+        forageMarkerMinQualityLabel.settext(String.valueOf(forageMinQValue));
     }
     
     @Override
@@ -125,6 +148,7 @@ public class QOLLanfirSettings extends Panel {
         NConfig.set(NConfig.Key.treeResizePercentage, treeResizePercentageSlider.val);
         NConfig.set(NConfig.Key.permIconScale, permIconScaleSlider.val);
         NConfig.set(NConfig.Key.prospectIconScale, prospectIconScaleSlider.val);
+        NConfig.set(NConfig.Key.forageMarkerMinQuality, forageMarkerMinQualitySlider.val);
         NConfig.needUpdate();
         
         // Apply tree resizing to all existing trees in the world

@@ -170,6 +170,22 @@ public class Build implements Action
         return SelectAreaWithLiveGhosts.hitBoxForBuilding(buildingName, customHitBox);
     }
 
+    enum ApproachAction
+    {
+        PROCEED,
+        SKIP_GHOST,
+        ABORT
+    }
+
+    static ApproachAction decideApproachAction(boolean pathSucceeded, boolean hasGhostPositions)
+    {
+        if (pathSucceeded)
+        {
+            return ApproachAction.PROCEED;
+        }
+        return hasGhostPositions ? ApproachAction.SKIP_GHOST : ApproachAction.ABORT;
+    }
+
     /**
      * Snapshot map.placing into a local before calling get(), to avoid the race where
      * placing gets reassigned to a fresh not-done Future between WaitPlob succeeding
@@ -438,11 +454,26 @@ public class Build implements Action
                 : new PathFinder(dummy, true);
             pf.isHardMode = true;
             Results pfResult = pf.run(gui);
-            if (!pfResult.IsSuccess() && playerGob != null && playerGob.rc.dist(pos) > 12)
+            ApproachAction approachAction = decideApproachAction(
+                    pfResult.IsSuccess(),
+                    ghostPositions != null && !ghostPositions.isEmpty()
+            );
+            if (approachAction == ApproachAction.SKIP_GHOST)
             {
-                Coord2d delta = playerGob.rc.sub(pos);
-                Coord2d approach = (delta.abs() > 0.1) ? pos.add(delta.norm().mul(8)) : pos.add(8, 0);
-                new GoTo(approach).run(gui);
+                if (ghostPreview != null)
+                {
+                    ghostPreview.removeGhost(pos);
+                }
+                ghostIndex++;
+                if (ghostIndex >= ghostPositions.size())
+                {
+                    pos = null;
+                }
+                continue;
+            }
+            if (approachAction == ApproachAction.ABORT)
+            {
+                return pfResult;
             }
 
             if (!placeConstruction(gui, pos, rotationAngle))

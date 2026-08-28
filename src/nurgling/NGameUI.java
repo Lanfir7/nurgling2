@@ -81,6 +81,7 @@ public class NGameUI extends GameUI
     public nurgling.widgets.GemstoneSearchWindow gemstoneSearchWindow = null;
     public nurgling.widgets.ForagingSearchWindow foragingSearchWindow = null;
     public LabeledMarkService labeledMarkService;
+    public final ForagePickupMarker foragePickupMarker;
     public MapToolsWindow mapToolsWindow = null;
     public StudyDeskPlannerWidget studyDeskPlanner = null;
     public NDraggableWidget studyReportWidget = null;
@@ -248,6 +249,7 @@ public class NGameUI extends GameUI
     public NGameUI(String chrid, long plid, String genus, NUI nui)
     {
         super(chrid, plid, genus, nui);
+        foragePickupMarker = new ForagePickupMarker(this);
 
         // Initialize world-specific profile
         nurgling.profiles.ConfigFactory.initializeProfile(genus);
@@ -544,6 +546,7 @@ public class NGameUI extends GameUI
         }
         if(labeledMarkService != null)
             labeledMarkService.dispose();
+        foragePickupMarker.dispose();
         /* Take this character's published position out on the way down. It would age out on its own
          * within the minute, but that minute is a minute of showing someone who has left, and
          * "logged out" and "standing still" are exactly the two states these markers exist to tell

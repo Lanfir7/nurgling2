@@ -58,6 +58,8 @@ public class LabeledMarkService implements ProfileAwareService {
     private Thread writer;
     private boolean saveQueued = false;
     private boolean shutdown = false;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+    private volatile long dataVersion = 0;
     private boolean suppressReindex = false;
     
     // Очередь для неблокирующего добавления маркеров (устраняет лаги UI)
@@ -105,6 +107,13 @@ public class LabeledMarkService implements ProfileAwareService {
         this.gui = gui;
         this.genus = genus;
         initializeForProfile(genus);
+    }
+
+    LabeledMarkService(NGameUI gui, String genus, String dataFile) {
+        this.gui = gui;
+        this.genus = genus;
+        this.dataFile = dataFile;
+        loadLabeledMarks();
     }
 
     // ProfileAwareService implementation
@@ -311,6 +320,18 @@ public class LabeledMarkService implements ProfileAwareService {
     public void addForageMark(String label, String resourceType, long segmentId,
                              Coord tileCoords, BufferedImage iconImage) {
         if (resourceType == null || tileCoords == null) return;
+        long gridId = -1;
+        Coord localTileCoords = null;
+        try {
+            if (gui != null && gui.map != null && gui.map.glob != null && gui.map.glob.map != null) {
+                MCache.Grid grid = gui.map.glob.map.getgridt(tileCoords);
+                if (grid != null) {
+                    gridId = grid.id;
+                    localTileCoords = tileCoords.sub(grid.ul);
+                }
+            }
+        } catch (Exception ignored) {
+        }
         lock.writeLock().lock();
         try {
             List<LabeledMinimapMark> sameType =
@@ -332,7 +353,7 @@ public class LabeledMarkService implements ProfileAwareService {
             String locationId = ForageMarkerLogic.forageLocationId(
                 segmentId, tileCoords.x, tileCoords.y, resourceType);
             LabeledMinimapMark mark = new LabeledMinimapMark(
-                locationId, label, resourceType, segmentId, tileCoords, iconImage, null);
+                locationId, label, resourceType, segmentId, tileCoords, gridId, localTileCoords, iconImage, null);
             labeledMarks.put(locationId, mark);
             addMarkToIndexes(mark);
             scheduleSave();
@@ -350,6 +371,7 @@ public class LabeledMarkService implements ProfileAwareService {
         
         // Индекс по сегменту
         segmentIndex.computeIfAbsent(mark.segmentId, k -> new ArrayList<>()).add(mark);
+        dataVersion++;
         if (!suppressReindex) {
             reindex();
         }
@@ -382,6 +404,7 @@ public class LabeledMarkService implements ProfileAwareService {
         
         // Удаляем из основного хранилища
         labeledMarks.remove(locationId);
+        dataVersion++;
         if (!suppressReindex) {
             reindex();
         }
@@ -432,7 +455,7 @@ public class LabeledMarkService implements ProfileAwareService {
                 }
             }
             
-            // Сохраняем асинхронно
+            dataVersion++;
             scheduleSave();
             reindex();
             
@@ -486,7 +509,7 @@ public class LabeledMarkService implements ProfileAwareService {
                 }
             }
             
-            // Сохраняем асинхронно
+            dataVersion++;
             scheduleSave();
             reindex();
         } finally {
@@ -550,7 +573,7 @@ public class LabeledMarkService implements ProfileAwareService {
             main.put("lastSaved", java.time.Instant.now().toString());
 
             NFileUtils.writeAtomically(dataFile, main.toString());
-        } catch (IOException e) {
+        } catch (Exception e) {
             System.err.println("Failed to save labeled marks: " + e.getMessage());
         }
         }
@@ -562,7 +585,7 @@ public class LabeledMarkService implements ProfileAwareService {
      */
     private void scheduleSave() {
         synchronized (writeLock) {
-            if (shutdown || saveQueued) {
+            if (shutdown || closed.get() || saveQueued) {
                 return;
             }
             saveQueued = true;
@@ -589,12 +612,33 @@ public class LabeledMarkService implements ProfileAwareService {
                         return;
                     }
                 }
-                if (shutdown) {
+                if (!ForageMarkerLogic.allowQueuedMarkSave(shutdown) || closed.get()) {
                     return;
                 }
                 saveQueued = false;
             }
-            writeSnapshot(snapshot());
+            if (!ForageMarkerLogic.allowQueuedMarkSave(shutdown) || closed.get()) {
+                return;
+            }
+            long snapVersion;
+            List<LabeledMinimapMark> snap;
+            lock.readLock().lock();
+            try {
+                snapVersion = dataVersion;
+                snap = new ArrayList<>(labeledMarks.values());
+            } finally {
+                lock.readLock().unlock();
+            }
+            if (!ForageMarkerLogic.commitMarkSnapshot(snapVersion, dataVersion, shutdown) || closed.get()) {
+                if (ForageMarkerLogic.rescheduleMarkSave(snapVersion, dataVersion, shutdown) && !closed.get()) {
+                    scheduleSave();
+                }
+                continue;
+            }
+            writeSnapshot(snap);
+            if (ForageMarkerLogic.rescheduleMarkSave(snapVersion, dataVersion, shutdown) && !closed.get()) {
+                scheduleSave();
+            }
         }
     }
 
@@ -792,6 +836,7 @@ public class LabeledMarkService implements ProfileAwareService {
         if (!suppressReindex) {
             reindex();
         }
+        dataVersion++;
     }
 
     /**
@@ -1113,6 +1158,7 @@ public class LabeledMarkService implements ProfileAwareService {
      * Dispose the service and cleanup resources.
      */
     public void dispose() {
+        if (!closed.compareAndSet(false, true)) return;
         try {
             saveExecutor.shutdown();
             if (!saveExecutor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -1122,13 +1168,20 @@ public class LabeledMarkService implements ProfileAwareService {
             saveExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
+        Thread writerToJoin;
         synchronized (writeLock) {
             shutdown = true;
+            writerToJoin = writer;
             writer = null;
             writeLock.notifyAll();
         }
-        /* Blocks on fileLock until any in-flight background write finishes, so the
-         * final state always lands last. */
+        if (writerToJoin != null) {
+            try {
+                writerToJoin.join(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         writeSnapshot(snapshot());
         lock.writeLock().lock();
         try {

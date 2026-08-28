@@ -3,6 +3,7 @@ package nurgling.overlays;
 import haven.*;
 import haven.render.*;
 import nurgling.NUtils;
+import nurgling.tools.FlatWorld;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -74,7 +75,7 @@ public class NZoneBorderOverlay implements RenderTree.Node, Rendered {
 
     private float getTerrainZ(MCache map, float x, float y) {
         try {
-            return (float) map.getcz(x, y) + Z_OFFSET;
+            return (float) FlatWorld.visualCz(map.getcz(x, y)) + Z_OFFSET;
         } catch (Loading e) {
             return Z_OFFSET;
         }

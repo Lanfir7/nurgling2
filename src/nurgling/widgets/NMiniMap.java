@@ -15,6 +15,7 @@ import nurgling.overlays.map.MinimapFloorOverlayRenderer;
 import nurgling.map.FloorOverlayAligner;
 import nurgling.map.PermanentMarkerPath;
 import nurgling.tools.ExploredArea;
+import nurgling.tools.MiniMapDisplayExtent;
 import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
 
@@ -2040,7 +2041,7 @@ NMiniMap extends MiniMap {
         }
         
         // Draw current level
-        if(display != null && dgext != null) {
+        if(MiniMapDisplayExtent.canIterate(dgext, display)) {
             for(Coord c : dgext) {
                 DisplayGrid disp = display[dgext.ri(c)];
                 if(disp == null)
@@ -2109,6 +2110,8 @@ NMiniMap extends MiniMap {
 
     @Override
     public void drawmarkers(GOut g) {
+        if(!MiniMapDisplayExtent.canIterate(dgext, display))
+            return;
         Coord hsz = sz.div(2);
 
         // Get marker search pattern from NMapWnd if we're inside one

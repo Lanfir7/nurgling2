@@ -140,7 +140,6 @@ public class NGItem extends GItem
     public void tick(double dt)
     {
         super.tick(dt);
-        ForagePickupMarker.onItemTick(this);
         if (name == null && spr != null)
         {
             if (!res.get().name.contains("coin"))
@@ -164,6 +163,7 @@ public class NGItem extends GItem
             }
 
         }
+        ForagePickupMarker.onItemTick(this);
         if(name!= null) {
             // Check if this is a stack container (has contents with ItemStack)
             // This must be checked early while contents is still available

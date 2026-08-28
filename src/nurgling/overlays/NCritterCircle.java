@@ -5,6 +5,7 @@ import haven.render.*;
 import haven.render.Model.Indices;
 import nurgling.NConfig;
 import nurgling.conf.NCritterCircleConf;
+import nurgling.tools.FlatWorld;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 
@@ -104,6 +105,7 @@ public class NCritterCircle extends Sprite {
     private final Pipe.Op fillMat;
     private final String critterPath;
     private Coord2d lc;
+    private boolean lastFlat;
     private RenderTree.Slot _slot;
 
     public NCritterCircle(Owner owner, Color color, float radius, String critterPath) {
@@ -163,10 +165,11 @@ public class NCritterCircle extends Sprite {
     private void setz(Render g, Glob glob, Coord2d c) {
         FloatBuffer posb = posa.data;
         int n = VERTEX_COUNT;
+        boolean flat = FlatWorld.isEnabled();
         try {
             float bz = (float) glob.map.getcz(c.x, c.y);
             for (int i = 0; i < n; i++) {
-                float z = (float) glob.map.getcz(c.x + posb.get(i * 3), c.y - posb.get(i * 3 + 1)) - bz;
+                float z = FlatWorld.overlayRelZ(flat, glob.map.getcz(c.x + posb.get(i * 3), c.y - posb.get(i * 3 + 1)), bz);
                 posb.put(i * 3 + 2, z + HEIGHT);
                 // Inner ring vertices are at center, same base z
                 posb.put((n + i) * 3 + 2, HEIGHT);
@@ -183,9 +186,11 @@ public class NCritterCircle extends Sprite {
         if (_slot == null)
             return;
         Coord2d cc = ((Gob) owner).rc;
-        if (lc == null || !lc.equals(cc)) {
+        boolean flat = FlatWorld.isEnabled();
+        if (lc == null || !lc.equals(cc) || flat != lastFlat) {
             setz(g, owner.context(Glob.class), cc);
             lc = cc;
+            lastFlat = flat;
         }
     }
 

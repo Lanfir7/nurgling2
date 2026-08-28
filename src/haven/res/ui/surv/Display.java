@@ -10,6 +10,7 @@ import java.awt.Color;
 import static haven.MCache.tilesz;
 import static haven.render.sl.Cons.*;
 import static haven.render.sl.Type.*;
+import nurgling.tools.FlatWorld;
 
 @haven.FromResource(name = "ui/surv", version = 46)
 public class Display implements RenderTree.Node, TickList.Ticking, TickList.TickNode {
@@ -57,7 +58,7 @@ public class Display implements RenderTree.Node, TickList.Ticking, TickList.Tick
     private Coord3f vpos(Coord vc) {
 	return(Coord3f.of((vc.x - data.varea.ul.x) * (float)tilesz.x,
 			  (vc.y - data.varea.ul.y) * (float)tilesz.y,
-			  data.dz[data.varea.ridx(vc)] / data.gran));
+			  (float)FlatWorld.visualCz(data.dz[data.varea.ridx(vc)] / data.gran)));
     }
 
     public float zsize(Coord vc) {
@@ -79,7 +80,7 @@ public class Display implements RenderTree.Node, TickList.Ticking, TickList.Tick
 		tz = 0;
 	    }
 	    float vz = data.dz[data.varea.ridx(vc)] / data.gran;
-	    buf.putFloat((vc.x - ul.x) * (float)tilesz.x).putFloat(-(vc.y - ul.y) * (float)tilesz.y).putFloat(vz);
+	    buf.putFloat((vc.x - ul.x) * (float)tilesz.x).putFloat(-(vc.y - ul.y) * (float)tilesz.y).putFloat((float)FlatWorld.visualCz(vz));
 	    byte fl = 0;
 	    if(vz - tz > E)
 		fl |= 1;

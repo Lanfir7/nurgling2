@@ -14,9 +14,30 @@ public class AutoSaveTableware implements Action
     public final AtomicBoolean stop = new AtomicBoolean(false);
     NInventory tableInv = null;
     NInventory scInv = null;
+
+    enum TakeOff { TO_INVENTORY, DROP }
+
     public AutoSaveTableware()
     {
         stop.set(false);
+    }
+
+    /** Remaining wear is `m - d`; take off at 1 left so the next eat cannot break it. */
+    static boolean shouldRemove(int d, int m) {
+        return m > 0 && m - d <= 1;
+    }
+
+    static boolean shouldRemove(Wear w) {
+        return w != null && shouldRemove(w.d, w.m);
+    }
+
+    /** Shift-click `transfer` can land in the table's full food grid; invxf targets the bag. */
+    static TakeOff takeOffMode(int freeSlots) {
+        return freeSlots > 0 ? TakeOff.TO_INVENTORY : TakeOff.DROP;
+    }
+
+    static boolean canWatch(boolean feast, boolean hasTable) {
+        return feast && hasTable;
     }
 
     @Override
@@ -25,13 +46,13 @@ public class AutoSaveTableware implements Action
         while (!stop.get())
         {
             tableInv = null;
-            // Wait for condition: bot not paused and we can check table
+            scInv = null;
             NUtils.addTask(new NTask()
             {
                 @Override
                 public boolean check()
                 {
-                    return stop.get() || (NUtils.getGameUI()!= null && findTableInventory());
+                    return stop.get() || (NUtils.getGameUI() != null && findTableInventory());
                 }
             });
 
@@ -40,36 +61,71 @@ public class AutoSaveTableware implements Action
                 return Results.SUCCESS();
             }
 
-
-            if (tableInv != null && scInv!=null)
+            if (tableInv != null)
             {
                 ArrayList<WItem> items = tableInv.getItems();
-                items.addAll(scInv.getItems());
+                if (scInv != null)
+                    items.addAll(scInv.getItems());
                 for (WItem witem : items)
                 {
-
-                    Wear w = ((NGItem) witem.item).getInfo(Wear.class);
-                    if (w != null)
-                    {
-
-                        if (w.m - w.d <= 1)
-                        {
-                            witem.item.wdgmsg("transfer", haven.Coord.z);
-                            try {
-                                NUtils.addTask(new nurgling.tasks.ISRemoved(witem.item.wdgid()));
-                            } catch (InterruptedException e) {
-                                if (stop.get()) throw e;
-                            }
-                        }
-                    }
+                    if (!(witem.item instanceof NGItem))
+                        continue;
+                    witem.item.info();
+                    if (!shouldRemove(((NGItem) witem.item).getInfo(Wear.class)))
+                        continue;
+                    takeOff(gui, witem);
+                    if (stop.get())
+                        throw new InterruptedException();
                 }
             }
         }
 
-
         return Results.SUCCESS();
     }
 
+    private void takeOff(NGameUI gui, WItem witem) throws InterruptedException
+    {
+        int id = witem.item.wdgid();
+        TakeOff mode = takeOffMode(freeSlots(gui, witem));
+        sendTakeOff(gui, witem, mode);
+        waitGone(id);
+        if (stillHere(id) && mode == TakeOff.TO_INVENTORY)
+        {
+            sendTakeOff(gui, witem, TakeOff.DROP);
+            waitGone(id);
+        }
+    }
+
+    private static int freeSlots(NGameUI gui, WItem witem) throws InterruptedException
+    {
+        if (gui == null || gui.getInventory() == null)
+            return 0;
+        return gui.getInventory().getNumberFreeCoord(witem);
+    }
+
+    private static void sendTakeOff(NGameUI gui, WItem witem, TakeOff mode)
+    {
+        if (mode == TakeOff.TO_INVENTORY && gui != null && gui.getInventory() != null)
+            witem.item.wdgmsg("invxf", gui.getInventory().wdgid(), 1);
+        else
+            witem.item.wdgmsg("drop", Coord.z);
+    }
+
+    private void waitGone(int id) throws InterruptedException
+    {
+        try {
+            NUtils.addTask(new ISRemoved(id, false));
+        } catch (InterruptedException e) {
+            if (stop.get() || Thread.currentThread().isInterrupted())
+                throw e;
+        }
+    }
+
+    private static boolean stillHere(int id)
+    {
+        NUI ui = NUtils.getUI();
+        return ui != null && ui.getwidget(id) != null;
+    }
 
     private boolean findTableInventory()
     {
@@ -105,7 +161,7 @@ public class AutoSaveTableware implements Action
                 }
             }
         }
-        if (isFeast)
+        if (canWatch(isFeast, tableCand != null))
         {
             tableInv = tableCand;
             scInv = scCand;

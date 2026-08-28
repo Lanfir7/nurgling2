@@ -497,13 +497,13 @@ public class GobIcon extends GAttrib {
 			    }
 			}
 		    } catch(LinkageError e) {
-			if(!cached)
+			if(GobIconSavedIconPolicy.rethrow(e, cached))
 			    throw(e);
 			new Warning(e, "Could not re-load saved icon " + res).issue();
 			r = null;
 			continue;
 		    } catch(RuntimeException e) {
-			if((e instanceof Resource.BadVersionException) && !cached)
+			if(GobIconSavedIconPolicy.rethrow(e, cached))
 			    throw(e);
 			new Warning(e, "Could not re-load saved icon " + res).issue();
 			r = null;

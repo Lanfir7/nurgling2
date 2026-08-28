@@ -61,8 +61,7 @@ public class NTexMarker extends Sprite implements RenderTree.Node, PView.Render2
 
 	@Override
 	public void draw(GOut g, Pipe state) {
-		Coord3f markerPos = new Coord3f(0, 0, z + NUtils.getDeltaZ());
-		Coord sc = Homo3D.obj2view(markerPos, state, Area.sized(g.sz())).round2();
+		Coord sc = NObjectTexLabel.projectBillboard(g, state, owner, new Coord3f(0, 0, z + NUtils.getDeltaZ()));
 		g.aimage(img, sc, 0.5, 0.5,UI.scale(48,48));
 		if (clickThroughToGob) {
 			lastScreenCenter = sc;

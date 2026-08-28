@@ -30,6 +30,7 @@ public class NInventory extends Inventory
     private Grouping leftoverGrouping;
     private String leftoverAction;
     private int leftoverWait;
+    private int leftoverPass;
     private static final int LEFTOVER_DELAY_TICKS = 12;
     public boolean mainInvInstalled = false;
     private boolean extraPanelInstalled = false;
@@ -1816,47 +1817,105 @@ public class NInventory extends Inventory
             double vb = qb != null ? qb : 0;
             return -Double.compare(va, vb);
         };
+        boolean typeBulk = ExtraInvGroupTransfer.bulkByType(group.grouping) && !"drop".equals(action);
         boolean all = !"drop".equals(action) || (ui != null && ui.modmeta);
         List<WItem> items = ExtraInvGroupTransfer.pick(group.wItems, all, reverse, byQualityHighFirst);
-        Object[] invxf2 = "drop".equals(action) ? null : ExtraInvGroupTransfer.invxf2Args(transferTargetIds());
-        LinkedHashSet<GItem> stackWrappers = new LinkedHashSet<>();
-        for (WItem w : items) {
-            sendGroupItem(w == null ? null : w.item, action, invxf2);
-            GItem wrapper = stackOuterGItem(w);
-            if (wrapper != null) {
-                stackWrappers.add(wrapper);
+        if (typeBulk) {
+            sendTypeBulk(items, action);
+        } else {
+            Object[] invxf2 = "drop".equals(action) ? null : ExtraInvGroupTransfer.invxf2Args(transferTargetIds());
+            LinkedHashSet<GItem> stackWrappers = new LinkedHashSet<>();
+            for (WItem w : items) {
+                sendGroupItem(w == null ? null : w.item, action, invxf2, ExtraInvGroupTransfer.TRANSFER_COUNT);
+                GItem wrapper = stackOuterGItem(w);
+                if (wrapper != null && stackWrapperMatchesGroup(wrapper, group.groupKey, group.grouping)) {
+                    stackWrappers.add(wrapper);
+                }
             }
-        }
-        for (GItem wrapper : stackWrappers) {
-            sendGroupItem(wrapper, action, invxf2);
+            for (GItem wrapper : stackWrappers) {
+                sendGroupItem(wrapper, action, invxf2, ExtraInvGroupTransfer.TRANSFER_COUNT);
+            }
         }
         if (!"drop".equals(action) && all) {
             leftoverGroupKey = group.groupKey;
             leftoverGrouping = group.grouping;
             leftoverAction = action;
             leftoverWait = LEFTOVER_DELAY_TICKS;
+            leftoverPass = 0;
+        }
+    }
+
+    private void sendTypeBulk(List<WItem> items, String action) {
+        int[] dest = transferTargetIds();
+        for (WItem w : items) {
+            if (w == null || w.item == null) {
+                continue;
+            }
+            sendGroupItem(w.item, action, ExtraInvGroupTransfer.invxf2Args(dest),
+                    ExtraInvGroupTransfer.TRANSFER_COUNT);
         }
     }
 
     private void sendGroupItem(GItem item, String action, Object[] invxf2) {
+        sendGroupItem(item, action, invxf2, ExtraInvGroupTransfer.TRANSFER_COUNT);
+    }
+
+    private void sendGroupItem(GItem item, String action, Object[] invxf2, int count) {
         if (item == null) {
             return;
         }
         Coord click = sqsz.div(2);
+        int n = count < 1 ? ExtraInvGroupTransfer.TRANSFER_COUNT : count;
         if (invxf2 != null) {
             item.wdgmsg("invxf2", invxf2);
         } else if ("drop".equals(action)) {
-            item.wdgmsg("drop", click, ExtraInvGroupTransfer.TRANSFER_COUNT);
+            item.wdgmsg("drop", click, n);
         } else {
-            item.wdgmsg("transfer", click, ExtraInvGroupTransfer.TRANSFER_COUNT);
+            item.wdgmsg("transfer", click, n);
         }
     }
 
-    static GItem stackOuterGItem(WItem w) {
+    private boolean stackWrapperMatchesGroup(GItem wrapper, String groupKey, Grouping grouping) {
+        if (wrapper == null || !(wrapper.contents instanceof ItemStack)) {
+            return false;
+        }
+        ItemStack stack = (ItemStack) wrapper.contents;
+        List<ExtraInvGroupTransfer.Listed> inners = new ArrayList<>();
+        for (GItem inner : stack.order) {
+            WItem innerW = stack.wmap.get(inner);
+            if (innerW == null || !(innerW.item instanceof NGItem)) {
+                continue;
+            }
+            NGItem nitem = (NGItem) innerW.item;
+            inners.add(ExtraInvGroupTransfer.Listed.item(nitem.name(), getItemQuality(nitem)));
+        }
+        if (inners.isEmpty()) {
+            for (Widget ch = stack.child; ch != null; ch = ch.next) {
+                if (!(ch instanceof WItem) || !(((WItem) ch).item instanceof NGItem)) {
+                    continue;
+                }
+                NGItem nitem = (NGItem) ((WItem) ch).item;
+                inners.add(ExtraInvGroupTransfer.Listed.item(nitem.name(), getItemQuality(nitem)));
+            }
+        }
+        return ExtraInvGroupTransfer.stackWrapperSafe(inners, groupKey, grouping);
+    }
+
+    public static GItem stackOuterGItem(WItem w) {
         if (w == null) {
             return null;
         }
         if (w.parent instanceof ItemStack) {
+            Widget stackParent = w.parent.parent;
+            if (stackParent instanceof GItem.ContentsWindow) {
+                GItem.ContentsWindow cw = (GItem.ContentsWindow) stackParent;
+                if (cw.cont != null) {
+                    return cw.cont;
+                }
+            }
+            if (stackParent instanceof GItem) {
+                return (GItem) stackParent;
+            }
             GItem.ContentsWindow cw = w.getparent(GItem.ContentsWindow.class);
             if (cw != null && cw.cont != null) {
                 return cw.cont;
@@ -1868,6 +1927,40 @@ public class NInventory extends Inventory
         return null;
     }
 
+    public static int itemStackSize(GItem item) {
+        if (item != null && item.contents instanceof ItemStack) {
+            ItemStack stack = (ItemStack) item.contents;
+            if (stack.wmap != null && !stack.wmap.isEmpty()) {
+                return stack.wmap.size();
+            }
+            int n = 0;
+            for (Widget ch = stack.child; ch != null; ch = ch.next) {
+                if (ch instanceof WItem) {
+                    n++;
+                }
+            }
+            return Math.max(n, 1);
+        }
+        return 1;
+    }
+
+    public static boolean isLeftoverItem(WItem w) {
+        GItem outer = stackOuterGItem(w);
+        GItem item = outer != null ? outer : (w == null ? null : w.item);
+        if (item == null) {
+            return false;
+        }
+        if (item.contents instanceof ItemStack) {
+            return ExtraInvGroupTransfer.isLeftover(true, itemStackSize(item));
+        }
+        return true;
+    }
+
+    public static GItem leftoverTransferTarget(WItem w) {
+        GItem outer = stackOuterGItem(w);
+        return outer != null ? outer : (w == null ? null : w.item);
+    }
+
     private void flushLeftoversIfDue() {
         if (leftoverGroupKey == null) {
             return;
@@ -1876,12 +1969,12 @@ public class NInventory extends Inventory
         if (leftoverWait > 0) {
             return;
         }
+        leftoverPass++;
         String key = leftoverGroupKey;
         Grouping grouping = leftoverGrouping != null ? leftoverGrouping : Grouping.NONE;
         String action = leftoverAction != null ? leftoverAction : "transfer";
-        leftoverGroupKey = null;
-        leftoverAction = null;
         Object[] invxf2 = ExtraInvGroupTransfer.invxf2Args(transferTargetIds());
+        int sent = 0;
         for (Widget widget = this.child; widget != null; widget = widget.next) {
             if (!(widget instanceof WItem)) {
                 continue;
@@ -1898,14 +1991,23 @@ public class NInventory extends Inventory
             if (!key.equals(ExtraInvGroupTransfer.groupKey(name, getItemQuality(nitem), grouping))) {
                 continue;
             }
-            Widget contents = w.item.contents;
-            boolean stack = contents instanceof ItemStack;
-            int stackSize = stack ? ((ItemStack) contents).wmap.size() : 1;
-            if (!ExtraInvGroupTransfer.isLeftover(stack, stackSize)) {
+            if (w.item.contents instanceof ItemStack
+                    && !ExtraInvGroupTransfer.isLeftover(true, itemStackSize(w.item))) {
                 continue;
             }
             sendGroupItem(w.item, action, invxf2);
+            sent++;
         }
+        if (ExtraInvGroupTransfer.leftoverWatchDone(leftoverPass, sent)) {
+            leftoverGroupKey = null;
+            leftoverAction = null;
+        } else {
+            leftoverWait = LEFTOVER_DELAY_TICKS;
+        }
+    }
+
+    public int[] extraTransferTargetIds() {
+        return transferTargetIds();
     }
 
     /** Visible stockpiles first (topmost window), then other inventories except this one. */

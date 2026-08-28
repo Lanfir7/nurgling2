@@ -94,6 +94,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     private RenderTree.Slot gridWallSlot = null;
     private Set<Coord> gridWallLastCoords = null;
     private Color gridWallLastColor = null;
+    private boolean gridWallLastFlat = false;
     private static final Color GRID_WALL_DEFAULT_COLOR = new Color(255, 140, 0, 217);
 
     public NMapView(Coord sz, Glob glob, Coord2d cc, long plgob)
@@ -1511,6 +1512,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             currentGridCoords = new HashSet<>(glob.map.grids.keySet());
         }
         Color currentColor = NConfig.getColor(NConfig.Key.gridWallColor, GRID_WALL_DEFAULT_COLOR);
+        boolean currentFlat = FlatWorld.isEnabled();
 
         // Only include grids whose corners have loaded terrain; the rest are
         // retried on later ticks as their data arrives.
@@ -1524,7 +1526,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         boolean needRebuild = (gridWallOverlay == null)
                 || gridWallLastCoords == null
                 || !readyCoords.equals(gridWallLastCoords)
-                || !currentColor.equals(gridWallLastColor);
+                || !currentColor.equals(gridWallLastColor)
+                || currentFlat != gridWallLastFlat;
 
         if (!needRebuild) return;
 
@@ -1534,6 +1537,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         gridWallOverlay.rebuild(glob.map, readyCoords, currentColor);
         gridWallLastCoords = readyCoords;
         gridWallLastColor = currentColor;
+        gridWallLastFlat = currentFlat;
 
         if (gridWallSlot == null) {
             try {
@@ -1555,6 +1559,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         gridWallOverlay = null;
         gridWallLastCoords = null;
         gridWallLastColor = null;
+        gridWallLastFlat = false;
     }
 
     public void toggleol(String tag, boolean a)

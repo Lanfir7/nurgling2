@@ -1,11 +1,11 @@
 package nurgling.overlays;
 
 import haven.*;
-import haven.render.Camera;
 import haven.render.Homo3D;
 import haven.render.Pipe;
 import haven.render.RenderTree;
 import nurgling.*;
+import nurgling.tools.FlatWorld;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -43,11 +43,11 @@ public class NObjectTexLabel extends Sprite implements RenderTree.Node, PView.Re
             
             // If zoom hide is disabled, always show full label
             boolean showFullLabel = forced || disableZoomHide;
+            Coord sc = projectBillboard(g, state, owner, pos);
             
             if (NUtils.getGameUI().map.camera instanceof MapView.FreeCam) {
-                HomoCoord4f sc3 = Homo3D.obj2clip(pos, state);
-                Coord sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
-                if (sc3.w > 1000 && !showFullLabel) {
+                HomoCoord4f sc3 = Homo3D.obj2clip(drawPos(state), state);
+                if (sc3 != null && sc3.w > 1000 && !showFullLabel) {
                     if (img != null)
                         g.aimage(img, sc, 0.5, 0.5);
                 } else {
@@ -55,7 +55,6 @@ public class NObjectTexLabel extends Sprite implements RenderTree.Node, PView.Re
                         g.aimage(label, sc, 0.5, 0.5);
                 }
             } else if (NUtils.getGameUI().map.camera instanceof MapView.OrthoCam) {
-                Coord sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
                 if (((MapView.OrthoCam) cam).field > 400 && !showFullLabel) {
                     if (img != null)
                         g.aimage(img, sc, 0.5, 0.5);
@@ -64,7 +63,6 @@ public class NObjectTexLabel extends Sprite implements RenderTree.Node, PView.Re
                         g.aimage(label, sc, 0.5, 0.5);
                 }
             } else if (NUtils.getGameUI().map.camera instanceof MapView.SimpleCam) {
-                Coord sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
                 if (((MapView.SimpleCam) cam).dist > 600 && !showFullLabel) {
                     if (img != null)
                         g.aimage(img, sc, 0.5, 0.5);
@@ -73,10 +71,34 @@ public class NObjectTexLabel extends Sprite implements RenderTree.Node, PView.Re
                         g.aimage(label, sc, 0.5, 0.5);
                 }
             } else {
-                Coord sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
                 if (label != null)
                     g.aimage(label, sc, 0.5, 0.5);
             }
         }
+    }
+
+    /** Gob location Z still follows the real heightmap; drop it when the world is drawn flat. */
+    protected Coord3f drawPos(Pipe state) {
+        return FlatWorld.flattenBillboard(pos, state);
+    }
+
+    /**
+     * Project a gob-parented billboard. Flat world uses map {@code screenxf} at visual
+     * ground + local Z so a stale or unflattened gob location cannot lift the sprite.
+     */
+    static Coord projectBillboard(GOut g, Pipe state, Owner owner, Coord3f localPos) {
+        if (FlatWorld.isEnabled() && owner instanceof Gob) {
+            try {
+                NGameUI gui = NUtils.getGameUI();
+                if (gui != null && gui.map != null) {
+                    Coord3f gc = ((Gob) owner).getc();
+                    Coord3f sc3 = gui.map.screenxf(new Coord3f(gc.x, gc.y, localPos.z));
+                    if (sc3 != null)
+                        return sc3.round2();
+                }
+            } catch (Loading ignored) {}
+        }
+        Coord3f p = FlatWorld.flattenBillboard(localPos, state);
+        return Homo3D.obj2view(p, state, Area.sized(g.sz())).round2();
     }
 }

@@ -78,7 +78,28 @@ public final class ExtraInvGroupTransfer {
             return name;
         }
         double q = quality != null ? quantifyQuality(quality, grouping) : 0;
+        if (grouping == NInventory.Grouping.Q) {
+            return name + "@Q" + String.format(java.util.Locale.US, "%.4f", q);
+        }
         return name + "@Q" + (int) q;
+    }
+
+    /** Type grouping: whole stack is one kind, so one invxf2 with count=N is safe. Quality stays 1-by-1. */
+    public static boolean bulkByType(NInventory.Grouping grouping) {
+        return grouping == null || grouping == NInventory.Grouping.NONE;
+    }
+
+    /** Extra wrapper invxf2 is only safe when every inner item belongs to the clicked row. */
+    public static boolean stackWrapperSafe(List<Listed> inners, String groupKey, NInventory.Grouping grouping) {
+        if (inners == null || inners.isEmpty() || groupKey == null) {
+            return false;
+        }
+        for (Listed it : inners) {
+            if (!groupKey.equals(groupKey(it.name, it.quality, grouping))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static double quantifyQuality(double q, NInventory.Grouping grouping) {
@@ -176,6 +197,19 @@ public final class ExtraInvGroupTransfer {
         return !stack || stackSize <= 1;
     }
 
+    public static final int LEFTOVER_MAX_PASSES = 8;
+
+    /**
+     * Leftover flush is not one-shot: first pass often still sees stacks, not unpacked solos.
+     * Give up after two empty passes, or after {@link #LEFTOVER_MAX_PASSES}.
+     */
+    public static boolean leftoverWatchDone(int pass, int leftoversThisPass) {
+        if (pass >= LEFTOVER_MAX_PASSES) {
+            return true;
+        }
+        return pass >= 2 && leftoversThisPass == 0;
+    }
+
     public static List<Slot> matchingLeftovers(List<Slot> slots, String groupKey, NInventory.Grouping grouping) {
         if (slots == null || groupKey == null) {
             return List.of();
@@ -185,7 +219,7 @@ public final class ExtraInvGroupTransfer {
             if (!groupKey.equals(groupKey(slot.name, slot.quality, grouping))) {
                 continue;
             }
-            if (!slot.stack) {
+            if (isLeftover(slot.stack, slot.stackSize)) {
                 out.add(slot);
             }
         }
@@ -196,19 +230,29 @@ public final class ExtraInvGroupTransfer {
         public final String name;
         public final Double quality;
         public final boolean stack;
+        public final int stackSize;
 
         public Slot(String name, Double quality, boolean stack) {
+            this(name, quality, stack, stack ? 3 : 1);
+        }
+
+        public Slot(String name, Double quality, boolean stack, int stackSize) {
             this.name = name;
             this.quality = quality;
             this.stack = stack;
+            this.stackSize = stackSize;
         }
 
         public static Slot stack(String name, Double quality) {
-            return new Slot(name, quality, true);
+            return new Slot(name, quality, true, 3);
+        }
+
+        public static Slot oneItemStack(String name, Double quality) {
+            return new Slot(name, quality, true, 1);
         }
 
         public static Slot solo(String name, Double quality) {
-            return new Slot(name, quality, false);
+            return new Slot(name, quality, false, 1);
         }
     }
 
@@ -225,18 +269,42 @@ public final class ExtraInvGroupTransfer {
         return !EXTRA_PANEL_EXCLUDES.contains(windowTitle);
     }
 
-    /** Ender ExtInventory.getTransferTargets(): flags, count=1, destination widget ids. */
+    /** Ender ExtInventory.getTransferTargets(): flags, count, destination widget ids. */
+    /** Extra-inventory Shift+click on a type row: invxf2, never take-to-hand. */
+    public static final String EXTRA_SHIFT_MSG = "invxf2";
+
     public static Object[] invxf2Args(int[] destWdgIds) {
+        return invxf2Args(destWdgIds, TRANSFER_COUNT);
+    }
+
+    public static Object[] invxf2Args(int[] destWdgIds, int count) {
         if (destWdgIds == null || destWdgIds.length == 0) {
             return null;
         }
         Object[] args = new Object[2 + destWdgIds.length];
         args[0] = 0;
-        args[1] = 1;
+        args[1] = count < 1 ? TRANSFER_COUNT : count;
         for (int i = 0; i < destWdgIds.length; i++) {
             args[2 + i] = destWdgIds[i];
         }
         return args;
+    }
+
+    /** Send one transfer command for every concrete item in the chosen type. */
+    public static <T> List<Object[]> extraShiftClickInvxf2(int destWdgId, List<Op<T>> ops) {
+        if (ops == null || ops.isEmpty()) {
+            return List.of();
+        }
+        List<Object[]> out = new ArrayList<>();
+        for (Op<T> op : ops) {
+            for (int i = 0; i < op.count; i++) {
+                Object[] args = invxf2Args(new int[]{destWdgId});
+                if (args != null) {
+                    out.add(args);
+                }
+            }
+        }
+        return out;
     }
 
     public static <T> List<Op<T>> plan(List<T> items, java.util.function.Function<T, T> stackWrapper) {

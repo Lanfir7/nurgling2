@@ -4,6 +4,7 @@ import haven.*;
 import haven.render.*;
 import haven.render.Model.Indices;
 import nurgling.conf.NAreaRadStyle;
+import nurgling.tools.FlatWorld;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 
@@ -22,8 +23,9 @@ public class NAreaRad extends Sprite {
 	final VertexBuf.VertexData posa;
 	final VertexBuf vbuf;
 	final Model smod, emod;
-	private Coord2d lc;
-	int n;
+		private Coord2d lc;
+		private boolean lastFlat;
+		int n;
 	float curR;
 	Palette palette = Palette.ANIMAL;
 	Color customFill;
@@ -132,22 +134,23 @@ public class NAreaRad extends Sprite {
 		}
 	}
 
-	private void setz(Render g, Glob glob, Coord2d c) {
-		int n = this.n;
-		FloatBuffer posb = posa.data;
-		float h = NAreaRadStyle.bandHeight();
-		try {
-			float bz = (float)glob.map.getcz(c.x, c.y);
-			for(int i = 0; i < n; i++) {
-				float z = (float)glob.map.getcz(c.x + posb.get(i * 3), c.y - posb.get(i * 3 + 1)) - bz;
-				posb.put(i * 3 + 2, z + h);
-				posb.put((n + i) * 3 + 2, z - h);
+		private void setz(Render g, Glob glob, Coord2d c) {
+			int n = this.n;
+			FloatBuffer posb = posa.data;
+			float h = NAreaRadStyle.bandHeight();
+			boolean flat = FlatWorld.isEnabled();
+			try {
+				float bz = (float)glob.map.getcz(c.x, c.y);
+				for(int i = 0; i < n; i++) {
+					float z = FlatWorld.overlayRelZ(flat, glob.map.getcz(c.x + posb.get(i * 3), c.y - posb.get(i * 3 + 1)), bz);
+					posb.put(i * 3 + 2, z + h);
+					posb.put((n + i) * 3 + 2, z - h);
+				}
+			} catch(Loading e) {
+				return;
 			}
-		} catch(Loading e) {
-			return;
+			vbuf.update(g);
 		}
-		vbuf.update(g);
-	}
 
 	void setR(Render g, float r){
 		this.curR = r;
@@ -171,11 +174,13 @@ public class NAreaRad extends Sprite {
 				setR(g, curR);
 			rebuildSlots();
 		}
-		Coord2d cc = ((Gob)owner).rc;
-		if((lc == null) || !lc.equals(cc)) {
-			setz(g, owner.context(Glob.class), cc);
-			lc = cc;
-		}
+			Coord2d cc = ((Gob)owner).rc;
+			boolean flat = FlatWorld.isEnabled();
+			if((lc == null) || !lc.equals(cc) || flat != lastFlat) {
+				setz(g, owner.context(Glob.class), cc);
+				lc = cc;
+				lastFlat = flat;
+			}
 	}
 
 	public void added(RenderTree.Slot slot) {
