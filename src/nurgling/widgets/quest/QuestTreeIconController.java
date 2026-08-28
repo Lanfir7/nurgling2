@@ -19,8 +19,10 @@ public class QuestTreeIconController {
         Map<Integer, Set<String>> required = new HashMap<>();
         for(QuestModel.TQuest quest : quests) {
             Set<String> resources = new LinkedHashSet<>();
-            for(QCond cond : quest.conds)
-                resources.addAll(resolver.treeResources(cond));
+            for(QCond cond : quest.conds) {
+                for(String tree : resolver.treeResources(cond))
+                    resources.add(iconResourceForTree(tree));
+            }
             if(!resources.isEmpty())
                 required.put(quest.id, resources);
         }
@@ -30,6 +32,11 @@ public class QuestTreeIconController {
     public void release(GobIcon.Settings settings) {
         if(settings != null)
             claims.reconcile(java.util.Collections.emptyMap(), visibility(settings));
+    }
+
+    static String iconResourceForTree(String treeResource) {
+        return treeResource.replace("gfx/terobjs/trees/", "gfx/terobjs/mm/trees/")
+                .replace("gfx/terobjs/bushes/", "gfx/terobjs/mm/bushes/");
     }
 
     private static QuestTreeIconClaims.Visibility visibility(GobIcon.Settings settings) {
