@@ -63,6 +63,7 @@ public class RockResourceMapper {
         registerRock("quartz");
         registerRock("calcite");
         registerRock("fluorite");
+        registerRock("fluorospar");
         registerRock("apatite");
         registerRock("sodalite");
         registerRock("zeolite");
@@ -143,6 +144,7 @@ public class RockResourceMapper {
         registerRock("argyrodite");
         registerRock("canfieldite");
         registerRock("blackcoal");
+        registerRock("sunstone");
 
         // Inventory/display names used by the terrain-search ore presets.
         registerItemAlias("Heavy Earth", "ilmenite");
@@ -157,6 +159,7 @@ public class RockResourceMapper {
         registerItemAlias("Direvein", "nagyagite");
         registerItemAlias("Quarryartz", "quartz");
         registerItemAlias("Rock Salt", "halite");
+        registerItemAlias("Korund", "corund");
     }
 
     /**

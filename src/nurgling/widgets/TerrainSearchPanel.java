@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
 import nurgling.tools.ForageTerrain;
+import nurgling.tools.RockResourceMapper;
 
 import java.awt.Color;
 import java.util.*;
@@ -193,74 +194,14 @@ public class TerrainSearchPanel extends Widget {
             return result;
         }
         
-        // Map common search patterns to resource paths
-        // Ores - gfx/tiles/rocks/*
-        if(lower.equals("cassiterite")) result.add("gfx/tiles/rocks/cassiterite");
-        else if(lower.equals("chalcopyrite")) result.add("gfx/tiles/rocks/chalcopyrite");
-        else if(lower.equals("malachite")) result.add("gfx/tiles/rocks/malachite");
-        else if(lower.equals("heavyearth")) result.add("gfx/tiles/rocks/ilmenite");
-        else if(lower.equals("ironochre")) result.add("gfx/tiles/rocks/limonite");
-        else if(lower.equals("bloodstone")) result.add("gfx/tiles/rocks/hematite");
-        else if(lower.equals("blackore")) result.add("gfx/tiles/rocks/magnetite");
-        else if(lower.equals("cinnabar")) result.add("gfx/tiles/rocks/cinnabar");
-        else if(lower.equals("galena")) result.add("gfx/tiles/rocks/galena");
-        else if(lower.equals("silvershine")) result.add("gfx/tiles/rocks/argentite");
-        else if(lower.equals("hornsilver")) result.add("gfx/tiles/rocks/hornsilver");
-        else if(lower.equals("wineglance")) result.add("gfx/tiles/rocks/cuprite");
-        else if(lower.equals("leadglance")) result.add("gfx/tiles/rocks/leadglance");
-        else if(lower.equals("leafore")) result.add("gfx/tiles/rocks/petzite");
-        else if(lower.equals("schrifterz")) result.add("gfx/tiles/rocks/sylvanite");
-        else if(lower.equals("direvein")) result.add("gfx/tiles/rocks/nagyagite");
-        else if(lower.equals("blackcoal")) result.add("gfx/tiles/rocks/blackcoal");
-        // Rocks - gfx/tiles/rocks/*
-        else if(lower.equals("alabaster")) result.add("gfx/tiles/rocks/alabaster");
-        else if(lower.equals("apatite")) result.add("gfx/tiles/rocks/apatite");
-        else if(lower.equals("arkose")) result.add("gfx/tiles/rocks/arkose");
-        else if(lower.equals("basalt")) result.add("gfx/tiles/rocks/basalt");
-        else if(lower.equals("breccia")) result.add("gfx/tiles/rocks/breccia");
-        else if(lower.equals("chert")) result.add("gfx/tiles/rocks/chert");
-        else if(lower.equals("diabase")) result.add("gfx/tiles/rocks/diabase");
-        else if(lower.equals("diorite")) result.add("gfx/tiles/rocks/diorite");
-        else if(lower.equals("dolomite")) result.add("gfx/tiles/rocks/dolomite");
-        else if(lower.equals("eclogite")) result.add("gfx/tiles/rocks/eclogite");
-        else if(lower.equals("feldspar")) result.add("gfx/tiles/rocks/feldspar");
-        else if(lower.equals("flint")) result.add("gfx/tiles/rocks/flint");
-        else if(lower.equals("fluorospar")) result.add("gfx/tiles/rocks/fluorospar");
-        else if(lower.equals("gabbro")) result.add("gfx/tiles/rocks/gabbro");
-        else if(lower.equals("gneiss")) result.add("gfx/tiles/rocks/gneiss");
-        else if(lower.equals("granite")) result.add("gfx/tiles/rocks/granite");
-        else if(lower.equals("graywacke")) result.add("gfx/tiles/rocks/graywacke");
-        else if(lower.equals("greenschist")) result.add("gfx/tiles/rocks/greenschist");
-        else if(lower.equals("hornblende")) result.add("gfx/tiles/rocks/hornblende");
-        else if(lower.equals("jasper")) result.add("gfx/tiles/rocks/jasper");
-        else if(lower.equals("korund")) result.add("gfx/tiles/rocks/corund");
-        else if(lower.equals("kyanite")) result.add("gfx/tiles/rocks/kyanite");
-        else if(lower.equals("limestone")) result.add("gfx/tiles/rocks/limestone");
-        else if(lower.equals("marble")) result.add("gfx/tiles/rocks/marble");
-        else if(lower.equals("mica")) result.add("gfx/tiles/rocks/mica");
-        else if(lower.equals("microlite")) result.add("gfx/tiles/rocks/microlite");
-        else if(lower.equals("olivine")) result.add("gfx/tiles/rocks/olivine");
-        else if(lower.equals("orthoclase")) result.add("gfx/tiles/rocks/orthoclase");
-        else if(lower.equals("pegmatite")) result.add("gfx/tiles/rocks/pegmatite");
-        else if(lower.equals("porphyry")) result.add("gfx/tiles/rocks/porphyry");
-        else if(lower.equals("pumice")) result.add("gfx/tiles/rocks/pumice");
-        else if(lower.equals("quartz")) result.add("gfx/tiles/rocks/quartz");
-        else if(lower.equals("quarryartz")) result.add("gfx/tiles/rocks/quartz");
-        else if(lower.equals("rhyolite")) result.add("gfx/tiles/rocks/rhyolite");
-        else if(lower.equals("rocksalt")) result.add("gfx/tiles/rocks/halite");
-        else if(lower.equals("sandstone")) result.add("gfx/tiles/rocks/sandstone");
-        else if(lower.equals("schist")) result.add("gfx/tiles/rocks/schist");
-        else if(lower.equals("serpentine")) result.add("gfx/tiles/rocks/serpentine");
-        else if(lower.equals("slate")) result.add("gfx/tiles/rocks/slate");
-        else if(lower.equals("soapstone")) result.add("gfx/tiles/rocks/soapstone");
-        else if(lower.equals("sodalite")) result.add("gfx/tiles/rocks/sodalite");
-        else if(lower.equals("sunstone")) result.add("gfx/tiles/rocks/sunstone");
-        else if(lower.equals("zincspar")) result.add("gfx/tiles/rocks/zincspar");
-        // Ground tiles - gfx/tiles/*
-        else {
-            // Try as generic ground tile
-            result.add("gfx/tiles/" + lower);
+        Set<String> rocks = RockResourceMapper.getTileResourcesForItem(lower);
+        if(!rocks.isEmpty()) {
+            result.addAll(rocks);
+            return result;
         }
+
+        // Try as a generic ground tile.
+        result.add("gfx/tiles/" + lower);
         
         return result;
     }
