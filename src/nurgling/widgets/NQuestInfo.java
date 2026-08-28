@@ -20,6 +20,7 @@ import nurgling.widgets.quest.QuestKind;
 import nurgling.widgets.quest.QuestMenu;
 import nurgling.widgets.quest.QuestModel;
 import nurgling.widgets.quest.QuestRowTheme;
+import nurgling.widgets.quest.QuestTreeIconController;
 
 import java.awt.Color;
 import java.util.*;
@@ -65,6 +66,7 @@ public class NQuestInfo extends Widget
     /* ------------------------------------------------------------------ state */
 
     private final QuestModel model = new QuestModel();
+    private final QuestTreeIconController treeIcons = new QuestTreeIconController();
     private NQuestTrackerProp prop = null;
     private NQuestTrackerProp fallback = null;
     private boolean needRebuild = true;
@@ -223,6 +225,7 @@ public class NQuestInfo extends Widget
             gui = NUtils.getGameUI();
         if(model.tick(dt, (gui != null) ? gui.chrwdg : null))
             needRebuild = true;
+        treeIcons.reconcile(model.quests(), (gui != null) ? gui.iconconf : null);
         harvestPointers(gui);
         if(condsSweepIdle() && gui != null && gui.chrwdg != null) {
             harvestAcc += dt;
@@ -250,6 +253,16 @@ public class NQuestInfo extends Widget
             needRebuild = false;
             rebuild();
         }
+    }
+
+    @Override
+    public void destroy()
+    {
+        NGameUI gui = getparent(NGameUI.class);
+        if(gui == null)
+            gui = NUtils.getGameUI();
+        treeIcons.release((gui != null) ? gui.iconconf : null);
+        super.destroy();
     }
 
     /* ------------------------------------------------------------------ view model */
