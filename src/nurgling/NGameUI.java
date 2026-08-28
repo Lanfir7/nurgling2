@@ -75,7 +75,6 @@ public class NGameUI extends GameUI
     public final Map<String, TreeLocationDetailsWindow> openTreeDetailWindows = new HashMap<>();
     public ProspectingLocationService prospectingLocationService;
     public ProspectingSearchWindow prospectingSearchWindow = null;
-    public TerrainSearchWindow terrainSearchWindow = null;
     public nurgling.widgets.QuarryartzSearchWindow quarryartzSearchWindow = null;
     public nurgling.widgets.OreSearchWindow oreSearchWindow = null;
     public nurgling.widgets.GemstoneSearchWindow gemstoneSearchWindow = null;

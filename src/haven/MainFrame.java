@@ -4,6 +4,7 @@ import nurgling.NConfig;
 import nurgling.headless.Headless;
 import nurgling.headless.HeadlessConfig;
 import nurgling.headless.HeadlessMain;
+import nurgling.llm.LocalLlmLifecycle;
 import nurgling.sessions.NBootstrap;
 import nurgling.sessions.NRemoteUI;
 import haven.iosys.tk.Toolkit;
@@ -154,6 +155,7 @@ public class MainFrame {
 	    status("visible");
 	    cl.run(fun);
 	} finally {
+	    LocalLlmLifecycle.global().stopDesktop();
 	    cl.dispose();
 	}
 	resdump();
@@ -189,6 +191,7 @@ public class MainFrame {
 	// Initialize FileLogger and redirect System.err as early as possible
 	haven.error.FileLogger.redirectSystemErr();
 	haven.error.FileLogger.log("Application starting...");
+	LocalLlmLifecycle.global().startDesktop();
 
 	/* Set up the error handler as early as humanly possible. */
 	ThreadGroup g = new ThreadGroup("Haven main group");

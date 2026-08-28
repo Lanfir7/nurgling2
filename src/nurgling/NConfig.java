@@ -310,6 +310,12 @@ public class NConfig
         agentMaxTokens,
         agentTimeoutMs,
         agentAutoMode,
+        llmEnabled,
+        llmServerPath,
+        llmModelPath,
+        llmHost,
+        llmPort,
+        llmStartupTimeoutMs,
         floorOverlayEnable,
         floorOverlayAlpha,
         floorOverlaySegId
@@ -759,6 +765,12 @@ public class NConfig
         conf.put(Key.agentMaxTokens, 1024);
         conf.put(Key.agentTimeoutMs, 120000);
         conf.put(Key.agentAutoMode, true);
+        conf.put(Key.llmEnabled, true);
+        conf.put(Key.llmServerPath, "ai/llama-server.exe");
+        conf.put(Key.llmModelPath, "ai/model.gguf");
+        conf.put(Key.llmHost, "127.0.0.1");
+        conf.put(Key.llmPort, 8080);
+        conf.put(Key.llmStartupTimeoutMs, 90000L);
         conf.put(Key.autoLogoutEnabled, false);
         conf.put(Key.autoLogoutThreshold, 0);
         conf.put(Key.autoLogoutCountdown, 30);

@@ -40,6 +40,7 @@ hs_err_pid*.log
 javac.*.args
 /assets/
 /logs/
+/ai/
 /.codegraph/
 /.superpowers/
 /docs/superpowers/
