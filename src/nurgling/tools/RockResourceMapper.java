@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
+import java.util.Locale;
 
 /**
  * Maps bumbling rock gobs to their corresponding tile resources.
@@ -14,6 +16,7 @@ public class RockResourceMapper {
 
     // Map from bumbling/inventory resource name to tile resource name
     private static final Map<String, String> gobToTileMap = new HashMap<>();
+    private static final Map<String, String> itemToTileMap = new HashMap<>();
 
     static {
         // Register all rock type mappings
@@ -148,6 +151,8 @@ public class RockResourceMapper {
      */
     private static void registerRock(String rockName) {
         String tileResource = "gfx/tiles/rocks/" + rockName;
+        itemToTileMap.put(normalize(rockName), tileResource);
+        itemToTileMap.put(normalize(rockName.replace('-', ' ')), tileResource);
 
         // Common patterns for bumbling and inventory resources
         String[] gobPatterns = {
@@ -188,5 +193,15 @@ public class RockResourceMapper {
         }
 
         return result;
+    }
+
+    public static Set<String> getTileResourcesForItem(String itemName) {
+        String tile = itemToTileMap.get(normalize(itemName));
+        return tile == null ? Collections.emptySet() : Collections.singleton(tile);
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "");
     }
 }
