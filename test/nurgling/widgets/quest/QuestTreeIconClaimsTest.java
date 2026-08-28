@@ -50,6 +50,32 @@ class QuestTreeIconClaimsTest {
         assertFalse(visible.get("oak"));
     }
 
+    @Test
+    void retriesClaimWhenIconSettingLoadsLater() {
+        Map<String, Boolean> visible = new HashMap<>();
+        Map<String, Boolean> loaded = visibility("oak", false);
+        QuestTreeIconClaims claims = new QuestTreeIconClaims();
+        QuestTreeIconClaims.Visibility adapter = new QuestTreeIconClaims.Visibility() {
+            @Override
+            public boolean isVisible(String resource) {
+                return Boolean.TRUE.equals(visible.get(resource));
+            }
+
+            @Override
+            public void setVisible(String resource, boolean value) {
+                if(Boolean.TRUE.equals(loaded.get(resource)))
+                    visible.put(resource, value);
+            }
+        };
+
+        claims.reconcile(requirements(1, "oak"), adapter);
+        assertFalse(visible.containsKey("oak"));
+
+        loaded.put("oak", true);
+        claims.reconcile(requirements(1, "oak"), adapter);
+        assertTrue(visible.get("oak"));
+    }
+
     private static Map<String, Boolean> visibility(String resource, boolean value) {
         Map<String, Boolean> out = new HashMap<>();
         out.put(resource, value);

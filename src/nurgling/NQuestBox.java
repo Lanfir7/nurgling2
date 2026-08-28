@@ -7,6 +7,7 @@ import nurgling.widgets.quest.QCond;
 import nurgling.widgets.quest.QuestObjectiveAction;
 import nurgling.widgets.quest.QuestObjectiveActionButton;
 import nurgling.widgets.quest.QuestObjectiveActionResolver;
+import nurgling.widgets.quest.QuestConditionWidgetPolicy;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.font.TextAttribute;
@@ -92,7 +93,7 @@ public class NQuestBox extends Quest.DefaultBox {
                     continue cond;
                 }
             }
-            if(cond[i].wdata != null) {
+            if(QuestConditionWidgetPolicy.usesServerWidget(cond[i])) {
                 Indir<Resource> wres = ui.sess.getresv(cond[i].wdata[0]);
                 nw[i] = (Quest.CondWidget)wres.get().getcode(Widget.Factory.class, true)
                         .create(ui, new Object[] {cond[i]});

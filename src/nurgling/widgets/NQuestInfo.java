@@ -22,6 +22,7 @@ import nurgling.widgets.quest.QuestModel;
 import nurgling.widgets.quest.QuestObjectiveAction;
 import nurgling.widgets.quest.QuestObjectiveActionButton;
 import nurgling.widgets.quest.QuestObjectiveActionResolver;
+import nurgling.widgets.quest.QuestObjectiveRowLayout;
 import nurgling.widgets.quest.QuestRowTheme;
 import nurgling.widgets.quest.QuestTreeIconController;
 
@@ -946,8 +947,8 @@ public class NQuestInfo extends Widget
             } else {
                 actionButton = null;
             }
-            int actionWidth = actionButton == null ? 0 : actionButton.sz.x + UI.scale(5);
-            this.text = condFnd.render(elide(condFnd, r.text, w - off - actionWidth), col).tex();
+            int textWidth = QuestObjectiveRowLayout.textWidth(w, off, actionButton != null);
+            this.text = condFnd.render(elide(condFnd, r.text, textWidth), col).tex();
         }
 
         @Override
