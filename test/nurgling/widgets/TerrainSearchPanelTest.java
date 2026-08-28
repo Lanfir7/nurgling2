@@ -30,4 +30,11 @@ class TerrainSearchPanelTest {
     void exactGrassPresetDoesNotExpandToGrasslandGroup() {
         assertEquals(Set.of("gfx/tiles/grass"), TerrainSearchPanel.resourceNamesForPattern("grass"));
     }
+
+    @Test
+    void exactResourceSelectionDoesNotExpandRockName() {
+        TerrainSearchPanel.applyResourceHighlight(Arrays.asList("gfx/tiles/rocks/quartz"));
+
+        assertEquals(Set.of("gfx/tiles/rocks/quartz"), TileHighlight.getHighlighted());
+    }
 }

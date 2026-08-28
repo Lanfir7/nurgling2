@@ -312,6 +312,22 @@ public class MapToolsWindow extends Window {
         gui.mapToolsWindow.pack();
     }
 
+    /** Open the terrain controls and highlight exact tile resources (used for quest rocks). */
+    public static void openTerrainResources(Collection<String> resources) {
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null)
+            return;
+        if(gui.mapToolsWindow == null) {
+            gui.mapToolsWindow = new MapToolsWindow();
+            gui.add(gui.mapToolsWindow, new Coord(100, 100));
+        }
+        gui.mapToolsWindow.show();
+        gui.mapToolsWindow.raise();
+        gui.mapToolsWindow.tabs.showtab(gui.mapToolsWindow.searchTab);
+        gui.mapToolsWindow.terrainSearchPanel.selectResources(resources);
+        gui.mapToolsWindow.pack();
+    }
+
     public static void openTreeSearch() {
         NGameUI gui = NUtils.getGameUI();
         if(gui == null)

@@ -134,6 +134,19 @@ public class TerrainSearchPanel extends Widget {
         TileHighlight.setHighlighted(ForageTerrain.resourceNames(terrains));
     }
 
+    /** Replace the highlight with already resolved, exact tile resource paths. */
+    public void selectResources(Collection<String> resources) {
+        if(resources == null || resources.isEmpty())
+            return;
+        terrainSearchField.settext("");
+        applyResourceHighlight(resources);
+        invalidateMap();
+    }
+
+    static void applyResourceHighlight(Collection<String> resources) {
+        TileHighlight.setHighlighted(new LinkedHashSet<>(resources));
+    }
+
     private static void invalidateMap() {
         if(NUtils.getGameUI() != null && NUtils.getGameUI().mmap instanceof NMiniMap)
             ((NMiniMap)NUtils.getGameUI().mmap).invalidateDisplayCache();
