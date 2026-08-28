@@ -19,6 +19,9 @@ import nurgling.widgets.quest.QCond;
 import nurgling.widgets.quest.QuestKind;
 import nurgling.widgets.quest.QuestMenu;
 import nurgling.widgets.quest.QuestModel;
+import nurgling.widgets.quest.QuestObjectiveAction;
+import nurgling.widgets.quest.QuestObjectiveActionButton;
+import nurgling.widgets.quest.QuestObjectiveActionResolver;
 import nurgling.widgets.quest.QuestRowTheme;
 import nurgling.widgets.quest.QuestTreeIconController;
 
@@ -66,6 +69,7 @@ public class NQuestInfo extends Widget
     /* ------------------------------------------------------------------ state */
 
     private final QuestModel model = new QuestModel();
+    private final QuestObjectiveActionResolver actionResolver = new QuestObjectiveActionResolver();
     private final QuestTreeIconController treeIcons = new QuestTreeIconController();
     private NQuestTrackerProp prop = null;
     private NQuestTrackerProp fallback = null;
@@ -274,14 +278,16 @@ public class NQuestInfo extends Widget
         final int questId;
         final boolean secondary;
         final QuestKind kind;
+        final QCond cond;
 
-        Row(String text, boolean ready, int questId, boolean secondary, QuestKind kind)
+        Row(String text, boolean ready, int questId, boolean secondary, QuestKind kind, QCond cond)
         {
             this.text = text;
             this.ready = ready;
             this.questId = questId;
             this.secondary = secondary;
             this.kind = kind;
+            this.cond = cond;
         }
     }
 
@@ -923,6 +929,7 @@ public class NQuestInfo extends Widget
         final Row row;
         private final Tex glyph, text;
         private final String full;
+        private final QuestObjectiveActionButton actionButton;
 
         CondRow(Row r, int w, QuestKind groupKind)
         {
@@ -932,7 +939,15 @@ public class NQuestInfo extends Widget
             Color col = theme.conditionColor(r.ready, r.secondary);
             this.glyph = condFnd.render(r.ready ? "✓" : "•", col).tex();
             int off = INDENT + glyph.sz().x + UI.scale(4);
-            this.text = condFnd.render(elide(condFnd, r.text, w - off), col).tex();
+            QuestObjectiveAction potential = actionResolver.resolve(r.cond);
+            if(potential != null) {
+                actionButton = add(new QuestObjectiveActionButton(r.cond));
+                actionButton.c = new Coord(w - actionButton.sz.x - UI.scale(2), (rowH - actionButton.sz.y) / 2);
+            } else {
+                actionButton = null;
+            }
+            int actionWidth = actionButton == null ? 0 : actionButton.sz.x + UI.scale(5);
+            this.text = condFnd.render(elide(condFnd, r.text, w - off - actionWidth), col).tex();
         }
 
         @Override
@@ -941,11 +956,14 @@ public class NQuestInfo extends Widget
             band(g);
             g.image(glyph, new Coord(INDENT, ty(glyph)));
             g.image(text, new Coord(INDENT + glyph.sz().x + UI.scale(4), ty(text)));
+            super.draw(g);
         }
 
         @Override
         public boolean mousedown(MouseDownEvent ev)
         {
+            if(ev.propagate(this))
+                return true;
             if(ev.b == 1) {
                 openQuest(row.questId);
                 return true;
@@ -1132,7 +1150,7 @@ public class NQuestInfo extends Widget
 
     private Row condRow(QCond c, boolean secondary, QuestKind kind)
     {
-        return new Row(displayCond(c), c.ready, c.questId, secondary, kind);
+        return new Row(displayCond(c), c.ready, c.questId, secondary, kind, c);
     }
 
     private String displayCond(QCond c)

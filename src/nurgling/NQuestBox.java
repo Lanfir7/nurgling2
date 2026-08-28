@@ -3,6 +3,10 @@ package nurgling;
 import haven.*;
 import haven.QuestWnd.Quest;
 import nurgling.i18n.L10n;
+import nurgling.widgets.quest.QCond;
+import nurgling.widgets.quest.QuestObjectiveAction;
+import nurgling.widgets.quest.QuestObjectiveActionButton;
+import nurgling.widgets.quest.QuestObjectiveActionResolver;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.font.TextAttribute;
@@ -11,6 +15,7 @@ import static haven.CharWnd.*;
 import static haven.PUtils.*;
 
 public class NQuestBox extends Quest.DefaultBox {
+    private static final QuestObjectiveActionResolver actionResolver = new QuestObjectiveActionResolver();
     private static final Text.Foundry nameFnd = new Text.Foundry(
 	nurgling.conf.FontSettings.getOpenSansSemibold(), 14, Color.WHITE).aa(true);
 
@@ -70,6 +75,70 @@ public class NQuestBox extends Quest.DefaultBox {
 	g.dispose();
 
 	cont.add(new Img(new TexI(header)), UI.scale(new Coord(10, 10)));
+    }
+
+    @Override
+    protected void layoutc(Widget cont) {
+        int y = cont.contentsz().y + UI.scale(10);
+        Quest.CondWidget[] nw = new Quest.CondWidget[cond.length];
+        Quest.CondWidget[] pw = condw;
+        cond: for(int i = 0; i < cond.length; i++) {
+            for(int o = 0; o < pw.length; o++) {
+                if((pw[o] != null) && (pw[o].cond == cond[i]) && pw[o].update()) {
+                    pw[o].unlink();
+                    nw[i] = cont.add(pw[o], new Coord(0, y));
+                    y += nw[i].sz.y;
+                    pw[o] = null;
+                    continue cond;
+                }
+            }
+            if(cond[i].wdata != null) {
+                Indir<Resource> wres = ui.sess.getresv(cond[i].wdata[0]);
+                nw[i] = (Quest.CondWidget)wres.get().getcode(Widget.Factory.class, true)
+                        .create(ui, new Object[] {cond[i]});
+            } else {
+                QCond parsed = new QCond(id, cond[i].done != 0, cond[i].desc, cond[i].status);
+                QuestObjectiveAction potential = actionResolver.resolve(parsed);
+                nw[i] = potential == null ? new Quest.DefaultCond(cond[i])
+                        : new QuestActionCond(cond[i], parsed);
+            }
+            y += cont.add(nw[i], new Coord(0, y)).sz.y;
+        }
+        condw = nw;
+    }
+
+    private static class QuestActionCond extends Quest.CondWidget {
+        private final QCond parsed;
+        private Text text;
+
+        QuestActionCond(Quest.Condition cond, QCond parsed) {
+            super(cond);
+            this.parsed = parsed;
+        }
+
+        @Override
+        protected void added() {
+            super.added();
+            QuestObjectiveActionButton button = add(new QuestObjectiveActionButton(parsed));
+            int width = parent.sz.x;
+            int textWidth = Math.max(UI.scale(40), width - UI.scale(24) - button.sz.x);
+            StringBuilder buf = new StringBuilder();
+            buf.append(String.format("%s{%c %s", RichText.Parser.col2a(Quest.stcol[cond.done]),
+                    Quest.stsym[cond.done], QuestWnd.localizeCond(cond.desc)));
+            if(cond.status != null)
+                buf.append(' ').append(cond.status);
+            buf.append('}');
+            text = ifnd.render(buf.toString(), textWidth);
+            int height = Math.max(text.sz().y, button.sz.y);
+            button.c = new Coord(width - UI.scale(10) - button.sz.x, (height - button.sz.y) / 2);
+            resize(new Coord(width, height + UI.scale(1)));
+        }
+
+        @Override
+        public void draw(GOut g) {
+            g.image(text.tex(), new Coord(UI.scale(15), 0));
+            super.draw(g);
+        }
     }
 
     private void layoutDesc(Widget cont) {
