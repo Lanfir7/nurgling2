@@ -21,7 +21,7 @@ public class MigrationManager {
      * and this older client may not understand the new columns/tables; we
      * refuse to sync in that case rather than write incompatible rows.
      */
-    public static final int CLIENT_MAX_SCHEMA_VERSION = 20;
+    public static final int CLIENT_MAX_SCHEMA_VERSION = 21;
 
     /** Version of the migration that creates kin_secrets; optional, see {@link Migration#optional}. */
     public static final int MIGRATION_KIN_SECRETS = 15;
@@ -37,6 +37,9 @@ public class MigrationManager {
 
     /** Repairs databases where schema version 12 meant peer_positions instead of local_timers. */
     public static final int MIGRATION_LOCAL_TIMERS_REPAIR = 20;
+
+    /** Adds the DAO columns when an unrelated legacy table already used the local_timers name. */
+    public static final int MIGRATION_LOCAL_TIMERS_COLUMNS = 21;
 
     /** Group role holding read/write on everything. Villagers are members of it. */
     public static final String ROLE_MEMBER = "nurgling_member";
@@ -901,6 +904,14 @@ public class MigrationManager {
             }
         });
 
+        migrations.add(new Migration(MIGRATION_LOCAL_TIMERS_COLUMNS,
+            "Repair legacy local_timers columns", true) {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                ensureLocalTimersTable(adapter);
+            }
+        });
+
         return migrations;
     }
 
@@ -1138,7 +1149,8 @@ public class MigrationManager {
         if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
             return;
         }
-        if (!adapter.tableExists("local_timers")) {
+        boolean created = !adapter.tableExists("local_timers");
+        if (created) {
             createTable(adapter, "local_timers", "CREATE TABLE local_timers (" +
                 "id SERIAL PRIMARY KEY, " +
                 "profile VARCHAR(255) NOT NULL, " +
@@ -1157,11 +1169,30 @@ public class MigrationManager {
                 ")");
             System.out.println("Created local_timers table");
         } else {
+            /* Some installations already have an unrelated/older table with this name. Keep its
+             * rows, but add the nullable DAO columns so new file-backed timers can be uploaded. */
+            addColumnIfMissing(adapter, "local_timers", "id", "BIGSERIAL");
+            addColumnIfMissing(adapter, "local_timers", "profile", "VARCHAR(255)");
+            addColumnIfMissing(adapter, "local_timers", "resource_id", "VARCHAR(512)");
+            addColumnIfMissing(adapter, "local_timers", "segment_id", "BIGINT");
+            addColumnIfMissing(adapter, "local_timers", "tile_x", "INTEGER");
+            addColumnIfMissing(adapter, "local_timers", "tile_y", "INTEGER");
+            addColumnIfMissing(adapter, "local_timers", "resource_name", "VARCHAR(255)");
+            addColumnIfMissing(adapter, "local_timers", "resource_type", "VARCHAR(512)");
+            addColumnIfMissing(adapter, "local_timers", "start_time_utc", "BIGINT");
+            addColumnIfMissing(adapter, "local_timers", "duration_ms", "BIGINT");
+            addColumnIfMissing(adapter, "local_timers", "description", "VARCHAR(512)");
+            addColumnIfMissing(adapter, "local_timers", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+            addColumnIfMissing(adapter, "local_timers", "updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
             grantDml(adapter, "local_timers");
         }
         safeCreateIndex(adapter, "CREATE INDEX idx_local_timers_profile ON local_timers (profile)");
         safeCreateIndex(adapter, "CREATE INDEX idx_local_timers_profile_resource ON local_timers (profile, resource_id)");
         safeCreateIndex(adapter, "CREATE INDEX idx_local_timers_expiration ON local_timers (profile, start_time_utc, duration_ms)");
+        if (!created) {
+            safeCreateIndex(adapter, "CREATE UNIQUE INDEX uq_local_timers_profile_resource " +
+                "ON local_timers (profile, resource_id)");
+        }
     }
 
     private static void createTable(DatabaseAdapter adapter, String table, String ddl) throws SQLException {

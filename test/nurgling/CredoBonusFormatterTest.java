@@ -15,8 +15,8 @@ class CredoBonusFormatterTest {
     @Test
     void completedLevelsBecomeGreenChecksAndFutureLevelsStayYellow() {
         assertEquals(
-            "$col[96,232,96]{✓ Strength +15}\n"
-                + "$col[96,232,96]{✓ Masonry +15}\n"
+            "$col[96,232,96]{$img[credodone,h=0.8ln] Strength +15}\n"
+                + "$col[96,232,96]{$img[credodone,h=0.8ln] Masonry +15}\n"
                 + "$col[255,218,64]{• Faster mining}",
             CredoBonusFormatter.format(RAW, 2, false));
     }
@@ -25,7 +25,7 @@ class CredoBonusFormatterTest {
     void acquiredCredoMarksEveryBonusCompleted() {
         String formatted = CredoBonusFormatter.format(RAW, 0, true);
 
-        assertEquals(3, formatted.split("✓", -1).length - 1);
+        assertEquals(3, formatted.split("\\$img\\[credodone,h=0\\.8ln]", -1).length - 1);
         assertFalse(formatted.contains("$col[255,218,64]"));
     }
 
@@ -45,11 +45,11 @@ class CredoBonusFormatterTest {
             + "* Ability to sense ore ahead when mining.}";
 
         assertEquals(
-            "$col[96,232,96]{\u2713 Strength +15 & Masonry +15}\n"
-                + "$col[96,232,96]{\u2713 Significant chance to localize cave-ins.}\n"
-                + "$col[96,232,96]{\u2713 Ore mined smelts faster.}\n"
-                + "$col[96,232,96]{\u2713 Chance to pulverize tiles when mining.}\n"
-                + "$col[96,232,96]{\u2713 Ability to sense ore ahead when mining.}",
+            "$col[96,232,96]{$img[credodone,h=0.8ln] Strength +15 & Masonry +15}\n"
+                + "$col[96,232,96]{$img[credodone,h=0.8ln] Significant chance to localize cave-ins.}\n"
+                + "$col[96,232,96]{$img[credodone,h=0.8ln] Ore mined smelts faster.}\n"
+                + "$col[96,232,96]{$img[credodone,h=0.8ln] Chance to pulverize tiles when mining.}\n"
+                + "$col[96,232,96]{$img[credodone,h=0.8ln] Ability to sense ore ahead when mining.}",
             CredoBonusFormatter.format(raw, 0, true));
     }
 }

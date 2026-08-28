@@ -18,6 +18,7 @@ public class NSettingsWindow extends Widget {
     private static TexI rbtn = new TexI(Resource.loadsimg("nurgling/hud/buttons/right/u"));
     private static TexI dbtn = new TexI(Resource.loadsimg("nurgling/hud/buttons/down/u"));
     private final SettingsList list;
+    private final Scrollport settingsView;
     public World world;
     public Navigation navigation;
     Widget container;
@@ -39,7 +40,6 @@ public class NSettingsWindow extends Widget {
     public NSettingsWindow(Runnable backAction) {
         this.backAction = backAction;
         sz = UI.scale(800, 600);
-        container = add(new Widget(Coord.z));
         list = add(new SettingsList(UI.scale(200, 580)), UI.scale(10, 10));
 
         saveBtn = add(new Button(UI.scale(100), L10n.get("nsettings.btn.save")) {
@@ -76,8 +76,10 @@ public class NSettingsWindow extends Widget {
         }
 
         addSearch();
+        settingsView = add(new Scrollport(UI.scale(580, 526)), UI.scale(210, contentTop));
+        container = settingsView.cont;
         fillSettings();
-        container.resize(UI.scale(800, 600));
+        resize(sz);
     }
 
 
@@ -226,7 +228,7 @@ public class NSettingsWindow extends Widget {
         public SettingsItem(String name, Widget panel, Widget container) {
             this.name = name;
             this.panel = panel;
-            container.add(panel, Coord.of(UI.scale(210), contentTop));
+            container.add(panel, Coord.z);
             panel.hide();
         }
 
@@ -255,6 +257,29 @@ public class NSettingsWindow extends Widget {
         currentPanel = (Panel)item.panel;
         currentPanel.show();
         currentPanel.load();
+        settingsView.bar.ch(-settingsView.bar.val);
+        settingsView.cont.update();
+    }
+
+    @Override
+    public void resize(Coord size) {
+        super.resize(size);
+        if((list == null) || (settingsView == null) || (saveBtn == null) || (cancelBtn == null))
+            return;
+        int margin = UI.scale(10);
+        NSettingsLayout layout = NSettingsLayout.calculate(
+                size, UI.scale(210), contentTop, saveBtn.sz, backBtn != null, margin);
+        list.resize(layout.sidebarSize);
+        settingsView.move(layout.panelPosition);
+        settingsView.resize(layout.panelSize);
+        saveBtn.move(layout.saveButton);
+        cancelBtn.move(layout.cancelButton);
+        if((backBtn != null) && (layout.backButton != null))
+            backBtn.move(layout.backButton);
+        search.move(Coord.of(size.x - margin - search.sz.x, 0));
+        drop.move(search.c.add(0, search.sz.y + UI.scale(2)));
+        settingsView.cont.update();
+        settingsView.bar.ch(0);
     }
 
     private void addSearch() {

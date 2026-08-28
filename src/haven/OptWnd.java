@@ -41,19 +41,65 @@ import java.util.*;
 public class OptWnd extends Window {
     public final Panel main;
     public Panel current;
+    private final Scrollport panels;
+    private boolean fittingPanel = false;
+    private Area fittedArea = null;
 
     public void chpanel(Panel p) {
 	if(current != null)
 	    current.hide();
 	(current = p).show();
+	panels.bar.ch(-panels.bar.val);
+	panels.cont.update();
 	cresize(p);
     }
 
     public void cresize(Widget ch) {
-	if(ch == current) {
-	    Coord cc = this.c.add(this.sz.div(2));
+	if((ch == current) && !fittingPanel)
+	    fitCurrentPanel();
+    }
+
+    private void fitCurrentPanel() {
+	if(current == null)
+	    return;
+	fittingPanel = true;
+	try {
+	    current.resetLayout();
+	    Coord desired = current.sz.add(panels.bar.sz.x, 0);
+	    panels.resize(desired);
+	    panels.cont.update();
 	    pack();
-	    move(cc.sub(this.sz.div(2)));
+
+	    if((ui != null) && (ui.root != null)) {
+		if(!SettingsViewportLayout.canFit(current, parent, ui.root.sz))
+		    return;
+		int margin = UI.scale(10);
+		Coord minimum = UI.scale(240, 160);
+		Area visible = SettingsViewportLayout.visibleArea(ui.root.sz,
+			(parent == null) ? null : parent.rootarea());
+		Coord available = visible.sz();
+		Coord fitted = SettingsViewportLayout.fit(desired, sz, available, margin, minimum);
+		current.fitTo(fitted.sub(panels.bar.sz.x, 0));
+		desired = current.sz.add(panels.bar.sz.x, 0);
+		panels.resize(desired);
+		panels.cont.update();
+		pack();
+		fitted = SettingsViewportLayout.fit(desired, sz, available, margin, minimum);
+		panels.resize(fitted);
+		panels.cont.update();
+		pack();
+		fittedArea = visible;
+
+		Coord rootPosition = Coord.of(
+			visible.ul.x + Math.max(margin, (available.x - sz.x) / 2),
+			visible.ul.y + Math.max(margin, (available.y - sz.y) / 2));
+		move(rootPosition.sub(parent.rootpos()));
+	    } else {
+		Coord center = c.add(sz.div(2));
+		move(center.sub(sz.div(2)));
+	    }
+	} finally {
+	    fittingPanel = false;
 	}
     }
 
@@ -77,7 +123,7 @@ public class OptWnd extends Window {
 
 	public void click() {
 	    if(actual == null)
-		actual = OptWnd.this.add(tgt.get(), Coord.z);
+		actual = panels.cont.add(tgt.get(), Coord.z);
 	    chpanel(actual);
 	}
 
@@ -94,6 +140,12 @@ public class OptWnd extends Window {
 	public Panel() {
 	    visible = false;
 	    c = Coord.z;
+	}
+
+	protected void resetLayout() {
+	}
+
+	protected void fitTo(Coord available) {
 	}
     }
 
@@ -1008,8 +1060,16 @@ public class OptWnd extends Window {
 
     public OptWnd(boolean gopts) {
 	super(Coord.z, "Options", true);
-	main = add(new Panel());
-	nqolwnd = add(new NSettingsPanel(main));
+	panels = add(new Scrollport(Coord.of(1, 1)) {
+	    @Override
+	    public void cresize(Widget child) {
+		super.cresize(child);
+		if(!fittingPanel && (current != null))
+		    fitCurrentPanel();
+	    }
+	}, Coord.z);
+	main = panels.cont.add(new Panel(), Coord.z);
+	nqolwnd = panels.cont.add(new NSettingsPanel(main), Coord.z);
 
 	int y = 0;
 	int x = 0;
@@ -1055,6 +1115,24 @@ public class OptWnd extends Window {
 	super.show();
     }
 
+    @Override
+    public void tick(double dt) {
+	super.tick(dt);
+	Coord rootSize = ((ui != null) && (ui.root != null)) ? ui.root.sz : null;
+	if(SettingsViewportLayout.canFit(current, parent, rootSize)) {
+	    Area visible = SettingsViewportLayout.visibleArea(ui.root.sz,
+		    parent.rootarea());
+	    if(!Utils.eq(fittedArea, visible))
+		fitCurrentPanel();
+	}
+    }
+
+    @Override
+    protected void added() {
+	super.added();
+	fitCurrentPanel();
+    }
+
 	public class NSettingsPanel extends Panel  {
 
 		public NSettingsWindow settingsWindow;
@@ -1071,6 +1149,20 @@ public class OptWnd extends Window {
 				}
 			}), Coord.z);
 
+			pack();
+		}
+
+		@Override
+		protected void resetLayout() {
+			settingsWindow.resize(UI.scale(800, 600));
+			pack();
+		}
+
+		@Override
+		protected void fitTo(Coord available) {
+			settingsWindow.resize(Coord.of(
+				Math.min(UI.scale(800), Math.max(UI.scale(480), available.x)),
+				Math.min(UI.scale(600), Math.max(UI.scale(300), available.y))));
 			pack();
 		}
 	}

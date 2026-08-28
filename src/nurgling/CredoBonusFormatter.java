@@ -40,7 +40,7 @@ public final class CredoBonusFormatter {
             out.append("$col[")
                .append(completed ? DONE_COLOR : TODO_COLOR)
                .append("]{")
-               .append(completed ? "✓ " : "• ")
+               .append(completed ? CredoBonusIcon.MARKUP + " " : "• ")
                .append(bonuses.get(i))
                .append('}');
         }

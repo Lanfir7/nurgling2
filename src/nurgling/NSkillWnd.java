@@ -36,7 +36,7 @@ public class NSkillWnd extends SkillWnd {
 	    (float)Math.floor(UI.scale(11.0)));
 
     private static final RichText.Foundry descFnd = new RichText.Foundry(
-	RichText.IMAGESRC, RichText.ImageSource.legacy,
+	RichText.IMAGESRC, CredoBonusIcon.source(RichText.ImageSource.legacy),
 	TextAttribute.FONT, descFont).aa(true);
 
     public NSkillWnd() {
@@ -123,7 +123,8 @@ public class NSkillWnd extends SkillWnd {
 
 	    // Render bonuses block
 	    if(bonuses != null && !bonuses.isEmpty()) {
-		bonusRt = descFnd.render(resdoc(res, bonuses), TEXT_W);
+		bonusRt = descFnd.render(new RichText.Document(bonuses, RichText.IMAGESRC,
+		    CredoBonusIcon.source(resimg(res))), TEXT_W);
 		bonusY = y;
 		y += bonusRt.sz().y;
 	    }

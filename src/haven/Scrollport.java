@@ -60,6 +60,12 @@ public class Scrollport extends Widget {
 
 	public void update() {}
 
+	public void cresize(Widget child) {
+	    update();
+	    if(parent != null)
+		parent.cresize(this);
+	}
+
 	public <T extends Widget> T add(T child) {
 	    super.add(child);
 	    update();
@@ -97,11 +103,22 @@ public class Scrollport extends Widget {
 	cont.addchild(child, args);
     }
 
+    public void cresize(Widget child) {
+	if(child == cont) {
+	    cont.update();
+	    bar.ch(0);
+	    if(parent != null)
+		parent.cresize(this);
+	}
+    }
+
     public void resize(Coord nsz) {
 	super.resize(nsz);
 	bar.c = new Coord(sz.x - bar.sz.x, 0);
 	bar.resize(nsz.y);
 	cont.resize(sz.sub(bar.sz.x, 0));
+	cont.update();
+	bar.ch(0);
     }
 
     public void uimsg(String msg, Object... args) {

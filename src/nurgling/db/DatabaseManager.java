@@ -4,6 +4,7 @@ import nurgling.NConfig;
 import nurgling.db.service.*;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -442,7 +443,7 @@ public class DatabaseManager {
         this.areaService = new AreaService(this);
         this.planningService = new nurgling.db.service.PlanningService(this);
         this.animalMarkerService = new AnimalMarkerService(this);
-        boolean localTimersOk = tableUsable("local_timers");
+        boolean localTimersOk = tableUsable("local_timers") && localTimerSchemaUsable(adapter);
         this.localTimerService = localTimersOk ? new LocalTimerService(this) : null;
         if (!localTimersOk && DatabaseAdapterFactory.isPostgres()) {
             System.err.println("[DatabaseManager] local_timers unavailable; local timers stay file-only");
@@ -543,6 +544,19 @@ public class DatabaseManager {
             return adapter != null && adapter.tableExists(table);
         } catch (SQLException e) {
             System.err.println("[DatabaseManager] cannot check for table " + table + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** Verify the table contract, not just its name: older software used local_timers differently. */
+    static boolean localTimerSchemaUsable(DatabaseAdapter adapter) {
+        if (adapter == null) return false;
+        try (ResultSet ignored = adapter.executeQuery(
+                "SELECT id, profile, resource_id, segment_id, tile_x, tile_y, resource_name, " +
+                "resource_type, start_time_utc, duration_ms, description, created_at, updated_at " +
+                "FROM local_timers WHERE 1 = 0")) {
+            return true;
+        } catch (SQLException e) {
             return false;
         }
     }

@@ -31,6 +31,15 @@ public class AutoSaveTableware implements Action
         return w != null && shouldRemove(w.d, w.m);
     }
 
+    static boolean shouldRemove(NGItem item) {
+        try {
+            item.info();
+            return shouldRemove(item.getInfo(Wear.class));
+        } catch (Loading ignored) {
+            return false;
+        }
+    }
+
     /** Shift-click `transfer` can land in the table's full food grid; invxf targets the bag. */
     static TakeOff takeOffMode(int freeSlots) {
         return freeSlots > 0 ? TakeOff.TO_INVENTORY : TakeOff.DROP;
@@ -70,8 +79,7 @@ public class AutoSaveTableware implements Action
                 {
                     if (!(witem.item instanceof NGItem))
                         continue;
-                    witem.item.info();
-                    if (!shouldRemove(((NGItem) witem.item).getInfo(Wear.class)))
+                    if (!shouldRemove((NGItem) witem.item))
                         continue;
                     takeOff(gui, witem);
                     if (stop.get())
