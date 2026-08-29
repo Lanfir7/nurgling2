@@ -51,9 +51,12 @@ public class TransferToPiles implements Action{
         return false;
     }
 
-    /** After a stack dump, one Gob Shift-click replaces a packet per loose leftover. */
+    /**
+     * Mixed-category TYPE_BULK always uses invxf2 by exact type. Vanilla Shift-on-pile-gob
+     * dumps every type the pile accepts, whether leftovers are stacked or loose (Quartz+Flint).
+     */
     static boolean typeBulkUsesGobShift(boolean hasStackEntries) {
-        return !hasStackEntries;
+        return false;
     }
 
     static boolean stockpileFillChanged(int freeBefore, int freeNow) {
@@ -207,7 +210,7 @@ public class TransferToPiles implements Action{
         }
     }
 
-    /** Mixed types cannot use Stockpile.put (server picks any sibling). */
+    /** Mixed types cannot use Stockpile.put or gob-shift (server/vanilla pick any sibling). */
     private boolean transferTypeBulk(NGameUI gui, int target_size) throws InterruptedException {
         NISBox pile = gui.getStockpile();
         if (pile == null || target_size < 1) {

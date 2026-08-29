@@ -14,7 +14,9 @@ import static nurgling.actions.TransferToPiles.PileMode;
 class TransferToPilesTest {
 
     @Test
-    void mixedTypesWithoutQualityUseTypeBulk() {
+    void mixedQuartzAndFlintUseTypeBulk() {
+        // Quartz and Flint share the stone pile; exactName + isSameExistExact
+        // reports mixedCategory=true, so Free Inventory must stay on TYPE_BULK.
         assertEquals(PileMode.TYPE_BULK, TransferToPiles.pileMode(0, true));
         assertEquals(PileMode.TYPE_BULK, TransferToPiles.pileMode(1, true));
     }
@@ -62,8 +64,10 @@ class TransferToPilesTest {
     }
 
     @Test
-    void typeBulkUsesOneGobShiftForLooseStackRemainders() {
-        assertTrue(TransferToPiles.typeBulkUsesGobShift(false));
+    void typeBulkNeverUsesGobShiftForMixedLoads() {
+        // Vanilla Shift-on-pile-gob dumps every type the pile accepts.
+        // Loose leftovers after a stack dump are still mixed (Quartz+Flint).
+        assertFalse(TransferToPiles.typeBulkUsesGobShift(false));
         assertFalse(TransferToPiles.typeBulkUsesGobShift(true));
     }
 
