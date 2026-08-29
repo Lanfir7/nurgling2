@@ -41,4 +41,28 @@ class NHitBoxCustomTest {
         assertEquals(10.0, box.end.x - box.begin.x, 0.01);
         assertEquals(10.0, box.end.y - box.begin.y, 0.01);
     }
+
+    @Test
+    void timberTunnelHasForceZeroHitbox() {
+        assertForceZeroHitbox("gfx/terobjs/timbertunnel");
+    }
+
+    @Test
+    void reinforcedTunnelHasForceZeroHitbox() {
+        assertForceZeroHitbox("gfx/terobjs/reinforcedtunnel");
+    }
+
+    @Test
+    void stoneArchTunnelHasForceZeroHitbox() {
+        assertForceZeroHitbox("gfx/terobjs/stonearchtunnel");
+    }
+
+    private static void assertForceZeroHitbox(String name) {
+        NHitBox box = NHitBox.findCustom(name);
+        assertNotNull(box);
+        assertEquals(0.0, box.begin.x, 0.01);
+        assertEquals(0.0, box.begin.y, 0.01);
+        assertEquals(0.0, box.end.x, 0.01);
+        assertEquals(0.0, box.end.y, 0.01);
+    }
 }
