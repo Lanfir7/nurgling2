@@ -286,13 +286,12 @@ public class MapToolsWindow extends Window {
             if(gui.mapToolsWindow.visible()) {
                 gui.mapToolsWindow.hide();
             } else {
-                gui.mapToolsWindow.show();
-                gui.mapToolsWindow.raise();
+                MapSearchFront.showInFront(gui.mapToolsWindow);
             }
         } else {
             gui.mapToolsWindow = new MapToolsWindow();
             gui.add(gui.mapToolsWindow, new Coord(100, 100));
-            gui.mapToolsWindow.show();
+            MapSearchFront.showInFront(gui.mapToolsWindow);
         }
     }
 
@@ -305,8 +304,7 @@ public class MapToolsWindow extends Window {
             gui.mapToolsWindow = new MapToolsWindow();
             gui.add(gui.mapToolsWindow, new Coord(100, 100));
         }
-        gui.mapToolsWindow.show();
-        gui.mapToolsWindow.raise();
+        MapSearchFront.showInFront(gui.mapToolsWindow);
         gui.mapToolsWindow.tabs.showtab(gui.mapToolsWindow.searchTab);
         gui.mapToolsWindow.terrainSearchPanel.selectTerrains(terrains);
         gui.mapToolsWindow.pack();
@@ -321,8 +319,7 @@ public class MapToolsWindow extends Window {
             gui.mapToolsWindow = new MapToolsWindow();
             gui.add(gui.mapToolsWindow, new Coord(100, 100));
         }
-        gui.mapToolsWindow.show();
-        gui.mapToolsWindow.raise();
+        MapSearchFront.showInFront(gui.mapToolsWindow);
         gui.mapToolsWindow.tabs.showtab(gui.mapToolsWindow.searchTab);
         gui.mapToolsWindow.terrainSearchPanel.selectResources(resources);
         gui.mapToolsWindow.pack();
@@ -336,13 +333,12 @@ public class MapToolsWindow extends Window {
             if(gui.treeSearchWindow.visible()) {
                 gui.treeSearchWindow.hide();
             } else {
-                gui.treeSearchWindow.show();
-                gui.treeSearchWindow.raise();
+                MapSearchFront.showInFront(gui.treeSearchWindow);
             }
         } else {
             gui.treeSearchWindow = new TreeSearchWindow(gui);
             gui.add(gui.treeSearchWindow, new Coord(100, 100));
-            gui.treeSearchWindow.show();
+            MapSearchFront.showInFront(gui.treeSearchWindow);
         }
     }
 
@@ -354,13 +350,12 @@ public class MapToolsWindow extends Window {
             if(gui.fishSearchWindow.visible()) {
                 gui.fishSearchWindow.hide();
             } else {
-                gui.fishSearchWindow.show();
-                gui.fishSearchWindow.raise();
+                MapSearchFront.showInFront(gui.fishSearchWindow);
             }
         } else {
             gui.fishSearchWindow = new FishSearchWindow(gui);
             gui.add(gui.fishSearchWindow, new Coord(100, 100));
-            gui.fishSearchWindow.show();
+            MapSearchFront.showInFront(gui.fishSearchWindow);
         }
     }
 }

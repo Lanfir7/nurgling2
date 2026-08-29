@@ -534,13 +534,12 @@ public class NMapWnd extends MapWnd {
                 if(gui.foragingSearchWindow.visible()) {
                     gui.foragingSearchWindow.hide();
                 } else {
-                    gui.foragingSearchWindow.show();
-                    gui.foragingSearchWindow.raise();
+                    MapSearchFront.showInFront(gui.foragingSearchWindow);
                 }
             } else {
                 gui.foragingSearchWindow = new ForagingSearchWindow(gui);
                 gui.add(gui.foragingSearchWindow, new Coord(100, 100));
-                gui.foragingSearchWindow.show();
+                MapSearchFront.showInFront(gui.foragingSearchWindow);
             }
         }
     }
@@ -552,13 +551,12 @@ public class NMapWnd extends MapWnd {
                 if(gui.gemstoneSearchWindow.visible()) {
                     gui.gemstoneSearchWindow.hide();
                 } else {
-                    gui.gemstoneSearchWindow.show();
-                    gui.gemstoneSearchWindow.raise();
+                    MapSearchFront.showInFront(gui.gemstoneSearchWindow);
                 }
             } else {
                 gui.gemstoneSearchWindow = new GemstoneSearchWindow(gui);
                 gui.add(gui.gemstoneSearchWindow, new Coord(100, 100));
-                gui.gemstoneSearchWindow.show();
+                MapSearchFront.showInFront(gui.gemstoneSearchWindow);
             }
         }
     }
@@ -570,13 +568,12 @@ public class NMapWnd extends MapWnd {
                 if(gui.treeSearchWindow.visible()) {
                     gui.treeSearchWindow.hide();
                 } else {
-                    gui.treeSearchWindow.show();
-                    gui.treeSearchWindow.raise();
+                    MapSearchFront.showInFront(gui.treeSearchWindow);
                 }
             } else {
                 gui.treeSearchWindow = new TreeSearchWindow(gui);
                 gui.add(gui.treeSearchWindow, new Coord(100, 100));
-                gui.treeSearchWindow.show();
+                MapSearchFront.showInFront(gui.treeSearchWindow);
             }
         }
     }
@@ -588,13 +585,12 @@ public class NMapWnd extends MapWnd {
                 if(gui.fishSearchWindow.visible()) {
                     gui.fishSearchWindow.hide();
                 } else {
-                    gui.fishSearchWindow.show();
-                    gui.fishSearchWindow.raise();
+                    MapSearchFront.showInFront(gui.fishSearchWindow);
                 }
             } else {
                 gui.fishSearchWindow = new FishSearchWindow(gui);
                 gui.add(gui.fishSearchWindow, new Coord(100, 100));
-                gui.fishSearchWindow.show();
+                MapSearchFront.showInFront(gui.fishSearchWindow);
             }
         }
     }
@@ -610,13 +606,12 @@ public class NMapWnd extends MapWnd {
                 if(gui.prospectingSearchWindow.visible()) {
                     gui.prospectingSearchWindow.hide();
                 } else {
-                    gui.prospectingSearchWindow.show();
-                    gui.prospectingSearchWindow.raise();
+                    MapSearchFront.showInFront(gui.prospectingSearchWindow);
                 }
             } else {
                 gui.prospectingSearchWindow = new ProspectingSearchWindow(gui);
                 gui.add(gui.prospectingSearchWindow, new Coord(100, 100));
-                gui.prospectingSearchWindow.show();
+                MapSearchFront.showInFront(gui.prospectingSearchWindow);
             }
         }
     }
@@ -628,13 +623,12 @@ public class NMapWnd extends MapWnd {
                 if(gui.quarryartzSearchWindow.visible()) {
                     gui.quarryartzSearchWindow.hide();
                 } else {
-                    gui.quarryartzSearchWindow.show();
-                    gui.quarryartzSearchWindow.raise();
+                    MapSearchFront.showInFront(gui.quarryartzSearchWindow);
                 }
             } else {
                 gui.quarryartzSearchWindow = new QuarryartzSearchWindow(gui);
                 gui.add(gui.quarryartzSearchWindow, new Coord(100, 100));
-                gui.quarryartzSearchWindow.show();
+                MapSearchFront.showInFront(gui.quarryartzSearchWindow);
             }
         }
     }
