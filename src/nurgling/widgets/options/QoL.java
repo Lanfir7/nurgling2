@@ -4,11 +4,13 @@ import haven.*;
 import nurgling.NConfig;
 import nurgling.NMapView;
 import nurgling.NUtils;
+import nurgling.NStyle;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NLPassistant;
+import nurgling.widgets.AdaptiveSettingsPanel;
 import nurgling.widgets.nsettings.Panel;
 
-public class QoL extends Panel {
+public class QoL extends Panel implements AdaptiveSettingsPanel {
     private CheckBox showCropStage;
     private CheckBox simpleCrops;
     private CheckBox nightVision;
@@ -80,50 +82,16 @@ public class QoL extends Panel {
     private TextEntry temsmarkdistEntry;
     private TextEntry temsmarktimeEntry;
 
-    private Scrollport scrollport;
-    private Widget content;
     private Widget leftColumn;
     private Widget rightColumn;
 
     public QoL() {
-        super("");
-        int margin = UI.scale(10);
-
-        // Create scrollport to contain all settings (wider for 2 columns)
-        int scrollWidth = UI.scale(720);
-        int scrollHeight = UI.scale(550);
-        scrollport = add(new Scrollport(new Coord(scrollWidth, scrollHeight)), new Coord(margin, margin));
-
-        // Create main content container
-        content = new Widget(new Coord(scrollWidth - UI.scale(20), UI.scale(50))) {
-            @Override
-            public void pack() {
-                // Auto-resize based on children
-                resize(contentsz());
-            }
-        };
-        scrollport.cont.add(content, Coord.z);
+        super();
 
         // Create two columns
         int columnWidth = UI.scale(340);
-        int contentMargin = UI.scale(5);
-
-        leftColumn = new Widget(new Coord(columnWidth, UI.scale(50))) {
-            @Override
-            public void pack() {
-                resize(contentsz());
-            }
-        };
-
-        rightColumn = new Widget(new Coord(columnWidth, UI.scale(50))) {
-            @Override
-            public void pack() {
-                resize(contentsz());
-            }
-        };
-
-        content.add(leftColumn, new Coord(contentMargin, contentMargin));
-        content.add(rightColumn, new Coord(contentMargin + columnWidth + UI.scale(10), contentMargin));
+        leftColumn = add(new SettingsColumnCard(new Coord(columnWidth, UI.scale(50))), Coord.z);
+        rightColumn = add(new SettingsColumnCard(new Coord(columnWidth, UI.scale(50))), Coord.z);
 
         // LEFT COLUMN - Visual & Interface Settings
         Widget leftPrev = leftColumn.add(new Label("● " + L10n.get("qol.section.visual")), new Coord(5, 5));
@@ -373,11 +341,44 @@ public class QoL extends Panel {
         leftColumn.pack();
         rightColumn.pack();
 
-        // Pack content and update scrollbar
-        content.pack();
-        scrollport.cont.update();
+        fitToWidth(UI.scale(700), 2);
+    }
 
-        pack();
+    @Override
+    public void fitToWidth(int width, int columns) {
+        leftColumn.pack();
+        rightColumn.pack();
+        int minCardWidth = (columns > 1) ? UI.scale(245) : width + 1;
+        QoLLayout layout = QoLLayout.calculate(width, UI.scale(12), minCardWidth,
+                leftColumn.sz.y, rightColumn.sz.y);
+        leftColumn.move(layout.leftPosition);
+        rightColumn.move(layout.rightPosition);
+        leftColumn.resize(Coord.of(layout.cardWidth, leftColumn.sz.y));
+        rightColumn.resize(Coord.of(layout.cardWidth, rightColumn.sz.y));
+        resize(Coord.of(width, layout.contentHeight));
+    }
+
+    private static class SettingsColumnCard extends Widget {
+        SettingsColumnCard(Coord size) {
+            super(size);
+        }
+
+        @Override
+        public void pack() {
+            Coord content = contentsz();
+            resize(Coord.of(Math.max(sz.x, content.x + UI.scale(8)),
+                    content.y + UI.scale(8)));
+        }
+
+        @Override
+        public void draw(GOut g) {
+            g.chcolor(NStyle.windowBg);
+            g.frect(Coord.z, sz);
+            g.chcolor(NStyle.separator);
+            g.rect(Coord.z, sz.sub(1, 1));
+            g.chcolor();
+            super.draw(g);
+        }
     }
 
     @Override
