@@ -23,9 +23,12 @@ public class NRingSettings extends Panel {
 
     public NRingSettings() {
         super();
-        final int margin = UI.scale(10);
-        Scrollport scrollport = add(new Scrollport(UI.scale(560, 540)), new Coord(margin, margin));
-        Widget content = scrollport.cont;
+        Widget content = add(new Widget(Coord.z) {
+            @Override
+            public void pack() {
+                resize(contentsz());
+            }
+        }, Coord.z);
 
         Widget prev = content.add(new Label(L10n.get("rings.style_title")), Coord.z);
 
@@ -105,8 +108,7 @@ public class NRingSettings extends Panel {
         }
 
         content.pack();
-        scrollport.cont.update();
-        pack();
+        resize(content.sz);
     }
 
     @Override

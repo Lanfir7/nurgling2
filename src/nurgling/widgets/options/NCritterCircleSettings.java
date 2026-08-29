@@ -31,13 +31,12 @@ public class NCritterCircleSettings extends Panel {
 
     public NCritterCircleSettings() {
         super();
-        int margin = UI.scale(10);
-
-        // Scrollport for the list
-        int scrollWidth = UI.scale(560);
-        int scrollHeight = UI.scale(540);
-        Scrollport scrollport = add(new Scrollport(new Coord(scrollWidth, scrollHeight)), new Coord(margin, margin));
-        Widget content = scrollport.cont;
+        Widget content = add(new Widget(Coord.z) {
+            @Override
+            public void pack() {
+                resize(contentsz());
+            }
+        }, Coord.z);
 
         // Header
         Widget prev = content.add(new Label(L10n.get("critter_circles.title")), new Coord(0, 0));
@@ -105,6 +104,7 @@ public class NCritterCircleSettings extends Panel {
         }
 
         content.pack();
+        resize(content.sz);
     }
 
     @Override

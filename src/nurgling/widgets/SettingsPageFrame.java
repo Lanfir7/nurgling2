@@ -20,16 +20,17 @@ public class SettingsPageFrame extends Widget {
     public void fitTo(Coord viewport, int columns) {
         int pad = UI.scale(12);
         int innerWidth = Math.max(1, viewport.x - (pad * 2));
-        if(panel instanceof AdaptiveSettingsPanel)
-            ((AdaptiveSettingsPanel)panel).fitToWidth(innerWidth, columns);
-        else
-            panel.resize(Coord.of(innerWidth, panel.sz.y));
-
         int panelTop = pad;
         if(title != null) {
             title.move(Coord.of(pad, pad));
             panelTop = title.c.y + title.sz.y + pad;
         }
+        int panelHeight = Math.max(1, viewport.y - panelTop - pad);
+        if(panel instanceof AdaptiveSettingsPanel)
+            ((AdaptiveSettingsPanel)panel).fitToViewport(
+                    Coord.of(innerWidth, panelHeight), columns);
+        else
+            panel.resize(Coord.of(innerWidth, panel.sz.y));
         panel.move(Coord.of(pad, panelTop));
 
         boolean ownsScroll = (panel instanceof AdaptiveSettingsPanel)

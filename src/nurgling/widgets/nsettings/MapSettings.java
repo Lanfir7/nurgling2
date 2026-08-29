@@ -24,26 +24,17 @@ public class MapSettings extends Panel {
     private CheckBox trackingVectors;
     private CheckBox pingSound;
     
-    private Scrollport scrollport;
     private Widget content;
 
     public MapSettings() {
-        super("");
-        int margin = UI.scale(10);
-
-        // Create scrollport to contain all settings
+        super();
         int scrollWidth = UI.scale(560);
-        int scrollHeight = UI.scale(550);
-        scrollport = add(new Scrollport(new Coord(scrollWidth, scrollHeight)), new Coord(margin, margin));
-
-        // Create main content container
-        content = new Widget(new Coord(scrollWidth - UI.scale(20), UI.scale(50))) {
+        content = add(new Widget(new Coord(scrollWidth - UI.scale(20), UI.scale(50))) {
             @Override
             public void pack() {
                 resize(contentsz());
             }
-        };
-        scrollport.cont.add(content, Coord.z);
+        }, Coord.z);
 
         int contentMargin = UI.scale(5);
         
@@ -92,11 +83,8 @@ public class MapSettings extends Panel {
             }
         }, prev.pos("bl").adds(0, 10));
 
-        // Pack content and update scrollbar
         content.pack();
-        scrollport.cont.update();
-        
-        pack();
+        resize(content.sz);
     }
 
     @Override

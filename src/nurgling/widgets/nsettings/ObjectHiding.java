@@ -44,24 +44,17 @@ public class ObjectHiding extends Panel {
     private final HSlider lineWidthSlider;
     private final Label lineWidthLabel;
 
-    private final Scrollport scrollport;
     private final Widget content;
 
     public ObjectHiding() {
-        super("");
-        int margin = UI.scale(10);
-
+        super();
         int scrollWidth = UI.scale(560);
-        int scrollHeight = UI.scale(550);
-        scrollport = add(new Scrollport(new Coord(scrollWidth, scrollHeight)), new Coord(margin, margin));
-
-        content = new Widget(new Coord(scrollWidth - UI.scale(20), UI.scale(50))) {
+        content = add(new Widget(new Coord(scrollWidth - UI.scale(20), UI.scale(50))) {
             @Override
             public void pack() {
                 resize(contentsz());
             }
-        };
-        scrollport.cont.add(content, Coord.z);
+        }, Coord.z);
 
         int contentMargin = UI.scale(5);
 
@@ -144,9 +137,7 @@ public class ObjectHiding extends Panel {
         content.add(new Label(""), origin.add(0, rows * rowStep));
 
         content.pack();
-        scrollport.cont.update();
-
-        pack();
+        resize(content.sz);
     }
 
     private void resetBoxStyle() {

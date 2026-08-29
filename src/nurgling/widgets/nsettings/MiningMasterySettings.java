@@ -7,6 +7,7 @@ import nurgling.NUI;
 import nurgling.NUtils;
 import nurgling.actions.bots.MasterMiner;
 import nurgling.conf.NMasterMinerMarkingConfig;
+import nurgling.widgets.AdaptiveSettingsPanel;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,7 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MiningMasterySettings extends Panel {
+public class MiningMasterySettings extends Panel implements AdaptiveSettingsPanel {
     private static class ItemCheckbox extends Widget {
         private final CheckBox checkbox;
         private final Label nameLabel;
@@ -126,11 +127,12 @@ public class MiningMasterySettings extends Panel {
     }
 
     private final Map<String, ItemCheckbox> checkboxes = new HashMap<>();
+    private final List<ItemCheckbox> checkboxOrder = new ArrayList<>();
     private Scrollport scrollport;
     private boolean initialized = false;
 
     public MiningMasterySettings() {
-        super("Mining Mastery Settings");
+        super();
         // Инициализация отложена до первого вызова load() или show()
     }
     
@@ -144,7 +146,7 @@ public class MiningMasterySettings extends Panel {
         add(new Label("Select which items to mark on map when mining:"), new Coord(margin, y));
         
         // Вычисляем позицию справа для кнопок - справа от верхнего текста
-        int labelWidth = UI.scale(400); // Примерная ширина первого label
+        int labelWidth = UI.scale(330); // Keeps both action buttons inside the standard page width.
         int buttonX = margin + labelWidth + UI.scale(20); // Справа от текста с отступом
         int buttonY = y; // На той же высоте, что и первый label
         
@@ -209,6 +211,7 @@ public class MiningMasterySettings extends Panel {
             int columnX = columnIndex * columnWidth;
             scrollport.cont.add(itemCheckbox, new Coord(columnX, itemY));
             checkboxes.put(itemName, itemCheckbox);
+            checkboxOrder.add(itemCheckbox);
             
             maxY = Math.max(maxY, itemY + itemHeight);
             
@@ -224,6 +227,36 @@ public class MiningMasterySettings extends Panel {
         
         // Устанавливаем размер контента для двух колонок
         scrollport.cont.resize(columnWidth * 2, maxY);
+    }
+
+    @Override
+    public void fitToWidth(int width, int columns) {
+        fitToViewport(Coord.of(width, sz.y), columns);
+    }
+
+    @Override
+    public void fitToViewport(Coord viewport, int columns) {
+        initializeIfNeeded();
+        int margin = UI.scale(10);
+        int itemHeight = UI.scale(22);
+        int y = 0;
+        int contentWidth = Math.max(UI.scale(400), viewport.x - (margin * 2));
+        for(ItemCheckbox item : checkboxOrder) {
+            item.move(Coord.of(0, y));
+            item.resize(Coord.of(contentWidth, itemHeight));
+            y += itemHeight;
+        }
+        scrollport.cont.resize(Coord.of(contentWidth, y));
+        scrollport.resize(Coord.of(
+                Math.max(1, viewport.x - (margin * 2)),
+                Math.max(UI.scale(80), viewport.y - scrollport.c.y - margin)));
+        scrollport.cont.update();
+        resize(viewport);
+    }
+
+    @Override
+    public boolean ownsVerticalScroll() {
+        return true;
     }
 
     @Override

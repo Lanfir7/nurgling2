@@ -7,6 +7,7 @@ import nurgling.cheese.CheeseOrder;
 import nurgling.cheese.CheeseOrdersManager;
 import nurgling.NUtils;
 import nurgling.tools.VSpec;
+import nurgling.widgets.AdaptiveSettingsPanel;
 import org.json.JSONObject;
 
 import nurgling.i18n.L10n;
@@ -18,7 +19,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class CheeseOrdersPanel extends Panel {
+public class CheeseOrdersPanel extends Panel implements AdaptiveSettingsPanel {
     private final CheeseOrdersManager manager = new CheeseOrdersManager();
     private final int margin = UI.scale(10);
 
@@ -34,6 +35,9 @@ public class CheeseOrdersPanel extends Panel {
     // --- Editor Panel widgets ---
     private Dropbox<String> cheeseTypeDropdown;
     private TextEntry countEntry;
+    private Button addOrderButton;
+    private Button editorSaveButton;
+    private Button editorCancelButton;
     
     // Icon cache for cheese types
     private final Map<String, BufferedImage> cheeseIcons = new HashMap<>();
@@ -47,7 +51,7 @@ public class CheeseOrdersPanel extends Panel {
     private WatchKey watchKey;
 
     public CheeseOrdersPanel() {
-        super("");
+        super();
 
         int btnWidth = UI.scale(120);
         int btnHeight = UI.scale(28);
@@ -80,7 +84,7 @@ public class CheeseOrdersPanel extends Panel {
 
         // "Add Order" button
         listPanel.add(
-                new Button(btnWidth, L10n.get("cheese.add_order"), this::showEditorPanel),
+                addOrderButton = new Button(btnWidth, L10n.get("cheese.add_order"), this::showEditorPanel),
                 new Coord((contentWidth - btnWidth) / 2, bottomY - btnHeight - UI.scale(8))
         );
 
@@ -112,11 +116,11 @@ public class CheeseOrdersPanel extends Panel {
 
         // "Save" and "Cancel" buttons
         editorPanel.add(
-                new Button(btnWidth, L10n.get("common.save"), this::saveOrder),
+                editorSaveButton = new Button(btnWidth, L10n.get("common.save"), this::saveOrder),
                 new Coord((contentWidth - btnWidth * 2 - UI.scale(20)) / 2, editorBtnY)
         );
         editorPanel.add(
-                new Button(btnWidth, L10n.get("common.cancel"), this::showListPanel),
+                editorCancelButton = new Button(btnWidth, L10n.get("common.cancel"), this::showListPanel),
                 new Coord((contentWidth - btnWidth * 2 - UI.scale(20)) / 2 + btnWidth + UI.scale(20), editorBtnY)
         );
 
@@ -124,6 +128,40 @@ public class CheeseOrdersPanel extends Panel {
         pack();
 
         showListPanel();
+    }
+
+    @Override
+    public void fitToWidth(int width, int columns) {
+        fitToViewport(Coord.of(width, sz.y), columns);
+    }
+
+    @Override
+    public void fitToViewport(Coord viewport, int columns) {
+        int contentWidth = Math.max(1, viewport.x - (margin * 2));
+        int contentHeight = Math.max(UI.scale(180), viewport.y - (margin * 2));
+        int btnGap = UI.scale(20);
+        int bottom = contentHeight - margin;
+
+        resize(viewport);
+        listPanel.resize(Coord.of(contentWidth, contentHeight));
+        editorPanel.resize(Coord.of(contentWidth, contentHeight));
+        orderListContainer.resize(Coord.of(
+                Math.max(1, contentWidth - (margin * 2)),
+                Math.max(UI.scale(80), contentHeight - UI.scale(115))));
+
+        addOrderButton.move(Coord.of((contentWidth - addOrderButton.sz.x) / 2,
+                bottom - addOrderButton.sz.y));
+        int editorButtonsWidth = editorSaveButton.sz.x + btnGap + editorCancelButton.sz.x;
+        int editorX = Math.max(0, (contentWidth - editorButtonsWidth) / 2);
+        editorSaveButton.move(Coord.of(editorX, bottom - editorSaveButton.sz.y));
+        editorCancelButton.move(Coord.of(editorX + editorSaveButton.sz.x + btnGap,
+                bottom - editorCancelButton.sz.y));
+        rebuildOrderList();
+    }
+
+    @Override
+    public boolean ownsVerticalScroll() {
+        return true;
     }
 
     private void showListPanel() {

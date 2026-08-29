@@ -54,26 +54,17 @@ public class World extends Panel {
     private HSlider lineWidthSlider;
     private Label lineWidthLabel;
     
-    private Scrollport scrollport;
     private Widget content;
 
     public World() {
-        super("");
-        int margin = UI.scale(10);
-
-        // Create scrollport to contain all settings
+        super();
         int scrollWidth = UI.scale(560);
-        int scrollHeight = UI.scale(550);
-        scrollport = add(new Scrollport(new Coord(scrollWidth, scrollHeight)), new Coord(margin, margin));
-
-        // Create main content container
-        content = new Widget(new Coord(scrollWidth - UI.scale(20), UI.scale(50))) {
+        content = add(new Widget(new Coord(scrollWidth - UI.scale(20), UI.scale(50))) {
             @Override
             public void pack() {
                 resize(contentsz());
             }
-        };
-        scrollport.cont.add(content, Coord.z);
+        }, Coord.z);
 
         int contentMargin = UI.scale(5);
         
@@ -202,11 +193,8 @@ public class World extends Panel {
             }
         }, prev.pos("bl").adds(0, 5));
         
-        // Pack content and update scrollbar
         content.pack();
-        scrollport.cont.update();
-        
-        pack();
+        resize(content.sz);
     }
 
     /** Re-reads showBB after the Ctrl+N hotkey changed it while this panel was already open. */

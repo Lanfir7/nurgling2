@@ -5,6 +5,7 @@ import haven.res.lib.itemtex.ItemTex;
 import nurgling.scenarios.CraftPreset;
 import nurgling.scenarios.CraftPresetManager;
 import nurgling.tools.VSpec;
+import nurgling.widgets.AdaptiveSettingsPanel;
 import org.json.JSONObject;
 
 import nurgling.i18n.L10n;
@@ -16,7 +17,7 @@ import java.util.*;
  * Panel for managing craft presets in the settings window.
  * Allows viewing and deleting saved craft presets.
  */
-public class CraftPresetsPanel extends Panel {
+public class CraftPresetsPanel extends Panel implements AdaptiveSettingsPanel {
     private final int margin = UI.scale(10);
     private Scrollport presetListContainer;
     private Widget presetListContent;
@@ -27,7 +28,7 @@ public class CraftPresetsPanel extends Panel {
     private final Set<String> failedIcons = new HashSet<>();
 
     public CraftPresetsPanel() {
-        super("");
+        super();
 
         int contentWidth = sz.x - margin * 2;
         int listHeight = UI.scale(420);
@@ -50,6 +51,26 @@ public class CraftPresetsPanel extends Panel {
         presetListContainer.cont.add(presetListContent, Coord.z);
 
         rebuildPresetList();
+    }
+
+    @Override
+    public void fitToWidth(int width, int columns) {
+        fitToViewport(Coord.of(width, sz.y), columns);
+    }
+
+    @Override
+    public void fitToViewport(Coord viewport, int columns) {
+        int listTop = margin + UI.scale(45);
+        resize(viewport);
+        presetListContainer.resize(Coord.of(
+                Math.max(1, viewport.x - (margin * 2)),
+                Math.max(UI.scale(80), viewport.y - listTop - margin)));
+        rebuildPresetList();
+    }
+
+    @Override
+    public boolean ownsVerticalScroll() {
+        return true;
     }
 
     private void rebuildPresetList() {
