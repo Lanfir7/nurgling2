@@ -38,6 +38,7 @@ public class GobContextRegistry {
         register(new ChipStoneAreaAction());
         register(new ShearWoolAreaAction());
         register(new LightAction());
+        register(new KilnFuelAction());
         register(new BoughBeeAction());
         register(new BoughPyreTimerAction());
         register(new FeedCloverAction());
