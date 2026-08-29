@@ -1,6 +1,7 @@
 package nurgling.widgets.options;
 
 import haven.Coord;
+import haven.UI;
 
 final class QoLLayout {
     final int columns;
@@ -28,5 +29,21 @@ final class QoLLayout {
         }
         return new QoLLayout(1, width, Coord.z,
                 Coord.of(0, leftHeight + gap), leftHeight + gap + rightHeight);
+    }
+
+    static QoLLayout forSettings(int width, int gap, int columns,
+                                 int leftHeight, int rightHeight) {
+        int minCardWidth = (columns > 1) ? UI.scale(245) : width + 1;
+        return calculate(width, gap, minCardWidth, leftHeight, rightHeight);
+    }
+
+    static int optionWidth(int cardWidth, int optionX, int preferredWidth,
+                           int rightPadding) {
+        return Math.max(1, Math.min(preferredWidth,
+                cardWidth - optionX - rightPadding));
+    }
+
+    static int optionX(int requestedX, int minimumInset) {
+        return Math.max(requestedX, minimumInset);
     }
 }

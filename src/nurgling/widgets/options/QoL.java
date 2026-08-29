@@ -89,12 +89,12 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         super();
 
         // Create two columns
-        int columnWidth = UI.scale(340);
+        int columnWidth = UI.scale(245);
         leftColumn = add(new SettingsColumnCard(new Coord(columnWidth, UI.scale(50))), Coord.z);
         rightColumn = add(new SettingsColumnCard(new Coord(columnWidth, UI.scale(50))), Coord.z);
 
         // LEFT COLUMN - Visual & Interface Settings
-        Widget leftPrev = leftColumn.add(new Label("● " + L10n.get("qol.section.visual")), new Coord(5, 5));
+        Widget leftPrev = leftColumn.add(new Label("● " + L10n.get("qol.section.visual")), UI.scale(12, 5));
         leftPrev = showCropStage = leftColumn.add(new CheckBox(L10n.get("qol.show_crop_stage")), leftPrev.pos("bl").adds(0, 10));
         leftPrev = simpleCrops = leftColumn.add(new CheckBox(L10n.get("qol.simple_crops")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = nightVision = leftColumn.add(new CheckBox(L10n.get("qol.night_vision")), leftPrev.pos("bl").adds(0, 5));
@@ -248,7 +248,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
 
         // RIGHT COLUMN - Advanced Settings
         Widget rightPrev = null;
-        rightPrev = rightColumn.add(new Label("● " + L10n.get("qol.section.language")), new Coord(5, 5));
+        rightPrev = rightColumn.add(new Label("● " + L10n.get("qol.section.language")), UI.scale(12, 5));
         rightPrev = languageDropbox = rightColumn.add(new Dropbox<String>(UI.scale(150), L10n.SUPPORTED_LANGUAGES.length, UI.scale(16)) {
             @Override
             protected String listitem(int i) {
@@ -348,8 +348,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
     public void fitToWidth(int width, int columns) {
         leftColumn.pack();
         rightColumn.pack();
-        int minCardWidth = (columns > 1) ? UI.scale(280) : width + 1;
-        QoLLayout layout = QoLLayout.calculate(width, UI.scale(12), minCardWidth,
+        QoLLayout layout = QoLLayout.forSettings(width, UI.scale(12), columns,
                 leftColumn.sz.y, rightColumn.sz.y);
         leftColumn.move(layout.leftPosition);
         rightColumn.move(layout.rightPosition);
@@ -365,8 +364,11 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
 
         @Override
         public <T extends Widget> T add(T child, Coord c) {
-            if(child instanceof CheckBox)
-                ((CheckBox)child).wrapTo(UI.scale(230));
+            if(child instanceof CheckBox) {
+                c = Coord.of(QoLLayout.optionX(c.x, UI.scale(12)), c.y);
+                ((CheckBox)child).wrapTo(QoLLayout.optionWidth(
+                        sz.x, c.x, UI.scale(230), UI.scale(8)));
+            }
             return super.add(child, c);
         }
 

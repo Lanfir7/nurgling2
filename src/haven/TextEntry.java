@@ -123,6 +123,10 @@ public class TextEntry extends Widget implements ReadLine.Owner {
 	    this.tcache = tcache = fnd.render(dtext(), (dshow && dirty) ? dirtycol : defcol);
 	int point = buf.point(), mark = buf.mark();
 	g.image(mext, Coord.z, sz);
+	int inset = Math.max(1, UI.scale(1));
+	g.chcolor(TextEntryVisualStyle.background());
+	g.frect(Coord.of(inset, inset), sz.sub(inset * 2, inset * 2));
+	g.chcolor();
 	if(mark >= 0) {
 	    int px = tcache.advance(point) - sx, mx = tcache.advance(mark) - sx;
 	    g.chcolor(selcol);
@@ -141,6 +145,11 @@ public class TextEntry extends Widget implements ReadLine.Owner {
 	    if(((Utils.rtime() - Math.max(focusstart, buf.mtime())) % 1.0) < 0.5)
 		g.image(caret, coff.add(toffx + lx, (sz.y - tcache.img.getHeight()) / 2));
 	}
+	g.chcolor(TextEntryVisualStyle.border(hasfocus));
+	for(TextEntryVisualStyle.BorderFrame frame :
+		TextEntryVisualStyle.borderFrames(sz, inset))
+	    g.rect(frame.position, frame.size);
+	g.chcolor();
     }
 
     public TextEntry(int w, String deftext) {

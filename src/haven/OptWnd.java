@@ -162,6 +162,13 @@ public class OptWnd extends Window {
 	}
     }
 
+    public static class MainPanel extends Panel {
+        @Override
+        protected boolean usesOuterScroll() {
+            return false;
+        }
+    }
+
     private void error(String msg) {
 	GameUI gui = getparent(GameUI.class);
 	if(gui != null)
@@ -1081,7 +1088,7 @@ public class OptWnd extends Window {
 		    fitCurrentPanel();
 	    }
 	}, Coord.z);
-	main = panels.cont.add(new Panel(), Coord.z);
+	main = panels.cont.add(new MainPanel(), Coord.z);
 	nqolwnd = panels.cont.add(new NSettingsPanel(main), Coord.z);
 
 	int y = 0;
