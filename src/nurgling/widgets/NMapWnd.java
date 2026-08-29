@@ -600,21 +600,7 @@ public class NMapWnd extends MapWnd {
     }
 
     private void openOresSearch() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null) {
-            if(gui.terrainSearchWindow != null) {
-                if(gui.terrainSearchWindow.visible()) {
-                    gui.terrainSearchWindow.hide();
-                } else {
-                    gui.terrainSearchWindow.show();
-                    gui.terrainSearchWindow.raise();
-                }
-            } else {
-                gui.terrainSearchWindow = new TerrainSearchWindow();
-                gui.add(gui.terrainSearchWindow, new Coord(100, 100));
-                gui.terrainSearchWindow.show();
-            }
-        }
+        MapToolsWindow.openTerrainSearch(java.util.Collections.emptyList());
     }
 
     private void openProspectingSearch() {

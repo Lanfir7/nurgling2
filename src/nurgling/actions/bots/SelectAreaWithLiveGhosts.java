@@ -60,6 +60,10 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
         return hitBox != null && resourceName != null && !resourceName.isEmpty();
     }
 
+    static NHitBox preferLiveHitBox(NHitBox fallback, NHitBox liveHitBox) {
+        return (liveHitBox != null) ? liveHitBox : fallback;
+    }
+
     /** Area is enough to build; holograms may still be loading in a second window. */
     static boolean selectionCanProceed(int areasSelected, boolean userCancelled) {
         return areasSelected > 0 && !userCancelled;
@@ -134,27 +138,30 @@ public class SelectAreaWithLiveGhosts extends SelectArea {
         Indir<Resource> resource = (resName != null) ? Resource.remote().load(resName) : null;
         Message sdt = Message.nil;
 
-        if (!canPreviewWithoutPlob(hitBox, resName)) {
+        // The catalog footprint is only a fallback. Prefer the server hologram's real
+        // collision box when it loads; it can be larger than the catalog tile footprint.
+        tryActivateBuildMenu(gui, buildingName);
+        if (gui.map.placing == null) {
             tryActivateBuildMenu(gui, buildingName);
-            if (gui.map.placing == null) {
-                tryActivateBuildMenu(gui, buildingName);
+        }
+        gui.ui.core.addTask(WaitPlob.withSoftTimeout(false, 60, gui));
+        if (gui.map.placing != null) {
+            gui.ui.core.addTask(WaitPlob.withSoftTimeout(true, 200, gui));
+        }
+        Loader.Future<MapView.Plob> placing = gui.map.placing;
+        if (placing != null && placing.ready()) {
+            MapView.Plob plob = placing.get();
+            if (plob.ngob != null) {
+                hitBox = preferLiveHitBox(hitBox, plob.ngob.hitBox);
             }
-            gui.ui.core.addTask(WaitPlob.withSoftTimeout(false, 60, gui));
-            Loader.Future<MapView.Plob> placing = gui.map.placing;
-            if (placing != null && placing.ready()) {
-                MapView.Plob plob = placing.get();
-                if (hitBox == null && plob.ngob != null) {
-                    hitBox = plob.ngob.hitBox;
+            ResDrawable rd = plob.getattr(ResDrawable.class);
+            if (rd != null && rd.res != null) {
+                resource = rd.res;
+                if (rd.sdt != null) {
+                    sdt = rd.sdt.clone();
                 }
-                ResDrawable rd = plob.getattr(ResDrawable.class);
-                if (rd != null && rd.res != null) {
-                    resource = rd.res;
-                    if (rd.sdt != null) {
-                        sdt = rd.sdt.clone();
-                    }
-                } else if (plob.ngob != null && plob.ngob.name != null) {
-                    resource = Resource.remote().load(plob.ngob.name);
-                }
+            } else if (plob.ngob != null && plob.ngob.name != null) {
+                resource = Resource.remote().load(plob.ngob.name);
             }
         }
 

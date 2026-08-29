@@ -1261,9 +1261,27 @@ public class MigrationManager {
     }
 
     private static void safeCreateIndex(DatabaseAdapter adapter, String sql) throws SQLException {
+        if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
+            try {
+                adapter.executeUpdate(sql);
+            } catch (SQLException e) {
+                if (!isAlreadyExists(e)) throw e;
+            }
+            return;
+        }
+
+        Connection conn = adapter.getConnection();
+        java.sql.Savepoint sp = conn.setSavepoint("nurgling_create_index");
         try {
             adapter.executeUpdate(sql);
+            conn.releaseSavepoint(sp);
         } catch (SQLException e) {
+            try {
+                conn.rollback(sp);
+            } catch (SQLException rollbackEx) {
+                e.addSuppressed(rollbackEx);
+                throw e;
+            }
             if (!isAlreadyExists(e)) throw e;
         }
     }
