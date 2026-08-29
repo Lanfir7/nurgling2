@@ -72,12 +72,12 @@ public final class DefaultAnimalAlarms {
             this.notification = notification;
         }
 
-        public void poll(String pose, String iconResName) {
+        public Play poll(String pose, String iconResName) {
             if(notification == null)
-                return;
+                return(null);
             Play play = playForPose(pose, iconResName);
             if(play == Play.LATER)
-                return;
+                return(play);
             if(play == Play.NEVER) {
                 notification = null;
                 visualActive = false;
@@ -86,6 +86,7 @@ public final class DefaultAnimalAlarms {
                 notification = null;
                 current.run();
             }
+            return(play);
         }
 
         public void expireVisual() {

@@ -118,4 +118,11 @@ class DefaultAnimalAlarmsTest {
         assertFalse(state.isPending());
         assertTrue(state.isVisualActive());
     }
+
+    @Test
+    void pollKeepsBinaryCompatibleReturnTypeForIncrementalBuilds() throws Exception {
+        assertEquals(Play.class, DefaultAnimalAlarms.State.class
+                .getDeclaredMethod("poll", String.class, String.class)
+                .getReturnType());
+    }
 }
