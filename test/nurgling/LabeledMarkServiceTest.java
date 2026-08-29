@@ -80,4 +80,26 @@ class LabeledMarkServiceTest {
         assertFalse(saved.contains("animal_7"));
         assertFalse(saved.contains("q40"));
     }
+
+    @Test
+    void staleDbMergeKeepsLocalInspectQualityAndKillTime() {
+        Path file = tempDir.resolve("labeled-marks.json");
+        LabeledMarkService service = new LabeledMarkService(null, "test", file.toString());
+        long gobId = 9L;
+        service.addAnimalMarkerLocal(gobId, "gfx/kritter/fox", "Fox", 1L, 10, 20, 1L, 0, 0, null);
+        service.applyAnimalMarkerQuality(gobId, 40, "Denis");
+        Long killedAt = service.getMark("animal_" + gobId).killedAtMs;
+
+        nurgling.db.dao.AnimalMarkerDao.AnimalMarkerData stale =
+            new nurgling.db.dao.AnimalMarkerDao.AnimalMarkerData(
+                1, "test", gobId, "gfx/kritter/fox", "Fox", "",
+                1L, 10, 20, 1L, 0, 0,
+                null, null, null, null, null);
+        service.mergeAnimalMarkersFromDb(java.util.Collections.singletonList(stale), null);
+
+        LabeledMinimapMark after = service.getMark("animal_" + gobId);
+        assertEquals("q40", after.label);
+        assertEquals(killedAt, after.killedAtMs);
+        assertEquals("Denis", after.killedBy);
+    }
 }

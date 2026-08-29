@@ -145,21 +145,21 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     /**
      * After magnifying-glass Quality inspect: set the on-map animal marker to qN + kill time
-     * and persist quality/killed_at via AnimalMarkerService. No-op if there is no local mark.
+     * and persist quality/killed_at via AnimalMarkerService. Local mark update is a no-op if
+     * that gob was never marked; DB update still runs so a later sync can pick it up.
      */
     public void applyAnimalMarkerQuality(Gob gob, int quality) {
         if (gob == null) {
             return;
         }
         NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : NUtils.getGameUI();
-        if (gui == null || gui.labeledMarkService == null) {
-            return;
-        }
-        if (gui.labeledMarkService.getMark("animal_" + gob.id) == null) {
+        if (gui == null) {
             return;
         }
         String killedBy = gui.chrid;
-        gui.labeledMarkService.applyAnimalMarkerQuality(gob.id, quality, killedBy);
+        if (gui.labeledMarkService != null) {
+            gui.labeledMarkService.applyAnimalMarkerQuality(gob.id, quality, killedBy);
+        }
         String profile = gui.getGenus();
         if (profile == null || profile.isEmpty()) {
             return;

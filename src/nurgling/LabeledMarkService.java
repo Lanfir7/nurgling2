@@ -686,6 +686,7 @@ public class LabeledMarkService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             suppressReindex = true;
+            Map<String, LabeledMinimapMark> inspected = snapshotInspectedAnimalMarks();
             List<String> toRemove = new ArrayList<>();
             for (String locationId : labeledMarks.keySet()) {
                 if (locationId.startsWith("animal_")) toRemove.add(locationId);
@@ -727,6 +728,12 @@ public class LabeledMarkService implements ProfileAwareService {
                 }
                 Long killedAtMs = data.getKilledAt() != null ? data.getKilledAt().getTime() : null;
                 String killedBy = data.getKilledBy();
+                LabeledMinimapMark localInspect = inspected.get(locationId);
+                if ((label == null || label.isEmpty()) && localInspect != null) {
+                    label = localInspect.label;
+                    killedAtMs = localInspect.killedAtMs;
+                    killedBy = localInspect.killedBy;
+                }
                 LabeledMinimapMark mark = new LabeledMinimapMark(locationId, label, resourceType, data.getSegmentId(), tileCoords, gridId, localTileCoords, icon, null, killedAtMs, killedBy, data.getIconPath(), data.getAnimalType());
                 labeledMarks.put(locationId, mark);
                 addMarkToIndexes(mark);
@@ -751,6 +758,7 @@ public class LabeledMarkService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             suppressReindex = true;
+            Map<String, LabeledMinimapMark> inspected = snapshotInspectedAnimalMarks();
             // Удаляем старые маркеры животных
             List<String> toRemove = new ArrayList<>();
             for (String locationId : labeledMarks.keySet()) {
@@ -762,9 +770,18 @@ public class LabeledMarkService implements ProfileAwareService {
             
             // Добавляем новые маркеры с уже загруженными иконками
             for (AnimalMarkerSyncService.PreloadedAnimalMarker pm : preloadedMarkers) {
+                String label = pm.label;
+                Long killedAtMs = pm.killedAtMs;
+                String killedBy = pm.killedBy;
+                LabeledMinimapMark localInspect = inspected.get(pm.locationId);
+                if ((label == null || label.isEmpty()) && localInspect != null) {
+                    label = localInspect.label;
+                    killedAtMs = localInspect.killedAtMs;
+                    killedBy = localInspect.killedBy;
+                }
                 LabeledMinimapMark mark = new LabeledMinimapMark(
-                    pm.locationId, pm.label, pm.resourceType, pm.segmentId, pm.tileCoords,
-                    pm.gridId, pm.localTileCoords, pm.icon, null, pm.killedAtMs, pm.killedBy, 
+                    pm.locationId, label, pm.resourceType, pm.segmentId, pm.tileCoords,
+                    pm.gridId, pm.localTileCoords, pm.icon, null, killedAtMs, killedBy, 
                     pm.iconPath, pm.animalType);
                 labeledMarks.put(pm.locationId, mark);
                 addMarkToIndexes(mark);
@@ -885,6 +902,17 @@ public class LabeledMarkService implements ProfileAwareService {
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    private Map<String, LabeledMinimapMark> snapshotInspectedAnimalMarks() {
+        Map<String, LabeledMinimapMark> kept = new HashMap<>();
+        for (LabeledMinimapMark mark : labeledMarks.values()) {
+            if (mark.getLocationId() != null && mark.getLocationId().startsWith("animal_")
+                && mark.label != null && !mark.label.isEmpty()) {
+                kept.put(mark.getLocationId(), mark);
+            }
+        }
+        return kept;
     }
 
     /**
