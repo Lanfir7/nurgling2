@@ -194,6 +194,9 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 		pag.scm.wdgmsg("act", Utils.extend(Utils.extend(new Object[0], act().ad), eact));
 	    else
 		pag.scm.wdgmsg("use", Utils.extend(new Object[] {pag.id}, eact));
+	    try {
+		nurgling.tools.AttackEquipOnAttack.INSTANCE.onMenuUse(pag.scm.ui, res.name, act().ad, nurgling.tools.AttackEquipOnAttack.cursorOf(pag.scm.ui));
+	    } catch (Exception ignored) {}
 	}
 	public void tick(double dt) {
 	    if(spr != null)

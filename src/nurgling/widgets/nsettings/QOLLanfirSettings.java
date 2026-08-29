@@ -3,11 +3,13 @@ package nurgling.widgets.nsettings;
 import haven.*;
 import nurgling.NConfig;
 import nurgling.NUtils;
+import nurgling.i18n.L10n;
 import nurgling.tools.ForageMarkerLogic;
 
 public class QOLLanfirSettings extends Panel {
     
     private CheckBox treeResizeEnabled;
+    private CheckBox equipSwordShieldOnAttack;
     private HSlider treeResizePercentageSlider;
     private Label treeResizePercentageLabel;
     
@@ -94,6 +96,9 @@ public class QOLLanfirSettings extends Panel {
             }
         };
         addhlp(Coord.of(margin, y), UI.scale(5), forageMarkerMinQualitySlider, forageMarkerMinQualityLabel);
+        y += UI.scale(50);
+
+        equipSwordShieldOnAttack = add(new CheckBox(L10n.get("qol.equip_sword_shield_on_attack")), margin, y);
         
         pack();
     }
@@ -140,6 +145,8 @@ public class QOLLanfirSettings extends Panel {
         int forageMinQValue = ForageMarkerLogic.minQualityFromConfig(forageMinQ);
         forageMarkerMinQualitySlider.val = forageMinQValue;
         forageMarkerMinQualityLabel.settext(String.valueOf(forageMinQValue));
+
+        equipSwordShieldOnAttack.a = getBool(NConfig.Key.equipSwordShieldOnAttack);
     }
     
     @Override
@@ -149,6 +156,7 @@ public class QOLLanfirSettings extends Panel {
         NConfig.set(NConfig.Key.permIconScale, permIconScaleSlider.val);
         NConfig.set(NConfig.Key.prospectIconScale, prospectIconScaleSlider.val);
         NConfig.set(NConfig.Key.forageMarkerMinQuality, forageMarkerMinQualitySlider.val);
+        NConfig.set(NConfig.Key.equipSwordShieldOnAttack, equipSwordShieldOnAttack.a);
         NConfig.needUpdate();
         
         // Apply tree resizing to all existing trees in the world
