@@ -29,6 +29,7 @@ package haven;
 public class Scrollport extends Widget {
     public final Scrollbar bar;
     public final Scrollcont cont;
+    private boolean showBar = true;
 
     @RName("scr")
     public static class $_ implements Factory {
@@ -113,12 +114,33 @@ public class Scrollport extends Widget {
     }
 
     public void resize(Coord nsz) {
-	super.resize(nsz);
-	bar.c = new Coord(sz.x - bar.sz.x, 0);
-	bar.resize(nsz.y);
-	cont.resize(sz.sub(bar.sz.x, 0));
-	cont.update();
-	bar.ch(0);
+		super.resize(nsz);
+		bar.c = new Coord(sz.x - bar.sz.x, 0);
+		bar.resize(nsz.y);
+		cont.resize(new Coord(contentWidth(sz.x, bar.sz.x, showBar), sz.y));
+		cont.update();
+		bar.ch(0);
+	    }
+
+    static int contentWidth(int totalWidth, int barWidth, boolean barVisible) {
+	return(Math.max(1, totalWidth - (barVisible ? barWidth : 0)));
+    }
+
+    public void showbar(boolean show) {
+	if(showBar == show)
+	    return;
+	showBar = show;
+	bar.visible = show;
+	resize(sz);
+	if(!show) {
+	    bar.val = 0;
+	    bar.max = 0;
+	    cont.sy = 0;
+	}
+    }
+
+    public boolean barvisible() {
+	return(showBar);
     }
 
     public void uimsg(String msg, Object... args) {

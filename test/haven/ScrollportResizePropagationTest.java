@@ -18,6 +18,13 @@ class ScrollportResizePropagationTest {
         assertTrue(parent.reflows > 0);
     }
 
+    @Test
+    void hiddenBarReturnsItsWidthToContent() {
+        assertEquals(183, Scrollport.contentWidth(200, 17, true));
+        assertEquals(200, Scrollport.contentWidth(200, 17, false));
+        assertEquals(1, Scrollport.contentWidth(0, 17, true));
+    }
+
     private static class TrackingParent extends Widget {
         int reflows;
 
