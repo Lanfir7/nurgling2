@@ -1297,7 +1297,7 @@ public class NContext {
     }
 
     /**
-     * Calculate distance to an area using ChunkNav if available, falling back to RouteGraph.
+     * Calculate verified route distance to an area using ChunkNav.
      * Returns Double.MAX_VALUE if area is unreachable.
      */
     private static double getDistanceToArea(NArea area, NGameUI gui) {
@@ -1330,14 +1330,128 @@ public class NContext {
         return Double.MAX_VALUE;
     }
 
+    static double distanceToAreaGeometry(
+            Coord2d point, Pair<Coord2d, Coord2d> geometry) {
+        double minX = Math.min(geometry.a.x, geometry.b.x);
+        double maxX = Math.max(geometry.a.x, geometry.b.x);
+        double minY = Math.min(geometry.a.y, geometry.b.y);
+        double maxY = Math.max(geometry.a.y, geometry.b.y);
+        double dx = Math.max(Math.max(minX - point.x, 0), point.x - maxX);
+        double dy = Math.max(Math.max(minY - point.y, 0), point.y - maxY);
+        return Math.hypot(dx, dy);
+    }
+
+    static double distanceToAreaGeometryInTiles(
+            Coord2d point, Pair<Coord2d, Coord2d> geometry, double tileSize) {
+        if (tileSize <= 0)
+            return Double.MAX_VALUE;
+        return distanceToAreaGeometry(point, geometry) / tileSize;
+    }
+
+    static double routingScore(int chunkHops, double geometryTiles) {
+        if (chunkHops < 0)
+            return Double.MAX_VALUE;
+        double tieBreaker = Double.isFinite(geometryTiles)
+                ? Math.min(Math.max(geometryTiles, 0), 999_999.0) / 1_000_000.0
+                : 0.999_999;
+        return chunkHops + tieBreaker;
+    }
+
+    static int visibleFallbackHops(boolean visible, boolean hasUnrecordedTargetGrid) {
+        return visible && hasUnrecordedTargetGrid ? 0 : Integer.MAX_VALUE;
+    }
+
     /**
-     * Calculate distance to an area by areaId using ChunkNav.
+     * Rank many destinations with one cheap chunk-graph BFS. Detailed four-corner A* is
+     * intentionally deferred until navigation to the selected area actually starts.
+     */
+    public Map<String, Double> getRoutingScores(
+            Collection<String> areaIds, NGameUI gui) {
+        Map<String, Double> scores = new LinkedHashMap<>();
+        Gob player = gui != null && gui.map != null ? gui.map.player() : null;
+
+        ChunkNavManager chunkNav = null;
+        Map<Long, Integer> hops = null;
+        if (gui != null && gui.map instanceof NMapView) {
+            chunkNav = ((NMapView)gui.map).getChunkNavManager();
+            if (chunkNav != null && chunkNav.isInitialized())
+                hops = chunkNav.chunkHopsFromPlayer();
+        }
+
+        for (String areaId : areaIds) {
+            NArea area = areas.get(areaId);
+            if (area == null) {
+                scores.put(areaId, Double.MAX_VALUE);
+                continue;
+            }
+
+            Pair<Coord2d, Coord2d> geometry = area.getRCArea();
+            if (geometry == null) {
+                Coord2d[] corners = AreaNavigationHelper.getAreaCorners(area);
+                if (corners != null && corners.length >= 2)
+                    geometry = new Pair<>(corners[0], corners[1]);
+            }
+            double geometryTiles = player != null && geometry != null
+                    ? distanceToAreaGeometryInTiles(player.rc, geometry, MCache.tilesz.x)
+                    : Double.MAX_VALUE;
+
+            if (hops == null) {
+                scores.put(areaId, geometryTiles);
+                continue;
+            }
+
+            int minHops = Integer.MAX_VALUE;
+            boolean hasUnrecordedTargetGrid = false;
+            if (area.space != null && area.space.space != null) {
+                for (Long gridId : area.space.space.keySet()) {
+                    if (chunkNav != null && chunkNav.getGraph().getChunk(gridId) == null)
+                        hasUnrecordedTargetGrid = true;
+                    Integer value = hops.get(gridId);
+                    if (value != null)
+                        minHops = Math.min(minHops, value);
+                }
+            }
+            if (minHops == Integer.MAX_VALUE)
+                minHops = visibleFallbackHops(
+                        area.isVisible(), hasUnrecordedTargetGrid);
+            scores.put(areaId, minHops == Integer.MAX_VALUE
+                    ? Double.MAX_VALUE
+                    : routingScore(minHops, geometryTiles));
+        }
+        return scores;
+    }
+
+    /**
+     * Calculate distance to an area by areaId using ChunkNav or geometric fallback.
      * Returns Double.MAX_VALUE if area is unreachable.
      */
     public double getDistanceToAreaById(String areaId, NGameUI gui) {
         NArea area = areas.get(areaId);
         if (area == null) return Double.MAX_VALUE;
-        return getDistanceToArea(area, gui);
+        double routeDistance = getDistanceToArea(area, gui);
+        if (routeDistance < Double.MAX_VALUE)
+            return routeDistance;
+
+        if (gui != null && gui.map instanceof NMapView) {
+            ChunkNavManager chunkNav = ((NMapView)gui.map).getChunkNavManager();
+            if (chunkNav != null && chunkNav.isInitialized())
+                return Double.MAX_VALUE;
+        }
+
+        Gob player = gui != null && gui.map != null ? gui.map.player() : null;
+        Pair<Coord2d, Coord2d> geometry = area.getRCArea();
+        if (player != null && geometry != null) {
+            return distanceToAreaGeometryInTiles(
+                    player.rc, geometry, MCache.tilesz.x);
+        }
+        return Double.MAX_VALUE;
+    }
+
+    /** Barter stands choose the input server-side and cannot target an exact inventory item. */
+    public boolean isBarterOutput(String areaId, String itemName) {
+        NArea area = areas.get(areaId);
+        NArea.Ingredient output = area != null ? area.getOutput(itemName) : null;
+        return output != null && output.type == NArea.Ingredient.Type.BARTER;
     }
 
     public static NArea findInGlobal(String name) {

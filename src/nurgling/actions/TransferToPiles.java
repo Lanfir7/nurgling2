@@ -24,6 +24,8 @@ public class TransferToPiles implements Action{
 
     int th = 0;
 
+    Double maxQualityExclusive = null;
+
     enum PileMode {
         GOB_SHIFT_BULK,
         TYPE_BULK,
@@ -87,6 +89,12 @@ public class TransferToPiles implements Action{
         this.exactName = exactName;
         this.items = new NAlias(exactName);
         this.th = th;
+    }
+
+    public TransferToPiles(Pair<Coord2d,Coord2d> out, String exactName,
+                           int th, Double maxQualityExclusive) {
+        this(out, exactName, th);
+        this.maxQualityExclusive = maxQualityExclusive;
     }
 
 
@@ -156,7 +164,9 @@ public class TransferToPiles implements Action{
     private boolean transfer(NGameUI gui, int target_size) throws InterruptedException {
         NUtils.addTask(new WaitStockpile(true, 80, false));
         int fullSize = gui.getInventory().getItems().size();
-        PileMode mode = pileMode(th, sameCategoryItemPresent(gui));
+        PileMode mode = maxQualityExclusive != null
+                ? PileMode.ONE_BY_ONE
+                : pileMode(th, sameCategoryItemPresent(gui));
         boolean accepted = true;
         if (mode == PileMode.ONE_BY_ONE) {
             transferOneByOne(gui, target_size);
@@ -342,13 +352,14 @@ public class TransferToPiles implements Action{
      * otherwise uses NAlias substring matching.
      */
     private ArrayList<WItem> getMatchingItems(NGameUI gui) throws InterruptedException {
-        ArrayList<WItem> allItems = gui.getInventory().getItems(items, th);
-        if (exactName == null) {
-            return allItems;
-        }
+        ArrayList<WItem> allItems = gui.getInventory().getItems(items);
         ArrayList<WItem> exactMatches = new ArrayList<>();
         for (WItem witem : allItems) {
-            if (((NGItem) witem.item).name().equals(exactName)) {
+            NGItem item = (NGItem)witem.item;
+            double quality = item.quality != null ? item.quality : 1.0;
+            boolean nameMatches = exactName == null || item.name().equals(exactName);
+            if (nameMatches && TransferItems2.matchesQuality(
+                    quality, Math.max(th, 1), maxQualityExclusive)) {
                 exactMatches.add(witem);
             }
         }

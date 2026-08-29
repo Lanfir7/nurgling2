@@ -163,10 +163,12 @@ public class ChunkNavBinaryFormat {
         readEdges(in, chunk);
 
         // Read portals
-        chunk.portals = readPortals(in);
+        chunk.portals = new java.util.concurrent.CopyOnWriteArrayList<>(readPortals(in));
 
         // Read connected chunks
-        chunk.connectedChunks = readConnectedChunks(in);
+        Set<Long> connectedChunks = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        connectedChunks.addAll(readConnectedChunks(in));
+        chunk.connectedChunks = connectedChunks;
 
         // Read reachable areas
         chunk.reachableAreaIds = readReachableAreas(in);

@@ -10,15 +10,26 @@ import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.VSpec;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.TreeMap;
 import java.util.*;
+import java.util.function.BiPredicate;
 
 public class TransferItems2 implements Action
 {
     final NContext cnt;
     HashSet<String> items;
+
+    static boolean matchesQuality(double quality, double minInclusive, Double maxExclusive) {
+        return quality >= minInclusive && (maxExclusive == null || quality < maxExclusive);
+    }
+
+    static boolean isBandEmpty(ItemTransfer transfer, Collection<Double> liveQualities) {
+        for (Double quality : liveQualities) {
+            double normalized = quality != null ? quality : 1.0;
+            if (matchesQuality(normalized, transfer.quality, transfer.maxQualityExclusive))
+                return false;
+        }
+        return true;
+    }
 
     static HashSet<String> orderList = new HashSet<>();
     static {
@@ -59,37 +70,103 @@ public class TransferItems2 implements Action
     /**
      * Helper class to store item transfer information
      */
-    private static class ItemTransfer {
-        String itemName;
-        double quality;
-        String areaId;
+    static class ItemTransfer {
+        final String itemName;
+        final double quality;
+        final Double maxQualityExclusive;
+        final String areaId;
 
         ItemTransfer(String itemName, double quality, String areaId) {
+            this(itemName, quality, null, areaId);
+        }
+
+        ItemTransfer(String itemName, double quality, Double maxQualityExclusive, String areaId) {
             this.itemName = itemName;
             this.quality = quality;
+            this.maxQualityExclusive = maxQualityExclusive;
             this.areaId = areaId;
         }
     }
 
-    /**
-     * Helper class to group transfers by quality threshold for proper ordering
-     */
-    private static class ThresholdGroup {
-        double threshold;
-        Map<String, List<ItemTransfer>> itemsByArea = new LinkedHashMap<>();
-
-        ThresholdGroup(double threshold) {
-            this.threshold = threshold;
+    static Map<String, List<ItemTransfer>> buildAreaPlan(
+            Map<String, ? extends NavigableMap<Double, String>> destinations,
+            Map<String, List<Double>> inventoryQualities) {
+        Map<String, List<ItemTransfer>> result = new LinkedHashMap<>();
+        for (Map.Entry<String, ? extends NavigableMap<Double, String>> itemEntry : destinations.entrySet()) {
+            String itemName = itemEntry.getKey();
+            NavigableMap<Double, String> areas = itemEntry.getValue();
+            List<Double> qualities = inventoryQualities.getOrDefault(itemName, Collections.emptyList());
+            for (Map.Entry<Double, String> threshold : areas.entrySet()) {
+                double minQuality = threshold.getKey();
+                Double maxQuality = areas.higherKey(minQuality);
+                boolean hasItems = false;
+                for (Double quality : qualities) {
+                    double normalized = quality != null ? quality : 1.0;
+                    if (matchesQuality(normalized, minQuality, maxQuality)) {
+                        hasItems = true;
+                        break;
+                    }
+                }
+                if (hasItems) {
+                    String areaId = threshold.getValue();
+                    result.computeIfAbsent(areaId, key -> new ArrayList<>())
+                            .add(new ItemTransfer(itemName, minQuality, maxQuality, areaId));
+                }
+            }
         }
+        return result;
+    }
+
+    static String pickNearestArea(Collection<String> areaIds, Map<String, Double> distances) {
+        String nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        for (String areaId : areaIds) {
+            Double value = distances.get(areaId);
+            double distance = value != null ? value : Double.MAX_VALUE;
+            if (nearest == null || distance < nearestDistance) {
+                nearest = areaId;
+                nearestDistance = distance;
+            }
+        }
+        return nearest;
+    }
+
+    static Map<String, List<ItemTransfer>> eligibleAreaPlan(
+            Map<String, List<ItemTransfer>> remaining,
+            BiPredicate<String, String> requiresDescendingQuality) {
+        Map<String, Double> highestUnsafeByItem = new HashMap<>();
+        Set<String> itemsWithSafeTransfer = new HashSet<>();
+        for (Map.Entry<String, List<ItemTransfer>> area : remaining.entrySet()) {
+            for (ItemTransfer transfer : area.getValue()) {
+                if (requiresDescendingQuality.test(area.getKey(), transfer.itemName)) {
+                    highestUnsafeByItem.merge(
+                            transfer.itemName, transfer.quality, Math::max);
+                } else {
+                    itemsWithSafeTransfer.add(transfer.itemName);
+                }
+            }
+        }
+        Map<String, List<ItemTransfer>> eligible = new LinkedHashMap<>();
+        for (Map.Entry<String, List<ItemTransfer>> area : remaining.entrySet()) {
+            for (ItemTransfer transfer : area.getValue()) {
+                boolean unsafeServerSelection = requiresDescendingQuality.test(
+                        area.getKey(), transfer.itemName);
+                if (!unsafeServerSelection
+                        || (!itemsWithSafeTransfer.contains(transfer.itemName)
+                        && Double.compare(transfer.quality,
+                                highestUnsafeByItem.get(transfer.itemName)) == 0)) {
+                    eligible.computeIfAbsent(area.getKey(), key -> new ArrayList<>()).add(transfer);
+                }
+            }
+        }
+        return eligible;
     }
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
-        // Step 1: Sort items into priority/non-priority (preserve existing orderList behavior)
         ArrayList<String> before = new ArrayList<>();
         ArrayList<String> after = new ArrayList<>();
-
         for (String item : items)
         {
             if(orderList.contains(item))
@@ -101,61 +178,56 @@ public class TransferItems2 implements Action
                 after.add(item);
             }
         }
+        before.sort(String.CASE_INSENSITIVE_ORDER);
+        after.sort(String.CASE_INSENSITIVE_ORDER);
         ArrayList<String> resitems = new ArrayList<>();
         resitems.addAll(before);
         resitems.addAll(after);
 
-        // Step 2: Group items by quality threshold first, then by area within each threshold
-        // This ensures higher quality thresholds are processed first (preventing lower threshold
-        // areas from grabbing high quality items)
-        TreeMap<Double, ThresholdGroup> thresholdGroups = new TreeMap<>(Collections.reverseOrder());
-
-        for(String item : resitems) {
-            TreeMap<Double,String> areas = cnt.getOutAreas(item);
-            if(areas != null) {
-                for (Double quality : areas.descendingKeySet()) {
-                    if (!getItemsExactMatch(item, quality).isEmpty()) {
-                        String areaId = areas.get(quality);
-                        ThresholdGroup group = thresholdGroups.computeIfAbsent(quality, ThresholdGroup::new);
-                        group.itemsByArea.computeIfAbsent(areaId, k -> new ArrayList<>())
-                            .add(new ItemTransfer(item, quality, areaId));
-                    }
-                }
+        Map<String, NavigableMap<Double, String>> destinations = new LinkedHashMap<>();
+        Map<String, List<Double>> inventoryQualities = new LinkedHashMap<>();
+        for (String itemName : resitems) {
+            TreeMap<Double, String> areas = cnt.getOutAreas(itemName);
+            if (areas != null && !areas.isEmpty()) {
+                destinations.put(itemName, areas);
+                inventoryQualities.put(itemName, new ArrayList<>());
+            }
+        }
+        for (WItem item : gui.getInventory().getItems()) {
+            String itemName = ((NGItem)item.item).name();
+            List<Double> qualities = inventoryQualities.get(itemName);
+            if (qualities != null) {
+                Float quality = ((NGItem)item.item).quality;
+                qualities.add(quality != null ? (double)quality : 1.0);
             }
         }
 
-        // Step 3: Process each threshold group in order (highest first)
-        for (ThresholdGroup group : thresholdGroups.values()) {
-
-            if (group.threshold > 1) {
-                // Items with thresholds: process in arbitrary order (no optimization needed)
-                for (String areaId : group.itemsByArea.keySet()) {
-                    processAreaTransfers(areaId, group.itemsByArea.get(areaId), gui);
-                }
-            } else {
-                // Items without thresholds (threshold <= 1): dump fewer same-group
-                // siblings first so the majority can batch, then greedy nearest.
-                Map<String, List<ItemTransfer>> remaining = new HashMap<>(group.itemsByArea);
-                Map<String, Integer> counts = inventoryCounts(remaining);
-                while (!remaining.isEmpty()) {
-                    Map<String, List<String>> namesByArea = namesByArea(remaining);
-                    Map<String, Double> distances = new HashMap<>();
-                    for (String areaId : remaining.keySet()) {
-                        distances.put(areaId, cnt.getDistanceToAreaById(areaId, gui));
-                    }
-                    String nearestAreaId = pickNextArea(namesByArea, counts, distances);
-                    if (nearestAreaId == null) break;
-                    List<ItemTransfer> itemsForArea = remaining.get(nearestAreaId);
-                    ArrayList<String> allNames = new ArrayList<>();
-                    for (List<String> names : namesByArea.values()) {
-                        allNames.addAll(names);
-                    }
-                    itemsForArea.sort(Comparator.comparingInt(
-                            (ItemTransfer t) -> transferPriority(t.itemName, allNames, counts)));
-                    processAreaTransfers(nearestAreaId, itemsForArea, gui);
-                    remaining.remove(nearestAreaId);
+        Map<String, List<ItemTransfer>> remaining =
+                new LinkedHashMap<>(buildAreaPlan(destinations, inventoryQualities));
+        while (!remaining.isEmpty()) {
+            Map<String, List<ItemTransfer>> eligible = eligibleAreaPlan(
+                    remaining, cnt::isBarterOutput);
+            Map<String, Double> distances = cnt.getRoutingScores(eligible.keySet(), gui);
+            String nearestAreaId = pickNearestArea(eligible.keySet(), distances);
+            if (nearestAreaId == null)
+                break;
+            List<ItemTransfer> areaTransfers = eligible.get(nearestAreaId);
+            areaTransfers.sort(Comparator
+                    .comparing((ItemTransfer transfer) -> !orderList.contains(transfer.itemName))
+                    .thenComparing(transfer -> transfer.itemName, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(Comparator.comparingDouble(
+                            (ItemTransfer transfer) -> transfer.quality).reversed()));
+            processAreaTransfers(nearestAreaId, areaTransfers, gui);
+            for (ItemTransfer transfer : areaTransfers) {
+                if (!isBandEmpty(transfer, getExactItemQualities(transfer.itemName))) {
+                    return Results.ERROR("Could not transfer " + transfer.itemName
+                            + " to area " + nearestAreaId);
                 }
             }
+            List<ItemTransfer> pendingAtArea = remaining.get(nearestAreaId);
+            pendingAtArea.removeAll(areaTransfers);
+            if (pendingAtArea.isEmpty())
+                remaining.remove(nearestAreaId);
         }
 
         return Results.SUCCESS();
@@ -170,28 +242,32 @@ public class TransferItems2 implements Action
             ArrayList<NContext.ObjectStorage> storages = cnt.getOutStorages(itemTransfer.itemName, itemTransfer.quality);
             for (NContext.ObjectStorage output : storages) {
                 if (output instanceof NContext.FloorDump) {
-                    new DropItemsOnFloor(cnt.getRCArea(areaId), itemTransfer.itemName).run(gui);
+                    new DropItemsOnFloor(cnt.getRCArea(areaId), itemTransfer.itemName,
+                            itemTransfer.quality, itemTransfer.maxQualityExclusive).run(gui);
                 }
                 if (output instanceof NContext.Pile) {
                     new TransferToPiles(cnt.getRCArea(areaId), itemTransfer.itemName,
-                        (int)itemTransfer.quality).run(gui);
+                            (int)itemTransfer.quality, itemTransfer.maxQualityExclusive).run(gui);
                 }
                 if (output instanceof Container) {
                     TreeMap<Double,String> areas = cnt.getOutAreas(itemTransfer.itemName);
                     TransferToContainer ttc = new TransferToContainer((Container) output, itemTransfer.itemName,
-                        (int)itemTransfer.quality);
+                            itemTransfer.quality, itemTransfer.maxQualityExclusive);
                     ttc.needsSorting = areas != null && areas.size() > 1;
                     ttc.run(gui);
                 }
                 if (output instanceof NContext.Barrel) {
-                    if (getItemsExactMatch(itemTransfer.itemName, itemTransfer.quality).isEmpty())
+                    if (getItemsExactMatch(itemTransfer.itemName, itemTransfer.quality,
+                            itemTransfer.maxQualityExclusive).isEmpty())
                         break;
                     new TransferToBarrel(Finder.findGob(((NContext.Barrel) output).barrel),
-                        itemTransfer.itemName).run(gui);
+                            itemTransfer.itemName, itemTransfer.quality,
+                            itemTransfer.maxQualityExclusive).run(gui);
                 }
                 if (output instanceof NContext.Barter) {
                     new TransferToBarter((NContext.Barter) output,
-                        new NAlias(itemTransfer.itemName), (int) itemTransfer.quality).run(gui);
+                            itemTransfer.itemName, itemTransfer.quality,
+                            itemTransfer.maxQualityExclusive).run(gui);
                 }
             }
         }
@@ -319,15 +395,36 @@ public class TransferItems2 implements Action
      * Gets items from inventory with exact name match only.
      * This prevents substring matching issues where "Straw Hat" would match "Straw" area.
      */
-    private static ArrayList<WItem> getItemsExactMatch(String exactName, double quality) throws InterruptedException {
-        ArrayList<WItem> allItems = NUtils.getGameUI().getInventory().getItems(new NAlias(exactName), quality);
+    private static ArrayList<WItem> getItemsExactMatch(
+            String exactName, double minQuality, Double maxQualityExclusive) throws InterruptedException {
+        ArrayList<WItem> allItems = NUtils.getGameUI().getInventory().getItems(new NAlias(exactName));
         ArrayList<WItem> exactMatches = new ArrayList<>();
         for (WItem witem : allItems) {
-            if (((NGItem) witem.item).name().equals(exactName)) {
+            NGItem item = (NGItem)witem.item;
+            double quality = item.quality != null ? item.quality : 1.0;
+            if (item.name().equals(exactName)
+                    && matchesQuality(quality, minQuality, maxQualityExclusive)) {
                 exactMatches.add(witem);
             }
         }
         return exactMatches;
+    }
+
+    private static List<Double> getExactItemQualities(String exactName)
+            throws InterruptedException {
+        ArrayList<WItem> allItems = NUtils.getGameUI().getInventory().getItems(new NAlias(exactName));
+        ArrayList<Double> qualities = new ArrayList<>();
+        for (WItem witem : allItems) {
+            NGItem item = (NGItem)witem.item;
+            if (item.name().equals(exactName))
+                qualities.add(item.quality != null ? (double)item.quality : 1.0);
+        }
+        return qualities;
+    }
+
+    private static ArrayList<WItem> getItemsExactMatch(String exactName, double quality)
+            throws InterruptedException {
+        return getItemsExactMatch(exactName, quality, null);
     }
 
 }

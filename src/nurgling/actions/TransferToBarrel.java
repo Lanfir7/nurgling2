@@ -23,6 +23,10 @@ public class TransferToBarrel implements Action{
     // When set, use exact name matching instead of NAlias substring matching
     String exactName = null;
 
+    double minQuality = 1.0;
+    Double maxQualityExclusive = null;
+    boolean qualityFiltered = false;
+
     public TransferToBarrel(Gob barrel, NAlias items) {
         this.barrel = barrel;
         this.items = items;
@@ -37,6 +41,14 @@ public class TransferToBarrel implements Action{
         this.barrel = barrel;
         this.exactName = exactName;
         this.items = new NAlias(exactName);
+    }
+
+    public TransferToBarrel(Gob barrel, String exactName,
+                            double minQuality, Double maxQualityExclusive) {
+        this(barrel, exactName);
+        this.minQuality = minQuality;
+        this.maxQualityExclusive = maxQualityExclusive;
+        this.qualityFiltered = true;
     }
 
     @Override
@@ -88,18 +100,29 @@ public class TransferToBarrel implements Action{
 
             if(!handed)
                 NUtils.takeItemToHand(witems.get(0));
-            NUtils.dropsame(barrel);
-
-            WaitItemsDecrease wait = new WaitItemsDecrease(gui.getInventory(), items, exactName, before);
-            NUtils.addTask(wait);
-            if(!wait.decreased()) {
-                // The barrel refused the item: it is full, or it will not take this content.
-                stalled = true;
-                System.out.println("TransferToBarrel: barrel " + barrel.id + " stopped accepting, "
-                        + witems.size() + " item(s) left");
-                break;
+            if (qualityFiltered) {
+                NUtils.activateItem(barrel, false);
+                NUtils.addTask(new WaitFreeHand(80, false));
+                if (isHoldingTarget(gui)) {
+                    stalled = true;
+                    break;
+                }
+                total += 1;
+            } else {
+                NUtils.dropsame(barrel);
+                WaitItemsDecrease wait = new WaitItemsDecrease(
+                        gui.getInventory(), items, exactName, before);
+                NUtils.addTask(wait);
+                if(!wait.decreased()) {
+                    // The barrel refused the item: it is full, or it will not take this content.
+                    stalled = true;
+                    System.out.println("TransferToBarrel: barrel " + barrel.id + " stopped accepting, "
+                            + witems.size() + " item(s) left");
+                    break;
+                }
+                total += before - (getMatchingItems(gui).size()
+                        + (isHoldingTarget(gui) ? 1 : 0));
             }
-            total += before - (getMatchingItems(gui).size() + (isHoldingTarget(gui) ? 1 : 0));
         }
     }
 
@@ -115,8 +138,15 @@ public class TransferToBarrel implements Action{
         String name = ((NGItem) hand.item).name();
         if(name == null)
             return false;
-        return exactName != null ? name.equals(exactName)
-                : nurgling.tools.NParser.checkName(name, items);
+        if (exactName != null && !name.equals(exactName))
+            return false;
+        if (exactName == null && !nurgling.tools.NParser.checkName(name, items))
+            return false;
+        if (!qualityFiltered)
+            return true;
+        Float quality = ((NGItem)hand.item).quality;
+        return TransferItems2.matchesQuality(
+                quality != null ? quality : 1.0, minQuality, maxQualityExclusive);
     }
 
     public boolean isFull()
@@ -130,12 +160,14 @@ public class TransferToBarrel implements Action{
      */
     private ArrayList<WItem> getMatchingItems(NGameUI gui) throws InterruptedException {
         ArrayList<WItem> allItems = gui.getInventory().getItems(items);
-        if (exactName == null) {
-            return allItems;
-        }
         ArrayList<WItem> exactMatches = new ArrayList<>();
         for (WItem witem : allItems) {
-            if (((NGItem) witem.item).name().equals(exactName)) {
+            NGItem item = (NGItem)witem.item;
+            boolean nameMatches = exactName == null || item.name().equals(exactName);
+            Float quality = item.quality;
+            boolean qualityMatches = !qualityFiltered || TransferItems2.matchesQuality(
+                    quality != null ? quality : 1.0, minQuality, maxQualityExclusive);
+            if (nameMatches && qualityMatches) {
                 exactMatches.add(witem);
             }
         }

@@ -17,7 +17,9 @@ public class TransferToContainer implements Action
 
     Container container;
 
-    Integer th = -1;
+    double th = -1;
+
+    Double maxQualityExclusive = null;
 
     // When set, use exact name matching instead of NAlias substring matching
     String exactName = null;
@@ -43,6 +45,16 @@ public class TransferToContainer implements Action
         this.exactName = exactName;
         this.items = new NAlias(exactName);
         this.th = th;
+    }
+
+    public TransferToContainer(Container container, String exactName,
+                               double minQuality, Double maxQualityExclusive)
+    {
+        this.container = container;
+        this.exactName = exactName;
+        this.items = new NAlias(exactName);
+        this.th = minQuality;
+        this.maxQualityExclusive = maxQualityExclusive;
     }
 
 
@@ -94,7 +106,7 @@ public class TransferToContainer implements Action
                             while (Math.min(gui.getInventory(container.cap).getNumberFreeCoord(coord), coorditems.size()) > 0)
                             {
                                 WItem cand = coorditems.get(0);
-                                transfer(cand, gui.getInventory(container.cap), target_size);
+                                transfer(cand, gui.getInventory(container.cap), target_size, needsSorting);
                                 witems = getMatchingItems(gui);
                                 coorditems = new ArrayList<>();
                                 for (WItem witem : witems)
@@ -494,18 +506,15 @@ public class TransferToContainer implements Action
      * otherwise uses NAlias substring matching.
      */
     private ArrayList<WItem> getMatchingItems(NGameUI gui) throws InterruptedException {
-        ArrayList<WItem> allItems;
-        if (th == -1) {
-            allItems = gui.getInventory().getItems(items);
-        } else {
-            allItems = gui.getInventory().getItems(items, th);
-        }
-        if (exactName == null) {
-            return allItems;
-        }
+        ArrayList<WItem> allItems = gui.getInventory().getItems(items);
         ArrayList<WItem> exactMatches = new ArrayList<>();
         for (WItem witem : allItems) {
-            if (((NGItem) witem.item).name().equals(exactName)) {
+            NGItem item = (NGItem)witem.item;
+            double quality = item.quality != null ? item.quality : 1.0;
+            boolean nameMatches = exactName == null || item.name().equals(exactName);
+            boolean qualityMatches = th == -1
+                    || TransferItems2.matchesQuality(quality, th, maxQualityExclusive);
+            if (nameMatches && qualityMatches) {
                 exactMatches.add(witem);
             }
         }
