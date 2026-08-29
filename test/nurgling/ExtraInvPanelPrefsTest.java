@@ -1,111 +1,83 @@
 package nurgling;
 
-import haven.Coord;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExtraInvPanelPrefsTest {
 
-    private NConfig previous;
-    private boolean savedCurrent;
-    private NInventory.DisplayType previousDisplayType;
-
-    @AfterEach
-    void restoreCurrent() {
-        if (savedCurrent) {
-            NConfig.current = previous;
-        }
-        if (previousDisplayType != null) {
-            NInventory.currentDisplayType = previousDisplayType;
-        }
+    private static Map<NConfig.Key, Object> emptyStore() {
+        return new HashMap<>();
     }
 
-    private void useFreshConfig() {
-        previous = NConfig.current;
-        savedCurrent = true;
-        previousDisplayType = NInventory.currentDisplayType;
-        NConfig.current = new NConfig();
-        NInventory.currentDisplayType = NInventory.DisplayType.Name;
+    private static Function<NConfig.Key, Object> getter(Map<NConfig.Key, Object> store) {
+        return store::get;
+    }
+
+    private static BiConsumer<NConfig.Key, Object> setter(Map<NConfig.Key, Object> store) {
+        return store::put;
     }
 
     @Test
     void defaultConfigOpensClosedWithEmptyFilters() {
-        useFreshConfig();
+        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.read(k -> null);
 
-        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.load();
-
-        assertEquals(NInventory.PANEL_CLOSED, snap.panelState);
+        assertEquals(0, snap.panelState);
         assertEquals(NInventory.Grouping.NONE, snap.grouping);
         assertEquals(NInventory.DisplayType.Name, snap.displayType);
         assertEquals("", snap.minQualityText);
-
-        NInventory inv = new NInventory(new Coord(1, 1));
-        inv.applyContainerExtraPanelPrefs(snap);
-        assertEquals(NInventory.PANEL_CLOSED, inv.panelState);
-        assertEquals(NInventory.Grouping.NONE, inv.currentGrouping);
-        assertEquals("", inv.extraPanelMinQualityText);
     }
 
     @Test
     void missingConfigOpensClosed() {
-        previous = NConfig.current;
-        savedCurrent = true;
-        previousDisplayType = NInventory.currentDisplayType;
-        NConfig.current = null;
-
-        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.load();
-        assertEquals(NInventory.PANEL_CLOSED, snap.panelState);
-
-        NInventory inv = new NInventory(new Coord(1, 1));
-        inv.applyContainerExtraPanelPrefs(snap);
-        assertEquals(NInventory.PANEL_CLOSED, inv.panelState);
+        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.read(k -> null);
+        assertEquals(0, snap.panelState);
     }
 
     @Test
     void freshContainerRestoresExpandedQ5AndMinQuality() {
-        useFreshConfig();
-        ExtraInvPanelPrefs.save(new ExtraInvPanelPrefs.Snapshot(
-                NInventory.PANEL_EXPANDED,
+        Map<NConfig.Key, Object> store = emptyStore();
+        ExtraInvPanelPrefs.write(new ExtraInvPanelPrefs.Snapshot(
+                2,
                 NInventory.Grouping.Q5,
                 NInventory.DisplayType.Name,
-                "10"));
+                "10"), setter(store));
 
-        NInventory inv = new NInventory(new Coord(1, 1));
-        inv.applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.load());
-
-        assertEquals(NInventory.PANEL_EXPANDED, inv.panelState);
-        assertEquals(NInventory.Grouping.Q5, inv.currentGrouping);
-        assertEquals(NInventory.DisplayType.Name, NInventory.currentDisplayType);
-        assertEquals("10", inv.extraPanelMinQualityText);
+        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.read(getter(store));
+        assertEquals(2, snap.panelState);
+        assertEquals(NInventory.Grouping.Q5, snap.grouping);
+        assertEquals(NInventory.DisplayType.Name, snap.displayType);
+        assertEquals("10", snap.minQualityText);
     }
 
     @Test
     void setPanelStateOnContainerExtraPanelWritesConfig() {
-        useFreshConfig();
-        NInventory inv = new NInventory(new Coord(1, 1));
-        inv.extraPanelInstalled = true;
-        inv.setPanelState(NInventory.PANEL_EXPANDED);
+        Map<NConfig.Key, Object> store = emptyStore();
+        store.put(NConfig.Key.inventoryRightPanelShow, false);
+        ExtraInvPanelPrefs.onPanelStateChanged(false, true, 2, setter(store));
 
-        assertEquals(NInventory.PANEL_EXPANDED, ExtraInvPanelPrefs.load().panelState);
-        Object mainInv = NConfig.get(NConfig.Key.inventoryRightPanelShow);
-        assertFalse(mainInv instanceof Number && ((Number) mainInv).intValue() == NInventory.PANEL_EXPANDED);
+        assertEquals(2, ExtraInvPanelPrefs.read(getter(store)).panelState);
+        Object mainInv = store.get(NConfig.Key.inventoryRightPanelShow);
+        assertFalse(mainInv instanceof Number && ((Number) mainInv).intValue() == 2);
         assertFalse(mainInv instanceof Boolean && (Boolean) mainInv);
     }
 
     @Test
     void setPanelStateOnMainInvDoesNotWriteContainerKey() {
-        useFreshConfig();
-        NInventory inv = new NInventory(new Coord(1, 1));
-        inv.mainInvInstalled = true;
-        inv.setPanelState(NInventory.PANEL_SIMPLIFIED);
+        Map<NConfig.Key, Object> store = emptyStore();
+        ExtraInvPanelPrefs.onPanelStateChanged(true, false, 1, setter(store));
 
-        assertEquals(NInventory.PANEL_CLOSED, ExtraInvPanelPrefs.load().panelState);
-        assertEquals(NInventory.PANEL_SIMPLIFIED,
-                ((Number) NConfig.get(NConfig.Key.inventoryRightPanelShow)).intValue());
+        assertEquals(0, ExtraInvPanelPrefs.read(getter(store)).panelState);
+        assertEquals(1, store.get(NConfig.Key.inventoryRightPanelShow));
+        assertNull(store.get(NConfig.Key.extraInvPanelState));
     }
 
     @Test

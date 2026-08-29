@@ -33,7 +33,7 @@ public class NInventory extends Inventory
     private int leftoverPass;
     private static final int LEFTOVER_DELAY_TICKS = ExtraInvGroupTransfer.LEFTOVER_DELAY_TICKS;
     public boolean mainInvInstalled = false;
-    boolean extraPanelInstalled = false;
+    private boolean extraPanelInstalled = false;
     private boolean extraPanelResolved = false;
     private Widget containerSortBtn;
     private Widget containerStackSortBtn;
@@ -352,14 +352,14 @@ public class NInventory extends Inventory
     }
     
     // Current display type and grouping
-    static DisplayType currentDisplayType = DisplayType.Name;
-    Grouping currentGrouping = Grouping.NONE;
+    private static DisplayType currentDisplayType = DisplayType.Name;
+    private Grouping currentGrouping = Grouping.NONE;
     public Dropbox<Grouping> groupingDropbox;
     public Dropbox<DisplayType> displayTypeDropbox;
     private Label spaceLabel; // Shows filled/total slots
     private TextEntry qualityFilterEntry; // Min quality filter
     private Double minQualityFilter = null; // Parsed min quality value
-    String extraPanelMinQualityText = "";
+    private String extraPanelMinQualityText = "";
 
     @Override
     public void draw(GOut g) {
@@ -1044,14 +1044,9 @@ public class NInventory extends Inventory
         }
     }
 
-    void setPanelState(int state) {
+    private void setPanelState(int state) {
         panelState = state;
-        if (mainInvInstalled) {
-            NConfig.set(NConfig.Key.inventoryRightPanelShow, state);
-        }
-        if (extraPanelInstalled) {
-            ExtraInvPanelPrefs.savePanelState(state);
-        }
+        ExtraInvPanelPrefs.onPanelStateChanged(mainInvInstalled, extraPanelInstalled, state);
         applyPanelState();
         if (mainInvInstalled) {
             resizeSearchToFit();
@@ -1064,7 +1059,7 @@ public class NInventory extends Inventory
         }
     }
 
-    void applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.Snapshot snap) {
+    private void applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.Snapshot snap) {
         if (snap == null) {
             snap = ExtraInvPanelPrefs.defaults();
         }

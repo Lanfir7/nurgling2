@@ -1,5 +1,8 @@
 package nurgling;
 
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+
 public final class ExtraInvPanelPrefs {
     private ExtraInvPanelPrefs() {}
 
@@ -19,26 +22,50 @@ public final class ExtraInvPanelPrefs {
     }
 
     public static Snapshot defaults() {
-        return new Snapshot(NInventory.PANEL_CLOSED, NInventory.Grouping.NONE,
-                NInventory.DisplayType.Name, "");
+        return new Snapshot(0, NInventory.Grouping.NONE, NInventory.DisplayType.Name, "");
     }
 
     public static Snapshot load() {
+        return read(NConfig::get);
+    }
+
+    static Snapshot read(Function<NConfig.Key, Object> get) {
         return new Snapshot(
-                parsePanelState(NConfig.get(NConfig.Key.extraInvPanelState)),
-                parseGrouping(NConfig.get(NConfig.Key.extraInvGrouping)),
-                parseDisplayType(NConfig.get(NConfig.Key.extraInvDisplayType)),
-                parseMinQualityText(NConfig.get(NConfig.Key.extraInvMinQuality)));
+                parsePanelState(get.apply(NConfig.Key.extraInvPanelState)),
+                parseGrouping(get.apply(NConfig.Key.extraInvGrouping)),
+                parseDisplayType(get.apply(NConfig.Key.extraInvDisplayType)),
+                parseMinQualityText(get.apply(NConfig.Key.extraInvMinQuality)));
     }
 
     public static void save(Snapshot snap) {
+        write(snap, NConfig::set);
+    }
+
+    static void write(Snapshot snap, BiConsumer<NConfig.Key, Object> set) {
         if (snap == null) {
             snap = defaults();
         }
-        savePanelState(snap.panelState);
-        saveGrouping(snap.grouping);
-        saveDisplayType(snap.displayType);
-        saveMinQualityText(snap.minQualityText);
+        set.accept(NConfig.Key.extraInvPanelState, clampState(snap.panelState));
+        NInventory.Grouping grouping = snap.grouping != null ? snap.grouping : NInventory.Grouping.NONE;
+        NInventory.DisplayType displayType = snap.displayType != null ? snap.displayType : NInventory.DisplayType.Name;
+        set.accept(NConfig.Key.extraInvGrouping, grouping.name());
+        set.accept(NConfig.Key.extraInvDisplayType, displayType.name());
+        set.accept(NConfig.Key.extraInvMinQuality, snap.minQualityText != null ? snap.minQualityText : "");
+    }
+
+    /** Main inv and container extra panels use separate keys so they do not fight. */
+    public static void onPanelStateChanged(boolean mainInvInstalled, boolean extraPanelInstalled, int state) {
+        onPanelStateChanged(mainInvInstalled, extraPanelInstalled, state, NConfig::set);
+    }
+
+    static void onPanelStateChanged(boolean mainInvInstalled, boolean extraPanelInstalled, int state,
+                                    BiConsumer<NConfig.Key, Object> set) {
+        if (mainInvInstalled) {
+            set.accept(NConfig.Key.inventoryRightPanelShow, state);
+        }
+        if (extraPanelInstalled) {
+            set.accept(NConfig.Key.extraInvPanelState, clampState(state));
+        }
     }
 
     public static void savePanelState(int state) {
@@ -64,9 +91,9 @@ public final class ExtraInvPanelPrefs {
             return clampState(((Number) raw).intValue());
         }
         if (raw instanceof Boolean) {
-            return ((Boolean) raw) ? NInventory.PANEL_EXPANDED : NInventory.PANEL_CLOSED;
+            return ((Boolean) raw) ? 2 : 0;
         }
-        return NInventory.PANEL_CLOSED;
+        return 0;
     }
 
     static NInventory.Grouping parseGrouping(Object raw) {
@@ -96,8 +123,8 @@ public final class ExtraInvPanelPrefs {
     }
 
     static int clampState(int state) {
-        if (state < NInventory.PANEL_CLOSED || state > NInventory.PANEL_EXPANDED) {
-            return NInventory.PANEL_CLOSED;
+        if (state < 0 || state > 2) {
+            return 0;
         }
         return state;
     }
