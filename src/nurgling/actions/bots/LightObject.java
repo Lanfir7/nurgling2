@@ -16,6 +16,7 @@ import nurgling.widgets.NEquipory;
 import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * Unified workstation lighter.
@@ -30,15 +31,16 @@ import java.util.ArrayList;
  * </ul>
  *
  * <p>Priority order: embers → equipped lit torch → unlit torch + brazier → in-view lit candelabrum →
- * torchpost (lit) → torchpost (unlit) + brazier → branches → (bot path only, last resort) fetch a lit
- * candelabrum from its designated spec area. The area fetch is last because it can be a long round-trip;
- * every nearby option is preferred over it.
+ * torchpost (lit) → torchpost (unlit) + brazier → neighbor lit workstation + inventory branch →
+ * branches → (bot path only, last resort) fetch a lit candelabrum from its designated spec area.
+ * The area fetch is last because it can be a long round-trip; every nearby option is preferred over it.
  *
  * <p>Behavior contract:
  * <ul>
  *   <li><b>Fail-closed</b> — if any requested gob cannot be lit the whole run fails; if a gob lacks
  *       fuel the run fails <i>up front</i>, before any implement is acquired or firebrand crafted.</li>
- *   <li><b>Branches never batch</b> — a firebrand is single-use, so the branch tier re-crafts per gob.</li>
+ *   <li><b>Branches never batch</b> — a firebrand (crafted or a neighbor-lit stick) is single-use, so
+ *       those tiers re-acquire per gob.</li>
  *   <li><b>Torch stays equipped</b> — a lit torch is only lit while equipped/in-hand; the apply loop
  *       never routes it through inventory (that extinguishes it).</li>
  *   <li><b>Bots come back</b> — the list constructor bookmarks where the caller was standing and
@@ -58,6 +60,12 @@ public class LightObject implements Action {
     private final boolean returnToOrigin;
 
     private static final Coord TORCH_SIZE = new Coord(1, 1);
+
+    /** 5 tiles from the player; tile size is {@link MCache#tilesz}. */
+    public static final double NEIGHBOR_STICK_RADIUS = 5 * MCache.tilesz.x;
+
+    /** Ctrl+Alt itemact so the server lights a held branch instead of stuffing it in as fuel. */
+    public static final int NEIGHBOR_STICK_MODFLAGS = UI.MOD_CTRL | UI.MOD_META;
 
     private static final int SOURCE_EQUIPMENT = 0;
     private static final int SOURCE_INVENTORY = 1;
@@ -207,7 +215,11 @@ public class LightObject implements Action {
         tryUnlitTorchpostWithBrazier(gui, remaining);
         if (remaining.isEmpty()) return Results.SUCCESS();
 
-        // Priority 6: Branches — always per-gob, never batched (firebrand is single-use).
+        // Priority 6: Inventory branch lit on a nearby already-lit workstation (Ctrl+Alt), per gob.
+        lightWithNeighborStick(gui, remaining);
+        if (remaining.isEmpty()) return Results.SUCCESS();
+
+        // Priority 7: Branches — always per-gob, never batched (firebrand is single-use).
         lightWithBranches(gui, remaining);
         if (remaining.isEmpty()) return Results.SUCCESS();
 
@@ -570,7 +582,101 @@ public class LightObject implements Action {
         }
     }
 
-    // --- Priority 6: Branches (never batched — re-craft a firebrand per gob) ---
+    // --- Priority 6: Inventory branch + nearby lit workstation (never batched — stick is single-use) ---
+
+    private void lightWithNeighborStick(NGameUI gui, ArrayList<Gob> remaining) throws InterruptedException {
+        for (Gob t : new ArrayList<>(remaining)) {
+            LightConfig config = getConfig(t.ngob.name);
+            if (config == null)
+                continue;
+            if (isLit(t, config)) {
+                remaining.remove(t);
+                continue;
+            }
+            Gob source = findLitFireSourceNear(t);
+            if (source == null)
+                continue;
+
+            WItem branch = gui.getInventory().getItem("Branch");
+            if (branch == null)
+                continue;
+
+            NUtils.takeItemToHand(branch);
+            NUtils.getUI().core.addTask(new WaitItemInHand());
+            if (gui.vhand == null)
+                continue;
+
+            new PathFinder(source).run(gui);
+            NUtils.activateItem(source, NEIGHBOR_STICK_MODFLAGS);
+
+            final boolean[] sawStart = {false};
+            NUtils.getUI().core.addTask(new NTask() {
+                {
+                    infinite = false;
+                    maxCounter = 200;
+                    criticalOnTimeout = false;
+                }
+                @Override
+                public boolean check() {
+                    boolean clocks = LightFire.hasClocks(gui.prog != null);
+                    if (clocks)
+                        sawStart[0] = true;
+                    if (gui.vhand == null)
+                        return true;
+                    return neighborStickReady(true, clocks, sawStart[0]);
+                }
+            });
+
+            if (gui.vhand == null || !neighborStickReady(true, LightFire.hasClocks(gui.prog != null), sawStart[0])) {
+                dropLeftoverHand(gui);
+                continue;
+            }
+
+            new PathFinder(t).run(gui);
+            NUtils.activateItem(t);
+            NUtils.getUI().core.addTask(new NTask() {
+                private boolean sawUse = false;
+                {
+                    infinite = false;
+                    maxCounter = 400;
+                    criticalOnTimeout = false;
+                }
+                @Override
+                public boolean check() {
+                    boolean clocks = LightFire.hasClocks(gui.prog != null);
+                    if (clocks)
+                        sawUse = true;
+                    return LightFire.lightingUseFinished(clocks, sawUse);
+                }
+            });
+            NUtils.getUI().core.addTask(new WaitGobModelAttr(t, config.fireFlag, 2000));
+            Gob updated = Finder.findGob(t.id);
+            if (updated != null && isLit(updated, config))
+                remaining.remove(t);
+            dropLeftoverHand(gui);
+        }
+    }
+
+    private void dropLeftoverHand(NGameUI gui) throws InterruptedException {
+        if (gui.vhand == null)
+            return;
+        if (gui.getInventory().getNumberFreeCoord(gui.vhand) > 0) {
+            NUtils.dropToInv();
+        } else {
+            NUtils.drop(gui.vhand);
+        }
+        NUtils.getUI().core.addTask(new WaitFreeHand());
+    }
+
+    /**
+     * Hand holds a usable firebrand once lighting clocks have appeared and cleared.
+     * {@code progVisible} is the progress widget, not the percent value.
+     */
+    public static boolean neighborStickReady(boolean hasHand, boolean progVisible, boolean sawStart) {
+        return hasHand && LightFire.lightingUseFinished(progVisible, sawStart);
+    }
+
+    // --- Priority 7: Branches (never batched — re-craft a firebrand per gob) ---
 
     private void lightWithBranches(NGameUI gui, ArrayList<Gob> remaining) throws InterruptedException {
         for (Gob t : new ArrayList<>(remaining)) {
@@ -675,29 +781,77 @@ public class LightObject implements Action {
         return false;
     }
 
-    private Gob findLitFireSource() {
-        ArrayList<Gob> sources = Finder.findGobs(FIRE_SOURCE_ALIAS);
-        Gob closest = null;
-        double closestDist = Double.MAX_VALUE;
-        Coord2d playerPos = NUtils.player().rc;
+    public static final class FireSourceProbe {
+        public final long id;
+        public final String name;
+        public final long modelAttr;
+        public final Coord2d rc;
 
-        for (Gob gob : sources) {
-            if (isTarget(gob.id))
+        public FireSourceProbe(long id, String name, long modelAttr, Coord2d rc) {
+            this.id = id;
+            this.name = name;
+            this.modelAttr = modelAttr;
+            this.rc = rc;
+        }
+    }
+
+    /**
+     * Closest already-lit FIRE_SOURCE workstation within {@code radius} of {@code playerPos},
+     * skipping {@code excludeId} (the gob being lit). Does not use Finder / a live client.
+     */
+    public static FireSourceProbe pickClosestLitFireSource(
+            Coord2d playerPos, double radius, long excludeId, Iterable<FireSourceProbe> sources) {
+        if (playerPos == null || sources == null)
+            return null;
+        FireSourceProbe closest = null;
+        double closestDist = Double.MAX_VALUE;
+        for (FireSourceProbe src : sources) {
+            if (src == null || src.name == null || src.rc == null)
                 continue;
-            if (gob.ngob == null || gob.ngob.name == null)
+            if (src.id == excludeId)
                 continue;
-            LightConfig config = getConfig(gob.ngob.name);
+            LightConfig config = getConfig(src.name);
             if (config == null)
                 continue;
-            if ((gob.ngob.getModelAttribute() & config.fireFlag) == 0)
+            if ((src.modelAttr & config.fireFlag) == 0)
                 continue;
-            double dist = gob.rc.dist(playerPos);
+            double dist = src.rc.dist(playerPos);
+            if (dist > radius)
+                continue;
             if (dist < closestDist) {
                 closestDist = dist;
-                closest = gob;
+                closest = src;
             }
         }
         return closest;
+    }
+
+    private Gob findLitFireSource() {
+        return findLitFireSource(Double.POSITIVE_INFINITY, Long.MIN_VALUE, true);
+    }
+
+    private Gob findLitFireSourceNear(Gob exclude) {
+        long excludeId = exclude == null ? Long.MIN_VALUE : exclude.id;
+        return findLitFireSource(NEIGHBOR_STICK_RADIUS, excludeId, false);
+    }
+
+    private Gob findLitFireSource(double radius, long excludeId, boolean excludeAllTargets) {
+        Gob player = NUtils.player();
+        if (player == null)
+            return null;
+        ArrayList<Gob> sources = Finder.findGobs(FIRE_SOURCE_ALIAS);
+        ArrayList<FireSourceProbe> probes = new ArrayList<>();
+        HashMap<Long, Gob> byId = new HashMap<>();
+        for (Gob gob : sources) {
+            if (gob == null || gob.ngob == null || gob.ngob.name == null)
+                continue;
+            if (excludeAllTargets && isTarget(gob.id))
+                continue;
+            probes.add(new FireSourceProbe(gob.id, gob.ngob.name, gob.ngob.getModelAttribute(), gob.rc));
+            byId.put(gob.id, gob);
+        }
+        FireSourceProbe picked = pickClosestLitFireSource(player.rc, radius, excludeId, probes);
+        return picked == null ? null : byId.get(picked.id);
     }
 
     private void waitForProgress(NGameUI gui) throws InterruptedException {

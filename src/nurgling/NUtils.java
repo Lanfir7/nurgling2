@@ -292,7 +292,12 @@ public class NUtils
 
 
     public static void activateItem(Gob gob, boolean shift) {
-        getGameUI().map.wdgmsg("itemact", Coord.z, gob.rc.floor(posres), shift ? 1 : 0, 0, (int) gob.id, gob.rc.floor(posres), 0, -1);
+        activateItem(gob, shift ? 1 : 0);
+    }
+
+    /** Itemact the held item on {@code gob} with raw Haven modflags (SHIFT=1, CTRL=2, META/ALT=4). */
+    public static void activateItem(Gob gob, int modflags) {
+        getGameUI().map.wdgmsg("itemact", Coord.z, gob.rc.floor(posres), modflags, 0, (int) gob.id, gob.rc.floor(posres), 0, -1);
     }
 
     public static void activateItem(Coord2d pos) {
