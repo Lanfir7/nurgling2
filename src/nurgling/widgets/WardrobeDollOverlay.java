@@ -14,10 +14,14 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Equipment-style characteristics drawn on a Wardrobe paper-doll (Avaview),
+ * Equipment-style characteristics drawn over a Wardrobe paper-doll,
  * sourced from items on that doll — not the player's Equipory.
+ * Hosted as a sibling of the doll on Equipory/host, not as an Avaview child
+ * (Avaview skips {@code super.draw} when avatar images are present).
  */
 public class WardrobeDollOverlay extends EquipmentStatsWidget {
+    private Widget doll;
+
     public WardrobeDollOverlay(Coord sz) {
         super(sz);
     }
@@ -68,19 +72,64 @@ public class WardrobeDollOverlay extends EquipmentStatsWidget {
         return items.toArray(new WItem[0]);
     }
 
-    public static boolean installOn(Avaview ava) {
-        if (ava == null)
-            return false;
-        Window window = ava.getparent(Window.class);
-        if (!isWardrobeWindow(window))
-            return false;
-        for (Widget ch = ava.child; ch != null; ch = ch.next) {
+    static WardrobeDollOverlay findOverlay(Widget host) {
+        if (host == null)
+            return null;
+        for (Widget ch = host.child; ch != null; ch = ch.next) {
             if (ch instanceof WardrobeDollOverlay)
-                return true;
+                return (WardrobeDollOverlay) ch;
         }
-        WardrobeDollOverlay overlay = ava.add(new WardrobeDollOverlay(ava.sz), Coord.z);
+        return null;
+    }
+
+    static boolean attachAsSibling(Widget doll, Widget overlay) {
+        if (doll == null || overlay == null)
+            return false;
+        Widget host = resolveDollHost(doll);
+        if (host == null || host == doll)
+            return false;
+        Coord pos = doll.parentpos(host);
+        overlay.resize(doll.sz);
+        if (overlay.parent != host)
+            host.add(overlay, pos);
+        else
+            overlay.move(pos);
+        if (overlay instanceof WardrobeDollOverlay)
+            ((WardrobeDollOverlay) overlay).bindDoll(doll);
         overlay.raise();
         return true;
+    }
+
+    static void syncOverlayToDoll(Widget overlay, Widget doll) {
+        if (overlay == null || doll == null || overlay.parent == null || doll.parent == null)
+            return;
+        overlay.move(doll.parentpos(overlay.parent));
+        overlay.resize(doll.sz);
+    }
+
+    public static boolean installOn(Widget doll) {
+        if (doll == null)
+            return false;
+        Window window = doll.getparent(Window.class);
+        if (!isWardrobeWindow(window))
+            return false;
+        Widget host = resolveDollHost(doll);
+        if (host == null || host == doll)
+            return false;
+        WardrobeDollOverlay existing = findOverlay(host);
+        if (existing != null) {
+            existing.bindDoll(doll);
+            existing.syncToDoll();
+            existing.raise();
+            return true;
+        }
+        WardrobeDollOverlay overlay = new WardrobeDollOverlay(doll.sz);
+        overlay.bindDoll(doll);
+        return attachAsSibling(doll, overlay);
+    }
+
+    public static boolean installOn(Avaview ava) {
+        return installOn((Widget) ava);
     }
 
     public static boolean installFrom(Widget root) {
@@ -94,17 +143,26 @@ public class WardrobeDollOverlay extends EquipmentStatsWidget {
         return installed;
     }
 
+    void bindDoll(Widget doll) {
+        this.doll = doll;
+    }
+
+    void syncToDoll() {
+        syncOverlayToDoll(this, doll);
+    }
+
     @Override
     public void presize() {
-        if (parent != null)
-            resize(parent.sz);
+        syncToDoll();
     }
 
     @Override
     public void tick(double dt) {
         super.tick(dt);
-        Widget host = resolveDollHost(parent);
-        updateStatsFromItems(itemsOnDoll(host));
+        syncToDoll();
+        Widget host = parent;
+        if (host != null)
+            updateStatsFromItems(itemsOnDoll(host));
     }
 
     @Override
