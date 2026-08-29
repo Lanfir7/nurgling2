@@ -41,7 +41,7 @@ class HTableTimesL10nTest {
     private static Properties load(String path) throws Exception {
         Path file = Paths.get(path);
         Properties p = new Properties();
-        try (InputStreamReader in = new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF-8)) {
+        try (InputStreamReader in = new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF_8)) {
             p.load(in);
         }
         return p;
