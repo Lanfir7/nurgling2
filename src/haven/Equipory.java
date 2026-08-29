@@ -104,6 +104,7 @@ public class Equipory extends Widget implements DTarget {
 	if(ava.avagob == -2)
 	    ava.avagob = getparent(GameUI.class).plid;
 	super.added();
+	WardrobeDollOverlay.installFrom(this);
     }
 
     public Equipory(long gobid) {

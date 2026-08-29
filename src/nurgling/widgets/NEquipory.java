@@ -90,10 +90,16 @@ public class NEquipory extends Equipory
     @Override
     protected void added() {
         super.added();
+        haven.Window window = getparent(haven.Window.class);
+        if (WardrobeDollOverlay.isWardrobeWindow(window)) {
+            if (statsWidget != null)
+                statsWidget.hide();
+            WardrobeDollOverlay.installFrom(this);
+            return;
+        }
         if (statsToggleButton != null) {
             return;
         }
-        haven.Window window = getparent(haven.Window.class);
         if (window == null) {
             return;
         }

@@ -151,6 +151,14 @@ public class Window extends Widget implements WindowLayering.Target {
 
     public void chcap(String cap) {
 	this.cap = cap;
+	if(nurgling.widgets.WardrobeDollOverlay.isWardrobeCap(this.cap))
+	    nurgling.widgets.WardrobeDollOverlay.installFrom(this);
+    }
+
+    public void addchild(Widget child, Object... args) {
+	super.addchild(child, args);
+	if(nurgling.widgets.WardrobeDollOverlay.isWardrobeCap(this.cap))
+	    nurgling.widgets.WardrobeDollOverlay.installFrom(this);
     }
 
     public void chdeco(Deco deco) {

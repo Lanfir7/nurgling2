@@ -77,6 +77,11 @@ public class Avaview extends PView {
 	makeproj();
     }
 
+    protected void added() {
+	super.added();
+	nurgling.widgets.WardrobeDollOverlay.installOn(this);
+    }
+
     protected void makeproj() {
 	float field = 0.5f;
 	float aspect = ((float)sz.y) / ((float)sz.x);

@@ -25,116 +25,11 @@ public class EquipmentStatsWidget extends Widget {
     }
     
     public void updateStatsFromItems(WItem[] items) {
-        attributeMap.clear();
-        totalStats.clear();
-        sortedStats.clear();
-        needUpdate = true;
-        
-        // Use a set to track processed items to avoid counting the same item twice
-        // (some items can be in multiple slots, but they're the same GItem)
-        Set<GItem> processedItems = new HashSet<>();
-        
-        // Collect stats from all equipped items
-        for (WItem item : items) {
-            if (item != null && item.item != null) {
-                GItem gitem = item.item;
-                
-                // Skip if we've already processed this item
-                if (processedItems.contains(gitem)) {
-                    continue;
-                }
-                processedItems.add(gitem);
-                
-                try {
-                    List<ItemInfo> info = null;
-                    try {
-                        info = gitem.info();
-                    } catch (Loading e) {
-                        // Item info not ready yet, skip this item for now
-                        // It will be processed on next update
-                        continue;
-                    }
-                    
-                    if (info != null) {
-                        // Collect from all AttrMod instances (base item modifiers)
-                        for (ItemInfo inf : info) {
-                            if (inf instanceof AttrMod) {
-                                AttrMod attrMod = (AttrMod) inf;
-                                if (attrMod.tab != null) {
-                                    for (haven.res.ui.tt.attrmod.Entry entry2 : attrMod.tab) {
-                                        if (entry2 instanceof Mod) {
-                                            Mod mod = (Mod) entry2;
-                                            Attribute attr = mod.attr;
-                                            String attrName = attr.name();
-                                            double value = mod.mod;
-                                            
-                                            // Store attribute object for later use
-                                            attributeMap.put(attrName, attr);
-                                            
-                                            // Sum up values for the same attribute by name
-                                            totalStats.put(attrName, totalStats.getOrDefault(attrName, 0.0) + value);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Collect from ISlots (Gilding slots)
-                        for (ItemInfo inf : info) {
-                            if (inf.getClass().getName().equals("haven.res.ui.tt.slots.ISlots") || 
-                                inf.getClass().getName().equals("haven.res.ui.tt.slots_alt.ISlots")) {
-                                try {
-                                    java.lang.reflect.Field sField = inf.getClass().getField("s");
-                                    Collection<?> slots = (Collection<?>) sField.get(inf);
-                                    for (Object slot : slots) {
-                                        try {
-                                            java.lang.reflect.Field infoField = slot.getClass().getField("info");
-                                            List<ItemInfo> slotInfo = (List<ItemInfo>) infoField.get(slot);
-                                            collectAttrModsFromList(slotInfo);
-                                        } catch (Exception e) {
-                                            // Field not found or error
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    // Field not found or error
-                                }
-                            }
-                        }
-                        
-                        // Collect from Slotted (Gilding items)
-                        for (ItemInfo inf : info) {
-                            if (inf.getClass().getName().equals("haven.res.ui.tt.slot.Slotted") || 
-                                inf.getClass().getName().equals("haven.res.ui.tt.slot_alt.Slotted")) {
-                                try {
-                                    java.lang.reflect.Field subField = inf.getClass().getField("sub");
-                                    List<ItemInfo> subInfo = (List<ItemInfo>) subField.get(inf);
-                                    collectAttrModsFromList(subInfo);
-                                } catch (Exception e) {
-                                    // Field not found or error
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    // Item info not available or error
-                }
-            }
-        }
-        
-        // Sort by absolute value (largest first)
-        sortedStats = new ArrayList<>(totalStats.entrySet());
-        sortedStats.sort((a, b) -> Double.compare(Math.abs(b.getValue()), Math.abs(a.getValue())));
-        
-        needUpdate = true;
+        applyTotals(EquipmentStatsCollector.collectFromItems(items));
     }
     
     public void updateStatsFromPreset(Map<Integer, String> slotConfig) {
-        attributeMap.clear();
-        totalStats.clear();
-        sortedStats.clear();
-        needUpdate = true;
-        
-        // Collect stats from all items in the set
+        List<List<ItemInfo>> itemInfos = new ArrayList<>();
         for (Map.Entry<Integer, String> entry : slotConfig.entrySet()) {
             String resName = entry.getValue();
             try {
@@ -154,76 +49,27 @@ public class EquipmentStatsWidget extends Widget {
                         continue;
                     }
                     
-                    if (info != null) {
-                        // Collect from all AttrMod instances (base item modifiers)
-                        for (ItemInfo inf : info) {
-                            if (inf instanceof AttrMod) {
-                                AttrMod attrMod = (AttrMod) inf;
-                                if (attrMod.tab != null) {
-                                    for (haven.res.ui.tt.attrmod.Entry entry2 : attrMod.tab) {
-                                        if (entry2 instanceof Mod) {
-                                            Mod mod = (Mod) entry2;
-                                            Attribute attr = mod.attr;
-                                            String attrName = attr.name();
-                                            double value = mod.mod;
-                                            
-                                            // Store attribute object for later use
-                                            attributeMap.put(attrName, attr);
-                                            
-                                            // Sum up values for the same attribute by name
-                                            totalStats.put(attrName, totalStats.getOrDefault(attrName, 0.0) + value);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Collect from ISlots (Gilding slots)
-                        for (ItemInfo inf : info) {
-                            if (inf.getClass().getName().equals("haven.res.ui.tt.slots.ISlots") || 
-                                inf.getClass().getName().equals("haven.res.ui.tt.slots_alt.ISlots")) {
-                                try {
-                                    java.lang.reflect.Field sField = inf.getClass().getField("s");
-                                    Collection<?> slots = (Collection<?>) sField.get(inf);
-                                    for (Object slot : slots) {
-                                        try {
-                                            java.lang.reflect.Field infoField = slot.getClass().getField("info");
-                                            List<ItemInfo> slotInfo = (List<ItemInfo>) infoField.get(slot);
-                                            collectAttrModsFromList(slotInfo);
-                                        } catch (Exception e) {
-                                            // Field not found or error
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    // Field not found or error
-                                }
-                            }
-                        }
-                        
-                        // Collect from Slotted (Gilding items)
-                        for (ItemInfo inf : info) {
-                            if (inf.getClass().getName().equals("haven.res.ui.tt.slot.Slotted") || 
-                                inf.getClass().getName().equals("haven.res.ui.tt.slot_alt.Slotted")) {
-                                try {
-                                    java.lang.reflect.Field subField = inf.getClass().getField("sub");
-                                    List<ItemInfo> subInfo = (List<ItemInfo>) subField.get(inf);
-                                    collectAttrModsFromList(subInfo);
-                                } catch (Exception e) {
-                                    // Field not found or error
-                                }
-                            }
-                        }
-                    }
+                    if (info != null)
+                        itemInfos.add(info);
                 }
             } catch (Exception e) {
                 // Resource not available or error loading
             }
         }
-        
-        // Sort by absolute value (largest first)
-        sortedStats = new ArrayList<>(totalStats.entrySet());
-        sortedStats.sort((a, b) -> Double.compare(Math.abs(b.getValue()), Math.abs(a.getValue())));
-        
+        applyTotals(EquipmentStatsCollector.collectFromInfoLists(itemInfos));
+    }
+
+    private void applyTotals(EquipmentStatsCollector.Totals totals) {
+        attributeMap.clear();
+        totalStats.clear();
+        sortedStats.clear();
+        for (Map.Entry<String, Double> entry : totals.sorted()) {
+            totalStats.put(entry.getKey(), entry.getValue());
+            Attribute attr = totals.attribute(entry.getKey());
+            if (attr != null)
+                attributeMap.put(entry.getKey(), attr);
+        }
+        sortedStats = new ArrayList<>(totals.sorted());
         needUpdate = true;
     }
     
@@ -245,31 +91,6 @@ public class EquipmentStatsWidget extends Widget {
         if (statsTex != null) {
             int statsY = titleLabel.sz.y + UI.scale(8);
             g.image(statsTex, new Coord(0, statsY));
-        }
-    }
-    
-    private void collectAttrModsFromList(List<ItemInfo> infoList) {
-        if (infoList == null) return;
-        for (ItemInfo inf : infoList) {
-            if (inf instanceof AttrMod) {
-                AttrMod attrMod = (AttrMod) inf;
-                if (attrMod.tab != null) {
-                    for (haven.res.ui.tt.attrmod.Entry entry2 : attrMod.tab) {
-                        if (entry2 instanceof Mod) {
-                            Mod mod = (Mod) entry2;
-                            Attribute attr = mod.attr;
-                            String attrName = attr.name();
-                            double value = mod.mod;
-                            
-                            // Store attribute object for later use
-                            attributeMap.put(attrName, attr);
-                            
-                            // Sum up values for the same attribute by name
-                            totalStats.put(attrName, totalStats.getOrDefault(attrName, 0.0) + value);
-                        }
-                    }
-                }
-            }
         }
     }
     
