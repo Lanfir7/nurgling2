@@ -122,11 +122,23 @@ public class TextEntry extends Widget implements ReadLine.Owner {
 	if(tcache == null)
 	    this.tcache = tcache = fnd.render(dtext(), (dshow && dirty) ? dirtycol : defcol);
 	int point = buf.point(), mark = buf.mark();
-	g.image(mext, Coord.z, sz);
 	int inset = Math.max(1, UI.scale(1));
-	g.chcolor(TextEntryVisualStyle.background());
-	g.frect(Coord.of(inset, inset), sz.sub(inset * 2, inset * 2));
-	g.chcolor();
+	for(TextEntryVisualStyle.BaseLayer layer : TextEntryVisualStyle.BASE_LAYERS) {
+	    switch(layer) {
+	    case THEME:
+		g.image(mext, Coord.z, sz);
+		break;
+	    case CAPS:
+		    g.image(lcap, Coord.z);
+		    g.image(rcap, Coord.of(sz.x - rcap.sz().x, 0));
+		break;
+	    case FILL:
+		    g.chcolor(TextEntryVisualStyle.background());
+		    g.frect(Coord.of(inset, inset), sz.sub(inset * 2, inset * 2));
+		    g.chcolor();
+		break;
+	    }
+	}
 	if(mark >= 0) {
 	    int px = tcache.advance(point) - sx, mx = tcache.advance(mark) - sx;
 	    g.chcolor(selcol);
@@ -135,8 +147,6 @@ public class TextEntry extends Widget implements ReadLine.Owner {
 	    g.chcolor();
 	}
 	g.image(tcache.tex(), Coord.of(toffx - sx, (sz.y - tcache.sz().y) / 2));
-	g.image(lcap, Coord.z);
-	g.image(rcap, Coord.of(sz.x - rcap.sz().x, 0));
 	if(hasfocus) {
 	    int cx = tcache.advance(point);
 	    if(cx < sx) {sx = cx;}

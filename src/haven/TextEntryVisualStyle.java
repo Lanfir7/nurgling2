@@ -3,6 +3,11 @@ package haven;
 import java.awt.Color;
 
 final class TextEntryVisualStyle {
+    enum BaseLayer {THEME, CAPS, FILL}
+    static final BaseLayer[] BASE_LAYERS = {
+            BaseLayer.THEME, BaseLayer.CAPS, BaseLayer.FILL
+    };
+
     private static final Color BACKGROUND = new Color(12, 20, 22, 235);
     private static final Color BORDER = new Color(82, 101, 104);
     private static final Color FOCUS_BORDER = new Color(233, 156, 84);

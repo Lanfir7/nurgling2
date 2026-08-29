@@ -34,7 +34,7 @@ import static haven.PUtils.*;
 import nurgling.*;
 import nurgling.widgets.NProspecting;
 
-public class Window extends Widget {
+public class Window extends Widget implements WindowLayering.Target {
     public static final Pipe.Op bgblend = FragColor.blend.nil;
     public static final Pipe.Op cblend  = FragColor.blend(new BlendMode(BlendMode.Function.ADD, BlendMode.Factor.SRC_ALPHA, BlendMode.Factor.INV_SRC_ALPHA,
             BlendMode.Function.ADD, BlendMode.Factor.ONE, BlendMode.Factor.INV_SRC_ALPHA));
@@ -460,7 +460,18 @@ public class Window extends Widget {
     }
 
     protected void drawbuf(GOut g) {
+	WindowLayering.paint(this, g);
+    }
+
+    public void drawContent(GOut g) {
 	super.draw(g);
+    }
+
+    public void drawForeground(GOut g) {
+	if((deco instanceof WindowLayering.Overlay) && deco.visible) {
+	    Coord cc = xlate(deco.c, true);
+	    ((WindowLayering.Overlay)deco).drawOverlay(g.reclip(cc, deco.sz), true);
+	}
     }
 
     protected void drawfin(GOut g, Tex buf) {

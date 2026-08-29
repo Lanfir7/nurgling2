@@ -2,6 +2,7 @@ package haven;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -24,5 +25,14 @@ class TextEntryVisualStyleTest {
         assertEquals(Coord.of(10, 8), frames[0].size);
         assertEquals(Coord.of(1, 1), frames[1].position);
         assertEquals(Coord.of(8, 6), frames[1].size);
+    }
+
+    @Test
+    void customFillCoversThemeCapsBeforeTextIsDrawn() {
+        assertArrayEquals(new TextEntryVisualStyle.BaseLayer[] {
+                        TextEntryVisualStyle.BaseLayer.THEME,
+                        TextEntryVisualStyle.BaseLayer.CAPS,
+                        TextEntryVisualStyle.BaseLayer.FILL
+                }, TextEntryVisualStyle.BASE_LAYERS);
     }
 }

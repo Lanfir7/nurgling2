@@ -3,7 +3,7 @@ package nurgling;
 import haven.*;
 import java.awt.Color;
 
-public class NWindowDeco extends Window.DragDeco {
+public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overlay {
     private static final int TITLE_H = 21;
 
     public final boolean lg;
@@ -134,28 +134,30 @@ public class NWindowDeco extends Window.DragDeco {
             layoutTitleWidget();
         }
 
-        int bw     = Math.max(1, UI.scale(1));
+        drawbg(g);
+        cdraw(g.reclip(aa.ul, aa.sz()));
+    }
+
+    @Override
+    public void drawOverlay(GOut g, boolean strict) {
+        if(ca == null || aa == null)
+            return;
+        int bw = Math.max(1, UI.scale(1));
         int titleH = ca.ul.y;
 
-        // 1. Content background
-        drawbg(g);
-
-        // 2. Title bar
+        // Opaque title mask is deliberately painted after window content.
         g.chcolor(NStyle.titleBg);
         g.frect(Coord.z, new Coord(sz.x, titleH));
         g.chcolor();
 
-        // 3. Title text
         if(cap != null) {
             Coord textPos = new Coord(UI.scale(10), (titleH - cap.sz().y) / 2);
             g.image(cap.tex(), textPos);
         }
 
-        // 4. Separator
         g.chcolor(NStyle.separator);
         g.frect(new Coord(0, titleH - bw), new Coord(sz.x, bw));
 
-        // 5. Outer border
         g.chcolor(NStyle.border);
         g.frect(Coord.z,                  new Coord(sz.x, bw));
         g.frect(new Coord(0, sz.y - bw),  new Coord(sz.x, bw));
@@ -163,14 +165,10 @@ public class NWindowDeco extends Window.DragDeco {
         g.frect(new Coord(sz.x - bw, 0),  new Coord(bw, sz.y));
         g.chcolor();
 
-        // 6. Sizer handle
         if(dragsize)
             g.image(Window.sizer, ca.br.sub(Window.sizer.sz()));
 
-        // 7. Content drawing
-        cdraw(g.reclip(aa.ul, aa.sz()));
-
-        // 8. Children (close button, sort button, etc.)
+        // Close button and embedded title widgets stay above the mask.
         super.draw(g, strict);
     }
 
