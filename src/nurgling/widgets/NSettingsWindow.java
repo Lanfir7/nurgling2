@@ -4,6 +4,7 @@ package nurgling.widgets;
 import haven.*;
 import nurgling.NMapView;
 import nurgling.NUtils;
+import nurgling.NWindowDeco;
 import nurgling.i18n.L10n;
 import nurgling.widgets.nsettings.*;
 import nurgling.widgets.nsettings.AnimalMarkersSettings;
@@ -31,14 +32,20 @@ public class NSettingsWindow extends Widget {
     private TextEntry search;
     private SearchDrop drop;
     private SettingFlash flash;
+    private final Widget searchHost;
     private int contentTop = 0;
 
     public NSettingsWindow() {
-        this(null);
+        this(null, null);
     }
 
     public NSettingsWindow(Runnable backAction) {
+        this(backAction, null);
+    }
+
+    public NSettingsWindow(Runnable backAction, Widget searchHost) {
         this.backAction = backAction;
+        this.searchHost = (searchHost == null) ? this : searchHost;
         sz = UI.scale(800, 600);
         list = add(new SettingsList(UI.scale(200, 580)), UI.scale(10, 10));
 
@@ -276,15 +283,22 @@ public class NSettingsWindow extends Widget {
         cancelBtn.move(layout.cancelButton);
         if((backBtn != null) && (layout.backButton != null))
             backBtn.move(layout.backButton);
-        search.move(Coord.of(size.x - margin - search.sz.x, 0));
-        drop.move(search.c.add(0, search.sz.y + UI.scale(2)));
+        if(searchHost == this)
+            search.move(Coord.of(size.x - margin - search.sz.x, 0));
+        syncSearchOverlay();
         settingsView.cont.update();
         settingsView.bar.ch(0);
     }
 
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        syncSearchOverlay();
+    }
+
     private void addSearch() {
         int searchW = UI.scale(250);
-        search = adda(new TextEntry(searchW, "") {
+        search = new TextEntry(searchW, "") {
             @Override
             protected void changed() {
                 super.changed();
@@ -322,12 +336,36 @@ public class NSettingsWindow extends Widget {
                     g.chcolor();
                 }
             }
-        }, sz.x - UI.scale(10), 0, 1.0, 0.0);
+        };
+        if(searchHost instanceof NWindowDeco)
+            ((NWindowDeco)searchHost).setTitleWidget(search, searchW, UI.scale(140));
+        else
+            searchHost.add(search, Coord.of(sz.x - UI.scale(10) - searchW, 0));
         search.z(20);
-        contentTop = search.sz.y + UI.scale(4);
-        drop = add(new SearchDrop(Coord.of(searchW, UI.scale(20))), search.c.add(0, search.sz.y + UI.scale(2)));
+        contentTop = (searchHost == this) ? search.sz.y + UI.scale(4) : 0;
+        drop = searchHost.add(new SearchDrop(Coord.of(searchW, UI.scale(20))), Coord.z);
         drop.z(21);
         drop.hide();
+        syncSearchOverlay();
+    }
+
+    public void setSearchVisible(boolean visible) {
+        if(searchHost instanceof NWindowDeco)
+            ((NWindowDeco)searchHost).setTitleWidgetVisible(visible);
+        else
+            search.visible = visible;
+        if(!visible)
+            hideDrop();
+        syncSearchOverlay();
+    }
+
+    private void syncSearchOverlay() {
+        if((search == null) || (drop == null))
+            return;
+        SettingsSearchOverlayLayout layout = SettingsSearchOverlayLayout.calculate(
+                search.c, search.sz, searchHost.sz, drop.sz, UI.scale(2));
+        drop.resize(layout.size);
+        drop.move(layout.position);
     }
 
     private void refreshSearch() {
@@ -476,6 +514,7 @@ public class NSettingsWindow extends Widget {
             hover = 0;
             int h = items.isEmpty() ? 0 : items.size() * rowH + UI.scale(4);
             resize(search.sz.x, h);
+            syncSearchOverlay();
             show(!items.isEmpty());
         }
 

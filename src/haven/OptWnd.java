@@ -45,13 +45,19 @@ public class OptWnd extends Window {
     private boolean fittingPanel = false;
     private Area fittedArea = null;
 
-    public void chpanel(Panel p) {
+	public void chpanel(Panel p) {
 	if(current != null)
 	    current.hide();
 	(current = p).show();
+	updateSettingsSearchVisibility();
 	panels.bar.ch(-panels.bar.val);
 	panels.cont.update();
 	cresize(p);
+    }
+
+    private void updateSettingsSearchVisibility() {
+	if(nqolwnd instanceof NSettingsPanel)
+	    ((NSettingsPanel)nqolwnd).settingsWindow.setSearchVisible(current == nqolwnd);
     }
 
     public void cresize(Widget ch) {
@@ -1147,7 +1153,7 @@ public class OptWnd extends Window {
 				if (settingsWindow.currentPanel != null) {
 					settingsWindow.currentPanel.load();
 				}
-			}), Coord.z);
+			}, deco), Coord.z);
 
 			pack();
 		}

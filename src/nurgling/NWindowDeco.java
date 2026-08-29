@@ -13,6 +13,10 @@ public class NWindowDeco extends Window.DragDeco {
     private Text cap;
     private boolean cfocus;
     private final Coord customMrgn;
+    private Widget titleWidget;
+    private int titleWidgetPreferredWidth;
+    private int titleWidgetMinWidth;
+    private boolean titleWidgetEnabled;
     private static Text.Foundry ftitlef, nftitlef;
 
     public NWindowDeco(boolean lg) {
@@ -30,6 +34,36 @@ public class NWindowDeco extends Window.DragDeco {
     public NWindowDeco dragsize(boolean v) {
         this.dragsize = v;
         return this;
+    }
+
+    public <T extends Widget> T setTitleWidget(T widget, int preferredWidth, int minWidth) {
+        if((titleWidget != null) && (titleWidget != widget))
+            titleWidget.destroy();
+        titleWidget = add(widget, Coord.z);
+        titleWidgetPreferredWidth = preferredWidth;
+        titleWidgetMinWidth = minWidth;
+        titleWidgetEnabled = true;
+        layoutTitleWidget();
+        return widget;
+    }
+
+    public void setTitleWidgetVisible(boolean visible) {
+        titleWidgetEnabled = visible;
+        layoutTitleWidget();
+    }
+
+    private void layoutTitleWidget() {
+        if((titleWidget == null) || (ca == null))
+            return;
+        int titleWidth = UI.scale(10) + ((cap == null) ? UI.scale(55) : cap.sz().x);
+        NWindowTitleLayout layout = NWindowTitleLayout.calculate(
+                sz.x, titleWidth, cbtn.c.x, titleWidgetPreferredWidth,
+                titleWidgetMinWidth, UI.scale(5), ca.ul.y, titleWidget.sz.y);
+        titleWidget.visible = titleWidgetEnabled && layout.visible;
+        if(titleWidget.visible) {
+            titleWidget.resize(Coord.of(layout.width, titleWidget.sz.y));
+            titleWidget.move(layout.position);
+        }
     }
 
     private static Text.Foundry titlef() {
@@ -55,6 +89,7 @@ public class NWindowDeco extends Window.DragDeco {
         aa = Area.sized(ca.ul.add(mrgn), isz);
         cbtn.c = Coord.of(wsz.x - cbtn.sz.x - UI.scale(5),
                           (titleH - cbtn.sz.y) / 2);
+        layoutTitleWidget();
     }
 
     @Override
@@ -84,6 +119,7 @@ public class NWindowDeco extends Window.DragDeco {
         if(cap == null || cap.text != wnd.cap || cfocus != wnd.hasfocus) {
             cfocus = wnd.hasfocus;
             cap = (wnd.cap != null) ? (cfocus ? titlef() : ntitlef()).render(wnd.cap) : null;
+            layoutTitleWidget();
         }
 
         int bw     = Math.max(1, UI.scale(1));
