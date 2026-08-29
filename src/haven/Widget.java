@@ -751,6 +751,7 @@ public class Widget {
 	} else if(msg == "show") {
 	    show(Utils.bv(args[0]));
 	} else if(msg == "curs") {
+	    String prevCurs = cursorRes;
 	    if(args.length == 0)
 		{
 			cursor = null;
@@ -772,6 +773,11 @@ public class Widget {
 					cursorRes = nm;
 			}
 		}
+	    if((args.length == 0) || ((cursorRes != null) && !cursorRes.equals(prevCurs))) {
+		try {
+		    nurgling.tools.AttackEquipOnAttack.INSTANCE.onCursorRes(ui, cursorRes);
+		} catch(Exception ignored) {}
+	    }
 	} else if(msg == "tip") {
 	    int a = 0;
 	    Object tt = args[a++];
