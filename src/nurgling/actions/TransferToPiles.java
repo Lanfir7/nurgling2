@@ -123,6 +123,31 @@ public class TransferToPiles implements Action{
         return freeBefore >= 0 && freeNow >= 0 && freeNow < freeBefore;
     }
 
+    /** Window 30/30 (free 0) is full even if gob model attr is not yet 31. */
+    static boolean stockpileIsFull(long modelAttribute, int freeSpace) {
+        return modelAttribute == 31 || freeSpace <= 0;
+    }
+
+    static boolean shouldLeaveOpenedPile(long modelAttribute, int freeSpace) {
+        return stockpileIsFull(modelAttribute, freeSpace);
+    }
+
+    static boolean shouldCloseStockpileWhenLeaving(boolean windowOpen) {
+        return windowOpen;
+    }
+
+    static boolean keepFillingOpenedPile(long modelAttribute, int freeSpace) {
+        return !stockpileIsFull(modelAttribute, freeSpace);
+    }
+
+    static boolean canStartPileMaker(boolean stockpileWindowOpen) {
+        return !stockpileWindowOpen;
+    }
+
+    static boolean shouldCloseStockpileBeforePileMaker(boolean stockpileWindowOpen) {
+        return stockpileWindowOpen;
+    }
+
     static boolean stockpileTransferFinished(boolean sourceGone, boolean pileFull,
                                              int freeBefore, int freeNow) {
         return sourceGone || pileFull || stockpileFillChanged(freeBefore, freeNow);
@@ -180,7 +205,14 @@ public class TransferToPiles implements Action{
                             witems = getMatchingItems(gui);
                             int size = witems.size();
                             new OpenTargetContainer("Stockpile", target).run(gui);
-                            int target_size = Math.min(size,gui.getStockpile().getFreeSpace());
+                            int freeSpace = gui.getStockpile() == null ? 0 : gui.getStockpile().getFreeSpace();
+                            int target_size = Math.min(size, freeSpace);
+                            if (shouldLeaveOpenedPile(gob.ngob.getModelAttribute(), freeSpace)) {
+                                if (shouldCloseStockpileWhenLeaving(gui.getStockpile() != null)) {
+                                    new CloseTargetContainer("Stockpile").run(gui);
+                                }
+                                break;
+                            }
                             if(target_size>0) {
                                 if (!transfer(gui, target_size)) {
                                     return Results.FAIL();
@@ -195,6 +227,9 @@ public class TransferToPiles implements Action{
                 }
 
                 while(!getMatchingItems(gui).isEmpty() && out!=null) {
+                    if (shouldCloseStockpileBeforePileMaker(gui.getStockpile() != null)) {
+                        new CloseTargetContainer("Stockpile").run(gui);
+                    }
                     PileMaker pm;
                     if (exactName != null) {
                         pm = new PileMaker(out, exactName, pileName, th);
@@ -208,15 +243,18 @@ public class TransferToPiles implements Action{
                         witems = getMatchingItems(gui);
                         int size = witems.size();
                         new OpenTargetContainer("Stockpile", pile).run(gui);
-                        int target_size = Math.min(size, gui.getStockpile().getFreeSpace());
+                        int freeSpace = gui.getStockpile() == null ? 0 : gui.getStockpile().getFreeSpace();
+                        int target_size = Math.min(size, freeSpace);
+                        if (shouldLeaveOpenedPile(pile.ngob.getModelAttribute(), freeSpace)) {
+                            if (shouldCloseStockpileWhenLeaving(gui.getStockpile() != null)) {
+                                new CloseTargetContainer("Stockpile").run(gui);
+                            }
+                            break;
+                        }
                         if (target_size > 0) {
                             if (!transfer(gui, target_size)) {
                                 return Results.FAIL();
                             }
-                        }
-                        else
-                        {
-                            break;
                         }
                     }
                 }

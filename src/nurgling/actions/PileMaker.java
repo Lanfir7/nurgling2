@@ -10,6 +10,7 @@ import nurgling.NHitBox;
 import nurgling.NUtils;
 import nurgling.tasks.WaitPile;
 import nurgling.tasks.WaitPlob;
+import nurgling.tasks.WaitItemInHand;
 import nurgling.NGItem;
 import nurgling.db.StockpileStoragePolicy;
 import nurgling.tools.Finder;
@@ -34,6 +35,16 @@ public class PileMaker implements Action{
 
     Gob pile = null;
     Coord2d exactPos = null;
+
+    static final int TAKE_TO_HAND_TICKS = 80;
+
+    static boolean shouldCloseStockpileBeforeTakeToHand(boolean stockpileWindowOpen) {
+        return stockpileWindowOpen;
+    }
+
+    static WaitItemInHand takeToHandWait(WItem item) {
+        return WaitItemInHand.withSoftTimeout(item, TAKE_TO_HAND_TICKS);
+    }
 
     public PileMaker(Pair<Coord2d, Coord2d> out, NAlias items, NAlias pileName) {
         this.out = out;
@@ -65,10 +76,12 @@ public class PileMaker implements Action{
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-
+        if (shouldCloseStockpileBeforeTakeToHand(gui.getStockpile() != null)) {
+            new CloseTargetContainer("Stockpile").run(gui);
+        }
         if (gui.hand.isEmpty()) {
             ArrayList<WItem> witems = getMatchingItems(gui);
-            if(witems.isEmpty() || NUtils.takeItemToHand(witems.get(0))==null)
+            if(witems.isEmpty() || NUtils.takeItemToHand(witems.get(0), takeToHandWait(witems.get(0)))==null)
 
                 return Results.FAIL();
         }

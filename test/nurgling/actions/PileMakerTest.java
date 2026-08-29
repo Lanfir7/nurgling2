@@ -5,8 +5,10 @@ import nurgling.tools.NAlias;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PileMakerTest {
     @Test
@@ -28,5 +30,11 @@ class PileMakerTest {
         NHitBox box = PileMaker.resolveHitbox(null, new NAlias("stockpile"));
         assertNotNull(box);
         assertEquals(NHitBox.findCustom("stockpile").begin, box.begin);
+    }
+
+    @Test
+    void closesStockpileWindowBeforeTakeToHand() {
+        assertTrue(PileMaker.shouldCloseStockpileBeforeTakeToHand(true));
+        assertFalse(PileMaker.shouldCloseStockpileBeforeTakeToHand(false));
     }
 }

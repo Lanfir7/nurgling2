@@ -29,6 +29,25 @@ public class WaitItemInHand extends NTask
 
     }
 
+    public static WaitItemInHand withSoftTimeout(int ticks) {
+        return applySoftTimeout(new WaitItemInHand(), ticks);
+    }
+
+    public static WaitItemInHand withSoftTimeout(WItem item, int ticks) {
+        return applySoftTimeout(new WaitItemInHand(item), ticks);
+    }
+
+    public static WaitItemInHand withSoftTimeout(GItem item, int ticks) {
+        return applySoftTimeout(new WaitItemInHand(item), ticks);
+    }
+
+    static WaitItemInHand applySoftTimeout(WaitItemInHand wait, int ticks) {
+        wait.infinite = false;
+        wait.maxCounter = Math.max(1, ticks);
+        wait.criticalOnTimeout = false;
+        return wait;
+    }
+
     @Override
     public boolean check() {
         if (item != null) {

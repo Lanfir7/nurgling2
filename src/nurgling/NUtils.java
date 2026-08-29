@@ -124,10 +124,16 @@ public class NUtils
     {
         if(item == null)
             return null;
+        return takeItemToHand(item, new WaitItemInHand(item));
+    }
+
+    public static WItem takeItemToHand(WItem item, WaitItemInHand wait) throws InterruptedException
+    {
+        if(item == null)
+            return null;
         monitoring.StockpileStorageTracker.rememberHand(item);
         item.item.wdgmsg("take", Coord.z);
-        WaitItemInHand tith = new WaitItemInHand(item);
-        getUI().core.addTask(tith);
+        getUI().core.addTask(wait);
         return getGameUI().vhand;
     }
 

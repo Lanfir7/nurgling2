@@ -144,4 +144,29 @@ class TransferToPilesTest {
         assertTrue(TransferToPiles.leftoverFlushSends(1));
     }
 
+    @Test
+    void freeSpaceZeroIsFullEvenIfModelAttrIsNot31() {
+        assertTrue(TransferToPiles.stockpileIsFull(0, 0));
+        assertTrue(TransferToPiles.stockpileIsFull(30, 0));
+        assertFalse(TransferToPiles.stockpileIsFull(0, 1));
+        assertTrue(TransferToPiles.stockpileIsFull(31, 5));
+    }
+
+    @Test
+    void fullPileBreaksInnerLoopAndClosesWindow() {
+        assertTrue(TransferToPiles.shouldLeaveOpenedPile(0, 0));
+        assertTrue(TransferToPiles.shouldCloseStockpileWhenLeaving(true));
+        assertFalse(TransferToPiles.shouldLeaveOpenedPile(0, 3));
+        assertFalse(TransferToPiles.keepFillingOpenedPile(0, 0));
+        assertTrue(TransferToPiles.keepFillingOpenedPile(0, 5));
+    }
+
+    @Test
+    void pileMakerDoesNotStartWhileStockpileWindowOpen() {
+        assertFalse(TransferToPiles.canStartPileMaker(true));
+        assertTrue(TransferToPiles.shouldCloseStockpileBeforePileMaker(true));
+        assertTrue(TransferToPiles.canStartPileMaker(false));
+        assertFalse(TransferToPiles.shouldCloseStockpileBeforePileMaker(false));
+    }
+
 }
