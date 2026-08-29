@@ -134,7 +134,15 @@ public class MasterMiner extends ActionWithFinal {
         // сброс состояния для повторного запуска
         stop = false;
         known.clear();
-        wnd = NUtils.addCentered(gui, new MasterMinerWnd());
+        MasterMinerWnd created = new MasterMinerWnd();
+        Coord savedPos = created.savedWindowPos();
+        if (savedPos != null) {
+            gui.add(created, savedPos);
+            gui.fitwdg(created);
+            wnd = created;
+        } else {
+            wnd = NUtils.addCentered(gui, created);
+        }
 
         // Активируем курсор майнинга при запуске
         try {

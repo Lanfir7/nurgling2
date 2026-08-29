@@ -525,7 +525,7 @@ public class NConfig
         conf.put(Key.syncZoneSync, false);
         conf.put(Key.filltreepotsprop, false);
         conf.put(Key.tunnelingprop, false);
-        conf.put(Key.masterminerprop, false);
+        conf.put(Key.masterminerprop, new ArrayList<NMasterMinerProp>());
         conf.put(Key.masterminermarkingconfig, false);
 
         ArrayList<HashMap<String, Object>> qpattern = new ArrayList<>();

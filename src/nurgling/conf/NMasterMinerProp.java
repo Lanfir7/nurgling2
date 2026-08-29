@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 
 public class NMasterMinerProp implements JConf {
     private final String username;
@@ -30,6 +31,10 @@ public class NMasterMinerProp implements JConf {
 
     /** Сколько камней всегда держать в инвентаре (для подпорки). Сбрасывать только сверх этого. */
     public int keepStonesForSupport = 30;
+
+    /** Last window position; both null means never placed. */
+    public Integer wndX = null;
+    public Integer wndY = null;
 
     public NMasterMinerProp(String username, String chrid) {
         this.username = username;
@@ -72,23 +77,33 @@ public class NMasterMinerProp implements JConf {
                 keepStonesForSupport = Math.max(0, ((Number) k).intValue());
             }
         }
+        if (values.get("wndX") instanceof Number) {
+            wndX = ((Number) values.get("wndX")).intValue();
+        }
+        if (values.get("wndY") instanceof Number) {
+            wndY = ((Number) values.get("wndY")).intValue();
+        }
+    }
+
+    public boolean hasWindowPos() {
+        return wndX != null && wndY != null;
     }
 
     public static void set(NMasterMinerProp prop) {
-        ArrayList<NMasterMinerProp> props = (ArrayList<NMasterMinerProp>) NConfig.get(NConfig.Key.masterminerprop);
-        if (props != null) {
-            for (Iterator<NMasterMinerProp> i = props.iterator(); i.hasNext(); ) {
-                NMasterMinerProp old = i.next();
-                if (old.username.equals(prop.username) && old.chrid.equals(prop.chrid)) {
-                    i.remove();
-                    break;
-                }
+        NConfig.set(NConfig.Key.masterminerprop, replace(storedProps(), prop));
+    }
+
+    static ArrayList<NMasterMinerProp> replace(ArrayList<NMasterMinerProp> props, NMasterMinerProp prop) {
+        ArrayList<NMasterMinerProp> next = new ArrayList<>(props);
+        for (Iterator<NMasterMinerProp> i = next.iterator(); i.hasNext(); ) {
+            NMasterMinerProp old = i.next();
+            if (java.util.Objects.equals(old.username, prop.username) && java.util.Objects.equals(old.chrid, prop.chrid)) {
+                i.remove();
+                break;
             }
-        } else {
-            props = new ArrayList<>();
         }
-        props.add(prop);
-        NConfig.set(NConfig.Key.masterminerprop, props);
+        next.add(prop);
+        return next;
     }
 
     @Override
@@ -109,6 +124,10 @@ public class NMasterMinerProp implements JConf {
             j.put("markerThreshold", markerThreshold);
         }
         j.put("keepStonesForSupport", keepStonesForSupport);
+        if (hasWindowPos()) {
+            j.put("wndX", wndX);
+            j.put("wndY", wndY);
+        }
         return j;
     }
 
@@ -121,15 +140,39 @@ public class NMasterMinerProp implements JConf {
         if (sessInfo == null || NUtils.getGameUI() == null || NUtils.getGameUI().getCharInfo() == null) {
             return null;
         }
-        String chrid = NUtils.getGameUI().getCharInfo().chrid;
-        ArrayList<NMasterMinerProp> props = (ArrayList<NMasterMinerProp>) NConfig.get(NConfig.Key.masterminerprop);
-        if (props == null) props = new ArrayList<>();
+        return get(sessInfo.username, NUtils.getGameUI().getCharInfo().chrid);
+    }
+
+    public static NMasterMinerProp get(String username, String chrid) {
+        return find(storedProps(), username, chrid);
+    }
+
+    static NMasterMinerProp find(ArrayList<NMasterMinerProp> props, String username, String chrid) {
         for (NMasterMinerProp prop : props) {
-            if (prop.username.equals(sessInfo.username) && prop.chrid.equals(chrid)) {
+            if (java.util.Objects.equals(prop.username, username) && java.util.Objects.equals(prop.chrid, chrid)) {
                 return prop;
             }
         }
-        return new NMasterMinerProp(sessInfo.username, chrid);
+        return new NMasterMinerProp(username, chrid);
+    }
+
+    static ArrayList<NMasterMinerProp> storedProps() {
+        return listFromRaw(NConfig.getGlobal(NConfig.Key.masterminerprop));
+    }
+
+    @SuppressWarnings("unchecked")
+    static ArrayList<NMasterMinerProp> listFromRaw(Object raw) {
+        ArrayList<NMasterMinerProp> result = new ArrayList<>();
+        if (!(raw instanceof List<?>)) {
+            return result;
+        }
+        for (Object item : (List<?>) raw) {
+            if (item instanceof NMasterMinerProp) {
+                result.add((NMasterMinerProp) item);
+            } else if (item instanceof HashMap<?, ?>) {
+                result.add(new NMasterMinerProp((HashMap<String, Object>) item));
+            }
+        }
+        return result;
     }
 }
-

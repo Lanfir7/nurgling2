@@ -8,6 +8,7 @@ import haven.Text;
 import haven.TextEntry;
 import haven.UI;
 import haven.Window;
+import haven.Widget;
 import haven.WItem;
 import nurgling.actions.bots.MasterMiner;
 import nurgling.NGItem;
@@ -43,6 +44,8 @@ public class MasterMinerWnd extends Window {
     private int totalStonesMined = 0;
     private final Text.Foundry boldFoundry;
     private final Color masonryColor = new Color(255, 215, 0); // золотой цвет
+    private Coord savedWindowPos = null;
+    private Coord lastPersistedPos = null;
     
     // Структура для хранения лучших значений по каждому типу камня
     private static class BestStoneData {
@@ -79,6 +82,10 @@ public class MasterMinerWnd extends Window {
                     (int)prop.shellCatGoldThreshold : prop.shellCatGoldThreshold);
             }
             savedKeepStones = String.valueOf(prop.keepStonesForSupport);
+            if (prop.hasWindowPos()) {
+                savedWindowPos = new Coord(prop.wndX, prop.wndY);
+                lastPersistedPos = savedWindowPos;
+            }
         }
 
         Coord pad = UI.scale(8, 6);
@@ -199,6 +206,24 @@ public class MasterMinerWnd extends Window {
 
     public boolean isClosed() {
         return closed;
+    }
+
+    /** Saved screen position, or null to center on first open. */
+    public Coord savedWindowPos() {
+        return savedWindowPos;
+    }
+
+    @Override
+    public void move(Coord c) {
+        super.move(c);
+        persistWindowPos();
+    }
+
+    @Override
+    public boolean mouseup(Widget.MouseUpEvent ev) {
+        boolean handled = super.mouseup(ev);
+        persistWindowPos();
+        return handled;
     }
 
     public void setMasonry(int masonry) {
@@ -446,67 +471,81 @@ public class MasterMinerWnd extends Window {
      * Загружает сохраненные настройки
      */
     private NMasterMinerProp loadSettings() {
-        try {
-            if (NUtils.getUI() != null && NUtils.getUI().sessInfo != null) {
-                return NMasterMinerProp.get(NUtils.getUI().sessInfo);
-            }
-        } catch (Exception e) {
-            // Игнорируем ошибки загрузки
+        if (NUtils.getUI() == null || NUtils.getUI().sessInfo == null) {
+            return null;
         }
-        return null;
+        return NMasterMinerProp.get(NUtils.getUI().sessInfo);
+    }
+
+    private void persistWindowPos() {
+        if (c == null) {
+            return;
+        }
+        if (lastPersistedPos != null && lastPersistedPos.equals(c)) {
+            return;
+        }
+        saveSettings(true);
     }
     
     /**
      * Сохраняет текущие настройки
      */
     private void saveSettings() {
-        try {
-            if (NUtils.getUI() != null && NUtils.getUI().sessInfo != null) {
-                NMasterMinerProp prop = NMasterMinerProp.get(NUtils.getUI().sessInfo);
-                if (prop == null) {
-                    if (NUtils.getGameUI() != null && NUtils.getGameUI().getCharInfo() != null) {
-                        prop = new NMasterMinerProp(NUtils.getUI().sessInfo.username, 
-                                                    NUtils.getGameUI().getCharInfo().chrid);
-                    } else {
-                        return;
-                    }
-                }
-                
-                // Сохраняем порог сброса для камней
-                try {
-                    String dropText = thresholdEntry.text().trim();
-                    if (!dropText.isEmpty()) {
-                        prop.dropThreshold = Float.parseFloat(dropText.replace(',', '.'));
-                    } else {
-                        prop.dropThreshold = Float.NaN;
-                    }
-                } catch (Exception e) {
+        saveSettings(false);
+    }
+
+    private void saveSettings(boolean includeWindowPos) {
+        if (NUtils.getUI() == null || NUtils.getUI().sessInfo == null) {
+            return;
+        }
+        NMasterMinerProp prop = NMasterMinerProp.get(NUtils.getUI().sessInfo);
+        if (prop == null) {
+            if (NUtils.getGameUI() != null && NUtils.getGameUI().getCharInfo() != null) {
+                prop = new NMasterMinerProp(NUtils.getUI().sessInfo.username,
+                                            NUtils.getGameUI().getCharInfo().chrid);
+            } else {
+                System.err.println("[MasterMiner] Cannot save settings: no character info");
+                return;
+            }
+        }
+
+        if (thresholdEntry != null) {
+            try {
+                String dropText = thresholdEntry.text().trim();
+                if (!dropText.isEmpty()) {
+                    prop.dropThreshold = Float.parseFloat(dropText.replace(',', '.'));
+                } else {
                     prop.dropThreshold = Float.NaN;
                 }
-                
-                // Сохраняем порог сброса для ракух и кэтголдов
-                try {
-                    String shellCatGoldText = shellCatGoldThresholdEntry.text().trim();
-                    if (!shellCatGoldText.isEmpty()) {
-                        prop.shellCatGoldThreshold = Float.parseFloat(shellCatGoldText.replace(',', '.'));
-                    } else {
-                        prop.shellCatGoldThreshold = Float.NaN;
-                    }
-                } catch (Exception e) {
+            } catch (NumberFormatException e) {
+                prop.dropThreshold = Float.NaN;
+            }
+        }
+
+        if (shellCatGoldThresholdEntry != null) {
+            try {
+                String shellCatGoldText = shellCatGoldThresholdEntry.text().trim();
+                if (!shellCatGoldText.isEmpty()) {
+                    prop.shellCatGoldThreshold = Float.parseFloat(shellCatGoldText.replace(',', '.'));
+                } else {
                     prop.shellCatGoldThreshold = Float.NaN;
                 }
-
-                try {
-                    prop.keepStonesForSupport = getKeepStonesForSupport();
-                } catch (Exception e) {
-                    prop.keepStonesForSupport = 30;
-                }
-                
-                NMasterMinerProp.set(prop);
+            } catch (NumberFormatException e) {
+                prop.shellCatGoldThreshold = Float.NaN;
             }
-        } catch (Exception e) {
-            // Игнорируем ошибки сохранения
         }
+
+        if (keepStonesEntry != null) {
+            prop.keepStonesForSupport = getKeepStonesForSupport();
+        }
+
+        if (includeWindowPos && c != null) {
+            prop.wndX = c.x;
+            prop.wndY = c.y;
+            lastPersistedPos = new Coord(c.x, c.y);
+        }
+
+        NMasterMinerProp.set(prop);
     }
 
     /**
@@ -726,8 +765,7 @@ public class MasterMinerWnd extends Window {
     public void wdgmsg(String msg, Object... args) {
         if ("close".equals(msg)) {
             closed = true;
-            // Сохраняем настройки при закрытии окна
-            saveSettings();
+            saveSettings(true);
             hide();
         }
         super.wdgmsg(msg, args);
