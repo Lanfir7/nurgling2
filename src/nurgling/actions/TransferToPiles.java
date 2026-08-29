@@ -125,7 +125,7 @@ public class TransferToPiles implements Action{
 
     /** Window 30/30 (free 0) is full even if gob model attr is not yet 31. */
     static boolean stockpileIsFull(long modelAttribute, int freeSpace) {
-        return modelAttribute == 31 || freeSpace <= 0;
+        return modelAttribute == 31 || freeSpace == 0;
     }
 
     static boolean shouldLeaveOpenedPile(long modelAttribute, int freeSpace) {
@@ -138,6 +138,11 @@ public class TransferToPiles implements Action{
 
     static boolean keepFillingOpenedPile(long modelAttribute, int freeSpace) {
         return !stockpileIsFull(modelAttribute, freeSpace);
+    }
+
+    /** Full pile, no items left, or unreadable free space — do not spin while attr != 31. */
+    static boolean shouldStopFillingOpenedPile(long modelAttribute, int freeSpace, int matchingItems) {
+        return matchingItems <= 0 || freeSpace < 0 || stockpileIsFull(modelAttribute, freeSpace);
     }
 
     static boolean canStartPileMaker(boolean stockpileWindowOpen) {
@@ -205,11 +210,17 @@ public class TransferToPiles implements Action{
                             witems = getMatchingItems(gui);
                             int size = witems.size();
                             new OpenTargetContainer("Stockpile", target).run(gui);
-                            int freeSpace = gui.getStockpile() == null ? 0 : gui.getStockpile().getFreeSpace();
+                            if (gui.getStockpile() == null) {
+                                break;
+                            }
+                            int freeSpace = gui.getStockpile().getFreeSpace();
                             int target_size = Math.min(size, freeSpace);
-                            if (shouldLeaveOpenedPile(gob.ngob.getModelAttribute(), freeSpace)) {
+                            if (shouldStopFillingOpenedPile(gob.ngob.getModelAttribute(), freeSpace, size)) {
                                 if (shouldCloseStockpileWhenLeaving(gui.getStockpile() != null)) {
                                     new CloseTargetContainer("Stockpile").run(gui);
+                                }
+                                if (size <= 0) {
+                                    return Results.SUCCESS();
                                 }
                                 break;
                             }
@@ -243,9 +254,12 @@ public class TransferToPiles implements Action{
                         witems = getMatchingItems(gui);
                         int size = witems.size();
                         new OpenTargetContainer("Stockpile", pile).run(gui);
-                        int freeSpace = gui.getStockpile() == null ? 0 : gui.getStockpile().getFreeSpace();
+                        if (gui.getStockpile() == null) {
+                            break;
+                        }
+                        int freeSpace = gui.getStockpile().getFreeSpace();
                         int target_size = Math.min(size, freeSpace);
-                        if (shouldLeaveOpenedPile(pile.ngob.getModelAttribute(), freeSpace)) {
+                        if (shouldStopFillingOpenedPile(pile.ngob.getModelAttribute(), freeSpace, size)) {
                             if (shouldCloseStockpileWhenLeaving(gui.getStockpile() != null)) {
                                 new CloseTargetContainer("Stockpile").run(gui);
                             }

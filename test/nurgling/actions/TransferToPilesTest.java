@@ -162,6 +162,19 @@ class TransferToPilesTest {
     }
 
     @Test
+    void emptyInventoryLeavesInnerLoopEvenIfPileHasSpace() {
+        assertTrue(TransferToPiles.shouldStopFillingOpenedPile(0, 5, 0));
+        assertFalse(TransferToPiles.shouldStopFillingOpenedPile(0, 5, 3));
+        assertTrue(TransferToPiles.shouldStopFillingOpenedPile(0, 0, 3));
+    }
+
+    @Test
+    void unknownFreeSpaceIsNotTreatedAsFull() {
+        assertFalse(TransferToPiles.stockpileIsFull(0, -1));
+        assertTrue(TransferToPiles.shouldStopFillingOpenedPile(0, -1, 3));
+    }
+
+    @Test
     void pileMakerDoesNotStartWhileStockpileWindowOpen() {
         assertFalse(TransferToPiles.canStartPileMaker(true));
         assertTrue(TransferToPiles.shouldCloseStockpileBeforePileMaker(true));
