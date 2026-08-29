@@ -27,6 +27,15 @@ class SelectAreaWithLiveGhostsTest {
     }
 
     @Test
+    void livePlobHitBoxOverridesCatalogFallback() {
+        NHitBox fallback = new NHitBox(new haven.Coord(-5, -5), new haven.Coord(5, 5));
+        NHitBox live = new NHitBox(new haven.Coord(-8, -6), new haven.Coord(8, 6));
+
+        assertSame(live, SelectAreaWithLiveGhosts.preferLiveHitBox(fallback, live));
+        assertSame(fallback, SelectAreaWithLiveGhosts.preferLiveHitBox(fallback, null));
+    }
+
+    @Test
     void unknownBuildingStillNeedsPlob() {
         assertFalse(SelectAreaWithLiveGhosts.canPreviewWithoutPlob(
             SelectAreaWithLiveGhosts.hitBoxForBuilding("Dream Catcher", null),
