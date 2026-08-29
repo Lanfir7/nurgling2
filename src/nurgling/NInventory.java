@@ -33,7 +33,7 @@ public class NInventory extends Inventory
     private int leftoverPass;
     private static final int LEFTOVER_DELAY_TICKS = ExtraInvGroupTransfer.LEFTOVER_DELAY_TICKS;
     public boolean mainInvInstalled = false;
-    private boolean extraPanelInstalled = false;
+    boolean extraPanelInstalled = false;
     private boolean extraPanelResolved = false;
     private Widget containerSortBtn;
     private Widget containerStackSortBtn;
@@ -315,7 +315,10 @@ public class NInventory extends Inventory
         }
 
         attachRightPanel();
-        panelState = PANEL_CLOSED;
+        applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.load());
+        if (eyeBtn instanceof NHeaderCycler) {
+            ((NHeaderCycler) eyeBtn).state = panelState;
+        }
         applyPanelState();
         if (parent != null) {
             parent.pack();
@@ -349,13 +352,14 @@ public class NInventory extends Inventory
     }
     
     // Current display type and grouping
-    private static DisplayType currentDisplayType = DisplayType.Name;
-    private Grouping currentGrouping = Grouping.NONE;
+    static DisplayType currentDisplayType = DisplayType.Name;
+    Grouping currentGrouping = Grouping.NONE;
     public Dropbox<Grouping> groupingDropbox;
     public Dropbox<DisplayType> displayTypeDropbox;
     private Label spaceLabel; // Shows filled/total slots
     private TextEntry qualityFilterEntry; // Min quality filter
     private Double minQualityFilter = null; // Parsed min quality value
+    String extraPanelMinQualityText = "";
 
     @Override
     public void draw(GOut g) {
@@ -1040,18 +1044,43 @@ public class NInventory extends Inventory
         }
     }
 
-    private void setPanelState(int state) {
+    void setPanelState(int state) {
         panelState = state;
         if (mainInvInstalled) {
             NConfig.set(NConfig.Key.inventoryRightPanelShow, state);
         }
+        if (extraPanelInstalled) {
+            ExtraInvPanelPrefs.savePanelState(state);
+        }
         applyPanelState();
         if (mainInvInstalled) {
             resizeSearchToFit();
-            parent.pack();
+            if (parent != null) {
+                parent.pack();
+            }
             positionTitleBarButtons();
         } else if (parent != null) {
             parent.pack();
+        }
+    }
+
+    void applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.Snapshot snap) {
+        if (snap == null) {
+            snap = ExtraInvPanelPrefs.defaults();
+        }
+        panelState = snap.panelState;
+        currentGrouping = snap.grouping;
+        currentDisplayType = snap.displayType;
+        extraPanelMinQualityText = snap.minQualityText;
+        if (qualityFilterEntry != null) {
+            qualityFilterEntry.settext(extraPanelMinQualityText);
+            parseQualityFilter();
+        }
+        if (groupingDropbox != null) {
+            groupingDropbox.change(snap.grouping);
+        }
+        if (displayTypeDropbox != null) {
+            displayTypeDropbox.change(snap.displayType);
         }
     }
 
@@ -1206,6 +1235,9 @@ public class NInventory extends Inventory
                     return;
                 super.change(item);
                 currentGrouping = item;
+                if (extraPanelInstalled) {
+                    ExtraInvPanelPrefs.saveGrouping(item);
+                }
                 rebuildItemList();
             }
         };
@@ -1232,6 +1264,9 @@ public class NInventory extends Inventory
                     return;
                 super.change(item);
                 currentDisplayType = item;
+                if (extraPanelInstalled) {
+                    ExtraInvPanelPrefs.saveDisplayType(item);
+                }
                 rebuildItemList();
             }
         };
@@ -1241,11 +1276,15 @@ public class NInventory extends Inventory
 
         dropX += displayTypeW + elementGap;
         int qualityW = UI.scale(32);
-        qualityFilterEntry = new TextEntry(qualityW, "") {
+        qualityFilterEntry = new TextEntry(qualityW, extraPanelMinQualityText) {
             @Override
             public void changed() {
                 super.changed();
+                extraPanelMinQualityText = text();
                 parseQualityFilter();
+                if (extraPanelInstalled) {
+                    ExtraInvPanelPrefs.saveMinQualityText(extraPanelMinQualityText);
+                }
                 rebuildItemList();
             }
         };
