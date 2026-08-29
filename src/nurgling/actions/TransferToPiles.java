@@ -83,11 +83,24 @@ public class TransferToPiles implements Action{
     static final int LEFTOVER_FLUSH_COUNT = -1;
 
     static ExtraInvGroupTransfer.Slot leftoverFlushTarget(List<ExtraInvGroupTransfer.Slot> slots, String exactName) {
-        if (exactName == null) {
+        if (slots == null || slots.isEmpty()) {
+            return null;
+        }
+        String key = exactName;
+        if (key == null) {
+            for (ExtraInvGroupTransfer.Slot slot : slots) {
+                if (slot != null && ExtraInvGroupTransfer.isLeftover(slot.stack, slot.stackSize)
+                        && slot.name != null) {
+                    key = slot.name;
+                    break;
+                }
+            }
+        }
+        if (key == null) {
             return null;
         }
         List<ExtraInvGroupTransfer.Slot> leftovers = ExtraInvGroupTransfer.matchingLeftovers(
-                slots, exactName, NInventory.Grouping.NONE);
+                slots, key, NInventory.Grouping.NONE);
         return leftovers.isEmpty() ? null : leftovers.get(0);
     }
 
@@ -318,23 +331,55 @@ public class TransferToPiles implements Action{
         return true;
     }
 
-    private static WItem findLeftover(ArrayList<WItem> matching) {
+    private WItem findLeftover(ArrayList<WItem> matching) {
+        ExtraInvGroupTransfer.Slot target = leftoverFlushTarget(slotsOf(matching), exactName);
+        if (target == null) {
+            return null;
+        }
         for (WItem w : matching) {
-            if (w != null && NInventory.isLeftoverItem(w)) {
+            ExtraInvGroupTransfer.Slot slot = slotOf(w);
+            if (slot != null && target.name.equals(slot.name)
+                    && ExtraInvGroupTransfer.isLeftover(slot.stack, slot.stackSize)) {
                 return w;
             }
         }
         return null;
     }
 
-    private static int countLeftovers(ArrayList<WItem> matching) {
-        int n = 0;
+    private int countLeftovers(ArrayList<WItem> matching) {
+        ExtraInvGroupTransfer.Slot target = leftoverFlushTarget(slotsOf(matching), exactName);
+        if (target == null) {
+            return 0;
+        }
+        return ExtraInvGroupTransfer.matchingLeftovers(
+                slotsOf(matching), target.name, NInventory.Grouping.NONE).size();
+    }
+
+    private static ExtraInvGroupTransfer.Slot slotOf(WItem w) {
+        if (w == null || !(w.item instanceof NGItem)) {
+            return null;
+        }
+        String name = ((NGItem) w.item).name();
+        if (name == null) {
+            return null;
+        }
+        return NInventory.isLeftoverItem(w)
+                ? ExtraInvGroupTransfer.Slot.solo(name, null)
+                : ExtraInvGroupTransfer.Slot.stack(name, null);
+    }
+
+    private static List<ExtraInvGroupTransfer.Slot> slotsOf(ArrayList<WItem> matching) {
+        ArrayList<ExtraInvGroupTransfer.Slot> slots = new ArrayList<>();
+        if (matching == null) {
+            return slots;
+        }
         for (WItem w : matching) {
-            if (w != null && NInventory.isLeftoverItem(w)) {
-                n++;
+            ExtraInvGroupTransfer.Slot slot = slotOf(w);
+            if (slot != null) {
+                slots.add(slot);
             }
         }
-        return n;
+        return slots;
     }
 
     /** Matches taking an item in hand and Shift-clicking the stockpile gob. */

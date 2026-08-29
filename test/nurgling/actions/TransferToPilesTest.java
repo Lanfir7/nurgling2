@@ -128,6 +128,8 @@ class TransferToPilesTest {
         assertEquals("Quartz", target.name);
         assertTrue(ExtraInvGroupTransfer.isLeftover(target.stack, target.stackSize));
         assertNull(TransferToPiles.leftoverFlushTarget(after, "Cinnabar"));
+        ExtraInvGroupTransfer.Slot firstType = TransferToPiles.leftoverFlushTarget(after, null);
+        assertEquals("Quartz", firstType.name);
     }
 
     @Test
