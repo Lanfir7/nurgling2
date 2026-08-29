@@ -443,8 +443,7 @@ public class MiniMap extends Widget
 	public double ang = 0.0;
 	public int z;
 	public double stime, ntime;
-	public boolean notify;
-	private Consumer<UI> snotify;
+	private DefaultAnimalAlarms.State alarmState;
 	private boolean markchecked;
 
 	public DisplayIcon(GobIcon attr, GobIcon.Setting conf) {
@@ -454,17 +453,18 @@ public class MiniMap extends Widget
 	    this.z = icon.z();
 	    this.stime = ui.lasttick;
 	    this.conf = conf;
-	    if(this.notify = conf.notify)
-		this.snotify = conf.notification();
+	    if(conf.notify) {
+		Consumer<UI> notification = conf.notification();
+		this.alarmState = new DefaultAnimalAlarms.State((notification == null) ? null : () -> notification.accept(ui));
+	    }
 	}
 
 	public void update(Coord2d rc, double ang) {
 	    this.rc = rc;
 	    this.ang = ang;
-	    if(notify) {
+	    if((alarmState != null) && alarmState.isVisualActive()) {
 		if((ntime = (ui.lasttick - stime) * 0.5) > 1.0) {
-		    notify = false;
-		    snotify = null;
+		    alarmState.expireVisual();
 		}
 	    }
 	}
@@ -478,7 +478,7 @@ public class MiniMap extends Widget
 
 	public void draw(GOut g) {
 	    icon.draw(g, sc);
-	    if(notify) {
+	    if((alarmState != null) && alarmState.isVisualActive()) {
 		double f = 1.0 + (Math.pow(Math.sin(ntime * Math.PI * 1.5), 2) * 1.0);
 		double a = (ntime < 0.5) ? 0.5 : (0.5 - (ntime - 0.5));
 		g.usestate(new ColorMask(notifcol));
@@ -491,7 +491,7 @@ public class MiniMap extends Widget
 	}
 
 	public boolean force() {
-	    if(notify)
+	    if((alarmState != null) && alarmState.isVisualActive())
 		return(true);
 	    return(false);
 	}
@@ -501,19 +501,9 @@ public class MiniMap extends Widget
 	}
 
 	private void fireNotifyIfAlive() {
-	    if(snotify == null)
+	    if(alarmState == null)
 		return;
-	    String pose = gob.pose();
-	    DefaultAnimalAlarms.Play play = DefaultAnimalAlarms.playForPose(pose, iconResName());
-	    if(play == DefaultAnimalAlarms.Play.LATER)
-		return;
-	    if(play == DefaultAnimalAlarms.Play.NEVER) {
-		snotify = null;
-		notify = false;
-		return;
-	    }
-	    snotify.accept(ui);
-	    snotify = null;
+	    alarmState.poll(gob.pose(), iconResName());
 	}
 
 	public void playNotification() {

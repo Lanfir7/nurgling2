@@ -4,8 +4,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static nurgling.tools.DefaultAnimalAlarms.Play;
 
 class DefaultAnimalAlarmsTest {
@@ -71,5 +75,47 @@ class DefaultAnimalAlarmsTest {
     @Test
     void nonAnimalNullPosePlaysImmediately() {
         assertEquals(Play.NOW, DefaultAnimalAlarms.playForPose(null, "gfx/terobjs/herbs/chantrelle"));
+    }
+
+    @Test
+    void pendingAnimalAlarmSurvivesUnknownPoseUntilAnimalLoads() {
+        AtomicInteger played = new AtomicInteger();
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
+
+        state.poll(null, "gfx/invobjs/kritter/bear");
+        state.expireVisual();
+
+        assertEquals(0, played.get());
+        assertFalse(state.isVisualActive());
+        assertTrue(state.isPending());
+
+        state.poll("gfx/kritter/bear/idle", "gfx/invobjs/kritter/bear");
+        state.poll("gfx/kritter/bear/idle", "gfx/invobjs/kritter/bear");
+
+        assertEquals(1, played.get());
+        assertFalse(state.isPending());
+    }
+
+    @Test
+    void corpseCancelsPendingAlarmAndVisual() {
+        AtomicInteger played = new AtomicInteger();
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
+
+        state.poll("gfx/kritter/bear/knocked", "gfx/invobjs/kritter/bear");
+
+        assertEquals(0, played.get());
+        assertFalse(state.isPending());
+        assertFalse(state.isVisualActive());
+    }
+
+    @Test
+    void completedAlarmStopsPollingPoseWhileVisualRemainsActive() {
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(() -> {});
+
+        state.poll("gfx/kritter/bear/idle", "gfx/invobjs/kritter/bear");
+        state.poll("gfx/kritter/bear/knocked", "gfx/invobjs/kritter/bear");
+
+        assertFalse(state.isPending());
+        assertTrue(state.isVisualActive());
     }
 }

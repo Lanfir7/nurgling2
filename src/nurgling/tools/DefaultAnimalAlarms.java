@@ -64,6 +64,43 @@ public final class DefaultAnimalAlarms {
 
     public enum Play { NOW, LATER, NEVER }
 
+    public static final class State {
+        private Runnable notification;
+        private boolean visualActive = true;
+
+        public State(Runnable notification) {
+            this.notification = notification;
+        }
+
+        public void poll(String pose, String iconResName) {
+            if(notification == null)
+                return;
+            Play play = playForPose(pose, iconResName);
+            if(play == Play.LATER)
+                return;
+            if(play == Play.NEVER) {
+                notification = null;
+                visualActive = false;
+            } else if(notification != null) {
+                Runnable current = notification;
+                notification = null;
+                current.run();
+            }
+        }
+
+        public void expireVisual() {
+            visualActive = false;
+        }
+
+        public boolean isVisualActive() {
+            return(visualActive);
+        }
+
+        public boolean isPending() {
+            return(notification != null);
+        }
+    }
+
     public static boolean isCorpsePose(String pose) {
         if(pose == null || pose.isEmpty())
             return(false);
