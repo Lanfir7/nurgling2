@@ -90,16 +90,20 @@ public class NMasterMinerProp implements JConf {
     }
 
     public static void set(NMasterMinerProp prop) {
-        ArrayList<NMasterMinerProp> props = storedProps();
-        for (Iterator<NMasterMinerProp> i = props.iterator(); i.hasNext(); ) {
+        NConfig.set(NConfig.Key.masterminerprop, replace(storedProps(), prop));
+    }
+
+    static ArrayList<NMasterMinerProp> replace(ArrayList<NMasterMinerProp> props, NMasterMinerProp prop) {
+        ArrayList<NMasterMinerProp> next = new ArrayList<>(props);
+        for (Iterator<NMasterMinerProp> i = next.iterator(); i.hasNext(); ) {
             NMasterMinerProp old = i.next();
             if (old.username.equals(prop.username) && old.chrid.equals(prop.chrid)) {
                 i.remove();
                 break;
             }
         }
-        props.add(prop);
-        NConfig.set(NConfig.Key.masterminerprop, props);
+        next.add(prop);
+        return next;
     }
 
     @Override
@@ -140,7 +144,10 @@ public class NMasterMinerProp implements JConf {
     }
 
     public static NMasterMinerProp get(String username, String chrid) {
-        ArrayList<NMasterMinerProp> props = storedProps();
+        return find(storedProps(), username, chrid);
+    }
+
+    static NMasterMinerProp find(ArrayList<NMasterMinerProp> props, String username, String chrid) {
         for (NMasterMinerProp prop : props) {
             if (prop.username.equals(username) && prop.chrid.equals(chrid)) {
                 return prop;

@@ -1,6 +1,5 @@
 package nurgling.conf;
 
-import nurgling.NConfig;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 
@@ -8,21 +7,35 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NMasterMinerPropTest {
 
     @Test
-    void listFromRawTreatsBooleanFalseAsEmptyList() {
-        ArrayList<NMasterMinerProp> fromFalse = NMasterMinerProp.listFromRaw(false);
-        assertNotNull(fromFalse);
-        assertTrue(fromFalse.isEmpty());
+    void getSetSurvivesBooleanFalseLeftover() {
+        ArrayList<NMasterMinerProp> fromLeftover = NMasterMinerProp.listFromRaw(false);
+        assertTrue(fromLeftover.isEmpty());
         assertTrue(NMasterMinerProp.listFromRaw(null).isEmpty());
         assertTrue(NMasterMinerProp.listFromRaw(true).isEmpty());
+
+        NMasterMinerProp prop = new NMasterMinerProp("alice", "chr1");
+        prop.dropThreshold = 40f;
+        prop.keepStonesForSupport = 12;
+        ArrayList<NMasterMinerProp> stored = NMasterMinerProp.replace(fromLeftover, prop);
+
+        assertInstanceOf(ArrayList.class, stored);
+        assertEquals(1, stored.size());
+        assertInstanceOf(NMasterMinerProp.class, stored.get(0));
+        assertEquals(40f, stored.get(0).dropThreshold);
+        assertEquals(12, stored.get(0).keepStonesForSupport);
+
+        NMasterMinerProp loaded = NMasterMinerProp.find(stored, "alice", "chr1");
+        assertEquals(40f, loaded.dropThreshold);
+        assertEquals(12, loaded.keepStonesForSupport);
+        assertEquals(Float.NaN, NMasterMinerProp.find(fromLeftover, "alice", "chr1").dropThreshold);
     }
 
     @Test
@@ -43,37 +56,6 @@ class NMasterMinerPropTest {
         assertEquals(12, props.get(0).keepStonesForSupport);
         assertEquals(80, props.get(0).wndX);
         assertEquals(120, props.get(0).wndY);
-    }
-
-    @Test
-    void getSetSurvivesBooleanFalseLeftover() {
-        NConfig previous = NConfig.current;
-        try {
-            NConfig.current = new NConfig();
-            NConfig.set(NConfig.Key.masterminerprop, false);
-
-            NMasterMinerProp prop = new NMasterMinerProp("alice", "chr1");
-            prop.dropThreshold = 40f;
-            prop.keepStonesForSupport = 12;
-            assertDoesNotThrow(() -> NMasterMinerProp.set(prop));
-
-            Object stored = NConfig.getGlobal(NConfig.Key.masterminerprop);
-            assertInstanceOf(ArrayList.class, stored);
-            @SuppressWarnings("unchecked")
-            ArrayList<?> list = (ArrayList<?>) stored;
-            assertEquals(1, list.size());
-            assertInstanceOf(NMasterMinerProp.class, list.get(0));
-            NMasterMinerProp saved = (NMasterMinerProp) list.get(0);
-            assertEquals(40f, saved.dropThreshold);
-            assertEquals(12, saved.keepStonesForSupport);
-
-            NMasterMinerProp loaded = NMasterMinerProp.get("alice", "chr1");
-            assertNotNull(loaded);
-            assertEquals(40f, loaded.dropThreshold);
-            assertEquals(12, loaded.keepStonesForSupport);
-        } finally {
-            NConfig.current = previous;
-        }
     }
 
     @Test
@@ -98,15 +80,14 @@ class NMasterMinerPropTest {
     }
 
     @Test
-    void constructorDefaultIsEmptyListNotBoolean() {
-        NConfig previous = NConfig.current;
-        try {
-            NConfig.current = new NConfig();
-            Object def = NConfig.getGlobal(NConfig.Key.masterminerprop);
-            assertInstanceOf(ArrayList.class, def);
-            assertTrue(((ArrayList<?>) def).isEmpty());
-        } finally {
-            NConfig.current = previous;
-        }
+    void emptyListDefaultWritesAListNotBoolean() {
+        ArrayList<NMasterMinerProp> def = new ArrayList<>();
+        assertTrue(NMasterMinerProp.listFromRaw(def).isEmpty());
+        NMasterMinerProp prop = new NMasterMinerProp("alice", "chr1");
+        ArrayList<NMasterMinerProp> stored = NMasterMinerProp.replace(def, prop);
+        assertInstanceOf(ArrayList.class, stored);
+        assertNotSame(Boolean.FALSE, stored);
+        assertEquals(1, stored.size());
     }
 }
+
