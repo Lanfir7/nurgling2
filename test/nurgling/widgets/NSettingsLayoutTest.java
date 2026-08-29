@@ -30,6 +30,8 @@ class NSettingsLayoutTest {
         assertEquals(new Coord(560, 478), layout.panelSize);
         assertEquals(new Coord(10, 10), layout.sidebarPosition);
         assertEquals(new Coord(230, 10), layout.panelPosition);
+        assertEquals(new Coord(0, 488), layout.footerMaskPosition);
+        assertEquals(new Coord(800, 50), layout.footerMaskSize);
     }
 
     @Test

@@ -12,12 +12,15 @@ final class NSettingsLayout {
     final Coord saveButton;
     final Coord cancelButton;
     final Coord backButton;
+    final Coord footerMaskPosition;
+    final Coord footerMaskSize;
     final boolean compact;
     final int columns;
 
     private NSettingsLayout(Coord sidebarPosition, Coord sidebarSize,
                             Coord panelPosition, Coord panelSize, int footerTop,
                             Coord saveButton, Coord cancelButton, Coord backButton,
+                            Coord footerMaskPosition, Coord footerMaskSize,
                             boolean compact, int columns) {
         this.sidebarPosition = sidebarPosition;
         this.sidebarSize = sidebarSize;
@@ -27,6 +30,8 @@ final class NSettingsLayout {
         this.saveButton = saveButton;
         this.cancelButton = cancelButton;
         this.backButton = backButton;
+        this.footerMaskPosition = footerMaskPosition;
+        this.footerMaskSize = footerMaskSize;
         this.compact = compact;
         this.columns = columns;
     }
@@ -47,6 +52,7 @@ final class NSettingsLayout {
         Coord back = hasBack
                 ? Coord.of(Math.max(margin, cancelX - margin - buttonSize.x), footerTop)
                 : null;
+        int footerMaskTop = Math.max(0, footerTop - margin);
         return new NSettingsLayout(
                 Coord.of(margin, margin),
                 Coord.of(sidebarWidth, panelSize.y),
@@ -56,6 +62,8 @@ final class NSettingsLayout {
                 Coord.of(saveX, footerTop),
                 Coord.of(cancelX, footerTop),
                 back,
+                Coord.of(0, footerMaskTop),
+                Coord.of(size.x, Math.max(0, size.y - footerMaskTop)),
                 compact,
                 compact ? 1 : 2);
     }
@@ -69,6 +77,7 @@ final class NSettingsLayout {
                 ? Coord.of(Math.max(margin, cancelX - margin - buttonSize.x), footerTop)
                 : null;
         boolean compact = size.x < UI.scale(680);
+        int footerMaskTop = Math.max(0, footerTop - margin);
         return new NSettingsLayout(
                 Coord.of(margin, margin),
                 Coord.of(Math.max(1, sidebarX - margin),
@@ -80,6 +89,8 @@ final class NSettingsLayout {
                 Coord.of(saveX, footerTop),
                 Coord.of(cancelX, footerTop),
                 back,
+                Coord.of(0, footerMaskTop),
+                Coord.of(size.x, Math.max(0, size.y - footerMaskTop)),
                 compact,
                 compact ? 1 : 2);
     }

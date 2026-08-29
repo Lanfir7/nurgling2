@@ -3,6 +3,7 @@ package nurgling.widgets;
 
 import haven.*;
 import nurgling.NMapView;
+import nurgling.NStyle;
 import nurgling.NUtils;
 import nurgling.NWindowDeco;
 import nurgling.i18n.L10n;
@@ -36,6 +37,8 @@ public class NSettingsWindow extends Widget {
     private SettingsPageFrame currentFrame;
     private int pageColumns = 2;
     private int contentTop = 0;
+    private Coord footerMaskPosition = Coord.z;
+    private Coord footerMaskSize = Coord.z;
 
     public NSettingsWindow() {
         this(null, null);
@@ -307,10 +310,23 @@ public class NSettingsWindow extends Widget {
         cancelBtn.move(layout.cancelButton);
         if((backBtn != null) && (layout.backButton != null))
             backBtn.move(layout.backButton);
+        footerMaskPosition = layout.footerMaskPosition;
+        footerMaskSize = layout.footerMaskSize;
         if(searchHost == this)
             search.move(Coord.of(size.x - margin - search.sz.x, 0));
         fitCurrentPage();
         syncSearchOverlay();
+    }
+
+    @Override
+    public void draw(GOut g) {
+        if((footerMaskSize.x > 0) && (footerMaskSize.y > 0)) {
+            java.awt.Color bg = NStyle.resolveWindowBg(ui);
+            g.chcolor(bg.getRed(), bg.getGreen(), bg.getBlue(), 255);
+            g.frect(footerMaskPosition, footerMaskSize);
+            g.chcolor();
+        }
+        super.draw(g);
     }
 
     @Override
