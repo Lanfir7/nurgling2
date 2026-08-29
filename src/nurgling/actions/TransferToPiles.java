@@ -4,7 +4,6 @@ import haven.*;
 import nurgling.ExtraInvGroupTransfer;
 import nurgling.NGItem;
 import nurgling.NGameUI;
-import nurgling.NInventory;
 import nurgling.NISBox;
 import nurgling.NUtils;
 import nurgling.tasks.*;
@@ -225,9 +224,6 @@ public class TransferToPiles implements Action{
             return false;
         }
         ArrayList<WItem> matching = getMatchingItems(gui);
-        if (typeBulkUsesGobShift(hasStackEntries(matching))) {
-            return transferHeldTypeToStockpileGob(gui, target_size);
-        }
         int sent = 0;
         for (WItem w : matching) {
             if (sent >= target_size) {
@@ -239,15 +235,6 @@ public class TransferToPiles implements Action{
             }
         }
         return true;
-    }
-
-    private boolean hasStackEntries(ArrayList<WItem> items) {
-        for (WItem item : items) {
-            if (NInventory.stackOuterGItem(item) != null) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** Matches taking an item in hand and Shift-clicking the stockpile gob. */
