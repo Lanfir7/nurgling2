@@ -50,7 +50,7 @@ public class AnimalMarkerSyncService {
         
         public PreloadedAnimalMarker(AnimalMarkerDao.AnimalMarkerData data, BufferedImage icon) {
             this.locationId = "animal_" + data.getGobId();
-            this.label = data.getQuality() != null ? ("q" + (int) Math.round(data.getQuality())) : "";
+            this.label = data.getQuality() != null ? LabeledMarkService.animalQualityLabel(data.getQuality()) : "";
             String displayName = data.getDisplayName() != null && !data.getDisplayName().isEmpty() 
                     ? data.getDisplayName() 
                     : (data.getAnimalType() != null && !data.getAnimalType().contains("/") ? data.getAnimalType() : "Animal");

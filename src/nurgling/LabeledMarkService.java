@@ -696,7 +696,7 @@ public class LabeledMarkService implements ProfileAwareService {
             for (AnimalMarkerDao.AnimalMarkerData data : fromDb) {
                 String locationId = "animal_" + data.getGobId();
                 // Подпись только при наличии качества: "q40", иначе пусто
-                String label = data.getQuality() != null ? ("q" + (int) Math.round(data.getQuality())) : "";
+                String label = data.getQuality() != null ? animalQualityLabel(data.getQuality()) : "";
                 String displayName = data.getDisplayName() != null && !data.getDisplayName().isEmpty() ? data.getDisplayName() : (data.getAnimalType() != null && !data.getAnimalType().contains("/") ? data.getAnimalType() : "Animal");
                 String resourceType = displayName; // подсказка — короткое имя
                 Coord tileCoords = new Coord(data.getTileX(), data.getTileY());
@@ -852,6 +852,34 @@ public class LabeledMarkService implements ProfileAwareService {
             LabeledMinimapMark newMark = new LabeledMinimapMark(
                 locationId, newLabel, oldMark.resourceType, oldMark.segmentId, oldMark.tileCoords,
                 oldMark.gridId, oldMark.localTileCoords, oldMark.iconImage, oldMark.labelColor, oldMark.killedAtMs, oldMark.killedBy, oldMark.iconPath, oldMark.animalType);
+            labeledMarks.put(locationId, newMark);
+            updateMarkInIndexes(oldMark, newMark);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /** Same format as DB merge: {@code "q" + round(quality)}. */
+    public static String animalQualityLabel(double quality) {
+        return "q" + (int) Math.round(quality);
+    }
+
+    /**
+     * After magnifying-glass inspect: replace the empty local animal marker with qN and kill time.
+     * Does not save to file. No-op if no {@code animal_{gobId}} mark exists.
+     */
+    public void applyAnimalMarkerQuality(long gobId, int quality, String killedBy) {
+        String locationId = "animal_" + gobId;
+        String newLabel = animalQualityLabel(quality);
+        long killedAtMs = System.currentTimeMillis();
+        lock.writeLock().lock();
+        try {
+            LabeledMinimapMark oldMark = labeledMarks.get(locationId);
+            if (oldMark == null) return;
+            LabeledMinimapMark newMark = new LabeledMinimapMark(
+                locationId, newLabel, oldMark.resourceType, oldMark.segmentId, oldMark.tileCoords,
+                oldMark.gridId, oldMark.localTileCoords, oldMark.iconImage, oldMark.labelColor,
+                killedAtMs, killedBy, oldMark.iconPath, oldMark.animalType);
             labeledMarks.put(locationId, newMark);
             updateMarkInIndexes(oldMark, newMark);
         } finally {

@@ -37,6 +37,7 @@ import nurgling.widgets.NAreasWidget;
 import nurgling.widgets.NMiniMap;
 import nurgling.widgets.NZoneMeasureTool;
 import nurgling.NConfig;
+import nurgling.db.service.AnimalMarkerService;
 import nurgling.styles.TooltipStyle;
 import org.json.JSONObject;
 
@@ -140,6 +141,42 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     public SimpleRouteManager getSimpleRouteManager() {
         return simpleRouteManager;
+    }
+
+    /**
+     * After magnifying-glass Quality inspect: set the on-map animal marker to qN + kill time
+     * and persist quality/killed_at via AnimalMarkerService. No-op if there is no local mark.
+     */
+    public void applyAnimalMarkerQuality(Gob gob, int quality) {
+        if (gob == null) {
+            return;
+        }
+        NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : NUtils.getGameUI();
+        if (gui == null || gui.labeledMarkService == null) {
+            return;
+        }
+        if (gui.labeledMarkService.getMark("animal_" + gob.id) == null) {
+            return;
+        }
+        String killedBy = gui.chrid;
+        gui.labeledMarkService.applyAnimalMarkerQuality(gob.id, quality, killedBy);
+        String profile = gui.getGenus();
+        if (profile == null || profile.isEmpty()) {
+            return;
+        }
+        AnimalMarkerService svc = NCore.databaseManager != null
+            ? NCore.databaseManager.getAnimalMarkerService() : null;
+        if (svc == null) {
+            return;
+        }
+        final long gobId = gob.id;
+        final String fKilledBy = killedBy;
+        try {
+            gui.getAnimalMarkerWorker().submit(() ->
+                svc.updateQualityByGobId(profile, gobId, quality, fKilledBy));
+        } catch (Exception e) {
+            svc.updateQualityByGobId(profile, gobId, quality, fKilledBy);
+        }
     }
 
     public void addSimpleRoute() {

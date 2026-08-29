@@ -1492,19 +1492,10 @@ public class NGameUI extends GameUI
                 if(m.find()) {  // find() вместо matches() — ищем подстроку, а не полное совпадение
                     try {
                         int quality = Integer.parseInt(m.group(1));
-                        System.err.println("[NGameUI] Quality message parsed: " + quality + " for gob " + map.clickedGob.gob.id);
                         map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, quality));
                         // Обновить маркер животного на карте (качество приходит сообщением от сервера, не из sdt)
-                        if (map instanceof nurgling.NMapView) {
-                            System.err.println("[NGameUI] Calling applyAnimalMarkerQuality for gob " + map.clickedGob.gob.id + " quality=" + quality);
-                            try {
-                                java.lang.reflect.Method mth = map.getClass().getMethod("applyAnimalMarkerQuality", Gob.class, int.class);
-                                mth.invoke(map, map.clickedGob.gob, quality);
-                            } catch (Exception ignored) {
-                                // Method may be absent in some merged branches; keep quality overlay only.
-                            }
-                        } else {
-                            System.err.println("[NGameUI] map is NOT NMapView: " + (map != null ? map.getClass().getName() : "null"));
+                        if (map instanceof NMapView) {
+                            ((NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, quality);
                         }
                     } catch (NumberFormatException ignored) {
                     } finally {

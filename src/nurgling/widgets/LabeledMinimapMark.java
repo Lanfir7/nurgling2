@@ -48,14 +48,30 @@ public class LabeledMinimapMark {
     private volatile String iconBase64;
     private volatile TexI iconTex;
 
-    private static final Text.Furnace labelFurnace = new PUtils.BlurFurn(
-        new Text.Foundry(Text.sans, 10, Color.WHITE).aa(true),
-        2, 1, new Color(60, 30, 30)
-    );
-    private static final Text.Furnace quarryartzFurnace = new PUtils.BlurFurn(
-        new Text.Foundry(Text.sans, 8, Color.WHITE).aa(true),
-        2, 1, new Color(60, 30, 30)
-    );
+    private static volatile Text.Furnace labelFurnace;
+    private static volatile Text.Furnace quarryartzFurnace;
+
+    private static Text.Furnace whiteFurnace(int fontSize) {
+        Text.Furnace cached = fontSize == 8 ? quarryartzFurnace : labelFurnace;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (LabeledMinimapMark.class) {
+            cached = fontSize == 8 ? quarryartzFurnace : labelFurnace;
+            if (cached == null) {
+                cached = new PUtils.BlurFurn(
+                    new Text.Foundry(Text.sans, fontSize, Color.WHITE).aa(true),
+                    2, 1, new Color(60, 30, 30)
+                );
+                if (fontSize == 8) {
+                    quarryartzFurnace = cached;
+                } else {
+                    labelFurnace = cached;
+                }
+            }
+            return cached;
+        }
+    }
 
     /* Shared caches. Marks are built on bot and loader threads and read on the
      * render thread, hence the concurrent maps. Nothing is evicted: there are only
@@ -383,7 +399,7 @@ public class LabeledMinimapMark {
 
     private static Text.Furnace furnace(int rgb, int fontSize) {
         if(rgb == Color.WHITE.getRGB())
-            return fontSize == 8 ? quarryartzFurnace : labelFurnace;
+            return whiteFurnace(fontSize);
         return furnaces.computeIfAbsent(rgb + ":" + fontSize, c -> new PUtils.BlurFurn(
             new Text.Foundry(Text.sans, fontSize, new Color(rgb)).aa(true),
             2, 1, new Color(60, 30, 30)));
