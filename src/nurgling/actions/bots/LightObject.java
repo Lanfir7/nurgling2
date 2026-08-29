@@ -143,7 +143,9 @@ public class LightObject implements Action {
         } else if (gobName.contains("gfx/terobjs/steelcrucible")) {
             return new LightConfig("Steel Crucible", 4, 0, -1);
         } else if (gobName.contains("gfx/terobjs/crucible")) {
-            return new LightConfig("Crucible", 4, 2, -1);
+            /* Fuel is a mask of branches (marker bit 0) or coal (bit 1). Fire stays bit 4.
+             * Checking coal alone fail-closes a branch-filled crucible as empty. */
+            return new LightConfig("Crucible", 4, 1 | 2, -1);
         } else if (gobName.contains("bpyre")) {
             return new LightConfig("Bough Pyre", 4, 0, -1);
         }
