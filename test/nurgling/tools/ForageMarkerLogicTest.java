@@ -69,6 +69,30 @@ class ForageMarkerLogicTest {
     }
 
     @Test
+    void forageLocationIdsSnapshotsOnlyForageMarks() {
+        java.util.LinkedHashMap<String, Boolean> marks = new java.util.LinkedHashMap<>();
+        marks.put("forage_1_2_3_Blueberries", Boolean.TRUE);
+        marks.put("labeled_1_2_3_q20", Boolean.TRUE);
+        marks.put("animal_7", Boolean.TRUE);
+        marks.put("forage_9_10_11_Morels", Boolean.TRUE);
+        marks.put(null, Boolean.TRUE);
+
+        java.util.List<String> ids = ForageMarkerLogic.forageLocationIds(marks.keySet());
+        assertEquals(java.util.Arrays.asList(
+            "forage_1_2_3_Blueberries",
+            "forage_9_10_11_Morels"), ids);
+        for (String id : ids) {
+            marks.remove(id);
+        }
+        assertFalse(marks.containsKey("forage_1_2_3_Blueberries"));
+        assertFalse(marks.containsKey("forage_9_10_11_Morels"));
+        assertTrue(marks.containsKey("labeled_1_2_3_q20"));
+        assertTrue(marks.containsKey("animal_7"));
+        assertTrue(ForageMarkerLogic.forageLocationIds(null).isEmpty());
+        assertTrue(ForageMarkerLogic.forageLocationIds(java.util.Collections.emptyList()).isEmpty());
+    }
+
+    @Test
     void labelFormatAndParse() {
         assertEquals("q45", ForageMarkerLogic.formatLabel(45.4));
         assertEquals(45.0, ForageMarkerLogic.parseQuality("q45"), 0.01);

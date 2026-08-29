@@ -3,6 +3,8 @@ package nurgling.widgets;
 import haven.*;
 import haven.Locked;
 import nurgling.NGameUI;
+import nurgling.NStyle;
+import nurgling.i18n.L10n;
 import nurgling.tools.ForageMarkerLogic;
 
 import java.util.*;
@@ -44,7 +46,13 @@ public class ForagingSearchWindow extends Window {
             public void click() {
                 performSearch();
             }
-        }, UI.scale(125), y);
+        }, UI.scale(10), y);
+        add(new Button(UI.scale(180), L10n.get("foraging.search.delete_all")) {
+            @Override
+            public void click() {
+                deleteAllForageMarks();
+            }
+        }, UI.scale(170), y);
         y += lineHeight + UI.scale(10);
 
         add(new Label("Results:"), labelX, y);
@@ -123,6 +131,13 @@ public class ForagingSearchWindow extends Window {
         resultsList.setResults(results);
     }
 
+    private void deleteAllForageMarks() {
+        if (gui == null || gui.labeledMarkService == null) return;
+        gui.labeledMarkService.removeAllForageMarks();
+        refreshItemTypeDropdown();
+        performSearch();
+    }
+
     private class ForageResultsList extends SListBox<LabeledMinimapMark, Widget> {
         private List<LabeledMinimapMark> results = new ArrayList<>();
 
@@ -143,11 +158,27 @@ public class ForagingSearchWindow extends Window {
         protected Widget makeitem(LabeledMinimapMark mark, int idx, Coord sz) {
             return new ItemWidget<LabeledMinimapMark>(this, sz, mark) {
                 {
+                    int deleteButtonWidth = UI.scale(22);
+                    int panButtonWidth = sz.x - deleteButtonWidth - UI.scale(4);
                     String labelText = mark.label != null ? mark.label : "q0";
                     String resourceText = mark.resourceType != null ? mark.resourceType : "Unknown";
-                    add(new Label(String.format("%s: %s", resourceText, labelText)), new Coord(UI.scale(5), 0));
+                    final String rowText = String.format("%s: %s", resourceText, labelText);
 
-                    add(new Button(UI.scale(20), "×") {
+                    add(new Button(panButtonWidth, "") {
+                        @Override
+                        public void draw(GOut g) {
+                            g.text(rowText, Coord.z);
+                        }
+
+                        @Override
+                        public void click() {
+                            panMapToLocation(mark);
+                        }
+                    }, Coord.z);
+
+                    add(new IButton(NStyle.crossSquare[0].back,
+                                   NStyle.crossSquare[1].back,
+                                   NStyle.crossSquare[2].back) {
                         @Override
                         public void click() {
                             if (gui != null && gui.labeledMarkService != null) {
@@ -155,16 +186,7 @@ public class ForagingSearchWindow extends Window {
                                 performSearch();
                             }
                         }
-                    }, new Coord(sz.x - UI.scale(25), 0));
-                }
-
-                @Override
-                public boolean mousedown(MouseDownEvent ev) {
-                    if (ev.b == 1 && checkhit(ev.c)) {
-                        panMapToLocation(mark);
-                        return true;
-                    }
-                    return super.mousedown(ev);
+                    }, new Coord(panButtonWidth + UI.scale(2), (sz.y - UI.scale(22)) / 2));
                 }
             };
         }

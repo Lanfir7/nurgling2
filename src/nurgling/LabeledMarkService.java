@@ -1123,6 +1123,31 @@ public class LabeledMarkService implements ProfileAwareService {
     }
 
     /**
+     * Remove every forage marker ({@link ForageMarkerLogic#isForageId}).
+     * Non-forage labeled marks are left untouched. Ids are snapshotted first.
+     */
+    public int removeAllForageMarks() {
+        lock.writeLock().lock();
+        try {
+            List<String> toRemove = ForageMarkerLogic.forageLocationIds(labeledMarks.keySet());
+            if (toRemove.isEmpty()) {
+                return 0;
+            }
+            suppressReindex = true;
+            for (String locationId : toRemove) {
+                removeMarkFromIndexes(locationId);
+            }
+            suppressReindex = false;
+            reindex();
+            scheduleSave();
+            return toRemove.size();
+        } finally {
+            suppressReindex = false;
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
      * Get marks filtered by quality threshold (for Quarryartz marks with "q" prefix in label).
      * Оптимизировано с использованием индекса.
      */

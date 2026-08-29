@@ -117,6 +117,16 @@ public final class ForageMarkerLogic {
         return locationId != null && locationId.startsWith(ID_PREFIX);
     }
 
+    /** Snapshot forage location ids so callers can remove without mutating while iterating. */
+    public static List<String> forageLocationIds(Iterable<String> locationIds) {
+        List<String> ids = new ArrayList<String>();
+        if (locationIds == null) return ids;
+        for (String id : locationIds) {
+            if (isForageId(id)) ids.add(id);
+        }
+        return ids;
+    }
+
     public static String formatLabel(double quality) {
         return String.format(Locale.US, "q%.0f", quality);
     }
