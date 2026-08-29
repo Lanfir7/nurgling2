@@ -37,8 +37,7 @@ public class NSettingsWindow extends Widget {
     private SettingsPageFrame currentFrame;
     private int pageColumns = 2;
     private int contentTop = 0;
-    private Coord footerMaskPosition = Coord.z;
-    private Coord footerMaskSize = Coord.z;
+    private final Widget footerMask;
 
     public NSettingsWindow() {
         this(null, null);
@@ -90,6 +89,8 @@ public class NSettingsWindow extends Widget {
         addSearch();
         settingsView = add(new Scrollport(UI.scale(580, 526)), UI.scale(210, contentTop));
         container = settingsView.cont;
+        footerMask = add(new FooterMask(), Coord.z);
+        SettingsFooterLayering.arrange(footerMask, saveBtn, cancelBtn, backBtn);
         fillSettings();
         resize(sz);
     }
@@ -310,23 +311,12 @@ public class NSettingsWindow extends Widget {
         cancelBtn.move(layout.cancelButton);
         if((backBtn != null) && (layout.backButton != null))
             backBtn.move(layout.backButton);
-        footerMaskPosition = layout.footerMaskPosition;
-        footerMaskSize = layout.footerMaskSize;
+        footerMask.move(layout.footerMaskPosition);
+        footerMask.resize(layout.footerMaskSize);
         if(searchHost == this)
             search.move(Coord.of(size.x - margin - search.sz.x, 0));
         fitCurrentPage();
         syncSearchOverlay();
-    }
-
-    @Override
-    public void draw(GOut g) {
-        if((footerMaskSize.x > 0) && (footerMaskSize.y > 0)) {
-            java.awt.Color bg = NStyle.resolveWindowBg(ui);
-            g.chcolor(bg.getRed(), bg.getGreen(), bg.getBlue(), 255);
-            g.frect(footerMaskPosition, footerMaskSize);
-            g.chcolor();
-        }
-        super.draw(g);
     }
 
     @Override
@@ -543,6 +533,35 @@ public class NSettingsWindow extends Widget {
             this.entry = entry;
             this.item = item;
             this.widget = widget;
+        }
+    }
+
+    private class FooterMask extends Widget {
+        FooterMask() {
+            super(Coord.z);
+        }
+
+        @Override
+        public void draw(GOut g) {
+            java.awt.Color bg = NStyle.resolveWindowBg(ui);
+            g.chcolor(bg.getRed(), bg.getGreen(), bg.getBlue(), 255);
+            g.frect(Coord.z, sz);
+            g.chcolor();
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev) {
+            return true;
+        }
+
+        @Override
+        public boolean mouseup(MouseUpEvent ev) {
+            return true;
+        }
+
+        @Override
+        public boolean mousewheel(MouseWheelEvent ev) {
+            return true;
         }
     }
 
