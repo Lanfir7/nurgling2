@@ -198,6 +198,7 @@ public final class ExtraInvGroupTransfer {
     }
 
     public static final int LEFTOVER_MAX_PASSES = 8;
+    public static final int LEFTOVER_DELAY_TICKS = 12;
 
     /**
      * Leftover flush is not one-shot: first pass often still sees stacks, not unpacked solos.

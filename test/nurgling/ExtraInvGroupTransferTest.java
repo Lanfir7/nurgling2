@@ -195,6 +195,7 @@ class ExtraInvGroupTransferTest {
         assertFalse(ExtraInvGroupTransfer.leftoverWatchDone(2, 3));
         assertTrue(ExtraInvGroupTransfer.leftoverWatchDone(
                 ExtraInvGroupTransfer.LEFTOVER_MAX_PASSES, 3));
+        assertEquals(12, ExtraInvGroupTransfer.LEFTOVER_DELAY_TICKS);
     }
 
     @Test

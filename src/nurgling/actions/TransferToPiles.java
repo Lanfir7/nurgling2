@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.ExtraInvGroupTransfer;
 import nurgling.NGItem;
 import nurgling.NGameUI;
+import nurgling.NInventory;
 import nurgling.NISBox;
 import nurgling.NUtils;
 import nurgling.tasks.*;
@@ -14,6 +15,7 @@ import nurgling.tools.StackSupporter;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 
 public class TransferToPiles implements Action{
 
@@ -56,6 +58,52 @@ public class TransferToPiles implements Action{
      */
     static boolean typeBulkUsesGobShift(boolean hasStackEntries) {
         return false;
+    }
+
+    /** invxf2 only for real stacks; leftover solos / 1-item stacks use transfer -1. */
+    static boolean typeBulkSendsInvxf2(boolean stack, int stackSize) {
+        return !ExtraInvGroupTransfer.isLeftover(stack, stackSize);
+    }
+
+    static List<ExtraInvGroupTransfer.Slot> typeBulkInvxf2Targets(List<ExtraInvGroupTransfer.Slot> matching) {
+        if (matching == null || matching.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<ExtraInvGroupTransfer.Slot> out = new ArrayList<>();
+        for (ExtraInvGroupTransfer.Slot slot : matching) {
+            if (typeBulkSendsInvxf2(slot.stack, slot.stackSize)) {
+                out.add(slot);
+            }
+        }
+        return out;
+    }
+
+    /** Vanilla Alt+Shift: transfer all items of the clicked leftover's type. */
+    static final String LEFTOVER_FLUSH_MSG = "transfer";
+    static final int LEFTOVER_FLUSH_COUNT = -1;
+
+    static ExtraInvGroupTransfer.Slot leftoverFlushTarget(List<ExtraInvGroupTransfer.Slot> slots, String exactName) {
+        if (exactName == null) {
+            return null;
+        }
+        List<ExtraInvGroupTransfer.Slot> leftovers = ExtraInvGroupTransfer.matchingLeftovers(
+                slots, exactName, NInventory.Grouping.NONE);
+        return leftovers.isEmpty() ? null : leftovers.get(0);
+    }
+
+    /**
+     * After stack invxf2, wait until leftover count grows, or leftoverWatchDone on no-growth
+     * scans. Do not fire transfer -1 on the first empty remnant check.
+     */
+    static boolean leftoverFlushReady(int pass, int leftoversThisPass, int leftoversBefore) {
+        if (leftoversThisPass > leftoversBefore) {
+            return true;
+        }
+        return ExtraInvGroupTransfer.leftoverWatchDone(pass, 0);
+    }
+
+    static boolean leftoverFlushSends(int leftoversThisPass) {
+        return leftoversThisPass > 0;
     }
 
     static boolean stockpileFillChanged(int freeBefore, int freeNow) {
@@ -224,17 +272,69 @@ public class TransferToPiles implements Action{
             return false;
         }
         ArrayList<WItem> matching = getMatchingItems(gui);
+        int leftoversBefore = countLeftovers(matching);
         int sent = 0;
+        boolean dumpedStacks = false;
         for (WItem w : matching) {
             if (sent >= target_size) {
                 break;
             }
-            if (w != null && w.item != null) {
+            if (w != null && w.item != null && !NInventory.isLeftoverItem(w)) {
                 w.item.wdgmsg(ExtraInvGroupTransfer.EXTRA_SHIFT_MSG, invxf2);
                 sent++;
+                dumpedStacks = true;
             }
         }
+        return flushTypeBulkLeftovers(gui, dumpedStacks, leftoversBefore, matching);
+    }
+
+    private boolean flushTypeBulkLeftovers(NGameUI gui, boolean dumpedStacks, int leftoversBefore,
+                                           ArrayList<WItem> matching) throws InterruptedException {
+        WItem leftover;
+        int leftoverCount;
+        if (dumpedStacks) {
+            leftover = null;
+            leftoverCount = leftoversBefore;
+            int pass = 0;
+            do {
+                NUtils.addTask(new WaitTicks(ExtraInvGroupTransfer.LEFTOVER_DELAY_TICKS));
+                pass++;
+                matching = getMatchingItems(gui);
+                leftover = findLeftover(matching);
+                leftoverCount = countLeftovers(matching);
+            } while (!leftoverFlushReady(pass, leftoverCount, leftoversBefore));
+        } else {
+            leftover = findLeftover(matching);
+            leftoverCount = countLeftovers(matching);
+        }
+        if (!leftoverFlushSends(leftoverCount) || leftover == null) {
+            return true;
+        }
+        GItem target = NInventory.leftoverTransferTarget(leftover);
+        if (target == null) {
+            return true;
+        }
+        target.wdgmsg(LEFTOVER_FLUSH_MSG, Inventory.sqsz.div(2), LEFTOVER_FLUSH_COUNT);
         return true;
+    }
+
+    private static WItem findLeftover(ArrayList<WItem> matching) {
+        for (WItem w : matching) {
+            if (w != null && NInventory.isLeftoverItem(w)) {
+                return w;
+            }
+        }
+        return null;
+    }
+
+    private static int countLeftovers(ArrayList<WItem> matching) {
+        int n = 0;
+        for (WItem w : matching) {
+            if (w != null && NInventory.isLeftoverItem(w)) {
+                n++;
+            }
+        }
+        return n;
     }
 
     /** Matches taking an item in hand and Shift-clicking the stockpile gob. */

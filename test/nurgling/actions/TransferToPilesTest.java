@@ -8,6 +8,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static nurgling.actions.TransferToPiles.PileMode;
 
@@ -90,6 +91,55 @@ class TransferToPilesTest {
     @Test
     void typeBulkTargetsOnlyTheStockpileOpenedByTheMacro() {
         assertArrayEquals(new int[]{42}, TransferToPiles.typeBulkDestination(42));
+    }
+
+    @Test
+    void typeBulkSendsInvxf2OnlyForStackedItems() {
+        assertTrue(TransferToPiles.typeBulkSendsInvxf2(true, 3));
+        assertFalse(TransferToPiles.typeBulkSendsInvxf2(true, 1));
+        assertFalse(TransferToPiles.typeBulkSendsInvxf2(false, 1));
+        List<ExtraInvGroupTransfer.Slot> matching = List.of(
+                ExtraInvGroupTransfer.Slot.stack("Quartz", 10.0),
+                ExtraInvGroupTransfer.Slot.oneItemStack("Quartz", 11.0),
+                ExtraInvGroupTransfer.Slot.solo("Quartz", 12.0),
+                ExtraInvGroupTransfer.Slot.solo("Flint", 13.0));
+        List<ExtraInvGroupTransfer.Slot> stacks = TransferToPiles.typeBulkInvxf2Targets(matching);
+        assertEquals(1, stacks.size());
+        assertEquals("Quartz", stacks.get(0).name);
+        assertTrue(stacks.get(0).stack);
+        assertEquals(3, stacks.get(0).stackSize);
+    }
+
+    @Test
+    void typeBulkLeftoverFlushUsesTransferAllNotInvxf2() {
+        assertEquals("transfer", TransferToPiles.LEFTOVER_FLUSH_MSG);
+        assertEquals(-1, TransferToPiles.LEFTOVER_FLUSH_COUNT);
+        assertFalse("invxf2".equals(TransferToPiles.LEFTOVER_FLUSH_MSG));
+    }
+
+    @Test
+    void typeBulkLeftoverFlushPicksOneQuartzNotFlint() {
+        List<ExtraInvGroupTransfer.Slot> after = List.of(
+                ExtraInvGroupTransfer.Slot.solo("Quartz", 10.0),
+                ExtraInvGroupTransfer.Slot.solo("Quartz", 11.0),
+                ExtraInvGroupTransfer.Slot.solo("Flint", 12.0),
+                ExtraInvGroupTransfer.Slot.oneItemStack("Flint", 13.0));
+        ExtraInvGroupTransfer.Slot target = TransferToPiles.leftoverFlushTarget(after, "Quartz");
+        assertEquals("Quartz", target.name);
+        assertTrue(ExtraInvGroupTransfer.isLeftover(target.stack, target.stackSize));
+        assertNull(TransferToPiles.leftoverFlushTarget(after, "Cinnabar"));
+    }
+
+    @Test
+    void typeBulkLeftoverWaitUntilRemnantsAppear() {
+        assertFalse(TransferToPiles.leftoverFlushReady(1, 0, 0));
+        assertTrue(TransferToPiles.leftoverFlushReady(1, 2, 0));
+        assertFalse(TransferToPiles.leftoverFlushReady(1, 1, 1));
+        assertTrue(TransferToPiles.leftoverFlushReady(1, 3, 1));
+        assertTrue(TransferToPiles.leftoverFlushReady(2, 0, 0));
+        assertTrue(TransferToPiles.leftoverFlushReady(2, 1, 1));
+        assertFalse(TransferToPiles.leftoverFlushSends(0));
+        assertTrue(TransferToPiles.leftoverFlushSends(1));
     }
 
 }

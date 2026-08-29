@@ -31,7 +31,7 @@ public class NInventory extends Inventory
     private String leftoverAction;
     private int leftoverWait;
     private int leftoverPass;
-    private static final int LEFTOVER_DELAY_TICKS = 12;
+    private static final int LEFTOVER_DELAY_TICKS = ExtraInvGroupTransfer.LEFTOVER_DELAY_TICKS;
     public boolean mainInvInstalled = false;
     private boolean extraPanelInstalled = false;
     private boolean extraPanelResolved = false;
