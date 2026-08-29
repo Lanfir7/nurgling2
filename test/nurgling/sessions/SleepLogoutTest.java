@@ -23,9 +23,9 @@ class SleepLogoutTest {
     }
 
     @Test
-    void sleepWithOnlySessionExitsClient() {
-        assertEquals(Action.EXIT_CLIENT, SleepLogout.decide(true, 1));
-        assertEquals(Action.EXIT_CLIENT, SleepLogout.decide(true, 0));
+    void sleepWithOnlySessionClosesSession() {
+        assertEquals(Action.CLOSE_SESSION, SleepLogout.decide(true, 1));
+        assertEquals(Action.CLOSE_SESSION, SleepLogout.decide(true, 0));
     }
 
     @Test

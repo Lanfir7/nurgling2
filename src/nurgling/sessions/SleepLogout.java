@@ -2,17 +2,14 @@ package nurgling.sessions;
 
 /**
  * After Sleep on a bed the server drops the character to the charlist
- * without closing the client. Last session should exit; extra sessions
- * only close this one.
+ * without closing the client. Close only the sleeping session; when it is
+ * the last one, the normal client loop returns to the login screen.
  */
 public final class SleepLogout {
     public enum Action {
         NONE,
-        CLOSE_SESSION,
-        EXIT_CLIENT
+        CLOSE_SESSION
     }
-
-    static volatile Runnable exitHook = () -> System.exit(0);
 
     private SleepLogout() {}
 
@@ -23,9 +20,6 @@ public final class SleepLogout {
     public static Action decide(boolean sleepRequested, int sessionCount) {
         if (!sleepRequested) {
             return Action.NONE;
-        }
-        if (sessionCount <= 1) {
-            return Action.EXIT_CLIENT;
         }
         return Action.CLOSE_SESSION;
     }
@@ -41,31 +35,23 @@ public final class SleepLogout {
     }
 
     public static void onCharlist(haven.UI ui) {
-        apply(ui, true);
+        apply(ui);
     }
 
     public static void onSessionEnded(haven.UI ui) {
         SessionManager sm = SessionManager.getInstance();
         SessionContext ctx = ui != null ? sm.findByUI(ui) : null;
-        boolean sleepRequested = ctx != null && ctx.consumeExitAfterSleep();
-        if (decide(sleepRequested, sm.getSessionCount()) == Action.EXIT_CLIENT) {
-            exitHook.run();
+        if (ctx != null) {
+            ctx.consumeExitAfterSleep();
         }
     }
 
-    private static void apply(haven.UI ui, boolean closeNetwork) {
+    private static void apply(haven.UI ui) {
         SessionManager sm = SessionManager.getInstance();
         SessionContext ctx = ui != null ? sm.findByUI(ui) : null;
         boolean sleepRequested = ctx != null && ctx.consumeExitAfterSleep();
         Action action = decide(sleepRequested, sm.getSessionCount());
         if (action == Action.NONE) {
-            return;
-        }
-        if (action == Action.EXIT_CLIENT) {
-            if (closeNetwork && ui != null && ui.sess != null) {
-                ui.sess.close();
-            }
-            exitHook.run();
             return;
         }
         if (ctx != null) {
