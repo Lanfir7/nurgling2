@@ -203,6 +203,13 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     public HashMap<Long, Gob> portalDummys = new HashMap<>();
     private MinesweeperDangerMarkers minesweeperDangerMarkers;
 
+    public void restoreMinesweeperOverlay() {
+        if (minesweeperDangerMarkers == null) {
+            minesweeperDangerMarkers = new MinesweeperDangerMarkers();
+        }
+        minesweeperDangerMarkers.restoreNow();
+    }
+
 
     // Destination point for path line (set by click)
     public Coord3f clickDestination = null;

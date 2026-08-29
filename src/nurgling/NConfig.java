@@ -281,6 +281,7 @@ public class NConfig
         tunnelingprop,
         masterminerprop,
         masterminermarkingconfig,
+        miningoverlaymemory,
         autoLogoutEnabled,
         autoLogoutThreshold,
         autoLogoutCountdown,
@@ -529,6 +530,7 @@ public class NConfig
         conf.put(Key.tunnelingprop, false);
         conf.put(Key.masterminerprop, new ArrayList<NMasterMinerProp>());
         conf.put(Key.masterminermarkingconfig, false);
+        conf.put(Key.miningoverlaymemory, new ArrayList<NMiningOverlayMemory>());
 
         ArrayList<HashMap<String, Object>> qpattern = new ArrayList<>();
         HashMap<String, Object> res1 = new HashMap<>();
@@ -1260,6 +1262,9 @@ public class NConfig
                                 break;
                             case "NWorldExplorer":
                                 res.add(new NWorldExplorerProp(obj));
+                                break;
+                            case "NMiningOverlayMemory":
+                                res.add(new NMiningOverlayMemory(obj));
                                 break;
                             case "NFishingSettings":
                                 res.add(new NFishingSettings(obj));

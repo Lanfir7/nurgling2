@@ -2,8 +2,10 @@ package nurgling.overlays;
 
 import haven.*;
 import nurgling.NGameUI;
+import nurgling.NUI;
 import nurgling.NUtils;
 import nurgling.actions.bots.MinesweeperSolver;
+import nurgling.conf.NMiningOverlayMemory;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,9 +39,13 @@ public class MinesweeperDangerMarkers {
     private NGameUI solverGui;
     private final Map<Long, Gob> markers = new HashMap<>();
     private final Map<Long, Mark> kinds = new HashMap<>();
+    private final Map<Long, Gob> numberMarkers = new HashMap<>();
     private final Map<Long, Boolean> prevMineable = new HashMap<>();
     private final Map<Long, Double> pendingBlanks = new HashMap<>();
     private final Set<Long> confirmedBlanks = new HashSet<>();
+    private NMiningOverlayMemory memory;
+    private String memUser;
+    private String memChr;
     private double sinceUpdate = UPDATE_INTERVAL;
     private long lastFingerprint = Long.MIN_VALUE;
 
@@ -68,6 +74,7 @@ public class MinesweeperDangerMarkers {
             confirmedBlanks.clear();
             solver = new MinesweeperSolver(gui);
             solverGui = gui;
+            restoreNow(gui);
         }
         Coord playerTile = gui.map.player().rc.div(tilesz).floor();
         observeMinedTiles(playerTile, dt);
@@ -78,13 +85,52 @@ public class MinesweeperDangerMarkers {
         if (numbersChanged || sinceUpdate >= UPDATE_INTERVAL) {
             lastFingerprint = fingerprint;
             sinceUpdate = 0;
-            if (fingerprint != 0) {
+            persistLiveNumbers(gui);
+            persistGreens(gui);
+            boolean seeded = applyMemory(gui, playerTile);
+            if (fingerprint != 0 || seeded) {
                 solver.refresh(playerTile, RADIUS);
                 solver.scanMinesweeperNumbers();
+                applyMemory(gui, playerTile);
                 solver.solve();
+                lastFingerprint = fingerprint(gui);
+            }
+            if (memory != null) {
+                memory.maybeFlush(System.currentTimeMillis());
             }
         }
         sync(gui);
+    }
+
+    public void restoreNow() {
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.map == null || gui.map.player() == null) {
+            return;
+        }
+        restoreNow(gui);
+        Coord playerTile = gui.map.player().rc.div(tilesz).floor();
+        applyMemory(gui, playerTile);
+        solver.refresh(playerTile, RADIUS);
+        solver.scanMinesweeperNumbers();
+        applyMemory(gui, playerTile);
+        solver.solve();
+        sync(gui);
+        if (memory != null) {
+            memory.maybeFlush(System.currentTimeMillis());
+        }
+    }
+
+    private void restoreNow(NGameUI gui) {
+        if (solver == null || solverGui != gui) {
+            solver = new MinesweeperSolver(gui);
+            solverGui = gui;
+        }
+        memory = null;
+        memUser = null;
+        memChr = null;
+        resolveMemory(gui);
+        persistLiveNumbers(gui);
+        persistGreens(gui);
     }
 
     private void observeMinedTiles(Coord playerTile, double dt) {
@@ -130,6 +176,142 @@ public class MinesweeperDangerMarkers {
                 Math.abs(keyX(e.getKey()) - playerTile.x) > prune || Math.abs(keyY(e.getKey()) - playerTile.y) > prune);
     }
 
+    private NMiningOverlayMemory resolveMemory(NGameUI gui) {
+        if (gui == null || !(gui.ui instanceof NUI) || gui.getCharInfo() == null) {
+            return memory;
+        }
+        NUI.NSessInfo sess = ((NUI) gui.ui).sessInfo;
+        if (sess == null || sess.username == null) {
+            return memory;
+        }
+        String chrid = gui.getCharInfo().chrid;
+        if (chrid == null) {
+            return memory;
+        }
+        if (memory == null || !sess.username.equals(memUser) || !chrid.equals(memChr)) {
+            memory = NMiningOverlayMemory.get(sess.username, chrid);
+            memUser = sess.username;
+            memChr = chrid;
+        }
+        return memory;
+    }
+
+    private MCache mapOf(NGameUI gui) {
+        return gui.ui.sess.glob.map;
+    }
+
+    private void persistLiveNumbers(NGameUI gui) {
+        NMiningOverlayMemory mem = resolveMemory(gui);
+        if (mem == null) {
+            return;
+        }
+        MCache map = mapOf(gui);
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                if (gob.virtual) {
+                    continue;
+                }
+                for (Gob.Overlay ol : gob.ols) {
+                    if (ol.spr instanceof NMiningNumber) {
+                        NMiningNumber nmn = (NMiningNumber) ol.spr;
+                        Coord tile = gob.rc.div(tilesz).floor();
+                        NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(map, tile);
+                        if (ref != null) {
+                            mem.putNumber(ref, nmn.val);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void persistGreens(NGameUI gui) {
+        NMiningOverlayMemory mem = resolveMemory(gui);
+        if (mem == null) {
+            return;
+        }
+        MCache map = mapOf(gui);
+        Set<Coord> blanks = new HashSet<>();
+        Set<Coord> mineable = new HashSet<>();
+        collectBlankNeighbors(blanks, mineable);
+        for (Coord tile : greenFromFreshBlanks(blanks, mineable)) {
+            NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(map, tile);
+            if (ref != null) {
+                mem.putGreen(ref);
+            }
+        }
+    }
+
+    private boolean applyMemory(NGameUI gui, Coord playerTile) {
+        NMiningOverlayMemory mem = resolveMemory(gui);
+        if (mem == null) {
+            return false;
+        }
+        MCache map = mapOf(gui);
+        OCache oc = gui.ui.sess.glob.oc;
+        Set<Long> liveNumberTiles = liveNumberTiles(gui);
+        Set<Long> wantedNumbers = new HashSet<>();
+        boolean seeded = false;
+        for (Map.Entry<NMiningOverlayMemory.TileRef, Integer> e : mem.numbers().entrySet()) {
+            Coord tile = NMiningOverlayMemory.toWorld(map, e.getKey());
+            if (tile == null) {
+                continue;
+            }
+            if (Math.abs(tile.x - playerTile.x) > RADIUS || Math.abs(tile.y - playerTile.y) > RADIUS) {
+                continue;
+            }
+            solver.putState(tile.x, tile.y, MinesweeperSolver.TileState.REVEALED);
+            solver.putNumber(tile.x, tile.y, e.getValue());
+            seeded = true;
+            if (e.getValue() <= 0) {
+                continue;
+            }
+            long k = key(tile.x, tile.y);
+            wantedNumbers.add(k);
+            if (liveNumberTiles.contains(k)) {
+                Gob dummy = numberMarkers.remove(k);
+                if (dummy != null) {
+                    removeGob(oc, dummy);
+                }
+                continue;
+            }
+            Gob dummy = numberMarkers.get(k);
+            if (dummy == null || oc.getgob(dummy.id) == null || dummy.findol(NMiningNumber.class) == null) {
+                if (dummy != null) {
+                    removeGob(oc, dummy);
+                }
+                numberMarkers.put(k, createNumber(oc, tile, e.getValue()));
+            }
+        }
+        Iterator<Map.Entry<Long, Gob>> it = numberMarkers.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Long, Gob> e = it.next();
+            if (!wantedNumbers.contains(e.getKey()) || liveNumberTiles.contains(e.getKey())) {
+                removeGob(oc, e.getValue());
+                it.remove();
+            }
+        }
+        return seeded;
+    }
+
+    private Set<Long> liveNumberTiles(NGameUI gui) {
+        Set<Long> tiles = new HashSet<>();
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                if (gob.virtual) {
+                    continue;
+                }
+                for (Gob.Overlay ol : gob.ols) {
+                    if (ol.spr instanceof NMiningNumber) {
+                        Coord tile = gob.rc.div(tilesz).floor();
+                        tiles.add(key(tile.x, tile.y));
+                    }
+                }
+            }
+        }
+        return tiles;
+    }
+
     private static long fingerprint(NGameUI gui) {
         long hash = 0;
         int count = 0;
@@ -153,12 +335,7 @@ public class MinesweeperDangerMarkers {
         return hash ^ ((long) count << 32);
     }
 
-    private void sync(NGameUI gui) {
-        OCache oc = gui.ui.sess.glob.oc;
-        Map<Long, Mark> wanted = new HashMap<>();
-
-        Set<Coord> blanks = new HashSet<>();
-        Set<Coord> mineable = new HashSet<>();
+    private void collectBlankNeighbors(Set<Coord> blanks, Set<Coord> mineable) {
         for (long k : confirmedBlanks) {
             blanks.add(new Coord(keyX(k), keyY(k)));
             int x = keyX(k);
@@ -171,10 +348,20 @@ public class MinesweeperDangerMarkers {
                 }
             }
         }
+    }
+
+    private void sync(NGameUI gui) {
+        OCache oc = gui.ui.sess.glob.oc;
+        Map<Long, Mark> wanted = new HashMap<>();
+
+        Set<Coord> blanks = new HashSet<>();
+        Set<Coord> mineable = new HashSet<>();
+        collectBlankNeighbors(blanks, mineable);
         for (Coord tile : greenFromFreshBlanks(blanks, mineable)) {
             wanted.put(key(tile.x, tile.y), Mark.SAFE);
         }
-        if (lastFingerprint != 0) {
+        rememberedGreens(gui, wanted);
+        if (lastFingerprint != 0 || (solver != null && !solver.dangerTiles().isEmpty())) {
             for (Coord tile : solver.dangerTiles()) {
                 wanted.put(key(tile.x, tile.y), Mark.DANGER);
             }
@@ -205,6 +392,31 @@ public class MinesweeperDangerMarkers {
         }
     }
 
+    private void rememberedGreens(NGameUI gui, Map<Long, Mark> wanted) {
+        NMiningOverlayMemory mem = resolveMemory(gui);
+        if (mem == null) {
+            return;
+        }
+        MCache map = mapOf(gui);
+        Gob player = gui.map.player();
+        Coord playerTile = player.rc.div(tilesz).floor();
+        for (NMiningOverlayMemory.TileRef ref : mem.greens()) {
+            Coord tile = NMiningOverlayMemory.toWorld(map, ref);
+            if (tile == null) {
+                continue;
+            }
+            if (Math.abs(tile.x - playerTile.x) > RADIUS || Math.abs(tile.y - playerTile.y) > RADIUS) {
+                continue;
+            }
+            Boolean mineable = solver.mineableOrUnknown(tile.x, tile.y);
+            if (Boolean.FALSE.equals(mineable)) {
+                mem.removeGreen(ref);
+                continue;
+            }
+            wanted.putIfAbsent(key(tile.x, tile.y), Mark.SAFE);
+        }
+    }
+
     private static Gob createMarker(OCache oc, Coord tile, Mark kind) {
         Coord2d pos = new Coord2d((tile.x + 0.5) * tilesz.x, (tile.y + 0.5) * tilesz.y);
         OCache.Virtual created = oc.new Virtual(pos, 0);
@@ -217,16 +429,26 @@ public class MinesweeperDangerMarkers {
         return created;
     }
 
+    private static Gob createNumber(OCache oc, Coord tile, int val) {
+        Coord2d pos = new Coord2d((tile.x + 0.5) * tilesz.x, (tile.y + 0.5) * tilesz.y);
+        OCache.Virtual created = oc.new Virtual(pos, 0);
+        created.virtual = true;
+        created.addol(new Gob.Overlay(created, new NMiningNumber(created, val)), false);
+        oc.add(created);
+        return created;
+    }
+
     private void clear(NGameUI gui) {
-        if (markers.isEmpty()) {
-            return;
-        }
         OCache oc = gui.ui.sess.glob.oc;
         for (Gob dummy : markers.values()) {
             removeGob(oc, dummy);
         }
         markers.clear();
         kinds.clear();
+        for (Gob dummy : numberMarkers.values()) {
+            removeGob(oc, dummy);
+        }
+        numberMarkers.clear();
     }
 
     private static void removeGob(OCache oc, Gob dummy) {

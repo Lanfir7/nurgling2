@@ -144,6 +144,10 @@ public class MasterMiner extends ActionWithFinal {
             wnd = NUtils.addCentered(gui, created);
         }
 
+        if (gui.map instanceof nurgling.NMapView) {
+            ((nurgling.NMapView) gui.map).restoreMinesweeperOverlay();
+        }
+
         // Активируем курсор майнинга при запуске
         try {
             Gob player = NUtils.player();
