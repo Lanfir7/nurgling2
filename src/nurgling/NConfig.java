@@ -132,6 +132,10 @@ public class NConfig
         uniformBiomeColors,
         inventoryRightPanelShow,
         inventoryRightPanelMode,
+        extraInvPanelState,
+        extraInvGrouping,
+        extraInvDisplayType,
+        extraInvMinQuality,
         showTerrainName,
         validateAllCropsBeforeHarvest,
         skipButcherInKFC,
@@ -484,6 +488,10 @@ public class NConfig
         conf.put(Key.uniformBiomeColors, false);
         conf.put(Key.inventoryRightPanelShow, false);
         conf.put(Key.inventoryRightPanelMode, "EXPANDED");
+        conf.put(Key.extraInvPanelState, 0);
+        conf.put(Key.extraInvGrouping, "NONE");
+        conf.put(Key.extraInvDisplayType, "Name");
+        conf.put(Key.extraInvMinQuality, "");
         conf.put(Key.showTerrainName, false);
         conf.put(Key.validateAllCropsBeforeHarvest, false);
         conf.put(Key.studyDeskLayout, "");

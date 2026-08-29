@@ -314,14 +314,17 @@ public class NInventory extends Inventory
             eyeBtn.c = new Coord(anchor.c.x - eyeBtn.sz.x - UI.scale(2), centerY);
         }
 
+        applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.snapshotForInstall());
+        if (eyeBtn instanceof NHeaderCycler) {
+            ((NHeaderCycler) eyeBtn).state = panelState;
+        }
         attachRightPanel();
-        panelState = PANEL_CLOSED;
         applyPanelState();
+        extraPanelInstalled = true;
+        extraPanelResolved = true;
         if (parent != null) {
             parent.pack();
         }
-        extraPanelInstalled = true;
-        extraPanelResolved = true;
     }
 
     public enum QualityType {
@@ -348,14 +351,15 @@ public class NInventory extends Inventory
         Name, Quality, Info
     }
     
-    // Current display type and grouping
-    private static DisplayType currentDisplayType = DisplayType.Name;
+    // Current display type and grouping (per inventory; extra panels restore from ExtraInvPanelPrefs)
+    private DisplayType currentDisplayType = DisplayType.Name;
     private Grouping currentGrouping = Grouping.NONE;
     public Dropbox<Grouping> groupingDropbox;
     public Dropbox<DisplayType> displayTypeDropbox;
     private Label spaceLabel; // Shows filled/total slots
     private TextEntry qualityFilterEntry; // Min quality filter
     private Double minQualityFilter = null; // Parsed min quality value
+    private String extraPanelMinQualityText = "";
 
     @Override
     public void draw(GOut g) {
@@ -1042,16 +1046,36 @@ public class NInventory extends Inventory
 
     private void setPanelState(int state) {
         panelState = state;
-        if (mainInvInstalled) {
-            NConfig.set(NConfig.Key.inventoryRightPanelShow, state);
-        }
+        ExtraInvPanelPrefs.onPanelStateChanged(mainInvInstalled, extraPanelInstalled, state);
         applyPanelState();
         if (mainInvInstalled) {
             resizeSearchToFit();
-            parent.pack();
+            if (parent != null) {
+                parent.pack();
+            }
             positionTitleBarButtons();
         } else if (parent != null) {
             parent.pack();
+        }
+    }
+
+    private void applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.Snapshot snap) {
+        if (snap == null) {
+            snap = ExtraInvPanelPrefs.defaults();
+        }
+        panelState = snap.panelState;
+        currentGrouping = snap.grouping;
+        currentDisplayType = snap.displayType;
+        extraPanelMinQualityText = snap.minQualityText;
+        if (qualityFilterEntry != null) {
+            qualityFilterEntry.settext(extraPanelMinQualityText);
+            parseQualityFilter();
+        }
+        if (groupingDropbox != null) {
+            groupingDropbox.change(snap.grouping);
+        }
+        if (displayTypeDropbox != null) {
+            displayTypeDropbox.change(snap.displayType);
         }
     }
 
@@ -1206,10 +1230,13 @@ public class NInventory extends Inventory
                     return;
                 super.change(item);
                 currentGrouping = item;
+                if (extraPanelInstalled) {
+                    ExtraInvPanelPrefs.saveGrouping(item);
+                }
                 rebuildItemList();
             }
         };
-        groupingDropbox.change(Grouping.NONE);
+        groupingDropbox.change(currentGrouping);
         rightPanel.add(groupingDropbox, new Coord(dropX, y));
         expandedOnlyWidgets.add(groupingDropbox);
 
@@ -1232,6 +1259,9 @@ public class NInventory extends Inventory
                     return;
                 super.change(item);
                 currentDisplayType = item;
+                if (extraPanelInstalled) {
+                    ExtraInvPanelPrefs.saveDisplayType(item);
+                }
                 rebuildItemList();
             }
         };
@@ -1241,15 +1271,20 @@ public class NInventory extends Inventory
 
         dropX += displayTypeW + elementGap;
         int qualityW = UI.scale(32);
-        qualityFilterEntry = new TextEntry(qualityW, "") {
+        qualityFilterEntry = new TextEntry(qualityW, extraPanelMinQualityText) {
             @Override
             public void changed() {
                 super.changed();
+                extraPanelMinQualityText = text();
                 parseQualityFilter();
+                if (extraPanelInstalled) {
+                    ExtraInvPanelPrefs.saveMinQualityText(extraPanelMinQualityText);
+                }
                 rebuildItemList();
             }
         };
         qualityFilterEntry.settip("Min quality filter\nEnter a number (e.g. 10)\nto show only items with q >= 10");
+        parseQualityFilter();
         rightPanel.add(qualityFilterEntry, new Coord(dropX, y + UI.scale(-2)));
         expandedOnlyWidgets.add(qualityFilterEntry);
 
