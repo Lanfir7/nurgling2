@@ -26,7 +26,16 @@ public final class ExtraInvPanelPrefs {
     }
 
     public static Snapshot load() {
-        return read(NConfig::get);
+        return snapshotForInstall(NConfig::get);
+    }
+
+    /** Snapshot a new extra-panel container applies. Never forced closed. */
+    public static Snapshot snapshotForInstall() {
+        return load();
+    }
+
+    static Snapshot snapshotForInstall(Function<NConfig.Key, Object> get) {
+        return read(get);
     }
 
     static Snapshot read(Function<NConfig.Key, Object> get) {

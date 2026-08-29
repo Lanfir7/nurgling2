@@ -51,7 +51,7 @@ class ExtraInvPanelPrefsTest {
                 NInventory.DisplayType.Name,
                 "10"), setter(store));
 
-        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.read(getter(store));
+        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.snapshotForInstall(getter(store));
         assertEquals(2, snap.panelState);
         assertEquals(NInventory.Grouping.Q5, snap.grouping);
         assertEquals(NInventory.DisplayType.Name, snap.displayType);
@@ -65,9 +65,7 @@ class ExtraInvPanelPrefsTest {
         ExtraInvPanelPrefs.onPanelStateChanged(false, true, 2, setter(store));
 
         assertEquals(2, ExtraInvPanelPrefs.read(getter(store)).panelState);
-        Object mainInv = store.get(NConfig.Key.inventoryRightPanelShow);
-        assertFalse(mainInv instanceof Number && ((Number) mainInv).intValue() == 2);
-        assertFalse(mainInv instanceof Boolean && (Boolean) mainInv);
+        assertEquals(Boolean.FALSE, store.get(NConfig.Key.inventoryRightPanelShow));
     }
 
     @Test
@@ -78,6 +76,22 @@ class ExtraInvPanelPrefsTest {
         assertEquals(0, ExtraInvPanelPrefs.read(getter(store)).panelState);
         assertEquals(1, store.get(NConfig.Key.inventoryRightPanelShow));
         assertNull(store.get(NConfig.Key.extraInvPanelState));
+    }
+
+    @Test
+    void filterWritesSurviveLaterPanelStateChange() {
+        Map<NConfig.Key, Object> store = emptyStore();
+        ExtraInvPanelPrefs.write(new ExtraInvPanelPrefs.Snapshot(
+                2,
+                NInventory.Grouping.Q5,
+                NInventory.DisplayType.Name,
+                "10"), setter(store));
+        ExtraInvPanelPrefs.onPanelStateChanged(false, true, 1, setter(store));
+
+        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.read(getter(store));
+        assertEquals(1, snap.panelState);
+        assertEquals(NInventory.Grouping.Q5, snap.grouping);
+        assertEquals("10", snap.minQualityText);
     }
 
     @Test

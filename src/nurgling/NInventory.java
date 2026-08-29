@@ -314,17 +314,17 @@ public class NInventory extends Inventory
             eyeBtn.c = new Coord(anchor.c.x - eyeBtn.sz.x - UI.scale(2), centerY);
         }
 
-        attachRightPanel();
-        applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.load());
+        applyContainerExtraPanelPrefs(ExtraInvPanelPrefs.snapshotForInstall());
         if (eyeBtn instanceof NHeaderCycler) {
             ((NHeaderCycler) eyeBtn).state = panelState;
         }
+        attachRightPanel();
         applyPanelState();
+        extraPanelInstalled = true;
+        extraPanelResolved = true;
         if (parent != null) {
             parent.pack();
         }
-        extraPanelInstalled = true;
-        extraPanelResolved = true;
     }
 
     public enum QualityType {
@@ -351,8 +351,8 @@ public class NInventory extends Inventory
         Name, Quality, Info
     }
     
-    // Current display type and grouping
-    private static DisplayType currentDisplayType = DisplayType.Name;
+    // Current display type and grouping (per inventory; extra panels restore from ExtraInvPanelPrefs)
+    private DisplayType currentDisplayType = DisplayType.Name;
     private Grouping currentGrouping = Grouping.NONE;
     public Dropbox<Grouping> groupingDropbox;
     public Dropbox<DisplayType> displayTypeDropbox;
@@ -1236,7 +1236,7 @@ public class NInventory extends Inventory
                 rebuildItemList();
             }
         };
-        groupingDropbox.change(Grouping.NONE);
+        groupingDropbox.change(currentGrouping);
         rightPanel.add(groupingDropbox, new Coord(dropX, y));
         expandedOnlyWidgets.add(groupingDropbox);
 
@@ -1284,6 +1284,7 @@ public class NInventory extends Inventory
             }
         };
         qualityFilterEntry.settip("Min quality filter\nEnter a number (e.g. 10)\nto show only items with q >= 10");
+        parseQualityFilter();
         rightPanel.add(qualityFilterEntry, new Coord(dropX, y + UI.scale(-2)));
         expandedOnlyWidgets.add(qualityFilterEntry);
 
