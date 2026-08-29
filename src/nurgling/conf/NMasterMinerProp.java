@@ -97,7 +97,7 @@ public class NMasterMinerProp implements JConf {
         ArrayList<NMasterMinerProp> next = new ArrayList<>(props);
         for (Iterator<NMasterMinerProp> i = next.iterator(); i.hasNext(); ) {
             NMasterMinerProp old = i.next();
-            if (old.username.equals(prop.username) && old.chrid.equals(prop.chrid)) {
+            if (java.util.Objects.equals(old.username, prop.username) && java.util.Objects.equals(old.chrid, prop.chrid)) {
                 i.remove();
                 break;
             }
@@ -149,7 +149,7 @@ public class NMasterMinerProp implements JConf {
 
     static NMasterMinerProp find(ArrayList<NMasterMinerProp> props, String username, String chrid) {
         for (NMasterMinerProp prop : props) {
-            if (prop.username.equals(username) && prop.chrid.equals(chrid)) {
+            if (java.util.Objects.equals(prop.username, username) && java.util.Objects.equals(prop.chrid, chrid)) {
                 return prop;
             }
         }

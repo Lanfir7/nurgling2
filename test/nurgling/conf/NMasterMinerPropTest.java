@@ -59,6 +59,17 @@ class NMasterMinerPropTest {
     }
 
     @Test
+    void nullIdentityEntriesDoNotThrow() {
+        ArrayList<HashMap<String, Object>> leftover = new ArrayList<>();
+        leftover.add(new HashMap<>());
+        ArrayList<NMasterMinerProp> props = NMasterMinerProp.listFromRaw(leftover);
+        NMasterMinerProp next = new NMasterMinerProp("alice", "chr1");
+        next.dropThreshold = 1f;
+        ArrayList<NMasterMinerProp> stored = NMasterMinerProp.replace(props, next);
+        assertEquals(1f, NMasterMinerProp.find(stored, "alice", "chr1").dropThreshold);
+    }
+
+    @Test
     void jsonRoundTripsThresholdsKeepStonesAndWindowPos() {
         NMasterMinerProp original = new NMasterMinerProp("bob", "chr2");
         original.dropThreshold = 33.5f;
