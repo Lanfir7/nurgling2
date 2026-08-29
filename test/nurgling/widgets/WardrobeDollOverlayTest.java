@@ -1,6 +1,9 @@
 package nurgling.widgets;
 
 import haven.Coord;
+import haven.Frame;
+import haven.GOut;
+import haven.IBox;
 import haven.Widget;
 import org.junit.jupiter.api.Test;
 
@@ -70,13 +73,31 @@ class WardrobeDollOverlayTest {
     @Test
     void overlayIsNotParentedToImmediateWrapperWhenHostIsResolved() {
         Widget host = new Widget(Coord.of(200, 300));
-        Widget doll = host.add(new Widget(Coord.of(80, 120)), Coord.of(40, 0));
+        Frame frame = host.add(new Frame(Coord.of(80, 120), true, zeroBox()), Coord.of(10, 5));
+        Widget doll = frame.add(new Widget(Coord.of(80, 120)), Coord.z);
         Widget overlay = new Widget(Coord.z);
 
+        assertTrue(WardrobeDollOverlay.attachAsSibling(doll, overlay));
+
+        assertSame(host, overlay.parent);
+        assertNotSame(frame, overlay.parent);
+        assertNotSame(doll, overlay.parent);
+        assertEquals(doll.parentpos(host), overlay.c);
+        assertEquals(doll.sz, overlay.sz);
+    }
+
+    @Test
+    void tickReadsItemsFromOverlayParentNotWindowAboveHost() {
+        Widget window = new Widget(Coord.of(240, 340));
+        Widget host = window.add(new Widget(Coord.of(200, 300)), Coord.z);
+        Widget doll = host.add(new Widget(Coord.of(80, 120)), Coord.of(40, 0));
+        Widget overlay = new Widget(Coord.z);
         WardrobeDollOverlay.attachAsSibling(doll, overlay);
 
-        assertSame(WardrobeDollOverlay.resolveDollHost(doll), overlay.parent);
-        assertNotSame(doll, overlay.parent);
+        assertSame(host, WardrobeDollOverlay.overlayStatsHost(overlay));
+        assertSame(window, WardrobeDollOverlay.resolveDollHost(overlay.parent));
+        assertNotSame(WardrobeDollOverlay.overlayStatsHost(overlay),
+                WardrobeDollOverlay.resolveDollHost(overlay.parent));
     }
 
     @Test
@@ -123,5 +144,17 @@ class WardrobeDollOverlayTest {
                 return true;
         }
         return false;
+    }
+
+    private static IBox zeroBox() {
+        return new IBox() {
+            public Coord btloff() { return Coord.z; }
+            public Coord ctloff() { return Coord.z; }
+            public Coord bbroff() { return Coord.z; }
+            public Coord cbroff() { return Coord.z; }
+            public Coord bisz() { return Coord.z; }
+            public Coord cisz() { return Coord.z; }
+            public void draw(GOut g, Coord tl, Coord sz) {}
+        };
     }
 }

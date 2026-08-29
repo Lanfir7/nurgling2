@@ -151,6 +151,10 @@ public class WardrobeDollOverlay extends EquipmentStatsWidget {
         syncOverlayToDoll(this, doll);
     }
 
+    static Widget overlayStatsHost(Widget overlay) {
+        return overlay == null ? null : overlay.parent;
+    }
+
     @Override
     public void presize() {
         syncToDoll();
@@ -160,7 +164,7 @@ public class WardrobeDollOverlay extends EquipmentStatsWidget {
     public void tick(double dt) {
         super.tick(dt);
         syncToDoll();
-        Widget host = parent;
+        Widget host = overlayStatsHost(this);
         if (host != null)
             updateStatsFromItems(itemsOnDoll(host));
     }
