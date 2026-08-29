@@ -69,6 +69,21 @@ class ForageMarkerLogicTest {
     }
 
     @Test
+    void forageLocationIdsSnapshotsOnlyForageMarks() {
+        java.util.List<String> ids = ForageMarkerLogic.forageLocationIds(java.util.Arrays.asList(
+            "forage_1_2_3_Blueberries",
+            "labeled_1_2_3_q20",
+            "animal_7",
+            "forage_9_10_11_Morels",
+            null));
+        assertEquals(java.util.Arrays.asList(
+            "forage_1_2_3_Blueberries",
+            "forage_9_10_11_Morels"), ids);
+        assertTrue(ForageMarkerLogic.forageLocationIds(null).isEmpty());
+        assertTrue(ForageMarkerLogic.forageLocationIds(java.util.Collections.emptyList()).isEmpty());
+    }
+
+    @Test
     void labelFormatAndParse() {
         assertEquals("q45", ForageMarkerLogic.formatLabel(45.4));
         assertEquals(45.0, ForageMarkerLogic.parseQuality("q45"), 0.01);
