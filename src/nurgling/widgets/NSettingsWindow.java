@@ -33,6 +33,8 @@ public class NSettingsWindow extends Widget {
     private SearchDrop drop;
     private SettingFlash flash;
     private final Widget searchHost;
+    private SettingsPageFrame currentFrame;
+    private int pageColumns = 2;
     private int contentTop = 0;
 
     public NSettingsWindow() {
@@ -227,6 +229,7 @@ public class NSettingsWindow extends Widget {
 
     private class SettingsItem {
         public Widget panel;
+        public final SettingsPageFrame frame;
         private boolean expanded = false;
         private final String name;
         private final List<SettingsItem> children = new ArrayList<>();
@@ -235,8 +238,9 @@ public class NSettingsWindow extends Widget {
         public SettingsItem(String name, Widget panel, Widget container) {
             this.name = name;
             this.panel = panel;
-            container.add(panel, Coord.z);
-            panel.hide();
+            this.frame = new SettingsPageFrame((Panel)panel, name);
+            container.add(frame, Coord.z);
+            frame.hide();
         }
 
         public String getName() { return name; }
@@ -259,13 +263,31 @@ public class NSettingsWindow extends Widget {
     }
 
     private void showSettings(SettingsItem item) {
-        if(currentPanel != null)
-            currentPanel.hide();
+        if(currentFrame != null)
+            currentFrame.hide();
+        currentFrame = item.frame;
         currentPanel = (Panel)item.panel;
-        currentPanel.show();
+        currentFrame.show();
         currentPanel.load();
+        fitCurrentPage();
         settingsView.bar.ch(-settingsView.bar.val);
         settingsView.cont.update();
+    }
+
+    private void fitCurrentPage() {
+        if(currentFrame == null)
+            return;
+        settingsView.showbar(true);
+        currentFrame.fitTo(settingsView.cont.sz, pageColumns);
+        currentFrame.move(Coord.z);
+        settingsView.cont.update();
+        boolean overflow = settingsView.bar.max > 0;
+        settingsView.showbar(overflow);
+        if(!overflow) {
+            currentFrame.fitTo(settingsView.cont.sz, pageColumns);
+            settingsView.cont.update();
+        }
+        settingsView.bar.ch(0);
     }
 
     @Override
@@ -275,7 +297,8 @@ public class NSettingsWindow extends Widget {
             return;
         int margin = UI.scale(10);
         NSettingsLayout layout = NSettingsLayout.calculate(
-                size, UI.scale(210), contentTop, saveBtn.sz, backBtn != null, margin);
+                size, UI.scale(210), saveBtn.sz, backBtn != null, margin);
+        pageColumns = layout.columns;
         list.resize(layout.sidebarSize);
         settingsView.move(layout.panelPosition);
         settingsView.resize(layout.panelSize);
@@ -285,9 +308,8 @@ public class NSettingsWindow extends Widget {
             backBtn.move(layout.backButton);
         if(searchHost == this)
             search.move(Coord.of(size.x - margin - search.sz.x, 0));
+        fitCurrentPage();
         syncSearchOverlay();
-        settingsView.cont.update();
-        settingsView.bar.ch(0);
     }
 
     @Override
@@ -446,20 +468,33 @@ public class NSettingsWindow extends Widget {
     }
 
     private void revealWidget(Widget w) {
-        Scrollport sp = w.getparent(Scrollport.class);
-        if(sp == null)
+        SettingsPageFrame frame = w.getparent(SettingsPageFrame.class);
+        if((frame == null) || (frame != currentFrame))
             return;
-        sp.cont.update();
-        Coord pos = w.parentpos(sp.cont);
+        settingsView.cont.update();
+        Coord pos = positionWithin(w, settingsView.cont);
+        if(pos == null)
+            return;
         int margin = UI.scale(24);
-        int view = sp.cont.sz.y;
+        int view = settingsView.cont.sz.y;
         int top = pos.y;
         int bottom = pos.y + w.sz.y;
-        int sy = sp.cont.sy;
+        int sy = settingsView.cont.sy;
         if(top < sy + margin)
-            sp.bar.ch(top - margin - sy);
+            settingsView.bar.ch(Math.max(-sy, top - margin - sy));
         else if(bottom > sy + view - margin)
-            sp.bar.ch(bottom - (sy + view - margin));
+            settingsView.bar.ch(Math.min(settingsView.bar.max - sy,
+                    bottom - (sy + view - margin)));
+    }
+
+    private static Coord positionWithin(Widget widget, Widget ancestor) {
+        Coord position = Coord.z;
+        for(Widget current = widget; current != null && current != ancestor; current = current.parent)
+            position = position.add(current.c);
+        Widget current = widget;
+        while(current != null && current != ancestor)
+            current = current.parent;
+        return (current == ancestor) ? position : null;
     }
 
     private void flashWidget(Widget w) {

@@ -70,8 +70,11 @@ public class OptWnd extends Window {
 	    return;
 	fittingPanel = true;
 	try {
+	    boolean outerScroll = current.usesOuterScroll();
+	    panels.showbar(outerScroll);
+	    int outerBarWidth = outerScroll ? panels.bar.sz.x : 0;
 	    current.resetLayout();
-	    Coord desired = current.sz.add(panels.bar.sz.x, 0);
+	    Coord desired = current.sz.add(outerBarWidth, 0);
 	    panels.resize(desired);
 	    panels.cont.update();
 	    pack();
@@ -85,8 +88,8 @@ public class OptWnd extends Window {
 			(parent == null) ? null : parent.rootarea());
 		Coord available = visible.sz();
 		Coord fitted = SettingsViewportLayout.fit(desired, sz, available, margin, minimum);
-		current.fitTo(fitted.sub(panels.bar.sz.x, 0));
-		desired = current.sz.add(panels.bar.sz.x, 0);
+		current.fitTo(fitted.sub(outerBarWidth, 0));
+		desired = current.sz.add(outerBarWidth, 0);
 		panels.resize(desired);
 		panels.cont.update();
 		pack();
@@ -152,6 +155,10 @@ public class OptWnd extends Window {
 	}
 
 	protected void fitTo(Coord available) {
+	}
+
+	protected boolean usesOuterScroll() {
+	    return true;
 	}
     }
 
@@ -1161,15 +1168,18 @@ public class OptWnd extends Window {
 		@Override
 		protected void resetLayout() {
 			settingsWindow.resize(UI.scale(800, 600));
-			pack();
+			resize(settingsWindow.sz);
 		}
 
 		@Override
 		protected void fitTo(Coord available) {
-			settingsWindow.resize(Coord.of(
-				Math.min(UI.scale(800), Math.max(UI.scale(480), available.x)),
-				Math.min(UI.scale(600), Math.max(UI.scale(300), available.y))));
-			pack();
+			settingsWindow.resize(available);
+			resize(available);
+		}
+
+		@Override
+		protected boolean usesOuterScroll() {
+			return false;
 		}
 	}
 }
