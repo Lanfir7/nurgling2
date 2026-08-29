@@ -608,53 +608,47 @@ public class LightObject implements Action {
 
             new PathFinder(source).run(gui);
             NUtils.activateItem(source, NEIGHBOR_STICK_MODFLAGS);
-
-            final boolean[] sawStart = {false};
-            NUtils.getUI().core.addTask(new NTask() {
-                {
-                    infinite = false;
-                    maxCounter = 200;
-                    criticalOnTimeout = false;
-                }
-                @Override
-                public boolean check() {
-                    boolean clocks = LightFire.hasClocks(gui.prog != null);
-                    if (clocks)
-                        sawStart[0] = true;
-                    if (gui.vhand == null)
-                        return true;
-                    return neighborStickReady(true, clocks, sawStart[0]);
-                }
-            });
-
-            if (gui.vhand == null || !neighborStickReady(true, LightFire.hasClocks(gui.prog != null), sawStart[0])) {
-                dropLeftoverHand(gui);
+            if (!waitUntilNeighborStickReady(gui)) {
+                if (LightFire.shouldDropFirebrand(gui.vhand != null, gui.prog != null))
+                    dropLeftoverHand(gui);
+                if (LightFire.hasClocks(gui.prog != null))
+                    return;
                 continue;
             }
 
             new PathFinder(t).run(gui);
             NUtils.activateItem(t);
-            NUtils.getUI().core.addTask(new NTask() {
-                private boolean sawUse = false;
-                {
-                    infinite = false;
-                    maxCounter = 400;
-                    criticalOnTimeout = false;
+            WaitProgress useStart = new WaitProgress(WaitProgress.Phase.START, 8000);
+            NUtils.getUI().core.addTask(useStart);
+            if (!useStart.isTimedOut()) {
+                WaitProgress useFinish = new WaitProgress(WaitProgress.Phase.FINISH, 60000);
+                NUtils.getUI().core.addTask(useFinish);
+                if (useFinish.isTimedOut() && LightFire.hasClocks(gui.prog != null)) {
+                    return;
                 }
-                @Override
-                public boolean check() {
-                    boolean clocks = LightFire.hasClocks(gui.prog != null);
-                    if (clocks)
-                        sawUse = true;
-                    return LightFire.lightingUseFinished(clocks, sawUse);
-                }
-            });
+            }
             NUtils.getUI().core.addTask(new WaitGobModelAttr(t, config.fireFlag, 2000));
             Gob updated = Finder.findGob(t.id);
             if (updated != null && isLit(updated, config))
                 remaining.remove(t);
-            dropLeftoverHand(gui);
+            if (LightFire.shouldDropFirebrand(gui.vhand != null, gui.prog != null))
+                dropLeftoverHand(gui);
         }
+    }
+
+    /**
+     * Wait for lighting clocks to start, then finish, before treating the held branch as a firebrand.
+     * Returns false if the stick never lit (or clocks are still running). Does not drop the hand item.
+     */
+    private boolean waitUntilNeighborStickReady(NGameUI gui) throws InterruptedException {
+        WaitProgress start = new WaitProgress(WaitProgress.Phase.START, 8000);
+        NUtils.getUI().core.addTask(start);
+        if (!start.isTimedOut()) {
+            WaitProgress finish = new WaitProgress(WaitProgress.Phase.FINISH, 60000);
+            NUtils.getUI().core.addTask(finish);
+        }
+        boolean clocks = LightFire.hasClocks(gui.prog != null);
+        return neighborStickReady(gui.vhand != null, clocks, !start.isTimedOut());
     }
 
     private void dropLeftoverHand(NGameUI gui) throws InterruptedException {
