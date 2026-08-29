@@ -249,7 +249,7 @@ public class Craft implements Action {
         }
 
         Results craftResult = null;
-        while (left.get() > 0) {
+        while (left.get() > 0 && !CraftTarget.reachedCap(count - left.get(), count)) {
             craftResult = crafting(ncontext, gui, size, left);
             if (!craftResult.IsSuccess()) {
                 return craftResult;
@@ -295,6 +295,8 @@ public class Craft implements Action {
             // Use stack-aware calculation for better inventory utilization
             for_craft = calculateMaxCraftsWithStacking(ncontext, freeSpace, left.get());
         }
+        for_craft = CraftTarget.capIterations(count, for_craft);
+        for_craft = Math.min(for_craft, left.get());
         
 
         if (for_craft <= 0) {
@@ -484,13 +486,13 @@ public class Craft implements Action {
             
         }
 
-        craftProc(ncontext, gui, resfc, targetName);
+        boolean batchDone = craftProc(ncontext, gui, resfc, targetName, for_craft);
 
         boolean isCauldron = ncontext.workstation != null &&
                 ncontext.workstation.station != null &&
                 ncontext.workstation.station.contains("gfx/terobjs/cauldron");
 
-        if (isCauldron)
+        if (isCauldron && batchDone)
         {
 
             Gob cauldron = Finder.findGob(ncontext.workstation.selected);
@@ -504,14 +506,16 @@ public class Craft implements Action {
                     return Results.ERROR("Failed to use workstation");
                 }
                 openBarrelWindows(ncontext, gui);
-                craftProc(ncontext, gui, resfc, targetName);
+                batchDone = craftProc(ncontext, gui, resfc, targetName, for_craft);
             }
         }
-        for (NMakewindow.Spec s : mwnd.outputs) {
-            if (s.ing != null) {
-                NUtils.getUI().core.addTask(new WaitItems(NUtils.getGameUI().getInventory(), new NAlias(s.ing.name), resfc));
-            } else {
-                NUtils.getUI().core.addTask(new WaitItems(NUtils.getGameUI().getInventory(), new NAlias(s.name), resfc));
+        if (batchDone) {
+            for (NMakewindow.Spec s : mwnd.outputs) {
+                if (s.ing != null) {
+                    NUtils.getUI().core.addTask(new WaitItems(NUtils.getGameUI().getInventory(), new NAlias(s.ing.name), resfc));
+                } else {
+                    NUtils.getUI().core.addTask(new WaitItems(NUtils.getGameUI().getInventory(), new NAlias(s.name), resfc));
+                }
             }
         }
         HashSet<String> targets = new HashSet<>();
@@ -530,12 +534,18 @@ public class Craft implements Action {
         if (!mwnd.noTransfer.a) {
             new FreeInventory2(ncontext).run(gui);
         }
-        left.set(left.get() - for_craft);
+        if (batchDone)
+            left.set(left.get() - for_craft);
+        else
+            left.set(0);
         return Results.SUCCESS();
     }
 
-    private void craftProc(NContext ncontext, NGameUI gui, int resfc, String targetName) throws InterruptedException
+    private boolean craftProc(NContext ncontext, NGameUI gui, int resfc, String targetName, int for_craft) throws InterruptedException
     {
+        if (!CraftTarget.isAll(count)) {
+            return craftOneByOne(gui, for_craft);
+        }
         int finalResfc = resfc;
         String finalTargetName = targetName;
         int maxRetries = 3;
@@ -627,7 +637,7 @@ public class Craft implements Action {
                 // Успех! Делаем клики для сброса состояния и выходим
                 NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 3, 0);
                 NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 1, 0);
-                return;
+                return true;
             }
             
             // Крафт не завершился успешно - проверяем нужен ли retry
@@ -637,13 +647,32 @@ public class Craft implements Action {
                 // Недостаточно ингредиентов - делаем клики и выходим
                 NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 3, 0);
                 NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 1, 0);
-                return;
+                return true;
             }
         }
         
         // Исчерпали все попытки
         NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 3, 0);
         NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 1, 0);
+        return true;
+    }
+
+    private boolean craftOneByOne(NGameUI gui, int for_craft) throws InterruptedException {
+        for (int i = 0; i < for_craft; i++) {
+            refreshMakeWidget(gui);
+            if (!CraftMake.windowOpen(mwnd))
+                return false;
+            if (NUtils.getUI() != null)
+                NUtils.getUI().dropLastError();
+            mwnd.wdgmsg("make", 0);
+            if (!CraftMake.waitOne(gui, mwnd))
+                return false;
+        }
+        if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null && NUtils.player() != null) {
+            NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 3, 0);
+            NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 1, 0);
+        }
+        return true;
     }
     
     /**

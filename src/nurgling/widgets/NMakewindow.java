@@ -1178,7 +1178,10 @@ public class NMakewindow extends Widget implements DTarget {
 
     public boolean globtype(GlobKeyEvent ev) {
         if(ev.c == '\n') {
-            wdgmsg("make", ui.modctrl?1:0);
+            if(ui.modctrl)
+                craftAll();
+            else
+                craft();
             return(true);
         }
         return(super.globtype(ev));
@@ -1205,26 +1208,25 @@ public class NMakewindow extends Widget implements DTarget {
 
     void craft()
     {
+        final NGameUI gui = NUtils.getGameUI();
+        Integer parsed = CraftTarget.parse(getCraftCount());
+        if (parsed == null) {
+            if (gui != null)
+                gui.error(L10n.get("craft.incorrect_target_num"));
+            return;
+        }
+        int num = parsed.intValue();
         if(!autoMode)
-            wdgmsg("make", 0);
+        {
+            if (num == 1)
+                wdgmsg("make", 0);
+            else
+                BotExecutor.runAsync("Craft", new RepeatMake(NMakewindow.this, num));
+        }
         else
         {
-            final NGameUI gui = NUtils.getGameUI();
             if (gui == null) return;
-
-            int num = 1;
-            try
-            {
-                String cand = craft_num.text();
-                if(!cand.isEmpty())
-                    num = Integer.parseInt(cand);
-            }
-            catch (NumberFormatException e)
-            {
-                gui.error("Incorrect target num");
-            }
-            final int craftNum = num;
-            BotExecutor.runAsync("Auto craft(BOT)", new Craft(NMakewindow.this, craftNum));
+            BotExecutor.runAsync("Auto craft(BOT)", new Craft(NMakewindow.this, num));
         }
     }
 
@@ -1236,7 +1238,7 @@ public class NMakewindow extends Widget implements DTarget {
         }
         else
         {
-            BotExecutor.runAsync("Auto craft(BOT)", new Craft(NMakewindow.this, 9999));
+            BotExecutor.runAsync("Auto craft(BOT)", new Craft(NMakewindow.this, CraftTarget.ALL));
         }
     }
 
