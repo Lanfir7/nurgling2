@@ -2,8 +2,10 @@ package nurgling.tools;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,9 +78,55 @@ class KilnFuelCatalogTest {
         assertEquals(23, fuel("Urn"));
     }
 
+    @Test
+    void fuelUnitsForStripsUnfiredAndMatchesCatalog() {
+        assertEquals(23, units("Unfired Garden Pot"));
+        assertEquals(12, units("Unfired Clay Jar"));
+        assertEquals(4, units("Fishwrap"));
+    }
+
+    @Test
+    void fuelUnitsForMapsClayToBrickAmounts() {
+        assertEquals(2, units("Ball Clay"));
+        assertEquals(2, units("Potter's Clay"));
+        assertEquals(23, units("Coade Clay"));
+    }
+
+    @Test
+    void fuelUnitsForMapsWoodAndBonePrecursors() {
+        assertEquals(3, units("Board"));
+        assertEquals(8, units("Block of Wood"));
+        assertEquals(8, units("Branch"));
+        assertEquals(8, units("Bark"));
+        assertEquals(6, units("Bone Material"));
+        assertEquals(6, units("Wishbone"));
+    }
+
+    @Test
+    void fuelUnitsForUnknownItemIsEmpty() {
+        assertFalse(KilnFuelCatalog.fuelUnitsFor("Mystery Goo").isPresent());
+        assertFalse(KilnFuelCatalog.fuelUnitsFor("Board of Oak").isPresent());
+        assertFalse(KilnFuelCatalog.fuelUnitsFor(null).isPresent());
+    }
+
+    @Test
+    void mixedKilnLoadUsesMaxNotSum() {
+        OptionalInt mixed = KilnFuelCatalog.maxFuelUnitsFor(Arrays.asList("Ball Clay", "Unfired Garden Pot"));
+        assertTrue(mixed.isPresent());
+        assertEquals(23, mixed.getAsInt());
+        assertEquals(0, KilnFuelCatalog.maxFuelUnitsFor(Arrays.asList()).orElse(-1));
+        assertFalse(KilnFuelCatalog.maxFuelUnitsFor(Arrays.asList("Brick", "Mystery Goo")).isPresent());
+    }
+
     private static int fuel(String item) {
         KilnFuelCatalog.Entry entry = KilnFuelCatalog.find(item);
         assertNotNull(entry, item);
         return entry.fuelUnits;
+    }
+
+    private static int units(String item) {
+        OptionalInt resolved = KilnFuelCatalog.fuelUnitsFor(item);
+        assertTrue(resolved.isPresent(), item);
+        return resolved.getAsInt();
     }
 }

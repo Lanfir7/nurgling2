@@ -2,7 +2,10 @@ package nurgling.tools;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.OptionalInt;
+import java.util.Set;
 
 /**
  * Kiln firing table from the Ring of Brodgar wiki (Kiln page, fetched 2026-08-29).
@@ -71,5 +74,73 @@ public final class KilnFuelCatalog {
                 return entry;
         }
         return null;
+    }
+
+    /** Precursor names from {@code VSpec} Clay; Coade Clay fires as Brick (Coade Clay). */
+    private static final Set<String> CLAYS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+            "Acre Clay", "Ball Clay", "Sea Clay", "Gray Clay", "Cave Clay",
+            "Pit Clay", "Soap Clay", "Coade Clay", "Bone Clay", "Potter's Clay",
+            "Riverbed Clay"
+    )));
+
+    /** Precursor names from {@code VSpec} Bone Material, as used by BoneAshAction. */
+    private static final Set<String> BONES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+            "Bone Material", "Adder Skeleton", "Crabshell", "Mammoth Tusk", "Moose Antlers",
+            "Troll Skull", "Troll Tusks", "Trollbone", "Walrus Tusk", "Whale Bone Material",
+            "Wishbone"
+    )));
+
+    /**
+     * Fuel units (branches) for a kiln inventory item. Precursors are mapped to catalog
+     * products; unknown names return empty — callers must not guess.
+     */
+    public static OptionalInt fuelUnitsFor(String itemName) {
+        if (itemName == null || itemName.isEmpty())
+            return OptionalInt.empty();
+        String name = itemName;
+        if (name.startsWith("Unfired "))
+            name = name.substring("Unfired ".length());
+        if (name.isEmpty())
+            return OptionalInt.empty();
+
+        if ("Coade Clay".equals(name))
+            return unitsOf("Brick (Coade Clay)");
+        if (CLAYS.contains(name))
+            return unitsOf("Brick");
+        if ("Board".equals(name))
+            return unitsOf("Ashes (Board)");
+        if ("Block of Wood".equals(name))
+            return unitsOf("Ashes (Block of Wood)");
+        if ("Branch".equals(name))
+            return unitsOf("Ashes (Branch)");
+        if ("Bark".equals(name))
+            return unitsOf("Ashes (Bark)");
+        if (BONES.contains(name))
+            return unitsOf("Bone Ash");
+
+        return unitsOf(name);
+    }
+
+    /**
+     * Max fuel among items in one kiln (mixed load). Empty list is 0.
+     * Empty optional if any name cannot be resolved.
+     */
+    public static OptionalInt maxFuelUnitsFor(Iterable<String> itemNames) {
+        if (itemNames == null)
+            return OptionalInt.empty();
+        int max = 0;
+        for (String itemName : itemNames) {
+            OptionalInt units = fuelUnitsFor(itemName);
+            if (!units.isPresent())
+                return OptionalInt.empty();
+            if (units.getAsInt() > max)
+                max = units.getAsInt();
+        }
+        return OptionalInt.of(max);
+    }
+
+    private static OptionalInt unitsOf(String catalogItem) {
+        Entry entry = find(catalogItem);
+        return entry == null ? OptionalInt.empty() : OptionalInt.of(entry.fuelUnits);
     }
 }
