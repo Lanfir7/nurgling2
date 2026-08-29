@@ -24,4 +24,8 @@ final class NWindowTitleLayout {
                 Math.max(0, (titleHeight - widgetHeight) / 2));
         return new NWindowTitleLayout(position, width, visible);
     }
+
+    static int requiredTitleHeight(int baseHeight, int widgetHeight, int verticalPadding) {
+        return Math.max(baseHeight, widgetHeight + (verticalPadding * 2));
+    }
 }

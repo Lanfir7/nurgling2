@@ -33,4 +33,10 @@ class NWindowTitleLayoutTest {
         assertTrue(layout.position.x >= 132);
         assertTrue(layout.position.x + layout.width <= 469);
     }
+
+    @Test
+    void titleBarMakesRoomAboveAndBelowEmbeddedControl() {
+        assertEquals(26, NWindowTitleLayout.requiredTitleHeight(21, 20, 3));
+        assertEquals(21, NWindowTitleLayout.requiredTitleHeight(21, 12, 3));
+    }
 }

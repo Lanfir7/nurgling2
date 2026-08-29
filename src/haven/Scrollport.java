@@ -47,7 +47,9 @@ public class Scrollport extends Widget {
 	    }, sz.x, 0, 1, 0);
 	cont = add(new Scrollcont(sz.sub(bar.sz.x, 0)) {
 		public void update() {
-		    bar.max = Math.max(0, contentsz().y + 10 - sz.y);
+		    bar.max = scrollRange(contentsz().y, sz.y, 10, showBar);
+		    if(!showBar)
+			cont.sy = 0;
 		}
 	    }, Coord.z);
     }
@@ -96,6 +98,8 @@ public class Scrollport extends Widget {
     }
 
     public boolean mousewheel(MouseWheelEvent ev) {
+	if(!acceptsWheel(showBar, bar.max))
+	    return(false);
 	bar.ch(ev.s * UI.scale(15));
 	return(true);
     }
@@ -124,6 +128,15 @@ public class Scrollport extends Widget {
 
     static int contentWidth(int totalWidth, int barWidth, boolean barVisible) {
 	return(Math.max(1, totalWidth - (barVisible ? barWidth : 0)));
+    }
+
+    static int scrollRange(int contentHeight, int viewportHeight, int padding,
+			   boolean barVisible) {
+	return(barVisible ? Math.max(0, contentHeight + padding - viewportHeight) : 0);
+    }
+
+    static boolean acceptsWheel(boolean barVisible, int range) {
+	return(barVisible && (range > 0));
     }
 
     public void showbar(boolean show) {

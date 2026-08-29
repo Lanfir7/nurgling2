@@ -43,13 +43,23 @@ public class NWindowDeco extends Window.DragDeco {
         titleWidgetPreferredWidth = preferredWidth;
         titleWidgetMinWidth = minWidth;
         titleWidgetEnabled = true;
-        layoutTitleWidget();
+        refreshTitleGeometry();
         return widget;
     }
 
     public void setTitleWidgetVisible(boolean visible) {
         titleWidgetEnabled = visible;
-        layoutTitleWidget();
+        refreshTitleGeometry();
+    }
+
+    private void refreshTitleGeometry() {
+        if(aa == null) {
+            layoutTitleWidget();
+        } else if(parent instanceof Window) {
+            ((Window)parent).resize(aa.sz());
+        } else {
+            iresize(aa.sz());
+        }
     }
 
     private void layoutTitleWidget() {
@@ -80,7 +90,9 @@ public class NWindowDeco extends Window.DragDeco {
 
     @Override
     public void iresize(Coord isz) {
-        int titleH = UI.scale(TITLE_H);
+        int widgetHeight = ((titleWidget != null) && titleWidgetEnabled) ? titleWidget.sz.y : 0;
+        int titleH = NWindowTitleLayout.requiredTitleHeight(
+                UI.scale(TITLE_H), widgetHeight, UI.scale(3));
         Coord mrgn = customMrgn != null ? customMrgn : (lg ? Window.dlmrgn : Window.dsmrgn);
         Coord csz = isz.add(mrgn.mul(2));
         Coord wsz = new Coord(csz.x, csz.y + titleH);

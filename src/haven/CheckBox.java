@@ -33,6 +33,7 @@ public class CheckBox extends ACheckBox {
     public static final Tex smark = Resource.loadtex("gfx/hud/chkmarks");
     public final Tex box, mark;
     public final Coord loff;
+    private final String labelText;
     Text lbl;
 
     @RName("chk")
@@ -45,6 +46,7 @@ public class CheckBox extends ACheckBox {
     }
 
     public CheckBox(String lbl, boolean lg) {
+	this.labelText = lbl;
 	this.lbl = (lbl.length() > 0) ? Text.std.render(lbl, java.awt.Color.WHITE) : null;
 	if(lg) {
 	    box = lbox; mark = lmark;
@@ -64,7 +66,17 @@ public class CheckBox extends ACheckBox {
     }
 
     public String label() {
-	return (this.lbl == null) ? "" : this.lbl.text;
+	return labelText;
+    }
+
+    public CheckBox wrapTo(int width) {
+	if(lbl == null)
+	    return(this);
+	int gap = UI.scale(5);
+	int labelWidth = CheckBoxWrapLayout.labelWidth(width, box.sz().x, gap);
+	lbl = Text.std.renderwrap(labelText, java.awt.Color.WHITE, labelWidth);
+	sz = CheckBoxWrapLayout.size(box.sz(), lbl.sz(), gap);
+	return(this);
     }
 
     public void draw(GOut g) {

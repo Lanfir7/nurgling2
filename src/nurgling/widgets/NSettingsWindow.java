@@ -281,7 +281,8 @@ public class NSettingsWindow extends Widget {
         currentFrame.fitTo(settingsView.cont.sz, pageColumns);
         currentFrame.move(Coord.z);
         settingsView.cont.update();
-        boolean overflow = settingsView.bar.max > 0;
+        boolean overflow = SettingsPageScrollPolicy.needsScroll(
+                currentFrame.sz.y, settingsView.cont.sz.y);
         settingsView.showbar(overflow);
         if(!overflow) {
             currentFrame.fitTo(settingsView.cont.sz, pageColumns);

@@ -3,6 +3,7 @@ package haven;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScrollportResizePropagationTest {
@@ -23,6 +24,14 @@ class ScrollportResizePropagationTest {
         assertEquals(183, Scrollport.contentWidth(200, 17, true));
         assertEquals(200, Scrollport.contentWidth(200, 17, false));
         assertEquals(1, Scrollport.contentWidth(0, 17, true));
+    }
+
+    @Test
+    void hiddenScrollbarHasNoRangeAndDoesNotConsumeWheel() {
+        assertEquals(0, Scrollport.scrollRange(110, 100, 10, false));
+        assertFalse(Scrollport.acceptsWheel(false, 10));
+        assertFalse(Scrollport.acceptsWheel(true, 0));
+        assertTrue(Scrollport.acceptsWheel(true, 10));
     }
 
     private static class TrackingParent extends Widget {

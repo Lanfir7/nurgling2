@@ -348,7 +348,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
     public void fitToWidth(int width, int columns) {
         leftColumn.pack();
         rightColumn.pack();
-        int minCardWidth = (columns > 1) ? UI.scale(245) : width + 1;
+        int minCardWidth = (columns > 1) ? UI.scale(280) : width + 1;
         QoLLayout layout = QoLLayout.calculate(width, UI.scale(12), minCardWidth,
                 leftColumn.sz.y, rightColumn.sz.y);
         leftColumn.move(layout.leftPosition);
@@ -361,6 +361,13 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
     private static class SettingsColumnCard extends Widget {
         SettingsColumnCard(Coord size) {
             super(size);
+        }
+
+        @Override
+        public <T extends Widget> T add(T child, Coord c) {
+            if(child instanceof CheckBox)
+                ((CheckBox)child).wrapTo(UI.scale(230));
+            return super.add(child, c);
         }
 
         @Override
