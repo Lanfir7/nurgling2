@@ -49,13 +49,11 @@ class KilnFuelCatalogTest {
     }
 
     @Test
-    void brickTimesAndNotesMatchWiki() {
+    void brickTimesMatchWiki() {
         KilnFuelCatalog.Entry brick = KilnFuelCatalog.find("Brick");
         assertNotNull(brick);
         assertEquals("0:08:58", brick.realTime);
         assertEquals("0:29:30", brick.inGameTime);
-        assertEquals("Coade Clay excluded", brick.notes);
-        assertEquals("warm up", KilnFuelCatalog.find("Branding Iron").notes);
     }
 
     @Test

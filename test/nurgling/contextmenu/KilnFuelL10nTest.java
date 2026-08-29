@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class KilnFuelL10nTest {
 
@@ -22,7 +23,7 @@ class KilnFuelL10nTest {
         assertEquals("Branches", p.getProperty("kiln_fuel.col.fuel"));
         assertEquals("Real time", p.getProperty("kiln_fuel.col.real"));
         assertEquals("In-game", p.getProperty("kiln_fuel.col.ingame"));
-        assertEquals("Notes", p.getProperty("kiln_fuel.col.notes"));
+        assertNull(p.getProperty("kiln_fuel.col.notes"));
     }
 
     @Test
@@ -34,7 +35,7 @@ class KilnFuelL10nTest {
         assertEquals("Ветки", p.getProperty("kiln_fuel.col.fuel"));
         assertEquals("Реальное", p.getProperty("kiln_fuel.col.real"));
         assertEquals("Игровое", p.getProperty("kiln_fuel.col.ingame"));
-        assertEquals("Заметки", p.getProperty("kiln_fuel.col.notes"));
+        assertNull(p.getProperty("kiln_fuel.col.notes"));
     }
 
     private static Properties load(String path) throws Exception {
