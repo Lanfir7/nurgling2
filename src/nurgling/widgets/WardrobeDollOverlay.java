@@ -4,6 +4,7 @@ import haven.Avaview;
 import haven.Coord;
 import haven.Equipory;
 import haven.Frame;
+import haven.Inventory;
 import haven.WItem;
 import haven.Widget;
 import haven.Window;
@@ -59,6 +60,10 @@ public class WardrobeDollOverlay extends EquipmentStatsWidget {
         for (Widget ch = host.child; ch != null; ch = ch.next) {
             if (ch instanceof WItem)
                 items.add((WItem) ch);
+            else if (ch instanceof Inventory) {
+                for (WItem w : ch.children(WItem.class))
+                    items.add(w);
+            }
         }
         return items.toArray(new WItem[0]);
     }
