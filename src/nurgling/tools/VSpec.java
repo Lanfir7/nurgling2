@@ -433,7 +433,7 @@ public class VSpec {
 
         // Crabapple Tree
         ArrayList<String> crabappleOp = new ArrayList<>();
-        crabappleOp.add("Crabapple"); // РџР»РѕРґС‹
+        crabappleOp.add("Crabapples"); // РџР»РѕРґС‹
         crabappleOp.add("Yesteryear's Crabapple");
         object.put("gfx/terobjs/trees/crabappletree", crabappleOp);
 
@@ -1337,6 +1337,7 @@ public class VSpec {
         ArrayList<JSONObject> eggs = new ArrayList<>();
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-bullfinch\",\"name\":\"Bullfinch Egg\"}"));
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-chicken\",\"name\":\"Chicken Egg\"}"));
+        eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-duck\",\"name\":\"Duck Egg\"}"));
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-magpie\",\"name\":\"Magpie Egg\"}"));
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-rockdove\",\"name\":\"Rock Dove Egg\"}"));
         eggs.add(new JSONObject("{\"static\":\"gfx/invobjs/egg-woodgrouse\",\"name\":\"Woodgrouse Egg\"}"));
@@ -1956,6 +1957,7 @@ public class VSpec {
 
         ArrayList<JSONObject> poultry = new ArrayList<>();
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-chicken\"], \"name\": \"Chicken Meat\"}"));
+        poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-crane\"], \"name\": \"Crane Meat\"}"));
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-eagleowl\"], \"name\": \"Eagle Owl Meat\"}"));
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-goldeneagle\"], \"name\": \"Golden Eagle Meat\"}"));
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-magpie\"], \"name\": \"Magpie Meat\"}"));
@@ -2815,7 +2817,7 @@ public class VSpec {
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/plum-yester\",\"name\":\"Yesteryear's Plum\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/quince-yester\",\"name\":\"Yesteryear's Quince\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/apple-yester\",\"name\":\"Yesteryear's Red Apple\"}"));
-        seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-crabappletree\",\"name\":\"Crabapple\"}"));
+        seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-crabappletree\",\"name\":\"Crabapples\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/seed-crabappletree-yester\",\"name\":\"Yesteryear's Crabapple\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/cork\",\"name\":\"Cork\"}"));
         seedsAndBerries.add(new JSONObject("{\"static\":\"gfx/invobjs/applecore\",\"name\":\"Red Apple Core\"}"));

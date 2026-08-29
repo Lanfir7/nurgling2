@@ -5,7 +5,6 @@ import haven.Widget;
 import nurgling.NGItem;
 import nurgling.NInventory;
 import nurgling.tools.NAlias;
-import nurgling.tools.NParser;
 import nurgling.tools.StackSupporter;
 
 public class GetNotStack extends NTask
@@ -38,7 +37,7 @@ public class GetNotStack extends NTask
                 if (!NGItem.validateItem(item)) {
                     return true;
                 } else {
-                    if (NParser.checkName(((NGItem)item.item).name(), name)) {
+                    if (matchesRequestedName(name, ((NGItem)item.item).name())) {
                         if (
                                 item.item.contents == null
                                 && StackSupporter.isStackable((NInventory) item.item.parent, ((NGItem) item.item).name())
@@ -51,6 +50,10 @@ public class GetNotStack extends NTask
             }
         }
         return false;
+    }
+
+    static boolean matchesRequestedName(NAlias requestedName, String candidateName) {
+        return requestedName.matchesExact(candidateName);
     }
 
     private WItem result = null;

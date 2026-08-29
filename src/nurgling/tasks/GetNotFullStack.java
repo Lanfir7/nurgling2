@@ -6,7 +6,6 @@ import haven.res.ui.stackinv.ItemStack;
 import nurgling.NGItem;
 import nurgling.NInventory;
 import nurgling.tools.NAlias;
-import nurgling.tools.NParser;
 import nurgling.tools.StackSupporter;
 
 public class GetNotFullStack extends NTask
@@ -38,7 +37,7 @@ public class GetNotFullStack extends NTask
                 if (!NGItem.validateItem(item)) {
                     return true;
                 } else {
-                    if (NParser.checkName(((NGItem)item.item).name(), name)) {
+                    if (GetNotStack.matchesRequestedName(name, ((NGItem)item.item).name())) {
                         /* Strictly less than, not "different from": maxSize is our guess at the
                          * server's stack depth, and when it guesses low every stack the server
                          * built deeper than that would come back as a fill target. Merging into
