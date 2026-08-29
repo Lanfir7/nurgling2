@@ -486,13 +486,21 @@ public class Craft implements Action {
             
         }
 
-        boolean batchDone = craftProc(ncontext, gui, resfc, targetName, for_craft);
+        int completed = 0;
+        boolean batchDone;
+        if (CraftTarget.isAll(count)) {
+            batchDone = craftProc(ncontext, gui, resfc, targetName);
+            completed = for_craft;
+        } else {
+            completed = craftOneByOne(gui, for_craft);
+            batchDone = completed == for_craft;
+        }
 
         boolean isCauldron = ncontext.workstation != null &&
                 ncontext.workstation.station != null &&
                 ncontext.workstation.station.contains("gfx/terobjs/cauldron");
 
-        if (isCauldron && batchDone)
+        if (isCauldron)
         {
 
             Gob cauldron = Finder.findGob(ncontext.workstation.selected);
@@ -506,7 +514,12 @@ public class Craft implements Action {
                     return Results.ERROR("Failed to use workstation");
                 }
                 openBarrelWindows(ncontext, gui);
-                batchDone = craftProc(ncontext, gui, resfc, targetName, for_craft);
+                if (CraftTarget.isAll(count)) {
+                    batchDone = craftProc(ncontext, gui, resfc, targetName);
+                } else if (completed < for_craft) {
+                    completed += craftOneByOne(gui, for_craft - completed);
+                    batchDone = completed == for_craft;
+                }
             }
         }
         if (batchDone) {
@@ -534,19 +547,16 @@ public class Craft implements Action {
         if (!mwnd.noTransfer.a) {
             new FreeInventory2(ncontext).run(gui);
         }
-        if (batchDone)
+        if (CraftTarget.isAll(count) || batchDone)
             left.set(left.get() - for_craft);
         else
             left.set(0);
         return Results.SUCCESS();
     }
 
-    private boolean craftProc(NContext ncontext, NGameUI gui, int resfc, String targetName, int for_craft) throws InterruptedException
+    private boolean craftProc(NContext ncontext, NGameUI gui, int resfc, String targetName) throws InterruptedException
     {
-        if (!CraftTarget.isAll(count)) {
-            return craftOneByOne(gui, for_craft);
-        }
-        int finalResfc = resfc;
+        final int finalResfc = resfc;
         String finalTargetName = targetName;
         int maxRetries = 3;
         
@@ -657,22 +667,24 @@ public class Craft implements Action {
         return true;
     }
 
-    private boolean craftOneByOne(NGameUI gui, int for_craft) throws InterruptedException {
+    private int craftOneByOne(NGameUI gui, int for_craft) throws InterruptedException {
+        int done = 0;
         for (int i = 0; i < for_craft; i++) {
             refreshMakeWidget(gui);
             if (!CraftMake.windowOpen(mwnd))
-                return false;
+                break;
             if (NUtils.getUI() != null)
                 NUtils.getUI().dropLastError();
             mwnd.wdgmsg("make", 0);
             if (!CraftMake.waitOne(gui, mwnd))
-                return false;
+                break;
+            done++;
         }
         if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null && NUtils.player() != null) {
             NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 3, 0);
             NUtils.getGameUI().map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 1, 0);
         }
-        return true;
+        return done;
     }
     
     /**

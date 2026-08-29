@@ -18,6 +18,20 @@ public final class CraftMake {
         return mwnd != null && mwnd.parent != null;
     }
 
+    /** Stop this make if the recipe window went away or the server rejected it. */
+    public static boolean shouldStop(boolean windowClosed, boolean makeFailed) {
+        return windowClosed || makeFailed;
+    }
+
+    /**
+     * No progress bar and no error: treat as an instant craft, not a failure.
+     * {@code getLastError()} consumes the error, so callers must capture it in
+     * the wait task — not re-read it afterwards.
+     */
+    public static boolean instantSuccess(boolean progAppeared, boolean windowClosed, boolean makeFailed) {
+        return !progAppeared && !windowClosed && !makeFailed;
+    }
+
     /**
      * After {@code wdgmsg("make", 0)}: wait for the progress bar to appear and
      * finish, or for an instant craft / error / closed window.
@@ -29,6 +43,8 @@ public final class CraftMake {
             return false;
 
         final boolean[] progAppeared = {false};
+        final boolean[] windowClosed = {false};
+        final boolean[] makeFailed = {false};
         NUtils.addTask(new NTask() {
             {
                 infinite = false;
@@ -38,10 +54,14 @@ public final class CraftMake {
 
             @Override
             public boolean check() {
-                if (!windowOpen(mwnd))
+                if (!windowOpen(mwnd)) {
+                    windowClosed[0] = true;
                     return true;
-                if (NUtils.getUI() != null && NUtils.getUI().getLastError() != null)
+                }
+                if (NUtils.getUI() != null && NUtils.getUI().getLastError() != null) {
+                    makeFailed[0] = true;
                     return true;
+                }
                 if (gui.prog != null && gui.prog.prog > 0) {
                     progAppeared[0] = true;
                     return true;
@@ -50,11 +70,9 @@ public final class CraftMake {
             }
         });
 
-        if (!windowOpen(mwnd))
+        if (shouldStop(windowClosed[0], makeFailed[0]))
             return false;
-        if (NUtils.getUI() != null && NUtils.getUI().getLastError() != null)
-            return false;
-        if (!progAppeared[0])
+        if (instantSuccess(progAppeared[0], windowClosed[0], makeFailed[0]))
             return true;
 
         NUtils.addTask(new NTask() {
@@ -62,10 +80,14 @@ public final class CraftMake {
 
             @Override
             public boolean check() {
-                if (!windowOpen(mwnd))
+                if (!windowOpen(mwnd)) {
+                    windowClosed[0] = true;
                     return true;
-                if (NUtils.getUI() != null && NUtils.getUI().getLastError() != null)
+                }
+                if (NUtils.getUI() != null && NUtils.getUI().getLastError() != null) {
+                    makeFailed[0] = true;
                     return true;
+                }
                 if (gui.prog != null && gui.prog.visible) {
                     ticksAfterProgGone = 0;
                     return false;
@@ -75,8 +97,6 @@ public final class CraftMake {
             }
         });
 
-        if (!windowOpen(mwnd))
-            return false;
-        return NUtils.getUI() == null || NUtils.getUI().getLastError() == null;
+        return !shouldStop(windowClosed[0], makeFailed[0]);
     }
 }
