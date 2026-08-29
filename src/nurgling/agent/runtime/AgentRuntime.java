@@ -205,7 +205,7 @@ public class AgentRuntime {
             List<String> rules = memoryRetriever.topRules(3);
             String memoryContext = buildMemoryContext(rules, episodes);
             if (!memoryContext.isEmpty()) {
-                messagesSnapshot.add(new LLMMessage("system", memoryContext));
+                messagesSnapshot = withSystemContext(messagesSnapshot, memoryContext);
             }
         }
         return client.chat(target.baseUrl, target.apiKey, target.model, messagesSnapshot, tools.toolDefinitions(),
@@ -238,14 +238,15 @@ public class AgentRuntime {
         if (l != null) {
             l.onLog(safe);
         }
-        if (gui != null && isChatVisibleLine(safe)) {
+        if (gui != null && isUserVisibleLine(safe)) {
             gui.msg(safe);
         }
     }
 
-    private static boolean isChatVisibleLine(String line) {
+    public static boolean isUserVisibleLine(String line) {
         if (line == null) return false;
-        return line.startsWith("YOU:") || line.startsWith("ASSISTANT:") || line.startsWith("TOOL ");
+        return line.startsWith("YOU:") || line.startsWith("ASSISTANT:") || line.startsWith("TOOL ")
+                || line.startsWith("Agent error:");
     }
 
     private static String shortenForLog(String line) {
@@ -303,6 +304,22 @@ public class AgentRuntime {
             }
         }
         return "";
+    }
+
+    static List<LLMMessage> withSystemContext(List<LLMMessage> messages, String context) {
+        List<LLMMessage> result = new ArrayList<>(messages);
+        if (context == null || context.trim().isEmpty()) {
+            return result;
+        }
+        if (!result.isEmpty() && "system".equals(result.get(0).role)) {
+            LLMMessage system = result.get(0);
+            String base = system.content == null ? "" : system.content.trim();
+            String merged = base.isEmpty() ? context : base + "\n\n" + context;
+            result.set(0, new LLMMessage("system", merged));
+        } else {
+            result.add(0, new LLMMessage("system", context));
+        }
+        return result;
     }
 
     private static String buildMemoryContext(List<String> rules, List<MemoryRecord> episodes) {

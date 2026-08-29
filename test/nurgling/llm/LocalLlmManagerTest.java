@@ -232,7 +232,9 @@ class LocalLlmManagerTest {
                 "--host",
                 "127.0.0.1",
                 "--port",
-                "19090"
+                "19090",
+                "--reasoning",
+                "off"
         ), starter.lastCommand);
         manager.stop();
     }

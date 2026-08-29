@@ -55,15 +55,7 @@ public class OpenAIChatClient {
         if (!checkTcp(host, port, 3000)) {
             throw new IOException("TCP connect failed to " + host + ":" + port + " (request not sent)");
         }
-        JSONObject payload = new JSONObject();
-        payload.put("model", model);
-        payload.put("temperature", temperature);
-        payload.put("max_tokens", maxTokens);
-        payload.put("messages", toJsonMessages(messages));
-        if (tools != null && !tools.isEmpty()) {
-            payload.put("tools", tools);
-            payload.put("tool_choice", "auto");
-        }
+        JSONObject payload = buildPayload(model, messages, tools, temperature, maxTokens);
 
         HttpRequest.Builder rb = HttpRequest.newBuilder()
                 .uri(URI.create(normalized + "/v1/chat/completions"))
@@ -85,6 +77,24 @@ public class OpenAIChatClient {
             throw new IOException("LLM HTTP " + response.statusCode() + ": " + response.body());
         }
         return parseResponse(response.body());
+    }
+
+    static JSONObject buildPayload(String model,
+                                   List<LLMMessage> messages,
+                                   JSONArray tools,
+                                   double temperature,
+                                   int maxTokens) {
+        JSONObject payload = new JSONObject();
+        payload.put("model", model);
+        payload.put("temperature", temperature);
+        payload.put("max_tokens", maxTokens);
+        payload.put("messages", toJsonMessages(messages));
+        if (tools != null && !tools.isEmpty()) {
+            payload.put("tools", tools);
+            payload.put("tool_choice", "auto");
+            payload.put("parallel_tool_calls", false);
+        }
+        return payload;
     }
 
     private static JSONArray toJsonMessages(List<LLMMessage> messages) {

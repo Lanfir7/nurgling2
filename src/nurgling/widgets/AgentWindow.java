@@ -184,7 +184,7 @@ public class AgentWindow extends Window implements AgentEventListener {
     @Override
     public void onLog(String line) {
         if (line == null) return;
-        if (line.startsWith("YOU:") || line.startsWith("ASSISTANT:") || line.startsWith("TOOL ")) {
+        if (AgentRuntime.isUserVisibleLine(line)) {
             log.append(line);
         }
     }

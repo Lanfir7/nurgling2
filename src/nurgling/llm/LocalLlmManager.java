@@ -261,6 +261,8 @@ public class LocalLlmManager {
         command.add(cfg.host);
         command.add("--port");
         command.add(String.valueOf(cfg.port));
+        command.add("--reasoning");
+        command.add("off");
 
         Process launched;
         try {

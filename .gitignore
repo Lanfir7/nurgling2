@@ -41,6 +41,7 @@ javac.*.args
 /assets/
 /logs/
 /ai/
+/bin/ai/
 /.codegraph/
 /.superpowers/
 /docs/superpowers/
