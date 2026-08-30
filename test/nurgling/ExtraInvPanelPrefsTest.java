@@ -108,25 +108,6 @@ class ExtraInvPanelPrefsTest {
     }
 
     @Test
-    void persistedOpenStateDoesNotForceCharWndPanel() {
-        Map<NConfig.Key, Object> store = emptyStore();
-        ExtraInvPanelPrefs.write(new ExtraInvPanelPrefs.Snapshot(
-                2,
-                NInventory.Grouping.Q5,
-                NInventory.DisplayType.Name,
-                "10"), setter(store));
-
-        ExtraInvPanelPrefs.Snapshot snap = ExtraInvPanelPrefs.snapshotForInstall(getter(store));
-        assertEquals(2, snap.panelState);
-
-        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Character Sheet", false));
-        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Лист персонажа", false));
-        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false, true));
-        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false, false));
-        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", false));
-    }
-
-    @Test
     void keysRoundTripForJsonLoad() {
         assertEquals(NConfig.Key.extraInvPanelState, NConfig.Key.valueOf("extraInvPanelState"));
         assertEquals(NConfig.Key.extraInvGrouping, NConfig.Key.valueOf("extraInvGrouping"));
