@@ -282,6 +282,11 @@ public class NInventory extends Inventory
         if (wnd == null || !(wnd.deco instanceof NWindowDeco) || parent == null) {
             return;
         }
+        boolean charWnd = wnd instanceof CharWnd || getparent(CharWnd.class) != null;
+        if (charWnd) {
+            extraPanelResolved = true;
+            return;
+        }
         if (wnd.cap == null) {
             return;
         }

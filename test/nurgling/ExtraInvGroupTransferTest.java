@@ -261,6 +261,36 @@ class ExtraInvGroupTransferTest {
     }
 
     @Test
+    void extraPanelSkippedForCharacterSheetCaptions() {
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Character Sheet", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Лист персонажа", false));
+        String prev = nurgling.i18n.L10n.getLanguage();
+        try {
+            nurgling.i18n.L10n.setLanguage("en");
+            assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel(
+                    nurgling.i18n.L10n.get("char.window_title"), false));
+            nurgling.i18n.L10n.setLanguage("ru");
+            assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel(
+                    nurgling.i18n.L10n.get("char.window_title"), false));
+        } finally {
+            nurgling.i18n.L10n.setLanguage(prev);
+        }
+    }
+
+    @Test
+    void extraPanelStillInstallsOnChest() {
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", false));
+    }
+
+    @Test
+    void charWndHostSkipsEvenWhenTitleLooksLikeAChest() {
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false, true));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Character Sheet", false, true));
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false, false));
+    }
+
+    @Test
     void oneItemStackCountsAsLeftover() {
         assertTrue(ExtraInvGroupTransfer.isLeftover(false, 1));
         assertTrue(ExtraInvGroupTransfer.isLeftover(true, 1));
