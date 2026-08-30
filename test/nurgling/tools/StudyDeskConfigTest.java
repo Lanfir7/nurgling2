@@ -148,6 +148,27 @@ class StudyDeskConfigTest {
     }
 
     @Test
+    void entirelyMalformedLegacyConfigIsBackedUpBeforeFirstNewDeskWrite() {
+        Map<String, Object> legacy = new LinkedHashMap<>();
+        Map<String, Object> incomplete = new HashMap<>();
+        incomplete.put("gobHash", "broken-hash");
+        legacy.put("Bob", incomplete);
+        NConfig.set(NConfig.Key.studyDeskLayout, legacy);
+
+        assertTrue(StudyDeskConfig.allDesks().isEmpty());
+        StudyDeskConfig.putDesk("new-hash", "New", Collections.emptyMap(), "owner");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> wrapper = (Map<String, Object>)
+                NConfig.getGlobal(NConfig.Key.studyDeskLayout);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> backup = (Map<String, Object>) wrapper.get("legacyBackup");
+        assertEquals(1, backup.size());
+        assertEquals("broken-hash", desk(backup, "Bob").get("gobHash"));
+        assertNull(desk(backup, "Bob").get("layout"));
+    }
+
+    @Test
     void simultaneousSessionSavesDoNotLoseDesks() throws Exception {
         int workers = 32;
         ExecutorService pool = Executors.newFixedThreadPool(workers);

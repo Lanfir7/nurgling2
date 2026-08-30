@@ -104,19 +104,23 @@ public class DbStorageService {
      */
     public CompletableFuture<Integer> clearSharedMapAsync() {
         return databaseManager.executeWithRetry(adapter -> {
-            int grids = countRows(adapter, "map_grids");
-
             if (DatabaseAdapterFactory.isPostgres()) {
+                int grids = countRows(adapter, "map_grids");
                 /* One statement for both: TRUNCATE takes a list, and doing them separately would
                  * leave a window where the layout points at grids that are already gone. */
                 adapter.executeUpdate("TRUNCATE TABLE " + String.join(", ", SHARED_MAP_TABLES));
-            } else {
-                for (String table : SHARED_MAP_TABLES)
-                    adapter.executeUpdate("DELETE FROM " + table);
-                vacuumBestEffort(adapter);
+                return grids;
             }
-            return grids;
+            return clearSqlite(adapter);
         }, "clear shared map");
+    }
+
+    static int clearSqlite(nurgling.db.DatabaseAdapter adapter) throws SQLException {
+        int grids = countRows(adapter, "map_grids");
+        for (String table : SHARED_MAP_TABLES)
+            adapter.executeUpdate("DELETE FROM " + table);
+        vacuumBestEffort(adapter);
+        return grids;
     }
 
     private static int countRows(nurgling.db.DatabaseAdapter adapter, String table)

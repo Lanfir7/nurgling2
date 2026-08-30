@@ -96,9 +96,7 @@ public class StudyDeskConfig {
             firstOwnerByHash.put(hash, entry.getKey());
         }
 
-        if (!migrated.isEmpty()) {
-            saveDesks(migrated, raw);
-        }
+        saveDesks(migrated, raw);
         return migrated;
     }
 

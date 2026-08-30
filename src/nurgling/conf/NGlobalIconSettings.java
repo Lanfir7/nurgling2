@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Machine-global map-icon settings.
@@ -275,16 +276,44 @@ public class NGlobalIconSettings {
         return(dst.fin());
     }
 
+    /** Message.list normally treats end-of-buffer like an explicit list terminator. That is
+     * useful for network messages, but lets a truncated settings file decode as a shorter valid
+     * store. Persistent data must contain every terminator written by addlist(). */
+    private static class StrictMessageBuf extends MessageBuf {
+        StrictMessageBuf(byte[] raw) {
+            super(raw);
+        }
+
+        @Override
+        public Object[] list(Function<Object, ? extends Object> mapper) {
+            ArrayList<Object> ret = new ArrayList<>();
+            while(true) {
+                if(eom())
+                    throw(new Message.FormatError("Unterminated list"));
+                int type = uint8();
+                if(type == Message.T_END)
+                    return(ret.toArray());
+                ret.add(tto(type, mapper));
+            }
+        }
+    }
+
     /** @return the decoded store, or null if the blob could not be read. */
     private static Store decode(byte[] raw) {
+        return decode(raw, true);
+    }
+
+    private static Store decode(byte[] raw, boolean warn) {
         try {
-            Message blob = new MessageBuf(raw);
+            Message blob = new StrictMessageBuf(raw);
             if(!Arrays.equals(blob.bytes(GobIcon.Settings.sig.length), GobIcon.Settings.sig))
                 throw(new Message.FormatError("Invalid signature"));
             int ver = blob.uint8();
             if(ver != 3)
                 throw(new Message.FormatError("Unknown version: " + ver));
             Map<Object, Object> root = Utils.mapdecn(blob.tto());
+            if(!blob.eom())
+                throw(new Message.FormatError("Trailing data"));
             Store ret = new Store();
             ret.notify = Utils.bv(root.getOrDefault("notify", 0));
             if(root.containsKey("nabsorbed")) {
@@ -311,9 +340,14 @@ public class NGlobalIconSettings {
             }
             return(ret);
         } catch(Message.BinError | ClassCastException | NullPointerException | ArrayIndexOutOfBoundsException e) {
-            new Warning(e, "could not decode icon settings").issue();
+            if(warn)
+                new Warning(e, "could not decode icon settings").issue();
             return(null);
         }
+    }
+
+    static boolean isDecodable(byte[] raw) {
+        return decode(raw, false) != null;
     }
 
     /* ------------------------------------------------------------------ storage */
@@ -324,7 +358,7 @@ public class NGlobalIconSettings {
 
     private static Store read() {
         byte[] raw = NFileUtils.readBytesWithBackupFallback(path(), GobIcon.Settings.sig,
-                candidate -> decode(candidate) != null);
+                NGlobalIconSettings::isDecodable);
         Store ret = (raw == null) ? null : decode(raw);
         return((ret == null) ? new Store() : ret);
     }
