@@ -1341,17 +1341,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             NArea newArea = new NArea(key);
             newArea.id = id;
             createdId = id;
-            newArea.uuid = java.util.UUID.randomUUID().toString();
             newArea.space = result;
             newArea.grids_id.addAll(newArea.space.space.keySet());
             newArea.path = NUtils.getGameUI().areas.currentPath;
-            // Brand new area: baseline is empty so every group is "dirty" on first save.
-            newArea.baselineVersion = 0;
-            newArea.baselineSnapshot = null;
-            newArea.markDirty(nurgling.areas.AreaFieldGroup.GEOMETRY);
-            newArea.markDirty(nurgling.areas.AreaFieldGroup.IDENTITY);
-            newArea.markDirty(nurgling.areas.AreaFieldGroup.COSMETIC);
-            newArea.markDirty(nurgling.areas.AreaFieldGroup.ROUTING);
+            AreaCreation.initializeNew(newArea);
             
             // Apply random color if setting is enabled
             Object randomColorSetting = NConfig.get(NConfig.Key.randomAreaColor);
@@ -1387,24 +1380,13 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 names.add(area.name);
             }
 
-            // Deep-copy through JSON string to avoid shared JSONArray/JSONObject references
-            // (otherwise jin/jout can be linked between original and duplicate).
-            NArea copy = new NArea(new JSONObject(source.toJson().toString()));
-            copy.id = newId;
-            copy.gid = Long.MIN_VALUE;
-            copy.uuid = null;
-            copy.synced = false;
-            copy.lastUpdated = 0;
-            copy.lastLocalChange = System.currentTimeMillis();
-            copy.syncGridIdsFromSpace();
-
             String baseName = source.name + " (copy)";
             String newName = baseName;
             int suffix = 1;
             while (names.contains(newName)) {
                 newName = baseName + " " + suffix++;
             }
-            copy.name = newName;
+            NArea copy = AreaCreation.duplicate(source, newId, newName);
 
             glob.map.areas.put(newId, copy);
             createAreaLabel(newId);

@@ -13,6 +13,7 @@ import java.util.List;
 
 public class NArea
 {
+    public static final String PILE_FILL_DIRECTION_JSON = "pile_fill_direction";
     public long gid = Long.MIN_VALUE;
     public String path = "";
     public boolean hide = false;
@@ -365,6 +366,7 @@ public class NArea
         this.color = other.color;
         this.space = other.space;
         this.version = other.version;
+        this.pileFillDirection = other.pileFillDirection;
         this.grids_id.clear();
         this.grids_id.addAll(other.grids_id);
         this.jin = other.jin;
@@ -402,6 +404,15 @@ public class NArea
         this.baselineSnapshot = AreaSnapshot.of(this);
         this.baselineVersion = this.version;
         this.dirtyGroups.clear();
+    }
+
+    public boolean setPileFillDirection(PileFillDirection direction) {
+        PileFillDirection next = direction == null
+                ? PileFillDirection.LEFT_TO_RIGHT : direction;
+        if (pileFillDirection == next) return false;
+        pileFillDirection = next;
+        markDirty(AreaFieldGroup.ROUTING);
+        return true;
     }
 
     public NArea(JSONObject obj)
@@ -466,6 +477,9 @@ public class NArea
         if(obj.has("version")) {
             this.version = obj.getInt("version");
         }
+        if(obj.has(PILE_FILL_DIRECTION_JSON)) {
+            this.pileFillDirection = PileFillDirection.fromStored(obj.get(PILE_FILL_DIRECTION_JSON));
+        }
         
         // Загружаем поля синхронизации (если есть)
         if(obj.has("uuid")) {
@@ -499,6 +513,7 @@ public class NArea
     public String name;
     public int id;
     public int version = 1;  // Version for sync - incremented on each update
+    public PileFillDirection pileFillDirection = PileFillDirection.LEFT_TO_RIGHT;
     public long lastLocalChange = 0;  // Timestamp of last local change (to prevent sync overwrite)
     public Color color = new Color(194,194,65,56);
     public final ArrayList<Long> grids_id = new ArrayList<>();
@@ -817,6 +832,7 @@ public class NArea
         }
         res.put("spec",jspec);
         res.put("version", version);
+        res.put(PILE_FILL_DIRECTION_JSON, pileFillDirection.name());
         this.jspec = jspec;
         
         // Добавляем поля синхронизации (если они установлены)
