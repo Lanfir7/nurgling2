@@ -15,9 +15,9 @@ public class EquipmentStatsWidget extends Widget {
     private Map<String, Attribute> attributeMap = new HashMap<>();
     private Map<String, Double> totalStats = new HashMap<>();
     private List<Map.Entry<String, Double>> sortedStats = new ArrayList<>();
-    private Tex statsTex = null;
+    protected Tex statsTex = null;
     private boolean needUpdate = true;
-    private Label titleLabel;
+    protected Label titleLabel;
     
     public EquipmentStatsWidget(Coord sz) {
         super(sz);
@@ -80,11 +80,8 @@ public class EquipmentStatsWidget extends Widget {
             needUpdate = false;
         }
         
-        // Draw title background
-        g.chcolor(0, 0, 0, 128);
-        g.frect(Coord.z, new Coord(sz.x, titleLabel.sz.y + UI.scale(4)));
-        g.chcolor();
-        
+        drawBackdrop(g);
+
         super.draw(g);
         
         // Draw stats below title
@@ -122,5 +119,11 @@ public class EquipmentStatsWidget extends Widget {
         // Use the same rendering method as AttrMod.modimg
         BufferedImage result = AttrMod.modimg(mods);
         statsTex = new TexI(result);
+    }
+
+    protected void drawBackdrop(GOut g) {
+        g.chcolor(0, 0, 0, 128);
+        g.frect(Coord.z, new Coord(sz.x, titleLabel.sz.y + UI.scale(4)));
+        g.chcolor();
     }
 }

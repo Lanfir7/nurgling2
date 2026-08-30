@@ -138,6 +138,66 @@ class WardrobeDollOverlayTest {
         assertNull(doll.child);
     }
 
+    @Test
+    void installSkippedWithoutEquiporyHostEvenInWardrobe() {
+        Widget pickerHost = new Widget(Coord.of(80, 80));
+        Widget pickerDoll = pickerHost.add(new Widget(Coord.of(40, 40)), Coord.z);
+
+        assertFalse(WardrobeDollOverlay.isPaperDollHost(pickerHost));
+        assertFalse(WardrobeDollOverlay.isPaperDollHost(null));
+        assertFalse(WardrobeDollOverlay.canInstall(pickerDoll, "Wardrobe", pickerHost));
+        assertFalse(WardrobeDollOverlay.canInstall(pickerDoll, "Гардероб", pickerHost));
+        assertFalse(WardrobeDollOverlay.installOn(pickerDoll));
+        assertFalse(WardrobeDollOverlay.installFrom(pickerHost));
+        assertNull(WardrobeDollOverlay.findOverlay(pickerHost));
+        assertNull(pickerDoll.child);
+    }
+
+    @Test
+    void equipmentWindowCaptionIsANoOp() {
+        Widget host = new Widget(Coord.of(200, 300));
+        Widget doll = host.add(new Widget(Coord.of(80, 120)), Coord.of(40, 0));
+
+        assertFalse(WardrobeDollOverlay.canInstall(doll, "Equipment", host));
+        assertFalse(WardrobeDollOverlay.canInstall(doll, "Экипировка", host));
+        assertFalse(WardrobeDollOverlay.installOn(doll));
+        assertNull(WardrobeDollOverlay.findOverlay(host));
+    }
+
+    @Test
+    void overlayStaysSiblingOfDollOnHost() {
+        Widget host = new Widget(Coord.of(200, 300));
+        Widget doll = host.add(new Widget(Coord.of(80, 120)), Coord.of(40, 0));
+        Widget overlay = new Widget(Coord.z);
+
+        assertTrue(WardrobeDollOverlay.attachAsSibling(doll, overlay));
+        assertSame(host, overlay.parent);
+        assertNotSame(doll, overlay.parent);
+        assertFalse(isDirectChild(doll, overlay));
+        assertTrue(isDirectChild(host, overlay));
+        assertNull(doll.child);
+    }
+
+    @Test
+    void wardrobeListBackdropIsDarkerThanOldTitleStrip() {
+        assertTrue(WardrobeDollOverlay.LIST_BACKDROP_ALPHA > 128);
+        assertTrue(WardrobeDollOverlay.HEADER_BACKDROP_ALPHA > WardrobeDollOverlay.LIST_BACKDROP_ALPHA);
+    }
+
+    @Test
+    void textBlockBackdropFitsTitleAndStatsNotWholeDoll() {
+        Coord title = Coord.of(80, 14);
+        Coord stats = Coord.of(70, 60);
+        Coord doll = Coord.of(200, 250);
+        Coord block = WardrobeDollOverlay.textBlockSize(title, stats, 8, 6, doll);
+
+        assertEquals(Coord.of(86, 88), block);
+        assertTrue(block.x < doll.x);
+        assertTrue(block.y < doll.y);
+        assertEquals(Coord.of(80, 18),
+                WardrobeDollOverlay.headerBandSize(Coord.of(18, 14), Coord.of(80, 88)));
+    }
+
     private static boolean isDirectChild(Widget parent, Widget child) {
         for (Widget ch = parent.child; ch != null; ch = ch.next) {
             if (ch == child)
