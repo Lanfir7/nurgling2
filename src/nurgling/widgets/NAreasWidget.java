@@ -472,6 +472,7 @@ public class NAreasWidget extends Window
                     add(L10n.get("area.menu.set_color"));
                     add(L10n.get("area.menu.edit_name"));
                     add(L10n.get("area.menu.duplicate"));
+                    add(L10n.get("area.menu.fill_direction"));
                     add(L10n.get("area.menu.scan"));
                     add(L10n.get("area.menu.delete"));
                 }
@@ -656,6 +657,11 @@ public class NAreasWidget extends Window
                                 if (duplicatedId != -1) {
                                     NAreasWidget.this.showPath(currentPath, duplicatedId);
                                 }
+                            }
+                            else if (option.name.equals(get("area.menu.fill_direction")))
+                            {
+                                NAreaDirectionMenu popup = new NAreaDirectionMenu(area);
+                                ui.root.add(popup, ui.mc);
                             }
                             else if (option.name.equals(get("area.menu.scan")))
                             {
