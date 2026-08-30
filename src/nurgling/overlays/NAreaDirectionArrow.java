@@ -70,9 +70,9 @@ public class NAreaDirectionArrow extends Sprite implements RenderTree.Node, Rend
 
     static float[] arrowVertices(PileFillDirection direction) {
         float[] vertices = new float[] {
-                -19.0f, -5.0f, Z_OFFSET,   3.0f, -5.0f, Z_OFFSET,   3.0f, 5.0f, Z_OFFSET,
-                -19.0f, -5.0f, Z_OFFSET,   3.0f, 5.0f, Z_OFFSET,   -19.0f, 5.0f, Z_OFFSET,
-                3.0f, -11.0f, Z_OFFSET,   19.0f, 0.0f, Z_OFFSET,   3.0f, 11.0f, Z_OFFSET
+                -9.5f, -2.5f, Z_OFFSET,   1.5f, -2.5f, Z_OFFSET,   1.5f, 2.5f, Z_OFFSET,
+                -9.5f, -2.5f, Z_OFFSET,   1.5f, 2.5f, Z_OFFSET,   -9.5f, 2.5f, Z_OFFSET,
+                1.5f, -5.5f, Z_OFFSET,   9.5f, 0.0f, Z_OFFSET,   1.5f, 5.5f, Z_OFFSET
         };
         PileFillDirection resolved = direction == null ? PileFillDirection.LEFT_TO_RIGHT : direction;
         for (int index = 0; index < vertices.length; index += 3) {

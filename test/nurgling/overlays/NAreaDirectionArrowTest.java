@@ -30,26 +30,26 @@ class NAreaDirectionArrowTest {
         assertEquals(maxY(down), -minY(up), 0.001f);
     }
 
-    @Test void directionsUseTheExpectedArrowExtents() {
+    @Test void directionsUseHalfScaleArrowExtents() {
         float[] right = NAreaDirectionArrow.arrowVertices(PileFillDirection.LEFT_TO_RIGHT);
-        assertEquals(-19.0f, minX(right), 0.001f);
-        assertEquals(19.0f, maxX(right), 0.001f);
-        assertEquals(-11.0f, minY(right), 0.001f);
-        assertEquals(11.0f, maxY(right), 0.001f);
+        assertEquals(-9.5f, minX(right), 0.001f);
+        assertEquals(9.5f, maxX(right), 0.001f);
+        assertEquals(-5.5f, minY(right), 0.001f);
+        assertEquals(5.5f, maxY(right), 0.001f);
 
         float[] left = NAreaDirectionArrow.arrowVertices(PileFillDirection.RIGHT_TO_LEFT);
-        assertEquals(-19.0f, minX(left), 0.001f);
-        assertEquals(19.0f, maxX(left), 0.001f);
+        assertEquals(-9.5f, minX(left), 0.001f);
+        assertEquals(9.5f, maxX(left), 0.001f);
 
         float[] down = NAreaDirectionArrow.arrowVertices(PileFillDirection.TOP_TO_BOTTOM);
-        assertEquals(-11.0f, minX(down), 0.001f);
-        assertEquals(11.0f, maxX(down), 0.001f);
-        assertEquals(-19.0f, minY(down), 0.001f);
-        assertEquals(19.0f, maxY(down), 0.001f);
+        assertEquals(-5.5f, minX(down), 0.001f);
+        assertEquals(5.5f, maxX(down), 0.001f);
+        assertEquals(-9.5f, minY(down), 0.001f);
+        assertEquals(9.5f, maxY(down), 0.001f);
 
         float[] up = NAreaDirectionArrow.arrowVertices(PileFillDirection.BOTTOM_TO_TOP);
-        assertEquals(-19.0f, minY(up), 0.001f);
-        assertEquals(19.0f, maxY(up), 0.001f);
+        assertEquals(-9.5f, minY(up), 0.001f);
+        assertEquals(9.5f, maxY(up), 0.001f);
     }
 
     @Test void clearsInheritedBackFaceCulling() {
