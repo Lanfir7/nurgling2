@@ -264,10 +264,34 @@ public final class ExtraInvGroupTransfer {
 
     /** Extra panel on containers: skip stack popups and Ender-excluded titles. */
     public static boolean shouldInstallExtraPanel(String windowTitle, boolean inContents) {
+        return shouldInstallExtraPanel(windowTitle, inContents, false);
+    }
+
+    /**
+     * Extra panel on containers. {@code charWnd} is the host check (CharWnd /
+     * character sheet study inv): never install even if nconfig persisted the
+     * panel open, and even if the title looks like a chest.
+     */
+    public static boolean shouldInstallExtraPanel(String windowTitle, boolean inContents, boolean charWnd) {
+        if (charWnd) {
+            return false;
+        }
         if (inContents || windowTitle == null || windowTitle.isEmpty()) {
             return false;
         }
+        if (isCharacterSheetTitle(windowTitle)) {
+            return false;
+        }
         return !EXTRA_PANEL_EXCLUDES.contains(windowTitle);
+    }
+
+    /** Verified i18n captions for CharWnd: en Character Sheet, ru Лист персонажа. */
+    static boolean isCharacterSheetTitle(String windowTitle) {
+        if ("Character Sheet".equals(windowTitle) || "Лист персонажа".equals(windowTitle)) {
+            return true;
+        }
+        String localized = nurgling.i18n.L10n.get("char.window_title");
+        return localized != null && windowTitle.equals(localized);
     }
 
     /** Ender ExtInventory.getTransferTargets(): flags, count, destination widget ids. */
