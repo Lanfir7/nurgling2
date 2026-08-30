@@ -411,6 +411,21 @@ public class Finder
         return null;
     }
 
+    public static ArrayList<Gob> findGobs(Coord2d pos) {
+        ArrayList<Gob> result = new ArrayList<>();
+        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
+            for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
+                if (!(gob instanceof OCache.Virtual || gob.attr.isEmpty() ||
+                        gob.getClass().getName().contains("GlobEffector")) &&
+                        gob.id != NUtils.playerID() && gob.rc.dist(pos) < 0.5 &&
+                        !(gob instanceof MapView.Plob) && gob.id > 0) {
+                    result.add(gob);
+                }
+            }
+        }
+        return result;
+    }
+
 
 
     public static Gob findGob(Coord pos, NAlias exc){
@@ -508,8 +523,50 @@ public class Finder
     }
 
     public static Coord2d getFreePlace(Pair<Coord2d,Coord2d> area, NHitBox hitBox, double angle, Coord2d nearestTo) {
-        Coord2d pos = null;
-        double bestDist = Double.POSITIVE_INFINITY;
+        ArrayList<Coord2d> candidates = collectFreePlaces(area, hitBox, angle, nearestTo == null, 1,
+                PileFillDirection.LEFT_TO_RIGHT);
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        if (nearestTo != null) {
+            candidates = orderCandidatesNearestFirst(candidates, nearestTo);
+        }
+        return candidates.get(0);
+    }
+
+    public static ArrayList<Coord2d> getFreePlaces(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
+                                                    double angle, Coord2d nearestTo) {
+        return getFreePlaces(area, hitBox, angle, nearestTo, 1);
+    }
+
+    public static ArrayList<Coord2d> getFreePlaces(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
+                                                    double angle, Coord2d nearestTo,
+                                                    double candidateStride) {
+        ArrayList<Coord2d> candidates = collectFreePlaces(
+                area, hitBox, angle, false, candidateStride, PileFillDirection.LEFT_TO_RIGHT);
+        return nearestTo == null ? candidates : orderCandidatesNearestFirst(candidates, nearestTo);
+    }
+
+    public static ArrayList<Coord2d> getFreePlaces(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
+                                                    double angle, PileFillDirection direction,
+                                                    double candidateStride) {
+        return collectFreePlaces(area, hitBox, angle, false, candidateStride, direction);
+    }
+
+    public static ArrayList<Coord2d> orderCandidatesNearestFirst(Collection<Coord2d> candidates,
+                                                                 Coord2d nearestTo) {
+        ArrayList<Coord2d> ordered = new ArrayList<>(candidates);
+        if (nearestTo != null) {
+            ordered.sort(Comparator.comparingDouble(candidate -> candidate.dist(nearestTo)));
+        }
+        return ordered;
+    }
+
+    private static ArrayList<Coord2d> collectFreePlaces(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
+                                                         double angle, boolean firstOnly,
+                                                         double candidateStride,
+                                                         PileFillDirection direction) {
+        ArrayList<Coord2d> candidates = new ArrayList<>();
 
         ArrayList<NHitBoxD> significantGobs = new ArrayList<> ();
         NHitBoxD chekerOfArea = new NHitBoxD(area.a, area.b);
@@ -518,7 +575,7 @@ public class Finder
         NHitBoxD temporalGobBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
         if(chekerOfArea.c[2].sub(chekerOfArea.c[0]).x < temporalGobBox.getCircumscribedBR().sub(temporalGobBox.getCircumscribedUL()).x ||
                 chekerOfArea.c[2].sub(chekerOfArea.c[0]).y < temporalGobBox.getCircumscribedBR().sub(temporalGobBox.getCircumscribedUL()).y )
-            return null;
+            return candidates;
 
         synchronized ( NUtils.getGameUI().ui.sess.glob.oc ) {
             for ( Gob gob : NUtils.getGameUI().ui.sess.glob.oc ) {
@@ -558,28 +615,68 @@ public class Finder
         double xOffset = ((rotatedBR.x - rotatedUL.x) % 2.0 > 0.5) ? 0.5 : 0.0;
         double yOffset = ((rotatedBR.y - rotatedUL.y) % 2.0 > 0.5) ? 0.5 : 0.0;
 
-        for (int i = margin.x; i <= inchMax.x - margin.x; i++)
-        {
-            for (int j = margin.y; j <= inchMax.y - margin.y; j++)
-            {
-                boolean passed = true;
-                NHitBoxD testGobBox = new NHitBoxD(hitBox.begin, hitBox.end, area.a.add(i + xOffset, j + yOffset), angle);
-                for ( NHitBoxD significantHitbox : significantGobs )
-                    if(significantHitbox.intersects(testGobBox,false))
-                        passed = false;
-                if(passed) {
-                    Coord2d candidate = Coord2d.of(testGobBox.rc.x, testGobBox.rc.y);
-                    if (nearestTo == null)
-                        return candidate;
-                    double d = candidate.dist(nearestTo);
-                    if (d < bestDist) {
-                        bestDist = d;
-                        pos = candidate;
-                    }
+        List<Coord2d> offsets = orderCandidateOffsets(
+                candidateOffsets(margin.x, inchMax.x - margin.x, candidateStride),
+                candidateOffsets(margin.y, inchMax.y - margin.y, candidateStride), direction);
+        for (Coord2d offset : offsets) {
+            boolean passed = true;
+            NHitBoxD testGobBox = new NHitBoxD(hitBox.begin, hitBox.end,
+                    area.a.add(offset.x + xOffset, offset.y + yOffset), angle);
+            for ( NHitBoxD significantHitbox : significantGobs )
+                if(significantHitbox.intersects(testGobBox,false))
+                    passed = false;
+            if(passed) {
+                Coord2d candidate = Coord2d.of(testGobBox.rc.x, testGobBox.rc.y);
+                candidates.add(candidate);
+                if (firstOnly) {
+                    return candidates;
                 }
             }
         }
-        return pos;
+        return candidates;
+    }
+
+    static List<Coord2d> orderCandidateOffsets(List<Double> xs, List<Double> ys,
+                                               PileFillDirection direction) {
+        List<Double> orderedXs = new ArrayList<>(xs);
+        List<Double> orderedYs = new ArrayList<>(ys);
+        PileFillDirection effectiveDirection = direction == null
+                ? PileFillDirection.LEFT_TO_RIGHT : direction;
+        if (effectiveDirection == PileFillDirection.RIGHT_TO_LEFT) {
+            Collections.reverse(orderedXs);
+        } else if (effectiveDirection == PileFillDirection.BOTTOM_TO_TOP) {
+            Collections.reverse(orderedYs);
+        }
+
+        List<Coord2d> offsets = new ArrayList<>();
+        if (effectiveDirection == PileFillDirection.TOP_TO_BOTTOM ||
+                effectiveDirection == PileFillDirection.BOTTOM_TO_TOP) {
+            for (double y : orderedYs) {
+                for (double x : orderedXs) {
+                    offsets.add(Coord2d.of(x, y));
+                }
+            }
+        } else {
+            for (double x : orderedXs) {
+                for (double y : orderedYs) {
+                    offsets.add(Coord2d.of(x, y));
+                }
+            }
+        }
+        return offsets;
+    }
+
+    static ArrayList<Double> candidateOffsets(double min, double max, double stride) {
+        ArrayList<Double> offsets = new ArrayList<>();
+        double step = Math.max(1, stride);
+        for (double value = min; value <= max + 0.001; value += step) {
+            offsets.add(value);
+        }
+        if (min <= max && (offsets.isEmpty() ||
+                Math.abs(offsets.get(offsets.size() - 1) - max) > 0.001)) {
+            offsets.add(max);
+        }
+        return offsets;
     }
     
     /**

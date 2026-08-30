@@ -2,6 +2,7 @@ package nurgling.actions;
 
 import haven.Coord2d;
 import haven.Gob;
+import haven.MCache;
 import haven.MapView;
 import haven.Pair;
 import nurgling.NGameUI;
@@ -12,11 +13,16 @@ import nurgling.tasks.WaitPile;
 import nurgling.tasks.WaitPlob;
 import nurgling.tasks.WaitItemInHand;
 import nurgling.NGItem;
+import nurgling.areas.NArea;
+import nurgling.areas.PileFillDirection;
 import nurgling.db.StockpileStoragePolicy;
+import nurgling.pf.NHitBoxD;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import haven.WItem;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static haven.OCache.posres;
 
@@ -37,6 +43,18 @@ public class PileMaker implements Action{
     Coord2d exactPos = null;
 
     static final int TAKE_TO_HAND_TICKS = 80;
+    static final int WAIT_PILE_TICKS = 80;
+    static final double EXACT_ESCAPE_MARGIN = MCache.tilesz.x * 10;
+
+    @FunctionalInterface
+    interface CandidateProbe {
+        boolean isSafe(Coord2d candidate) throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    interface DirectMove {
+        boolean run(Coord2d target) throws InterruptedException;
+    }
 
     static boolean shouldCloseStockpileBeforeTakeToHand(boolean stockpileWindowOpen) {
         return stockpileWindowOpen;
@@ -94,20 +112,212 @@ public class PileMaker implements Action{
         if (hitbox == null) {
             return Results.ERROR("No hitbox");
         }
-        if (exactPos != null) {
-            pos = exactPos;
-        } else if ((pos = Finder.getFreePlace(out, hitbox)) == null) {
+        double width = Math.abs(hitbox.end.x - hitbox.begin.x);
+        double height = Math.abs(hitbox.end.y - hitbox.begin.y);
+        double candidateStride = Math.max(1, Math.min(width, height));
+        PileFillDirection direction = directionFor(out);
+        List<Coord2d> candidates = exactPos != null
+                ? Collections.singletonList(exactPos)
+                : Finder.getFreePlaces(out, hitbox, 0, direction, candidateStride);
+        pos = firstSafeCandidate(candidates, candidate -> approachAndPreserveEscape(gui, candidate, hitbox));
+        if (pos == null) {
             return Results.ERROR("No free space");
         }
 
-        new PathFinder( NGob.getDummy(pos, 0, hitbox),true).run(gui);
-        NUtils.addTask(new WaitStockpile(false));
+        NUtils.addTask(new WaitStockpile(false, WAIT_PILE_TICKS, false));
         NUtils.getGameUI().map.wdgmsg("place", pos.floor(posres), 0, 1, 0);
-        WaitPile wp = new WaitPile(pos);
+        WaitPile wp = WaitPile.withSoftTimeout(pos, WAIT_PILE_TICKS);
         NUtils.getUI().core.addTask(wp);
         pile = wp.getPile();
-        NUtils.addTask(new WaitStockpile(true));
+        if (pile == null) {
+            return Results.ERROR("Stockpile was not created");
+        }
+        NUtils.addTask(new WaitStockpile(true, WAIT_PILE_TICKS, false));
         return Results.SUCCESS();
+    }
+
+    static Coord2d firstSafeCandidate(List<Coord2d> candidates, CandidateProbe probe)
+            throws InterruptedException {
+        for (Coord2d candidate : candidates) {
+            if (probe.isSafe(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    static PileFillDirection directionFor(Pair<Coord2d, Coord2d> bounds) {
+        return bounds instanceof NArea.DirectedAreaBounds
+                ? ((NArea.DirectedAreaBounds) bounds).direction()
+                : PileFillDirection.LEFT_TO_RIGHT;
+    }
+
+    static boolean exitStartObstacle(Coord2d freeStart,
+                                     DirectMove move) throws InterruptedException {
+        return freeStart != null && move.run(freeStart);
+    }
+
+    private static Coord2d freeStartTarget(PathFinder preview) {
+        if (preview == null || preview.gobInStartPos == null ||
+                preview.pfmap == null || preview.start_pos == null) {
+            return null;
+        }
+        return nurgling.pf.Utils.pfGridToWorld(
+                preview.pfmap.getCells()[preview.start_pos.x][preview.start_pos.y].pos);
+    }
+
+    static List<Coord2d> escapeTargets(Pair<Coord2d, Coord2d> area,
+                                       double spacing, double clearance) {
+        double minX = Math.min(area.a.x, area.b.x);
+        double maxX = Math.max(area.a.x, area.b.x);
+        double minY = Math.min(area.a.y, area.b.y);
+        double maxY = Math.max(area.a.y, area.b.y);
+        double step = Math.max(1, spacing);
+        double margin = Math.max(1, clearance);
+        ArrayList<Coord2d> targets = new ArrayList<>();
+
+        for (double x : axisSamples(minX, maxX, step)) {
+            addUnique(targets, Coord2d.of(x, minY - margin));
+            addUnique(targets, Coord2d.of(x, maxY + margin));
+        }
+        for (double y : axisSamples(minY, maxY, step)) {
+            addUnique(targets, Coord2d.of(minX - margin, y));
+            addUnique(targets, Coord2d.of(maxX + margin, y));
+        }
+        return targets;
+    }
+
+    static Pair<Coord2d, Coord2d> escapeEnvelope(Coord2d player, Coord2d candidate,
+                                                  double margin) {
+        double safeMargin = Math.max(1, margin);
+        return new Pair<>(
+                Coord2d.of(Math.min(player.x, candidate.x) - safeMargin,
+                        Math.min(player.y, candidate.y) - safeMargin),
+                Coord2d.of(Math.max(player.x, candidate.x) + safeMargin,
+                        Math.max(player.y, candidate.y) + safeMargin));
+    }
+
+    private static List<Double> axisSamples(double min, double max, double spacing) {
+        ArrayList<Double> samples = new ArrayList<>();
+        for (double value = min; value < max; value += spacing) {
+            samples.add(value);
+        }
+        if (samples.isEmpty() || Math.abs(samples.get(samples.size() - 1) - max) > 0.001) {
+            samples.add(max);
+        }
+        return samples;
+    }
+
+    private static void addUnique(List<Coord2d> targets, Coord2d target) {
+        if (!targets.contains(target)) {
+            targets.add(target);
+        }
+    }
+
+    private boolean approachAndPreserveEscape(NGameUI gui, Coord2d candidate, NHitBox hitbox)
+            throws InterruptedException {
+        Gob dummy = NGob.getDummy(candidate, 0, hitbox);
+        PathFinder preview = new PathFinder(dummy, true);
+        if (preview.construct(true) == null && !preview.dn) {
+            return false;
+        }
+
+        Gob player = NUtils.player();
+        Gob startObstacle = preview.gobInStartPos;
+        if (player != null && player.rc != null && startObstacle != null &&
+                startObstacle.ngob != null && startObstacle.ngob.name != null &&
+                new NAlias("stockpile").matches(startObstacle.ngob.name)) {
+            Coord2d freeStart = freeStartTarget(preview);
+            if (!exitStartObstacle(freeStart,
+                    target -> new GoTo(target).run(gui).IsSuccess())) {
+                return false;
+            }
+
+            preview = new PathFinder(dummy, true);
+            if (preview.construct(true) == null && !preview.dn) {
+                return false;
+            }
+        }
+
+        if (!nonRetryingPathFinder(dummy).run(gui).IsSuccess()) {
+            return false;
+        }
+
+        player = NUtils.player();
+        if (player == null || player.rc == null) {
+            return false;
+        }
+        Coord2d escape = findEscapeTarget(player.rc, dummy, hitbox);
+        if (escape == null) {
+            return false;
+        }
+
+        if (overlapsCandidate(player, dummy)) {
+            if (!nonRetryingPathFinder(escape).run(gui).IsSuccess()) {
+                return false;
+            }
+            player = NUtils.player();
+            if (player == null || overlapsCandidate(player, dummy)) {
+                return false;
+            }
+            return findEscapeTarget(player.rc, dummy, hitbox) != null;
+        }
+        return true;
+    }
+
+    private Coord2d findEscapeTarget(Coord2d from, Gob futurePile, NHitBox hitbox)
+            throws InterruptedException {
+        if (exactPos == null && !insidePlacementArea(from) &&
+                !new NHitBoxD(futurePile).containsSemiOpen(from)) {
+            return from;
+        }
+        double width = Math.abs(hitbox.end.x - hitbox.begin.x);
+        double height = Math.abs(hitbox.end.y - hitbox.begin.y);
+        double spacing = Math.max(MCache.tilesz.x, Math.min(width, height));
+        double clearance = Math.max(MCache.tilesz.x * 2, Math.max(width, height) + MCache.tilesz.x);
+        Pair<Coord2d, Coord2d> escapeArea = exactPos == null
+                ? out
+                : escapeEnvelope(from, futurePile.rc, Math.max(EXACT_ESCAPE_MARGIN, clearance * 2));
+        for (Coord2d target : escapeTargets(escapeArea, spacing, clearance)) {
+            if (PathFinder.isAvailableWithObstacle(from, target, futurePile)) {
+                return target;
+            }
+        }
+        return null;
+    }
+
+    private boolean insidePlacementArea(Coord2d point) {
+        double minX = Math.min(out.a.x, out.b.x);
+        double maxX = Math.max(out.a.x, out.b.x);
+        double minY = Math.min(out.a.y, out.b.y);
+        double maxY = Math.max(out.a.y, out.b.y);
+        return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+    }
+
+    private static boolean overlapsCandidate(Gob player, Gob futurePile) {
+        NHitBoxD pileBox = new NHitBoxD(futurePile);
+        if (player.ngob != null && player.ngob.hitBox != null) {
+            return pileBox.intersects(new NHitBoxD(player), false);
+        }
+        return pileBox.containsSemiOpen(player.rc);
+    }
+
+    private static PathFinder nonRetryingPathFinder(Gob target) {
+        return new PathFinder(target, true) {
+            @Override
+            protected boolean onLegFailed(NGameUI gui, Coord2d at) {
+                return false;
+            }
+        };
+    }
+
+    private static PathFinder nonRetryingPathFinder(Coord2d target) {
+        return new PathFinder(target) {
+            @Override
+            protected boolean onLegFailed(NGameUI gui, Coord2d at) {
+                return false;
+            }
+        };
     }
 
     static NHitBox plobHitbox(NGameUI gui) {
