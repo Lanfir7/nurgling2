@@ -528,6 +528,10 @@ public class NArea
                     ? PileFillDirection.LEFT_TO_RIGHT : owner.pileFillDirection;
         }
     }
+
+    DirectedAreaBounds directedBounds(Coord2d a, Coord2d b) {
+        return new DirectedAreaBounds(a, b, this);
+    }
     public long lastLocalChange = 0;  // Timestamp of last local change (to prevent sync overwrite)
     public Color color = new Color(194,194,65,56);
     public final ArrayList<Long> grids_id = new ArrayList<>();
@@ -606,8 +610,8 @@ public class NArea
                 if (NUtils.player()!=null && begin.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000 && end.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000) {
                     return null;
                 }
-                return new DirectedAreaBounds(begin.mul(MCache.tilesz),
-                        end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz), this);
+                return directedBounds(begin.mul(MCache.tilesz),
+                        end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
             }
         }
         return null;
@@ -640,7 +644,8 @@ public class NArea
                 if (NUtils.player()!=null && begin.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000 && end.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000) {
                     return null;
                 }
-                return new Pair<Coord2d, Coord2d>(begin.mul(MCache.tilesz), end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
+                return directedBounds(begin.mul(MCache.tilesz),
+                        end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
             }
         }
         return null;
@@ -687,7 +692,8 @@ public class NArea
                 if (NUtils.player()!=null && begin.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000 && end.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000) {
                     return null;
                 }
-                return new Pair<Coord2d, Coord2d>(begin.mul(MCache.tilesz), end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
+                return directedBounds(begin.mul(MCache.tilesz),
+                        end.sub(1, 1).mul(MCache.tilesz).add(MCache.tilesz));
             }
         }
         return null;
@@ -760,7 +766,7 @@ public class NArea
             Coord2d begin = new Coord(minX, minY).mul(MCache.tilesz);
             Coord2d end = new Coord(maxX - 1, maxY - 1).mul(MCache.tilesz).add(MCache.tilesz);
             
-            return new DirectedAreaBounds(begin, end, this);
+            return directedBounds(begin, end);
             
         } catch (Exception e) {
             return null;

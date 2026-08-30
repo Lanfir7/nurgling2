@@ -411,23 +411,6 @@ public class Finder
         return null;
     }
 
-    public static ArrayList<Gob> findGobs(Coord2d pos) {
-        ArrayList<Gob> result = new ArrayList<>();
-        synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
-            for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
-                if (!(gob instanceof OCache.Virtual || gob.attr.isEmpty() ||
-                        gob.getClass().getName().contains("GlobEffector")) &&
-                        gob.id != NUtils.playerID() && gob.rc.dist(pos) < 0.5 &&
-                        !(gob instanceof MapView.Plob) && gob.id > 0) {
-                    result.add(gob);
-                }
-            }
-        }
-        return result;
-    }
-
-
-
     public static Gob findGob(Coord pos, NAlias exc){
         Pair<Coord2d,Coord2d> space = new Pair<>(new Coord2d(pos.x*MCache.tilesz.x,pos.y*MCache.tilesz.y),new Coord2d((pos.x + 1) *MCache.tilesz.x,(pos.y+1)*MCache.tilesz.y));
 //        NUtils.getGameUI().msg(space.a + " " +  space.b);
