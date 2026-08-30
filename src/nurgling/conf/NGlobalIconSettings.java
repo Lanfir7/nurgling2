@@ -323,7 +323,8 @@ public class NGlobalIconSettings {
     }
 
     private static Store read() {
-        byte[] raw = NFileUtils.readBytesWithBackupFallback(path(), GobIcon.Settings.sig);
+        byte[] raw = NFileUtils.readBytesWithBackupFallback(path(), GobIcon.Settings.sig,
+                candidate -> decode(candidate) != null);
         Store ret = (raw == null) ? null : decode(raw);
         return((ret == null) ? new Store() : ret);
     }

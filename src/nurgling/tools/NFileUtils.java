@@ -3,6 +3,7 @@ package nurgling.tools;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.function.Predicate;
 
 /**
  * Atomic file write utilities to prevent corruption on crash/kill.
@@ -115,18 +116,27 @@ public class NFileUtils {
      * @return the file content, or null if neither file nor backup is usable
      */
     public static byte[] readBytesWithBackupFallback(String targetPath, byte[] sig) {
+        return readBytesWithBackupFallback(targetPath, sig, raw -> true);
+    }
+
+    /**
+     * Byte-oriented fallback that also validates the complete payload. A matching signature is
+     * not enough for structured binary data: a truncated file can still contain its full header.
+     */
+    public static byte[] readBytesWithBackupFallback(String targetPath, byte[] sig,
+                                                     Predicate<byte[]> validator) {
         Path target = Path.of(targetPath);
         Path backup = target.resolveSibling(target.getFileName() + ".bak");
 
         byte[] content = readFileBytes(target);
-        if (hasPrefix(content, sig)) {
+        if (isUsable(content, sig, validator)) {
             return content;
         }
 
         if (Files.exists(backup)) {
             System.err.println("[NFileUtils] Primary file corrupt or empty, trying backup: " + targetPath);
             byte[] backupContent = readFileBytes(backup);
-            if (hasPrefix(backupContent, sig)) {
+            if (isUsable(backupContent, sig, validator)) {
                 try {
                     Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
                     System.err.println("[NFileUtils] Restored from backup: " + targetPath);
@@ -141,6 +151,10 @@ public class NFileUtils {
             System.err.println("[NFileUtils] Both primary and backup are corrupt: " + targetPath);
         }
         return null;
+    }
+
+    private static boolean isUsable(byte[] content, byte[] sig, Predicate<byte[]> validator) {
+        return hasPrefix(content, sig) && validator.test(content);
     }
 
     private static byte[] readFileBytes(Path path) {
