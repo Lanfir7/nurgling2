@@ -113,7 +113,7 @@ public class DbStorageService {
             } else {
                 for (String table : SHARED_MAP_TABLES)
                     adapter.executeUpdate("DELETE FROM " + table);
-                vacuum(adapter);
+                vacuumBestEffort(adapter);
             }
             return grids;
         }, "clear shared map");
@@ -141,6 +141,20 @@ public class DbStorageService {
             st.execute("VACUUM");
         } finally {
             conn.setAutoCommit(false);
+        }
+    }
+
+    /**
+     * VACUUM runs after SQLite has committed the destructive part of the operation. Its failure
+     * must therefore not escape into DatabaseManager's retry queue, which would repeat an already
+     * completed delete and replace the original row count with zero.
+     */
+    static void vacuumBestEffort(nurgling.db.DatabaseAdapter adapter) {
+        try {
+            vacuum(adapter);
+        } catch (SQLException e) {
+            System.err.println("[DbStorageService] Shared map cleared, but VACUUM failed: "
+                    + e.getMessage());
         }
     }
 
