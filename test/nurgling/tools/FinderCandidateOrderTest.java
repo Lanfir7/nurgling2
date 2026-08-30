@@ -4,12 +4,21 @@ import haven.Coord2d;
 import nurgling.areas.PileFillDirection;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FinderCandidateOrderTest {
+    @Test
+    void preventsWaitPileNoSuchMethodErrorForFinderCoord2dLookup() throws Throwable {
+        MethodHandles.publicLookup().findStatic(Finder.class, "findGobs",
+                MethodType.methodType(ArrayList.class, Coord2d.class));
+    }
+
     @Test
     void leftToRightUsesLegacyColumnOrder() {
         assertEquals(Arrays.asList(c(1,10), c(1,20), c(2,10), c(2,20)),
