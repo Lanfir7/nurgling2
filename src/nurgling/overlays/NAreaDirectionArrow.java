@@ -20,6 +20,8 @@ import nurgling.areas.NArea;
 import nurgling.areas.PileFillDirection;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 
 public class NAreaDirectionArrow extends Sprite implements RenderTree.Node, Rendered {
@@ -30,6 +32,26 @@ public class NAreaDirectionArrow extends Sprite implements RenderTree.Node, Rend
     private final NArea area;
     private final Pipe.Op state;
     private final EnumMap<PileFillDirection, Model> models = new EnumMap<>(PileFillDirection.class);
+    private final Collection<RenderTree.Slot> slots = new ArrayList<>(1);
+    private volatile RenderKey renderKey;
+
+    private static class RenderKey {
+        final boolean visible;
+        final PileFillDirection direction;
+
+        RenderKey(boolean visible, PileFillDirection direction) {
+            this.visible = visible;
+            this.direction = direction == null ? PileFillDirection.LEFT_TO_RIGHT : direction;
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (!(object instanceof RenderKey))
+                return false;
+            RenderKey other = (RenderKey) object;
+            return visible == other.visible && direction == other.direction;
+        }
+    }
 
     public NAreaDirectionArrow(Owner owner, NArea area) {
         super(owner, null);
@@ -89,18 +111,52 @@ public class NAreaDirectionArrow extends Sprite implements RenderTree.Node, Rend
         return model;
     }
 
+    void refreshRenderState(boolean editorOpen, boolean selected, boolean locatable, PileFillDirection direction) {
+        RenderKey next = new RenderKey(shouldDraw(editorOpen, selected, locatable), direction);
+        if (!next.equals(renderKey)) {
+            renderKey = next;
+            Collection<RenderTree.Slot> current;
+            synchronized (slots) {
+                current = new ArrayList<>(slots);
+            }
+            for (RenderTree.Slot slot : current) {
+                try {
+                    slot.update();
+                } catch (RenderTree.SlotRemoved ignored) {
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean tick(double dt) {
+        NGameUI gui = NUtils.getGameUI();
+        boolean editorOpen = gui != null && gui.areas != null && gui.areas.visible();
+        boolean selected = gui != null && gui.areas != null && gui.areas.al.sel != null && gui.areas.al.sel.area == area;
+        boolean locatable = area != null && area.getLoadedRCArea(false) != null;
+        refreshRenderState(editorOpen, selected, locatable, area == null ? null : area.pileFillDirection);
+        return false;
+    }
+
     @Override
     public void added(RenderTree.Slot slot) {
         slot.ostate(state);
+        synchronized (slots) {
+            slots.add(slot);
+        }
+    }
+
+    @Override
+    public void removed(RenderTree.Slot slot) {
+        synchronized (slots) {
+            slots.remove(slot);
+        }
     }
 
     @Override
     public void draw(Pipe context, Render out) {
-        NGameUI gui = NUtils.getGameUI();
-        boolean editorOpen = gui != null && gui.areas != null && gui.areas.visible();
-        boolean selected = gui != null && gui.areas != null && gui.areas.al.sel != null && gui.areas.al.sel.area == area;
-        boolean locatable = area.getLoadedRCArea(false) != null;
-        if (shouldDraw(editorOpen, selected, locatable))
-            out.draw(context, modelFor(area.pileFillDirection));
+        RenderKey current = renderKey;
+        if (current != null && current.visible)
+            out.draw(context, modelFor(current.direction));
     }
 }

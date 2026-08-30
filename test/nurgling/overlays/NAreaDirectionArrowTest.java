@@ -63,6 +63,29 @@ class NAreaDirectionArrowTest {
         assertNull(arrows.slot.state().get(States.facecull));
     }
 
+    @Test void invalidatesWorldDrawListWhenVisibilityOrDirectionChanges() {
+        RenderTree tree = new RenderTree();
+        ArrowList arrows = new ArrowList();
+        tree.add(arrows, NAreaDirectionArrow.class);
+        NAreaDirectionArrow arrow = new NAreaDirectionArrow(null, null);
+        tree.add(arrow);
+
+        arrow.refreshRenderState(false, false, false, PileFillDirection.LEFT_TO_RIGHT);
+        assertEquals(1, arrows.updates);
+
+        arrow.refreshRenderState(true, true, true, PileFillDirection.LEFT_TO_RIGHT);
+        assertEquals(2, arrows.updates);
+
+        arrow.refreshRenderState(true, true, true, PileFillDirection.LEFT_TO_RIGHT);
+        assertEquals(2, arrows.updates);
+
+        arrow.refreshRenderState(true, true, true, PileFillDirection.RIGHT_TO_LEFT);
+        assertEquals(3, arrows.updates);
+
+        arrow.refreshRenderState(true, false, true, PileFillDirection.RIGHT_TO_LEFT);
+        assertEquals(4, arrows.updates);
+    }
+
     private static class ArrowList implements RenderList<NAreaDirectionArrow> {
         private RenderList.Slot<? extends NAreaDirectionArrow> slot;
 
@@ -72,7 +95,11 @@ class NAreaDirectionArrowTest {
 
         @Override public void remove(RenderList.Slot<? extends NAreaDirectionArrow> slot) {}
 
-        @Override public void update(RenderList.Slot<? extends NAreaDirectionArrow> slot) {}
+        private int updates;
+
+        @Override public void update(RenderList.Slot<? extends NAreaDirectionArrow> slot) {
+            updates++;
+        }
 
         @Override public void update(Pipe group, int[] statemask) {}
     }
