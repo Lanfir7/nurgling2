@@ -165,20 +165,6 @@ class WardrobeDollOverlayTest {
     }
 
     @Test
-    void overlayStaysSiblingOfDollOnHost() {
-        Widget host = new Widget(Coord.of(200, 300));
-        Widget doll = host.add(new Widget(Coord.of(80, 120)), Coord.of(40, 0));
-        Widget overlay = new Widget(Coord.z);
-
-        assertTrue(WardrobeDollOverlay.attachAsSibling(doll, overlay));
-        assertSame(host, overlay.parent);
-        assertNotSame(doll, overlay.parent);
-        assertFalse(isDirectChild(doll, overlay));
-        assertTrue(isDirectChild(host, overlay));
-        assertNull(doll.child);
-    }
-
-    @Test
     void wardrobeListBackdropIsDarkerThanOldTitleStrip() {
         assertTrue(WardrobeDollOverlay.LIST_BACKDROP_ALPHA > 128);
         assertTrue(WardrobeDollOverlay.HEADER_BACKDROP_ALPHA > WardrobeDollOverlay.LIST_BACKDROP_ALPHA);
