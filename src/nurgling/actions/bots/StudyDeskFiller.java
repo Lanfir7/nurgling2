@@ -1,7 +1,6 @@
 package nurgling.actions.bots;
 
 import haven.Coord;
-import haven.Drawable;
 import haven.Gob;
 import haven.Resource;
 import haven.UI;
@@ -14,141 +13,231 @@ import nurgling.actions.PathFinder;
 import nurgling.actions.Results;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
+import nurgling.i18n.L10n;
 import nurgling.tasks.ISRemoved;
 import nurgling.tasks.NTask;
 import nurgling.tasks.WaitItems;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.StudyDeskConfig;
+import nurgling.widgets.NCharacterInfo;
 import nurgling.widgets.Specialisation;
-import org.json.JSONObject;
 
 import java.awt.Color;
 import java.util.*;
 
 /**
- * Bot that validates the current study desk layout against the planned layout from config
+ * Bot that fills study desks (global config, not tied to any one character) - every configured
+ * desk, or just the one owned by the current character, depending on the "fillAll" setting (see
+ * the "Fill All Study Desks"/"Fill Study Desk" {@code BotRegistry} entries this class backs).
  */
 public class StudyDeskFiller implements Action {
 
+    private final boolean fillAll;
+
+    // BotDescriptor.instantiate() always finds and prefers this constructor via reflection (it
+    // only falls back to a no-arg one on NoSuchMethodException) - a no-arg constructor here would
+    // never actually be called, so there's deliberately only this one; settings=null (or missing
+    // "fillAll") defaults to false so direct/legacy callers keep the old one-character scope.
+    public StudyDeskFiller(Map<String, Object> settings) {
+        Object v = settings != null ? settings.get("fillAll") : null;
+        this.fillAll = v instanceof Boolean && (Boolean) v;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-        // Step 1: Validate config exists
-        Map<String, Object> charData = loadAndValidateConfig(gui);
-        if (charData == null) {
-            return Results.ERROR("No planner layout");
+        // Step 1: Load which desk plan(s) to fill this run
+        Map<String, Object> allDesks = StudyDeskConfig.allDesks();
+        if (allDesks.isEmpty()) {
+            String message = L10n.get("study.fill.error.no_plans");
+            gui.msg(message, Color.RED);
+            return Results.ERROR(message);
         }
 
-        String studyDeskHash = (String) charData.get("gobHash");
-        Map<String, Object> plannedLayout = (Map<String, Object>) charData.get("layout");
-
-        // Step 2: Navigate to study desk area
+        // Step 2: Navigate to the study desk area (all desks share one area)
         NArea studyDeskArea = getStudyDeskArea(gui);
         if (studyDeskArea == null) {
-            gui.msg("ERROR: No study desk area found! Please create one first.", Color.RED);
-            return Results.ERROR("No study desk area found! Please create one first");
+            String message = L10n.get("study.fill.error.no_area");
+            gui.msg(message, Color.RED);
+            return Results.ERROR(message);
         }
 
-        // Step 3: Find the specific study desk by hash
-        Gob studyDesk = Finder.findGob(studyDeskHash);
-        if (studyDesk == null) {
-            gui.msg("ERROR: Could not find study desk with hash: " + studyDeskHash, Color.RED);
-            return Results.ERROR("Could not find study desk with hash: " + studyDeskHash);
+        Map<String, Object> desks;
+        if (fillAll) {
+            desks = allDesks;
+        } else {
+            // Just this character's own desk (see StudyDeskConfig#findOwnedDeskHash) - not
+            // proximity, since a shared study area can have someone else's desk sitting closer.
+            NCharacterInfo charInfo = gui.getCharInfo();
+            String characterId = StudyDeskConfig.resolveOwnerId(
+                    charInfo != null ? charInfo.chrid : null, gui.chrid);
+            String ownedHash = StudyDeskConfig.findOwnedDeskHash(characterId);
+            if (ownedHash == null || !allDesks.containsKey(ownedHash)) {
+                String message = L10n.get("study.fill.error.no_owned");
+                gui.msg(message, Color.RED);
+                return Results.ERROR(message);
+            }
+            desks = Collections.singletonMap(ownedHash, allDesks.get(ownedHash));
         }
 
-        // Step 4: Navigate to the study desk
-        new PathFinder(studyDesk).run(gui);
+        // Step 3: Visit every desk in the (possibly single-entry) map, skipping ones that can't currently be found
+        RunProgress progress = new RunProgress();
 
-        // Step 5: Determine container cap name and open the study desk
-        String deskCap = getStudyDeskCap(studyDesk);
-        new OpenTargetContainer(deskCap, studyDesk).run(gui);
+        for (Map.Entry<String, Object> entry : desks.entrySet()) {
+            String hash = entry.getKey();
+            if (!(entry.getValue() instanceof Map)) {
+                gui.msg(L10n.get("study.fill.warning.malformed", hash), Color.ORANGE);
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> deskEntry = (Map<String, Object>) entry.getValue();
+            String label = deskLabel(hash, deskEntry);
 
-        // Step 6: Get the study desk inventory
-        NInventory studyDeskInv = gui.getInventory(deskCap);
-        if (studyDeskInv == null) {
-            gui.msg("ERROR: Could not access study desk inventory!", Color.RED);
-            return Results.ERROR("ERROR: Could not access study desk inventory!");
+            Object layoutObj = deskEntry.get("layout");
+            if (!(layoutObj instanceof Map)) {
+                gui.msg(L10n.get("study.fill.warning.no_layout", label), Color.ORANGE);
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> plannedLayout = (Map<String, Object>) layoutObj;
+
+            Gob studyDesk = Finder.findGob(hash);
+            if (studyDesk == null) {
+                gui.msg(L10n.get("study.fill.warning.not_found", label), Color.ORANGE);
+                continue;
+            }
+
+            progress.recordFound();
+            try {
+                DeskFillOutcome outcome = fillOneDesk(gui, label, studyDesk, plannedLayout);
+                if (outcome.failed) {
+                    progress.recordFailure();
+                } else {
+                    progress.recordCompleted(outcome.missingCount == 0 && outcome.conflictCount == 0);
+                }
+            } catch (RuntimeException e) {
+                // A single malformed/corrupted desk plan (bad position keys, bad size data, ...)
+                // must not take down the rest of the batch - report it and keep going.
+                gui.msg(L10n.get("study.fill.error.failed", label, e.toString()), Color.RED);
+                progress.recordFailure();
+            }
         }
 
-        // Step 7: Build map of current item positions
-        Map<Coord, WItem> currentItems = buildCurrentItemsMap(studyDeskInv);
-
-        // Step 8: Find missing items and conflicts
-        List<ConflictItem> conflicts = new ArrayList<>();
-        List<MissingItem> missingItems = findMissingItems(plannedLayout, currentItems, conflicts);
-
-        // Step 9: Report results
-        reportMissingItems(gui, missingItems);
-        reportConflicts(gui, conflicts);
-
-        // Step 10: Fetch and place missing items
-        if (!missingItems.isEmpty()) {
-            fetchAndPlaceAllItems(gui, missingItems, studyDesk, studyDeskInv, deskCap);
+        // Step 4: Final aggregated summary
+        if (!progress.hasFoundDesk()) {
+            String message = L10n.get("study.fill.error.none_found");
+            gui.msg(message, Color.RED);
+            return Results.ERROR(message);
+        }
+        if (!progress.hasCompletedDesk()) {
+            String message = L10n.get("study.fill.error.none_completed");
+            gui.msg(message, Color.RED);
+            return Results.ERROR(message);
         }
 
-        // Step 11: Final status message
-        if (missingItems.isEmpty() && conflicts.isEmpty()) {
-            gui.msg("Study desk layout matches plan perfectly!", Color.GREEN);
-        } else if (missingItems.isEmpty() && !conflicts.isEmpty()) {
-            gui.msg("Study desk has conflicts that need manual resolution.", Color.ORANGE);
-        }
+        gui.msg(L10n.get("study.fill.summary", progress.foundCount,
+                progress.perfectCount, progress.issueCount), Color.WHITE);
 
         return Results.SUCCESS();
     }
 
     /**
-     * Load and validate the study desk layout config for the current character
+     * Human-readable label for a desk, falling back to a short hash if it was never renamed.
      */
-    private Map<String, Object> loadAndValidateConfig(NGameUI gui) {
-        String charName = gui.chrid;
-        Object existingData = NConfig.get(NConfig.Key.studyDeskLayout);
+    private String deskLabel(String hash, Map<String, Object> deskEntry) {
+        Object labelObj = deskEntry.get("label");
+        if (labelObj instanceof String && !((String) labelObj).isEmpty()) {
+            return (String) labelObj;
+        }
+        return L10n.get("study.fill.label_default", hash.substring(0, Math.min(8, hash.length())));
+    }
 
-        if (existingData == null) {
-            gui.msg("ERROR: No study desk layout configuration found!", Color.RED);
-            return null;
+    private static class DeskFillOutcome {
+        boolean failed = false;
+        int missingCount;
+        int conflictCount;
+    }
+
+    static class RunProgress {
+        int foundCount;
+        int completedCount;
+        int perfectCount;
+        int issueCount;
+
+        void recordFound() {
+            foundCount++;
         }
 
-        Map<String, Object> allLayouts;
-        if (existingData instanceof Map) {
-            allLayouts = (Map<String, Object>) existingData;
-        } else if (existingData instanceof String && !((String) existingData).isEmpty()) {
-            JSONObject jsonObj = new JSONObject((String) existingData);
-            allLayouts = jsonObj.toMap();
-        } else {
-            gui.msg("ERROR: Invalid study desk layout configuration!", Color.RED);
-            return null;
+        void recordCompleted(boolean perfect) {
+            completedCount++;
+            if (perfect) {
+                perfectCount++;
+            } else {
+                issueCount++;
+            }
         }
 
-        if (!allLayouts.containsKey(charName)) {
-            gui.msg("ERROR: No study desk layout found for character: " + charName, Color.RED);
-            return null;
+        void recordFailure() {
+            issueCount++;
         }
 
-        Object charObj = allLayouts.get(charName);
-        if (!(charObj instanceof Map)) {
-            gui.msg("ERROR: Invalid character layout data!", Color.RED);
-            return null;
+        boolean hasFoundDesk() {
+            return foundCount > 0;
         }
 
-        Map<String, Object> charData = (Map<String, Object>) charObj;
+        boolean hasCompletedDesk() {
+            return completedCount > 0;
+        }
+    }
 
-        if (!charData.containsKey("gobHash")) {
-            gui.msg("ERROR: No study desk hash found in layout config!", Color.RED);
-            return null;
+    /**
+     * Validate one study desk's current layout against its plan and fetch/place anything missing.
+     */
+    private DeskFillOutcome fillOneDesk(NGameUI gui, String label, Gob studyDesk, Map<String, Object> plannedLayout) throws InterruptedException {
+        DeskFillOutcome outcome = new DeskFillOutcome();
+
+        // Navigate to the study desk
+        new PathFinder(studyDesk).run(gui);
+
+        // Determine container cap name and open the study desk
+        String deskCap = getStudyDeskCap(studyDesk);
+        new OpenTargetContainer(deskCap, studyDesk).run(gui);
+
+        // Get the study desk inventory
+        NInventory studyDeskInv = gui.getInventory(deskCap);
+        if (studyDeskInv == null) {
+            gui.msg(L10n.get("study.fill.error.inventory", label), Color.RED);
+            outcome.failed = true;
+            return outcome;
         }
 
-        if (!charData.containsKey("layout")) {
-            gui.msg("ERROR: No layout data found in config!", Color.RED);
-            return null;
+        // Build map of current item positions
+        Map<Coord, WItem> currentItems = buildCurrentItemsMap(studyDeskInv);
+
+        // Find missing items and conflicts
+        List<ConflictItem> conflicts = new ArrayList<>();
+        List<MissingItem> missingItems = findMissingItems(plannedLayout, currentItems, conflicts);
+        outcome.missingCount = missingItems.size();
+        outcome.conflictCount = conflicts.size();
+
+        // Report results
+        reportMissingItems(gui, missingItems);
+        reportConflicts(gui, conflicts);
+
+        // Fetch and place missing items
+        if (!missingItems.isEmpty()) {
+            fetchAndPlaceAllItems(gui, missingItems, studyDesk, studyDeskInv, deskCap);
         }
 
-        Object layoutObj = charData.get("layout");
-        if (!(layoutObj instanceof Map)) {
-            gui.msg("ERROR: Invalid layout data format!", Color.RED);
-            return null;
+        // Final status message for this desk
+        if (missingItems.isEmpty() && conflicts.isEmpty()) {
+            gui.msg(L10n.get("study.fill.perfect", label), Color.GREEN);
+        } else if (missingItems.isEmpty() && !conflicts.isEmpty()) {
+            gui.msg(L10n.get("study.fill.conflicts", label), Color.ORANGE);
         }
 
-        return charData;
+        return outcome;
     }
 
     /**
@@ -163,16 +252,8 @@ public class StudyDeskFiller implements Action {
      * Get the container cap name for a study desk gob
      */
     private String getStudyDeskCap(Gob studyDesk) {
-        Drawable drawable = studyDesk.getattr(Drawable.class);
-        if (drawable != null && drawable.getres() != null) {
-            String resName = drawable.getres().name;
-            if ("gfx/terobjs/studydesk-big".equals(resName)) {
-                return "Fine Study Desk";
-            } else if ("gfx/terobjs/grandstudydesk".equals(resName)) {
-                return "Grand Study Desk";
-            }
-        }
-        return "Study Desk";
+        String cap = StudyDeskConfig.capFor(studyDesk);
+        return cap != null ? cap : "Study Desk";
     }
 
     /**
