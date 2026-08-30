@@ -125,6 +125,29 @@ class StudyDeskConfigTest {
     }
 
     @Test
+    void partialLegacyMigrationKeepsCompleteBackupAcrossLaterWrites() {
+        Map<String, Object> legacy = new LinkedHashMap<>();
+        legacy.put("Alice", legacyDesk("alice-hash", "Cone Cow"));
+        Map<String, Object> incomplete = new HashMap<>();
+        incomplete.put("gobHash", "broken-hash");
+        legacy.put("Bob", incomplete);
+        NConfig.set(NConfig.Key.studyDeskLayout, legacy);
+
+        StudyDeskConfig.allDesks();
+        StudyDeskConfig.renameDesk("alice-hash", "Renamed");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> wrapper = (Map<String, Object>)
+                NConfig.getGlobal(NConfig.Key.studyDeskLayout);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> backup = (Map<String, Object>) wrapper.get("legacyBackup");
+        assertEquals(2, backup.size());
+        assertEquals("Cone Cow", itemName(desk(backup, "Alice")));
+        assertEquals("broken-hash", desk(backup, "Bob").get("gobHash"));
+        assertNull(desk(backup, "Bob").get("layout"));
+    }
+
+    @Test
     void simultaneousSessionSavesDoNotLoseDesks() throws Exception {
         int workers = 32;
         ExecutorService pool = Executors.newFixedThreadPool(workers);

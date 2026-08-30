@@ -18,11 +18,13 @@ import java.util.Map;
  *   "desks": {
  *     "&lt;gobHash&gt;": { "label": "Desk 1", "layout": { "x,y": {...} } },
  *     ...
- *   }
+ *   },
+ *   "legacyBackup": { ...original legacy config... }
  * }
  * </pre>
  * Older configs saved one desk per character name (no "desks" key) and are migrated into this
- * shape the first time they're loaded.
+ * shape the first time they're loaded. The complete legacy value is kept as recovery metadata,
+ * including malformed entries that cannot be migrated automatically.
  */
 public class StudyDeskConfig {
 
@@ -36,6 +38,7 @@ public class StudyDeskConfig {
     private static final String GOB_HASH_KEY = "gobHash";
     private static final String OWNER_KEY = "owner";
     private static final String LEGACY_LAYOUTS_KEY = "legacyLayouts";
+    private static final String LEGACY_BACKUP_KEY = "legacyBackup";
 
     /**
      * Load every configured desk, migrating legacy per-character config on the fly.
@@ -47,12 +50,8 @@ public class StudyDeskConfig {
         // globally, so reading a session/profile snapshot here could overwrite newer desks.
         Object existingData = NConfig.getGlobal(NConfig.Key.studyDeskLayout);
 
-        Map<String, Object> raw;
-        if (existingData instanceof Map) {
-            raw = (Map<String, Object>) existingData;
-        } else if (existingData instanceof String && !((String) existingData).isEmpty()) {
-            raw = new JSONObject((String) existingData).toMap();
-        } else {
+        Map<String, Object> raw = rawConfig(existingData);
+        if (raw == null) {
             return new HashMap<>();
         }
 
@@ -98,7 +97,7 @@ public class StudyDeskConfig {
         }
 
         if (!migrated.isEmpty()) {
-            saveDesks(migrated);
+            saveDesks(migrated, raw);
         }
         return migrated;
     }
@@ -231,10 +230,34 @@ public class StudyDeskConfig {
     /**
      * Persist the full flat desk map back to config.
      */
+    @SuppressWarnings("unchecked")
     public static synchronized void saveDesks(Map<String, Object> desks) {
+        Map<String, Object> current = rawConfig(
+                NConfig.getGlobal(NConfig.Key.studyDeskLayout));
+        Object legacyBackup = current == null ? null : current.get(LEGACY_BACKUP_KEY);
+        saveDesks(desks, legacyBackup instanceof Map
+                ? (Map<String, Object>) legacyBackup : null);
+    }
+
+    private static void saveDesks(Map<String, Object> desks,
+                                  Map<String, Object> legacyBackup) {
         Map<String, Object> wrapper = new HashMap<>();
         wrapper.put(DESKS_KEY, copyMap(desks));
+        if (legacyBackup != null) {
+            wrapper.put(LEGACY_BACKUP_KEY, copyMap(legacyBackup));
+        }
         NConfig.set(NConfig.Key.studyDeskLayout, wrapper);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> rawConfig(Object value) {
+        if (value instanceof Map) {
+            return (Map<String, Object>) value;
+        }
+        if (value instanceof String && !((String) value).isEmpty()) {
+            return new JSONObject((String) value).toMap();
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")
