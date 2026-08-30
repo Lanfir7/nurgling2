@@ -77,6 +77,9 @@ public class DatabaseSettings extends Panel {
     private Label sharingLabel;
     private CheckBox shareHsCheckbox, shareMapMarksCheckbox, sharePosCheckbox, showPeerPosCheckbox;
     private Button seedFishButton;
+    private DbSizeView sizeView;
+    private int sizeYVillage;
+    private int sizeYSqlite;
 
     private boolean built = false;
 
@@ -238,6 +241,7 @@ public class DatabaseSettings extends Panel {
 
         advancedHeight = py - blockY;
         sqliteHeight = sy - blockY;
+        sizeYSqlite = blockY + sqliteHeight + UI.scale(6);
         y = Math.max(py, sy) + UI.scale(6);
 
         sharingLabel = add(new Label(L10n.get("database.sharing")), new Coord(labelX, y));
@@ -302,6 +306,10 @@ public class DatabaseSettings extends Panel {
         seedFishButton.tooltip = Text.render(L10n.get("database.seed_fish_tip")).tex();
         y += seedFishButton.sz.y + margin;
 
+        sizeYVillage = y;
+        sizeView = add(new DbSizeView(UI.scale(520)), new Coord(labelX, sizeYVillage));
+        y += sizeView.sz.y + margin;
+
         for (Widget w : new Widget[]{sharingLabel, shareHsCheckbox, shareMapMarksCheckbox,
                                      sharePosCheckbox, showPeerPosCheckbox, reconnectBtn, reconnectStatus,
                                      seedFishButton}) {
@@ -363,6 +371,9 @@ public class DatabaseSettings extends Panel {
 
         updateWidgetsVisibility();
         refreshReconnectStatus();
+        if (sizeView != null && mode != MODE_OFF) {
+            sizeView.refreshIfStale();
+        }
     }
 
     @Override
@@ -393,6 +404,10 @@ public class DatabaseSettings extends Panel {
             }
         } else if (wasEnabled) {
             reloadAreasFromFile();
+        }
+
+        if (sizeView != null) {
+            sizeView.invalidate();
         }
 
         NConfig.needUpdate();
@@ -737,12 +752,33 @@ public class DatabaseSettings extends Panel {
         showPeerPosCheckbox.visible = village;
         seedFishButton.visible = village;
 
+        sizeView.visible = village || sqlite;
+        sizeView.move(new Coord(labelX, village ? sizeYVillage - shift : sizeYSqlite));
+
         if (reconnectBtn != null) {
             reconnectBtn.visible = true;
         }
         if (reconnectStatus != null) {
             reconnectStatus.visible = true;
         }
+        resizeToVisibleContent();
+    }
+
+    @Override
+    public void cresize(Widget child) {
+        if (built) {
+            resizeToVisibleContent();
+        }
+    }
+
+    private void resizeToVisibleContent() {
+        int bottom = UI.scale(400);
+        for (Widget widget = child; widget != null; widget = widget.next) {
+            if (widget.visible) {
+                bottom = Math.max(bottom, widget.c.y + widget.sz.y + margin);
+            }
+        }
+        resize(new Coord(sz.x, bottom));
     }
 
     private void createSqliteDatabase() {

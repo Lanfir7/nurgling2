@@ -11,6 +11,7 @@ import nurgling.widgets.nsettings.Panel;
 public class SettingsPageFrame extends Widget {
     public final Panel panel;
     private final Label title;
+    private Coord viewport = null;
 
     public SettingsPageFrame(Panel panel, String title) {
         this.panel = add(panel, Coord.z);
@@ -18,6 +19,7 @@ public class SettingsPageFrame extends Widget {
     }
 
     public void fitTo(Coord viewport, int columns) {
+        this.viewport = viewport;
         int pad = UI.scale(12);
         int innerWidth = Math.max(1, viewport.x - (pad * 2));
         int panelTop = pad;
@@ -33,6 +35,17 @@ public class SettingsPageFrame extends Widget {
             panel.resize(Coord.of(innerWidth, panel.sz.y));
         panel.move(Coord.of(pad, panelTop));
 
+        updateFrameSize();
+    }
+
+    @Override
+    public void cresize(Widget child) {
+        if(child == panel && viewport != null)
+            updateFrameSize();
+    }
+
+    private void updateFrameSize() {
+        int pad = UI.scale(12);
         boolean ownsScroll = (panel instanceof AdaptiveSettingsPanel)
                 && ((AdaptiveSettingsPanel)panel).ownsVerticalScroll();
         int contentBottom = panel.c.y + contentHeight(panel, pad);

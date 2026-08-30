@@ -3,6 +3,7 @@ package nurgling.tools;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.function.Predicate;
 
 /**
  * Atomic file write utilities to prevent corruption on crash/kill.
@@ -22,12 +23,28 @@ public class NFileUtils {
      * @param content    the full content to write
      */
     public static void writeAtomically(String targetPath, String content) throws IOException {
+        writeAtomically(targetPath, content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Byte-oriented variant of {@link #writeAtomically(String, String)}, for files that
+     * aren't text (the global icon settings are stored in the client's own binary format).
+     *
+     * @param targetPath path to the target file
+     * @param content    the full content to write
+     */
+    public static void writeAtomically(String targetPath, byte[] content) throws IOException {
         Path target = Path.of(targetPath);
         Path temp = target.resolveSibling(target.getFileName() + ".tmp");
         Path backup = target.resolveSibling(target.getFileName() + ".bak");
 
+        Path parent = target.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+
         // Step 1: Write to temp file (original untouched)
-        Files.write(temp, content.getBytes(StandardCharsets.UTF_8));
+        Files.write(temp, content);
 
         // Step 2: Backup current file if it exists
         if (Files.exists(target)) {
@@ -87,6 +104,80 @@ public class NFileUtils {
             System.err.println("[NFileUtils] Both primary and backup are corrupt: " + targetPath);
         }
         return null;
+    }
+
+    /**
+     * Byte-oriented variant of {@link #readWithBackupFallback(String)}. A file counts as
+     * usable when it starts with the given signature, so a truncated write falls through
+     * to the .bak copy instead of being handed back as valid data.
+     *
+     * @param targetPath path to the target file
+     * @param sig        expected leading bytes
+     * @return the file content, or null if neither file nor backup is usable
+     */
+    public static byte[] readBytesWithBackupFallback(String targetPath, byte[] sig) {
+        return readBytesWithBackupFallback(targetPath, sig, raw -> true);
+    }
+
+    /**
+     * Byte-oriented fallback that also validates the complete payload. A matching signature is
+     * not enough for structured binary data: a truncated file can still contain its full header.
+     */
+    public static byte[] readBytesWithBackupFallback(String targetPath, byte[] sig,
+                                                     Predicate<byte[]> validator) {
+        Path target = Path.of(targetPath);
+        Path backup = target.resolveSibling(target.getFileName() + ".bak");
+
+        byte[] content = readFileBytes(target);
+        if (isUsable(content, sig, validator)) {
+            return content;
+        }
+
+        if (Files.exists(backup)) {
+            System.err.println("[NFileUtils] Primary file corrupt or empty, trying backup: " + targetPath);
+            byte[] backupContent = readFileBytes(backup);
+            if (isUsable(backupContent, sig, validator)) {
+                try {
+                    Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
+                    System.err.println("[NFileUtils] Restored from backup: " + targetPath);
+                } catch (IOException e) {
+                    System.err.println("[NFileUtils] Warning: could not restore backup to primary: " + e.getMessage());
+                }
+                return backupContent;
+            }
+        }
+
+        if (content != null && content.length > 0) {
+            System.err.println("[NFileUtils] Both primary and backup are corrupt: " + targetPath);
+        }
+        return null;
+    }
+
+    private static boolean isUsable(byte[] content, byte[] sig, Predicate<byte[]> validator) {
+        return hasPrefix(content, sig) && validator.test(content);
+    }
+
+    private static byte[] readFileBytes(Path path) {
+        if (!Files.exists(path)) {
+            return null;
+        }
+        try {
+            return Files.readAllBytes(path);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static boolean hasPrefix(byte[] content, byte[] sig) {
+        if (content == null || content.length < sig.length) {
+            return false;
+        }
+        for (int i = 0; i < sig.length; i++) {
+            if (content[i] != sig[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String readFileContent(Path path) {

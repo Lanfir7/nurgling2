@@ -45,6 +45,7 @@ public class DatabaseManager {
     private nurgling.db.service.FishLocationSeeder fishLocationSeeder;
     private nurgling.db.service.MapDbService mapDbService;
     private nurgling.db.service.VillagerService villagerService;
+    private nurgling.db.service.DbStorageService dbStorageService;
 
     /**
      * Optional migrations the database refused, as version -> reason. Their features report
@@ -400,6 +401,10 @@ public class DatabaseManager {
         return villagerService;
     }
 
+    public nurgling.db.service.DbStorageService getDbStorageService() {
+        return dbStorageService;
+    }
+
     /** Role this client is authenticated as, empty when not connected. */
     public String getConnectedUser() {
         return connUser;
@@ -436,6 +441,7 @@ public class DatabaseManager {
          * uses it is exactly where a host goes to fix that. The service degrades internally
          * when its bookkeeping table is absent. */
         this.villagerService = new nurgling.db.service.VillagerService(this);
+        this.dbStorageService = new nurgling.db.service.DbStorageService(this);
         this.recipeService = new RecipeService(this);
         this.favoriteRecipeService = new FavoriteRecipeService(this);
         this.containerService = new ContainerService(this);
@@ -947,6 +953,7 @@ public class DatabaseManager {
         fishLocationService = null;
         fishLocationSeeder = null;
         mapDbService = null;
+        dbStorageService = null;
         
         // Create new executor and reinitialize
         this.executorService = Executors.newFixedThreadPool(threadPoolSize, r -> {

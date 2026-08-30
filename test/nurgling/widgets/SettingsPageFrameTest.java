@@ -31,6 +31,18 @@ class SettingsPageFrameTest {
     }
 
     @Test
+    void pageGrowsWhenAsyncPanelContentArrivesAfterLayout() {
+        Panel panel = new Panel();
+        panel.resize(Coord.of(400, 100));
+        SettingsPageFrame frame = new SettingsPageFrame(panel, null);
+        frame.fitTo(Coord.of(500, 300), 1);
+
+        panel.resize(Coord.of(400, 700));
+
+        assertTrue(frame.sz.y > 300);
+    }
+
+    @Test
     void internalScrollOwnerStaysAtViewportHeight() {
         Panel panel = new InternalScrollPanel();
         SettingsPageFrame frame = new SettingsPageFrame(panel, null);
