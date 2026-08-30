@@ -283,14 +283,10 @@ public class NInventory extends Inventory
             return;
         }
         boolean charWnd = wnd instanceof CharWnd || getparent(CharWnd.class) != null;
-        if (charWnd) {
-            extraPanelResolved = true;
+        if (!charWnd && wnd.cap == null) {
             return;
         }
-        if (wnd.cap == null) {
-            return;
-        }
-        if (!ExtraInvGroupTransfer.shouldInstallExtraPanel(wnd.cap, false)) {
+        if (!ExtraInvGroupTransfer.shouldInstallExtraPanel(wnd.cap, false, charWnd)) {
             extraPanelResolved = true;
             return;
         }
