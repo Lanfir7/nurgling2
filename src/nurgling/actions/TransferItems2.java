@@ -22,15 +22,6 @@ public class TransferItems2 implements Action
         return quality >= minInclusive && (maxExclusive == null || quality < maxExclusive);
     }
 
-    static boolean isBandEmpty(ItemTransfer transfer, Collection<Double> liveQualities) {
-        for (Double quality : liveQualities) {
-            double normalized = quality != null ? quality : 1.0;
-            if (matchesQuality(normalized, transfer.quality, transfer.maxQualityExclusive))
-                return false;
-        }
-        return true;
-    }
-
     static HashSet<String> orderList = new HashSet<>();
     static {
         orderList.add("Moose Antlers");
@@ -117,6 +108,33 @@ public class TransferItems2 implements Action
         return result;
     }
 
+    static boolean allGroupItemsRouteToArea(
+            String currentItem, String currentArea,
+            Map<String, ? extends NavigableMap<Double, String>> destinations,
+            Map<String, List<Double>> inventoryQualities) {
+        List<String> currentGroups = transferGroups(currentItem);
+        if (currentGroups.isEmpty()) {
+            return false;
+        }
+        boolean found = false;
+        for (Map.Entry<String, List<Double>> item : inventoryQualities.entrySet()) {
+            if (Collections.disjoint(currentGroups, transferGroups(item.getKey()))) {
+                continue;
+            }
+            NavigableMap<Double, String> areas = destinations.get(item.getKey());
+            for (Double quality : item.getValue()) {
+                found = true;
+                double normalized = quality != null ? quality : 1.0;
+                Map.Entry<Double, String> route = areas != null
+                        ? areas.floorEntry(normalized) : null;
+                if (route == null || !Objects.equals(currentArea, route.getValue())) {
+                    return false;
+                }
+            }
+        }
+        return found;
+    }
+
     static String pickNearestArea(Collection<String> areaIds, Map<String, Double> distances) {
         String nearest = null;
         double nearestDistance = Double.MAX_VALUE;
@@ -162,6 +180,47 @@ public class TransferItems2 implements Action
         return eligible;
     }
 
+    @FunctionalInterface
+    interface RoutingScores {
+        Map<String, Double> get(Collection<String> areaIds) throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    interface AreaProcessor {
+        void process(String areaId, List<ItemTransfer> transfers) throws InterruptedException;
+    }
+
+    static void processPlan(
+            Map<String, List<ItemTransfer>> plan,
+            BiPredicate<String, String> requiresDescendingQuality,
+            RoutingScores routingScores,
+            AreaProcessor processor) throws InterruptedException {
+        Map<String, List<ItemTransfer>> remaining = new LinkedHashMap<>();
+        for (Map.Entry<String, List<ItemTransfer>> entry : plan.entrySet())
+            remaining.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+
+        while (!remaining.isEmpty()) {
+            Map<String, List<ItemTransfer>> eligible = eligibleAreaPlan(
+                    remaining, requiresDescendingQuality);
+            String nearestAreaId = pickNearestArea(
+                    eligible.keySet(), routingScores.get(eligible.keySet()));
+            if (nearestAreaId == null)
+                break;
+            List<ItemTransfer> areaTransfers = eligible.get(nearestAreaId);
+            areaTransfers.sort(Comparator
+                    .comparing((ItemTransfer transfer) -> !orderList.contains(transfer.itemName))
+                    .thenComparing(transfer -> transfer.itemName, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(Comparator.comparingDouble(
+                            (ItemTransfer transfer) -> transfer.quality).reversed()));
+            processor.process(nearestAreaId, areaTransfers);
+
+            List<ItemTransfer> pendingAtArea = remaining.get(nearestAreaId);
+            pendingAtArea.removeAll(areaTransfers);
+            if (pendingAtArea.isEmpty())
+                remaining.remove(nearestAreaId);
+        }
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
@@ -202,33 +261,11 @@ public class TransferItems2 implements Action
             }
         }
 
-        Map<String, List<ItemTransfer>> remaining =
-                new LinkedHashMap<>(buildAreaPlan(destinations, inventoryQualities));
-        while (!remaining.isEmpty()) {
-            Map<String, List<ItemTransfer>> eligible = eligibleAreaPlan(
-                    remaining, cnt::isBarterOutput);
-            Map<String, Double> distances = cnt.getRoutingScores(eligible.keySet(), gui);
-            String nearestAreaId = pickNearestArea(eligible.keySet(), distances);
-            if (nearestAreaId == null)
-                break;
-            List<ItemTransfer> areaTransfers = eligible.get(nearestAreaId);
-            areaTransfers.sort(Comparator
-                    .comparing((ItemTransfer transfer) -> !orderList.contains(transfer.itemName))
-                    .thenComparing(transfer -> transfer.itemName, String.CASE_INSENSITIVE_ORDER)
-                    .thenComparing(Comparator.comparingDouble(
-                            (ItemTransfer transfer) -> transfer.quality).reversed()));
-            processAreaTransfers(nearestAreaId, areaTransfers, gui);
-            for (ItemTransfer transfer : areaTransfers) {
-                if (!isBandEmpty(transfer, getExactItemQualities(transfer.itemName))) {
-                    return Results.ERROR("Could not transfer " + transfer.itemName
-                            + " to area " + nearestAreaId);
-                }
-            }
-            List<ItemTransfer> pendingAtArea = remaining.get(nearestAreaId);
-            pendingAtArea.removeAll(areaTransfers);
-            if (pendingAtArea.isEmpty())
-                remaining.remove(nearestAreaId);
-        }
+        processPlan(
+                buildAreaPlan(destinations, inventoryQualities),
+                cnt::isBarterOutput,
+                areaIds -> cnt.getRoutingScores(areaIds, gui),
+                (areaId, areaTransfers) -> processAreaTransfers(areaId, areaTransfers, gui));
 
         return Results.SUCCESS();
     }
@@ -246,8 +283,11 @@ public class TransferItems2 implements Action
                             itemTransfer.quality, itemTransfer.maxQualityExclusive).run(gui);
                 }
                 if (output instanceof NContext.Pile) {
+                    boolean categoryBulkSafe = allLiveGroupItemsRouteToArea(
+                            itemTransfer.itemName, areaId, gui);
                     new TransferToPiles(cnt.getRCArea(areaId), itemTransfer.itemName,
-                            (int)itemTransfer.quality, itemTransfer.maxQualityExclusive).run(gui);
+                            (int)itemTransfer.quality, itemTransfer.maxQualityExclusive,
+                            categoryBulkSafe).run(gui);
                 }
                 if (output instanceof Container) {
                     TreeMap<Double,String> areas = cnt.getOutAreas(itemTransfer.itemName);
@@ -271,6 +311,29 @@ public class TransferItems2 implements Action
                 }
             }
         }
+    }
+
+    private boolean allLiveGroupItemsRouteToArea(
+            String currentItem, String currentArea, NGameUI gui) throws InterruptedException {
+        Map<String, List<Double>> inventoryQualities = new LinkedHashMap<>();
+        for (WItem witem : gui.getInventory().getItems()) {
+            NGItem item = (NGItem) witem.item;
+            String name = item.name();
+            if (!Collections.disjoint(transferGroups(currentItem), transferGroups(name))) {
+                inventoryQualities.computeIfAbsent(name, key -> new ArrayList<>())
+                        .add(item.quality != null ? (double)item.quality : 1.0);
+            }
+        }
+
+        Map<String, NavigableMap<Double, String>> destinations = new LinkedHashMap<>();
+        for (String name : inventoryQualities.keySet()) {
+            TreeMap<Double, String> areas = cnt.getOutAreas(name);
+            if (areas != null) {
+                destinations.put(name, areas);
+            }
+        }
+        return allGroupItemsRouteToArea(
+                currentItem, currentArea, destinations, inventoryQualities);
     }
 
     static List<String> orderByGroupCount(Collection<String> names, Map<String, Integer> counts) {
@@ -408,18 +471,6 @@ public class TransferItems2 implements Action
             }
         }
         return exactMatches;
-    }
-
-    private static List<Double> getExactItemQualities(String exactName)
-            throws InterruptedException {
-        ArrayList<WItem> allItems = NUtils.getGameUI().getInventory().getItems(new NAlias(exactName));
-        ArrayList<Double> qualities = new ArrayList<>();
-        for (WItem witem : allItems) {
-            NGItem item = (NGItem)witem.item;
-            if (item.name().equals(exactName))
-                qualities.add(item.quality != null ? (double)item.quality : 1.0);
-        }
-        return qualities;
     }
 
     private static ArrayList<WItem> getItemsExactMatch(String exactName, double quality)

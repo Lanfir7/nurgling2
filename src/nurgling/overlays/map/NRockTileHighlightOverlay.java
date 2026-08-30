@@ -115,7 +115,8 @@ public class NRockTileHighlightOverlay extends NOverlay {
         }
 
         // Signal map to rebuild if needed
-        requpdate2 = requpdate();
+        if (requpdate())
+            requestUpdate();
     }
 
     @Override

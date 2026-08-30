@@ -1,10 +1,8 @@
 package nurgling.tasks;
 
 import haven.Fightview;
-import haven.Gob;
+import nurgling.NGameUI;
 import nurgling.NUtils;
-
-import java.util.LinkedList;
 
 public class WaitBattleWindow extends NTask
 {
@@ -20,16 +18,26 @@ public class WaitBattleWindow extends NTask
 
     long id;
 
+    Fightview fightview()
+    {
+        NGameUI gui = NUtils.getGameUI();
+        return (gui == null) ? null : gui.fv;
+    }
+
     @Override
     public boolean check()
     {
+        Fightview fv = fightview();
+        if(fv == null)
+            return false;
+
         if(id==-1)
         {
-            return !NUtils.getGameUI().fv.lsrel.isEmpty();
+            return !fv.lsrel.isEmpty();
         }
         else
         {
-            for(Fightview.Relation rel : NUtils.getGameUI().fv.lsrel)
+            for(Fightview.Relation rel : fv.lsrel)
             {
                 if(rel.gobid == id)
                     return true;

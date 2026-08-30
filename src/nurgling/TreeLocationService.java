@@ -27,6 +27,7 @@ import java.util.stream.Stream;
  */
 public class TreeLocationService implements ProfileAwareService {
     private final Map<String, TreeLocation> treeLocations = new ConcurrentHashMap<>();
+    private final Map<Long, List<TreeLocation>> treeLocationsBySegment = new ConcurrentHashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private String dataFile;
     private final NGameUI gui;
@@ -140,6 +141,7 @@ public class TreeLocationService implements ProfileAwareService {
             try {
                 TreeLocation location = new TreeLocation(segmentId, segmentCoord, treeName, treeResource, quantity, growthPercent);
                 treeLocations.put(location.getLocationId(), location);
+                treeLocationsBySegment.remove(segmentId);
                 saveTreeLocations();
                 String savedLabel = location.getListLabel();
                 gui.msg("Saved " + savedLabel + " location", java.awt.Color.GREEN);
@@ -224,13 +226,14 @@ public class TreeLocationService implements ProfileAwareService {
     public List<TreeLocation> getTreeLocationsForSegment(long segmentId) {
         lock.readLock().lock();
         try {
-            List<TreeLocation> result = new ArrayList<>();
-            for (TreeLocation loc : treeLocations.values()) {
-                if (loc.getSegmentId() == segmentId) {
-                    result.add(loc);
+            return treeLocationsBySegment.computeIfAbsent(segmentId, id -> {
+                List<TreeLocation> result = new ArrayList<>();
+                for (TreeLocation loc : treeLocations.values()) {
+                    if (loc.getSegmentId() == id)
+                        result.add(loc);
                 }
-            }
-            return result;
+                return Collections.unmodifiableList(result);
+            });
         } finally {
             lock.readLock().unlock();
         }
@@ -251,8 +254,11 @@ public class TreeLocationService implements ProfileAwareService {
             }
             for (TreeLocation loc : moved)
                 treeLocations.put(loc.getLocationId(), loc);
-            if (!moved.isEmpty())
+            if (!moved.isEmpty()) {
+                treeLocationsBySegment.remove(srcSeg);
+                treeLocationsBySegment.remove(dstSeg);
                 saveTreeLocations();
+            }
         } finally {
             lock.writeLock().unlock();
         }
@@ -276,11 +282,12 @@ public class TreeLocationService implements ProfileAwareService {
     public boolean removeTreeLocation(String locationId) {
         lock.writeLock().lock();
         try {
-            boolean removed = treeLocations.remove(locationId) != null;
-            if (removed) {
+            TreeLocation removed = treeLocations.remove(locationId);
+            if (removed != null) {
+                treeLocationsBySegment.remove(removed.getSegmentId());
                 saveTreeLocations();
             }
-            return removed;
+            return removed != null;
         } finally {
             lock.writeLock().unlock();
         }
@@ -293,6 +300,7 @@ public class TreeLocationService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             treeLocations.clear();
+            treeLocationsBySegment.clear();
             String content = NFileUtils.readWithBackupFallback(dataFile);
             if (content != null && !content.isEmpty()) {
                 try {

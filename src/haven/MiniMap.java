@@ -65,6 +65,9 @@ public class MiniMap extends Widget
     public Location sessloc;
     public GobIcon.Settings iconconf;
     public List<DisplayIcon> icons = Collections.emptyList();
+    private static final int ICON_VIEW_MARGIN = UI.scale(32);
+    private final MiniMapIconPolicy.TimedRefresh<List<DisplayIcon>> iconRefresh =
+	MiniMapIconPolicy.newRefresh();
     protected Locator setloc;
     protected boolean follow;
     protected int zoomlevel = 0, maglevel = 1 << Utils.clip((int)Math.round(Math.log(UI.scale(1.0)) / Math.log(2)), 0, 3);
@@ -397,7 +400,13 @@ public class MiniMap extends Widget
 	    } catch(Loading l) {
 	    }
 	}
-	icons = findicons(icons);
+	MiniMapIconPolicy.RefreshResult<List<DisplayIcon>> iconUpdate =
+	    iconRefresh.update(dt, () -> findicons(icons));
+	icons = iconUpdate.value;
+	if(!iconUpdate.refreshed) {
+	    for(DisplayIcon disp : icons)
+		disp.update(disp.gob.rc, disp.gob.a);
+	}
 	if(tvisible()) {
 	    Location loc = this.curloc;
 	    if(loc != null)
@@ -860,6 +869,9 @@ public class MiniMap extends Widget
 	synchronized(oc) {
 	    for(Gob gob : oc) {
 		try {
+		    if((sessloc != null) && (dloc != null) && (dloc.seg.id == sessloc.seg.id) &&
+		       !MiniMapIconPolicy.insideViewport(p2c(gob.rc), sz, ICON_VIEW_MARGIN))
+			continue;
 		    GobIcon icon = gob.getattr(GobIcon.class);
 		    if(icon != null) {
                 GobIcon.Setting conf = iconconf.get(icon.icon());

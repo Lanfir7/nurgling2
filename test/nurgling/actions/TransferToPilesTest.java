@@ -23,6 +23,14 @@ class TransferToPilesTest {
     }
 
     @Test
+    void mixedCategoryUsesGobShiftWhenEveryTypeRoutesToThisArea() {
+        assertEquals(PileMode.GOB_SHIFT_BULK,
+                TransferToPiles.pileMode(1, true, true));
+        assertEquals(PileMode.TYPE_BULK,
+                TransferToPiles.pileMode(1, true, false));
+    }
+
+    @Test
     void pureLoadUsesShiftClickOnStockpileGob() {
         assertEquals(PileMode.GOB_SHIFT_BULK, TransferToPiles.pileMode(0, false));
         assertEquals(PileMode.GOB_SHIFT_BULK, TransferToPiles.pileMode(1, false));
@@ -32,6 +40,34 @@ class TransferToPilesTest {
     void qualityThresholdStaysOneByOne() {
         assertEquals(PileMode.ONE_BY_ONE, TransferToPiles.pileMode(20, true));
         assertEquals(PileMode.ONE_BY_ONE, TransferToPiles.pileMode(20, false));
+    }
+
+    @Test
+    void lowerThresholdBandUsesGobShiftWhenEveryAcceptedTypeGoesToThisArea() {
+        assertEquals(PileMode.GOB_SHIFT_BULK,
+                TransferToPiles.thresholdPileMode(false, true, false));
+        assertEquals(PileMode.GOB_SHIFT_BULK,
+                TransferToPiles.thresholdPileMode(true, true, true));
+    }
+
+    @Test
+    void lowerThresholdBandUsesTypeBulkWhenOnlyCurrentTypeIsSafe() {
+        assertEquals(PileMode.TYPE_BULK,
+                TransferToPiles.thresholdPileMode(true, true, false));
+        assertEquals(PileMode.ONE_BY_ONE,
+                TransferToPiles.thresholdPileMode(false, false, true));
+        assertEquals(PileMode.ONE_BY_ONE,
+                TransferToPiles.thresholdPileMode(true, false, false));
+    }
+
+    @Test
+    void everyItemMustFitTheCurrentThresholdBand() {
+        assertTrue(TransferToPiles.allQualitiesInBand(
+                List.of(25.0, 30.0, 39.9), 1, 40.0));
+        assertFalse(TransferToPiles.allQualitiesInBand(
+                List.of(25.0, 40.0), 1, 40.0));
+        assertFalse(TransferToPiles.allQualitiesInBand(
+                List.of(), 1, 40.0));
     }
 
     @Test
@@ -51,10 +87,10 @@ class TransferToPilesTest {
     }
 
     @Test
-    void stackedDumpMustNotWaitForExactInventorySize() {
+    void oneByOneDoesNotWaitForTotalInventoryWhenUnrelatedItemsRemain() {
         assertFalse(TransferToPiles.useExactInventoryWait(PileMode.TYPE_BULK));
         assertFalse(TransferToPiles.useExactInventoryWait(PileMode.GOB_SHIFT_BULK));
-        assertTrue(TransferToPiles.useExactInventoryWait(PileMode.ONE_BY_ONE));
+        assertFalse(TransferToPiles.useExactInventoryWait(PileMode.ONE_BY_ONE));
     }
 
     @Test

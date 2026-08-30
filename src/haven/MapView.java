@@ -1249,7 +1249,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    } else {
 		maxlights = gprefs.maxlights.val;
 		if(gprefs.lightmode.val == GSettings.LightMode.ZONED) {
-		    zgrid = new Lighting.LightGrid(64, 64, 64);
+		    zgrid = new Lighting.LightGrid(32, 32, 32);
 		    if(maxlights != 0)
 			zgrid.maxlights = maxlights;
 		} else {
@@ -1819,6 +1819,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
     private Loading camload = null;
 	public Loading lastload = null;
+    private final WorldLoadTracker worldLoadTracker = new WorldLoadTracker(
+            WorldLoadTracker.fileLogger(NUtils.getDataFile("world-load.log")));
     public void draw(GOut g) {
 	Loader.Future<Plob> placing = this.placing;
 	if((placing != null) && placing.done())
@@ -1838,12 +1840,14 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    undelay(delayed2, g);
 	    poldraw(g);
 	    partydraw(g);
+	    worldLoadTracker.ready(System.nanoTime());
 	} catch(Loading e) {
 	    e.boostprio(6);
 	    lastload = e;
 	    String text = e.getMessage();
 	    if(text == null)
 		text = "Loading...";
+	    worldLoadTracker.blocked(e, System.nanoTime());
 	    g.chcolor(Color.BLACK);
 	    g.frect(Coord.z, sz);
 	    g.chcolor(Color.WHITE);

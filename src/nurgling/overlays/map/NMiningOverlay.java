@@ -85,7 +85,8 @@ public class NMiningOverlay extends NOverlay
             }
         }
 
-        requpdate2 = requpdate();
+        if (requpdate())
+            requestUpdate();
 
         super.tick();
     }

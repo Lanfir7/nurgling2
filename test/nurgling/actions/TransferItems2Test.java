@@ -42,6 +42,47 @@ class TransferItems2Test {
                 .collect(Collectors.toList()));
     }
 
+    @Test
+    void allRemainingHidesCanShareTheFoxLowPile() {
+        Map<String, NavigableMap<Double, String>> destinations = new LinkedHashMap<>();
+        destinations.put("Fox Hide", thresholds(1.0, "hide-low", 40.0, "fox-high"));
+        destinations.put("Goat Hide", new TreeMap<>(Map.of(1.0, "hide-low")));
+
+        Map<String, List<Double>> qualities = new LinkedHashMap<>();
+        qualities.put("Fox Hide", List.of(25.0, 39.9));
+        qualities.put("Goat Hide", List.of(15.0));
+
+        assertTrue(TransferItems2.allGroupItemsRouteToArea(
+                "Fox Hide", "hide-low", destinations, qualities));
+    }
+
+    @Test
+    void anyHideForAnotherAreaBlocksCategoryShift() {
+        Map<String, NavigableMap<Double, String>> destinations = new LinkedHashMap<>();
+        destinations.put("Fox Hide", thresholds(1.0, "hide-low", 40.0, "fox-high"));
+        destinations.put("Goat Hide", thresholds(1.0, "hide-low", 30.0, "goat-high"));
+
+        Map<String, List<Double>> qualities = new LinkedHashMap<>();
+        qualities.put("Fox Hide", List.of(25.0));
+        qualities.put("Goat Hide", List.of(35.0));
+
+        assertFalse(TransferItems2.allGroupItemsRouteToArea(
+                "Fox Hide", "hide-low", destinations, qualities));
+    }
+
+    @Test
+    void hideWithoutKnownDestinationBlocksCategoryShift() {
+        Map<String, NavigableMap<Double, String>> destinations = new LinkedHashMap<>();
+        destinations.put("Fox Hide", thresholds(1.0, "hide-low", 40.0, "fox-high"));
+
+        Map<String, List<Double>> qualities = new LinkedHashMap<>();
+        qualities.put("Fox Hide", List.of(25.0));
+        qualities.put("Goat Hide", List.of(15.0));
+
+        assertFalse(TransferItems2.allGroupItemsRouteToArea(
+                "Fox Hide", "hide-low", destinations, qualities));
+    }
+
     private static NavigableMap<Double, String> thresholds(
             double firstQuality, String firstArea,
             double secondQuality, String secondArea) {
@@ -111,12 +152,27 @@ class TransferItems2Test {
     }
 
     @Test
-    void transferBandIsCompleteOnlyWhenNoMatchingQualityRemains() {
-        TransferItems2.ItemTransfer lowBand =
-                new TransferItems2.ItemTransfer("Bone", 1.0, 20.0, "bone-low");
+    void fullDestinationDoesNotStopTransfersToOtherAreas() throws InterruptedException {
+        Map<String, List<TransferItems2.ItemTransfer>> remaining = new LinkedHashMap<>();
+        remaining.put("full", List.of(
+                new TransferItems2.ItemTransfer("Bone", 1.0, "full")));
+        remaining.put("next", List.of(
+                new TransferItems2.ItemTransfer("Entrails", 1.0, "next")));
+        List<String> visited = new java.util.ArrayList<>();
+        List<String> inventory = new java.util.ArrayList<>(List.of("Bone", "Entrails"));
 
-        assertFalse(TransferItems2.isBandEmpty(lowBand, List.of(5.0, 25.0)));
-        assertTrue(TransferItems2.isBandEmpty(lowBand, List.of(25.0)));
+        TransferItems2.processPlan(
+                remaining,
+                (areaId, itemName) -> false,
+                areaIds -> Map.of("full", 0.0, "next", 1.0),
+                (areaId, transfers) -> {
+                    visited.add(areaId);
+                    if (areaId.equals("next"))
+                        inventory.remove("Entrails");
+                });
+
+        assertEquals(List.of("full", "next"), visited);
+        assertEquals(List.of("Bone"), inventory);
     }
 
     @Test

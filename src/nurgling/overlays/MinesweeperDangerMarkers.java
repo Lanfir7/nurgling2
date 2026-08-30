@@ -10,8 +10,11 @@ import nurgling.conf.NMiningOverlayMemory;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static haven.MCache.tilesz;
 
@@ -46,8 +49,105 @@ public class MinesweeperDangerMarkers {
     private NMiningOverlayMemory memory;
     private String memUser;
     private String memChr;
-    private double sinceUpdate = UPDATE_INTERVAL;
+    private final TimedSnapshot<NumberSnapshot> numberSnapshots = newNumberSnapshotCache();
     private long lastFingerprint = Long.MIN_VALUE;
+
+    static final class SnapshotUpdate<T> {
+        final T value;
+        final boolean refreshed;
+
+        SnapshotUpdate(T value, boolean refreshed) {
+            this.value = value;
+            this.refreshed = refreshed;
+        }
+    }
+
+    static final class TimedSnapshot<T> {
+        private final double interval;
+        private double age;
+        private T value;
+
+        TimedSnapshot(double interval) {
+            this.interval = interval;
+            this.age = interval;
+        }
+
+        SnapshotUpdate<T> update(double dt, Supplier<T> capture) {
+            age += dt;
+            if (value == null || age >= interval) {
+                value = capture.get();
+                age = 0;
+                return new SnapshotUpdate<>(value, true);
+            }
+            return new SnapshotUpdate<>(value, false);
+        }
+
+        void clear() {
+            value = null;
+            age = interval;
+        }
+    }
+
+    static <T> TimedSnapshot<T> newNumberSnapshotCache() {
+        return new TimedSnapshot<>(UPDATE_INTERVAL);
+    }
+
+    private static final class NumberEntry {
+        final Coord tile;
+        final int value;
+        final boolean virtual;
+
+        NumberEntry(Coord tile, int value, boolean virtual) {
+            this.tile = tile;
+            this.value = value;
+            this.virtual = virtual;
+        }
+    }
+
+    private static final class NumberSnapshot {
+        final List<NumberEntry> entries;
+        final Set<Long> liveTiles;
+        final long fingerprint;
+
+        NumberSnapshot(List<NumberEntry> entries, Set<Long> liveTiles, long fingerprint) {
+            this.entries = entries;
+            this.liveTiles = liveTiles;
+            this.fingerprint = fingerprint;
+        }
+
+        static NumberSnapshot capture(NGameUI gui) {
+            List<NumberEntry> entries = new ArrayList<>();
+            Set<Long> liveTiles = new HashSet<>();
+            long hash = 0;
+            int count = 0;
+            synchronized (gui.ui.sess.glob.oc) {
+                for (Gob gob : gui.ui.sess.glob.oc) {
+                    for (Gob.Overlay ol : gob.ols) {
+                        if (ol.spr instanceof NMiningNumber) {
+                            NMiningNumber number = (NMiningNumber) ol.spr;
+                            Coord tile = gob.rc.div(tilesz).floor();
+                            entries.add(new NumberEntry(tile, number.val, gob.virtual));
+                            if (!gob.virtual) {
+                                liveTiles.add(key(tile.x, tile.y));
+                            }
+                            hash ^= (((long) tile.x) * 73856093L)
+                                    ^ (((long) tile.y) * 19349663L)
+                                    ^ (((long) number.val) * 83492791L);
+                            count++;
+                        }
+                    }
+                }
+            }
+            long fingerprint = count == 0 ? 0 : hash ^ ((long) count << 32);
+            return new NumberSnapshot(entries, liveTiles, fingerprint);
+        }
+
+        void applyTo(MinesweeperSolver solver) {
+            for (NumberEntry entry : entries) {
+                solver.reveal(entry.tile, entry.value);
+            }
+        }
+    }
 
     static Set<Coord> greenFromFreshBlanks(Iterable<Coord> blanks, Set<Coord> mineable) {
         Set<Coord> green = new HashSet<>();
@@ -62,9 +162,21 @@ public class MinesweeperDangerMarkers {
         return green;
     }
 
+    static Coord snapshotPlayerTile(Supplier<Coord2d> playerPosition) {
+        Coord2d position = playerPosition.get();
+        return position == null ? null : position.div(tilesz).floor();
+    }
+
     public void tick(double dt) {
         NGameUI gui = NUtils.getGameUI();
-        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.map == null || gui.map.player() == null) {
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.map == null) {
+            return;
+        }
+        Coord playerTile = snapshotPlayerTile(() -> {
+            Gob player = gui.map.player();
+            return player == null ? null : player.rc;
+        });
+        if (playerTile == null) {
             return;
         }
         if (solver == null || solverGui != gui) {
@@ -72,55 +184,67 @@ public class MinesweeperDangerMarkers {
             prevMineable.clear();
             pendingBlanks.clear();
             confirmedBlanks.clear();
+            numberSnapshots.clear();
             solver = new MinesweeperSolver(gui);
             solverGui = gui;
             restoreNow(gui);
         }
-        Coord playerTile = gui.map.player().rc.div(tilesz).floor();
+
+        SnapshotUpdate<NumberSnapshot> snapshotUpdate = numberSnapshots.update(
+                dt, () -> NumberSnapshot.capture(gui));
+        NumberSnapshot snapshot = snapshotUpdate.value;
+        if (snapshotUpdate.refreshed) {
+            snapshot.applyTo(solver);
+        }
         observeMinedTiles(playerTile, dt);
 
-        sinceUpdate += dt;
-        long fingerprint = fingerprint(gui);
-        boolean numbersChanged = fingerprint != lastFingerprint;
-        if (numbersChanged || sinceUpdate >= UPDATE_INTERVAL) {
-            lastFingerprint = fingerprint;
-            sinceUpdate = 0;
-            persistLiveNumbers(gui);
+        if (snapshotUpdate.refreshed) {
+            lastFingerprint = snapshot.fingerprint;
+            persistLiveNumbers(gui, snapshot);
             persistGreens(gui);
-            boolean seeded = applyMemory(gui, playerTile);
-            if (fingerprint != 0 || seeded) {
+            boolean seeded = applyMemory(gui, playerTile, snapshot);
+            if (snapshot.fingerprint != 0 || seeded) {
                 solver.refresh(playerTile, RADIUS);
-                solver.scanMinesweeperNumbers();
-                applyMemory(gui, playerTile);
+                applyMemory(gui, playerTile, snapshot);
                 solver.solve();
-                lastFingerprint = fingerprint(gui);
             }
             if (memory != null) {
                 memory.maybeFlush(System.currentTimeMillis());
             }
         }
-        sync(gui);
+        sync(gui, playerTile);
     }
 
     public void restoreNow() {
         NGameUI gui = NUtils.getGameUI();
-        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.map == null || gui.map.player() == null) {
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.map == null) {
             return;
         }
-        restoreNow(gui);
-        Coord playerTile = gui.map.player().rc.div(tilesz).floor();
-        applyMemory(gui, playerTile);
+        Coord playerTile = snapshotPlayerTile(() -> {
+            Gob player = gui.map.player();
+            return player == null ? null : player.rc;
+        });
+        if (playerTile == null) {
+            return;
+        }
+        NumberSnapshot snapshot = NumberSnapshot.capture(gui);
+        restoreNow(gui, snapshot);
+        snapshot.applyTo(solver);
+        applyMemory(gui, playerTile, snapshot);
         solver.refresh(playerTile, RADIUS);
-        solver.scanMinesweeperNumbers();
-        applyMemory(gui, playerTile);
+        applyMemory(gui, playerTile, snapshot);
         solver.solve();
-        sync(gui);
+        sync(gui, playerTile);
         if (memory != null) {
             memory.maybeFlush(System.currentTimeMillis());
         }
     }
 
     private void restoreNow(NGameUI gui) {
+        restoreNow(gui, NumberSnapshot.capture(gui));
+    }
+
+    private void restoreNow(NGameUI gui, NumberSnapshot snapshot) {
         if (solver == null || solverGui != gui) {
             solver = new MinesweeperSolver(gui);
             solverGui = gui;
@@ -129,7 +253,7 @@ public class MinesweeperDangerMarkers {
         memUser = null;
         memChr = null;
         resolveMemory(gui);
-        persistLiveNumbers(gui);
+        persistLiveNumbers(gui, snapshot);
         persistGreens(gui);
     }
 
@@ -149,7 +273,6 @@ public class MinesweeperDangerMarkers {
             }
         }
 
-        solver.scanMinesweeperNumbers();
         Iterator<Map.Entry<Long, Double>> pending = pendingBlanks.entrySet().iterator();
         while (pending.hasNext()) {
             Map.Entry<Long, Double> e = pending.next();
@@ -200,27 +323,19 @@ public class MinesweeperDangerMarkers {
         return gui.ui.sess.glob.map;
     }
 
-    private void persistLiveNumbers(NGameUI gui) {
+    private void persistLiveNumbers(NGameUI gui, NumberSnapshot snapshot) {
         NMiningOverlayMemory mem = resolveMemory(gui);
         if (mem == null) {
             return;
         }
         MCache map = mapOf(gui);
-        synchronized (gui.ui.sess.glob.oc) {
-            for (Gob gob : gui.ui.sess.glob.oc) {
-                if (gob.virtual) {
-                    continue;
-                }
-                for (Gob.Overlay ol : gob.ols) {
-                    if (ol.spr instanceof NMiningNumber) {
-                        NMiningNumber nmn = (NMiningNumber) ol.spr;
-                        Coord tile = gob.rc.div(tilesz).floor();
-                        NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(map, tile);
-                        if (ref != null) {
-                            mem.putNumber(ref, nmn.val);
-                        }
-                    }
-                }
+        for (NumberEntry entry : snapshot.entries) {
+            if (entry.virtual) {
+                continue;
+            }
+            NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(map, entry.tile);
+            if (ref != null) {
+                mem.putNumber(ref, entry.value);
             }
         }
     }
@@ -242,14 +357,14 @@ public class MinesweeperDangerMarkers {
         }
     }
 
-    private boolean applyMemory(NGameUI gui, Coord playerTile) {
+    private boolean applyMemory(NGameUI gui, Coord playerTile, NumberSnapshot snapshot) {
         NMiningOverlayMemory mem = resolveMemory(gui);
         if (mem == null) {
             return false;
         }
         MCache map = mapOf(gui);
         OCache oc = gui.ui.sess.glob.oc;
-        Set<Long> liveNumberTiles = liveNumberTiles(gui);
+        Set<Long> liveNumberTiles = snapshot.liveTiles;
         Set<Long> wantedNumbers = new HashSet<>();
         boolean seeded = false;
         for (Map.Entry<NMiningOverlayMemory.TileRef, Integer> e : mem.numbers().entrySet()) {
@@ -294,47 +409,6 @@ public class MinesweeperDangerMarkers {
         return seeded;
     }
 
-    private Set<Long> liveNumberTiles(NGameUI gui) {
-        Set<Long> tiles = new HashSet<>();
-        synchronized (gui.ui.sess.glob.oc) {
-            for (Gob gob : gui.ui.sess.glob.oc) {
-                if (gob.virtual) {
-                    continue;
-                }
-                for (Gob.Overlay ol : gob.ols) {
-                    if (ol.spr instanceof NMiningNumber) {
-                        Coord tile = gob.rc.div(tilesz).floor();
-                        tiles.add(key(tile.x, tile.y));
-                    }
-                }
-            }
-        }
-        return tiles;
-    }
-
-    private static long fingerprint(NGameUI gui) {
-        long hash = 0;
-        int count = 0;
-        synchronized (gui.ui.sess.glob.oc) {
-            for (Gob gob : gui.ui.sess.glob.oc) {
-                for (Gob.Overlay ol : gob.ols) {
-                    if (ol.spr instanceof NMiningNumber) {
-                        NMiningNumber nmn = (NMiningNumber) ol.spr;
-                        Coord tile = gob.rc.div(tilesz).floor();
-                        hash ^= (((long) tile.x) * 73856093L)
-                                ^ (((long) tile.y) * 19349663L)
-                                ^ (((long) nmn.val) * 83492791L);
-                        count++;
-                    }
-                }
-            }
-        }
-        if (count == 0) {
-            return 0;
-        }
-        return hash ^ ((long) count << 32);
-    }
-
     private void collectBlankNeighbors(Set<Coord> blanks, Set<Coord> mineable) {
         for (long k : confirmedBlanks) {
             blanks.add(new Coord(keyX(k), keyY(k)));
@@ -350,7 +424,7 @@ public class MinesweeperDangerMarkers {
         }
     }
 
-    private void sync(NGameUI gui) {
+    private void sync(NGameUI gui, Coord playerTile) {
         OCache oc = gui.ui.sess.glob.oc;
         Map<Long, Mark> wanted = new HashMap<>();
 
@@ -360,7 +434,7 @@ public class MinesweeperDangerMarkers {
         for (Coord tile : greenFromFreshBlanks(blanks, mineable)) {
             wanted.put(key(tile.x, tile.y), Mark.SAFE);
         }
-        rememberedGreens(gui, wanted);
+        rememberedGreens(gui, wanted, playerTile);
         if (lastFingerprint != 0 || (solver != null && !solver.dangerTiles().isEmpty())) {
             for (Coord tile : solver.dangerTiles()) {
                 wanted.put(key(tile.x, tile.y), Mark.DANGER);
@@ -392,14 +466,12 @@ public class MinesweeperDangerMarkers {
         }
     }
 
-    private void rememberedGreens(NGameUI gui, Map<Long, Mark> wanted) {
+    private void rememberedGreens(NGameUI gui, Map<Long, Mark> wanted, Coord playerTile) {
         NMiningOverlayMemory mem = resolveMemory(gui);
         if (mem == null) {
             return;
         }
         MCache map = mapOf(gui);
-        Gob player = gui.map.player();
-        Coord playerTile = player.rc.div(tilesz).floor();
         for (NMiningOverlayMemory.TileRef ref : mem.greens()) {
             Coord tile = NMiningOverlayMemory.toWorld(map, ref);
             if (tile == null) {

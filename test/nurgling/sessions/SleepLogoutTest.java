@@ -2,6 +2,8 @@ package nurgling.sessions;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,5 +33,14 @@ class SleepLogoutTest {
     @Test
     void sleepWithOtherSessionsOnlyClosesThisOne() {
         assertEquals(Action.CLOSE_SESSION, SleepLogout.decide(true, 2));
+    }
+
+    @Test
+    void completedSleepClosesTheConnectionThroughNormalLifecycle() {
+        AtomicInteger closes = new AtomicInteger();
+
+        SleepLogout.completeLogout(Action.CLOSE_SESSION, closes::incrementAndGet);
+
+        assertEquals(1, closes.get());
     }
 }

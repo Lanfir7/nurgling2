@@ -790,7 +790,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         // Refresh region overlays + the areas widget (mirrors DatabaseSettings.refreshAreasUI).
         if (nols != null) {
             for (NOverlay o : nols.values()) {
-                if (o != null) o.requpdate2 = true;
+                if (o != null) o.requestUpdate();
             }
         }
         try {

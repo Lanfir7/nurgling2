@@ -876,7 +876,7 @@ public class DatabaseSettings extends Panel {
             if (map.nols != null) {
                 for (nurgling.overlays.map.NOverlay overlay : map.nols.values()) {
                     if (overlay != null) {
-                        overlay.requpdate2 = true;
+                        overlay.requestUpdate();
                     }
                 }
             }

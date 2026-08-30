@@ -10,12 +10,21 @@ import java.util.*;
 public class FontSettings implements JConf {
     private static final Font serif = new Font("Serif", Font.PLAIN, 10);
     private static final Font sans  = new Font("Sans", Font.PLAIN, 10);
-    private static final Font fraktur = Resource.local().loadwait("ui/fraktur").flayer(Resource.Font.class).font;
-    private static final Font roboto = Resource.local().loadwait("nurgling/font/roboto").flayer(Resource.Font.class).font.deriveFont(Font.PLAIN);
+    private static final Font fraktur = loadFont("ui/fraktur", serif);
+    private static final Font roboto = loadFont("nurgling/font/roboto", sans);
 
-    private static final Font helvetica = Resource.local().loadwait("nurgling/font/helvetica").flayer(Resource.Font.class).font.deriveFont(Font.PLAIN);
-    private static final Font opensans = Resource.local().loadwait("nurgling/font/opensans").flayer(Resource.Font.class).font.deriveFont(Font.PLAIN);
-    private static final Font opensansSemibold = Resource.local().loadwait("nurgling/font/opensans-semibold").flayer(Resource.Font.class).font.deriveFont(Font.PLAIN);
+    private static final Font helvetica = loadFont("nurgling/font/helvetica", sans);
+    private static final Font opensans = loadFont("nurgling/font/opensans", sans);
+    private static final Font opensansSemibold = loadFont("nurgling/font/opensans-semibold", sans);
+
+    private static Font loadFont(String resourceName, Font fallback) {
+        try {
+            return Resource.local().loadwait(resourceName).flayer(Resource.Font.class).font.deriveFont(Font.PLAIN);
+        } catch (Resource.LoadException | Resource.BadResourceException e) {
+            return fallback;
+        }
+    }
+
     public static Font getOpenSans() { return opensans; }
     public static Font getOpenSansSemibold() { return opensansSemibold; }
 

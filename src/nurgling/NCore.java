@@ -1098,7 +1098,7 @@ public class NCore extends Widget
                             needsWidgetRefresh = true;
                             try {
                                 nurgling.overlays.map.NOverlay overlay = NUtils.getGameUI().map.nols.get(newArea.id);
-                                if (overlay != null) overlay.requpdate2 = true;
+                                if (overlay != null) overlay.requestUpdate();
                             } catch (Exception ignore) {}
                             updated++;
                         }
@@ -1160,7 +1160,7 @@ public class NCore extends Widget
             if (map.nols != null) {
                 for (nurgling.overlays.map.NOverlay overlay : map.nols.values()) {
                     if (overlay != null) {
-                        overlay.requpdate2 = true;
+                        overlay.requestUpdate();
                     }
                 }
             }

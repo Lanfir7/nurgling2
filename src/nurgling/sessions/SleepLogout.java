@@ -2,8 +2,8 @@ package nurgling.sessions;
 
 /**
  * After Sleep on a bed the server drops the character to the charlist
- * without closing the client. Close only the sleeping session; when it is
- * the last one, the normal client loop returns to the login screen.
+ * without closing the client. Close the sleeping connection and let the
+ * normal RemoteUI lifecycle remove its session and return to login.
  */
 public final class SleepLogout {
     public enum Action {
@@ -54,8 +54,12 @@ public final class SleepLogout {
         if (action == Action.NONE) {
             return;
         }
-        if (ctx != null) {
-            sm.requestCloseSession(ctx.sessionId);
+        completeLogout(action, ui != null && ui.sess != null ? ui.sess::close : null);
+    }
+
+    static void completeLogout(Action action, Runnable closeConnection) {
+        if (action == Action.CLOSE_SESSION && closeConnection != null) {
+            closeConnection.run();
         }
     }
 }

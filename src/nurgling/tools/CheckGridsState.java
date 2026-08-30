@@ -7,8 +7,10 @@ import nurgling.areas.NGlobalCoord;
 import nurgling.tasks.NTask;
 import nurgling.tasks.WaitForMapLoad;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class CheckGridsState implements Runnable {
@@ -16,11 +18,12 @@ public class CheckGridsState implements Runnable {
     private static final AtomicReference<ExecutorService> executorRef = new AtomicReference<>(createExecutor());
 
     private static ExecutorService createExecutor() {
-        return Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "CheckGridsState");
-            t.setDaemon(true);
-            return t;
-        });
+        return new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(1), r -> {
+                    Thread t = new Thread(r, "CheckGridsState");
+                    t.setDaemon(true);
+                    return t;
+                }, new ThreadPoolExecutor.DiscardOldestPolicy());
     }
 
     public static void submit() {

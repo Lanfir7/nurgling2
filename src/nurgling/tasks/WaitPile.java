@@ -14,13 +14,37 @@ public class WaitPile extends NTask {
         this.pos = pos;
     }
 
+    public static WaitPile withSoftTimeout(Coord2d pos, int ticks) {
+        WaitPile wait = new WaitPile(pos);
+        wait.infinite = false;
+        wait.maxCounter = Math.max(1, ticks);
+        wait.criticalOnTimeout = false;
+        return wait;
+    }
+
 
     @Override
     public boolean check() {
-        Gob gob = Finder.findGob(pos);
-        if(gob!=null) {
-            return NParser.checkName((pile = gob).ngob.name, new NAlias("stockpile"));
+        return acceptCandidates(Finder.findGobs(pos));
+    }
+
+    boolean acceptCandidates(Iterable<Gob> candidates) {
+        for (Gob candidate : candidates) {
+            if (acceptCandidate(candidate)) {
+                return true;
+            }
         }
+        pile = null;
+        return false;
+    }
+
+    boolean acceptCandidate(Gob gob) {
+        if (gob != null && gob.ngob != null && gob.ngob.name != null &&
+                NParser.checkName(gob.ngob.name, new NAlias("stockpile"))) {
+            pile = gob;
+            return true;
+        }
+        pile = null;
         return false;
     }
 

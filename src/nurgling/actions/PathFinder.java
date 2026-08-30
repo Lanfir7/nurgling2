@@ -10,6 +10,7 @@ import nurgling.tools.NParser;
 
 import java.util.*;
 import java.util.concurrent.atomic.*;
+import java.util.function.LongFunction;
 
 import static nurgling.pf.Graph.getPath;
 
@@ -34,6 +35,7 @@ public class PathFinder implements Action {
     public int maxMul = 200;
     Gob gobInStartPos = null;
     double badDir = Double.MAX_VALUE;
+    private final ArrayList<Gob> additionalObstacles = new ArrayList<>();
 
 
 
@@ -75,6 +77,30 @@ public class PathFinder implements Action {
 
     public void setMode(Mode mode) {
         this.mode = mode;
+    }
+
+    public PathFinder withAdditionalObstacle(Gob obstacle) {
+        if (obstacle != null) {
+            additionalObstacles.add(obstacle);
+        }
+        return this;
+    }
+
+    static Gob resolveObstacle(long id, Gob targetDummy, List<Gob> extraObstacles,
+                               LongFunction<Gob> liveLookup) {
+        if (targetDummy != null && targetDummy.id == id) {
+            return targetDummy;
+        }
+        for (Gob obstacle : extraObstacles) {
+            if (obstacle != null && obstacle.id == id) {
+                return obstacle;
+            }
+        }
+        return liveLookup.apply(id);
+    }
+
+    private Gob resolveObstacle(long id) {
+        return resolveObstacle(id, dummy, additionalObstacles, Finder::findGob);
     }
 
     /* ---------------------------------------------------------------------------------------
@@ -179,6 +205,9 @@ public class PathFinder implements Action {
             pfmap.waterMode = waterMode;
             pfmap.gatesAlwaysClosed = gatesAlwaysClosed;
             pfmap.build();
+            for (Gob obstacle : additionalObstacles) {
+                pfmap.addGob(obstacle);
+            }
             CellsArray dca = null;
             if (dummy != null)
                 dca = pfmap.addGob(dummy);
@@ -374,18 +403,20 @@ public class PathFinder implements Action {
             if (pfmap.cells[pos.x][pos.y].val!=0 && pfmap.cells[pos.x][pos.y].val!=7) {
                 ArrayList<Coord> targets = null;
                 if(pfmap.cells[pos.x][pos.y].content.contains((long)-1)) {
-                    CellsArray ca = dummy.ngob.getCA();
+                    Gob obstacle = resolveObstacle(-1);
+                    if (obstacle == null) {
+                        return new ArrayList<>();
+                    }
+                    CellsArray ca = obstacle.ngob.getCA();
                     return findFreeNearByHB(ca, target_id, dummy, start);
                 }
                 else {
                     for (Long cand : pfmap.cells[pos.x][pos.y].content) {
-                        CellsArray ca;
-                        if (cand <= 0) {
-                            ca = dummy.ngob.getCA();
-                        } else {
-                            Gob gcand = Finder.findGob(cand);
-                            ca = gcand.ngob.getCA();
+                        Gob obstacle = resolveObstacle(cand);
+                        if (obstacle == null) {
+                            continue;
                         }
+                        CellsArray ca = obstacle.ngob.getCA();
                         ArrayList<Coord> cords = findFreeNearByHB(ca, cand, dummy, start);
                         if (targets == null) {
                             targets = cords;
@@ -477,6 +508,16 @@ public class PathFinder implements Action {
         return res != null || pf.dn;
     }
 
+    public static boolean isAvailableWithObstacle(Coord2d begin, Coord2d target, Gob obstacle)
+            throws InterruptedException {
+        if (NUtils.player() == null || obstacle == null) {
+            return false;
+        }
+        PathFinder pf = new PathFinder(begin, target).withAdditionalObstacle(obstacle);
+        LinkedList<Graph.Vertex> res = pf.construct(true);
+        return res != null || pf.dn;
+    }
+
     public static boolean isAvailable(Coord2d begin, Gob target, boolean gatesAlwaysClosed) throws InterruptedException {
         if(NUtils.player() == null)
             return false;
@@ -536,16 +577,11 @@ public class PathFinder implements Action {
                                             double dst = 9000, testdst;
                                             long res_id = -2;
                                             for (long id : pfmap.cells[npfpos.x][npfpos.y].content) {
-                                                if (id >= 0) {
-                                                    if ((testdst = Finder.findGob(id).rc.dist(test2d_coord)) < dst) {
-                                                        res_id = id;
-                                                        dst = testdst;
-                                                    }
-                                                } else {
-                                                    if ((testdst = dummy.rc.dist(test2d_coord)) < dst) {
-                                                        res_id = id;
-                                                        dst = testdst;
-                                                    }
+                                                Gob obstacle = resolveObstacle(id);
+                                                if (obstacle != null &&
+                                                        (testdst = obstacle.rc.dist(test2d_coord)) < dst) {
+                                                    res_id = id;
+                                                    dst = testdst;
                                                 }
                                                 if (res_id == target_id) {
                                                     pfmap.getCells()[test_coord.x][test_coord.y].val = 7;

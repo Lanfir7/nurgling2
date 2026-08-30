@@ -17,4 +17,11 @@ class StackSupporterNewItemsTest {
         assertTrue(VSpec.getCategory("Crane Meat").contains("Poultry"));
         assertEquals(5, StackSupporter.getFullStackSize("Crane Meat"));
     }
+
+    @Test
+    void mouflonHornIsGroupedWithBoneMaterial() {
+        assertTrue(VSpec.getCategory("Mouflon Horn").contains("Finebone"));
+        assertTrue(VSpec.getCategory("Mouflon Horn").contains("Bone Material"));
+        assertEquals(1, StackSupporter.getFullStackSize("Mouflon Horn"));
+    }
 }

@@ -1899,6 +1899,7 @@ public class VSpec {
 
         ArrayList<JSONObject> finebones = new ArrayList<>();
         finebones.addAll(goatHorn);
+        finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/mouflonhorn\",\"name\":\"Mouflon Horn\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/beartooth\",\"name\":\"Bear Tooth\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/boartusk\",\"name\":\"Boar Tusk\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/bogturtleshell\",\"name\":\"Bog Turtle Shell\"}"));
@@ -2137,6 +2138,19 @@ public class VSpec {
         crust.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-crust\", \"gfx/invobjs/meat-crab\"], \"name\": \"Raw Crab\"}"));
         crust.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-crust\", \"gfx/invobjs/meat-lobster\"], \"name\": \"Raw Lobster\"}"));
         categories.put("Crab Meat", crust);
+
+        ArrayList<JSONObject> fruttiDiMare = new ArrayList<>();
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/bayshrimp\",\"name\":\"Bay Shrimp\"}"));
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/goosebarnacle\",\"name\":\"Gooseneck Barnacle\"}"));
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/lakesnail\",\"name\":\"Lake Snail\"}"));
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/oyster\",\"name\":\"Oyster\"}"));
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/pearloyster\",\"name\":\"Pearl Oyster\"}"));
+        fruttiDiMare.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-crust\", \"gfx/invobjs/meat-crab\"], \"name\": \"Raw Crab\"}"));
+        fruttiDiMare.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-crust\", \"gfx/invobjs/meat-lobster\"], \"name\": \"Raw Lobster\"}"));
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/razorclams\",\"name\":\"Razor Clam\"}"));
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/mussels\",\"name\":\"River Pearl Mussel\"}"));
+        fruttiDiMare.add(new JSONObject("{\"static\":\"gfx/invobjs/roundclam\",\"name\":\"Round Clam\"}"));
+        categories.put("Frutti di Mare", fruttiDiMare);
 
         ArrayList<JSONObject> rawMeat = new ArrayList<>();
         rawMeat.addAll(raw);

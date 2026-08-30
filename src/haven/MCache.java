@@ -427,6 +427,53 @@ public class MCache implements MapSource {
 	}
     }
 
+    public static class CustomOverlayCache {
+	public final Map<Integer, RenderTree.Node> bases = new HashMap<>();
+	public final Map<Integer, RenderTree.Node> edges = new HashMap<>();
+	private final Map<Integer, Long> revisions = new HashMap<>();
+
+	public synchronized boolean isCurrent(Integer id, long revision) {
+	    Long cached = revisions.get(id);
+	    return((cached != null) && (cached == revision));
+	}
+
+	public synchronized RenderTree.Node base(Integer id) {
+	    return(bases.get(id));
+	}
+
+	public synchronized RenderTree.Node edge(Integer id) {
+	    return(edges.get(id));
+	}
+
+	public synchronized void put(Integer id, long revision, RenderTree.Node base, RenderTree.Node edge) {
+	    remove(id);
+	    bases.put(id, base);
+	    edges.put(id, edge);
+	    revisions.put(id, revision);
+	}
+
+	public synchronized void remove(Integer id) {
+	    dispose(bases.remove(id));
+	    dispose(edges.remove(id));
+	    revisions.remove(id);
+	}
+
+	public synchronized void clear() {
+	    for(RenderTree.Node node : bases.values())
+		dispose(node);
+	    for(RenderTree.Node node : edges.values())
+		dispose(node);
+	    bases.clear();
+	    edges.clear();
+	    revisions.clear();
+	}
+
+	private static void dispose(RenderTree.Node node) {
+	    if(node instanceof Disposable)
+		((Disposable)node).dispose();
+	}
+    }
+
     private void cktileid(int id) {
 	if(id >= sets.length) {
 	    synchronized(setmon) {
@@ -532,8 +579,9 @@ public class MCache implements MapSource {
 	    public final Map<OverlayInfo, RenderTree.Node> ols = new HashMap<>();
 	    public final Map<OverlayInfo, RenderTree.Node> olols = new HashMap<>();
 
-		public final Map<Integer, RenderTree.Node> nols = new HashMap<>();
-		public final Map<Integer, RenderTree.Node> nedgs = new HashMap<>();
+		public final CustomOverlayCache nolcache = new CustomOverlayCache();
+		public final Map<Integer, RenderTree.Node> nols = nolcache.bases;
+		public final Map<Integer, RenderTree.Node> nedgs = nolcache.edges;
 
 	    public Cut(Coord cc) {
 		this.cc = cc;
@@ -547,6 +595,7 @@ public class MCache implements MapSource {
 			public void update(MapMesh mesh) {
 			    super.update(mesh);
 			    olseq = -1;
+			    nolcache.clear();
 			}
 			public String message() {
 			    return("Building map...");
@@ -581,18 +630,7 @@ public class MCache implements MapSource {
 			    ((Disposable)r).dispose();
 		    }
 		    olols.clear();
-			for(RenderTree.Node nol : nols.values())
-			{
-			if(nol instanceof Disposable)
-				((Disposable)nol).dispose();
-			}
-			nols.clear();
-			for(RenderTree.Node nol : nedgs.values())
-			{
-				if(nol instanceof Disposable)
-					((Disposable)nol).dispose();
-			}
-			nedgs.clear();
+			nolcache.clear();
 	    }
 		}
 	}
@@ -756,51 +794,19 @@ public class MCache implements MapSource {
 			return null;
 		nurgling.NMapView mapView = (nurgling.NMapView) gui.map;
 		NOverlay nol = mapView.nols.get(id);
-		boolean requpd = (nol != null && nol.requpdate2);
 		if((areas.get(id)!= null && areas.get(id).grids_id.contains(this.id)) || NMapView.isCustom(id))
 		{
-			int nseq = MCache.this.olseq;
-			if (this.olseq != nseq)
-			{
-				for (int i = 0; i < cutn.x * cutn.y; i++)
-				{
-					for (RenderTree.Node r : cuts[i].nols.values())
-					{
-						if (r instanceof Disposable)
-							((Disposable) r).dispose();
-					}
-					for (RenderTree.Node r : cuts[i].nedgs.values())
-					{
-						if (r instanceof Disposable)
-							((Disposable) r).dispose();
-					}
-					cuts[i].nols.clear();
-					cuts[i].nedgs.clear();
-				}
-				this.olseq = nseq;
-			}
 			Cut cut = geticut(cc);
-			// При requpd перестраиваем только текущий чанк — иначе оверлей остаётся только в одном куске карты
-			if (requpd && cut.nols.containsKey(id))
+			if (nol == null)
+				return null;
+			long revision = nol.cacheRevision();
+			if (!cut.nolcache.isCurrent(id, revision))
 			{
-				RenderTree.Node r = cut.nols.get(id);
-				if (r instanceof Disposable)
-					((Disposable) r).dispose();
-				cut.nols.remove(id);
-				RenderTree.Node re = cut.nedgs.get(id);
-				if (re instanceof Disposable)
-					((Disposable) re).dispose();
-				cut.nedgs.remove(id);
-			}
-			if (!cut.nols.containsKey(id) || requpd)
-			{
-				if (nol == null)
-					return null;
-				cut.nols.put(id, nol.makenol(getcut(cc), this.id, ul));
-				cut.nedgs.put(id, nol.makenolol(getcut(cc),this.id, ul));
+				MapMesh mesh = getcut(cc);
+				cut.nolcache.put(id, revision, nol.makenol(mesh, this.id, ul), nol.makenolol(mesh, this.id, ul));
 				nol.cuts.add(cut);
 			}
-			return (cut.nols.get(id));
+			return (cut.nolcache.base(id));
 		}
 		return null;
 	}
@@ -812,7 +818,7 @@ public class MCache implements MapSource {
 
 	public RenderTree.Node getnedgecut(Integer id, Coord cc) {
 		getnolcut(id, cc);
-		return(geticut(cc).nedgs.get(id));
+		return(geticut(cc).nolcache.edge(id));
 	}
 
 

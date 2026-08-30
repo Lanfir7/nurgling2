@@ -118,6 +118,7 @@ public class StackSupporter {
         catExceptions.add("Dried Filet");
         catExceptions.add("Billygoat Horn");
         catExceptions.add("Wildgoat Horn");
+        catExceptions.add("Mouflon Horn");
         catExceptions.add("Ant Chitin");
         catExceptions.add("Cave Louse Chitin");
         catExceptions.add("Driftkelp");

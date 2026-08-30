@@ -142,6 +142,9 @@ public interface Lighting {
 	public int maxlights = defmax;
 	private final int lswb;
 	private GridLights last;
+	private Object[][] lastparams;
+	private float[] lastproj;
+	private int lastmaxlights = -1;
 
 	public LightGrid(int w, int h, int d) {
 	    if(w != Integer.highestOneBit(w)) throw(new IllegalArgumentException("not a power of two: " + w));
@@ -401,18 +404,60 @@ public interface Lighting {
 	    }
 	}
 
+	private static Object snapshot(Object value) {
+	    if(value instanceof Object[]) {
+		Object[] src = (Object[])value;
+		Object[] ret = new Object[src.length];
+		for(int i = 0; i < src.length; i++)
+		    ret[i] = snapshot(src[i]);
+		return(ret);
+	    } else if(value instanceof float[]) {
+		return(((float[])value).clone());
+	    } else if(value instanceof double[]) {
+		return(((double[])value).clone());
+	    } else if(value instanceof int[]) {
+		return(((int[])value).clone());
+	    } else if(value instanceof long[]) {
+		return(((long[])value).clone());
+	    } else if(value instanceof short[]) {
+		return(((short[])value).clone());
+	    } else if(value instanceof byte[]) {
+		return(((byte[])value).clone());
+	    } else if(value instanceof char[]) {
+		return(((char[])value).clone());
+	    } else if(value instanceof boolean[]) {
+		return(((boolean[])value).clone());
+	    }
+	    return(value);
+	}
+
+	private static Object[][] snapshot(Object[][] params) {
+	    Object[][] ret = new Object[params.length][];
+	    for(int i = 0; i < params.length; i++)
+		ret[i] = (Object[])snapshot(params[i]);
+	    return(ret);
+	}
+
 	public State compile(Object[][] lights, Projection proj) {
+	    float[] projstate = proj.fin(Matrix4f.id).m.clone();
+	    if((last != null) && (lastmaxlights == maxlights) &&
+	       Arrays.equals(lastproj, projstate) && Arrays.deepEquals(lastparams, lights))
+		return(last);
+	    Object[][] frozen = snapshot(lights);
 	    Compiler c = new Compiler(proj);
-	    int n = Math.min(lights.length, 65535);
+	    int n = Math.min(frozen.length, 65535);
 	    for(int i = 0; i < n; i++)
-		c.addlight(i, lights[i]);
+		c.addlight(i, frozen[i]);
 	    c.compact();
 	    Debug.statprint(Utils.formatter("C-lights: %d lists, max %d, bounds %s, cell %s", c.nlists, c.maxlist, c.bbox, c.gsz), stats);
 	    if(last != null) {
 		last.dispose();
 		last = null;
 	    }
-	    return(last = new GridLights(lights, c.bbox, c.grid, c.listbuf, c.lboff));
+	    lastparams = frozen;
+	    lastproj = projstate;
+	    lastmaxlights = maxlights;
+	    return(last = new GridLights(frozen, c.bbox, c.grid, c.listbuf, c.lboff));
 	}
 
 	private static final Uniform u_bboxm = new Uniform(VEC3, "lboxm", p -> ((GridLights)p.get(lights)).bboxm(), lights);

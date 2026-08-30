@@ -27,6 +27,8 @@ public class TransferToPiles implements Action{
 
     Double maxQualityExclusive = null;
 
+    boolean allCategoryItemsInCurrentArea = false;
+
     enum PileMode {
         GOB_SHIFT_BULK,
         TYPE_BULK,
@@ -34,18 +36,48 @@ public class TransferToPiles implements Action{
     }
 
     static PileMode pileMode(int th, boolean mixedCategory) {
+        return pileMode(th, mixedCategory, false);
+    }
+
+    static PileMode pileMode(int th, boolean mixedCategory,
+                             boolean allCategoryItemsInCurrentArea) {
         if (th > 1) {
             return PileMode.ONE_BY_ONE;
         }
-        if (mixedCategory) {
+        if (mixedCategory && !allCategoryItemsInCurrentArea) {
             return PileMode.TYPE_BULK;
         }
         return PileMode.GOB_SHIFT_BULK;
     }
 
-    /** Stack dump leaves the last item; WaitTargetSize(fullSize - N) hangs at the pile. */
+    static PileMode thresholdPileMode(boolean mixedCategory, boolean allExactItemsInBand,
+                                      boolean allCategoryItemsInCurrentArea) {
+        if (!allExactItemsInBand) {
+            return PileMode.ONE_BY_ONE;
+        }
+        if (!mixedCategory || allCategoryItemsInCurrentArea) {
+            return PileMode.GOB_SHIFT_BULK;
+        }
+        return PileMode.TYPE_BULK;
+    }
+
+    static boolean allQualitiesInBand(List<Double> qualities,
+                                      double minInclusive, Double maxExclusive) {
+        if (qualities == null || qualities.isEmpty() || maxExclusive == null) {
+            return false;
+        }
+        for (Double quality : qualities) {
+            double normalized = quality != null ? quality : 1.0;
+            if (!TransferItems2.matchesQuality(normalized, minInclusive, maxExclusive)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** One-by-one transfers synchronize each item with WaitFreeHand. */
     static boolean useExactInventoryWait(PileMode mode) {
-        return mode == PileMode.ONE_BY_ONE;
+        return false;
     }
 
     static boolean waitsForInventoryUpdate(PileMode mode) {
@@ -186,8 +218,15 @@ public class TransferToPiles implements Action{
 
     public TransferToPiles(Pair<Coord2d,Coord2d> out, String exactName,
                            int th, Double maxQualityExclusive) {
+        this(out, exactName, th, maxQualityExclusive, false);
+    }
+
+    public TransferToPiles(Pair<Coord2d,Coord2d> out, String exactName,
+                           int th, Double maxQualityExclusive,
+                           boolean allCategoryItemsInCurrentArea) {
         this(out, exactName, th);
         this.maxQualityExclusive = maxQualityExclusive;
+        this.allCategoryItemsInCurrentArea = allCategoryItemsInCurrentArea;
     }
 
 
@@ -278,10 +317,11 @@ public class TransferToPiles implements Action{
 
     private boolean transfer(NGameUI gui, int target_size) throws InterruptedException {
         NUtils.addTask(new WaitStockpile(true, 80, false));
-        int fullSize = gui.getInventory().getItems().size();
+        boolean mixedCategory = sameCategoryItemPresent(gui);
         PileMode mode = maxQualityExclusive != null
-                ? PileMode.ONE_BY_ONE
-                : pileMode(th, sameCategoryItemPresent(gui));
+                ? thresholdPileMode(mixedCategory, allExactItemsInCurrentBand(gui),
+                        allCategoryItemsInCurrentArea)
+                : pileMode(th, mixedCategory, allCategoryItemsInCurrentArea);
         boolean accepted = true;
         if (mode == PileMode.ONE_BY_ONE) {
             transferOneByOne(gui, target_size);
@@ -294,9 +334,6 @@ public class TransferToPiles implements Action{
             return false;
         }
 
-        if (useExactInventoryWait(mode)) {
-            NUtils.getUI().core.addTask(new WaitTargetSize(NUtils.getGameUI().getInventory(), fullSize - target_size));
-        }
         return true;
     }
 
@@ -501,6 +538,20 @@ public class TransferToPiles implements Action{
             return StackSupporter.isSameExist(items, gui.getInventory());
         }
         return StackSupporter.isSameExistExact(exactName, gui.getInventory());
+    }
+
+    private boolean allExactItemsInCurrentBand(NGameUI gui) throws InterruptedException {
+        if (exactName == null || maxQualityExclusive == null) {
+            return false;
+        }
+        ArrayList<Double> qualities = new ArrayList<>();
+        for (WItem witem : gui.getInventory().getItems(items)) {
+            NGItem item = (NGItem) witem.item;
+            if (item.name().equals(exactName)) {
+                qualities.add(item.quality != null ? item.quality : 1.0);
+            }
+        }
+        return allQualitiesInBand(qualities, Math.max(th, 1), maxQualityExclusive);
     }
 
     NAlias getStockpileName(NAlias items) {

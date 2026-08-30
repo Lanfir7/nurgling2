@@ -10,8 +10,20 @@ import java.util.*;
 
 public class NOverlay extends MapView.MapRaster
 {
+    private static final long REFRESH_INTERVAL_NANOS = 200_000_000L;
+
     final Integer id;
-    public boolean requpdate2 = false;
+    private long cacheRevision = 0;
+    private final NOverlayRefreshPolicy refreshPolicy =
+            new NOverlayRefreshPolicy(REFRESH_INTERVAL_NANOS);
+
+    public synchronized void requestUpdate() {
+        cacheRevision++;
+    }
+
+    public synchronized long cacheRevision() {
+        return cacheRevision;
+    }
 
     public boolean requpdate(){
         return false;
@@ -39,11 +51,11 @@ public class NOverlay extends MapView.MapRaster
 
     public void tick() {
         super.tick();
-        if(area != null) {
+        if(area != null && refreshPolicy.shouldRefresh(
+                System.nanoTime(), area.ul.add(area.sz().div(2)), cacheRevision())) {
             base.tick();
             outl.tick();
         }
-        requpdate2 = false;
     }
 
     public void added(RenderTree.Slot slot) {
@@ -67,9 +79,9 @@ public class NOverlay extends MapView.MapRaster
         slot.remove();
         for(MCache.Grid.Cut cut : cuts)
         {
-            cut.nols.remove(id);
-            cut.nedgs.remove(id);
+            cut.nolcache.remove(id);
         }
+        cuts.clear();
     }
 
     public RenderTree.Node makenol(MapMesh mm, Long grid_id, Coord grid_ul) {
@@ -173,5 +185,5 @@ public class NOverlay extends MapView.MapRaster
         return(new MapMesh.ShallowWrap(mod, Pipe.Op.compose(new MapMesh.NOLOrder(id), new States.LineWidth(2))));
     }
 
-    public ArrayList<MCache.Grid.Cut> cuts = new ArrayList<>();
+    public Set<MCache.Grid.Cut> cuts = Collections.newSetFromMap(new WeakHashMap<>());
 }
