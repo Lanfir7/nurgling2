@@ -281,6 +281,9 @@ class ExtraInvGroupTransferTest {
     void extraPanelStillInstallsOnChest() {
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", false));
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Study Desk", false));
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Fine Study Desk", false));
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Grand Study Desk", false));
     }
 
     @Test
