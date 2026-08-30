@@ -112,22 +112,17 @@ public class AreaService {
             return;
         }
 
-        // Areas imported from JSON files or created before the migration may
-        // not have a UUID yet. Assign one before first DB write so identity
-        // stays stable across clients.
-        if (area.uuid == null) {
-            area.uuid = java.util.UUID.randomUUID().toString();
-        }
+            // Areas imported from JSON files or created before the migration may
+            // not have a UUID yet. Assign one before first DB write so identity
+            // stays stable across clients.
+            if (area.uuid == null) {
+                area.uuid = java.util.UUID.randomUUID().toString();
+            }
 
         String touchedBy = currentPlayerName();
 
         for (int attempt = 0; attempt < MAX_OCC_RETRIES; attempt++) {
-            JSONObject json = area.toJson();
-            JSONObject dataJson = new JSONObject();
-            if (json.has("space")) dataJson.put("space", json.get("space"));
-            if (json.has("in")) dataJson.put("in", json.get("in"));
-            if (json.has("out")) dataJson.put("out", json.get("out"));
-            if (json.has("spec")) dataJson.put("spec", json.get("spec"));
+            JSONObject dataJson = buildDataJson(area);
 
             final int expectedVersion = area.baselineVersion;
             final String dataStr = dataJson.toString();
@@ -195,6 +190,16 @@ public class AreaService {
         }
 
         System.err.println("AreaService.saveArea: exceeded OCC retries for area " + area.id);
+    }
+
+    static JSONObject buildDataJson(NArea area) {
+        JSONObject json = area.toJson();
+        JSONObject data = new JSONObject();
+        for (String key : new String[]{"space", "in", "out", "spec",
+                NArea.PILE_FILL_DIRECTION_JSON}) {
+            if (json.has(key)) data.put(key, json.get(key));
+        }
+        return data;
     }
 
     /**
