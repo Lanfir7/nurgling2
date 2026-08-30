@@ -1316,23 +1316,11 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         synchronized (glob.map.areas)
         {
             HashSet<String> names = new HashSet<String>();
-            int id = 1;
+            int id = AreaCreation.nextAvailableAreaId(
+                    glob.map.areas.values(), maxKnownDbAreaId());
             for(NArea area : glob.map.areas.values())
             {
-                if(area.id >= id)
-                {
-                    id = area.id + 1;
-                }
                 names.add(area.name);
-            }
-            // Deleted areas leave a tombstone row in the DB under their old id.
-            // Numbering only from the live areas hands a new area the id of a
-            // deleted one, and the sync poll then sees it as tombstoned and
-            // removes it again - so skip past every id the DB has ever used.
-            int dbId = maxKnownDbAreaId();
-            if(dbId >= id)
-            {
-                id = dbId + 1;
             }
             key = ("New Area" + String.valueOf(glob.map.areas.size()));
             while(names.contains(key))
@@ -1372,12 +1360,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 return -1;
             }
 
-            int newId = 1;
+            int newId = AreaCreation.nextAvailableAreaId(
+                    glob.map.areas.values(), maxKnownDbAreaId());
             HashSet<String> names = new HashSet<String>();
             for (NArea area : glob.map.areas.values()) {
-                if (area.id >= newId) {
-                    newId = area.id + 1;
-                }
                 names.add(area.name);
             }
 
