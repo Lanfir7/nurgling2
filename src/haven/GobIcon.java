@@ -372,6 +372,7 @@ public class GobIcon extends GAttrib {
 	private transient Map<Setting.ID, Boolean> showOverrides = new HashMap<>();
 	public int tag = -1;
 	public boolean notify = false;
+	public Object globalsync = null;
 
 	public Settings(UI ui, String filename) {
 	    this.ui = ui;
@@ -461,6 +462,7 @@ public class GobIcon extends GAttrib {
 		set.show    = conf.show;
 		set.defshow = conf.defshow;
 		set.notify  = conf.notify;
+		set.ring    = conf.ring;
 		set.resns   = conf.resns;
 		set.filens  = conf.filens;
 		if(set.markset = conf.markset)
@@ -732,6 +734,9 @@ public class GobIcon extends GAttrib {
 	    } catch(Exception e) {
 		new Warning(e, "failed to store icon-conf").issue();
 	    }
+	    /* The per-world file above still carries the server's catalog tag; the settings
+	     * themselves belong to the machine. */
+	    nurgling.conf.NGlobalIconSettings.push(this);
 	}
 
 	private boolean saveagain = false, saving = false;

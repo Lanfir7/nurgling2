@@ -3,7 +3,6 @@ package nurgling;
 import haven.*;
 import haven.res.ui.rbuff.RealmBuff;
 import haven.res.ui.relcnt.RelCont;
-import nurgling.conf.IconRingConfig;
 import nurgling.conf.NDiscordNotification;
 import nurgling.conf.NToolBeltProp;
 import nurgling.i18n.L10n;
@@ -168,10 +167,6 @@ public class NGameUI extends GameUI
     /** Prospecting results waiting to be paired up with their window; see NProspecting. */
     public final NProspecting.Pending prospecting = new NProspecting.Pending();
 
-    // Local storage for ring settings
-    public IconRingConfig iconRingConfig;
-    private boolean ringSettingsApplied = false;
-    
     // Temporary rings (session-only, for objects without GobIcon)
     // Maps resource name to ring enabled state
     public final Map<String, Boolean> tempRingResources = Collections.synchronizedMap(new HashMap<>());
@@ -255,10 +250,6 @@ public class NGameUI extends GameUI
 
         // Initialize local allowed zones manager (for local hide control)
         nurgling.areas.AllowedZonesManager.getInstance().initialize(genus);
-
-        // Initialize local ring config
-        iconRingConfig = new IconRingConfig(genus);
-
         add(new NDraggableWidget(botsMenu = new NBotsMenu(), "botsmenu", botsMenu.sz.add(NDraggableWidget.delta)));
 
         // Initialize world speed
@@ -473,29 +464,6 @@ public class NGameUI extends GameUI
             }, "AnimalMarkerMacro-AutoStart").start();
         }
         
-        // Apply local ring settings to iconconf after it's loaded (only once)
-        if (!ringSettingsApplied) {
-            applyLocalRingSettings();
-            ringSettingsApplied = true;
-        }
-    }
-    
-    private void applyLocalRingSettings() {
-        if (iconRingConfig == null || iconconf == null) {
-            return;
-        }
-        
-        for (Map.Entry<String, Boolean> entry : iconRingConfig.getAllSettings().entrySet()) {
-            String iconResName = entry.getKey();
-            boolean ringEnabled = entry.getValue();
-            
-            // Find matching settings in iconconf
-            for (GobIcon.Setting setting : iconconf.settings.values()) {
-                if (setting.res != null && setting.res.name.equals(iconResName)) {
-                    setting.ring = ringEnabled;
-                }
-            }
-        }
     }
 
     private void initializeInventoryVisibility() {
