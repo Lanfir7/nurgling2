@@ -3,6 +3,7 @@ package nurgling.areas.storage;
 import haven.Area;
 import haven.Coord;
 import nurgling.areas.NArea;
+import nurgling.areas.PileFillDirection;
 import org.json.JSONObject;
 
 import java.sql.*;
@@ -42,7 +43,7 @@ public class AreaDBStorage implements AreaStorage {
             
             // Загружаем основные данные зон
             String sql = "SELECT id, global_id, name, path, color_r, color_g, color_b, color_a, " +
-                        "hide, sync_status, sync_version, zone_sync, updated_at, last_sync_at FROM areas WHERE deleted = FALSE";
+                        "hide, sync_status, sync_version, zone_sync, pile_fill_direction, updated_at, last_sync_at FROM areas WHERE deleted = FALSE";
             
             try (PreparedStatement stmt = conn.prepareStatement(sql);
                  ResultSet rs = stmt.executeQuery()) {
@@ -65,6 +66,7 @@ public class AreaDBStorage implements AreaStorage {
                     if (zoneSync != null && !zoneSync.isEmpty()) {
                         area.zoneSync = zoneSync;
                     }
+                    area.pileFillDirection = PileFillDirection.fromStored(rs.getString("pile_fill_direction"));
                     
                     // Загружаем last_updated
                     java.sql.Timestamp updatedAt = rs.getTimestamp("updated_at");
@@ -491,7 +493,7 @@ public class AreaDBStorage implements AreaStorage {
         
         // Восстанавливаем удаленную зону
         String sql = "UPDATE areas SET deleted = FALSE, global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, " +
-                    "color_b = ?, color_a = ?, hide = ?, zone_sync = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+                    "color_b = ?, color_a = ?, hide = ?, zone_sync = ?, pile_fill_direction = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
         
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, area.uuid != null && !area.uuid.isEmpty() ? area.uuid : null);
@@ -503,7 +505,8 @@ public class AreaDBStorage implements AreaStorage {
             stmt.setInt(7, area.color.getAlpha());
             stmt.setBoolean(8, area.hide);
             stmt.setString(9, area.zoneSync != null && !area.zoneSync.isEmpty() ? area.zoneSync : null);
-            stmt.setInt(10, area.id);
+            stmt.setString(10, (area.pileFillDirection != null ? area.pileFillDirection : PileFillDirection.LEFT_TO_RIGHT).name());
+            stmt.setInt(11, area.id);
             stmt.executeUpdate();
         }
         
@@ -545,11 +548,11 @@ public class AreaDBStorage implements AreaStorage {
         if (useOriginalTimestamp) {
             // Используем оригинальное время из сервера
             sql = "INSERT INTO areas (id, global_id, name, path, color_r, color_g, color_b, color_a, hide, " +
-                  "sync_status, sync_version, zone_sync, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 1, ?, ?)";
+                  "sync_status, sync_version, zone_sync, pile_fill_direction, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 1, ?, ?, ?)";
         } else {
             // Используем текущее время для новых локальных зон
             sql = "INSERT INTO areas (id, global_id, name, path, color_r, color_g, color_b, color_a, hide, " +
-                  "sync_status, sync_version, zone_sync, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 1, ?, CURRENT_TIMESTAMP)";
+                  "sync_status, sync_version, zone_sync, pile_fill_direction, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 1, ?, ?, CURRENT_TIMESTAMP)";
         }
         
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -563,10 +566,11 @@ public class AreaDBStorage implements AreaStorage {
             stmt.setInt(8, area.color.getAlpha());
             stmt.setBoolean(9, area.hide);
             stmt.setString(10, area.zoneSync != null && !area.zoneSync.isEmpty() ? area.zoneSync : null);
+            stmt.setString(11, (area.pileFillDirection != null ? area.pileFillDirection : PileFillDirection.LEFT_TO_RIGHT).name());
             if (useOriginalTimestamp) {
                 // Устанавливаем оригинальное время из сервера
                 java.sql.Timestamp timestamp = new java.sql.Timestamp(area.lastUpdated);
-                stmt.setTimestamp(11, timestamp);
+                stmt.setTimestamp(12, timestamp);
             }
             stmt.executeUpdate();
         }
@@ -624,15 +628,15 @@ public class AreaDBStorage implements AreaStorage {
             // Зона изменена локально - используем явное значение lastUpdated, которое мы установили
             // Это гарантирует, что в БД будет сохранено правильное время
             sql = "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
-                  "color_a = ?, hide = ?, zone_sync = ?, updated_at = ? WHERE id = ?";
+                  "color_a = ?, hide = ?, zone_sync = ?, pile_fill_direction = ?, updated_at = ? WHERE id = ?";
         } else if (useOriginalTimestamp) {
             // Зона синхронизирована с сервером и не изменена - сохраняем оригинальное время
             sql = "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
-                  "color_a = ?, hide = ?, zone_sync = ?, updated_at = ? WHERE id = ?";
+                  "color_a = ?, hide = ?, zone_sync = ?, pile_fill_direction = ?, updated_at = ? WHERE id = ?";
         } else {
             // Зона не изменена и не синхронизирована - не обновляем updated_at
             sql = "UPDATE areas SET global_id = ?, name = ?, path = ?, color_r = ?, color_g = ?, color_b = ?, " +
-                  "color_a = ?, hide = ?, zone_sync = ? WHERE id = ?";
+                  "color_a = ?, hide = ?, zone_sync = ?, pile_fill_direction = ? WHERE id = ?";
         }
         
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -646,6 +650,7 @@ public class AreaDBStorage implements AreaStorage {
             stmt.setInt(paramIndex++, area.color.getAlpha());
             stmt.setBoolean(paramIndex++, area.hide);
             stmt.setString(paramIndex++, area.zoneSync != null && !area.zoneSync.isEmpty() ? area.zoneSync : null);
+            stmt.setString(paramIndex++, (area.pileFillDirection != null ? area.pileFillDirection : PileFillDirection.LEFT_TO_RIGHT).name());
             if (hasChanges) {
                 // Устанавливаем явное значение lastUpdated, которое мы установили при изменении
                 java.sql.Timestamp timestamp = new java.sql.Timestamp(area.lastUpdated);
@@ -693,7 +698,7 @@ public class AreaDBStorage implements AreaStorage {
      * Загружает зону из БД для сравнения (без полной загрузки связанных данных)
      */
     private NArea loadAreaForComparison(Connection conn, int areaId) throws SQLException {
-        String sql = "SELECT name, path, color_r, color_g, color_b, color_a, hide FROM areas WHERE id = ? AND deleted = FALSE";
+        String sql = "SELECT name, path, color_r, color_g, color_b, color_a, hide, pile_fill_direction FROM areas WHERE id = ? AND deleted = FALSE";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, areaId);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -709,6 +714,7 @@ public class AreaDBStorage implements AreaStorage {
                     int a = rs.getInt("color_a");
                     area.color = new java.awt.Color(r, g, b, a);
                     area.hide = rs.getBoolean("hide");
+                    area.pileFillDirection = PileFillDirection.fromStored(rs.getString("pile_fill_direction"));
                     
                     // Инициализируем space перед загрузкой данных
                     if (area.space == null) {
@@ -752,6 +758,7 @@ public class AreaDBStorage implements AreaStorage {
         if (dbArea.color == null || newArea.color == null || 
             dbArea.color.getRGB() != newArea.color.getRGB()) return true;
         if (dbArea.hide != newArea.hide) return true;
+        if (dbArea.pileFillDirection != newArea.pileFillDirection) return true;
         
         // Сравниваем пространственные данные
         if (dbArea.space == null || newArea.space == null) {
@@ -1051,7 +1058,7 @@ public class AreaDBStorage implements AreaStorage {
         try {
             Connection conn = poolManager.getConnection();
             // ВАЖНО: Загружаем также global_id (UUID) и zone_sync для синхронизации
-            String sql = "SELECT id, global_id, name, path, color_r, color_g, color_b, color_a, hide, zone_sync, updated_at " +
+            String sql = "SELECT id, global_id, name, path, color_r, color_g, color_b, color_a, hide, zone_sync, pile_fill_direction, updated_at " +
                         "FROM areas WHERE id = ? AND deleted = FALSE";
             
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -1076,6 +1083,7 @@ public class AreaDBStorage implements AreaStorage {
                         if (zoneSync != null && !zoneSync.isEmpty()) {
                             area.zoneSync = zoneSync;
                         }
+                        area.pileFillDirection = PileFillDirection.fromStored(rs.getString("pile_fill_direction"));
                         
                         // Загружаем last_updated
                         java.sql.Timestamp updatedAt = rs.getTimestamp("updated_at");

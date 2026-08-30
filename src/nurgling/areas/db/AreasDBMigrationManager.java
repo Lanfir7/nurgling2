@@ -418,6 +418,38 @@ public class AreasDBMigrationManager {
             }
         });
         
+        migrations.add(new Migration(7, "Add pile_fill_direction column for area pile fill direction") {
+            @Override
+            public void run(Connection conn, boolean isPostgres) throws SQLException {
+                try (Statement stmt = conn.createStatement()) {
+                    boolean columnExists;
+                    try (ResultSet ignored = stmt.executeQuery("SELECT pile_fill_direction FROM areas LIMIT 1")) {
+                        columnExists = true;
+                    } catch (SQLException e) {
+                        String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase(java.util.Locale.ROOT);
+                        if (!message.contains("no such column") && !message.contains("unknown column")) {
+                            throw e;
+                        }
+                        columnExists = false;
+                    }
+
+                    if (!columnExists) {
+                        try {
+                            stmt.executeUpdate("ALTER TABLE areas ADD COLUMN pile_fill_direction VARCHAR(32) NOT NULL DEFAULT 'LEFT_TO_RIGHT'");
+                        } catch (SQLException e) {
+                            String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase(java.util.Locale.ROOT);
+                            if (!message.contains("duplicate column") && !message.contains("already exists")) {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    stmt.executeUpdate("UPDATE areas SET pile_fill_direction = 'LEFT_TO_RIGHT' " +
+                            "WHERE pile_fill_direction IS NULL OR TRIM(pile_fill_direction) = ''");
+                }
+            }
+        });
+
         return migrations;
     }
     
