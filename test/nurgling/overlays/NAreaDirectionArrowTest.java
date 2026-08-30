@@ -1,10 +1,15 @@
 package nurgling.overlays;
 
+import haven.render.Pipe;
+import haven.render.RenderList;
+import haven.render.RenderTree;
+import haven.render.States;
 import nurgling.areas.PileFillDirection;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NAreaDirectionArrowTest {
@@ -45,6 +50,31 @@ class NAreaDirectionArrowTest {
         float[] up = NAreaDirectionArrow.arrowVertices(PileFillDirection.BOTTOM_TO_TOP);
         assertEquals(-19.0f, minY(up), 0.001f);
         assertEquals(19.0f, maxY(up), 0.001f);
+    }
+
+    @Test void clearsInheritedBackFaceCulling() {
+        RenderTree tree = new RenderTree();
+        ArrowList arrows = new ArrowList();
+        tree.add(arrows, NAreaDirectionArrow.class);
+
+        RenderTree.Slot parent = tree.add(null, new States.Facecull(States.Facecull.Mode.BACK));
+        parent.add(new NAreaDirectionArrow(null, null));
+
+        assertNull(arrows.slot.state().get(States.facecull));
+    }
+
+    private static class ArrowList implements RenderList<NAreaDirectionArrow> {
+        private RenderList.Slot<? extends NAreaDirectionArrow> slot;
+
+        @Override public void add(RenderList.Slot<? extends NAreaDirectionArrow> slot) {
+            this.slot = slot;
+        }
+
+        @Override public void remove(RenderList.Slot<? extends NAreaDirectionArrow> slot) {}
+
+        @Override public void update(RenderList.Slot<? extends NAreaDirectionArrow> slot) {}
+
+        @Override public void update(Pipe group, int[] statemask) {}
     }
 
     private static float minX(float[] vertices) {

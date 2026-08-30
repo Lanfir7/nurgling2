@@ -37,6 +37,7 @@ public class NAreaDirectionArrow extends Sprite implements RenderTree.Node, Rend
         this.state = Pipe.Op.compose(
                 new BaseColor(new Color(255, 190, 40, 185)),
                 Clickable.No,
+                new States.Facecull(States.Facecull.Mode.NONE),
                 Pipe.Op.compose(Rendered.last, States.Depthtest.none, States.maskdepth)
         );
     }
