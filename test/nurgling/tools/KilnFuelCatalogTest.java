@@ -82,11 +82,18 @@ class KilnFuelCatalogTest {
     void fuelUnitsForStripsUnfiredAndMatchesCatalog() {
         assertEquals(23, units("Unfired Garden Pot"));
         assertEquals(12, units("Unfired Clay Jar"));
+        assertEquals(23, units("Unfired Pot"));
         assertEquals(4, units("Fishwrap"));
     }
 
     @Test
+    void fuelUnitsForStripsUnbakedAndMatchesCatalog() {
+        assertEquals(4, units("Unbaked Fishwrap"));
+    }
+
+    @Test
     void fuelUnitsForMapsClayToBrickAmounts() {
+        assertEquals(2, units("Acre Clay"));
         assertEquals(2, units("Ball Clay"));
         assertEquals(2, units("Potter's Clay"));
         assertEquals(23, units("Coade Clay"));
@@ -114,6 +121,10 @@ class KilnFuelCatalogTest {
         OptionalInt mixed = KilnFuelCatalog.maxFuelUnitsFor(Arrays.asList("Ball Clay", "Unfired Garden Pot"));
         assertTrue(mixed.isPresent());
         assertEquals(23, mixed.getAsInt());
+        OptionalInt unbakedAndMug = KilnFuelCatalog.maxFuelUnitsFor(
+                Arrays.asList("Unbaked Fishwrap", "Unfired Mug"));
+        assertTrue(unbakedAndMug.isPresent());
+        assertEquals(12, unbakedAndMug.getAsInt());
         assertEquals(0, KilnFuelCatalog.maxFuelUnitsFor(Arrays.asList()).orElse(-1));
         assertFalse(KilnFuelCatalog.maxFuelUnitsFor(Arrays.asList("Brick", "Mystery Goo")).isPresent());
     }
