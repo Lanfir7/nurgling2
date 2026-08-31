@@ -1934,6 +1934,8 @@ public class VSpec {
         ArrayList<JSONObject> cleanedBirds = new ArrayList<>();
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/bullfinch-cleaned\",\"name\":\"Cleaned Bullfinch\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/chicken-cleaned\",\"name\":\"Cleaned Chicken\"}"));
+        cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/crane-cleaned\",\"name\":\"Cleaned Crane\"}"));
+        cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/eagleowl-cleaned\",\"name\":\"Cleaned Eagle Owl\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/goldeneagle-cleaned\",\"name\":\"Cleaned Golden Eagle\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/magpie-cleaned\",\"name\":\"Cleaned Magpie\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/mallard-cleaned\",\"name\":\"Cleaned Mallard\"}"));

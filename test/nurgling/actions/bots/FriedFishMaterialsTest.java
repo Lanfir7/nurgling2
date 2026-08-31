@@ -9,6 +9,7 @@ import java.util.Collections;
 import haven.Coord2d;
 import nurgling.tools.NAlias;
 import nurgling.tools.VSpec;
+import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +96,12 @@ class FriedFishMaterialsTest {
         assertTrue(raw.matches("Pike"));
         assertTrue(raw.matches("Clean Rabbit Carcass"));
         assertTrue(raw.matches("Cleaned Chicken"));
+        assertTrue(VSpec.getCategoryContent("Clean Bird Carcass").contains("Cleaned Crane"));
+        assertTrue(VSpec.getCategoryContent("Clean Bird Carcass").contains("Cleaned Eagle Owl"));
+        assertTrue(raw.matches("Cleaned Crane"));
+        assertTrue(raw.matches("Cleaned Eagle Owl"));
+        assertEquals("gfx/invobjs/crane-cleaned", staticPath("Clean Bird Carcass", "Cleaned Crane"));
+        assertEquals("gfx/invobjs/eagleowl-cleaned", staticPath("Clean Bird Carcass", "Cleaned Eagle Owl"));
         for (String name : VSpec.getCategoryContent("Clean Animal Carcass")) {
             assertTrue(raw.matches(name), name);
         }
@@ -124,5 +131,14 @@ class FriedFishMaterialsTest {
         assertTrue(src.contains("Please select area with raw fish or cleaned carcasses"), src);
         assertFalse(src.contains("VSpec.getAllFish()"), src);
         assertFalse(src.contains("content.contains(\"raw\")"), src);
+    }
+
+    private static String staticPath(String category, String name) {
+        for (JSONObject entry : VSpec.categories.get(category)) {
+            if (name.equals(entry.optString("name"))) {
+                return entry.getString("static");
+            }
+        }
+        throw new AssertionError("Missing entry: " + name);
     }
 }
