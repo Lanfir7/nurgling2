@@ -100,6 +100,8 @@ public final class KilnFuelCatalog {
         String name = itemName;
         if (name.startsWith("Unfired "))
             name = name.substring("Unfired ".length());
+        if (name.startsWith("Unbaked "))
+            name = name.substring("Unbaked ".length());
         if (name.isEmpty())
             return OptionalInt.empty();
 
