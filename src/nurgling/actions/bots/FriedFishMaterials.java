@@ -1,6 +1,8 @@
 package nurgling.actions.bots;
 
 import haven.Coord2d;
+import nurgling.tools.NAlias;
+import nurgling.tools.VSpec;
 
 import java.util.Collection;
 
@@ -51,5 +53,14 @@ public final class FriedFishMaterials {
 
     public static boolean isCookedSpitroast(String name) {
         return name != null && name.toLowerCase().contains("spitroast");
+    }
+
+    public static NAlias roastableRaw() {
+        NAlias raw = VSpec.getAllFish();
+        raw.keys.addAll(VSpec.getCategoryContent("Clean Animal Carcass"));
+        raw.keys.addAll(VSpec.getCategoryContent("Clean Bird Carcass"));
+        raw.exceptions.add("Spitroast");
+        raw.buildCaches();
+        return raw;
     }
 }

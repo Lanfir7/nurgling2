@@ -49,6 +49,7 @@ public class GobContextRegistry {
         register(new SawBoardsAction());
         register(new DryHidesContextAction());
         register(new DryFishContextAction());
+        register(new SpitRoastContextAction());
         // Registered last so the generic entry sits below the object-specific ones.
         register(new ConfigureGobAction());
     }

@@ -14,7 +14,6 @@ import nurgling.tasks.WaitPose;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
-import nurgling.tools.VSpec;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,7 +26,7 @@ public class FriedFish implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         NContext context = new NContext(gui);
-        String insaId = context.createArea("Please select area with raw fish", Resource.loadsimg("baubles/rawFish"));
+        String insaId = context.createArea("Please select area with raw fish or cleaned carcasses", Resource.loadsimg("baubles/rawFish"));
         NArea insaArea = context.goToAreaById(insaId);
 
         String outsaId = context.createArea("Please select area for results", Resource.loadsimg("baubles/prepFish"));
@@ -79,9 +78,7 @@ public class FriedFish implements Action {
         boolean toContainers = FriedFishMaterials.toContainers(!containers.isEmpty());
         boolean fromInventory = FriedFishMaterials.fromInventory(inRc != null && Finder.findGob(inRc, new NAlias("stockpile")) != null);
 
-        NAlias rawFish = VSpec.getAllFish();
-        rawFish.exceptions.add("Spitroast");
-        rawFish.buildCaches();
+        NAlias rawFish = FriedFishMaterials.roastableRaw();
 
         while (shouldKeepWorking(gui, fromInventory, inRc, pows, rawFish)) {
             boolean readyToWork = false;
