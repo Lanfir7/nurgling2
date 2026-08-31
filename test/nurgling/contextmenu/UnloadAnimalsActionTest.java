@@ -61,8 +61,10 @@ class UnloadAnimalsActionTest {
         assertFalse(src.contains("SelectArea"), src);
         assertTrue(src.contains("TakeFromVehicle"), src);
         assertTrue(src.contains("FindPlaceAndAction"), src);
+        assertTrue(src.contains("new FindPlaceAndAction(gob, dest, true)"), src);
         assertTrue(src.contains("findLiftedbyPlayer"), src);
         assertTrue(src.contains("NAlias(\"vehicle\")"), src);
+        assertTrue(src.contains("Results.ERROR(\"No carcass area\")"), src);
     }
 
     @Test
