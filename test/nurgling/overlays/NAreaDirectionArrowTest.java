@@ -46,14 +46,14 @@ class NAreaDirectionArrowTest {
         assertEquals(5.5f, maxX(down), 0.001f);
         assertEquals(-9.5f, minY(down), 0.001f);
         assertEquals(9.5f, maxY(down), 0.001f);
-        // Default tip (9.5, 0) rotates to (0, -9.5): south / increasing world Y.
+        // Default tip (9.5, 0) rotates via (x,y)->(y,-x) to (0, -9.5).
         assertTrue(hasXY(down, 0.0f, -9.5f));
         assertFalse(hasXY(down, 0.0f, 9.5f));
 
         float[] up = NAreaDirectionArrow.arrowVertices(PileFillDirection.BOTTOM_TO_TOP);
         assertEquals(-9.5f, minY(up), 0.001f);
         assertEquals(9.5f, maxY(up), 0.001f);
-        // Default tip (9.5, 0) rotates to (0, 9.5): north / decreasing world Y.
+        // Default tip (9.5, 0) rotates via (x,y)->(-y,x) to (0, 9.5).
         assertTrue(hasXY(up, 0.0f, 9.5f));
         assertFalse(hasXY(up, 0.0f, -9.5f));
     }
