@@ -6,6 +6,16 @@ import haven.Pair;
 public final class AreaWorldHit {
     public enum Kind { BOUNDARY, GOB, AREA, TILE, SERVER }
 
+    public static final class Hit {
+        public final Kind kind;
+        public final NArea area;
+
+        Hit(Kind kind, NArea area) {
+            this.kind = kind;
+            this.area = area;
+        }
+    }
+
     private AreaWorldHit() {}
 
     /** Inclusive axis-aligned hit, matching {@link NArea#checkHit}. */
@@ -33,9 +43,12 @@ public final class AreaWorldHit {
         NArea best = null;
         double bestSize = Double.POSITIVE_INFINITY;
         for (NArea area : areas) {
-            if (area == null || !area.checkHit(mc))
+            if (area == null)
                 continue;
-            double size = areaSize(area.getRCArea());
+            Pair<Coord2d, Coord2d> rc = area.getRCArea();
+            if (!contains(rc, mc))
+                continue;
+            double size = areaSize(rc);
             if (size < bestSize) {
                 bestSize = size;
                 best = area;
@@ -58,5 +71,22 @@ public final class AreaWorldHit {
         if (tileHasActions)
             return Kind.TILE;
         return Kind.SERVER;
+    }
+
+    /**
+     * Combined Ctrl+RMB hit: gob/boundary short-circuit before area geometry,
+     * then smallest containing area, then tile/server.
+     */
+    public static Hit resolve(boolean boundaryGob, boolean gobHasActions, Iterable<NArea> areas, Coord2d mc, boolean tileHasActions) {
+        if (boundaryGob)
+            return new Hit(Kind.BOUNDARY, null);
+        if (gobHasActions)
+            return new Hit(Kind.GOB, null);
+        NArea area = smallestContaining(areas, mc);
+        if (area != null)
+            return new Hit(Kind.AREA, area);
+        if (tileHasActions)
+            return new Hit(Kind.TILE, null);
+        return new Hit(Kind.SERVER, null);
     }
 }

@@ -61,10 +61,35 @@ class AreaWorldHitTest {
     }
 
     @Test
+    void resolveGobWinsOverContainingArea() {
+        BoxedArea area = boxed(1, 0, 0, 10, 10);
+        AreaWorldHit.Hit hit = AreaWorldHit.resolve(false, true, List.of(area), new Coord2d(5, 5), true);
+        assertEquals(AreaWorldHit.Kind.GOB, hit.kind);
+        assertNull(hit.area);
+    }
+
+    @Test
+    void resolvePicksSmallestAreaWhenNoGob() {
+        BoxedArea big = boxed(1, 0, 0, 100, 100);
+        BoxedArea small = boxed(2, 40, 40, 60, 60);
+        AreaWorldHit.Hit hit = AreaWorldHit.resolve(false, false, List.of(big, small), new Coord2d(50, 50), true);
+        assertEquals(AreaWorldHit.Kind.AREA, hit.kind);
+        assertSame(small, hit.area);
+    }
+
+    @Test
+    void resolveMissUsesTileThenServer() {
+        BoxedArea area = boxed(1, 0, 0, 10, 10);
+        assertEquals(AreaWorldHit.Kind.TILE,
+                AreaWorldHit.resolve(false, false, List.of(area), new Coord2d(99, 99), true).kind);
+        assertEquals(AreaWorldHit.Kind.SERVER,
+                AreaWorldHit.resolve(false, false, List.of(area), new Coord2d(99, 99), false).kind);
+    }
+
+    @Test
     void mapViewCtrlRmbUsesHitTestAndSameOptsAtMenu() throws Exception {
         String src = new String(Files.readAllBytes(Paths.get("src/nurgling/NMapView.java")), StandardCharsets.UTF_8);
-        assertTrue(src.contains("AreaWorldHit.smallestContaining"), src);
-        assertTrue(src.contains("AreaWorldHit.decide"), src);
+        assertTrue(src.contains("AreaWorldHit.resolve"), src);
         assertTrue(src.contains("openAreaOptsAt"), src);
         String widget = new String(Files.readAllBytes(Paths.get("src/nurgling/widgets/NAreasWidget.java")), StandardCharsets.UTF_8);
         assertTrue(widget.contains("found.optsAt(rootPos)"), widget);

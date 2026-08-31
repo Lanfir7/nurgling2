@@ -275,9 +275,10 @@ public class NAreasWidget extends Window
             HashMap<String, Folder> folders = new HashMap<>();
             ArrayList<AreaItem> areas = new ArrayList<>();
             for (NArea area : ((NMapView) NUtils.getGameUI().map).glob.map.areas.values()) {
-                if (area.path.equals(path)) {
+                String areaPath = area.path == null ? "" : area.path;
+                if (areaPath.equals(path)) {
                     areas.add(new AreaItem(area.name, area));
-                } else if (area.path.startsWith(path)) {
+                } else if (areaPath.startsWith(path)) {
                     String cand = area.path.substring(path.length());
                     if (cand.startsWith("/")) {
                         String[] parts = cand.split("/");

@@ -1781,17 +1781,16 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                     if (!boundary && target != null) {
                         gobHasActions = !GobContextRegistry.getActionsFor(target).isEmpty();
                     }
-                    NArea hitArea = null;
-                    if (!boundary && !gobHasActions && glob != null && glob.map != null && glob.map.areas != null) {
+                    boolean tileHasActions = !TileContextRegistry.getActionsFor(mc).isEmpty();
+                    AreaWorldHit.Hit hit;
+                    if (glob != null && glob.map != null && glob.map.areas != null) {
                         synchronized (glob.map.areas) {
-                            hitArea = AreaWorldHit.smallestContaining(glob.map.areas.values(), mc);
+                            hit = AreaWorldHit.resolve(boundary, gobHasActions, glob.map.areas.values(), mc, tileHasActions);
                         }
+                    } else {
+                        hit = AreaWorldHit.resolve(boundary, gobHasActions, java.util.Collections.emptyList(), mc, tileHasActions);
                     }
-                    boolean tileHasActions = false;
-                    if (!boundary && !gobHasActions && hitArea == null) {
-                        tileHasActions = !TileContextRegistry.getActionsFor(mc).isEmpty();
-                    }
-                    switch (AreaWorldHit.decide(boundary, gobHasActions, hitArea != null, tileHasActions)) {
+                    switch (hit.kind) {
                     case BOUNDARY:
                     case SERVER:
                         super.hit(pc, mc, inf);
@@ -1804,8 +1803,11 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                     case AREA: {
                         NGameUI gui = NUtils.getGameUI();
                         Coord pos = (NUtils.getUI() != null) ? NUtils.getUI().mc : pc;
-                        if (gui != null && gui.areas != null)
-                            gui.areas.openAreaOptsAt(hitArea, pos);
+                        if (gui != null && gui.areas != null) {
+                            gui.areas.openAreaOptsAt(hit.area, pos);
+                            return;
+                        }
+                        super.hit(pc, mc, inf);
                         return;
                     }
                     case TILE: {
