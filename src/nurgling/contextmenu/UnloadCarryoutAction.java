@@ -8,7 +8,6 @@ import nurgling.areas.NContext;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
-import nurgling.widgets.Specialisation;
 
 public class UnloadCarryoutAction implements GobContextAction {
     private static final NAlias VEHICLE = new NAlias("vehicle");
@@ -30,8 +29,7 @@ public class UnloadCarryoutAction implements GobContextAction {
     @Override
     public Action create(Gob vehicle) {
         return gui -> {
-            NContext context = new NContext(gui);
-            NArea dest = context.findArea(Specialisation.SpecName.carrierout);
+            NArea dest = NContext.findSpec("carrierout");
             if (dest == null)
                 return Results.ERROR("No CarrierOut zone found! Please create a global zone with 'carrierout' specialization.");
 

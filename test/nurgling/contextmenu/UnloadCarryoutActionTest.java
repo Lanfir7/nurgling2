@@ -35,8 +35,9 @@ class UnloadCarryoutActionTest {
     @Test
     void destinationSpecIsCarrierout() throws Exception {
         String src = read("src/nurgling/contextmenu/UnloadCarryoutAction.java");
-        assertTrue(src.contains("findArea(Specialisation.SpecName.carrierout)")
-                || src.contains("findSpec(\"carrierout\")"), src);
+        assertTrue(src.contains("findSpec(\"carrierout\")"), src);
+        assertFalse(src.contains("findArea"), src);
+        assertFalse(src.contains("findSpecGlobal"), src);
         assertTrue(src.contains("carrierout"), src);
         String spec = read("src/nurgling/widgets/Specialisation.java");
         assertTrue(spec.contains("carrierout,"), spec);

@@ -35,8 +35,9 @@ class UnloadAnimalsActionTest {
     @Test
     void destinationSpecIsDeadkritterAnimalCarcasses() throws Exception {
         String src = read("src/nurgling/contextmenu/UnloadAnimalsAction.java");
-        assertTrue(src.contains("findSpec(\"deadkritter\")")
-                || src.contains("SpecName.deadkritter"), src);
+        assertTrue(src.contains("findSpec(\"deadkritter\")"), src);
+        assertFalse(src.contains("findArea"), src);
+        assertFalse(src.contains("findSpecGlobal"), src);
         assertTrue(src.contains("deadkritter"), src);
         String spec = read("src/nurgling/widgets/Specialisation.java");
         assertTrue(spec.contains("deadkritter,"), spec);
