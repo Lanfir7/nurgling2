@@ -96,6 +96,94 @@ class LightObjectNeighborStickTest {
         assertFalse(LightObject.neighborStickReady(false, false, true));
     }
 
+    @Test
+    void retriesNeighborStickWhileUnlitSourceAndBranchRemain() {
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+    }
+
+    @Test
+    void doesNotFallThroughToFirebrandWhileNeighborSourceAndBranchRemain() {
+        // Neighbor-stick keeps the gob until retry is false (no source/branch or already lit)
+        // or the no-progress bound trips while a source and branch still exist.
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(0));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(1));
+        assertTrue(LightObject.shouldGiveUpNeighborStickNoProgress(
+                LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS));
+    }
+
+    @Test
+    void stopsNeighborStickWhenTargetIsLit() {
+        assertFalse(LightObject.shouldRetryNeighborStick(true, true, true));
+    }
+
+    @Test
+    void stopsNeighborStickWhenSourceIsGone() {
+        assertFalse(LightObject.shouldRetryNeighborStick(false, true, false));
+        assertFalse(LightObject.shouldRetryNeighborStick(false, false, false));
+    }
+
+    @Test
+    void stopsNeighborStickWhenNoBranch() {
+        assertFalse(LightObject.shouldRetryNeighborStick(true, false, false));
+    }
+
+    @Test
+    void firstFailedAttemptStillRetriesIfSourceAndBranchRemain() {
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(0));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(1));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(
+                LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS - 1));
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+    }
+
+    @Test
+    void givesUpNeighborStickAfterBoundedNoProgress() {
+        assertTrue(LightObject.shouldGiveUpNeighborStickNoProgress(
+                LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS));
+    }
+
+    @Test
+    void nextNoProgressIncrementsOnlyWhileSourceRemains() {
+        assertEquals(1, LightObject.nextNeighborStickNoProgress(0, false, true));
+        assertEquals(2, LightObject.nextNeighborStickNoProgress(1, false, true));
+        assertEquals(1, LightObject.nextNeighborStickNoProgress(1, false, false));
+        assertEquals(0, LightObject.nextNeighborStickNoProgress(0, false, false));
+    }
+
+    @Test
+    void nextNoProgressResetsWhenStickLights() {
+        assertEquals(0, LightObject.nextNeighborStickNoProgress(2, true, true));
+        assertEquals(0, LightObject.nextNeighborStickNoProgress(2, true, false));
+    }
+
+    @Test
+    void neighborSearchUsesTargetOriginSoOppositeNeighborIsStillFound() {
+        Coord2d target = Coord2d.of(0, 0);
+        Coord2d playerAtDeadSource = Coord2d.of(RADIUS, 0);
+        LightObject.FireSourceProbe opposite = kiln(3, -4 * MCache.tilesz.x, 1);
+        assertNotNull(LightObject.pickClosestLitFireSource(
+                target, RADIUS, 1L, Collections.singletonList(opposite)));
+        assertNull(LightObject.pickClosestLitFireSource(
+                playerAtDeadSource, RADIUS, 1L, Collections.singletonList(opposite)));
+    }
+
+    @Test
+    void readyStickThatDoesNotLightTargetStillRetriesWhileSourceAndBranchRemain() {
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(0));
+        assertFalse(LightObject.shouldExitNeighborStickAfterAttempt(false, true, true, 0));
+    }
+
+    @Test
+    void exitNeighborStickAfterAttemptWhenLitOrNoSourceOrNoBranchOrGiveUp() {
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(true, true, true, 0));
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(false, false, true, 0));
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(false, true, false, 0));
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(
+                false, true, true, LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS));
+    }
+
     private static LightObject.FireSourceProbe kiln(long id, double x, int attr) {
         return new LightObject.FireSourceProbe(id, KILN, attr, Coord2d.of(x, 0));
     }
