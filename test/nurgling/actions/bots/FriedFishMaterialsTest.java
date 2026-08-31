@@ -1,9 +1,14 @@
 package nurgling.actions.bots;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 
 import haven.Coord2d;
+import nurgling.tools.NAlias;
+import nurgling.tools.VSpec;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,6 +57,19 @@ class FriedFishMaterialsTest {
         assertTrue(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/meat-herring", 5));
         assertFalse(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/meat-herring-raw", 5));
         assertTrue(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/meat-herring-raw", 0));
+        assertFalse(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/rabbit-clean", 5));
+        assertFalse(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/chicken-cleaned", 5));
+        assertTrue(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/rabbit-clean", 0));
+    }
+
+    @Test
+    void uncookedSpitContentIncludesFishRawAndCleanCarcassOverlays() {
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/meat-herring-raw"));
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/rabbit-clean"));
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/chicken-cleaned"));
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/adder-clean"));
+        assertFalse(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/meat-herring"));
+        assertFalse(FriedFishMaterials.isUncookedSpitContent(null));
     }
 
     @Test
@@ -68,5 +86,43 @@ class FriedFishMaterialsTest {
         assertTrue(FriedFishMaterials.isCookedSpitroast("Spitroast Herring"));
         assertFalse(FriedFishMaterials.isCookedSpitroast("Herring"));
         assertFalse(FriedFishMaterials.isCookedSpitroast(null));
+    }
+
+    @Test
+    void roastableRawIncludesFishAndBothCleanCarcassCategories() {
+        NAlias raw = FriedFishMaterials.roastableRaw();
+        assertTrue(raw.matches("Herring"));
+        assertTrue(raw.matches("Pike"));
+        assertTrue(raw.matches("Clean Rabbit Carcass"));
+        assertTrue(raw.matches("Cleaned Chicken"));
+        for (String name : VSpec.getCategoryContent("Clean Animal Carcass")) {
+            assertTrue(raw.matches(name), name);
+        }
+        for (String name : VSpec.getCategoryContent("Clean Bird Carcass")) {
+            assertTrue(raw.matches(name), name);
+        }
+    }
+
+    @Test
+    void roastableRawExcludesCookedSpitroastFishByproductsAndUncleaned() {
+        NAlias raw = FriedFishMaterials.roastableRaw();
+        assertFalse(raw.matches("Spitroast Herring"));
+        assertFalse(raw.matches("Spitroast Rabbit"));
+        assertFalse(raw.matches("Filet of Herring"));
+        assertFalse(raw.matches("Herring Roe"));
+        assertFalse(raw.matches("Dead Hedgehog"));
+        assertFalse(raw.matches("Cat Gold"));
+        assertFalse(raw.matches("Branch"));
+    }
+
+    @Test
+    void friedFishLoadsRoastableRawAndHonestInputPrompt() throws Exception {
+        String src = new String(Files.readAllBytes(Paths.get("src/nurgling/actions/bots/FriedFish.java")),
+                StandardCharsets.UTF_8);
+        assertTrue(src.contains("FriedFishMaterials.roastableRaw()"), src);
+        assertTrue(src.contains("FriedFishMaterials.isUncookedSpitContent"), src);
+        assertTrue(src.contains("Please select area with raw fish or cleaned carcasses"), src);
+        assertFalse(src.contains("VSpec.getAllFish()"), src);
+        assertFalse(src.contains("content.contains(\"raw\")"), src);
     }
 }
