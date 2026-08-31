@@ -21,10 +21,20 @@ public class NAreaDirectionMenu extends Widget {
         super(new Coord(CELL * 3, CELL * 3));
         this.area = area;
 
-        add(new DirectionButton("↑", PileFillDirection.BOTTOM_TO_TOP), new Coord(CELL, 0));
-        add(new DirectionButton("←", PileFillDirection.RIGHT_TO_LEFT), new Coord(0, CELL));
-        add(new DirectionButton("→", PileFillDirection.LEFT_TO_RIGHT), new Coord(CELL * 2, CELL));
-        add(new DirectionButton("↓", PileFillDirection.TOP_TO_BOTTOM), new Coord(CELL, CELL * 2));
+        add(new DirectionButton("↑", directionForGlyph("↑")), new Coord(CELL, 0));
+        add(new DirectionButton("←", directionForGlyph("←")), new Coord(0, CELL));
+        add(new DirectionButton("→", directionForGlyph("→")), new Coord(CELL * 2, CELL));
+        add(new DirectionButton("↓", directionForGlyph("↓")), new Coord(CELL, CELL * 2));
+    }
+
+    static PileFillDirection directionForGlyph(String glyph) {
+        switch (glyph) {
+            case "↑": return PileFillDirection.TOP_TO_BOTTOM;
+            case "↓": return PileFillDirection.BOTTOM_TO_TOP;
+            case "←": return PileFillDirection.RIGHT_TO_LEFT;
+            case "→": return PileFillDirection.LEFT_TO_RIGHT;
+            default: throw new IllegalArgumentException(glyph);
+        }
     }
 
     static boolean apply(NArea area, PileFillDirection direction) {

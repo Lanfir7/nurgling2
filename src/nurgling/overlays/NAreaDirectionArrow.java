@@ -84,12 +84,12 @@ public class NAreaDirectionArrow extends Sprite implements RenderTree.Node, Rend
                     vertices[index + 1] = -y;
                     break;
                 case TOP_TO_BOTTOM:
-                    vertices[index] = -y;
-                    vertices[index + 1] = x;
-                    break;
-                case BOTTOM_TO_TOP:
                     vertices[index] = y;
                     vertices[index + 1] = -x;
+                    break;
+                case BOTTOM_TO_TOP:
+                    vertices[index] = -y;
+                    vertices[index + 1] = x;
                     break;
                 default:
                     break;
