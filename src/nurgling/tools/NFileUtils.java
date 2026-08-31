@@ -1,8 +1,13 @@
 package nurgling.tools;
 
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
 /**
@@ -14,6 +19,17 @@ import java.util.function.Predicate;
  * of the previous version is kept for recovery.
  */
 public class NFileUtils {
+    private static final ConcurrentHashMap<Path, ReentrantLock> JVM_LOCKS = new ConcurrentHashMap<>();
+
+    @FunctionalInterface
+    interface AtomicUpdate {
+        byte[] apply(Path target, byte[] primary) throws IOException;
+    }
+
+    @FunctionalInterface
+    private interface LockedOperation<T> {
+        T run(Path target) throws IOException;
+    }
 
     /**
      * Writes content to a file atomically using a temp-file-then-rename pattern.
@@ -34,34 +50,180 @@ public class NFileUtils {
      * @param content    the full content to write
      */
     public static void writeAtomically(String targetPath, byte[] content) throws IOException {
-        Path target = Path.of(targetPath);
-        Path temp = target.resolveSibling(target.getFileName() + ".tmp");
-        Path backup = target.resolveSibling(target.getFileName() + ".bak");
+        withExclusiveLock(targetPath, target -> {
+            writeAtomicallyLocked(target, content);
+            return null;
+        });
+    }
 
-        Path parent = target.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
+    static byte[] updateAtomically(String targetPath, Predicate<byte[]> validator,
+                                   AtomicUpdate update) throws IOException {
+        return withExclusiveLock(targetPath, target -> {
+            byte[] current = readBytesIfExists(target);
+            boolean rotateExisting = validator.test(current);
+            if (!rotateExisting) {
+                Path backup = target.resolveSibling(target.getFileName() + ".bak");
+                byte[] backupContent = readBytesIfExists(backup);
+                if (validator.test(backupContent)) {
+                    // Make the validated backup the current version before normal rotation. This
+                    // prevents a corrupt primary from replacing the only usable backup.
+                    restorePrimaryLocked(target, backupContent);
+                    current = backupContent;
+                    rotateExisting = true;
+                } else {
+                    current = null;
+                }
+            }
+            byte[] updated = update.apply(target, current);
+            writeAtomicallyLocked(target, updated, rotateExisting);
+            return updated;
+        });
+    }
+
+    private static <T> T withExclusiveLock(String targetPath, LockedOperation<T> operation) throws IOException {
+        Path target = Path.of(targetPath).toAbsolutePath().normalize();
+        ReentrantLock lock = JVM_LOCKS.computeIfAbsent(target, ignored -> new ReentrantLock());
+        lock.lock();
+        try {
+            Path parent = target.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Path lockPath = target.resolveSibling(target.getFileName() + ".lock");
+            try (FileChannel lockChannel = FileChannel.open(lockPath,
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 FileLock ignored = acquireFileLock(lockChannel)) {
+                return operation.run(target);
+            }
+        } finally {
+            lock.unlock();
         }
+    }
 
-        // Step 1: Write to temp file (original untouched)
-        Files.write(temp, content);
-
-        // Step 2: Backup current file if it exists
-        if (Files.exists(target)) {
+    private static FileLock acquireFileLock(FileChannel channel) throws IOException {
+        while (true) {
             try {
-                Files.copy(target, backup, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                // Backup failure is non-fatal -- proceed with the save
-                System.err.println("[NFileUtils] Warning: could not create backup for " + targetPath + ": " + e.getMessage());
+                return channel.lock();
+            } catch (OverlappingFileLockException e) {
+                // Another component in this JVM may have acquired the companion lock directly.
+                // FileChannel.lock() reports that case instead of waiting, so retry as a waiter.
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    InterruptedIOException failure = new InterruptedIOException("interrupted while waiting for config lock");
+                    failure.initCause(interrupted);
+                    throw failure;
+                }
             }
         }
+    }
 
-        // Step 3: Atomic rename temp -> target
+    private static byte[] readBytesIfExists(Path path) throws IOException {
+        return Files.exists(path) ? Files.readAllBytes(path) : null;
+    }
+
+    private static void writeAtomicallyLocked(Path target, byte[] content) throws IOException {
+        writeAtomicallyLocked(target, content, Files.exists(target));
+    }
+
+    private static void writeAtomicallyLocked(Path target, byte[] content,
+                                              boolean rotateExisting) throws IOException {
+        Path parent = target.getParent();
+        Path temp = Files.createTempFile(parent, "." + target.getFileName() + "-", ".tmp");
+        Path backup = target.resolveSibling(target.getFileName() + ".bak");
+        Path backupTemp = null;
         try {
-            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            // Step 1: Write and flush a private temp file (original untouched)
+            Files.write(temp, content, StandardOpenOption.TRUNCATE_EXISTING);
+            forceFile(temp);
+
+            // Step 2: Atomically replace the backup with the current target
+            if (rotateExisting && Files.exists(target)) {
+                try {
+                    backupTemp = Files.createTempFile(parent, "." + target.getFileName() + "-backup-", ".tmp");
+                    Files.copy(target, backupTemp, StandardCopyOption.REPLACE_EXISTING);
+                    forceFile(backupTemp);
+                    moveReplacing(backupTemp, backup);
+                    forceDirectory(parent);
+                    backupTemp = null;
+                } catch (IOException e) {
+                    // Backup failure is non-fatal -- proceed with the save
+                    System.err.println("[NFileUtils] Warning: could not create backup for " + target + ": " + e.getMessage());
+                }
+            } else if (!rotateExisting) {
+                try {
+                    backupTemp = Files.createTempFile(parent, "." + target.getFileName() + "-backup-", ".tmp");
+                    Files.write(backupTemp, content, StandardOpenOption.TRUNCATE_EXISTING);
+                    forceFile(backupTemp);
+                    moveReplacing(backupTemp, backup);
+                    forceDirectory(parent);
+                    backupTemp = null;
+                } catch (IOException e) {
+                    // There is no validated previous version. Keep the new primary save usable
+                    // even if establishing its initial recovery copy fails.
+                    System.err.println("[NFileUtils] Warning: could not create backup for " + target + ": " + e.getMessage());
+                }
+            }
+
+            // Step 3: Atomically replace the target
+            moveReplacing(temp, target);
+            forceDirectory(parent);
+            temp = null;
+        } finally {
+            deleteTempQuietly(temp);
+            deleteTempQuietly(backupTemp);
+        }
+    }
+
+    private static void restorePrimaryLocked(Path target, byte[] content) throws IOException {
+        Path parent = target.getParent();
+        Path temp = Files.createTempFile(parent, "." + target.getFileName() + "-restore-", ".tmp");
+        try {
+            Files.write(temp, content, StandardOpenOption.TRUNCATE_EXISTING);
+            forceFile(temp);
+            moveReplacing(temp, target);
+            forceDirectory(parent);
+            temp = null;
+        } finally {
+            deleteTempQuietly(temp);
+        }
+    }
+
+    private static void forceFile(Path path) throws IOException {
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE)) {
+            channel.force(true);
+        }
+    }
+
+    private static void moveReplacing(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
-            // Fallback for filesystems that don't support atomic move
-            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void forceDirectory(Path directory) {
+        if (directory == null) {
+            return;
+        }
+        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+            channel.force(true);
+        } catch (IOException | UnsupportedOperationException | SecurityException ignored) {
+            // Windows/JDK providers commonly do not allow opening directories as channels.
+            // File contents were already forced; atomic rename remains the supported fallback.
+        }
+    }
+
+    private static void deleteTempQuietly(Path temp) {
+        if (temp == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(temp);
+        } catch (IOException e) {
+            System.err.println("[NFileUtils] Warning: could not remove temporary file " + temp + ": " + e.getMessage());
         }
     }
 
@@ -74,36 +236,36 @@ public class NFileUtils {
      * @return the file content, or null if neither file nor backup is usable
      */
     public static String readWithBackupFallback(String targetPath) {
-        Path target = Path.of(targetPath);
-        Path backup = target.resolveSibling(target.getFileName() + ".bak");
-
-        // Try primary file
-        String content = readFileContent(target);
-        if (isValidJsonContent(content)) {
-            return content;
+        String unlockedContent = decodeUtf8(readUnlocked(targetPath));
+        if (isValidJsonContent(unlockedContent)) {
+            return unlockedContent;
         }
-
-        // Primary is bad -- try backup
-        if (Files.exists(backup)) {
-            System.err.println("[NFileUtils] Primary file corrupt or empty, trying backup: " + targetPath);
-            String backupContent = readFileContent(backup);
-            if (isValidJsonContent(backupContent)) {
-                // Restore backup as primary so next save has a good base
-                try {
-                    Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
-                    System.err.println("[NFileUtils] Restored from backup: " + targetPath);
-                } catch (IOException e) {
-                    System.err.println("[NFileUtils] Warning: could not restore backup to primary: " + e.getMessage());
+        try {
+            return withExclusiveLock(targetPath, target -> {
+                Path backup = target.resolveSibling(target.getFileName() + ".bak");
+                byte[] primaryBytes = readBytesIfExists(target);
+                String content = decodeUtf8(primaryBytes);
+                if (isValidJsonContent(content)) {
+                    return content;
                 }
-                return backupContent;
-            }
-        }
 
-        // Both are bad
-        if (content != null && !content.isEmpty()) {
-            System.err.println("[NFileUtils] Both primary and backup are corrupt: " + targetPath);
+                byte[] backupBytes = readBytesIfExists(backup);
+                String backupContent = decodeUtf8(backupBytes);
+                if (isValidJsonContent(backupContent)) {
+                    System.err.println("[NFileUtils] Primary file corrupt or empty, trying backup: " + targetPath);
+                    restoreFromBackupLocked(target, backupBytes, targetPath);
+                    return backupContent;
+                }
+
+                if (content != null && !content.isEmpty()) {
+                    System.err.println("[NFileUtils] Both primary and backup are corrupt: " + targetPath);
+                }
+                return null;
+            });
+        } catch (IOException e) {
+            System.err.println("[NFileUtils] Warning: could not read " + targetPath + ": " + e.getMessage());
+            return null;
         }
-        return null;
     }
 
     /**
@@ -125,47 +287,60 @@ public class NFileUtils {
      */
     public static byte[] readBytesWithBackupFallback(String targetPath, byte[] sig,
                                                      Predicate<byte[]> validator) {
-        Path target = Path.of(targetPath);
-        Path backup = target.resolveSibling(target.getFileName() + ".bak");
-
-        byte[] content = readFileBytes(target);
-        if (isUsable(content, sig, validator)) {
-            return content;
+        byte[] unlockedContent = readUnlocked(targetPath);
+        if (isUsable(unlockedContent, sig, validator)) {
+            return unlockedContent;
         }
-
-        if (Files.exists(backup)) {
-            System.err.println("[NFileUtils] Primary file corrupt or empty, trying backup: " + targetPath);
-            byte[] backupContent = readFileBytes(backup);
-            if (isUsable(backupContent, sig, validator)) {
-                try {
-                    Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
-                    System.err.println("[NFileUtils] Restored from backup: " + targetPath);
-                } catch (IOException e) {
-                    System.err.println("[NFileUtils] Warning: could not restore backup to primary: " + e.getMessage());
+        try {
+            return withExclusiveLock(targetPath, target -> {
+                Path backup = target.resolveSibling(target.getFileName() + ".bak");
+                byte[] content = readBytesIfExists(target);
+                if (isUsable(content, sig, validator)) {
+                    return content;
                 }
-                return backupContent;
-            }
-        }
 
-        if (content != null && content.length > 0) {
-            System.err.println("[NFileUtils] Both primary and backup are corrupt: " + targetPath);
+                byte[] backupContent = readBytesIfExists(backup);
+                if (isUsable(backupContent, sig, validator)) {
+                    System.err.println("[NFileUtils] Primary file corrupt or empty, trying backup: " + targetPath);
+                    restoreFromBackupLocked(target, backupContent, targetPath);
+                    return backupContent;
+                }
+
+                if (content != null && content.length > 0) {
+                    System.err.println("[NFileUtils] Both primary and backup are corrupt: " + targetPath);
+                }
+                return null;
+            });
+        } catch (IOException e) {
+            System.err.println("[NFileUtils] Warning: could not read " + targetPath + ": " + e.getMessage());
+            return null;
         }
-        return null;
+    }
+
+    private static void restoreFromBackupLocked(Path target, byte[] backupContent, String displayPath) {
+        try {
+            restorePrimaryLocked(target, backupContent);
+            System.err.println("[NFileUtils] Restored from backup: " + displayPath);
+        } catch (IOException e) {
+            System.err.println("[NFileUtils] Warning: could not restore backup to primary: " + e.getMessage());
+        }
+    }
+
+    private static String decodeUtf8(byte[] content) {
+        return content == null ? null : new String(content, StandardCharsets.UTF_8);
+    }
+
+    private static byte[] readUnlocked(String targetPath) {
+        try {
+            Path target = Path.of(targetPath).toAbsolutePath().normalize();
+            return readBytesIfExists(target);
+        } catch (IOException | RuntimeException ignored) {
+            return null;
+        }
     }
 
     private static boolean isUsable(byte[] content, byte[] sig, Predicate<byte[]> validator) {
         return hasPrefix(content, sig) && validator.test(content);
-    }
-
-    private static byte[] readFileBytes(Path path) {
-        if (!Files.exists(path)) {
-            return null;
-        }
-        try {
-            return Files.readAllBytes(path);
-        } catch (IOException e) {
-            return null;
-        }
     }
 
     private static boolean hasPrefix(byte[] content, byte[] sig) {
@@ -178,17 +353,6 @@ public class NFileUtils {
             }
         }
         return true;
-    }
-
-    private static String readFileContent(Path path) {
-        if (!Files.exists(path)) {
-            return null;
-        }
-        try {
-            return Files.readString(path, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return null;
-        }
     }
 
     private static boolean isValidJsonContent(String content) {

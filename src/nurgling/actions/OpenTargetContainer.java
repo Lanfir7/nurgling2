@@ -67,6 +67,11 @@ public class OpenTargetContainer implements Action
             default:
                 gui.ui.core.addTask(new FindNInventory(name));
         }
+        if ("Stockpile".equals(name) && gui.getStockpile() != null) {
+            gui.getStockpile().parentGob = gob;
+            monitoring.StockpileStorageTracker.observeOpenPile(
+                    gob, gui.getStockpile().stockpileItemName(), gui.getStockpile().stockpileCount());
+        }
         if(cont!=null)
         {
             cont.update();

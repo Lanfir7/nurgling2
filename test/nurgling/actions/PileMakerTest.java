@@ -14,6 +14,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -46,14 +47,19 @@ class PileMakerTest {
     }
 
     @Test
-    void rejectsCandidateThatClosesThePlayersLastEscape() throws InterruptedException {
-        Coord2d closesExit = Coord2d.of(10, 10);
-        Coord2d safe = Coord2d.of(20, 10);
+    void neverSkipsTheFirstFreeSlotBecauseOfThePlayersPosition() throws InterruptedException {
+        Coord2d first = Coord2d.of(10, 10);
+        Coord2d later = Coord2d.of(20, 10);
+        List<Coord2d> attempted = new java.util.ArrayList<>();
 
         Coord2d selected = PileMaker.firstSafeCandidate(
-                Arrays.asList(closesExit, safe), candidate -> candidate.equals(safe));
+                Arrays.asList(first, later), candidate -> {
+                    attempted.add(candidate);
+                    return false;
+                });
 
-        assertEquals(safe, selected);
+        assertNull(selected);
+        assertEquals(Arrays.asList(first), attempted);
     }
 
     @Test
@@ -80,6 +86,43 @@ class PileMakerTest {
 
         assertTrue(exited);
         assertEquals(Arrays.asList(freeStart), directMoves);
+    }
+
+    @Test
+    void failedApproachExitsThenRetriesTheSameTargetOnce() throws InterruptedException {
+        List<String> steps = new java.util.ArrayList<>();
+        int[] approaches = {0};
+
+        boolean reached = PileMaker.retryAfterExit(
+                () -> {
+                    steps.add("approach");
+                    return approaches[0]++ == 1;
+                },
+                () -> {
+                    steps.add("exit");
+                    return true;
+                });
+
+        assertTrue(reached);
+        assertEquals(Arrays.asList("approach", "exit", "approach"), steps);
+    }
+
+    @Test
+    void failedRetryStopsInsteadOfLoopingAlongThePiles() throws InterruptedException {
+        List<String> steps = new java.util.ArrayList<>();
+
+        boolean reached = PileMaker.retryAfterExit(
+                () -> {
+                    steps.add("approach");
+                    return false;
+                },
+                () -> {
+                    steps.add("exit");
+                    return true;
+                });
+
+        assertFalse(reached);
+        assertEquals(Arrays.asList("approach", "exit", "approach"), steps);
     }
 
     @Test

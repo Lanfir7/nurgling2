@@ -335,18 +335,6 @@ public class FetchStorageItemBot implements Action {
             monitoring.StockpileStorageTracker.flush();
         }
 
-        List<StorageItemDao.StorageItemData> taken = new ArrayList<>();
-        List<StockpileStoragePolicy.Item> keepLeft = new ArrayList<>(split.keep);
-        for (StorageItemDao.StorageItemData data : requestedItems) {
-            StockpileStoragePolicy.Item fp = new StockpileStoragePolicy.Item(data.getName(), data.getQuality());
-            int idx = keepLeft.indexOf(fp);
-            if (idx >= 0) {
-                keepLeft.remove(idx);
-                taken.add(data);
-            }
-        }
-        removeTakenFromDb(taken);
-
         return split.keep.size();
     }
 
@@ -438,6 +426,7 @@ public class FetchStorageItemBot implements Action {
                 break;
             }
             if (box != null) {
+                box.beginDepositTracking();
                 box.wdgmsg("drop");
             } else {
                 NUtils.activateItem(pile, false);

@@ -61,9 +61,19 @@ public class TransferToPiles implements Action{
         return PileMode.TYPE_BULK;
     }
 
+    static PileMode pileMode(int th, Double maxQualityExclusive,
+                             boolean mixedCategory, boolean allExactItemsInBand,
+                             boolean allCategoryItemsInCurrentArea) {
+        if (th > 1 || maxQualityExclusive != null) {
+            return thresholdPileMode(mixedCategory, allExactItemsInBand,
+                    allCategoryItemsInCurrentArea);
+        }
+        return pileMode(th, mixedCategory, allCategoryItemsInCurrentArea);
+    }
+
     static boolean allQualitiesInBand(List<Double> qualities,
                                       double minInclusive, Double maxExclusive) {
-        if (qualities == null || qualities.isEmpty() || maxExclusive == null) {
+        if (qualities == null || qualities.isEmpty()) {
             return false;
         }
         for (Double quality : qualities) {
@@ -239,9 +249,9 @@ public class TransferToPiles implements Action{
                 for (Gob gob : Finder.findGobs(out, pileName = getStockpileName(items))) {
                     while (gob.ngob.getModelAttribute() != 31 && PathFinder.isAvailable(gob)) {
                             target = gob;
-                            PathFinder pf = new PathFinder(target);
-                            pf.isHardMode = true;
-                            pf.run(gui);
+                            if (!approachExistingPile(gui, target)) {
+                                break;
+                            }
                             if(NUtils.getGameUI().vhand!=null) {
                                 NUtils.activateItem(target, false);
                                 NUtils.addTask(new WaitFreeHand(80, false));
@@ -315,13 +325,68 @@ public class TransferToPiles implements Action{
         return Results.SUCCESS();
         }
 
+    private boolean approachExistingPile(NGameUI gui, Gob target) throws InterruptedException {
+        return PileMaker.retryAfterExit(
+                () -> attemptExistingPileApproach(gui, target),
+                () -> leavePileArea(gui));
+    }
+
+    private boolean attemptExistingPileApproach(NGameUI gui, Gob target)
+            throws InterruptedException {
+        PathFinder preview = new PathFinder(target);
+        preview.construct(true);
+        Gob startObstacle = preview.gobInStartPos;
+        if (startObstacle != null && startObstacle.ngob != null
+                && startObstacle.ngob.name != null
+                && new NAlias("stockpile").matches(startObstacle.ngob.name)) {
+            Coord2d freeStart = PileMaker.freeStartTarget(preview);
+            if (!PileMaker.exitStartObstacle(freeStart,
+                    point -> new GoTo(point).run(gui).IsSuccess())) {
+                return false;
+            }
+        }
+
+        PathFinder path = new PathFinder(target) {
+            @Override
+            protected boolean onLegFailed(NGameUI currentGui, Coord2d at) {
+                return false;
+            }
+        };
+        return path.run(gui).IsSuccess();
+    }
+
+    private boolean leavePileArea(NGameUI gui) throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null || player.rc == null || out == null) {
+            return false;
+        }
+        double minX = Math.min(out.a.x, out.b.x);
+        double maxX = Math.max(out.a.x, out.b.x);
+        double minY = Math.min(out.a.y, out.b.y);
+        double maxY = Math.max(out.a.y, out.b.y);
+        if (player.rc.x < minX || player.rc.x > maxX
+                || player.rc.y < minY || player.rc.y > maxY) {
+            return true;
+        }
+
+        List<Coord2d> exits = Finder.orderCandidatesNearestFirst(
+                PileMaker.escapeTargets(out, MCache.tilesz.x, MCache.tilesz.x * 2),
+                player.rc);
+        for (Coord2d exit : exits) {
+            if (PileMaker.nonRetryingPathFinder(exit).run(gui).IsSuccess()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean transfer(NGameUI gui, int target_size) throws InterruptedException {
         NUtils.addTask(new WaitStockpile(true, 80, false));
         boolean mixedCategory = sameCategoryItemPresent(gui);
-        PileMode mode = maxQualityExclusive != null
-                ? thresholdPileMode(mixedCategory, allExactItemsInCurrentBand(gui),
-                        allCategoryItemsInCurrentArea)
-                : pileMode(th, mixedCategory, allCategoryItemsInCurrentArea);
+        boolean thresholdBand = th > 1 || maxQualityExclusive != null;
+        PileMode mode = pileMode(th, maxQualityExclusive, mixedCategory,
+                thresholdBand && allExactItemsInCurrentBand(gui),
+                allCategoryItemsInCurrentArea);
         boolean accepted = true;
         if (mode == PileMode.ONE_BY_ONE) {
             transferOneByOne(gui, target_size);
@@ -354,7 +419,9 @@ public class TransferToPiles implements Action{
                 break;
             }
             NUtils.takeItemToHand(witems.get(0));
-            gui.getStockpile().wdgmsg("drop");
+            NISBox pile = gui.getStockpile();
+            pile.beginDepositTracking();
+            pile.wdgmsg("drop");
             NUtils.addTask(new WaitFreeHand());
         }
     }
@@ -366,7 +433,7 @@ public class TransferToPiles implements Action{
             return false;
         }
         if (pile.parentGob != null) {
-            monitoring.StockpileStorageTracker.touch(pile.parentGob);
+            pile.beginDepositTracking();
         }
         int[] dest = typeBulkDestination(pile.wdgid());
         Object[] invxf2 = ExtraInvGroupTransfer.invxf2Args(dest);
@@ -489,7 +556,7 @@ public class TransferToPiles implements Action{
         if (freeBefore < 0) {
             return false;
         }
-        monitoring.StockpileStorageTracker.touch(pile.parentGob);
+        pile.beginDepositTracking();
         WItem source = matching.get(0);
         NUtils.takeItemToHand(source);
         NUtils.activateItem(pile.parentGob, true);
@@ -541,7 +608,7 @@ public class TransferToPiles implements Action{
     }
 
     private boolean allExactItemsInCurrentBand(NGameUI gui) throws InterruptedException {
-        if (exactName == null || maxQualityExclusive == null) {
+        if (exactName == null) {
             return false;
         }
         ArrayList<Double> qualities = new ArrayList<>();

@@ -56,6 +56,11 @@ public class PileMaker implements Action{
         boolean run(Coord2d target) throws InterruptedException;
     }
 
+    @FunctionalInterface
+    interface MovementAttempt {
+        boolean run() throws InterruptedException;
+    }
+
     static boolean shouldCloseStockpileBeforeTakeToHand(boolean stockpileWindowOpen) {
         return stockpileWindowOpen;
     }
@@ -112,14 +117,11 @@ public class PileMaker implements Action{
         if (hitbox == null) {
             return Results.ERROR("No hitbox");
         }
-        double width = Math.abs(hitbox.end.x - hitbox.begin.x);
-        double height = Math.abs(hitbox.end.y - hitbox.begin.y);
-        double candidateStride = Math.max(1, Math.min(width, height));
         PileFillDirection direction = directionFor(out);
         List<Coord2d> candidates = exactPos != null
                 ? Collections.singletonList(exactPos)
-                : Finder.getFreePlaces(out, hitbox, 0, direction, candidateStride);
-        pos = firstSafeCandidate(candidates, candidate -> approachAndPreserveEscape(gui, candidate, hitbox));
+                : Finder.getFreePlaces(out, hitbox, 0, direction);
+        pos = firstSafeCandidate(candidates, candidate -> approachForDensePlacement(gui, candidate, hitbox));
         if (pos == null) {
             return Results.ERROR("No free space");
         }
@@ -133,17 +135,21 @@ public class PileMaker implements Action{
             return Results.ERROR("Stockpile was not created");
         }
         NUtils.addTask(new WaitStockpile(true, WAIT_PILE_TICKS, false));
+        if (gui.getStockpile() != null) {
+            gui.getStockpile().parentGob = pile;
+            monitoring.StockpileStorageTracker.observeOpenPile(
+                    pile, gui.getStockpile().stockpileItemName(), gui.getStockpile().stockpileCount());
+        }
         return Results.SUCCESS();
     }
 
     static Coord2d firstSafeCandidate(List<Coord2d> candidates, CandidateProbe probe)
             throws InterruptedException {
-        for (Coord2d candidate : candidates) {
-            if (probe.isSafe(candidate)) {
-                return candidate;
-            }
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
         }
-        return null;
+        Coord2d first = candidates.get(0);
+        return probe.isSafe(first) ? first : null;
     }
 
     static PileFillDirection directionFor(Pair<Coord2d, Coord2d> bounds) {
@@ -157,7 +163,15 @@ public class PileMaker implements Action{
         return freeStart != null && move.run(freeStart);
     }
 
-    private static Coord2d freeStartTarget(PathFinder preview) {
+    static boolean retryAfterExit(MovementAttempt approach, MovementAttempt exit)
+            throws InterruptedException {
+        if (approach.run()) {
+            return true;
+        }
+        return exit.run() && approach.run();
+    }
+
+    static Coord2d freeStartTarget(PathFinder preview) {
         if (preview == null || preview.gobInStartPos == null ||
                 preview.pfmap == null || preview.start_pos == null) {
             return null;
@@ -214,9 +228,16 @@ public class PileMaker implements Action{
         }
     }
 
-    private boolean approachAndPreserveEscape(NGameUI gui, Coord2d candidate, NHitBox hitbox)
+    private boolean approachForDensePlacement(NGameUI gui, Coord2d candidate, NHitBox hitbox)
             throws InterruptedException {
         Gob dummy = NGob.getDummy(candidate, 0, hitbox);
+        return retryAfterExit(
+                () -> approachCandidateOnce(gui, dummy, hitbox),
+                () -> moveOutsidePlacementArea(gui, dummy, hitbox));
+    }
+
+    private boolean approachCandidateOnce(NGameUI gui, Gob dummy, NHitBox hitbox)
+            throws InterruptedException {
         PathFinder preview = new PathFinder(dummy, true);
         if (preview.construct(true) == null && !preview.dn) {
             return false;
@@ -247,22 +268,28 @@ public class PileMaker implements Action{
         if (player == null || player.rc == null) {
             return false;
         }
-        Coord2d escape = findEscapeTarget(player.rc, dummy, hitbox);
+        if (overlapsCandidate(player, dummy)) {
+            return moveOutsidePlacementArea(gui, dummy, hitbox);
+        }
+        return true;
+    }
+
+    private boolean moveOutsidePlacementArea(NGameUI gui, Gob futurePile, NHitBox hitbox)
+            throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null || player.rc == null) {
+            return false;
+        }
+        Coord2d escape = findEscapeTarget(player.rc, futurePile, hitbox);
         if (escape == null) {
             return false;
         }
-
-        if (overlapsCandidate(player, dummy)) {
-            if (!nonRetryingPathFinder(escape).run(gui).IsSuccess()) {
-                return false;
-            }
-            player = NUtils.player();
-            if (player == null || overlapsCandidate(player, dummy)) {
-                return false;
-            }
-            return findEscapeTarget(player.rc, dummy, hitbox) != null;
+        if (player.rc.dist(escape) > 0.001
+                && !nonRetryingPathFinder(escape).run(gui).IsSuccess()) {
+            return false;
         }
-        return true;
+        player = NUtils.player();
+        return player != null && player.rc != null && !overlapsCandidate(player, futurePile);
     }
 
     private Coord2d findEscapeTarget(Coord2d from, Gob futurePile, NHitBox hitbox)
@@ -311,7 +338,7 @@ public class PileMaker implements Action{
         };
     }
 
-    private static PathFinder nonRetryingPathFinder(Coord2d target) {
+    static PathFinder nonRetryingPathFinder(Coord2d target) {
         return new PathFinder(target) {
             @Override
             protected boolean onLegFailed(NGameUI gui, Coord2d at) {

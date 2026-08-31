@@ -1,7 +1,10 @@
 package nurgling.tools;
 
 import haven.Coord2d;
+import haven.Pair;
+import nurgling.NHitBox;
 import nurgling.areas.PileFillDirection;
+import nurgling.pf.NHitBoxD;
 import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodHandles;
@@ -47,6 +50,21 @@ class FinderCandidateOrderTest {
     void placementCandidateOffsetsUseTheStockpileFootprintStride() {
         assertEquals(Arrays.asList(5.0, 15.0, 25.0, 29.0),
                 Finder.candidateOffsets(5, 29, 10));
+    }
+
+    @Test
+    void densePlacementRecoversImmediatelyAfterOffGridPileColumns() {
+        NHitBox pile = new NHitBox(Coord2d.of(-2.5, -2.5),
+                Coord2d.of(2.5, 2.5), true);
+        List<NHitBoxD> offGridColumn = Arrays.asList(
+                new NHitBoxD(pile.begin, pile.end, Coord2d.of(3.5, 2.5), 0),
+                new NHitBoxD(pile.begin, pile.end, Coord2d.of(3.5, 7.5), 0));
+
+        List<Coord2d> candidates = Finder.collectDenseFreePlaces(
+                new Pair<>(Coord2d.of(0, 0), Coord2d.of(20, 10)),
+                pile, 0, PileFillDirection.LEFT_TO_RIGHT, offGridColumn);
+
+        assertEquals(Coord2d.of(8.5, 2.5), candidates.get(0));
     }
 
     private static List<Double> xs() {

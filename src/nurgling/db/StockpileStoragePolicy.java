@@ -3,6 +3,7 @@ package nurgling.db;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Pure rules for detecting stockpiles and attributing inventory
@@ -59,12 +60,117 @@ public final class StockpileStoragePolicy {
 
     public enum ProbeAction { KEEP_ONE, DUMP_MAX }
 
+    public enum TransferDirection { INTO_PILE, OUT_OF_PILE }
+
+    public static TransferDirection directionFromPileCounts(int oldCount, int newCount) {
+        if (newCount > oldCount) {
+            return TransferDirection.INTO_PILE;
+        }
+        if (newCount < oldCount) {
+            return TransferDirection.OUT_OF_PILE;
+        }
+        return null;
+    }
+
+    public static int confirmedPileDelta(int before, int after) {
+        return Math.abs(after - before);
+    }
+
     public static List<Item> disappeared(List<Item> before, List<Item> after) {
         return unmatched(before, after);
     }
 
     public static List<Item> appeared(List<Item> before, List<Item> after) {
         return unmatched(after, before);
+    }
+
+    /**
+     * Attribute only the inventory change that an explicit stockpile transfer can cause.
+     * A non-negative confirmedCount is the server-observed pile delta and caps partial transfers.
+     */
+    public static List<Item> attributedTransfer(List<Item> before, List<Item> after,
+                                                String expectedName, TransferDirection direction,
+                                                int confirmedCount) {
+        if (expectedName == null || direction == null || confirmedCount == 0) {
+            return List.of();
+        }
+        List<Item> gone = disappeared(before, after);
+        List<Item> gained = appeared(before, after);
+        if (isStackResolution(gone, gained)) {
+            return List.of();
+        }
+        List<Item> changed = direction == TransferDirection.INTO_PILE ? gone : gained;
+        List<Item> matching = new ArrayList<>();
+        for (Item item : changed) {
+            if (expectedName.equals(item.name)) {
+                matching.add(item);
+            }
+        }
+        if (confirmedCount >= 0) {
+            if (changed.size() == confirmedCount) {
+                return changed;
+            }
+            if (matching.size() > confirmedCount) {
+                return new ArrayList<>(matching.subList(0, confirmedCount));
+            }
+        }
+        return matching;
+    }
+
+    public static int confirmedInventoryTransitionCount(List<Item> before, List<Item> after,
+                                                        TransferDirection direction) {
+        if (before == null || after == null || direction == null) {
+            return 0;
+        }
+        List<Item> gone = disappeared(before, after);
+        List<Item> gained = appeared(before, after);
+        if (isStackResolution(gone, gained)) {
+            return 0;
+        }
+        return direction == TransferDirection.INTO_PILE ? gone.size() : gained.size();
+    }
+
+    public static boolean isMatchingInventoryTransition(List<Item> before, List<Item> after,
+                                                        String expectedName,
+                                                        TransferDirection direction) {
+        return matchingInventoryTransitionCount(before, after, expectedName, direction) > 0;
+    }
+
+    public static int matchingInventoryTransitionCount(List<Item> before, List<Item> after,
+                                                       String expectedName,
+                                                       TransferDirection direction) {
+        return attributedTransfer(before, after, expectedName, direction, -1).size();
+    }
+
+    public static boolean isWithdrawalRecordMatch(Item actual, Item stored) {
+        if (actual == null || stored == null || !Objects.equals(actual.name, stored.name)) {
+            return false;
+        }
+        return Double.compare(actual.quality, stored.quality) == 0
+                || (actual.quality > 0 && stored.quality <= 0);
+    }
+
+    public static int withdrawalRecordIndex(Item actual, List<Item> stored) {
+        if (actual == null || stored == null) {
+            return -1;
+        }
+        for (int i = 0; i < stored.size(); i++) {
+            Item candidate = stored.get(i);
+            if (candidate != null && Objects.equals(actual.name, candidate.name)
+                    && Double.compare(actual.quality, candidate.quality) == 0) {
+                return i;
+            }
+        }
+        if (actual.quality > 0) {
+            for (int i = 0; i < stored.size(); i++) {
+                Item candidate = stored.get(i);
+                if (candidate != null && Objects.equals(actual.name, candidate.name)
+                        && candidate.quality <= 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 
     public static FetchSplit splitForFetch(List<Item> dumped, String name, double minQ, double maxQ, int count) {
@@ -193,6 +299,23 @@ public final class StockpileStoragePolicy {
         return isStockpileRes(resName) && sameWorldTile(placeX, placeY, gobX, gobY);
     }
 
+    /** A placement can only bind to a stockpile gob that did not exist before the click. */
+    public static boolean isNewPlacedPileAt(String resName, long gobId, Set<Long> existingIds,
+                                            double placeX, double placeY,
+                                            double gobX, double gobY) {
+        return (existingIds == null || !existingIds.contains(gobId))
+                && isPlacedPileAt(resName, placeX, placeY, gobX, gobY);
+    }
+
+    public static boolean isExpectedNewPlacedPileAt(String resName, String expectedResName,
+                                                    long gobId, Set<Long> existingIds,
+                                                    double placeX, double placeY,
+                                                    double gobX, double gobY) {
+        return expectedResName != null && expectedResName.equals(resName)
+                && isNewPlacedPileAt(resName, gobId, existingIds,
+                placeX, placeY, gobX, gobY);
+    }
+
     /**
      * Neighbor piles must not be treated as the original.
      * Same hash only — never a nearby tile with a different gob.
@@ -296,6 +419,18 @@ public final class StockpileStoragePolicy {
     }
 
     /**
+     * At the placement click the seed has already been consumed from the cursor.
+     * It must therefore be added even when inventory still contains an equal item.
+     */
+    public static List<Item> mergeConsumedPlacementSeed(List<Item> snapshot, List<Item> seed) {
+        List<Item> out = snapshot == null ? new ArrayList<>() : new ArrayList<>(snapshot);
+        if (seed != null) {
+            out.addAll(seed);
+        }
+        return out;
+    }
+
+    /**
      * Rebinding the pile gob must not replace the snapshot with post-consume
      * inventory while the seed has already left the player's items.
      */
@@ -344,6 +479,58 @@ public final class StockpileStoragePolicy {
             return previous;
         }
         return new ArrayList<>(captured);
+    }
+
+    /** Current cursor contents take precedence; otherwise keep the last captured placement seed. */
+    public static List<Item> placementSeed(List<Item> currentHand, List<Item> lastHand) {
+        if (currentHand != null && !currentHand.isEmpty()) {
+            return new ArrayList<>(currentHand);
+        }
+        if (lastHand != null && !lastHand.isEmpty()) {
+            return new ArrayList<>(lastHand);
+        }
+        return List.of();
+    }
+
+    /** A consumed cursor item is safe to reuse only within the same short itemact sequence. */
+    public static List<Item> placementSeed(List<Item> currentHand, List<Item> armedHand,
+                                           long capturedAtMs, long nowMs, long maxAgeMs) {
+        if (currentHand != null && !currentHand.isEmpty()) {
+            return new ArrayList<>(currentHand);
+        }
+        if (capturedAtMs <= 0 || nowMs < capturedAtMs || nowMs - capturedAtMs > maxAgeMs) {
+            return List.of();
+        }
+        return placementSeed(List.of(), armedHand);
+    }
+
+    /** A not-yet-loaded ghost may be a stockpile only when backed by a fresh itemact seed. */
+    public static List<Item> placementSeedForResource(String resName,
+                                                      List<Item> currentHand, List<Item> armedHand,
+                                                      long capturedAtMs, long nowMs, long maxAgeMs) {
+        if (resName != null && !isStockpileRes(resName)) {
+            return List.of();
+        }
+        return placementSeed(currentHand, armedHand, capturedAtMs, nowMs, maxAgeMs);
+    }
+
+    /** Recover the itemact seed at the guaranteed place event if ghost-start was bypassed. */
+    public static List<Item> placementSeedAtPlace(String resName,
+                                                  List<Item> frozenSeed, List<Item> armedHand,
+                                                  long capturedAtMs, long nowMs, long maxAgeMs) {
+        if (frozenSeed != null && !frozenSeed.isEmpty()) {
+            return new ArrayList<>(frozenSeed);
+        }
+        return placementSeedForResource(
+                resName, List.of(), armedHand, capturedAtMs, nowMs, maxAgeMs);
+    }
+
+    public static boolean placementDeadlineActive(long deadlineMs, long nowMs) {
+        return deadlineMs > 0 && nowMs <= deadlineMs;
+    }
+
+    public static boolean canReplacePlacementSession(long deadlineMs, long nowMs) {
+        return !placementDeadlineActive(deadlineMs, nowMs);
     }
 
     /**

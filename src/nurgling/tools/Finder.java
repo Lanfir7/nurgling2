@@ -546,6 +546,11 @@ public class Finder
     }
 
     public static ArrayList<Coord2d> getFreePlaces(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
+                                                    double angle, PileFillDirection direction) {
+        return collectFreePlaces(area, hitBox, angle, false, 1, direction);
+    }
+
+    public static ArrayList<Coord2d> getFreePlaces(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
                                                     double angle, PileFillDirection direction,
                                                     double candidateStride) {
         return collectFreePlaces(area, hitBox, angle, false, candidateStride, direction);
@@ -599,6 +604,29 @@ public class Finder
                 }
             }
         }
+
+        return collectFreePlacesAgainstObstacles(area, hitBox, angle, firstOnly,
+                candidateStride, direction, significantGobs);
+    }
+
+    static ArrayList<Coord2d> collectDenseFreePlaces(Pair<Coord2d,Coord2d> area,
+                                                      NHitBox hitBox,
+                                                      double angle,
+                                                      PileFillDirection direction,
+                                                      Collection<NHitBoxD> significantGobs) {
+        return collectFreePlacesAgainstObstacles(area, hitBox, angle, false,
+                1, direction, significantGobs);
+    }
+
+    private static ArrayList<Coord2d> collectFreePlacesAgainstObstacles(
+            Pair<Coord2d,Coord2d> area,
+            NHitBox hitBox,
+            double angle,
+            boolean firstOnly,
+            double candidateStride,
+            PileFillDirection direction,
+            Collection<NHitBoxD> significantGobs) {
+        ArrayList<Coord2d> candidates = new ArrayList<>();
 
         Coord inchMax = area.b.sub(area.a).floor();
         

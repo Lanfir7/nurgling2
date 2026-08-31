@@ -3,6 +3,7 @@ package nurgling.overlays;
 import haven.Coord;
 import haven.Coord2d;
 import haven.Gob;
+import haven.res.lib.tree.TreeScale;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,6 +46,17 @@ class NMiningSupportTest {
     void unknownGobHasNoSupportSpec() {
         assertNull(NMiningSupport.specFor("gfx/terobjs/dframe"));
         assertNull(NMiningSupport.specFor(null));
+    }
+
+    @Test
+    void resizedFullyGrownTowercapKeepsFullSupportRadius() {
+        Gob gob = new Gob(null, Coord2d.of(5.5, 5.5), 1);
+        gob.setattr(new TreeScale(gob, 0.2f, 1.0f));
+        NMiningSupport overlay = new NMiningSupport(gob, 100);
+
+        overlay.getData();
+
+        assertEquals(100, overlay.r);
     }
 
     @Test

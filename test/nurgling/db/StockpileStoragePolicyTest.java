@@ -3,12 +3,185 @@ package nurgling.db;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
+import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class StockpileStoragePolicyTest {
+    @Test
+    void placeRecoversFreshSeedWhenGhostStartCallbackWasSkipped() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "placementSeedAtPlace", String.class, List.class, List.class,
+                    long.class, long.class, long.class);
+        } catch (NoSuchMethodException e) {
+            fail("onPlace must recover the fresh itemact seed when NMapView skips ghost-start");
+            return;
+        }
+        List<StockpileStoragePolicy.Item> rope = List.of(item("Rope", 28.02));
+        List<StockpileStoragePolicy.Item> axe = List.of(item("Axe", 42));
+
+        assertEquals(rope, method.invoke(null,
+                "gfx/terobjs/stockpile-rope", List.of(), rope,
+                1_000L, 1_500L, 30_000L));
+        assertEquals(rope, method.invoke(null,
+                "gfx/terobjs/stockpile-rope", rope, axe,
+                1_000L, 40_000L, 30_000L));
+        assertEquals(List.of(), method.invoke(null,
+                "gfx/terobjs/stockpile-rope", List.of(), rope,
+                1_000L, 40_001L, 30_000L));
+    }
+
+    @Test
+    void unresolvedGhostResourceKeepsFreshItemactSeed() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "placementSeedForResource", String.class, List.class, List.class,
+                    long.class, long.class, long.class);
+        } catch (NoSuchMethodException e) {
+            fail("A loading ghost resource must not discard the fresh itemact seed");
+            return;
+        }
+        List<StockpileStoragePolicy.Item> rope = List.of(item("Rope", 16.68));
+
+        assertEquals(rope, method.invoke(null,
+                null, List.of(), rope, 1_000L, 1_100L, 30_000L));
+        assertEquals(List.of(), method.invoke(null,
+                "gfx/terobjs/tree", List.of(), rope, 1_000L, 1_100L, 30_000L));
+        assertEquals(List.of(), method.invoke(null,
+                null, List.of(), rope, 1_000L, 40_000L, 30_000L));
+    }
+
+    @Test
+    void staleArmedHandCannotSeedAPlacement() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "placementSeed", List.class, List.class,
+                    long.class, long.class, long.class);
+        } catch (NoSuchMethodException e) {
+            fail("Placement fallback must expire instead of reusing a stale hand item");
+            return;
+        }
+        List<StockpileStoragePolicy.Item> axe = List.of(item("Axe", 42));
+        List<StockpileStoragePolicy.Item> rope = List.of(item("Rope", 16.5));
+
+        assertEquals(axe, method.invoke(null, List.of(), axe, 1_000L, 1_500L, 1_000L));
+        assertEquals(List.of(), method.invoke(null, List.of(), axe, 1_000L, 2_001L, 1_000L));
+        assertEquals(rope, method.invoke(null, rope, axe, 1_000L, 20_000L, 1_000L));
+    }
+
+    @Test
+    void newPileCandidateMustMatchThePlacedResource() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "isExpectedNewPlacedPileAt", String.class, String.class, long.class, Set.class,
+                    double.class, double.class, double.class, double.class);
+        } catch (NoSuchMethodException e) {
+            fail("A pending Rope placement must not bind to a different stockpile resource");
+            return;
+        }
+
+        assertTrue((Boolean) method.invoke(null,
+                "gfx/terobjs/stockpile-rope", "gfx/terobjs/stockpile-rope", 11L, Set.of(10L),
+                100.0, 100.0, 100.0, 100.0));
+        assertFalse((Boolean) method.invoke(null,
+                "gfx/terobjs/stockpile-soil", "gfx/terobjs/stockpile-rope", 11L, Set.of(10L),
+                100.0, 100.0, 100.0, 100.0));
+    }
+
+    @Test
+    void placementDeadlineBoundsGobAndMetadataWaiting() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "placementDeadlineActive", long.class, long.class);
+        } catch (NoSuchMethodException e) {
+            fail("Pending placement and delayed gob metadata need a bounded lifetime");
+            return;
+        }
+
+        assertTrue((Boolean) method.invoke(null, 10_000L, 9_999L));
+        assertTrue((Boolean) method.invoke(null, 10_000L, 10_000L));
+        assertFalse((Boolean) method.invoke(null, 10_000L, 10_001L));
+        assertFalse((Boolean) method.invoke(null, 0L, 0L));
+    }
+
+    @Test
+    void activePlacementSessionCannotBeReplaced() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "canReplacePlacementSession", long.class, long.class);
+        } catch (NoSuchMethodException e) {
+            fail("An active placement snapshot must survive unrelated pile events");
+            return;
+        }
+
+        assertFalse((Boolean) method.invoke(null, 10_000L, 9_999L));
+        assertTrue((Boolean) method.invoke(null, 10_000L, 10_001L));
+        assertTrue((Boolean) method.invoke(null, 0L, 1L));
+    }
+
+    @Test
+    void placementKeepsLastHandAfterServerConsumesTheCursorItem() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "placementSeed", List.class, List.class);
+        } catch (NoSuchMethodException e) {
+            fail("Placement must retain the last hand after vhand is consumed");
+            return;
+        }
+        List<StockpileStoragePolicy.Item> rope = List.of(item("Rope", 16.5));
+        List<StockpileStoragePolicy.Item> soil = List.of(item("Soil", 20));
+
+        assertEquals(rope, method.invoke(null, List.of(), rope));
+        assertEquals(soil, method.invoke(null, soil, rope));
+    }
+
+    @Test
+    void placedPileCandidateMustNotBeAnOldPileNearThePlacementPoint() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "isNewPlacedPileAt", String.class, long.class, Set.class,
+                    double.class, double.class, double.class, double.class);
+        } catch (NoSuchMethodException e) {
+            fail("New pile lookup must exclude gobs present before the placement click");
+            return;
+        }
+
+        assertFalse((Boolean) method.invoke(null, "gfx/terobjs/stockpile-rope", 10L,
+                Set.of(10L), 100.0, 100.0, 100.0, 100.0));
+        assertTrue((Boolean) method.invoke(null, "gfx/terobjs/stockpile-rope", 11L,
+                Set.of(10L), 100.0, 100.0, 100.0, 100.0));
+        assertFalse((Boolean) method.invoke(null, "gfx/terobjs/chest", 11L,
+                Set.of(10L), 100.0, 100.0, 100.0, 100.0));
+    }
+
+    @Test
+    void consumedPlacementSeedIsAddedEvenWhenAnotherItemHasTheSameQuality() throws Exception {
+        Method method;
+        try {
+            method = StockpileStoragePolicy.class.getDeclaredMethod(
+                    "mergeConsumedPlacementSeed", List.class, List.class);
+        } catch (NoSuchMethodException e) {
+            fail("A consumed seed must not be confused with an equal item still in inventory");
+            return;
+        }
+        StockpileStoragePolicy.Item rope = item("Rope", 16.5);
+
+        assertEquals(List.of(rope, rope), method.invoke(null, List.of(rope), List.of(rope)));
+    }
     @Test
     void detectsStockpileResourceNames() {
         assertTrue(StockpileStoragePolicy.isStockpileRes("gfx/terobjs/stockpile-board"));
@@ -303,6 +476,188 @@ class StockpileStoragePolicyTest {
         assertEquals(frozen, StockpileStoragePolicy.itemsToInsertOnNewPile(frozen));
         assertEquals(List.of(), StockpileStoragePolicy.itemsToInsertOnNewPile(List.of()));
         assertEquals(List.of(), StockpileStoragePolicy.itemsToInsertOnNewPile(null));
+    }
+
+    @Test
+    void shiftDepositAttributesEveryMatchingItemButNotOtherInventoryChanges() {
+        List<StockpileStoragePolicy.Item> before = List.of(
+                item("Earth", 10), item("Axe", 42), item("Earth", 11), item("Earth", 12));
+        List<StockpileStoragePolicy.Item> after = List.of(item("Axe", 42));
+
+        assertEquals(
+                List.of(item("Earth", 10), item("Earth", 11), item("Earth", 12)),
+                StockpileStoragePolicy.attributedTransfer(
+                        before, after, "Earth",
+                        StockpileStoragePolicy.TransferDirection.INTO_PILE, -1));
+    }
+
+    @Test
+    void confirmedPileIncreaseCapsPartiallyAcceptedShiftDeposit() {
+        List<StockpileStoragePolicy.Item> before = List.of(
+                item("Earth", 10), item("Earth", 11), item("Earth", 12));
+
+        assertEquals(
+                List.of(item("Earth", 10), item("Earth", 11)),
+                StockpileStoragePolicy.attributedTransfer(
+                        before, List.of(), "Earth",
+                        StockpileStoragePolicy.TransferDirection.INTO_PILE, 2));
+    }
+
+    @Test
+    void rejectedDepositAndUnrelatedAxeDisappearanceRecordNothing() {
+        List<StockpileStoragePolicy.Item> before = List.of(item("Earth", 10), item("Axe", 42));
+
+        assertEquals(List.of(), StockpileStoragePolicy.attributedTransfer(
+                before, before, "Earth",
+                StockpileStoragePolicy.TransferDirection.INTO_PILE, 0));
+        assertEquals(List.of(), StockpileStoragePolicy.attributedTransfer(
+                before, List.of(item("Earth", 10)), "Earth",
+                StockpileStoragePolicy.TransferDirection.INTO_PILE, -1));
+    }
+
+    @Test
+    void withdrawalAttributesOnlyTheConfirmedPileResource() {
+        List<StockpileStoragePolicy.Item> before = List.of(item("Axe", 42));
+        List<StockpileStoragePolicy.Item> after = List.of(
+                item("Axe", 42), item("Earth", 10), item("Earth", 11), item("Branch", 7));
+
+        assertEquals(
+                List.of(item("Earth", 10)),
+                StockpileStoragePolicy.attributedTransfer(
+                        before, after, "Earth",
+                        StockpileStoragePolicy.TransferDirection.OUT_OF_PILE, 1));
+    }
+
+    @Test
+    void confirmedCategoryPileAttributesTheActualInventoryVariant() {
+        List<StockpileStoragePolicy.Item> before = List.of(item("Branch", 27.6));
+        List<StockpileStoragePolicy.Item> after = List.of(
+                item("Branch", 27.6), item("Cat Gold", 29));
+
+        assertEquals(List.of(item("Cat Gold", 29)),
+                StockpileStoragePolicy.attributedTransfer(
+                        before, after, "Stone",
+                        StockpileStoragePolicy.TransferDirection.OUT_OF_PILE, 1));
+    }
+
+    @Test
+    void confirmedCategoryPileKeepsExactAndVariantItemsInSameBurst() {
+        List<StockpileStoragePolicy.Item> before = List.of(
+                item("Stone", 20), item("Cat Gold", 29));
+
+        assertEquals(List.of(item("Stone", 20), item("Cat Gold", 29)),
+                StockpileStoragePolicy.attributedTransfer(
+                        before, List.of(), "Stone",
+                        StockpileStoragePolicy.TransferDirection.INTO_PILE, 2));
+    }
+
+    @Test
+    void confirmedCategoryPileFailsClosedWhenAnotherItemChanges() {
+        List<StockpileStoragePolicy.Item> after = List.of(
+                item("Cat Gold", 29), item("Axe", 42));
+
+        assertEquals(List.of(), StockpileStoragePolicy.attributedTransfer(
+                List.of(), after, "Stone",
+                StockpileStoragePolicy.TransferDirection.OUT_OF_PILE, 1));
+    }
+
+    @Test
+    void confirmedPileCountCorrelatesANameVariantTransition() {
+        assertEquals(1, StockpileStoragePolicy.confirmedInventoryTransitionCount(
+                List.of(), List.of(item("Cat Gold", 29)),
+                StockpileStoragePolicy.TransferDirection.OUT_OF_PILE));
+    }
+
+    @Test
+    void unknownStoredQualityCanBeRemovedByConfirmedActualQuality() {
+        assertTrue(StockpileStoragePolicy.isWithdrawalRecordMatch(
+                item("Cat Gold", 29), item("Cat Gold", 0)));
+        assertFalse(StockpileStoragePolicy.isWithdrawalRecordMatch(
+                item("Cat Gold", 29), item("Axe", 0)));
+    }
+
+    @Test
+    void withdrawalPrefersExactQualityBeforeUnknownFallback() {
+        List<StockpileStoragePolicy.Item> stored = List.of(
+                item("Cat Gold", 0), item("Cat Gold", 29));
+
+        assertEquals(1, StockpileStoragePolicy.withdrawalRecordIndex(
+                item("Cat Gold", 29), stored));
+        assertEquals(-1, StockpileStoragePolicy.withdrawalRecordIndex(
+                item("Cat Gold", 0), List.of(item("Cat Gold", 29))));
+    }
+
+    @Test
+    void stackQualityResolutionIsNeverAttributedAsAStockpileTransfer() {
+        List<StockpileStoragePolicy.Item> before = List.of(
+                item("Earth", 0), item("Earth", 0));
+        List<StockpileStoragePolicy.Item> after = List.of(
+                item("Earth", 10), item("Earth", 11));
+
+        assertEquals(List.of(), StockpileStoragePolicy.attributedTransfer(
+                before, after, "Earth",
+                StockpileStoragePolicy.TransferDirection.INTO_PILE, -1));
+        assertEquals(List.of(), StockpileStoragePolicy.attributedTransfer(
+                before, after, "Earth",
+                StockpileStoragePolicy.TransferDirection.OUT_OF_PILE, -1));
+    }
+
+    @Test
+    void pileIncreaseDiscoversDepositWithoutAnExplicitUiAction() {
+        assertEquals(StockpileStoragePolicy.TransferDirection.INTO_PILE,
+                StockpileStoragePolicy.directionFromPileCounts(8, 11));
+    }
+
+    @Test
+    void pileDecreaseDiscoversWithdrawalWithoutAnExplicitUiAction() {
+        assertEquals(StockpileStoragePolicy.TransferDirection.OUT_OF_PILE,
+                StockpileStoragePolicy.directionFromPileCounts(11, 8));
+        assertNull(StockpileStoragePolicy.directionFromPileCounts(8, 8));
+    }
+
+    @Test
+    void delayedPileCountCanCorrelateWithEarlierInventoryTransition() {
+        List<StockpileStoragePolicy.Item> before = List.of(
+                item("Earth", 10), item("Axe", 42));
+        List<StockpileStoragePolicy.Item> after = List.of(item("Axe", 42));
+
+        assertTrue(StockpileStoragePolicy.isMatchingInventoryTransition(
+                before, after, "Earth",
+                StockpileStoragePolicy.TransferDirection.INTO_PILE));
+        assertFalse(StockpileStoragePolicy.isMatchingInventoryTransition(
+                before, after, "Axe",
+                StockpileStoragePolicy.TransferDirection.INTO_PILE));
+    }
+
+    @Test
+    void withdrawalCorrelationRequiresExpectedPileItemToAppear() {
+        List<StockpileStoragePolicy.Item> before = List.of(item("Axe", 42));
+        List<StockpileStoragePolicy.Item> after = List.of(
+                item("Axe", 42), item("Earth", 10));
+
+        assertTrue(StockpileStoragePolicy.isMatchingInventoryTransition(
+                before, after, "Earth",
+                StockpileStoragePolicy.TransferDirection.OUT_OF_PILE));
+        assertFalse(StockpileStoragePolicy.isMatchingInventoryTransition(
+                before, after, "Branch",
+                StockpileStoragePolicy.TransferDirection.OUT_OF_PILE));
+    }
+
+    @Test
+    void multiUpdateShiftDepositCountsEveryMatchingTransition() {
+        List<StockpileStoragePolicy.Item> before = List.of(
+                item("Earth", 10), item("Earth", 11), item("Axe", 42));
+        List<StockpileStoragePolicy.Item> middle = List.of(
+                item("Earth", 11), item("Axe", 42));
+        List<StockpileStoragePolicy.Item> after = List.of(item("Axe", 42));
+
+        assertEquals(1, StockpileStoragePolicy.matchingInventoryTransitionCount(
+                before, middle, "Earth",
+                StockpileStoragePolicy.TransferDirection.INTO_PILE));
+        assertEquals(1, StockpileStoragePolicy.matchingInventoryTransitionCount(
+                middle, after, "Earth",
+                StockpileStoragePolicy.TransferDirection.INTO_PILE));
+        assertEquals(3, StockpileStoragePolicy.confirmedPileDelta(8, 11));
     }
 
     private static StockpileStoragePolicy.Item item(String name, double quality) {

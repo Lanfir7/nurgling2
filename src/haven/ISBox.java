@@ -28,6 +28,7 @@ package haven;
 
 import java.awt.Color;
 import nurgling.*;
+import nurgling.db.StockpileStoragePolicy;
 
 public class ISBox extends Widget implements DTarget {
     public static final Color bgcol = new Color(43, 51, 44, 127);
@@ -43,6 +44,9 @@ public class ISBox extends Widget implements DTarget {
     public static final Text.Foundry lf = new Text.Foundry(Text.fraktur, 22, Color.WHITE).aa(true);
     private final Indir<Resource> res;
     protected Text label;
+    protected int rem;
+    protected int av;
+    protected int bi;
 
     @RName("isbox")
     public static class $_ implements Factory {
@@ -61,6 +65,9 @@ public class ISBox extends Widget implements DTarget {
     }
 
     private void setlabel(int rem, int av, int bi) {
+	this.rem = rem;
+	this.av = av;
+	this.bi = bi;
 	if(bi < 0)
 	    label = lf.renderf("%d/%d", rem, av);
 	else
@@ -86,7 +93,7 @@ public class ISBox extends Widget implements DTarget {
 
     public boolean mousedown(MouseDownEvent ev) {
         if(ev.b == 1) {
-            touchPile();
+	    beginTransfer(StockpileStoragePolicy.TransferDirection.OUT_OF_PILE);
             if(ui.modshift)
                 wdgmsg("xfer");
             else
@@ -97,37 +104,70 @@ public class ISBox extends Widget implements DTarget {
     }
 
     public boolean mousewheel(MouseWheelEvent ev) {
-	touchPile();
-	if(ev.a < 0)
-	    wdgmsg("xfer2", -1, ui.modflags());
-	if(ev.a > 0)
-	    wdgmsg("xfer2", 1, ui.modflags());
+		if(ev.a < 0) {
+		    beginTransfer(StockpileStoragePolicy.TransferDirection.OUT_OF_PILE);
+		    wdgmsg("xfer2", -1, ui.modflags());
+		}
+		if(ev.a > 0) {
+		    beginTransfer(StockpileStoragePolicy.TransferDirection.INTO_PILE);
+		    wdgmsg("xfer2", 1, ui.modflags());
+		}
 	return(true);
     }
 
     public boolean drop(Coord cc, Coord ul) {
-        touchPile();
+	        beginTransfer(StockpileStoragePolicy.TransferDirection.INTO_PILE);
         wdgmsg("drop");
         return(true);
     }
 
     public boolean iteminteract(Coord cc, Coord ul) {
-        touchPile();
+	        beginTransfer(StockpileStoragePolicy.TransferDirection.INTO_PILE);
         wdgmsg("iact");
         return(true);
     }
 
     public void uimsg(String msg, Object... args) {
-        if(msg == "chnum") {
-            setlabel(Utils.iv(args[0]), Utils.iv(args[1]), Utils.iv(args[2]));
-            touchPile();
+	        if(msg == "chnum") {
+	            int oldCount = rem;
+	            setlabel(Utils.iv(args[0]), Utils.iv(args[1]), Utils.iv(args[2]));
+	            Gob gob = parentPileGob();
+	            if(gob != null)
+	                monitoring.StockpileStorageTracker.onPileCountChanged(gob, oldCount, rem);
         } else {
             super.uimsg(msg, args);
         }
     }
 
-    private void touchPile() {
-	Gob gob = (this instanceof NISBox) ? ((NISBox) this).parentGob : null;
-	monitoring.StockpileStorageTracker.touch(gob);
-    }
+	    protected Gob parentPileGob() {
+		return (this instanceof NISBox) ? ((NISBox) this).parentGob : null;
+	    }
+
+	    public int stockpileCount() {
+		return rem;
+	    }
+
+	    public String stockpileItemName() {
+		try {
+		    Resource.Tooltip tip = res.get().layer(Resource.tooltip);
+		    return tip == null ? null : tip.text();
+		} catch(Loading e) {
+		    return null;
+		}
+	    }
+
+	    public void beginDepositTracking() {
+		beginTransfer(StockpileStoragePolicy.TransferDirection.INTO_PILE);
+	    }
+
+	    public void beginWithdrawalTracking() {
+		beginTransfer(StockpileStoragePolicy.TransferDirection.OUT_OF_PILE);
+	    }
+
+	    private void beginTransfer(StockpileStoragePolicy.TransferDirection direction) {
+		Gob gob = parentPileGob();
+		String name = stockpileItemName();
+		if(gob != null && name != null)
+		    monitoring.StockpileStorageTracker.beginTransfer(gob, name, direction, rem);
+	    }
 }

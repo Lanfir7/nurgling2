@@ -2576,12 +2576,12 @@ public class MapView extends PView implements DTarget, Console.Directory {
     public boolean iteminteract(Coord cc, Coord ul) {
 	NGameUI gui = NUtils.getGameUI();
 	if (gui != null && gui.vhand != null) {
-	    monitoring.StockpileStorageTracker.rememberHand(gui.vhand);
+	    monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
 	}
 	new Hittest(cc) {
 	    public void hit(Coord pc, Coord2d mc, ClickData inf) {
 		if (gui != null && gui.vhand != null) {
-		    monitoring.StockpileStorageTracker.rememberHand(gui.vhand);
+		    monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
 		}
 		monitoring.StockpileStorageTracker.onClickData(inf);
 		Object[] args = {pc, mc.floor(posres), ui.modflags()};

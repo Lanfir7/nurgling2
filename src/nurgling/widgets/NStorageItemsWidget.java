@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
  * - Pagination for large item sets
  */
 public class NStorageItemsWidget extends Window {
+    private final StorageItemsRefreshSignal refreshSignal = new StorageItemsRefreshSignal();
 
     private static final int PAGE_SIZE = 25;
     private static final int WINDOW_WIDTH = 720;
@@ -83,6 +84,19 @@ public class NStorageItemsWidget extends Window {
     private boolean compressByType = false;
     private Grouping currentGrouping = Grouping.Q;
     private boolean isLoading = false;
+
+    /** May be called from the database worker after tracked storage contents change. */
+    public void requestRefresh() {
+        refreshSignal.request();
+    }
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        if (refreshSignal.take(visible(), isLoading)) {
+            loadItems();
+        }
+    }
     
     // Clickable column headers
     private Label nameHeaderLabel;

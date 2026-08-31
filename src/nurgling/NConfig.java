@@ -10,6 +10,8 @@ import nurgling.sessions.SessionContext;
 import nurgling.sessions.SessionManager;
 import nurgling.sessions.ThreadLocalUI;
 import nurgling.tools.NFileUtils;
+import nurgling.tools.ConfigWriteState;
+import nurgling.tools.NConfigPersistence;
 import nurgling.widgets.NCornerMiniMap;
 import org.json.*;
 
@@ -788,7 +790,7 @@ public class NConfig
 
 
     HashMap<Key, Object> conf = new HashMap<>();
-    private boolean isUpd = false;
+    private ConfigWriteState configWriteState = new ConfigWriteState();
     private boolean isExploredUpd = false;
     private long lastExploredChangeTime = 0;
     private static final long EXPLORED_DEBOUNCE_MS = 5000; // 5 seconds debounce for explored area changes
@@ -798,7 +800,17 @@ public class NConfig
 
     public boolean isUpdated()
     {
-        return isUpd;
+        synchronized (conf) {
+            return writeState().isDirty();
+        }
+    }
+
+    private ConfigWriteState writeState() {
+        // Some lightweight tools/tests allocate NConfig without running its constructor.
+        if (configWriteState == null) {
+            configWriteState = new ConfigWriteState();
+        }
+        return configWriteState;
     }
 
     public boolean isRoutesUpdated() {
@@ -871,8 +883,8 @@ public class NConfig
         {
             synchronized (cur.conf) {
                 cur.conf.put(key, val);
+                cur.writeState().markDirty();
             }
-            cur.isUpd = true;
         }
         // Propagate to all session configs so every session sees the same value
         for (SessionContext ctx : SessionManager.getInstance().getAllSessions())
@@ -898,7 +910,9 @@ public class NConfig
     {
         if (current != null)
         {
-            current.isUpd = true;
+            synchronized (current.conf) {
+                current.writeState().markDirty();
+            }
         }
     }
 
@@ -1330,6 +1344,7 @@ public class NConfig
                 main = new JSONObject(content);
             } catch (org.json.JSONException e) {
                 System.err.println("[NConfig] Failed to parse config file (corrupt JSON), using defaults: " + path);
+                writeState().initialize(serializeSnapshot(new HashMap<>(conf)));
                 current = this;
                 return;
             }
@@ -1403,6 +1418,10 @@ public class NConfig
             }
         }
 
+        // This is the local state corresponding to the version read from disk. Migrations below
+        // intentionally remain differences so they are included in the next merged save.
+        writeState().initialize(serializeSnapshot(new HashMap<>(conf)));
+
         // Migration: Ensure new config keys have default values if not present in loaded config
         if (!conf.containsKey(Key.showSpeedometer)) {
             conf.put(Key.showSpeedometer, true);
@@ -1437,7 +1456,7 @@ public class NConfig
             if (conf.get(Key.boxLineWidth) instanceof Number)
                 conf.put(Key.hideBoxLineWidth, conf.get(Key.boxLineWidth));
 
-            isUpd = true;
+            writeState().markDirty();
         }
         conf.remove(Key.hideNature);
 
@@ -1447,7 +1466,7 @@ public class NConfig
             String migrated = NUpdateFeed.migrateBaseUrl(currentUrl);
             if (currentUrl == null || !currentUrl.equals(migrated)) {
                 conf.put(Key.baseurl, migrated);
-                isUpd = true;
+                writeState().markDirty();
             }
         }
 
@@ -1467,11 +1486,11 @@ public class NConfig
             for (String[] entry : newAnimals) {
                 if (!existingNames.contains(entry[0])) {
                     savedRads.add(new NAreaRad(entry[0], Integer.parseInt(entry[1])));
-                    isUpd = true;
+                    writeState().markDirty();
                 }
             }
             if (NAreaRad.migrateList(savedRads))
-                isUpd = true;
+                writeState().markDirty();
         }
 
         conf.put(Key.showCSprite,conf.get(Key.nextshowCSprite));
@@ -1515,14 +1534,7 @@ public class NConfig
     }
 
     @SuppressWarnings("unchecked")
-    public void write()
-    {
-        // Snapshot under lock so we never iterate the map while another thread
-        // mutates it via set(); serialization/IO then happens off the lock.
-        Map<Key, Object> snapshot;
-        synchronized (conf) {
-            snapshot = new HashMap<>(conf);
-        }
+    private String serializeSnapshot(Map<Key, Object> snapshot) {
         Map<String, Object> prep = new HashMap<>();
         for (Map.Entry<Key, Object> entry : snapshot.entrySet())
         {
@@ -1551,16 +1563,51 @@ public class NConfig
                 prep.put(entry.getKey().toString(), entry.getValue());
             }
         }
+        return new JSONObject(prep).toString();
+    }
 
-        JSONObject main = new JSONObject(prep);
+    private String serializeStableSnapshot() {
+        String previous = null;
+        RuntimeException lastFailure = null;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+                String candidate = serializeSnapshot(new HashMap<>(conf));
+                if (previous != null && Objects.equals(
+                        new JSONObject(previous).toMap(), new JSONObject(candidate).toMap())) {
+                    return candidate;
+                }
+                previous = candidate;
+                lastFailure = null;
+            } catch (RuntimeException e) {
+                // Mutable legacy config values are exposed through get(). If another session is
+                // finishing an in-place change, retry until two complete snapshots agree.
+                previous = null;
+                lastFailure = e;
+            }
+        }
+        throw new IllegalStateException("config kept changing while it was being serialized", lastFailure);
+    }
+
+    public void write()
+    {
         try
         {
-            NFileUtils.writeAtomically(path, main.toString());
-            this.isUpd = false;
+            // Capture the revision together with a validated, immutable JSON snapshot. Disk I/O
+            // then runs without blocking setting changes.
+            String localSnapshot;
+            ConfigWriteState.Save save;
+            synchronized (conf) {
+                save = writeState().begin();
+                localSnapshot = serializeStableSnapshot();
+            }
+            NConfigPersistence.mergeAndWrite(path, save.baseline, localSnapshot);
+            synchronized (conf) {
+                writeState().complete(save, localSnapshot);
+            }
         }
-        catch (IOException e)
+        catch (IOException | RuntimeException e)
         {
-            // Don't crash the UI thread — isUpd stays true so we retry next tick
+            // Don't crash the UI thread — dirty state stays set so we retry next tick
             System.err.println("[NConfig] Warning: failed to save config, will retry: " + e.getMessage());
         }
     }

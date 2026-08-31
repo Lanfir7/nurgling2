@@ -12,13 +12,9 @@ public class NISBox extends ISBox
     private TextEntry.NumberValue value;
     private TakeButton take;
 
-    private int rem;
-
-
     public NISBox(Indir<Resource> res, int rem, int av, int bi)
     {
         super(res, rem, av, bi);
-        this.rem = rem;
     }
 
     public int calcFreeSpace()
@@ -72,7 +68,7 @@ public class NISBox extends ISBox
 
     public void transfer(int amount)
     {
-        monitoring.StockpileStorageTracker.touch(parentGob);
+        beginWithdrawalTracking();
         for (int i = 0; i < amount; i++)
         {
             wdgmsg("xfer2", -1, 1);
@@ -81,7 +77,7 @@ public class NISBox extends ISBox
 
     public void put(int amount)
     {
-        monitoring.StockpileStorageTracker.touch(parentGob);
+        beginDepositTracking();
         for (int i = 0; i < amount; i++)
         {
             wdgmsg("xfer2", 1, 1);
@@ -129,6 +125,8 @@ public class NISBox extends ISBox
                 }
                 if (parentGob != null) {
                     monitoring.StockpileStorageTracker.onGob(parentGob);
+                    monitoring.StockpileStorageTracker.observeOpenPile(
+                            parentGob, stockpileItemName(), stockpileCount());
                 }
             }
         }

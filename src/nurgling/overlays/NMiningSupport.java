@@ -158,7 +158,8 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
             TreeScale ts = gob.getattr(TreeScale.class);
             if(ts!=null)
             {
-                this.r = (int) Math.round(baser * (ts.scale - 0.1) / 0.9);
+                float growthScale = ts.originalScale > 0 ? ts.originalScale : ts.scale;
+                this.r = (int) Math.round(baser * (growthScale - 0.1) / 0.9);
             }
             else
             {

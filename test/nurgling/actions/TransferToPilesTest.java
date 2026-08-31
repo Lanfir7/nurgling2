@@ -71,6 +71,21 @@ class TransferToPilesTest {
     }
 
     @Test
+    void highestThresholdBandAllowsBulkWhenEveryItemIsAboveItsMinimum() {
+        assertTrue(TransferToPiles.allQualitiesInBand(
+                List.of(30.0, 31.0, 34.0), 30, null));
+        assertFalse(TransferToPiles.allQualitiesInBand(
+                List.of(29.9, 31.0), 30, null));
+
+        assertEquals(PileMode.GOB_SHIFT_BULK,
+                TransferToPiles.pileMode(30, null, false, true, false));
+        assertEquals(PileMode.TYPE_BULK,
+                TransferToPiles.pileMode(30, null, true, true, false));
+        assertEquals(PileMode.ONE_BY_ONE,
+                TransferToPiles.pileMode(30, null, false, false, false));
+    }
+
+    @Test
     void typeBulkIsExtraPanelShiftClickNotHandTake() {
         assertEquals("invxf2", ExtraInvGroupTransfer.EXTRA_SHIFT_MSG);
         List<ExtraInvGroupTransfer.Op<String>> ops = ExtraInvGroupTransfer.plan(
