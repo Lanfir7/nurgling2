@@ -264,7 +264,8 @@ public class NAreasWidget extends Window
     }
 
     public void showPath(String path) {
-        showPath(path, -1);
+        Integer cur = (al != null && al.sel != null && al.sel.area != null) ? al.sel.area.id : null;
+        showPath(path, AreaListSelection.implicitRebuildId(cur));
     }
     
     public void showPath(String path, int selectAreaId) {
@@ -307,17 +308,22 @@ public class NAreasWidget extends Window
             items.addAll(areas);
         }
             if(!items.isEmpty()) {
-                // Try to select the specified area, otherwise select last item
+                ArrayList<Integer> present = new ArrayList<>();
+                for (AreaItem item : items) {
+                    if (item != null && item.area != null)
+                        present.add(item.area.id);
+                }
+                Integer keep = AreaListSelection.keptAreaId(selectAreaId, present);
                 AreaItem selectedItem = null;
-                if(selectAreaId >= 0) {
-                    for(AreaItem item : items) {
-                        if(item.area != null && item.area.id == selectAreaId) {
+                if (keep != null) {
+                    for (AreaItem item : items) {
+                        if (item.area != null && item.area.id == keep) {
                             selectedItem = item;
                             break;
                         }
                     }
                 }
-                if(selectedItem == null) {
+                if (selectedItem == null) {
                     selectedItem = items.get(items.size() - 1);
                 }
                 al.sel = selectedItem;
@@ -330,6 +336,26 @@ public class NAreasWidget extends Window
                 }
             }
 
+    }
+
+    /** Same flower menu as RMB on the list row, even if the editor is closed or the list is stale. */
+    public void openAreaOptsAt(NArea area, Coord rootPos) {
+        if (area == null)
+            return;
+        String path = area.path == null ? "" : area.path;
+        showPath(path, area.id);
+        AreaItem found = null;
+        synchronized (items) {
+            for (AreaItem ai : items) {
+                if (ai.area != null && ai.area.id == area.id) {
+                    found = ai;
+                    break;
+                }
+            }
+        }
+        if (found == null)
+            found = new AreaItem(area.name, area);
+        found.optsAt(rootPos);
     }
     
     public void selectAreaById(int areaId) {

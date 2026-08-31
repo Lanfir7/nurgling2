@@ -1763,7 +1763,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             }
         }
 
-        // Ctrl+RMB (without Shift) opens custom gob context menu
+        // Ctrl+RMB (without Shift): gob menu, else zone flower menu, else tile/server
         if (ev.b == 3 && ui.modctrl && !ui.modshift) {
             new Click(ev.c, ev.b) {
                 @Override
@@ -1775,34 +1775,43 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                         else if (inf.ci instanceof Composited.CompositeClick)
                             target = ((Composited.CompositeClick) inf.ci).gi.gob;
                     }
-                    // Claim boundary gobs: always forward Ctrl+RMB to the server so
-                    // the built-in "Memorize owner" flow keeps working.
-                    if (target != null && target.ngob != null && target.ngob.name != null
-                            && target.ngob.name.startsWith("gfx/terobjs/bounds/")) {
+                    boolean boundary = target != null && target.ngob != null && target.ngob.name != null
+                            && target.ngob.name.startsWith("gfx/terobjs/bounds/");
+                    boolean gobHasActions = false;
+                    if (!boundary && target != null) {
+                        gobHasActions = !GobContextRegistry.getActionsFor(target).isEmpty();
+                    }
+                    NArea hitArea = null;
+                    if (!boundary && !gobHasActions && glob != null && glob.map != null && glob.map.areas != null) {
+                        synchronized (glob.map.areas) {
+                            hitArea = AreaWorldHit.smallestContaining(glob.map.areas.values(), mc);
+                        }
+                    }
+                    boolean tileHasActions = false;
+                    if (!boundary && !gobHasActions && hitArea == null) {
+                        tileHasActions = !TileContextRegistry.getActionsFor(mc).isEmpty();
+                    }
+                    switch (AreaWorldHit.decide(boundary, gobHasActions, hitArea != null, tileHasActions)) {
+                    case BOUNDARY:
+                    case SERVER:
                         super.hit(pc, mc, inf);
                         return;
-                    }
-                    boolean handled = false;
-                    if (target != null) {
+                    case GOB: {
                         java.util.List<GobContextAction> actions = GobContextRegistry.getActionsFor(target);
-                        if (!actions.isEmpty()) {
-                            Gob finalTarget = target;
-                            NUtils.getGameUI().add(new NGobContextMenu(finalTarget, actions), new Coord(-1, -1));
-                            handled = true;
-                        }
+                        NUtils.getGameUI().add(new NGobContextMenu(target, actions), new Coord(-1, -1));
+                        return;
                     }
-                    if (!handled) {
+                    case AREA: {
+                        NGameUI gui = NUtils.getGameUI();
+                        Coord pos = (NUtils.getUI() != null) ? NUtils.getUI().mc : pc;
+                        if (gui != null && gui.areas != null)
+                            gui.areas.openAreaOptsAt(hitArea, pos);
+                        return;
+                    }
+                    case TILE: {
                         java.util.List<TileContextAction> tileActions = TileContextRegistry.getActionsFor(mc);
-                        if (!tileActions.isEmpty()) {
-                            NUtils.getGameUI().add(new NTileContextMenu(mc, tileActions), new Coord(-1, -1));
-                            handled = true;
-                        }
+                        NUtils.getGameUI().add(new NTileContextMenu(mc, tileActions), new Coord(-1, -1));
                     }
-                    if (!handled) {
-                        // Nothing registered for this gob or tile — forward the click to the
-                        // server so Ctrl+RMB retains its original Haven behavior (e.g. claim
-                        // owner lookup, pointer/beam, etc.).
-                        super.hit(pc, mc, inf);
                     }
                 }
             }.run();
