@@ -61,7 +61,7 @@ public class LightObject implements Action {
 
     private static final Coord TORCH_SIZE = new Coord(1, 1);
 
-    /** 5 tiles from the player; tile size is {@link MCache#tilesz}. */
+    /** 5 tiles from the target gob; tile size is {@link MCache#tilesz}. */
     public static final double NEIGHBOR_STICK_RADIUS = 5 * MCache.tilesz.x;
 
     /** Ctrl+Alt itemact so the server lights a held branch instead of stuffing it in as fuel. */
@@ -599,7 +599,7 @@ public class LightObject implements Action {
             while (true) {
                 Gob current = Finder.findGob(t.id);
                 if (current == null)
-                    current = t;
+                    break;
                 boolean targetLit = isLit(current, config);
                 if (targetLit) {
                     remaining.remove(t);
@@ -612,10 +612,8 @@ public class LightObject implements Action {
                 if (shouldGiveUpNeighborStickNoProgress(noProgress))
                     break;
 
-                NUtils.takeItemToHand(branch);
-                NUtils.getUI().core.addTask(new WaitItemInHand());
-                if (gui.vhand == null) {
-                    noProgress++;
+                if (NUtils.takeItemToHand(branch) == null) {
+                    noProgress = nextNeighborStickNoProgress(noProgress, false, true);
                     continue;
                 }
 
@@ -626,26 +624,39 @@ public class LightObject implements Action {
                         dropLeftoverHand(gui);
                     if (LightFire.hasClocks(gui.prog != null))
                         return;
-                    if (findLitFireSourceNear(t) != null)
-                        noProgress++;
+                    noProgress = nextNeighborStickNoProgress(
+                            noProgress, false, findLitFireSourceNear(t) != null);
                     continue;
                 }
-                noProgress = 0;
 
-                new PathFinder(t).run(gui);
-                NUtils.activateItem(t);
-                WaitProgress useStart = new WaitProgress(WaitProgress.Phase.START, 8000);
-                NUtils.getUI().core.addTask(useStart);
-                if (!useStart.isTimedOut()) {
-                    WaitProgress useFinish = new WaitProgress(WaitProgress.Phase.FINISH, 60000);
-                    NUtils.getUI().core.addTask(useFinish);
-                    if (useFinish.isTimedOut() && LightFire.hasClocks(gui.prog != null)) {
-                        return;
+                boolean clocksStuck = false;
+                for (int applyAttempt = 0; applyAttempt < NEIGHBOR_STICK_MAX_NO_PROGRESS; applyAttempt++) {
+                    if (gui.vhand == null)
+                        break;
+                    new PathFinder(t).run(gui);
+                    NUtils.activateItem(t);
+                    WaitProgress useStart = new WaitProgress(WaitProgress.Phase.START, 8000);
+                    NUtils.getUI().core.addTask(useStart);
+                    if (!useStart.isTimedOut()) {
+                        WaitProgress useFinish = new WaitProgress(WaitProgress.Phase.FINISH, 60000);
+                        NUtils.getUI().core.addTask(useFinish);
+                        if (useFinish.isTimedOut() && LightFire.hasClocks(gui.prog != null)) {
+                            clocksStuck = true;
+                            break;
+                        }
+                    }
+                    NUtils.getUI().core.addTask(new WaitGobModelAttr(t, config.fireFlag, 2000));
+                    Gob updated = Finder.findGob(t.id);
+                    if (updated != null && isLit(updated, config)) {
+                        remaining.remove(t);
+                        break;
                     }
                 }
-                NUtils.getUI().core.addTask(new WaitGobModelAttr(t, config.fireFlag, 2000));
+                if (clocksStuck)
+                    return;
                 if (LightFire.shouldDropFirebrand(gui.vhand != null, gui.prog != null))
                     dropLeftoverHand(gui);
+                break;
             }
         }
     }
@@ -694,6 +705,14 @@ public class LightObject implements Action {
 
     public static boolean shouldGiveUpNeighborStickNoProgress(int consecutiveNoProgress) {
         return consecutiveNoProgress >= NEIGHBOR_STICK_MAX_NO_PROGRESS;
+    }
+
+    public static int nextNeighborStickNoProgress(int prev, boolean stickReady, boolean sourceStillPresent) {
+        if (stickReady)
+            return 0;
+        if (sourceStillPresent)
+            return prev + 1;
+        return prev;
     }
 
     // --- Priority 7: Branches (never batched — re-craft a firebrand per gob) ---
@@ -816,12 +835,12 @@ public class LightObject implements Action {
     }
 
     /**
-     * Closest already-lit FIRE_SOURCE workstation within {@code radius} of {@code playerPos},
+     * Closest already-lit FIRE_SOURCE workstation within {@code radius} of {@code origin},
      * skipping {@code excludeId} (the gob being lit). Does not use Finder / a live client.
      */
     public static FireSourceProbe pickClosestLitFireSource(
-            Coord2d playerPos, double radius, long excludeId, Iterable<FireSourceProbe> sources) {
-        if (playerPos == null || sources == null)
+            Coord2d origin, double radius, long excludeId, Iterable<FireSourceProbe> sources) {
+        if (origin == null || sources == null)
             return null;
         FireSourceProbe closest = null;
         double closestDist = Double.MAX_VALUE;
@@ -835,7 +854,7 @@ public class LightObject implements Action {
                 continue;
             if ((src.modelAttr & config.fireFlag) == 0)
                 continue;
-            double dist = src.rc.dist(playerPos);
+            double dist = src.rc.dist(origin);
             if (dist > radius)
                 continue;
             if (dist < closestDist) {
@@ -847,17 +866,23 @@ public class LightObject implements Action {
     }
 
     private Gob findLitFireSource() {
-        return findLitFireSource(Double.POSITIVE_INFINITY, Long.MIN_VALUE, true);
+        Gob player = NUtils.player();
+        if (player == null)
+            return null;
+        return findLitFireSource(player.rc, Double.POSITIVE_INFINITY, Long.MIN_VALUE, true);
     }
 
     private Gob findLitFireSourceNear(Gob exclude) {
-        long excludeId = exclude == null ? Long.MIN_VALUE : exclude.id;
-        return findLitFireSource(NEIGHBOR_STICK_RADIUS, excludeId, false);
-    }
-
-    private Gob findLitFireSource(double radius, long excludeId, boolean excludeAllTargets) {
         Gob player = NUtils.player();
         if (player == null)
+            return null;
+        Coord2d origin = (exclude != null && exclude.rc != null) ? exclude.rc : player.rc;
+        long excludeId = exclude == null ? Long.MIN_VALUE : exclude.id;
+        return findLitFireSource(origin, NEIGHBOR_STICK_RADIUS, excludeId, false);
+    }
+
+    private Gob findLitFireSource(Coord2d origin, double radius, long excludeId, boolean excludeAllTargets) {
+        if (origin == null)
             return null;
         ArrayList<Gob> sources = Finder.findGobs(FIRE_SOURCE_ALIAS);
         ArrayList<FireSourceProbe> probes = new ArrayList<>();
@@ -870,7 +895,7 @@ public class LightObject implements Action {
             probes.add(new FireSourceProbe(gob.id, gob.ngob.name, gob.ngob.getModelAttribute(), gob.rc));
             byId.put(gob.id, gob);
         }
-        FireSourceProbe picked = pickClosestLitFireSource(player.rc, radius, excludeId, probes);
+        FireSourceProbe picked = pickClosestLitFireSource(origin, radius, excludeId, probes);
         return picked == null ? null : byId.get(picked.id);
     }
 

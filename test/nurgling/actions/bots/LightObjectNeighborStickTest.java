@@ -103,10 +103,13 @@ class LightObjectNeighborStickTest {
 
     @Test
     void doesNotFallThroughToFirebrandWhileNeighborSourceAndBranchRemain() {
-        // lightWithBranches runs only after this predicate is false for the gob.
+        // Neighbor-stick keeps the gob until retry is false (no source/branch or already lit)
+        // or the no-progress bound trips while a source and branch still exist.
         assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
         assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(0));
         assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(1));
+        assertTrue(LightObject.shouldGiveUpNeighborStickNoProgress(
+                LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS));
     }
 
     @Test
@@ -138,6 +141,31 @@ class LightObjectNeighborStickTest {
     void givesUpNeighborStickAfterBoundedNoProgress() {
         assertTrue(LightObject.shouldGiveUpNeighborStickNoProgress(
                 LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS));
+    }
+
+    @Test
+    void nextNoProgressIncrementsOnlyWhileSourceRemains() {
+        assertEquals(1, LightObject.nextNeighborStickNoProgress(0, false, true));
+        assertEquals(2, LightObject.nextNeighborStickNoProgress(1, false, true));
+        assertEquals(1, LightObject.nextNeighborStickNoProgress(1, false, false));
+        assertEquals(0, LightObject.nextNeighborStickNoProgress(0, false, false));
+    }
+
+    @Test
+    void nextNoProgressResetsWhenStickLights() {
+        assertEquals(0, LightObject.nextNeighborStickNoProgress(2, true, true));
+        assertEquals(0, LightObject.nextNeighborStickNoProgress(2, true, false));
+    }
+
+    @Test
+    void neighborSearchUsesTargetOriginSoOppositeNeighborIsStillFound() {
+        Coord2d target = Coord2d.of(0, 0);
+        Coord2d playerAtDeadSource = Coord2d.of(RADIUS, 0);
+        LightObject.FireSourceProbe opposite = kiln(3, -4 * MCache.tilesz.x, 1);
+        assertNotNull(LightObject.pickClosestLitFireSource(
+                target, RADIUS, 1L, Collections.singletonList(opposite)));
+        assertNull(LightObject.pickClosestLitFireSource(
+                playerAtDeadSource, RADIUS, 1L, Collections.singletonList(opposite)));
     }
 
     private static LightObject.FireSourceProbe kiln(long id, double x, int attr) {
