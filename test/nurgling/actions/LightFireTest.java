@@ -33,6 +33,7 @@ class LightFireTest {
         assertTrue(LightFire.isLightFireRecipe("Light fire"));
         assertTrue(LightFire.isLightFireRecipe("light fire"));
         assertFalse(LightFire.isLightFireRecipe("Wrought Iron"));
+        assertFalse(LightFire.isLightFireRecipe("Pyrite Spark"));
         assertFalse(LightFire.isLightFireRecipe(null));
     }
 

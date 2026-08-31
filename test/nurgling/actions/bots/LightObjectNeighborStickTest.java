@@ -168,6 +168,22 @@ class LightObjectNeighborStickTest {
                 playerAtDeadSource, RADIUS, 1L, Collections.singletonList(opposite)));
     }
 
+    @Test
+    void readyStickThatDoesNotLightTargetStillRetriesWhileSourceAndBranchRemain() {
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(0));
+        assertFalse(LightObject.shouldExitNeighborStickAfterAttempt(false, true, true, 0));
+    }
+
+    @Test
+    void exitNeighborStickAfterAttemptWhenLitOrNoSourceOrNoBranchOrGiveUp() {
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(true, true, true, 0));
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(false, false, true, 0));
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(false, true, false, 0));
+        assertTrue(LightObject.shouldExitNeighborStickAfterAttempt(
+                false, true, true, LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS));
+    }
+
     private static LightObject.FireSourceProbe kiln(long id, double x, int attr) {
         return new LightObject.FireSourceProbe(id, KILN, attr, Coord2d.of(x, 0));
     }

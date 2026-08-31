@@ -30,6 +30,12 @@ import java.util.Map;
 public class LightFire implements Action {
     
     private final Gob firedGob;
+    private final String recipeName;
+    private final boolean useBranches;
+
+    public static final String RECIPE_LIGHT_FIRE = "Light fire";
+    public static final String RECIPE_PYRITE_SPARK = "Pyrite Spark";
+    public static final String CAT_GOLD = "Cat Gold";
 
     // Maximum attempts to light fire with branches before failing
     private static final int MAX_ATTEMPTS = 5;
@@ -66,7 +72,17 @@ public class LightFire implements Action {
      * @param firedGob the object to light fire on
      */
     public LightFire(Gob firedGob) {
+        this(firedGob, RECIPE_LIGHT_FIRE, true);
+    }
+
+    public static LightFire pyriteSpark(Gob firedGob) {
+        return new LightFire(firedGob, RECIPE_PYRITE_SPARK, false);
+    }
+
+    private LightFire(Gob firedGob, String recipeName, boolean useBranches) {
         this.firedGob = firedGob;
+        this.recipeName = recipeName;
+        this.useBranches = useBranches;
     }
     
 
@@ -195,7 +211,32 @@ public class LightFire implements Action {
     }
 
     public static boolean isLightFireRecipe(String name) {
-        return name != null && name.equalsIgnoreCase("Light fire");
+        return isRecipe(name, RECIPE_LIGHT_FIRE);
+    }
+
+    public static boolean isPyriteSparkRecipe(String name) {
+        return isRecipe(name, RECIPE_PYRITE_SPARK);
+    }
+
+    public static boolean isRecipe(String name, String expected) {
+        return name != null && expected != null && name.equalsIgnoreCase(expected);
+    }
+
+    public static boolean shouldSkipPyriteSparkTier(boolean hasCatGold, boolean hasRecipe) {
+        return !hasCatGold || !hasRecipe;
+    }
+
+    public static MenuGrid.Pagina findRecipePagina(NGameUI gui, String recipeName) {
+        if (gui == null || gui.menu == null || recipeName == null)
+            return null;
+        for (MenuGrid.Pagina pb : gui.menu.paginae) {
+            try {
+                if (pb.button() != null && isRecipe(pb.button().name(), recipeName))
+                    return pb;
+            } catch (Loading ignored) {
+            }
+        }
+        return null;
     }
 
     public static boolean craftWaitDone(boolean hasHandItem, boolean hasProg, int ticks, int maxTicks) {
@@ -218,29 +259,43 @@ public class LightFire implements Action {
         return hasHand && leftoverClocksCleared(progWidgetVisible);
     }
 
-    private int countInventoryBranches(NGameUI gui) throws InterruptedException {
+    private int countInventoryItems(NGameUI gui, String name) throws InterruptedException {
         int n = 0;
-        for (WItem it : gui.getInventory().getItems("Branch")) {
+        for (WItem it : gui.getInventory().getItems(name)) {
             GItem.Amount amount = ((NGItem) it.item).getInfo(GItem.Amount.class);
             n += (amount != null && amount.itemnum() > 0) ? amount.itemnum() : 1;
         }
         return n;
     }
 
-    private Results lightWithBranches(NGameUI gui) throws InterruptedException {
-        NArea branchArea = NContext.findSpec(Specialisation.SpecName.fuel.toString(), "Branch");
+    private int countInventoryBranches(NGameUI gui) throws InterruptedException {
+        return countInventoryItems(gui, "Branch");
+    }
 
-        // Last resort when no branch area is available (never defined, or its grids are not loaded):
-        // fall back to the branches we are already carrying. Every "Light fire" craft eats 2 branches,
-        // so the carried stock alone decides the budget: 2 branches -> 1 attempt, 4 -> 2, 6 -> 3, ...
-        boolean inventoryOnly = (branchArea == null);
+    private Results lightWithBranches(NGameUI gui) throws InterruptedException {
+        NArea branchArea = null;
+        boolean inventoryOnly = false;
         int maxAttempts = MAX_ATTEMPTS;
-        if (inventoryOnly) {
-            maxAttempts = countInventoryBranches(gui) / 2;
-            if (maxAttempts < 1) {
-                gui.error("No area with branches and less than 2 branches in inventory");
-                return Results.ERROR("No branches available for fire lighting");
+        if (useBranches) {
+            branchArea = NContext.findSpec(Specialisation.SpecName.fuel.toString(), "Branch");
+
+            // Last resort when no branch area is available (never defined, or its grids are not loaded):
+            // fall back to the branches we are already carrying. Every "Light fire" craft eats 2 branches,
+            // so the carried stock alone decides the budget: 2 branches -> 1 attempt, 4 -> 2, 6 -> 3, ...
+            inventoryOnly = (branchArea == null);
+            if (inventoryOnly) {
+                maxAttempts = countInventoryBranches(gui) / 2;
+                if (maxAttempts < 1) {
+                    gui.error("No area with branches and less than 2 branches in inventory");
+                    return Results.ERROR("No branches available for fire lighting");
+                }
             }
+        } else {
+            int catGold = countInventoryItems(gui, CAT_GOLD);
+            if (catGold < 1) {
+                return Results.ERROR("No Cat Gold available for Pyrite Spark");
+            }
+            maxAttempts = Math.min(MAX_ATTEMPTS, catGold);
         }
 
 
@@ -253,8 +308,9 @@ public class LightFire implements Action {
 
             // Re-read the live count every attempt: crafting without the branches actually present
             // would block forever on the progress waits below.
-            if (needsFuelArea(countInventoryBranches(gui)))
-            {
+            if (useBranches) {
+                if (needsFuelArea(countInventoryBranches(gui)))
+                {
                 if (inventoryOnly)
                 {
                     // Nothing left to craft with, and no stockpile to refill from.
@@ -306,6 +362,10 @@ public class LightFire implements Action {
 
                 TakeItemsFromPile takeAction = new TakeItemsFromPile(branchPile, stockpile, 2);
                 takeAction.run(gui);
+                }
+            } else if (countInventoryItems(gui, CAT_GOLD) < 1) {
+                gui.error("Ran out of Cat Gold while lighting");
+                return Results.ERROR("Out of Cat Gold after " + (attempts - 1) + " attempts");
             }
 
             // Go to the object to light
@@ -371,22 +431,12 @@ public class LightFire implements Action {
 
     private void craftLightFire(NGameUI gui) throws InterruptedException {
         NMakewindow makeWidget = gui.craftwnd != null ? gui.craftwnd.makeWidget : null;
-        if (makeWidget == null || !isLightFireRecipe(makeWidget.rcpnm)) {
-            MenuGrid.Pagina lightPag = null;
-            if (gui.menu != null) {
-                for (MenuGrid.Pagina pb : gui.menu.paginae) {
-                    try {
-                        if (pb.button() != null && isLightFireRecipe(pb.button().name())) {
-                            lightPag = pb;
-                            break;
-                        }
-                    } catch (Loading ignored) {
-                    }
-                }
-            }
+        if (makeWidget == null || !isRecipe(makeWidget.rcpnm, recipeName)) {
+            MenuGrid.Pagina lightPag = findRecipePagina(gui, recipeName);
             if (lightPag == null || lightPag.button() == null)
                 return;
             lightPag.button().use(new MenuGrid.Interaction());
+            final String wanted = recipeName;
             NUtils.addTask(new NTask() {
                 {
                     infinite = false;
@@ -396,13 +446,13 @@ public class LightFire implements Action {
                 @Override
                 public boolean check() {
                     return gui.craftwnd != null && gui.craftwnd.makeWidget != null
-                            && isLightFireRecipe(gui.craftwnd.makeWidget.rcpnm);
+                            && isRecipe(gui.craftwnd.makeWidget.rcpnm, wanted);
                 }
             });
         }
 
         makeWidget = gui.craftwnd != null ? gui.craftwnd.makeWidget : null;
-        if (makeWidget == null || !isLightFireRecipe(makeWidget.rcpnm))
+        if (makeWidget == null || !isRecipe(makeWidget.rcpnm, recipeName))
             return;
 
         if (gui.vhand != null) {

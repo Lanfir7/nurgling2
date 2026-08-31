@@ -32,8 +32,9 @@ import java.util.HashMap;
  *
  * <p>Priority order: embers → equipped lit torch → unlit torch + brazier → in-view lit candelabrum →
  * torchpost (lit) → torchpost (unlit) + brazier → neighbor lit workstation + inventory branch →
- * branches → (bot path only, last resort) fetch a lit candelabrum from its designated spec area.
- * The area fetch is last because it can be a long round-trip; every nearby option is preferred over it.
+ * Pyrite Spark (Cat Gold) → branches → (bot path only, last resort) fetch a lit candelabrum from its
+ * designated spec area. The area fetch is last because it can be a long round-trip; every nearby option
+ * is preferred over it.
  *
  * <p>Behavior contract:
  * <ul>
@@ -69,6 +70,10 @@ public class LightObject implements Action {
 
     /** Consecutive failed stick-lights before leaving an unlit gob for firebrand. */
     public static final int NEIGHBOR_STICK_MAX_NO_PROGRESS = 3;
+
+    public static final int NEIGHBOR_STICK_PRIORITY = 6;
+    public static final int PYRITE_SPARK_PRIORITY = 7;
+    public static final int BRANCH_FIREBRAND_PRIORITY = 8;
 
     private static final int SOURCE_EQUIPMENT = 0;
     private static final int SOURCE_INVENTORY = 1;
@@ -225,7 +230,11 @@ public class LightObject implements Action {
         lightWithNeighborStick(gui, remaining);
         if (remaining.isEmpty()) return Results.SUCCESS();
 
-        // Priority 7: Branches — always per-gob, never batched (firebrand is single-use).
+        // Priority 7: Cat Gold → Pyrite Spark craft (same paginae/make path as Light fire).
+        lightWithPyriteSpark(gui, remaining);
+        if (remaining.isEmpty()) return Results.SUCCESS();
+
+        // Priority 8: Branches — always per-gob, never batched (firebrand is single-use).
         lightWithBranches(gui, remaining);
         if (remaining.isEmpty()) return Results.SUCCESS();
 
@@ -656,7 +665,15 @@ public class LightObject implements Action {
                     return;
                 if (LightFire.shouldDropFirebrand(gui.vhand != null, gui.prog != null))
                     dropLeftoverHand(gui);
-                break;
+                Gob updated = Finder.findGob(t.id);
+                boolean lit = updated != null && isLit(updated, config);
+                if (lit)
+                    remaining.remove(t);
+                noProgress = nextNeighborStickNoProgress(noProgress, true, findLitFireSourceNear(t) != null);
+                WItem leftoverBranch = gui.getInventory().getItem("Branch");
+                if (shouldExitNeighborStickAfterAttempt(
+                        lit, findLitFireSourceNear(t) != null, leftoverBranch != null, noProgress))
+                    break;
             }
         }
     }
@@ -715,7 +732,48 @@ public class LightObject implements Action {
         return prev;
     }
 
-    // --- Priority 7: Branches (never batched — re-craft a firebrand per gob) ---
+    /**
+     * After a stick-light attempt, leave this gob only when it is lit, there is nothing left to light
+     * from, or the no-progress bound tripped. A ready stick that did not ignite the target is not give-up.
+     */
+    public static boolean shouldExitNeighborStickAfterAttempt(
+            boolean targetLit, boolean hasSource, boolean hasBranch, int noProgress) {
+        if (targetLit)
+            return true;
+        if (shouldGiveUpNeighborStickNoProgress(noProgress))
+            return true;
+        return !shouldRetryNeighborStick(hasSource, hasBranch, targetLit);
+    }
+
+    // --- Priority 7: Cat Gold / Pyrite Spark (never batched — craft is single-use) ---
+
+    private void lightWithPyriteSpark(NGameUI gui, ArrayList<Gob> remaining) throws InterruptedException {
+        if (LightFire.shouldSkipPyriteSparkTier(
+                gui.getInventory().getItem(LightFire.CAT_GOLD) != null,
+                LightFire.findRecipePagina(gui, LightFire.RECIPE_PYRITE_SPARK) != null))
+            return;
+        for (Gob t : new ArrayList<>(remaining)) {
+            LightConfig config = getConfig(t.ngob.name);
+            if (config == null)
+                continue;
+            if (isLit(t, config)) {
+                remaining.remove(t);
+                continue;
+            }
+            if (gui.getInventory().getItem(LightFire.CAT_GOLD) == null)
+                break;
+            Results lightResult = LightFire.pyriteSpark(t).run(gui);
+            if (!lightResult.IsSuccess()) {
+                gui.error("Failed to light with Pyrite Spark on: " + t.ngob.name);
+                continue;
+            }
+            Gob updated = Finder.findGob(t.id);
+            if (updated != null && isLit(updated, config))
+                remaining.remove(t);
+        }
+    }
+
+    // --- Priority 8: Branches (never batched — re-craft a firebrand per gob) ---
 
     private void lightWithBranches(NGameUI gui, ArrayList<Gob> remaining) throws InterruptedException {
         for (Gob t : new ArrayList<>(remaining)) {
