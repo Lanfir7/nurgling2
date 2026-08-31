@@ -32,6 +32,7 @@ public class GobContextRegistry {
         register(new EmptyBarrelsIntoCisternAction());
         register(new LoadVehicleAction());
         register(new UnloadVehicleAction());
+        register(new UnloadAnimalsAction());
         register(new SaveTreeLocationAction());
         register(new SaveBushLocationAction());
         register(new CutDownAreaAction());
