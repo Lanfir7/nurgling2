@@ -3,9 +3,14 @@ package nurgling;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Extra-inventory grouping and transfer, matching Ender's ExtInventory:
@@ -13,6 +18,8 @@ import java.util.Map;
  */
 public final class ExtraInvGroupTransfer {
     public static final int TRANSFER_COUNT = 1;
+    private static final Set<String> EXTERNAL_BAG_NAMES = Set.of(
+            "Creel", "Poacher's Pouch", "Leather Purse", "Silk Purse", "Seedbag");
 
     private ExtraInvGroupTransfer() {}
 
@@ -40,6 +47,74 @@ public final class ExtraInvGroupTransfer {
         List<Listed> out = new ArrayList<>();
         unpackInto(items, out);
         return out;
+    }
+
+    public static <T> List<T> walkListings(T root, Function<T, List<T>> children,
+                                           Predicate<T> transparent) {
+        List<T> out = new ArrayList<>();
+        walkListingsInto(root, children, transparent, out);
+        return out;
+    }
+
+    public static <T> List<T> externalBagContents(List<T> candidates,
+                                                   Function<T, ?> identity,
+                                                   Function<T, String> name,
+                                                   Function<T, List<T>> children,
+                                                   Predicate<T> transparent) {
+        List<T> out = new ArrayList<>();
+        if (candidates == null) {
+            return out;
+        }
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (T candidate : candidates) {
+            Object candidateIdentity = candidate != null ? identity.apply(candidate) : null;
+            String candidateName = candidate != null ? name.apply(candidate) : null;
+            if (candidateIdentity == null || !seen.add(candidateIdentity)
+                    || candidateName == null || !EXTERNAL_BAG_NAMES.contains(candidateName)) {
+                continue;
+            }
+            List<T> nested = children.apply(candidate);
+            if (nested == null) {
+                continue;
+            }
+            for (T child : nested) {
+                out.addAll(walkListings(child, children, transparent));
+            }
+        }
+        return out;
+    }
+
+    private static <T> void walkListingsInto(T item, Function<T, List<T>> children,
+                                              Predicate<T> transparent, List<T> out) {
+        if (item == null) {
+            return;
+        }
+        List<T> nested = children.apply(item);
+        if (nested == null) {
+            nested = Collections.emptyList();
+        }
+        if (nested.isEmpty() || !transparent.test(item)) {
+            out.add(item);
+        }
+        for (T child : nested) {
+            walkListingsInto(child, children, transparent, out);
+        }
+    }
+
+    public static <T, R> List<R> uniqueTargets(List<T> items, Predicate<T> selected,
+                                                Function<T, R> target) {
+        LinkedHashSet<R> unique = new LinkedHashSet<>();
+        if (items != null) {
+            for (T item : items) {
+                if (selected.test(item)) {
+                    R resolved = target.apply(item);
+                    if (resolved != null) {
+                        unique.add(resolved);
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(unique);
     }
 
     private static void unpackInto(List<Listed> items, List<Listed> out) {

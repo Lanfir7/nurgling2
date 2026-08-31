@@ -628,26 +628,42 @@ public class Finder
             Collection<NHitBoxD> significantGobs) {
         ArrayList<Coord2d> candidates = new ArrayList<>();
 
-        Coord inchMax = area.b.sub(area.a).floor();
-        
-        // Create a test box to get actual rotated dimensions for margin calculation
+        Coord2d areaSize = area.b.sub(area.a);
+
+        // Derive the valid center range from the exact rotated bounds.  Using half of the
+        // rounded width lets odd-sized piles protrude past the far edge of the area.
         NHitBoxD tempBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
         Coord2d rotatedUL = tempBox.getCircumscribedUL();
         Coord2d rotatedBR = tempBox.getCircumscribedBR();
-        Coord margin = rotatedBR.sub(rotatedUL).floor(2, 2);
-        // For hitboxes with odd dimensions (e.g. 11x11 = one full tile), the center must land
-        // on a half-integer tile center (5.5, 16.5, ...). Add 0.5 offset so the integer loop
-        // hits those positions instead of being snapped by the server.
-        double xOffset = ((rotatedBR.x - rotatedUL.x) % 2.0 > 0.5) ? 0.5 : 0.0;
-        double yOffset = ((rotatedBR.y - rotatedUL.y) % 2.0 > 0.5) ? 0.5 : 0.0;
 
-        List<Coord2d> offsets = orderCandidateOffsets(
-                candidateOffsets(margin.x, inchMax.x - margin.x, candidateStride),
-                candidateOffsets(margin.y, inchMax.y - margin.y, candidateStride), direction);
+        double minX = -rotatedUL.x;
+        double maxX = areaSize.x - rotatedBR.x;
+        double minY = -rotatedUL.y;
+        double maxY = areaSize.y - rotatedBR.y;
+        ArrayList<Double> xs = candidateOffsets(minX, maxX, candidateStride);
+        ArrayList<Double> ys = candidateOffsets(minY, maxY, candidateStride);
+
+        PileFillDirection effectiveDirection = direction == null
+                ? PileFillDirection.LEFT_TO_RIGHT : direction;
+        boolean verticalFill = effectiveDirection == PileFillDirection.TOP_TO_BOTTOM
+                || effectiveDirection == PileFillDirection.BOTTOM_TO_TOP;
+        for (NHitBoxD obstacle : significantGobs) {
+            Coord2d obstacleUL = obstacle.getCircumscribedUL();
+            Coord2d obstacleBR = obstacle.getCircumscribedBR();
+            if (verticalFill) {
+                addCandidateOffset(ys, obstacleUL.y - area.a.y - rotatedBR.y, minY, maxY);
+                addCandidateOffset(ys, obstacleBR.y - area.a.y - rotatedUL.y, minY, maxY);
+            } else {
+                addCandidateOffset(xs, obstacleUL.x - area.a.x - rotatedBR.x, minX, maxX);
+                addCandidateOffset(xs, obstacleBR.x - area.a.x - rotatedUL.x, minX, maxX);
+            }
+        }
+
+        List<Coord2d> offsets = orderCandidateOffsets(xs, ys, effectiveDirection);
         for (Coord2d offset : offsets) {
             boolean passed = true;
             NHitBoxD testGobBox = new NHitBoxD(hitBox.begin, hitBox.end,
-                    area.a.add(offset.x + xOffset, offset.y + yOffset), angle);
+                    area.a.add(offset), angle);
             for ( NHitBoxD significantHitbox : significantGobs )
                 if(significantHitbox.intersects(testGobBox,false))
                     passed = false;
@@ -660,6 +676,21 @@ public class Finder
             }
         }
         return candidates;
+    }
+
+    private static void addCandidateOffset(List<Double> offsets, double value,
+                                           double min, double max) {
+        if (value < min - 0.001 || value > max + 0.001) {
+            return;
+        }
+        double bounded = Math.max(min, Math.min(max, value));
+        for (double existing : offsets) {
+            if (Math.abs(existing - bounded) <= 0.001) {
+                return;
+            }
+        }
+        offsets.add(bounded);
+        Collections.sort(offsets);
     }
 
     static List<Coord2d> orderCandidateOffsets(List<Double> xs, List<Double> ys,

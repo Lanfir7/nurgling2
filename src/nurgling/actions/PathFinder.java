@@ -11,6 +11,7 @@ import nurgling.tools.NParser;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 import java.util.function.LongFunction;
+import java.util.function.Predicate;
 
 import static nurgling.pf.Graph.getPath;
 
@@ -34,6 +35,7 @@ public class PathFinder implements Action {
     public boolean skipDN = false;
     public int maxMul = 200;
     Gob gobInStartPos = null;
+    private boolean startWasBlocked = false;
     double badDir = Double.MAX_VALUE;
     private final ArrayList<Gob> additionalObstacles = new ArrayList<>();
 
@@ -185,8 +187,46 @@ public class PathFinder implements Action {
         return construct(false);
     }
 
+    boolean startWasBlocked() {
+        return startWasBlocked;
+    }
+
+    static Coord nearestFreeCell(Coord start, int width, int height, Predicate<Coord> isFree) {
+        if (start == null || start.x < 0 || start.y < 0 || start.x >= width || start.y >= height) {
+            return null;
+        }
+
+        Coord[] directions = {
+                Coord.of(1, 0), Coord.of(0, 1), Coord.of(-1, 0), Coord.of(0, -1),
+                Coord.of(1, 1), Coord.of(-1, 1), Coord.of(-1, -1), Coord.of(1, -1)
+        };
+        boolean[][] visited = new boolean[width][height];
+        ArrayDeque<Coord> queue = new ArrayDeque<>();
+        queue.add(start);
+        visited[start.x][start.y] = true;
+
+        while (!queue.isEmpty()) {
+            Coord current = queue.removeFirst();
+            if (isFree.test(current)) {
+                return current;
+            }
+            for (Coord direction : directions) {
+                Coord next = current.add(direction);
+                if (next.x < 0 || next.y < 0 || next.x >= width || next.y >= height ||
+                        visited[next.x][next.y]) {
+                    continue;
+                }
+                visited[next.x][next.y] = true;
+                queue.addLast(next);
+            }
+        }
+        return null;
+    }
+
     public LinkedList<Graph.Vertex> construct(boolean test) throws InterruptedException {
         LinkedList<Graph.Vertex> path = new LinkedList<>();
+        startWasBlocked = false;
+        gobInStartPos = null;
         int mul = 1;
         while (path.isEmpty() && mul < maxMul) {
             if(pfmap!=null && pfmap.lastMul)
@@ -325,8 +365,14 @@ public class PathFinder implements Action {
                     return false;
                 }
                 ArrayList<Coord> st_poses = findFreeNear(start_pos, true);
-                if (st_poses.isEmpty())
-                    return false;
+                if (st_poses.isEmpty()) {
+                    Coord freeStart = nearestFreeCell(start_pos, pfmap.size, pfmap.size,
+                            cell -> cells[cell.x][cell.y].val == 0);
+                    if (freeStart == null)
+                        return false;
+                    st_poses.add(freeStart);
+                }
+                startWasBlocked = true;
                 if (cells[start_pos.x][start_pos.y].content.size() == 1 || (cells[start_pos.x][start_pos.y].content.size() == 2 && cells[start_pos.x][start_pos.y].content.contains((long) -1)))
                     for (Long id : cells[start_pos.x][start_pos.y].content) {
                         if (id != -1) {

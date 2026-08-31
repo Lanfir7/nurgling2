@@ -163,6 +163,11 @@ public class PileMaker implements Action{
         return freeStart != null && move.run(freeStart);
     }
 
+    static boolean exitBlockedStart(boolean blocked, Coord2d freeStart,
+                                    DirectMove move) throws InterruptedException {
+        return !blocked || exitStartObstacle(freeStart, move);
+    }
+
     static boolean retryAfterExit(MovementAttempt approach, MovementAttempt exit)
             throws InterruptedException {
         if (approach.run()) {
@@ -172,7 +177,7 @@ public class PileMaker implements Action{
     }
 
     static Coord2d freeStartTarget(PathFinder preview) {
-        if (preview == null || preview.gobInStartPos == null ||
+        if (preview == null || !preview.startWasBlocked() ||
                 preview.pfmap == null || preview.start_pos == null) {
             return null;
         }
@@ -239,17 +244,15 @@ public class PileMaker implements Action{
     private boolean approachCandidateOnce(NGameUI gui, Gob dummy, NHitBox hitbox)
             throws InterruptedException {
         PathFinder preview = new PathFinder(dummy, true);
-        if (preview.construct(true) == null && !preview.dn) {
+        boolean missingPreviewPath = preview.construct(true) == null && !preview.dn;
+        boolean blockedStart = preview.startWasBlocked();
+        if (!blockedStart && missingPreviewPath) {
             return false;
         }
 
-        Gob player = NUtils.player();
-        Gob startObstacle = preview.gobInStartPos;
-        if (player != null && player.rc != null && startObstacle != null &&
-                startObstacle.ngob != null && startObstacle.ngob.name != null &&
-                new NAlias("stockpile").matches(startObstacle.ngob.name)) {
+        if (blockedStart) {
             Coord2d freeStart = freeStartTarget(preview);
-            if (!exitStartObstacle(freeStart,
+            if (!exitBlockedStart(true, freeStart,
                     target -> new GoTo(target).run(gui).IsSuccess())) {
                 return false;
             }
@@ -264,7 +267,7 @@ public class PileMaker implements Action{
             return false;
         }
 
-        player = NUtils.player();
+        Gob player = NUtils.player();
         if (player == null || player.rc == null) {
             return false;
         }

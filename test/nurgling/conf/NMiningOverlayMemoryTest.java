@@ -1,5 +1,7 @@
 package nurgling.conf;
 
+import haven.Coord;
+import haven.MCache;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +16,19 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NMiningOverlayMemoryTest {
+
+    @Test
+    void staleCachedGridCannotRestoreSafeMiningMarks() {
+        MCache map = new MCache(null);
+        MCache.Grid stale = map.new Grid(Coord.of(5, 7));
+        stale.id = 42L;
+        map.grids.put(stale.gc, stale);
+        Coord tile = stale.ul.add(3, 4);
+
+        assertNull(NMiningOverlayMemory.ofWorld(map, tile));
+        assertNull(NMiningOverlayMemory.toWorld(map,
+                new NMiningOverlayMemory.TileRef(stale.id, 3, 4)));
+    }
 
     @Test
     void jsonRoundTripsNumbersAndGreens() {

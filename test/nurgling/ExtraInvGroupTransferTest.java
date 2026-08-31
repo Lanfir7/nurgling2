@@ -12,6 +12,142 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExtraInvGroupTransferTest {
 
+    private static final class NestedItem {
+        final String name;
+        final boolean transparent;
+        final boolean leftover;
+        final Object transferTarget;
+        final List<NestedItem> contents;
+
+        NestedItem(String name, boolean transparent, NestedItem... contents) {
+            this(name, transparent, false, null, contents);
+        }
+
+        NestedItem(String name, boolean transparent, boolean leftover,
+                   Object transferTarget, NestedItem... contents) {
+            this.name = name;
+            this.transparent = transparent;
+            this.leftover = leftover;
+            this.transferTarget = transferTarget != null ? transferTarget : this;
+            this.contents = List.of(contents);
+        }
+    }
+
+    @Test
+    void inventoryContainerAndItsContentsAreBothListed() {
+        NestedItem seeds = new NestedItem("Seeds of Barley", false);
+        NestedItem seedbag = new NestedItem("Seedbag", false, seeds);
+
+        assertEquals(List.of(seedbag, seeds), ExtraInvGroupTransfer.walkListings(
+                seedbag, item -> item.contents, item -> item.transparent));
+    }
+
+    @Test
+    void stackWrapperIsHiddenWhenItsContentsAreListed() {
+        NestedItem seeds = new NestedItem("Seeds of Barley", false);
+        NestedItem stack = new NestedItem("Stack wrapper", true, seeds);
+
+        assertEquals(List.of(seeds), ExtraInvGroupTransfer.walkListings(
+                stack, item -> item.contents, item -> item.transparent));
+    }
+
+    @Test
+    void nestedStackLeftoversResolveToUniqueTransferTargets() {
+        Object stackWrapper = new Object();
+        Object looseTarget = new Object();
+        NestedItem stackedSeedA = new NestedItem(
+                "Seeds of Barley", false, true, stackWrapper);
+        NestedItem stackedSeedB = new NestedItem(
+                "Seeds of Barley", false, true, stackWrapper);
+        NestedItem stack = new NestedItem(
+                "Stack wrapper", true, false, null, stackedSeedA, stackedSeedB);
+        NestedItem looseSeed = new NestedItem(
+                "Seeds of Barley", false, true, looseTarget);
+        NestedItem seedbag = new NestedItem("Seedbag", false, stack, looseSeed);
+
+        List<NestedItem> listed = ExtraInvGroupTransfer.walkListings(
+                seedbag, item -> item.contents, item -> item.transparent);
+        List<Object> targets = ExtraInvGroupTransfer.uniqueTargets(
+                listed,
+                item -> item.leftover && item.name.equals("Seeds of Barley"),
+                item -> item.transferTarget);
+
+        assertEquals(List.of(stackWrapper, looseTarget), targets);
+    }
+
+    @Test
+    void externalBagIsHiddenWhileItsContentsAreListed() {
+        NestedItem seeds = new NestedItem("Seeds of Barley", false);
+        NestedItem seedbag = new NestedItem("Seedbag", false, seeds);
+        NestedItem hammer = new NestedItem("Hammer", false);
+
+        List<NestedItem> listed = ExtraInvGroupTransfer.externalBagContents(
+                List.of(seedbag, hammer),
+                item -> item.transferTarget,
+                item -> item.name,
+                item -> item.contents,
+                item -> item.transparent);
+
+        assertEquals(List.of(seeds), listed);
+    }
+
+    @Test
+    void unnamedEquipmentCandidateIsIgnored() {
+        NestedItem unnamed = new NestedItem(null, false);
+
+        List<NestedItem> listed = ExtraInvGroupTransfer.externalBagContents(
+                List.of(unnamed),
+                item -> item.transferTarget,
+                item -> item.name,
+                item -> item.contents,
+                item -> item.transparent);
+
+        assertTrue(listed.isEmpty());
+    }
+
+    @Test
+    void onlyApprovedBeltAndPouchContainersContributeContents() {
+        NestedItem creelContent = new NestedItem("Fish", false);
+        NestedItem poacherContent = new NestedItem("Raw Meat", false);
+        NestedItem leatherContent = new NestedItem("Coin", false);
+        NestedItem silkContent = new NestedItem("Gemstone", false);
+        NestedItem seedContent = new NestedItem("Seeds of Wheat", false);
+        NestedItem key = new NestedItem("Key", false);
+
+        List<NestedItem> listed = ExtraInvGroupTransfer.externalBagContents(
+                List.of(
+                        new NestedItem("Creel", false, creelContent),
+                        new NestedItem("Poacher's Pouch", false, poacherContent),
+                        new NestedItem("Leather Purse", false, leatherContent),
+                        new NestedItem("Silk Purse", false, silkContent),
+                        new NestedItem("Seedbag", false, seedContent),
+                        new NestedItem("Keyring", false, key)),
+                item -> item.transferTarget,
+                item -> item.name,
+                item -> item.contents,
+                item -> item.transparent);
+
+        assertEquals(List.of(creelContent, poacherContent, leatherContent,
+                silkContent, seedContent), listed);
+    }
+
+    @Test
+    void duplicateEquipmentWrappersForSameBagAreCountedOnce() {
+        Object equippedBag = new Object();
+        NestedItem seeds = new NestedItem("Seeds of Barley", false);
+        NestedItem leftSlot = new NestedItem("Seedbag", false, false, equippedBag, seeds);
+        NestedItem rightSlot = new NestedItem("Seedbag", false, false, equippedBag, seeds);
+
+        List<NestedItem> listed = ExtraInvGroupTransfer.externalBagContents(
+                List.of(leftSlot, rightSlot),
+                item -> item.transferTarget,
+                item -> item.name,
+                item -> item.contents,
+                item -> item.transparent);
+
+        assertEquals(List.of(seeds), listed);
+    }
+
     @Test
     void unpacksStackIntoIndividualItems() {
         ExtraInvGroupTransfer.Listed stack = ExtraInvGroupTransfer.Listed.stack(

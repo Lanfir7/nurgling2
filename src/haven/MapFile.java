@@ -1374,8 +1374,11 @@ public class MapFile {
 	    synchronized(ccache) {
 		bc = ccache.get(sc);
 	    }
-	    if((bc != null) && (bc.cur == null))
-		bc.cur = grid0(id);
+	    if(bc != null) {
+		Cached cur = grid0(id);
+		if(bc.cur != cur)
+		    bc.cur = cur;
+	    }
 	}
 
 	private void include(Grid grid, Coord sc) {
@@ -2085,7 +2088,10 @@ public class MapFile {
 	Collection<MCache.Grid> grids = new ArrayList<>();
 	for(Coord off : inout) {
 	    Coord gc = cgc.add(off);
-	    grids.add(map.getgrid(gc));
+	    MCache.Grid grid = map.getgrid(gc);
+	    if(!grid.serverFresh)
+		throw(new MCache.LoadingMap(map, gc));
+	    grids.add(grid);
 	}
 	if(!grids.isEmpty()) {
 	    synchronized(procmon) {

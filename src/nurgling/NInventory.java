@@ -15,6 +15,7 @@ import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.tasks.*;
 import nurgling.tools.*;
+import nurgling.widgets.NEquipory;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -1516,39 +1517,93 @@ public class NInventory extends Inventory
 
     /** Walk inventory slots and unpack ItemStacks into individual listed items (Ender extra-inv). */
     private void collectInventoryGroups(Map<String, ItemGroup> itemGroupMap, boolean applyQualityFilter, Grouping grouping) {
-        for (Widget widget = this.child; widget != null; widget = widget.next) {
-            if (widget instanceof WItem) {
-                collectListedWItems((WItem) widget, wItem -> addToGroup(itemGroupMap, wItem, applyQualityFilter, grouping));
-            }
+        for (WItem wItem : panelListedItems()) {
+            addToGroup(itemGroupMap, wItem, applyQualityFilter, grouping);
         }
     }
 
-    private void collectListedWItems(WItem wItem, java.util.function.Consumer<WItem> sink) {
-        Widget contents = (wItem.item != null) ? wItem.item.contents : null;
+    private List<WItem> panelListedItems() {
+        List<WItem> listed = new ArrayList<>();
+        for (Widget widget = this.child; widget != null; widget = widget.next) {
+            if (widget instanceof WItem) {
+                listed.addAll(listedWItems((WItem) widget));
+            }
+        }
+        listed.addAll(ExtraInvGroupTransfer.externalBagContents(
+                externalBagCandidates(),
+                item -> item.item,
+                NInventory::listedItemName,
+                item -> listedChildren(item != null && item.item != null ? item.item.contents : null),
+                item -> item != null && item.item != null && item.item.contents instanceof ItemStack));
+        return listed;
+    }
+
+    private List<WItem> externalBagCandidates() {
+        List<WItem> candidates = new ArrayList<>();
+        NEquipory equipment = NUtils.getEquipment();
+        if (equipment == null || equipment.quickslots == null) {
+            return candidates;
+        }
+
+        WItem belt = equipment.quickslots[NEquipory.Slots.BELT.idx];
+        if (belt != null && belt.item != null && belt.item.contents instanceof Inventory) {
+            Inventory beltInventory = (Inventory) belt.item.contents;
+            for (Widget widget = beltInventory.child; widget != null; widget = widget.next) {
+                if (widget instanceof WItem) {
+                    candidates.add((WItem) widget);
+                }
+            }
+        }
+        addEquipCandidate(candidates, equipment, NEquipory.Slots.LFOOT.idx);
+        addEquipCandidate(candidates, equipment, NEquipory.Slots.RFOOT.idx);
+        return candidates;
+    }
+
+    private static void addEquipCandidate(List<WItem> candidates, NEquipory equipment, int slot) {
+        if (slot >= 0 && slot < equipment.quickslots.length && equipment.quickslots[slot] != null) {
+            candidates.add(equipment.quickslots[slot]);
+        }
+    }
+
+    private static String listedItemName(WItem item) {
+        if (item == null || !(item.item instanceof NGItem)) {
+            return null;
+        }
+        try {
+            return ((NGItem) item.item).name();
+        } catch (Loading loading) {
+            return null;
+        }
+    }
+
+    static List<WItem> listedWItems(WItem root) {
+        return ExtraInvGroupTransfer.walkListings(root,
+                item -> listedChildren(item != null && item.item != null ? item.item.contents : null),
+                item -> item != null && item.item != null && item.item.contents instanceof ItemStack);
+    }
+
+    private static List<WItem> listedChildren(Widget contents) {
+        List<WItem> children = new ArrayList<>();
         if (contents instanceof ItemStack) {
             ItemStack stack = (ItemStack) contents;
-            boolean any = false;
             for (GItem inner : stack.order) {
                 WItem innerW = stack.wmap.get(inner);
                 if (innerW != null) {
-                    collectListedWItems(innerW, sink);
-                    any = true;
+                    children.add(innerW);
                 }
             }
-            if (any) {
-                return;
+            if (!children.isEmpty()) {
+                return children;
             }
-            for (Widget ch = contents.child; ch != null; ch = ch.next) {
-                if (ch instanceof WItem) {
-                    collectListedWItems((WItem) ch, sink);
-                    any = true;
-                }
-            }
-            if (any) {
-                return;
+        } else if (!(contents instanceof Inventory)) {
+            return children;
+        }
+        for (Widget ch = contents.child; ch != null; ch = ch.next) {
+            if (ch instanceof WItem) {
+                children.add((WItem) ch);
             }
         }
-        sink.accept(wItem);
+        return children;
     }
 
     private void addToGroup(Map<String, ItemGroup> itemGroupMap, WItem wItem, boolean applyQualityFilter, Grouping grouping) {
@@ -2009,30 +2064,25 @@ public class NInventory extends Inventory
         Grouping grouping = leftoverGrouping != null ? leftoverGrouping : Grouping.NONE;
         String action = leftoverAction != null ? leftoverAction : "transfer";
         Object[] invxf2 = ExtraInvGroupTransfer.invxf2Args(transferTargetIds());
-        int sent = 0;
-        for (Widget widget = this.child; widget != null; widget = widget.next) {
-            if (!(widget instanceof WItem)) {
-                continue;
-            }
-            WItem w = (WItem) widget;
+        List<WItem> listed = panelListedItems();
+        List<GItem> targets = ExtraInvGroupTransfer.uniqueTargets(listed, w -> {
             if (!(w.item instanceof NGItem)) {
-                continue;
+                return false;
             }
             NGItem nitem = (NGItem) w.item;
             String name = nitem.name();
             if (name == null) {
-                continue;
+                return false;
             }
             if (!key.equals(ExtraInvGroupTransfer.groupKey(name, getItemQuality(nitem), grouping))) {
-                continue;
+                return false;
             }
-            if (w.item.contents instanceof ItemStack
-                    && !ExtraInvGroupTransfer.isLeftover(true, itemStackSize(w.item))) {
-                continue;
-            }
-            sendGroupItem(w.item, action, invxf2);
-            sent++;
+            return isLeftoverItem(w);
+        }, NInventory::leftoverTransferTarget);
+        for (GItem target : targets) {
+            sendGroupItem(target, action, invxf2);
         }
+        int sent = targets.size();
         if (ExtraInvGroupTransfer.leftoverWatchDone(leftoverPass, sent)) {
             leftoverGroupKey = null;
             leftoverAction = null;

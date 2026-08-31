@@ -10,6 +10,14 @@ public class FindNISBox extends NTask
         this.name = name;
     }
 
+    public FindNISBox(String name, int maxCounter)
+    {
+        this(name);
+        this.infinite = false;
+        this.maxCounter = maxCounter;
+        this.criticalOnTimeout = false;
+    }
+
     String name;
 
     @Override

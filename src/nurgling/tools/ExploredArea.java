@@ -7,17 +7,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
 
 /**
  * Tracks explored (visible) area on the minimap.
@@ -606,127 +599,53 @@ public class ExploredArea {
      * 6. Release lock
      */
     public void mergeAndSaveToFile(String filePath) throws IOException {
-        File file = new File(filePath);
-        File parentDir = file.getParentFile();
-        if (parentDir != null && !parentDir.exists()) {
-            parentDir.mkdirs();
-        }
-        
-        // Create lock file to coordinate access
-        File lockFile = new File(filePath + ".lock");
-        
-        try (RandomAccessFile raf = new RandomAccessFile(lockFile, "rw");
-             FileChannel channel = raf.getChannel()) {
-            
-            // Acquire exclusive lock (blocks until available)
-            FileLock lock = null;
-            try {
-                lock = channel.tryLock();
-                if (lock == null) {
-                    // Could not acquire lock immediately, wait a bit and try again
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                    lock = channel.tryLock();
-                }
-                
-                if (lock == null) {
-                    // Still no lock, fall back to simple save
-                    System.err.println("Could not acquire file lock, saving without merge");
-                    saveWithoutMerge(filePath);
-                    return;
-                }
-                
-                // Read existing data from file
-                Map<GridKey, boolean[]> diskData = readFromDisk(filePath);
-                
-                // Merge: OR the masks together
-                // First, copy disk data to merged result
-                Map<GridKey, boolean[]> mergedData = new HashMap<>();
-                for (Map.Entry<GridKey, boolean[]> entry : diskData.entrySet()) {
-                    boolean[] copy = new boolean[MASK_SIZE];
-                    System.arraycopy(entry.getValue(), 0, copy, 0, MASK_SIZE);
-                    mergedData.put(entry.getKey(), copy);
-                }
-                
-                // Then, merge in-memory data
-                for (Map.Entry<GridKey, boolean[]> entry : gridMasks.entrySet()) {
-                    GridKey key = entry.getKey();
-                    boolean[] memoryMask = entry.getValue();
-                    
-                    boolean[] existingMask = mergedData.get(key);
-                    if (existingMask == null) {
-                        // New grid, just add it
-                        boolean[] copy = new boolean[MASK_SIZE];
-                        System.arraycopy(memoryMask, 0, copy, 0, MASK_SIZE);
-                        mergedData.put(key, copy);
-                    } else {
-                        // Merge: OR the masks
-                        for (int i = 0; i < MASK_SIZE; i++) {
-                            existingMask[i] = existingMask[i] || memoryMask[i];
-                        }
-                    }
-                }
-                
-                // Write merged result to file
-                JSONObject doc = toJsonFromData(mergedData);
-                NFileUtils.writeAtomically(filePath, doc.toString());
-                
-                // Update in-memory data with merged result (so we have the latest data)
-                // This is important to prevent re-saving stale data
-                for (Map.Entry<GridKey, boolean[]> entry : mergedData.entrySet()) {
-                    GridKey key = entry.getKey();
-                    boolean[] mergedMask = entry.getValue();
-                    boolean[] currentMask = gridMasks.get(key);
-                    
-                    if (currentMask == null) {
-                        // Grid from disk that we didn't have
-                        gridMasks.put(key, mergedMask);
-                    } else {
-                        // Update our mask with merged data
-                        for (int i = 0; i < MASK_SIZE; i++) {
-                            currentMask[i] = mergedMask[i];
-                        }
-                    }
-                }
-                
-            } finally {
-                if (lock != null) {
-                    try {
-                        lock.release();
-                    } catch (Exception e) {
-                        // Ignore
-                    }
-                }
+        byte[] mergedBytes = NFileUtils.updateAtomically(filePath,
+                this::isValidStoredData,
+                (target, primary) -> toJsonFromData(mergeWithMemory(readFromBytes(primary)))
+                        .toString().getBytes(StandardCharsets.UTF_8));
+        Map<GridKey, boolean[]> mergedData = readFromBytes(mergedBytes);
+        for (Map.Entry<GridKey, boolean[]> entry : mergedData.entrySet()) {
+            GridKey key = entry.getKey();
+            boolean[] mergedMask = entry.getValue();
+            boolean[] currentMask = gridMasks.get(key);
+            if (currentMask == null) {
+                gridMasks.put(key, mergedMask);
+            } else {
+                System.arraycopy(mergedMask, 0, currentMask, 0, MASK_SIZE);
             }
-        } catch (Exception e) {
-            // If locking fails, fall back to simple save
-            System.err.println("Error during merge-save, falling back to simple save: " + e.getMessage());
-            saveWithoutMerge(filePath);
         }
     }
-    
-    /**
-     * Simple save without merge (fallback when locking fails).
-     */
-    private void saveWithoutMerge(String filePath) throws IOException {
-        NFileUtils.writeAtomically(filePath, toJson().toString());
-    }
-    
-    /**
-     * Read grid data from disk file.
-     */
-    private Map<GridKey, boolean[]> readFromDisk(String filePath) {
-        Map<GridKey, boolean[]> result = new HashMap<>();
 
+    private Map<GridKey, boolean[]> mergeWithMemory(Map<GridKey, boolean[]> diskData) {
+        Map<GridKey, boolean[]> mergedData = new HashMap<>();
+        for (Map.Entry<GridKey, boolean[]> entry : diskData.entrySet())
+            mergedData.put(entry.getKey(), Arrays.copyOf(entry.getValue(), MASK_SIZE));
+        for (Map.Entry<GridKey, boolean[]> entry : gridMasks.entrySet()) {
+            boolean[] mergedMask = mergedData.computeIfAbsent(entry.getKey(),
+                    ignored -> new boolean[MASK_SIZE]);
+            boolean[] memoryMask = entry.getValue();
+            for (int i = 0; i < MASK_SIZE; i++)
+                mergedMask[i] |= memoryMask[i];
+        }
+        return mergedData;
+    }
+
+    private boolean isValidStoredData(byte[] content) {
+        if(content == null || content.length == 0)
+            return false;
         try {
-            String content = NFileUtils.readWithBackupFallback(filePath);
-            if (content == null || content.isEmpty()) {
-                return result;
-            }
+            return new JSONObject(new String(content, StandardCharsets.UTF_8)).has("grids");
+        } catch(Exception e) {
+            return false;
+        }
+    }
 
+    private Map<GridKey, boolean[]> readFromBytes(byte[] bytes) {
+        Map<GridKey, boolean[]> result = new HashMap<>();
+        if(bytes == null || bytes.length == 0)
+            return result;
+        try {
+            String content = new String(bytes, StandardCharsets.UTF_8);
             JSONObject json = new JSONObject(content);
             if (!json.has("grids")) {
                 return result;

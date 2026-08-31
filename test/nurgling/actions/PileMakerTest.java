@@ -89,6 +89,23 @@ class PileMakerTest {
     }
 
     @Test
+    void blockedStartWithoutUniqueGobStillMovesToFreeStart() throws InterruptedException {
+        Coord2d freeStart = Coord2d.of(7.25, 3.5);
+        List<Coord2d> directMoves = new java.util.ArrayList<>();
+
+        boolean exited = PileMaker.exitBlockedStart(
+                true,
+                freeStart,
+                target -> {
+                    directMoves.add(target);
+                    return true;
+                });
+
+        assertTrue(exited);
+        assertEquals(Arrays.asList(freeStart), directMoves);
+    }
+
+    @Test
     void failedApproachExitsThenRetriesTheSameTargetOnce() throws InterruptedException {
         List<String> steps = new java.util.ArrayList<>();
         int[] approaches = {0};

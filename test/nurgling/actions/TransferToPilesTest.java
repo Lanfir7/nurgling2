@@ -1,6 +1,8 @@
 package nurgling.actions;
 
+import haven.Coord2d;
 import nurgling.ExtraInvGroupTransfer;
+import nurgling.pf.NHitBoxD;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -13,6 +15,74 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static nurgling.actions.TransferToPiles.PileMode;
 
 class TransferToPilesTest {
+
+    @Test
+    void ordinaryApproachFailureDoesNotSendCharacterOutOfPileZone() throws InterruptedException {
+        int[] exits = {0};
+        int[] retries = {0};
+
+        boolean recovered = TransferToPiles.recoverExistingPileApproach(
+                false,
+                () -> {
+                    exits[0]++;
+                    return true;
+                },
+                () -> {
+                    retries[0]++;
+                    return true;
+                });
+
+        assertFalse(recovered);
+        assertEquals(0, exits[0]);
+        assertEquals(0, retries[0]);
+    }
+
+    @Test
+    void blockedApproachMayExitAndRetryTheSamePile() throws InterruptedException {
+        boolean recovered = TransferToPiles.recoverExistingPileApproach(
+                true, () -> true, () -> true);
+
+        assertTrue(recovered);
+    }
+
+    @Test
+    void failedAvailablePileDoesNotAuthorizeCreatingAnotherPile() {
+        assertFalse(TransferToPiles.shouldCreateNewPile(true, true));
+        assertTrue(TransferToPiles.shouldCreateNewPile(true, false));
+        assertFalse(TransferToPiles.shouldCreateNewPile(false, false));
+    }
+
+    @Test
+    void existingPilePathReplansOnlyAfterFirstSegmentFailure() {
+        assertTrue(TransferToPiles.shouldReplanExistingPileLeg(0));
+        assertFalse(TransferToPiles.shouldReplanExistingPileLeg(1));
+    }
+
+    @Test
+    void diagonalHitboxOverlapRetreatsOnlyFarEnoughToOpenPile() {
+        NHitBoxD pile = new NHitBoxD(
+                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.of(0, 0), 0);
+        NHitBoxD player = new NHitBoxD(
+                Coord2d.of(-2, -2), Coord2d.of(2, 2), Coord2d.of(4, 4), 0);
+
+        Coord2d retreat = TransferToPiles.interactionRetreatPoint(player, pile, 0.5);
+
+        assertEquals(5.0, retreat.x, 0.000001);
+        assertEquals(4.0, retreat.y, 0.000001);
+    }
+
+    @Test
+    void nearTouchingHitboxesKeepServerInteractionClearance() {
+        NHitBoxD pile = new NHitBoxD(
+                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.of(0, 0), 0);
+        NHitBoxD player = new NHitBoxD(
+                Coord2d.of(-2, -2), Coord2d.of(2, 2), Coord2d.of(4.7, 0), 0);
+
+        Coord2d retreat = TransferToPiles.interactionRetreatPoint(player, pile, 0.5);
+
+        assertEquals(5.0, retreat.x, 0.000001);
+        assertEquals(0.0, retreat.y, 0.000001);
+    }
 
     @Test
     void mixedQuartzAndFlintUseTypeBulk() {

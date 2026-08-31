@@ -67,6 +67,54 @@ class FinderCandidateOrderTest {
         assertEquals(Coord2d.of(8.5, 2.5), candidates.get(0));
     }
 
+    @Test
+    void fiveWidePileUsesActualNeighbourEdgeInsteadOfLeavingOneUnitGap() {
+        NHitBox pile = new NHitBox(Coord2d.of(-2.5, -2.5),
+                Coord2d.of(2.5, 2.5), true);
+        List<NHitBoxD> serverShiftedColumn = Arrays.asList(
+                new NHitBoxD(pile.begin, pile.end, Coord2d.of(3.75, 2.5), 0),
+                new NHitBoxD(pile.begin, pile.end, Coord2d.of(3.75, 7.5), 0));
+
+        List<Coord2d> candidates = Finder.collectDenseFreePlaces(
+                new Pair<>(Coord2d.of(0, 0), Coord2d.of(20, 10)),
+                pile, 0, PileFillDirection.LEFT_TO_RIGHT, serverShiftedColumn);
+
+        assertEquals(Coord2d.of(8.75, 2.5), candidates.get(0));
+    }
+
+    @Test
+    void verticalFillUsesActualNeighbourEdgeInsteadOfLeavingOneUnitGap() {
+        NHitBox pile = new NHitBox(Coord2d.of(-2.5, -2.5),
+                Coord2d.of(2.5, 2.5), true);
+        List<NHitBoxD> serverShiftedRow = Arrays.asList(
+                new NHitBoxD(pile.begin, pile.end, Coord2d.of(2.5, 3.75), 0),
+                new NHitBoxD(pile.begin, pile.end, Coord2d.of(7.5, 3.75), 0));
+
+        List<Coord2d> candidates = Finder.collectDenseFreePlaces(
+                new Pair<>(Coord2d.of(0, 0), Coord2d.of(10, 20)),
+                pile, 0, PileFillDirection.TOP_TO_BOTTOM, serverShiftedRow);
+
+        assertEquals(Coord2d.of(2.5, 8.75), candidates.get(0));
+    }
+
+    @Test
+    void oddSizedPilesStartFullyInsideFarZoneEdges() {
+        NHitBox pile = new NHitBox(Coord2d.of(-2.5, -2.5),
+                Coord2d.of(2.5, 2.5), true);
+        Pair<Coord2d, Coord2d> zone = new Pair<>(
+                Coord2d.of(0, 0), Coord2d.of(20, 10));
+
+        List<Coord2d> fromRight = Finder.collectDenseFreePlaces(
+                zone, pile, 0, PileFillDirection.RIGHT_TO_LEFT,
+                java.util.Collections.emptyList());
+        List<Coord2d> fromBottom = Finder.collectDenseFreePlaces(
+                zone, pile, 0, PileFillDirection.BOTTOM_TO_TOP,
+                java.util.Collections.emptyList());
+
+        assertEquals(Coord2d.of(17.5, 2.5), fromRight.get(0));
+        assertEquals(Coord2d.of(2.5, 7.5), fromBottom.get(0));
+    }
+
     private static List<Double> xs() {
         return Arrays.asList(1.0, 2.0);
     }

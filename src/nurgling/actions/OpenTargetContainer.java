@@ -37,7 +37,9 @@ public class OpenTargetContainer implements Action
         switch (name)
         {
             case "Stockpile":
-                gui.ui.core.addTask(new FindNISBox(name));
+                gui.ui.core.addTask(boundedStockpileWait
+                        ? new FindNISBox(name, 200)
+                        : new FindNISBox(name));
                 break;
             case "Barter Stand":
                 gui.ui.core.addTask(new FindBarterStand());
@@ -67,10 +69,13 @@ public class OpenTargetContainer implements Action
             default:
                 gui.ui.core.addTask(new FindNInventory(name));
         }
-        if ("Stockpile".equals(name) && gui.getStockpile() != null) {
-            gui.getStockpile().parentGob = gob;
+        if ("Stockpile".equals(name)) {
+            NISBox stockpile = gui.getStockpile();
+            if (stockpile == null)
+                return Results.FAIL();
+            stockpile.parentGob = gob;
             monitoring.StockpileStorageTracker.observeOpenPile(
-                    gob, gui.getStockpile().stockpileItemName(), gui.getStockpile().stockpileCount());
+                    gob, stockpile.stockpileItemName(), stockpile.stockpileCount());
         }
         if(cont!=null)
         {
@@ -124,6 +129,12 @@ public class OpenTargetContainer implements Action
         this.gob = gob;
     }
 
+    public OpenTargetContainer(String name, Gob gob, boolean boundedStockpileWait)
+    {
+        this(name, gob);
+        this.boundedStockpileWait = boundedStockpileWait;
+    }
+
     public OpenTargetContainer(Container container)
     {
         this.name = container.cap;
@@ -141,4 +152,5 @@ public class OpenTargetContainer implements Action
     String name;
     Gob gob;
     Container cont = null;
+    boolean boundedStockpileWait = false;
 }

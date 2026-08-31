@@ -191,7 +191,7 @@ public class NMiningOverlayMemory implements JConf {
         synchronized (map.grids) {
             g = map.grids.get(worldTile.div(MCache.cmaps));
         }
-        if (g == null) {
+        if (g == null || !g.isServerFresh()) {
             return null;
         }
         Coord local = worldTile.sub(g.ul);
@@ -203,7 +203,7 @@ public class NMiningOverlayMemory implements JConf {
             return null;
         }
         MCache.Grid g = map.findGrid(ref.gridId);
-        if (g == null) {
+        if (g == null || !g.isServerFresh()) {
             return null;
         }
         return g.ul.add(ref.lx, ref.ly);
