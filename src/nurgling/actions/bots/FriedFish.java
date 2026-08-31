@@ -129,7 +129,7 @@ public class FriedFish implements Action {
                 Gob.Overlay ol = gob.findol(Roastspit.class);
                 String content = ((Roastspit) ol.spr).getContent();
                 if (content != null) {
-                    while (!content.contains("raw")) {
+                    while (!FriedFishMaterials.isUncookedSpitContent(content)) {
                         new PathFinder(gob).run(gui);
                         new SelectFlowerAction("Carve", gob, ((Roastspit) ol.spr)).run(gui);
                         NUtils.addTask(new WaitPose(NUtils.player(), "gfx/borka/carving"));

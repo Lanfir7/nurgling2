@@ -57,6 +57,19 @@ class FriedFishMaterialsTest {
         assertTrue(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/meat-herring", 5));
         assertFalse(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/meat-herring-raw", 5));
         assertTrue(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/meat-herring-raw", 0));
+        assertFalse(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/rabbit-clean", 5));
+        assertFalse(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/chicken-cleaned", 5));
+        assertTrue(FriedFishMaterials.isSpitReadyToWork("gfx/invobjs/rabbit-clean", 0));
+    }
+
+    @Test
+    void uncookedSpitContentIncludesFishRawAndCleanCarcassOverlays() {
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/meat-herring-raw"));
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/rabbit-clean"));
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/chicken-cleaned"));
+        assertTrue(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/adder-clean"));
+        assertFalse(FriedFishMaterials.isUncookedSpitContent("gfx/invobjs/meat-herring"));
+        assertFalse(FriedFishMaterials.isUncookedSpitContent(null));
     }
 
     @Test
@@ -107,7 +120,9 @@ class FriedFishMaterialsTest {
         String src = new String(Files.readAllBytes(Paths.get("src/nurgling/actions/bots/FriedFish.java")),
                 StandardCharsets.UTF_8);
         assertTrue(src.contains("FriedFishMaterials.roastableRaw()"), src);
+        assertTrue(src.contains("FriedFishMaterials.isUncookedSpitContent"), src);
         assertTrue(src.contains("Please select area with raw fish or cleaned carcasses"), src);
         assertFalse(src.contains("VSpec.getAllFish()"), src);
+        assertFalse(src.contains("content.contains(\"raw\")"), src);
     }
 }
