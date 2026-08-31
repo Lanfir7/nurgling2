@@ -67,6 +67,9 @@ public class LightObject implements Action {
     /** Ctrl+Alt itemact so the server lights a held branch instead of stuffing it in as fuel. */
     public static final int NEIGHBOR_STICK_MODFLAGS = UI.MOD_CTRL | UI.MOD_META;
 
+    /** Consecutive failed stick-lights before leaving an unlit gob for firebrand. */
+    public static final int NEIGHBOR_STICK_MAX_NO_PROGRESS = 3;
+
     private static final int SOURCE_EQUIPMENT = 0;
     private static final int SOURCE_INVENTORY = 1;
     private static final int SOURCE_BELT = 2;
@@ -217,7 +220,8 @@ public class LightObject implements Action {
         tryUnlitTorchpostWithBrazier(gui, remaining);
         if (remaining.isEmpty()) return Results.SUCCESS();
 
-        // Priority 6: Inventory branch lit on a nearby already-lit workstation (Ctrl+Alt), per gob.
+        // Priority 6: Inventory branch lit on a nearby already-lit workstation (Ctrl+Alt).
+        // Per gob, retry until the target lights or no source/branch remains.
         lightWithNeighborStick(gui, remaining);
         if (remaining.isEmpty()) return Results.SUCCESS();
 
@@ -591,50 +595,58 @@ public class LightObject implements Action {
             LightConfig config = getConfig(t.ngob.name);
             if (config == null)
                 continue;
-            if (isLit(t, config)) {
-                remaining.remove(t);
-                continue;
-            }
-            Gob source = findLitFireSourceNear(t);
-            if (source == null)
-                continue;
+            int noProgress = 0;
+            while (true) {
+                Gob current = Finder.findGob(t.id);
+                if (current == null)
+                    current = t;
+                boolean targetLit = isLit(current, config);
+                if (targetLit) {
+                    remaining.remove(t);
+                    break;
+                }
+                Gob source = findLitFireSourceNear(t);
+                WItem branch = gui.getInventory().getItem("Branch");
+                if (!shouldRetryNeighborStick(source != null, branch != null, targetLit))
+                    break;
+                if (shouldGiveUpNeighborStickNoProgress(noProgress))
+                    break;
 
-            WItem branch = gui.getInventory().getItem("Branch");
-            if (branch == null)
-                continue;
+                NUtils.takeItemToHand(branch);
+                NUtils.getUI().core.addTask(new WaitItemInHand());
+                if (gui.vhand == null) {
+                    noProgress++;
+                    continue;
+                }
 
-            NUtils.takeItemToHand(branch);
-            NUtils.getUI().core.addTask(new WaitItemInHand());
-            if (gui.vhand == null)
-                continue;
+                new PathFinder(source).run(gui);
+                NUtils.activateItem(source, NEIGHBOR_STICK_MODFLAGS);
+                if (!waitUntilNeighborStickReady(gui)) {
+                    if (LightFire.shouldDropFirebrand(gui.vhand != null, gui.prog != null))
+                        dropLeftoverHand(gui);
+                    if (LightFire.hasClocks(gui.prog != null))
+                        return;
+                    if (findLitFireSourceNear(t) != null)
+                        noProgress++;
+                    continue;
+                }
+                noProgress = 0;
 
-            new PathFinder(source).run(gui);
-            NUtils.activateItem(source, NEIGHBOR_STICK_MODFLAGS);
-            if (!waitUntilNeighborStickReady(gui)) {
+                new PathFinder(t).run(gui);
+                NUtils.activateItem(t);
+                WaitProgress useStart = new WaitProgress(WaitProgress.Phase.START, 8000);
+                NUtils.getUI().core.addTask(useStart);
+                if (!useStart.isTimedOut()) {
+                    WaitProgress useFinish = new WaitProgress(WaitProgress.Phase.FINISH, 60000);
+                    NUtils.getUI().core.addTask(useFinish);
+                    if (useFinish.isTimedOut() && LightFire.hasClocks(gui.prog != null)) {
+                        return;
+                    }
+                }
+                NUtils.getUI().core.addTask(new WaitGobModelAttr(t, config.fireFlag, 2000));
                 if (LightFire.shouldDropFirebrand(gui.vhand != null, gui.prog != null))
                     dropLeftoverHand(gui);
-                if (LightFire.hasClocks(gui.prog != null))
-                    return;
-                continue;
             }
-
-            new PathFinder(t).run(gui);
-            NUtils.activateItem(t);
-            WaitProgress useStart = new WaitProgress(WaitProgress.Phase.START, 8000);
-            NUtils.getUI().core.addTask(useStart);
-            if (!useStart.isTimedOut()) {
-                WaitProgress useFinish = new WaitProgress(WaitProgress.Phase.FINISH, 60000);
-                NUtils.getUI().core.addTask(useFinish);
-                if (useFinish.isTimedOut() && LightFire.hasClocks(gui.prog != null)) {
-                    return;
-                }
-            }
-            NUtils.getUI().core.addTask(new WaitGobModelAttr(t, config.fireFlag, 2000));
-            Gob updated = Finder.findGob(t.id);
-            if (updated != null && isLit(updated, config))
-                remaining.remove(t);
-            if (LightFire.shouldDropFirebrand(gui.vhand != null, gui.prog != null))
-                dropLeftoverHand(gui);
         }
     }
 
@@ -670,6 +682,18 @@ public class LightObject implements Action {
      */
     public static boolean neighborStickReady(boolean hasHand, boolean progVisible, boolean sawStart) {
         return hasHand && LightFire.lightingUseFinished(progVisible, sawStart);
+    }
+
+    /**
+     * Keep lighting from a neighbor stick while the target is unlit and both a lit neighbor
+     * and an inventory Branch remain. False means this gob may fall through to firebrand.
+     */
+    public static boolean shouldRetryNeighborStick(boolean hasSource, boolean hasBranch, boolean targetLit) {
+        return !targetLit && hasSource && hasBranch;
+    }
+
+    public static boolean shouldGiveUpNeighborStickNoProgress(int consecutiveNoProgress) {
+        return consecutiveNoProgress >= NEIGHBOR_STICK_MAX_NO_PROGRESS;
     }
 
     // --- Priority 7: Branches (never batched — re-craft a firebrand per gob) ---

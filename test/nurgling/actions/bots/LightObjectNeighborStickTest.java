@@ -96,6 +96,50 @@ class LightObjectNeighborStickTest {
         assertFalse(LightObject.neighborStickReady(false, false, true));
     }
 
+    @Test
+    void retriesNeighborStickWhileUnlitSourceAndBranchRemain() {
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+    }
+
+    @Test
+    void doesNotFallThroughToFirebrandWhileNeighborSourceAndBranchRemain() {
+        // lightWithBranches runs only after this predicate is false for the gob.
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(0));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(1));
+    }
+
+    @Test
+    void stopsNeighborStickWhenTargetIsLit() {
+        assertFalse(LightObject.shouldRetryNeighborStick(true, true, true));
+    }
+
+    @Test
+    void stopsNeighborStickWhenSourceIsGone() {
+        assertFalse(LightObject.shouldRetryNeighborStick(false, true, false));
+        assertFalse(LightObject.shouldRetryNeighborStick(false, false, false));
+    }
+
+    @Test
+    void stopsNeighborStickWhenNoBranch() {
+        assertFalse(LightObject.shouldRetryNeighborStick(true, false, false));
+    }
+
+    @Test
+    void firstFailedAttemptStillRetriesIfSourceAndBranchRemain() {
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(0));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(1));
+        assertFalse(LightObject.shouldGiveUpNeighborStickNoProgress(
+                LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS - 1));
+        assertTrue(LightObject.shouldRetryNeighborStick(true, true, false));
+    }
+
+    @Test
+    void givesUpNeighborStickAfterBoundedNoProgress() {
+        assertTrue(LightObject.shouldGiveUpNeighborStickNoProgress(
+                LightObject.NEIGHBOR_STICK_MAX_NO_PROGRESS));
+    }
+
     private static LightObject.FireSourceProbe kiln(long id, double x, int attr) {
         return new LightObject.FireSourceProbe(id, KILN, attr, Coord2d.of(x, 0));
     }
