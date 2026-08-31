@@ -6,6 +6,7 @@ import haven.res.lib.tree.TreeScale;
 import nurgling.NConfig;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
+import nurgling.tools.TreeGrowth;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.TreeLocation;
@@ -39,21 +40,8 @@ public class NTreeScaleOl extends NObjectTexLabel {
         // Raise above tree harvest icons overlay
         pos = new Coord3f(0, 0, -4);
         TreeScale ts = gob.getattr(TreeScale.class);
-        long scale = 0;
-        if (NParser.checkName(gob.ngob.name, new NAlias("bushes"))) {
-            // Always use originalScale for growth calculation (not the modified scale)
-            // If originalScale equals scale, it means no resize was applied, so use scale
-            // If originalScale differs from scale, it means resize was applied, so use originalScale
-            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
-            scale = Math.round(100 * (scaleToUse - 0.3) / 0.7);
-
-        } else {
-            // Always use originalScale for growth calculation (not the modified scale)
-            // If originalScale equals scale, it means no resize was applied, so use scale
-            // If originalScale differs from scale, it means resize was applied, so use originalScale
-            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
-            scale = Math.round(100 * (scaleToUse - 0.1) / 0.9);
-        }
+        boolean bush = NParser.checkName(gob.ngob.name, new NAlias("bushes"));
+        long scale = TreeGrowth.percent(ts, bush);
         this.calculatedScale = scale;
         this.img = qIcon;
         BufferedImage retlabel =fnd.render(String.format("%d%%",scale)).img;
@@ -230,44 +218,20 @@ public class NTreeScaleOl extends NObjectTexLabel {
 
     @Override
     public boolean tick(double dt) {
-        // Remove overlay if TreeScale is removed
+        // Remove overlay only when TreeScale is gone (mature trees keep the overlay while it exists)
         TreeScale ts = gob.getattr(TreeScale.class);
         if (ts == null) {
             return true;
         }
-        
-        // Recalculate growth percentage to check if tree reached 100%
-        // Always use originalScale for growth calculation (not the modified scale)
-        long currentScale = 0;
-        if (NParser.checkName(gob.ngob.name, new NAlias("bushes"))) {
-            // If originalScale differs from scale, it means resize was applied, so use originalScale
-            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
-            currentScale = Math.round(100 * (scaleToUse - 0.3) / 0.7);
-        } else {
-            // If originalScale differs from scale, it means resize was applied, so use originalScale
-            float scaleToUse = (ts.originalScale != ts.scale && ts.originalScale > 0) ? ts.originalScale : ts.scale;
-            currentScale = Math.round(100 * (scaleToUse - 0.1) / 0.9);
-        }
-        
-        // Update calculated scale
-        calculatedScale = currentScale;
-        
-        // Remove overlay if tree is fully grown (100% or more)
-        if (currentScale >= 100) {
-            return true;
-        }
+        boolean bush = NParser.checkName(gob.ngob.name, new NAlias("bushes"));
+        calculatedScale = TreeGrowth.percent(ts, bush);
         return false;
     }
     
     @Override
     public void draw(GOut g, Pipe state) {
         updateConfigCache();
-        // Don't draw if tree is fully grown (100% or more)
-        if (calculatedScale >= 100) {
-            return;
-        }
-        // Don't draw if scale is below minimum threshold
-        if (calculatedScale < minThreshold) {
+        if (!TreeGrowth.shouldDraw((int) calculatedScale, minThreshold)) {
             return;
         }
         super.draw(g, state);

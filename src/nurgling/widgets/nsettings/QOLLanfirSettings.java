@@ -5,6 +5,7 @@ import nurgling.NConfig;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
 import nurgling.tools.ForageMarkerLogic;
+import nurgling.tools.TreeGrowth;
 
 public class QOLLanfirSettings extends Panel {
     
@@ -184,25 +185,8 @@ public class QOLLanfirSettings extends Panel {
                         haven.res.lib.tree.TreeScale ts = gob.getattr(haven.res.lib.tree.TreeScale.class);
                         
                         if(enabled) {
-                            // Get original scale (before resize modification)
-                            float originalScale = 1.0f;
-                            if(ts != null) {
-                                // If originalScale differs from scale, it means resize was already applied
-                                // In this case, use originalScale as the base
-                                // If originalScale equals scale, it means no resize was applied yet, use scale as base
-                                if(ts.originalScale != ts.scale && ts.originalScale > 0) {
-                                    // Resize was already applied, use stored original scale
-                                    originalScale = ts.originalScale;
-                                } else {
-                                    // No resize applied yet, use current scale as original
-                                    originalScale = ts.scale;
-                                }
-                            }
-                            
-                            // Apply resize multiplier to original scale
+                            float originalScale = (ts != null) ? TreeGrowth.serverScale(ts) : 1.0f;
                             float newScale = originalScale * scaleMultiplier;
-                            
-                            // Create new TreeScale with both modified scale and original scale
                             gob.delattr(haven.res.lib.tree.TreeScale.class);
                             gob.setattr(new haven.res.lib.tree.TreeScale(gob, newScale, originalScale));
                         } else {
