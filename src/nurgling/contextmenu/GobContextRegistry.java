@@ -33,6 +33,7 @@ public class GobContextRegistry {
         register(new LoadVehicleAction());
         register(new UnloadVehicleAction());
         register(new UnloadAnimalsAction());
+        register(new UnloadCarryoutAction());
         register(new SaveTreeLocationAction());
         register(new SaveBushLocationAction());
         register(new CutDownAreaAction());
