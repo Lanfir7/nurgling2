@@ -76,7 +76,10 @@ public class CombatSettings extends Panel {
         hpBarOffsetLabel = add(new Label(offsetLabelText(NCombatHpBarStyle.offsetZ())), new Coord(margin, y));
         hpBarOffsetLabel.tooltip = Text.render("World-height offset of the HP bar (default 13.2). Positive sits above the animal, negative sits below. Range -20..40.").tex();
         y += line;
-        hpBarOffsetSlider = add(new HSlider(UI.scale(200), -200, 400, offsetSliderVal(NCombatHpBarStyle.offsetZ())) {
+        hpBarOffsetSlider = add(new HSlider(UI.scale(200),
+                (int) Math.round(NCombatHpBarStyle.OFFSET_MIN * 10),
+                (int) Math.round(NCombatHpBarStyle.OFFSET_MAX * 10),
+                offsetSliderVal(NCombatHpBarStyle.offsetZ())) {
             public void changed() {
                 float z = val / 10f;
                 hpBarOffsetLabel.settext(offsetLabelText(z));

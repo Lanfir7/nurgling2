@@ -12,6 +12,8 @@ class NCombatHpBarSettingsTest {
         assertEquals(-5f, NCombatHpBarStyle.clampOffset(-5), 0.001f);
         assertEquals(-20f, NCombatHpBarStyle.clampOffset(-25), 0.001f);
         assertEquals(40f, NCombatHpBarStyle.clampOffset(99), 0.001f);
+        assertEquals((int) Math.round(NCombatHpBarStyle.OFFSET_MIN * 10), -200);
+        assertEquals((int) Math.round(NCombatHpBarStyle.OFFSET_MAX * 10), 400);
         assertEquals(NCombatHpBarStyle.DEF_OFFSET, NCombatHpBarStyle.clampOffset(null), 0.001f);
         assertEquals(NCombatHpBarStyle.DEF_OFFSET, NCombatHpBarStyle.clampOffset("nope"), 0.001f);
         assertEquals(13.2f, NCombatHpBarStyle.clampOffset(13.2), 0.001f);

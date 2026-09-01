@@ -14,17 +14,19 @@ import java.util.WeakHashMap;
 public class NDMGOverlay extends Sprite implements PView.Render2D {
 
     /**
-     * Clears all NDMGOverlay overlays from all Gobs and forgets fight-scoped totals.
+     * Clears NDMGOverlay overlays on the current session's gobs and forgets
+     * that session's fight-scoped totals.
      */
     public static void clearAll() {
-        NCombatDamageStore.clearAll();
         synchronized (live) {
             live.clear();
         }
         if (NUtils.getGameUI() == null || NUtils.getGameUI().ui == null ||
             NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
+            NCombatDamageStore.clearAll();
             return;
         }
+        NCombatDamageStore.clearSession(NUtils.getGameUI().ui.sess.glob);
         synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
             for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
                 Gob.Overlay ol = gob.findol(NDMGOverlay.class);
@@ -36,8 +38,8 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
     }
 
     /** Drop stored totals for one gob when its fight relation ends. */
-    public static void forgetGob(long gobid) {
-        NCombatDamageStore.clear(gobid);
+    public static void forgetGob(Object session, long gobid) {
+        NCombatDamageStore.clear(session, gobid);
     }
 
     /* Gob.addcustomol() defers the actual add to a loader thread, so findol() cannot
@@ -61,7 +63,7 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
         Gob gob = ownerGob();
         if(gob == null)
             return;
-        NCombatDamageStore.copyInto(gob.id, dmg);
+        NCombatDamageStore.copyInto(gob.glob, gob.id, dmg);
     }
 
     private Gob ownerGob() {
@@ -115,7 +117,7 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
     private void persist() {
         Gob gob = ownerGob();
         if(gob != null)
-            NCombatDamageStore.replace(gob.id, this.dmg[0], this.dmg[1], this.dmg[2]);
+            NCombatDamageStore.replace(gob.glob, gob.id, this.dmg[0], this.dmg[1], this.dmg[2]);
     }
 
     private void rebuildTextures() {

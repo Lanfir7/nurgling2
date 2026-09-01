@@ -49,8 +49,8 @@ public class NCombatHpBar extends Sprite implements RenderTree.Node, PView.Rende
     public static int dealtOn(Gob gob) {
         if(gob == null)
             return 0;
-        if(NCombatDamageStore.contains(gob.id))
-            return NCombatDamageStore.total(gob.id);
+        if(NCombatDamageStore.contains(gob.glob, gob.id))
+            return NCombatDamageStore.total(gob.glob, gob.id);
         Gob.Overlay gol = gob.findol(NDMGOverlay.class);
         if((gol != null) && (gol.spr instanceof NDMGOverlay))
             return ((NDMGOverlay) gol.spr).total();

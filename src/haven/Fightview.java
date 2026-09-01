@@ -471,9 +471,14 @@ public class Fightview extends Widget {
     }
 
     public void destroy() {
+        Object session = fightSession();
         for(Relation rel : new ArrayList<>(lsrel))
-            NDMGOverlay.forgetGob(rel.gobid);
+            NDMGOverlay.forgetGob(session, rel.gobid);
         super.destroy();
+    }
+
+    private Object fightSession() {
+        return ((ui != null) && (ui.sess != null)) ? ui.sess.glob : null;
     }
 
     public void uimsg(String msg, Object... args) {
@@ -499,7 +504,7 @@ public class Fightview extends Widget {
 	    if(rel == current)
 		setcur(null);
 	    updrel();
-            NDMGOverlay.forgetGob(id);
+            NDMGOverlay.forgetGob(fightSession(), id);
             return;
         } else if(msg == "upd") {
             Relation rel = getrel(Utils.uiv(args[0]));
