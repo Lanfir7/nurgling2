@@ -1733,20 +1733,23 @@ public class NConfig
                 this.lastExploredChangeTime = 0;
                 boolean submitted = ((NCornerMiniMap)NUtils.getGameUI().mmap).exploredArea.requestMergeAndSave(
                         filePath,
-                        () -> {},
-                        NConfig::needExploredUpdate);
+                        null,
+                        this::markExploredDirty);
                 if (!submitted) {
-                    this.isExploredUpd = true;
-                    this.lastExploredChangeTime = System.currentTimeMillis();
+                    markExploredDirty();
                 }
             }
             catch (Exception e)
             {
                 System.err.println("Error saving explored area: " + e.getMessage());
-                this.isExploredUpd = true;
-                this.lastExploredChangeTime = System.currentTimeMillis();
+                markExploredDirty();
             }
         }
+    }
+
+    private void markExploredDirty() {
+        this.isExploredUpd = true;
+        this.lastExploredChangeTime = System.currentTimeMillis();
     }
 
 

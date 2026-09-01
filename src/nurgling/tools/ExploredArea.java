@@ -10,9 +10,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -39,9 +39,11 @@ public class ExploredArea {
     private final Object masksLock = new Object();
     private final AtomicBoolean mainSaveQueued = new AtomicBoolean(false);
     private final AtomicBoolean sessionSaveQueued = new AtomicBoolean(false);
+    private final AtomicBoolean drainScheduled = new AtomicBoolean(false);
     private volatile String pendingSavePath;
     private volatile Runnable pendingSaveSuccess;
     private volatile Runnable pendingSaveFailure;
+    private volatile String pendingSessionPath;
     
     /**
      * Key for identifying a grid in a specific segment.
@@ -324,17 +326,26 @@ public class ExploredArea {
 
     static ExecutorService createExecutor() {
         return new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(1), r -> {
+                new LinkedBlockingQueue<>(), r -> {
                     Thread t = new Thread(r, "ExploredArea-Save");
                     t.setDaemon(true);
                     return t;
-                }, new ThreadPoolExecutor.DiscardOldestPolicy());
+                });
     }
 
     public static void resetExecutor() {
         ExecutorService old = executorRef.getAndSet(createExecutor());
-        if (old != null) {
+        if (old == null) {
+            return;
+        }
+        old.shutdown();
+        try {
+            if (!old.awaitTermination(2, TimeUnit.SECONDS)) {
+                old.shutdownNow();
+            }
+        } catch (InterruptedException e) {
             old.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -351,6 +362,12 @@ public class ExploredArea {
     }
 
     private void requestSessionSave() {
+        NConfig config = getConfig();
+        if (config == null) {
+            needSessionUpdate = true;
+            return;
+        }
+        pendingSessionPath = config.getSessionExploredPath();
         sessionSaveQueued.set(true);
         if (!submitDrain()) {
             needSessionUpdate = true;
@@ -362,27 +379,34 @@ public class ExploredArea {
         if (ex == null || ex.isShutdown()) {
             return false;
         }
+        if (!drainScheduled.compareAndSet(false, true)) {
+            return true;
+        }
         try {
             ex.execute(this::drainPendingSaves);
             return true;
         } catch (RejectedExecutionException e) {
-            return true;
+            drainScheduled.set(false);
+            return false;
         }
     }
 
     private void drainPendingSaves() {
-        boolean work;
-        do {
-            work = false;
-            if (mainSaveQueued.compareAndSet(true, false)) {
-                work = true;
-                runMainSave();
+        try {
+            do {
+                if (mainSaveQueued.compareAndSet(true, false)) {
+                    runMainSave();
+                }
+                if (sessionSaveQueued.compareAndSet(true, false)) {
+                    runSessionSave();
+                }
+            } while (mainSaveQueued.get() || sessionSaveQueued.get());
+        } finally {
+            drainScheduled.set(false);
+            if (mainSaveQueued.get() || sessionSaveQueued.get()) {
+                submitDrain();
             }
-            if (sessionSaveQueued.compareAndSet(true, false)) {
-                work = true;
-                runSessionSave();
-            }
-        } while (work || mainSaveQueued.get() || sessionSaveQueued.get());
+        }
     }
 
     private void runMainSave() {
@@ -406,13 +430,19 @@ public class ExploredArea {
     }
 
     private void runSessionSave() {
-        JSONObject json;
+        String path = pendingSessionPath;
+        Map<GridKey, boolean[]> snap;
+        boolean active;
         synchronized (masksLock) {
-            json = sessionToJson();
+            snap = copyMasksLocked(sessionGridMasks);
+            active = sessionActive;
         }
-        NConfig config = getConfig();
+        if (path == null) {
+            needSessionUpdate = true;
+            return;
+        }
         try {
-            NFileUtils.writeAtomically(config.getSessionExploredPath(), json.toString());
+            NFileUtils.writeAtomically(path, sessionToJsonFromData(snap, active).toString());
         } catch (Exception e) {
             System.err.println("Error saving explored session: " + e.getMessage());
             needSessionUpdate = true;
@@ -421,74 +451,44 @@ public class ExploredArea {
 
     Map<GridKey, boolean[]> snapshotGridMasks() {
         synchronized (masksLock) {
-            Map<GridKey, boolean[]> snap = new HashMap<>(gridMasks.size());
-            for (Map.Entry<GridKey, boolean[]> entry : gridMasks.entrySet()) {
-                boolean[] mask = entry.getValue();
-                snap.put(entry.getKey(), mask == null ? new boolean[MASK_SIZE] : Arrays.copyOf(mask, MASK_SIZE));
-            }
-            return snap;
+            return copyMasksLocked(gridMasks);
         }
+    }
+
+    private Map<GridKey, boolean[]> copyMasksLocked(Map<GridKey, boolean[]> source) {
+        Map<GridKey, boolean[]> snap = new HashMap<>(source.size());
+        for (Map.Entry<GridKey, boolean[]> entry : source.entrySet()) {
+            boolean[] mask = entry.getValue();
+            snap.put(entry.getKey(), mask == null ? new boolean[MASK_SIZE] : Arrays.copyOf(mask, MASK_SIZE));
+        }
+        return snap;
     }
 
     public void reloadFromFile() {
         Map<GridKey, boolean[]> currentData = snapshotGridMasks();
-
-        Map<GridKey, boolean[]> fromFile = new HashMap<>();
+        Map<GridKey, boolean[]> fromFile = readMasksFromExploredFile();
         synchronized (masksLock) {
-            gridMasks.clear();
-        }
-        loadFromFile();
-        synchronized (masksLock) {
-            fromFile.putAll(gridMasks);
+            Map<GridKey, boolean[]> live = copyMasksLocked(gridMasks);
             Map<GridKey, boolean[]> merged = ExploredAreaMerge.merge(fromFile, currentData, MASK_SIZE);
+            merged = ExploredAreaMerge.merge(merged, live, MASK_SIZE);
             gridMasks.clear();
             gridMasks.putAll(merged);
-            sessionGridMasks.clear();
         }
+        sessionGridMasks.clear();
         loadSessionFromFile();
         seq++;
     }
-    
-    /**
-     * Load explored area from JSON file.
-     */
-    private void loadFromFile() {
-        // Use profile-specific config from NCore if available, otherwise fallback to global
-        NConfig config = getConfig();
 
+    private Map<GridKey, boolean[]> readMasksFromExploredFile() {
+        NConfig config = getConfig();
         try {
             String content = NFileUtils.readWithBackupFallback(config.getExploredPath());
             if (content == null || content.isEmpty()) {
-                return;
+                return new HashMap<>();
             }
-
-            JSONObject json = new JSONObject(content);
-            if (!json.has("grids")) {
-                return;
-            }
-            
-            JSONArray gridsArray = json.getJSONArray("grids");
-            for (int i = 0; i < gridsArray.length(); i++) {
-                JSONObject gridJson = gridsArray.getJSONObject(i);
-                
-                long segmentId = gridJson.getLong("seg");
-                int gx = gridJson.getInt("gx");
-                int gy = gridJson.getInt("gy");
-                
-                GridKey key = new GridKey(segmentId, new Coord(gx, gy));
-                
-                // Decode RLE compressed mask
-                String rle = gridJson.getString("mask");
-                boolean[] mask = decodeRLE(rle);
-                
-                if (mask != null) {
-                    gridMasks.put(key, mask);
-                }
-            }
-            
-            seq++;
+            return readFromBytes(content.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
-            // Ignore load errors
+            return new HashMap<>();
         }
     }
     
@@ -503,32 +503,9 @@ public class ExploredArea {
     /**
      * Convert session data to JSON for saving.
      */
-    private JSONObject sessionToJson() {
-        JSONArray gridsArray = new JSONArray();
-        
-        for (Map.Entry<GridKey, boolean[]> entry : sessionGridMasks.entrySet()) {
-            GridKey key = entry.getKey();
-            boolean[] mask = entry.getValue();
-            
-            // Skip empty masks
-            if (!hasAnyExploredTiles(mask)) {
-                continue;
-            }
-            
-            JSONObject gridJson = new JSONObject();
-            gridJson.put("seg", key.segmentId);
-            gridJson.put("gx", key.gridCoord.x);
-            gridJson.put("gy", key.gridCoord.y);
-            
-            // Encode mask with RLE compression
-            gridJson.put("mask", encodeRLE(mask));
-            
-            gridsArray.put(gridJson);
-        }
-        
-        JSONObject doc = new JSONObject();
-        doc.put("active", sessionActive);
-        doc.put("grids", gridsArray);
+    private JSONObject sessionToJsonFromData(Map<GridKey, boolean[]> data, boolean active) {
+        JSONObject doc = toJsonFromData(data);
+        doc.put("active", active);
         return doc;
     }
 

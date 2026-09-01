@@ -5,22 +5,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
@@ -113,35 +108,47 @@ class ExploredAreaSaveTest {
     }
 
     @Test
-    void saveExecutorKeepsOnlyLatestPendingRun() throws Exception {
-        Method factory = ExploredArea.class.getDeclaredMethod("createExecutor");
-        factory.setAccessible(true);
-        ExecutorService executor = (ExecutorService) factory.invoke(null);
-        CountDownLatch firstStarted = new CountDownLatch(1);
-        CountDownLatch releaseFirst = new CountDownLatch(1);
-        List<Integer> completed = new CopyOnWriteArrayList<>();
+    void twoInstancesBothSaveOnSharedExecutor() throws Exception {
+        ExploredArea first = new ExploredArea(null);
+        ExploredArea second = new ExploredArea(null);
+        first.updateExploredTiles(Coord.z, Coord.of(1, 1), 11);
+        second.updateExploredTiles(Coord.z, Coord.of(1, 1), 22);
+        Path firstPath = tempDir.resolve("instance-a.json");
+        Path secondPath = tempDir.resolve("instance-b.json");
+        CountDownLatch done = new CountDownLatch(2);
 
-        try {
-            executor.execute(() -> {
-                firstStarted.countDown();
-                try {
-                    releaseFirst.await();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+        assertTrue(first.requestMergeAndSave(firstPath.toString(), done::countDown, done::countDown));
+        assertTrue(second.requestMergeAndSave(secondPath.toString(), done::countDown, done::countDown));
+        assertTrue(done.await(3, TimeUnit.SECONDS));
+
+        assertTrue(new String(Files.readAllBytes(firstPath), StandardCharsets.UTF_8).contains("\"seg\":11"));
+        assertTrue(new String(Files.readAllBytes(secondPath), StandardCharsets.UTF_8).contains("\"seg\":22"));
+    }
+
+    @Test
+    void overlappingRequestsOnSameInstanceKeepLatestTiles() throws Exception {
+        ExploredArea explored = new ExploredArea(null);
+        Path target = tempDir.resolve("latest.json");
+        CountDownLatch lastDone = new CountDownLatch(1);
+
+        explored.updateExploredTiles(Coord.z, Coord.of(1, 1), 1);
+        assertTrue(explored.requestMergeAndSave(target.toString(), null, lastDone::countDown));
+        explored.updateExploredTiles(Coord.of(10, 10), Coord.of(11, 11), 2);
+        assertTrue(explored.requestMergeAndSave(target.toString(), lastDone::countDown, lastDone::countDown));
+
+        assertTrue(lastDone.await(3, TimeUnit.SECONDS));
+        String json = "";
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            if (Files.exists(target)) {
+                json = new String(Files.readAllBytes(target), StandardCharsets.UTF_8);
+                if (json.contains("\"seg\":1") && json.contains("\"seg\":2")) {
+                    break;
                 }
-                completed.add(1);
-            });
-            assertTrue(firstStarted.await(2, TimeUnit.SECONDS));
-            executor.execute(() -> completed.add(2));
-            executor.execute(() -> completed.add(3));
-            releaseFirst.countDown();
-            executor.shutdown();
-            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
-        } finally {
-            releaseFirst.countDown();
-            executor.shutdownNow();
+            }
+            Thread.sleep(20);
         }
-
-        assertEquals(Arrays.asList(1, 3), completed);
+        assertTrue(json.contains("\"seg\":1"));
+        assertTrue(json.contains("\"seg\":2"));
     }
 }
