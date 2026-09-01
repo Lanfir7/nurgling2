@@ -13,6 +13,7 @@ public class MapSettings extends Panel {
         boolean showPartyMemberNames;
         boolean trackingVectors;
         boolean pingSound;
+        boolean recordExploredArea;
     }
 
     private final MapSettingsData tempSettings = new MapSettingsData();
@@ -23,6 +24,7 @@ public class MapSettings extends Panel {
     private CheckBox showPartyMemberNames;
     private CheckBox trackingVectors;
     private CheckBox pingSound;
+    private CheckBox recordExploredArea;
     
     private Widget content;
 
@@ -83,6 +85,15 @@ public class MapSettings extends Panel {
             }
         }, prev.pos("bl").adds(0, 10));
 
+        prev = content.add(new Label("\u25CF " + L10n.get("map.section.explored")), prev.pos("bl").adds(0, 15));
+
+        prev = recordExploredArea = content.add(new CheckBox(L10n.get("map.record_explored_area")) {
+            public void set(boolean val) {
+                tempSettings.recordExploredArea = val;
+                a = val;
+            }
+        }, prev.pos("bl").adds(0, 10));
+
         content.pack();
         resize(content.sz);
     }
@@ -95,6 +106,7 @@ public class MapSettings extends Panel {
         tempSettings.showPartyMemberNames = getBool(NConfig.Key.showPartyMemberNames);
         tempSettings.trackingVectors = getBool(NConfig.Key.trackingVectors);
         tempSettings.pingSound = getBool(NConfig.Key.pingSound);
+        tempSettings.recordExploredArea = getBool(NConfig.Key.exploredAreaRecord);
 
         // Update UI components
         showQuestGiverNames.a = tempSettings.showQuestGiverNames;
@@ -102,6 +114,7 @@ public class MapSettings extends Panel {
         showPartyMemberNames.a = tempSettings.showPartyMemberNames;
         trackingVectors.a = tempSettings.trackingVectors;
         pingSound.a = tempSettings.pingSound;
+        recordExploredArea.a = tempSettings.recordExploredArea;
     }
 
     @Override
@@ -112,6 +125,7 @@ public class MapSettings extends Panel {
         NConfig.set(NConfig.Key.showPartyMemberNames, tempSettings.showPartyMemberNames);
         NConfig.set(NConfig.Key.trackingVectors, tempSettings.trackingVectors);
         NConfig.set(NConfig.Key.pingSound, tempSettings.pingSound);
+        NConfig.set(NConfig.Key.exploredAreaRecord, tempSettings.recordExploredArea);
         NConfig.needUpdate();
     }
     

@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.NConfig;
 import nurgling.NUtils;
 import nurgling.tools.ExploredArea;
+import nurgling.tools.ExploredAreaPolicy;
 import nurgling.widgets.NCornerMiniMap;
 import nurgling.widgets.NMiniMap;
 
@@ -27,8 +28,7 @@ public class MinimapExploredAreaRenderer {
     private static final int MAX_CACHE_SIZE = 200;
 
     public static void renderExploredArea(MiniMap map, GOut g) {
-        Object val = NConfig.get(NConfig.Key.exploredAreaEnable);
-        if (!(val instanceof Boolean) || !(Boolean) val) {
+        if (!ExploredAreaPolicy.shouldDraw(NConfig.get(NConfig.Key.exploredAreaEnable))) {
             return;
         }
         

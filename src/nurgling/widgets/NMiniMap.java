@@ -15,6 +15,7 @@ import nurgling.overlays.map.MinimapFloorOverlayRenderer;
 import nurgling.map.FloorOverlayAligner;
 import nurgling.map.PermanentMarkerPath;
 import nurgling.tools.ExploredArea;
+import nurgling.tools.ExploredAreaPolicy;
 import nurgling.tools.MiniMapDisplayExtent;
 import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
@@ -1377,7 +1378,7 @@ NMiniMap extends MiniMap {
 
         // Only update explored area from the main corner minimap (gui.mmap)
         // This prevents multiple minimap instances from conflicting
-        if((Boolean) NConfig.get(NConfig.Key.exploredAreaEnable) && gui != null && gui.mmap == this) {
+        if(ExploredAreaPolicy.shouldRecord(NConfig.get(NConfig.Key.exploredAreaRecord)) && gui != null && gui.mmap == this) {
             if ((sessloc != null) && ((curloc == null) || (sessloc.seg.id == curloc.seg.id))) {
                 exploredArea.tick(dt);
                 Gob player = ui.gui.map.player();
