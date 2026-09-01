@@ -100,6 +100,11 @@ public final class DefaultAnimalAlarms {
         public boolean isPending() {
             return(notification != null);
         }
+
+        /** Drop pending notify sound without playing; visual pulse may remain. */
+        public void dropSound() {
+            notification = null;
+        }
     }
 
     public static boolean isCorpsePose(String pose) {

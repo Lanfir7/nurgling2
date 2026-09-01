@@ -14,6 +14,11 @@ public final class ClaimLand {
         return "cplot".equals(tag) || "vlg".equals(tag);
     }
 
+    /** Icon Settings notify sounds: muted on personal/village claim, unchanged in wilderness. */
+    public static boolean shouldPlayIconNotify(boolean onClaim) {
+        return !onClaim;
+    }
+
     public static boolean hasClaimOrVillage(Iterable<String> tags) {
         if (tags == null) {
             return false;

@@ -1,6 +1,8 @@
 package haven;
 
 import java.util.function.Supplier;
+import nurgling.tools.ClaimLand;
+import nurgling.tools.DefaultAnimalAlarms;
 
 final class MiniMapIconPolicy {
     private static final double REFRESH_INTERVAL = 0.2;
@@ -43,6 +45,22 @@ final class MiniMapIconPolicy {
     static boolean insideViewport(Coord point, Coord viewport, int margin) {
         return (point.x >= -margin) && (point.y >= -margin) &&
                 (point.x <= viewport.x + margin) && (point.y <= viewport.y + margin);
+    }
+
+    static boolean shouldPlayIconNotify(boolean onClaim) {
+        return ClaimLand.shouldPlayIconNotify(onClaim);
+    }
+
+    static void fireIconNotify(DefaultAnimalAlarms.State alarmState, boolean onClaim,
+                               String pose, String iconResName) {
+        if (alarmState == null) {
+            return;
+        }
+        if (!shouldPlayIconNotify(onClaim)) {
+            alarmState.dropSound();
+            return;
+        }
+        alarmState.poll(pose, iconResName);
     }
 
     private MiniMapIconPolicy() {

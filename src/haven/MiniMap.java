@@ -45,6 +45,7 @@ import nurgling.NUtils;
 import nurgling.ForageInteractionSource;
 import nurgling.overlays.NQuestGiver;
 import nurgling.overlays.NQuestTarget;
+import nurgling.tools.ClaimLand;
 import nurgling.tools.DefaultAnimalAlarms;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
@@ -512,9 +513,8 @@ public class MiniMap extends Widget
 	}
 
 	private void fireNotifyIfAlive() {
-	    if(alarmState == null)
-		return;
-	    alarmState.poll(gob.pose(), iconResName());
+	    MiniMapIconPolicy.fireIconNotify(alarmState,
+		ClaimLand.isOnClaimOrVillage(NUtils.player()), gob.pose(), iconResName());
 	}
 
 	public void playNotification() {

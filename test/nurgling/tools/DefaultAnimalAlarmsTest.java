@@ -125,4 +125,16 @@ class DefaultAnimalAlarmsTest {
                 .getDeclaredMethod("poll", String.class, String.class)
                 .getReturnType());
     }
+
+    @Test
+    void dropSoundClearsPendingWithoutPlayingOrKillingVisual() {
+        AtomicInteger played = new AtomicInteger();
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
+
+        state.dropSound();
+
+        assertEquals(0, played.get());
+        assertFalse(state.isPending());
+        assertTrue(state.isVisualActive());
+    }
 }

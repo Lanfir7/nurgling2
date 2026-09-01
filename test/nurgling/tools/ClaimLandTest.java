@@ -24,4 +24,10 @@ class ClaimLandTest {
         assertFalse(ClaimLand.hasClaimOrVillage(List.of()));
         assertFalse(ClaimLand.hasClaimOrVillage(null));
     }
+
+    @Test
+    void mutesIconNotifySoundOnClaimAndAllowsWilderness() {
+        assertFalse(ClaimLand.shouldPlayIconNotify(true));
+        assertTrue(ClaimLand.shouldPlayIconNotify(false));
+    }
 }
