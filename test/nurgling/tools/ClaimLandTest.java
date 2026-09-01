@@ -30,4 +30,10 @@ class ClaimLandTest {
         assertFalse(ClaimLand.shouldPlayIconNotify(true));
         assertTrue(ClaimLand.shouldPlayIconNotify(false));
     }
+
+    @Test
+    void skipsAnimalMarkerOnClaimAndPlacesInWilderness() {
+        assertFalse(ClaimLand.shouldPlaceAnimalMarker(true));
+        assertTrue(ClaimLand.shouldPlaceAnimalMarker(false));
+    }
 }

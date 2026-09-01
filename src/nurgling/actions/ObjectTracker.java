@@ -7,6 +7,7 @@ import haven.GobIcon;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.conf.NDiscordNotification;
+import nurgling.tools.ClaimLand;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
@@ -322,6 +323,9 @@ public class ObjectTracker {
     }
 
     private void saveAnimalMarkerToDb(Gob gob, String displayName, String animalType, int attempt) {
+        if (!ClaimLand.shouldPlaceAnimalMarker(ClaimLand.isOnClaimOrVillage(NUtils.player()))) {
+            return;
+        }
         if (gui == null || gui.labeledMarkService == null) {
             return;
         }

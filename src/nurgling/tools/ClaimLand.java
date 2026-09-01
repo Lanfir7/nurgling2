@@ -19,6 +19,11 @@ public final class ClaimLand {
         return !onClaim;
     }
 
+    /** Animal map markers: skipped on personal/village claim, placed in wilderness. */
+    public static boolean shouldPlaceAnimalMarker(boolean onClaim) {
+        return !onClaim;
+    }
+
     public static boolean hasClaimOrVillage(Iterable<String> tags) {
         if (tags == null) {
             return false;
