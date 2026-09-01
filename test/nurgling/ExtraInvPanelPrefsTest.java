@@ -95,7 +95,7 @@ class ExtraInvPanelPrefsTest {
     }
 
     @Test
-    void extraPanelExclusionsUnchanged() {
+    void extraPanelExcludesCharacterSheetAndStudyDesks() {
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", false));
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Belt", false));
@@ -105,6 +105,13 @@ class ExtraInvPanelPrefsTest {
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Table", false));
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", true));
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel(null, false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Character Sheet", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Study Desk", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Fine Study Desk", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Grand Study Desk", false));
+        assertTrue(ExtraInvGroupTransfer.skipExtraPanelForHost(true, false));
+        assertTrue(ExtraInvGroupTransfer.skipExtraPanelForHost(false, true));
+        assertFalse(ExtraInvGroupTransfer.skipExtraPanelForHost(false, false));
     }
 
     @Test

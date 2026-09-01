@@ -394,6 +394,24 @@ class ExtraInvGroupTransferTest {
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Table", false));
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", true));
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel(null, false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Character Sheet", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Study Desk", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Fine Study Desk", false));
+        assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Grand Study Desk", false));
+    }
+
+    @Test
+    void extraPanelSkippedForCharWndParentAndStudyDeskHost() {
+        assertTrue(ExtraInvGroupTransfer.skipExtraPanelForHost(true, false));
+        assertTrue(ExtraInvGroupTransfer.skipExtraPanelForHost(false, true));
+        assertTrue(ExtraInvGroupTransfer.skipExtraPanelForHost(true, true));
+        assertFalse(ExtraInvGroupTransfer.skipExtraPanelForHost(false, false));
+        // Localized CharWnd title is not in EXTRA_PANEL_EXCLUDES; CharWnd parent check covers it.
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Лист персонажа", false));
+        // Stale last-action study-desk gob (unconfirmed) must not count as a host skip
+        // while the window title is a real container.
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
+        assertFalse(ExtraInvGroupTransfer.skipExtraPanelForHost(false, false));
     }
 
     @Test

@@ -335,7 +335,8 @@ public final class ExtraInvGroupTransfer {
     /** Ender ExtInventory.EXCLUDES — extra list is disabled for these window titles. */
     private static final java.util.Set<String> EXTRA_PANEL_EXCLUDES = new java.util.HashSet<>(java.util.Arrays.asList(
             "Steelbox", "Pouch", "Frame", "Tub", "Fireplace", "Rack",
-            "Pane mold", "Table", "Purse", "Archery Target", "Stack", "Belt"));
+            "Pane mold", "Table", "Purse", "Archery Target", "Stack", "Belt",
+            "Character Sheet", "Study Desk", "Fine Study Desk", "Grand Study Desk"));
 
     /** Extra panel on containers: skip stack popups and Ender-excluded titles. */
     public static boolean shouldInstallExtraPanel(String windowTitle, boolean inContents) {
@@ -343,6 +344,15 @@ public final class ExtraInvGroupTransfer {
             return false;
         }
         return !EXTRA_PANEL_EXCLUDES.contains(windowTitle);
+    }
+
+    /**
+     * Character Sheet (any L10n title via CharWnd parent) and confirmed study desks
+     * never get the extra panel. Study-desk {@code parentGob} is only confirmed when
+     * the gob matches this window; a stale last-action desk must not latch-skip a chest.
+     */
+    public static boolean skipExtraPanelForHost(boolean inCharacterSheet, boolean confirmedStudyDesk) {
+        return inCharacterSheet || confirmedStudyDesk;
     }
 
     /** Ender ExtInventory.getTransferTargets(): flags, count, destination widget ids. */
