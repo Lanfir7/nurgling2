@@ -49,17 +49,14 @@ class MiniMapIconNotifyClaimMuteTest {
     }
 
     @Test
-    void walkingOntoClaimBeforePlayDropsPending() {
+    void unknownPoseInWildernessPlaysImmediately() {
         AtomicInteger played = new AtomicInteger();
         DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
 
         MiniMapIconPolicy.fireIconNotify(state, false, null, BEAR);
-        assertTrue(state.isPending());
-        assertEquals(0, played.get());
-
         MiniMapIconPolicy.fireIconNotify(state, true, "idle", BEAR);
 
-        assertEquals(0, played.get());
+        assertEquals(1, played.get());
         assertFalse(state.isPending());
         assertTrue(state.isVisualActive());
     }
