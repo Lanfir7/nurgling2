@@ -11,7 +11,7 @@ Add a movable top compass to the Lanfir HUD that remains correct in every camera
 - Cardinal and intercardinal labels are localized: Russian uses `С`, `СВ`, `В`, `ЮВ`, `Ю`, `ЮЗ`, `З`, `СЗ`; other locales use `N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`.
 - Active quest targets and party members are placed at their relative bearings. Every visible target shows an icon, a name, and distance below it.
 - Targets outside the frontal sector are assigned to the left or right edge according to the shortest turn toward them. Each edge shows the nearest target and a `+N` count for additional targets assigned to that edge.
-- Party markers use the member color. Their name comes from the member gob's `KinInfo`; while that data is unavailable, the fallback is the localized equivalent of `Party member`.
+- Party markers use the member color. Their name comes from the existing kin-name cache or the member gob's `haven.res.ui.obj.buddy.Buddy` attribute; while that data is unavailable, the fallback is the localized equivalent of `Party member`.
 - The compass does not consume ordinary game clicks.
 
 ## Position and width editing
