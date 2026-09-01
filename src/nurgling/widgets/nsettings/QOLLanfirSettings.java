@@ -115,8 +115,15 @@ public class QOLLanfirSettings extends Panel {
                 NConfig.needUpdate();
                 for (SessionContext context : SessionManager.getInstance().getAllSessions()) {
                     nurgling.NGameUI sessionGui = context.getGameUI();
-                    if (sessionGui != null)
+                    if (sessionGui == null)
+                        continue;
+                    if (context.ui != null) {
+                        synchronized (context.ui) {
+                            sessionGui.setCompassVisible(val);
+                        }
+                    } else {
                         sessionGui.setCompassVisible(val);
+                    }
                 }
             }
         }, margin, y);
