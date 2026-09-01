@@ -68,8 +68,6 @@ public class MCache implements MapSource {
     private final Waitable.Queue gridwait = new Waitable.Queue();
     Map<Coord, Request> req = new HashMap<Coord, Request>();
     public Map<Coord, Grid> grids = new HashMap<Coord, Grid>();
-    private final RecentGridCache<Coord, Grid> recentGrids =
-	new RecentGridCache<>(24, 5 * 60 * 1000L, System::currentTimeMillis, Grid::dispose);
     public final HashMap<Integer, NArea> areas = new HashMap<>();
     Session sess;
     Set<LocalOverlay> ols = new HashSet<>();
@@ -496,8 +494,7 @@ public class MCache implements MapSource {
 	public boolean ol[][];
 	public long id;
 	public int seq = -1;
-	public volatile boolean removed = false;
-	volatile boolean serverFresh = false;
+	public boolean removed = false;
 	private int olseq = -1;
 	public final Cut[] cuts;
 
@@ -649,10 +646,6 @@ public class MCache implements MapSource {
 		for(int x = 0; x < cutn.x; x++)
 		    cuts[i++] = new Cut(Coord.of(x, y));
 	    }
-	    }
-
-	public boolean isServerFresh() {
-	    return(serverFresh);
 	}
 
 	public int gettile(Coord tc) {
@@ -1100,7 +1093,6 @@ public class MCache implements MapSource {
 	    }
 	    invalidate();
 	    seq++;
-	    serverFresh = true;
 	}
 
 	public double getfz(Coord c) {return(getz(c));}
@@ -1182,15 +1174,8 @@ public class MCache implements MapSource {
 	synchronized(grids) {
 	    ret = grids.get(gc);
 	    if(ret == null) {
-		ret = recentGrids.take(gc);
-		if(ret == null) {
-		    request(gc);
-		    throw(new LoadingMap(this, gc));
-		}
-		ret.removed = false;
-		ret.serverFresh = false;
-		grids.put(Coord.of(gc), ret);
 		request(gc);
+		throw(new LoadingMap(this, gc));
 	    }
 	    cached.set(new WeakReference<>(ret));
 	    return(ret);
@@ -1535,11 +1520,8 @@ public class MCache implements MapSource {
     public void trimall() {
 	synchronized(grids) {
 	    synchronized(req) {
-		for(Map.Entry<Coord, Grid> entry : grids.entrySet()) {
-		    Grid g = entry.getValue();
-		    g.removed = true;
-		    recentGrids.put(Coord.of(entry.getKey()), g);
-		}
+		for(Grid g : grids.values())
+		    g.dispose();
 		grids.clear();
 		req.clear();
 	    }
@@ -1555,8 +1537,7 @@ public class MCache implements MapSource {
 		    Coord gc = e.getKey();
 		    Grid g = e.getValue();
 		    if((gc.x < ul.x) || (gc.y < ul.y) || (gc.x > lr.x) || (gc.y > lr.y)) {
-			g.removed = true;
-			recentGrids.put(Coord.of(gc), g);
+			g.dispose();
 			i.remove();
 		    }
 		}

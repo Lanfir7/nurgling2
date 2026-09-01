@@ -1,6 +1,7 @@
 package nurgling.actions;
 
 import haven.WItem;
+import haven.error.FileLogger;
 import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -187,10 +188,10 @@ public class TransferItems2 implements Action
 
     @FunctionalInterface
     interface AreaProcessor {
-        void process(String areaId, List<ItemTransfer> transfers) throws InterruptedException;
+        Results process(String areaId, List<ItemTransfer> transfers) throws InterruptedException;
     }
 
-    static void processPlan(
+    static Results processPlan(
             Map<String, List<ItemTransfer>> plan,
             BiPredicate<String, String> requiresDescendingQuality,
             RoutingScores routingScores,
@@ -212,13 +213,21 @@ public class TransferItems2 implements Action
                     .thenComparing(transfer -> transfer.itemName, String.CASE_INSENSITIVE_ORDER)
                     .thenComparing(Comparator.comparingDouble(
                             (ItemTransfer transfer) -> transfer.quality).reversed()));
-            processor.process(nearestAreaId, areaTransfers);
+            Results processed = processor.process(nearestAreaId, areaTransfers);
+            if (processed == null || !processed.IsSuccess()) {
+                FileLogger.log("[TransferItems2] area-failed thread="
+                        + Thread.currentThread().getName()
+                        + " area=" + nearestAreaId
+                        + " transfers=" + areaTransfers.size());
+                return processed != null ? processed : Results.FAIL();
+            }
 
             List<ItemTransfer> pendingAtArea = remaining.get(nearestAreaId);
             pendingAtArea.removeAll(areaTransfers);
             if (pendingAtArea.isEmpty())
                 remaining.remove(nearestAreaId);
         }
+        return remaining.isEmpty() ? Results.SUCCESS() : Results.FAIL();
     }
 
     @Override
@@ -261,56 +270,65 @@ public class TransferItems2 implements Action
             }
         }
 
-        processPlan(
+        return processPlan(
                 buildAreaPlan(destinations, inventoryQualities),
                 cnt::isBarterOutput,
                 areaIds -> cnt.getRoutingScores(areaIds, gui),
                 (areaId, areaTransfers) -> processAreaTransfers(areaId, areaTransfers, gui));
-
-        return Results.SUCCESS();
     }
 
 
     /**
      * Process all item transfers for a specific area.
      */
-    private void processAreaTransfers(String areaId, List<ItemTransfer> itemsForArea, NGameUI gui) throws InterruptedException {
+    private Results processAreaTransfers(String areaId, List<ItemTransfer> itemsForArea, NGameUI gui) throws InterruptedException {
         for (ItemTransfer itemTransfer : itemsForArea) {
             ArrayList<NContext.ObjectStorage> storages = cnt.getOutStorages(itemTransfer.itemName, itemTransfer.quality);
             for (NContext.ObjectStorage output : storages) {
                 if (output instanceof NContext.FloorDump) {
-                    new DropItemsOnFloor(cnt.getRCArea(areaId), itemTransfer.itemName,
+                    Results result = new DropItemsOnFloor(cnt.getRCArea(areaId), itemTransfer.itemName,
                             itemTransfer.quality, itemTransfer.maxQualityExclusive).run(gui);
+                    if (!result.IsSuccess())
+                        return result;
                 }
                 if (output instanceof NContext.Pile) {
                     boolean categoryBulkSafe = allLiveGroupItemsRouteToArea(
                             itemTransfer.itemName, areaId, gui);
-                    new TransferToPiles(cnt.getRCArea(areaId), itemTransfer.itemName,
+                    Results result = new TransferToPiles(cnt.getRCArea(areaId), itemTransfer.itemName,
                             (int)itemTransfer.quality, itemTransfer.maxQualityExclusive,
                             categoryBulkSafe).run(gui);
+                    if (!result.IsSuccess())
+                        return result;
                 }
                 if (output instanceof Container) {
                     TreeMap<Double,String> areas = cnt.getOutAreas(itemTransfer.itemName);
                     TransferToContainer ttc = new TransferToContainer((Container) output, itemTransfer.itemName,
                             itemTransfer.quality, itemTransfer.maxQualityExclusive);
                     ttc.needsSorting = areas != null && areas.size() > 1;
-                    ttc.run(gui);
+                    Results result = ttc.run(gui);
+                    if (!result.IsSuccess())
+                        return result;
                 }
                 if (output instanceof NContext.Barrel) {
                     if (getItemsExactMatch(itemTransfer.itemName, itemTransfer.quality,
                             itemTransfer.maxQualityExclusive).isEmpty())
                         break;
-                    new TransferToBarrel(Finder.findGob(((NContext.Barrel) output).barrel),
+                    Results result = new TransferToBarrel(Finder.findGob(((NContext.Barrel) output).barrel),
                             itemTransfer.itemName, itemTransfer.quality,
                             itemTransfer.maxQualityExclusive).run(gui);
+                    if (!result.IsSuccess())
+                        return result;
                 }
                 if (output instanceof NContext.Barter) {
-                    new TransferToBarter((NContext.Barter) output,
+                    Results result = new TransferToBarter((NContext.Barter) output,
                             itemTransfer.itemName, itemTransfer.quality,
                             itemTransfer.maxQualityExclusive).run(gui);
+                    if (!result.IsSuccess())
+                        return result;
                 }
             }
         }
+        return Results.SUCCESS();
     }
 
     private boolean allLiveGroupItemsRouteToArea(

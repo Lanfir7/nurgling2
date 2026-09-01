@@ -2088,10 +2088,7 @@ public class MapFile {
 	Collection<MCache.Grid> grids = new ArrayList<>();
 	for(Coord off : inout) {
 	    Coord gc = cgc.add(off);
-	    MCache.Grid grid = map.getgrid(gc);
-	    if(!grid.serverFresh)
-		throw(new MCache.LoadingMap(map, gc));
-	    grids.add(grid);
+	    grids.add(map.getgrid(gc));
 	}
 	if(!grids.isEmpty()) {
 	    synchronized(procmon) {

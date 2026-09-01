@@ -10,6 +10,7 @@ import nurgling.NInventory.QualityType;
 import nurgling.NUtils;
 import nurgling.areas.NContext;
 import nurgling.tasks.WaitItems;
+import nurgling.tasks.WaitTicks;
 import nurgling.tasks.WindowIsClosed;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
@@ -23,6 +24,27 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class TakeItems2 implements Action
 {
+    static final int PILE_WITHDRAWAL_SETTLE_TICKS = 15;
+
+    @FunctionalInterface
+    interface PileWithdrawalStep {
+        void run() throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    interface PileWithdrawalOpen {
+        Results run() throws InterruptedException;
+    }
+
+    static Results approachSettleAndOpenPile(PileWithdrawalOpen approach,
+                                             PileWithdrawalStep settle,
+                                             PileWithdrawalOpen open)
+            throws InterruptedException {
+        approach.run();
+        settle.run();
+        return open.run();
+    }
+
     final NContext cnt;
     String item;
     int count;
@@ -203,8 +225,10 @@ public class TakeItems2 implements Action
     {
         if(PathFinder.isAvailable(pile.pile))
         {
-            new PathFinder(pile.pile).run(gui);
-            new OpenTargetContainer("Stockpile", pile.pile).run(gui);
+            approachSettleAndOpenPile(
+                    () -> new PathFinder(pile.pile).run(gui),
+                    () -> NUtils.addTask(new WaitTicks(PILE_WITHDRAWAL_SETTLE_TICKS)),
+                    () -> new OpenTargetContainer("Stockpile", pile.pile).run(gui));
             TakeItemsFromPile tifp;
             (tifp = new TakeItemsFromPile(pile.pile, gui.getStockpile(), left.get())).run(gui);
             new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);

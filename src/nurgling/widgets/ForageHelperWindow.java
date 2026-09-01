@@ -7,6 +7,7 @@ import haven.Label;
 import haven.Loading;
 import haven.Resource;
 import haven.SListBox;
+import haven.Text;
 import haven.UI;
 import haven.Widget;
 import haven.Window;
@@ -154,9 +155,9 @@ public class ForageHelperWindow extends Window {
         }
 
         private void drawSeason(GOut g, int column, String value) {
-            g.chcolor(ForageSeasonPresentation.color(value));
-            drawColumn(g, column, ForageSeasonPresentation.glyph(value));
-            g.chcolor();
+            Text.Line symbol = ForageSeasonPresentation.render(value);
+            g.image(symbol.tex(), new Coord(ForageHelperTableLayout.columnX(column), UI.scale(3)));
+            symbol.dispose();
         }
 
         @Override

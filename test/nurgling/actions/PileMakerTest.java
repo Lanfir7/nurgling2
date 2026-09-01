@@ -5,6 +5,7 @@ import haven.Pair;
 import nurgling.NHitBox;
 import nurgling.areas.NArea;
 import nurgling.areas.PileFillDirection;
+import nurgling.pf.NHitBoxD;
 import nurgling.tools.NAlias;
 import org.junit.jupiter.api.Test;
 
@@ -140,6 +141,41 @@ class PileMakerTest {
 
         assertFalse(reached);
         assertEquals(Arrays.asList("approach", "exit", "approach"), steps);
+    }
+
+    @Test
+    void failedRouteToPlacementTriesAnotherSideWithoutChangingThePileSlot()
+            throws InterruptedException {
+        List<String> attempts = new java.util.ArrayList<>();
+
+        boolean reached = PileMaker.tryApproachSides(List.of(
+                () -> {
+                    attempts.add("nearest");
+                    return false;
+                },
+                () -> {
+                    attempts.add("other-side");
+                    return true;
+                },
+                () -> {
+                    attempts.add("unused");
+                    return true;
+                }));
+
+        assertTrue(reached);
+        assertEquals(List.of("nearest", "other-side"), attempts);
+    }
+
+    @Test
+    void placementApproachStartsFromTheSideNearestToThePlayer() {
+        NHitBoxD pile = new NHitBoxD(
+                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.z);
+
+        List<PathFinder.Mode> modes = PileMaker.orderedApproachModes(
+                Coord2d.of(0, 10), pile);
+
+        assertEquals(PathFinder.Mode.Y_MAX, modes.get(0));
+        assertEquals(4, modes.size());
     }
 
     @Test

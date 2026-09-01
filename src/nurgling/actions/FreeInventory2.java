@@ -84,8 +84,6 @@ public class FreeInventory2 implements Action
             }
         }
 
-        new TransferItems2(context, targets).run(gui);
-
-        return Results.SUCCESS();
+        return new TransferItems2(context, targets).run(gui);
     }
 }

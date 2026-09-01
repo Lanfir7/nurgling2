@@ -161,7 +161,7 @@ class TransferItems2Test {
         List<String> visited = new java.util.ArrayList<>();
         List<String> inventory = new java.util.ArrayList<>(List.of("Bone", "Entrails"));
 
-        TransferItems2.processPlan(
+        Results result = TransferItems2.processPlan(
                 remaining,
                 (areaId, itemName) -> false,
                 areaIds -> Map.of("full", 0.0, "next", 1.0),
@@ -169,10 +169,34 @@ class TransferItems2Test {
                     visited.add(areaId);
                     if (areaId.equals("next"))
                         inventory.remove("Entrails");
+                    return Results.SUCCESS();
                 });
 
+        assertTrue(result.IsSuccess());
         assertEquals(List.of("full", "next"), visited);
         assertEquals(List.of("Bone"), inventory);
+    }
+
+    @Test
+    void failedAreaStopsPlanAndReportsFailure() throws InterruptedException {
+        Map<String, List<TransferItems2.ItemTransfer>> plan = new LinkedHashMap<>();
+        plan.put("broken", List.of(
+                new TransferItems2.ItemTransfer("Bone", 1.0, "broken")));
+        plan.put("next", List.of(
+                new TransferItems2.ItemTransfer("Entrails", 1.0, "next")));
+        List<String> visited = new java.util.ArrayList<>();
+
+        Results result = TransferItems2.processPlan(
+                plan,
+                (areaId, itemName) -> false,
+                areaIds -> Map.of("broken", 0.0, "next", 1.0),
+                (areaId, transfers) -> {
+                    visited.add(areaId);
+                    return areaId.equals("broken") ? Results.FAIL() : Results.SUCCESS();
+                });
+
+        assertFalse(result.IsSuccess());
+        assertEquals(List.of("broken"), visited);
     }
 
     @Test

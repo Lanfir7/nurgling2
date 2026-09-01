@@ -21,7 +21,9 @@ import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import haven.WItem;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import static haven.OCache.posres;
@@ -236,9 +238,7 @@ public class PileMaker implements Action{
     private boolean approachForDensePlacement(NGameUI gui, Coord2d candidate, NHitBox hitbox)
             throws InterruptedException {
         Gob dummy = NGob.getDummy(candidate, 0, hitbox);
-        return retryAfterExit(
-                () -> approachCandidateOnce(gui, dummy, hitbox),
-                () -> moveOutsidePlacementArea(gui, dummy, hitbox));
+        return approachCandidateOnce(gui, dummy, hitbox);
     }
 
     private boolean approachCandidateOnce(NGameUI gui, Gob dummy, NHitBox hitbox)
@@ -263,18 +263,66 @@ public class PileMaker implements Action{
             }
         }
 
-        if (!nonRetryingPathFinder(dummy).run(gui).IsSuccess()) {
-            return false;
-        }
-
         Gob player = NUtils.player();
         if (player == null || player.rc == null) {
             return false;
         }
+        ArrayList<MovementAttempt> approaches = new ArrayList<>();
+        for (PathFinder.Mode mode : orderedApproachModes(player.rc, new NHitBoxD(dummy))) {
+            approaches.add(() -> nonRetryingPathFinder(dummy, mode).run(gui).IsSuccess());
+        }
+        if (!tryApproachSides(approaches)) {
+            return false;
+        }
+
+        player = NUtils.player();
+        if (player == null || player.rc == null) {
+            return false;
+        }
         if (overlapsCandidate(player, dummy)) {
-            return moveOutsidePlacementArea(gui, dummy, hitbox);
+            return false;
         }
         return true;
+    }
+
+    static boolean tryApproachSides(List<MovementAttempt> approaches)
+            throws InterruptedException {
+        for (MovementAttempt approach : approaches) {
+            if (approach.run()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static List<PathFinder.Mode> orderedApproachModes(Coord2d player, NHitBoxD target) {
+        Coord2d ul = target.getCircumscribedUL();
+        Coord2d br = target.getCircumscribedBR();
+        Coord2d center = ul.add(br).div(2);
+        ArrayList<PathFinder.Mode> modes = new ArrayList<>(Arrays.asList(
+                PathFinder.Mode.X_MIN,
+                PathFinder.Mode.X_MAX,
+                PathFinder.Mode.Y_MIN,
+                PathFinder.Mode.Y_MAX));
+        modes.sort(Comparator.comparingDouble(mode -> approachPoint(mode, ul, br, center)
+                .dist(player)));
+        return modes;
+    }
+
+    private static Coord2d approachPoint(PathFinder.Mode mode, Coord2d ul, Coord2d br,
+                                         Coord2d center) {
+        switch (mode) {
+            case X_MIN:
+                return Coord2d.of(ul.x, center.y);
+            case X_MAX:
+                return Coord2d.of(br.x, center.y);
+            case Y_MIN:
+                return Coord2d.of(center.x, ul.y);
+            case Y_MAX:
+                return Coord2d.of(center.x, br.y);
+            default:
+                return center;
+        }
     }
 
     private boolean moveOutsidePlacementArea(NGameUI gui, Gob futurePile, NHitBox hitbox)
@@ -339,6 +387,12 @@ public class PileMaker implements Action{
                 return false;
             }
         };
+    }
+
+    private static PathFinder nonRetryingPathFinder(Gob target, PathFinder.Mode mode) {
+        PathFinder result = nonRetryingPathFinder(target);
+        result.setMode(mode);
+        return result;
     }
 
     static PathFinder nonRetryingPathFinder(Coord2d target) {

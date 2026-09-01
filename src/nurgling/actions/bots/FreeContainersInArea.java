@@ -111,6 +111,12 @@ public class FreeContainersInArea implements Action {
     }
 
     static boolean approachThenOpen(Step approach, Step open) throws InterruptedException {
+        if (!approach.run()) {
+            return false;
+        }
+        if (open.run()) {
+            return true;
+        }
         return approach.run() && open.run();
     }
 
@@ -142,7 +148,7 @@ public class FreeContainersInArea implements Action {
         ArrayList<PathFinder.Mode> modes = approachModes(targetCenter, candidates);
         for (int i = 0; i < candidates.size(); i++) {
             Coord2d candidate = candidates.get(i);
-            PathFinder approach = new PathFinder(pile);
+            PathFinder approach = boundedApproachPathFinder(pile);
             approach.setMode(modes.get(i));
             if (!approach.run(gui).IsSuccess())
                 continue;
@@ -150,7 +156,7 @@ public class FreeContainersInArea implements Action {
             if (currentPlayer != null && currentPlayer.ngob.hitBox != null && playerIsClear(
                     new NHitBoxD(currentPlayer), targetHitBox, occupied))
                 return true;
-            if (new PathFinder(candidate).run(gui).IsSuccess()) {
+            if (boundedApproachPathFinder(candidate).run(gui).IsSuccess()) {
                 currentPlayer = NUtils.player();
                 if (currentPlayer != null && currentPlayer.ngob.hitBox != null && playerIsClear(
                         new NHitBoxD(currentPlayer), targetHitBox, occupied))
@@ -158,6 +164,32 @@ public class FreeContainersInArea implements Action {
             }
         }
         return false;
+    }
+
+    static boolean shouldReplanPileApproach(int completedReplans) {
+        return completedReplans < 1;
+    }
+
+    private static PathFinder boundedApproachPathFinder(Gob target) {
+        return new PathFinder(target) {
+            private int completedReplans;
+
+            @Override
+            protected boolean onLegFailed(NGameUI gui, Coord2d at) {
+                return shouldReplanPileApproach(completedReplans++);
+            }
+        };
+    }
+
+    private static PathFinder boundedApproachPathFinder(Coord2d target) {
+        return new PathFinder(target) {
+            private int completedReplans;
+
+            @Override
+            protected boolean onLegFailed(NGameUI gui, Coord2d at) {
+                return shouldReplanPileApproach(completedReplans++);
+            }
+        };
     }
 
     static ArrayList<PathFinder.Mode> approachModes(Coord2d targetCenter,
@@ -208,8 +240,9 @@ public class FreeContainersInArea implements Action {
             safe.add(new ScoredApproach(point, clearance, point.dist(playerPosition)));
         }
         safe.sort(Comparator
-                .comparingDouble((ScoredApproach candidate) -> candidate.clearance).reversed()
-                .thenComparingDouble(candidate -> candidate.playerDistance));
+                .comparingDouble((ScoredApproach candidate) -> candidate.playerDistance)
+                .thenComparing(Comparator.comparingDouble(
+                        (ScoredApproach candidate) -> candidate.clearance).reversed()));
 
         ArrayList<Coord2d> result = new ArrayList<>();
         for (ScoredApproach candidate : safe)

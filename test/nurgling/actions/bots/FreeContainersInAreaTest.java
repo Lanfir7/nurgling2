@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FreeContainersInAreaTest {
     @Test
@@ -39,6 +40,45 @@ class FreeContainersInAreaTest {
 
         assertFalse(success);
         assertFalse(opened[0]);
+    }
+
+    @Test
+    void ignoredFirstOpenIsRetriedAfterReapproachingTheSamePile() throws InterruptedException {
+        int[] approaches = {0};
+        int[] opens = {0};
+
+        boolean success = FreeContainersInArea.approachThenOpen(
+                () -> {
+                    approaches[0]++;
+                    return true;
+                },
+                () -> ++opens[0] == 2);
+
+        assertTrue(success);
+        assertEquals(2, approaches[0]);
+        assertEquals(2, opens[0]);
+    }
+
+    @Test
+    void nearestSafeApproachSideWinsOverAUsuallyClearerFarSide() {
+        Coord2d player = Coord2d.of(0, 10);
+        NHitBoxD playerHitBox = new NHitBoxD(
+                Coord2d.of(-1, -1), Coord2d.of(1, 1), player);
+        NHitBoxD target = new NHitBoxD(
+                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.z);
+        List<NHitBoxD> occupied = List.of(
+                new NHitBoxD(Coord2d.of(-8, 5.2), Coord2d.of(8, 6)));
+
+        ArrayList<Coord2d> candidates = FreeContainersInArea.safeApproachCandidates(
+                player, playerHitBox, target, occupied, 0.5);
+
+        assertEquals(Coord2d.of(0, 4), candidates.get(0));
+    }
+
+    @Test
+    void stockpileApproachReplansOnlyOnceBeforeTryingAnotherSide() {
+        assertTrue(FreeContainersInArea.shouldReplanPileApproach(0));
+        assertFalse(FreeContainersInArea.shouldReplanPileApproach(1));
     }
 
     @Test

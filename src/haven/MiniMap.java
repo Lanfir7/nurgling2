@@ -128,7 +128,7 @@ public class MiniMap extends Widget
 	    MCache map = sess.glob.map;
 	    if(lastgrid != null) {
 		synchronized(map.grids) {
-		    if((map.grids.get(lastgrid.gc) == lastgrid) && lastgrid.serverFresh) {
+		    if(map.grids.get(lastgrid.gc) == lastgrid) {
 			GridInfo info = file.gridinfo.get(lastgrid.id);
 			if((info != null) && (info.seg == lastloc.seg.id))
 			    return(lastloc);
@@ -142,8 +142,6 @@ public class MiniMap extends Widget
 		grids.addAll(map.grids.values());
 	    }
 	    for(MCache.Grid grid : grids) {
-		if(!grid.serverFresh)
-		    continue;
 		GridInfo info = file.gridinfo.get(grid.id);
 		if(info == null)
 		    continue;

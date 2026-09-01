@@ -1,6 +1,7 @@
 package nurgling.actions;
 
 import haven.*;
+import haven.error.FileLogger;
 import nurgling.ExtraInvGroupTransfer;
 import nurgling.NGItem;
 import nurgling.NGameUI;
@@ -19,6 +20,27 @@ import java.util.Comparator;
 import java.util.List;
 
 public class TransferToPiles implements Action{
+
+    static final int GOB_SHIFT_RETRY_DELAY_TICKS = 15;
+
+    @FunctionalInterface
+    interface GobShiftAttempt {
+        boolean run() throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    interface GobShiftPause {
+        void run() throws InterruptedException;
+    }
+
+    static boolean retryGobShiftTransfer(GobShiftAttempt attempt, GobShiftPause pause)
+            throws InterruptedException {
+        if (attempt.run()) {
+            return true;
+        }
+        pause.run();
+        return attempt.run();
+    }
 
     NAlias items;
 
@@ -261,7 +283,7 @@ public class TransferToPiles implements Action{
                             }
                             witems = getMatchingItems(gui);
                             int size = witems.size();
-                            Results opened = new OpenTargetContainer("Stockpile", target, true).run(gui);
+                            Results opened = openPileWithRetry(gui, target);
                             if (!opened.IsSuccess() || gui.getStockpile() == null) {
                                 availablePileApproachFailed = true;
                                 break;
@@ -310,7 +332,7 @@ public class TransferToPiles implements Action{
                     while (pile.ngob.getModelAttribute() != 31) {
                         witems = getMatchingItems(gui);
                         int size = witems.size();
-                        Results opened = new OpenTargetContainer("Stockpile", pile, true).run(gui);
+                        Results opened = openPileWithRetry(gui, pile);
                         if (!opened.IsSuccess() || gui.getStockpile() == null)
                             return Results.FAIL();
                         int freeSpace = gui.getStockpile().getFreeSpace();
@@ -353,11 +375,43 @@ public class TransferToPiles implements Action{
 
     static boolean shouldCreateNewPile(boolean hasRemainingItems,
                                        boolean availablePileApproachFailed) {
-        return hasRemainingItems && !availablePileApproachFailed;
+        return hasRemainingItems;
     }
 
     static boolean shouldReplanExistingPileLeg(int completedReplans) {
         return completedReplans < 1;
+    }
+
+    @FunctionalInterface
+    interface ExistingPileOpenAttempt {
+        Results run() throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    interface TypeBulkLeftoverSend {
+        void run() throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    interface TypeBulkLeftoverConfirmation {
+        boolean await() throws InterruptedException;
+    }
+
+    static boolean sendAndConfirmTypeBulkLeftover(TypeBulkLeftoverSend send,
+                                                   TypeBulkLeftoverConfirmation confirmation)
+            throws InterruptedException {
+        send.run();
+        return confirmation.await();
+    }
+
+    static Results retryExistingPileOpen(ExistingPileOpenAttempt open,
+                                         PileMaker.MovementAttempt reposition)
+            throws InterruptedException {
+        Results first = open.run();
+        if (first.IsSuccess() || !reposition.run()) {
+            return first;
+        }
+        return open.run();
     }
 
     private boolean attemptExistingPileApproach(NGameUI gui, Gob target)
@@ -406,6 +460,103 @@ public class TransferToPiles implements Action{
                 && !new NHitBoxD(player).intersects(new NHitBoxD(target), false);
     }
 
+    private Results openPileWithRetry(NGameUI gui, Gob target) throws InterruptedException {
+        int[] attempt = {0};
+        return retryExistingPileOpen(
+                () -> {
+                    attempt[0]++;
+                    FileLogger.log(pileTrace("open-attempt-" + attempt[0], target, ""));
+                    Results result = new OpenTargetContainer("Stockpile", target, true).run(gui);
+                    FileLogger.log(pileTrace("open-result-" + attempt[0], target,
+                            "success=" + result.IsSuccess()
+                                    + " window=" + (gui.getStockpile() != null)));
+                    return result;
+                },
+                () -> {
+                    FileLogger.log(pileTrace("reposition-start", target, ""));
+                    boolean result = repositionForPileOpen(gui, target);
+                    FileLogger.log(pileTrace("reposition-finish", target,
+                            "success=" + result));
+                    return result;
+                });
+    }
+
+    private boolean repositionForPileOpen(NGameUI gui, Gob target) throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null || player.rc == null || player.ngob == null
+                || player.ngob.hitBox == null || target == null || target.ngob == null
+                || target.ngob.hitBox == null) {
+            return approachExistingPile(gui, target);
+        }
+
+        for (Coord2d candidate : interactionClearanceCandidates(
+                new NHitBoxD(player), new NHitBoxD(target), 0.5)) {
+            boolean needsMove = candidate.dist(player.rc) > 0.001;
+            boolean moved = !needsMove || new GoTo(candidate).run(gui).IsSuccess();
+            FileLogger.log(pileTrace("reposition-candidate", target,
+                    "candidate=" + candidate + " needsMove=" + needsMove
+                            + " moved=" + moved));
+            if (!moved) {
+                continue;
+            }
+            player = NUtils.player();
+            if (player != null && player.ngob != null && player.ngob.hitBox != null
+                    && hasInteractionClearance(
+                    new NHitBoxD(player), new NHitBoxD(target), 0.5)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String pileTrace(String phase, Gob target, String extra) {
+        Gob player = NUtils.player();
+        return "[TransferToPiles] phase=" + phase
+                + " thread=" + Thread.currentThread().getName()
+                + " target=" + (target != null ? target.id : -1)
+                + " targetRc=" + (target != null ? target.rc : null)
+                + " playerRc=" + (player != null ? player.rc : null)
+                + (extra == null || extra.isEmpty() ? "" : " " + extra);
+    }
+
+    static List<Coord2d> interactionClearanceCandidates(NHitBoxD playerBox,
+                                                         NHitBoxD targetBox,
+                                                         double clearance) {
+        if (playerBox == null || targetBox == null || playerBox.rc == null) {
+            return List.of();
+        }
+        if (hasInteractionClearance(playerBox, targetBox, clearance)) {
+            return List.of(playerBox.rc);
+        }
+
+        Coord2d playerUL = playerBox.getCircumscribedUL();
+        Coord2d playerBR = playerBox.getCircumscribedBR();
+        Coord2d targetUL = targetBox.getCircumscribedUL();
+        Coord2d targetBR = targetBox.getCircumscribedBR();
+        double margin = Math.max(0, clearance);
+        ArrayList<Coord2d> candidates = new ArrayList<>(List.of(
+                playerBox.rc.add(targetUL.x - margin - playerBR.x, 0),
+                playerBox.rc.add(targetBR.x + margin - playerUL.x, 0),
+                playerBox.rc.add(0, targetUL.y - margin - playerBR.y),
+                playerBox.rc.add(0, targetBR.y + margin - playerUL.y)));
+        candidates.sort(Comparator.comparingDouble(candidate -> candidate.dist(playerBox.rc)));
+        return candidates;
+    }
+
+    private static boolean hasInteractionClearance(NHitBoxD playerBox,
+                                                    NHitBoxD targetBox,
+                                                    double clearance) {
+        Coord2d playerUL = playerBox.getCircumscribedUL();
+        Coord2d playerBR = playerBox.getCircumscribedBR();
+        Coord2d targetUL = targetBox.getCircumscribedUL();
+        Coord2d targetBR = targetBox.getCircumscribedBR();
+        double margin = Math.max(0, clearance);
+        return playerBR.x <= targetUL.x - margin
+                || playerUL.x >= targetBR.x + margin
+                || playerBR.y <= targetUL.y - margin
+                || playerUL.y >= targetBR.y + margin;
+    }
+
     static Coord2d interactionRetreatPoint(NHitBoxD playerBox, NHitBoxD targetBox,
                                            double clearance) {
         if (playerBox == null || targetBox == null || playerBox.rc == null) {
@@ -417,11 +568,7 @@ public class TransferToPiles implements Action{
         Coord2d targetUL = targetBox.getCircumscribedUL();
         Coord2d targetBR = targetBox.getCircumscribedBR();
         double margin = Math.max(0, clearance);
-        boolean insideInteractionMargin = playerBR.x > targetUL.x - margin
-                && playerUL.x < targetBR.x + margin
-                && playerBR.y > targetUL.y - margin
-                && playerUL.y < targetBR.y + margin;
-        if (!insideInteractionMargin) {
+        if (!playerBox.intersects(targetBox, false)) {
             return playerBox.rc;
         }
         Coord2d[] shifts = {
@@ -567,8 +714,21 @@ public class TransferToPiles implements Action{
         if (target == null) {
             return true;
         }
-        target.wdgmsg(LEFTOVER_FLUSH_MSG, Inventory.sqsz.div(2), LEFTOVER_FLUSH_COUNT);
-        return true;
+        NISBox pile = gui.getStockpile();
+        if (pile == null) {
+            return false;
+        }
+        WItem source = leftover;
+        int freeBefore = pile.calcFreeSpace();
+        return sendAndConfirmTypeBulkLeftover(
+                () -> target.wdgmsg(LEFTOVER_FLUSH_MSG,
+                        Inventory.sqsz.div(2), LEFTOVER_FLUSH_COUNT),
+                () -> {
+                    WaitStockpileFillChanged wait =
+                            new WaitStockpileFillChanged(pile, source, freeBefore);
+                    NUtils.addTask(wait);
+                    return wait.changed;
+                });
     }
 
     private WItem findLeftover(ArrayList<WItem> matching) {
@@ -640,13 +800,41 @@ public class TransferToPiles implements Action{
         if (freeBefore < 0) {
             return false;
         }
-        pile.beginDepositTracking();
         WItem source = matching.get(0);
         NUtils.takeItemToHand(source);
+        int[] attempt = {0};
+        return retryGobShiftTransfer(
+                () -> attemptHeldTypeToStockpileGob(gui, pile, source, freeBefore, ++attempt[0]),
+                () -> NUtils.addTask(new WaitTicks(GOB_SHIFT_RETRY_DELAY_TICKS)));
+    }
+
+    private boolean attemptHeldTypeToStockpileGob(NGameUI gui, NISBox pile, WItem source,
+                                                   int freeBefore, int attempt)
+            throws InterruptedException {
+        boolean sourceGone = source == null || source.parent == null;
+        boolean pileFull = pile.parentGob != null
+                && pile.parentGob.ngob.getModelAttribute() == 31;
+        int freeNow = pile.calcFreeSpace();
+        if (attempt > 1
+                && stockpileTransferFinished(sourceGone, pileFull, freeBefore, freeNow)) {
+            return true;
+        }
+        if (gui.vhand == null) {
+            NUtils.takeItemToHand(source);
+            if (gui.vhand == null) {
+                return false;
+            }
+        }
+        pile.beginDepositTracking();
+        FileLogger.log(pileTrace("gob-shift-attempt-" + attempt, pile.parentGob,
+                "freeBefore=" + freeBefore + " freeNow=" + freeNow));
         NUtils.activateItem(pile.parentGob, true);
         NUtils.addTask(new WaitFreeHand(80, false));
         WaitStockpileFillChanged wait = new WaitStockpileFillChanged(pile, source, freeBefore);
         NUtils.addTask(wait);
+        FileLogger.log(pileTrace("gob-shift-result-" + attempt, pile.parentGob,
+                "changed=" + wait.changed + " freeNow=" + pile.calcFreeSpace()
+                        + " hand=" + (gui.vhand != null)));
         return wait.changed;
     }
 

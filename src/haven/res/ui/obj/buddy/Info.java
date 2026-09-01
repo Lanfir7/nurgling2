@@ -21,7 +21,7 @@ public class Info extends GAttrib implements RenderTree.Node, PView.Render2D {
 	super(gob);
     }
 
-    public void draw(GOut g, Pipe state) {
+    public synchronized void draw(GOut g, Pipe state) {
 	Coord sc = Homo3D.obj2view(new Coord3f(0, 0, 15), state, Area.sized(g.sz())).round2();
 	if(dirty) {
 	    RenderContext ctx = state.get(RenderContext.slot);
@@ -65,7 +65,7 @@ public class Info extends GAttrib implements RenderTree.Node, PView.Render2D {
 	}
     }
 
-    public void dirty() {
+    public synchronized void dirty() {
 	if(rend != null)
 	    rend.dispose();
 	rend = null;

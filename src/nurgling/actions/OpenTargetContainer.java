@@ -1,6 +1,7 @@
 package nurgling.actions;
 
 import haven.*;
+import haven.error.FileLogger;
 import static haven.OCache.posres;
 import nurgling.*;
 import nurgling.tasks.*;
@@ -12,8 +13,14 @@ public class OpenTargetContainer implements Action
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
+        long startedAt = System.currentTimeMillis();
         Window already = NUtils.getGameUI().getWindow(name);
-        if(already != null && !isOwnedBy(gui, already, gob))
+        boolean ownsExisting = already != null && isOwnedBy(gui, already, gob);
+        if ("Stockpile".equals(name)) {
+            FileLogger.log(stockpileTrace("start", already,
+                    "ownsExisting=" + ownsExisting));
+        }
+        if(already != null && !ownsExisting)
         {
             /* A container window is keyed only by its caption, so an open window from a
              * previously visited container of the same kind suppresses the click below and
@@ -22,6 +29,9 @@ public class OpenTargetContainer implements Action
              * every second one in a row was never opened at all. */
             already.wdgmsg("close");
             gui.ui.core.addTask(new WindowIsClosed(already));
+            if ("Stockpile".equals(name)) {
+                FileLogger.log(stockpileTrace("stale-window-closed", null, ""));
+            }
             already = null;
         }
         if(already == null)
@@ -31,15 +41,23 @@ public class OpenTargetContainer implements Action
              * leaves every bot-opened container unbound. Set it here so the window that is
              * about to arrive knows which gob it belongs to. */
             gui.ui.core.setLastAction(gob);
+            if ("Stockpile".equals(name)) {
+                FileLogger.log(stockpileTrace("click-sent", null, ""));
+            }
             gui.map.wdgmsg ( "click", Coord.z, gob.rc.floor ( posres ), 3, 0, 0, ( int ) gob.id,
                     gob.rc.floor ( posres ), 0, -1 );
         }
         switch (name)
         {
             case "Stockpile":
-                gui.ui.core.addTask(boundedStockpileWait
-                        ? new FindNISBox(name, 200)
-                        : new FindNISBox(name));
+                NTask wait = boundedStockpileWait
+                        ? new FindStockpileAfterApproach(name, 200)
+                        : new FindNISBox(name);
+                gui.ui.core.addTask(wait);
+                FileLogger.log(stockpileTrace("wait-finished",
+                        NUtils.getGameUI().getWindow(name),
+                        "elapsedMs=" + (System.currentTimeMillis() - startedAt)
+                                + " stockpile=" + (gui.getStockpile() != null)));
                 break;
             case "Barter Stand":
                 gui.ui.core.addTask(new FindBarterStand());
@@ -71,9 +89,15 @@ public class OpenTargetContainer implements Action
         }
         if ("Stockpile".equals(name)) {
             NISBox stockpile = gui.getStockpile();
-            if (stockpile == null)
+            if (stockpile == null) {
+                FileLogger.log(stockpileTrace("failed", NUtils.getGameUI().getWindow(name),
+                        "elapsedMs=" + (System.currentTimeMillis() - startedAt)));
                 return Results.FAIL();
+            }
             stockpile.parentGob = gob;
+            FileLogger.log(stockpileTrace("success", NUtils.getGameUI().getWindow(name),
+                    "elapsedMs=" + (System.currentTimeMillis() - startedAt)
+                            + " free=" + stockpile.getFreeSpace()));
             monitoring.StockpileStorageTracker.observeOpenPile(
                     gob, stockpile.stockpileItemName(), stockpile.stockpileCount());
         }
@@ -82,6 +106,17 @@ public class OpenTargetContainer implements Action
             cont.update();
         }
         return Results.SUCCESS();
+    }
+
+    private String stockpileTrace(String phase, Window window, String extra) {
+        Gob player = NUtils.player();
+        return "[StockpileOpen] phase=" + phase
+                + " thread=" + Thread.currentThread().getName()
+                + " target=" + (gob != null ? gob.id : -1)
+                + " targetRc=" + (gob != null ? gob.rc : null)
+                + " playerRc=" + (player != null ? player.rc : null)
+                + " window=" + (window != null)
+                + (extra == null || extra.isEmpty() ? "" : " " + extra);
     }
 
     /**
@@ -121,6 +156,52 @@ public class OpenTargetContainer implements Action
 
     static boolean sameGobId(long ownerGobId, long requestedGobId) {
         return ownerGobId >= 0 && ownerGobId == requestedGobId;
+    }
+
+    static final class StockpileOpenWaitBudget {
+        private final int stationaryLimit;
+        private int stationaryTicks;
+        private boolean timedOut;
+
+        StockpileOpenWaitBudget(int stationaryLimit) {
+            this.stationaryLimit = Math.max(1, stationaryLimit);
+        }
+
+        boolean tick(boolean windowReady, boolean moving) {
+            if (windowReady) {
+                return true;
+            }
+            if (moving) {
+                stationaryTicks = 0;
+                return false;
+            }
+            timedOut = ++stationaryTicks >= stationaryLimit;
+            return timedOut;
+        }
+
+        boolean timedOut() {
+            return timedOut;
+        }
+    }
+
+    private static final class FindStockpileAfterApproach extends NTask {
+        private final String name;
+        private final StockpileOpenWaitBudget budget;
+
+        FindStockpileAfterApproach(String name, int stationaryLimit) {
+            this.name = name;
+            this.budget = new StockpileOpenWaitBudget(stationaryLimit);
+            this.infinite = true;
+            this.criticalOnTimeout = false;
+        }
+
+        @Override
+        public boolean check() {
+            Window window = NUtils.getGameUI().getWindow(name);
+            Gob player = NUtils.player();
+            boolean moving = player != null && player.getv() > 0.1;
+            return budget.tick(window != null, moving);
+        }
     }
 
     public OpenTargetContainer(String name, Gob gob)

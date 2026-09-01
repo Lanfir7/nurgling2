@@ -17,6 +17,23 @@ import static nurgling.actions.TransferToPiles.PileMode;
 class TransferToPilesTest {
 
     @Test
+    void failedGobShiftWaitsThenRetriesExactlyOnce() throws InterruptedException {
+        StringBuilder order = new StringBuilder();
+        int[] attempts = {0};
+
+        boolean accepted = TransferToPiles.retryGobShiftTransfer(
+                () -> {
+                    order.append('A');
+                    return ++attempts[0] == 2;
+                },
+                () -> order.append('P'));
+
+        assertTrue(accepted);
+        assertEquals(2, attempts[0]);
+        assertEquals("APA", order.toString());
+    }
+
+    @Test
     void ordinaryApproachFailureDoesNotSendCharacterOutOfPileZone() throws InterruptedException {
         int[] exits = {0};
         int[] retries = {0};
@@ -46,8 +63,8 @@ class TransferToPilesTest {
     }
 
     @Test
-    void failedAvailablePileDoesNotAuthorizeCreatingAnotherPile() {
-        assertFalse(TransferToPiles.shouldCreateNewPile(true, true));
+    void exhaustedExistingPileApproachesStillAllowCreatingANewPile() {
+        assertTrue(TransferToPiles.shouldCreateNewPile(true, true));
         assertTrue(TransferToPiles.shouldCreateNewPile(true, false));
         assertFalse(TransferToPiles.shouldCreateNewPile(false, false));
     }
@@ -72,7 +89,7 @@ class TransferToPilesTest {
     }
 
     @Test
-    void nearTouchingHitboxesKeepServerInteractionClearance() {
+    void nearTouchingHitboxesDoNotRetreatBeforeOpeningPile() {
         NHitBoxD pile = new NHitBoxD(
                 Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.of(0, 0), 0);
         NHitBoxD player = new NHitBoxD(
@@ -80,8 +97,55 @@ class TransferToPilesTest {
 
         Coord2d retreat = TransferToPiles.interactionRetreatPoint(player, pile, 0.5);
 
-        assertEquals(5.0, retreat.x, 0.000001);
+        assertEquals(4.7, retreat.x, 0.000001);
         assertEquals(0.0, retreat.y, 0.000001);
+    }
+
+    @Test
+    void failedPileOpenRepositionsAndRetriesTheSamePile() throws InterruptedException {
+        int[] opens = {0};
+        int[] repositions = {0};
+
+        Results result = TransferToPiles.retryExistingPileOpen(
+                () -> ++opens[0] == 1 ? Results.FAIL() : Results.SUCCESS(),
+                () -> {
+                    repositions[0]++;
+                    return true;
+                });
+
+        assertTrue(result.IsSuccess());
+        assertEquals(2, opens[0]);
+        assertEquals(1, repositions[0]);
+    }
+
+    @Test
+    void failedPileOpenStaysFailedWhenSafeRepositionIsImpossible() throws InterruptedException {
+        int[] opens = {0};
+
+        Results result = TransferToPiles.retryExistingPileOpen(
+                () -> {
+                    opens[0]++;
+                    return Results.FAIL();
+                },
+                () -> false);
+
+        assertFalse(result.IsSuccess());
+        assertEquals(1, opens[0]);
+    }
+
+    @Test
+    void nearTouchingPileGetsClearancePointOnlyForOpenRetry() {
+        NHitBoxD pile = new NHitBoxD(
+                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.of(0, 0), 0);
+        NHitBoxD player = new NHitBoxD(
+                Coord2d.of(-2, -2), Coord2d.of(2, 2), Coord2d.of(4.7, 0), 0);
+
+        List<Coord2d> candidates = TransferToPiles.interactionClearanceCandidates(
+                player, pile, 0.5);
+
+        assertEquals(4, candidates.size());
+        assertEquals(5.0, candidates.get(0).x, 0.000001);
+        assertEquals(0.0, candidates.get(0).y, 0.000001);
     }
 
     @Test
@@ -263,6 +327,24 @@ class TransferToPilesTest {
         assertTrue(TransferToPiles.leftoverFlushReady(2, 1, 1));
         assertFalse(TransferToPiles.leftoverFlushSends(0));
         assertTrue(TransferToPiles.leftoverFlushSends(1));
+    }
+
+    @Test
+    void typeBulkLeftoverDoesNotReportSuccessBeforeServerConfirmation()
+            throws InterruptedException {
+        int[] sends = {0};
+        int[] waits = {0};
+
+        boolean accepted = TransferToPiles.sendAndConfirmTypeBulkLeftover(
+                () -> sends[0]++,
+                () -> {
+                    waits[0]++;
+                    return false;
+                });
+
+        assertFalse(accepted);
+        assertEquals(1, sends[0]);
+        assertEquals(1, waits[0]);
     }
 
     @Test

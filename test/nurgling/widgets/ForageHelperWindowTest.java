@@ -3,6 +3,7 @@ package nurgling.widgets;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
+import java.awt.Font;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,8 +14,16 @@ class ForageHelperWindowTest {
     void yesAndNoSeasonsUseColoredSymbols() {
         assertEquals("✓", ForageSeasonPresentation.glyph("Y"));
         assertEquals(new Color(90, 220, 105), ForageSeasonPresentation.color("Y"));
-        assertEquals("X", ForageSeasonPresentation.glyph("N"));
+        assertEquals("✕", ForageSeasonPresentation.glyph("N"));
         assertEquals(new Color(235, 85, 85), ForageSeasonPresentation.color("N"));
+    }
+
+    @Test
+    void seasonSymbolsUseDedicatedFontThatCanDisplayBothMarks() {
+        Font font = ForageSeasonPresentation.symbolFont();
+
+        assertTrue(font.canDisplay('✓'));
+        assertTrue(font.canDisplay('✕'));
     }
 
     @Test

@@ -179,17 +179,6 @@ public class MinesweeperDangerMarkers {
         if (playerTile == null) {
             return;
         }
-        if (NMiningOverlayMemory.ofWorld(mapOf(gui), playerTile) == null) {
-            clear(gui);
-            prevMineable.clear();
-            pendingBlanks.clear();
-            confirmedBlanks.clear();
-            numberSnapshots.clear();
-            lastFingerprint = Long.MIN_VALUE;
-            solver = null;
-            solverGui = null;
-            return;
-        }
         if (solver == null || solverGui != gui) {
             clear(gui);
             prevMineable.clear();
@@ -236,10 +225,6 @@ public class MinesweeperDangerMarkers {
             return player == null ? null : player.rc;
         });
         if (playerTile == null) {
-            return;
-        }
-        if (NMiningOverlayMemory.ofWorld(mapOf(gui), playerTile) == null) {
-            clear(gui);
             return;
         }
         NumberSnapshot snapshot = NumberSnapshot.capture(gui);
