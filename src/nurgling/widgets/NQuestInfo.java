@@ -24,6 +24,7 @@ import nurgling.widgets.quest.QuestObjectiveActionButton;
 import nurgling.widgets.quest.QuestObjectiveActionResolver;
 import nurgling.widgets.quest.QuestObjectiveRowLayout;
 import nurgling.widgets.quest.QuestRowTheme;
+import nurgling.widgets.quest.QuestHelperFilter;
 import nurgling.widgets.quest.QuestTreeIconController;
 
 import java.awt.Color;
@@ -230,7 +231,8 @@ public class NQuestInfo extends Widget
             gui = NUtils.getGameUI();
         if(model.tick(dt, (gui != null) ? gui.chrwdg : null))
             needRebuild = true;
-        treeIcons.reconcile(model.quests(), (gui != null) ? gui.iconconf : null);
+        treeIcons.reconcile(QuestHelperFilter.visibleQuests(model.quests(), prop()),
+                (gui != null) ? gui.iconconf : null);
         harvestPointers(gui);
         if(condsSweepIdle() && gui != null && gui.chrwdg != null) {
             harvestAcc += dt;
@@ -327,7 +329,8 @@ public class NQuestInfo extends Widget
         boolean overlays = applyMarkerProps();
         filterAndSort(groups, p);
         layoutRows(groups, p);
-        QuestModel.Snapshot s = model.snapshot();
+        QuestHelperFilter.OverlaySets s = QuestHelperFilter.overlayTargets(
+                QuestHelperFilter.visibleQuests(model.quests(), p));
         if(!s.hunt.equals(huntingT) || !s.forage.equals(forageT) || !s.bring.equals(bringItems)) {
             huntingT = s.hunt;
             forageT = s.forage;
@@ -343,13 +346,7 @@ public class NQuestInfo extends Widget
     /** Should this quest be considered at all, before per-group filtering? */
     private boolean visible(QuestModel.TQuest q, NQuestTrackerProp p)
     {
-        if(q.kind == QuestKind.UNKNOWN)
-            return false;
-        if(p.hiddenQuests.contains(q.key()))
-            return false;
-        if(QuestTrackFilter.isMutedTitle(q.title()))
-            return false;
-        return p.kinds.contains(q.kind) || p.pinned.contains(q.key());
+        return QuestHelperFilter.visible(q, p);
     }
 
     private List<Group> giverGroups(NQuestTrackerProp p)
@@ -616,7 +613,10 @@ public class NQuestInfo extends Widget
     private boolean applyMarkerProps()
     {
         Map<String, HashSet<String>> props = new HashMap<>();
+        NQuestTrackerProp p = prop();
         for(QuestModel.TQuest q : model.quests()) {
+            if(!visible(q, p))
+                continue;
             if(q.giver != null && q.readyToTurnIn())
                 tag(props, q.giver, "tell");
             for(QCond c : q.conds) {

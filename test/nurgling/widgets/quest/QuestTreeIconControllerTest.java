@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QuestTreeIconControllerTest {
@@ -44,6 +45,60 @@ class QuestTreeIconControllerTest {
                 QuestTreeIconController.settingIds(required, settings).get(1));
     }
 
+    @Test
+    void claimWritesPersistedShowAndClearsLeftoverOverride() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
+        settings.settings.put(oak.id, oak);
+        settings.setShowOverride(oak.id, true);
+
+        QuestTreeIconController controller = new QuestTreeIconController();
+        controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
+
+        assertTrue(oak.show);
+        assertTrue(settings.shown(oak));
+    }
+
+    @Test
+    void releaseRestoresPreviousShowAndClearsOverride() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
+        settings.settings.put(oak.id, oak);
+        settings.setShowOverride(oak.id, true);
+
+        QuestTreeIconController controller = new QuestTreeIconController();
+        controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
+        controller.release(settings);
+
+        assertFalse(oak.show);
+        assertFalse(settings.shown(oak));
+    }
+
+    @Test
+    void alreadyShownIconIsNotForcedOnEveryTick() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], true);
+        settings.settings.put(oak.id, oak);
+
+        QuestTreeIconController controller = new QuestTreeIconController();
+        controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
+        oak.show = false;
+        controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
+
+        assertFalse(oak.show);
+
+        controller.release(settings);
+        assertTrue(oak.show);
+    }
+
+    private static QuestModel.TQuest oakQuest(int id) {
+        QuestModel.TQuest q = new QuestModel.TQuest(id);
+        q.kind = QuestKind.NPC;
+        q.resnm = "paginae/quest/act/oakboard";
+        q.conds = Collections.singletonList(new QCond(id, false, "Bring a Board of Oak to Jenny", null));
+        return q;
+    }
+
     private static Map<Integer, Set<String>> requirements(String resource) {
         Map<Integer, Set<String>> out = new HashMap<>();
         out.put(1, Collections.singleton(resource));
@@ -51,6 +106,12 @@ class QuestTreeIconControllerTest {
     }
 
     private static GobIcon.Setting setting(String name, Object[] sub) {
-        return new GobIcon.Setting(new Resource.Saved(Resource.remote(), name, 1), sub);
+        return setting(name, sub, false);
+    }
+
+    private static GobIcon.Setting setting(String name, Object[] sub, boolean show) {
+        GobIcon.Setting setting = new GobIcon.Setting(new Resource.Saved(Resource.remote(), name, 1), sub);
+        setting.show = show;
+        return setting;
     }
 }
