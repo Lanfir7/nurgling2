@@ -279,6 +279,12 @@ public class NInventory extends Inventory
             extraPanelResolved = true;
             return;
         }
+        if (ExtraInvGroupTransfer.skipExtraPanelForHost(
+                getparent(CharWnd.class) != null,
+                nurgling.widgets.StudyDeskInventoryExtension.isStudyDeskInventory(this))) {
+            extraPanelResolved = true;
+            return;
+        }
         Window wnd = getparent(Window.class);
         if (wnd == null || !(wnd.deco instanceof NWindowDeco) || parent == null) {
             return;
