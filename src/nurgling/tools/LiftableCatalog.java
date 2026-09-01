@@ -12,6 +12,8 @@ import java.util.Set;
  * Category:Bush, and tree logs via {@link PrepQuota#isLog}. Paths here are only those already
  * present in this client (BuildCatalog, NContext.contcaps, NHitBox, MaterialFactory, VSpec, …).
  * Unmapped wiki names can be added later; do not invent resource paths.
+ * Boulders ({@code gfx/terobjs/bumlings/...}) are omitted: liftability depends on remaining
+ * size, not the resource name.
  * <p>
  * Bushes in this client live under {@code gfx/terobjs/bushes/}, not {@code gfx/terobjs/plants/}
  * (crop plants are not liftable).
@@ -76,7 +78,7 @@ public final class LiftableCatalog {
     }
 
     /**
-     * @return true if {@code gobResName} is a tree log, a bush, a boulder, or a mapped liftable
+     * @return true if {@code gobResName} is a tree log, a bush, or a mapped liftable
      * structure. Unknown wiki names stay false until a known client path is added.
      */
     public static boolean isLiftable(String gobResName) {
@@ -86,16 +88,22 @@ public final class LiftableCatalog {
             return true;
         if (gobResName.startsWith("gfx/terobjs/bushes/"))
             return true;
-        if (gobResName.startsWith("gfx/terobjs/bumlings"))
-            return true;
         if (gobResName.startsWith("gfx/terobjs/furn/table"))
             return true;
         return STRUCTURES.contains(gobResName);
     }
 
     /**
-     * Exact-name filter for the clicked gob so a barrel click moves only that barrel resource,
-     * and an oak log click moves only oak logs.
+     * Finder still uses {@link NAlias} substring matching, so this must be applied after
+     * {@link #objectFilter} to keep {@code gfx/terobjs/studydesk} from also matching
+     * {@code gfx/terobjs/studydesk-big}.
+     */
+    public static boolean isExactResource(String gobResName, String clickedResName) {
+        return gobResName != null && gobResName.equals(clickedResName);
+    }
+
+    /**
+     * Coarse Finder alias for the clicked gob. Always pair with {@link #isExactResource}.
      */
     public static NAlias objectFilter(String gobResName) {
         return new NAlias(gobResName);

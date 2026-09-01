@@ -25,6 +25,7 @@ class CarryManyActionTest {
         assertTrue(action.appliesTo(gob("gfx/terobjs/bushes/arrowwood")));
         assertFalse(action.appliesTo(gob("gfx/terobjs/kiln")));
         assertFalse(action.appliesTo(gob("gfx/terobjs/trees/oakstump")));
+        assertFalse(action.appliesTo(gob("gfx/terobjs/bumlings/granite")));
         assertFalse(action.appliesTo(gob("gfx/borka/body")));
         assertFalse(action.appliesTo(gob(null)));
     }
@@ -49,6 +50,7 @@ class CarryManyActionTest {
         assertTrue(src.contains("LiftObject"), src);
         assertTrue(src.contains("FindPlaceAndAction"), src);
         assertTrue(src.contains("LiftableCatalog.objectFilter"), src);
+        assertTrue(src.contains("isExactResource"), src);
         assertTrue(src.contains("context.carry_many"), src);
     }
 

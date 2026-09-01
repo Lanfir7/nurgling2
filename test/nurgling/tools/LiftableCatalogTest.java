@@ -46,8 +46,8 @@ class LiftableCatalogTest {
     }
 
     @Test
-    void bouldersMatchBumlingPrefix() {
-        assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/bumlings/granite"));
+    void bouldersAreNotCataloguedByResourceAlone() {
+        assertFalse(LiftableCatalog.isLiftable("gfx/terobjs/bumlings/granite"));
     }
 
     @Test
@@ -71,5 +71,16 @@ class LiftableCatalogTest {
         NAlias barrel = LiftableCatalog.objectFilter("gfx/terobjs/barrel");
         assertTrue(barrel.matches("gfx/terobjs/barrel"));
         assertFalse(barrel.matches("gfx/terobjs/crate"));
+    }
+
+    @Test
+    void exactResourceRejectsSubstringCollisions() {
+        assertTrue(LiftableCatalog.isExactResource("gfx/terobjs/studydesk", "gfx/terobjs/studydesk"));
+        assertFalse(LiftableCatalog.isExactResource("gfx/terobjs/studydesk-big", "gfx/terobjs/studydesk"));
+        assertFalse(LiftableCatalog.isExactResource("gfx/terobjs/trees/birchlog", "gfx/terobjs/trees/oaklog"));
+        assertFalse(LiftableCatalog.isExactResource(null, "gfx/terobjs/barrel"));
+        NAlias desk = LiftableCatalog.objectFilter("gfx/terobjs/studydesk");
+        assertTrue(desk.matches("gfx/terobjs/studydesk-big"),
+                "NAlias is substring; isExactResource must be applied after Finder");
     }
 }

@@ -39,11 +39,12 @@ public class CarryManyAction implements GobContextAction {
 
     @Override
     public Action create(Gob clicked) {
-        NAlias alias = LiftableCatalog.objectFilter(clicked.ngob.name);
-        return gui -> transferMany(gui, alias);
+        String clickedName = clicked.ngob.name;
+        NAlias alias = LiftableCatalog.objectFilter(clickedName);
+        return gui -> transferMany(gui, clickedName, alias);
     }
 
-    private static Results transferMany(NGameUI gui, NAlias alias) throws InterruptedException {
+    private static Results transferMany(NGameUI gui, String clickedName, NAlias alias) throws InterruptedException {
         NContext context = new NContext(gui);
 
         String insaId = context.createArea("Please, select input area", Resource.loadsimg("baubles/inputArea"));
@@ -52,14 +53,14 @@ public class CarryManyAction implements GobContextAction {
         NArea outarea = context.goToAreaById(outsaId);
 
         ArrayList<Gob> items;
-        while (!(items = Finder.findGobs(inarea, alias)).isEmpty()) {
+        while (!(items = findClickedType(inarea, clickedName, alias)).isEmpty()) {
             ArrayList<Gob> availableItems = new ArrayList<>();
             for (Gob currGob : items) {
                 if (PathFinder.isAvailable(currGob))
                     availableItems.add(currGob);
             }
             if (availableItems.isEmpty()) {
-                NUtils.getGameUI().msg("Can't reach any " + alias.getDefault() + " in current area, skipping...");
+                NUtils.getGameUI().msg("Can't reach any " + clickedName + " in current area, skipping...");
                 break;
             }
 
@@ -75,5 +76,15 @@ public class CarryManyAction implements GobContextAction {
         }
 
         return Results.SUCCESS();
+    }
+
+    static ArrayList<Gob> findClickedType(NArea inarea, String clickedName, NAlias alias) throws InterruptedException {
+        ArrayList<Gob> found = Finder.findGobs(inarea, alias);
+        ArrayList<Gob> exact = new ArrayList<>();
+        for (Gob gob : found) {
+            if (gob.ngob != null && LiftableCatalog.isExactResource(gob.ngob.name, clickedName))
+                exact.add(gob);
+        }
+        return exact;
     }
 }
