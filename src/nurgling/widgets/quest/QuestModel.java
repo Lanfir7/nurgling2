@@ -17,8 +17,8 @@ import java.util.*;
  * runs one request at a time, times out, and puts the player's own selection back when it is
  * done - see {@link #pumpConds}.
  *
- * Lives on the UI thread. {@link #snapshot()} publishes an immutable view for the gob-overlay
- * code, which runs on pool threads.
+ * Lives on the UI thread. {@link #snapshot()} is the unfiltered derived hunt/forage/bring
+ * sets; the tracker applies {@link QuestHelperFilter} before publishing overlays.
  */
 public class QuestModel
 {
