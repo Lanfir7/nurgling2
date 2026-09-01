@@ -1,5 +1,6 @@
 package nurgling.widgets.compass;
 
+import haven.Coord2d;
 import haven.Widget;
 import haven.res.ui.locptr.Pointer;
 import org.junit.jupiter.api.Test;
@@ -24,5 +25,14 @@ class NCompassTargetCollectorTest {
         assertEquals("Cached", NCompassTargetCollector.choosePartyName("Cached", "Buddy", "Party member"));
         assertEquals("Buddy", NCompassTargetCollector.choosePartyName(null, "Buddy", "Party member"));
         assertEquals("Party member", NCompassTargetCollector.choosePartyName("", "", "Party member"));
+    }
+
+    @Test
+    void questPointerUsesCurrentGobPositionInsteadOfStalePointerCoordinates() {
+        Coord2d stalePointerPosition = new Coord2d(100, 200);
+        Coord2d currentGobPosition = new Coord2d(-300, -400);
+
+        assertEquals(currentGobPosition,
+                NCompassTargetCollector.choosePointerPosition(stalePointerPosition, currentGobPosition));
     }
 }

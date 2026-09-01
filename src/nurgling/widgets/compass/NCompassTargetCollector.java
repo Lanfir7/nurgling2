@@ -33,7 +33,11 @@ public final class NCompassTargetCollector {
         for (Pointer pointer : findPointers(gui, root)) {
             try {
                 String name = pointer.tip();
-                Coord2d position = pointer.tc();
+                Gob targetGob = null;
+                if (pointer.gobid >= 0 && gui.ui != null && gui.ui.sess != null && gui.ui.sess.glob != null)
+                    targetGob = gui.ui.sess.glob.oc.getgob(pointer.gobid);
+                Coord2d position = choosePointerPosition(pointer.tc,
+                        targetGob == null ? null : targetGob.rc);
                 if (name == null || name.trim().isEmpty() || position == null)
                     continue;
                 targets.add(new NCompassTarget(
@@ -103,5 +107,9 @@ public final class NCompassTargetCollector {
         if (buddy != null && !buddy.isEmpty())
             return buddy;
         return fallback;
+    }
+
+    static Coord2d choosePointerPosition(Coord2d pointerPosition, Coord2d gobPosition) {
+        return gobPosition == null ? pointerPosition : gobPosition;
     }
 }
