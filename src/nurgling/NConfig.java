@@ -265,6 +265,8 @@ public class NConfig
         treeFinderNotificationAutoCloseTime,
         treeResizeEnabled,
         equipSwordShieldOnAttack,
+        showCompassBar,
+        showLegacyCompassPointers,
         treeResizePercentage,
         animal_marker_enabled,
         animal_marker_patterns,
@@ -518,6 +520,8 @@ public class NConfig
         conf.put(Key.harvestOverlay, false);
         conf.put(Key.treeResizeEnabled, false);
         conf.put(Key.equipSwordShieldOnAttack, false);
+        conf.put(Key.showCompassBar, true);
+        conf.put(Key.showLegacyCompassPointers, false);
         conf.put(Key.treeResizePercentage, 100);
         conf.put(Key.animal_marker_enabled, false);
         conf.put(Key.animal_marker_patterns, new ArrayList<HashMap<String, Object>>());

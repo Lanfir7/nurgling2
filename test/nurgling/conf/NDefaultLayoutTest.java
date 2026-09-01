@@ -7,7 +7,9 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -55,5 +57,13 @@ class NDefaultLayoutTest {
         assertTrue(layout(NDefaultLayout.Preset.MINIMAL).size()
                    < layout(NDefaultLayout.Preset.CLASSIC).size(),
                    "MINIMAL should show fewer widgets than CLASSIC");
+    }
+
+    @Test
+    void compassHasVisibleTopCenterSlot() {
+        NDefaultLayout.Slot slot = NDefaultLayout.slot(NDefaultLayout.Preset.CLASSIC, "compass");
+        assertNotNull(slot);
+        assertEquals(NDefaultLayout.Anchor.TC, slot.anchor);
+        assertTrue(slot.vis);
     }
 }

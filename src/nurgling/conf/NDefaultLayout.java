@@ -47,6 +47,7 @@ public class NDefaultLayout {
         METER(100, 20),
         SMALL(120, 108),
         BAR(240, 90),
+        COMPASS(520, 100),
         BELT(500, 40),
         SLIM(200, 80),
         PANEL(200, 150),
@@ -135,9 +136,10 @@ public class NDefaultLayout {
         base.put("speedmeter", new Slot(Anchor.TL, 132, 102, Box.METER));
         base.put("party", new Slot(Anchor.TL, 4, 128, Box.PANEL));
 
-        /* Time and buffs, top-centre. */
-        base.put("Calendar", new Slot(Anchor.TC, 0, 4, Box.BAR));
-        base.put("bufflist", new Slot(Anchor.TC, 0, 98, Box.BAR));
+        /* Navigation, time and buffs, top-centre. */
+        base.put("compass", new Slot(Anchor.TC, 0, 4, Box.COMPASS));
+        base.put("Calendar", new Slot(Anchor.TC, 0, 110, Box.BAR));
+        base.put("bufflist", new Slot(Anchor.TC, 0, 204, Box.BAR));
 
         /* Navigation and notifications, top-right. */
         base.put("mainmenu", new Slot(Anchor.TR, 4, 4, Box.BAR));
@@ -145,7 +147,7 @@ public class NDefaultLayout {
         base.put("quests", new Slot(Anchor.TR, 4, 336, Box.PANEL));
         /* Alarms sit top-centre rather than in the right column: that column is
          * fully booked by the menu, minimap, quests and the action grid. */
-        base.put("alarm", new Slot(Anchor.TC, 0, 192, Box.METER));
+        base.put("alarm", new Slot(Anchor.TC, 0, 298, Box.METER));
 
         /* Client tools, left edge in the band between the party list and chat. */
         base.put("botsmenu", new Slot(Anchor.ML, 4, 0, Box.PANEL));
@@ -198,6 +200,7 @@ public class NDefaultLayout {
         titles.put("drinkmeter", "widget.drink");
         titles.put("speedmeter", "widget.speed");
         titles.put("party", "widget.party");
+        titles.put("compass", "widget.compass");
         titles.put("Calendar", "widget.calendar");
         titles.put("bufflist", "widget.buffs");
         titles.put("mainmenu", "widget.mainmenu");
