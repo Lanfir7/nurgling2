@@ -6,11 +6,14 @@ import nurgling.NUtils;
 import nurgling.i18n.L10n;
 import nurgling.tools.ForageMarkerLogic;
 import nurgling.tools.TreeGrowth;
+import nurgling.widgets.compass.NCompassSettings;
 
 public class QOLLanfirSettings extends Panel {
     
     private CheckBox treeResizeEnabled;
     private CheckBox equipSwordShieldOnAttack;
+    private CheckBox showCompassBar;
+    private CheckBox showLegacyCompassPointers;
     private HSlider treeResizePercentageSlider;
     private Label treeResizePercentageLabel;
     
@@ -100,6 +103,28 @@ public class QOLLanfirSettings extends Panel {
         y += UI.scale(50);
 
         equipSwordShieldOnAttack = add(new CheckBox(L10n.get("qol.equip_sword_shield_on_attack")), margin, y);
+        y += UI.scale(30);
+
+        showCompassBar = add(new CheckBox(L10n.get("qol.compass_bar")) {
+            @Override
+            public void changed(boolean val) {
+                super.changed(val);
+                NConfig.set(NConfig.Key.showCompassBar, val);
+                NConfig.needUpdate();
+                if (NUtils.getGameUI() != null)
+                    NUtils.getGameUI().setCompassVisible(val);
+            }
+        }, margin, y);
+        y += UI.scale(30);
+
+        showLegacyCompassPointers = add(new CheckBox(L10n.get("qol.legacy_compass_pointers")) {
+            @Override
+            public void changed(boolean val) {
+                super.changed(val);
+                NConfig.set(NConfig.Key.showLegacyCompassPointers, val);
+                NConfig.needUpdate();
+            }
+        }, margin, y);
         
         pack();
     }
@@ -148,6 +173,8 @@ public class QOLLanfirSettings extends Panel {
         forageMarkerMinQualityLabel.settext(String.valueOf(forageMinQValue));
 
         equipSwordShieldOnAttack.a = getBool(NConfig.Key.equipSwordShieldOnAttack);
+        showCompassBar.a = NCompassSettings.showBar();
+        showLegacyCompassPointers.a = NCompassSettings.showLegacyPointers();
     }
     
     @Override
@@ -158,6 +185,8 @@ public class QOLLanfirSettings extends Panel {
         NConfig.set(NConfig.Key.prospectIconScale, prospectIconScaleSlider.val);
         NConfig.set(NConfig.Key.forageMarkerMinQuality, forageMarkerMinQualitySlider.val);
         NConfig.set(NConfig.Key.equipSwordShieldOnAttack, equipSwordShieldOnAttack.a);
+        NConfig.set(NConfig.Key.showCompassBar, showCompassBar.a);
+        NConfig.set(NConfig.Key.showLegacyCompassPointers, showLegacyCompassPointers.a);
         NConfig.needUpdate();
         
         // Apply tree resizing to all existing trees in the world

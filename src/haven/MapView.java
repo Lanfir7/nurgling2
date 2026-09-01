@@ -1768,6 +1768,20 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	return(clipxf(mc, false).toview(Area.sized(this.sz)));
     }
 
+    public Coord3f compassxf(Coord3f mc) {
+	return(CompassProjection.toview(clipxf(mc, false), Area.sized(this.sz)));
+    }
+
+    public Coord3f compassxf(Coord2d mc) {
+	Coord3f cc;
+	try {
+	    cc = getcc();
+	} catch(Loading e) {
+	    return(null);
+	}
+	return(compassxf(new Coord3f((float)mc.x, (float)mc.y, cc.z)));
+    }
+
     public Coord3f screenxf(Coord2d mc) {
 	Coord3f cc;
 	try {
@@ -1797,6 +1811,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
     }
 
     private void partydraw(GOut g) {
+	if(!nurgling.widgets.compass.NCompassSettings.showLegacyPointers())
+	    return;
 	for(Party.Member m : ui.sess.glob.party.memb.values()) {
 	    if(m.gobid == this.plgob)
 		continue;

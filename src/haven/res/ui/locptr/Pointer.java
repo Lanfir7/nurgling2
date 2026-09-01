@@ -6,6 +6,7 @@ import haven.render.*;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.widgets.NMapWnd;
+import nurgling.widgets.compass.NCompassSettings;
 
 import java.awt.Color;
 import java.util.Optional;
@@ -93,18 +94,21 @@ public class Pointer extends Widget {
 
     public void draw(GOut g) {
 	this.lc = null;
+	if(!NCompassSettings.showLegacyPointers())
+	    return;
 	if(tc == null)
 	    return;
 	Gob gob = (gobid < 0) ? null : ui.sess.glob.oc.getgob(gobid);
+	MapView map = getparent(GameUI.class).map;
 	Coord3f sl;
 	if(gob != null) {
 	    try {
-		sl = getparent(GameUI.class).map.screenxf(gob.getc());
+		sl = map.compassxf(gob.getc());
 	    } catch(Loading l) {
 		return;
 	    }
 	} else {
-	    sl = getparent(GameUI.class).map.screenxf(tc);
+	    sl = map.compassxf(tc);
 	}
 	if(sl != null)
 	    drawarrow(g, new Coord(sl));
