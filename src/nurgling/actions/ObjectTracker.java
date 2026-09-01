@@ -315,6 +315,7 @@ public class ObjectTracker {
 
     /**
      * Saves animal marker to Postgres and adds it locally so the finder sees it immediately.
+     * Skipped while the player stands on a personal or village claim; wilderness is unchanged.
      * Runs in bot thread (when gob is valid), adds mark locally and DB in background.
      * On map loading (haven.Loading) schedules one delayed retry so marker is placed after map is ready.
      */
