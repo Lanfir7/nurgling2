@@ -11,6 +11,7 @@ import nurgling.sessions.SessionManager;
 import nurgling.sessions.ThreadLocalUI;
 import nurgling.tools.NFileUtils;
 import nurgling.tools.ConfigWriteState;
+import nurgling.tools.ExploredAreaPolicy;
 import nurgling.tools.NConfigPersistence;
 import nurgling.widgets.NCornerMiniMap;
 import org.json.*;
@@ -121,7 +122,7 @@ public class NConfig
         worldexplorerprop,
         questNotified, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, shareHearthSecret, autoHearthSecret, sharePosition, showPeerPositions, dbGrantRole, dbStatsOverlay, mapShareMarkers, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, dbHost, dbPort, dbName, dbSsl, dbVillage, simplecrops,
-        temsmarktime, exploredAreaEnable, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
+        temsmarktime, exploredAreaEnable, exploredAreaRecord, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         areaRankPresets,  // Map of areaId -> Map of animalType -> presetName
         shortCupboards,
         shortPalisades,
@@ -471,6 +472,7 @@ public class NConfig
         conf.put(Key.dbSsl, nurgling.db.DbSettings.SSL_PREFER);
         conf.put(Key.dbVillage, "");
         conf.put(Key.exploredAreaEnable, false);
+        conf.put(Key.exploredAreaRecord, false);
         conf.put(Key.chunkNavOverlay, false);
         conf.put(Key.floorOverlayEnable, false);
         conf.put(Key.floorOverlayAlpha, 120);
@@ -1355,6 +1357,7 @@ public class NConfig
         // The constructor already seeded a default hideConf, so "does conf contain it" cannot tell
         // us whether the user's file had one. Track what the file actually carried instead.
         boolean fileHadHideConf = false;
+        boolean fileHadExploredAreaRecord = false;
         boolean hadConfigFile = (content != null && !content.isEmpty());
 
         if (hadConfigFile)
@@ -1369,6 +1372,7 @@ public class NConfig
                 return;
             }
             fileHadHideConf = main.has(Key.hideConf.name());
+            fileHadExploredAreaRecord = main.has(Key.exploredAreaRecord.name());
             Map<String, Object> map = main.toMap();
             for (Map.Entry<String, Object> entry : map.entrySet())
             {
@@ -1445,6 +1449,12 @@ public class NConfig
         // Migration: Ensure new config keys have default values if not present in loaded config
         if (!conf.containsKey(Key.showSpeedometer)) {
             conf.put(Key.showSpeedometer, true);
+        }
+
+        // Fog button used to both display and record. Keep recording for those users.
+        if (hadConfigFile && !fileHadExploredAreaRecord) {
+            conf.put(Key.exploredAreaRecord, ExploredAreaPolicy.migrateRecord(false, null, conf.get(Key.exploredAreaEnable)));
+            writeState().markDirty();
         }
 
         if (!conf.containsKey(Key.harvestOverlay)) {
@@ -1718,15 +1728,23 @@ public class NConfig
             try
             {
                 String filePath = customPath == null ? getExploredPath() : customPath;
-                // Merge with existing data on disk to prevent data loss when multiple clients run
-                ((NCornerMiniMap)NUtils.getGameUI().mmap).exploredArea.mergeAndSaveToFile(filePath);
+                // Drop the debounce flag before queueing so a concurrent explore can re-dirty.
                 this.isExploredUpd = false;
                 this.lastExploredChangeTime = 0;
+                boolean submitted = ((NCornerMiniMap)NUtils.getGameUI().mmap).exploredArea.requestMergeAndSave(
+                        filePath,
+                        () -> {},
+                        NConfig::needExploredUpdate);
+                if (!submitted) {
+                    this.isExploredUpd = true;
+                    this.lastExploredChangeTime = System.currentTimeMillis();
+                }
             }
             catch (Exception e)
             {
-                // Log error but don't crash
                 System.err.println("Error saving explored area: " + e.getMessage());
+                this.isExploredUpd = true;
+                this.lastExploredChangeTime = System.currentTimeMillis();
             }
         }
     }
