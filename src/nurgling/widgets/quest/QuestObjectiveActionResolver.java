@@ -43,7 +43,7 @@ public final class QuestObjectiveActionResolver {
     }
 
     public Set<String> treeResources(QCond cond) {
-        if(cond == null || cond.itemTarget == null)
+        if(cond == null || cond.ready || cond.itemTarget == null)
             return Collections.emptySet();
         return VSpec.treeResourcesForProduct(cond.itemTarget);
     }

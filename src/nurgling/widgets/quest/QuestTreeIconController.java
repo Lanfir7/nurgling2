@@ -23,6 +23,8 @@ public class QuestTreeIconController {
         for(QuestModel.TQuest quest : quests) {
             Set<String> resources = new LinkedHashSet<>();
             for(QCond cond : quest.conds) {
+                if(cond.ready)
+                    continue;
                 for(String tree : resolver.treeResources(cond))
                     resources.add(iconResourceForTree(tree));
             }
