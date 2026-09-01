@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
@@ -24,14 +23,14 @@ class FuelSmeltersActionTest {
         int light = bot.indexOf("LightGob");
         assertTrue(fuel >= 0 && light >= 0, bot);
         assertTrue(fuel < light, "must light after fuel: " + bot);
-        assertTrue(bot.contains("primsmelter"), "must exclude stack furnace via primsmelter");
+        assertTrue(bot.contains("Arrays.asList(\"primsmelter\")"), "primsmelter must be an NAlias exception: " + bot);
+        assertFalse(bot.contains("new NAlias(\"gfx/terobjs/primsmelter\")"), bot);
+        assertFalse(bot.contains("\"Stack furnace\""), bot);
         assertTrue(bot.contains("setMaxlvl(12)"), bot);
         assertTrue(bot.contains("setCredolvl(9)"), bot);
         assertTrue(bot.contains("setFueltype(\"coal\")"), bot);
         assertTrue(bot.contains("Ore Smelter") && bot.contains("Smith's Smelter"), bot);
         assertFalse(bot.contains("BotRegistry"));
-        assertFalse(bot.contains("gfx/terobjs/primsmelter") && bot.contains("Stack furnace"),
-                "must not include Stack Furnace");
         String registry = read("src/nurgling/actions/bots/registry/BotRegistry.java");
         assertFalse(registry.contains("FuelSmelters"));
     }
