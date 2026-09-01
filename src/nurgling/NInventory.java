@@ -279,9 +279,9 @@ public class NInventory extends Inventory
             extraPanelResolved = true;
             return;
         }
-        if (ExtraInvGroupTransfer.skipExtraPanelForHost(
-                getparent(CharWnd.class) != null,
-                nurgling.widgets.StudyDeskInventoryExtension.isStudyDeskInventory(this))) {
+        // CharWnd parent is stable (localized titles). Do not latch study-desk skip on
+        // last-action parentGob — bindParentGobIfNeeded may rebind this inventory to a chest.
+        if (ExtraInvGroupTransfer.skipExtraPanelForHost(getparent(CharWnd.class) != null, false)) {
             extraPanelResolved = true;
             return;
         }
@@ -292,8 +292,14 @@ public class NInventory extends Inventory
         if (wnd.cap == null) {
             return;
         }
-        if (!ExtraInvGroupTransfer.shouldInstallExtraPanel(wnd.cap, false)) {
+        boolean studyDesk = nurgling.widgets.StudyDeskInventoryExtension.isStudyDeskInventory(this);
+        boolean confirmedStudyDesk = studyDesk && gobMatchesWindow(parentGob, wnd.cap);
+        if (ExtraInvGroupTransfer.skipExtraPanelForHost(false, confirmedStudyDesk)
+                || !ExtraInvGroupTransfer.shouldInstallExtraPanel(wnd.cap, false)) {
             extraPanelResolved = true;
+            return;
+        }
+        if (studyDesk) {
             return;
         }
         installContainerExtraPanel((NWindowDeco) wnd.deco);

@@ -347,10 +347,12 @@ public final class ExtraInvGroupTransfer {
     }
 
     /**
-     * Character Sheet (any L10n title via CharWnd parent) and study desks never get the extra panel.
+     * Character Sheet (any L10n title via CharWnd parent) and confirmed study desks
+     * never get the extra panel. Study-desk {@code parentGob} is only confirmed when
+     * the gob matches this window; a stale last-action desk must not latch-skip a chest.
      */
-    public static boolean skipExtraPanelForHost(boolean inCharacterSheet, boolean isStudyDeskInventory) {
-        return inCharacterSheet || isStudyDeskInventory;
+    public static boolean skipExtraPanelForHost(boolean inCharacterSheet, boolean confirmedStudyDesk) {
+        return inCharacterSheet || confirmedStudyDesk;
     }
 
     /** Ender ExtInventory.getTransferTargets(): flags, count, destination widget ids. */

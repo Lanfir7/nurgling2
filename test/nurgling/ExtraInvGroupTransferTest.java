@@ -408,6 +408,10 @@ class ExtraInvGroupTransferTest {
         assertFalse(ExtraInvGroupTransfer.skipExtraPanelForHost(false, false));
         // Localized CharWnd title is not in EXTRA_PANEL_EXCLUDES; CharWnd parent check covers it.
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Лист персонажа", false));
+        // Stale last-action study-desk gob (unconfirmed) must not count as a host skip
+        // while the window title is a real container.
+        assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
+        assertFalse(ExtraInvGroupTransfer.skipExtraPanelForHost(false, false));
     }
 
     @Test

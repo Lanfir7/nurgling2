@@ -95,7 +95,7 @@ class ExtraInvPanelPrefsTest {
     }
 
     @Test
-    void extraPanelExclusionsUnchanged() {
+    void extraPanelExcludesCharacterSheetAndStudyDesks() {
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Cupboard", false));
         assertTrue(ExtraInvGroupTransfer.shouldInstallExtraPanel("Chest", false));
         assertFalse(ExtraInvGroupTransfer.shouldInstallExtraPanel("Belt", false));
