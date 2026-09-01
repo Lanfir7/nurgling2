@@ -269,6 +269,12 @@ public class NConfig
         equipSwordShieldOnAttack,
         showCompassBar,
         showLegacyCompassPointers,
+        showCompassQuests,
+        showCompassParty,
+        showCompassDatabasePeers,
+        showCompassNearbyPlayers,
+        showCompassCombatTargets,
+        compassBackgroundOpacity,
         treeResizePercentage,
         animal_marker_enabled,
         animal_marker_patterns,
@@ -524,6 +530,12 @@ public class NConfig
         conf.put(Key.equipSwordShieldOnAttack, false);
         conf.put(Key.showCompassBar, true);
         conf.put(Key.showLegacyCompassPointers, false);
+        conf.put(Key.showCompassQuests, true);
+        conf.put(Key.showCompassParty, true);
+        conf.put(Key.showCompassDatabasePeers, true);
+        conf.put(Key.showCompassNearbyPlayers, true);
+        conf.put(Key.showCompassCombatTargets, true);
+        conf.put(Key.compassBackgroundOpacity, 75);
         conf.put(Key.treeResizePercentage, 100);
         conf.put(Key.animal_marker_enabled, false);
         conf.put(Key.animal_marker_patterns, new ArrayList<HashMap<String, Object>>());

@@ -16,6 +16,11 @@ public class QOLLanfirSettings extends Panel {
     private CheckBox equipSwordShieldOnAttack;
     private CheckBox showCompassBar;
     private CheckBox showLegacyCompassPointers;
+    private CheckBox showCompassQuests;
+    private CheckBox showCompassParty;
+    private CheckBox showCompassDatabasePeers;
+    private CheckBox showCompassNearbyPlayers;
+    private CheckBox showCompassCombatTargets;
     private HSlider treeResizePercentageSlider;
     private Label treeResizePercentageLabel;
     
@@ -25,6 +30,8 @@ public class QOLLanfirSettings extends Panel {
     private Label prospectIconScaleLabel;
     private HSlider forageMarkerMinQualitySlider;
     private Label forageMarkerMinQualityLabel;
+    private HSlider compassBackgroundOpacitySlider;
+    private Label compassBackgroundOpacityLabel;
     
     public QOLLanfirSettings() {
         super("QOL Lanfir");
@@ -129,6 +136,40 @@ public class QOLLanfirSettings extends Panel {
         }, margin, y);
         y += UI.scale(30);
 
+        add(new Label(L10n.get("qol.compass_markers")), margin, y);
+        y += UI.scale(22);
+
+        showCompassQuests = add(compassCategory(
+                L10n.get("qol.compass_quests"), NConfig.Key.showCompassQuests), margin, y);
+        y += UI.scale(25);
+        showCompassParty = add(compassCategory(
+                L10n.get("qol.compass_party"), NConfig.Key.showCompassParty), margin, y);
+        y += UI.scale(25);
+        showCompassDatabasePeers = add(compassCategory(
+                L10n.get("qol.compass_database_peers"), NConfig.Key.showCompassDatabasePeers), margin, y);
+        y += UI.scale(25);
+        showCompassNearbyPlayers = add(compassCategory(
+                L10n.get("qol.compass_nearby_players"), NConfig.Key.showCompassNearbyPlayers), margin, y);
+        y += UI.scale(25);
+        showCompassCombatTargets = add(compassCategory(
+                L10n.get("qol.compass_combat_targets"), NConfig.Key.showCompassCombatTargets), margin, y);
+        y += UI.scale(32);
+
+        add(new Label(L10n.get("qol.compass_background_opacity")), margin, y);
+        y += UI.scale(20);
+        compassBackgroundOpacityLabel = new Label("75%");
+        compassBackgroundOpacitySlider = new HSlider(UI.scale(300), 0, 100, 75) {
+            @Override
+            public void changed() {
+                compassBackgroundOpacityLabel.settext(this.val + "%");
+                NConfig.set(NConfig.Key.compassBackgroundOpacity, this.val);
+                NConfig.needUpdate();
+            }
+        };
+        addhlp(Coord.of(margin, y), UI.scale(5),
+                compassBackgroundOpacitySlider, compassBackgroundOpacityLabel);
+        y += UI.scale(45);
+
         showLegacyCompassPointers = add(new CheckBox(L10n.get("qol.legacy_compass_pointers")) {
             @Override
             public void changed(boolean val) {
@@ -139,6 +180,17 @@ public class QOLLanfirSettings extends Panel {
         }, margin, y);
         
         pack();
+    }
+
+    private CheckBox compassCategory(String label, NConfig.Key key) {
+        return new CheckBox(label) {
+            @Override
+            public void changed(boolean val) {
+                super.changed(val);
+                NConfig.set(key, val);
+                NConfig.needUpdate();
+            }
+        };
     }
     
     private void updateSliderVisibility() {
@@ -187,6 +239,14 @@ public class QOLLanfirSettings extends Panel {
         equipSwordShieldOnAttack.a = getBool(NConfig.Key.equipSwordShieldOnAttack);
         showCompassBar.a = NCompassSettings.showBar();
         showLegacyCompassPointers.a = NCompassSettings.showLegacyPointers();
+        showCompassQuests.a = NCompassSettings.showQuests();
+        showCompassParty.a = NCompassSettings.showParty();
+        showCompassDatabasePeers.a = NCompassSettings.showDatabasePeers();
+        showCompassNearbyPlayers.a = NCompassSettings.showNearbyPlayers();
+        showCompassCombatTargets.a = NCompassSettings.showCombatTargets();
+        int compassOpacity = NCompassSettings.backgroundOpacity();
+        compassBackgroundOpacitySlider.val = compassOpacity;
+        compassBackgroundOpacityLabel.settext(compassOpacity + "%");
     }
     
     @Override
@@ -199,6 +259,12 @@ public class QOLLanfirSettings extends Panel {
         NConfig.set(NConfig.Key.equipSwordShieldOnAttack, equipSwordShieldOnAttack.a);
         NConfig.set(NConfig.Key.showCompassBar, showCompassBar.a);
         NConfig.set(NConfig.Key.showLegacyCompassPointers, showLegacyCompassPointers.a);
+        NConfig.set(NConfig.Key.showCompassQuests, showCompassQuests.a);
+        NConfig.set(NConfig.Key.showCompassParty, showCompassParty.a);
+        NConfig.set(NConfig.Key.showCompassDatabasePeers, showCompassDatabasePeers.a);
+        NConfig.set(NConfig.Key.showCompassNearbyPlayers, showCompassNearbyPlayers.a);
+        NConfig.set(NConfig.Key.showCompassCombatTargets, showCompassCombatTargets.a);
+        NConfig.set(NConfig.Key.compassBackgroundOpacity, compassBackgroundOpacitySlider.val);
         NConfig.needUpdate();
         
         // Apply tree resizing to all existing trees in the world

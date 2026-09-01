@@ -27,4 +27,11 @@ public final class NCompassPresentation {
         int index = (int) Math.floor((NCompassMath.normalize(bearing) + (step / 2.0)) / step);
         return DIRECTION_KEYS[Math.floorMod(index, DIRECTION_KEYS.length)];
     }
+
+    public static boolean isPrimaryDirection(double bearing) {
+        double quarter = Math.PI / 2.0;
+        double normalized = NCompassMath.normalize(bearing);
+        double nearest = Math.rint(normalized / quarter) * quarter;
+        return Math.abs(NCompassMath.normalize(normalized - nearest)) < 0.000001;
+    }
 }

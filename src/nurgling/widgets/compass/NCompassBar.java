@@ -11,8 +11,10 @@ import haven.UI;
 import haven.Widget;
 import nurgling.NGameUI;
 import nurgling.i18n.L10n;
+import nurgling.tools.NPointerClickHandler;
 
 import java.awt.Color;
+import java.awt.Font;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -31,10 +33,13 @@ public class NCompassBar extends Widget {
             -Math.PI / 4.0
     };
     private static final Text.Foundry TEXT = new Text.Foundry(Text.sans, 11).aa(true);
+    private static final Text.Foundry PRIMARY_TEXT =
+            new Text.Foundry(Text.sans.deriveFont(Font.BOLD), 14).aa(true);
     private static final int CACHE_LIMIT = 128;
 
     private final NGameUI gui;
     private final NCompassTargetCollector collector;
+    private final NCompassHits hits = new NCompassHits();
     private final LinkedHashMap<String, Tex> labels = new LinkedHashMap<String, Tex>(CACHE_LIMIT, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Tex> eldest) {
@@ -57,7 +62,8 @@ public class NCompassBar extends Widget {
 
     @Override
     public void draw(GOut g) {
-        g.chcolor(15, 24, 28, 190);
+        hits.clear();
+        g.chcolor(15, 24, 28, NCompassSettings.backgroundAlpha());
         g.frect(Coord.z, sz);
         g.chcolor(92, 119, 126, 220);
         int baseline = UI.scale(20);
@@ -77,13 +83,14 @@ public class NCompassBar extends Widget {
             if (projection.region != NCompassMath.Region.FRONT)
                 continue;
             boolean center = Math.abs(projection.x - (sz.x / 2)) <= UI.scale(2);
+            boolean primary = NCompassPresentation.isPrimaryDirection(bearing);
             g.chcolor(center ? new Color(239, 211, 126) : new Color(174, 193, 195));
-            int tick = center ? UI.scale(8) : UI.scale(5);
+            int tick = center ? UI.scale(10) : primary ? UI.scale(8) : UI.scale(5);
             g.line(new Coord(projection.x, baseline - tick), new Coord(projection.x, baseline + tick), UI.scale(1));
             g.chcolor();
             Tex label = label(L10n.get(NCompassPresentation.directionKey(bearing)),
-                    center ? new Color(255, 229, 145) : Color.WHITE);
-            g.aimage(label, new Coord(projection.x, UI.scale(2)), 0.5, 0.0);
+                    center ? new Color(255, 229, 145) : Color.WHITE, primary);
+            g.aimage(label, new Coord(projection.x, primary ? 0 : UI.scale(2)), 0.5, 0.0);
         }
         g.chcolor(255, 230, 155, 230);
         g.line(new Coord(sz.x / 2, baseline - UI.scale(11)),
@@ -124,6 +131,7 @@ public class NCompassBar extends Widget {
         else if (marker.region == NCompassMath.Region.REAR_RIGHT)
             markerX = sz.x - UI.scale(11);
         Coord center = new Coord(markerX, iconY);
+        hits.add(center, UI.scale(12), target);
         if (marker.region == NCompassMath.Region.REAR_LEFT ||
                 marker.region == NCompassMath.Region.REAR_RIGHT) {
             int edgeX = marker.region == NCompassMath.Region.REAR_LEFT ? 0 : sz.x - 1;
@@ -145,19 +153,36 @@ public class NCompassBar extends Widget {
         }
 
         String text = NCompassPresentation.targetLabel(target.name, target.distance, marker.extra);
-        Tex label = label(text, target.kind == NCompassTarget.Kind.PARTY ? target.color : Color.WHITE);
+        Tex label = label(text, target.kind == NCompassTarget.Kind.QUEST ? Color.WHITE : target.color, false);
         int labelX = Math.max(label.sz().x / 2, Math.min(sz.x - label.sz().x / 2, markerX));
         g.aimage(label, new Coord(labelX, iconY + UI.scale(9)), 0.5, 0.0);
     }
 
     private Tex label(String text, Color color) {
-        String key = color.getRGB() + "\n" + text;
+        return label(text, color, false);
+    }
+
+    private Tex label(String text, Color color, boolean primary) {
+        String key = (primary ? "primary" : "normal") + "\n" + color.getRGB() + "\n" + text;
         Tex cached = labels.get(key);
         if (cached != null)
             return cached;
-        Tex created = TEXT.renderstroked(text, color, Color.BLACK).tex();
+        Tex created = (primary ? PRIMARY_TEXT : TEXT).renderstroked(text, color, Color.BLACK).tex();
         labels.put(key, created);
         return created;
+    }
+
+    @Override
+    public boolean mousedown(MouseDownEvent ev) {
+        if (ev.b == 3) {
+            NCompassTarget target = hits.find(ev.c);
+            if (target != null) {
+                NPointerClickHandler.handleRightClick(
+                        target.position, target.name, target.gobId);
+                return true;
+            }
+        }
+        return super.mousedown(ev);
     }
 
     @Override
