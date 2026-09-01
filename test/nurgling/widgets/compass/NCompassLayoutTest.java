@@ -11,9 +11,9 @@ class NCompassLayoutTest {
     @Test
     void rearBucketShowsNearestAndCountsTheRest() {
         List<NCompassLayout.Input> in = Arrays.asList(
-                new NCompassLayout.Input("far", -Math.PI + 0.1, 80),
-                new NCompassLayout.Input("near", -Math.PI + 0.2, 20),
-                new NCompassLayout.Input("other", -Math.PI + 0.3, 40));
+                new NCompassLayout.Input("far", 0.1, 80),
+                new NCompassLayout.Input("near", 0.2, 20),
+                new NCompassLayout.Input("other", 0.3, 40));
 
         List<NCompassLayout.Marker> out = NCompassLayout.arrange(in, 0.0, 500, 70, 2);
 
@@ -26,8 +26,8 @@ class NCompassLayoutTest {
     @Test
     void rearSidesAreAggregatedIndependently() {
         List<NCompassLayout.Input> in = Arrays.asList(
-                new NCompassLayout.Input("left", -Math.PI + 0.1, 10),
-                new NCompassLayout.Input("right", Math.PI - 0.1, 15));
+                new NCompassLayout.Input("left", 0.1, 10),
+                new NCompassLayout.Input("right", -0.1, 15));
 
         List<NCompassLayout.Marker> out = NCompassLayout.arrange(in, 0.0, 500, 70, 2);
 
@@ -38,9 +38,9 @@ class NCompassLayoutTest {
     @Test
     void collisionsUseTwoLanesThenAggregate() {
         List<NCompassLayout.Input> in = Arrays.asList(
-                new NCompassLayout.Input("a", 0.0, 10),
-                new NCompassLayout.Input("b", 0.0, 20),
-                new NCompassLayout.Input("c", 0.0, 30));
+                new NCompassLayout.Input("a", Math.PI, 10),
+                new NCompassLayout.Input("b", Math.PI, 20),
+                new NCompassLayout.Input("c", Math.PI, 30));
 
         List<NCompassLayout.Marker> out = NCompassLayout.arrange(in, 0.0, 500, 70, 2);
 
@@ -53,8 +53,8 @@ class NCompassLayoutTest {
     @Test
     void separatedFrontTargetsStayInFirstLane() {
         List<NCompassLayout.Input> in = Arrays.asList(
-                new NCompassLayout.Input("left", -Math.PI / 2, 10),
-                new NCompassLayout.Input("right", Math.PI / 2, 20));
+                new NCompassLayout.Input("left", Math.PI / 2, 10),
+                new NCompassLayout.Input("right", -Math.PI / 2, 20));
 
         List<NCompassLayout.Marker> out = NCompassLayout.arrange(in, 0.0, 500, 70, 2);
 

@@ -31,7 +31,7 @@ public final class NCompassMath {
     }
 
     public static double cameraHeading(double cameraAngle) {
-        return normalize(cameraAngle);
+        return normalize(Math.PI - cameraAngle);
     }
 
     public static Projection project(double targetBearing, double cameraAngle, int width) {
