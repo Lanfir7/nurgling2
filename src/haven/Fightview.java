@@ -470,6 +470,17 @@ public class Fightview extends Widget {
         throw(new Notfound(gobid));
     }
 
+    public void destroy() {
+        Object session = fightSession();
+        for(Relation rel : new ArrayList<>(lsrel))
+            NDMGOverlay.forgetGob(session, rel.gobid);
+        super.destroy();
+    }
+
+    private Object fightSession() {
+        return ((ui != null) && (ui.sess != null)) ? ui.sess.glob : null;
+    }
+
     public void uimsg(String msg, Object... args) {
         if(msg == "new") {
             long id = Utils.uiv(args[0]);
@@ -486,12 +497,14 @@ public class Fightview extends Widget {
 	        updrel();
             return;
         } else if(msg == "del") {
-            Relation rel = getrel(Utils.uiv(args[0]));
+            long id = Utils.uiv(args[0]);
+            Relation rel = getrel(id);
 	    rel.remove();
             lsrel.remove(rel);
 	    if(rel == current)
 		setcur(null);
 	    updrel();
+            NDMGOverlay.forgetGob(fightSession(), id);
             return;
         } else if(msg == "upd") {
             Relation rel = getrel(Utils.uiv(args[0]));

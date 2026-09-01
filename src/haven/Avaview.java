@@ -33,7 +33,7 @@ import haven.Composited.Desc;
 import haven.Composited.MD;
 import haven.Composited.ED;
 import nurgling.NStyle;
-import nurgling.overlays.NDMGOverlay;
+import nurgling.overlays.NCombatHpBar;
 import nurgling.tools.CreatureHp;
 
 public class Avaview extends PView {
@@ -288,10 +288,7 @@ public class Avaview extends PView {
 	Gob gob = ui.sess.glob.oc.getgob(avagob);
 	if(gob == null)
 	    return;
-	int dealt = 0;
-	Gob.Overlay gol = gob.findol(NDMGOverlay.class);
-	if((gol != null) && (gol.spr instanceof NDMGOverlay))
-	    dealt = ((NDMGOverlay)gol.spr).total();
+	int dealt = NCombatHpBar.dealtOn(gob);
 	String name = (gob.ngob != null) ? gob.ngob.name : null;
 		String text = CreatureHp.remainingLabel(dealt, name);
 	if(text == null)

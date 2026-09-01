@@ -14,12 +14,17 @@ import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 
 /**
- * HP bar above a gob that is currently in combat ({@code Fightview.lsrel}).
+ * World HP bar on a gob currently in combat ({@code Fightview.lsrel}).
  * Anchored in the world, drawn in screen pixels so it stays readable from the camera.
  */
 public class NCombatHpBar extends Sprite implements RenderTree.Node, PView.Render2D {
-    private static final Coord3f POS = new Coord3f(0, 0, 13.2f);
-    private static final Coord BAR = UI.scale(new Coord(78, 22));
+    public static final float DEF_OFFSET = NCombatHpBarStyle.DEF_OFFSET;
+    public static final float OFFSET_MIN = NCombatHpBarStyle.OFFSET_MIN;
+    public static final float OFFSET_MAX = NCombatHpBarStyle.OFFSET_MAX;
+    public static final int DEF_WIDTH = NCombatHpBarStyle.DEF_WIDTH;
+    public static final int WIDTH_MIN = NCombatHpBarStyle.WIDTH_MIN;
+    public static final int WIDTH_MAX = NCombatHpBarStyle.WIDTH_MAX;
+    private static final int BAR_H = NCombatHpBarStyle.BAR_H;
     private static final int PAD = UI.scale(3);
     private static final float ARC = UI.scale(8f);
     private static final Text.Foundry NUM = new Text.Foundry(Text.sans.deriveFont(Font.BOLD), 9, Color.WHITE).aa(true);
@@ -33,11 +38,27 @@ public class NCombatHpBar extends Sprite implements RenderTree.Node, PView.Rende
         this.gob = (Gob) owner;
     }
 
-    private int dealt() {
+    public static float offsetZ() {
+        return NCombatHpBarStyle.offsetZ();
+    }
+
+    public static int unscaledWidth() {
+        return NCombatHpBarStyle.unscaledWidth();
+    }
+
+    public static int dealtOn(Gob gob) {
+        if(gob == null)
+            return 0;
+        if(NCombatDamageStore.contains(gob.glob, gob.id))
+            return NCombatDamageStore.total(gob.glob, gob.id);
         Gob.Overlay gol = gob.findol(NDMGOverlay.class);
         if((gol != null) && (gol.spr instanceof NDMGOverlay))
-            return ((NDMGOverlay)gol.spr).total();
+            return ((NDMGOverlay) gol.spr).total();
         return 0;
+    }
+
+    private int dealt() {
+        return dealtOn(gob);
     }
 
     private String resName() {
@@ -60,7 +81,8 @@ public class NCombatHpBar extends Sprite implements RenderTree.Node, PView.Rende
         Integer max = CreatureHp.maxHp(resName());
         if(max == null)
             return;
-        Coord sc = Homo3D.obj2view(POS, state, Area.sized(g.sz())).round2();
+        Coord3f pos = new Coord3f(0, 0, offsetZ());
+        Coord sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
         if(sc == null)
             return;
         int dealt = dealt();
@@ -68,26 +90,27 @@ public class NCombatHpBar extends Sprite implements RenderTree.Node, PView.Rende
         if(text == null)
             return;
         float frac = CreatureHp.fraction(dealt, max);
-        int fw = Math.max(0, Math.round(BAR.x * frac));
-        String key = text + "/" + fw;
+        Coord bar = UI.scale(new Coord(unscaledWidth(), BAR_H));
+        int fw = Math.max(0, Math.round(bar.x * frac));
+        String key = text + "/" + fw + "/" + bar.x;
         if(!key.equals(lastKey)) {
             lastKey = key;
             if(lastTex != null)
                 lastTex.dispose();
-            lastTex = new TexI(paint(frac, fw, text));
+            lastTex = new TexI(paint(frac, fw, text, bar));
         }
         g.image(lastTex, sc.sub(lastTex.sz().div(2)));
     }
 
-    private static BufferedImage paint(float frac, int fw, String text) {
-        int w = BAR.x + PAD * 2;
-        int h = BAR.y + PAD * 2;
+    private static BufferedImage paint(float frac, int fw, String text, Coord bar) {
+        int w = bar.x + PAD * 2;
+        int h = bar.y + PAD * 2;
         BufferedImage img = TexI.mkbuf(new Coord(w, h));
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
 
-        float x = PAD, y = PAD, bw = BAR.x, bh = BAR.y;
+        float x = PAD, y = PAD, bw = bar.x, bh = bar.y;
         float arc = ARC;
         float iarc = Math.max(2f, arc - 2f);
 

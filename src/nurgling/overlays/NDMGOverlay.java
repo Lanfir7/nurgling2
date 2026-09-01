@@ -14,13 +14,19 @@ import java.util.WeakHashMap;
 public class NDMGOverlay extends Sprite implements PView.Render2D {
 
     /**
-     * Clears all NDMGOverlay overlays from all Gobs
+     * Clears NDMGOverlay overlays on the current session's gobs and forgets
+     * that session's fight-scoped totals.
      */
     public static void clearAll() {
-        if (NUtils.getGameUI() == null || NUtils.getGameUI().ui == null || 
+        synchronized (live) {
+            live.clear();
+        }
+        if (NUtils.getGameUI() == null || NUtils.getGameUI().ui == null ||
             NUtils.getGameUI().ui.sess == null || NUtils.getGameUI().ui.sess.glob == null) {
+            NCombatDamageStore.clearAll();
             return;
         }
+        NCombatDamageStore.clearSession(NUtils.getGameUI().ui.sess.glob);
         synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
             for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
                 Gob.Overlay ol = gob.findol(NDMGOverlay.class);
@@ -29,9 +35,11 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
                 }
             }
         }
-        synchronized (live) {
-            live.clear();
-        }
+    }
+
+    /** Drop stored totals for one gob when its fight relation ends. */
+    public static void forgetGob(Object session, long gobid) {
+        NCombatDamageStore.clear(session, gobid);
     }
 
     /* Gob.addcustomol() defers the actual add to a loader thread, so findol() cannot
@@ -48,6 +56,18 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
 
     public NDMGOverlay(Owner owner) {
         super(owner, null);
+        seedFromStore();
+    }
+
+    private void seedFromStore() {
+        Gob gob = ownerGob();
+        if(gob == null)
+            return;
+        NCombatDamageStore.copyInto(gob.glob, gob.id, dmg);
+    }
+
+    private Gob ownerGob() {
+        return (owner instanceof Gob) ? (Gob) owner : null;
     }
 
     public static void IsDMG(Message sdt, Gob g) {
@@ -90,7 +110,23 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
 
     public synchronized void updDmg(int dmg, int type) {
         this.dmg[type] += dmg;
-        dmgt[type] = new TexI(Utils.outline2(fnd.render(Integer.toString(this.dmg[type]), colt[type]).img, Utils.contrast(colt[type])));
+        persist();
+        rebuildTextures();
+    }
+
+    private void persist() {
+        Gob gob = ownerGob();
+        if(gob != null)
+            NCombatDamageStore.replace(gob.glob, gob.id, this.dmg[0], this.dmg[1], this.dmg[2]);
+    }
+
+    private void rebuildTextures() {
+        for(int i = 0; i < 3; i++) {
+            if(this.dmg[i] != 0)
+                dmgt[i] = new TexI(Utils.outline2(fnd.render(Integer.toString(this.dmg[i]), colt[i]).img, Utils.contrast(colt[i])));
+            else
+                dmgt[i] = null;
+        }
         int w = 0;
         int h = 0;
         for(int i = 0; i < 3; i++) {
@@ -98,6 +134,10 @@ public class NDMGOverlay extends Sprite implements PView.Render2D {
                 w += dmgt[i].sz().x + UI.scale(2);
                 h = Math.max(h, dmgt[i].sz().y + UI.scale(2));
             }
+        }
+        if((w <= 0) || (h <= 0)) {
+            pending = null;
+            return;
         }
         BufferedImage ret = TexI.mkbuf(new Coord(w, h));
         Graphics g = ret.getGraphics();
