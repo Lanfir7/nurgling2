@@ -5,6 +5,7 @@ import haven.Button;
 import haven.Label;
 import nurgling.NConfig;
 import nurgling.conf.NCombatData;
+import nurgling.overlays.NCombatHpBarStyle;
 import nurgling.widgets.NColorWidget;
 
 import java.awt.Color;
@@ -24,6 +25,10 @@ public class CombatSettings extends Panel {
     private final CheckBox showHealthBar;
     private final CheckBox showStaminaBar;
     private final CheckBox includeHHP;
+    private final Label hpBarOffsetLabel;
+    private final HSlider hpBarOffsetSlider;
+    private final Label hpBarWidthLabel;
+    private final HSlider hpBarWidthSlider;
 
     private final NColorWidget colOffbalance;
     private final NColorWidget colReeling;
@@ -65,6 +70,33 @@ public class CombatSettings extends Panel {
         singleRow = add(new CheckBox("Single row for combat moves"), new Coord(margin, y));
         singleRow.tooltip = Text.render("Lay all ten moves out on one row instead of two rows of five. The panel resizes to match.").tex();
         y += line + UI.scale(14);
+
+        add(new Label("● Creature HP bar"), new Coord(margin, y));
+        y += UI.scale(22);
+        hpBarOffsetLabel = add(new Label(offsetLabelText(NCombatHpBarStyle.offsetZ())), new Coord(margin, y));
+        hpBarOffsetLabel.tooltip = Text.render("World-height offset of the HP bar (default 13.2). Positive sits above the animal, negative sits below. Range -20..40.").tex();
+        y += line;
+        hpBarOffsetSlider = add(new HSlider(UI.scale(200), -200, 400, offsetSliderVal(NCombatHpBarStyle.offsetZ())) {
+            public void changed() {
+                float z = val / 10f;
+                hpBarOffsetLabel.settext(offsetLabelText(z));
+                NConfig.set(NConfig.Key.combatCreatureHpBarOffset, z);
+                NConfig.needUpdate();
+            }
+        }, new Coord(margin, y));
+        hpBarOffsetSlider.tooltip = hpBarOffsetLabel.tooltip;
+        y += UI.scale(22);
+        hpBarWidthLabel = add(new Label(widthLabelText(NCombatHpBarStyle.unscaledWidth())), new Coord(margin, y));
+        hpBarWidthLabel.tooltip = Text.render("Width of the world HP bar in unscaled pixels (default 78). Range 40..160. Scaled with UI like the rest of the HUD.").tex();
+        y += line;
+        hpBarWidthSlider = add(new HSlider(UI.scale(200), NCombatHpBarStyle.WIDTH_MIN, NCombatHpBarStyle.WIDTH_MAX, NCombatHpBarStyle.unscaledWidth()) {
+            public void changed() {
+                hpBarWidthLabel.settext(widthLabelText(val));
+                NConfig.set(NConfig.Key.combatCreatureHpBarWidth, val);
+                NConfig.needUpdate();
+            }
+        }, new Coord(margin, y));
+        hpBarWidthSlider.tooltip = hpBarWidthLabel.tooltip;
 
         int cy = UI.scale(40);
         add(new Label("● Opening colours"), new Coord(col2, cy));
@@ -111,6 +143,13 @@ public class CombatSettings extends Panel {
         showStaminaBar.a = bool(NConfig.Key.combatShowStaminaBar, true);
         includeHHP.a = bool(NConfig.Key.combatIncludeHHPText, false);
 
+        float offset = NCombatHpBarStyle.offsetZ();
+        hpBarOffsetSlider.val = offsetSliderVal(offset);
+        hpBarOffsetLabel.settext(offsetLabelText(offset));
+        int width = NCombatHpBarStyle.unscaledWidth();
+        hpBarWidthSlider.val = width;
+        hpBarWidthLabel.settext(widthLabelText(width));
+
         colOffbalance.color = NConfig.getColor(NConfig.Key.combatColorOffbalance, NCombatData.DEF_GREEN);
         colReeling.color = NConfig.getColor(NConfig.Key.combatColorReeling, NCombatData.DEF_YELLOW);
         colCornered.color = NConfig.getColor(NConfig.Key.combatColorCornered, NCombatData.DEF_RED);
@@ -129,6 +168,8 @@ public class CombatSettings extends Panel {
         NConfig.set(NConfig.Key.combatShowHealthBar, showHealthBar.a);
         NConfig.set(NConfig.Key.combatShowStaminaBar, showStaminaBar.a);
         NConfig.set(NConfig.Key.combatIncludeHHPText, includeHHP.a);
+        NConfig.set(NConfig.Key.combatCreatureHpBarOffset, hpBarOffsetSlider.val / 10.0);
+        NConfig.set(NConfig.Key.combatCreatureHpBarWidth, hpBarWidthSlider.val);
 
         NConfig.set(NConfig.Key.combatColorOffbalance, colOffbalance.color);
         NConfig.set(NConfig.Key.combatColorReeling, colReeling.color);
@@ -143,5 +184,17 @@ public class CombatSettings extends Panel {
     private static boolean bool(NConfig.Key key, boolean def) {
         Object v = NConfig.get(key);
         return((v instanceof Boolean) ? (Boolean)v : def);
+    }
+
+    private static int offsetSliderVal(float z) {
+        return Math.round(z * 10f);
+    }
+
+    private static String offsetLabelText(float z) {
+        return String.format("Vertical offset: %.1f", z);
+    }
+
+    private static String widthLabelText(int w) {
+        return "Bar width: " + w;
     }
 }

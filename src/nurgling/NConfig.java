@@ -223,6 +223,8 @@ public class NConfig
         combatColorDizzy,
         combatColorMyIP,
         combatColorEnemyIP,
+        combatCreatureHpBarOffset,
+        combatCreatureHpBarWidth,
         randomAreaColor,
         treeScaleDisableZoomHide,
         treeScaleMinThreshold,
@@ -694,6 +696,8 @@ public class NConfig
         conf.put(Key.combatColorDizzy, nurgling.conf.NCombatData.DEF_BLUE);
         conf.put(Key.combatColorMyIP, nurgling.conf.NCombatData.DEF_MYIP);
         conf.put(Key.combatColorEnemyIP, nurgling.conf.NCombatData.DEF_ENEMYIP);
+        conf.put(Key.combatCreatureHpBarOffset, 13.2);
+        conf.put(Key.combatCreatureHpBarWidth, 78);
 
         // Random area color on creation
         conf.put(Key.randomAreaColor, false);
