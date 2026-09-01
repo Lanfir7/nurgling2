@@ -3,6 +3,7 @@ package nurgling.actions.bots;
 import haven.Coord2d;
 import haven.Gob;
 import nurgling.actions.PathFinder;
+import nurgling.actions.Results;
 import nurgling.pf.NHitBoxD;
 import org.junit.jupiter.api.Test;
 
@@ -79,6 +80,13 @@ class FreeContainersInAreaTest {
     void stockpileApproachReplansOnlyOnceBeforeTryingAnotherSide() {
         assertTrue(FreeContainersInArea.shouldReplanPileApproach(0));
         assertFalse(FreeContainersInArea.shouldReplanPileApproach(1));
+    }
+
+    @Test
+    void pickupResumesOnlyAfterInventoryWasActuallyFreed() {
+        assertFalse(FreeContainersInArea.canResumePickup(Results.FAIL(), 10));
+        assertFalse(FreeContainersInArea.canResumePickup(Results.SUCCESS(), 0));
+        assertTrue(FreeContainersInArea.canResumePickup(Results.SUCCESS(), 1));
     }
 
     @Test

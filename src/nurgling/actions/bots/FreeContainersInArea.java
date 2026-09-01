@@ -62,17 +62,18 @@ public class FreeContainersInArea implements Action {
                 if (!openPile(gui, pile))
                     continue;
                 openedPile = true;
-                drainPile(gui, context, workAreaId, pile);
+                if (!drainPile(gui, context, workAreaId, pile)) {
+                    return Results.FAIL();
+                }
                 break;
             }
             if (!openedPile)
                 break;
         }
-        new FreeInventory2(context).run(gui);
-        return Results.SUCCESS();
+        return new FreeInventory2(context).run(gui);
     }
 
-    private static void drainPile(NGameUI gui, NContext context, String workAreaId, Gob pile)
+    private static boolean drainPile(NGameUI gui, NContext context, String workAreaId, Gob pile)
             throws InterruptedException {
         Coord size = StockpileUtils.itemMaxSize.get(pile.ngob.name);
         Coord itemSize = size != null ? size : new Coord(1, 1);
@@ -80,7 +81,11 @@ public class FreeContainersInArea implements Action {
         while (Finder.findGob(pile.id) != null) {
             int freeSlots = gui.getInventory().getNumberFreeCoord(itemSize);
             if (freeSlots == 0) {
-                new FreeInventory2(context).run(gui);
+                Results freed = new FreeInventory2(context).run(gui);
+                int freeAfter = gui.getInventory().getNumberFreeCoord(itemSize);
+                if (!canResumePickup(freed, freeAfter)) {
+                    return false;
+                }
                 context.navigateToAreaIfNeeded(workAreaId);
                 if (Finder.findGob(pile.id) == null || !openPile(gui, pile))
                     break;
@@ -97,6 +102,12 @@ public class FreeContainersInArea implements Action {
             new TakeItemsFromPile(pile, stockpile, freeSlots).run(gui);
             context.navigateToAreaIfNeeded(workAreaId);
         }
+        return true;
+    }
+
+    static boolean canResumePickup(Results freeInventoryResult, int freeSlotsAfter) {
+        return freeInventoryResult != null && freeInventoryResult.IsSuccess()
+                && freeSlotsAfter > 0;
     }
 
     static void orderPilesNearestFirst(ArrayList<Gob> piles, Coord2d player) {

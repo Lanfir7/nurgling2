@@ -238,7 +238,23 @@ public class PileMaker implements Action{
     private boolean approachForDensePlacement(NGameUI gui, Coord2d candidate, NHitBox hitbox)
             throws InterruptedException {
         Gob dummy = NGob.getDummy(candidate, 0, hitbox);
-        return approachCandidateOnce(gui, dummy, hitbox);
+        Gob player = NUtils.player();
+        boolean occupiedByPlayer = player != null && player.rc != null
+                && overlapsCandidate(player, dummy);
+        return approachAfterLeavingOccupiedSlot(
+                occupiedByPlayer,
+                () -> moveOutsidePlacementArea(gui, dummy, hitbox),
+                () -> approachCandidateOnce(gui, dummy, hitbox));
+    }
+
+    static boolean approachAfterLeavingOccupiedSlot(boolean occupiedByPlayer,
+                                                     MovementAttempt exit,
+                                                     MovementAttempt approach)
+            throws InterruptedException {
+        if (occupiedByPlayer && !exit.run()) {
+            return false;
+        }
+        return approach.run();
     }
 
     private boolean approachCandidateOnce(NGameUI gui, Gob dummy, NHitBox hitbox)
@@ -269,20 +285,18 @@ public class PileMaker implements Action{
         }
         ArrayList<MovementAttempt> approaches = new ArrayList<>();
         for (PathFinder.Mode mode : orderedApproachModes(player.rc, new NHitBoxD(dummy))) {
-            approaches.add(() -> nonRetryingPathFinder(dummy, mode).run(gui).IsSuccess());
+            approaches.add(() -> approachCandidateFromSide(gui, dummy, mode));
         }
-        if (!tryApproachSides(approaches)) {
-            return false;
-        }
+        return tryApproachSides(approaches);
+    }
 
-        player = NUtils.player();
-        if (player == null || player.rc == null) {
+    private boolean approachCandidateFromSide(NGameUI gui, Gob dummy, PathFinder.Mode mode)
+            throws InterruptedException {
+        if (!nonRetryingPathFinder(dummy, mode).run(gui).IsSuccess()) {
             return false;
         }
-        if (overlapsCandidate(player, dummy)) {
-            return false;
-        }
-        return true;
+        Gob player = NUtils.player();
+        return player != null && player.rc != null && !overlapsCandidate(player, dummy);
     }
 
     static boolean tryApproachSides(List<MovementAttempt> approaches)

@@ -74,6 +74,44 @@ class PileMakerTest {
     }
 
     @Test
+    void occupiedPileSlotIsExitedBeforeApproachingTheSameSlot() throws InterruptedException {
+        List<String> steps = new java.util.ArrayList<>();
+
+        boolean reached = PileMaker.approachAfterLeavingOccupiedSlot(
+                true,
+                () -> {
+                    steps.add("exit");
+                    return true;
+                },
+                () -> {
+                    steps.add("approach");
+                    return true;
+                });
+
+        assertTrue(reached);
+        assertEquals(List.of("exit", "approach"), steps);
+    }
+
+    @Test
+    void clearPileSlotIsApproachedWithoutAnEscapeMove() throws InterruptedException {
+        List<String> steps = new java.util.ArrayList<>();
+
+        boolean reached = PileMaker.approachAfterLeavingOccupiedSlot(
+                false,
+                () -> {
+                    steps.add("exit");
+                    return true;
+                },
+                () -> {
+                    steps.add("approach");
+                    return true;
+                });
+
+        assertTrue(reached);
+        assertEquals(List.of("approach"), steps);
+    }
+
+    @Test
     void exitsPreviousPileThroughTheFreeStartChosenByPathfinder() throws InterruptedException {
         Coord2d freeStart = Coord2d.of(5.5, -2.75);
         List<Coord2d> directMoves = new java.util.ArrayList<>();

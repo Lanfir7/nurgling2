@@ -355,15 +355,17 @@ public class TransferToPiles implements Action{
         }
 
     private boolean approachExistingPile(NGameUI gui, Gob target) throws InterruptedException {
-        boolean reached = attemptExistingPileApproach(gui, target);
-        if (reached) {
-            return true;
+        Gob player = NUtils.player();
+        if (player == null || player.rc == null || target == null
+                || target.ngob == null || target.ngob.hitBox == null) {
+            return false;
         }
-        PathFinder preview = new PathFinder(target);
-        preview.construct(true);
-        return recoverExistingPileApproach(preview.startWasBlocked(),
-                () -> leavePileArea(gui),
-                () -> attemptExistingPileApproach(gui, target));
+        ArrayList<PileMaker.MovementAttempt> approaches = new ArrayList<>();
+        for (PathFinder.Mode mode : PileMaker.orderedApproachModes(
+                player.rc, new NHitBoxD(target))) {
+            approaches.add(() -> attemptExistingPileApproach(gui, target, mode));
+        }
+        return PileMaker.tryApproachSides(approaches);
     }
 
     static boolean recoverExistingPileApproach(boolean stillBlocked,
@@ -414,9 +416,10 @@ public class TransferToPiles implements Action{
         return open.run();
     }
 
-    private boolean attemptExistingPileApproach(NGameUI gui, Gob target)
+    private boolean attemptExistingPileApproach(NGameUI gui, Gob target, PathFinder.Mode mode)
             throws InterruptedException {
         PathFinder preview = new PathFinder(target);
+        preview.setMode(mode);
         preview.construct(true);
         if (preview.startWasBlocked()) {
             Coord2d freeStart = PileMaker.freeStartTarget(preview);
@@ -434,6 +437,7 @@ public class TransferToPiles implements Action{
                 return shouldReplanExistingPileLeg(completedReplans++);
             }
         };
+        path.setMode(mode);
         return path.run(gui).IsSuccess() && clearInteractionOverlap(gui, target);
     }
 
