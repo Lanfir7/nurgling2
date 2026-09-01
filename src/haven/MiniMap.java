@@ -514,7 +514,7 @@ public class MiniMap extends Widget
 
 	private void fireNotifyIfAlive() {
 	    MiniMapIconPolicy.fireIconNotify(alarmState,
-		ClaimLand.isOnClaimOrVillage(NUtils.player()), gob.pose(), iconResName());
+		() -> ClaimLand.isOnClaimOrVillage(NUtils.player()), gob.pose(), iconResName());
 	}
 
 	public void playNotification() {

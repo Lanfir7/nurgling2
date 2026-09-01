@@ -65,12 +65,32 @@ class MiniMapIconNotifyClaimMuteTest {
     }
 
     @Test
+    void skipsClaimLookupWhenNothingIsPending() {
+        AtomicInteger claimChecks = new AtomicInteger();
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(() -> {});
+        state.dropSound();
+
+        MiniMapIconPolicy.fireIconNotify(state, () -> {
+            claimChecks.incrementAndGet();
+            return true;
+        }, "idle", BEAR);
+        MiniMapIconPolicy.fireIconNotify(null, () -> {
+            claimChecks.incrementAndGet();
+            return false;
+        }, "idle", BEAR);
+
+        assertEquals(0, claimChecks.get());
+    }
+
+    @Test
     void displayIconNotifyPathUsesClaimGateAtPlayTime() throws Exception {
         String src = Files.readString(Path.of("src/haven/MiniMap.java"));
         assertTrue(src.contains("MiniMapIconPolicy.fireIconNotify"),
                 "DisplayIcon must mute via MiniMapIconPolicy.fireIconNotify");
         assertTrue(src.contains("ClaimLand.isOnClaimOrVillage"),
                 "play-time gate must check player claim/village overlay");
+        assertTrue(src.contains("() -> ClaimLand.isOnClaimOrVillage"),
+                "claim overlay lookup must be deferred until a sound is pending");
         assertFalse(src.contains("SettingsWindow"),
                 "must not route preview play through the minimap mute");
     }

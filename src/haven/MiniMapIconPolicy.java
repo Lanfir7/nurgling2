@@ -53,10 +53,16 @@ final class MiniMapIconPolicy {
 
     static void fireIconNotify(DefaultAnimalAlarms.State alarmState, boolean onClaim,
                                String pose, String iconResName) {
-        if (alarmState == null) {
+        fireIconNotify(alarmState, () -> onClaim, pose, iconResName);
+    }
+
+    static void fireIconNotify(DefaultAnimalAlarms.State alarmState, Supplier<Boolean> onClaim,
+                               String pose, String iconResName) {
+        if (alarmState == null || !alarmState.isPending()) {
             return;
         }
-        if (!shouldPlayIconNotify(onClaim)) {
+        boolean mute = (onClaim != null) && Boolean.TRUE.equals(onClaim.get());
+        if (!shouldPlayIconNotify(mute)) {
             alarmState.dropSound();
             return;
         }
