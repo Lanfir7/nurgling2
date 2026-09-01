@@ -57,6 +57,8 @@ class QuestTreeIconControllerTest {
 
         assertTrue(oak.show);
         assertTrue(settings.shown(oak));
+        oak.show = false;
+        assertFalse(settings.shown(oak));
     }
 
     @Test
@@ -110,7 +112,9 @@ class QuestTreeIconControllerTest {
     }
 
     private static GobIcon.Setting setting(String name, Object[] sub, boolean show) {
-        GobIcon.Setting setting = new GobIcon.Setting(new Resource.Saved(Resource.remote(), name, 1), sub);
+        Resource.Saved saved = new Resource.Saved(Resource.remote(), name, 1);
+        GobIcon.Settings.ResID from = new GobIcon.Settings.ResID(saved, new byte[0]);
+        GobIcon.Setting setting = new GobIcon.Setting(saved, sub, null, from);
         setting.show = show;
         return setting;
     }
