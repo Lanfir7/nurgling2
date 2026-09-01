@@ -46,9 +46,16 @@ class QuestObjectiveActionResolverTest {
     }
 
     @Test
-    void readyTreeObjectiveStillRetainsTreeResource() {
+    void unfinishedTreeObjectiveReturnsTreeResource() {
+        assertTrue(resolver.treeResources(
+                new QCond(1, false, "Bring a Board of Oak to Jenny", null))
+                .contains("gfx/terobjs/trees/oak"));
+    }
+
+    @Test
+    void readyTreeObjectiveHasNoTreeResource() {
         assertTrue(resolver.treeResources(
                 new QCond(1, true, "Bring a Board of Oak to Jenny", null))
-                .contains("gfx/terobjs/trees/oak"));
+                .isEmpty());
     }
 }

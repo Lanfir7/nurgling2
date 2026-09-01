@@ -4,6 +4,7 @@ import haven.GobIcon;
 import haven.Resource;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -74,6 +75,42 @@ class QuestTreeIconControllerTest {
 
         assertFalse(oak.show);
         assertFalse(settings.shown(oak));
+    }
+
+    @Test
+    void readyOakBringDoesNotForceOakWhenOtherConditionUnfinished() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
+        settings.settings.put(oak.id, oak);
+
+        QuestModel.TQuest q = new QuestModel.TQuest(1);
+        q.kind = QuestKind.NPC;
+        q.resnm = "paginae/quest/act/oakboard";
+        q.conds = Arrays.asList(
+                new QCond(1, true, "Bring oak acorn to Bildal", null),
+                new QCond(1, false, "Catch a big fish", null));
+
+        new QuestTreeIconController().reconcile(Collections.singletonList(q), settings);
+
+        assertFalse(oak.show);
+        assertFalse(settings.shown(oak));
+    }
+
+    @Test
+    void unfinishedOakBringStillClaimsOakIcon() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
+        settings.settings.put(oak.id, oak);
+
+        QuestModel.TQuest q = new QuestModel.TQuest(1);
+        q.kind = QuestKind.NPC;
+        q.resnm = "paginae/quest/act/oakboard";
+        q.conds = Collections.singletonList(new QCond(1, false, "Bring oak acorn to Bildal", null));
+
+        new QuestTreeIconController().reconcile(Collections.singletonList(q), settings);
+
+        assertTrue(oak.show);
+        assertTrue(settings.shown(oak));
     }
 
     @Test
