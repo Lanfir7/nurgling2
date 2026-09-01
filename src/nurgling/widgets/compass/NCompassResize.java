@@ -26,4 +26,14 @@ public final class NCompassResize {
         int left = edge == Edge.LEFT ? startRight - width : startLeft;
         return new Result(left, width);
     }
+
+    public static Result dragFrame(Edge edge, int frameLeft, int contentOffset,
+                                   int contentWidth, int cursorX, int minContentWidth,
+                                   int maxContentWidth, int frameExtraWidth) {
+        int contentLeft = frameLeft + contentOffset;
+        int contentRight = contentLeft + contentWidth;
+        Result content = drag(edge, contentLeft, contentRight, cursorX,
+                minContentWidth, maxContentWidth);
+        return new Result(content.left - contentOffset, content.width + frameExtraWidth);
+    }
 }

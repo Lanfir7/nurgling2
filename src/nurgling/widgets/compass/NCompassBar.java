@@ -118,12 +118,17 @@ public class NCompassBar extends Widget {
 
     private void drawMarker(GOut g, NCompassLayout.Marker marker, NCompassTarget target) {
         int iconY = UI.scale(marker.lane == 0 ? 34 : 56);
-        Coord center = new Coord(marker.x, iconY);
+        int markerX = marker.x;
+        if (marker.region == NCompassMath.Region.REAR_LEFT)
+            markerX = UI.scale(10);
+        else if (marker.region == NCompassMath.Region.REAR_RIGHT)
+            markerX = sz.x - UI.scale(11);
+        Coord center = new Coord(markerX, iconY);
         if (marker.region == NCompassMath.Region.REAR_LEFT ||
                 marker.region == NCompassMath.Region.REAR_RIGHT) {
-            int inward = marker.region == NCompassMath.Region.REAR_LEFT ? UI.scale(7) : -UI.scale(7);
+            int edgeX = marker.region == NCompassMath.Region.REAR_LEFT ? 0 : sz.x - 1;
             g.chcolor(255, 211, 111, 255);
-            g.line(center, center.add(inward, 0), UI.scale(3));
+            g.line(new Coord(edgeX, iconY), center, UI.scale(3));
             g.chcolor();
         }
 
@@ -141,7 +146,7 @@ public class NCompassBar extends Widget {
 
         String text = NCompassPresentation.targetLabel(target.name, target.distance, marker.extra);
         Tex label = label(text, target.kind == NCompassTarget.Kind.PARTY ? target.color : Color.WHITE);
-        int labelX = Math.max(label.sz().x / 2, Math.min(sz.x - label.sz().x / 2, marker.x));
+        int labelX = Math.max(label.sz().x / 2, Math.min(sz.x - label.sz().x / 2, markerX));
         g.aimage(label, new Coord(labelX, iconY + UI.scale(9)), 0.5, 0.0);
     }
 

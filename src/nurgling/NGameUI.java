@@ -278,10 +278,7 @@ public class NGameUI extends GameUI
     public void setCompassVisible(boolean visible) {
         if (compassWidget == null)
             return;
-        if (visible)
-            compassWidget.show();
-        else
-            compassWidget.hide();
+        compassWidget.applyCompassVisibility(visible);
     }
     
     /**

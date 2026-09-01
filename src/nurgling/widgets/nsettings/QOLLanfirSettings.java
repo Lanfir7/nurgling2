@@ -4,6 +4,8 @@ import haven.*;
 import nurgling.NConfig;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
+import nurgling.sessions.SessionContext;
+import nurgling.sessions.SessionManager;
 import nurgling.tools.ForageMarkerLogic;
 import nurgling.tools.TreeGrowth;
 import nurgling.widgets.compass.NCompassSettings;
@@ -111,8 +113,11 @@ public class QOLLanfirSettings extends Panel {
                 super.changed(val);
                 NConfig.set(NConfig.Key.showCompassBar, val);
                 NConfig.needUpdate();
-                if (NUtils.getGameUI() != null)
-                    NUtils.getGameUI().setCompassVisible(val);
+                for (SessionContext context : SessionManager.getInstance().getAllSessions()) {
+                    nurgling.NGameUI sessionGui = context.getGameUI();
+                    if (sessionGui != null)
+                        sessionGui.setCompassVisible(val);
+                }
             }
         }, margin, y);
         y += UI.scale(30);

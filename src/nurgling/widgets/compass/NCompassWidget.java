@@ -14,17 +14,33 @@ public class NCompassWidget extends NDraggableWidget {
     private UI.Grab resizeGrab;
     private NCompassResize.Edge resizeEdge;
     private int startLeft;
-    private int startRight;
+    private int startContentWidth;
 
     public NCompassWidget(nurgling.NGameUI gui) {
         super(new NCompassBar(gui), NAME, restoredSize());
     }
 
+    public void applyCompassVisibility(boolean visible) {
+        btnVis.a = visible;
+        if (content != null)
+            content.visible = visible;
+        if (visible)
+            show();
+        else
+            hide();
+    }
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        btnVis.hide();
+    }
+
     private static Coord restoredSize() {
         Coord saved = NResizeProp.find(NAME);
-        int width = saved == null ? UI.scale(520) : saved.x;
-        width = Math.max(UI.scale(300), Math.min(UI.scale(900), width));
-        return new Coord(width, NCompassBar.contentHeight() + delta.y);
+        int contentWidth = saved == null ? UI.scale(520) : saved.x - delta.x;
+        contentWidth = Math.max(UI.scale(300), Math.min(UI.scale(900), contentWidth));
+        return new Coord(contentWidth + delta.x, NCompassBar.contentHeight() + delta.y);
     }
 
     @Override
@@ -34,7 +50,7 @@ public class NCompassWidget extends NDraggableWidget {
             if (edge != null) {
                 resizeEdge = edge;
                 startLeft = rootpos().x;
-                startRight = startLeft + sz.x;
+                startContentWidth = content.sz.x;
                 resizeGrab = ui.grabmouse(this);
                 parent.setfocus(this);
                 return true;
@@ -49,9 +65,10 @@ public class NCompassWidget extends NDraggableWidget {
             int min = UI.scale(300);
             int max = UI.scale(900);
             if (parent != null && parent.sz.x > 0)
-                max = Math.max(min, Math.min(max, parent.sz.x));
-            NCompassResize.Result result = NCompassResize.drag(
-                    resizeEdge, startLeft, startRight, ui.mc.x, min, max);
+                max = Math.max(min, Math.min(max, parent.sz.x - delta.x));
+            NCompassResize.Result result = NCompassResize.dragFrame(
+                    resizeEdge, startLeft, off.x, startContentWidth, ui.mc.x,
+                    min, max, delta.x);
             int parentLeft = parent == null ? result.left : parent.rootxlate(new Coord(result.left, rootpos().y)).x;
             c.x = parentLeft;
             target_c.x = parentLeft;
@@ -84,7 +101,7 @@ public class NCompassWidget extends NDraggableWidget {
         NCompassResize.Edge edge = edgeAt(mouse);
         if (resizeGrab != null || (ui.modctrl && edge != null)) {
             NCompassResize.Edge active = resizeGrab != null ? resizeEdge : edge;
-            int x = active == NCompassResize.Edge.LEFT ? 1 : sz.x - 2;
+            int x = active == NCompassResize.Edge.LEFT ? off.x : off.x + content.sz.x - 1;
             g.chcolor(255, 221, 120, 230);
             g.line(new Coord(x, 0), new Coord(x, sz.y - 1), UI.scale(2));
             g.chcolor();
@@ -95,9 +112,11 @@ public class NCompassWidget extends NDraggableWidget {
         if (point.y < 0 || point.y >= sz.y)
             return null;
         int edge = UI.scale(EDGE);
-        if (point.x >= 0 && point.x <= edge)
+        int left = off.x;
+        int right = off.x + (content == null ? sz.x - delta.x : content.sz.x);
+        if (point.x >= left - edge && point.x <= left + edge)
             return NCompassResize.Edge.LEFT;
-        if (point.x < sz.x && point.x >= sz.x - edge)
+        if (point.x >= right - edge && point.x <= right + edge)
             return NCompassResize.Edge.RIGHT;
         return null;
     }

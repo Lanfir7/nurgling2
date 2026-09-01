@@ -35,4 +35,17 @@ class NCompassResizeTest {
         assertEquals(-300, tooWide.left);
         assertEquals(900, tooWide.width);
     }
+
+    @Test
+    void framedResizeMeasuresAndClampsTheVisibleContent() {
+        NCompassResize.Result right = NCompassResize.dragFrame(
+                NCompassResize.Edge.RIGHT, 100, 10, 500, 750, 300, 900, 35);
+        NCompassResize.Result left = NCompassResize.dragFrame(
+                NCompassResize.Edge.LEFT, 100, 10, 500, 250, 300, 900, 35);
+
+        assertEquals(100, right.left);
+        assertEquals(675, right.width);
+        assertEquals(240, left.left);
+        assertEquals(395, left.width);
+    }
 }
