@@ -20,6 +20,8 @@ import nurgling.widgets.LocalizedResourceTimersWindow;
 import nurgling.widgets.LocalizedResourceTimerDialog;
 import nurgling.widgets.StudyDeskPlannerWidget;
 import nurgling.widgets.FishingWindowExtension;
+import nurgling.widgets.compass.NCompassSettings;
+import nurgling.widgets.compass.NCompassWidget;
 import nurgling.sessions.BotExecutor;
 import haven.MapFile;
 import haven.MiniMap;
@@ -44,6 +46,7 @@ public class NGameUI extends GameUI
     public StarvationAlertWidget starvationAlertWidget;
     public AutoLogoutWidget autoLogoutWidget;
     public NQuestInfo questinfo;
+    public NCompassWidget compassWidget;
     public NGUIInfo guiinfo;
     public NSearchItem itemsForSearch = null;
     public NCraftWindow craftwnd;
@@ -268,6 +271,17 @@ public class NGameUI extends GameUI
             questinfo = new NQuestInfo(), "quests", questinfo.sz.add(NDraggableWidget.delta));
         questwdg.minSize = new Coord(200, 110);
         add(questwdg);
+        add(compassWidget = new NCompassWidget(this));
+        setCompassVisible(NCompassSettings.showBar());
+    }
+
+    public void setCompassVisible(boolean visible) {
+        if (compassWidget == null)
+            return;
+        if (visible)
+            compassWidget.show();
+        else
+            compassWidget.hide();
     }
     
     /**
