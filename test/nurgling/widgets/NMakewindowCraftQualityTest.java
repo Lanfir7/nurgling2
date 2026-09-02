@@ -31,8 +31,9 @@ class NMakewindowCraftQualityTest {
     @Test
     void averagesComeFromPlayerInventoryMakePrepNotChests() throws Exception {
         String src = read("src/nurgling/widgets/NMakewindow.java");
-        assertTrue(src.contains("getInfo(MakePrep.class)"), "must match highlighted MakePrep items: " + src);
-        assertTrue(src.contains("getInventory()"), "player inventory only: " + src);
+        assertTrue(src.contains("gui.getInventory()"), "player inventory only: " + src);
+        assertTrue(src.contains("isMakePrepClass") && src.contains("info()"),
+                "must detect resource-loaded MakePrep via info(), not only NMakewindow.MakePrep: " + src);
         assertFalse(src.contains("getInventory(\""), "must not scan named chests: " + src);
         assertFalse(src.contains("getWindows"), src);
         // Quality scan must not walk every open container inventory.

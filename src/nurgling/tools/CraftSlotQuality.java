@@ -64,6 +64,11 @@ public final class CraftSlotQuality {
         return true;
     }
 
+    /** Resource-loaded MakePrep may not be {@code NMakewindow.MakePrep}. */
+    public static boolean isMakePrepClass(String className) {
+        return className != null && className.endsWith("MakePrep");
+    }
+
     /** Auto/search: use the picked category ingredient when present. */
     public static String slotMatchName(String specName, String selectedIngName) {
         if (selectedIngName != null) {

@@ -1115,7 +1115,7 @@ public class NMakewindow extends Widget implements DTarget {
             return;
         }
         NGItem ng = (NGItem) w.item;
-        boolean prep = ng.getInfo(MakePrep.class) != null;
+        boolean prep = hasMakePrep(ng);
         out.add(new InvSample(ng.name(), prep, readItemQuality(ng)));
         if (!prep && ng.contents != null) {
             for (Widget ch = ng.contents.child; ch != null; ch = ch.next) {
@@ -1124,6 +1124,18 @@ public class NMakewindow extends Widget implements DTarget {
                 }
             }
         }
+    }
+
+    private static boolean hasMakePrep(NGItem ng) {
+        try {
+            for (ItemInfo inf : ng.info()) {
+                if (inf instanceof MakePrep || CraftSlotQuality.isMakePrepClass(inf.getClass().getName())) {
+                    return true;
+                }
+            }
+        } catch (Loading l) {
+        }
+        return false;
     }
 
     private static Double readItemQuality(NGItem item) {

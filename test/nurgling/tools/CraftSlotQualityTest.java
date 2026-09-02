@@ -50,6 +50,14 @@ class CraftSlotQualityTest {
     }
 
     @Test
+    void makePrepClassNameMatchesResourceAndInnerClass() {
+        assertTrue(CraftSlotQuality.isMakePrepClass("nurgling.widgets.NMakewindow$MakePrep"));
+        assertTrue(CraftSlotQuality.isMakePrepClass("haven.res.ui.tt.prep.MakePrep"));
+        assertFalse(CraftSlotQuality.isMakePrepClass("haven.resutil.Curiosity"));
+        assertFalse(CraftSlotQuality.isMakePrepClass(null));
+    }
+
+    @Test
     void autoSearchUsesSelectedIngredientName() {
         assertEquals("Branch", CraftSlotQuality.slotMatchName("Wooden Block", "Branch"));
         assertEquals("Stone", CraftSlotQuality.slotMatchName("Stone", null));
