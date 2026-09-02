@@ -50,7 +50,8 @@ public class NMakewindow extends Widget implements DTarget {
     public List<Spec> outputs = Collections.emptyList();
     public List<Indir<Resource>> qmod = Collections.emptyList();
     public List<Indir<Resource>> tools = new ArrayList<>();;
-    private int xoff = UI.scale(45), qmy = UI.scale(38), outy = UI.scale(65);
+    private int xoff = UI.scale(45), qmy = UI.scale(38 + CraftSlotQuality.LINE), outy = UI.scale(65 + CraftSlotQuality.LINE);
+    private final Map<String, Tex> avgQTex = new HashMap<>();
     public static final Text.Foundry nmf = new Text.Foundry(Text.serif, 20).aa(true);
     private static double softcap = 0;
     private static Tex softTex = null;
@@ -507,9 +508,9 @@ public class NMakewindow extends Widget implements DTarget {
         int resultW = add(new Label(L10n.get("craft.result")), new Coord(0, outy + UI.scale(8))).sz.x;
         xoff = Math.max(inputW, resultW) + UI.scale(10);
 
-        add(new Button(UI.scale(85), L10n.get("craft.craft")), UI.scale(new Coord(230, 75))).action(() -> craft()).setgkey(kb_make);
-        add(craft_num = new TextEntry(UI.scale(55), ""), UI.scale(new Coord(165, 82)));
-        add(new Button(UI.scale(85), L10n.get("craft.craft_all")), UI.scale(new Coord(325, 75))).action(() -> craftAll()).setgkey(kb_makeall);
+        add(new Button(UI.scale(85), L10n.get("craft.craft")), UI.scale(new Coord(230, 75 + CraftSlotQuality.LINE))).action(() -> craft()).setgkey(kb_make);
+        add(craft_num = new TextEntry(UI.scale(55), ""), UI.scale(new Coord(165, 82 + CraftSlotQuality.LINE)));
+        add(new Button(UI.scale(85), L10n.get("craft.craft_all")), UI.scale(new Coord(325, 75 + CraftSlotQuality.LINE))).action(() -> craftAll()).setgkey(kb_makeall);
         searchChk = add(new ICheckBox(NStyle.search[0], NStyle.search[1], NStyle.search[2], NStyle.search[3]){
             @Override
             public void changed(boolean val)
@@ -541,14 +542,14 @@ public class NMakewindow extends Widget implements DTarget {
             public void changed(boolean val) {
                 super.changed(val);
             }
-        }, UI.scale(new Coord(325, 38)));
+        }, UI.scale(new Coord(325, 38 + CraftSlotQuality.LINE)));
         noTransfer.visible = false;
         searchBtn = add(new Button(UI.scale(85), L10n.get("craft.search")) {
             @Override
             public void click() {
                 runIngredientSearch();
             }
-        }, UI.scale(new Coord(325, 38)));
+        }, UI.scale(new Coord(325, 38 + CraftSlotQuality.LINE)));
         searchBtn.visible = false;
 
         // Save Preset button - only visible in auto mode when all inputs are configured
@@ -610,6 +611,12 @@ public class NMakewindow extends Widget implements DTarget {
         if (parent != null) {
             parent.pack();
         }
+    }
+
+    @Override
+    public void pack() {
+        super.pack();
+        resize(sz.add(0, UI.scale(CraftSlotQuality.LINE)));
     }
 
     void runIngredientSearch() {
@@ -759,6 +766,8 @@ public class NMakewindow extends Widget implements DTarget {
     }
 
     public void draw(GOut g) {
+        List<Double> slotAvgs = ingredientAverages();
+        Double resultAvg = CraftSlotQuality.meanOfSlotAverages(slotAvgs);
         Coord c = new Coord(xoff, 0);
         boolean popt = false;
         int inIdx = 0;
@@ -780,7 +789,6 @@ public class NMakewindow extends Widget implements DTarget {
                 sg.frect2(Coord.of(0, (invsq.sz().y * s.using) / s.count), invsq.sz());
                 sg.chcolor();
             }
-            c = c.add(Inventory.sqsz.x, 0);
             popt = opt;
             if(autoMode)
             {
@@ -820,6 +828,8 @@ public class NMakewindow extends Widget implements DTarget {
             {
                 drawSearchSlotOverlay(sg, s, inIdx);
             }
+            drawAvgQuality(g, c, inIdx < slotAvgs.size() ? slotAvgs.get(inIdx) : null);
+            c = c.add(Inventory.sqsz.x, 0);
             inIdx++;
         }
         {
@@ -891,6 +901,7 @@ public class NMakewindow extends Widget implements DTarget {
             GOut sg = g.reclip(c, invsq.sz());
             sg.image(invsq, Coord.z);
             s.draw(sg);
+            drawAvgQuality(g, c, resultAvg);
             c = c.add(Inventory.sqsz.x, 0);
             if(autoMode)
             {
@@ -1011,6 +1022,135 @@ public class NMakewindow extends Widget implements DTarget {
         }
         Set<String> names = searchFoundNames.get(idx);
         return names != null && names.contains(name);
+    }
+
+    private static final class InvSample {
+        final String name;
+        final boolean makePrep;
+        final Double quality;
+
+        InvSample(String name, boolean makePrep, Double quality) {
+            this.name = name;
+            this.makePrep = makePrep;
+            this.quality = quality;
+        }
+    }
+
+    private void drawAvgQuality(GOut g, Coord slot, Double avg) {
+        if (avg == null) {
+            return;
+        }
+        g.aimage(avgQualityTex(avg.doubleValue()), slot.add(invsq.sz().x / 2, invsq.sz().y), 0.5, 0);
+    }
+
+    private Tex avgQualityTex(double q) {
+        String text = String.format(java.util.Locale.US, "%.1f", q);
+        Tex cached = avgQTex.get(text);
+        if (cached != null) {
+            return cached;
+        }
+        Tex tex = new TexI(fnd.render(text).img);
+        avgQTex.put(text, tex);
+        return tex;
+    }
+
+    /**
+     * Per-slot average quality of highlighted player-inventory items (MakePrep),
+     * unweighted by recipe count. Empty slots stay blank.
+     */
+    private List<Double> ingredientAverages() {
+        List<InvSample> samples = playerInvSamples();
+        boolean anyPrep = false;
+        for (InvSample s : samples) {
+            if (s.makePrep) {
+                anyPrep = true;
+                break;
+            }
+        }
+        List<Double> avgs = new ArrayList<>(inputs.size());
+        for (Spec spec : inputs) {
+            if (spec.ing != null && spec.ing.isIgnored) {
+                avgs.add(null);
+                continue;
+            }
+            String picked = ((autoMode || searchMode) && spec.ing != null) ? spec.ing.name : null;
+            String want = CraftSlotQuality.slotMatchName(spec.name, picked);
+            List<Double> qs = new ArrayList<>();
+            for (InvSample s : samples) {
+                if (!CraftSlotQuality.includeItem(s.makePrep, anyPrep, s.name, want)) {
+                    continue;
+                }
+                if (s.quality != null) {
+                    qs.add(s.quality);
+                }
+            }
+            avgs.add(CraftSlotQuality.average(qs));
+        }
+        return avgs;
+    }
+
+    /** Player inventory only — not chests/containers. */
+    private List<InvSample> playerInvSamples() {
+        List<InvSample> out = new ArrayList<>();
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null) {
+            return out;
+        }
+        NInventory inv = gui.getInventory();
+        if (inv == null) {
+            return out;
+        }
+        try {
+            for (WItem w : inv.getTopLevelItems()) {
+                collectSample(w, out);
+            }
+        } catch (Loading l) {
+        } catch (Exception ignored) {
+        }
+        return out;
+    }
+
+    private void collectSample(WItem w, List<InvSample> out) {
+        if (w == null || !(w.item instanceof NGItem)) {
+            return;
+        }
+        NGItem ng = (NGItem) w.item;
+        boolean prep = ng.getInfo(MakePrep.class) != null;
+        out.add(new InvSample(ng.name(), prep, readItemQuality(ng)));
+        if (!prep && ng.contents != null) {
+            for (Widget ch = ng.contents.child; ch != null; ch = ch.next) {
+                if (ch instanceof WItem) {
+                    collectSample((WItem) ch, out);
+                }
+            }
+        }
+    }
+
+    private static Double readItemQuality(NGItem item) {
+        Double q = CraftSlotQuality.qualityOf(item.quality);
+        if (q != null) {
+            return q;
+        }
+        try {
+            haven.res.ui.tt.stackn.Stack stack = item.getInfo(haven.res.ui.tt.stackn.Stack.class);
+            if (stack != null && stack.quality > 0) {
+                return Double.valueOf(stack.quality);
+            }
+        } catch (Exception ignored) {
+        }
+        if (item.contents != null) {
+            List<Double> inner = new ArrayList<>();
+            for (Widget ch : item.contents.children()) {
+                if (ch instanceof NGItem) {
+                    Double cq = CraftSlotQuality.qualityOf(((NGItem) ch).quality);
+                    if (cq != null) {
+                        inner.add(cq);
+                    }
+                }
+            }
+            return CraftSlotQuality.average(inner);
+        }
+        return null;
     }
 
     private int drawSoftcap(GOut g, Coord p, double product, int count) {
