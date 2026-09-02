@@ -35,7 +35,7 @@ public class UnloadCarryoutAction implements GobContextAction {
 
             while (new TakeFromVehicle(vehicle).run(gui).IsSuccess()) {
                 Gob gob = Finder.findLiftedbyPlayer();
-                new FindPlaceAndAction(gob, dest, true).run(gui);
+                new FindPlaceAndAction(gob, dest).run(gui);
                 Coord2d shift = gob.rc.sub(NUtils.player().rc).norm().mul(2);
                 new GoTo(NUtils.player().rc.sub(shift)).run(gui);
             }

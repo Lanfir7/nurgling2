@@ -1,8 +1,6 @@
 package nurgling.actions;
 
-import haven.Coord2d;
 import nurgling.ExtraInvGroupTransfer;
-import nurgling.pf.NHitBoxD;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -34,118 +32,25 @@ class TransferToPilesTest {
     }
 
     @Test
-    void ordinaryApproachFailureDoesNotSendCharacterOutOfPileZone() throws InterruptedException {
-        int[] exits = {0};
-        int[] retries = {0};
-
-        boolean recovered = TransferToPiles.recoverExistingPileApproach(
-                false,
-                () -> {
-                    exits[0]++;
-                    return true;
-                },
-                () -> {
-                    retries[0]++;
-                    return true;
-                });
-
-        assertFalse(recovered);
-        assertEquals(0, exits[0]);
-        assertEquals(0, retries[0]);
-    }
-
-    @Test
-    void blockedApproachMayExitAndRetryTheSamePile() throws InterruptedException {
-        boolean recovered = TransferToPiles.recoverExistingPileApproach(
-                true, () -> true, () -> true);
-
-        assertTrue(recovered);
-    }
-
-    @Test
-    void exhaustedExistingPileApproachesStillAllowCreatingANewPile() {
-        assertTrue(TransferToPiles.shouldCreateNewPile(true, true));
+    void failedExistingPileAccessDoesNotCreateAReplacementPile() {
+        assertFalse(TransferToPiles.shouldCreateNewPile(true, true));
         assertTrue(TransferToPiles.shouldCreateNewPile(true, false));
         assertFalse(TransferToPiles.shouldCreateNewPile(false, false));
     }
 
     @Test
-    void existingPilePathReplansOnlyAfterFirstSegmentFailure() {
-        assertTrue(TransferToPiles.shouldReplanExistingPileLeg(0));
-        assertFalse(TransferToPiles.shouldReplanExistingPileLeg(1));
+    void alexandrApproachRunsOnlyForReachableNonFullPile() {
+        assertTrue(TransferToPiles.shouldApproachExistingPile(0, true));
+        assertFalse(TransferToPiles.shouldApproachExistingPile(0, false));
+        assertFalse(TransferToPiles.shouldApproachExistingPile(31, true));
     }
 
     @Test
-    void diagonalHitboxOverlapRetreatsOnlyFarEnoughToOpenPile() {
-        NHitBoxD pile = new NHitBoxD(
-                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.of(0, 0), 0);
-        NHitBoxD player = new NHitBoxD(
-                Coord2d.of(-2, -2), Coord2d.of(2, 2), Coord2d.of(4, 4), 0);
+    void unreachableNonFullPileBlocksReplacementPileCreation() {
+        boolean accessFailed = TransferToPiles.existingPileAccessFailed(0, false);
 
-        Coord2d retreat = TransferToPiles.interactionRetreatPoint(player, pile, 0.5);
-
-        assertEquals(5.0, retreat.x, 0.000001);
-        assertEquals(4.0, retreat.y, 0.000001);
-    }
-
-    @Test
-    void nearTouchingHitboxesDoNotRetreatBeforeOpeningPile() {
-        NHitBoxD pile = new NHitBoxD(
-                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.of(0, 0), 0);
-        NHitBoxD player = new NHitBoxD(
-                Coord2d.of(-2, -2), Coord2d.of(2, 2), Coord2d.of(4.7, 0), 0);
-
-        Coord2d retreat = TransferToPiles.interactionRetreatPoint(player, pile, 0.5);
-
-        assertEquals(4.7, retreat.x, 0.000001);
-        assertEquals(0.0, retreat.y, 0.000001);
-    }
-
-    @Test
-    void failedPileOpenRepositionsAndRetriesTheSamePile() throws InterruptedException {
-        int[] opens = {0};
-        int[] repositions = {0};
-
-        Results result = TransferToPiles.retryExistingPileOpen(
-                () -> ++opens[0] == 1 ? Results.FAIL() : Results.SUCCESS(),
-                () -> {
-                    repositions[0]++;
-                    return true;
-                });
-
-        assertTrue(result.IsSuccess());
-        assertEquals(2, opens[0]);
-        assertEquals(1, repositions[0]);
-    }
-
-    @Test
-    void failedPileOpenStaysFailedWhenSafeRepositionIsImpossible() throws InterruptedException {
-        int[] opens = {0};
-
-        Results result = TransferToPiles.retryExistingPileOpen(
-                () -> {
-                    opens[0]++;
-                    return Results.FAIL();
-                },
-                () -> false);
-
-        assertFalse(result.IsSuccess());
-        assertEquals(1, opens[0]);
-    }
-
-    @Test
-    void nearTouchingPileGetsClearancePointOnlyForOpenRetry() {
-        NHitBoxD pile = new NHitBoxD(
-                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.of(0, 0), 0);
-        NHitBoxD player = new NHitBoxD(
-                Coord2d.of(-2, -2), Coord2d.of(2, 2), Coord2d.of(4.7, 0), 0);
-
-        List<Coord2d> candidates = TransferToPiles.interactionClearanceCandidates(
-                player, pile, 0.5);
-
-        assertEquals(4, candidates.size());
-        assertEquals(5.0, candidates.get(0).x, 0.000001);
-        assertEquals(0.0, candidates.get(0).y, 0.000001);
+        assertTrue(accessFailed);
+        assertFalse(TransferToPiles.shouldCreateNewPile(true, accessFailed));
     }
 
     @Test

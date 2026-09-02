@@ -62,7 +62,8 @@ class UnloadCarryoutActionTest {
         assertFalse(src.contains("SelectArea"), src);
         assertTrue(src.contains("TakeFromVehicle"), src);
         assertTrue(src.contains("FindPlaceAndAction"), src);
-        assertTrue(src.contains("new FindPlaceAndAction(gob, dest, true)"), src);
+        assertTrue(src.contains("new FindPlaceAndAction(gob, dest).run(gui)"), src);
+        assertFalse(src.contains("new FindPlaceAndAction(gob, dest, true)"), src);
         assertTrue(src.contains("findLiftedbyPlayer"), src);
         assertTrue(src.contains("NAlias(\"vehicle\")"), src);
         assertTrue(src.contains("No CarrierOut zone found"), src);

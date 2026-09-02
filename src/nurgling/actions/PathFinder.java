@@ -34,6 +34,7 @@ public class PathFinder implements Action {
     Mode mode = Mode.NEAREST;
     public boolean skipDN = false;
     public int maxMul = 200;
+    private boolean alexandrPileBehavior = false;
     Gob gobInStartPos = null;
     private boolean startWasBlocked = false;
     double badDir = Double.MAX_VALUE;
@@ -88,6 +89,11 @@ public class PathFinder implements Action {
         return this;
     }
 
+    public PathFinder withAlexandrPileBehavior() {
+        alexandrPileBehavior = true;
+        return this;
+    }
+
     static Gob resolveObstacle(long id, Gob targetDummy, List<Gob> extraObstacles,
                                LongFunction<Gob> liveLookup) {
         if (targetDummy != null && targetDummy.id == id) {
@@ -136,6 +142,13 @@ public class PathFinder implements Action {
         return finalWaypoint && (hardMode || hasDummy);
     }
 
+    static boolean shouldAdjustApproachWaypoint(boolean finalWaypoint, boolean hardMode,
+                                                boolean hasDummy, boolean alexandrPileBehavior) {
+        return alexandrPileBehavior
+                ? (finalWaypoint && hardMode) || hasDummy
+                : shouldAdjustApproachWaypoint(finalWaypoint, hardMode, hasDummy);
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         while (true) {
@@ -148,7 +161,8 @@ public class PathFinder implements Action {
                 for (Graph.Vertex vert : path) {
                     Coord2d targetCoord = Utils.pfGridToWorld(vert.pos);
 
-                    if(shouldAdjustApproachWaypoint(vert == path.getLast(), isHardMode, dummy != null)) {
+                    if(shouldAdjustApproachWaypoint(vert == path.getLast(), isHardMode,
+                            dummy != null, alexandrPileBehavior)) {
                         Coord2d tcord = dummy != null ? dummy.rc : Finder.findGob(target_id).rc;
                         if (Math.abs(targetCoord.x - tcord.x) < 4) {
                             targetCoord.x = tcord.x;
@@ -221,6 +235,14 @@ public class PathFinder implements Action {
             }
         }
         return null;
+    }
+
+    static Coord selectBlockedStart(List<Coord> adjacent, Coord remoteFallback,
+                                    boolean alexandrPileBehavior) {
+        if (adjacent != null && !adjacent.isEmpty()) {
+            return adjacent.get(0);
+        }
+        return alexandrPileBehavior ? null : remoteFallback;
     }
 
     public LinkedList<Graph.Vertex> construct(boolean test) throws InterruptedException {
@@ -366,8 +388,10 @@ public class PathFinder implements Action {
                 }
                 ArrayList<Coord> st_poses = findFreeNear(start_pos, true);
                 if (st_poses.isEmpty()) {
-                    Coord freeStart = nearestFreeCell(start_pos, pfmap.size, pfmap.size,
+                    Coord remoteFallback = nearestFreeCell(start_pos, pfmap.size, pfmap.size,
                             cell -> cells[cell.x][cell.y].val == 0);
+                    Coord freeStart = selectBlockedStart(
+                            st_poses, remoteFallback, alexandrPileBehavior);
                     if (freeStart == null)
                         return false;
                     st_poses.add(freeStart);
@@ -525,6 +549,14 @@ public class PathFinder implements Action {
         if(NUtils.player() == null || target == null)
             return false;
         PathFinder pf = new PathFinder(target);
+        LinkedList<Graph.Vertex> res = pf.construct(true);
+        return res != null || pf.dn;
+    }
+
+    public static boolean isAvailableForAlexandrPile(Gob target) throws InterruptedException {
+        if(NUtils.player() == null || target == null)
+            return false;
+        PathFinder pf = new PathFinder(target).withAlexandrPileBehavior();
         LinkedList<Graph.Vertex> res = pf.construct(true);
         return res != null || pf.dn;
     }

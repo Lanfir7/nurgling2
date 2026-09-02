@@ -20,4 +20,9 @@ class PathFinderApproachWaypointTest {
     void hardModeAdjustsFinalWaypointWithoutDummy() {
         assertTrue(PathFinder.shouldAdjustApproachWaypoint(true, true, false));
     }
+
+    @Test
+    void alexandrPileFlowAdjustsEveryDummyWaypoint() {
+        assertTrue(PathFinder.shouldAdjustApproachWaypoint(false, false, true, true));
+    }
 }

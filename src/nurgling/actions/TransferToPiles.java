@@ -8,7 +8,6 @@ import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NISBox;
 import nurgling.NUtils;
-import nurgling.pf.NHitBoxD;
 import nurgling.tasks.*;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
@@ -269,23 +268,34 @@ public class TransferToPiles implements Action{
         NAlias pileName;
         if (!(witems = getMatchingItems(gui)).isEmpty() ) {
                 Gob target = null;
-                boolean availablePileApproachFailed = false;
+                boolean existingPileAccessFailed = false;
                 for (Gob gob : Finder.findGobs(out, pileName = getStockpileName(items))) {
-                    while (gob.ngob.getModelAttribute() != 31 && PathFinder.isAvailable(gob)) {
-                            target = gob;
-                            if (!approachExistingPile(gui, target)) {
-                                availablePileApproachFailed = true;
+                    while (gob.ngob.getModelAttribute() != 31) {
+                            boolean pathAvailable = PathFinder.isAvailableForAlexandrPile(gob);
+                            if (!shouldApproachExistingPile(
+                                    gob.ngob.getModelAttribute(), pathAvailable)) {
+                                existingPileAccessFailed |= existingPileAccessFailed(
+                                        gob.ngob.getModelAttribute(), pathAvailable);
                                 break;
                             }
+                            target = gob;
+                            PathFinder pf = new PathFinder(target).withAlexandrPileBehavior();
+                            pf.isHardMode = true;
+                            pf.run(gui);
                             if(NUtils.getGameUI().vhand!=null) {
                                 NUtils.activateItem(target, false);
-                                NUtils.addTask(new WaitFreeHand(80, false));
+                                NUtils.addTask(new NTask() {
+                                    @Override
+                                    public boolean check() {
+                                        return NUtils.getGameUI().vhand == null;
+                                    }
+                                });
                             }
                             witems = getMatchingItems(gui);
                             int size = witems.size();
-                            Results opened = openPileWithRetry(gui, target);
+                            Results opened = new OpenTargetContainer("Stockpile", target).run(gui);
                             if (!opened.IsSuccess() || gui.getStockpile() == null) {
-                                availablePileApproachFailed = true;
+                                existingPileAccessFailed = true;
                                 break;
                             }
                             int freeSpace = gui.getStockpile().getFreeSpace();
@@ -313,18 +323,15 @@ public class TransferToPiles implements Action{
                 }
 
                 boolean hasRemainingItems = !getMatchingItems(gui).isEmpty();
-                if (!shouldCreateNewPile(hasRemainingItems, availablePileApproachFailed)) {
+                if (!shouldCreateNewPile(hasRemainingItems, existingPileAccessFailed)) {
                     return hasRemainingItems ? Results.FAIL() : Results.SUCCESS();
                 }
                 while(!getMatchingItems(gui).isEmpty() && out!=null) {
-                    if (shouldCloseStockpileBeforePileMaker(gui.getStockpile() != null)) {
-                        new CloseTargetContainer("Stockpile").run(gui);
-                    }
                     PileMaker pm;
                     if (exactName != null) {
-                        pm = new PileMaker(out, exactName, pileName, th);
+                        pm = PileMaker.forTransferToPiles(out, exactName, pileName, th);
                     } else {
-                        pm = new PileMaker(out, items, pileName, th);
+                        pm = PileMaker.forTransferToPiles(out, items, pileName, th);
                     }
                     if(!pm.run(gui).IsSuccess())
                         return Results.FAIL();
@@ -332,7 +339,7 @@ public class TransferToPiles implements Action{
                     while (pile.ngob.getModelAttribute() != 31) {
                         witems = getMatchingItems(gui);
                         int size = witems.size();
-                        Results opened = openPileWithRetry(gui, pile);
+                        Results opened = new OpenTargetContainer("Stockpile", pile).run(gui);
                         if (!opened.IsSuccess() || gui.getStockpile() == null)
                             return Results.FAIL();
                         int freeSpace = gui.getStockpile().getFreeSpace();
@@ -354,39 +361,17 @@ public class TransferToPiles implements Action{
         return Results.SUCCESS();
         }
 
-    private boolean approachExistingPile(NGameUI gui, Gob target) throws InterruptedException {
-        Gob player = NUtils.player();
-        if (player == null || player.rc == null || target == null
-                || target.ngob == null || target.ngob.hitBox == null) {
-            return false;
-        }
-        ArrayList<PileMaker.MovementAttempt> approaches = new ArrayList<>();
-        for (PathFinder.Mode mode : PileMaker.orderedApproachModes(
-                player.rc, new NHitBoxD(target))) {
-            approaches.add(() -> attemptExistingPileApproach(gui, target, mode));
-        }
-        return PileMaker.tryApproachSides(approaches);
+    static boolean shouldApproachExistingPile(long modelAttribute, boolean pathAvailable) {
+        return modelAttribute != 31 && pathAvailable;
     }
 
-    static boolean recoverExistingPileApproach(boolean stillBlocked,
-                                               PileMaker.MovementAttempt exit,
-                                               PileMaker.MovementAttempt retry)
-            throws InterruptedException {
-        return stillBlocked && exit.run() && retry.run();
+    static boolean existingPileAccessFailed(long modelAttribute, boolean pathAvailable) {
+        return modelAttribute != 31 && !pathAvailable;
     }
 
     static boolean shouldCreateNewPile(boolean hasRemainingItems,
                                        boolean availablePileApproachFailed) {
-        return hasRemainingItems;
-    }
-
-    static boolean shouldReplanExistingPileLeg(int completedReplans) {
-        return completedReplans < 1;
-    }
-
-    @FunctionalInterface
-    interface ExistingPileOpenAttempt {
-        Results run() throws InterruptedException;
+        return hasRemainingItems && !availablePileApproachFailed;
     }
 
     @FunctionalInterface
@@ -406,113 +391,6 @@ public class TransferToPiles implements Action{
         return confirmation.await();
     }
 
-    static Results retryExistingPileOpen(ExistingPileOpenAttempt open,
-                                         PileMaker.MovementAttempt reposition)
-            throws InterruptedException {
-        Results first = open.run();
-        if (first.IsSuccess() || !reposition.run()) {
-            return first;
-        }
-        return open.run();
-    }
-
-    private boolean attemptExistingPileApproach(NGameUI gui, Gob target, PathFinder.Mode mode)
-            throws InterruptedException {
-        PathFinder preview = new PathFinder(target);
-        preview.setMode(mode);
-        preview.construct(true);
-        if (preview.startWasBlocked()) {
-            Coord2d freeStart = PileMaker.freeStartTarget(preview);
-            if (!PileMaker.exitBlockedStart(true, freeStart,
-                    point -> new GoTo(point).run(gui).IsSuccess())) {
-                return false;
-            }
-        }
-
-        PathFinder path = new PathFinder(target) {
-            private int completedReplans = 0;
-
-            @Override
-            protected boolean onLegFailed(NGameUI currentGui, Coord2d at) {
-                return shouldReplanExistingPileLeg(completedReplans++);
-            }
-        };
-        path.setMode(mode);
-        return path.run(gui).IsSuccess() && clearInteractionOverlap(gui, target);
-    }
-
-    private boolean clearInteractionOverlap(NGameUI gui, Gob target)
-            throws InterruptedException {
-        Gob player = NUtils.player();
-        if (player == null || player.rc == null || player.ngob == null
-                || player.ngob.hitBox == null || target == null || target.ngob == null
-                || target.ngob.hitBox == null) {
-            return true;
-        }
-
-        Coord2d retreat = interactionRetreatPoint(
-                new NHitBoxD(player), new NHitBoxD(target), 0.5);
-        if (retreat == null || retreat.dist(player.rc) <= 0.001) {
-            return true;
-        }
-        if (!new GoTo(retreat).run(gui).IsSuccess()) {
-            return false;
-        }
-
-        player = NUtils.player();
-        return player != null && player.ngob != null && player.ngob.hitBox != null
-                && !new NHitBoxD(player).intersects(new NHitBoxD(target), false);
-    }
-
-    private Results openPileWithRetry(NGameUI gui, Gob target) throws InterruptedException {
-        int[] attempt = {0};
-        return retryExistingPileOpen(
-                () -> {
-                    attempt[0]++;
-                    FileLogger.log(pileTrace("open-attempt-" + attempt[0], target, ""));
-                    Results result = new OpenTargetContainer("Stockpile", target, true).run(gui);
-                    FileLogger.log(pileTrace("open-result-" + attempt[0], target,
-                            "success=" + result.IsSuccess()
-                                    + " window=" + (gui.getStockpile() != null)));
-                    return result;
-                },
-                () -> {
-                    FileLogger.log(pileTrace("reposition-start", target, ""));
-                    boolean result = repositionForPileOpen(gui, target);
-                    FileLogger.log(pileTrace("reposition-finish", target,
-                            "success=" + result));
-                    return result;
-                });
-    }
-
-    private boolean repositionForPileOpen(NGameUI gui, Gob target) throws InterruptedException {
-        Gob player = NUtils.player();
-        if (player == null || player.rc == null || player.ngob == null
-                || player.ngob.hitBox == null || target == null || target.ngob == null
-                || target.ngob.hitBox == null) {
-            return approachExistingPile(gui, target);
-        }
-
-        for (Coord2d candidate : interactionClearanceCandidates(
-                new NHitBoxD(player), new NHitBoxD(target), 0.5)) {
-            boolean needsMove = candidate.dist(player.rc) > 0.001;
-            boolean moved = !needsMove || new GoTo(candidate).run(gui).IsSuccess();
-            FileLogger.log(pileTrace("reposition-candidate", target,
-                    "candidate=" + candidate + " needsMove=" + needsMove
-                            + " moved=" + moved));
-            if (!moved) {
-                continue;
-            }
-            player = NUtils.player();
-            if (player != null && player.ngob != null && player.ngob.hitBox != null
-                    && hasInteractionClearance(
-                    new NHitBoxD(player), new NHitBoxD(target), 0.5)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static String pileTrace(String phase, Gob target, String extra) {
         Gob player = NUtils.player();
         return "[TransferToPiles] phase=" + phase
@@ -521,98 +399,6 @@ public class TransferToPiles implements Action{
                 + " targetRc=" + (target != null ? target.rc : null)
                 + " playerRc=" + (player != null ? player.rc : null)
                 + (extra == null || extra.isEmpty() ? "" : " " + extra);
-    }
-
-    static List<Coord2d> interactionClearanceCandidates(NHitBoxD playerBox,
-                                                         NHitBoxD targetBox,
-                                                         double clearance) {
-        if (playerBox == null || targetBox == null || playerBox.rc == null) {
-            return List.of();
-        }
-        if (hasInteractionClearance(playerBox, targetBox, clearance)) {
-            return List.of(playerBox.rc);
-        }
-
-        Coord2d playerUL = playerBox.getCircumscribedUL();
-        Coord2d playerBR = playerBox.getCircumscribedBR();
-        Coord2d targetUL = targetBox.getCircumscribedUL();
-        Coord2d targetBR = targetBox.getCircumscribedBR();
-        double margin = Math.max(0, clearance);
-        ArrayList<Coord2d> candidates = new ArrayList<>(List.of(
-                playerBox.rc.add(targetUL.x - margin - playerBR.x, 0),
-                playerBox.rc.add(targetBR.x + margin - playerUL.x, 0),
-                playerBox.rc.add(0, targetUL.y - margin - playerBR.y),
-                playerBox.rc.add(0, targetBR.y + margin - playerUL.y)));
-        candidates.sort(Comparator.comparingDouble(candidate -> candidate.dist(playerBox.rc)));
-        return candidates;
-    }
-
-    private static boolean hasInteractionClearance(NHitBoxD playerBox,
-                                                    NHitBoxD targetBox,
-                                                    double clearance) {
-        Coord2d playerUL = playerBox.getCircumscribedUL();
-        Coord2d playerBR = playerBox.getCircumscribedBR();
-        Coord2d targetUL = targetBox.getCircumscribedUL();
-        Coord2d targetBR = targetBox.getCircumscribedBR();
-        double margin = Math.max(0, clearance);
-        return playerBR.x <= targetUL.x - margin
-                || playerUL.x >= targetBR.x + margin
-                || playerBR.y <= targetUL.y - margin
-                || playerUL.y >= targetBR.y + margin;
-    }
-
-    static Coord2d interactionRetreatPoint(NHitBoxD playerBox, NHitBoxD targetBox,
-                                           double clearance) {
-        if (playerBox == null || targetBox == null || playerBox.rc == null) {
-            return playerBox == null ? null : playerBox.rc;
-        }
-
-        Coord2d playerUL = playerBox.getCircumscribedUL();
-        Coord2d playerBR = playerBox.getCircumscribedBR();
-        Coord2d targetUL = targetBox.getCircumscribedUL();
-        Coord2d targetBR = targetBox.getCircumscribedBR();
-        double margin = Math.max(0, clearance);
-        if (!playerBox.intersects(targetBox, false)) {
-            return playerBox.rc;
-        }
-        Coord2d[] shifts = {
-                Coord2d.of(targetUL.x - margin - playerBR.x, 0),
-                Coord2d.of(targetBR.x + margin - playerUL.x, 0),
-                Coord2d.of(0, targetUL.y - margin - playerBR.y),
-                Coord2d.of(0, targetBR.y + margin - playerUL.y)
-        };
-        Coord2d best = shifts[0];
-        for (int i = 1; i < shifts.length; i++) {
-            if (shifts[i].abs() < best.abs()) {
-                best = shifts[i];
-            }
-        }
-        return playerBox.rc.add(best);
-    }
-
-    private boolean leavePileArea(NGameUI gui) throws InterruptedException {
-        Gob player = NUtils.player();
-        if (player == null || player.rc == null || out == null) {
-            return false;
-        }
-        double minX = Math.min(out.a.x, out.b.x);
-        double maxX = Math.max(out.a.x, out.b.x);
-        double minY = Math.min(out.a.y, out.b.y);
-        double maxY = Math.max(out.a.y, out.b.y);
-        if (player.rc.x < minX || player.rc.x > maxX
-                || player.rc.y < minY || player.rc.y > maxY) {
-            return true;
-        }
-
-        List<Coord2d> exits = Finder.orderCandidatesNearestFirst(
-                PileMaker.escapeTargets(out, MCache.tilesz.x, MCache.tilesz.x * 2),
-                player.rc);
-        for (Coord2d exit : exits) {
-            if (PileMaker.nonRetryingPathFinder(exit).run(gui).IsSuccess()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private boolean transfer(NGameUI gui, int target_size) throws InterruptedException {

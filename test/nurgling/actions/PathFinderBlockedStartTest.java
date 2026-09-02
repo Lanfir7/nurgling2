@@ -3,8 +3,11 @@ package nurgling.actions;
 import haven.Coord;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PathFinderBlockedStartTest {
@@ -18,5 +21,15 @@ class PathFinderBlockedStartTest {
         assertNotNull(exit);
         assertTrue(exit.x == 0 || exit.x == 4 || exit.y == 0 || exit.y == 4);
         assertEquals(2, Math.max(Math.abs(exit.x - start.x), Math.abs(exit.y - start.y)));
+    }
+
+    @Test
+    void alexandrPileFlowDoesNotLeaveBlockedPileForARemoteFallbackCell() {
+        Coord remoteFallback = Coord.of(0, 2);
+
+        Coord start = PathFinder.selectBlockedStart(
+                List.of(), remoteFallback, true);
+
+        assertNull(start);
     }
 }

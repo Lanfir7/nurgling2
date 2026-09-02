@@ -5,17 +5,15 @@ import haven.Pair;
 import nurgling.NHitBox;
 import nurgling.areas.NArea;
 import nurgling.areas.PileFillDirection;
-import nurgling.pf.NHitBoxD;
 import nurgling.tools.NAlias;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,199 +46,6 @@ class PileMakerTest {
     }
 
     @Test
-    void neverSkipsTheFirstFreeSlotBecauseOfThePlayersPosition() throws InterruptedException {
-        Coord2d first = Coord2d.of(10, 10);
-        Coord2d later = Coord2d.of(20, 10);
-        List<Coord2d> attempted = new java.util.ArrayList<>();
-
-        Coord2d selected = PileMaker.firstSafeCandidate(
-                Arrays.asList(first, later), candidate -> {
-                    attempted.add(candidate);
-                    return false;
-                });
-
-        assertNull(selected);
-        assertEquals(Arrays.asList(first), attempted);
-    }
-
-    @Test
-    void currentPlayerTileRemainsCandidateWhenMovingAwayKeepsAnEscape() throws InterruptedException {
-        Coord2d playerTile = Coord2d.of(10, 10);
-
-        Coord2d selected = PileMaker.firstSafeCandidate(
-                Arrays.asList(playerTile), candidate -> true);
-
-        assertEquals(playerTile, selected);
-    }
-
-    @Test
-    void occupiedPileSlotIsExitedBeforeApproachingTheSameSlot() throws InterruptedException {
-        List<String> steps = new java.util.ArrayList<>();
-
-        boolean reached = PileMaker.approachAfterLeavingOccupiedSlot(
-                true,
-                () -> {
-                    steps.add("exit");
-                    return true;
-                },
-                () -> {
-                    steps.add("approach");
-                    return true;
-                });
-
-        assertTrue(reached);
-        assertEquals(List.of("exit", "approach"), steps);
-    }
-
-    @Test
-    void clearPileSlotIsApproachedWithoutAnEscapeMove() throws InterruptedException {
-        List<String> steps = new java.util.ArrayList<>();
-
-        boolean reached = PileMaker.approachAfterLeavingOccupiedSlot(
-                false,
-                () -> {
-                    steps.add("exit");
-                    return true;
-                },
-                () -> {
-                    steps.add("approach");
-                    return true;
-                });
-
-        assertTrue(reached);
-        assertEquals(List.of("approach"), steps);
-    }
-
-    @Test
-    void exitsPreviousPileThroughTheFreeStartChosenByPathfinder() throws InterruptedException {
-        Coord2d freeStart = Coord2d.of(5.5, -2.75);
-        List<Coord2d> directMoves = new java.util.ArrayList<>();
-
-        boolean exited = PileMaker.exitStartObstacle(
-                freeStart,
-                target -> {
-                    directMoves.add(target);
-                    return true;
-                });
-
-        assertTrue(exited);
-        assertEquals(Arrays.asList(freeStart), directMoves);
-    }
-
-    @Test
-    void blockedStartWithoutUniqueGobStillMovesToFreeStart() throws InterruptedException {
-        Coord2d freeStart = Coord2d.of(7.25, 3.5);
-        List<Coord2d> directMoves = new java.util.ArrayList<>();
-
-        boolean exited = PileMaker.exitBlockedStart(
-                true,
-                freeStart,
-                target -> {
-                    directMoves.add(target);
-                    return true;
-                });
-
-        assertTrue(exited);
-        assertEquals(Arrays.asList(freeStart), directMoves);
-    }
-
-    @Test
-    void failedApproachExitsThenRetriesTheSameTargetOnce() throws InterruptedException {
-        List<String> steps = new java.util.ArrayList<>();
-        int[] approaches = {0};
-
-        boolean reached = PileMaker.retryAfterExit(
-                () -> {
-                    steps.add("approach");
-                    return approaches[0]++ == 1;
-                },
-                () -> {
-                    steps.add("exit");
-                    return true;
-                });
-
-        assertTrue(reached);
-        assertEquals(Arrays.asList("approach", "exit", "approach"), steps);
-    }
-
-    @Test
-    void failedRetryStopsInsteadOfLoopingAlongThePiles() throws InterruptedException {
-        List<String> steps = new java.util.ArrayList<>();
-
-        boolean reached = PileMaker.retryAfterExit(
-                () -> {
-                    steps.add("approach");
-                    return false;
-                },
-                () -> {
-                    steps.add("exit");
-                    return true;
-                });
-
-        assertFalse(reached);
-        assertEquals(Arrays.asList("approach", "exit", "approach"), steps);
-    }
-
-    @Test
-    void failedRouteToPlacementTriesAnotherSideWithoutChangingThePileSlot()
-            throws InterruptedException {
-        List<String> attempts = new java.util.ArrayList<>();
-
-        boolean reached = PileMaker.tryApproachSides(List.of(
-                () -> {
-                    attempts.add("nearest");
-                    return false;
-                },
-                () -> {
-                    attempts.add("other-side");
-                    return true;
-                },
-                () -> {
-                    attempts.add("unused");
-                    return true;
-                }));
-
-        assertTrue(reached);
-        assertEquals(List.of("nearest", "other-side"), attempts);
-    }
-
-    @Test
-    void placementApproachStartsFromTheSideNearestToThePlayer() {
-        NHitBoxD pile = new NHitBoxD(
-                Coord2d.of(-2.5, -2.5), Coord2d.of(2.5, 2.5), Coord2d.z);
-
-        List<PathFinder.Mode> modes = PileMaker.orderedApproachModes(
-                Coord2d.of(0, 10), pile);
-
-        assertEquals(PathFinder.Mode.Y_MAX, modes.get(0));
-        assertEquals(4, modes.size());
-    }
-
-    @Test
-    void exactPlacementBuildsANonDegenerateEscapeEnvelopeAroundPlayerAndPile() {
-        Pair<Coord2d, Coord2d> envelope = PileMaker.escapeEnvelope(
-                Coord2d.of(0, 0), Coord2d.of(20, 10), 50);
-
-        assertEquals(Coord2d.of(-50, -50), envelope.a);
-        assertEquals(Coord2d.of(70, 60), envelope.b);
-    }
-
-    @Test
-    void escapeTargetsCoverEverySideOutsideThePlacementArea() {
-        List<Coord2d> targets = PileMaker.escapeTargets(
-                new Pair<>(Coord2d.of(0, 0), Coord2d.of(22, 22)), 11, 11);
-
-        assertTrue(targets.contains(Coord2d.of(0, -11)));
-        assertTrue(targets.contains(Coord2d.of(22, -11)));
-        assertTrue(targets.contains(Coord2d.of(33, 0)));
-        assertTrue(targets.contains(Coord2d.of(33, 22)));
-        assertTrue(targets.contains(Coord2d.of(22, 33)));
-        assertTrue(targets.contains(Coord2d.of(0, 33)));
-        assertTrue(targets.contains(Coord2d.of(-11, 22)));
-        assertTrue(targets.contains(Coord2d.of(-11, 0)));
-    }
-
-    @Test
     void zoneBoundsExposeLiveDirection() {
         NArea area = new NArea("zone");
         area.pileFillDirection = PileFillDirection.RIGHT_TO_LEFT;
@@ -255,5 +60,60 @@ class PileMakerTest {
     void plainBoundsUseLegacyDirection() {
         assertEquals(PileFillDirection.LEFT_TO_RIGHT, PileMaker.directionFor(
                 Pair.of(Coord2d.of(0, 0), Coord2d.of(22, 22))));
+    }
+
+    @Test
+    void transferToPilesUsesAlexandrCreationFlow() {
+        PileMaker maker = PileMaker.forTransferToPiles(
+                Pair.of(Coord2d.of(0, 0), Coord2d.of(22, 22)),
+                "Raw Wildhide", new NAlias("stockpile"), 0);
+
+        assertTrue(maker.usesAlexandrCreationFlow());
+    }
+
+    @Test
+    void transferPilePositionUsesDirectionOnlyForNonLegacyDirections() {
+        NArea area = new NArea("zone");
+        Pair<Coord2d, Coord2d> bounds = new NArea.DirectedAreaBounds(
+                Coord2d.of(0, 0), Coord2d.of(22, 22), area);
+        Coord2d legacyPosition = Coord2d.of(1, 1);
+        int[] legacyCalls = {0};
+        List<PileFillDirection> directedCalls = new ArrayList<>();
+
+        for (PileFillDirection direction : new PileFillDirection[]{
+                PileFillDirection.RIGHT_TO_LEFT,
+                PileFillDirection.TOP_TO_BOTTOM,
+                PileFillDirection.BOTTOM_TO_TOP}) {
+            area.pileFillDirection = direction;
+            Coord2d directedPosition = Coord2d.of(direction.ordinal() + 10, 2);
+            assertSame(directedPosition, PileMaker.transferPilePosition(
+                    bounds,
+                    () -> {
+                        legacyCalls[0]++;
+                        return legacyPosition;
+                    },
+                    selectedDirection -> {
+                        directedCalls.add(selectedDirection);
+                        return directedPosition;
+                    }));
+        }
+
+        area.pileFillDirection = PileFillDirection.LEFT_TO_RIGHT;
+        assertSame(legacyPosition, PileMaker.transferPilePosition(
+                bounds,
+                () -> {
+                    legacyCalls[0]++;
+                    return legacyPosition;
+                },
+                selectedDirection -> {
+                    directedCalls.add(selectedDirection);
+                    return Coord2d.of(99, 99);
+                }));
+
+        assertEquals(1, legacyCalls[0]);
+        assertEquals(List.of(
+                PileFillDirection.RIGHT_TO_LEFT,
+                PileFillDirection.TOP_TO_BOTTOM,
+                PileFillDirection.BOTTOM_TO_TOP), directedCalls);
     }
 }
