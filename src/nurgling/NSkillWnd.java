@@ -304,13 +304,19 @@ public class NSkillWnd extends SkillWnd {
 			if(cr != null) {
 			    info.set(() -> {
 				Resource res = cr.res.get();
-                            int completed = (cr == pcr) ? CredoBonusFormatter.completedBonuses(pcl) : 0;
+				int completed = CredoBonusFormatter.isPursuing(cr.nm, (pcr == null) ? null : pcr.nm)
+				    ? CredoBonusFormatter.completedBonuses(pcl) : 0;
 				return new TexI(renderInfo(res, CREDO_IMG_SZ, null, true, null,
 					completed, cr.has));
 			    });
 			} else if(p != null) {
 			    info.set((Tex)null);
 			}
+		    }
+		    public void pcr(Credo cr, int crl, int crlt, int crql, int crqlt, int qid) {
+			super.pcr(cr, crl, crlt, crql, crqlt, qid);
+			if(sel != null && CredoBonusFormatter.isPursuing(sel.nm, (cr == null) ? null : cr.nm))
+			    change(pcr);
 		    }
 		}, 0, 0);
 	}

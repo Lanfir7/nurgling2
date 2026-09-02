@@ -15,6 +15,11 @@ public final class CredoBonusFormatter {
         return Math.max(0, displayedLevel - 1);
     }
 
+    /** True when the selected credo is the one currently being pursued, matched by name. */
+    public static boolean isPursuing(String selectedName, String pursuedName) {
+        return selectedName != null && selectedName.equals(pursuedName);
+    }
+
     public static String format(String markup, int completedLevels, boolean acquired) {
         if(markup == null || markup.trim().isEmpty())
             return "";

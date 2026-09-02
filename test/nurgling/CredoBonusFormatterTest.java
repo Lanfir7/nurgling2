@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CredoBonusFormatterTest {
     private static final String RAW = "$col[255,255,0]{\n"
@@ -33,7 +34,16 @@ class CredoBonusFormatterTest {
     void currentLevelCountsOnlyPreviouslyCompletedBonuses() {
         assertEquals(0, CredoBonusFormatter.completedBonuses(1));
         assertEquals(1, CredoBonusFormatter.completedBonuses(2));
+        assertEquals(3, CredoBonusFormatter.completedBonuses(4));
         assertEquals(4, CredoBonusFormatter.completedBonuses(5));
+    }
+
+    @Test
+    void sameNameOnDifferentInstancesStillCountsAsPursuing() {
+        assertTrue(CredoBonusFormatter.isPursuing("hunter", "hunter"));
+        assertFalse(CredoBonusFormatter.isPursuing("hunter", "miner"));
+        assertFalse(CredoBonusFormatter.isPursuing("hunter", null));
+        assertFalse(CredoBonusFormatter.isPursuing(null, "hunter"));
     }
 
     @Test
