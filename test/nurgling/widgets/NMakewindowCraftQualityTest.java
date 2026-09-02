@@ -24,6 +24,9 @@ class NMakewindowCraftQualityTest {
         assertTrue(src.contains("75 + CraftSlotQuality.LINE"), src);
         assertTrue(src.contains("82 + CraftSlotQuality.LINE"), "craft_num y must shift: " + src);
         assertTrue(src.contains("pack()") && src.contains("CraftSlotQuality.LINE"), src);
+        assertTrue(src.contains("packedHeight"), "pack() must use idempotent packedHeight: " + src);
+        assertFalse(src.contains("sz.add(0, UI.scale(CraftSlotQuality.LINE))"),
+                "sz.add stacks a LINE on every pack(): " + src);
         assertFalse(src.contains("qmy = UI.scale(38), outy = UI.scale(65)"),
                 "old layout would overlap the extra quality line: " + src);
     }

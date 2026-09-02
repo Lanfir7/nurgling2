@@ -76,4 +76,19 @@ public final class CraftSlotQuality {
         }
         return specName;
     }
+
+    /**
+     * Height after pack: content plus one quality line, never stacked.
+     * If children already filled the previous packed size, the line is already
+     * in {@code contentHeight} and must not be added again.
+     */
+    public static int packedHeight(int contentHeight, int currentHeight, int linePx) {
+        if (linePx < 0) {
+            linePx = 0;
+        }
+        if (currentHeight > 0 && contentHeight == currentHeight) {
+            return contentHeight;
+        }
+        return contentHeight + linePx;
+    }
 }

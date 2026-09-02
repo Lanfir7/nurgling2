@@ -62,4 +62,17 @@ class CraftSlotQualityTest {
         assertEquals("Branch", CraftSlotQuality.slotMatchName("Wooden Block", "Branch"));
         assertEquals("Stone", CraftSlotQuality.slotMatchName("Stone", null));
     }
+
+    @Test
+    void packedHeightAddsLineOnceAndDoesNotStack() {
+        int line = CraftSlotQuality.LINE;
+        assertEquals(112, CraftSlotQuality.packedHeight(100, 0, line));
+        assertEquals(112, CraftSlotQuality.packedHeight(100, 112, line));
+        // Children already filled to the previous packed size — do not add LINE again.
+        assertEquals(112, CraftSlotQuality.packedHeight(112, 112, line));
+        // Real content grew: still exactly one line, not two.
+        assertEquals(132, CraftSlotQuality.packedHeight(120, 112, line));
+        assertEquals(CraftSlotQuality.packedHeight(100, 50, line),
+                CraftSlotQuality.packedHeight(100, 50, line));
+    }
 }

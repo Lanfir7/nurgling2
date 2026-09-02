@@ -615,8 +615,9 @@ public class NMakewindow extends Widget implements DTarget {
 
     @Override
     public void pack() {
-        super.pack();
-        resize(sz.add(0, UI.scale(CraftSlotQuality.LINE)));
+        Coord csz = contentsz();
+        int line = UI.scale(CraftSlotQuality.LINE);
+        resize(new Coord(csz.x, CraftSlotQuality.packedHeight(csz.y, sz.y, line)));
     }
 
     void runIngredientSearch() {
