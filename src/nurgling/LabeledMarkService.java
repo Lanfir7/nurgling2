@@ -661,7 +661,7 @@ public class LabeledMarkService implements ProfileAwareService {
         try {
             removeMarkFromIndexes(locationId);
             if (icon != null) animalIconCache.put(gobId, icon);
-            LabeledMinimapMark mark = new LabeledMinimapMark(locationId, label, resourceType, segmentId, tileCoords, gid, localTileCoords, icon, null);
+            LabeledMinimapMark mark = new LabeledMinimapMark(locationId, label, resourceType, segmentId, tileCoords, gid, localTileCoords, icon, null, null, null, null, animalType);
             labeledMarks.put(locationId, mark);
             addMarkToIndexes(mark);
         } finally {
@@ -704,7 +704,7 @@ public class LabeledMarkService implements ProfileAwareService {
                 long gridId = data.getGridId() != null ? data.getGridId() : -1;
                 Coord localTileCoords = (data.getLocalTileX() != null && data.getLocalTileY() != null) ? new Coord(data.getLocalTileX(), data.getLocalTileY()) : null;
                 // Иконка: кэш → icon_path → iconconf → animal_type. Если не загрузилась, но есть iconPath/animalType — оставляем null,
-                // чтобы при отрисовке сработала ленивая загрузка (Resource доступен на UI-потоке).
+                // чтобы AnimalMarkerIconLoad подгрузил её на AnimalMarkerWorker, а не на потоке отрисовки.
                 BufferedImage icon = animalIconCache.get(data.getGobId());
                 if (icon == null && data.getIconPath() != null && !data.getIconPath().isEmpty()) {
                     icon = nurgling.actions.ObjectTracker.loadIconFromResourcePath(data.getIconPath());
@@ -823,8 +823,12 @@ public class LabeledMarkService implements ProfileAwareService {
             if (oldMark == null) return;
             LabeledMinimapMark newMark = new LabeledMinimapMark(
                 locationId, oldMark.label, oldMark.resourceType, oldMark.segmentId, oldMark.tileCoords,
-                oldMark.gridId, oldMark.localTileCoords, icon, oldMark.labelColor, oldMark.killedAtMs, oldMark.killedBy, null, null);
+                oldMark.gridId, oldMark.localTileCoords, icon, oldMark.labelColor, oldMark.killedAtMs, oldMark.killedBy, oldMark.iconPath, oldMark.animalType);
             labeledMarks.put(locationId, newMark);
+            try {
+                cacheAnimalIcon(Long.parseLong(locationId.substring("animal_".length())), icon);
+            } catch (NumberFormatException ignored) {
+            }
             updateMarkInIndexes(oldMark, newMark);
         } finally {
             lock.writeLock().unlock();

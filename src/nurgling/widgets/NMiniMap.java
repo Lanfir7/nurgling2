@@ -1825,20 +1825,7 @@ NMiniMap extends MiniMap {
 
             TexI iconTex = mark.getIconTex();
             if (iconTex == null && isAnimalMark(mark)) {
-                java.awt.image.BufferedImage lazyIcon = null;
-                if (mark.iconPath != null)
-                    lazyIcon = nurgling.actions.ObjectTracker.loadIconFromResourcePath(mark.iconPath);
-                if (lazyIcon == null && mark.animalType != null && gui != null)
-                    lazyIcon = nurgling.actions.ObjectTracker.loadIconFromIconConf(mark.animalType, gui);
-                if (lazyIcon == null && mark.animalType != null && gui != null)
-                    lazyIcon = nurgling.actions.ObjectTracker.loadAnimalIconFromPath(mark.animalType, mark.resourceType, gui);
-                if (lazyIcon == null) {
-                    try { lazyIcon = Resource.loadsimg("gfx/invobjs/kritter"); } catch (Exception ignored) { }
-                }
-                if (lazyIcon != null) {
-                    gui.labeledMarkService.updateAnimalMarkerIcon(mark.getLocationId(), lazyIcon);
-                    iconTex = new TexI(lazyIcon);
-                }
+                nurgling.AnimalMarkerIconLoad.enqueue(gui, mark);
             }
             if(iconTex != null) {
                 int dsz = Math.max(iconTex.sz().y, iconTex.sz().x);

@@ -166,6 +166,14 @@ public class AnimalMarkerSyncService {
      * Порядок: кэш → icon_path → iconconf → animal_type → default.
      */
     private BufferedImage preloadIcon(AnimalMarkerDao.AnimalMarkerData data, BufferedImage defaultIcon) {
+        try {
+            return preloadIconUnchecked(data, defaultIcon);
+        } catch (haven.Loading e) {
+            return defaultIcon;
+        }
+    }
+
+    private BufferedImage preloadIconUnchecked(AnimalMarkerDao.AnimalMarkerData data, BufferedImage defaultIcon) {
         // Проверяем кэш
         BufferedImage icon = gui.labeledMarkService.getAnimalIconFromCache(data.getGobId());
         if (icon != null) {

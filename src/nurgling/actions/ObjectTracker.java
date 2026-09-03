@@ -372,15 +372,17 @@ public class ObjectTracker {
             long gridId = obg.id;
             int localTileX = tc.x - obg.gc.x * MCache.cmaps.x;
             int localTileY = tc.y - obg.gc.y * MCache.cmaps.y;
-            BufferedImage icon = loadAnimalIcon(gob);
-            if (icon == null) {
-                try {
-                    icon = Resource.loadsimg("gfx/invobjs/kritter");
-                } catch (Exception ignored) { }
-            }
             gui.labeledMarkService.addAnimalMarkerLocal(fGobId, fAnimalType, fDisplayName,
-                segmentId, tileX, tileY, gridId, localTileX, localTileY, icon);
+                segmentId, tileX, tileY, gridId, localTileX, localTileY, null);
             gui.msg("ObjectTracker: Animal marker placed at segment " + segmentId);
+            final NGameUI fGui = gui;
+            nurgling.AnimalMarkerIconLoad.enqueue(gui, "animal_" + fGobId, () -> {
+                BufferedImage icon = loadAnimalIcon(gob);
+                if (icon == null) {
+                    icon = nurgling.AnimalMarkerIconLoad.loadIcon(fGui, null, fAnimalType, fDisplayName);
+                }
+                return icon;
+            });
             if (dbAvailable) {
                 final long fSegmentId = segmentId;
                 final int fTileX = tileX;
@@ -389,9 +391,12 @@ public class ObjectTracker {
                 final Integer fLocalTileX = localTileX;
                 final Integer fLocalTileY = localTileY;
                 final String fProfile = profile;
-                final String iconPath = getAnimalIconPath(fAnimalType, fDisplayName);
                 try {
                     gui.getAnimalMarkerWorker().submit(() -> {
+                        String iconPath = null;
+                        try {
+                            iconPath = getAnimalIconPath(fAnimalType, fDisplayName);
+                        } catch (haven.Loading ignored) { }
                         animalMarkerService.insert(fProfile, fGobId, fAnimalType, fDisplayName, iconPath,
                             fSegmentId, fTileX, fTileY, fGridId, fLocalTileX, fLocalTileY);
                     });
@@ -434,6 +439,8 @@ public class ObjectTracker {
             }
             String name = gob.ngob != null ? gob.ngob.name : null;
             if (name != null) return loadAnimalIconFromPath(name);
+        } catch (haven.Loading e) {
+            throw e;
         } catch (Exception ignored) { }
         return null;
     }
@@ -524,6 +531,8 @@ public class ObjectTracker {
         try {
             BufferedImage direct = Resource.loadsimg(path);
             if (direct != null) return direct;
+        } catch (haven.Loading e) {
+            throw e;
         } catch (Exception ignored) { }
         try {
             Resource res = Resource.remote().loadwait(path);
@@ -531,6 +540,8 @@ public class ObjectTracker {
                 Resource.Image img = res.layer(Resource.imgc);
                 if (img != null && img.img != null) return img.img;
             }
+        } catch (haven.Loading e) {
+            throw e;
         } catch (Exception ignored) { }
         return null;
     }
@@ -586,6 +597,8 @@ public class ObjectTracker {
                     }
                 }
             }
+        } catch (haven.Loading e) {
+            throw e;
         } catch (Exception e) { 
             // Игнорируем
         }
