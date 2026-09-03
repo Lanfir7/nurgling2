@@ -30,6 +30,18 @@ public final class KilnFiringTip {
         return meter;
     }
 
+    /**
+     * Same source as {@code WItem.draw}: {@code GItem.meter} (0–100) wins when
+     * greater than 0; otherwise {@code MeterInfo.meter()} is a 0.0–1.0 fraction.
+     */
+    public static int resolvedPercent(int gItemMeter, Double meterInfo) {
+        if (gItemMeter > 0)
+            return meterPercent(gItemMeter);
+        if (meterInfo == null)
+            return 0;
+        return meterPercent((int) Math.round(meterInfo * 100.0));
+    }
+
     public static boolean meterChanged(int renderedPercent, int currentMeter) {
         return renderedPercent != meterPercent(currentMeter);
     }

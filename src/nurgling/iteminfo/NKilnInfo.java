@@ -34,7 +34,7 @@ public class NKilnInfo extends ItemInfo.Tip {
         String name = itemName(item);
         if (KilnFiringTip.shouldRender(windowCap(item), name) == null)
             return false;
-        return KilnFiringTip.meterChanged(lastMeterPercent, item.meter);
+        return KilnFiringTip.meterChanged(lastMeterPercent, resolvedPercent(item));
     }
 
     @Override
@@ -51,12 +51,21 @@ public class NKilnInfo extends ItemInfo.Tip {
         String name = itemName(item);
         if (KilnFiringTip.shouldRender(cap, name) == null)
             return null;
-        int percent = KilnFiringTip.meterPercent(item.meter);
+        int percent = resolvedPercent(item);
         OptionalInt remaining = KilnFuelCatalog.remainingSeconds(name, percent);
         if (!remaining.isPresent())
             return null;
         lastMeterPercent = percent;
         return render(percent, remaining.getAsInt());
+    }
+
+    private static int resolvedPercent(NGItem item) {
+        return KilnFiringTip.resolvedPercent(item.meter, meterInfoFraction(item));
+    }
+
+    private static Double meterInfoFraction(NGItem item) {
+        GItem.MeterInfo minf = ItemInfo.find(GItem.MeterInfo.class, item.info());
+        return minf != null ? minf.meter() : null;
     }
 
     private static String itemName(NGItem item) {

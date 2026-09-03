@@ -38,6 +38,28 @@ class KilnFiringTipTest {
         assertTrue(KilnFiringTip.meterChanged(76, 77));
         assertFalse(KilnFiringTip.meterChanged(76, 76));
         assertFalse(KilnFiringTip.meterChanged(0, 0));
+        assertTrue(KilnFiringTip.meterChanged(0, 14));
+    }
+
+    @Test
+    void resolvedPercentPrefersGItemMeterThenMeterInfoFraction() {
+        assertEquals(76, KilnFiringTip.resolvedPercent(76, null));
+        assertEquals(76, KilnFiringTip.resolvedPercent(76, 0.14));
+        assertEquals(14, KilnFiringTip.resolvedPercent(0, 0.14));
+        assertEquals(0, KilnFiringTip.resolvedPercent(0, null));
+        assertEquals(0, KilnFiringTip.resolvedPercent(0, 0.0));
+        assertEquals(100, KilnFiringTip.resolvedPercent(0, 1.0));
+        assertEquals(100, KilnFiringTip.resolvedPercent(140, 0.14));
+    }
+
+    @Test
+    void coadeClayFourteenPercentLeavesEightySixPercentOfCatalogTime() {
+        int percent = KilnFiringTip.resolvedPercent(0, 0.14);
+        assertEquals(14, percent);
+        int full = KilnFuelCatalog.parseRealTimeSeconds("1:49:25");
+        int left = KilnFuelCatalog.remainingSeconds("Coade Clay", percent).getAsInt();
+        assertEquals(Math.round(0.86 * full), left);
+        assertEquals("1 h 34 min", KilnFiringTip.formatRemaining(left, "{0} min", "{0} h {1} min", "{0} h"));
     }
 
     @Test
