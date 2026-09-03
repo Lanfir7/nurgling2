@@ -99,4 +99,22 @@ class SmelterOreTipTest {
         assertNull(KilnFiringTip.shouldRender("Ore Smelter", "Coade Clay"));
         assertNull(KilnFiringTip.shouldRender("Smith's Smelter", "Coade Clay"));
     }
+
+    /**
+     * Every NGItem gets both NKilnInfo and NSmelterInfo. Returning kiln's
+     * needUpdate() immediately would skip the smelter tip whenever the window
+     * is not a kiln (needUpdate is false), so the smelter bar would never
+     * refresh as the meter changes.
+     */
+    @Test
+    void needlongtipDoesNotReturnKilnNeedUpdateBeforeCheckingSmelter() throws Exception {
+        String src = java.nio.file.Files.readString(java.nio.file.Paths.get("src/nurgling/NGItem.java"));
+        int kiln = src.indexOf("inf instanceof NKilnInfo");
+        int smelter = src.indexOf("inf instanceof NSmelterInfo");
+        assertTrue(kiln >= 0 && smelter > kiln, src);
+        String kilnBlock = src.substring(kiln, smelter);
+        assertFalse(kilnBlock.contains("return ((NKilnInfo)"),
+                "unconditional kiln return skips NSmelterInfo: " + kilnBlock);
+        assertTrue(kilnBlock.contains("needUpdate()"), kilnBlock);
+    }
 }

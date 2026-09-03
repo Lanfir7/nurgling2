@@ -65,10 +65,12 @@ public class NGItem extends GItem
                 return ((NCuriosity) inf).needUpdate();
             }
             else if (inf instanceof NKilnInfo) {
-                return ((NKilnInfo) inf).needUpdate();
+                if (((NKilnInfo) inf).needUpdate())
+                    return true;
             }
             else if (inf instanceof NSmelterInfo) {
-                return ((NSmelterInfo) inf).needUpdate();
+                if (((NSmelterInfo) inf).needUpdate())
+                    return true;
             }
             if (inf instanceof ISlots) {
                 return this.ui.modshift!=((ISlots)inf).isShifted;
