@@ -72,5 +72,9 @@ class AnimalMarkerIconLoadTest {
                 && src.contains("loadAnimalIconFromPath")
                 && src.contains("gfx/invobjs/kritter"),
                 "worker must keep iconPath → iconconf → animalType → kritter fallback");
+        assertTrue(src.contains("animalMarkerIconJobs"),
+                "in-flight set must be per NGameUI so a relog can enqueue again");
+        assertTrue(src.contains("tryAcquire") && src.contains("submitAcquired"),
+                "tracker must be able to acquire before the mark is visible, then submit");
     }
 }

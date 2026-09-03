@@ -7,14 +7,16 @@ import nurgling.widgets.LabeledMinimapMark;
 import java.awt.image.BufferedImage;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
  * Loads animal-marker icons on {@code AnimalMarkerWorker} instead of the minimap draw thread.
- * In-flight jobs are deduped by locationId so a missing icon is not retried every frame.
+ * In-flight jobs are deduped per {@link NGameUI} by locationId so a missing icon is not retried every frame.
  */
 public final class AnimalMarkerIconLoad {
     private static final long RETRY_DELAY_MS = 400;
@@ -36,8 +38,6 @@ public final class AnimalMarkerIconLoad {
         }
     }
 
-    static final InFlight IN_FLIGHT = new InFlight();
-
     private static final ScheduledExecutorService RETRIES = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "AnimalMarkerIconRetry");
         t.setDaemon(true);
@@ -58,10 +58,25 @@ public final class AnimalMarkerIconLoad {
     }
 
     public static void enqueue(NGameUI gui, String locationId, Supplier<BufferedImage> loader) {
-        if (gui == null || locationId == null || !locationId.startsWith("animal_") || loader == null) {
+        if (!tryAcquire(gui, locationId) || loader == null) {
             return;
         }
-        if (!IN_FLIGHT.tryAcquire(locationId)) {
+        submitAcquired(gui, locationId, loader);
+    }
+
+    /**
+     * Reserve {@code locationId} before the local mark is visible so draw cannot steal the job.
+     * Call {@link #submitAcquired} after {@code addAnimalMarkerLocal}.
+     */
+    public static boolean tryAcquire(NGameUI gui, String locationId) {
+        if (gui == null || locationId == null || !locationId.startsWith("animal_")) {
+            return false;
+        }
+        return gui.animalMarkerIconJobs.tryAcquire(locationId);
+    }
+
+    public static void submitAcquired(NGameUI gui, String locationId, Supplier<BufferedImage> loader) {
+        if (gui == null || locationId == null || loader == null) {
             return;
         }
         submit(gui, locationId, loader);
@@ -92,25 +107,35 @@ public final class AnimalMarkerIconLoad {
 
     private static void submit(NGameUI gui, String locationId, Supplier<BufferedImage> loader) {
         try {
-            gui.getAnimalMarkerWorker().submit(() -> run(gui, locationId, loader));
-        } catch (RuntimeException e) {
-            IN_FLIGHT.release(locationId);
+            ExecutorService worker = gui.getAnimalMarkerWorker();
+            if (worker == null || worker.isShutdown()) {
+                gui.animalMarkerIconJobs.release(locationId);
+                return;
+            }
+            worker.submit(() -> run(gui, locationId, loader));
+        } catch (RejectedExecutionException e) {
+            gui.animalMarkerIconJobs.release(locationId);
         }
     }
 
     private static void run(NGameUI gui, String locationId, Supplier<BufferedImage> loader) {
+        InFlight jobs = gui.animalMarkerIconJobs;
         try {
+            if (gui.labeledMarkService == null) {
+                jobs.release(locationId);
+                return;
+            }
             BufferedImage icon = loader.get();
-            if (icon != null && gui.labeledMarkService != null) {
+            if (icon != null) {
                 gui.labeledMarkService.updateAnimalMarkerIcon(locationId, icon);
-                IN_FLIGHT.release(locationId);
+                jobs.release(locationId);
                 return;
             }
             /* Leave in-flight on null so draw does not re-submit every frame. */
         } catch (haven.Loading e) {
             RETRIES.schedule(() -> submit(gui, locationId, loader), RETRY_DELAY_MS, TimeUnit.MILLISECONDS);
         } catch (RuntimeException ignored) {
-            IN_FLIGHT.release(locationId);
+            jobs.release(locationId);
         }
     }
 }

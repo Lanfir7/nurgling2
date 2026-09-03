@@ -20,6 +20,8 @@ class NMiniMapAnimalIconDrawTest {
         int lazyAt = draw.indexOf("iconTex == null && isAnimalMark(mark)");
         assertTrue(lazyAt >= 0, "animal placeholder path must still exist when iconTex is null");
         String lazy = draw.substring(lazyAt);
+        int placeholderAt = lazy.indexOf("g.fellipse");
+        assertTrue(placeholderAt >= 0, "null animal iconTex must still draw the placeholder circle");
 
         assertFalse(lazy.contains("loadAnimalIconFromPath"),
                 "draw must not call loadAnimalIconFromPath");

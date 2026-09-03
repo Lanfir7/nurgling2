@@ -372,17 +372,21 @@ public class ObjectTracker {
             long gridId = obg.id;
             int localTileX = tc.x - obg.gc.x * MCache.cmaps.x;
             int localTileY = tc.y - obg.gc.y * MCache.cmaps.y;
+            final String locationId = "animal_" + fGobId;
+            final boolean iconJob = nurgling.AnimalMarkerIconLoad.tryAcquire(gui, locationId);
             gui.labeledMarkService.addAnimalMarkerLocal(fGobId, fAnimalType, fDisplayName,
                 segmentId, tileX, tileY, gridId, localTileX, localTileY, null);
             gui.msg("ObjectTracker: Animal marker placed at segment " + segmentId);
-            final NGameUI fGui = gui;
-            nurgling.AnimalMarkerIconLoad.enqueue(gui, "animal_" + fGobId, () -> {
-                BufferedImage icon = loadAnimalIcon(gob);
-                if (icon == null) {
-                    icon = nurgling.AnimalMarkerIconLoad.loadIcon(fGui, null, fAnimalType, fDisplayName);
-                }
-                return icon;
-            });
+            if (iconJob) {
+                final NGameUI fGui = gui;
+                nurgling.AnimalMarkerIconLoad.submitAcquired(gui, locationId, () -> {
+                    BufferedImage icon = loadAnimalIcon(gob);
+                    if (icon == null) {
+                        icon = nurgling.AnimalMarkerIconLoad.loadIcon(fGui, null, fAnimalType, fDisplayName);
+                    }
+                    return icon;
+                });
+            }
             if (dbAvailable) {
                 final long fSegmentId = segmentId;
                 final int fTileX = tileX;
@@ -479,6 +483,8 @@ public class ObjectTracker {
             try {
                 img = loadIconFromResourcePath(invPath);
                 if (img != null) return img;
+            } catch (haven.Loading e) {
+                throw e;
             } catch (Exception ignored) { }
         }
         // 2) По display name: "Wild Boar" -> gfx/invobjs/kritter/wildboar

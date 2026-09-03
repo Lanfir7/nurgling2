@@ -20,6 +20,12 @@ class ObjectTrackerAnimalMarkerIconOffThreadTest {
         int addLocalAt = save.indexOf("addAnimalMarkerLocal");
         assertTrue(addLocalAt >= 0, "new markers must still be placed immediately");
 
+        int acquireAt = save.indexOf("tryAcquire");
+        assertTrue(acquireAt >= 0 && acquireAt < addLocalAt,
+                "in-flight must be acquired before addAnimalMarkerLocal so draw cannot steal the gob loader");
+        assertTrue(save.contains("submitAcquired"),
+                "gob icon load must be submitted after the local mark exists");
+
         int loadIconCall = indexOfUncommented(save, "loadAnimalIcon(");
         assertTrue(loadIconCall < 0 || loadIconCall > addLocalAt,
                 "loadAnimalIcon must not run on the caller thread before addAnimalMarkerLocal");

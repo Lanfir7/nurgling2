@@ -825,10 +825,6 @@ public class LabeledMarkService implements ProfileAwareService {
                 locationId, oldMark.label, oldMark.resourceType, oldMark.segmentId, oldMark.tileCoords,
                 oldMark.gridId, oldMark.localTileCoords, icon, oldMark.labelColor, oldMark.killedAtMs, oldMark.killedBy, oldMark.iconPath, oldMark.animalType);
             labeledMarks.put(locationId, newMark);
-            try {
-                cacheAnimalIcon(Long.parseLong(locationId.substring("animal_".length())), icon);
-            } catch (NumberFormatException ignored) {
-            }
             updateMarkInIndexes(oldMark, newMark);
         } finally {
             lock.writeLock().unlock();

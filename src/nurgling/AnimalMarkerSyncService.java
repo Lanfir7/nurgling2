@@ -169,7 +169,7 @@ public class AnimalMarkerSyncService {
         try {
             return preloadIconUnchecked(data, defaultIcon);
         } catch (haven.Loading e) {
-            return defaultIcon;
+            return null;
         }
     }
 

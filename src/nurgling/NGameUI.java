@@ -93,8 +93,13 @@ public class NGameUI extends GameUI
     public LocalTimerSyncService localTimerSyncService = null;
     /** Отдельный поток для установки маркеров в БД и загрузки из БД (merge выполняется на UI-потоке). */
     private volatile java.util.concurrent.ExecutorService animalMarkerWorker = null;
+    private volatile boolean animalMarkerWorkerStopped = false;
+    final AnimalMarkerIconLoad.InFlight animalMarkerIconJobs = new AnimalMarkerIconLoad.InFlight();
 
     public synchronized java.util.concurrent.ExecutorService getAnimalMarkerWorker() {
+        if (animalMarkerWorkerStopped) {
+            return null;
+        }
         if (animalMarkerWorker == null) {
             animalMarkerWorker = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
                 Thread t = new Thread(r, "AnimalMarkerWorker");
@@ -513,6 +518,7 @@ public class NGameUI extends GameUI
             animalMarkerSyncService.stop();
         if(fishLocationService != null)
             fishLocationService.dispose();
+        animalMarkerWorkerStopped = true;
         if (animalMarkerWorker != null) {
             animalMarkerWorker.shutdownNow();
             animalMarkerWorker = null;
