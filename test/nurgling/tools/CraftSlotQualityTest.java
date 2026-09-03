@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -48,7 +49,8 @@ class CraftSlotQualityTest {
         assertTrue(CraftSlotQuality.includeItem(false, false, "Stone", "Stone"));
         assertFalse(CraftSlotQuality.includeItem(false, false, "Branch", "Stone"));
         assertFalse(CraftSlotQuality.includeItem(true, true, null, "Stone"));
-        assertFalse(CraftSlotQuality.includeItem(true, true, "Stone", null));
+        assertFalse(CraftSlotQuality.includeItem(true, true, "Stone", (String) null));
+        assertFalse(CraftSlotQuality.includeItem(true, true, "Stone", (Collection<String>) null));
     }
 
     @Test
