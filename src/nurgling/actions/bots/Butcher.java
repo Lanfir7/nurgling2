@@ -95,7 +95,8 @@ public class Butcher implements Action {
                 if (gob == null || !ButcherTarget.isCarcass(gob)) {
                     return Results.ERROR("No carcass");
                 }
-                return butcherGobs(gui, listOf(gob), null, false);
+                return butcherGobs(gui, listOf(gob), null,
+                        ButcherTarget.dumpInventory(mode, ButcherTarget.hasOutAreas(playerOutAreas(gui))));
             }
 
             if (mode == ButcherTarget.Mode.ZONE) {
@@ -297,6 +298,26 @@ public class Butcher implements Action {
         ArrayList<Gob> gobs = new ArrayList<>();
         gobs.add(gob);
         return gobs;
+    }
+
+    /** Player overlay NAreas with OUT tags — same nols set FreeInventory2 / NContext uses. */
+    private static ButcherTarget.OutArea[] playerOutAreas(NGameUI gui) {
+        if (gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null) {
+            return new ButcherTarget.OutArea[0];
+        }
+        ArrayList<ButcherTarget.OutArea> out = new ArrayList<>();
+        for (Integer id : gui.map.nols.keySet()) {
+            if (id == null || id <= 0) {
+                continue;
+            }
+            NArea cand = gui.map.glob.map.areas.get(id);
+            if (cand == null) {
+                continue;
+            }
+            int outs = cand.jout == null ? 0 : cand.jout.length();
+            out.add(new ButcherTarget.OutArea(cand.isDisabled(), outs));
+        }
+        return out.toArray(new ButcherTarget.OutArea[0]);
     }
 
     private static ArrayList<Gob> getGobs(NArea area) throws InterruptedException {

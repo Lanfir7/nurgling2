@@ -67,4 +67,38 @@ class ButcherTargetTest {
         assertEquals(0, stop.y, 0.01);
         assertEquals(ButcherTarget.MOUNTED_REACH, new Coord2d(50, 0).dist(stop), 0.01);
     }
+
+    @Test
+    void singleDumpsOnlyWhenPlayerOutAreasExist() {
+        assertTrue(ButcherTarget.dumpInventory(ButcherTarget.Mode.SINGLE, true));
+        assertFalse(ButcherTarget.dumpInventory(ButcherTarget.Mode.SINGLE, false));
+    }
+
+    @Test
+    void zoneAlwaysDumpsInventory() {
+        assertTrue(ButcherTarget.dumpInventory(ButcherTarget.Mode.ZONE, true));
+        assertTrue(ButcherTarget.dumpInventory(ButcherTarget.Mode.ZONE, false));
+    }
+
+    @Test
+    void localSelectAreaDoesNotDumpEvenIfOutAreasExist() {
+        assertFalse(ButcherTarget.dumpInventory(ButcherTarget.Mode.LOCAL, true));
+        assertFalse(ButcherTarget.dumpInventory(ButcherTarget.Mode.LOCAL, false));
+    }
+
+    @Test
+    void unloadOutAreaNeedsEnabledOutTagsNotCarcassSpec() {
+        assertTrue(ButcherTarget.isUnloadOutArea(false, 1));
+        assertFalse(ButcherTarget.isUnloadOutArea(false, 0));
+        assertFalse(ButcherTarget.isUnloadOutArea(true, 3));
+        assertFalse(ButcherTarget.hasOutAreas());
+        assertFalse(ButcherTarget.hasOutAreas(area(false, 0)));
+        assertTrue(ButcherTarget.hasOutAreas(area(false, 2)));
+        assertFalse(ButcherTarget.hasOutAreas(area(true, 2), area(false, 0)));
+        assertTrue(ButcherTarget.hasOutAreas(area(true, 2), area(false, 1)));
+    }
+
+    private static ButcherTarget.OutArea area(boolean disabled, int outCount) {
+        return new ButcherTarget.OutArea(disabled, outCount);
+    }
 }
