@@ -35,7 +35,7 @@ class NMakewindowCraftQualityTest {
     void ingredientAveragesExpandCategoryViaNamesFor() throws Exception {
         String src = read("src/nurgling/widgets/NMakewindow.java");
         int start = src.indexOf("private List<Double> ingredientAverages()");
-        int end = src.indexOf("playerInvSamples()");
+        int end = src.indexOf("private List<InvSample> playerInvSamples()");
         assertTrue(start >= 0 && end > start, src);
         String avg = src.substring(start, end);
         assertTrue(avg.contains("CraftIngredientStock.namesFor"),
