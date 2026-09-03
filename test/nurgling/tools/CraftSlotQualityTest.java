@@ -63,7 +63,10 @@ class CraftSlotQualityTest {
 
     @Test
     void categoryNamesMatchMembersNotTitle() {
-        List<String> slot = Arrays.asList("Cleaned Crane", "Cleaned Eagle Owl", "Cleaned Chicken");
+        List<String> slot = CraftIngredientStock.namesFor("Clean Bird Carcass", true, null);
+        assertTrue(slot.contains("Cleaned Crane"));
+        assertTrue(slot.contains("Cleaned Eagle Owl"));
+        assertFalse(slot.contains("Clean Bird Carcass"));
         assertTrue(CraftSlotQuality.includeItem(false, false, "Cleaned Crane", slot));
         assertTrue(CraftSlotQuality.includeItem(false, false, "Cleaned Eagle Owl", slot));
         assertFalse(CraftSlotQuality.includeItem(false, false, "Clean Bird Carcass", slot));
@@ -98,10 +101,10 @@ class CraftSlotQualityTest {
 
     @Test
     void namedSlotStillExactNameOnly() {
-        List<String> slot = Collections.singletonList("Stone");
-        assertTrue(CraftSlotQuality.includeItem(false, false, "Stone", slot));
-        assertFalse(CraftSlotQuality.includeItem(false, false, "Quarryartz", slot));
-        assertFalse(CraftSlotQuality.includeItem(false, false, "Raw Stone", slot));
+        List<String> slot = Collections.singletonList("Nettle");
+        assertTrue(CraftSlotQuality.includeItem(false, false, "Nettle", slot));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Stinging Nettle", slot));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Raw Nettle", slot));
     }
 
     @Test
