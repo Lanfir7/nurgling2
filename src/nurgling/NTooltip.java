@@ -10,6 +10,7 @@ import haven.res.ui.tt.slot.Slotted;
 import haven.res.ui.tt.ingred.Ingredient;
 import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NKilnInfo;
+import nurgling.iteminfo.NSmelterInfo;
 import nurgling.styles.TooltipStyle;
 
 import java.awt.*;
@@ -542,6 +543,7 @@ public class NTooltip {
         Integer presenceCurrent = null;  // Presence current value (x in "Presence: x/y")
         Integer presenceMax = null;      // Presence max value (y in "Presence: x/y")
         NKilnInfo kilnInfo = null;
+        NSmelterInfo smelterInfo = null;
         for (ItemInfo ii : info) {
             String className = ii.getClass().getSimpleName();
             String fullName = ii.getClass().getName();
@@ -593,6 +595,9 @@ public class NTooltip {
             }
             if (ii instanceof NKilnInfo) {
                 kilnInfo = (NKilnInfo) ii;
+            }
+            if (ii instanceof NSmelterInfo) {
+                smelterInfo = (NSmelterInfo) ii;
             }
             if (ii instanceof ItemInfo.Contents) {
                 contentsList.add((ItemInfo.Contents) ii);
@@ -1393,20 +1398,21 @@ public class NTooltip {
         } else if (presenceAndBelow != null) {
             result = presenceAndBelow;
         }
-        return appendKilnFiringTip(result, kilnInfo, scaledSectionSpacing, bodyDescentVal);
+        result = appendFiringTip(result, kilnInfo, scaledSectionSpacing, bodyDescentVal);
+        return appendFiringTip(result, smelterInfo, scaledSectionSpacing, bodyDescentVal);
     }
 
-    private static BufferedImage appendKilnFiringTip(BufferedImage result, NKilnInfo kilnInfo,
-                                                     int scaledSectionSpacing, int bodyDescentVal) {
-        if (kilnInfo == null)
+    private static BufferedImage appendFiringTip(BufferedImage result, ItemInfo.Tip tip,
+                                                 int scaledSectionSpacing, int bodyDescentVal) {
+        if (tip == null)
             return result;
-        BufferedImage kilnImg = kilnInfo.tipimg();
-        if (kilnImg == null)
+        BufferedImage tipImg = tip.tipimg();
+        if (tipImg == null)
             return result;
-        kilnImg = TooltipStyle.cropTopOnly(kilnImg);
+        tipImg = TooltipStyle.cropTopOnly(tipImg);
         if (result == null)
-            return kilnImg;
-        return ItemInfo.catimgs(scaledSectionSpacing - bodyDescentVal, result, kilnImg);
+            return tipImg;
+        return ItemInfo.catimgs(scaledSectionSpacing - bodyDescentVal, result, tipImg);
     }
 
     /**
@@ -2878,8 +2884,8 @@ public class NTooltip {
                     tip.getClass().getSimpleName().equals("NQuestItem")) {
                     continue;
                 }
-                // Skip NKilnInfo - rendered below the resource path
-                if (tip instanceof NKilnInfo) {
+                // Skip NKilnInfo / NSmelterInfo - rendered below the resource path
+                if (tip instanceof NKilnInfo || tip instanceof NSmelterInfo) {
                     continue;
                 }
                 // Skip Tool class - it renders "When used:" header and resource path

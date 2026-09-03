@@ -12,6 +12,7 @@ import nurgling.cookbook.upload.RecipeCaptureMode;
 import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NFoodInfo;
 import nurgling.iteminfo.NKilnInfo;
+import nurgling.iteminfo.NSmelterInfo;
 import nurgling.tools.LpExplorer;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +66,9 @@ public class NGItem extends GItem
             }
             else if (inf instanceof NKilnInfo) {
                 return ((NKilnInfo) inf).needUpdate();
+            }
+            else if (inf instanceof NSmelterInfo) {
+                return ((NSmelterInfo) inf).needUpdate();
             }
             if (inf instanceof ISlots) {
                 return this.ui.modshift!=((ISlots)inf).isShifted;

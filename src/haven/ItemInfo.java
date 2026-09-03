@@ -33,6 +33,7 @@ import nurgling.NGItem;
 import nurgling.iteminfo.NKilnInfo;
 import nurgling.iteminfo.NQuestItem;
 import nurgling.iteminfo.NSearchingHighlight;
+import nurgling.iteminfo.NSmelterInfo;
 
 import java.util.*;
 import java.util.function.*;
@@ -457,6 +458,7 @@ public abstract class ItemInfo implements Comparable<ItemInfo> {
 		ret.add(new NSearchingHighlight(owner));
 		ret.add(new NQuestItem(owner));
 		ret.add(new NKilnInfo(owner));
+		ret.add(new NSmelterInfo(owner));
 	}
 	Collections.sort(ret);
 	return(ret);
