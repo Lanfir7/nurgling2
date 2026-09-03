@@ -41,6 +41,55 @@ public final class ButcherTarget {
         return Mode.LOCAL;
     }
 
+    /**
+     * Player overlay area used by {@code NContext}/{@code containOut} unload lookup.
+     * {@code outCount} is {@code NArea.jout.length()} — not a container-type list.
+     * {@code visible} is {@code isVisible()} plus loaded {@code getRCArea()}, same as {@code findOut}.
+     */
+    public static final class OutArea {
+        public final boolean disabled;
+        public final int outCount;
+        public final boolean visible;
+
+        public OutArea(boolean disabled, int outCount, boolean visible) {
+            this.disabled = disabled;
+            this.outCount = outCount;
+            this.visible = visible;
+        }
+    }
+
+    /** Enabled, currently visible area with at least one OUT tag. Carcass spec alone is not enough. */
+    public static boolean isUnloadOutArea(boolean disabled, int outCount, boolean visible) {
+        return !disabled && outCount > 0 && visible;
+    }
+
+    /** True if any player overlay area has visible OUT tags FreeInventory2 can route to. */
+    public static boolean hasOutAreas(OutArea... areas) {
+        if (areas == null) {
+            return false;
+        }
+        for (OutArea area : areas) {
+            if (area != null && isUnloadOutArea(area.disabled, area.outCount, area.visible)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * ZONE always unloads. SINGLE unloads only when OUT areas exist.
+     * LOCAL SelectArea stays off even if OUT areas exist.
+     */
+    public static boolean dumpInventory(Mode mode, boolean hasOutAreas) {
+        if (mode == Mode.ZONE) {
+            return true;
+        }
+        if (mode == Mode.SINGLE) {
+            return hasOutAreas;
+        }
+        return false;
+    }
+
     /** After Skin a horse gob often respawns with a new id; retry empty menus before quitting. */
     public static final int EMPTY_MENU_RETRIES = 3;
     public static final double FOLLOW_RADIUS = 33;
