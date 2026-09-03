@@ -21,6 +21,8 @@ class ButcherDumpInventoryTest {
         assertTrue(src.contains("ButcherTarget.dumpInventory(mode, ButcherTarget.hasOutAreas("), src);
         assertTrue(src.contains("gui.map.nols"), src);
         assertTrue(src.contains("cand.jout"), src);
+        assertTrue(src.contains("cand.isVisible()"), src);
+        assertTrue(src.contains("cand.getRCArea()"), src);
         assertTrue(src.contains("listOf(gob)"), src);
         assertFalse(src.contains("return butcherGobs(gui, listOf(gob), null, false);"), src);
         assertTrue(src.contains("return butcherGobs(gui, getGobs(insa.getRCArea()), null, false);"), src);

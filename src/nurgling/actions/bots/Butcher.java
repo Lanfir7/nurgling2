@@ -315,7 +315,8 @@ public class Butcher implements Action {
                 continue;
             }
             int outs = cand.jout == null ? 0 : cand.jout.length();
-            out.add(new ButcherTarget.OutArea(cand.isDisabled(), outs));
+            boolean visible = cand.isVisible() && cand.getRCArea() != null;
+            out.add(new ButcherTarget.OutArea(cand.isDisabled(), outs, visible));
         }
         return out.toArray(new ButcherTarget.OutArea[0]);
     }

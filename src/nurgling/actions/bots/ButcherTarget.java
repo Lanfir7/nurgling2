@@ -44,29 +44,32 @@ public final class ButcherTarget {
     /**
      * Player overlay area used by {@code NContext}/{@code containOut} unload lookup.
      * {@code outCount} is {@code NArea.jout.length()} — not a container-type list.
+     * {@code visible} is {@code isVisible()} plus loaded {@code getRCArea()}, same as {@code findOut}.
      */
     public static final class OutArea {
         public final boolean disabled;
         public final int outCount;
+        public final boolean visible;
 
-        public OutArea(boolean disabled, int outCount) {
+        public OutArea(boolean disabled, int outCount, boolean visible) {
             this.disabled = disabled;
             this.outCount = outCount;
+            this.visible = visible;
         }
     }
 
-    /** Enabled area with at least one OUT tag. Carcass spec alone is not enough. */
-    public static boolean isUnloadOutArea(boolean disabled, int outCount) {
-        return !disabled && outCount > 0;
+    /** Enabled, currently visible area with at least one OUT tag. Carcass spec alone is not enough. */
+    public static boolean isUnloadOutArea(boolean disabled, int outCount, boolean visible) {
+        return !disabled && outCount > 0 && visible;
     }
 
-    /** True if any player overlay area has OUT tags FreeInventory2 can route to. */
+    /** True if any player overlay area has visible OUT tags FreeInventory2 can route to. */
     public static boolean hasOutAreas(OutArea... areas) {
         if (areas == null) {
             return false;
         }
         for (OutArea area : areas) {
-            if (area != null && isUnloadOutArea(area.disabled, area.outCount)) {
+            if (area != null && isUnloadOutArea(area.disabled, area.outCount, area.visible)) {
                 return true;
             }
         }

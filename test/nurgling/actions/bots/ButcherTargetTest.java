@@ -87,18 +87,22 @@ class ButcherTargetTest {
     }
 
     @Test
-    void unloadOutAreaNeedsEnabledOutTagsNotCarcassSpec() {
-        assertTrue(ButcherTarget.isUnloadOutArea(false, 1));
-        assertFalse(ButcherTarget.isUnloadOutArea(false, 0));
-        assertFalse(ButcherTarget.isUnloadOutArea(true, 3));
+    void unloadOutAreaNeedsEnabledVisibleOutTagsNotCarcassSpec() {
+        assertTrue(ButcherTarget.isUnloadOutArea(false, 1, true));
+        assertFalse(ButcherTarget.isUnloadOutArea(false, 0, true));
+        assertFalse(ButcherTarget.isUnloadOutArea(true, 3, true));
+        assertFalse(ButcherTarget.isUnloadOutArea(false, 2, false));
         assertFalse(ButcherTarget.hasOutAreas());
-        assertFalse(ButcherTarget.hasOutAreas(area(false, 0)));
-        assertTrue(ButcherTarget.hasOutAreas(area(false, 2)));
-        assertFalse(ButcherTarget.hasOutAreas(area(true, 2), area(false, 0)));
-        assertTrue(ButcherTarget.hasOutAreas(area(true, 2), area(false, 1)));
+        assertFalse(ButcherTarget.hasOutAreas(area(false, 0, true)));
+        assertTrue(ButcherTarget.hasOutAreas(area(false, 2, true)));
+        assertFalse(ButcherTarget.hasOutAreas(area(true, 2, true), area(false, 0, true)));
+        assertTrue(ButcherTarget.hasOutAreas(area(true, 2, true), area(false, 1, true)));
+        assertFalse(ButcherTarget.hasOutAreas(area(false, 3, false)));
+        assertFalse(ButcherTarget.dumpInventory(ButcherTarget.Mode.SINGLE, ButcherTarget.hasOutAreas(area(false, 1, false))));
+        assertTrue(ButcherTarget.dumpInventory(ButcherTarget.Mode.SINGLE, ButcherTarget.hasOutAreas(area(false, 1, true))));
     }
 
-    private static ButcherTarget.OutArea area(boolean disabled, int outCount) {
-        return new ButcherTarget.OutArea(disabled, outCount);
+    private static ButcherTarget.OutArea area(boolean disabled, int outCount, boolean visible) {
+        return new ButcherTarget.OutArea(disabled, outCount, visible);
     }
 }
