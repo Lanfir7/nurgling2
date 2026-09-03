@@ -186,18 +186,7 @@ public class NTooltip {
             if (isTransfer) {
                 return transferValue != null ? transferValue : "";
             }
-            String sign = modValue >= 0 ? "+" : "";
-            if (isPercent) {
-                // Format as percentage (normattr style)
-                double percent = modValue * 100;
-                if (percent == Math.floor(percent)) {
-                    return String.format("%s%.0f%%", sign, percent);
-                }
-                return String.format("%s%.1f%%", sign, percent);
-            } else {
-                // Format as integer (intattr style)
-                return String.format("%s%d", sign, (int) modValue);
-            }
+            return OverlayAttrModFormat.formatModValue(modValue, isPercent);
         }
     }
 
@@ -227,26 +216,7 @@ public class NTooltip {
      * Integer types: intattr
      */
     private static boolean isPercentageAttribute(Class<?> clazz) {
-        // Walk up the class hierarchy looking for known attribute type names
-        // Check both simple name and full name patterns since classes might be dynamically loaded
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            String simpleName = current.getSimpleName();
-            String fullName = current.getName();
-
-            // Check for percentage attribute types (check both simple and full names)
-            if (simpleName.equals("normattr") || simpleName.equals("inormattr") || simpleName.equals("pmattr") ||
-                fullName.contains("normattr") || fullName.contains("inormattr") || fullName.contains("pmattr")) {
-                return true;
-            }
-            // Check for integer attribute type (explicitly not percentage)
-            if (simpleName.equals("intattr") || fullName.contains("intattr")) {
-                return false;
-            }
-            current = current.getSuperclass();
-        }
-        // Default to percentage if unknown (safer for display)
-        return true;
+        return OverlayAttrModFormat.isPercentageAttribute(clazz);
     }
 
     /**
@@ -293,19 +263,8 @@ public class NTooltip {
                             Field modField = entry.getClass().getField("mod");
                             double modValue = modField.getDouble(entry);
 
-                            // Check if it's percentage or integer type
                             boolean isPercent = isPercentageAttribute(attr.getClass());
-                            String sign = modValue >= 0 ? "+" : "";
-                            if (isPercent) {
-                                double percent = modValue * 100;
-                                if (percent == Math.floor(percent)) {
-                                    formattedValue = String.format("%s%.0f%%", sign, percent);
-                                } else {
-                                    formattedValue = String.format("%s%.1f%%", sign, percent);
-                                }
-                            } else {
-                                formattedValue = String.format("%s%d", sign, (int) modValue);
-                            }
+                            formattedValue = OverlayAttrModFormat.formatModValue(modValue, isPercent);
                         } catch (NoSuchFieldException e) {
                             // Not a Mod with numeric value
                         }
