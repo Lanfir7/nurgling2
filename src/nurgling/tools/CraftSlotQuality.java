@@ -1,5 +1,8 @@
 package nurgling.tools;
 
+import java.util.Collection;
+import java.util.Collections;
+
 /**
  * Pure helpers for craft-window average-quality labels.
  * No client types — unit-testable without Haven.
@@ -52,10 +55,22 @@ public final class CraftSlotQuality {
      */
     public static boolean includeItem(boolean itemHasMakePrep, boolean anyMakePrep,
                                       String itemName, String slotName) {
-        if (itemName == null || slotName == null) {
+        if (slotName == null) {
             return false;
         }
-        if (!slotName.equals(itemName)) {
+        return includeItem(itemHasMakePrep, anyMakePrep, itemName, Collections.singleton(slotName));
+    }
+
+    /**
+     * Same as {@link #includeItem(boolean, boolean, String, String)} against any exact slot name.
+     * Category slots pass VSpec member names; matching stays {@code equals}, never substring.
+     */
+    public static boolean includeItem(boolean itemHasMakePrep, boolean anyMakePrep,
+                                      String itemName, Collection<String> slotNames) {
+        if (itemName == null || slotNames == null) {
+            return false;
+        }
+        if (!slotNames.contains(itemName)) {
             return false;
         }
         if (anyMakePrep) {

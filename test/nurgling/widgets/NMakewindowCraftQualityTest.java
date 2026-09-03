@@ -32,6 +32,21 @@ class NMakewindowCraftQualityTest {
     }
 
     @Test
+    void ingredientAveragesExpandCategoryViaNamesFor() throws Exception {
+        String src = read("src/nurgling/widgets/NMakewindow.java");
+        int start = src.indexOf("private List<Double> ingredientAverages()");
+        int end = src.indexOf("playerInvSamples()");
+        assertTrue(start >= 0 && end > start, src);
+        String avg = src.substring(start, end);
+        assertTrue(avg.contains("CraftIngredientStock.namesFor"),
+                "category slots must expand via namesFor: " + avg);
+        assertTrue(avg.contains("VSpec.categories.containsKey"),
+                "must treat VSpec keys as categories: " + avg);
+        assertFalse(avg.contains("slotMatchName"),
+                "single slotMatchName cannot expand VSpec members: " + avg);
+    }
+
+    @Test
     void averagesComeFromPlayerInventoryMakePrepNotChests() throws Exception {
         String src = read("src/nurgling/widgets/NMakewindow.java");
         assertTrue(src.contains("gui.getInventory()"), "player inventory only: " + src);

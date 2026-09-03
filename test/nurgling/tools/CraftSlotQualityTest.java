@@ -2,8 +2,10 @@ package nurgling.tools;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -55,6 +57,68 @@ class CraftSlotQualityTest {
         assertTrue(CraftSlotQuality.isMakePrepClass("haven.res.ui.tt.prep.MakePrep"));
         assertFalse(CraftSlotQuality.isMakePrepClass("haven.resutil.Curiosity"));
         assertFalse(CraftSlotQuality.isMakePrepClass(null));
+    }
+
+    @Test
+    void categoryNamesMatchMembersNotTitle() {
+        List<String> slot = Arrays.asList("Cleaned Crane", "Cleaned Eagle Owl", "Cleaned Chicken");
+        assertTrue(CraftSlotQuality.includeItem(false, false, "Cleaned Crane", slot));
+        assertTrue(CraftSlotQuality.includeItem(false, false, "Cleaned Eagle Owl", slot));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Clean Bird Carcass", slot));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Raw Crane", slot));
+    }
+
+    @Test
+    void pickedMemberMatchesOnlyThatName() {
+        List<String> picked = Collections.singletonList("Cleaned Crane");
+        assertTrue(CraftSlotQuality.includeItem(false, false, "Cleaned Crane", picked));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Cleaned Eagle Owl", picked));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Clean Bird Carcass", picked));
+    }
+
+    @Test
+    void categoryMakePrepStillRequiredWhenAnyHighlightExists() {
+        List<String> slot = Arrays.asList("Cleaned Crane", "Cleaned Chicken");
+        assertTrue(CraftSlotQuality.includeItem(true, true, "Cleaned Crane", slot));
+        assertFalse(CraftSlotQuality.includeItem(false, true, "Cleaned Crane", slot));
+        assertFalse(CraftSlotQuality.includeItem(true, true, "Clean Bird Carcass", slot));
+    }
+
+    @Test
+    void mixedCategoryMembersAverageUnweighted() {
+        List<String> slot = Arrays.asList("Cleaned Crane", "Cleaned Chicken");
+        List<Double> qs = new ArrayList<>();
+        addIfIncluded(qs, slot, false, false, "Cleaned Crane", 20.0);
+        addIfIncluded(qs, slot, false, false, "Cleaned Chicken", 10.0);
+        addIfIncluded(qs, slot, false, false, "Clean Bird Carcass", 99.0);
+        assertEquals(15.0, CraftSlotQuality.average(qs), 1e-9);
+    }
+
+    @Test
+    void namedSlotStillExactNameOnly() {
+        List<String> slot = Collections.singletonList("Stone");
+        assertTrue(CraftSlotQuality.includeItem(false, false, "Stone", slot));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Quarryartz", slot));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Raw Stone", slot));
+    }
+
+    @Test
+    void prefixCategoryMembersNeverSubstringMatch() {
+        List<String> raw = Arrays.asList("Raw Beef", "Raw Pork");
+        assertTrue(CraftSlotQuality.includeItem(false, false, "Raw Beef", raw));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Raw Chicken", raw));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Filet of Pike", raw));
+        List<String> filet = Collections.singletonList("Filet of Pike");
+        assertTrue(CraftSlotQuality.includeItem(false, false, "Filet of Pike", filet));
+        assertFalse(CraftSlotQuality.includeItem(false, false, "Pike", filet));
+    }
+
+    private static void addIfIncluded(List<Double> qs, List<String> slot,
+                                      boolean itemHasMakePrep, boolean anyMakePrep,
+                                      String itemName, double quality) {
+        if (CraftSlotQuality.includeItem(itemHasMakePrep, anyMakePrep, itemName, slot)) {
+            qs.add(Double.valueOf(quality));
+        }
     }
 
     @Test

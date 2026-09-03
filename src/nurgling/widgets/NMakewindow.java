@@ -1075,7 +1075,8 @@ public class NMakewindow extends Widget implements DTarget {
                 continue;
             }
             String picked = ((autoMode || searchMode) && spec.ing != null) ? spec.ing.name : null;
-            String want = CraftSlotQuality.slotMatchName(spec.name, picked);
+            boolean category = spec.categories || (spec.name != null && VSpec.categories.containsKey(spec.name));
+            List<String> want = CraftIngredientStock.namesFor(spec.name, category, picked);
             List<Double> qs = new ArrayList<>();
             for (InvSample s : samples) {
                 if (!CraftSlotQuality.includeItem(s.makePrep, anyPrep, s.name, want)) {
