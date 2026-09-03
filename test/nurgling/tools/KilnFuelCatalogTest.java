@@ -130,6 +130,7 @@ class KilnFuelCatalogTest {
         assertTrue(brickUnlit.isPresent());
         assertEquals(KilnFuelCatalog.parseRealTimeSeconds("0:08:58"), brickUnlit.getAsInt());
         assertEquals("0:08:58", KilnFuelCatalog.entryFor("Brick").get().realTime);
+        assertEquals(0, KilnFuelCatalog.remainingSeconds("Coade Clay", 100).getAsInt());
     }
 
     @Test

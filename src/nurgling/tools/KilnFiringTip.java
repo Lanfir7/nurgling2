@@ -30,6 +30,10 @@ public final class KilnFiringTip {
         return meter;
     }
 
+    public static boolean meterChanged(int renderedPercent, int currentMeter) {
+        return renderedPercent != meterPercent(currentMeter);
+    }
+
     /**
      * Item name to render extra kiln tip for, or null if the window is not a kiln
      * or the name is not in the catalog.

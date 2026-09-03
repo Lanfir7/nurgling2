@@ -21,9 +21,20 @@ import java.util.OptionalInt;
  */
 public class NKilnInfo extends ItemInfo.Tip {
     private static Text.Foundry timeFoundry = null;
+    private int lastMeterPercent = Integer.MIN_VALUE;
 
     public NKilnInfo(Owner owner) {
         super(owner);
+    }
+
+    public boolean needUpdate() {
+        if (!(owner instanceof NGItem))
+            return false;
+        NGItem item = (NGItem) owner;
+        String name = itemName(item);
+        if (KilnFiringTip.shouldRender(windowCap(item), name) == null)
+            return false;
+        return KilnFiringTip.meterChanged(lastMeterPercent, item.meter);
     }
 
     @Override
@@ -37,19 +48,23 @@ public class NKilnInfo extends ItemInfo.Tip {
             return null;
         NGItem item = (NGItem) owner;
         String cap = windowCap(item);
-        String name = item.name();
-        if (name == null) {
-            ItemInfo.Name nm = ItemInfo.find(ItemInfo.Name.class, item.info());
-            if (nm != null)
-                name = nm.str.text;
-        }
+        String name = itemName(item);
         if (KilnFiringTip.shouldRender(cap, name) == null)
             return null;
         int percent = KilnFiringTip.meterPercent(item.meter);
         OptionalInt remaining = KilnFuelCatalog.remainingSeconds(name, percent);
         if (!remaining.isPresent())
             return null;
+        lastMeterPercent = percent;
         return render(percent, remaining.getAsInt());
+    }
+
+    private static String itemName(NGItem item) {
+        String name = item.name();
+        if (name != null)
+            return name;
+        ItemInfo.Name nm = ItemInfo.find(ItemInfo.Name.class, item.info());
+        return nm != null ? nm.str.text : null;
     }
 
     static BufferedImage render(int meterPercent, int remainingSeconds) {

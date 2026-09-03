@@ -33,6 +33,14 @@ class KilnFiringTipTest {
     }
 
     @Test
+    void meterChangedWhenPercentDiffers() {
+        assertTrue(KilnFiringTip.meterChanged(Integer.MIN_VALUE, 0));
+        assertTrue(KilnFiringTip.meterChanged(76, 77));
+        assertFalse(KilnFiringTip.meterChanged(76, 76));
+        assertFalse(KilnFiringTip.meterChanged(0, 0));
+    }
+
+    @Test
     void formatRemainingUsesMinutesUnderAnHourAndHoursAfter() {
         int coadeLeft = KilnFuelCatalog.remainingSeconds("Coade Clay", 76).getAsInt();
         assertEquals("26 min", KilnFiringTip.formatRemaining(coadeLeft, "{0} min", "{0} h {1} min", "{0} h"));
