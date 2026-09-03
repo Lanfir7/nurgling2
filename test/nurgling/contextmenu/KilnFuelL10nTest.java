@@ -24,6 +24,9 @@ class KilnFuelL10nTest {
         assertEquals("Real time", p.getProperty("kiln_fuel.col.real"));
         assertEquals("In-game", p.getProperty("kiln_fuel.col.ingame"));
         assertNull(p.getProperty("kiln_fuel.col.notes"));
+        assertEquals("{0} min", p.getProperty("kiln.item.time.minutes"));
+        assertEquals("{0} h {1} min", p.getProperty("kiln.item.time.hours_minutes"));
+        assertEquals("{0} h", p.getProperty("kiln.item.time.hours"));
     }
 
     @Test
@@ -36,6 +39,9 @@ class KilnFuelL10nTest {
         assertEquals("Реальное", p.getProperty("kiln_fuel.col.real"));
         assertEquals("Игровое", p.getProperty("kiln_fuel.col.ingame"));
         assertNull(p.getProperty("kiln_fuel.col.notes"));
+        assertEquals("{0} мин", p.getProperty("kiln.item.time.minutes"));
+        assertEquals("{0} ч {1} мин", p.getProperty("kiln.item.time.hours_minutes"));
+        assertEquals("{0} ч", p.getProperty("kiln.item.time.hours"));
     }
 
     private static Properties load(String path) throws Exception {

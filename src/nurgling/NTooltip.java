@@ -9,6 +9,7 @@ import haven.res.ui.tt.slots.ISlots;
 import haven.res.ui.tt.slot.Slotted;
 import haven.res.ui.tt.ingred.Ingredient;
 import nurgling.iteminfo.NCuriosity;
+import nurgling.iteminfo.NKilnInfo;
 import nurgling.styles.TooltipStyle;
 
 import java.awt.*;
@@ -540,6 +541,7 @@ public class NTooltip {
         java.util.List<Object> smokeItems = new java.util.ArrayList<>();  // "Smoked with..." items (dynamically loaded)
         Integer presenceCurrent = null;  // Presence current value (x in "Presence: x/y")
         Integer presenceMax = null;      // Presence max value (y in "Presence: x/y")
+        NKilnInfo kilnInfo = null;
         for (ItemInfo ii : info) {
             String className = ii.getClass().getSimpleName();
             String fullName = ii.getClass().getName();
@@ -588,6 +590,9 @@ public class NTooltip {
             }
             if (ii instanceof NCuriosity) {
                 curiosity = (NCuriosity) ii;
+            }
+            if (ii instanceof NKilnInfo) {
+                kilnInfo = (NKilnInfo) ii;
             }
             if (ii instanceof ItemInfo.Contents) {
                 contentsList.add((ItemInfo.Contents) ii);
@@ -1378,17 +1383,30 @@ public class NTooltip {
 
         // Then combine nameLine with presenceAndBelow (or contentAndBelow if no presence) using 10px section spacing
         // Note: Outer padding is handled by NWItem.PaddedTip
+        BufferedImage result = null;
         if (nameLine != null && presenceAndBelow != null) {
             // Account for text position within presence/content canvas to achieve baseline-relative spacing
             int nameToPresenceSpacing = scaledSectionSpacing - nameDescentVal - nameTextBottomOffset - presenceAndBelowTopOffset;
-            return ItemInfo.catimgs(nameToPresenceSpacing, nameLine, presenceAndBelow);
+            result = ItemInfo.catimgs(nameToPresenceSpacing, nameLine, presenceAndBelow);
         } else if (nameLine != null) {
-            return nameLine;
+            result = nameLine;
         } else if (presenceAndBelow != null) {
-            return presenceAndBelow;
+            result = presenceAndBelow;
         }
+        return appendKilnFiringTip(result, kilnInfo, scaledSectionSpacing, bodyDescentVal);
+    }
 
-        return null;
+    private static BufferedImage appendKilnFiringTip(BufferedImage result, NKilnInfo kilnInfo,
+                                                     int scaledSectionSpacing, int bodyDescentVal) {
+        if (kilnInfo == null)
+            return result;
+        BufferedImage kilnImg = kilnInfo.tipimg();
+        if (kilnImg == null)
+            return result;
+        kilnImg = TooltipStyle.cropTopOnly(kilnImg);
+        if (result == null)
+            return kilnImg;
+        return ItemInfo.catimgs(scaledSectionSpacing - bodyDescentVal, result, kilnImg);
     }
 
     /**
@@ -2858,6 +2876,10 @@ public class NTooltip {
                 // Skip NSearchingHighlight and NQuestItem - nurgling classes (overlay only, no tooltip)
                 if (tip.getClass().getSimpleName().equals("NSearchingHighlight") ||
                     tip.getClass().getSimpleName().equals("NQuestItem")) {
+                    continue;
+                }
+                // Skip NKilnInfo - rendered below the resource path
+                if (tip instanceof NKilnInfo) {
                     continue;
                 }
                 // Skip Tool class - it renders "When used:" header and resource path

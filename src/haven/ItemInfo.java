@@ -30,6 +30,7 @@ import haven.res.ui.tt.stackn.Stack;
 import haven.res.ui.tt.stackn.StackName;
 import haven.res.ui.tt.wellmined.WellMined;
 import nurgling.NGItem;
+import nurgling.iteminfo.NKilnInfo;
 import nurgling.iteminfo.NQuestItem;
 import nurgling.iteminfo.NSearchingHighlight;
 
@@ -455,6 +456,7 @@ public abstract class ItemInfo implements Comparable<ItemInfo> {
 	{
 		ret.add(new NSearchingHighlight(owner));
 		ret.add(new NQuestItem(owner));
+		ret.add(new NKilnInfo(owner));
 	}
 	Collections.sort(ret);
 	return(ret);

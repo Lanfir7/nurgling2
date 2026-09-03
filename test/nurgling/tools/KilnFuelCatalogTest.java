@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -114,6 +115,45 @@ class KilnFuelCatalogTest {
         assertFalse(KilnFuelCatalog.fuelUnitsFor("Mystery Goo").isPresent());
         assertFalse(KilnFuelCatalog.fuelUnitsFor("Board of Oak").isPresent());
         assertFalse(KilnFuelCatalog.fuelUnitsFor(null).isPresent());
+    }
+
+    @Test
+    void remainingSecondsUsesCatalogRealTimeAndMeter() {
+        int coadeFull = KilnFuelCatalog.parseRealTimeSeconds("1:49:25");
+        assertEquals(1 * 3600 + 49 * 60 + 25, coadeFull);
+        OptionalInt coadeLeft = KilnFuelCatalog.remainingSeconds("Coade Clay", 76);
+        assertTrue(coadeLeft.isPresent());
+        assertEquals(Math.round((100 - 76) / 100.0 * coadeFull), coadeLeft.getAsInt());
+        assertEquals(26, Math.round(coadeLeft.getAsInt() / 60.0));
+
+        OptionalInt brickUnlit = KilnFuelCatalog.remainingSeconds("Brick", 0);
+        assertTrue(brickUnlit.isPresent());
+        assertEquals(KilnFuelCatalog.parseRealTimeSeconds("0:08:58"), brickUnlit.getAsInt());
+        assertEquals("0:08:58", KilnFuelCatalog.entryFor("Brick").get().realTime);
+    }
+
+    @Test
+    void remainingSecondsMapsPrefixesClayWoodAndBone() {
+        assertEquals(KilnFuelCatalog.remainingSeconds("Garden Pot", 0).getAsInt(),
+                KilnFuelCatalog.remainingSeconds("Unfired Garden Pot", 0).getAsInt());
+        assertEquals(KilnFuelCatalog.remainingSeconds("Fishwrap", 10).getAsInt(),
+                KilnFuelCatalog.remainingSeconds("Unbaked Fishwrap", 10).getAsInt());
+        assertEquals(KilnFuelCatalog.remainingSeconds("Brick", 0).getAsInt(),
+                KilnFuelCatalog.remainingSeconds("Ball Clay", 0).getAsInt());
+        assertEquals(KilnFuelCatalog.remainingSeconds("Brick (Coade Clay)", 50).getAsInt(),
+                KilnFuelCatalog.remainingSeconds("Coade Clay", 50).getAsInt());
+        assertEquals(KilnFuelCatalog.remainingSeconds("Ashes (Board)", 0).getAsInt(),
+                KilnFuelCatalog.remainingSeconds("Board", 0).getAsInt());
+        assertEquals(KilnFuelCatalog.remainingSeconds("Bone Ash", 0).getAsInt(),
+                KilnFuelCatalog.remainingSeconds("Wishbone", 0).getAsInt());
+    }
+
+    @Test
+    void remainingSecondsUnknownNameIsEmpty() {
+        assertFalse(KilnFuelCatalog.remainingSeconds("Mystery Goo", 50).isPresent());
+        assertFalse(KilnFuelCatalog.remainingSeconds(null, 0).isPresent());
+        assertFalse(KilnFuelCatalog.entryFor("Board of Oak").isPresent());
+        assertEquals(Optional.empty(), KilnFuelCatalog.entryFor(null));
     }
 
     @Test

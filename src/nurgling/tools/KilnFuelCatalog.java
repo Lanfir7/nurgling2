@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -91,36 +92,78 @@ public final class KilnFuelCatalog {
     )));
 
     /**
+     * Catalog product for a kiln inventory item. Precursors use the same mapping as
+     * {@link #fuelUnitsFor}; unknown names return empty.
+     */
+    public static Optional<Entry> entryFor(String itemName) {
+        String catalogItem = catalogItemName(itemName);
+        if (catalogItem == null)
+            return Optional.empty();
+        Entry entry = find(catalogItem);
+        return entry == null ? Optional.empty() : Optional.of(entry);
+    }
+
+    /**
      * Fuel units (branches) for a kiln inventory item. Precursors are mapped to catalog
      * products; unknown names return empty — callers must not guess.
      */
     public static OptionalInt fuelUnitsFor(String itemName) {
-        if (itemName == null || itemName.isEmpty())
+        Optional<Entry> entry = entryFor(itemName);
+        return entry.isPresent() ? OptionalInt.of(entry.get().fuelUnits) : OptionalInt.empty();
+    }
+
+    /**
+     * Remaining real-time firing seconds from the current meter (0–100).
+     * Missing meter is 0% (full catalog duration). Unknown names return empty.
+     */
+    public static OptionalInt remainingSeconds(String itemName, double meterPercent) {
+        Optional<Entry> entry = entryFor(itemName);
+        if (!entry.isPresent())
             return OptionalInt.empty();
+        int full = parseRealTimeSeconds(entry.get().realTime);
+        double pct = Math.max(0, Math.min(100, meterPercent));
+        return OptionalInt.of((int) Math.round((100.0 - pct) / 100.0 * full));
+    }
+
+    public static int parseRealTimeSeconds(String realTime) {
+        if (realTime == null || realTime.isEmpty())
+            throw new IllegalArgumentException("realTime");
+        String[] parts = realTime.split(":");
+        if (parts.length != 3)
+            throw new IllegalArgumentException("realTime: " + realTime);
+        int hours = Integer.parseInt(parts[0]);
+        int minutes = Integer.parseInt(parts[1]);
+        int seconds = Integer.parseInt(parts[2]);
+        return hours * 3600 + minutes * 60 + seconds;
+    }
+
+    /** Same name mapping {@link #fuelUnitsFor} uses; null if the name cannot be mapped. */
+    static String catalogItemName(String itemName) {
+        if (itemName == null || itemName.isEmpty())
+            return null;
         String name = itemName;
         if (name.startsWith("Unfired "))
             name = name.substring("Unfired ".length());
         if (name.startsWith("Unbaked "))
             name = name.substring("Unbaked ".length());
         if (name.isEmpty())
-            return OptionalInt.empty();
+            return null;
 
         if ("Coade Clay".equals(name))
-            return unitsOf("Brick (Coade Clay)");
+            return "Brick (Coade Clay)";
         if (CLAYS.contains(name))
-            return unitsOf("Brick");
+            return "Brick";
         if ("Board".equals(name))
-            return unitsOf("Ashes (Board)");
+            return "Ashes (Board)";
         if ("Block of Wood".equals(name))
-            return unitsOf("Ashes (Block of Wood)");
+            return "Ashes (Block of Wood)";
         if ("Branch".equals(name))
-            return unitsOf("Ashes (Branch)");
+            return "Ashes (Branch)";
         if ("Bark".equals(name))
-            return unitsOf("Ashes (Bark)");
+            return "Ashes (Bark)";
         if (BONES.contains(name))
-            return unitsOf("Bone Ash");
-
-        return unitsOf(name);
+            return "Bone Ash";
+        return name;
     }
 
     /**
@@ -139,10 +182,5 @@ public final class KilnFuelCatalog {
                 max = units.getAsInt();
         }
         return OptionalInt.of(max);
-    }
-
-    private static OptionalInt unitsOf(String catalogItem) {
-        Entry entry = find(catalogItem);
-        return entry == null ? OptionalInt.empty() : OptionalInt.of(entry.fuelUnits);
     }
 }
