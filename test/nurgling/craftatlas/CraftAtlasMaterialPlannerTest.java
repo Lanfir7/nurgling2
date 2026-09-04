@@ -149,6 +149,22 @@ class CraftAtlasMaterialPlannerTest {
         assertEquals(2, plan.slots.get(0).missing);
     }
 
+    @Test
+    void samePhysicalCandidateCannotBeAllocatedTwiceAcrossSlots() {
+        Candidate shared = candidate("inv-glue", "Glue", 50, 3, Source.INVENTORY);
+        List<SlotRequest> slots = List.of(
+                new SlotRequest(0, 2, false, List.of("Glue")),
+                new SlotRequest(1, 2, false, List.of("Glue")));
+
+        Plan plan = CraftAtlasMaterialPlanner.plan(slots,
+                Map.of(0, List.of(shared), 1, List.of(shared)), Map.of(), 1);
+
+        assertFalse(plan.complete);
+        assertEquals(2, plan.slots.get(0).supplied);
+        assertEquals(1, plan.slots.get(1).supplied);
+        assertEquals(1, plan.slots.get(1).missing);
+    }
+
     private static Candidate candidate(String id, String material, double quality, int count, Source source) {
         return new Candidate(id, material, quality, count, source,
                 source == Source.INVENTORY ? "Inventory" : "Warehouse");

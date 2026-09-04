@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 /** Pure material allocation and quality projection for Craft Atlas recipes. */
@@ -157,6 +158,7 @@ public final class CraftAtlasMaterialPlanner {
         if(craftCount < 1) throw new IllegalArgumentException("craftCount must be positive");
         List<SlotPlan> planned = new ArrayList<>();
         List<Double> qualities = new ArrayList<>();
+        Map<String, Integer> remainingByCandidate = new HashMap<>();
         boolean complete = true;
         if(slots != null) for(SlotRequest slot : slots) {
             int required = Math.multiplyExact(slot.unitsPerCraft, craftCount);
@@ -183,11 +185,15 @@ public final class CraftAtlasMaterialPlanner {
             int supplied = 0;
             double weightedQuality = 0;
             for(Candidate candidate : allowed) {
-                int take = Math.min(required - supplied, candidate.count);
-                if(take <= 0) break;
+                int available = remainingByCandidate.containsKey(candidate.id)
+                        ? remainingByCandidate.get(candidate.id) : candidate.count;
+                int take = Math.min(required - supplied, available);
+                if(take <= 0) continue;
                 allocations.add(new Allocation(candidate, take));
+                remainingByCandidate.put(candidate.id, available - take);
                 supplied += take;
                 weightedQuality += candidate.quality * take;
+                if(supplied >= required) break;
             }
             Double slotQuality = supplied == required ? weightedQuality / supplied : null;
             if(supplied < required) complete = false;

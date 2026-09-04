@@ -121,14 +121,14 @@ public final class CraftAtlasMaterialSource {
         if(inventory != null) for(InventorySample sample : groupInventory(inventory)) {
             if(sample.name == null || sample.name.isEmpty() || sample.count < 1
                     || !Double.isFinite(sample.quality) || sample.quality <= 0) continue;
-            candidates.add(new Candidate(candidateId(slotIndex, Source.INVENTORY, sample.name, sample.quality),
+            candidates.add(new Candidate(candidateId(Source.INVENTORY, sample.name, sample.quality),
                     sample.name, sample.quality, sample.count, Source.INVENTORY,
                     L10n.get("craft_atlas.inventory")));
         }
         if(warehouse != null) for(GroupedItem row : warehouse) {
             if(row == null || row.name == null || row.name.isEmpty() || row.count < 1
                     || !Double.isFinite(row.quality) || row.quality <= 0) continue;
-            String id = candidateId(slotIndex, Source.STORAGE, row.name, row.quality);
+            String id = candidateId(Source.STORAGE, row.name, row.quality);
             candidates.add(new Candidate(id, row.name, row.quality, row.count, Source.STORAGE,
                     row.storageName));
             storage.put(id, row);
@@ -148,8 +148,8 @@ public final class CraftAtlasMaterialSource {
         return new ArrayList<>(grouped.values());
     }
 
-    private static String candidateId(int slot, Source source, String name, double quality) {
-        return "slot:" + slot + ":" + source.name().toLowerCase(Locale.ROOT) + ":"
+    private static String candidateId(Source source, String name, double quality) {
+        return source.name().toLowerCase(Locale.ROOT) + ":"
                 + CraftAtlasSearch.normalize(name) + ":" + CraftIngredientStock.qualityKey(quality);
     }
 
