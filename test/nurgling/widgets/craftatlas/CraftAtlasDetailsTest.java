@@ -84,6 +84,25 @@ class CraftAtlasDetailsTest {
     }
 
     @Test
+    void alternativeIngredientsShareOneSelectableRecipeSlot() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("cloth", "Cloth")
+                .input(new CraftAtlasEntry.InputSlot(2, false, Arrays.asList(
+                        new CraftAtlasEntry.IngredientOption("linen", "Linen Cloth"),
+                        new CraftAtlasEntry.IngredientOption("hemp", "Hemp Cloth"))))
+                .input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(
+                        new CraftAtlasEntry.IngredientOption("thread", "Thread"))))
+                .build();
+
+        List<CraftAtlasDetails.DetailRow> rows = CraftAtlasDetails.buildRows(entry,
+                resource -> CraftRecipeGraph.LinkState.NONE);
+
+        assertEquals(2, rows.size());
+        assertEquals("Linen Cloth / Hemp Cloth", rows.get(0).name);
+        assertEquals(0, rows.get(0).slotIndex);
+        assertEquals(1, rows.get(1).slotIndex);
+    }
+
+    @Test
     void equipmentDetailsShowOccupiedSlots() {
         String previousLanguage = L10n.getLanguage();
         try {

@@ -1,6 +1,7 @@
 package nurgling.widgets.craftatlas;
 
 import haven.Coord;
+import haven.CheckBox;
 import haven.GOut;
 import haven.Tex;
 import haven.Text;
@@ -10,6 +11,8 @@ import haven.Widget;
 import nurgling.craftatlas.CraftAtlasController;
 import nurgling.craftatlas.CraftAtlasEntry;
 import nurgling.craftatlas.CraftAtlasQuality;
+import nurgling.craftatlas.CraftAtlasMaterialPlanner;
+import nurgling.craftatlas.CraftAtlasMaterialSource;
 import nurgling.craftatlas.CraftRecipeGraph;
 import nurgling.i18n.L10n;
 
@@ -41,11 +44,18 @@ public class CraftAtlasDetails extends Widget {
         public final Target target;
         public final CraftAtlasEntry.Requirement requirement;
         public final List<CraftAtlasEntry.AttributeRef> attributes;
+        public final int slotIndex;
         DetailRow(Kind kind, String name, String resource, String value, int quantity, Target target,
                   CraftAtlasEntry.Requirement requirement, List<CraftAtlasEntry.AttributeRef> attributes) {
+            this(kind, name, resource, value, quantity, target, requirement, attributes, -1);
+        }
+        DetailRow(Kind kind, String name, String resource, String value, int quantity, Target target,
+                  CraftAtlasEntry.Requirement requirement, List<CraftAtlasEntry.AttributeRef> attributes,
+                  int slotIndex) {
             this.kind = kind; this.name = name; this.resource = resource; this.value = value;
             this.quantity = quantity; this.target = target; this.requirement = requirement;
             this.attributes = attributes == null ? Collections.<CraftAtlasEntry.AttributeRef>emptyList() : attributes;
+            this.slotIndex = slotIndex;
         }
     }
 
@@ -65,6 +75,17 @@ public class CraftAtlasDetails extends Widget {
     private final CraftAtlasIconCache icons = new CraftAtlasIconCache();
     private final List<IconHit> iconHits = new ArrayList<>();
     private final TextEntry qualityEntry;
+    private final CheckBox autoQualityBox;
+    private final CraftAtlasMaterialSource materialSource = new CraftAtlasMaterialSource();
+    private CraftAtlasMaterialSource.Snapshot materials;
+    private CraftAtlasMaterialPlanner.Plan materialPlan;
+    private final Map<Integer, CraftAtlasIngredientSelector> selectors = new HashMap<>();
+    private final Map<String, Map<Integer, CraftAtlasMaterialPlanner.Selection>> savedSelections = new HashMap<>();
+    private Map<Integer, CraftAtlasMaterialPlanner.Selection> selections = new HashMap<>();
+    private Runnable planListener;
+    private int craftCount = 1;
+    private boolean autoQuality = true;
+    private boolean syncingQuality;
     private double quality = 10;
     private final int headerHeight = UI.scale(104);
     private final int sectionHeight = UI.scale(30);
@@ -75,24 +96,61 @@ public class CraftAtlasDetails extends Widget {
         super(size);
         this.controller = controller;
         qualityEntry = add(new TextEntry(UI.scale(54), "10") {
-            @Override protected void changed() { super.changed(); qualityChanged(); }
+            @Override protected void changed() {
+                super.changed();
+                if(!syncingQuality && !autoQuality) qualityChanged();
+            }
+            @Override public boolean mousedown(MouseDownEvent ev) {
+                return autoQuality || super.mousedown(ev);
+            }
+            @Override public boolean keydown(KeyDownEvent ev) {
+                return autoQuality || super.keydown(ev);
+            }
         });
         qualityEntry.tooltip = L10n.get("craft_atlas.quality_hint");
         qualityEntry.hide();
+        autoQualityBox = add(new CheckBox(L10n.get("craft_atlas.auto")));
+        autoQualityBox.a = true;
+        autoQualityBox.changed(value -> setAutoQuality(value));
+        autoQualityBox.hide();
+        qualityEntry.setcanfocus(false);
         positionQualityEntry();
     }
 
     public void setEntry(CraftAtlasEntry value) {
+        CraftAtlasEntry oldEntry = entry;
         String previous = entry == null ? null : entry.recipeResource;
         String next = value == null ? null : value.recipeResource;
         if(previous != null && !previous.equals(next)) savedScroll.put(previous, scroll);
         entry = value;
+        boolean changed = previous == null ? next != null : !previous.equals(next);
+        boolean materialsChanged = changed || (oldEntry != value && value != null &&
+                (oldEntry == null || oldEntry.inputs != value.inputs || oldEntry.inputsObserved != value.inputsObserved));
+        if(materialsChanged) loadMaterials();
         rebuildRows();
-        qualityEntry.visible = value != null &&
+        if(materialsChanged) rebuildSelectors();
+        boolean qualityVisible = value != null &&
                 (value.categories.contains("gildings") || value.categories.contains("foods") ||
-                        value.categories.contains("equipment"));
+                        value.categories.contains("equipment") || value.inputsObserved);
+        qualityEntry.visible = qualityVisible;
+        autoQualityBox.visible = qualityVisible;
         if(previous == null || !previous.equals(next)) scroll = next == null ? 0 : savedScroll.getOrDefault(next, 0);
     }
+
+    public void setCraftCount(int value) {
+        craftCount = Math.max(1, value);
+        replan();
+    }
+
+    public void refreshMaterials() {
+        loadMaterials();
+        rebuildRows();
+        rebuildSelectors();
+    }
+
+    public CraftAtlasMaterialSource.Snapshot materialSnapshot() { return materials; }
+    public CraftAtlasMaterialPlanner.Plan materialPlan() { return materialPlan; }
+    public void setPlanListener(Runnable listener) { planListener = listener; }
 
     public void setState(CraftAtlasController.ViewState state) {
         setEntry(state.selected);
@@ -125,11 +183,23 @@ public class CraftAtlasDetails extends Widget {
         }
         for(String slot : entry.equipmentSlots)
             rows.add(new DetailRow(Kind.SLOT, formatEquipmentSlots(slot), null, null, 0, Target.NONE, null, null));
-        for(CraftAtlasEntry.InputSlot slot : entry.inputs) for(CraftAtlasEntry.IngredientOption option : slot.options) {
-            CraftRecipeGraph.LinkState state = links.apply(option.resource, option.name);
+        for(int slotIndex = 0; slotIndex < entry.inputs.size(); slotIndex++) {
+            CraftAtlasEntry.InputSlot slot = entry.inputs.get(slotIndex);
+            CraftAtlasEntry.IngredientOption linked = slot.options.get(0);
+            CraftRecipeGraph.LinkState state = CraftRecipeGraph.LinkState.NONE;
+            List<String> names = new ArrayList<>();
+            for(CraftAtlasEntry.IngredientOption option : slot.options) {
+                names.add(option.name);
+                CraftRecipeGraph.LinkState candidate = links.apply(option.resource, option.name);
+                if(state == CraftRecipeGraph.LinkState.NONE && candidate != CraftRecipeGraph.LinkState.NONE) {
+                    linked = option;
+                    state = candidate;
+                }
+            }
             Target target = state == CraftRecipeGraph.LinkState.NONE ? Target.NONE :
                     state == CraftRecipeGraph.LinkState.CYCLE ? Target.CYCLE : Target.INGREDIENT;
-            rows.add(new DetailRow(Kind.INPUT, option.name, option.resource, null, slot.quantity, target, null, null));
+            rows.add(new DetailRow(Kind.INPUT, String.join(" / ", names), linked.resource, null,
+                    slot.quantity, target, null, null, slotIndex));
         }
         for(CraftAtlasEntry.Requirement requirement : entry.requirements) {
             Target target;
@@ -188,7 +258,7 @@ public class CraftAtlasDetails extends Widget {
             if(!category.isEmpty()) drawCentered(g, category, UI.scale(98), UI.scale(66), UI.scale(22), new Color(169, 179, 181, 220));
         }
         if(qualityEntry.visible)
-            drawCentered(g, L10n.get("craft_atlas.quality"), Math.max(UI.scale(220), sz.x - UI.scale(154)),
+            drawCentered(g, L10n.get("craft_atlas.quality"), Math.max(UI.scale(205), sz.x - UI.scale(238)),
                     UI.scale(14), UI.scale(24), new Color(169, 179, 181, 220));
         g.chcolor(new Color(75, 83, 86, 175)); g.frect(Coord.of(0, headerHeight - 1), Coord.of(sz.x, 1)); g.chcolor();
 
@@ -207,6 +277,7 @@ public class CraftAtlasDetails extends Widget {
             y += height;
             ordinal++;
         }
+        positionSelectors();
         super.draw(g);
     }
 
@@ -347,12 +418,15 @@ public class CraftAtlasDetails extends Widget {
     @Override public void resize(Coord size) {
         super.resize(size);
         positionQualityEntry();
+        positionSelectors();
         scroll = Math.max(0, Math.min(scroll, Math.max(0, contentHeight() - Math.max(1, sz.y - headerHeight))));
     }
 
     private void positionQualityEntry() {
-        if(qualityEntry != null)
-            qualityEntry.move(Coord.of(Math.max(UI.scale(300), sz.x - UI.scale(68)), UI.scale(14)));
+        if(qualityEntry != null) {
+            qualityEntry.move(Coord.of(Math.max(UI.scale(280), sz.x - UI.scale(150)), UI.scale(14)));
+            autoQualityBox.move(Coord.of(qualityEntry.c.x + qualityEntry.sz.x + UI.scale(8), UI.scale(16)));
+        }
     }
 
     private void qualityChanged() {
@@ -365,6 +439,104 @@ public class CraftAtlasDetails extends Widget {
         rows = entry == null ? Collections.<DetailRow>emptyList() :
                 buildRows(entry, (resource, name) -> controller == null ? CraftRecipeGraph.LinkState.NONE :
                         controller.linkState(resource, name), quality);
+    }
+
+    private void loadMaterials() {
+        clearSelectors();
+        if(entry == null) {
+            materials = null;
+            materialPlan = null;
+            selections = new HashMap<>();
+            notifyPlanChanged();
+            return;
+        }
+        materials = materialSource.load(entry);
+        selections = savedSelections.computeIfAbsent(entry.recipeResource, key -> new HashMap<>());
+        for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots) {
+            if(selections.containsKey(slot.slotIndex)) continue;
+            CraftAtlasMaterialPlanner.Selection initial = slot.optional
+                    ? CraftAtlasMaterialPlanner.Selection.ignored()
+                    : CraftAtlasMaterialPlanner.defaultSelection(materials.candidatesBySlot.get(slot.slotIndex));
+            selections.put(slot.slotIndex, initial);
+        }
+        replan();
+    }
+
+    private void replan() {
+        if(materials == null) {
+            materialPlan = null;
+        } else {
+            materialPlan = CraftAtlasMaterialPlanner.plan(materials.slots, materials.candidatesBySlot,
+                    selections, craftCount);
+            if(autoQuality && materialPlan.quality != null) {
+                quality = materialPlan.quality;
+                syncingQuality = true;
+                qualityEntry.settext(formatQuality(quality));
+                syncingQuality = false;
+                rows = entry == null ? Collections.<DetailRow>emptyList() :
+                        buildRows(entry, (resource, name) -> controller == null ? CraftRecipeGraph.LinkState.NONE :
+                                controller.linkState(resource, name), quality);
+            }
+        }
+        notifyPlanChanged();
+    }
+
+    private void setAutoQuality(boolean value) {
+        autoQuality = value;
+        autoQualityBox.a = value;
+        qualityEntry.setcanfocus(!value);
+        if(value) replan();
+        else qualityChanged();
+    }
+
+    private void rebuildSelectors() {
+        clearSelectors();
+        if(entry == null || materials == null) return;
+        for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots) {
+            List<CraftAtlasMaterialPlanner.Candidate> candidates = materials.candidatesBySlot.getOrDefault(
+                    slot.slotIndex, Collections.emptyList());
+            boolean grouped = slot.allowedMaterials.size() > 1;
+            CraftAtlasIngredientSelector selector = add(new CraftAtlasIngredientSelector(UI.scale(300), candidates,
+                    slot.optional, grouped, selections.get(slot.slotIndex), selected -> {
+                selections.put(slot.slotIndex, selected);
+                replan();
+            }));
+            selectors.put(slot.slotIndex, selector);
+        }
+        positionSelectors();
+    }
+
+    private void clearSelectors() {
+        for(CraftAtlasIngredientSelector selector : selectors.values()) selector.reqdestroy();
+        selectors.clear();
+    }
+
+    private void positionSelectors() {
+        for(CraftAtlasIngredientSelector selector : selectors.values()) selector.hide();
+        int y = headerHeight - scroll;
+        Kind previous = null;
+        for(DetailRow row : rows) {
+            if(row.kind != previous) { y += sectionHeight; previous = row.kind; }
+            int height = rowHeight(row);
+            if(row.kind == Kind.INPUT && row.slotIndex >= 0) {
+                CraftAtlasIngredientSelector selector = selectors.get(row.slotIndex);
+                if(selector != null) {
+                    selector.move(Coord.of(Math.max(UI.scale(190), sz.x - selector.sz.x - UI.scale(18)),
+                            y + (height - selector.sz.y) / 2));
+                    selector.visible = y >= headerHeight && y + height <= sz.y;
+                }
+            }
+            y += height;
+        }
+    }
+
+    private void notifyPlanChanged() {
+        if(planListener != null) planListener.run();
+    }
+
+    private static String formatQuality(double value) {
+        return value == Math.rint(value) ? String.format(Locale.ROOT, "%.0f", value)
+                : String.format(Locale.ROOT, "%.1f", value);
     }
 
     @Override public Object tooltip(Coord c, Widget prev) {
