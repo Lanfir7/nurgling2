@@ -7,29 +7,35 @@ public final class CraftAtlasLayout {
         Rect(int x, int y, int w, int h) { this.x = x; this.y = y; this.w = w; this.h = h; }
     }
 
-    public final Rect header, sidebar, list, details;
+    public final Rect header, sidebar, list, details, footer;
     public final boolean detailsAsPage;
 
-    private CraftAtlasLayout(Rect header, Rect sidebar, Rect list, Rect details, boolean detailsAsPage) {
+    private CraftAtlasLayout(Rect header, Rect sidebar, Rect list, Rect details, Rect footer, boolean detailsAsPage) {
         this.header = header; this.sidebar = sidebar; this.list = list; this.details = details;
+        this.footer = footer;
         this.detailsAsPage = detailsAsPage;
     }
 
     public static CraftAtlasLayout compute(int width, int height, double scale) {
-        int headerH = scaled(56, scale), gap = scaled(8, scale), sidebarW = scaled(184, scale);
+        int headerH = scaled(56, scale), footerH = scaled(56, scale), gap = scaled(8, scale);
+        int sidebarW = scaled(184, scale);
         int bodyY = headerH, bodyH = Math.max(0, height - headerH);
         boolean narrow = width < scaled(1000, scale);
         Rect header = new Rect(0, 0, width, headerH);
         if(narrow) {
             int listW = Math.max(0, width - sidebarW - gap);
             return new CraftAtlasLayout(header, new Rect(0, bodyY, sidebarW, bodyH),
-                    new Rect(sidebarW + gap, bodyY, listW, bodyH), new Rect(0, bodyY, 0, bodyH), true);
+                    new Rect(sidebarW + gap, bodyY, listW, bodyH),
+                    new Rect(0, bodyY, 0, Math.max(0, bodyH - footerH - gap)),
+                    new Rect(0, Math.max(bodyY, height - footerH), width, footerH), true);
         }
-        int listW = scaled(330, scale);
+        int listW = scaled(360, scale);
         int detailsX = sidebarW + gap + listW + gap;
+        int detailsW = Math.max(0, width - detailsX);
         return new CraftAtlasLayout(header, new Rect(0, bodyY, sidebarW, bodyH),
                 new Rect(sidebarW + gap, bodyY, listW, bodyH),
-                new Rect(detailsX, bodyY, Math.max(0, width - detailsX), bodyH), false);
+                new Rect(detailsX, bodyY, detailsW, Math.max(0, bodyH - footerH - gap)),
+                new Rect(detailsX, Math.max(bodyY, height - footerH), detailsW, footerH), false);
     }
 
     private static int scaled(int value, double scale) { return (int)Math.round(value * scale); }

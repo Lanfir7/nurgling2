@@ -16,6 +16,9 @@ public final class CraftAtlasEntry {
     public final List<InputSlot> inputs;
     public final List<Requirement> requirements;
     public final List<Bonus> bonuses;
+    public final Gilding gilding;
+    public final List<AttributeRef> qualityModifiers;
+    public final List<String> equipmentSlots;
     public final List<String> categories;
     public final String description;
 
@@ -27,6 +30,9 @@ public final class CraftAtlasEntry {
         inputs = immutable(b.inputs);
         requirements = immutable(b.requirements);
         bonuses = immutable(b.bonuses);
+        gilding = b.gilding;
+        qualityModifiers = immutable(b.qualityModifiers);
+        equipmentSlots = immutable(b.equipmentSlots);
         categories = immutable(b.categories);
         description = b.description;
     }
@@ -53,6 +59,9 @@ public final class CraftAtlasEntry {
         private final List<InputSlot> inputs = new ArrayList<>();
         private final List<Requirement> requirements = new ArrayList<>();
         private final List<Bonus> bonuses = new ArrayList<>();
+        private Gilding gilding;
+        private final List<AttributeRef> qualityModifiers = new ArrayList<>();
+        private final List<String> equipmentSlots = new ArrayList<>();
         private final List<String> categories = new ArrayList<>();
         private String description;
 
@@ -66,6 +75,9 @@ public final class CraftAtlasEntry {
         public Builder input(InputSlot value) { if(value != null) inputs.add(value); return this; }
         public Builder requirement(Requirement value) { if(value != null) requirements.add(value); return this; }
         public Builder bonus(Bonus value) { if(value != null) bonuses.add(value); return this; }
+        public Builder gilding(Gilding value) { gilding = value; return this; }
+        public Builder qualityModifier(AttributeRef value) { if(value != null) qualityModifiers.add(value); return this; }
+        public Builder equipmentSlot(String value) { if(value != null && !value.trim().isEmpty()) equipmentSlots.add(value); return this; }
         public Builder category(String value) { if(value != null && !value.trim().isEmpty()) categories.add(value); return this; }
         public Builder description(String value) { description = value; return this; }
         public CraftAtlasEntry build() { return new CraftAtlasEntry(this); }
@@ -119,6 +131,26 @@ public final class CraftAtlasEntry {
             this.attributeResource = attributeResource;
             this.name = name == null || name.trim().isEmpty() ? attributeResource : name;
             this.value = value;
+        }
+    }
+
+    public static final class AttributeRef {
+        public final String resource, name;
+
+        public AttributeRef(String resource, String name) {
+            this.resource = resource;
+            this.name = name == null || name.trim().isEmpty() ? resource : name;
+        }
+    }
+
+    public static final class Gilding {
+        public final double pmin, pmax;
+        public final List<AttributeRef> attributes;
+
+        public Gilding(double pmin, double pmax, List<AttributeRef> attributes) {
+            this.pmin = Math.max(0, Math.min(1, pmin));
+            this.pmax = Math.max(this.pmin, Math.min(1, pmax));
+            this.attributes = immutable(attributes == null ? Collections.<AttributeRef>emptyList() : attributes);
         }
     }
 }

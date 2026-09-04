@@ -24,4 +24,11 @@ class CraftAtlasLayoutTest {
         assertEquals(24, range[1]);
         assertTrue(range[0] <= range[1]);
     }
+
+    @Test
+    void detailsLeaveAVisibleFooterForCraftActions() {
+        CraftAtlasLayout layout = CraftAtlasLayout.compute(1160, 700, 1.0);
+        assertTrue(layout.details.y + layout.details.h <= 644,
+                "details content must stop above the fixed craft action bar");
+    }
 }

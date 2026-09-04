@@ -13,10 +13,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Bundled, offline Ring of Brodgar recipe snapshot. */
 public final class WikiReferenceCatalog {
     private static final String RESOURCE = "/nurgling/craftatlas/wiki-reference.json";
+    private static final Pattern GILD_CHANCE = Pattern.compile("(?i).*?(\\d+(?:\\.\\d+)?)%\\s*[-–]\\s*(\\d+(?:\\.\\d+)?)%");
 
     private WikiReferenceCatalog() { }
 
@@ -58,6 +61,9 @@ public final class WikiReferenceCatalog {
                 .description(value.optString("description", null));
         JSONArray categories = value.optJSONArray("categories");
         if(categories != null) for(int i = 0; i < categories.length(); i++) builder.category(categories.getString(i));
+        JSONArray equipmentSlots = value.optJSONArray("equipmentSlots");
+        if(equipmentSlots != null) for(int i = 0; i < equipmentSlots.length(); i++)
+            builder.equipmentSlot(equipmentSlots.getString(i));
         JSONArray inputs = value.optJSONArray("inputs");
         if(inputs != null) for(int i = 0; i < inputs.length(); i++) {
             JSONObject input = inputs.getJSONObject(i);
@@ -69,18 +75,51 @@ public final class WikiReferenceCatalog {
         JSONArray requirements = value.optJSONArray("requirements");
         if(requirements != null) for(int i = 0; i < requirements.length(); i++) {
             JSONObject requirement = requirements.getJSONObject(i);
-            builder.requirement(new CraftAtlasEntry.Requirement(
-                    CraftAtlasEntry.RequirementKind.valueOf(requirement.getString("kind")),
-                    emptyToNull(requirement.optString("resource", null)), requirement.getString("name"),
+            CraftAtlasEntry.RequirementKind kind = CraftAtlasEntry.RequirementKind.valueOf(requirement.getString("kind"));
+            String resource = emptyToNull(requirement.optString("resource", null));
+            String name = requirement.getString("name");
+            if(kind == CraftAtlasEntry.RequirementKind.SKILL)
+                resource = CraftAtlasAttributes.resource(name, resource);
+            builder.requirement(new CraftAtlasEntry.Requirement(kind, resource, name,
                     emptyToNull(requirement.optString("description", null))));
         }
+        CraftAtlasEntry.Gilding gilding = decodeGilding(value.optJSONObject("gilding"));
         JSONArray bonuses = value.optJSONArray("bonuses");
         if(bonuses != null) for(int i = 0; i < bonuses.length(); i++) {
             JSONObject bonus = bonuses.getJSONObject(i);
-            builder.bonus(new CraftAtlasEntry.Bonus(bonus.optString("resource", "wiki-bonus:" + i),
-                    bonus.getString("name"), bonus.has("value") && !bonus.isNull("value") ? bonus.getDouble("value") : null));
+            String name = bonus.getString("name");
+            Matcher chance = GILD_CHANCE.matcher(name);
+            if(chance.matches()) {
+                if(gilding == null) gilding = new CraftAtlasEntry.Gilding(
+                        Double.parseDouble(chance.group(1)) / 100.0,
+                        Double.parseDouble(chance.group(2)) / 100.0,
+                        Collections.<CraftAtlasEntry.AttributeRef>emptyList());
+                continue;
+            }
+            String resource = bonus.optString("resource", "wiki-bonus:" + i);
+            builder.bonus(new CraftAtlasEntry.Bonus(CraftAtlasAttributes.resource(name, resource), name,
+                    bonus.has("value") && !bonus.isNull("value") ? bonus.getDouble("value") : null));
         }
+        builder.gilding(gilding);
         return builder.build();
+    }
+
+    private static CraftAtlasEntry.Gilding decodeGilding(JSONObject value) {
+        if(value == null) return null;
+        List<CraftAtlasEntry.AttributeRef> attributes = new ArrayList<>();
+        JSONArray values = value.optJSONArray("attributes");
+        if(values != null) for(int i = 0; i < values.length(); i++) {
+            Object raw = values.get(i);
+            if(raw instanceof JSONObject) {
+                JSONObject attribute = (JSONObject)raw;
+                attributes.add(CraftAtlasAttributes.ref(emptyToNull(attribute.optString("resource", null)),
+                        attribute.getString("name")));
+            } else {
+                String name = String.valueOf(raw);
+                attributes.add(CraftAtlasAttributes.ref(null, name));
+            }
+        }
+        return new CraftAtlasEntry.Gilding(value.optDouble("min", 0), value.optDouble("max", 0), attributes);
     }
 
     private static String emptyToNull(String value) { return value == null || value.isEmpty() ? null : value; }

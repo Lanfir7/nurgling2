@@ -12,9 +12,17 @@ public final class CraftAtlasObservation {
     public final List<Item> outputs;
     public final List<RequirementResource> requirements;
     public final List<BonusResource> bonuses;
+    public final List<AttributeResource> qualityModifiers;
 
     public CraftAtlasObservation(String recipeResource, String displayName, List<Item> inputs, List<Item> outputs,
                                  List<RequirementResource> requirements, List<BonusResource> bonuses) {
+        this(recipeResource, displayName, inputs, outputs, requirements, bonuses,
+                Collections.<AttributeResource>emptyList());
+    }
+
+    public CraftAtlasObservation(String recipeResource, String displayName, List<Item> inputs, List<Item> outputs,
+                                 List<RequirementResource> requirements, List<BonusResource> bonuses,
+                                 List<AttributeResource> qualityModifiers) {
         if(recipeResource == null || recipeResource.trim().isEmpty())
             throw new IllegalArgumentException("recipeResource must not be empty");
         this.recipeResource = recipeResource;
@@ -23,6 +31,7 @@ public final class CraftAtlasObservation {
         this.outputs = copy(outputs);
         this.requirements = copy(requirements);
         this.bonuses = copy(bonuses);
+        this.qualityModifiers = copy(qualityModifiers);
     }
 
     private static <T> List<T> copy(List<T> values) {
@@ -56,6 +65,14 @@ public final class CraftAtlasObservation {
             this.resource = resource;
             this.name = name == null || name.isEmpty() ? resource : name;
             this.value = value;
+        }
+    }
+
+    public static final class AttributeResource {
+        public final String resource, name;
+        public AttributeResource(String resource, String name) {
+            this.resource = resource;
+            this.name = name == null || name.isEmpty() ? resource : name;
         }
     }
 }

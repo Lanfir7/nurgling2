@@ -24,6 +24,7 @@ class CraftAtlasObservationStoreTest {
         assertEquals("Fish Glue", loaded.inputs.get(0).name);
         assertEquals("gfx/invobjs/hammer", loaded.requirements.get(0).resource);
         assertEquals(1, loaded.inputs.size());
+        assertEquals("Sewing", loaded.qualityModifiers.get(0).name);
     }
 
     @Test
@@ -48,6 +49,8 @@ class CraftAtlasObservationStoreTest {
                 Arrays.asList(new CraftAtlasObservation.Item("gfx/invobjs/glue", input, 2, false)),
                 Arrays.asList(new CraftAtlasObservation.Item("gfx/invobjs/axe", "Axe", 1, false)),
                 Arrays.asList(new CraftAtlasObservation.RequirementResource(requirement, "Requirement")),
-                Collections.<CraftAtlasObservation.BonusResource>emptyList());
+                Collections.<CraftAtlasObservation.BonusResource>emptyList(),
+                Collections.singletonList(new CraftAtlasObservation.AttributeResource(
+                        "gfx/hud/chr/sewing", "Sewing")));
     }
 }

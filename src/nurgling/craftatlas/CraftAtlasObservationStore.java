@@ -85,7 +85,11 @@ public final class CraftAtlasObservationStore {
             if(b.value != null) item.put("value", b.value);
             bonuses.put(item);
         }
-        return value.put("requirements", requirements).put("bonuses", bonuses);
+        JSONArray qualityModifiers = new JSONArray();
+        for(CraftAtlasObservation.AttributeResource attribute : o.qualityModifiers)
+            qualityModifiers.put(new JSONObject().put("resource", attribute.resource).put("name", attribute.name));
+        return value.put("requirements", requirements).put("bonuses", bonuses)
+                .put("qualityModifiers", qualityModifiers);
     }
 
     private static JSONArray encodeItems(List<CraftAtlasObservation.Item> source) {
@@ -104,14 +108,25 @@ public final class CraftAtlasObservationStore {
             requirements.add(new CraftAtlasObservation.RequirementResource(r.optString("resource", null), r.optString("name", null)));
         }
         List<CraftAtlasObservation.BonusResource> bonuses = new ArrayList<>();
+        List<CraftAtlasObservation.AttributeResource> qualityModifiers = new ArrayList<>();
         JSONArray bon = value.optJSONArray("bonuses");
         if(bon != null) for(int i = 0; i < bon.length(); i++) {
             JSONObject b = bon.getJSONObject(i);
-            bonuses.add(new CraftAtlasObservation.BonusResource(b.optString("resource", null), b.optString("name", null),
-                    b.has("value") ? b.optDouble("value") : null));
+            Double amount = b.has("value") ? b.optDouble("value") : null;
+            if(amount == null) qualityModifiers.add(new CraftAtlasObservation.AttributeResource(
+                    b.optString("resource", null), b.optString("name", null)));
+            else bonuses.add(new CraftAtlasObservation.BonusResource(
+                    b.optString("resource", null), b.optString("name", null), amount));
+        }
+        JSONArray qmod = value.optJSONArray("qualityModifiers");
+        if(qmod != null) for(int i = 0; i < qmod.length(); i++) {
+            JSONObject attribute = qmod.getJSONObject(i);
+            qualityModifiers.add(new CraftAtlasObservation.AttributeResource(
+                    attribute.optString("resource", null), attribute.optString("name", null)));
         }
         return new CraftAtlasObservation(value.getString("recipe"), value.optString("name", null),
-                decodeItems(value.optJSONArray("inputs")), decodeItems(value.optJSONArray("outputs")), requirements, bonuses);
+                decodeItems(value.optJSONArray("inputs")), decodeItems(value.optJSONArray("outputs")), requirements,
+                bonuses, qualityModifiers);
     }
 
     private static List<CraftAtlasObservation.Item> decodeItems(JSONArray values) {

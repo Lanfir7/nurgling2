@@ -38,4 +38,31 @@ class CraftAtlasEntryTest {
         assertThrows(IllegalArgumentException.class,
                 () -> CraftAtlasSnapshot.of(1, Arrays.asList(first, second)));
     }
+
+    @Test
+    void gildingChanceAndCraftQualitySkillsAreSeparateFromEffectsAndRequirements() {
+        CraftAtlasEntry.AttributeRef stealth = new CraftAtlasEntry.AttributeRef("gfx/hud/chr/stealth", "Stealth");
+        CraftAtlasEntry.AttributeRef sewing = new CraftAtlasEntry.AttributeRef("gfx/hud/chr/sewing", "Sewing");
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("bonepins", "Bone Pins")
+                .gilding(new CraftAtlasEntry.Gilding(0.35, 1.0, Collections.singletonList(stealth)))
+                .qualityModifier(sewing)
+                .bonus(new CraftAtlasEntry.Bonus("gfx/hud/chr/stealth", "Stealth", 5.0))
+                .build();
+
+        assertEquals(0.35, entry.gilding.pmin);
+        assertEquals("Stealth", entry.gilding.attributes.get(0).name);
+        assertEquals("Sewing", entry.qualityModifiers.get(0).name);
+        assertEquals(1, entry.bonuses.size());
+        assertTrue(entry.requirements.isEmpty());
+    }
+
+    @Test
+    void keepsEquipmentSlotsAsReferenceMetadata() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("bunny-slippers", "Bunny Slippers")
+                .equipmentSlot("11R")
+                .build();
+
+        assertEquals(Collections.singletonList("11R"), entry.equipmentSlots);
+        assertThrows(UnsupportedOperationException.class, () -> entry.equipmentSlots.add("11L"));
+    }
 }

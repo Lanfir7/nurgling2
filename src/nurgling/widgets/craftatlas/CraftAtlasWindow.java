@@ -35,7 +35,8 @@ public class CraftAtlasWindow extends Window {
     private final CraftAtlasDetails details;
     private final CraftAtlasRecipeChooser chooser;
     private final Button back, forward, favorite, openCraft;
-    private final Button[] sectionButtons = new Button[5];
+    private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
+    private final Button[] equipmentButtons = new Button[CraftAtlasSections.EQUIPMENT.size() + 1];
     private String section;
     private int observedMenuRevision = Integer.MIN_VALUE;
     private long observedStoreRevision = Long.MIN_VALUE;
@@ -68,11 +69,17 @@ public class CraftAtlasWindow extends Window {
         });
         search.tooltip = L10n.get("craft_atlas.search_placeholder");
 
-        String[] sections = {"all", "favorites", "recent", "gildings", "foods"};
-        for(int i = 0; i < sections.length; i++) {
-            final String value = sections[i];
+        for(int i = 0; i < CraftAtlasSections.MAIN.size(); i++) {
+            final String value = CraftAtlasSections.MAIN.get(i);
             sectionButtons[i] = add(new Button(UI.scale(170), L10n.get("craft_atlas.section." + value))
                     .action(() -> selectSection(value)));
+        }
+        equipmentButtons[0] = add(new Button(UI.scale(170), L10n.get("craft_atlas.section.back"))
+                .action(() -> selectSection("all")));
+        for(int i = 0; i < CraftAtlasSections.EQUIPMENT.size(); i++) {
+            final String value = CraftAtlasSections.EQUIPMENT.get(i);
+            equipmentButtons[i + 1] = add(new Button(UI.scale(170),
+                    L10n.get("craft_atlas.section." + value)).action(() -> selectSection(value)));
         }
 
         recipeList = add(new CraftAtlasRecipeList(UI.scale(330, 600), controller));
@@ -115,9 +122,12 @@ public class CraftAtlasWindow extends Window {
     @Override public void show() {
         refreshCatalog();
         if(parent != null) {
-            Coord maximum = parent.sz.sub(UI.scale(20, 20)).max(Coord.of(1, 1));
-            if(sz.x > maximum.x || sz.y > maximum.y)
-                resize(Coord.of(Math.min(sz.x, maximum.x), Math.min(sz.y, maximum.y)));
+            Coord maximumOuter = parent.sz.sub(UI.scale(20, 20)).max(Coord.of(1, 1));
+            Coord frame = sz.sub(csz());
+            Coord maximumContent = maximumOuter.sub(frame).max(Coord.of(1, 1));
+            Coord content = csz();
+            if(content.x > maximumContent.x || content.y > maximumContent.y)
+                resize(Coord.of(Math.min(content.x, maximumContent.x), Math.min(content.y, maximumContent.y)));
         }
         if(parent != null && (c.x < 0 || c.y < 0 || c.x + sz.x > parent.sz.x || c.y + sz.y > parent.sz.y))
             c = parent.sz.sub(sz).div(2).max(Coord.z);
@@ -146,7 +156,8 @@ public class CraftAtlasWindow extends Window {
 
     private void applyQuery() {
         CraftAtlasSearch.Query.Builder query = CraftAtlasSearch.Query.builder().text(search == null ? "" : search.text());
-        if("gildings".equals(section) || "foods".equals(section)) query.category(section);
+        String category = CraftAtlasSections.category(section);
+        if(category != null) query.category(category);
         if("favorites".equals(section)) query.restrictTo(preferences.favorites);
         if("recent".equals(section)) query.restrictTo(new LinkedHashSet<>(preferences.recent));
         controller.setQuery(query.build());
@@ -162,7 +173,7 @@ public class CraftAtlasWindow extends Window {
         favorite.change(starred ? "\u2605" : "\u2606");
         if(state.selected != null) {
             preferences.recordRecent(state.selected.recipeResource);
-            CraftAtlasLayout current = CraftAtlasLayout.compute(sz.x, sz.y, uiScale());
+            CraftAtlasLayout current = layoutFor(csz(), uiScale());
             if(current.detailsAsPage) { narrowDetails = true; applyLayout(); }
         }
         chooser.setChoices(state.choices);
@@ -178,7 +189,8 @@ public class CraftAtlasWindow extends Window {
     }
 
     private void savePreferences() {
-        preferences.windowW = sz.x; preferences.windowH = sz.y;
+        Coord content = csz();
+        preferences.windowW = content.x; preferences.windowH = content.y;
         preferences.windowX = c.x; preferences.windowY = c.y;
         try { preferences.saveProfile(); } catch(IOException e) { System.err.println("Unable to save Craft Atlas preferences: " + e.getMessage()); }
     }
@@ -186,32 +198,48 @@ public class CraftAtlasWindow extends Window {
     @Override public void resize(Coord size) { super.resize(size); if(recipeList != null) applyLayout(); }
 
     private void applyLayout() {
-        CraftAtlasLayout layout = CraftAtlasLayout.compute(sz.x, sz.y, uiScale());
+        Coord content = csz();
+        CraftAtlasLayout layout = layoutFor(content, uiScale());
         back.move(UI.scale(8, 12)); forward.move(UI.scale(48, 12));
-        search.move(UI.scale(96, 12)); search.resize(Math.max(UI.scale(220), sz.x - UI.scale(112)));
+        search.move(UI.scale(96, 12)); search.resize(Math.max(UI.scale(220), content.x - UI.scale(112)));
         int sideY = layout.sidebar.y + UI.scale(8);
+        boolean equipmentMenu = CraftAtlasSections.isEquipment(section);
         for(int i = 0; i < sectionButtons.length; i++) {
             sectionButtons[i].move(Coord.of(layout.sidebar.x + UI.scale(7), sideY + i * UI.scale(38)));
             sectionButtons[i].resize(Coord.of(Math.max(UI.scale(100), layout.sidebar.w - UI.scale(14)), sectionButtons[i].sz.y));
-            sectionButtons[i].show();
+            sectionButtons[i].visible = !equipmentMenu;
+        }
+        for(int i = 0; i < equipmentButtons.length; i++) {
+            equipmentButtons[i].move(Coord.of(layout.sidebar.x + UI.scale(7), sideY + i * UI.scale(38)));
+            equipmentButtons[i].resize(Coord.of(Math.max(UI.scale(100), layout.sidebar.w - UI.scale(14)), equipmentButtons[i].sz.y));
+            equipmentButtons[i].visible = equipmentMenu;
         }
         recipeList.move(Coord.of(layout.list.x, layout.list.y)); recipeList.resize(Coord.of(layout.list.w, layout.list.h));
         details.move(Coord.of(layout.details.x, layout.details.y)); details.resize(Coord.of(layout.details.w, layout.details.h));
         if(layout.detailsAsPage && narrowDetails) {
             for(Button button : sectionButtons) button.hide();
+            for(Button button : equipmentButtons) button.hide();
             recipeList.hide();
-            details.move(Coord.of(0, layout.header.h)); details.resize(Coord.of(sz.x, sz.y - layout.header.h)); details.show();
+            details.move(Coord.of(0, layout.header.h));
+            details.resize(Coord.of(content.x, Math.max(0, layout.footer.y - layout.header.h - UI.scale(8))));
+            details.show();
         } else {
             recipeList.show();
             details.visible = !layout.detailsAsPage;
         }
-        Coord detailBase = details.c;
-        favorite.move(Coord.of(detailBase.x + UI.scale(12), Math.max(layout.header.h, sz.y - UI.scale(36))));
-        openCraft.move(Coord.of(Math.max(detailBase.x + UI.scale(60), sz.x - UI.scale(182)), Math.max(layout.header.h, sz.y - UI.scale(36))));
+        int footerY = layout.footer.y + Math.max(0, (layout.footer.h - openCraft.sz.y) / 2);
+        favorite.move(Coord.of(layout.footer.x + UI.scale(12), footerY));
+        openCraft.move(Coord.of(Math.max(layout.footer.x + UI.scale(64),
+                layout.footer.x + layout.footer.w - openCraft.sz.x - UI.scale(12)), footerY));
         favorite.visible = details.visible;
         openCraft.visible = details.visible;
-        chooser.move(Coord.of(Math.max(0, (sz.x - chooser.sz.x) / 2), Math.max(layout.header.h, (sz.y - chooser.sz.y) / 2)));
+        chooser.move(Coord.of(Math.max(0, (content.x - chooser.sz.x) / 2),
+                Math.max(layout.header.h, (content.y - chooser.sz.y) / 2)));
         chooser.raise();
+    }
+
+    static CraftAtlasLayout layoutFor(Coord content, double scale) {
+        return CraftAtlasLayout.compute(content.x, content.y, scale);
     }
 
     private double uiScale() { return UI.scale(1000) / 1000.0; }
