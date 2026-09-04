@@ -8,14 +8,20 @@ import haven.TextEntry;
 import haven.UI;
 import haven.Widget;
 import haven.Window;
+import nurgling.NGameUI;
+import nurgling.NUtils;
+import nurgling.actions.bots.CraftAtlasResourceCollector;
 import nurgling.craftatlas.CraftAtlasController;
 import nurgling.craftatlas.CraftAtlasEntry;
+import nurgling.craftatlas.CraftAtlasMaterialPlanner;
+import nurgling.craftatlas.CraftAtlasMaterialSource;
 import nurgling.craftatlas.CraftAtlasObservationStore;
 import nurgling.craftatlas.CraftAtlasPreferences;
 import nurgling.craftatlas.CraftAtlasSearch;
 import nurgling.craftatlas.CraftExecutionBridge;
 import nurgling.craftatlas.MenuCraftCatalog;
 import nurgling.i18n.L10n;
+import nurgling.sessions.BotExecutor;
 
 import java.awt.event.KeyEvent;
 import java.io.IOException;
@@ -34,7 +40,8 @@ public class CraftAtlasWindow extends Window {
     private final CraftAtlasRecipeList recipeList;
     private final CraftAtlasDetails details;
     private final CraftAtlasRecipeChooser chooser;
-    private final Button back, forward, favorite, openCraft;
+    private final TextEntry craftCount;
+    private final Button back, forward, favorite, collectResources, openCraft;
     private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
     private final Button[] equipmentButtons = new Button[CraftAtlasSections.EQUIPMENT.size() + 1];
     private String section;
@@ -42,6 +49,7 @@ public class CraftAtlasWindow extends Window {
     private long observedStoreRevision = Long.MIN_VALUE;
     private boolean subscribed;
     private boolean narrowDetails;
+    private Thread collectionThread;
 
     public CraftAtlasWindow(MenuGrid menu) {
         this(menu, CraftAtlasPreferences.loadProfile());
@@ -85,10 +93,17 @@ public class CraftAtlasWindow extends Window {
         recipeList = add(new CraftAtlasRecipeList(UI.scale(330, 600), controller));
         details = add(new CraftAtlasDetails(UI.scale(620, 600), controller));
         favorite = add(new Button(UI.scale(42), "\u2606").action(this::toggleFavorite));
+        craftCount = add(new TextEntry(UI.scale(54), "1") {
+            @Override protected void changed() { super.changed(); craftCountChanged(); }
+        });
+        craftCount.tooltip = L10n.get("craft_atlas.craft_count_hint");
+        collectResources = add(new Button(UI.scale(160), L10n.get("craft_atlas.collect_resources"))
+                .action(this::collectResources));
         openCraft = add(new Button(UI.scale(170), L10n.get("craft_atlas.open_craft")).action(controller::openCraft));
         openCraft.tooltip = L10n.get("craft_atlas.normal_craft_hint");
         back.tooltip = L10n.get("craft_atlas.back");
         forward.tooltip = L10n.get("craft_atlas.forward");
+        details.setPlanListener(this::refreshCollectionState);
         chooser = add(new CraftAtlasRecipeChooser(UI.scale(360, 240), controller));
         chooser.hide();
         applyLayout();
@@ -138,6 +153,10 @@ public class CraftAtlasWindow extends Window {
         super.tick(dt);
         if((menu != null && observedMenuRevision != menu.pagseq) || observedStoreRevision != observationStore.revision())
             refreshCatalog();
+        if(collectionThread != null && !collectionThread.isAlive()) {
+            collectionThread = null;
+            details.refreshMaterials();
+        }
     }
 
     private void refreshCatalog() {
@@ -169,6 +188,7 @@ public class CraftAtlasWindow extends Window {
         back.disable(!state.canBack);
         forward.disable(!state.canForward);
         openCraft.disable(state.selected == null || state.selected.availability != CraftAtlasEntry.Availability.OPEN);
+        refreshCollectionState();
         boolean starred = state.selected != null && preferences.favorites.contains(state.selected.recipeResource);
         favorite.change(starred ? "\u2605" : "\u2606");
         if(state.selected != null) {
@@ -186,6 +206,77 @@ public class CraftAtlasWindow extends Window {
         if(!preferences.favorites.remove(entry.recipeResource)) preferences.favorites.add(entry.recipeResource);
         if("favorites".equals(section)) applyQuery(); else stateChanged(controller.state());
         savePreferences();
+    }
+
+    private void craftCountChanged() {
+        Integer value = parseCraftCount(craftCount.text());
+        if(value != null) details.setCraftCount(value);
+        refreshCollectionState();
+    }
+
+    private void collectResources() {
+        Integer count = parseCraftCount(craftCount.text());
+        if(count == null) {
+            showError(L10n.get("craft_atlas.collect_bad_count"));
+            return;
+        }
+        details.setCraftCount(count);
+        details.refreshMaterials();
+        CraftAtlasMaterialSource.Snapshot snapshot = details.materialSnapshot();
+        CraftAtlasMaterialPlanner.Plan plan = details.materialPlan();
+        if(snapshot == null || !snapshot.collectible) {
+            showError(L10n.get("craft_atlas.collect_unavailable"));
+            return;
+        }
+        if(plan == null || !plan.complete) {
+            showError(shortageMessage(plan));
+            return;
+        }
+        try {
+            collectionThread = BotExecutor.runAsync("CraftAtlasResourceCollector",
+                    new CraftAtlasResourceCollector(plan, snapshot.storageByCandidateId));
+        } catch(IllegalArgumentException error) {
+            showError(error.getMessage());
+        }
+        refreshCollectionState();
+    }
+
+    private void refreshCollectionState() {
+        if(collectResources == null || craftCount == null) return;
+        CraftAtlasMaterialSource.Snapshot snapshot = details.materialSnapshot();
+        CraftAtlasMaterialPlanner.Plan plan = details.materialPlan();
+        collectResources.disable(collectionThread != null && collectionThread.isAlive()
+                || parseCraftCount(craftCount.text()) == null || snapshot == null || !snapshot.collectible
+                || plan == null || !plan.complete);
+    }
+
+    private String shortageMessage(CraftAtlasMaterialPlanner.Plan plan) {
+        if(plan != null) for(CraftAtlasMaterialPlanner.SlotPlan slot : plan.slots) {
+            if(slot.missing <= 0) continue;
+            String name = Integer.toString(slot.slotIndex + 1);
+            CraftAtlasMaterialSource.Snapshot snapshot = details.materialSnapshot();
+            if(snapshot != null && slot.slotIndex < snapshot.slots.size()) {
+                java.util.List<String> allowed = snapshot.slots.get(slot.slotIndex).allowedMaterials;
+                if(!allowed.isEmpty()) name = allowed.get(0);
+            }
+            return L10n.get("craft_atlas.collect_missing")
+                    .replace("{0}", name).replace("{1}", Integer.toString(slot.missing));
+        }
+        return L10n.get("craft_atlas.collect_unavailable");
+    }
+
+    private void showError(String message) {
+        NGameUI gui = NUtils.getGameUI();
+        if(gui != null) gui.error(message);
+    }
+
+    static Integer parseCraftCount(String text) {
+        try {
+            int value = Integer.parseInt(text == null ? "" : text.trim());
+            return value > 0 ? value : null;
+        } catch(NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private void savePreferences() {
@@ -227,11 +318,21 @@ public class CraftAtlasWindow extends Window {
             recipeList.show();
             details.visible = !layout.detailsAsPage;
         }
-        int footerY = layout.footer.y + Math.max(0, (layout.footer.h - openCraft.sz.y) / 2);
-        favorite.move(Coord.of(layout.footer.x + UI.scale(12), footerY));
-        openCraft.move(Coord.of(Math.max(layout.footer.x + UI.scale(64),
-                layout.footer.x + layout.footer.w - openCraft.sz.x - UI.scale(12)), footerY));
+        CraftAtlasLayout.Rect[] controls = CraftAtlasLayout.footerControls(layout.footer,
+                UI.scale(42), UI.scale(54), UI.scale(160), UI.scale(170),
+                UI.scale(8), UI.scale(12));
+        favorite.resize(Coord.of(controls[0].w, favorite.sz.y));
+        craftCount.resize(controls[1].w);
+        collectResources.resize(Coord.of(controls[2].w, collectResources.sz.y));
+        openCraft.resize(Coord.of(controls[3].w, openCraft.sz.y));
+        favorite.move(Coord.of(controls[0].x, layout.footer.y + Math.max(0, (layout.footer.h - favorite.sz.y) / 2)));
+        craftCount.move(Coord.of(controls[1].x, layout.footer.y + Math.max(0, (layout.footer.h - craftCount.sz.y) / 2)));
+        collectResources.move(Coord.of(controls[2].x,
+                layout.footer.y + Math.max(0, (layout.footer.h - collectResources.sz.y) / 2)));
+        openCraft.move(Coord.of(controls[3].x, layout.footer.y + Math.max(0, (layout.footer.h - openCraft.sz.y) / 2)));
         favorite.visible = details.visible;
+        craftCount.visible = details.visible;
+        collectResources.visible = details.visible;
         openCraft.visible = details.visible;
         chooser.move(Coord.of(Math.max(0, (content.x - chooser.sz.x) / 2),
                 Math.max(layout.header.h, (content.y - chooser.sz.y) / 2)));

@@ -49,4 +49,36 @@ public final class CraftAtlasLayout {
         int last = Math.min(count - 1, (scroll + Math.max(0, viewportHeight - 1)) / rowHeight);
         return new int[] {first, last};
     }
+
+    /** Left-to-right footer geometry: favorite, quantity, collect, open craft. */
+    public static Rect[] footerControls(Rect footer, int favoriteW, int quantityW,
+                                        int collectW, int craftW, int gap, int margin) {
+        int[] widths = {favoriteW, quantityW, collectW, craftW};
+        int[] minimum = {Math.min(favoriteW, 28), Math.min(quantityW, 34),
+                Math.min(collectW, 120), Math.min(craftW, 140)};
+        int available = Math.max(4, footer.w - margin * 2 - gap * 3);
+        int overflow = widths[0] + widths[1] + widths[2] + widths[3] - available;
+        int[] shrinkOrder = {2, 3, 1, 0};
+        for(int index : shrinkOrder) {
+            int reduce = Math.min(Math.max(0, overflow), widths[index] - minimum[index]);
+            widths[index] -= reduce;
+            overflow -= reduce;
+        }
+        for(int index : shrinkOrder) {
+            int reduce = Math.min(Math.max(0, overflow), widths[index] - 1);
+            widths[index] -= reduce;
+            overflow -= reduce;
+        }
+        int y = footer.y;
+        int favoriteX = footer.x + margin;
+        int quantityX = favoriteX + widths[0] + gap;
+        int collectX = quantityX + widths[1] + gap;
+        int craftX = collectX + widths[2] + gap;
+        return new Rect[] {
+                new Rect(favoriteX, y, widths[0], footer.h),
+                new Rect(quantityX, y, widths[1], footer.h),
+                new Rect(collectX, y, widths[2], footer.h),
+                new Rect(craftX, y, widths[3], footer.h)
+        };
+    }
 }
