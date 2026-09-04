@@ -1781,6 +1781,8 @@ public class VSpec {
         ArrayList<JSONObject> deadAnimalCarcasses = new ArrayList<>();
         deadAnimalCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/rooster-dead\",\"name\":\"Dead Cock\"}"));
         deadAnimalCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/hen-dead\",\"name\":\"Dead Hen\"}"));
+        deadAnimalCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/duckdrake-dead\",\"name\":\"Dead Duck Drake\"}"));
+        deadAnimalCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/duckhen-dead\",\"name\":\"Dead Duck Hen\"}"));
         deadAnimalCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/hedgehog-dead\",\"name\":\"Dead Hedgehog\"}"));
         deadAnimalCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/stoat-dead\",\"name\":\"Dead Stoat\"}"));
         categories.put("Dead Animal Carcass", deadAnimalCarcasses);
@@ -1796,6 +1798,7 @@ public class VSpec {
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/bogturtle-cleaned\",\"name\":\"Cleaned Bog Turtle\"}"));
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/bullfinch-cleaned\",\"name\":\"Cleaned Bullfinch\"}"));
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/chicken-cleaned\",\"name\":\"Cleaned Chicken\"}"));
+        cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/duck-cleaned\",\"name\":\"Cleaned Duck\"}"));
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/eagleowl-cleaned\",\"name\":\"Cleaned Eagle Owl\"}"));
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/goldeneagle-cleaned\",\"name\":\"Cleaned Golden Eagle\"}"));
         cleanCarcasses.add(new JSONObject("{\"static\":\"gfx/invobjs/magpie-cleaned\",\"name\":\"Cleaned Magpie\"}"));
@@ -1934,6 +1937,7 @@ public class VSpec {
         ArrayList<JSONObject> cleanedBirds = new ArrayList<>();
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/bullfinch-cleaned\",\"name\":\"Cleaned Bullfinch\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/chicken-cleaned\",\"name\":\"Cleaned Chicken\"}"));
+        cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/duck-cleaned\",\"name\":\"Cleaned Duck\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/crane-cleaned\",\"name\":\"Cleaned Crane\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/eagleowl-cleaned\",\"name\":\"Cleaned Eagle Owl\"}"));
         cleanedBirds.add(new JSONObject("{\"static\":\"gfx/invobjs/goldeneagle-cleaned\",\"name\":\"Cleaned Golden Eagle\"}"));
@@ -1960,6 +1964,7 @@ public class VSpec {
 
         ArrayList<JSONObject> poultry = new ArrayList<>();
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-chicken\"], \"name\": \"Chicken Meat\"}"));
+        poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-duck\"], \"name\": \"Duck Meat\"}"));
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-crane\"], \"name\": \"Crane Meat\"}"));
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-eagleowl\"], \"name\": \"Eagle Owl Meat\"}"));
         poultry.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-poultry\", \"gfx/invobjs/meat-goldeneagle\"], \"name\": \"Golden Eagle Meat\"}"));
@@ -2181,6 +2186,7 @@ public class VSpec {
         ArrayList<JSONObject> feathers = new ArrayList<>();
         feathers.add(new JSONObject("{\"static\":\"gfx/invobjs/feather-bullfinch\",\"name\":\"Bullfinch Feather\"}"));
         feathers.add(new JSONObject("{\"static\":\"gfx/invobjs/feather-chicken\",\"name\":\"Chicken Feathers\"}"));
+        feathers.add(new JSONObject("{\"static\":\"gfx/invobjs/feather-duck\",\"name\":\"Duck Feather\"}"));
         feathers.add(new JSONObject("{\"static\":\"gfx/invobjs/feather-eagleowl\",\"name\":\"Eagle Owl Feather\"}"));
         feathers.add(new JSONObject("{\"static\":\"gfx/invobjs/feather-goldeneagle\",\"name\":\"Golden Eagle Feather\"}"));
         feathers.add(new JSONObject("{\"static\":\"gfx/invobjs/feather-magpie\",\"name\":\"Magpie Feather\"}"));
