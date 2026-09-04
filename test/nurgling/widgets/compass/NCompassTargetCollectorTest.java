@@ -77,6 +77,51 @@ class NCompassTargetCollectorTest {
         assertFalse(NCompassTargetCollector.isPlayerResource("gfx/kritter/bear/bear"));
     }
 
+    @Test
+    void kritterResourcesCountAsAnimalsAndPlayerBodiesDoNot() {
+        assertTrue(NCompassTargetCollector.isAnimalResource("gfx/kritter/bear/bear"));
+        assertTrue(NCompassTargetCollector.isAnimalResource("gfx/invobjs/kritter/bear"));
+        assertFalse(NCompassTargetCollector.isAnimalResource("gfx/borka/body"));
+        assertFalse(NCompassTargetCollector.isAnimalResource("gfx/terobjs/trees/oak"));
+        assertFalse(NCompassTargetCollector.isAnimalResource(null));
+    }
+
+    @Test
+    void shownLiveAnimalsAreIncludedAndCorpsesOrHiddenIconsAreNot() {
+        assertTrue(NCompassTargetCollector.includeShownAnimal(
+                true, "idle", "gfx/kritter/bear/bear", "gfx/invobjs/kritter/bear"));
+        assertTrue(NCompassTargetCollector.includeShownAnimal(
+                true, null, "gfx/kritter/fox/fox", null));
+        assertFalse(NCompassTargetCollector.includeShownAnimal(
+                false, "idle", "gfx/kritter/bear/bear", "gfx/invobjs/kritter/bear"));
+        assertFalse(NCompassTargetCollector.includeShownAnimal(
+                true, "knock", "gfx/kritter/bear/bear", "gfx/invobjs/kritter/bear"));
+        assertFalse(NCompassTargetCollector.includeShownAnimal(
+                true, "gfx/kritter/wolf/dead", "gfx/kritter/wolf/wolf", "gfx/invobjs/kritter/wolf"));
+        assertFalse(NCompassTargetCollector.includeShownAnimal(
+                true, "idle", "gfx/borka/body", "gfx/hud/mmap/plo"));
+        assertFalse(NCompassTargetCollector.includeShownAnimal(
+                true, "idle", "gfx/terobjs/trees/oak", null));
+    }
+
+    @Test
+    void combatQuestAndPartyBeatAnimalMarksOnTheSameGob() {
+        NCompassTarget animal = target("animal", "gob:7", NCompassTarget.Kind.ANIMAL, 4, 7);
+        NCompassTarget combat = target("combat", "gob:7", NCompassTarget.Kind.COMBAT, 4, 7);
+        NCompassTarget quest = target("quest", "gob:8", NCompassTarget.Kind.QUEST, 5, 8);
+        NCompassTarget animalQuest = target("animal-quest", "gob:8", NCompassTarget.Kind.ANIMAL, 5, 8);
+        NCompassTarget party = target("party", "gob:9", NCompassTarget.Kind.PARTY, 6, 9);
+        NCompassTarget animalParty = target("animal-party", "gob:9", NCompassTarget.Kind.ANIMAL, 6, 9);
+
+        List<NCompassTarget> merged = NCompassTargetCollector.mergeTargets(
+                Arrays.asList(animal, combat, animalQuest, quest, animalParty, party));
+
+        assertEquals(3, merged.size());
+        assertEquals(NCompassTarget.Kind.COMBAT, merged.get(0).kind);
+        assertEquals(NCompassTarget.Kind.QUEST, merged.get(1).kind);
+        assertEquals(NCompassTarget.Kind.PARTY, merged.get(2).kind);
+    }
+
     private static NCompassTarget target(String id, String mergeKey, NCompassTarget.Kind kind,
                                          double distance, long gobId) {
         return new NCompassTarget(id, mergeKey, kind, new Coord2d(distance, 0), id,

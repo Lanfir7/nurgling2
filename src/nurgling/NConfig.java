@@ -274,6 +274,7 @@ public class NConfig
         showCompassParty,
         showCompassDatabasePeers,
         showCompassNearbyPlayers,
+        showCompassAnimals,
         showCompassCombatTargets,
         compassBackgroundOpacity,
         treeResizePercentage,
@@ -536,6 +537,7 @@ public class NConfig
         conf.put(Key.showCompassParty, true);
         conf.put(Key.showCompassDatabasePeers, true);
         conf.put(Key.showCompassNearbyPlayers, true);
+        conf.put(Key.showCompassAnimals, false);
         conf.put(Key.showCompassCombatTargets, true);
         conf.put(Key.compassBackgroundOpacity, 75);
         conf.put(Key.treeResizePercentage, 100);
