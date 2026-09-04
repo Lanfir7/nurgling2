@@ -45,7 +45,8 @@ class ButcherDumpInventoryTest {
         String src = butcherSrc();
         assertTrue(src.contains("new FreeInventory2(context).run(gui)"), src);
         assertTrue(src.contains("NUtils.drop(gui.vhand)"), src);
-        assertTrue(src.contains("if (dumpInventory) {\n                                    new FreeInventory2(context).run(gui);"), src);
+        String compact = src.replaceAll("\\s+", " ");
+        assertTrue(compact.contains("if (dumpInventory) { new FreeInventory2(context).run(gui);"), src);
         assertTrue(src.indexOf("NUtils.drop(gui.vhand)") < src.lastIndexOf("new FreeInventory2(context)"), src);
         assertFalse(src.contains("Cupboard"), src);
         assertFalse(src.contains("chest"), src);
