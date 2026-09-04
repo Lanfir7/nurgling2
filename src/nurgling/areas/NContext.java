@@ -1126,6 +1126,10 @@ public class NContext {
     public static NArea findIn(NAlias name) {
         double dist = 10000;
         NArea res = null;
+        Gob player = NUtils.player();
+        if(player == null)
+            return null;
+        Coord2d playerPosition = player.rc;
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
             Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
             for(Integer id : nids) {
@@ -1135,7 +1139,7 @@ public class NContext {
                         Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                         if(testrc!=null) {
                             double testdist;
-                            if ((testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc))) < dist) {
+                            if ((testdist = distanceToAreaCorners(playerPosition, testrc)) < dist) {
                                 res = test;
                                 dist = testdist;
                             }
@@ -1233,13 +1237,15 @@ public class NContext {
                 targets.add(area.area);
         }
 
-        if(targets.size()>1) {
+        Gob player = NUtils.player();
+        Coord2d playerPosition = (player != null) ? player.rc : null;
+        if(targets.size()>1 && playerPosition != null) {
             for (NArea test: targets) {
                 Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                 if(testrc == null)
                     continue;
                 double testdist;
-                if ((testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc))) < dist) {
+                if ((testdist = distanceToAreaCorners(playerPosition, testrc)) < dist) {
                     res = test;
                     dist = testdist;
                 }
@@ -1281,13 +1287,15 @@ public class NContext {
                 targets.add(area.area);
         }
 
-        if(targets.size()>1) {
+        Gob player = NUtils.player();
+        Coord2d playerPosition = (player != null) ? player.rc : null;
+        if(targets.size()>1 && playerPosition != null) {
             for (NArea test: targets) {
                 Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                 if(testrc == null)
                     continue;
                 double testdist;
-                if ((testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc))) < dist) {
+                if ((testdist = distanceToAreaCorners(playerPosition, testrc)) < dist) {
                     res = test;
                     dist = testdist;
                 }
@@ -1339,6 +1347,13 @@ public class NContext {
         double dx = Math.max(Math.max(minX - point.x, 0), point.x - maxX);
         double dy = Math.max(Math.max(minY - point.y, 0), point.y - maxY);
         return Math.hypot(dx, dy);
+    }
+
+    static double distanceToAreaCorners(
+            Coord2d point, Pair<Coord2d, Coord2d> geometry) {
+        if (point == null || geometry == null)
+            return Double.MAX_VALUE;
+        return geometry.a.dist(point) + geometry.b.dist(point);
     }
 
     static double distanceToAreaGeometryInTiles(
@@ -1628,6 +1643,10 @@ public class NContext {
     public static NArea findSpec(String name) {
         double dist = 10000;
         NArea res = null;
+        Gob player = NUtils.player();
+        if(player == null)
+            return null;
+        Coord2d playerPosition = player.rc;
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
             Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
             for(Integer id : nids) {
@@ -1642,7 +1661,7 @@ public class NContext {
                                 Pair<Coord2d, Coord2d> testrc = test.getRCArea();
                                 if(testrc != null) {
                                     double testdist;
-                                    if ((testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc))) < dist) {
+                                    if ((testdist = distanceToAreaCorners(playerPosition, testrc)) < dist) {
                                         res = test;
                                         dist = testdist;
                                     }
@@ -1659,6 +1678,10 @@ public class NContext {
     public static NArea findSpec(String name, String sub) {
         double dist = 10000;
         NArea res = null;
+        Gob player = NUtils.player();
+        if(player == null)
+            return null;
+        Coord2d playerPosition = player.rc;
         if(NUtils.getGameUI()!=null && NUtils.getGameUI().map!=null) {
             Set<Integer> nids = NUtils.getGameUI().map.nols.keySet();
             for(Integer id : nids) {
@@ -1673,7 +1696,7 @@ public class NContext {
                                 Pair<Coord2d,Coord2d> testrc = test.getRCArea();
                                 if(testrc!=null) {
                                     double testdist;
-                                    if ((testdist = (testrc.a.dist(NUtils.player().rc) + testrc.b.dist(NUtils.player().rc))) < dist) {
+                                    if ((testdist = distanceToAreaCorners(playerPosition, testrc)) < dist) {
                                         res = test;
                                         dist = testdist;
                                     }

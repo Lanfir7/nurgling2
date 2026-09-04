@@ -43,4 +43,22 @@ class NContextRoutingTest {
         assertEquals(Integer.MAX_VALUE,
                 NContext.visibleFallbackHops(false, true));
     }
+
+    @Test
+    void missingPlayerPositionCannotRankAreasByDistance() {
+        Pair<Coord2d, Coord2d> area = new Pair<>(
+                new Coord2d(5, 0), new Coord2d(10, 10));
+
+        assertEquals(Double.MAX_VALUE,
+                NContext.distanceToAreaCorners(null, area));
+    }
+
+    @Test
+    void loadedPlayerPositionKeepsExistingCornerSumRanking() {
+        Pair<Coord2d, Coord2d> area = new Pair<>(
+                new Coord2d(3, 4), new Coord2d(6, 8));
+
+        assertEquals(15.0,
+                NContext.distanceToAreaCorners(new Coord2d(0, 0), area), 0.001);
+    }
 }
