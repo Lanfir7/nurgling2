@@ -66,7 +66,7 @@ class CraftAtlasMaterialPlannerTest {
     }
 
     @Test
-    void selectedCandidateIsConsumedBeforeHigherQualityFallback() {
+    void selectedCandidateNeverFallsForwardToHigherQuality() {
         SlotRequest fabric = new SlotRequest(0, 3, false, List.of("Linen Cloth"));
         List<Candidate> stock = List.of(
                 candidate("linen-120", "Linen Cloth", 120, 10, Source.STORAGE),
@@ -75,8 +75,10 @@ class CraftAtlasMaterialPlannerTest {
         Plan plan = CraftAtlasMaterialPlanner.plan(List.of(fabric), Map.of(0, stock),
                 Map.of(0, Selection.preferred(stock.get(1))), 1);
 
-        assertEquals(List.of("linen-100", "linen-120"), plan.slots.get(0).allocations.stream()
+        assertFalse(plan.complete);
+        assertEquals(List.of("linen-100"), plan.slots.get(0).allocations.stream()
                 .map(value -> value.candidateId).collect(Collectors.toList()));
+        assertEquals(2, plan.slots.get(0).missing);
     }
 
     @Test
@@ -163,6 +165,49 @@ class CraftAtlasMaterialPlannerTest {
         assertEquals(2, plan.slots.get(0).supplied);
         assertEquals(1, plan.slots.get(1).supplied);
         assertEquals(1, plan.slots.get(1).missing);
+    }
+
+    @Test
+    void disallowedSavedMaterialResetsToAnAllowedDefault() {
+        SlotRequest slot = new SlotRequest(0, 1, false, List.of("Glue"));
+        Candidate oldCloth = candidate("cloth", "Linen Cloth", 100, 1, Source.STORAGE);
+        Candidate glue = candidate("glue", "Glue", 80, 1, Source.STORAGE);
+
+        Selection normalized = CraftAtlasMaterialPlanner.normalizeSelection(
+                slot, List.of(glue), Selection.preferred(oldCloth));
+
+        assertEquals("glue", normalized.preferredCandidateId);
+    }
+
+    @Test
+    void allowedSavedMaterialSurvivesTemporaryStockLoss() {
+        SlotRequest slot = new SlotRequest(0, 1, false, List.of("Linen Cloth", "Hemp Cloth"));
+        Selection linen = Selection.preferred(candidate(
+                "linen-100", "Linen Cloth", 100, 1, Source.STORAGE));
+
+        assertSame(linen, CraftAtlasMaterialPlanner.normalizeSelection(slot, List.of(), linen));
+    }
+
+    @Test
+    void excessiveCraftCountBecomesIncompleteInsteadOfOverflowing() {
+        SlotRequest slot = new SlotRequest(0, Integer.MAX_VALUE, false, List.of("Stone"));
+
+        Plan plan = assertDoesNotThrow(() -> CraftAtlasMaterialPlanner.plan(
+                List.of(slot), Map.of(), Map.of(), 2));
+
+        assertFalse(plan.complete);
+        assertEquals(Integer.MAX_VALUE, plan.slots.get(0).missing);
+    }
+
+    @Test
+    void ignoredOptionalSlotDoesNotOverflowAtLargeCount() {
+        SlotRequest slot = new SlotRequest(0, Integer.MAX_VALUE, true, List.of("Pepper"));
+
+        Plan plan = assertDoesNotThrow(() -> CraftAtlasMaterialPlanner.plan(
+                List.of(slot), Map.of(), Map.of(0, Selection.ignored()), Integer.MAX_VALUE));
+
+        assertTrue(plan.complete);
+        assertTrue(plan.slots.get(0).ignored);
     }
 
     private static Candidate candidate(String id, String material, double quality, int count, Source source) {

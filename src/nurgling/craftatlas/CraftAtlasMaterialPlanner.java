@@ -51,18 +51,20 @@ public final class CraftAtlasMaterialPlanner {
         public final Mode mode;
         public final String material;
         public final String preferredCandidateId;
+        public final Double preferredQuality;
 
-        private Selection(Mode mode, String material, String preferredCandidateId) {
+        private Selection(Mode mode, String material, String preferredCandidateId, Double preferredQuality) {
             this.mode = mode;
             this.material = material;
             this.preferredCandidateId = preferredCandidateId;
+            this.preferredQuality = preferredQuality;
         }
 
-        public static Selection all() { return new Selection(Mode.ALL, null, null); }
-        public static Selection ignored() { return new Selection(Mode.IGNORED, null, null); }
+        public static Selection all() { return new Selection(Mode.ALL, null, null, null); }
+        public static Selection ignored() { return new Selection(Mode.IGNORED, null, null, null); }
         public static Selection preferred(Candidate value) {
             if(value == null) throw new IllegalArgumentException("candidate must not be null");
-            return new Selection(Mode.PREFERRED, value.material, value.id);
+            return new Selection(Mode.PREFERRED, value.material, value.id, value.quality);
         }
         public boolean isAll() { return mode == Mode.ALL; }
         public boolean isIgnored() { return mode == Mode.IGNORED; }
@@ -151,6 +153,16 @@ public final class CraftAtlasMaterialPlanner {
         return ordered.isEmpty() ? Selection.all() : Selection.preferred(ordered.get(0));
     }
 
+    public static Selection normalizeSelection(SlotRequest slot, List<Candidate> candidates,
+                                               Selection selection) {
+        if(selection == null || (selection.isIgnored() && !slot.optional))
+            return defaultAllowedSelection(slot, candidates);
+        if(selection.mode == Selection.Mode.PREFERRED &&
+                !slot.allowedMaterials.contains(selection.material))
+            return slot.optional ? Selection.ignored() : defaultAllowedSelection(slot, candidates);
+        return selection;
+    }
+
     public static Plan plan(List<SlotRequest> slots,
                             Map<Integer, List<Candidate>> candidatesBySlot,
                             Map<Integer, Selection> selections,
@@ -161,23 +173,31 @@ public final class CraftAtlasMaterialPlanner {
         Map<String, Integer> remainingByCandidate = new HashMap<>();
         boolean complete = true;
         if(slots != null) for(SlotRequest slot : slots) {
-            int required = Math.multiplyExact(slot.unitsPerCraft, craftCount);
             List<Candidate> candidates = candidatesBySlot == null ? Collections.emptyList()
                     : candidatesBySlot.getOrDefault(slot.slotIndex, Collections.emptyList());
             Selection selection = selections == null ? null : selections.get(slot.slotIndex);
-            if(selection == null) selection = defaultSelection(candidates);
+            selection = normalizeSelection(slot, candidates, selection);
 
             if(selection.isIgnored()) {
                 if(slot.optional) {
                     planned.add(new SlotPlan(slot.slotIndex, 0, 0, true,
                             Collections.emptyList(), null));
                 } else {
-                    planned.add(new SlotPlan(slot.slotIndex, required, 0, false,
+                    planned.add(new SlotPlan(slot.slotIndex, safeRequired(slot, craftCount), 0, false,
                             Collections.emptyList(), null));
                     complete = false;
                 }
                 continue;
             }
+
+            long requiredLong = (long)slot.unitsPerCraft * craftCount;
+            if(requiredLong > Integer.MAX_VALUE) {
+                planned.add(new SlotPlan(slot.slotIndex, Integer.MAX_VALUE, 0, false,
+                        Collections.emptyList(), null));
+                complete = false;
+                continue;
+            }
+            int required = (int)requiredLong;
 
             List<Candidate> allowed = allowedCandidates(slot, candidates, selection);
             prefer(allowed, selection.preferredCandidateId);
@@ -211,9 +231,24 @@ public final class CraftAtlasMaterialPlanner {
         for(Candidate candidate : sortedCandidates(candidates)) {
             if(!allowedNames.contains(candidate.material)) continue;
             if(!selection.isAll() && !candidate.material.equals(selection.material)) continue;
+            if(!selection.isAll() && selection.preferredQuality != null &&
+                    candidate.quality > selection.preferredQuality) continue;
             result.add(candidate);
         }
         return result;
+    }
+
+    private static Selection defaultAllowedSelection(SlotRequest slot, List<Candidate> candidates) {
+        Set<String> allowedNames = new HashSet<>(slot.allowedMaterials);
+        List<Candidate> allowed = new ArrayList<>();
+        for(Candidate candidate : sortedCandidates(candidates))
+            if(allowedNames.contains(candidate.material)) allowed.add(candidate);
+        return defaultSelection(allowed);
+    }
+
+    private static int safeRequired(SlotRequest slot, int craftCount) {
+        long required = (long)slot.unitsPerCraft * craftCount;
+        return required > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int)required;
     }
 
     private static void prefer(List<Candidate> values, String candidateId) {

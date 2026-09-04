@@ -153,6 +153,7 @@ public class CraftAtlasWindow extends Window {
         super.tick(dt);
         if((menu != null && observedMenuRevision != menu.pagseq) || observedStoreRevision != observationStore.revision())
             refreshCatalog();
+        if(collectionThread == null) details.refreshMaterialsIfDue(System.nanoTime());
         if(collectionThread != null && !collectionThread.isAlive()) {
             collectionThread = null;
             details.refreshMaterials();

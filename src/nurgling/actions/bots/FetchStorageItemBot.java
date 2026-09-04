@@ -153,6 +153,7 @@ public class FetchStorageItemBot implements Action {
             // Container not visible - try to find its position from database and navigate
             ContainerDao.ContainerData containerData = loadContainerData(gui, containerHash);
             if (containerData == null) {
+                removeReconciledFromDb(requestedItems);
                 gui.msg("[DBG] container data not in DB for hash=" + containerHash.substring(0, 8), java.awt.Color.ORANGE);
                 return 0;
             }
@@ -222,13 +223,14 @@ public class FetchStorageItemBot implements Action {
             return 0;
         }
 
-        List<StorageItemDao.StorageItemData> taken = new ArrayList<>();
+        List<StorageItemDao.StorageItemData> reconciled = new ArrayList<>();
         for (StorageItemDao.StorageItemData dbItem : requestedItems) {
             if (stop.get()) break;
             if (gui.getInventory().calcFreeSpace() == 0) break;
 
             WItem match = findItemByQuality(containerInv, dbItem.getName(), dbItem.getQuality());
             if (match == null) {
+                reconciled.add(dbItem);
                 continue;
             }
             WItem leaf = firstLeaf(match);
@@ -238,18 +240,19 @@ public class FetchStorageItemBot implements Action {
                 leaf = firstLeaf(match);
             }
             if (leaf == null) {
+                reconciled.add(dbItem);
                 continue;
             }
 
             int moved = TransferToContainer.transfer(leaf, gui.getInventory(), 1);
             if (moved > 0) {
-                taken.add(dbItem);
+                reconciled.add(dbItem);
             }
         }
 
         containerWindow.wdgmsg("close");
         NUtils.addTask(new WindowIsClosed(containerWindow));
-        removeTakenFromDb(taken);
+        removeReconciledFromDb(reconciled);
 
         int afterCount = countItemsInInventory(gui, itemName);
         return afterCount - beforeCount;
@@ -642,8 +645,8 @@ public class FetchStorageItemBot implements Action {
         }
     }
 
-    private void removeTakenFromDb(List<StorageItemDao.StorageItemData> taken) {
-        List<String> hashes = FetchStorageDbSync.hashesToDelete(taken);
+    private void removeReconciledFromDb(List<StorageItemDao.StorageItemData> records) {
+        List<String> hashes = FetchStorageDbSync.hashesToDelete(records);
         if (hashes.isEmpty() || NCore.databaseManager == null || !NCore.databaseManager.isReady()) {
             return;
         }
@@ -655,7 +658,7 @@ public class FetchStorageItemBot implements Action {
                 }
                 return null;
             });
-            String container = taken.get(0).getContainer();
+            String container = records.get(0).getContainer();
             if (container != null) {
                 ItemWatcher.invalidateContainerCache(container);
             }

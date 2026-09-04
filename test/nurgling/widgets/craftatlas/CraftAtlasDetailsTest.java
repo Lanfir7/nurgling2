@@ -109,6 +109,15 @@ class CraftAtlasDetailsTest {
     }
 
     @Test
+    void qualityControlsStayInsideNarrowDetailsHeader() {
+        int[] x = CraftAtlasDetails.qualityControlPositions(320, 54, 58, 8, 12);
+
+        assertTrue(x[0] >= 0);
+        assertTrue(x[0] + 54 <= x[1]);
+        assertTrue(x[1] + 58 <= 320);
+    }
+
+    @Test
     void equipmentDetailsShowOccupiedSlots() {
         String previousLanguage = L10n.getLanguage();
         try {

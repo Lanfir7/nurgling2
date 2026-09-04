@@ -30,10 +30,13 @@ final class CraftAtlasIngredientChoices {
     static List<Choice> choices(List<Candidate> candidates, boolean optional, boolean grouped) {
         List<Choice> result = new ArrayList<>();
         if(optional) result.add(new Choice(L10n.get("craft_atlas.material.ignore"), Selection.ignored(), null));
+        if(candidates == null || candidates.isEmpty()) {
+            result.add(new Choice(L10n.get("craft_atlas.material.missing"), Selection.all(), null));
+            return Collections.unmodifiableList(result);
+        }
         if(grouped) result.add(new Choice(L10n.get("craft_atlas.material.all"), Selection.all(), null));
         for(Candidate candidate : CraftAtlasMaterialPlanner.sortedCandidates(candidates))
             result.add(new Choice(candidateLabel(candidate), Selection.preferred(candidate), candidate));
-        if(result.isEmpty()) result.add(new Choice(L10n.get("craft_atlas.material.missing"), Selection.all(), null));
         return Collections.unmodifiableList(result);
     }
 
@@ -57,6 +60,8 @@ final class CraftAtlasIngredientChoices {
                 if(value.mode != Selection.Mode.PREFERRED) return choice;
                 if(eq(value.preferredCandidateId, selected.preferredCandidateId)) return choice;
                 if(choice.candidate != null && choice.candidate.material.equals(selected.material)
+                        && (selected.preferredQuality == null ||
+                            choice.candidate.quality <= selected.preferredQuality)
                         && sameMaterial == null) sameMaterial = choice;
             }
             if(sameMaterial != null) return sameMaterial;

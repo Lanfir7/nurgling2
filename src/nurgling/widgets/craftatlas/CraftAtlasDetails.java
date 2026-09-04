@@ -33,6 +33,7 @@ public class CraftAtlasDetails extends Widget {
     private static final Pattern EQUIPMENT_SLOT = Pattern.compile(
             "(?<![A-Za-z0-9])((?:1[01]|[1-9])[LR])(?:\\s*\\((optional)\\))?",
             Pattern.CASE_INSENSITIVE);
+    private static final long MATERIAL_REFRESH_INTERVAL_NS = 3_000_000_000L;
     public enum Target { NONE, INGREDIENT, REQUIREMENT_DESCRIPTION, CYCLE }
     public enum Kind { GILDING, BONUS, SLOT, QUALITY, INPUT, REQUIREMENT, STATUS }
 
@@ -86,6 +87,8 @@ public class CraftAtlasDetails extends Widget {
     private int craftCount = 1;
     private boolean autoQuality;
     private boolean syncingQuality;
+    private long nextMaterialRefreshAt;
+    private String materialSignature;
     private double quality = 10;
     private final int headerHeight = UI.scale(104);
     private final int sectionHeight = UI.scale(30);
@@ -144,6 +147,17 @@ public class CraftAtlasDetails extends Widget {
 
     public void refreshMaterials() {
         loadMaterials();
+        rebuildRows();
+        rebuildSelectors();
+    }
+
+    public void refreshMaterialsIfDue(long now) {
+        if(entry == null || now < nextMaterialRefreshAt) return;
+        nextMaterialRefreshAt = now + MATERIAL_REFRESH_INTERVAL_NS;
+        CraftAtlasMaterialSource.Snapshot fresh = materialSource.load(entry);
+        String signature = materialSignature(fresh);
+        if(signature.equals(materialSignature)) return;
+        installMaterials(fresh, signature);
         rebuildRows();
         rebuildSelectors();
     }
@@ -258,7 +272,7 @@ public class CraftAtlasDetails extends Widget {
             if(!category.isEmpty()) drawCentered(g, category, UI.scale(98), UI.scale(66), UI.scale(22), new Color(169, 179, 181, 220));
         }
         if(qualityEntry.visible)
-            drawCentered(g, L10n.get("craft_atlas.quality"), Math.max(UI.scale(205), sz.x - UI.scale(238)),
+            drawCentered(g, L10n.get("craft_atlas.quality"), Math.max(UI.scale(98), qualityEntry.c.x - UI.scale(78)),
                     UI.scale(14), UI.scale(24), new Color(169, 179, 181, 220));
         g.chcolor(new Color(75, 83, 86, 175)); g.frect(Coord.of(0, headerHeight - 1), Coord.of(sz.x, 1)); g.chcolor();
 
@@ -426,9 +440,17 @@ public class CraftAtlasDetails extends Widget {
 
     private void positionQualityEntry() {
         if(qualityEntry != null) {
-            qualityEntry.move(Coord.of(Math.max(UI.scale(280), sz.x - UI.scale(150)), UI.scale(14)));
-            autoQualityBox.move(Coord.of(qualityEntry.c.x + qualityEntry.sz.x + UI.scale(8), UI.scale(16)));
+            int[] x = qualityControlPositions(sz.x, qualityEntry.sz.x, autoQualityBox.sz.x,
+                    UI.scale(8), UI.scale(12));
+            qualityEntry.move(Coord.of(x[0], UI.scale(14)));
+            autoQualityBox.move(Coord.of(x[1], UI.scale(16)));
         }
+    }
+
+    static int[] qualityControlPositions(int width, int entryWidth, int autoWidth, int gap, int margin) {
+        int autoX = Math.max(0, width - Math.max(0, margin) - Math.max(0, autoWidth));
+        int entryX = Math.max(0, autoX - Math.max(0, gap) - Math.max(0, entryWidth));
+        return new int[] { entryX, autoX };
     }
 
     private void qualityChanged() {
@@ -452,24 +474,57 @@ public class CraftAtlasDetails extends Widget {
     }
 
     private void loadMaterials() {
-        clearSelectors();
         if(entry == null) {
+            clearSelectors();
             materials = null;
+            materialSignature = null;
             materialPlan = null;
             selections = new HashMap<>();
             notifyPlanChanged();
             return;
         }
-        materials = materialSource.load(entry);
+        CraftAtlasMaterialSource.Snapshot fresh = materialSource.load(entry);
+        installMaterials(fresh, materialSignature(fresh));
+        nextMaterialRefreshAt = System.nanoTime() + MATERIAL_REFRESH_INTERVAL_NS;
+    }
+
+    private void installMaterials(CraftAtlasMaterialSource.Snapshot fresh, String signature) {
+        clearSelectors();
+        materials = fresh;
+        materialSignature = signature;
         selections = savedSelections.computeIfAbsent(entry.recipeResource, key -> new HashMap<>());
         for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots) {
-            if(selections.containsKey(slot.slotIndex)) continue;
-            CraftAtlasMaterialPlanner.Selection initial = slot.optional
-                    ? CraftAtlasMaterialPlanner.Selection.ignored()
-                    : CraftAtlasMaterialPlanner.defaultSelection(materials.candidatesBySlot.get(slot.slotIndex));
-            selections.put(slot.slotIndex, initial);
+            CraftAtlasMaterialPlanner.Selection current = selections.get(slot.slotIndex);
+            CraftAtlasMaterialPlanner.Selection normalized;
+            if(current == null && slot.optional) {
+                normalized = CraftAtlasMaterialPlanner.Selection.ignored();
+            } else {
+                normalized = CraftAtlasMaterialPlanner.normalizeSelection(slot,
+                        materials.candidatesBySlot.get(slot.slotIndex), current);
+            }
+            selections.put(slot.slotIndex, normalized);
         }
         replan();
+    }
+
+    private static String materialSignature(CraftAtlasMaterialSource.Snapshot snapshot) {
+        StringBuilder value = new StringBuilder().append(snapshot.collectible);
+        for(CraftAtlasMaterialPlanner.SlotRequest slot : snapshot.slots) {
+            value.append('|').append(slot.slotIndex).append(':').append(slot.unitsPerCraft)
+                    .append(':').append(slot.optional).append(':').append(slot.allowedMaterials);
+            for(CraftAtlasMaterialPlanner.Candidate candidate : snapshot.candidatesBySlot.getOrDefault(
+                    slot.slotIndex, Collections.emptyList()))
+                value.append(';').append(candidate.id).append(':')
+                        .append(Double.doubleToLongBits(candidate.quality)).append(':')
+                        .append(candidate.count).append(':').append(candidate.location);
+        }
+        for(Map.Entry<String, nurgling.widgets.NStorageItemsWidget.GroupedItem> row :
+                snapshot.storageByCandidateId.entrySet()) {
+            value.append('|').append(row.getKey());
+            for(nurgling.db.dao.StorageItemDao.StorageItemData item : row.getValue().items)
+                value.append(';').append(item.getItemHash()).append(':').append(item.getContainer());
+        }
+        return value.toString();
     }
 
     private void replan() {
