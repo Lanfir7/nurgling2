@@ -102,13 +102,7 @@ public final class CraftAtlasSearch {
     }
 
     private static String searchableText(CraftAtlasEntry e) {
-        StringBuilder out = new StringBuilder(normalize(e.displayName)).append(' ').append(normalize(e.recipeResource));
-        for(String category : e.categories) out.append(' ').append(normalize(category));
-        for(CraftAtlasEntry.InputSlot slot : e.inputs)
-            for(CraftAtlasEntry.IngredientOption option : slot.options)
-                out.append(' ').append(normalize(option.name)).append(' ').append(normalize(option.resource));
-        for(CraftAtlasEntry.Requirement requirement : e.requirements)
-            out.append(' ').append(normalize(requirement.name)).append(' ').append(normalize(requirement.description));
+        StringBuilder out = new StringBuilder(normalize(e.displayName));
         for(CraftAtlasEntry.Bonus bonus : e.bonuses)
             out.append(' ').append(normalize(bonus.name)).append(' ').append(normalize(bonus.attributeResource));
         return out.toString();

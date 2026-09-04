@@ -298,14 +298,10 @@ public class CraftAtlasDetails extends Widget {
                     slot.quantity, target, null, null, slotIndex));
         }
         for(CraftAtlasEntry.Requirement requirement : entry.requirements) {
-            Target target;
-            if(requirement.kind == CraftAtlasEntry.RequirementKind.SKILL || requirement.kind == CraftAtlasEntry.RequirementKind.DISCOVERY)
-                target = Target.REQUIREMENT_DESCRIPTION;
-            else {
-                CraftRecipeGraph.LinkState state = links.apply(requirement.resource, requirement.name);
-                target = state == CraftRecipeGraph.LinkState.NONE ? Target.NONE :
-                        state == CraftRecipeGraph.LinkState.CYCLE ? Target.CYCLE : Target.INGREDIENT;
-            }
+            if(requirement.kind != CraftAtlasEntry.RequirementKind.STATION) continue;
+            CraftRecipeGraph.LinkState state = links.apply(requirement.resource, requirement.name);
+            Target target = state == CraftRecipeGraph.LinkState.NONE ? Target.NONE :
+                    state == CraftRecipeGraph.LinkState.CYCLE ? Target.CYCLE : Target.INGREDIENT;
             rows.add(new DetailRow(Kind.REQUIREMENT, requirement.name, requirement.resource,
                     requirement.kind.name(), 0, target, requirement, null));
         }

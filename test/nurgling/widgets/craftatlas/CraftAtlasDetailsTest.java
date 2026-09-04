@@ -29,13 +29,16 @@ class CraftAtlasDetailsTest {
                         "workbench", "Workbench", null))
                 .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.SKILL,
                         null, "Carpentry", "Learn it"))
+                .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.TOOL,
+                        "hammer", "Hammer", null))
                 .bonus(new CraftAtlasEntry.Bonus("str", "Strength", 2.0)).build();
         List<CraftAtlasDetails.DetailRow> rows = CraftAtlasDetails.buildRows(entry, resource ->
                 "glue".equals(resource) ? CraftRecipeGraph.LinkState.SINGLE :
                         "workbench".equals(resource) ? CraftRecipeGraph.LinkState.MULTIPLE : CraftRecipeGraph.LinkState.NONE);
         assertEquals(CraftAtlasDetails.Target.INGREDIENT, find(rows, "Glue").target);
         assertEquals(CraftAtlasDetails.Target.INGREDIENT, find(rows, "Workbench").target);
-        assertEquals(CraftAtlasDetails.Target.REQUIREMENT_DESCRIPTION, find(rows, "Carpentry").target);
+        assertFalse(rows.stream().anyMatch(row -> "Carpentry".equals(row.name)));
+        assertFalse(rows.stream().anyMatch(row -> "Hammer".equals(row.name)));
         assertEquals(CraftAtlasDetails.Target.NONE, find(rows, "Strength").target);
     }
 

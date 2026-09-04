@@ -10,17 +10,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CraftAtlasSearchTest {
     @Test
-    void matchesAcrossBonusAndIngredientWithAndSemanticsAndNormalizesYo() {
+    void searchesOnlyByRecipeNameAndBonuses() {
         CraftAtlasEntry axe = CraftAtlasEntry.builder("test-axe", "Тестовый топор")
                 .input(new CraftAtlasEntry.InputSlot(1, false, Arrays.asList(
                         new CraftAtlasEntry.IngredientOption("glue", "Клей"))))
+                .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.SKILL,
+                        "sewing", "Sewing", null))
                 .bonus(new CraftAtlasEntry.Bonus("survive", "Выживание", 2.0)).build();
         CraftAtlasEntry food = CraftAtlasEntry.builder("food", "Ёжик в тумане").build();
         CraftAtlasSnapshot snapshot = CraftAtlasSnapshot.of(1, Arrays.asList(axe, food));
         assertEquals(Arrays.asList("test-axe"), ids(CraftAtlasSearch.query(snapshot,
-                CraftAtlasSearch.Query.text("выживание клей"))));
+                CraftAtlasSearch.Query.text("выживание"))));
         assertEquals(Arrays.asList("food"), ids(CraftAtlasSearch.query(snapshot,
                 CraftAtlasSearch.Query.text("ежик"))));
+        assertEquals(List.of(), ids(CraftAtlasSearch.query(snapshot, CraftAtlasSearch.Query.text("клей"))));
+        assertEquals(List.of(), ids(CraftAtlasSearch.query(snapshot, CraftAtlasSearch.Query.text("sewing"))));
     }
 
     @Test
