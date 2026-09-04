@@ -381,6 +381,41 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 	}
     }
 
+    /** Stable copy for read-only encyclopedia consumers. */
+    public List<Pagina> recipeSnapshot() {
+	List<Pagina> result = new ArrayList<>();
+	synchronized(paginae) {
+	    for(Pagina page : paginae) {
+		try {
+		    if(isCraftAction(page)) result.add(page);
+		} catch(Loading ignored) {
+		}
+	    }
+	}
+	return(Collections.unmodifiableList(result));
+    }
+
+    public Pagina recipeByResource(String resource) {
+	if(resource == null) return(null);
+	synchronized(paginae) {
+	    for(Pagina page : paginae) {
+		try {
+		    if(resource.equals(page.res().name) && isCraftAction(page)) return(page);
+		} catch(Loading ignored) {
+		}
+	    }
+	}
+	return(null);
+    }
+
+    private boolean isCraftAction(Pagina page) {
+	Set<Pagina> seen = Collections.newSetFromMap(new IdentityHashMap<Pagina, Boolean>());
+	for(Pagina current = page; current != null && seen.add(current); current = current.parent()) {
+	    if("paginae/act/craft".equals(current.res().name)) return(current != page);
+	}
+	return(false);
+    }
+
     private boolean cons(Pagina p, Collection<PagButton> buf) {
 	Pagina[] cp = new Pagina[0];
 	Collection<Pagina> open, close = new HashSet<Pagina>();

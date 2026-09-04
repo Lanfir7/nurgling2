@@ -14,6 +14,8 @@ import nurgling.actions.bots.*;
 import nurgling.areas.*;
 import nurgling.conf.FontSettings;
 import nurgling.conf.ItemQualityOverlaySettings;
+import nurgling.craftatlas.CraftAtlasObservation;
+import nurgling.craftatlas.CraftAtlasObservationStore;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
 import nurgling.tools.*;
@@ -70,6 +72,7 @@ public class NMakewindow extends Widget implements DTarget {
     private final Map<String, Tex> stockOverlayTex = new HashMap<>();
     private IButton savePresetBtn = null;
     private boolean recipesPersisted = false;
+    private boolean craftAtlasObservationDirty = true;
 
     private static final OwnerContext.ClassResolver<NMakewindow> ctxr = new OwnerContext.ClassResolver<NMakewindow>()
             .add(NMakewindow.class, wdg -> wdg)
@@ -302,6 +305,48 @@ public class NMakewindow extends Widget implements DTarget {
             savePresetBtn.visible = autoMode && allInputsConfigured();
         }
         persistRecipeMappings();
+        maybePublishCraftAtlasObservation();
+    }
+
+    private void maybePublishCraftAtlasObservation() {
+        if(!craftAtlasObservationDirty || ui == null) return;
+        String recipe = resolveRecipeResource();
+        if(recipe == null || rcpnm == null || outputs.isEmpty()) return;
+        try {
+            List<CraftAtlasObservation.Item> observedInputs = new ArrayList<>();
+            for(Spec spec : inputs) observedInputs.add(observedItem(spec));
+            List<CraftAtlasObservation.Item> observedOutputs = new ArrayList<>();
+            for(Spec spec : outputs) observedOutputs.add(observedItem(spec));
+            List<CraftAtlasObservation.RequirementResource> observedRequirements = new ArrayList<>();
+            for(Indir<Resource> indir : tools) {
+                Resource resource = indir.get();
+                observedRequirements.add(new CraftAtlasObservation.RequirementResource(resource.name, resourceName(resource)));
+            }
+            List<CraftAtlasObservation.BonusResource> observedBonuses = new ArrayList<>();
+            for(Indir<Resource> indir : qmod) {
+                Resource resource = indir.get();
+                observedBonuses.add(new CraftAtlasObservation.BonusResource(resource.name, resourceName(resource), null));
+            }
+            CraftAtlasObservationStore.current().record(new CraftAtlasObservation(recipe, rcpnm,
+                    observedInputs, observedOutputs, observedRequirements, observedBonuses));
+            craftAtlasObservationDirty = false;
+        } catch(Loading ignored) {
+            // Retry on a later UI tick; never block the render thread waiting for resources.
+        }
+    }
+
+    private CraftAtlasObservation.Item observedItem(Spec spec) {
+        Resource resource = spec.res.get();
+        String name = spec.name != null ? spec.name : resourceName(resource);
+        boolean optional = spec.opt();
+        return new CraftAtlasObservation.Item(resource.name, name, spec.count, optional);
+    }
+
+    private String resourceName(Resource resource) {
+        Resource.Tooltip tooltip = resource.layer(Resource.tooltip);
+        if(tooltip != null && tooltip.text() != null && !tooltip.text().trim().isEmpty()) return tooltip.text();
+        int slash = resource.name.lastIndexOf('/');
+        return slash < 0 ? resource.name : resource.name.substring(slash + 1);
     }
 
     private String resolveRecipeResource() {
@@ -720,6 +765,7 @@ public class NMakewindow extends Widget implements DTarget {
                     inputs.add(parsespec(OBJS.of(args[i])));
             }
             this.inputs = inputs;
+            craftAtlasObservationDirty = true;
             if (searchMode && searchPanel != null) {
                 searchPanel.syncTabs(this.inputs);
             }
@@ -735,13 +781,16 @@ public class NMakewindow extends Widget implements DTarget {
                     outputs.add(parsespec(OBJS.of(args[i])));
             }
             this.outputs = outputs;
+            craftAtlasObservationDirty = true;
         } else if(msg == "qmod") {
             List<Indir<Resource>> qmod = new ArrayList<Indir<Resource>>();
             for(Object arg : args)
                 qmod.add(ui.sess.getresv(arg));
             this.qmod = qmod;
+            craftAtlasObservationDirty = true;
         } else if(msg == "tool") {
             tools.add(ui.sess.getresv(args[0]));
+            craftAtlasObservationDirty = true;
         } else if(msg == "use") {
             inputs.get(Utils.iv(args[0])).using = Utils.iv(args[1]);
         } else if(msg == "inprcps") {
