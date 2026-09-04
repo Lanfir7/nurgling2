@@ -20,6 +20,7 @@ public class QOLLanfirSettings extends Panel {
     private CheckBox showCompassParty;
     private CheckBox showCompassDatabasePeers;
     private CheckBox showCompassNearbyPlayers;
+    private CheckBox showCompassAnimals;
     private CheckBox showCompassCombatTargets;
     private HSlider treeResizePercentageSlider;
     private Label treeResizePercentageLabel;
@@ -151,6 +152,9 @@ public class QOLLanfirSettings extends Panel {
         showCompassNearbyPlayers = add(compassCategory(
                 L10n.get("qol.compass_nearby_players"), NConfig.Key.showCompassNearbyPlayers), margin, y);
         y += UI.scale(25);
+        showCompassAnimals = add(compassCategory(
+                L10n.get("qol.compass_animals"), NConfig.Key.showCompassAnimals), margin, y);
+        y += UI.scale(25);
         showCompassCombatTargets = add(compassCategory(
                 L10n.get("qol.compass_combat_targets"), NConfig.Key.showCompassCombatTargets), margin, y);
         y += UI.scale(32);
@@ -243,6 +247,7 @@ public class QOLLanfirSettings extends Panel {
         showCompassParty.a = NCompassSettings.showParty();
         showCompassDatabasePeers.a = NCompassSettings.showDatabasePeers();
         showCompassNearbyPlayers.a = NCompassSettings.showNearbyPlayers();
+        showCompassAnimals.a = NCompassSettings.showAnimals();
         showCompassCombatTargets.a = NCompassSettings.showCombatTargets();
         int compassOpacity = NCompassSettings.backgroundOpacity();
         compassBackgroundOpacitySlider.val = compassOpacity;
@@ -263,6 +268,7 @@ public class QOLLanfirSettings extends Panel {
         NConfig.set(NConfig.Key.showCompassParty, showCompassParty.a);
         NConfig.set(NConfig.Key.showCompassDatabasePeers, showCompassDatabasePeers.a);
         NConfig.set(NConfig.Key.showCompassNearbyPlayers, showCompassNearbyPlayers.a);
+        NConfig.set(NConfig.Key.showCompassAnimals, showCompassAnimals.a);
         NConfig.set(NConfig.Key.showCompassCombatTargets, showCompassCombatTargets.a);
         NConfig.set(NConfig.Key.compassBackgroundOpacity, compassBackgroundOpacitySlider.val);
         NConfig.needUpdate();

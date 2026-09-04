@@ -19,6 +19,7 @@ class NCompassSettingsTest {
             assertTrue(NCompassSettings.showParty());
             assertTrue(NCompassSettings.showDatabasePeers());
             assertTrue(NCompassSettings.showNearbyPlayers());
+            assertFalse(NCompassSettings.showAnimals());
             assertTrue(NCompassSettings.showCombatTargets());
             assertEquals(75, NCompassSettings.backgroundOpacity());
             assertEquals(191, NCompassSettings.backgroundAlpha());
@@ -55,6 +56,7 @@ class NCompassSettingsTest {
             assertFalse(NCompassSettings.showParty());
             assertFalse(NCompassSettings.showDatabasePeers());
             assertFalse(NCompassSettings.showNearbyPlayers());
+            assertFalse(NCompassSettings.showAnimals());
             assertFalse(NCompassSettings.showCombatTargets());
         } finally {
             NConfig.current = previous;

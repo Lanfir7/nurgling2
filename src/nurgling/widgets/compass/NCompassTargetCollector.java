@@ -6,9 +6,11 @@ import haven.Coord2d;
 import haven.Fightview;
 import haven.Gob;
 import haven.GobIcon;
+import haven.Loading;
 import haven.MCache;
 import haven.MiniMap;
 import haven.Party;
+import haven.Resource;
 import haven.Utils;
 import haven.Widget;
 import haven.res.ui.locptr.Pointer;
@@ -16,6 +18,7 @@ import haven.res.ui.obj.buddy.Buddy;
 import nurgling.NGameUI;
 import nurgling.PeerPosition;
 import nurgling.i18n.L10n;
+import nurgling.tools.DefaultAnimalAlarms;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -31,11 +34,14 @@ public final class NCompassTargetCollector {
     private static final Color DATABASE_COLOR = new Color(102, 214, 255);
     private static final Color UNKNOWN_PLAYER_COLOR = new Color(255, 184, 82);
     private static final Color COMBAT_COLOR = new Color(255, 90, 75);
+    private static final Color ANIMAL_COLOR = new Color(168, 214, 96);
     private static final double PLAYER_SCAN_INTERVAL = 0.5;
 
     private final NGameUI gui;
     private List<Gob> nearbyPlayerCache = Collections.emptyList();
     private double nextPlayerScan = Double.NEGATIVE_INFINITY;
+    private List<Gob> nearbyAnimalCache = Collections.emptyList();
+    private double nextAnimalScan = Double.NEGATIVE_INFINITY;
 
     public NCompassTargetCollector(NGameUI gui) {
         this.gui = gui;
@@ -55,6 +61,8 @@ public final class NCompassTargetCollector {
             collectDatabasePeers(targets, player);
         if (NCompassSettings.showNearbyPlayers())
             collectNearbyPlayers(targets, player);
+        if (NCompassSettings.showAnimals())
+            collectAnimals(targets, player);
         if (NCompassSettings.showCombatTargets())
             collectCombatTargets(targets, player);
         return mergeTargets(targets);
@@ -153,6 +161,24 @@ public final class NCompassTargetCollector {
         }
     }
 
+    private void collectAnimals(List<NCompassTarget> targets, Gob player) {
+        if (!hasSession())
+            return;
+        for (Gob gob : nearbyAnimalSnapshot()) {
+            try {
+                if (gob == null || gob.id == player.id || gob.rc == null)
+                    continue;
+                String name = gobDisplayName(gob, L10n.get("compass.nearby_animal"));
+                String id = "animal:" + gob.id;
+                targets.add(new NCompassTarget(
+                        id, identityKey(false, null, gob.id, id),
+                        NCompassTarget.Kind.ANIMAL, gob.rc, name, distance(player, gob.rc),
+                        icon(gob), ANIMAL_COLOR, gob.id));
+            } catch (RuntimeException ignored) {
+            }
+        }
+    }
+
     private void collectCombatTargets(List<NCompassTarget> targets, Gob player) {
         if (gui.fv == null || !hasSession())
             return;
@@ -204,6 +230,7 @@ public final class NCompassTargetCollector {
             case PARTY: return 3;
             case PLAYER: return 2;
             case DATABASE: return 1;
+            case ANIMAL: return 0;
             default: return 0;
         }
     }
@@ -321,6 +348,89 @@ public final class NCompassTargetCollector {
 
     static boolean isPlayerResource(String resourceName) {
         return "gfx/borka/body".equals(resourceName);
+    }
+
+    static boolean isAnimalResource(String resourceName) {
+        return resourceName != null && resourceName.contains("/kritter/");
+    }
+
+    static boolean includeShownAnimal(boolean shown, String pose, String ngobName, String iconResName) {
+        if (!shown)
+            return false;
+        if (isPlayerResource(ngobName) || isPlayerResource(iconResName))
+            return false;
+        if (!isAnimalResource(ngobName) && !isAnimalResource(iconResName))
+            return false;
+        return !DefaultAnimalAlarms.isCorpsePose(pose);
+    }
+
+    private List<Gob> nearbyAnimalSnapshot() {
+        double now = Utils.rtime();
+        if (now < nextAnimalScan)
+            return nearbyAnimalCache;
+        nextAnimalScan = now + PLAYER_SCAN_INTERVAL;
+        if (!hasSession()) {
+            nearbyAnimalCache = Collections.emptyList();
+            return nearbyAnimalCache;
+        }
+        List<Gob> animals = new ArrayList<>();
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                try {
+                    if (isShownAnimalGob(gob))
+                        animals.add(gob);
+                } catch (Loading ignored) {
+                } catch (RuntimeException ignored) {
+                }
+            }
+        }
+        nearbyAnimalCache = animals;
+        return nearbyAnimalCache;
+    }
+
+    private boolean isShownAnimalGob(Gob gob) {
+        if (gob == null || isPlayerGob(gob))
+            return false;
+        String ngobName = gob.ngob != null ? gob.ngob.name : null;
+        GobIcon attr = gob.getattr(GobIcon.class);
+        String iconResName = iconResourceName(attr);
+        if (!isAnimalResource(ngobName) && !isAnimalResource(iconResName))
+            return false;
+        return includeShownAnimal(iconShown(attr), gob.pose(), ngobName, iconResName);
+    }
+
+    private static String iconResourceName(GobIcon attr) {
+        if (attr == null || attr.res == null)
+            return null;
+        try {
+            if (!attr.res.isReady())
+                return null;
+            Resource resource = attr.res.get();
+            return resource == null ? null : resource.name;
+        } catch (Loading ignored) {
+            return null;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private boolean iconShown(GobIcon attr) {
+        if (attr == null)
+            return false;
+        GobIcon.Settings settings = gui.iconconf;
+        if (settings == null && gui.mmap != null)
+            settings = gui.mmap.iconconf;
+        if (settings == null)
+            return false;
+        try {
+            GobIcon.Icon instance = attr.icon();
+            if (instance == null)
+                return false;
+            GobIcon.Setting conf = settings.get(instance);
+            return conf != null && settings.shown(conf);
+        } catch (Loading ignored) {
+            return false;
+        }
     }
 
     private static haven.Indir<haven.Resource> icon(Gob gob) {

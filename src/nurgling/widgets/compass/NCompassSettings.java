@@ -30,6 +30,10 @@ public final class NCompassSettings {
         return enabled(NConfig.Key.showCompassNearbyPlayers);
     }
 
+    public static boolean showAnimals() {
+        return enabled(NConfig.Key.showCompassAnimals);
+    }
+
     public static boolean showCombatTargets() {
         return enabled(NConfig.Key.showCompassCombatTargets);
     }

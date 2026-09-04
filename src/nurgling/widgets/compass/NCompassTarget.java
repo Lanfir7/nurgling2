@@ -12,6 +12,7 @@ public final class NCompassTarget {
         PARTY,
         DATABASE,
         PLAYER,
+        ANIMAL,
         COMBAT
     }
 
