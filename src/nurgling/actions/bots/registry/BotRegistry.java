@@ -253,7 +253,7 @@ public class BotRegistry {
         // Keep the existing id on its historical one-character behavior so old buttons and
         // scenario steps cannot unexpectedly visit every configured desk.
         bots.add(new BotDescriptor("studytable", BotDescriptor.BotType.UTILS, "bot.studytable.title", "bot.studytable.desc", true, true, StudyDeskFiller.class, "studytable", false, Map.of("fillAll", false)));
-        bots.add(new BotDescriptor("studytable_all", BotDescriptor.BotType.UTILS, "bot.studytable_all.title", "bot.studytable_all.desc", false, true, StudyDeskFiller.class, "test47", false, Map.of("fillAll", true)));
+        bots.add(new BotDescriptor("studytable_all", BotDescriptor.BotType.UTILS, "bot.studytable_all.title", "bot.studytable_all.desc", false, true, StudyDeskFiller.class, "studytable_all", false, Map.of("fillAll", true)));
         bots.add(new BotDescriptor("swill_collector", BotDescriptor.BotType.UTILS, "Swill Collector", "Collects swill items from area and feeds to troughs/cisterns.", false, true, CollectSwillToTrough.class, "swillcollector", false));
         bots.add(new BotDescriptor("swill_to_trough", BotDescriptor.BotType.UTILS, "Swill To Trough", "Collects swill from area to selected trough (click to select).", false, true, CollectSwillInArea.class, "swillzone", false));
         bots.add(new BotDescriptor("qzone", BotDescriptor.BotType.UTILS, "Quality in Zone", "Scan the quality of all typical objects in the area.", false, true, InspectQualityBot.class, "qzone", false));

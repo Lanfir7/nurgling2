@@ -21,4 +21,14 @@ class StudyDeskBotRegistryTest {
         assertNotNull(bot);
         assertEquals(Boolean.TRUE, bot.defaultSettings.get("fillAll"));
     }
+
+    @Test
+    void allDesksBotUsesDedicatedIconResource() {
+        BotDescriptor bot = BotRegistry.byId("studytable_all");
+
+        assertNotNull(bot);
+        assertEquals("nurgling/bots/icons/studytable_all/u", bot.getUpIconPath());
+        assertEquals("nurgling/bots/icons/studytable_all/d", bot.getDownIconPath());
+        assertEquals("nurgling/bots/icons/studytable_all/h", bot.getHoverIconPath());
+    }
 }
