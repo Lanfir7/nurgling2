@@ -59,6 +59,19 @@ class CraftAtlasControllerTest {
         assertEquals(CraftRecipeGraph.LinkState.SINGLE, controller.linkState("unknown-output", "Glue"));
     }
 
+    @Test
+    void wikiProducerIsFoundByIngredientNameWhenLiveResourceDiffers() {
+        CraftAtlasEntry glue = CraftAtlasEntry.builder("wiki:glue", "Glue")
+                .output(WikiReferenceCatalog.itemResource("Glue"))
+                .availability(CraftAtlasEntry.Availability.REFERENCE_ONLY).build();
+        CraftAtlasController controller = new CraftAtlasController(
+                CraftAtlasSnapshot.of(1, Collections.singletonList(glue)), null);
+
+        assertEquals(CraftRecipeGraph.LinkState.SINGLE, controller.linkState("gfx/invobjs/glue", "Glue"));
+        controller.openIngredient("gfx/invobjs/glue", "Glue");
+        assertEquals("wiki:glue", controller.state().selected.recipeResource);
+    }
+
     private CraftAtlasEntry recipe(String id, String output, String input) {
         CraftAtlasEntry.Builder b = CraftAtlasEntry.builder(id, id).output(output).availability(CraftAtlasEntry.Availability.OPEN);
         if(input != null) b.input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(

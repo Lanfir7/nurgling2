@@ -14,8 +14,10 @@ import haven.resutil.FoodInfo;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Merges current menu availability with complete Make-window observations. */
 public final class MenuCraftCatalog {
@@ -36,7 +38,15 @@ public final class MenuCraftCatalog {
 
     private final MenuGrid menu;
     private final CraftAtlasObservationStore store;
-    public MenuCraftCatalog(MenuGrid menu, CraftAtlasObservationStore store) { this.menu = menu; this.store = store; }
+    private final List<CraftAtlasEntry> references;
+    public MenuCraftCatalog(MenuGrid menu, CraftAtlasObservationStore store) {
+        this(menu, store, WikiReferenceCatalog.loadBundled());
+    }
+    MenuCraftCatalog(MenuGrid menu, CraftAtlasObservationStore store, List<CraftAtlasEntry> references) {
+        this.menu = menu;
+        this.store = store;
+        this.references = references == null ? Collections.<CraftAtlasEntry>emptyList() : references;
+    }
 
     public CraftAtlasSnapshot rebuild() {
         List<PageRecord> pages = new ArrayList<>();
@@ -45,11 +55,17 @@ public final class MenuCraftCatalog {
             catch(Loading ignored) { }
         }
         return fromRecords(menu == null ? 0 : menu.pagseq, pages,
-                store == null ? Collections.<String, CraftAtlasObservation>emptyMap() : store.all());
+                store == null ? Collections.<String, CraftAtlasObservation>emptyMap() : store.all(), references);
     }
 
     public static CraftAtlasSnapshot fromRecords(long revision, List<PageRecord> pages,
                                                   Map<String, CraftAtlasObservation> observations) {
+        return fromRecords(revision, pages, observations, Collections.<CraftAtlasEntry>emptyList());
+    }
+
+    public static CraftAtlasSnapshot fromRecords(long revision, List<PageRecord> pages,
+                                                  Map<String, CraftAtlasObservation> observations,
+                                                  List<CraftAtlasEntry> references) {
         LinkedHashMap<String, PageRecord> open = new LinkedHashMap<>();
         if(pages != null) for(PageRecord page : pages) if(page != null && page.resource != null) open.put(page.resource, page);
         LinkedHashMap<String, CraftAtlasEntry> result = new LinkedHashMap<>();
@@ -60,7 +76,57 @@ public final class MenuCraftCatalog {
             if(!result.containsKey(observation.recipeResource))
                 result.put(observation.recipeResource, build(new PageRecord(observation.recipeResource, observation.displayName),
                         CraftAtlasEntry.Availability.UNAVAILABLE_NOW, observation));
+        mergeReferences(result, references);
         return CraftAtlasSnapshot.of(revision, result.values());
+    }
+
+    private static void mergeReferences(LinkedHashMap<String, CraftAtlasEntry> result,
+                                        List<CraftAtlasEntry> references) {
+        if(references == null || references.isEmpty()) return;
+        Map<String, String> byName = new LinkedHashMap<>();
+        for(CraftAtlasEntry entry : result.values())
+            byName.put(CraftAtlasSearch.normalize(entry.displayName), entry.recipeResource);
+        for(CraftAtlasEntry reference : references) {
+            String name = CraftAtlasSearch.normalize(reference.displayName);
+            String liveResource = byName.get(name);
+            if(liveResource == null) {
+                result.put(reference.recipeResource, reference);
+                byName.put(name, reference.recipeResource);
+            } else {
+                result.put(liveResource, merge(result.get(liveResource), reference));
+            }
+        }
+    }
+
+    private static CraftAtlasEntry merge(CraftAtlasEntry live, CraftAtlasEntry reference) {
+        CraftAtlasEntry.Builder builder = CraftAtlasEntry.builder(live.recipeResource, live.displayName)
+                .availability(live.availability)
+                .output(live.outputResource == null ? reference.outputResource : live.outputResource)
+                .description(live.description == null ? reference.description : live.description);
+        List<CraftAtlasEntry.InputSlot> inputs = live.inputs.isEmpty() ? reference.inputs : live.inputs;
+        for(CraftAtlasEntry.InputSlot input : inputs) builder.input(input);
+
+        Set<String> requirementKeys = new LinkedHashSet<>();
+        for(CraftAtlasEntry.Requirement requirement : live.requirements) {
+            builder.requirement(requirement);
+            requirementKeys.add(requirement.kind + ":" + CraftAtlasSearch.normalize(requirement.name));
+        }
+        for(CraftAtlasEntry.Requirement requirement : reference.requirements)
+            if(requirementKeys.add(requirement.kind + ":" + CraftAtlasSearch.normalize(requirement.name)))
+                builder.requirement(requirement);
+
+        Set<String> bonusKeys = new LinkedHashSet<>();
+        for(CraftAtlasEntry.Bonus bonus : live.bonuses) {
+            builder.bonus(bonus);
+            bonusKeys.add(bonus.attributeResource);
+        }
+        for(CraftAtlasEntry.Bonus bonus : reference.bonuses)
+            if(bonusKeys.add(bonus.attributeResource)) builder.bonus(bonus);
+
+        Set<String> categories = new LinkedHashSet<>(live.categories);
+        categories.addAll(reference.categories);
+        for(String category : categories) builder.category(category);
+        return builder.build();
     }
 
     private static CraftAtlasEntry build(PageRecord page, CraftAtlasEntry.Availability availability,

@@ -73,7 +73,7 @@ public class CraftAtlasDetails extends Widget {
         List<DetailRow> rows = new ArrayList<>();
         for(CraftAtlasEntry.Bonus bonus : entry.bonuses)
             rows.add(new DetailRow(Kind.BONUS, bonus.name, bonus.attributeResource,
-                    bonus.value == null ? "?" : format(bonus.value), 0, Target.NONE, null));
+                    bonus.value == null ? null : format(bonus.value), 0, Target.NONE, null));
         for(CraftAtlasEntry.InputSlot slot : entry.inputs) for(CraftAtlasEntry.IngredientOption option : slot.options) {
             CraftRecipeGraph.LinkState state = links.apply(option.resource, option.name);
             Target target = state == CraftRecipeGraph.LinkState.NONE ? Target.NONE :

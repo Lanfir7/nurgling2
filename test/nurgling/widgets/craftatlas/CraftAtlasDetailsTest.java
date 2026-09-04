@@ -38,6 +38,15 @@ class CraftAtlasDetailsTest {
         assertEquals(CraftAtlasDetails.Target.NONE, find(rows, "Strength").target);
     }
 
+    @Test
+    void textualWikiBonusDoesNotShowAQuestionMarkValue() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("wiki:gilding", "Gilding")
+                .bonus(new CraftAtlasEntry.Bonus("gild:chance", "Gild chance: 45%-95%", null)).build();
+        CraftAtlasDetails.DetailRow row = CraftAtlasDetails.buildRows(entry,
+                resource -> CraftRecipeGraph.LinkState.NONE).get(0);
+        assertNull(row.value);
+    }
+
     private CraftAtlasDetails.DetailRow find(List<CraftAtlasDetails.DetailRow> rows, String name) {
         for(CraftAtlasDetails.DetailRow row : rows) if(name.equals(row.name)) return row;
         throw new AssertionError(name);

@@ -39,4 +39,29 @@ class MenuCraftCatalogTest {
         assertEquals(CraftAtlasEntry.Availability.UNAVAILABLE_NOW, snapshot.byRecipe("glue").availability);
         assertEquals(1, new CraftRecipeGraph(snapshot).producers("gfx/invobjs/glue").size());
     }
+
+    @Test
+    void referenceDataAddsUnknownRecipesAndFillsMissingLiveDetails() {
+        CraftAtlasEntry wikiGlue = CraftAtlasEntry.builder("wiki:glue", "Glue")
+                .output(WikiReferenceCatalog.itemResource("Glue"))
+                .availability(CraftAtlasEntry.Availability.REFERENCE_ONLY)
+                .category("gildings")
+                .input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(
+                        new CraftAtlasEntry.IngredientOption(WikiReferenceCatalog.itemResource("Bone"), "Bone"))))
+                .build();
+        CraftAtlasEntry wikiUnknown = CraftAtlasEntry.builder("wiki:unknown", "Unknown Gilding")
+                .output(WikiReferenceCatalog.itemResource("Unknown Gilding"))
+                .availability(CraftAtlasEntry.Availability.REFERENCE_ONLY).category("gildings").build();
+
+        CraftAtlasSnapshot snapshot = MenuCraftCatalog.fromRecords(9,
+                Collections.singletonList(new MenuCraftCatalog.PageRecord("paginae/craft/glue", "Glue")),
+                Collections.<String, CraftAtlasObservation>emptyMap(), Arrays.asList(wikiGlue, wikiUnknown));
+
+        CraftAtlasEntry live = snapshot.byRecipe("paginae/craft/glue");
+        assertEquals(CraftAtlasEntry.Availability.OPEN, live.availability);
+        assertEquals("Bone", live.inputs.get(0).options.get(0).name);
+        assertNull(snapshot.byRecipe("wiki:glue"));
+        assertEquals(CraftAtlasEntry.Availability.REFERENCE_ONLY,
+                snapshot.byRecipe("wiki:unknown").availability);
+    }
 }

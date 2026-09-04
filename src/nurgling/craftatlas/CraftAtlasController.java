@@ -134,6 +134,11 @@ public final class CraftAtlasController {
                 if(entry != null && !producers.contains(entry)) producers.add(entry);
             }
         }
+        if(producers.isEmpty() && displayName != null) {
+            String normalized = CraftAtlasSearch.normalize(displayName);
+            for(CraftAtlasEntry entry : snapshot.entries)
+                if(normalized.equals(CraftAtlasSearch.normalize(entry.displayName))) producers.add(entry);
+        }
         return producers;
     }
 
