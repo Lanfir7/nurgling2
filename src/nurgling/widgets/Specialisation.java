@@ -5,6 +5,7 @@ import haven.Label;
 import haven.Window;
 import nurgling.*;
 import nurgling.areas.*;
+import nurgling.i18n.L10n;
 import nurgling.overlays.NAreaLabel;
 
 import java.awt.*;
@@ -14,13 +15,37 @@ import java.util.List;
 
 public class Specialisation extends Window
 {
+    private static final Coord WSZ = UI.scale(200, 500);
 
     private NArea area = null;
+    private final TextEntry search;
+    private final SpecialisationList list;
 
     public Specialisation()
     {
-        super(UI.scale(200,500), "Specialisation");
-        add(new SpecialisationList(UI.scale(200,500)));
+        super(WSZ, "Specialisation");
+        search = add(new TextEntry(WSZ.x, "") {
+            @Override
+            protected void changed()
+            {
+                super.changed();
+                if(list != null)
+                    list.filter(text());
+            }
+        }, Coord.z);
+        search.settip(L10n.get("spec.search.placeholder"));
+        list = add(new SpecialisationList(new Coord(WSZ.x, WSZ.y - search.sz.y - UI.scale(4))),
+                search.pos("bl").adds(0, 4));
+        setfocusctl(true);
+        autofocus = false;
+    }
+
+    public void resetSearch()
+    {
+        search.settext("");
+        list.filter("");
+        list.scrollval(0);
+        setfocus(search);
     }
     public enum SpecName
     {
@@ -234,6 +259,8 @@ public class Specialisation extends Window
     }
 
     public class SpecialisationList extends SListBox<SpecialisationItem, Widget> {
+        private List<SpecialisationItem> shown = new ArrayList<>(specialisation);
+
         SpecialisationList(Coord sz) {
             super(sz, UI.scale(24));
         }
@@ -244,7 +271,19 @@ public class Specialisation extends Window
             super.change(item);
         }
 
-        protected List<SpecialisationItem> items() {return new ArrayList<>(specialisation);}
+        void filter(String query)
+        {
+            List<SpecialisationItem> next = new ArrayList<>();
+            for(SpecialisationItem item : specialisation) {
+                if(SpecialisationSearch.matches(query, item.name, item.prettyName))
+                    next.add(item);
+            }
+            shown = next;
+            sel = null;
+            reset();
+        }
+
+        protected List<SpecialisationItem> items() {return shown;}
 
         @Override
         public void resize(Coord sz) {
@@ -353,6 +392,7 @@ public class Specialisation extends Window
         NUtils.getGameUI().setfocus(NUtils.getGameUI().spec);
         NUtils.getGameUI().spec.raise();
         NUtils.getGameUI().spec.area = area;
+        NUtils.getGameUI().spec.resetSearch();
         // Position relative to areas widget if it exists and is visible
         if(NUtils.getGameUI().areas != null && NUtils.getGameUI().areas.visible()) {
             NUtils.getGameUI().spec.c = NUtils.getGameUI().areas.c.add(
