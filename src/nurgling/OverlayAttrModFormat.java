@@ -1,5 +1,7 @@
 package nurgling;
 
+import java.util.Locale;
+
 /**
  * Overlay-only AttrMod percent/flat formatting for NTooltip.
  * Haven-free so tests do not need a live tooltip.
@@ -31,10 +33,10 @@ public final class OverlayAttrModFormat {
         if (isPercent) {
             double percent = Math.abs(modValue) >= 1 ? modValue : modValue * 100;
             if (percent == Math.floor(percent)) {
-                return String.format("%s%.0f%%", sign, percent);
+                return String.format(Locale.US, "%s%.0f%%", sign, percent);
             }
-            return String.format("%s%.1f%%", sign, percent);
+            return String.format(Locale.US, "%s%.1f%%", sign, percent);
         }
-        return String.format("%s%d", sign, (int) modValue);
+        return String.format(Locale.US, "%s%d", sign, (int) modValue);
     }
 }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -74,7 +75,13 @@ class OverlayAttrModFormatTest {
 
     @Test
     void decimalStyleKeepsWholeAndOneFractionDigits() {
-        assertEquals("+15.5%", OverlayAttrModFormat.formatModValue(0.155, true));
-        assertEquals("+5.5%", OverlayAttrModFormat.formatModValue(5.5, true));
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("ru-RU"));
+            assertEquals("+15.5%", OverlayAttrModFormat.formatModValue(0.155, true));
+            assertEquals("+5.5%", OverlayAttrModFormat.formatModValue(5.5, true));
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 }
