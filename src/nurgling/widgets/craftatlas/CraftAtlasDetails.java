@@ -84,7 +84,7 @@ public class CraftAtlasDetails extends Widget {
     private Map<Integer, CraftAtlasMaterialPlanner.Selection> selections = new HashMap<>();
     private Runnable planListener;
     private int craftCount = 1;
-    private boolean autoQuality = true;
+    private boolean autoQuality;
     private boolean syncingQuality;
     private double quality = 10;
     private final int headerHeight = UI.scale(104);
@@ -110,10 +110,10 @@ public class CraftAtlasDetails extends Widget {
         qualityEntry.tooltip = L10n.get("craft_atlas.quality_hint");
         qualityEntry.hide();
         autoQualityBox = add(new CheckBox(L10n.get("craft_atlas.auto")));
-        autoQualityBox.a = true;
+        autoQualityBox.a = false;
         autoQualityBox.changed(value -> setAutoQuality(value));
         autoQualityBox.hide();
-        qualityEntry.setcanfocus(false);
+        qualityEntry.setcanfocus(true);
         positionQualityEntry();
     }
 
@@ -418,6 +418,8 @@ public class CraftAtlasDetails extends Widget {
     @Override public void resize(Coord size) {
         super.resize(size);
         positionQualityEntry();
+        if(!selectors.isEmpty() && selectors.values().iterator().next().sz.x != selectorWidth())
+            rebuildSelectors();
         positionSelectors();
         scroll = Math.max(0, Math.min(scroll, Math.max(0, contentHeight() - Math.max(1, sz.y - headerHeight))));
     }
@@ -439,6 +441,14 @@ public class CraftAtlasDetails extends Widget {
         rows = entry == null ? Collections.<DetailRow>emptyList() :
                 buildRows(entry, (resource, name) -> controller == null ? CraftRecipeGraph.LinkState.NONE :
                         controller.linkState(resource, name), quality);
+        if(autoQuality && materialPlan != null && materialPlan.quality == null) {
+            List<DetailRow> withoutProjection = new ArrayList<>();
+            for(DetailRow row : rows)
+                withoutProjection.add(row.kind == Kind.BONUS
+                        ? new DetailRow(row.kind, row.name, row.resource, null, row.quantity, row.target,
+                                row.requirement, row.attributes, row.slotIndex) : row);
+            rows = Collections.unmodifiableList(withoutProjection);
+        }
     }
 
     private void loadMaterials() {
@@ -468,14 +478,12 @@ public class CraftAtlasDetails extends Widget {
         } else {
             materialPlan = CraftAtlasMaterialPlanner.plan(materials.slots, materials.candidatesBySlot,
                     selections, craftCount);
-            if(autoQuality && materialPlan.quality != null) {
-                quality = materialPlan.quality;
+            if(autoQuality) {
+                if(materialPlan.quality != null) quality = materialPlan.quality;
                 syncingQuality = true;
-                qualityEntry.settext(formatQuality(quality));
+                qualityEntry.settext(autoQualityText(materialPlan.quality));
                 syncingQuality = false;
-                rows = entry == null ? Collections.<DetailRow>emptyList() :
-                        buildRows(entry, (resource, name) -> controller == null ? CraftRecipeGraph.LinkState.NONE :
-                                controller.linkState(resource, name), quality);
+                rebuildRows();
             }
         }
         notifyPlanChanged();
@@ -496,7 +504,7 @@ public class CraftAtlasDetails extends Widget {
             List<CraftAtlasMaterialPlanner.Candidate> candidates = materials.candidatesBySlot.getOrDefault(
                     slot.slotIndex, Collections.emptyList());
             boolean grouped = slot.allowedMaterials.size() > 1;
-            CraftAtlasIngredientSelector selector = add(new CraftAtlasIngredientSelector(UI.scale(300), candidates,
+            CraftAtlasIngredientSelector selector = add(new CraftAtlasIngredientSelector(selectorWidth(), candidates,
                     slot.optional, grouped, selections.get(slot.slotIndex), selected -> {
                 selections.put(slot.slotIndex, selected);
                 replan();
@@ -521,7 +529,7 @@ public class CraftAtlasDetails extends Widget {
             if(row.kind == Kind.INPUT && row.slotIndex >= 0) {
                 CraftAtlasIngredientSelector selector = selectors.get(row.slotIndex);
                 if(selector != null) {
-                    selector.move(Coord.of(Math.max(UI.scale(190), sz.x - selector.sz.x - UI.scale(18)),
+                    selector.move(Coord.of(Math.max(0, sz.x - selector.sz.x - UI.scale(18)),
                             y + (height - selector.sz.y) / 2));
                     selector.visible = y >= headerHeight && y + height <= sz.y;
                 }
@@ -534,9 +542,17 @@ public class CraftAtlasDetails extends Widget {
         if(planListener != null) planListener.run();
     }
 
+    private int selectorWidth() {
+        return Math.max(UI.scale(90), Math.min(UI.scale(300), sz.x - UI.scale(208)));
+    }
+
     private static String formatQuality(double value) {
         return value == Math.rint(value) ? String.format(Locale.ROOT, "%.0f", value)
                 : String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    static String autoQualityText(Double value) {
+        return value == null ? L10n.get("craft_atlas.quality_unavailable") : formatQuality(value);
     }
 
     @Override public Object tooltip(Coord c, Widget prev) {

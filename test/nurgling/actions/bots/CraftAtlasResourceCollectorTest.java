@@ -78,6 +78,31 @@ class CraftAtlasResourceCollectorTest {
         assertEquals(2, requests.get(0).count);
     }
 
+    @Test
+    void concreteFabricSelectionPlansQualityAndCollectsOnlyItsWarehouseFallback() {
+        Candidate linenInventory = new Candidate("inv-linen-100", "Linen Cloth", 100, 2,
+                Source.INVENTORY, "Inventory");
+        Candidate linenStorage = new Candidate("db-linen-92", "Linen Cloth", 92, 4,
+                Source.STORAGE, "Chest");
+        Candidate hempStorage = new Candidate("db-hemp-99", "Hemp Cloth", 99, 20,
+                Source.STORAGE, "Chest");
+        Plan plan = CraftAtlasMaterialPlanner.plan(
+                List.of(new SlotRequest(0, 3, false, List.of("Linen Cloth", "Hemp Cloth"))),
+                Map.of(0, List.of(linenInventory, linenStorage, hempStorage)),
+                Map.of(0, Selection.preferred(linenInventory)), 2);
+
+        List<CraftAtlasResourceCollector.FetchRequest> requests = CraftAtlasResourceCollector.requests(
+                plan, Map.of("db-linen-92", group(92, 4), "db-hemp-99", group(99, 20)));
+
+        assertTrue(plan.complete);
+        assertEquals((100 * 2 + 92 * 4) / 6.0, plan.quality, 0.001);
+        assertEquals(List.of("inv-linen-100", "db-linen-92"), plan.slots.get(0).allocations.stream()
+                .map(value -> value.candidateId).collect(Collectors.toList()));
+        assertEquals(1, requests.size());
+        assertEquals("db-linen-92", requests.get(0).candidateId);
+        assertEquals(4, requests.get(0).count);
+    }
+
     private static Candidate candidate(String id, double quality, int count, Source source) {
         return new Candidate(id, "Linen Cloth", quality, count, source,
                 source == Source.INVENTORY ? "Inventory" : "Chest");

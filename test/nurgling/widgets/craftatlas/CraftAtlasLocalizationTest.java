@@ -43,7 +43,7 @@ class CraftAtlasLocalizationTest {
                 "craft_atlas.material.missing", "craft_atlas.craft_count_hint",
                 "craft_atlas.collect_resources", "craft_atlas.collect_bad_count",
                 "craft_atlas.collect_unavailable", "craft_atlas.collect_missing",
-                "craft_atlas.collect_shortage"));
+                "craft_atlas.collect_shortage", "craft_atlas.quality_unavailable"));
         for(String code : SLOT_CODES)
             required.add("craft_atlas.equipment_slot." + code);
 

@@ -41,4 +41,19 @@ class CraftAtlasIngredientChoicesTest {
         assertTrue(label.contains("×6"));
         assertTrue(label.contains("Inventory"));
     }
+
+    @Test
+    void missingPreviouslySelectedMaterialStaysVisibleInsteadOfSwitchingMaterials() {
+        Candidate hemp = new Candidate("hemp", "Hemp Cloth", 90, 4,
+                Source.STORAGE, "Chest");
+        Candidate oldLinen = new Candidate("linen", "Linen Cloth", 100, 1,
+                Source.STORAGE, "Chest");
+
+        CraftAtlasIngredientChoices.Choice displayed = CraftAtlasIngredientChoices.displaySelection(
+                List.of(hemp), false, true, Selection.preferred(oldLinen));
+
+        assertEquals("Linen Cloth", displayed.selection.material);
+        assertNull(displayed.candidate);
+        assertTrue(displayed.label.contains("Linen Cloth"));
+    }
 }

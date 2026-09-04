@@ -45,4 +45,36 @@ final class CraftAtlasIngredientChoices {
         String location = value.location == null || value.location.isEmpty() ? "" : " · " + value.location;
         return marker + value.material + " · Q" + quality + " · ×" + value.count + location;
     }
+
+    static Choice displaySelection(List<Candidate> candidates, boolean optional, boolean grouped,
+                                   Selection selected) {
+        List<Choice> values = choices(candidates, optional, grouped);
+        if(selected != null) {
+            Choice sameMaterial = null;
+            for(Choice choice : values) {
+                Selection value = choice.selection;
+                if(value.mode != selected.mode) continue;
+                if(value.mode != Selection.Mode.PREFERRED) return choice;
+                if(eq(value.preferredCandidateId, selected.preferredCandidateId)) return choice;
+                if(choice.candidate != null && choice.candidate.material.equals(selected.material)
+                        && sameMaterial == null) sameMaterial = choice;
+            }
+            if(sameMaterial != null) return sameMaterial;
+            if(selected.mode == Selection.Mode.PREFERRED && selected.material != null)
+                return new Choice(selected.material + " · " + L10n.get("craft_atlas.material.missing"),
+                        selected, null);
+        }
+        Selection fallback = optional ? Selection.ignored()
+                : CraftAtlasMaterialPlanner.defaultSelection(candidates);
+        for(Choice choice : values) {
+            if(choice.selection.mode != fallback.mode) continue;
+            if(fallback.mode != Selection.Mode.PREFERRED
+                    || eq(choice.selection.preferredCandidateId, fallback.preferredCandidateId)) return choice;
+        }
+        return values.get(0);
+    }
+
+    private static boolean eq(String left, String right) {
+        return left == null ? right == null : left.equals(right);
+    }
 }

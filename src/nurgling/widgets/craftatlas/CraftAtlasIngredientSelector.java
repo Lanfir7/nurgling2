@@ -28,12 +28,7 @@ public final class CraftAtlasIngredientSelector extends Dropbox<Choice> {
 
     public void setChoices(List<Candidate> candidates, boolean optional, boolean grouped, Selection selected) {
         choices = CraftAtlasIngredientChoices.choices(candidates, optional, grouped);
-        Choice match = findSelection(selected);
-        if(match == null) {
-            Selection fallback = optional && (selected == null || selected.isIgnored())
-                    ? Selection.ignored() : nurgling.craftatlas.CraftAtlasMaterialPlanner.defaultSelection(candidates);
-            match = findSelection(fallback);
-        }
+        Choice match = CraftAtlasIngredientChoices.displaySelection(candidates, optional, grouped, selected);
         notifying = false;
         super.change(match == null && !choices.isEmpty() ? choices.get(0) : match);
         notifying = true;
@@ -55,21 +50,4 @@ public final class CraftAtlasIngredientSelector extends Dropbox<Choice> {
         if(notifying && item != null && listener != null) listener.accept(item.selection);
     }
 
-    private Choice findSelection(Selection selection) {
-        if(selection == null) return null;
-        for(Choice choice : choices) {
-            Selection value = choice.selection;
-            if(value.mode != selection.mode) continue;
-            if(value.mode == Selection.Mode.PREFERRED) {
-                if(eq(value.preferredCandidateId, selection.preferredCandidateId)) return choice;
-            } else {
-                return choice;
-            }
-        }
-        return null;
-    }
-
-    private static boolean eq(String left, String right) {
-        return left == null ? right == null : left.equals(right);
-    }
 }

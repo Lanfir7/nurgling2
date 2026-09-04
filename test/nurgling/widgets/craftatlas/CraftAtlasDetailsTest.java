@@ -103,6 +103,12 @@ class CraftAtlasDetailsTest {
     }
 
     @Test
+    void unavailableAutomaticQualityIsNotRenderedAsZero() {
+        assertEquals("—", CraftAtlasDetails.autoQualityText(null));
+        assertEquals("95.5", CraftAtlasDetails.autoQualityText(95.5));
+    }
+
+    @Test
     void equipmentDetailsShowOccupiedSlots() {
         String previousLanguage = L10n.getLanguage();
         try {
