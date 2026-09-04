@@ -21,6 +21,15 @@ class OpenTargetContainerTest {
     }
 
     @Test
+    void stockpileOpenWaitEndsWhenTargetDisappears() {
+        OpenTargetContainer.StockpileOpenWaitBudget wait =
+                new OpenTargetContainer.StockpileOpenWaitBudget(200);
+
+        assertTrue(wait.tick(false, false, false));
+        assertFalse(wait.timedOut());
+    }
+
+    @Test
     void stockpileWindowIsReusedOnlyForItsOwnGob() {
         assertTrue(OpenTargetContainer.sameGobId(42L, 42L));
         assertFalse(OpenTargetContainer.sameGobId(42L, 43L));

@@ -25,4 +25,10 @@ class TakeItems2Test {
         assertTrue(result.IsSuccess());
         assertEquals("ASO", order.toString());
     }
+
+    @Test
+    void pileWithdrawalIsClampedToInventoryCapacity() {
+        assertEquals(12, TakeItems2.pileTransferCount(50, 12));
+        assertEquals(0, TakeItems2.pileTransferCount(50, 0));
+    }
 }

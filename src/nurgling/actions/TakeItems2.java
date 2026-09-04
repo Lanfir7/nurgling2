@@ -1,5 +1,6 @@
 package nurgling.actions;
 
+import haven.Coord;
 import haven.Gob;
 import haven.WItem;
 import haven.Widget;
@@ -15,6 +16,7 @@ import nurgling.tasks.WindowIsClosed;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.StackSupporter;
 import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
@@ -43,6 +45,10 @@ public class TakeItems2 implements Action
         approach.run();
         settle.run();
         return open.run();
+    }
+
+    static int pileTransferCount(int requested, int capacity) {
+        return Math.max(0, Math.min(requested, capacity));
     }
 
     final NContext cnt;
@@ -223,16 +229,26 @@ public class TakeItems2 implements Action
 
     public Results takeFromPile(AtomicInteger left, NGameUI gui, NContext.Pile pile) throws InterruptedException
     {
-        if(PathFinder.isAvailable(pile.pile))
-        {
-            approachSettleAndOpenPile(
-                    () -> new PathFinder(pile.pile).run(gui),
+        Gob gpile = pile == null || pile.pile == null ? null : Finder.findGob(pile.pile.id);
+        if(gpile == null || !PathFinder.isAvailable(gpile))
+            return Results.FAIL();
+
+        Results opened = approachSettleAndOpenPile(
+                    () -> new PathFinder(gpile).run(gui),
                     () -> NUtils.addTask(new WaitTicks(PILE_WITHDRAWAL_SETTLE_TICKS)),
-                    () -> new OpenTargetContainer("Stockpile", pile.pile).run(gui));
-            TakeItemsFromPile tifp;
-            (tifp = new TakeItemsFromPile(pile.pile, gui.getStockpile(), left.get())).run(gui);
-            new CloseTargetWindow(NUtils.getGameUI().getWindow("Stockpile")).run(gui);
-        }
+                    () -> new OpenTargetContainer("Stockpile", gpile).run(gui));
+        if(!opened.IsSuccess() || gui.getStockpile() == null)
+            return Results.FAIL();
+
+        int capacity = StackSupporter.getOptimalItemCapacity(
+                gui.getInventory(), item, new Coord(1, 1), left.get());
+        int transferCount = pileTransferCount(left.get(), capacity);
+        if(transferCount > 0)
+            new TakeItemsFromPile(gpile, gui.getStockpile(), transferCount).run(gui);
+
+        Window stockpileWindow = NUtils.getGameUI().getWindow("Stockpile");
+        if(stockpileWindow != null)
+            new CloseTargetWindow(stockpileWindow).run(gui);
         return Results.SUCCESS();
     }
 

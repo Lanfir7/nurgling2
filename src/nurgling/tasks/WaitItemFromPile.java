@@ -35,6 +35,34 @@ public class WaitItemFromPile extends NTask
     private final NInventory inv;
     private final int baseline;
     private int totalItemCount = 0;
+    private final TransferWaitBudget waitBudget;
+
+    static final class TransferWaitBudget
+    {
+        private final int target;
+        private final int stallLimit;
+        private int stall;
+        private int highWater = Integer.MIN_VALUE;
+
+        TransferWaitBudget(int target, int stallLimit)
+        {
+            this.target = target;
+            this.stallLimit = Math.max(1, stallLimit);
+        }
+
+        boolean tick(int current)
+        {
+            if(current >= target)
+                return true;
+            if(current > highWater)
+            {
+                highWater = current;
+                stall = 0;
+                return false;
+            }
+            return ++stall >= stallLimit;
+        }
+    }
 
     public WaitItemFromPile()
     {
@@ -55,6 +83,7 @@ public class WaitItemFromPile extends NTask
         this.inv = inv;
         this.baseline = baseline;
         this.target_size = target_size;
+        this.waitBudget = new TransferWaitBudget(target_size, 250);
     }
 
     @Override
@@ -102,7 +131,7 @@ public class WaitItemFromPile extends NTask
             for (NGItem item : fresh)
                 totalItemCount += getItemCount(item);
         }
-        return totalItemCount >= target_size;
+        return waitBudget.tick(totalItemCount);
     }
 
     private int getItemCount(NGItem item)

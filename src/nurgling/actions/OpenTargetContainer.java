@@ -51,8 +51,8 @@ public class OpenTargetContainer implements Action
         {
             case "Stockpile":
                 NTask wait = boundedStockpileWait
-                        ? new FindStockpileAfterApproach(name, 200)
-                        : new FindNISBox(name);
+                        ? new FindStockpileAfterApproach(name, gob, 200)
+                        : new FindNISBox(name, gob);
                 gui.ui.core.addTask(wait);
                 FileLogger.log(stockpileTrace("wait-finished",
                         NUtils.getGameUI().getWindow(name),
@@ -168,7 +168,14 @@ public class OpenTargetContainer implements Action
         }
 
         boolean tick(boolean windowReady, boolean moving) {
+            return tick(windowReady, moving, true);
+        }
+
+        boolean tick(boolean windowReady, boolean moving, boolean targetPresent) {
             if (windowReady) {
+                return true;
+            }
+            if (!targetPresent) {
                 return true;
             }
             if (moving) {
@@ -186,10 +193,12 @@ public class OpenTargetContainer implements Action
 
     private static final class FindStockpileAfterApproach extends NTask {
         private final String name;
+        private final long gobId;
         private final StockpileOpenWaitBudget budget;
 
-        FindStockpileAfterApproach(String name, int stationaryLimit) {
+        FindStockpileAfterApproach(String name, Gob gob, int stationaryLimit) {
             this.name = name;
+            this.gobId = gob == null ? -1 : gob.id;
             this.budget = new StockpileOpenWaitBudget(stationaryLimit);
             this.infinite = true;
             this.criticalOnTimeout = false;
@@ -200,7 +209,8 @@ public class OpenTargetContainer implements Action
             Window window = NUtils.getGameUI().getWindow(name);
             Gob player = NUtils.player();
             boolean moving = player != null && player.getv() > 0.1;
-            return budget.tick(window != null, moving);
+            boolean targetPresent = gobId < 0 || Finder.findGob(gobId) != null;
+            return budget.tick(window != null, moving, targetPresent);
         }
     }
 

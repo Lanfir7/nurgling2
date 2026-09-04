@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,5 +32,11 @@ class PathFinderBlockedStartTest {
                 List.of(), remoteFallback, true);
 
         assertNull(start);
+    }
+
+    @Test
+    void missingEndCandidatesAreReportedAsNoPath() {
+        assertFalse(PathFinder.hasEndCandidates(null));
+        assertTrue(PathFinder.hasEndCandidates(List.of(Coord.of(1, 1))));
     }
 }

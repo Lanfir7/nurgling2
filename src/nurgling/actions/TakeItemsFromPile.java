@@ -41,12 +41,20 @@ public class TakeItemsFromPile implements Action
             box.transfer(count);
             WaitItemFromPile wifp = new WaitItemFromPile(gui.getInventory(), before, count);
             NUtils.getUI().core.addTask(wifp);
-            took += Math.max(0, wifp.getTotalItemCount());
+            int got = Math.max(0, wifp.getTotalItemCount());
+            took += got;
             ((NUI) gui.ui).disableMonitor();
             items.addAll(wifp.getResult());
+            if(!shouldRetryAfterPass(got))
+                break;
         }
 
         return Results.SUCCESS();
+    }
+
+    static boolean shouldRetryAfterPass(int received)
+    {
+        return received > 0;
     }
 
     public int getResult()

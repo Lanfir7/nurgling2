@@ -412,6 +412,8 @@ public class PathFinder implements Action {
             if (end_pos.x < pfmap.size && end_pos.y < pfmap.size && end_pos.x >= 0 && end_pos.y >= 0) {
                 if (cells[end_pos.x][end_pos.y].val != 0) {
                     end_poses = findFreeNear(end_pos, false);
+                    if(!hasEndCandidates(end_poses))
+                        return false;
                     if (dummy != null || (isHardMode && target_id != -2 && Finder.findGob(target_id) != null)) {
                         Coord2d tcoord = (dummy != null) ? dummy.rc : Finder.findGob(target_id).rc;
                         ArrayList<Coord> best_poses = new ArrayList<>();
@@ -455,6 +457,10 @@ public class PathFinder implements Action {
             return true;
         }
         return false;
+    }
+
+    static boolean hasEndCandidates(Collection<Coord> candidates) {
+        return candidates != null;
     }
 
     private ArrayList<Coord> findFreeNear(Coord pos, boolean start) {
