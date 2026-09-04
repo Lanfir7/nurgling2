@@ -38,7 +38,12 @@ class CraftAtlasLocalizationTest {
         required.addAll(Arrays.asList(
                 "craft_atlas.quality_hint", "craft_atlas.quality", "craft_atlas.gilding",
                 "craft_atlas.bonuses", "craft_atlas.equipment_slots", "craft_atlas.quality_modifiers",
-                "craft_atlas.open_recipe", "craft_atlas.equipment_slot.optional"));
+                "craft_atlas.open_recipe", "craft_atlas.equipment_slot.optional", "craft_atlas.auto",
+                "craft_atlas.inventory", "craft_atlas.material.ignore", "craft_atlas.material.all",
+                "craft_atlas.material.missing", "craft_atlas.craft_count_hint",
+                "craft_atlas.collect_resources", "craft_atlas.collect_bad_count",
+                "craft_atlas.collect_unavailable", "craft_atlas.collect_missing",
+                "craft_atlas.collect_shortage"));
         for(String code : SLOT_CODES)
             required.add("craft_atlas.equipment_slot." + code);
 
