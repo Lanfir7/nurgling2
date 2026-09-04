@@ -1,0 +1,9 @@
+Use case: ui-mockup edit.
+Edit the provided craft encyclopedia UI design. Preserve the entire original visual style, window size, typography, graphite/brass palette, forest margin, header, search, left navigation, category chips, five table rows, gilding icons, illustrative values, favourite stars, right recipe card and the bottom caption saying the example data is illustrative.
+Make only these precise product changes:
+1. Remove the ENTIRE bottom-center comparison strip including its enclosing rectangle, text "Выбрано для сравнения: 2", scale icon, and "Сравнить" button. Continue the plain dark table background to the bottom border. Do not add checkboxes, multiselect, replacement buttons or new text there.
+2. Remove the "Проверить материалы" button completely and also remove the "Запасы не проверены" label above it. Keep the recipe ingredients "Волокно ×2" and "Кость ×1". No inventory checking controls or stock counters.
+3. Remove the "Подробнее" button from the bottom right.
+4. Keep a single primary button "Открыть крафт" at the bottom of the right pane. Center it horizontally within that pane and make it moderately wider to occupy the space of the previous two buttons. Below the ingredients and above this button add a modest, clearly readable single line "Откроется обычное окно крафта".
+5. Remove the old sentence "Шанс установки — после выбора экипировки"; no character-specific chance calculator is in scope.
+The result should look like a clean finished intentional revision, without erasure marks or empty outlined button remnants. All other layout content unchanged. This is still an illustrative design concept, not a live game screenshot.
