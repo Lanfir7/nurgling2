@@ -52,7 +52,7 @@ public class CraftAtlasWindow extends Window {
     private boolean narrowDetails;
     private boolean collectionPreparing;
     private long collectionRequestToken;
-    private String selectedRecipeResource;
+    private CraftAtlasEntry selectedEntry;
     private Thread collectionThread;
 
     public CraftAtlasWindow(MenuGrid menu) {
@@ -189,9 +189,8 @@ public class CraftAtlasWindow extends Window {
     }
 
     private void stateChanged(CraftAtlasController.ViewState state) {
-        String nextRecipeResource = state.selected == null ? null : state.selected.recipeResource;
-        if(selectedRecipeResource == null ? nextRecipeResource != null : !selectedRecipeResource.equals(nextRecipeResource)) {
-            selectedRecipeResource = nextRecipeResource;
+        if(selectedEntry != state.selected) {
+            selectedEntry = state.selected;
             collectionRequestToken++;
             collectionPreparing = false;
         }

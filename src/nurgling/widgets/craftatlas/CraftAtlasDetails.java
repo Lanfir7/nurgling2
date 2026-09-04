@@ -560,7 +560,7 @@ public class CraftAtlasDetails extends Widget {
         rows = entry == null ? Collections.<DetailRow>emptyList() :
                 buildRows(entry, (resource, name) -> controller == null ? CraftRecipeGraph.LinkState.NONE :
                         controller.linkState(resource, name), quality);
-        if(autoQuality && materialPlan != null && materialPlan.quality == null) {
+        if(autoQuality && (materialPlan == null || materialPlan.quality == null)) {
             List<DetailRow> withoutProjection = new ArrayList<>();
             for(DetailRow row : rows)
                 withoutProjection.add(row.kind == Kind.BONUS
@@ -636,13 +636,14 @@ public class CraftAtlasDetails extends Widget {
         } else {
             materialPlan = CraftAtlasMaterialPlanner.plan(materials.slots, materials.candidatesBySlot,
                     selections, craftCount);
-            if(autoQuality) {
-                if(materialPlan.quality != null) quality = materialPlan.quality;
-                syncingQuality = true;
-                qualityEntry.settext(autoQualityText(materialPlan.quality));
-                syncingQuality = false;
-                rebuildRows();
-            }
+        }
+        if(autoQuality) {
+            Double plannedQuality = materialPlan == null ? null : materialPlan.quality;
+            if(plannedQuality != null) quality = plannedQuality;
+            syncingQuality = true;
+            qualityEntry.settext(autoQualityText(plannedQuality));
+            syncingQuality = false;
+            rebuildRows();
         }
         notifyPlanChanged();
     }
