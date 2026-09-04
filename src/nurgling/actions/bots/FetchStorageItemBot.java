@@ -31,6 +31,7 @@ public class FetchStorageItemBot implements Action {
     private final double maxQuality;
     private final int targetCount;
     private final List<StorageItemDao.StorageItemData> itemsToFetch;
+    private int actualCollected;
 
     public static final AtomicBoolean stop = new AtomicBoolean(false);
 
@@ -61,6 +62,7 @@ public class FetchStorageItemBot implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         stop.set(false);
+        actualCollected = 0;
 
         if (itemsToFetch.isEmpty()) {
             gui.msg(L10n.get("storage.no_containers"), java.awt.Color.RED);
@@ -105,15 +107,23 @@ public class FetchStorageItemBot implements Action {
 
         // Verify actual items collected
         int afterCount = countItemsInInventory(gui, itemName);
-        int actualCollected = afterCount - beforeCount;
+        actualCollected = Math.max(0, afterCount - beforeCount);
 
-        if (actualCollected > 0) {
+        if (isComplete(targetCount, actualCollected)) {
             gui.msg(L10n.get("storage.fetch_complete").replace("{0}", String.valueOf(actualCollected)), java.awt.Color.GREEN);
             return Results.SUCCESS();
         } else {
             gui.msg(L10n.get("storage.container_not_found"), java.awt.Color.RED);
             return Results.FAIL();
         }
+    }
+
+    public int actualCollected() {
+        return actualCollected;
+    }
+
+    static boolean isComplete(int target, int actual) {
+        return target > 0 && actual >= target;
     }
 
     /**
