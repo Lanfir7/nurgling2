@@ -38,6 +38,7 @@ import nurgling.*;
 import nurgling.actions.SortInventory;
 import nurgling.i18n.L10n;
 import nurgling.widgets.*;
+import nurgling.widgets.craftatlas.CraftAtlasWindow;
 
 public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.Handler {
     private static final int blpw = UI.scale(142), brpw = UI.scale(142);
@@ -73,6 +74,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public NCookBook cookBook;
 	public NStorageItemsWidget storageItemsWidget;
 	public EncyclopediaWindow encyclopediaWindow;
+	public CraftAtlasWindow craftAtlas;
 	public BlueprintWidget blueprintWidget;
 	public nurgling.widgets.NBasePlannerWidget basePlanner;
     public HelpWnd help;
@@ -315,6 +317,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	storageItemsWidget.hide();
 	add(encyclopediaWindow = new EncyclopediaWindow(),new Coord(sz.x/2 - 400,sz.y/2 - 300 ));
 	encyclopediaWindow.hide();
+	add(craftAtlas = new CraftAtlasWindow(menu), new Coord(sz.x/2 - UI.scale(580), sz.y/2 - UI.scale(350)));
+	craftAtlas.hide();
 	add(blueprintWidget = new BlueprintWidget(), new Coord(sz.x/2 - NGUIInfo.xs/2,sz.y/5 ));
 	blueprintWidget.hide();
 	add(basePlanner = new nurgling.widgets.NBasePlannerWidget(), new Coord(sz.x/2 - NGUIInfo.xs/2, sz.y/5));
@@ -764,6 +768,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	} else if(place == "menu") {
 	    NMenuGridWdg mwdg = new NMenuGridWdg();
 		menu = mwdg.setMenuGrid((MenuGrid)child);
+		if(craftAtlas != null)
+		    craftAtlas.setMenu(menu);
 		add(new NDraggableWidget(mwdg,"menugrid",new Coord(mwdg.sz).add(NDraggableWidget.delta)));
 	    MenuSearch.Main srch = new MenuSearch.Main(menu);
 	    srch.posmem("srch");
@@ -1409,7 +1415,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public static final KeyBinding kb_chr = KeyBinding.get("chr", KeyMatch.forchar('T', KeyMatch.C));
     public static final KeyBinding kb_bud = KeyBinding.get("bud", KeyMatch.forchar('B', KeyMatch.C));
     public static final KeyBinding kb_areas = KeyBinding.get("areas", KeyMatch.forchar('L', KeyMatch.C));
-    public static final KeyBinding kb_cookbook = KeyBinding.get("cookbook", KeyMatch.forchar('K', KeyMatch.C));
+	public static final KeyBinding kb_cookbook = KeyBinding.get("cookbook", KeyMatch.forchar('K', KeyMatch.C));
+	public static final KeyBinding kb_craftAtlas = KeyBinding.get("craft-atlas", KeyMatch.nil);
 	public static final KeyBinding kb_searchWidget = KeyBinding.get("searchWidget", KeyMatch.forchar('F', KeyMatch.C));
 	public static final KeyBinding kb_blueprints = KeyBinding.get("treegarden", KeyMatch.forchar('P', KeyMatch.C));
 	public static final KeyBinding kb_baseplanner = KeyBinding.get("baseplanner", KeyMatch.nil);
@@ -1432,6 +1439,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		prev = add(new MenuCheckBox("rbtn/blueprints/", kb_blueprints, L10n.get("blueprint.manager_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(blueprintWidget)).click(() -> togglewnd(blueprintWidget));
 		prev = add(new MenuCheckBox("rbtn/baseplanner/", kb_baseplanner, "Base planner"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(basePlanner)).click(() -> togglewnd(basePlanner));
 		prev = add(new MenuCheckBox("rbtn/storage/", kb_storage, L10n.get("storage.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(storageItemsWidget)).click(() -> togglewnd(storageItemsWidget));
+		prev = add(new MenuCheckBox("rbtn/encyclopedia/", kb_craftAtlas, L10n.get("craft_atlas.title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(craftAtlas)).click(() -> togglewnd(craftAtlas));
 		pack();
 	}
 

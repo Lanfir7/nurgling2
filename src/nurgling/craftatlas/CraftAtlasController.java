@@ -92,16 +92,22 @@ public final class CraftAtlasController {
     }
 
     public CraftRecipeGraph.LinkState linkState(String resource) { return graph.linkState(resource, activePath); }
+
+    public CraftRecipeGraph.LinkState linkState(String resource, String displayName) {
+        CraftRecipeGraph.LinkState direct = linkState(resource);
+        if(direct != CraftRecipeGraph.LinkState.NONE) return direct;
+        List<CraftAtlasEntry> producers = producers(resource, displayName);
+        for(CraftAtlasEntry producer : producers)
+            if(activePath.contains(producer.recipeResource)) return CraftRecipeGraph.LinkState.CYCLE;
+        if(producers.size() == 1) return CraftRecipeGraph.LinkState.SINGLE;
+        if(producers.size() > 1) return CraftRecipeGraph.LinkState.MULTIPLE;
+        return CraftRecipeGraph.LinkState.NONE;
+    }
+
     public void openIngredient(String resource) { openIngredient(resource, null); }
 
     public void openIngredient(String resource, String displayName) {
-        List<CraftAtlasEntry> producers = new ArrayList<>(graph.producers(resource));
-        if(producers.isEmpty() && displayName != null) {
-            for(RecipeIngredientCache.RecipeEntry cached : RecipeIngredientCache.findOutputRecipesForItem(displayName)) {
-                CraftAtlasEntry entry = snapshot.byRecipe(cached.paginaResource);
-                if(entry != null && !producers.contains(entry)) producers.add(entry);
-            }
-        }
+        List<CraftAtlasEntry> producers = producers(resource, displayName);
         if(producers.isEmpty()) return;
         for(CraftAtlasEntry producer : producers) if(activePath.contains(producer.recipeResource)) {
             cycleResource = resource;
@@ -118,6 +124,17 @@ public final class CraftAtlasController {
             cycleResource = null;
             notifyListeners();
         }
+    }
+
+    private List<CraftAtlasEntry> producers(String resource, String displayName) {
+        List<CraftAtlasEntry> producers = new ArrayList<>(graph.producers(resource));
+        if(producers.isEmpty() && displayName != null) {
+            for(RecipeIngredientCache.RecipeEntry cached : RecipeIngredientCache.findOutputRecipesForItem(displayName)) {
+                CraftAtlasEntry entry = snapshot.byRecipe(cached.paginaResource);
+                if(entry != null && !producers.contains(entry)) producers.add(entry);
+            }
+        }
+        return producers;
     }
 
     public void chooseProducer(String recipeResource) {

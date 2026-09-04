@@ -20,6 +20,7 @@ public final class CraftAtlasObservationStore {
     private static CraftAtlasObservationStore current;
     private final Path file;
     private final Map<String, CraftAtlasObservation> observations = new LinkedHashMap<>();
+    private long revision;
 
     public CraftAtlasObservationStore(Path file) {
         this.file = file;
@@ -35,6 +36,7 @@ public final class CraftAtlasObservationStore {
     }
 
     public synchronized CraftAtlasObservation get(String resource) { return observations.get(resource); }
+    public synchronized long revision() { return revision; }
     public synchronized Map<String, CraftAtlasObservation> all() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(observations));
     }
@@ -42,6 +44,7 @@ public final class CraftAtlasObservationStore {
     public synchronized void record(CraftAtlasObservation observation) {
         if(observation == null) return;
         observations.put(observation.recipeResource, observation);
+        revision++;
         save();
     }
 

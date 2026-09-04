@@ -49,7 +49,7 @@ public class CraftAtlasRecipeList extends Widget {
             Tex label = labels.get(entry.recipeResource);
             if(label == null) { label = Text.render(entry.displayName).tex(); labels.put(entry.recipeResource, label); }
             g.image(label, Coord.of(UI.scale(10), y + (rowHeight - label.sz().y) / 2));
-            String status = entry.availability == CraftAtlasEntry.Availability.OPEN ? "●" : "○";
+            String status = entry.availability == CraftAtlasEntry.Availability.OPEN ? "\u25cf" : "\u25cb";
             g.text(status, Coord.of(sz.x - UI.scale(18), y + UI.scale(22)));
         }
         super.draw(g);

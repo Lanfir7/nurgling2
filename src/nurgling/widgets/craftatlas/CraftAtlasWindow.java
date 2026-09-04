@@ -24,8 +24,9 @@ import java.util.Set;
 
 /** Separate crafting encyclopedia. Crafting itself stays in the normal NCraftWindow. */
 public class CraftAtlasWindow extends Window {
-    private final MenuGrid menu;
-    private final MenuCraftCatalog catalog;
+    private MenuGrid menu;
+    private MenuCraftCatalog catalog;
+    private final CraftAtlasObservationStore observationStore;
     private final CraftAtlasController controller;
     private final CraftAtlasPreferences preferences;
     private final CraftAtlasController.Listener listener = this::stateChanged;
@@ -37,20 +38,31 @@ public class CraftAtlasWindow extends Window {
     private final Button[] sectionButtons = new Button[5];
     private String section;
     private int observedMenuRevision = Integer.MIN_VALUE;
+    private long observedStoreRevision = Long.MIN_VALUE;
     private boolean subscribed;
     private boolean narrowDetails;
 
     public CraftAtlasWindow(MenuGrid menu) {
-        super(UI.scale(1160, 700), L10n.get("craft_atlas.title"));
+        this(menu, CraftAtlasPreferences.loadProfile());
+    }
+
+    private CraftAtlasWindow(MenuGrid menu, CraftAtlasPreferences preferences) {
+        super(Coord.of(preferences.windowW > 0 ? preferences.windowW : UI.scale(1160),
+                preferences.windowH > 0 ? preferences.windowH : UI.scale(700)), L10n.get("craft_atlas.title"));
         this.menu = menu;
-        this.catalog = new MenuCraftCatalog(menu, CraftAtlasObservationStore.current());
-        this.preferences = CraftAtlasPreferences.loadProfile();
+        this.observationStore = CraftAtlasObservationStore.current();
+        this.catalog = new MenuCraftCatalog(menu, observationStore);
+        this.preferences = preferences;
         this.section = preferences.lastSection;
-        CraftExecutionBridge bridge = new CraftExecutionBridge(menu);
+        CraftExecutionBridge bridge = new CraftExecutionBridge(resource -> {
+            MenuGrid current = this.menu;
+            MenuGrid.Pagina page = current == null ? null : current.recipeByResource(resource);
+            return page == null ? null : () -> page.button().use(new MenuGrid.Interaction());
+        }, System::nanoTime);
         this.controller = new CraftAtlasController(catalog.rebuild(), bridge);
 
-        back = add(new Button(UI.scale(34), "‹").action(controller::back));
-        forward = add(new Button(UI.scale(34), "›").action(controller::forward));
+        back = add(new Button(UI.scale(34), "\u2039").action(controller::back));
+        forward = add(new Button(UI.scale(34), "\u203a").action(controller::forward));
         search = add(new TextEntry(UI.scale(520), "") {
             @Override protected void changed() { super.changed(); applyQuery(); }
         });
@@ -65,8 +77,11 @@ public class CraftAtlasWindow extends Window {
 
         recipeList = add(new CraftAtlasRecipeList(UI.scale(330, 600), controller));
         details = add(new CraftAtlasDetails(UI.scale(620, 600), controller));
-        favorite = add(new Button(UI.scale(42), "☆").action(this::toggleFavorite));
+        favorite = add(new Button(UI.scale(42), "\u2606").action(this::toggleFavorite));
         openCraft = add(new Button(UI.scale(170), L10n.get("craft_atlas.open_craft")).action(controller::openCraft));
+        openCraft.tooltip = L10n.get("craft_atlas.normal_craft_hint");
+        back.tooltip = L10n.get("craft_atlas.back");
+        forward.tooltip = L10n.get("craft_atlas.forward");
         chooser = add(new CraftAtlasRecipeChooser(UI.scale(360, 240), controller));
         chooser.hide();
         applyLayout();
@@ -75,9 +90,18 @@ public class CraftAtlasWindow extends Window {
 
     public CraftAtlasController controller() { return controller; }
     public void onCraftWindowOpened() { controller.onCraftWindowOpened(); }
+    public void setMenu(MenuGrid value) {
+        if(menu == value) return;
+        menu = value;
+        catalog = new MenuCraftCatalog(value, observationStore);
+        observedMenuRevision = Integer.MIN_VALUE;
+        refreshCatalog();
+    }
 
     @Override protected void added() {
         super.added();
+        if(preferences.windowX >= 0 && preferences.windowY >= 0)
+            c = Coord.of(preferences.windowX, preferences.windowY);
         if(!subscribed) { controller.addListener(listener); subscribed = true; }
         stateChanged(controller.state());
     }
@@ -90,6 +114,11 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void show() {
         refreshCatalog();
+        if(parent != null) {
+            Coord maximum = parent.sz.sub(UI.scale(20, 20)).max(Coord.of(1, 1));
+            if(sz.x > maximum.x || sz.y > maximum.y)
+                resize(Coord.of(Math.min(sz.x, maximum.x), Math.min(sz.y, maximum.y)));
+        }
         if(parent != null && (c.x < 0 || c.y < 0 || c.x + sz.x > parent.sz.x || c.y + sz.y > parent.sz.y))
             c = parent.sz.sub(sz).div(2).max(Coord.z);
         super.show();
@@ -97,11 +126,13 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void tick(double dt) {
         super.tick(dt);
-        if(menu != null && observedMenuRevision != menu.pagseq) refreshCatalog();
+        if((menu != null && observedMenuRevision != menu.pagseq) || observedStoreRevision != observationStore.revision())
+            refreshCatalog();
     }
 
     private void refreshCatalog() {
         observedMenuRevision = menu == null ? 0 : menu.pagseq;
+        observedStoreRevision = observationStore.revision();
         controller.replaceSnapshot(catalog.rebuild());
     }
 
@@ -123,15 +154,15 @@ public class CraftAtlasWindow extends Window {
 
     private void stateChanged(CraftAtlasController.ViewState state) {
         recipeList.setState(state);
-        details.setEntry(state.selected);
+        details.setState(state);
         back.disable(!state.canBack);
         forward.disable(!state.canForward);
         openCraft.disable(state.selected == null || state.selected.availability != CraftAtlasEntry.Availability.OPEN);
         boolean starred = state.selected != null && preferences.favorites.contains(state.selected.recipeResource);
-        favorite.change(starred ? "★" : "☆");
+        favorite.change(starred ? "\u2605" : "\u2606");
         if(state.selected != null) {
             preferences.recordRecent(state.selected.recipeResource);
-            CraftAtlasLayout current = CraftAtlasLayout.compute(sz.x, sz.y, 1.0);
+            CraftAtlasLayout current = CraftAtlasLayout.compute(sz.x, sz.y, uiScale());
             if(current.detailsAsPage) { narrowDetails = true; applyLayout(); }
         }
         chooser.setChoices(state.choices);
@@ -155,7 +186,7 @@ public class CraftAtlasWindow extends Window {
     @Override public void resize(Coord size) { super.resize(size); if(recipeList != null) applyLayout(); }
 
     private void applyLayout() {
-        CraftAtlasLayout layout = CraftAtlasLayout.compute(sz.x, sz.y, 1.0);
+        CraftAtlasLayout layout = CraftAtlasLayout.compute(sz.x, sz.y, uiScale());
         back.move(UI.scale(8, 12)); forward.move(UI.scale(48, 12));
         search.move(UI.scale(96, 12)); search.resize(Math.max(UI.scale(220), sz.x - UI.scale(112)));
         int sideY = layout.sidebar.y + UI.scale(8);
@@ -182,6 +213,8 @@ public class CraftAtlasWindow extends Window {
         chooser.move(Coord.of(Math.max(0, (sz.x - chooser.sz.x) / 2), Math.max(layout.header.h, (sz.y - chooser.sz.y) / 2)));
         chooser.raise();
     }
+
+    private double uiScale() { return UI.scale(1000) / 1000.0; }
 
     @Override public boolean keydown(KeyDownEvent ev) {
         if(ev.code == KeyEvent.VK_F && (ev.mods & KeyMatch.C) != 0) { setfocus(search); return true; }

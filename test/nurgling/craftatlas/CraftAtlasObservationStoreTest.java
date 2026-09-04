@@ -35,6 +35,14 @@ class CraftAtlasObservationStoreTest {
         assertTrue(new CraftAtlasObservationStore(temp.resolve("other.json")).all().isEmpty());
     }
 
+    @Test
+    void revisionChangesWhenARecipeObservationChanges() {
+        CraftAtlasObservationStore store = new CraftAtlasObservationStore(temp.resolve("revision.json"));
+        long before = store.revision();
+        store.record(observation("axe", "Glue", "gfx/terobjs/workbench"));
+        assertTrue(store.revision() > before);
+    }
+
     private CraftAtlasObservation observation(String recipe, String input, String requirement) {
         return new CraftAtlasObservation(recipe, "Axe",
                 Arrays.asList(new CraftAtlasObservation.Item("gfx/invobjs/glue", input, 2, false)),

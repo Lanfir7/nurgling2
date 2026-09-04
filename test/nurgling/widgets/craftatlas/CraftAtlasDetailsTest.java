@@ -12,6 +12,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CraftAtlasDetailsTest {
     @Test
+    void availabilityUsesStableLocalizationKeys() {
+        assertEquals("craft_atlas.status.open", CraftAtlasDetails.statusKey(CraftAtlasEntry.Availability.OPEN));
+        assertEquals("craft_atlas.status.unavailable", CraftAtlasDetails.statusKey(CraftAtlasEntry.Availability.UNAVAILABLE_NOW));
+        assertEquals("craft_atlas.status.unavailable", CraftAtlasDetails.statusKey(CraftAtlasEntry.Availability.CHECKING));
+        assertEquals("craft_atlas.status.reference", CraftAtlasDetails.statusKey(CraftAtlasEntry.Availability.REFERENCE_ONLY));
+    }
+
+    @Test
     void linksOnlyRowsWithUsefulTargets() {
         CraftAtlasEntry entry = CraftAtlasEntry.builder("axe", "Axe")
                 .input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(

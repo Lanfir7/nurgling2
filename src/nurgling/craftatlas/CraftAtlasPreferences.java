@@ -24,7 +24,7 @@ public final class CraftAtlasPreferences {
     public final List<String> recent = new ArrayList<>();
     public final Map<String, Integer> columnWidths = new LinkedHashMap<>();
     public String lastSection = "all";
-    public int windowX = -1, windowY = -1, windowW = 1160, windowH = 700;
+    public int windowX = -1, windowY = -1, windowW = -1, windowH = -1;
 
     public void recordRecent(String recipeResource) {
         if(recipeResource == null || recipeResource.isEmpty()) return;

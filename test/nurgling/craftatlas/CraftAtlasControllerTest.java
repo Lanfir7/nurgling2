@@ -1,6 +1,8 @@
 package nurgling.craftatlas;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import nurgling.tools.RecipeIngredientCache;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -10,6 +12,11 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CraftAtlasControllerTest {
+    @AfterEach
+    void clearRecipeCache() {
+        RecipeIngredientCache.clear();
+    }
+
     @Test
     void oneProducerNavigatesAndManyProducersRequestsChoiceWithoutChangingResults() {
         CraftAtlasEntry axe = recipe("axe", "axe-out", "glue-one");
@@ -40,6 +47,16 @@ class CraftAtlasControllerTest {
                 CraftAtlasEntry.RequirementKind.SKILL, null, "Carpentry", "Learn Carpentry");
         controller.openRequirement(skill);
         assertEquals(skill, controller.state().requirementDescription);
+    }
+
+    @Test
+    void cachedProducerMakesAnIngredientLinkVisibleBeforeItsOutputWasObserved() {
+        CraftAtlasEntry glue = recipe("glue-recipe", null, null);
+        RecipeIngredientCache.addOutputMapping("Glue", "glue-recipe", "Glue");
+        CraftAtlasController controller = new CraftAtlasController(
+                CraftAtlasSnapshot.of(1, Collections.singletonList(glue)), null);
+
+        assertEquals(CraftRecipeGraph.LinkState.SINGLE, controller.linkState("unknown-output", "Glue"));
     }
 
     private CraftAtlasEntry recipe(String id, String output, String input) {

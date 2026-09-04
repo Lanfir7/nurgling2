@@ -6,6 +6,7 @@ import haven.UI;
 import haven.Widget;
 import nurgling.craftatlas.CraftAtlasController;
 import nurgling.craftatlas.CraftAtlasEntry;
+import nurgling.i18n.L10n;
 
 import java.awt.Color;
 import java.awt.event.KeyEvent;
@@ -28,7 +29,7 @@ public class CraftAtlasRecipeChooser extends Widget {
 
     @Override public void draw(GOut g) {
         g.chcolor(new Color(10, 13, 16, 245)); g.frect(Coord.z, sz); g.chcolor();
-        g.text("Choose recipe", UI.scale(12, 22));
+        g.text(L10n.get("craft_atlas.choice"), UI.scale(12, 22));
         int max = Math.min(choices.size(), Math.max(1, (sz.y - UI.scale(34)) / rowHeight));
         for(int i = 0; i < max; i++) {
             int y = UI.scale(34) + i * rowHeight;

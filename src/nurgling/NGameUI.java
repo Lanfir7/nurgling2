@@ -792,6 +792,8 @@ public class NGameUI extends GameUI
                 fitwdg(craftwnd);
             }
             craftwnd.add(child);
+            if(craftAtlas != null)
+                craftAtlas.onCraftWindowOpened();
             craftwnd.pack();
             fitwdg(craftwnd);
             craftwnd.raise();
