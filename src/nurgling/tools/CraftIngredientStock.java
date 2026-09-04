@@ -23,6 +23,10 @@ public final class CraftIngredientStock {
 
     private CraftIngredientStock() {}
 
+    public static String qualityKey(double quality) {
+        return String.format(Locale.ROOT, "%.2f", quality);
+    }
+
     public static final class Totals {
         public final int count;
         public final double maxQuality;
@@ -103,7 +107,7 @@ public final class CraftIngredientStock {
         Map<String, List<StorageItemDao.StorageItemData>> grouped = raw.stream()
                 .filter(item -> item.getQuality() >= 0)
                 .collect(Collectors.groupingBy(item ->
-                        item.getName() + "|" + String.format("%.2f", item.getQuality()),
+                        item.getName() + "|" + qualityKey(item.getQuality()),
                         LinkedHashMap::new,
                         Collectors.toList()));
 

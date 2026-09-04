@@ -21,6 +21,7 @@ public final class CraftAtlasEntry {
     public final List<String> equipmentSlots;
     public final List<String> categories;
     public final String description;
+    public final boolean inputsObserved;
 
     private CraftAtlasEntry(Builder b) {
         recipeResource = required(b.recipeResource, "recipeResource");
@@ -35,6 +36,7 @@ public final class CraftAtlasEntry {
         equipmentSlots = immutable(b.equipmentSlots);
         categories = immutable(b.categories);
         description = b.description;
+        inputsObserved = b.inputsObserved;
     }
 
     public static Builder builder(String recipeResource, String displayName) {
@@ -64,6 +66,7 @@ public final class CraftAtlasEntry {
         private final List<String> equipmentSlots = new ArrayList<>();
         private final List<String> categories = new ArrayList<>();
         private String description;
+        private boolean inputsObserved;
 
         private Builder(String recipeResource, String displayName) {
             this.recipeResource = recipeResource;
@@ -80,6 +83,7 @@ public final class CraftAtlasEntry {
         public Builder equipmentSlot(String value) { if(value != null && !value.trim().isEmpty()) equipmentSlots.add(value); return this; }
         public Builder category(String value) { if(value != null && !value.trim().isEmpty()) categories.add(value); return this; }
         public Builder description(String value) { description = value; return this; }
+        public Builder inputsObserved(boolean value) { inputsObserved = value; return this; }
         public CraftAtlasEntry build() { return new CraftAtlasEntry(this); }
     }
 

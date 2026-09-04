@@ -110,6 +110,7 @@ public final class MenuCraftCatalog {
     private static CraftAtlasEntry merge(CraftAtlasEntry live, CraftAtlasEntry reference) {
         CraftAtlasEntry.Builder builder = CraftAtlasEntry.builder(live.recipeResource, live.displayName)
                 .availability(live.availability)
+                .inputsObserved(live.inputsObserved)
                 .output(live.outputResource == null ? reference.outputResource : live.outputResource)
                 .description(live.description == null ? reference.description : live.description);
         builder.gilding(live.gilding == null ? reference.gilding : live.gilding);
@@ -154,7 +155,8 @@ public final class MenuCraftCatalog {
     private static CraftAtlasEntry build(PageRecord page, CraftAtlasEntry.Availability availability,
                                          CraftAtlasObservation observation) {
         CraftAtlasEntry.Builder builder = CraftAtlasEntry.builder(page.resource,
-                observation != null ? observation.displayName : page.name).availability(availability);
+                observation != null ? observation.displayName : page.name).availability(availability)
+                .inputsObserved(observation != null && !observation.inputs.isEmpty());
         Set<String> qualityKeys = new LinkedHashSet<>();
         LinkedHashMap<String, CraftAtlasEntry.Bonus> bonuses = new LinkedHashMap<>();
         for(CraftAtlasEntry.Bonus bonus : page.bonuses) bonuses.put(bonusKey(bonus), bonus);

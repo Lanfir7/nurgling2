@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,6 +62,21 @@ class CraftIngredientStockTest {
         assertEquals(1, grouped.size());
         assertEquals(2, grouped.get(0).count);
         assertEquals("Nettle", grouped.get(0).name);
+    }
+
+    @Test
+    void qualityGroupingDoesNotDependOnDecimalLocale() {
+        Locale previous = Locale.getDefault();
+        Locale.setDefault(Locale.GERMANY);
+        try {
+            List<StorageItemDao.StorageItemData> raw = List.of(
+                    item("ha", "Nettle", 10.00, "c1"),
+                    item("hb", "Nettle", 10.001, "c1"));
+            assertEquals(1, CraftIngredientStock.groupByQuality(raw, Map.of()).size());
+            assertEquals("10.00", CraftIngredientStock.qualityKey(10));
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 
     @Test

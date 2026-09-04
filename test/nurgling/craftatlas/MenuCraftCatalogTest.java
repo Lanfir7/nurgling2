@@ -25,6 +25,7 @@ class MenuCraftCatalogTest {
         assertEquals(CraftAtlasEntry.Availability.OPEN, e.availability);
         assertEquals(CraftAtlasEntry.RequirementKind.STATION, e.requirements.get(0).kind);
         assertEquals(1, e.inputs.size());
+        assertTrue(e.inputsObserved);
     }
 
     @Test
@@ -60,6 +61,7 @@ class MenuCraftCatalogTest {
         CraftAtlasEntry live = snapshot.byRecipe("paginae/craft/glue");
         assertEquals(CraftAtlasEntry.Availability.OPEN, live.availability);
         assertEquals("Bone", live.inputs.get(0).options.get(0).name);
+        assertFalse(live.inputsObserved);
         assertNull(snapshot.byRecipe("wiki:glue"));
         assertEquals(CraftAtlasEntry.Availability.REFERENCE_ONLY,
                 snapshot.byRecipe("wiki:unknown").availability);
