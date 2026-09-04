@@ -73,6 +73,15 @@ public final class CraftAtlasMaterialSource {
     }
 
     public Snapshot load(CraftAtlasEntry entry, List<InventorySample> inventory) {
+        return load(entry, inventory, true);
+    }
+
+    /** Build an immediate UI snapshot without touching the warehouse database. */
+    public Snapshot loadInventoryOnly(CraftAtlasEntry entry, List<InventorySample> inventory) {
+        return load(entry, inventory, false);
+    }
+
+    private Snapshot load(CraftAtlasEntry entry, List<InventorySample> inventory, boolean includeStorage) {
         if(entry == null) return new Snapshot(Collections.emptyList(), Collections.emptyMap(),
                 Collections.emptyMap(), false);
         if(inventory == null) inventory = Collections.emptyList();
@@ -87,7 +96,8 @@ public final class CraftAtlasMaterialSource {
             List<InventorySample> matchingInventory = new ArrayList<>();
             for(InventorySample sample : inventory)
                 if(wanted.contains(sample.name)) matchingInventory.add(sample);
-            MergedRows rows = merge(i, matchingInventory, CraftIngredientStock.search(names));
+            MergedRows rows = merge(i, matchingInventory,
+                    includeStorage ? CraftIngredientStock.search(names) : Collections.emptyList());
             candidates.put(i, rows.candidates);
             storage.putAll(rows.storageByCandidateId);
         }

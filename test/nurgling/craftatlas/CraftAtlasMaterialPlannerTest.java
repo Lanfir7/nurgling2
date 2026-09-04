@@ -201,6 +201,8 @@ class CraftAtlasMaterialPlannerTest {
     void ignoredOptionalSlotDoesNotOverflowAtLargeCount() {
         SlotRequest slot = new SlotRequest(0, Integer.MAX_VALUE, true, List.of("Pepper"));
 
+        assertTrue(CraftAtlasMaterialPlanner.supportsCraftCount(
+                List.of(slot), Map.of(0, Selection.ignored()), Integer.MAX_VALUE));
         Plan plan = assertDoesNotThrow(() -> CraftAtlasMaterialPlanner.plan(
                 List.of(slot), Map.of(), Map.of(0, Selection.ignored()), Integer.MAX_VALUE));
 

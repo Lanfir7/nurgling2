@@ -71,7 +71,17 @@ public final class ContainerInventorySync {
      * Trust live widgets only while slots are still in the window.
      */
     public static <T> List<T> itemsToPersist(List<T> eventCache, List<T> live, int liveSlotCount) {
-        if (liveSlotCount > 0 && live != null && !live.isEmpty()) {
+        return itemsToPersist(eventCache, live, liveSlotCount, false);
+    }
+
+    /**
+     * An explicit snapshot is taken while the inventory is still open, so an
+     * empty live list is authoritative there. Teardown keeps the conservative
+     * behavior above because widgets may already have been destroyed.
+     */
+    public static <T> List<T> itemsToPersist(List<T> eventCache, List<T> live, int liveSlotCount,
+                                             boolean trustEmptyLive) {
+        if (live != null && (trustEmptyLive || (liveSlotCount > 0 && !live.isEmpty()))) {
             return live;
         }
         return eventCache;

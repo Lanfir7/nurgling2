@@ -94,6 +94,12 @@ class ContainerInventorySyncTest {
     }
 
     @Test
+    void explicitOpenSnapshotTrustsEmptyLiveInventory() {
+        assertEquals(List.of(), ContainerInventorySync.itemsToPersist(
+                List.of("stale-item"), List.of(), 0, true));
+    }
+
+    @Test
     void unexpandedStackIsDroppedWhenAmountNoLongerMatches() {
         assertFalse(ContainerInventorySync.keepUnexpandedStackEntries(16, 0));
         assertFalse(ContainerInventorySync.keepUnexpandedStackEntries(16, 5));

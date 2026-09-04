@@ -164,9 +164,17 @@ public final class CraftAtlasMaterialPlanner {
     }
 
     public static boolean supportsCraftCount(List<SlotRequest> slots, int craftCount) {
+        return supportsCraftCount(slots, Collections.emptyMap(), craftCount);
+    }
+
+    public static boolean supportsCraftCount(List<SlotRequest> slots, Map<Integer, Selection> selections,
+                                             int craftCount) {
         if(craftCount < 1) return false;
-        if(slots != null) for(SlotRequest slot : slots)
+        if(slots != null) for(SlotRequest slot : slots) {
+            Selection selection = selections == null ? null : selections.get(slot.slotIndex);
+            if(slot.optional && selection != null && selection.isIgnored()) continue;
             if((long)slot.unitsPerCraft * craftCount > Integer.MAX_VALUE) return false;
+        }
         return true;
     }
 

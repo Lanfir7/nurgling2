@@ -73,8 +73,13 @@ public class ItemWatcher implements Runnable {
 
     @Override
     public void run() {
+        sync();
+    }
+
+    /** Persist the snapshot and report whether the database is now in sync. */
+    public boolean sync() {
         if (containerHash == null) {
-            return;
+            return false;
         }
         
         // Filter out items with negative or zero quality (stacks and unqualified items)
@@ -91,7 +96,7 @@ public class ItemWatcher implements Runnable {
         String cachedSignature = containerItemCache.get(containerHash);
         if (itemsSignature.equals(cachedSignature)) {
             nurgling.db.DatabaseManager.incrementSkippedContainer();
-            return; // Same items, no need to write to DB
+            return true; // Same items, no need to write to DB
         }
 
         try {
@@ -126,8 +131,10 @@ public class ItemWatcher implements Runnable {
             
             // Notify that container data has changed - increment version for debounced refresh
             nurgling.tools.NSearchItem.notifyContainerDataChanged();
+            return true;
         } catch (Exception e) {
             e.printStackTrace();
+            return false;
         }
     }
     

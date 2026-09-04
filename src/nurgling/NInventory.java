@@ -2476,7 +2476,7 @@ public class NInventory extends Inventory
      * Replace the event-sourced cache with what is actually in the window so
      * items taken by another client disappear from DB without sorting.
      */
-    private void rebuildIisFromLiveItems() {
+    private void rebuildIisFromLiveItems(boolean trustEmptyLive) {
         if (parentGob == null || parentGob.ngob == null || parentGob.ngob.hash == null) {
             return;
         }
@@ -2493,7 +2493,7 @@ public class NInventory extends Inventory
             }
             collectLiveItem((NGItem) w.item, w.c, hash, cachedBySlot.get(w.c), live);
         }
-        iis = new ArrayList<>(ContainerInventorySync.itemsToPersist(iis, live, slots.size()));
+        iis = new ArrayList<>(ContainerInventorySync.itemsToPersist(iis, live, slots.size(), trustEmptyLive));
     }
 
     private static void collectLiveItem(NGItem item, Coord slot, String hash,
@@ -2536,8 +2536,7 @@ public class NInventory extends Inventory
         if (containerHash == null || NCore.databaseManager == null || !NCore.databaseManager.isReady()) {
             return false;
         }
-        new ItemWatcher(new ArrayList<>(iis), NCore.databaseManager, containerHash).run();
-        return true;
+        return new ItemWatcher(new ArrayList<>(iis), NCore.databaseManager, containerHash).sync();
     }
 
     private String prepareStorageSnapshot(boolean trustEmptySnapshot) {
@@ -2547,7 +2546,7 @@ public class NInventory extends Inventory
         }
         String containerHash = parentGob.ngob.hash;
         iisPeak = Math.max(iisPeak, iis.size());
-        rebuildIisFromLiveItems();
+        rebuildIisFromLiveItems(trustEmptySnapshot);
         iisPeak = Math.max(iisPeak, iis.size());
         pendingCacheRemovals.clear();
         ItemWatcher.invalidateContainerCache(containerHash);

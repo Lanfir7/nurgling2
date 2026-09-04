@@ -50,6 +50,7 @@ public class CraftAtlasWindow extends Window {
     private long observedStoreRevision = Long.MIN_VALUE;
     private boolean subscribed;
     private boolean narrowDetails;
+    private boolean collectionPreparing;
     private Thread collectionThread;
 
     public CraftAtlasWindow(MenuGrid menu) {
@@ -158,7 +159,7 @@ public class CraftAtlasWindow extends Window {
             details.refreshMaterialsIfDue(System.nanoTime(), NGlobalSearchItems.storageRevision());
         if(collectionThread != null && !collectionThread.isAlive()) {
             collectionThread = null;
-            details.refreshMaterials();
+            details.refreshMaterialsAsync(NGlobalSearchItems.storageRevision(), null);
         }
     }
 
@@ -224,7 +225,26 @@ public class CraftAtlasWindow extends Window {
             return;
         }
         details.setCraftCount(count);
-        details.refreshMaterials();
+        CraftAtlasEntry selected = controller.state().selected;
+        String recipeResource = selected == null ? null : selected.recipeResource;
+        collectionPreparing = true;
+        refreshCollectionState();
+        details.refreshMaterialsAsync(NGlobalSearchItems.storageRevision(), fresh -> {
+            collectionPreparing = false;
+            CraftAtlasEntry current = controller.state().selected;
+            Integer currentCount = parseCraftCount(craftCount.text());
+            if(!fresh || current == null || !current.recipeResource.equals(recipeResource)
+                    || currentCount == null || currentCount.intValue() != count.intValue()) {
+                if(!fresh && current != null && current.recipeResource.equals(recipeResource))
+                    showError(L10n.get("craft_atlas.collect_unavailable"));
+                refreshCollectionState();
+                return;
+            }
+            startResourceCollection();
+        });
+    }
+
+    private void startResourceCollection() {
         CraftAtlasMaterialSource.Snapshot snapshot = details.materialSnapshot();
         CraftAtlasMaterialPlanner.Plan plan = details.materialPlan();
         if(snapshot == null || !snapshot.collectible) {
@@ -249,7 +269,7 @@ public class CraftAtlasWindow extends Window {
         CraftAtlasMaterialSource.Snapshot snapshot = details.materialSnapshot();
         CraftAtlasMaterialPlanner.Plan plan = details.materialPlan();
         Integer count = parseCraftCount(craftCount.text());
-        collectResources.disable(collectionThread != null && collectionThread.isAlive()
+        collectResources.disable(collectionPreparing || collectionThread != null && collectionThread.isAlive()
                 || count == null || !details.supportsCraftCount(count)
                 || snapshot == null || !snapshot.collectible
                 || plan == null || !plan.complete);

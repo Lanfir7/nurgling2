@@ -30,7 +30,7 @@ class CraftAtlasIntegrationTest {
         assertTrue(details.contains("CraftAtlasMaterialPlanner.plan("));
         assertTrue(details.contains("new CraftAtlasIngredientSelector("));
         assertTrue(window.contains("new CraftAtlasResourceCollector("));
-        assertTrue(window.contains("details.refreshMaterials()"));
+        assertTrue(window.contains("details.refreshMaterialsAsync("));
     }
 
     private String read(String path) throws Exception {

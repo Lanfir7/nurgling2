@@ -85,6 +85,22 @@ class CraftAtlasMaterialSourceTest {
         assertEquals(Source.INVENTORY, snapshot.candidatesBySlot.get(0).get(0).source);
     }
 
+    @Test
+    void inventoryOnlySnapshotDoesNotNeedWarehouseData() {
+        CraftAtlasEntry observed = CraftAtlasEntry.builder("paginae/craft/cloth", "Cloth")
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(2, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/linencloth", "Linen Cloth"))))
+                .build();
+
+        CraftAtlasMaterialSource.Snapshot snapshot = new CraftAtlasMaterialSource().loadInventoryOnly(
+                observed, List.of(new CraftAtlasMaterialSource.InventorySample("Linen Cloth", 77, 3)));
+
+        assertTrue(snapshot.collectible);
+        assertEquals(1, snapshot.candidatesBySlot.get(0).size());
+        assertTrue(snapshot.storageByCandidateId.isEmpty());
+    }
+
     private static ArrayList<JSONObject> jsonNames(String... names) {
         ArrayList<JSONObject> values = new ArrayList<>();
         for(String name : names) values.add(new JSONObject().put("name", name));

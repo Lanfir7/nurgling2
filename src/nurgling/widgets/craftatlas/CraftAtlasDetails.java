@@ -8,6 +8,7 @@ import haven.Text;
 import haven.TextEntry;
 import haven.UI;
 import haven.Widget;
+import monitoring.NGlobalSearchItems;
 import nurgling.craftatlas.CraftAtlasController;
 import nurgling.craftatlas.CraftAtlasEntry;
 import nurgling.craftatlas.CraftAtlasQuality;
@@ -23,7 +24,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,14 +71,18 @@ public class CraftAtlasDetails extends Widget {
     }
 
     private static final class PendingMaterials {
-        final long generation;
+        final long generation, requestToken;
         final String recipeResource;
         final CraftAtlasMaterialSource.Snapshot snapshot;
+        final Consumer<Boolean> callback;
 
-        PendingMaterials(long generation, String recipeResource, CraftAtlasMaterialSource.Snapshot snapshot) {
+        PendingMaterials(long generation, long requestToken, String recipeResource,
+                         CraftAtlasMaterialSource.Snapshot snapshot, Consumer<Boolean> callback) {
             this.generation = generation;
+            this.requestToken = requestToken;
             this.recipeResource = recipeResource;
             this.snapshot = snapshot;
+            this.callback = callback;
         }
     }
 
@@ -102,8 +110,9 @@ public class CraftAtlasDetails extends Widget {
     private long nextMaterialRefreshAt;
     private long observedStorageRevision = Long.MIN_VALUE;
     private long materialGeneration;
-    private volatile PendingMaterials pendingMaterials;
-    private Thread materialRefreshThread;
+    private long materialRequestToken;
+    private final ConcurrentLinkedQueue<PendingMaterials> completedMaterials = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger materialLoadsInFlight = new AtomicInteger();
     private String materialSignature;
     private double quality = 10;
     private final int headerHeight = UI.scale(104);
@@ -163,21 +172,21 @@ public class CraftAtlasDetails extends Widget {
     }
 
     public boolean supportsCraftCount(int value) {
-        return materials == null || CraftAtlasMaterialPlanner.supportsCraftCount(materials.slots, value);
+        return materials == null || CraftAtlasMaterialPlanner.supportsCraftCount(materials.slots, selections, value);
     }
 
-    public void refreshMaterials() {
-        loadMaterials();
-        rebuildRows();
-        rebuildSelectors();
+    public void refreshMaterialsAsync(long storageRevision, Consumer<Boolean> callback) {
+        startMaterialRefresh(storageRevision, callback);
     }
 
     public void refreshMaterialsIfDue(long now, long storageRevision) {
-        PendingMaterials completed = pendingMaterials;
-        if(completed != null) {
-            pendingMaterials = null;
-            if(entry != null && completed.generation == materialGeneration &&
-                    entry.recipeResource.equals(completed.recipeResource)) {
+        PendingMaterials completed;
+        while((completed = completedMaterials.poll()) != null) {
+            boolean current = completed.snapshot != null && entry != null &&
+                    completed.generation == materialGeneration &&
+                    completed.requestToken == materialRequestToken &&
+                    entry.recipeResource.equals(completed.recipeResource);
+            if(current) {
                 String signature = materialSignature(completed.snapshot);
                 if(!signature.equals(materialSignature)) {
                     installMaterials(completed.snapshot, signature);
@@ -185,20 +194,40 @@ public class CraftAtlasDetails extends Widget {
                     rebuildSelectors();
                 }
             }
+            if(completed.callback != null) completed.callback.accept(current);
         }
         if(entry == null || (now < nextMaterialRefreshAt && storageRevision == observedStorageRevision)
-                || (materialRefreshThread != null && materialRefreshThread.isAlive())) return;
-        nextMaterialRefreshAt = now + MATERIAL_REFRESH_INTERVAL_NS;
+                || materialLoadsInFlight.get() > 0) return;
+        startMaterialRefresh(storageRevision, null);
+    }
+
+    private void startMaterialRefresh(long storageRevision, Consumer<Boolean> callback) {
+        if(entry == null) {
+            if(callback != null) callback.accept(false);
+            return;
+        }
+        nextMaterialRefreshAt = System.nanoTime() + MATERIAL_REFRESH_INTERVAL_NS;
         observedStorageRevision = storageRevision;
         final CraftAtlasEntry requestedEntry = entry;
         final long requestedGeneration = materialGeneration;
+        final long requestToken = ++materialRequestToken;
         final List<CraftAtlasMaterialSource.InventorySample> inventory =
                 CraftAtlasMaterialSource.inventorySamples();
-        materialRefreshThread = new Thread(() -> pendingMaterials = new PendingMaterials(
-                requestedGeneration, requestedEntry.recipeResource,
-                materialSource.load(requestedEntry, inventory)), "CraftAtlasStockRefresh");
-        materialRefreshThread.setDaemon(true);
-        materialRefreshThread.start();
+        materialLoadsInFlight.incrementAndGet();
+        Thread worker = new Thread(() -> {
+            CraftAtlasMaterialSource.Snapshot snapshot = null;
+            try {
+                snapshot = materialSource.load(requestedEntry, inventory);
+            } catch(RuntimeException error) {
+                error.printStackTrace();
+            } finally {
+                completedMaterials.add(new PendingMaterials(requestedGeneration, requestToken,
+                        requestedEntry.recipeResource, snapshot, callback));
+                materialLoadsInFlight.decrementAndGet();
+            }
+        }, "CraftAtlasStockRefresh");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     public CraftAtlasMaterialSource.Snapshot materialSnapshot() { return materials; }
@@ -529,7 +558,7 @@ public class CraftAtlasDetails extends Widget {
 
     private void loadMaterials() {
         materialGeneration++;
-        pendingMaterials = null;
+        materialRequestToken++;
         if(entry == null) {
             clearSelectors();
             materials = null;
@@ -539,9 +568,10 @@ public class CraftAtlasDetails extends Widget {
             notifyPlanChanged();
             return;
         }
-        CraftAtlasMaterialSource.Snapshot fresh = materialSource.load(entry);
+        CraftAtlasMaterialSource.Snapshot fresh = materialSource.loadInventoryOnly(
+                entry, CraftAtlasMaterialSource.inventorySamples());
         installMaterials(fresh, materialSignature(fresh));
-        nextMaterialRefreshAt = System.nanoTime() + MATERIAL_REFRESH_INTERVAL_NS;
+        startMaterialRefresh(NGlobalSearchItems.storageRevision(), null);
     }
 
     private void installMaterials(CraftAtlasMaterialSource.Snapshot fresh, String signature) {
