@@ -7,6 +7,7 @@ import haven.Widget;
 import haven.Window;
 import haven.res.ui.barterbox.Shopbox;
 import nurgling.NGameUI;
+import nurgling.NInventory;
 import nurgling.NInventory.QualityType;
 import nurgling.NUtils;
 import nurgling.areas.NContext;
@@ -49,6 +50,10 @@ public class TakeItems2 implements Action
 
     static int pileTransferCount(int requested, int capacity) {
         return Math.max(0, Math.min(requested, capacity));
+    }
+
+    static boolean inventoryCannotAcceptItem(int freeCells, boolean partialStackAvailable) {
+        return freeCells <= 0 && !partialStackAvailable;
     }
 
     final NContext cnt;
@@ -104,6 +109,17 @@ public class TakeItems2 implements Action
         this.qualityType = QualityType.High;
     }
 
+    private boolean noRoomLeft(NGameUI gui) throws InterruptedException
+    {
+        NInventory inventory = gui.getInventory();
+        if(inventory == null)
+            return false;
+        int freeCells = inventory.getNumberFreeCoord(new Coord(1, 1));
+        boolean partialStackAvailable = freeCells <= 0 && item != null
+                && inventory.findNotFullStack(item) != null;
+        return inventoryCannotAcceptItem(freeCells, partialStackAvailable);
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
@@ -119,6 +135,8 @@ public class TakeItems2 implements Action
             return Results.FAIL();
         for(NContext.ObjectStorage input: inputs)
         {
+            if(noRoomLeft(gui))
+                return Results.SUCCESS();
             if(input instanceof NContext.Barter)
                 takeFromBarter(left,gui, (NContext.Barter)input);
             else if (input instanceof NContext.Pile)
