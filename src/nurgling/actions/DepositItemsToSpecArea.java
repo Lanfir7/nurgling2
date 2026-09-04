@@ -9,6 +9,7 @@ import nurgling.areas.NContext;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.StackSupporter;
 import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
@@ -35,6 +36,30 @@ public class DepositItemsToSpecArea implements Action {
     private Specialisation.SpecName originSpec = null;
 
     private Map<Long, Integer> containerFreeSpaceMap = new HashMap<>();
+    private Map<Long, Integer> containerStackDepth = new HashMap<>();
+
+    static int itemsThatFit(int freeCells, int stackDepth) {
+        return freeCells * Math.max(1, stackDepth);
+    }
+
+    private int itemsThatFit(long gobid, int freeCells) {
+        return itemsThatFit(freeCells, containerStackDepth.getOrDefault(gobid, 1));
+    }
+
+    private int measureStackDepth(NGameUI gui, Container container) {
+        NInventory inventory = gui.getInventory(container.cap);
+        if (inventory == null) {
+            return 1;
+        }
+
+        int stackDepth = 1;
+        for (String key : itemAlias.getKeys()) {
+            if (StackSupporter.isStackable(inventory, key)) {
+                stackDepth = Math.max(stackDepth, Math.max(1, StackSupporter.getFullStackSize(key)));
+            }
+        }
+        return stackDepth;
+    }
 
     public DepositItemsToSpecArea(NContext context, NAlias itemAlias, Specialisation.SpecName destinationSpec, int maxPerContainer) {
         this.context = context;
@@ -100,11 +125,12 @@ public class DepositItemsToSpecArea implements Action {
             
             // Store free space for external access
             containerFreeSpaceMap.put(container.gobid, freeSpace);
+            containerStackDepth.put(container.gobid, measureStackDepth(gui, container));
 
             // Only add if we need items AND have space
             if (needed > 0 && freeSpace > 0) {
                 // Limit by available free space
-                int canAdd = Math.min(needed, freeSpace);
+                int canAdd = Math.min(needed, itemsThatFit(container.gobid, freeSpace));
                 totalNeeded += canAdd;
                 containersNeedingItems.add(container);
                 gui.msg("DepositItems: Container #" + containerIndex + " NEEDS " + canAdd + " items (added to fill list)");
@@ -140,7 +166,7 @@ public class DepositItemsToSpecArea implements Action {
                 Container.Space space = container.getattr(Container.Space.class);
                 int needed = itemCount.getNeeded();
                 int freeSpace = space.getFreeSpace();
-                totalStillNeeded += Math.min(needed, freeSpace);
+                totalStillNeeded += Math.min(needed, itemsThatFit(container.gobid, freeSpace));
             }
 
             if (totalStillNeeded == 0) {
