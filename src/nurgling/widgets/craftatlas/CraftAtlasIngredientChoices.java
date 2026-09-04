@@ -28,13 +28,26 @@ final class CraftAtlasIngredientChoices {
     private CraftAtlasIngredientChoices() {}
 
     static List<Choice> choices(List<Candidate> candidates, boolean optional, boolean grouped) {
+        return choices(candidates, optional, grouped, Collections.emptyList());
+    }
+
+    static List<Choice> choices(List<Candidate> candidates, boolean optional, boolean grouped,
+                                List<String> allowedMaterials) {
         List<Choice> result = new ArrayList<>();
         if(optional) result.add(new Choice(L10n.get("craft_atlas.material.ignore"), Selection.ignored(), null));
+        if(grouped && allowedMaterials != null && !allowedMaterials.isEmpty()) {
+            result.add(new Choice(L10n.get("craft_atlas.material.all"), Selection.all(), null));
+            for(String material : allowedMaterials)
+                result.add(new Choice(material + " · " + L10n.get("craft_atlas.material.any_quality"),
+                        Selection.material(material), null));
+        }
         if(candidates == null || candidates.isEmpty()) {
-            result.add(new Choice(L10n.get("craft_atlas.material.missing"), Selection.all(), null));
+            if(!grouped || allowedMaterials == null || allowedMaterials.isEmpty())
+                result.add(new Choice(L10n.get("craft_atlas.material.missing"), Selection.all(), null));
             return Collections.unmodifiableList(result);
         }
-        if(grouped) result.add(new Choice(L10n.get("craft_atlas.material.all"), Selection.all(), null));
+        if(grouped && (allowedMaterials == null || allowedMaterials.isEmpty()))
+            result.add(new Choice(L10n.get("craft_atlas.material.all"), Selection.all(), null));
         for(Candidate candidate : CraftAtlasMaterialPlanner.sortedCandidates(candidates))
             result.add(new Choice(candidateLabel(candidate), Selection.preferred(candidate), candidate));
         return Collections.unmodifiableList(result);
@@ -51,14 +64,20 @@ final class CraftAtlasIngredientChoices {
 
     static Choice displaySelection(List<Candidate> candidates, boolean optional, boolean grouped,
                                    Selection selected) {
-        List<Choice> values = choices(candidates, optional, grouped);
+        return displaySelection(candidates, optional, grouped, Collections.emptyList(), selected);
+    }
+
+    static Choice displaySelection(List<Candidate> candidates, boolean optional, boolean grouped,
+                                   List<String> allowedMaterials, Selection selected) {
+        List<Choice> values = choices(candidates, optional, grouped, allowedMaterials);
         if(selected != null) {
             Choice sameMaterial = null;
             for(Choice choice : values) {
                 Selection value = choice.selection;
                 if(value.mode != selected.mode) continue;
                 if(value.mode != Selection.Mode.PREFERRED) return choice;
-                if(eq(value.preferredCandidateId, selected.preferredCandidateId)) return choice;
+                if(eq(value.material, selected.material) &&
+                        eq(value.preferredCandidateId, selected.preferredCandidateId)) return choice;
                 if(choice.candidate != null && choice.candidate.material.equals(selected.material)
                         && (selected.preferredQuality == null ||
                             choice.candidate.quality <= selected.preferredQuality)

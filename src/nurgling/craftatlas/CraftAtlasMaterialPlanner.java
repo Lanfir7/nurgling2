@@ -62,6 +62,11 @@ public final class CraftAtlasMaterialPlanner {
 
         public static Selection all() { return new Selection(Mode.ALL, null, null, null); }
         public static Selection ignored() { return new Selection(Mode.IGNORED, null, null, null); }
+        public static Selection material(String material) {
+            if(material == null || material.trim().isEmpty())
+                throw new IllegalArgumentException("material must not be empty");
+            return new Selection(Mode.PREFERRED, material, null, null);
+        }
         public static Selection preferred(Candidate value) {
             if(value == null) throw new IllegalArgumentException("candidate must not be null");
             return new Selection(Mode.PREFERRED, value.material, value.id, value.quality);

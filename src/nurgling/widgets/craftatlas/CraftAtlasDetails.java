@@ -487,17 +487,23 @@ public class CraftAtlasDetails extends Widget {
     }
 
     @Override public boolean mousedown(MouseDownEvent ev) {
-        if(ev.b != 1 || entry == null) return super.mousedown(ev);
-        if(ev.c.y < headerHeight) return super.mousedown(ev);
+        if(super.mousedown(ev)) return true;
+        if(ev.b != 1 || entry == null || ev.c.y < headerHeight) return false;
         DetailRow row = rowAt(ev.c.y - headerHeight + scroll);
-        if(row == null) return super.mousedown(ev);
+        if(row == null) return false;
+        if(row.kind == Kind.INPUT && isGroupedSlot(row.slotIndex) &&
+                ev.c.x >= UI.scale(16) && ev.c.x < UI.scale(52)) {
+            CraftAtlasIngredientSelector selector = selectors.get(row.slotIndex);
+            if(selector != null) selector.openChoices();
+            return true;
+        }
         if(row.target == Target.INGREDIENT || row.target == Target.CYCLE) {
             if(row.requirement != null) controller.openRequirement(row.requirement);
             else controller.openIngredient(row.resource, row.name);
             return true;
         }
         if(row.target == Target.REQUIREMENT_DESCRIPTION) { controller.openRequirement(row.requirement); return true; }
-        return super.mousedown(ev);
+        return false;
     }
 
     @Override public boolean mousewheel(MouseWheelEvent ev) {
@@ -660,7 +666,7 @@ public class CraftAtlasDetails extends Widget {
                     slot.slotIndex, Collections.emptyList());
             boolean grouped = slot.allowedMaterials.size() > 1;
             CraftAtlasIngredientSelector selector = add(new CraftAtlasIngredientSelector(selectorWidth(), candidates,
-                    slot.optional, grouped, selections.get(slot.slotIndex), selected -> {
+                    slot.optional, grouped, slot.allowedMaterials, selections.get(slot.slotIndex), selected -> {
                 selections.put(slot.slotIndex, selected);
                 savedSelections.computeIfAbsent(entry.recipeResource, key -> new HashMap<>())
                         .put(slot.slotIndex, selected);
@@ -669,6 +675,13 @@ public class CraftAtlasDetails extends Widget {
             selectors.put(slot.slotIndex, selector);
         }
         positionSelectors();
+    }
+
+    private boolean isGroupedSlot(int slotIndex) {
+        if(materials == null || slotIndex < 0) return false;
+        for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots)
+            if(slot.slotIndex == slotIndex) return slot.allowedMaterials.size() > 1;
+        return false;
     }
 
     private void clearSelectors() {

@@ -189,6 +189,24 @@ class CraftAtlasMaterialPlannerTest {
     }
 
     @Test
+    void materialSelectionUsesAllBatchesOfThatMaterialFromBestQualityDown() {
+        SlotRequest slot = new SlotRequest(0, 1, false, List.of("Linen Cloth", "Hemp Cloth"));
+        List<Candidate> stock = List.of(
+                candidate("hemp-150", "Hemp Cloth", 150, 10, Source.STORAGE),
+                candidate("linen-100", "Linen Cloth", 100, 2, Source.STORAGE),
+                candidate("linen-92", "Linen Cloth", 92, 4, Source.STORAGE));
+
+        Plan plan = CraftAtlasMaterialPlanner.plan(List.of(slot), Map.of(0, stock),
+                Map.of(0, Selection.material("Linen Cloth")), 6);
+
+        assertTrue(plan.complete);
+        assertEquals(List.of("linen-100", "linen-92"), plan.slots.get(0).allocations.stream()
+                .map(value -> value.candidateId).collect(Collectors.toList()));
+        assertEquals(List.of(2, 4), plan.slots.get(0).allocations.stream()
+                .map(value -> value.count).collect(Collectors.toList()));
+    }
+
+    @Test
     void excessiveCraftCountIsRejectedBeforePlanning() {
         SlotRequest slot = new SlotRequest(0, Integer.MAX_VALUE, false, List.of("Stone"));
 

@@ -15,20 +15,24 @@ import java.util.function.Consumer;
 /** One recipe-input selector backed by inventory and warehouse stock. */
 public final class CraftAtlasIngredientSelector extends Dropbox<Choice> {
     private final Consumer<Selection> listener;
+    private final List<String> allowedMaterials;
     private List<Choice> choices = Collections.emptyList();
     private boolean notifying = true;
 
     public CraftAtlasIngredientSelector(int width, List<Candidate> candidates, boolean optional,
-                                        boolean grouped, Selection selected,
+                                        boolean grouped, List<String> allowedMaterials, Selection selected,
                                         Consumer<Selection> listener) {
-        super(width, Math.min(10, Math.max(1, CraftAtlasIngredientChoices.choices(candidates, optional, grouped).size())), UI.scale(22));
+        super(width, Math.min(10, Math.max(1, CraftAtlasIngredientChoices.choices(
+                candidates, optional, grouped, allowedMaterials).size())), UI.scale(22));
         this.listener = listener;
+        this.allowedMaterials = allowedMaterials == null ? Collections.emptyList() : allowedMaterials;
         setChoices(candidates, optional, grouped, selected);
     }
 
     public void setChoices(List<Candidate> candidates, boolean optional, boolean grouped, Selection selected) {
-        choices = CraftAtlasIngredientChoices.choices(candidates, optional, grouped);
-        Choice match = CraftAtlasIngredientChoices.displaySelection(candidates, optional, grouped, selected);
+        choices = CraftAtlasIngredientChoices.choices(candidates, optional, grouped, allowedMaterials);
+        Choice match = CraftAtlasIngredientChoices.displaySelection(
+                candidates, optional, grouped, allowedMaterials, selected);
         notifying = false;
         super.change(match == null && !choices.isEmpty() ? choices.get(0) : match);
         notifying = true;
@@ -36,6 +40,10 @@ public final class CraftAtlasIngredientSelector extends Dropbox<Choice> {
 
     public Selection selection() {
         return sel == null ? Selection.all() : sel.selection;
+    }
+
+    public void openChoices() {
+        mousedown(new MouseDownEvent(Coord.of(Math.max(0, sz.x - 1), itemh / 2), 1));
     }
 
     @Override protected Choice listitem(int i) { return choices.get(i); }

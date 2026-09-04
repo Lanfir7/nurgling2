@@ -68,6 +68,19 @@ class CraftAtlasIngredientChoicesTest {
     }
 
     @Test
+    void groupedSlotExposesEveryAllowedMaterialEvenWhenStockIsEmpty() {
+        List<CraftAtlasIngredientChoices.Choice> choices = CraftAtlasIngredientChoices.choices(
+                List.of(), false, true, List.of("Linen Cloth", "Hemp Cloth"));
+
+        assertEquals(3, choices.size());
+        assertTrue(choices.get(0).selection.isAll());
+        assertEquals("Linen Cloth", choices.get(1).selection.material);
+        assertNull(choices.get(1).selection.preferredCandidateId);
+        assertEquals("Hemp Cloth", choices.get(2).selection.material);
+        assertTrue(choices.get(1).label.contains(L10n.get("craft_atlas.material.any_quality")));
+    }
+
+    @Test
     void missingSelectedBatchDoesNotDisplayAHigherQualityAsSelected() {
         Candidate selected = new Candidate("linen-100", "Linen Cloth", 100, 1,
                 Source.INVENTORY, "Inventory");
