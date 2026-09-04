@@ -2,6 +2,7 @@ package nurgling.actions.bots;
 
 import haven.Gob;
 import nurgling.NGameUI;
+import nurgling.NInventory;
 import nurgling.NUtils;
 import nurgling.actions.*;
 import nurgling.areas.NArea;
@@ -21,6 +22,54 @@ public class SmelterAction implements Action {
     static NAlias ores = new NAlias ( new ArrayList<> (
             Arrays.asList ( "Cassiterite", "Lead Glance", "Wine Glance", "Chalcopyrite", "Malachite", "Peacock Ore", "Cinnabar", "Heavy Earth", "Iron Ochre",
                     "Bloodstone", "Black Ore", "Galena", "Silvershine", "Horn Silver", "Direvein", "Schrifterz", "Leaf Ore", "Meteorite", "Dross") ) );
+
+    interface OreOperations {
+        int held() throws InterruptedException;
+        void fetch(int target) throws InterruptedException;
+        void goToSmelters() throws InterruptedException;
+        void transfer(Container container) throws InterruptedException;
+    }
+
+    /** Fills every smelter from one aggregate ore load and stops when a pass makes no progress. */
+    static boolean fillOreContainers(ArrayList<Container> containers, OreOperations operations)
+            throws InterruptedException {
+        ArrayList<Container> stillNeeding = new ArrayList<>();
+        for(Container container : containers)
+            if(!container.isFull())
+                stillNeeding.add(container);
+
+        while(!stillNeeding.isEmpty()) {
+            int totalNeeded = 0;
+            for(Container container : stillNeeding)
+                totalNeeded += container.freeSpace();
+            if(totalNeeded == 0)
+                break;
+
+            if(totalNeeded > operations.held())
+                operations.fetch(totalNeeded);
+            if(operations.held() == 0)
+                return true;
+
+            int heldBefore = operations.held();
+            operations.goToSmelters();
+            ArrayList<Container> nextRound = new ArrayList<>();
+            for(Container container : stillNeeding) {
+                if(container.isFull())
+                    continue;
+                if(operations.held() == 0) {
+                    nextRound.add(container);
+                    continue;
+                }
+                operations.transfer(container);
+                if(!container.isFull())
+                    nextRound.add(container);
+            }
+            if(operations.held() >= heldBefore)
+                break;
+            stillNeeding = nextRound;
+        }
+        return false;
+    }
 
 
     @Override
@@ -42,6 +91,10 @@ public class SmelterAction implements Action {
         opt.add(omercury);
 
         if(new Validator(req, opt).run(gui).IsSuccess()) {
+            boolean oldStackingValue = ((NInventory) NUtils.getGameUI().maininv).bundle.a;
+            NUtils.stackSwitch(true);
+            try {
+            NContext context = new NContext(gui);
 
             NArea smelters = NContext.findSpec(Specialisation.SpecName.smelter.toString());
 
@@ -126,7 +179,30 @@ public class SmelterAction implements Action {
                     new CollectQuickSilver(containers).run(gui);
                     NUtils.navigateToArea(smelters);
                     new DropTargets(containers, new NAlias("Slag")).run(gui);
-                    res = new FillContainersFromPiles(containers, NContext.findSpec(Specialisation.SpecName.ore.toString()).getRCArea(), ores).run(gui);
+                    boolean oreExhausted = fillOreContainers(containers, new OreOperations() {
+                        @Override
+                        public int held() throws InterruptedException {
+                            return gui.getInventory().getItems(ores).size();
+                        }
+
+                        @Override
+                        public void fetch(int target) throws InterruptedException {
+                            new TakeItems2(context, target, Specialisation.SpecName.ore,
+                                    NInventory.QualityType.High).takeAny(ores, gui);
+                        }
+
+                        @Override
+                        public void goToSmelters() throws InterruptedException {
+                            context.goToArea(Specialisation.SpecName.smelter);
+                        }
+
+                        @Override
+                        public void transfer(Container container) throws InterruptedException {
+                            new TransferToContainer(container, ores).run(gui);
+                            new CloseTargetContainer(container).run(gui);
+                        }
+                    });
+                    res = oreExhausted ? Results.ERROR("NO ORE") : Results.SUCCESS();
                     ArrayList<Container> forFuel = new ArrayList<>();
 
                     for (Container container : containers) {
@@ -150,6 +226,9 @@ public class SmelterAction implements Action {
                 }
             }
             return Results.SUCCESS();
+            } finally {
+                NUtils.stackSwitch(oldStackingValue);
+            }
         }
         return Results.FAIL();
     }
