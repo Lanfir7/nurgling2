@@ -4,6 +4,8 @@ import haven.Coord;
 import haven.Coord2d;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,5 +73,32 @@ class MinesweeperDangerMarkersTest {
         assertTrue(refreshed.refreshed);
         assertEquals(2, refreshed.value);
         assertEquals(2, scans.get());
+    }
+
+    @Test
+    void syncDoesNotRegisterSolverDangerTilesAsOverlayMarks() throws Exception {
+        String src = Files.readString(Path.of("src/nurgling/overlays/MinesweeperDangerMarkers.java"));
+        int syncAt = src.indexOf("private void sync(");
+        int nextAt = src.indexOf("private void rememberedGreens(");
+        assertTrue(syncAt >= 0 && nextAt > syncAt, "sync() must remain immediately before rememberedGreens");
+        String sync = src.substring(syncAt, nextAt);
+
+        assertFalse(sync.contains("dangerTiles()"),
+                "sync must not place DANGER marks from solver.dangerTiles()");
+        assertFalse(sync.contains("Mark.DANGER"),
+                "sync must not register Mark.DANGER overlay crosses");
+
+        assertTrue(sync.contains("greenFromFreshBlanks"),
+                "green circles from blank-mined neighbors must remain");
+        assertTrue(sync.contains("Mark.SAFE"),
+                "SAFE marks must remain in sync");
+        assertTrue(sync.contains("rememberedGreens"),
+                "remembered green persistence path must remain");
+        assertTrue(src.contains("NMiningNumber"),
+                "number overlays must remain");
+        assertTrue(src.contains("NMiningSafeOverlay"),
+                "green safe overlay must remain");
+        assertTrue(src.contains("public void tick("),
+                "MinesweeperDangerMarkers tick must stay wired");
     }
 }

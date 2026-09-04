@@ -19,8 +19,8 @@ import java.util.function.Supplier;
 import static haven.MCache.tilesz;
 
 /**
- * Red crosses on solver DANGER tiles. Green dots only on unmined walls
- * around a tile that was just mined with no dust.
+ * Green dots on unmined walls around a tile that was just mined with no dust.
+ * Solver danger tiles are not shown as overlay crosses.
  */
 public class MinesweeperDangerMarkers {
 
@@ -50,7 +50,6 @@ public class MinesweeperDangerMarkers {
     private String memUser;
     private String memChr;
     private final TimedSnapshot<NumberSnapshot> numberSnapshots = newNumberSnapshotCache();
-    private long lastFingerprint = Long.MIN_VALUE;
 
     static final class SnapshotUpdate<T> {
         final T value;
@@ -199,7 +198,6 @@ public class MinesweeperDangerMarkers {
         observeMinedTiles(playerTile, dt);
 
         if (snapshotUpdate.refreshed) {
-            lastFingerprint = snapshot.fingerprint;
             persistLiveNumbers(gui, snapshot);
             persistGreens(gui);
             boolean seeded = applyMemory(gui, playerTile, snapshot);
@@ -435,11 +433,6 @@ public class MinesweeperDangerMarkers {
             wanted.put(key(tile.x, tile.y), Mark.SAFE);
         }
         rememberedGreens(gui, wanted, playerTile);
-        if (lastFingerprint != 0 || (solver != null && !solver.dangerTiles().isEmpty())) {
-            for (Coord tile : solver.dangerTiles()) {
-                wanted.put(key(tile.x, tile.y), Mark.DANGER);
-            }
-        }
 
         for (Map.Entry<Long, Mark> e : wanted.entrySet()) {
             long k = e.getKey();
