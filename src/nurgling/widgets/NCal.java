@@ -6,6 +6,7 @@ import nurgling.NGameUI;
 import nurgling.NUI;
 import nurgling.conf.FontSettings;
 import nurgling.i18n.L10n;
+import nurgling.tools.DayCycleEvents;
 
 import java.awt.Color;
 import java.net.URI;
@@ -29,12 +30,12 @@ public class NCal extends Cal {
     /* Sizes handed to the hosting NDraggableWidget. Verbose mode needs room for
      * the two text columns; compact mode keeps the original footprint. */
     public static final Coord COMPACT_SZ = UI.scale(400, 90);
-    public static final Coord VERBOSE_SZ = UI.scale(650, 130);
+    public static final Coord VERBOSE_SZ = UI.scale(710, 130);
 
     /* Width reserved for the right-aligned time column left of the graphic. The
-     * season line ("Summer 47 (58.0 left (17.8 RL))") is the longest thing that
-     * has to fit. */
-    private static final int TIME_COL_W = UI.scale(230);
+     * mantle line ("Dewy Lady's Mantle (00:45 RL left)") is the longest thing
+     * that has to fit. */
+    private static final int TIME_COL_W = UI.scale(290);
 
     /* Same bundled Open Sans the custom tooltips and window titles use, blurred
      * against black so it stays legible over the map. */
@@ -58,6 +59,7 @@ public class NCal extends Cal {
     private final CachedLine dayLine = new CachedLine();
     private final CachedLine seasonLine = new CachedLine();
     private final CachedLine moonLine = new CachedLine();
+    private final CachedLine mantleLine = new CachedLine();
     private final CachedLine playersLine = new CachedLine();
     private final CachedLine pingLine = new CachedLine();
     private final CachedLine provinceLine = new CachedLine();
@@ -185,6 +187,12 @@ public class NCal extends Cal {
         g.aimage(dayLine.get(dayTime()), new Coord(TIME_COL_W, y), 1, 0);
         g.aimage(seasonLine.get(seasonText(a)), new Coord(TIME_COL_W, y + LINE_H), 1, 0);
         g.aimage(moonLine.get(Astronomy.phase[mp]), new Coord(TIME_COL_W, y + (LINE_H * 2)), 1, 0);
+        DayCycleEvents.MantleEta eta = mantleEta(a);
+        if(eta.inWindow)
+            g.chcolor(Color.CYAN);
+        g.aimage(mantleLine.get(mantleText(eta)), new Coord(TIME_COL_W, y + (LINE_H * 3)), 1, 0);
+        if(eta.inWindow)
+            g.chcolor();
     }
 
     private void drawStatusColumn(GOut g, int x) {
@@ -228,6 +236,19 @@ public class NCal extends Cal {
             return String.format(L10n.get("calendar.last_day"), a.season());
         double rl = Math.max(left / NGameUI.worldSpeed, 0.1);
         return String.format(L10n.get("calendar.season_line"), a.season(), a.scday + 1, left, rl);
+    }
+
+    private static DayCycleEvents.MantleEta mantleEta(Astronomy a) {
+        double speed = NGameUI.worldSpeed;
+        if(speed <= 0)
+            speed = NGameUI.DEFAULT_WORLD_SPEED;
+        return DayCycleEvents.mantleEta(a.hh, a.mm, speed);
+    }
+
+    private static String mantleText(DayCycleEvents.MantleEta eta) {
+        String name = L10n.get("calendar.mantle_name");
+        String key = eta.inWindow ? "calendar.mantle_left" : "calendar.mantle_in";
+        return String.format(L10n.get(key), name, eta.rlHours, eta.rlMinutes);
     }
 
     /* ---- server status ---- */
