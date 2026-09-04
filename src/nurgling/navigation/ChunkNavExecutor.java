@@ -419,6 +419,13 @@ public class ChunkNavExecutor implements Action {
             return traversePortalGob(gui, portalGob, targetGridId);
         }
 
+        // Right-clicking an interior building door already makes the client walk to and use it.
+        // Local PF commonly sees the landing tile/door as blocked, producing two handled
+        // "Can't find path" errors before this same click succeeds through the fallback.
+        if (!PortalApproachPolicy.shouldPathfindBeforeTraverse(portalName)) {
+            return traversePortalGob(gui, portalGob, targetGridId);
+        }
+
         // Interior door localCoord is recorded at the reachable landing tile inside the building.
         // Prefer it over a direction inferred from the door angle, which can point through a wall.
         Coord2d recordedAccessPoint = getPortalAccessPoint(recordedPortal, sourceGridId, gui);

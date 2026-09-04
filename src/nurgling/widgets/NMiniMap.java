@@ -40,14 +40,10 @@ NMiniMap extends MiniMap {
 
     private String currentTerrainName = null;
 
-    // Cache for fish icon textures to avoid reloading every frame
-    private final java.util.HashMap<String, TexI> fishIconCache = new java.util.HashMap<>();
-
-    // Cache for tree icon textures to avoid reloading every frame
-    private final java.util.HashMap<String, TexI> treeIconCache = new java.util.HashMap<>();
-    
-    // Cache for prospecting icon textures to avoid reloading every frame
-    private final java.util.HashMap<String, TexI> prospectingIconCache = new java.util.HashMap<>();
+    private final MiniMapLabelCache labelCache = new MiniMapLabelCache(512);
+    private final MiniMapIconCache iconCache = new MiniMapIconCache(256);
+    private final MiniMapIconCache scaledIconCache = new MiniMapIconCache(128, Resource::remote, true);
+    private final Text.Foundry terrainFurnace = new Text.Foundry(Text.dfont, 10);
 
     // Visibility flags for tree and fish icons live in NConfig (see showTreeIcons/showFishIcons).
     public boolean showProspectingIcons = true;
@@ -121,7 +117,6 @@ NMiniMap extends MiniMap {
         new Text.Foundry(Text.dfont, UI.scale(9), Color.WHITE).aa(true),
         2, 1, Color.BLACK
     );
-    private final java.util.Map<String, Tex> timerIconCache = new java.util.HashMap<>();
 
     public NMiniMap(Coord sz, MapFile file) {
         super(sz, file);
@@ -492,7 +487,7 @@ NMiniMap extends MiniMap {
 
     /** Name plate under an on-map marker: light text on a dark plate, so it works over any terrain. */
     private void drawPeerLabel(GOut g, Coord tp, String label, Color col, double alpha) {
-        Text txt = peerfnd.render(label, col);
+        Text txt = labelCache.get(peerfnd, label, col);
         Coord ul = tp.sub(txt.sz().x / 2 + UI.scale(3), 0);
         Coord psz = txt.sz().add(UI.scale(6), UI.scale(2));
         g.chcolor(0, 0, 0, (int)(165 * alpha));
@@ -773,7 +768,7 @@ NMiniMap extends MiniMap {
                         }
                     }
                     if(name != null && !name.isEmpty()) {
-                        Text nameText = NStyle.meter.render(name);
+                                Text nameText = labelCache.get(NStyle.meter, name);
                         g.aimage(nameText.tex(), p2cppc.add(0, -UI.scale(15)), 0.5, 0.5);
                     }
                 }
@@ -1145,6 +1140,14 @@ NMiniMap extends MiniMap {
         if(holdGrab != null)
             endHoldSteer();
         super.destroy();
+    }
+
+    @Override
+    public void dispose() {
+        labelCache.dispose();
+        iconCache.dispose();
+        scaledIconCache.dispose();
+        super.dispose();
     }
 
     private void endHoldSteer() {
@@ -1861,10 +1864,19 @@ NMiniMap extends MiniMap {
         }
     }
 
+    private BufferedImage markerIconImage(String path) {
+        try {
+            return scaledIconCache.get(path).back;
+        } catch (Loading pending) {
+            throw pending;
+        } catch (RuntimeException failed) {
+            return null;
+        }
+    }
+
     private void drawterrainname(GOut g) {
         if((Boolean)NConfig.get(NConfig.Key.showTerrainName) && currentTerrainName != null && !currentTerrainName.isEmpty()) {
-            Text.Foundry fnd = new Text.Foundry(Text.dfont, 10);
-            Text terrainText = fnd.render(currentTerrainName, Color.WHITE);
+            Text terrainText = labelCache.get(terrainFurnace, currentTerrainName);
             Coord textPos = new Coord((sz.x - terrainText.sz().x) / 2, 5);
             g.chcolor(0, 0, 0, 180);
             g.frect(textPos.sub(2, 1), terrainText.sz().add(4, 2));
@@ -2188,13 +2200,13 @@ NMiniMap extends MiniMap {
                 if(mark.m instanceof MapFile.SMarker) {
                     MapFile.SMarker sm = (MapFile.SMarker)mark.m;
                     if((Boolean)NConfig.get(NConfig.Key.showQuestGiverNames) && NParser.checkName(sm.res.name, "small/bush", "small/bumling", "gianttoad") && mark.m.nm != null && !mark.m.nm.isEmpty()) {
-                        Text nameText = NStyle.meter.render(mark.m.nm);
+                        Text nameText = labelCache.get(NStyle.meter, mark.m.nm);
                         Coord textPos = markPos.add(0, UI.scale(10));
                         g.aimage(nameText.tex(), textPos, 0.5, 0);
                     }
 
                     if((Boolean)NConfig.get(NConfig.Key.showThingwallNames) && NParser.checkName(sm.res.name, "thingwall") && mark.m.nm != null && !mark.m.nm.isEmpty()) {
-                        Text nameText = NStyle.cmeter.render(mark.m.nm);
+                        Text nameText = labelCache.get(NStyle.cmeter, mark.m.nm);
                         Coord textPos = markPos.add(0, UI.scale(10));
                         g.aimage(nameText.tex(), textPos, 0.5, 0);
                     }
@@ -2581,7 +2593,7 @@ NMiniMap extends MiniMap {
 
                 String timeText = timer.getFormattedRemainingTime();
                 Text.Furnace furnace = timer.isExpired() ? readyTimerFurnace : activeTimerFurnace;
-                Text timerDisplay = furnace.render(timeText);
+                Text timerDisplay = labelCache.get(furnace, timeText);
                 Coord textPos = screenPos.add(-timerDisplay.sz().x / 2, textOffsetY);
                 g.image(timerDisplay.tex(), textPos);
             }
@@ -2589,19 +2601,11 @@ NMiniMap extends MiniMap {
     }
 
     private Tex timerIcon(String iconRes) {
-        if (timerIconCache.containsKey(iconRes))
-            return timerIconCache.get(iconRes);
-        Tex tex = null;
         try {
-            tex = Resource.local().loadwait(iconRes).layer(Resource.imgc).tex();
-        } catch (Exception ignored) {
-            try {
-                tex = Resource.remote().loadwait(iconRes).layer(Resource.imgc).tex();
-            } catch (Exception ignored2) {
-            }
+            return scaledIconCache.get(iconRes);
+        } catch (RuntimeException pendingOrFailed) {
+            return null;
         }
-        timerIconCache.put(iconRes, tex);
-        return tex;
     }
 
     private void drawFishLocations(GOut g) {
@@ -2658,15 +2662,7 @@ NMiniMap extends MiniMap {
 
                 try {
                     String fishResource = fishLoc.getFishResource();
-                    TexI tex = fishIconCache.get(fishResource);
-
-                    // Load and cache if not already cached
-                    if(tex == null) {
-                        Resource fishRes = Resource.remote().loadwait(fishResource);
-                        BufferedImage icon = fishRes.layer(Resource.imgc).img;
-                        tex = new TexI(icon);
-                        fishIconCache.put(fishResource, tex);
-                    }
+                    TexI tex = iconCache.get(fishResource);
 
                     // Draw scaled fish icon
                     int dsz = Math.max(tex.sz().y, tex.sz().x);
@@ -2744,15 +2740,7 @@ NMiniMap extends MiniMap {
                         .replace("gfx/terobjs/trees/", "gfx/terobjs/mm/trees/")
                         .replace("gfx/terobjs/bushes/", "gfx/terobjs/mm/bushes/");
 
-                    TexI tex = treeIconCache.get(mmResource);
-
-                    // Load and cache if not already cached
-                    if(tex == null) {
-                        Resource treeRes = Resource.remote().loadwait(mmResource);
-                        BufferedImage icon = treeRes.layer(Resource.imgc).img;
-                        tex = new TexI(icon);
-                        treeIconCache.put(mmResource, tex);
-                    }
+                    TexI tex = iconCache.get(mmResource);
 
                     // Draw scaled tree icon (same size as fish icons)
                     int dsz = Math.max(tex.sz().y, tex.sz().x);
@@ -2762,12 +2750,7 @@ NMiniMap extends MiniMap {
                     String labelText = treeLoc.getMapLabel();
                     if (!labelText.isEmpty()) {
                         
-                        // Create text with border (similar to resource timers)
-                        Text.Furnace labelFurnace = new PUtils.BlurFurn(
-                            new Text.Foundry(Text.dfont, UI.scale(9), Color.WHITE).aa(true),
-                            2, 1, Color.BLACK
-                        );
-                        Text labelDisplay = labelFurnace.render(labelText);
+                        Text labelDisplay = labelCache.get(activeTimerFurnace, labelText);
                         
                         // Position text below the tree icon
                         Coord textPos = screenPos.add(-labelDisplay.sz().x / 2, targetSize / 2 + UI.scale(5));
@@ -2873,17 +2856,10 @@ NMiniMap extends MiniMap {
         // Сначала пробуем найти путь в VSpec (для руд с альтернативными названиями)
         String vSpecPath = getIconPathFromVSpec(resourceType);
         if (vSpecPath != null) {
-            TexI cached = prospectingIconCache.get(vSpecPath);
-            if (cached != null) {
-                return cached;
-            }
-            
             try {
-                Resource iconRes = Resource.remote().loadwait(vSpecPath);
-                BufferedImage icon = iconRes.layer(Resource.imgc).img;
-                TexI tex = new TexI(icon);
-                prospectingIconCache.put(vSpecPath, tex);
-                return tex;
+                return iconCache.get(vSpecPath);
+            } catch (Loading pending) {
+                throw pending;
             } catch (Exception e) {
                 // Если не удалось загрузить из VSpec, пробуем другие пути
             }
@@ -2918,17 +2894,10 @@ NMiniMap extends MiniMap {
         
         // Пробуем загрузить из каждого пути
         for (String path : possiblePaths) {
-            TexI cached = prospectingIconCache.get(path);
-            if (cached != null) {
-                return cached;
-            }
-            
             try {
-                Resource iconRes = Resource.remote().loadwait(path);
-                BufferedImage icon = iconRes.layer(Resource.imgc).img;
-                TexI tex = new TexI(icon);
-                prospectingIconCache.put(path, tex);
-                return tex;
+                return iconCache.get(path);
+            } catch (Loading pending) {
+                throw pending;
             } catch (Exception e) {
                 // Пробуем следующий путь
                 continue;
@@ -2981,16 +2950,12 @@ NMiniMap extends MiniMap {
             String iconResourcePath = getProspectingIconPath(resourceType);
             TexI tex = null;
             if (iconResourcePath != null) {
-                tex = prospectingIconCache.get(iconResourcePath);
-                if (tex == null) {
-                    try {
-                        Resource iconRes = Resource.remote().loadwait(iconResourcePath);
-                        BufferedImage icon = iconRes.layer(Resource.imgc).img;
-                        tex = new TexI(icon);
-                        prospectingIconCache.put(iconResourcePath, tex);
-                    } catch (Exception e) {
-                        tex = tryLoadProspectingIcon(resourceType);
-                    }
+                try {
+                    tex = iconCache.get(iconResourcePath);
+                } catch (Loading pending) {
+                    throw pending;
+                } catch (Exception e) {
+                    tex = tryLoadProspectingIcon(resourceType);
                 }
             } else {
                 tex = tryLoadProspectingIcon(resourceType);
@@ -3009,6 +2974,8 @@ NMiniMap extends MiniMap {
             } else {
                 drawFallbackProspectingIcon(g, screenPos, resourceType);
             }
+        } catch (Loading pending) {
+            drawFallbackProspectingIcon(g, screenPos, resourceType);
         } catch (Exception e) {
             g.chcolor(128, 128, 128, 255);
             g.fellipse(screenPos, new Coord(UI.scale(6), UI.scale(6)));

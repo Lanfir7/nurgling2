@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import mapv4.MultipartUtility;
@@ -462,13 +463,18 @@ public class ObjectTracker {
     /** По пути gfx/kritter/... загружает иконку из gfx/invobjs/kritter/... (ВСПЕК boar->wildboar, суффикс, display name).
      *  НЕ возвращает fallback-иконку — для поддержки lazy-loading при перезаходе. */
     public static BufferedImage loadAnimalIconFromPath(String animalTypePath, String displayName, NGameUI gui) {
+        return loadAnimalIconFromPath(animalTypePath, displayName, gui, ObjectTracker::loadIconFromResourcePath);
+    }
+
+    static BufferedImage loadAnimalIconFromPath(String animalTypePath, String displayName, NGameUI gui,
+                                                Function<String, BufferedImage> loader) {
         if (animalTypePath == null || !animalTypePath.startsWith("gfx/kritter/")) return null;
         BufferedImage img = null;
         // 0) ВСПЕК: boar -> wildboar, sheep -> mouflon и т.д. (иначе иконки не находятся)
         if (VSpec.kritterToInvobjsIcon != null) {
             String mapped = VSpec.getKritterIconPath(animalTypePath);
             if (mapped != null) {
-                img = loadIconFromResourcePath(mapped);
+                img = loader.apply(mapped);
                 if (img != null) return img;
             }
         }
@@ -481,7 +487,7 @@ public class ObjectTracker {
         for (String invPath : pathsToTry) {
             if (invPath.equals("gfx/invobjs/kritter/")) continue;
             try {
-                img = loadIconFromResourcePath(invPath);
+                img = loader.apply(invPath);
                 if (img != null) return img;
             } catch (haven.Loading e) {
                 throw e;
@@ -491,7 +497,7 @@ public class ObjectTracker {
         if (displayName != null && !displayName.isEmpty()) {
             String normalized = displayName.toLowerCase().trim().replaceAll("\\s+", "");
             if (!normalized.isEmpty()) {
-                img = loadIconFromResourcePath("gfx/invobjs/kritter/" + normalized);
+                img = loader.apply("gfx/invobjs/kritter/" + normalized);
                 if (img != null) return img;
             }
         }

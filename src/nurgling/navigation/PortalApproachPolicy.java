@@ -13,6 +13,10 @@ final class PortalApproachPolicy {
         return gobName != null && gobName.toLowerCase().endsWith("-door");
     }
 
+    static boolean shouldPathfindBeforeTraverse(String gobName) {
+        return !usesRecordedTile(gobName);
+    }
+
     static boolean usesRecordedTile(String gobName, Coord2d recordedPoint,
                                     Coord2d livePortalPoint, double tileSize) {
         return usesRecordedTile(gobName)

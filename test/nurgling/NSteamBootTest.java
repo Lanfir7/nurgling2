@@ -30,6 +30,21 @@ class NSteamBootTest {
         assertEquals("./hafen.jar", cmd.get(cmd.size() - 1));
         assertTrue(cmd.contains("--add-exports=java.desktop/sun.awt=ALL-UNNAMED"));
         assertTrue(cmd.contains("-Dhaven.authmech=steam"));
+        assertTrue(cmd.contains("-XX:+UseZGC"));
+        assertTrue(cmd.contains("-XX:+IgnoreUnrecognizedVMOptions"));
+        assertTrue(cmd.contains("-XX:+ZGenerational"));
+        assertTrue(cmd.indexOf("-XX:+UseZGC") < cmd.lastIndexOf("-jar"));
+        assertTrue(cmd.indexOf("-XX:+IgnoreUnrecognizedVMOptions")
+                < cmd.indexOf("-XX:+ZGenerational"));
+    }
+
+    @Test
+    void clientRequiresJava21OrNewer() {
+        assertFalse(NSteamBoot.supportsJava("1.8"));
+        assertFalse(NSteamBoot.supportsJava("17"));
+        assertFalse(NSteamBoot.supportsJava("invalid"));
+        assertTrue(NSteamBoot.supportsJava("21"));
+        assertTrue(NSteamBoot.supportsJava("24"));
     }
 
     @Test

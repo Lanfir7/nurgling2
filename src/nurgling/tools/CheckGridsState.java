@@ -64,8 +64,7 @@ public class CheckGridsState implements Runnable {
                         ((NMapView) NUtils.getGameUI().map).lastGC = newCoord;
                         NUtils.addTask(new WaitForMapLoad(NUtils.getGameUI(), newCoord));
                         NMapView mapView = (NMapView) NUtils.getGameUI().map;
-                        if (mapView.labelsNeeded())
-                            mapView.syncAreaLabels();
+                        mapView.requestAreaLabelSync();
                     }
                 }
             }

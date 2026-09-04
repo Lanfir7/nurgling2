@@ -55,9 +55,35 @@ public final class NSteamBoot {
         cmd.add("--add-exports=java.desktop/sun.awt=ALL-UNNAMED");
         cmd.add("-Dsun.java2d.uiScale.enabled=false");
         cmd.add("-Dhaven.authmech=steam");
+        cmd.add("-Xms512m");
+        cmd.add("-Xmx4g");
+        cmd.add("-Xss2m");
+        cmd.add("-XX:+UseZGC");
+        cmd.add("-XX:+IgnoreUnrecognizedVMOptions");
+        cmd.add("-XX:+ZGenerational");
+        cmd.add("-XX:SoftRefLRUPolicyMSPerMB=50");
+        cmd.add("-XX:+UseStringDeduplication");
         cmd.add("-jar");
         cmd.add("./hafen.jar");
         return cmd;
+    }
+
+    static boolean supportsJava(String specificationVersion) {
+        if (specificationVersion == null)
+            return false;
+        String value = specificationVersion.trim();
+        if (value.startsWith("1."))
+            value = value.substring(2);
+        int end = 0;
+        while (end < value.length() && Character.isDigit(value.charAt(end)))
+            end++;
+        if (end == 0)
+            return false;
+        try {
+            return Integer.parseInt(value.substring(0, end)) >= 21;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     static String stripLog(String raw) {
@@ -110,6 +136,9 @@ public final class NSteamBoot {
 
     static int boot(ProgressUi ui) throws Exception {
         ui.status("Preparing...");
+        String javaVersion = System.getProperty("java.specification.version", "");
+        if (!supportsJava(javaVersion))
+            throw new IOException("Java 21 or newer is required (found " + javaVersion + ")");
         Path cache = cacheDir();
         Files.createDirectories(cache);
         Path launcher = cache.resolve("nurgling_launcher.jar");

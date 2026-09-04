@@ -411,9 +411,9 @@ public class SessionContext {
 
         // Destroy the UI
         if (ui != null) {
-            synchronized (ui) {
-                ui.destroy();
-            }
+            // UI.destroy() drains loader commands before taking the UI monitor.
+            // Holding it here deadlocks when an in-flight command needs the same monitor.
+            ui.destroy();
         }
     }
 

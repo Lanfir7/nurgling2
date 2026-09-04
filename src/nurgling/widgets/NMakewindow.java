@@ -323,12 +323,13 @@ public class NMakewindow extends Widget implements DTarget {
                 observedRequirements.add(new CraftAtlasObservation.RequirementResource(resource.name, resourceName(resource)));
             }
             List<CraftAtlasObservation.BonusResource> observedBonuses = new ArrayList<>();
+            List<CraftAtlasObservation.AttributeResource> observedQualityModifiers = new ArrayList<>();
             for(Indir<Resource> indir : qmod) {
                 Resource resource = indir.get();
-                observedBonuses.add(new CraftAtlasObservation.BonusResource(resource.name, resourceName(resource), null));
+                observedQualityModifiers.add(new CraftAtlasObservation.AttributeResource(resource.name, resourceName(resource)));
             }
             CraftAtlasObservationStore.current().record(new CraftAtlasObservation(recipe, rcpnm,
-                    observedInputs, observedOutputs, observedRequirements, observedBonuses));
+                    observedInputs, observedOutputs, observedRequirements, observedBonuses, observedQualityModifiers));
             craftAtlasObservationDirty = false;
         } catch(Loading ignored) {
             // Retry on a later UI tick; never block the render thread waiting for resources.

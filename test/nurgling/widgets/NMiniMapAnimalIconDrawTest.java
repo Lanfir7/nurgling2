@@ -13,7 +13,7 @@ class NMiniMapAnimalIconDrawTest {
     void animalDrawPathDoesNotLoadIconsOnUiThread() throws Exception {
         String src = Files.readString(Path.of("src/nurgling/widgets/NMiniMap.java"));
         int drawAt = src.indexOf("private void drawLabeledMarks");
-        int nextAt = src.indexOf("private void drawterrainname");
+        int nextAt = src.indexOf("private BufferedImage markerIconImage", drawAt);
         assertTrue(drawAt >= 0 && nextAt > drawAt, "drawLabeledMarks block must be present");
         String draw = src.substring(drawAt, nextAt);
 

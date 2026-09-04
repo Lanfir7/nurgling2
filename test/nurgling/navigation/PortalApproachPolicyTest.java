@@ -31,4 +31,12 @@ class PortalApproachPolicyTest {
                 door, Coord2d.of(650, 650), liveDoor, 11.0));
         assertFalse(PortalApproachPolicy.usesRecordedTile(door, null, liveDoor, 11.0));
     }
+
+    @Test
+    void interiorDoorIsClickedWithoutFailingLocalPathAttempts() {
+        assertFalse(PortalApproachPolicy.shouldPathfindBeforeTraverse(
+                "gfx/terobjs/arch/stonestead-door"));
+        assertTrue(PortalApproachPolicy.shouldPathfindBeforeTraverse(
+                "gfx/terobjs/cellardoor"));
+    }
 }

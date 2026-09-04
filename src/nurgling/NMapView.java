@@ -448,6 +448,11 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
 
     private long lastAreaLabelSync = 0;
+    private final AreaLabelRefreshSignal areaLabelRefresh = new AreaLabelRefreshSignal();
+
+    public void requestAreaLabelSync() {
+        areaLabelRefresh.request();
+    }
 
     public boolean labelsNeeded() {
         NGameUI gui = NUtils.getGameUI();
@@ -1397,7 +1402,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             }
         }
         long now = System.currentTimeMillis();
-        if (now - lastAreaLabelSync >= 500) {
+        if (areaLabelRefresh.consume() || now - lastAreaLabelSync >= 500) {
             lastAreaLabelSync = now;
             if (labelsNeeded())
                 syncAreaLabels();

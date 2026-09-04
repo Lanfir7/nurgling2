@@ -25,37 +25,23 @@ public class WaitForGobStability extends NTask {
 
     @Override
     public boolean check() {
-        boolean res = false;
         List<Gob> nearbyGobs = Finder.findGobs(new NAlias(""));
-        int currentGobCount = nearbyGobs.size();
+        return checkAt(nearbyGobs.size(), System.currentTimeMillis());
+    }
+
+    boolean checkAt(int currentGobCount, long currentTime) {
+        if (startTime == -1) {
+            startTime = currentTime;
+        }
 
         // If gob count changed, reset stability timer
         if (currentGobCount != lastGobCount) {
             lastGobCount = currentGobCount;
-            lastGobCountChangeTime = System.currentTimeMillis();
-            res = false;
+            lastGobCountChangeTime = currentTime;
         }
 
-        // If no change recorded yet, we're not stable
-        if (lastGobCountChangeTime == -1) {
-            res = false;
-        }
-
-        // Check if we've been stable long enough
-        res = ((System.currentTimeMillis() - lastGobCountChangeTime) >= stabilityWindow);
-        if(res)
-        {
-            long currentTime = System.currentTimeMillis();
-
-            if (startTime == -1) {
-                startTime = currentTime;
-            }
-
-            // Safety timeout - don't wait forever
-            if (currentTime - startTime > maxWaitTime) {
-                return true;
-            }
-        }
-        return res;
+        // Stop once the gob list settles, but never let continuous loading keep the bot blocked.
+        return currentTime - lastGobCountChangeTime >= stabilityWindow
+                || currentTime - startTime >= maxWaitTime;
     }
 }

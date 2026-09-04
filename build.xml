@@ -254,7 +254,9 @@
       <jvmarg value="-Xmx4g" />
       <jvmarg value="-Xss2m" />
       <!-- GC optimization -->
-      <jvmarg value="-XX:+UseG1GC" />
+      <jvmarg value="-XX:+UseZGC" />
+      <jvmarg value="-XX:+IgnoreUnrecognizedVMOptions" />
+      <jvmarg value="-XX:+ZGenerational" />
       <jvmarg value="-XX:SoftRefLRUPolicyMSPerMB=50" />
       <jvmarg value="-XX:+UseStringDeduplication" />
       <!-- Module exports for Java 16+ -->
