@@ -12,6 +12,7 @@ import nurgling.widgets.NStorageItemsWidget.GroupedItem;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static nurgling.craftatlas.CraftAtlasMaterialPlanner.Source;
@@ -42,15 +43,17 @@ public final class CraftAtlasResourceCollector implements Action {
         if(plan == null || !plan.complete)
             throw new IllegalArgumentException("material plan must be complete");
         Map<String, GroupedItem> rows = storageRows == null ? Collections.emptyMap() : storageRows;
-        List<FetchRequest> result = new ArrayList<>();
+        Map<String, FetchRequest> result = new LinkedHashMap<>();
         for(SlotPlan slot : plan.slots) for(Allocation allocation : slot.allocations) {
             if(allocation.source != Source.STORAGE) continue;
             GroupedItem group = rows.get(allocation.candidateId);
             if(group == null)
                 throw new IllegalArgumentException("missing storage row: " + allocation.candidateId);
-            result.add(new FetchRequest(allocation.candidateId, allocation.material, allocation.count, group));
+            FetchRequest existing = result.get(allocation.candidateId);
+            result.put(allocation.candidateId, new FetchRequest(allocation.candidateId, allocation.material,
+                    allocation.count + (existing == null ? 0 : existing.count), group));
         }
-        return Collections.unmodifiableList(result);
+        return Collections.unmodifiableList(new ArrayList<>(result.values()));
     }
 
     @Override

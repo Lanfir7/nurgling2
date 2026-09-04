@@ -62,6 +62,22 @@ class CraftAtlasResourceCollectorTest {
                 () -> CraftAtlasResourceCollector.requests(plan, Map.of()));
     }
 
+    @Test
+    void combinesOneWarehouseBatchSharedBySeveralRecipeSlots() {
+        Candidate storage = candidate("db-shared", 80, 2, Source.STORAGE);
+        Plan plan = CraftAtlasMaterialPlanner.plan(
+                List.of(new SlotRequest(0, 1, false, List.of("Linen Cloth")),
+                        new SlotRequest(1, 1, false, List.of("Linen Cloth"))),
+                Map.of(0, List.of(storage), 1, List.of(storage)),
+                Map.of(0, Selection.all(), 1, Selection.all()), 1);
+
+        List<CraftAtlasResourceCollector.FetchRequest> requests =
+                CraftAtlasResourceCollector.requests(plan, Map.of("db-shared", group(80, 2)));
+
+        assertEquals(1, requests.size());
+        assertEquals(2, requests.get(0).count);
+    }
+
     private static Candidate candidate(String id, double quality, int count, Source source) {
         return new Candidate(id, "Linen Cloth", quality, count, source,
                 source == Source.INVENTORY ? "Inventory" : "Chest");
