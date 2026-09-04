@@ -316,6 +316,6 @@ public class BotRegistry {
     }
 
     public static List<BotDescriptor> all() {
-        return bots;
+        return Collections.unmodifiableList(bots);
     }
 }

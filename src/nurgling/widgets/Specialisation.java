@@ -7,6 +7,7 @@ import nurgling.*;
 import nurgling.areas.*;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NAreaLabel;
+import nurgling.tools.SpecialisationUsage;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -292,9 +293,37 @@ public class Specialisation extends Window
 
         protected Widget makeitem(SpecialisationItem item, int idx, Coord sz) {
             return(new ItemWidget<SpecialisationItem>(this, sz, item) {
+                private Tex tip = null;
+
                 {
                     //item.resize(new Coord(searchF.sz.x - removei[0].sz().x  + UI.scale(4), item.sz.y));
                     add(item);
+                }
+
+                @Override
+                public Object tooltip(Coord c, Widget prev) {
+                    if(tip == null) {
+                        List<String> bots = SpecialisationUsage.botsFor(item.name);
+                        if(bots == null)
+                            return L10n.get("spec.tip.scanning");
+                        String text = SpecialisationUsageTip.build(
+                                item.prettyName,
+                                bots,
+                                L10n.get("spec.tip.unused"),
+                                L10n.get("spec.tip.usedby", bots.size()),
+                                L10n.get("spec.tip.more", Math.max(0, bots.size() - SpecialisationUsageTip.BOT_LIMIT)));
+                        tip = RichText.render(text, UI.scale(280)).tex();
+                    }
+                    return tip;
+                }
+
+                @Override
+                public void dispose() {
+                    if(tip != null) {
+                        tip.dispose();
+                        tip = null;
+                    }
+                    super.dispose();
                 }
 
                 public boolean mousedown(MouseDownEvent ev) {
@@ -388,6 +417,7 @@ public class Specialisation extends Window
 
     public static void selectSpecialisation(NArea area)
     {
+        SpecialisationUsage.request();
         NUtils.getGameUI().spec.show();
         NUtils.getGameUI().setfocus(NUtils.getGameUI().spec);
         NUtils.getGameUI().spec.raise();

@@ -9,6 +9,7 @@ import nurgling.actions.*;
 import nurgling.areas.NArea;
 import nurgling.conf.HorseHerd;
 import nurgling.tools.NAlias;
+import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,8 +19,8 @@ public class HorsesAction implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
 
-        NArea.Specialisation Horses = new NArea.Specialisation("horses");
-        NArea.Specialisation deadkritter = new NArea.Specialisation("deadkritter");
+        NArea.Specialisation Horses = new NArea.Specialisation(Specialisation.SpecName.horses.toString());
+        NArea.Specialisation deadkritter = new NArea.Specialisation(Specialisation.SpecName.deadkritter.toString());
         ArrayList<NArea.Specialisation> req = new ArrayList<>();
         req.add(Horses);
         req.add(deadkritter);
