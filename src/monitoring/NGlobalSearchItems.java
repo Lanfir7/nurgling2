@@ -42,6 +42,12 @@ public class NGlobalSearchItems implements Runnable {
      */
     private static volatile List<ContainerHit> hits = Collections.emptyList();
     public static volatile long updateVersion = 0; // Incremented when containerHashes changes
+    private static final java.util.concurrent.atomic.AtomicLong storageRevision =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    public static long storageRevision() {
+        return storageRevision.get();
+    }
 
     /** Latest search results, newest complete set. Never null. */
     public static List<ContainerHit> hits() {
@@ -189,5 +195,6 @@ public class NGlobalSearchItems implements Runnable {
         lastSearchQuery = "";
         lastQueryTime = 0;
         resultsValid = false;
+        storageRevision.incrementAndGet();
     }
 }

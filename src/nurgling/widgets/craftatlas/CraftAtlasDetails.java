@@ -66,6 +66,18 @@ public class CraftAtlasDetails extends Widget {
         IconHit(Coord at, Coord size, String name) { this.at = at; this.size = size; this.name = name; }
     }
 
+    private static final class PendingMaterials {
+        final long generation;
+        final String recipeResource;
+        final CraftAtlasMaterialSource.Snapshot snapshot;
+
+        PendingMaterials(long generation, String recipeResource, CraftAtlasMaterialSource.Snapshot snapshot) {
+            this.generation = generation;
+            this.recipeResource = recipeResource;
+            this.snapshot = snapshot;
+        }
+    }
+
     private final CraftAtlasController controller;
     private CraftAtlasEntry entry;
     private CraftAtlasEntry.Requirement requirementDescription;
@@ -88,6 +100,10 @@ public class CraftAtlasDetails extends Widget {
     private boolean autoQuality;
     private boolean syncingQuality;
     private long nextMaterialRefreshAt;
+    private long observedStorageRevision = Long.MIN_VALUE;
+    private long materialGeneration;
+    private volatile PendingMaterials pendingMaterials;
+    private Thread materialRefreshThread;
     private String materialSignature;
     private double quality = 10;
     private final int headerHeight = UI.scale(104);
@@ -136,13 +152,18 @@ public class CraftAtlasDetails extends Widget {
                 (value.categories.contains("gildings") || value.categories.contains("foods") ||
                         value.categories.contains("equipment") || value.inputsObserved);
         qualityEntry.visible = qualityVisible;
-        autoQualityBox.visible = qualityVisible;
+        autoQualityBox.visible = qualityVisible && qualityControlsFit();
         if(previous == null || !previous.equals(next)) scroll = next == null ? 0 : savedScroll.getOrDefault(next, 0);
     }
 
     public void setCraftCount(int value) {
+        if(!supportsCraftCount(value)) return;
         craftCount = Math.max(1, value);
         replan();
+    }
+
+    public boolean supportsCraftCount(int value) {
+        return materials == null || CraftAtlasMaterialPlanner.supportsCraftCount(materials.slots, value);
     }
 
     public void refreshMaterials() {
@@ -151,15 +172,33 @@ public class CraftAtlasDetails extends Widget {
         rebuildSelectors();
     }
 
-    public void refreshMaterialsIfDue(long now) {
-        if(entry == null || now < nextMaterialRefreshAt) return;
+    public void refreshMaterialsIfDue(long now, long storageRevision) {
+        PendingMaterials completed = pendingMaterials;
+        if(completed != null) {
+            pendingMaterials = null;
+            if(entry != null && completed.generation == materialGeneration &&
+                    entry.recipeResource.equals(completed.recipeResource)) {
+                String signature = materialSignature(completed.snapshot);
+                if(!signature.equals(materialSignature)) {
+                    installMaterials(completed.snapshot, signature);
+                    rebuildRows();
+                    rebuildSelectors();
+                }
+            }
+        }
+        if(entry == null || (now < nextMaterialRefreshAt && storageRevision == observedStorageRevision)
+                || (materialRefreshThread != null && materialRefreshThread.isAlive())) return;
         nextMaterialRefreshAt = now + MATERIAL_REFRESH_INTERVAL_NS;
-        CraftAtlasMaterialSource.Snapshot fresh = materialSource.load(entry);
-        String signature = materialSignature(fresh);
-        if(signature.equals(materialSignature)) return;
-        installMaterials(fresh, signature);
-        rebuildRows();
-        rebuildSelectors();
+        observedStorageRevision = storageRevision;
+        final CraftAtlasEntry requestedEntry = entry;
+        final long requestedGeneration = materialGeneration;
+        final List<CraftAtlasMaterialSource.InventorySample> inventory =
+                CraftAtlasMaterialSource.inventorySamples();
+        materialRefreshThread = new Thread(() -> pendingMaterials = new PendingMaterials(
+                requestedGeneration, requestedEntry.recipeResource,
+                materialSource.load(requestedEntry, inventory)), "CraftAtlasStockRefresh");
+        materialRefreshThread.setDaemon(true);
+        materialRefreshThread.start();
     }
 
     public CraftAtlasMaterialSource.Snapshot materialSnapshot() { return materials; }
@@ -440,17 +479,32 @@ public class CraftAtlasDetails extends Widget {
 
     private void positionQualityEntry() {
         if(qualityEntry != null) {
+            int margin = UI.scale(12);
+            int availableWidth = Math.max(1, sz.x - (2 * margin));
+            qualityEntry.resize(Coord.of(Math.min(UI.scale(54), availableWidth), qualityEntry.sz.y));
             int[] x = qualityControlPositions(sz.x, qualityEntry.sz.x, autoQualityBox.sz.x,
-                    UI.scale(8), UI.scale(12));
+                    UI.scale(8), margin);
             qualityEntry.move(Coord.of(x[0], UI.scale(14)));
             autoQualityBox.move(Coord.of(x[1], UI.scale(16)));
+            autoQualityBox.visible = qualityEntry.visible && x[2] != 0;
         }
     }
 
     static int[] qualityControlPositions(int width, int entryWidth, int autoWidth, int gap, int margin) {
-        int autoX = Math.max(0, width - Math.max(0, margin) - Math.max(0, autoWidth));
-        int entryX = Math.max(0, autoX - Math.max(0, gap) - Math.max(0, entryWidth));
-        return new int[] { entryX, autoX };
+        width = Math.max(0, width);
+        entryWidth = Math.max(0, Math.min(entryWidth, width));
+        autoWidth = Math.max(0, autoWidth);
+        gap = Math.max(0, gap);
+        margin = Math.max(0, margin);
+        boolean showAuto = width >= entryWidth + gap + autoWidth + (2 * margin);
+        int autoX = showAuto ? width - margin - autoWidth : width;
+        int entryX = showAuto ? autoX - gap - entryWidth : Math.max(0, width - margin - entryWidth);
+        return new int[] { Math.max(0, entryX), Math.max(0, autoX), showAuto ? 1 : 0 };
+    }
+
+    private boolean qualityControlsFit() {
+        return qualityControlPositions(sz.x, qualityEntry.sz.x, autoQualityBox.sz.x,
+                UI.scale(8), UI.scale(12))[2] != 0;
     }
 
     private void qualityChanged() {
@@ -474,6 +528,8 @@ public class CraftAtlasDetails extends Widget {
     }
 
     private void loadMaterials() {
+        materialGeneration++;
+        pendingMaterials = null;
         if(entry == null) {
             clearSelectors();
             materials = null;

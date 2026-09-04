@@ -163,6 +163,13 @@ public final class CraftAtlasMaterialPlanner {
         return selection;
     }
 
+    public static boolean supportsCraftCount(List<SlotRequest> slots, int craftCount) {
+        if(craftCount < 1) return false;
+        if(slots != null) for(SlotRequest slot : slots)
+            if((long)slot.unitsPerCraft * craftCount > Integer.MAX_VALUE) return false;
+        return true;
+    }
+
     public static Plan plan(List<SlotRequest> slots,
                             Map<Integer, List<Candidate>> candidatesBySlot,
                             Map<Integer, Selection> selections,
@@ -183,7 +190,7 @@ public final class CraftAtlasMaterialPlanner {
                     planned.add(new SlotPlan(slot.slotIndex, 0, 0, true,
                             Collections.emptyList(), null));
                 } else {
-                    planned.add(new SlotPlan(slot.slotIndex, safeRequired(slot, craftCount), 0, false,
+                    planned.add(new SlotPlan(slot.slotIndex, slot.unitsPerCraft * craftCount, 0, false,
                             Collections.emptyList(), null));
                     complete = false;
                 }
@@ -191,12 +198,8 @@ public final class CraftAtlasMaterialPlanner {
             }
 
             long requiredLong = (long)slot.unitsPerCraft * craftCount;
-            if(requiredLong > Integer.MAX_VALUE) {
-                planned.add(new SlotPlan(slot.slotIndex, Integer.MAX_VALUE, 0, false,
-                        Collections.emptyList(), null));
-                complete = false;
-                continue;
-            }
+            if(requiredLong > Integer.MAX_VALUE)
+                throw new IllegalArgumentException("craftCount is too large for this recipe");
             int required = (int)requiredLong;
 
             List<Candidate> allowed = allowedCandidates(slot, candidates, selection);
@@ -244,11 +247,6 @@ public final class CraftAtlasMaterialPlanner {
         for(Candidate candidate : sortedCandidates(candidates))
             if(allowedNames.contains(candidate.material)) allowed.add(candidate);
         return defaultSelection(allowed);
-    }
-
-    private static int safeRequired(SlotRequest slot, int craftCount) {
-        long required = (long)slot.unitsPerCraft * craftCount;
-        return required > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int)required;
     }
 
     private static void prefer(List<Candidate> values, String candidateId) {

@@ -69,9 +69,13 @@ public final class CraftAtlasMaterialSource {
     }
 
     public Snapshot load(CraftAtlasEntry entry) {
+        return load(entry, inventorySamples());
+    }
+
+    public Snapshot load(CraftAtlasEntry entry, List<InventorySample> inventory) {
         if(entry == null) return new Snapshot(Collections.emptyList(), Collections.emptyMap(),
                 Collections.emptyMap(), false);
-        List<InventorySample> inventory = inventorySamples();
+        if(inventory == null) inventory = Collections.emptyList();
         List<SlotRequest> slots = new ArrayList<>();
         Map<Integer, List<Candidate>> candidates = new LinkedHashMap<>();
         Map<String, GroupedItem> storage = new LinkedHashMap<>();
@@ -153,7 +157,7 @@ public final class CraftAtlasMaterialSource {
                 + CraftAtlasSearch.normalize(name) + ":" + CraftIngredientStock.qualityKey(quality);
     }
 
-    private static List<InventorySample> inventorySamples() {
+    public static List<InventorySample> inventorySamples() {
         NGameUI gui = NUtils.getGameUI();
         if(gui == null) return Collections.emptyList();
         NInventory inventory = gui.getInventory();

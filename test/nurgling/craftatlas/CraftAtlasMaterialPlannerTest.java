@@ -189,14 +189,12 @@ class CraftAtlasMaterialPlannerTest {
     }
 
     @Test
-    void excessiveCraftCountBecomesIncompleteInsteadOfOverflowing() {
+    void excessiveCraftCountIsRejectedBeforePlanning() {
         SlotRequest slot = new SlotRequest(0, Integer.MAX_VALUE, false, List.of("Stone"));
 
-        Plan plan = assertDoesNotThrow(() -> CraftAtlasMaterialPlanner.plan(
+        assertFalse(CraftAtlasMaterialPlanner.supportsCraftCount(List.of(slot), 2));
+        assertThrows(IllegalArgumentException.class, () -> CraftAtlasMaterialPlanner.plan(
                 List.of(slot), Map.of(), Map.of(), 2));
-
-        assertFalse(plan.complete);
-        assertEquals(Integer.MAX_VALUE, plan.slots.get(0).missing);
     }
 
     @Test

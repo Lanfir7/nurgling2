@@ -115,6 +115,15 @@ class CraftAtlasDetailsTest {
         assertTrue(x[0] >= 0);
         assertTrue(x[0] + 54 <= x[1]);
         assertTrue(x[1] + 58 <= 320);
+        assertEquals(1, x[2]);
+    }
+
+    @Test
+    void qualityEntryStaysInsideHeaderWhenAutoControlCannotFit() {
+        int[] x = CraftAtlasDetails.qualityControlPositions(80, 54, 58, 8, 12);
+
+        assertEquals(0, x[2]);
+        assertTrue(x[0] + 54 <= 80);
     }
 
     @Test

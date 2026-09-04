@@ -22,6 +22,7 @@ import nurgling.craftatlas.CraftExecutionBridge;
 import nurgling.craftatlas.MenuCraftCatalog;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
+import monitoring.NGlobalSearchItems;
 
 import java.awt.event.KeyEvent;
 import java.io.IOException;
@@ -153,7 +154,8 @@ public class CraftAtlasWindow extends Window {
         super.tick(dt);
         if((menu != null && observedMenuRevision != menu.pagseq) || observedStoreRevision != observationStore.revision())
             refreshCatalog();
-        if(collectionThread == null) details.refreshMaterialsIfDue(System.nanoTime());
+        if(collectionThread == null)
+            details.refreshMaterialsIfDue(System.nanoTime(), NGlobalSearchItems.storageRevision());
         if(collectionThread != null && !collectionThread.isAlive()) {
             collectionThread = null;
             details.refreshMaterials();
@@ -211,13 +213,13 @@ public class CraftAtlasWindow extends Window {
 
     private void craftCountChanged() {
         Integer value = parseCraftCount(craftCount.text());
-        if(value != null) details.setCraftCount(value);
+        if(value != null && details.supportsCraftCount(value)) details.setCraftCount(value);
         refreshCollectionState();
     }
 
     private void collectResources() {
         Integer count = parseCraftCount(craftCount.text());
-        if(count == null) {
+        if(count == null || !details.supportsCraftCount(count)) {
             showError(L10n.get("craft_atlas.collect_bad_count"));
             return;
         }
@@ -246,8 +248,10 @@ public class CraftAtlasWindow extends Window {
         if(collectResources == null || craftCount == null) return;
         CraftAtlasMaterialSource.Snapshot snapshot = details.materialSnapshot();
         CraftAtlasMaterialPlanner.Plan plan = details.materialPlan();
+        Integer count = parseCraftCount(craftCount.text());
         collectResources.disable(collectionThread != null && collectionThread.isAlive()
-                || parseCraftCount(craftCount.text()) == null || snapshot == null || !snapshot.collectible
+                || count == null || !details.supportsCraftCount(count)
+                || snapshot == null || !snapshot.collectible
                 || plan == null || !plan.complete);
     }
 

@@ -2530,28 +2530,44 @@ public class NInventory extends Inventory
         live.add(new ItemWatcher.ItemInfo(item.name(), item.quality, slot, hash, stackIndex));
     }
 
+    /** Persist the currently visible contents before an automated fetch reports its result. */
+    public boolean syncStorageSnapshotNow() {
+        String containerHash = prepareStorageSnapshot(true);
+        if (containerHash == null || NCore.databaseManager == null || !NCore.databaseManager.isReady()) {
+            return false;
+        }
+        new ItemWatcher(new ArrayList<>(iis), NCore.databaseManager, containerHash).run();
+        return true;
+    }
+
+    private String prepareStorageSnapshot(boolean trustEmptySnapshot) {
+        bindParentGobIfNeeded();
+        if (!isIndexable() || parentGob == null || parentGob.ngob == null || parentGob.ngob.hash == null) {
+            return null;
+        }
+        String containerHash = parentGob.ngob.hash;
+        iisPeak = Math.max(iisPeak, iis.size());
+        rebuildIisFromLiveItems();
+        iisPeak = Math.max(iisPeak, iis.size());
+        pendingCacheRemovals.clear();
+        ItemWatcher.invalidateContainerCache(containerHash);
+        if ((!trustEmptySnapshot && !ContainerInventorySync.shouldWrite(iis.size(), iisPeak))
+                || !(Boolean) NConfig.get(NConfig.Key.ndbenable)
+                || !nurgling.tools.ClaimLand.isOnClaimOrVillage(parentGob)) {
+            return null;
+        }
+        return containerHash;
+    }
+
     @Override
     public void reqdestroy() {
         // Mark as closing
         isClosing = true;
 
-        bindParentGobIfNeeded();
-        // Only process if this is an indexable container
-        if (isIndexable() && parentGob != null && parentGob.ngob != null && parentGob.ngob.hash != null) {
-            String containerHash = parentGob.ngob.hash;
-
-            iisPeak = Math.max(iisPeak, iis.size());
-            rebuildIisFromLiveItems();
-            iisPeak = Math.max(iisPeak, iis.size());
-            pendingCacheRemovals.clear();
-            ItemWatcher.invalidateContainerCache(containerHash);
-
-            if (ContainerInventorySync.shouldWrite(iis.size(), iisPeak)
-                    && (Boolean) NConfig.get(NConfig.Key.ndbenable)
-                    && nurgling.tools.ClaimLand.isOnClaimOrVillage(parentGob)) {
-                System.out.println("NInventory.reqdestroy: Syncing " + iis.size() + " items for container " + containerHash);
-                ui.core.writeItemInfoForContainer(iis, containerHash);
-            }
+        String containerHash = prepareStorageSnapshot(false);
+        if (containerHash != null) {
+            System.out.println("NInventory.reqdestroy: Syncing " + iis.size() + " items for container " + containerHash);
+            ui.core.writeItemInfoForContainer(iis, containerHash);
         }
         // For non-indexable containers, just clear
         pendingCacheRemovals.clear();

@@ -15,6 +15,7 @@ import nurgling.tasks.*;
 import nurgling.tools.*;
 import nurgling.tools.NSearchItem;
 import monitoring.ItemWatcher;
+import monitoring.NGlobalSearchItems;
 import nurgling.widgets.NStorageItemsWidget.GroupedItem;
 
 import java.util.*;
@@ -153,7 +154,7 @@ public class FetchStorageItemBot implements Action {
             // Container not visible - try to find its position from database and navigate
             ContainerDao.ContainerData containerData = loadContainerData(gui, containerHash);
             if (containerData == null) {
-                removeReconciledFromDb(requestedItems);
+                removeContainerItemsFromDb(containerHash);
                 gui.msg("[DBG] container data not in DB for hash=" + containerHash.substring(0, 8), java.awt.Color.ORANGE);
                 return 0;
             }
@@ -161,6 +162,7 @@ public class FetchStorageItemBot implements Action {
             // Parse local coordinates and navigate using gridId
             Coord localCoord = parseLocalCoordinates(containerData.getCoord());
             if (localCoord == null) {
+                removeContainerItemsFromDb(containerHash);
                 gui.msg("[DBG] bad coords: " + containerData.getCoord(), java.awt.Color.ORANGE);
                 return 0;
             }
@@ -250,9 +252,10 @@ public class FetchStorageItemBot implements Action {
             }
         }
 
+        boolean snapshotSynchronized = containerInv.syncStorageSnapshotNow();
         containerWindow.wdgmsg("close");
         NUtils.addTask(new WindowIsClosed(containerWindow));
-        removeReconciledFromDb(reconciled);
+        if (!snapshotSynchronized) removeReconciledFromDb(reconciled);
 
         int afterCount = countItemsInInventory(gui, itemName);
         return afterCount - beforeCount;
@@ -662,6 +665,21 @@ public class FetchStorageItemBot implements Action {
             if (container != null) {
                 ItemWatcher.invalidateContainerCache(container);
             }
+            NGlobalSearchItems.clearQueryCache();
+            NSearchItem.notifyContainerDataChanged();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void removeContainerItemsFromDb(String containerHash) {
+        if (containerHash == null || NCore.databaseManager == null || !NCore.databaseManager.isReady()) return;
+        try {
+            NCore.databaseManager.executeOperation(adapter -> {
+                new StorageItemDao().deleteStorageItemsByContainer(adapter, containerHash);
+                return null;
+            });
+            ItemWatcher.invalidateContainerCache(containerHash);
+            NGlobalSearchItems.clearQueryCache();
             NSearchItem.notifyContainerDataChanged();
         } catch (Exception ignored) {
         }
