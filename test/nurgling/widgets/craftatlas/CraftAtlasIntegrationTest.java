@@ -21,6 +21,18 @@ class CraftAtlasIntegrationTest {
         assertTrue(ngame.indexOf("craftAtlas.onCraftWindowOpened()") > ngame.indexOf("craftwnd.add(child)"));
     }
 
+    @Test
+    void atlasDetailsAndFooterWireTheResourcePlannerToCollection() throws Exception {
+        String details = read("src/nurgling/widgets/craftatlas/CraftAtlasDetails.java");
+        String window = read("src/nurgling/widgets/craftatlas/CraftAtlasWindow.java");
+
+        assertTrue(details.contains("new CraftAtlasMaterialSource()"));
+        assertTrue(details.contains("CraftAtlasMaterialPlanner.plan("));
+        assertTrue(details.contains("new CraftAtlasIngredientSelector("));
+        assertTrue(window.contains("new CraftAtlasResourceCollector("));
+        assertTrue(window.contains("details.refreshMaterials()"));
+    }
+
     private String read(String path) throws Exception {
         return new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
     }
