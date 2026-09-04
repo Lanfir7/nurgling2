@@ -72,15 +72,20 @@ public class CraftAtlasDetails extends Widget {
 
     private static final class PendingMaterials {
         final long generation, requestToken;
+        final long storageRevision;
         final String recipeResource;
+        final String inventorySignature;
         final CraftAtlasMaterialSource.Snapshot snapshot;
         final Consumer<Boolean> callback;
 
-        PendingMaterials(long generation, long requestToken, String recipeResource,
-                         CraftAtlasMaterialSource.Snapshot snapshot, Consumer<Boolean> callback) {
+        PendingMaterials(long generation, long requestToken, long storageRevision, String recipeResource,
+                         String inventorySignature, CraftAtlasMaterialSource.Snapshot snapshot,
+                         Consumer<Boolean> callback) {
             this.generation = generation;
             this.requestToken = requestToken;
+            this.storageRevision = storageRevision;
             this.recipeResource = recipeResource;
+            this.inventorySignature = inventorySignature;
             this.snapshot = snapshot;
             this.callback = callback;
         }
@@ -182,11 +187,15 @@ public class CraftAtlasDetails extends Widget {
     public void refreshMaterialsIfDue(long now, long storageRevision) {
         PendingMaterials completed;
         while((completed = completedMaterials.poll()) != null) {
-            boolean current = completed.snapshot != null && entry != null &&
+            boolean requestCurrent = completed.snapshot != null && entry != null &&
                     completed.generation == materialGeneration &&
                     completed.requestToken == materialRequestToken &&
                     entry.recipeResource.equals(completed.recipeResource);
-            if(current) {
+            long currentStorageRevision = NGlobalSearchItems.storageRevision();
+            boolean sourceCurrent = requestCurrent && completed.storageRevision == currentStorageRevision &&
+                    completed.inventorySignature.equals(inventorySignature(
+                            CraftAtlasMaterialSource.inventorySamples()));
+            if(sourceCurrent) {
                 String signature = materialSignature(completed.snapshot);
                 if(!signature.equals(materialSignature)) {
                     installMaterials(completed.snapshot, signature);
@@ -194,7 +203,11 @@ public class CraftAtlasDetails extends Widget {
                     rebuildSelectors();
                 }
             }
-            if(completed.callback != null) completed.callback.accept(current);
+            if(requestCurrent && !sourceCurrent) {
+                startMaterialRefresh(currentStorageRevision, completed.callback);
+            } else if(completed.callback != null) {
+                completed.callback.accept(sourceCurrent);
+            }
         }
         if(entry == null || (now < nextMaterialRefreshAt && storageRevision == observedStorageRevision)
                 || materialLoadsInFlight.get() > 0) return;
@@ -213,6 +226,7 @@ public class CraftAtlasDetails extends Widget {
         final long requestToken = ++materialRequestToken;
         final List<CraftAtlasMaterialSource.InventorySample> inventory =
                 CraftAtlasMaterialSource.inventorySamples();
+        final String requestedInventorySignature = inventorySignature(inventory);
         materialLoadsInFlight.incrementAndGet();
         Thread worker = new Thread(() -> {
             CraftAtlasMaterialSource.Snapshot snapshot = null;
@@ -221,8 +235,8 @@ public class CraftAtlasDetails extends Widget {
             } catch(RuntimeException error) {
                 error.printStackTrace();
             } finally {
-                completedMaterials.add(new PendingMaterials(requestedGeneration, requestToken,
-                        requestedEntry.recipeResource, snapshot, callback));
+                completedMaterials.add(new PendingMaterials(requestedGeneration, requestToken, storageRevision,
+                        requestedEntry.recipeResource, requestedInventorySignature, snapshot, callback));
                 materialLoadsInFlight.decrementAndGet();
             }
         }, "CraftAtlasStockRefresh");
@@ -578,19 +592,20 @@ public class CraftAtlasDetails extends Widget {
         clearSelectors();
         materials = fresh;
         materialSignature = signature;
-        selections = savedSelections.computeIfAbsent(entry.recipeResource, key -> new HashMap<>());
-        for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots) {
-            CraftAtlasMaterialPlanner.Selection current = selections.get(slot.slotIndex);
-            CraftAtlasMaterialPlanner.Selection normalized;
-            if(current == null && slot.optional) {
-                normalized = CraftAtlasMaterialPlanner.Selection.ignored();
-            } else {
-                normalized = CraftAtlasMaterialPlanner.normalizeSelection(slot,
-                        materials.candidatesBySlot.get(slot.slotIndex), current);
-            }
-            selections.put(slot.slotIndex, normalized);
-        }
+        Map<Integer, CraftAtlasMaterialPlanner.Selection> explicit = savedSelections.get(entry.recipeResource);
+        selections = CraftAtlasMaterialPlanner.resolveSelections(
+                materials.slots, materials.candidatesBySlot, explicit);
         replan();
+    }
+
+    private static String inventorySignature(List<CraftAtlasMaterialSource.InventorySample> inventory) {
+        List<String> values = new ArrayList<>();
+        if(inventory != null) for(CraftAtlasMaterialSource.InventorySample sample : inventory) {
+            if(sample == null) continue;
+            values.add(String.valueOf(sample.name) + ':' + Double.doubleToLongBits(sample.quality) + ':' + sample.count);
+        }
+        Collections.sort(values);
+        return String.join("|", values);
     }
 
     private static String materialSignature(CraftAtlasMaterialSource.Snapshot snapshot) {
@@ -615,6 +630,8 @@ public class CraftAtlasDetails extends Widget {
 
     private void replan() {
         if(materials == null) {
+            materialPlan = null;
+        } else if(!CraftAtlasMaterialPlanner.supportsCraftCount(materials.slots, selections, craftCount)) {
             materialPlan = null;
         } else {
             materialPlan = CraftAtlasMaterialPlanner.plan(materials.slots, materials.candidatesBySlot,
@@ -648,6 +665,8 @@ public class CraftAtlasDetails extends Widget {
             CraftAtlasIngredientSelector selector = add(new CraftAtlasIngredientSelector(selectorWidth(), candidates,
                     slot.optional, grouped, selections.get(slot.slotIndex), selected -> {
                 selections.put(slot.slotIndex, selected);
+                savedSelections.computeIfAbsent(entry.recipeResource, key -> new HashMap<>())
+                        .put(slot.slotIndex, selected);
                 replan();
             }));
             selectors.put(slot.slotIndex, selector);

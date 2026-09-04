@@ -163,6 +163,22 @@ public final class CraftAtlasMaterialPlanner {
         return selection;
     }
 
+    /** Resolve display selections from user choices without persisting provisional defaults. */
+    public static Map<Integer, Selection> resolveSelections(List<SlotRequest> slots,
+                                                             Map<Integer, List<Candidate>> candidatesBySlot,
+                                                             Map<Integer, Selection> explicitSelections) {
+        Map<Integer, Selection> resolved = new HashMap<>();
+        if(slots == null) return resolved;
+        for(SlotRequest slot : slots) {
+            List<Candidate> candidates = candidatesBySlot == null ? Collections.emptyList()
+                    : candidatesBySlot.getOrDefault(slot.slotIndex, Collections.emptyList());
+            Selection explicit = explicitSelections == null ? null : explicitSelections.get(slot.slotIndex);
+            resolved.put(slot.slotIndex, explicit == null && slot.optional
+                    ? Selection.ignored() : normalizeSelection(slot, candidates, explicit));
+        }
+        return resolved;
+    }
+
     public static boolean supportsCraftCount(List<SlotRequest> slots, int craftCount) {
         return supportsCraftCount(slots, Collections.emptyMap(), craftCount);
     }

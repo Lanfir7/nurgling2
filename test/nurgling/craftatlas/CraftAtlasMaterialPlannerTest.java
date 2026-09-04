@@ -210,6 +210,20 @@ class CraftAtlasMaterialPlannerTest {
         assertTrue(plan.slots.get(0).ignored);
     }
 
+    @Test
+    void provisionalAllDoesNotReplaceBestStorageDefault() {
+        SlotRequest slot = new SlotRequest(0, 1, false, List.of("Linen Cloth"));
+        Candidate storage = candidate("linen-90", "Linen Cloth", 90, 4, Source.STORAGE);
+
+        Map<Integer, Selection> provisional = CraftAtlasMaterialPlanner.resolveSelections(
+                List.of(slot), Map.of(0, List.of()), Map.of());
+        Map<Integer, Selection> refreshed = CraftAtlasMaterialPlanner.resolveSelections(
+                List.of(slot), Map.of(0, List.of(storage)), Map.of());
+
+        assertTrue(provisional.get(0).isAll());
+        assertEquals("linen-90", refreshed.get(0).preferredCandidateId);
+    }
+
     private static Candidate candidate(String id, String material, double quality, int count, Source source) {
         return new Candidate(id, material, quality, count, source,
                 source == Source.INVENTORY ? "Inventory" : "Warehouse");

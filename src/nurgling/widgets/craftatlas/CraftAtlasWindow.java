@@ -51,6 +51,8 @@ public class CraftAtlasWindow extends Window {
     private boolean subscribed;
     private boolean narrowDetails;
     private boolean collectionPreparing;
+    private long collectionRequestToken;
+    private String selectedRecipeResource;
     private Thread collectionThread;
 
     public CraftAtlasWindow(MenuGrid menu) {
@@ -187,6 +189,12 @@ public class CraftAtlasWindow extends Window {
     }
 
     private void stateChanged(CraftAtlasController.ViewState state) {
+        String nextRecipeResource = state.selected == null ? null : state.selected.recipeResource;
+        if(selectedRecipeResource == null ? nextRecipeResource != null : !selectedRecipeResource.equals(nextRecipeResource)) {
+            selectedRecipeResource = nextRecipeResource;
+            collectionRequestToken++;
+            collectionPreparing = false;
+        }
         recipeList.setState(state);
         details.setState(state);
         back.disable(!state.canBack);
@@ -213,6 +221,10 @@ public class CraftAtlasWindow extends Window {
     }
 
     private void craftCountChanged() {
+        if(collectionPreparing) {
+            collectionRequestToken++;
+            collectionPreparing = false;
+        }
         Integer value = parseCraftCount(craftCount.text());
         if(value != null && details.supportsCraftCount(value)) details.setCraftCount(value);
         refreshCollectionState();
@@ -227,9 +239,11 @@ public class CraftAtlasWindow extends Window {
         details.setCraftCount(count);
         CraftAtlasEntry selected = controller.state().selected;
         String recipeResource = selected == null ? null : selected.recipeResource;
+        long requestToken = ++collectionRequestToken;
         collectionPreparing = true;
         refreshCollectionState();
         details.refreshMaterialsAsync(NGlobalSearchItems.storageRevision(), fresh -> {
+            if(requestToken != collectionRequestToken) return;
             collectionPreparing = false;
             CraftAtlasEntry current = controller.state().selected;
             Integer currentCount = parseCraftCount(craftCount.text());
