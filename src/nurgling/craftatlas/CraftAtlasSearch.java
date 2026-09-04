@@ -19,6 +19,8 @@ public final class CraftAtlasSearch {
         public final boolean descending;
         public final String category;
         public final Set<String> favorites;
+        public final Set<String> restrictedResources;
+        public final boolean restricted;
 
         private Query(Builder b) {
             text = normalize(b.text);
@@ -26,6 +28,8 @@ public final class CraftAtlasSearch {
             descending = b.descending;
             category = normalize(b.category);
             favorites = Collections.unmodifiableSet(new LinkedHashSet<>(b.favorites));
+            restrictedResources = Collections.unmodifiableSet(new LinkedHashSet<>(b.restrictedResources));
+            restricted = b.restricted;
         }
 
         public static Query text(String value) { return builder().text(value).build(); }
@@ -37,11 +41,18 @@ public final class CraftAtlasSearch {
             private boolean descending;
             private String category = "";
             private Set<String> favorites = Collections.emptySet();
+            private Set<String> restrictedResources = Collections.emptySet();
+            private boolean restricted;
             public Builder text(String value) { text = value; return this; }
             public Builder bonus(String value) { bonusResource = value; return this; }
             public Builder descending(boolean value) { descending = value; return this; }
             public Builder category(String value) { category = value; return this; }
             public Builder favorites(Set<String> value) { favorites = value == null ? Collections.<String>emptySet() : value; return this; }
+            public Builder restrictTo(Set<String> value) {
+                restrictedResources = value == null ? Collections.<String>emptySet() : value;
+                restricted = true;
+                return this;
+            }
             public Query build() { return new Query(this); }
         }
     }
@@ -53,6 +64,7 @@ public final class CraftAtlasSearch {
         List<CraftAtlasEntry> result = new ArrayList<>();
         for(CraftAtlasEntry entry : snapshot.entries) {
             if(!q.favorites.isEmpty() && !q.favorites.contains(entry.recipeResource)) continue;
+            if(q.restricted && !q.restrictedResources.contains(entry.recipeResource)) continue;
             if(!q.category.isEmpty() && !normalizedCategories(entry).contains(q.category)) continue;
             String haystack = searchableText(entry);
             boolean matches = true;
