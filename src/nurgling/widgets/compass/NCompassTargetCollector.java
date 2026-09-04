@@ -394,9 +394,9 @@ public final class NCompassTargetCollector {
         String ngobName = gob.ngob != null ? gob.ngob.name : null;
         GobIcon attr = gob.getattr(GobIcon.class);
         String iconResName = iconResourceName(attr);
-        if (!includeShownAnimal(true, gob.pose(), ngobName, iconResName))
+        if (!isAnimalResource(ngobName) && !isAnimalResource(iconResName))
             return false;
-        return iconShown(attr);
+        return includeShownAnimal(iconShown(attr), gob.pose(), ngobName, iconResName);
     }
 
     private static String iconResourceName(GobIcon attr) {

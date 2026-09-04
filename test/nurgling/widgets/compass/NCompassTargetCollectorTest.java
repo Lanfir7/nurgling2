@@ -112,14 +112,18 @@ class NCompassTargetCollectorTest {
         NCompassTarget animalQuest = target("animal-quest", "gob:8", NCompassTarget.Kind.ANIMAL, 5, 8);
         NCompassTarget party = target("party", "gob:9", NCompassTarget.Kind.PARTY, 6, 9);
         NCompassTarget animalParty = target("animal-party", "gob:9", NCompassTarget.Kind.ANIMAL, 6, 9);
+        NCompassTarget player = target("player", "gob:10", NCompassTarget.Kind.PLAYER, 7, 10);
+        NCompassTarget animalPlayer = target("animal-player", "gob:10", NCompassTarget.Kind.ANIMAL, 7, 10);
 
         List<NCompassTarget> merged = NCompassTargetCollector.mergeTargets(
-                Arrays.asList(animal, combat, animalQuest, quest, animalParty, party));
+                Arrays.asList(animal, combat, animalQuest, quest, animalParty, party,
+                        animalPlayer, player));
 
-        assertEquals(3, merged.size());
+        assertEquals(4, merged.size());
         assertEquals(NCompassTarget.Kind.COMBAT, merged.get(0).kind);
         assertEquals(NCompassTarget.Kind.QUEST, merged.get(1).kind);
         assertEquals(NCompassTarget.Kind.PARTY, merged.get(2).kind);
+        assertEquals(NCompassTarget.Kind.PLAYER, merged.get(3).kind);
     }
 
     private static NCompassTarget target(String id, String mergeKey, NCompassTarget.Kind kind,
