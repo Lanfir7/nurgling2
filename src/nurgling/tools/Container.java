@@ -6,6 +6,7 @@ import haven.Gob;
 import haven.WItem;
 import haven.res.ui.tt.wellmined.WellMined;
 import nurgling.*;
+import nurgling.actions.PathFinder;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 
@@ -27,6 +28,23 @@ public class Container implements NContext.ObjectStorage {
         this.gobHash = gob.ngob.hash;
         this.cap = cap;
         this.parent = area;
+    }
+
+    /** Navigates to a live container gob, using its area to reload it when needed. */
+    public static Gob pathTo(NGameUI gui, Container container) throws InterruptedException {
+        Gob gob = Finder.findGob(container.gobHash);
+        if(gob == null || !PathFinder.isAvailable(gob)) {
+            if(container.parent == null)
+                return null;
+            NUtils.navigateToArea(container.parent);
+            gob = Finder.findGob(container.gobHash);
+            if(gob == null || !PathFinder.isAvailable(gob))
+                return null;
+        }
+        PathFinder path = new PathFinder(gob);
+        path.isHardMode = true;
+        path.run(gui);
+        return gob;
     }
 
     public Map<Class<? extends Updater>, Updater> updaters = new HashMap<Class<? extends Updater>, Updater>();
@@ -389,6 +407,44 @@ public class Container implements NContext.ObjectStorage {
         if(!c.isInstance(attr))
             return(null);
         return(c.cast(attr));
+    }
+
+    /** Whether the physical container has no room left. */
+    public boolean isFull() {
+        Tetris tetris = getattr(Tetris.class);
+        if(tetris != null)
+            return Boolean.TRUE.equals(tetris.getRes().get(Tetris.DONE));
+        Space space = getattr(Space.class);
+        return space != null && space.isReady() && space.getFreeSpace() == 0;
+    }
+
+    /** Remaining capacity for a known item footprint. */
+    public int freeSpace(Coord shape) {
+        Tetris tetris = getattr(Tetris.class);
+        if(tetris != null) {
+            if(tetris.getRes().get(Tetris.SRC) == null)
+                return 1;
+            return tetris.calcNumberFreeCoord(Tetris.SRC, shape);
+        }
+        return freeSpace();
+    }
+
+    /** Conservative capacity before the actual item footprint is known. */
+    public int freeSpace() {
+        Tetris tetris = getattr(Tetris.class);
+        if(tetris != null) {
+            if(tetris.getRes().get(Tetris.SRC) == null)
+                return 1;
+            int fits = 0;
+            for(Coord shape : (ArrayList<Coord>) tetris.getRes().get(Tetris.TARGET_COORD)) {
+                int forShape = tetris.calcNumberFreeCoord(Tetris.SRC, shape);
+                if(forShape > 0 && (fits == 0 || forShape < fits))
+                    fits = forShape;
+            }
+            return fits;
+        }
+        Space space = getattr(Space.class);
+        return space != null && space.isReady() ? space.getFreeSpace() : 1;
     }
 
     private Class<? extends Updater> attrclass(Class<? extends Updater> cl) {

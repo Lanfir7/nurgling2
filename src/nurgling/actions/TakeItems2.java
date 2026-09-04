@@ -2,6 +2,7 @@ package nurgling.actions;
 
 import haven.Coord;
 import haven.Gob;
+import haven.UI;
 import haven.WItem;
 import haven.Widget;
 import haven.Window;
@@ -63,6 +64,32 @@ public class TakeItems2 implements Action
     String specSubtype;
     QualityType qualityType;
     public boolean exactMatch = false;
+    public ArrayList<Container> fillTargets = null;
+    private Coord observedShape = null;
+
+    static int capacityForShape(ArrayList<Container> targets, Coord shape) {
+        int capacity = 0;
+        for(Container target : targets)
+            capacity += target.freeSpace(shape);
+        return capacity;
+    }
+
+    public Coord getObservedShape() {
+        return observedShape;
+    }
+
+    private void observeShape(ArrayList<WItem> candidates) {
+        if(observedShape != null)
+            return;
+        for(WItem candidate : candidates) {
+            if(candidate.item.spr == null)
+                continue;
+            observedShape = candidate.item.spr.sz().div(UI.scale(32)).swapXY();
+            if(fillTargets != null)
+                count = capacityForShape(fillTargets, observedShape);
+            return;
+        }
+    }
 
 
     public TakeItems2(NContext context, String item, int count)
@@ -109,6 +136,14 @@ public class TakeItems2 implements Action
         this.qualityType = QualityType.High;
     }
 
+    public TakeItems2(NContext context, int count, Specialisation.SpecName specName, QualityType qualityType)
+    {
+        this.cnt = context;
+        this.count = count;
+        this.specName = specName;
+        this.qualityType = qualityType;
+    }
+
     private boolean noRoomLeft(NGameUI gui) throws InterruptedException
     {
         NInventory inventory = gui.getInventory();
@@ -120,9 +155,20 @@ public class TakeItems2 implements Action
         return inventoryCannotAcceptItem(freeCells, partialStackAvailable);
     }
 
+    private boolean noRoomLeftForAlias(NGameUI gui) throws InterruptedException {
+        NInventory inventory = gui.getInventory();
+        if(inventory == null)
+            return false;
+        if(observedShape != null && !observedShape.equals(1, 1))
+            return inventory.getNumberFreeCoord(observedShape) <= 0;
+        return inventory.getFreeSpace() <= 0;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
+        if(item == null)
+            return Results.FAIL();
         AtomicInteger left = new AtomicInteger(count);
         ArrayList<NContext.ObjectStorage> inputs;
         if(specName == null) {
@@ -158,8 +204,69 @@ public class TakeItems2 implements Action
         return Results.SUCCESS();
     }
 
+    /** Collects any item matched by the alias from every storage in a specialised area. */
+    public Results takeAny(NAlias itemsAlias, NGameUI gui) throws InterruptedException {
+        ArrayList<NContext.ObjectStorage> inputs = specName == null
+                ? cnt.getInStorages(itemsAlias.getKeys().get(0))
+                : cnt.getSpecStorages(specName, specSubtype);
+        if(inputs == null || inputs.isEmpty())
+            return Results.FAIL();
+
+        HashSet<String> names = new HashSet<>(itemsAlias.getKeys());
+        AtomicInteger left = new AtomicInteger(count);
+        for(NContext.ObjectStorage input : inputs) {
+            if(noRoomLeftForAlias(gui))
+                return Results.SUCCESS();
+            if(input instanceof NContext.Pile) {
+                while(true) {
+                    int before = gui.getInventory().getItems(itemsAlias).size();
+                    if(before >= count)
+                        break;
+                    left.set(count - before);
+                    if(!takeAnyFromPile(left, gui, (NContext.Pile) input).IsSuccess())
+                        break;
+                    ArrayList<WItem> held = gui.getInventory().getItems(itemsAlias);
+                    observeShape(held);
+                    if(held.size() == before || noRoomLeftForAlias(gui))
+                        break;
+                }
+            } else if(input instanceof Container) {
+                Container container = (Container) input;
+                Gob gob = Container.pathTo(gui, container);
+                if(gob == null || (!"Frame".equals(container.cap) && gob.ngob.isContainerEmpty()))
+                    continue;
+                new OpenTargetContainer(container).run(gui);
+                NInventory inventory = gui.getInventory(container.cap);
+                if(inventory != null)
+                    observeShape(inventory.getItems(itemsAlias));
+                while(true) {
+                    int before = gui.getInventory().getItems(itemsAlias).size();
+                    if(before >= count)
+                        break;
+                    TakeItemsFromContainer take = new TakeItemsFromContainer(
+                            container, names, itemsAlias, qualityType);
+                    take.minSize = count - before;
+                    take.exactMatch = exactMatch;
+                    take.run(gui);
+                    int after = gui.getInventory().getItems(itemsAlias).size();
+                    if(after == before || noRoomLeftForAlias(gui))
+                        break;
+                }
+                new CloseTargetContainer(container).run(gui);
+            }
+
+            int held = gui.getInventory().getItems(itemsAlias).size();
+            if(held >= count)
+                return Results.SUCCESS();
+            left.set(count - held);
+        }
+        return Results.SUCCESS();
+    }
+
     public Results takeFromBarter(AtomicInteger left, NGameUI gui, NContext.Barter barter) throws InterruptedException
     {
+        if(item == null)
+            return Results.FAIL();
         Gob gchest = Finder.findGob(barter.chest);
         Gob gbarter = Finder.findGob(barter.barter);
         if(gbarter==null || gchest==null)
@@ -242,6 +349,31 @@ public class TakeItems2 implements Action
 
             left.set(left.get() - bought);
         }
+        return Results.SUCCESS();
+    }
+
+    private Results takeAnyFromPile(AtomicInteger left, NGameUI gui, NContext.Pile pile)
+            throws InterruptedException {
+        Gob gob = pile == null || pile.pile == null ? null : Finder.findGob(pile.pile.id);
+        if(gob == null || !PathFinder.isAvailable(gob))
+            return Results.FAIL();
+
+        Results opened = approachSettleAndOpenPile(
+                () -> new PathFinder(gob).run(gui),
+                () -> NUtils.addTask(new WaitTicks(PILE_WITHDRAWAL_SETTLE_TICKS)),
+                () -> new OpenTargetContainer("Stockpile", gob).run(gui));
+        if(!opened.IsSuccess() || gui.getStockpile() == null)
+            return Results.FAIL();
+
+        Coord shape = observedShape == null ? new Coord(1, 1) : observedShape;
+        int capacity = gui.getInventory().getNumberFreeCoord(shape);
+        int transferCount = pileTransferCount(left.get(), capacity);
+        if(transferCount > 0)
+            new TakeItemsFromPile(gob, gui.getStockpile(), transferCount).run(gui);
+
+        Window window = gui.getWindow("Stockpile");
+        if(window != null)
+            new CloseTargetWindow(window).run(gui);
         return Results.SUCCESS();
     }
 
