@@ -16,6 +16,7 @@ import nurgling.craftatlas.CraftAtlasMaterialPlanner;
 import nurgling.craftatlas.CraftAtlasMaterialSource;
 import nurgling.craftatlas.CraftRecipeGraph;
 import nurgling.i18n.L10n;
+import nurgling.tools.VSpec;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -106,6 +107,7 @@ public class CraftAtlasDetails extends Widget {
     private CraftAtlasMaterialSource.Snapshot materials;
     private CraftAtlasMaterialPlanner.Plan materialPlan;
     private final Map<Integer, CraftAtlasIngredientSelector> selectors = new HashMap<>();
+    private CraftAtlasMaterialPicker materialPicker;
     private final Map<String, Map<Integer, CraftAtlasMaterialPlanner.Selection>> savedSelections = new HashMap<>();
     private Map<Integer, CraftAtlasMaterialPlanner.Selection> selections = new HashMap<>();
     private Runnable planListener;
@@ -151,6 +153,7 @@ public class CraftAtlasDetails extends Widget {
     }
 
     public void setEntry(CraftAtlasEntry value) {
+        closeMaterialPicker();
         CraftAtlasEntry oldEntry = entry;
         String previous = entry == null ? null : entry.recipeResource;
         String next = value == null ? null : value.recipeResource;
@@ -432,8 +435,12 @@ public class CraftAtlasDetails extends Widget {
         }
         int iconBox = UI.scale(36);
         Coord iconAt = Coord.of(UI.scale(16), y + (height - iconBox) / 2);
-        drawIcon(g, iconAt, iconBox, row.resource, row.name);
-        String title = row.kind == Kind.INPUT ? row.quantity + " \u00d7 " + row.name : row.name;
+        String displayName = row.kind == Kind.INPUT ? selectedMaterial(row.slotIndex) : null;
+        if(displayName == null) displayName = row.name;
+        String displayResource = row.kind == Kind.INPUT && !displayName.equals(row.name)
+                ? VSpec.getIconPath(displayName) : row.resource;
+        drawIcon(g, iconAt, iconBox, displayResource, displayName);
+        String title = row.kind == Kind.INPUT ? row.quantity + " × " + displayName : row.name;
         drawCentered(g, title, UI.scale(62), y + UI.scale(3), UI.scale(23), null);
         String meta = row.kind == Kind.REQUIREMENT ? L10n.get("craft_atlas.requirement." + row.value.toLowerCase()) :
                 (row.target == Target.NONE ? "" : L10n.get("craft_atlas.open_recipe"));
@@ -493,13 +500,16 @@ public class CraftAtlasDetails extends Widget {
         if(row == null) return false;
         if(row.kind == Kind.INPUT && isGroupedSlot(row.slotIndex) &&
                 ev.c.x >= UI.scale(16) && ev.c.x < UI.scale(52)) {
-            CraftAtlasIngredientSelector selector = selectors.get(row.slotIndex);
-            if(selector != null) selector.openChoices();
+            openMaterialPicker(row.slotIndex, ev.c);
             return true;
         }
         if(row.target == Target.INGREDIENT || row.target == Target.CYCLE) {
             if(row.requirement != null) controller.openRequirement(row.requirement);
-            else controller.openIngredient(row.resource, row.name);
+            else {
+                String material = row.kind == Kind.INPUT ? selectedMaterial(row.slotIndex) : null;
+                controller.openIngredient(material == null ? row.resource : null,
+                        material == null ? row.name : material);
+            }
             return true;
         }
         if(row.target == Target.REQUIREMENT_DESCRIPTION) { controller.openRequirement(row.requirement); return true; }
@@ -666,11 +676,8 @@ public class CraftAtlasDetails extends Widget {
                     slot.slotIndex, Collections.emptyList());
             boolean grouped = slot.allowedMaterials.size() > 1;
             CraftAtlasIngredientSelector selector = add(new CraftAtlasIngredientSelector(selectorWidth(), candidates,
-                    slot.optional, grouped, slot.allowedMaterials, selections.get(slot.slotIndex), selected -> {
-                selections.put(slot.slotIndex, selected);
-                savedSelections.computeIfAbsent(entry.recipeResource, key -> new HashMap<>())
-                        .put(slot.slotIndex, selected);
-                replan();
+                    slot.optional, grouped, selections.get(slot.slotIndex), selected -> {
+                applySelection(slot.slotIndex, selected, false);
             }));
             selectors.put(slot.slotIndex, selector);
         }
@@ -682,6 +689,71 @@ public class CraftAtlasDetails extends Widget {
         for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots)
             if(slot.slotIndex == slotIndex) return slot.allowedMaterials.size() > 1;
         return false;
+    }
+
+    private String selectedMaterial(int slotIndex) {
+        CraftAtlasMaterialPlanner.Selection selected = selections.get(slotIndex);
+        return selected == null || selected.isAll() || selected.isIgnored() ? null : selected.material;
+    }
+
+    private void openMaterialPicker(int slotIndex, Coord click) {
+        if(ui == null || entry == null || materials == null ||
+                slotIndex < 0 || slotIndex >= entry.inputs.size()) return;
+        CraftAtlasMaterialPlanner.SlotRequest slot = materialSlot(slotIndex);
+        if(slot == null || slot.allowedMaterials.size() < 2) return;
+        closeMaterialPicker();
+        List<CraftAtlasMaterialPicker.Option> options = CraftAtlasMaterialPicker.optionsFor(
+                entry.inputs.get(slotIndex), slot.allowedMaterials);
+        materialPicker = new CraftAtlasMaterialPicker(options, selectedMaterial(slotIndex),
+                material -> selectMaterial(slotIndex, material), () -> materialPicker = null);
+        Coord at = rootpos().add(UI.scale(16), click.y + UI.scale(8));
+        if(at.y + materialPicker.sz.y > ui.root.sz.y)
+            at = Coord.of(at.x, rootpos().y + click.y - materialPicker.sz.y - UI.scale(8));
+        Coord maximum = ui.root.sz.sub(materialPicker.sz).max(Coord.z);
+        at = Coord.of(Math.max(0, Math.min(at.x, maximum.x)), Math.max(0, Math.min(at.y, maximum.y)));
+        ui.root.add(materialPicker, at);
+        materialPicker.raise();
+    }
+
+    private void selectMaterial(int slotIndex, String material) {
+        CraftAtlasMaterialPlanner.SlotRequest slot = materialSlot(slotIndex);
+        if(slot == null || material == null || !slot.allowedMaterials.contains(material)) return;
+        List<CraftAtlasMaterialPlanner.Candidate> candidates = materials.candidatesBySlot.getOrDefault(
+                slotIndex, Collections.emptyList());
+        List<CraftAtlasMaterialPlanner.Candidate> matching = new ArrayList<>();
+        for(CraftAtlasMaterialPlanner.Candidate candidate : candidates)
+            if(material.equals(candidate.material)) matching.add(candidate);
+        CraftAtlasMaterialPlanner.Selection selected = matching.isEmpty()
+                ? CraftAtlasMaterialPlanner.Selection.material(material)
+                : CraftAtlasMaterialPlanner.defaultSelection(matching);
+        applySelection(slotIndex, selected, true);
+    }
+
+    private void applySelection(int slotIndex, CraftAtlasMaterialPlanner.Selection selected,
+                                boolean refreshSelector) {
+        selections.put(slotIndex, selected);
+        savedSelections.computeIfAbsent(entry.recipeResource, key -> new HashMap<>())
+                .put(slotIndex, selected);
+        if(refreshSelector) {
+            CraftAtlasMaterialPlanner.SlotRequest slot = materialSlot(slotIndex);
+            CraftAtlasIngredientSelector selector = selectors.get(slotIndex);
+            if(slot != null && selector != null)
+                selector.setChoices(materials.candidatesBySlot.getOrDefault(slotIndex, Collections.emptyList()),
+                        slot.optional, true, selected);
+        }
+        replan();
+    }
+
+    private CraftAtlasMaterialPlanner.SlotRequest materialSlot(int slotIndex) {
+        if(materials != null) for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots)
+            if(slot.slotIndex == slotIndex) return slot;
+        return null;
+    }
+
+    private void closeMaterialPicker() {
+        CraftAtlasMaterialPicker picker = materialPicker;
+        materialPicker = null;
+        if(picker != null && picker.parent != null) picker.destroy();
     }
 
     private void clearSelectors() {
@@ -730,5 +802,9 @@ public class CraftAtlasDetails extends Widget {
         return super.tooltip(c, prev);
     }
 
-    @Override public void dispose() { icons.dispose(); super.dispose(); }
+    @Override public void dispose() {
+        closeMaterialPicker();
+        icons.dispose();
+        super.dispose();
+    }
 }

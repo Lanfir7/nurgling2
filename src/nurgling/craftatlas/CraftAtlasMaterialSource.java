@@ -14,6 +14,7 @@ import nurgling.tools.VSpec;
 import nurgling.widgets.NStorageItemsWidget.GroupedItem;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import static nurgling.craftatlas.CraftAtlasMaterialPlanner.Candidate;
 import static nurgling.craftatlas.CraftAtlasMaterialPlanner.SlotRequest;
@@ -28,6 +30,16 @@ import static nurgling.craftatlas.CraftAtlasMaterialPlanner.Source;
 
 /** Adapts live inventory and the warehouse database to the pure Atlas planner. */
 public final class CraftAtlasMaterialSource {
+    private final Function<Collection<String>, List<GroupedItem>> storageSearch;
+
+    public CraftAtlasMaterialSource() {
+        this(CraftIngredientStock::search);
+    }
+
+    CraftAtlasMaterialSource(Function<Collection<String>, List<GroupedItem>> storageSearch) {
+        this.storageSearch = storageSearch;
+    }
+
     public static final class InventorySample {
         public final String name;
         public final double quality;
@@ -88,16 +100,28 @@ public final class CraftAtlasMaterialSource {
         List<SlotRequest> slots = new ArrayList<>();
         Map<Integer, List<Candidate>> candidates = new LinkedHashMap<>();
         Map<String, GroupedItem> storage = new LinkedHashMap<>();
+        List<List<String>> namesBySlot = new ArrayList<>();
+        Set<String> allNames = new LinkedHashSet<>();
+        for(CraftAtlasEntry.InputSlot input : entry.inputs) {
+            List<String> names = allowedNames(input);
+            namesBySlot.add(names);
+            allNames.addAll(names);
+        }
+        List<GroupedItem> warehouse = includeStorage && !allNames.isEmpty()
+                ? storageSearch.apply(allNames) : Collections.emptyList();
+        if(warehouse == null) warehouse = Collections.emptyList();
         for(int i = 0; i < entry.inputs.size(); i++) {
             CraftAtlasEntry.InputSlot input = entry.inputs.get(i);
-            List<String> names = allowedNames(input);
+            List<String> names = namesBySlot.get(i);
             slots.add(new SlotRequest(i, input.quantity, input.optional, names));
             Set<String> wanted = new LinkedHashSet<>(names);
             List<InventorySample> matchingInventory = new ArrayList<>();
             for(InventorySample sample : inventory)
                 if(wanted.contains(sample.name)) matchingInventory.add(sample);
-            MergedRows rows = merge(i, matchingInventory,
-                    includeStorage ? CraftIngredientStock.search(names) : Collections.emptyList());
+            List<GroupedItem> matchingWarehouse = new ArrayList<>();
+            for(GroupedItem row : warehouse)
+                if(row != null && wanted.contains(row.name)) matchingWarehouse.add(row);
+            MergedRows rows = merge(i, matchingInventory, matchingWarehouse);
             candidates.put(i, rows.candidates);
             storage.putAll(rows.storageByCandidateId);
         }

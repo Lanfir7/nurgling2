@@ -53,6 +53,20 @@ final class CraftAtlasIngredientChoices {
         return Collections.unmodifiableList(result);
     }
 
+    static List<Choice> choicesForMaterial(List<Candidate> candidates, boolean optional, String material) {
+        if(material == null || material.trim().isEmpty())
+            return choices(candidates, optional, false);
+        List<Choice> result = new ArrayList<>();
+        if(optional) result.add(new Choice(L10n.get("craft_atlas.material.ignore"), Selection.ignored(), null));
+        result.add(new Choice(material + " · " + L10n.get("craft_atlas.material.any_quality"),
+                Selection.material(material), null));
+        if(candidates != null) for(Candidate candidate : CraftAtlasMaterialPlanner.sortedCandidates(candidates)) {
+            if(material.equals(candidate.material))
+                result.add(new Choice(candidateLabel(candidate), Selection.preferred(candidate), candidate));
+        }
+        return Collections.unmodifiableList(result);
+    }
+
     static String candidateLabel(Candidate value) {
         String marker = value.source == Source.INVENTORY ? "★ " : "";
         String quality = value.quality == Math.rint(value.quality)
@@ -94,6 +108,19 @@ final class CraftAtlasIngredientChoices {
             if(choice.selection.mode != fallback.mode) continue;
             if(fallback.mode != Selection.Mode.PREFERRED
                     || eq(choice.selection.preferredCandidateId, fallback.preferredCandidateId)) return choice;
+        }
+        return values.get(0);
+    }
+
+    static Choice displaySelectionForMaterial(List<Candidate> candidates, boolean optional,
+                                              String material, Selection selected) {
+        List<Choice> values = choicesForMaterial(candidates, optional, material);
+        if(selected != null) for(Choice choice : values) {
+            Selection value = choice.selection;
+            if(value.mode != selected.mode) continue;
+            if(value.mode != Selection.Mode.PREFERRED) return choice;
+            if(eq(value.material, selected.material) &&
+                    eq(value.preferredCandidateId, selected.preferredCandidateId)) return choice;
         }
         return values.get(0);
     }

@@ -9,7 +9,10 @@ import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -99,6 +102,32 @@ class CraftAtlasMaterialSourceTest {
         assertTrue(snapshot.collectible);
         assertEquals(1, snapshot.candidatesBySlot.get(0).size());
         assertTrue(snapshot.storageByCandidateId.isEmpty());
+    }
+
+    @Test
+    void loadsWarehouseOnceForEveryRecipeSlot() {
+        CraftAtlasEntry observed = CraftAtlasEntry.builder("paginae/craft/test", "Test")
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(1, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/linencloth", "Linen Cloth"))))
+                .input(new CraftAtlasEntry.InputSlot(1, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/string", "String"))))
+                .build();
+        AtomicInteger calls = new AtomicInteger();
+        Set<String> queried = new LinkedHashSet<>();
+        CraftAtlasMaterialSource source = new CraftAtlasMaterialSource(names -> {
+            calls.incrementAndGet();
+            queried.addAll(names);
+            return List.of(storage("Linen Cloth", 90, 2), storage("Flax Fibres", 80, 3));
+        });
+
+        CraftAtlasMaterialSource.Snapshot snapshot = source.load(observed, List.of());
+
+        assertEquals(1, calls.get());
+        assertTrue(queried.contains("Linen Cloth"));
+        assertTrue(queried.contains("Flax Fibres"));
+        assertEquals("Linen Cloth", snapshot.candidatesBySlot.get(0).get(0).material);
+        assertEquals("Flax Fibres", snapshot.candidatesBySlot.get(1).get(0).material);
     }
 
     private static ArrayList<JSONObject> jsonNames(String... names) {

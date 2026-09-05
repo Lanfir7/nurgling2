@@ -6,6 +6,7 @@ import nurgling.actions.Results;
 import nurgling.craftatlas.CraftAtlasMaterialPlanner.Allocation;
 import nurgling.craftatlas.CraftAtlasMaterialPlanner.Plan;
 import nurgling.craftatlas.CraftAtlasMaterialPlanner.SlotPlan;
+import nurgling.db.dao.StorageItemDao;
 import nurgling.i18n.L10n;
 import nurgling.widgets.NStorageItemsWidget.GroupedItem;
 
@@ -25,7 +26,7 @@ public final class CraftAtlasResourceCollector implements Action {
         public final int count;
         public final GroupedItem group;
 
-        private FetchRequest(String candidateId, String material, int count, GroupedItem group) {
+        FetchRequest(String candidateId, String material, int count, GroupedItem group) {
             this.candidateId = candidateId;
             this.material = material;
             this.count = count;
@@ -56,9 +57,51 @@ public final class CraftAtlasResourceCollector implements Action {
         return Collections.unmodifiableList(new ArrayList<>(result.values()));
     }
 
+    static List<FetchRequest> combineMaterialRequests(List<FetchRequest> requests) {
+        Map<String, CombinedRequest> combined = new LinkedHashMap<>();
+        if(requests != null) for(FetchRequest request : requests) {
+            if(request == null) continue;
+            combined.computeIfAbsent(request.material,
+                    key -> new CombinedRequest(request.candidateId, request.material)).add(request);
+        }
+        List<FetchRequest> result = new ArrayList<>();
+        for(CombinedRequest value : combined.values()) result.add(value.build());
+        return Collections.unmodifiableList(result);
+    }
+
+    private static final class CombinedRequest {
+        final String candidateId;
+        final String material;
+        final List<StorageItemDao.StorageItemData> items = new ArrayList<>();
+        final java.util.LinkedHashSet<String> locations = new java.util.LinkedHashSet<>();
+        int count;
+        int distance = -1;
+
+        CombinedRequest(String candidateId, String material) {
+            this.candidateId = candidateId;
+            this.material = material;
+        }
+
+        void add(FetchRequest request) {
+            count += request.count;
+            int available = Math.min(request.count, request.group.items.size());
+            items.addAll(request.group.items.subList(0, available));
+            if(request.group.distanceTiles >= 0 && (distance < 0 || request.group.distanceTiles < distance))
+                distance = request.group.distanceTiles;
+            if(request.group.storageName != null && !request.group.storageName.isEmpty())
+                locations.add(request.group.storageName);
+        }
+
+        FetchRequest build() {
+            GroupedItem group = new GroupedItem(material, -1, count, items, distance,
+                    String.join(", ", locations));
+            return new FetchRequest(candidateId, material, count, group);
+        }
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
-        for(FetchRequest request : requests) {
+        for(FetchRequest request : combineMaterialRequests(requests)) {
             FetchStorageItemBot fetch = new FetchStorageItemBot(request.group, request.count,
                     request.group.items);
             Results result = fetch.run(gui);

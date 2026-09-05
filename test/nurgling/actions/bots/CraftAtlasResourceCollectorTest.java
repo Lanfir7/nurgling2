@@ -103,6 +103,22 @@ class CraftAtlasResourceCollectorTest {
         assertEquals(4, requests.get(0).count);
     }
 
+    @Test
+    void combinesQualityBatchesOfOneMaterialIntoOneFetch() {
+        List<CraftAtlasResourceCollector.FetchRequest> requests = List.of(
+                new CraftAtlasResourceCollector.FetchRequest("db-100", "Linen Cloth", 2, group(100, 2)),
+                new CraftAtlasResourceCollector.FetchRequest("db-92", "Linen Cloth", 3, group(92, 3)));
+
+        List<CraftAtlasResourceCollector.FetchRequest> combined =
+                CraftAtlasResourceCollector.combineMaterialRequests(requests);
+
+        assertEquals(1, combined.size());
+        assertEquals(5, combined.get(0).count);
+        assertEquals(5, combined.get(0).group.items.size());
+        assertEquals(92, combined.get(0).group.minQuality, 0.001);
+        assertEquals(100, combined.get(0).group.maxQuality, 0.001);
+    }
+
     private static Candidate candidate(String id, double quality, int count, Source source) {
         return new Candidate(id, "Linen Cloth", quality, count, source,
                 source == Source.INVENTORY ? "Inventory" : "Chest");
