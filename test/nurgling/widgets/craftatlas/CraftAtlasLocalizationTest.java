@@ -51,7 +51,7 @@ class CraftAtlasLocalizationTest {
                 "craft_atlas.curiosity.minutes", "craft_atlas.table.name",
                 "craft_atlas.table.more_columns", "craft_atlas.table.lp_hour",
                 "craft_atlas.table.lp_hour_weight", "craft_atlas.table.lp_hour_tip",
-                "craft_atlas.table.lp_hour_weight_tip"));
+                "craft_atlas.table.lp_hour_weight_tip", "craft_atlas.resize_table_hint"));
         for(String code : SLOT_CODES)
             required.add("craft_atlas.equipment_slot." + code);
 

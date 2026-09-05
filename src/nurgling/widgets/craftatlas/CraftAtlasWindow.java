@@ -40,6 +40,7 @@ public class CraftAtlasWindow extends Window {
     private final TextEntry search;
     private final CraftAtlasRecipeList recipeList;
     private final CraftAtlasDetails details;
+    private final CraftAtlasPaneDivider paneDivider;
     private final CraftAtlasRecipeChooser chooser;
     private final TextEntry craftCount;
     private final Button back, forward, favorite, collectResources, openCraft;
@@ -97,6 +98,8 @@ public class CraftAtlasWindow extends Window {
         recipeList = add(new CraftAtlasRecipeList(UI.scale(330, 600), controller));
         recipeList.setSection(section);
         details = add(new CraftAtlasDetails(UI.scale(620, 600), controller));
+        paneDivider = add(new CraftAtlasPaneDivider(this::movePaneDivider, this::savePreferences));
+        paneDivider.tooltip = L10n.get("craft_atlas.resize_table_hint");
         favorite = add(new Button(UI.scale(42), "\u2606").action(this::toggleFavorite));
         craftCount = add(new TextEntry(UI.scale(54), "1") {
             @Override protected void changed() { super.changed(); craftCountChanged(); }
@@ -347,6 +350,9 @@ public class CraftAtlasWindow extends Window {
         }
         recipeList.move(Coord.of(layout.list.x, layout.list.y)); recipeList.resize(Coord.of(layout.list.w, layout.list.h));
         details.move(Coord.of(layout.details.x, layout.details.y)); details.resize(Coord.of(layout.details.w, layout.details.h));
+        int dividerX = layout.list.x + layout.list.w;
+        paneDivider.move(Coord.of(dividerX, layout.list.y));
+        paneDivider.resize(Coord.of(Math.max(UI.scale(4), layout.details.x - dividerX), layout.list.h));
         if(layout.detailsAsPage && narrowDetails) {
             for(Button button : sectionButtons) button.hide();
             for(Button button : equipmentButtons) button.hide();
@@ -358,6 +364,7 @@ public class CraftAtlasWindow extends Window {
             recipeList.show();
             details.visible = !layout.detailsAsPage;
         }
+        paneDivider.visible = !layout.detailsAsPage && !narrowDetails;
         CraftAtlasLayout.Rect[] controls = CraftAtlasLayout.footerControls(layout.footer,
                 UI.scale(42), UI.scale(54), UI.scale(160), UI.scale(170),
                 UI.scale(8), UI.scale(12));
@@ -383,9 +390,26 @@ public class CraftAtlasWindow extends Window {
         return CraftAtlasLayout.compute(content.x, content.y, scale);
     }
 
-    private static CraftAtlasLayout layoutFor(Coord content, double scale, String section) {
+    private CraftAtlasLayout layoutFor(Coord content, double scale, String section) {
         return CraftAtlasLayout.compute(content.x, content.y, scale,
+                CraftAtlasSections.hasMetricTable(section), requestedListWidth());
+    }
+
+    private int requestedListWidth() {
+        Integer value = preferences.columnWidths.get("layout.recipe-list");
+        return value == null ? -1 : value;
+    }
+
+    private void movePaneDivider(int pointerX) {
+        Coord content = csz();
+        CraftAtlasLayout natural = CraftAtlasLayout.compute(content.x, content.y, uiScale(),
                 CraftAtlasSections.hasMetricTable(section));
+        if(natural.detailsAsPage) return;
+        int requested = pointerX - natural.list.x;
+        CraftAtlasLayout adjusted = CraftAtlasLayout.compute(content.x, content.y, uiScale(),
+                CraftAtlasSections.hasMetricTable(section), requested);
+        preferences.columnWidths.put("layout.recipe-list", adjusted.list.w);
+        applyLayout();
     }
 
     private double uiScale() { return UI.scale(1000) / 1000.0; }

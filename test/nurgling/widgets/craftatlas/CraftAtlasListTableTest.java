@@ -24,6 +24,21 @@ class CraftAtlasListTableTest {
     }
 
     @Test
+    void foodColumnsUseGameAttributeIconsInStatOrder() {
+        List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor("foods", List.of());
+
+        assertEquals(List.of(
+                        "gfx/hud/chr/str", "gfx/hud/chr/agi", "gfx/hud/chr/int",
+                        "gfx/hud/chr/con", "gfx/hud/chr/prc", "gfx/hud/chr/csm",
+                        "gfx/hud/chr/dex", "gfx/hud/chr/wil", "gfx/hud/chr/psy"),
+                columns.stream().map(column -> column.iconResource).toList());
+        assertEquals(List.of(
+                        "Strength", "Agility", "Intelligence", "Constitution", "Perception",
+                        "Charisma", "Dexterity", "Will", "Psyche"),
+                columns.stream().map(column -> column.tooltip).toList());
+    }
+
+    @Test
     void gildingColumnsComeFromActualBonuses() {
         CraftAtlasEntry entry = CraftAtlasEntry.builder("gild", "Gild")
                 .category("gildings")
@@ -35,6 +50,7 @@ class CraftAtlasListTableTest {
 
         assertEquals(1, columns.size());
         assertEquals("Agility", columns.get(0).tooltip);
+        assertEquals("gfx/hud/chr/agi", columns.get(0).iconResource);
         assertEquals(3.0, columns.get(0).value(entry), 0.001);
     }
 

@@ -40,4 +40,16 @@ class CraftAtlasLayoutTest {
         assertTrue(table.list.w > regular.list.w);
         assertTrue(table.details.w >= 320);
     }
+
+    @Test
+    void requestedRecipePaneWidthIsUsedAndClamped() {
+        CraftAtlasLayout requested = CraftAtlasLayout.compute(1160, 700, 1.0, true, 480);
+        CraftAtlasLayout tooWide = CraftAtlasLayout.compute(1160, 700, 1.0, true, 5000);
+        CraftAtlasLayout tooNarrow = CraftAtlasLayout.compute(1160, 700, 1.0, true, 20);
+
+        assertEquals(480, requested.list.w);
+        assertEquals(480, requested.details.w);
+        assertEquals(280, tooNarrow.list.w);
+        assertEquals(320, tooWide.details.w);
+    }
 }

@@ -20,12 +20,19 @@ final class CraftAtlasListTable {
         final String id;
         final String label;
         final String tooltip;
+        final String iconResource;
         private final ToDoubleFunction<CraftAtlasEntry> extractor;
 
         Column(String id, String label, String tooltip, ToDoubleFunction<CraftAtlasEntry> extractor) {
+            this(id, label, tooltip, null, extractor);
+        }
+
+        Column(String id, String label, String tooltip, String iconResource,
+               ToDoubleFunction<CraftAtlasEntry> extractor) {
             this.id = id;
             this.label = label;
             this.tooltip = tooltip;
+            this.iconResource = iconResource;
             this.extractor = extractor;
         }
 
@@ -46,6 +53,7 @@ final class CraftAtlasListTable {
             for(String[] stat : FOOD) {
                 String normalized = CraftAtlasSearch.normalize(stat[0]);
                 result.add(new Column("food:" + normalized, stat[1], stat[0],
+                        CraftAtlasAttributes.resource(stat[0], null),
                         entry -> bonusValue(entry, normalized)));
             }
             return Collections.unmodifiableList(result);
@@ -73,6 +81,7 @@ final class CraftAtlasListTable {
                 String normalized = value.getKey();
                 String name = value.getValue();
                 result.add(new Column("gilding:" + normalized, abbreviation(name), name,
+                        bonusIcon(entries, normalized, name),
                         entry -> bonusValue(entry, normalized)));
             }
             return Collections.unmodifiableList(result);
@@ -102,6 +111,14 @@ final class CraftAtlasListTable {
             if(normalizedName.equals(name)) return bonus.value;
         }
         return Double.NaN;
+    }
+
+    private static String bonusIcon(List<CraftAtlasEntry> entries, String normalizedName, String name) {
+        if(entries != null) for(CraftAtlasEntry entry : entries) for(CraftAtlasEntry.Bonus bonus : entry.bonuses) {
+            if(!normalizedName.equals(CraftAtlasSearch.normalize(CraftAtlasAttributes.baseName(bonus.name)))) continue;
+            return CraftAtlasAttributes.resource(name, bonus.attributeResource);
+        }
+        return CraftAtlasAttributes.resource(name, null);
     }
 
     private static String abbreviation(String name) {

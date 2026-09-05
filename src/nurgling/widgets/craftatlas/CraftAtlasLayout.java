@@ -21,6 +21,11 @@ public final class CraftAtlasLayout {
     }
 
     public static CraftAtlasLayout compute(int width, int height, double scale, boolean metricTable) {
+        return compute(width, height, scale, metricTable, -1);
+    }
+
+    public static CraftAtlasLayout compute(int width, int height, double scale, boolean metricTable,
+                                           int requestedListWidth) {
         int headerH = scaled(56, scale), footerH = scaled(56, scale), gap = scaled(8, scale);
         int sidebarW = scaled(184, scale);
         int bodyY = headerH, bodyH = Math.max(0, height - headerH);
@@ -34,9 +39,11 @@ public final class CraftAtlasLayout {
                     new Rect(0, Math.max(bodyY, height - footerH), width, footerH), true);
         }
         int remaining = Math.max(0, width - sidebarW - gap * 2);
-        int preferredList = scaled(metricTable ? 600 : 360, scale);
+        int preferredList = requestedListWidth > 0 ? requestedListWidth : scaled(metricTable ? 600 : 360, scale);
         int minimumDetails = scaled(320, scale);
-        int listW = Math.min(preferredList, Math.max(scaled(280, scale), remaining - minimumDetails));
+        int minimumList = scaled(280, scale);
+        int maximumList = Math.max(minimumList, remaining - minimumDetails);
+        int listW = Math.max(minimumList, Math.min(preferredList, maximumList));
         int detailsX = sidebarW + gap + listW + gap;
         int detailsW = Math.max(0, width - detailsX);
         return new CraftAtlasLayout(header, new Rect(0, bodyY, sidebarW, bodyH),

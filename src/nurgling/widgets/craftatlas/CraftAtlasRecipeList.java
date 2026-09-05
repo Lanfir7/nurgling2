@@ -87,7 +87,7 @@ public class CraftAtlasRecipeList extends Widget {
     private int headerHeight() { return tableVisible() ? UI.scale(34) : 0; }
     private int viewportHeight() { return Math.max(0, sz.y - headerHeight()); }
     private int nameWidth() { return Math.min(UI.scale(230), Math.max(UI.scale(170), sz.x / 2)); }
-    private int columnWidth() { return UI.scale("curiosities".equals(section) ? 108 : 64); }
+    private int columnWidth() { return UI.scale("curiosities".equals(section) ? 96 : 54); }
     private int navigationWidth() { return UI.scale(22); }
 
     private boolean pagedColumns() {
@@ -148,7 +148,17 @@ public class CraftAtlasRecipeList extends Widget {
             g.chcolor(new Color(74, 83, 87, 150));
             g.frect(Coord.of(x, 0), Coord.of(1, height));
             g.chcolor();
-            drawHeaderText(g, column.label + sortArrow(column.id), x, columnWidth(), height);
+            Tex icon = column.iconResource == null ? null : icons.icon(column.iconResource, column.tooltip);
+            if(icon == null) {
+                drawHeaderText(g, column.label + sortArrow(column.id), x, columnWidth(), height);
+            } else {
+                int iconBox = UI.scale(22);
+                CraftAtlasIconCache.draw(g, icon,
+                        Coord.of(x + (columnWidth() - iconBox) / 2, (height - iconBox) / 2), iconBox);
+                String arrow = sortArrow(column.id).trim();
+                if(!arrow.isEmpty())
+                    drawHeaderText(g, arrow, x + columnWidth() - UI.scale(18), UI.scale(16), height);
+            }
         }
     }
 
