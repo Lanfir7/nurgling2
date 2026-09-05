@@ -16,6 +16,7 @@ import nurgling.tools.QuestGiverDistance;
 import nurgling.tools.QuestTrackFilter;
 import nurgling.widgets.nsettings.Fonts;
 import nurgling.widgets.quest.QCond;
+import nurgling.widgets.quest.QuestCredoCounter;
 import nurgling.widgets.quest.QuestKind;
 import nurgling.widgets.quest.QuestMenu;
 import nurgling.widgets.quest.QuestModel;
@@ -860,7 +861,7 @@ public class NQuestInfo extends Widget
             this.collapsed = collapsed;
             this.chev = groupFnd.render(collapsed ? "▸" : "▾", NStyle.questDim).tex();
             String pin = g.pinned ? "◆ " : "";
-            String cnt = (g.total > 0) ? (g.done + "/" + g.total) : "";
+            String cnt = QuestCredoCounter.forGroup(g.kind, g.questId, g.done, g.total, model.pursuedCredoProgress());
             this.counter = cnt.isEmpty() ? null : condFnd.render(cnt, NStyle.questDim).tex();
             int cw = (counter != null) ? counter.sz().x + UI.scale(6) : 0;
             this.badge = theme.emphasized
