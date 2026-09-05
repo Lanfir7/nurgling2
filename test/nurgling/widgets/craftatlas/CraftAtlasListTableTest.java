@@ -25,7 +25,13 @@ class CraftAtlasListTableTest {
 
     @Test
     void foodColumnsUseGameAttributeIconsInStatOrder() {
-        List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor("foods", List.of());
+        List<CraftAtlasEntry> foods = List.of(
+                food("Strength", "Strength", 1), food("Agility", "Agility", 1),
+                food("Intelligence", "Intelligence", 1), food("Constitution", "Constitution", 1),
+                food("Perception", "Perception", 1), food("Charisma", "Charisma", 1),
+                food("Dexterity", "Dexterity", 1), food("Will", "Will", 1),
+                food("Psyche", "Psyche", 1));
+        List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor("foods", foods);
 
         assertEquals(List.of(
                         "gfx/hud/chr/str", "gfx/hud/chr/agi", "gfx/hud/chr/int",
@@ -36,6 +42,14 @@ class CraftAtlasListTableTest {
                         "Strength", "Agility", "Intelligence", "Constitution", "Perception",
                         "Charisma", "Dexterity", "Will", "Psyche"),
                 columns.stream().map(column -> column.tooltip).toList());
+    }
+
+    @Test
+    void foodColumnsHideStatsMissingFromEveryVisibleRecipe() {
+        List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor(
+                "foods", List.of(food("Dex food", "Dexterity", 2)));
+
+        assertEquals(List.of("Dexterity"), columns.stream().map(column -> column.tooltip).toList());
     }
 
     @Test
@@ -52,6 +66,33 @@ class CraftAtlasListTableTest {
         assertEquals("Agility", columns.get(0).tooltip);
         assertEquals("gfx/hud/chr/agi", columns.get(0).iconResource);
         assertEquals(3.0, columns.get(0).value(entry), 0.001);
+    }
+
+    @Test
+    void gildingColumnsFollowCharacterOrderAndMergeEquivalentNames() {
+        CraftAtlasEntry first = CraftAtlasEntry.builder("first", "First")
+                .category("gildings")
+                .bonus(new CraftAtlasEntry.Bonus("gild:inventory-space", "Inventory space", 2.0))
+                .bonus(new CraftAtlasEntry.Bonus("gild:lore", "Lore", 4.0))
+                .bonus(new CraftAtlasEntry.Bonus("gild:unarmed", "Unarmed", 3.0))
+                .bonus(new CraftAtlasEntry.Bonus("gild:dexterity", "Dexterity", 1.0))
+                .bonus(new CraftAtlasEntry.Bonus("gild:strength", "Strength", 5.0))
+                .build();
+        CraftAtlasEntry second = CraftAtlasEntry.builder("second", "Second")
+                .category("gildings")
+                .bonus(new CraftAtlasEntry.Bonus("gild:inventory", "Inventory", 1.0))
+                .bonus(new CraftAtlasEntry.Bonus("gild:unarmed-combat", "Unarmed Combat", 6.0))
+                .build();
+
+        List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor(
+                "gildings", List.of(first, second));
+
+        assertEquals(List.of("Strength", "Dexterity", "Unarmed Combat", "Lore", "Inventory"),
+                columns.stream().map(column -> column.tooltip).toList());
+        assertEquals(1, columns.stream().filter(column -> "gilding:inventory".equals(column.id)).count());
+        CraftAtlasListTable.Column inventory = columns.get(4);
+        assertEquals(2.0, inventory.value(first), 0.001);
+        assertEquals(1.0, inventory.value(second), 0.001);
     }
 
     @Test

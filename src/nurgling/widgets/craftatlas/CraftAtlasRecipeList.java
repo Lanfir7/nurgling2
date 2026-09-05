@@ -87,7 +87,7 @@ public class CraftAtlasRecipeList extends Widget {
     private int headerHeight() { return tableVisible() ? UI.scale(34) : 0; }
     private int viewportHeight() { return Math.max(0, sz.y - headerHeight()); }
     private int nameWidth() { return Math.min(UI.scale(230), Math.max(UI.scale(170), sz.x / 2)); }
-    private int columnWidth() { return UI.scale("curiosities".equals(section) ? 96 : 54); }
+    private int columnWidth() { return UI.scale("curiosities".equals(section) ? 96 : 42); }
     private int navigationWidth() { return UI.scale(22); }
 
     private boolean pagedColumns() {
