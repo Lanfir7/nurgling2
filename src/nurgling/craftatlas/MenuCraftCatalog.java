@@ -10,6 +10,8 @@ import haven.res.ui.tt.attrmod.Mod;
 import haven.res.ui.tt.attrmod.resattr;
 import haven.res.ui.tt.slot.Slotted;
 import haven.resutil.FoodInfo;
+import haven.resutil.Curiosity;
+import nurgling.iteminfo.NCuriosity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,6 +29,7 @@ public final class MenuCraftCatalog {
         public final List<String> categories;
         public final List<CraftAtlasEntry.Bonus> bonuses;
         public final CraftAtlasEntry.Gilding gilding;
+        public final CraftAtlasEntry.Curiosity curiosity;
         public final List<CraftAtlasEntry.AttributeRef> qualityModifiers;
         public PageRecord(String resource, String name) {
             this(resource, name, Collections.<String>emptyList(), Collections.<CraftAtlasEntry.Bonus>emptyList());
@@ -36,12 +39,18 @@ public final class MenuCraftCatalog {
         }
         public PageRecord(String resource, String name, List<String> categories, List<CraftAtlasEntry.Bonus> bonuses,
                           CraftAtlasEntry.Gilding gilding, List<CraftAtlasEntry.AttributeRef> qualityModifiers) {
+            this(resource, name, categories, bonuses, gilding, qualityModifiers, null);
+        }
+        public PageRecord(String resource, String name, List<String> categories, List<CraftAtlasEntry.Bonus> bonuses,
+                          CraftAtlasEntry.Gilding gilding, List<CraftAtlasEntry.AttributeRef> qualityModifiers,
+                          CraftAtlasEntry.Curiosity curiosity) {
             this.resource = resource;
             this.name = name;
             this.categories = categories;
             this.bonuses = bonuses;
             this.gilding = gilding;
             this.qualityModifiers = qualityModifiers;
+            this.curiosity = curiosity;
         }
     }
 
@@ -114,6 +123,7 @@ public final class MenuCraftCatalog {
                 .output(live.outputResource == null ? reference.outputResource : live.outputResource)
                 .description(live.description == null ? reference.description : live.description);
         builder.gilding(live.gilding == null ? reference.gilding : live.gilding);
+        builder.curiosity(live.curiosity == null ? reference.curiosity : live.curiosity);
         List<String> equipmentSlots = live.equipmentSlots.isEmpty() ? reference.equipmentSlots : live.equipmentSlots;
         for(String slot : equipmentSlots) builder.equipmentSlot(slot);
         List<CraftAtlasEntry.InputSlot> inputs = live.inputs.isEmpty() ? reference.inputs : live.inputs;
@@ -178,6 +188,7 @@ public final class MenuCraftCatalog {
             }
         }
         builder.gilding(page.gilding);
+        builder.curiosity(page.curiosity);
         for(String category : page.categories) builder.category(category);
         for(CraftAtlasEntry.Bonus bonus : bonuses.values()) builder.bonus(bonus);
         for(CraftAtlasEntry.AttributeRef attribute : page.qualityModifiers)
@@ -200,6 +211,7 @@ public final class MenuCraftCatalog {
         LinkedHashMap<String, CraftAtlasEntry.Bonus> bonuses = new LinkedHashMap<>();
         LinkedHashMap<String, CraftAtlasEntry.AttributeRef> qualityModifiers = new LinkedHashMap<>();
         CraftAtlasEntry.Gilding gilding = null;
+        CraftAtlasEntry.Curiosity curiosity = null;
         for(ItemInfo info : page.button().info()) {
             if(info instanceof Slotted) {
                 categories.add("gildings");
@@ -235,9 +247,15 @@ public final class MenuCraftCatalog {
                     bonuses.put(resource, new CraftAtlasEntry.Bonus(resource, name, event.a));
                 }
             }
+            if(info instanceof Curiosity) {
+                categories.add("curiosities");
+                Curiosity value = (Curiosity)info;
+                int realMinutes = Math.max(1, Math.round(value.time / NCuriosity.server_ratio / 60f));
+                curiosity = new CraftAtlasEntry.Curiosity(value.exp, realMinutes, value.mw);
+            }
         }
         return new PageRecord(page.res().name, page.button().name(), categories, new ArrayList<>(bonuses.values()),
-                gilding, new ArrayList<>(qualityModifiers.values()));
+                gilding, new ArrayList<>(qualityModifiers.values()), curiosity);
     }
 
     private static Resource[] skillResources(ItemInfo info) {

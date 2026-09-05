@@ -13,6 +13,7 @@ class CraftAtlasSectionsTest {
         assertTrue(CraftAtlasSections.isEquipment("equipment"));
         assertTrue(CraftAtlasSections.isEquipment("equipment-rings"));
         assertFalse(CraftAtlasSections.isEquipment("foods"));
+        assertTrue(CraftAtlasSections.MAIN.contains("curiosities"));
         assertEquals(Arrays.asList("equipment", "equipment-shoes", "equipment-pants", "equipment-shirts",
                         "equipment-shoulders", "equipment-hats", "equipment-capes", "equipment-cloaks", "equipment-rings"),
                 CraftAtlasSections.EQUIPMENT);
@@ -21,6 +22,7 @@ class CraftAtlasSectionsTest {
     @Test
     void sectionMapsDirectlyToItsCatalogCategory() {
         assertEquals("foods", CraftAtlasSections.category("foods"));
+        assertEquals("curiosities", CraftAtlasSections.category("curiosities"));
         assertEquals("equipment", CraftAtlasSections.category("equipment"));
         assertEquals("equipment-cloaks", CraftAtlasSections.category("equipment-cloaks"));
         assertNull(CraftAtlasSections.category("favorites"));

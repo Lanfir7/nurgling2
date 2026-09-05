@@ -18,6 +18,7 @@ USER_AGENT = "Nurgling-Craft-Atlas/1.0 (offline reference snapshot)"
 CATEGORIES = {
     "Category:Foods": "foods",
     "Category:Gilding Objects": "gildings",
+    "Category:Curiosity": "curiosities",
 }
 FOOD_STATS = {
     "str": "Strength", "agi": "Agility", "int": "Intelligence", "con": "Constitution",
@@ -61,7 +62,7 @@ def page_sources(titles):
 
 
 def infobox_fields(text):
-    match = re.search(r"\{\{\s*infobox\s+metaobj\b", text, re.I)
+    match = re.search(r"\{\{\s*infobox[\s_]+metaobj\b", text, re.I)
     if not match:
         return {}
     start, pos, depth = match.start(), match.start(), 0
@@ -130,6 +131,22 @@ def number(value):
     return float(match.group(0)) if match else None
 
 
+def study_minutes(value):
+    rendered = clean(value)
+    clock = re.fullmatch(r"(\d+)\s*:\s*(\d+)", rendered)
+    if clock:
+        return int(clock.group(1)) * 60 + int(clock.group(2))
+    days = re.search(r"(\d+(?:\.\d+)?)\s*d", rendered, re.I)
+    hours = re.search(r"(\d+(?:\.\d+)?)\s*h", rendered, re.I)
+    minutes = re.search(r"(\d+(?:\.\d+)?)\s*m", rendered, re.I)
+    if days or hours or minutes:
+        return round((float(days.group(1)) if days else 0) * 1440 +
+                     (float(hours.group(1)) if hours else 0) * 60 +
+                     (float(minutes.group(1)) if minutes else 0))
+    numeric = number(rendered)
+    return round(numeric * 60) if numeric is not None else None
+
+
 def referenced_recipe(value, title):
     name = clean(value, title).replace("_", " ")
     return re.sub(r"\s+", " ", name).strip() or None
@@ -153,7 +170,10 @@ def make_entry(title, text, categories):
         entry["requirements"].append({"kind": "SKILL", "name": name, "description": "Ring of Brodgar"})
     for target, name in linked_values(fields.get("discoveryreq", ""), title):
         entry["requirements"].append({"kind": "DISCOVERY", "name": name, "description": "Ring of Brodgar"})
+    crafted_curiosity = "curiosities" not in categories or bool(linked_values(fields.get("objectsreq", ""), title))
     for target, name in linked_values(fields.get("producedby", ""), title):
+        if not crafted_curiosity:
+            continue
         if name.lower() != "hand":
             entry["requirements"].append({"kind": "STATION", "resource": item_resource(target), "name": name,
                                           "description": "Ring of Brodgar"})
@@ -181,6 +201,16 @@ def make_entry(title, text, categories):
             value = number(fields.get(field, ""))
             if value not in (None, 0.0):
                 entry["bonuses"].append({"resource": "food:" + field, "name": label, "value": value})
+    if "curiosities" in categories:
+        learning_points = number(fields.get("lpgain", ""))
+        minutes = study_minutes(fields.get("studytime", ""))
+        mental_weight = number(fields.get("mentalweight", ""))
+        if learning_points is not None or minutes is not None or mental_weight is not None:
+            entry["curiosity"] = {
+                "learningPoints": round(learning_points or 0),
+                "studyMinutes": round(minutes or 0),
+                "mentalWeight": round(mental_weight or 0),
+            }
     return entry, referenced_recipe(fields.get("inc_recipe", ""), title)
 
 

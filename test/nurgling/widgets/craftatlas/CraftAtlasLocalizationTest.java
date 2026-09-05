@@ -44,6 +44,14 @@ class CraftAtlasLocalizationTest {
                 "craft_atlas.collect_resources", "craft_atlas.collect_bad_count",
                 "craft_atlas.collect_unavailable", "craft_atlas.collect_missing",
                 "craft_atlas.collect_shortage", "craft_atlas.quality_unavailable"));
+        required.addAll(Arrays.asList(
+                "craft_atlas.curiosity", "craft_atlas.curiosity.lp", "craft_atlas.curiosity.time",
+                "craft_atlas.curiosity.weight", "craft_atlas.curiosity.lp_hour",
+                "craft_atlas.curiosity.lp_hour_weight", "craft_atlas.curiosity.hours",
+                "craft_atlas.curiosity.minutes", "craft_atlas.table.name",
+                "craft_atlas.table.more_columns", "craft_atlas.table.lp_hour",
+                "craft_atlas.table.lp_hour_weight", "craft_atlas.table.lp_hour_tip",
+                "craft_atlas.table.lp_hour_weight_tip"));
         for(String code : SLOT_CODES)
             required.add("craft_atlas.equipment_slot." + code);
 

@@ -84,6 +84,10 @@ public final class WikiReferenceCatalog {
                     emptyToNull(requirement.optString("description", null))));
         }
         CraftAtlasEntry.Gilding gilding = decodeGilding(value.optJSONObject("gilding"));
+        JSONObject curiosity = value.optJSONObject("curiosity");
+        if(curiosity != null) builder.curiosity(new CraftAtlasEntry.Curiosity(
+                curiosity.optInt("learningPoints", 0), curiosity.optInt("studyMinutes", 0),
+                curiosity.optInt("mentalWeight", 0)));
         JSONArray bonuses = value.optJSONArray("bonuses");
         if(bonuses != null) for(int i = 0; i < bonuses.length(); i++) {
             JSONObject bonus = bonuses.getJSONObject(i);

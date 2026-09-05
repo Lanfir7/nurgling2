@@ -95,6 +95,7 @@ public class CraftAtlasWindow extends Window {
         }
 
         recipeList = add(new CraftAtlasRecipeList(UI.scale(330, 600), controller));
+        recipeList.setSection(section);
         details = add(new CraftAtlasDetails(UI.scale(620, 600), controller));
         favorite = add(new Button(UI.scale(42), "\u2606").action(this::toggleFavorite));
         craftCount = add(new TextEntry(UI.scale(54), "1") {
@@ -173,6 +174,7 @@ public class CraftAtlasWindow extends Window {
 
     private void selectSection(String value) {
         section = value;
+        recipeList.setSection(value);
         preferences.lastSection = value;
         narrowDetails = false;
         applyQuery();
@@ -204,7 +206,7 @@ public class CraftAtlasWindow extends Window {
         favorite.change(starred ? "\u2605" : "\u2606");
         if(state.selected != null) {
             preferences.recordRecent(state.selected.recipeResource);
-            CraftAtlasLayout current = layoutFor(csz(), uiScale());
+            CraftAtlasLayout current = layoutFor(csz(), uiScale(), section);
             if(current.detailsAsPage) { narrowDetails = true; applyLayout(); }
         }
         chooser.setChoices(state.choices);
@@ -328,7 +330,7 @@ public class CraftAtlasWindow extends Window {
 
     private void applyLayout() {
         Coord content = csz();
-        CraftAtlasLayout layout = layoutFor(content, uiScale());
+        CraftAtlasLayout layout = layoutFor(content, uiScale(), section);
         back.move(UI.scale(8, 12)); forward.move(UI.scale(48, 12));
         search.move(UI.scale(96, 12)); search.resize(Math.max(UI.scale(220), content.x - UI.scale(112)));
         int sideY = layout.sidebar.y + UI.scale(8);
@@ -379,6 +381,11 @@ public class CraftAtlasWindow extends Window {
 
     static CraftAtlasLayout layoutFor(Coord content, double scale) {
         return CraftAtlasLayout.compute(content.x, content.y, scale);
+    }
+
+    private static CraftAtlasLayout layoutFor(Coord content, double scale, String section) {
+        return CraftAtlasLayout.compute(content.x, content.y, scale,
+                CraftAtlasSections.hasMetricTable(section));
     }
 
     private double uiScale() { return UI.scale(1000) / 1000.0; }

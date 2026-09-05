@@ -31,4 +31,13 @@ class CraftAtlasLayoutTest {
         assertTrue(layout.details.y + layout.details.h <= 644,
                 "details content must stop above the fixed craft action bar");
     }
+
+    @Test
+    void metricTableExpandsTheRecipePane() {
+        CraftAtlasLayout regular = CraftAtlasLayout.compute(1160, 700, 1.0);
+        CraftAtlasLayout table = CraftAtlasLayout.compute(1160, 700, 1.0, true);
+
+        assertTrue(table.list.w > regular.list.w);
+        assertTrue(table.details.w >= 320);
+    }
 }

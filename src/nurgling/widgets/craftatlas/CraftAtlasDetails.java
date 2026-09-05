@@ -40,7 +40,7 @@ public class CraftAtlasDetails extends Widget {
             Pattern.CASE_INSENSITIVE);
     private static final long MATERIAL_REFRESH_INTERVAL_NS = 3_000_000_000L;
     public enum Target { NONE, INGREDIENT, REQUIREMENT_DESCRIPTION, CYCLE }
-    public enum Kind { GILDING, BONUS, SLOT, QUALITY, INPUT, REQUIREMENT, STATUS }
+    public enum Kind { GILDING, BONUS, CURIOSITY, SLOT, QUALITY, INPUT, REQUIREMENT, STATUS }
 
     public static final class DetailRow {
         public final Kind kind;
@@ -280,6 +280,19 @@ public class CraftAtlasDetails extends Widget {
                     bonus.value == null ? null : format(CraftAtlasQuality.project(entry, bonus, quality)),
                     0, Target.NONE, null, null));
         }
+        if(entry.curiosity != null) {
+            CraftAtlasEntry.Curiosity curiosity = entry.curiosity;
+            rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.lp"), null,
+                    String.format(Locale.ROOT, "%,d", curiosity.learningPoints), 0, Target.NONE, null, null));
+            rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.time"), null,
+                    formatStudyTime(curiosity.studyMinutes), 0, Target.NONE, null, null));
+            rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.weight"), null,
+                    Integer.toString(curiosity.mentalWeight), 0, Target.NONE, null, null));
+            rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.lp_hour"), null,
+                    formatUnsigned(curiosity.lpPerHour()), 0, Target.NONE, null, null));
+            rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.lp_hour_weight"), null,
+                    formatUnsigned(curiosity.lpPerHourPerWeight()), 0, Target.NONE, null, null));
+        }
         for(String slot : entry.equipmentSlots)
             rows.add(new DetailRow(Kind.SLOT, formatEquipmentSlots(slot), null, null, 0, Target.NONE, null, null));
         for(int slotIndex = 0; slotIndex < entry.inputs.size(); slotIndex++) {
@@ -328,6 +341,18 @@ public class CraftAtlasDetails extends Widget {
         return value == Math.rint(value) ? String.format("%+.0f", value) : String.format("%+.1f", value);
     }
 
+    private static String formatUnsigned(double value) {
+        if(!Double.isFinite(value)) return "—";
+        return value == Math.rint(value) ? String.format(Locale.ROOT, "%.0f", value) :
+                String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static String formatStudyTime(int minutes) {
+        int positive = Math.max(0, minutes);
+        return positive / 60 + L10n.get("craft_atlas.curiosity.hours") + " " +
+                positive % 60 + L10n.get("craft_atlas.curiosity.minutes");
+    }
+
     @Override public void draw(GOut g) {
         iconHits.clear();
         g.chcolor(new Color(24, 29, 33, 235)); g.frect(Coord.z, sz); g.chcolor();
@@ -349,7 +374,8 @@ public class CraftAtlasDetails extends Widget {
         } else {
             String category = entry.categories.contains("equipment") ? L10n.get("craft_atlas.section.equipment") :
                     entry.categories.contains("gildings") ? L10n.get("craft_atlas.section.gildings") :
-                            entry.categories.contains("foods") ? L10n.get("craft_atlas.section.foods") : "";
+                            entry.categories.contains("foods") ? L10n.get("craft_atlas.section.foods") :
+                                    entry.categories.contains("curiosities") ? L10n.get("craft_atlas.section.curiosities") : "";
             if(!category.isEmpty()) drawCentered(g, category, UI.scale(98), UI.scale(66), UI.scale(22), new Color(169, 179, 181, 220));
         }
         if(qualityEntry.visible)
@@ -384,6 +410,7 @@ public class CraftAtlasDetails extends Widget {
         if(y + sectionHeight < headerHeight || y > sz.y) return;
         String key = kind == Kind.GILDING ? "craft_atlas.gilding" :
                 kind == Kind.BONUS ? "craft_atlas.bonuses" :
+                kind == Kind.CURIOSITY ? "craft_atlas.curiosity" :
                 kind == Kind.SLOT ? "craft_atlas.equipment_slots" :
                 kind == Kind.QUALITY ? "craft_atlas.quality_modifiers" :
                 kind == Kind.INPUT ? "craft_atlas.inputs" : "craft_atlas.requirements";
@@ -420,6 +447,12 @@ public class CraftAtlasDetails extends Widget {
                 drawCentered(g, row.value, Math.max(UI.scale(180), sz.x - UI.scale(72)), y, height,
                         new Color(117, 211, 147));
             }
+            return;
+        }
+        if(row.kind == Kind.CURIOSITY) {
+            drawCentered(g, row.name, UI.scale(18), y, height, null);
+            drawCentered(g, row.value, Math.max(UI.scale(180), sz.x - UI.scale(92)), y, height,
+                    new Color(132, 220, 159));
             return;
         }
         if(row.kind == Kind.SLOT) {
@@ -461,7 +494,7 @@ public class CraftAtlasDetails extends Widget {
     }
 
     private int rowHeight(DetailRow row) {
-        return row.kind == Kind.BONUS || row.kind == Kind.SLOT ? bonusRowHeight :
+        return row.kind == Kind.BONUS || row.kind == Kind.CURIOSITY || row.kind == Kind.SLOT ? bonusRowHeight :
                 row.kind == Kind.GILDING || row.kind == Kind.QUALITY ? UI.scale(44) : itemRowHeight;
     }
 

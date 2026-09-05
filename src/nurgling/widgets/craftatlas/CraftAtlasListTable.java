@@ -1,0 +1,113 @@
+package nurgling.widgets.craftatlas;
+
+import nurgling.craftatlas.CraftAtlasAttributes;
+import nurgling.craftatlas.CraftAtlasEntry;
+import nurgling.craftatlas.CraftAtlasSearch;
+import nurgling.i18n.L10n;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.ToDoubleFunction;
+
+/** Metric columns and deterministic sorting for the expanded Craft Atlas list. */
+final class CraftAtlasListTable {
+    static final class Column {
+        final String id;
+        final String label;
+        final String tooltip;
+        private final ToDoubleFunction<CraftAtlasEntry> extractor;
+
+        Column(String id, String label, String tooltip, ToDoubleFunction<CraftAtlasEntry> extractor) {
+            this.id = id;
+            this.label = label;
+            this.tooltip = tooltip;
+            this.extractor = extractor;
+        }
+
+        double value(CraftAtlasEntry entry) { return extractor.applyAsDouble(entry); }
+    }
+
+    private static final String[][] FOOD = {
+            {"Strength", "STR"}, {"Agility", "AGI"}, {"Intelligence", "INT"},
+            {"Constitution", "CON"}, {"Perception", "PER"}, {"Charisma", "CHA"},
+            {"Dexterity", "DEX"}, {"Will", "WIL"}, {"Psyche", "PSY"}
+    };
+
+    private CraftAtlasListTable() { }
+
+    static List<Column> columnsFor(String section, List<CraftAtlasEntry> entries) {
+        if("foods".equals(section)) {
+            List<Column> result = new ArrayList<>();
+            for(String[] stat : FOOD) {
+                String normalized = CraftAtlasSearch.normalize(stat[0]);
+                result.add(new Column("food:" + normalized, stat[1], stat[0],
+                        entry -> bonusValue(entry, normalized)));
+            }
+            return Collections.unmodifiableList(result);
+        }
+        if("curiosities".equals(section)) {
+            return List.of(
+                    new Column("curiosity:lp-hour", L10n.get("craft_atlas.table.lp_hour"),
+                            L10n.get("craft_atlas.table.lp_hour_tip"),
+                            entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.lpPerHour()),
+                    new Column("curiosity:lp-hour-weight", L10n.get("craft_atlas.table.lp_hour_weight"),
+                            L10n.get("craft_atlas.table.lp_hour_weight_tip"),
+                            entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.lpPerHourPerWeight()));
+        }
+        if("gildings".equals(section)) {
+            Map<String, String> names = new LinkedHashMap<>();
+            if(entries != null) for(CraftAtlasEntry entry : entries) for(CraftAtlasEntry.Bonus bonus : entry.bonuses) {
+                if(bonus.value == null || "gild:chance".equals(bonus.attributeResource)) continue;
+                String name = CraftAtlasAttributes.baseName(bonus.name);
+                names.putIfAbsent(CraftAtlasSearch.normalize(name), name);
+            }
+            List<Map.Entry<String, String>> ordered = new ArrayList<>(names.entrySet());
+            ordered.sort(Comparator.comparing(Map.Entry::getValue, String.CASE_INSENSITIVE_ORDER));
+            List<Column> result = new ArrayList<>();
+            for(Map.Entry<String, String> value : ordered) {
+                String normalized = value.getKey();
+                String name = value.getValue();
+                result.add(new Column("gilding:" + normalized, abbreviation(name), name,
+                        entry -> bonusValue(entry, normalized)));
+            }
+            return Collections.unmodifiableList(result);
+        }
+        return Collections.emptyList();
+    }
+
+    static List<CraftAtlasEntry> sort(List<CraftAtlasEntry> entries, Column column, boolean descending) {
+        List<CraftAtlasEntry> result = new ArrayList<>(entries == null ? Collections.emptyList() : entries);
+        if(column == null) return result;
+        result.sort((left, right) -> {
+            double a = column.value(left), b = column.value(right);
+            boolean missingA = !Double.isFinite(a), missingB = !Double.isFinite(b);
+            if(missingA != missingB) return missingA ? 1 : -1;
+            int compared = missingA ? 0 : Double.compare(a, b);
+            if(descending) compared = -compared;
+            return compared != 0 ? compared : left.displayName.compareToIgnoreCase(right.displayName);
+        });
+        return Collections.unmodifiableList(result);
+    }
+
+    private static double bonusValue(CraftAtlasEntry entry, String normalizedName) {
+        if(entry == null) return Double.NaN;
+        for(CraftAtlasEntry.Bonus bonus : entry.bonuses) {
+            if(bonus.value == null) continue;
+            String name = CraftAtlasSearch.normalize(CraftAtlasAttributes.baseName(bonus.name));
+            if(normalizedName.equals(name)) return bonus.value;
+        }
+        return Double.NaN;
+    }
+
+    private static String abbreviation(String name) {
+        for(String[] stat : FOOD) if(stat[0].equalsIgnoreCase(name)) return stat[1];
+        String compact = name == null ? "" : name.replaceAll("[^\\p{L}\\p{Nd}]", "");
+        if(compact.length() <= 5) return compact.toUpperCase(Locale.ROOT);
+        return compact.substring(0, 3).toUpperCase(Locale.ROOT);
+    }
+}

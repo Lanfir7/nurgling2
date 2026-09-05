@@ -64,6 +64,22 @@ class WikiReferenceCatalogTest {
     }
 
     @Test
+    void parsesCuriosityStudyMetrics() throws Exception {
+        String json = "{\"entries\":[{\"id\":\"wiki:adder-fang\",\"name\":\"Adder Fang\"," +
+                "\"categories\":[\"curiosities\"],\"curiosity\":{" +
+                "\"learningPoints\":5000,\"studyMinutes\":1969,\"mentalWeight\":14}}]}";
+
+        CraftAtlasEntry entry = WikiReferenceCatalog.parse(new ByteArrayInputStream(
+                json.getBytes(StandardCharsets.UTF_8))).get(0);
+
+        assertNotNull(entry.curiosity);
+        assertEquals(5000, entry.curiosity.learningPoints);
+        assertEquals(32.0 + 49.0 / 60.0, entry.curiosity.studyHours(), 0.0001);
+        assertEquals(152.36, entry.curiosity.lpPerHour(), 0.01);
+        assertEquals(10.88, entry.curiosity.lpPerHourPerWeight(), 0.01);
+    }
+
+    @Test
     void stableWikiResourcesIgnoreCaseAndPunctuation() {
         assertEquals("wiki-item:taproot-lacing", WikiReferenceCatalog.itemResource("Taproot Lacing"));
         assertEquals(WikiReferenceCatalog.itemResource("Fish Glue"), WikiReferenceCatalog.itemResource("fish-glue"));
@@ -76,6 +92,7 @@ class WikiReferenceCatalogTest {
         assertTrue(has(entries, "Taproot Lacing", "gildings"));
         assertTrue(has(entries, "Apple Pie", "foods"));
         assertTrue(has(entries, "Unbaked Apple Pie", "foods"));
+        assertTrue(has(entries, "Adder Fang", "curiosities"));
         CraftAtlasSnapshot snapshot = new MenuCraftCatalog(null, null).rebuild();
         assertTrue(snapshot.entries.size() >= 700);
         CraftAtlasEntry applePie = find(snapshot.entries, "Apple Pie");
