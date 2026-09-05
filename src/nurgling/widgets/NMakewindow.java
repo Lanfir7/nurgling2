@@ -16,6 +16,7 @@ import nurgling.conf.FontSettings;
 import nurgling.conf.ItemQualityOverlaySettings;
 import nurgling.craftatlas.CraftAtlasObservation;
 import nurgling.craftatlas.CraftAtlasObservationStore;
+import nurgling.craftatlas.CraftAtlasRecipeProbe;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
 import nurgling.tools.*;
@@ -73,6 +74,11 @@ public class NMakewindow extends Widget implements DTarget {
     private IButton savePresetBtn = null;
     private boolean recipesPersisted = false;
     private boolean craftAtlasObservationDirty = true;
+    private boolean craftAtlasProbe;
+    private boolean craftAtlasProbeClosing;
+    private CraftAtlasRecipeProbe craftAtlasRecipeProbe;
+    private long craftAtlasProbeDeadline;
+    private long craftAtlasLastServerUpdate;
 
     private static final OwnerContext.ClassResolver<NMakewindow> ctxr = new OwnerContext.ClassResolver<NMakewindow>()
             .add(NMakewindow.class, wdg -> wdg)
@@ -306,10 +312,29 @@ public class NMakewindow extends Widget implements DTarget {
         }
         persistRecipeMappings();
         maybePublishCraftAtlasObservation();
+        if(craftAtlasProbe && !craftAtlasProbeClosing && System.nanoTime() >= craftAtlasProbeDeadline)
+            closeCraftAtlasProbe(false);
+    }
+
+    public void enableCraftAtlasProbe(String recipeResource, CraftAtlasRecipeProbe recipeProbe) {
+        this.recipeResource = recipeResource;
+        this.craftAtlasRecipeProbe = recipeProbe;
+        craftAtlasProbe = true;
+        craftAtlasLastServerUpdate = System.nanoTime();
+        craftAtlasProbeDeadline = System.nanoTime() + 8_000_000_000L;
+        hide();
+    }
+
+    @Override public void destroy() {
+        if(craftAtlasProbe && !craftAtlasProbeClosing && craftAtlasRecipeProbe != null)
+            craftAtlasRecipeProbe.fail(recipeResource);
+        super.destroy();
     }
 
     private void maybePublishCraftAtlasObservation() {
         if(!craftAtlasObservationDirty || ui == null) return;
+        if(craftAtlasProbe && !CraftAtlasRecipeProbe.readyToPublish(
+                System.nanoTime(), craftAtlasLastServerUpdate)) return;
         String recipe = resolveRecipeResource();
         if(recipe == null || rcpnm == null || outputs.isEmpty()) return;
         try {
@@ -331,9 +356,20 @@ public class NMakewindow extends Widget implements DTarget {
             CraftAtlasObservationStore.current().record(new CraftAtlasObservation(recipe, rcpnm,
                     observedInputs, observedOutputs, observedRequirements, observedBonuses, observedQualityModifiers));
             craftAtlasObservationDirty = false;
+            if(craftAtlasProbe) closeCraftAtlasProbe(true);
         } catch(Loading ignored) {
             // Retry on a later UI tick; never block the render thread waiting for resources.
         }
+    }
+
+    private void closeCraftAtlasProbe(boolean completed) {
+        if(craftAtlasProbeClosing) return;
+        craftAtlasProbeClosing = true;
+        if(craftAtlasRecipeProbe != null) {
+            if(completed) craftAtlasRecipeProbe.complete(recipeResource);
+            else craftAtlasRecipeProbe.fail(recipeResource);
+        }
+        wdgmsg("close");
     }
 
     private CraftAtlasObservation.Item observedItem(Spec spec) {
@@ -754,6 +790,7 @@ public class NMakewindow extends Widget implements DTarget {
 
     public void uimsg(String msg, Object... args) {
         if(msg == "inpop") {
+            craftAtlasLastServerUpdate = System.nanoTime();
             List<Spec> inputs;
             if(INT.is(args, 0)) {
                 // Indexed update: reuse existing specs, replace by index.
@@ -771,6 +808,7 @@ public class NMakewindow extends Widget implements DTarget {
                 searchPanel.syncTabs(this.inputs);
             }
         } else if(msg == "opop") {
+            craftAtlasLastServerUpdate = System.nanoTime();
             List<Spec> outputs;
             if(INT.is(args, 0)) {
                 outputs = new ArrayList<>(this.outputs);
@@ -784,12 +822,14 @@ public class NMakewindow extends Widget implements DTarget {
             this.outputs = outputs;
             craftAtlasObservationDirty = true;
         } else if(msg == "qmod") {
+            craftAtlasLastServerUpdate = System.nanoTime();
             List<Indir<Resource>> qmod = new ArrayList<Indir<Resource>>();
             for(Object arg : args)
                 qmod.add(ui.sess.getresv(arg));
             this.qmod = qmod;
             craftAtlasObservationDirty = true;
         } else if(msg == "tool") {
+            craftAtlasLastServerUpdate = System.nanoTime();
             tools.add(ui.sess.getresv(args[0]));
             craftAtlasObservationDirty = true;
         } else if(msg == "use") {

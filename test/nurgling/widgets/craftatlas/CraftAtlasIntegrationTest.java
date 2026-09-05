@@ -33,6 +33,19 @@ class CraftAtlasIntegrationTest {
         assertTrue(window.contains("details.refreshMaterialsAsync("));
     }
 
+    @Test
+    void gameUiInterceptsPendingAtlasProbeBeforeShowingCraftWindow() throws Exception {
+        String ngame = read("src/nurgling/NGameUI.java");
+        String make = read("src/nurgling/widgets/NMakewindow.java");
+        String atlas = read("src/nurgling/widgets/craftatlas/CraftAtlasWindow.java");
+        assertTrue(ngame.contains("craftAtlas.claimRecipeProbe(((NMakewindow)child).rcpnm)"));
+        assertTrue(ngame.indexOf("craftAtlas.claimRecipeProbe(((NMakewindow)child).rcpnm)") < ngame.indexOf("craftwnd.show()"));
+        assertTrue(make.contains("craftAtlasRecipeProbe.fail(recipeResource)"));
+        assertTrue(atlas.contains("requestRecipeProbe(controller.state().selected)"));
+        assertTrue(atlas.contains("recipeProbe.cancel(entry.recipeResource)"));
+        assertTrue(atlas.contains("catch(Loading ignored)"));
+    }
+
     private String read(String path) throws Exception {
         return new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
     }

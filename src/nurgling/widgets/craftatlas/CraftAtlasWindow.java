@@ -3,6 +3,7 @@ package nurgling.widgets.craftatlas;
 import haven.Button;
 import haven.Coord;
 import haven.KeyMatch;
+import haven.Loading;
 import haven.MenuGrid;
 import haven.TextEntry;
 import haven.UI;
@@ -17,6 +18,7 @@ import nurgling.craftatlas.CraftAtlasMaterialPlanner;
 import nurgling.craftatlas.CraftAtlasMaterialSource;
 import nurgling.craftatlas.CraftAtlasObservationStore;
 import nurgling.craftatlas.CraftAtlasPreferences;
+import nurgling.craftatlas.CraftAtlasRecipeProbe;
 import nurgling.craftatlas.CraftAtlasSearch;
 import nurgling.craftatlas.CraftExecutionBridge;
 import nurgling.craftatlas.MenuCraftCatalog;
@@ -36,6 +38,7 @@ public class CraftAtlasWindow extends Window {
     private final CraftAtlasObservationStore observationStore;
     private final CraftAtlasController controller;
     private final CraftAtlasPreferences preferences;
+    private final CraftAtlasRecipeProbe recipeProbe = new CraftAtlasRecipeProbe();
     private final CraftAtlasController.Listener listener = this::stateChanged;
     private final TextEntry search;
     private final CraftAtlasRecipeList recipeList;
@@ -119,7 +122,7 @@ public class CraftAtlasWindow extends Window {
 
         recipeList = add(new CraftAtlasRecipeList(UI.scale(330, 600), controller));
         recipeList.setSection(section);
-        details = add(new CraftAtlasDetails(UI.scale(620, 600), controller));
+        details = add(new CraftAtlasDetails(UI.scale(620, 600), controller, preferences, this::savePreferences));
         paneDivider = add(new CraftAtlasPaneDivider(this::movePaneDivider, this::savePreferences));
         paneDivider.tooltip = L10n.get("craft_atlas.resize_table_hint");
         favorite = add(new Button(UI.scale(42), "\u2606").action(this::toggleFavorite));
@@ -144,6 +147,8 @@ public class CraftAtlasWindow extends Window {
     }
 
     public CraftAtlasController controller() { return controller; }
+    public CraftAtlasRecipeProbe recipeProbe() { return recipeProbe; }
+    public CraftAtlasRecipeProbe.Claim claimRecipeProbe(String windowName) { return recipeProbe.claim(windowName); }
     public void onCraftWindowOpened() { controller.onCraftWindowOpened(); }
     public void setMenu(MenuGrid value) {
         if(menu == value) return;
@@ -185,6 +190,7 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void tick(double dt) {
         super.tick(dt);
+        requestRecipeProbe(controller.state().selected);
         if((menu != null && observedMenuRevision != menu.pagseq) || observedStoreRevision != observationStore.revision())
             refreshCatalog();
         if(collectionThread == null)
@@ -262,6 +268,19 @@ public class CraftAtlasWindow extends Window {
         }
         chooser.setChoices(state.choices);
         if(!state.choices.isEmpty()) chooser.setfocusctl(true);
+        requestRecipeProbe(state.selected);
+    }
+
+    private void requestRecipeProbe(CraftAtlasEntry entry) {
+        if(entry == null || entry.availability != CraftAtlasEntry.Availability.OPEN || menu == null) return;
+        MenuGrid.Pagina page = menu.recipeByResource(entry.recipeResource);
+        if(page == null) return;
+        try {
+            recipeProbe.request(entry.recipeResource, entry.displayName,
+                    () -> page.button().use(new MenuGrid.Interaction()));
+        } catch(Loading ignored) {
+            /* The menu page is still loading; tick() will retry. */
+        }
     }
 
     private void toggleFavorite() {
@@ -273,6 +292,8 @@ public class CraftAtlasWindow extends Window {
     }
 
     private void openSelectedCraft() {
+        CraftAtlasEntry entry = controller.state().selected;
+        if(entry != null) recipeProbe.cancel(entry.recipeResource);
         if(controller.openCraft()) recordRecentAction();
     }
 

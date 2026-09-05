@@ -34,7 +34,8 @@ STAT_NAMES = {
     "DEX": "Dexterity", "WIL": "Will", "PSY": "Psyche",
 }
 CHANCE = re.compile(r"(\d+(?:\.\d+)?)%\s*[-–]\s*(\d+(?:\.\d+)?)%")
-QUANTITY = re.compile(r"^(.*?)\s+x\s*(\d+)\s*$", re.I)
+QUANTITY = re.compile(r"^(.*?)\s*[x×]\s*(\d+)\s*$", re.I)
+LEADING_QUANTITY = re.compile(r"^(\d+)\s*[x×]\s*(.*?)$", re.I)
 NUMBER = re.compile(r"[-+]?\d+(?:\.\d+)?")
 
 
@@ -149,13 +150,14 @@ def ingredients(cell) -> list[dict]:
     if cell is None:
         return []
     result = []
-    for part in re.split(r",\s*", clean(cell.text_content())):
+    for part in re.split(r"\s*(?:[;,]|\band\b)\s*|[\r\n]+", clean(cell.text_content()), flags=re.I):
         part = part.strip()
         if not part or part.lower() in {"none", "(none)", "unknown", "(none or unknown)"}:
             continue
         match = QUANTITY.match(part)
-        name = (match.group(1) if match else part).strip()
-        quantity = int(match.group(2)) if match else 1
+        leading = LEADING_QUANTITY.match(part) if match is None else None
+        name = (match.group(1) if match else leading.group(2) if leading else part).strip()
+        quantity = int(match.group(2)) if match else int(leading.group(1)) if leading else 1
         result.append({"resource": "wiki-item:" + slug(name), "name": name, "quantity": quantity})
     return result
 
@@ -170,6 +172,70 @@ def skills(cell) -> list[dict]:
             names = [part.strip() for part in text.split(",") if part.strip()]
     return [{"kind": "SKILL", "name": name, "description": "Ring of Brodgar requirement"}
             for name in names]
+
+
+def production_requirements(cell) -> list[dict]:
+    if cell is None:
+        return []
+    names = [clean(link.text_content()) for link in cell.xpath(".//a") if clean(link.text_content())]
+    if not names:
+        names = [clean(cell.text_content())]
+    names = [part.strip() for name in names
+             for part in re.split(r"\s*(?:[;,]|\band\b)\s*", name, flags=re.I) if part.strip()]
+    stations = ("anvil", "cauldron", "crucible", "kiln", "oven", "smelter", "forge", "loom",
+                "quern", "workbench", "table", "churn", "press", "fireplace")
+    result = []
+    for name in dict.fromkeys(names):
+        kind = "STATION" if any(station in name.casefold() for station in stations) else "TOOL"
+        result.append({
+            "kind": kind, "resource": "wiki-item:" + slug(name), "name": name,
+            "description": "Ring of Brodgar production requirement",
+        })
+    return result
+
+
+def normalize_catalog_entry(entry: dict) -> dict:
+    normalized_inputs = []
+    for source in entry.get("inputs", []):
+        source_name = source.get("name", "")
+        parts = [part.strip() for part in re.split(r"\s*(?:[;,]|\band\b)\s*", source_name, flags=re.I)
+                 if part.strip()]
+        for part in parts or [source_name]:
+            match = QUANTITY.match(part)
+            leading = LEADING_QUANTITY.match(part) if match is None else None
+            name = (match.group(1) if match else leading.group(2) if leading else part).strip()
+            value = dict(source)
+            value["name"] = name
+            value["quantity"] = int(match.group(2)) if match else (
+                int(leading.group(1)) if leading else int(source.get("quantity", 1)))
+            if str(value.get("resource", "")).startswith("wiki-item:"):
+                value["resource"] = "wiki-item:" + slug(name)
+            normalized_inputs.append(value)
+    if normalized_inputs:
+        entry["inputs"] = normalized_inputs
+
+    normalized_requirements = []
+    for source in entry.get("requirements", []):
+        name = source.get("name", "")
+        if name.strip().casefold() in {"hand", "none", "nothing", "(none)", "unknown"}:
+            continue
+        parts = [name]
+        if source.get("kind") in {"STATION", "TOOL"}:
+            parts = [part.strip() for part in re.split(r"\s*(?:[;,]|\band\b)\s*", name, flags=re.I)
+                     if part.strip()]
+        for part in parts:
+            value = dict(source)
+            value["name"] = part
+            if str(value.get("resource", "")).startswith("wiki-item:"):
+                value["resource"] = "wiki-item:" + slug(part)
+            if source.get("kind") in {"STATION", "TOOL"}:
+                stations = ("anvil", "cauldron", "crucible", "kiln", "oven", "smelter", "forge", "loom",
+                            "quern", "workbench", "table", "churn", "press", "fireplace", "fire")
+                value["kind"] = "STATION" if any(station in part.casefold() for station in stations) else "TOOL"
+            normalized_requirements.append(value)
+    if normalized_requirements:
+        entry["requirements"] = normalized_requirements
+    return entry
 
 
 def bonuses(document) -> list[dict]:
@@ -204,13 +270,8 @@ def enrich(item: dict) -> dict:
     if "gilding" in item:
         entry["gilding"] = item["gilding"]
     produced = row_value(document, "Produced By")
-    if produced is not None:
-        station = clean(produced.text_content())
-        if station and station.lower() not in {"hand", "none", "(none)"}:
-            entry["requirements"].append({
-                "kind": "STATION", "resource": "wiki-item:" + slug(station), "name": station,
-                "description": "Ring of Brodgar production station",
-            })
+    if produced is not None and clean(produced.text_content()).lower() not in {"hand", "none", "nothing", "(none)"}:
+        entry["requirements"].extend(production_requirements(produced))
     item_bonuses = bonuses(document)
     if item_bonuses:
         entry["bonuses"] = item_bonuses
@@ -236,6 +297,7 @@ def main() -> None:
     data = json.loads(TARGET.read_text(encoding="utf-8"))
     data["entries"] = [entry for entry in data.get("entries", [])
                        if "equipment" not in entry.get("categories", [])] + entries
+    data["entries"] = [normalize_catalog_entry(entry) for entry in data["entries"]]
     TARGET.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Added {len(entries)} equipment entries to {TARGET}")
 

@@ -120,6 +120,29 @@ class WikiReferenceCatalogTest {
         assertEquals("Adder Fang", amulet.inputs.get(0).options.get(0).name);
         assertTrue(amulet.bonuses.stream().anyMatch(bonus ->
                 "Intelligence".equals(bonus.name) && Double.valueOf(3).equals(bonus.value)));
+
+        CraftAtlasEntry hempPants = find(snapshot.entries, "Hemp Pants");
+        assertEquals(2, hempPants.inputs.size());
+        assertEquals("Hemp Cloth", hempPants.inputs.get(0).options.get(0).name);
+        assertEquals(2, hempPants.inputs.get(0).quantity);
+        assertEquals("String", hempPants.inputs.get(1).options.get(0).name);
+        assertEquals(2, hempPants.inputs.get(1).quantity);
+
+        CraftAtlasEntry minersHelm = find(snapshot.entries, "Miner's Helm");
+        assertEquals("Bar of Hard Metal", minersHelm.inputs.get(0).options.get(0).name);
+        assertEquals(2, minersHelm.inputs.get(0).quantity);
+        assertEquals("Leather", minersHelm.inputs.get(1).options.get(0).name);
+
+        CraftAtlasEntry bauble = find(snapshot.entries, "Blacksmith's Bauble");
+        assertTrue(bauble.requirements.stream().anyMatch(requirement ->
+                requirement.kind == CraftAtlasEntry.RequirementKind.TOOL &&
+                        "Smithy's Hammer".equals(requirement.name)));
+        assertTrue(bauble.requirements.stream().anyMatch(requirement ->
+                requirement.kind == CraftAtlasEntry.RequirementKind.STATION && "Anvil".equals(requirement.name)));
+
+        CraftAtlasEntry druidsCloak = find(snapshot.entries, "Druid's Cloak");
+        assertFalse(druidsCloak.requirements.stream().anyMatch(requirement ->
+                "Nothing".equalsIgnoreCase(requirement.name)));
     }
 
     private boolean has(List<CraftAtlasEntry> entries, String name, String category) {

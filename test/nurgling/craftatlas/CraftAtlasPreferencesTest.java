@@ -24,6 +24,8 @@ class CraftAtlasPreferencesTest {
         prefs.lastSection = "gildings";
         prefs.windowW = 1120;
         prefs.columnWidths.put("gildings.bonus", 140);
+        prefs.requirementQualities.put("station:anvil", 87.5);
+        prefs.requirementQualities.put("context:cauldron-water", 62.0);
         prefs.save(file);
 
         CraftAtlasPreferences loaded = CraftAtlasPreferences.load(file);
@@ -36,6 +38,8 @@ class CraftAtlasPreferencesTest {
         assertTrue(loaded.recentFilter);
         assertEquals("gildings", loaded.lastSection);
         assertEquals(Integer.valueOf(140), loaded.columnWidths.get("gildings.bonus"));
+        assertEquals(87.5, loaded.requirementQualities.get("station:anvil"));
+        assertEquals(62.0, loaded.requirementQualities.get("context:cauldron-water"));
     }
 
     @Test

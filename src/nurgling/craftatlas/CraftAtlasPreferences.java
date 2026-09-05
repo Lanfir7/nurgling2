@@ -25,6 +25,7 @@ public final class CraftAtlasPreferences {
     public final List<String> recent = new ArrayList<>();
     public final List<String> searchHistory = new ArrayList<>();
     public final Map<String, Integer> columnWidths = new LinkedHashMap<>();
+    public final Map<String, Double> requirementQualities = new LinkedHashMap<>();
     public String lastSection = "all";
     public boolean favoriteFilter, recentFilter;
     public int windowX = -1, windowY = -1, windowW = -1, windowH = -1;
@@ -77,6 +78,11 @@ public final class CraftAtlasPreferences {
             }
             JSONObject columns = root.optJSONObject("columns");
             if(columns != null) for(String key : columns.keySet()) prefs.columnWidths.put(key, columns.optInt(key));
+            JSONObject qualities = root.optJSONObject("requirementQualities");
+            if(qualities != null) for(String key : qualities.keySet()) {
+                double quality = qualities.optDouble(key, Double.NaN);
+                if(Double.isFinite(quality) && quality >= 1) prefs.requirementQualities.put(key, quality);
+            }
         } catch(Exception ignored) {
             return new CraftAtlasPreferences();
         }
@@ -91,6 +97,7 @@ public final class CraftAtlasPreferences {
         }
     }
 
+
     public void save(Path file) throws IOException {
         JSONObject root = new JSONObject();
         root.put("favorites", new JSONArray(favorites));
@@ -101,6 +108,7 @@ public final class CraftAtlasPreferences {
         root.put("recentFilter", recentFilter);
         root.put("window", new JSONObject().put("x", windowX).put("y", windowY).put("w", windowW).put("h", windowH));
         root.put("columns", new JSONObject(columnWidths));
+        root.put("requirementQualities", new JSONObject(requirementQualities));
         NFileUtils.writeAtomically(file.toString(), root.toString(2));
     }
 }

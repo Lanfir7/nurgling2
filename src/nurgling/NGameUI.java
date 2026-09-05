@@ -5,6 +5,7 @@ import haven.res.ui.rbuff.RealmBuff;
 import haven.res.ui.relcnt.RelCont;
 import nurgling.conf.NDiscordNotification;
 import nurgling.conf.NToolBeltProp;
+import nurgling.craftatlas.CraftAtlasRecipeProbe;
 import nurgling.i18n.L10n;
 import nurgling.notifications.DiscordHookObject;
 import nurgling.overlays.QualityOl;
@@ -785,6 +786,15 @@ public class NGameUI extends GameUI
     {
         String place = ((String) args[0]).intern();
         if (place == "craft") {
+            CraftAtlasRecipeProbe.Claim probeClaim = child instanceof NMakewindow && craftAtlas != null ?
+                    craftAtlas.claimRecipeProbe(((NMakewindow)child).rcpnm) : null;
+            if(probeClaim != null) {
+                NMakewindow probe = (NMakewindow)child;
+                MenuGrid.lastPagina = null;
+                add(probe);
+                probe.enableCraftAtlasProbe(probeClaim.recipeResource, craftAtlas.recipeProbe());
+                return;
+            }
             if (craftwnd == null) {
                 NCraftWindow cwnd = new NCraftWindow();
                 cwnd.posmem("craft");

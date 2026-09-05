@@ -1,17 +1,23 @@
 package nurgling.widgets.craftatlas;
 
 import haven.Coord;
+import haven.BAttrWnd;
 import haven.CheckBox;
 import haven.GOut;
 import haven.Tex;
 import haven.Text;
 import haven.TextEntry;
+import haven.SAttrWnd;
 import haven.UI;
 import haven.Widget;
 import monitoring.NGlobalSearchItems;
+import nurgling.NGameUI;
+import nurgling.NUtils;
 import nurgling.craftatlas.CraftAtlasController;
 import nurgling.craftatlas.CraftAtlasEntry;
 import nurgling.craftatlas.CraftAtlasQuality;
+import nurgling.craftatlas.CraftAtlasQualityFormula;
+import nurgling.craftatlas.CraftAtlasPreferences;
 import nurgling.craftatlas.CraftAtlasMaterialPlanner;
 import nurgling.craftatlas.CraftAtlasMaterialSource;
 import nurgling.craftatlas.CraftRecipeGraph;
@@ -22,9 +28,11 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
@@ -103,6 +111,9 @@ public class CraftAtlasDetails extends Widget {
     private final List<IconHit> iconHits = new ArrayList<>();
     private final TextEntry qualityEntry;
     private final CheckBox autoQualityBox;
+    private final CraftAtlasPreferences preferences;
+    private final Runnable preferencesChanged;
+    private final Map<String, TextEntry> requirementQualityEntries = new HashMap<>();
     private final CraftAtlasMaterialSource materialSource = new CraftAtlasMaterialSource();
     private CraftAtlasMaterialSource.Snapshot materials;
     private CraftAtlasMaterialPlanner.Plan materialPlan;
@@ -128,8 +139,15 @@ public class CraftAtlasDetails extends Widget {
     private final int bonusRowHeight = UI.scale(34);
 
     public CraftAtlasDetails(Coord size, CraftAtlasController controller) {
+        this(size, controller, new CraftAtlasPreferences(), null);
+    }
+
+    public CraftAtlasDetails(Coord size, CraftAtlasController controller, CraftAtlasPreferences preferences,
+                             Runnable preferencesChanged) {
         super(size);
         this.controller = controller;
+        this.preferences = preferences == null ? new CraftAtlasPreferences() : preferences;
+        this.preferencesChanged = preferencesChanged;
         qualityEntry = add(new TextEntry(UI.scale(54), "10") {
             @Override protected void changed() {
                 super.changed();
@@ -164,6 +182,7 @@ public class CraftAtlasDetails extends Widget {
                 (oldEntry == null || oldEntry.inputs != value.inputs || oldEntry.inputsObserved != value.inputsObserved));
         if(materialsChanged) loadMaterials();
         rebuildRows();
+        rebuildRequirementQualityEntries();
         if(materialsChanged) rebuildSelectors();
         boolean qualityVisible = value != null &&
                 (value.categories.contains("gildings") || value.categories.contains("foods") ||
@@ -314,12 +333,26 @@ public class CraftAtlasDetails extends Widget {
                     slot.quantity, target, null, null, slotIndex));
         }
         for(CraftAtlasEntry.Requirement requirement : entry.requirements) {
-            if(requirement.kind != CraftAtlasEntry.RequirementKind.STATION) continue;
+            if(requirement.kind != CraftAtlasEntry.RequirementKind.STATION &&
+                    requirement.kind != CraftAtlasEntry.RequirementKind.TOOL) continue;
             CraftRecipeGraph.LinkState state = links.apply(requirement.resource, requirement.name);
             Target target = state == CraftRecipeGraph.LinkState.NONE ? Target.NONE :
                     state == CraftRecipeGraph.LinkState.CYCLE ? Target.CYCLE : Target.INGREDIENT;
             rows.add(new DetailRow(Kind.REQUIREMENT, requirement.name, requirement.resource,
                     requirement.kind.name(), 0, target, requirement, null));
+        }
+        Set<String> listedQualityFactors = new HashSet<>();
+        for(CraftAtlasEntry.Requirement requirement : entry.requirements)
+            if(requirement.kind == CraftAtlasEntry.RequirementKind.STATION ||
+                    requirement.kind == CraftAtlasEntry.RequirementKind.TOOL)
+                listedQualityFactors.add(CraftAtlasQualityFormula.key(requirement));
+        for(CraftAtlasQualityFormula.Factor factor : CraftAtlasQualityFormula.factors(entry)) {
+            if(listedQualityFactors.contains(factor.key)) continue;
+            boolean water = CraftAtlasQualityFormula.CAULDRON_WATER.equals(factor.key);
+            rows.add(new DetailRow(Kind.REQUIREMENT,
+                    water ? L10n.get("craft_atlas.cauldron_water") : factor.name,
+                    water ? factor.key : factor.resource, water ? "CONTEXT" : factor.requirement.kind.name(),
+                    0, Target.NONE, factor.requirement, null));
         }
         return Collections.unmodifiableList(rows);
     }
@@ -399,6 +432,7 @@ public class CraftAtlasDetails extends Widget {
             ordinal++;
         }
         positionSelectors();
+        positionRequirementQualityEntries();
         super.draw(g);
     }
 
@@ -478,6 +512,9 @@ public class CraftAtlasDetails extends Widget {
         String meta = row.kind == Kind.REQUIREMENT ? L10n.get("craft_atlas.requirement." + row.value.toLowerCase()) :
                 (row.target == Target.NONE ? "" : L10n.get("craft_atlas.open_recipe"));
         if(!meta.isEmpty()) drawCentered(g, meta, UI.scale(62), y + UI.scale(25), UI.scale(20), new Color(163, 172, 174, 220));
+        TextEntry qualityField = requirementQualityEntries.get(qualityKey(row));
+        if(qualityField != null)
+            drawCentered(g, "Q", qualityField.c.x - UI.scale(18), y, height, new Color(208, 171, 91, 235));
         if(row.target != Target.NONE) drawCentered(g, "\u203a", sz.x - UI.scale(24), y, height, new Color(220, 177, 89));
     }
 
@@ -562,6 +599,7 @@ public class CraftAtlasDetails extends Widget {
         if(!selectors.isEmpty() && selectors.values().iterator().next().sz.x != selectorWidth())
             rebuildSelectors();
         positionSelectors();
+        positionRequirementQualityEntries();
         scroll = Math.max(0, Math.min(scroll, Math.max(0, contentHeight() - Math.max(1, sz.y - headerHeight))));
     }
 
@@ -684,6 +722,12 @@ public class CraftAtlasDetails extends Widget {
         }
         if(autoQuality) {
             Double plannedQuality = materialPlan == null ? null : materialPlan.quality;
+            if(plannedQuality != null)
+                plannedQuality = CraftAtlasQualityFormula.result(entry, plannedQuality,
+                        preferences.requirementQualities);
+            Double softcap = characterSoftcap();
+            if(plannedQuality != null && softcap != null)
+                plannedQuality = CraftAtlasQualityFormula.softcap(plannedQuality, softcap);
             if(plannedQuality != null) quality = plannedQuality;
             syncingQuality = true;
             qualityEntry.settext(autoQualityText(plannedQuality));
@@ -792,6 +836,85 @@ public class CraftAtlasDetails extends Widget {
     private void clearSelectors() {
         for(CraftAtlasIngredientSelector selector : selectors.values()) selector.reqdestroy();
         selectors.clear();
+    }
+
+    private void rebuildRequirementQualityEntries() {
+        for(TextEntry field : requirementQualityEntries.values()) field.reqdestroy();
+        requirementQualityEntries.clear();
+        if(entry == null) return;
+        for(CraftAtlasQualityFormula.Factor factor : CraftAtlasQualityFormula.factors(entry)) {
+            double saved = preferences.requirementQualities.getOrDefault(factor.key, 10.0);
+            TextEntry field = add(new TextEntry(UI.scale(58), formatQuality(saved)) {
+                @Override protected void changed() {
+                    super.changed();
+                    Double parsed = parseQuality(text());
+                    if(parsed == null) return;
+                    preferences.requirementQualities.put(factor.key, parsed);
+                    if(preferencesChanged != null) preferencesChanged.run();
+                    if(autoQuality) replan();
+                }
+            });
+            field.tooltip = factor.affectsResult ? L10n.get("craft_atlas.requirement_quality_hint") :
+                    L10n.get("craft_atlas.requirement_quality_ignored");
+            requirementQualityEntries.put(factor.key, field);
+        }
+        positionRequirementQualityEntries();
+    }
+
+    private void positionRequirementQualityEntries() {
+        for(TextEntry field : requirementQualityEntries.values()) field.hide();
+        int y = headerHeight - scroll;
+        Kind previous = null;
+        for(DetailRow row : rows) {
+            if(row.kind != previous) { y += sectionHeight; previous = row.kind; }
+            int height = rowHeight(row);
+            String key = qualityKey(row);
+            TextEntry field = key == null ? null : requirementQualityEntries.get(key);
+            if(field != null) {
+                int right = row.target == Target.NONE ? UI.scale(16) : UI.scale(42);
+                field.move(Coord.of(Math.max(UI.scale(120), sz.x - field.sz.x - right),
+                        y + (height - field.sz.y) / 2));
+                field.visible = y >= headerHeight && y + height <= sz.y;
+            }
+            y += height;
+        }
+    }
+
+    private static String qualityKey(DetailRow row) {
+        if(row == null || row.kind != Kind.REQUIREMENT) return null;
+        if(CraftAtlasQualityFormula.CAULDRON_WATER.equals(row.resource)) return row.resource;
+        return row.requirement == null ? null : CraftAtlasQualityFormula.key(row.requirement);
+    }
+
+    private static Double parseQuality(String value) {
+        try {
+            double parsed = Double.parseDouble(value == null ? "" : value.trim().replace(',', '.'));
+            return Double.isFinite(parsed) && parsed >= 1 ? parsed : null;
+        } catch(NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Double characterSoftcap() {
+        if(entry == null || entry.qualityModifiers.isEmpty()) return null;
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null || gui.chrwdg == null || gui.chrwdg.battr == null || gui.chrwdg.sattr == null) return null;
+        double product = 1.0;
+        int count = 0;
+        for(CraftAtlasEntry.AttributeRef modifier : entry.qualityModifiers) {
+            String resource = modifier.resource == null ? "" : modifier.resource;
+            int slash = resource.lastIndexOf('/');
+            String name = slash < 0 ? resource : resource.substring(slash + 1);
+            Double value = null;
+            for(BAttrWnd.Attr attr : gui.chrwdg.battr.attrs)
+                if(attr.attr.nm.equals(name)) { value = (double)attr.attr.comp; break; }
+            if(value == null) for(SAttrWnd.SAttr attr : gui.chrwdg.sattr.attrs)
+                if(attr.attr.nm.equals(name)) { value = (double)attr.attr.comp; break; }
+            if(value == null || value < 1) return null;
+            product *= value;
+            count++;
+        }
+        return count == 0 ? null : Math.pow(product, 1.0 / count);
     }
 
     private void positionSelectors() {

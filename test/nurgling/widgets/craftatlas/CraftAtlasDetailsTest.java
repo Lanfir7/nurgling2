@@ -38,7 +38,7 @@ class CraftAtlasDetailsTest {
         assertEquals(CraftAtlasDetails.Target.INGREDIENT, find(rows, "Glue").target);
         assertEquals(CraftAtlasDetails.Target.INGREDIENT, find(rows, "Workbench").target);
         assertFalse(rows.stream().anyMatch(row -> "Carpentry".equals(row.name)));
-        assertFalse(rows.stream().anyMatch(row -> "Hammer".equals(row.name)));
+        assertEquals(CraftAtlasDetails.Kind.REQUIREMENT, find(rows, "Hammer").kind);
         assertEquals(CraftAtlasDetails.Target.NONE, find(rows, "Strength").target);
     }
 
@@ -84,6 +84,34 @@ class CraftAtlasDetailsTest {
 
         assertEquals(1, rows.size());
         assertEquals("Intelligence", rows.get(0).name);
+    }
+
+    @Test
+    void cauldronDetailsShowImplicitWaterQualityFactor() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("boneglue", "Bone Glue")
+                .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.STATION,
+                        "gfx/invobjs/cauldron", "Cauldron", null))
+                .build();
+
+        List<CraftAtlasDetails.DetailRow> rows = CraftAtlasDetails.buildRows(entry,
+                resource -> CraftRecipeGraph.LinkState.NONE);
+
+        assertTrue(rows.stream().anyMatch(row -> row.kind == CraftAtlasDetails.Kind.REQUIREMENT &&
+                "context:cauldron-water".equals(row.resource)));
+    }
+
+    @Test
+    void anvilDetailsShowImplicitSmithysHammerQualityFactor() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("metal", "Metal Craft")
+                .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.STATION,
+                        "gfx/terobjs/anvil", "Anvil", null))
+                .build();
+
+        List<CraftAtlasDetails.DetailRow> rows = CraftAtlasDetails.buildRows(entry,
+                resource -> CraftRecipeGraph.LinkState.NONE);
+
+        assertTrue(rows.stream().anyMatch(row -> row.kind == CraftAtlasDetails.Kind.REQUIREMENT &&
+                "Smithy's Hammer".equals(row.name)));
     }
 
     @Test

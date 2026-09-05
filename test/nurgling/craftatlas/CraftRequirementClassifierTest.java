@@ -23,4 +23,18 @@ class CraftRequirementClassifierTest {
                 "custom/anvil", CraftAtlasEntry.RequirementKind.STATION));
         assertEquals(CraftAtlasEntry.RequirementKind.STATION, c.classify("custom/anvil", "Anvil").kind);
     }
+
+    @Test
+    void classifiesServerInventoryIconsForKnownWorkstationsAsStations() {
+        CraftRequirementClassifier c = new CraftRequirementClassifier(Collections.<String, CraftAtlasEntry.RequirementKind>emptyMap());
+
+        assertEquals(CraftAtlasEntry.RequirementKind.STATION,
+                c.classify("gfx/invobjs/anvil", "Anvil").kind);
+        assertEquals(CraftAtlasEntry.RequirementKind.STATION,
+                c.classify("gfx/invobjs/cauldron", "Cauldron").kind);
+        assertEquals(CraftAtlasEntry.RequirementKind.STATION,
+                c.classify("gfx/invobjs/crucible", "Crucible").kind);
+        assertEquals(CraftAtlasEntry.RequirementKind.TOOL,
+                c.classify("gfx/invobjs/smithshammer", "Smithy's Hammer").kind);
+    }
 }
