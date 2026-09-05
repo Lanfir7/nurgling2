@@ -105,10 +105,13 @@ class CraftAtlasListTableTest {
         List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor(
                 "curiosities", List.of(entry));
 
-        assertEquals(List.of("curiosity:lp-hour", "curiosity:lp-hour-weight"),
+        assertEquals(List.of("curiosity:mental-weight", "curiosity:lp-hour",
+                        "curiosity:lp-hour-weight", "curiosity:study-time"),
                 columns.stream().map(column -> column.id).toList());
-        assertEquals(152.36, columns.get(0).value(entry), 0.01);
-        assertEquals(10.88, columns.get(1).value(entry), 0.01);
+        assertEquals(14.0, columns.get(0).value(entry), 0.01);
+        assertEquals(152.36, columns.get(1).value(entry), 0.01);
+        assertEquals(10.88, columns.get(2).value(entry), 0.01);
+        assertEquals(32.82, columns.get(3).value(entry), 0.01);
     }
 
     private static CraftAtlasEntry food(String id, String stat, double value) {

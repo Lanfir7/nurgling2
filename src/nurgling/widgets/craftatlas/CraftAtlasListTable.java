@@ -68,12 +68,18 @@ final class CraftAtlasListTable {
         }
         if("curiosities".equals(section)) {
             return List.of(
+                    new Column("curiosity:mental-weight", L10n.get("craft_atlas.table.mental_weight"),
+                            L10n.get("craft_atlas.table.mental_weight_tip"),
+                            entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.mentalWeight),
                     new Column("curiosity:lp-hour", L10n.get("craft_atlas.table.lp_hour"),
                             L10n.get("craft_atlas.table.lp_hour_tip"),
                             entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.lpPerHour()),
                     new Column("curiosity:lp-hour-weight", L10n.get("craft_atlas.table.lp_hour_weight"),
                             L10n.get("craft_atlas.table.lp_hour_weight_tip"),
-                            entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.lpPerHourPerWeight()));
+                            entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.lpPerHourPerWeight()),
+                    new Column("curiosity:study-time", L10n.get("craft_atlas.table.study_time"),
+                            L10n.get("craft_atlas.table.study_time_tip"),
+                            entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.studyHours()));
         }
         if("gildings".equals(section)) {
             Map<String, String> names = new LinkedHashMap<>();

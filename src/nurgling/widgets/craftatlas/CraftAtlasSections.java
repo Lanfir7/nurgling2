@@ -7,7 +7,7 @@ import java.util.List;
 /** Stable section ids shared by the Craft Atlas menu and its filters. */
 final class CraftAtlasSections {
     static final List<String> MAIN = Collections.unmodifiableList(Arrays.asList(
-            "all", "favorites", "recent", "gildings", "foods", "curiosities", "equipment"));
+            "all", "gildings", "foods", "curiosities", "equipment"));
     static final List<String> EQUIPMENT = Collections.unmodifiableList(Arrays.asList(
             "equipment", "equipment-shoes", "equipment-pants", "equipment-shirts",
             "equipment-shoulders", "equipment-hats", "equipment-capes", "equipment-cloaks",

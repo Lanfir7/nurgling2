@@ -3,7 +3,9 @@ package nurgling.craftatlas;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,6 +36,76 @@ class CraftAtlasSearchTest {
         CraftAtlasSearch.Query q = CraftAtlasSearch.Query.builder().bonus("survive").descending(true).build();
         assertEquals(Arrays.asList("plus-three", "plus-one", "unknown"),
                 ids(CraftAtlasSearch.query(snapshot, q)));
+    }
+
+    @Test
+    void filtersCuriositiesByStudyMetricsAndAvailability() {
+        CraftAtlasEntry fitting = CraftAtlasEntry.builder("fitting", "Fitting Curio")
+                .category("curiosities")
+                .availability(CraftAtlasEntry.Availability.OPEN)
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(1, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("string", "String"))))
+                .curiosity(new CraftAtlasEntry.Curiosity(7200, 180, 6)).build();
+        CraftAtlasEntry tooHeavy = CraftAtlasEntry.builder("heavy", "Heavy Curio")
+                .category("curiosities")
+                .availability(CraftAtlasEntry.Availability.OPEN)
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(1, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("stone", "Stone"))))
+                .curiosity(new CraftAtlasEntry.Curiosity(9000, 180, 12)).build();
+        CraftAtlasEntry reference = CraftAtlasEntry.builder("reference", "Reference Curio")
+                .category("curiosities")
+                .availability(CraftAtlasEntry.Availability.REFERENCE_ONLY)
+                .curiosity(new CraftAtlasEntry.Curiosity(12000, 180, 4)).build();
+
+        CraftAtlasSearch.Query query = CraftAtlasSearch.Query.text(
+                "type:curiosity recipe:true known:true time>=3h weight<=6 lph>=2400");
+
+        assertEquals(List.of("fitting"), ids(CraftAtlasSearch.query(
+                CraftAtlasSnapshot.of(1, List.of(fitting, tooHeavy, reference)), query)));
+    }
+
+    @Test
+    void filtersEveryCategoryByItsOwnFields() {
+        CraftAtlasEntry food = CraftAtlasEntry.builder("food", "Rich Food")
+                .category("foods").bonus(new CraftAtlasEntry.Bonus("food:strength", "Strength", 8.0)).build();
+        CraftAtlasEntry gilding = CraftAtlasEntry.builder("gild", "Fine Gilding")
+                .category("gildings")
+                .gilding(new CraftAtlasEntry.Gilding(0.4, 1.0, List.of()))
+                .bonus(new CraftAtlasEntry.Bonus("gild:sewing", "Sewing", 4.0)).build();
+        CraftAtlasEntry equipment = CraftAtlasEntry.builder("ring", "Silver Ring")
+                .category("equipment").equipmentSlot("7L; 7R").build();
+        CraftAtlasSnapshot snapshot = CraftAtlasSnapshot.of(1, List.of(food, gilding, equipment));
+
+        assertEquals(List.of("food"), ids(CraftAtlasSearch.query(snapshot,
+                CraftAtlasSearch.Query.text("type:food str>=8"))));
+        assertEquals(List.of("gild"), ids(CraftAtlasSearch.query(snapshot,
+                CraftAtlasSearch.Query.text("type:gilding sewing>=4 chance-min>=40"))));
+        assertEquals(List.of("ring"), ids(CraftAtlasSearch.query(snapshot,
+                CraftAtlasSearch.Query.text("type:equipment slot:7l"))));
+    }
+
+    @Test
+    void sortsByExtendedMetricAndPreservesRecentOrderWhenRequested() {
+        CraftAtlasEntry slow = CraftAtlasEntry.builder("slow", "Slow")
+                .category("curiosities").curiosity(new CraftAtlasEntry.Curiosity(3000, 180, 5)).build();
+        CraftAtlasEntry fast = CraftAtlasEntry.builder("fast", "Fast")
+                .category("curiosities").curiosity(new CraftAtlasEntry.Curiosity(6000, 120, 5)).build();
+        CraftAtlasSnapshot snapshot = CraftAtlasSnapshot.of(1, List.of(slow, fast));
+
+        assertEquals(List.of("fast", "slow"), ids(CraftAtlasSearch.query(snapshot,
+                CraftAtlasSearch.Query.text("sort:lph order:desc"))));
+        assertEquals(List.of("slow", "fast"), ids(CraftAtlasSearch.query(snapshot,
+                CraftAtlasSearch.Query.builder()
+                        .restrictTo(new LinkedHashSet<>(Set.of("slow", "fast")))
+                        .preferredOrder(List.of("slow", "fast")).build())));
+    }
+
+    @Test
+    void exposesUsefulExamplesForEveryAtlasCategory() {
+        for(String category : List.of("all", "foods", "gildings", "curiosities", "equipment"))
+            org.junit.jupiter.api.Assertions.assertFalse(CraftAtlasSearch.examplesFor(category).isEmpty(), category);
     }
 
     private CraftAtlasEntry bonus(String id, Double value) {

@@ -42,8 +42,10 @@ public class CraftAtlasWindow extends Window {
     private final CraftAtlasDetails details;
     private final CraftAtlasPaneDivider paneDivider;
     private final CraftAtlasRecipeChooser chooser;
+    private final CraftAtlasSearchHistory searchHistory;
     private final TextEntry craftCount;
-    private final Button back, forward, favorite, collectResources, openCraft;
+    private final Button help, back, forward, favoriteFilterButton, recentFilterButton;
+    private final Button favorite, collectResources, openCraft;
     private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
     private final Button[] equipmentButtons = new Button[CraftAtlasSections.EQUIPMENT.size() + 1];
     private String section;
@@ -55,6 +57,7 @@ public class CraftAtlasWindow extends Window {
     private long collectionRequestToken;
     private CraftAtlasEntry selectedEntry;
     private Thread collectionThread;
+    private CraftAtlasSearchHelp searchHelp;
 
     public CraftAtlasWindow(MenuGrid menu) {
         this(menu, CraftAtlasPreferences.loadProfile());
@@ -68,6 +71,8 @@ public class CraftAtlasWindow extends Window {
         this.catalog = new MenuCraftCatalog(menu, observationStore);
         this.preferences = preferences;
         this.section = preferences.lastSection;
+        if("favorites".equals(section)) { section = "all"; preferences.favoriteFilter = true; }
+        if("recent".equals(section)) { section = "all"; preferences.recentFilter = true; }
         CraftExecutionBridge bridge = new CraftExecutionBridge(resource -> {
             MenuGrid current = this.menu;
             MenuGrid.Pagina page = current == null ? null : current.recipeByResource(resource);
@@ -75,12 +80,29 @@ public class CraftAtlasWindow extends Window {
         }, System::nanoTime);
         this.controller = new CraftAtlasController(catalog.rebuild(), bridge);
 
+        help = add(new Button(UI.scale(34), "?").action(this::showSearchHelp));
         back = add(new Button(UI.scale(34), "\u2039").action(controller::back));
         forward = add(new Button(UI.scale(34), "\u203a").action(controller::forward));
         search = add(new TextEntry(UI.scale(520), "") {
-            @Override protected void changed() { super.changed(); applyQuery(); }
+            @Override protected void changed() {
+                super.changed();
+                if(searchHistory != null) searchHistory.hide();
+                applyQuery();
+            }
+            @Override public void gotfocus() { super.gotfocus(); showSearchHistory(); }
+            @Override public boolean keydown(KeyDownEvent ev) {
+                if(ev.code == KeyEvent.VK_ENTER) { rememberSearch(); return true; }
+                if(ev.code == KeyEvent.VK_ESCAPE && searchHistory != null && searchHistory.visible) {
+                    searchHistory.hide();
+                    return true;
+                }
+                return super.keydown(ev);
+            }
         });
         search.tooltip = L10n.get("craft_atlas.search_placeholder");
+        favoriteFilterButton = add(new Button(UI.scale(120), "").action(() -> toggleHeaderFilter(true)));
+        recentFilterButton = add(new Button(UI.scale(120), "").action(() -> toggleHeaderFilter(false)));
+        updateFilterButtons();
 
         for(int i = 0; i < CraftAtlasSections.MAIN.size(); i++) {
             final String value = CraftAtlasSections.MAIN.get(i);
@@ -107,13 +129,16 @@ public class CraftAtlasWindow extends Window {
         craftCount.tooltip = L10n.get("craft_atlas.craft_count_hint");
         collectResources = add(new Button(UI.scale(160), L10n.get("craft_atlas.collect_resources"))
                 .action(this::collectResources));
-        openCraft = add(new Button(UI.scale(170), L10n.get("craft_atlas.open_craft")).action(controller::openCraft));
+        openCraft = add(new Button(UI.scale(170), L10n.get("craft_atlas.open_craft")).action(this::openSelectedCraft));
         openCraft.tooltip = L10n.get("craft_atlas.normal_craft_hint");
         back.tooltip = L10n.get("craft_atlas.back");
         forward.tooltip = L10n.get("craft_atlas.forward");
         details.setPlanListener(this::refreshCollectionState);
         chooser = add(new CraftAtlasRecipeChooser(UI.scale(360, 240), controller));
         chooser.hide();
+        searchHistory = add(new CraftAtlasSearchHistory(UI.scale(520), this::applySearchExample));
+        searchHistory.setItems(preferences.searchHistory);
+        searchHistory.hide();
         applyLayout();
         applyQuery();
     }
@@ -138,6 +163,7 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void destroy() {
         if(subscribed) { controller.removeListener(listener); subscribed = false; }
+        if(searchHelp != null) { searchHelp.reqdestroy(); searchHelp = null; }
         savePreferences();
         super.destroy();
     }
@@ -184,12 +210,35 @@ public class CraftAtlasWindow extends Window {
         applyLayout();
     }
 
+    private void toggleHeaderFilter(boolean favorites) {
+        if(favorites) preferences.favoriteFilter = !preferences.favoriteFilter;
+        else preferences.recentFilter = !preferences.recentFilter;
+        updateFilterButtons();
+        applyQuery();
+        savePreferences();
+    }
+
+    private void updateFilterButtons() {
+        if(favoriteFilterButton != null) favoriteFilterButton.change(
+                (preferences.favoriteFilter ? "\u2713  " : "") + L10n.get("craft_atlas.filter.favorites"));
+        if(recentFilterButton != null) recentFilterButton.change(
+                (preferences.recentFilter ? "\u2713  " : "") + L10n.get("craft_atlas.filter.recent"));
+    }
+
     private void applyQuery() {
         CraftAtlasSearch.Query.Builder query = CraftAtlasSearch.Query.builder().text(search == null ? "" : search.text());
+        recipeList.setPreserveSourceOrder(preferences.recentFilter);
         String category = CraftAtlasSections.category(section);
         if(category != null) query.category(category);
-        if("favorites".equals(section)) query.restrictTo(preferences.favorites);
-        if("recent".equals(section)) query.restrictTo(new LinkedHashSet<>(preferences.recent));
+        Set<String> restricted = null;
+        if(preferences.favoriteFilter) restricted = new LinkedHashSet<>(preferences.favorites);
+        if(preferences.recentFilter) {
+            Set<String> recent = new LinkedHashSet<>(preferences.recent);
+            if(restricted == null) restricted = recent;
+            else restricted.retainAll(recent);
+            query.preferredOrder(preferences.recent);
+        }
+        if(restricted != null) query.restrictTo(restricted);
         controller.setQuery(query.build());
     }
 
@@ -208,7 +257,6 @@ public class CraftAtlasWindow extends Window {
         boolean starred = state.selected != null && preferences.favorites.contains(state.selected.recipeResource);
         favorite.change(starred ? "\u2605" : "\u2606");
         if(state.selected != null) {
-            preferences.recordRecent(state.selected.recipeResource);
             CraftAtlasLayout current = layoutFor(csz(), uiScale(), section);
             if(current.detailsAsPage) { narrowDetails = true; applyLayout(); }
         }
@@ -220,7 +268,19 @@ public class CraftAtlasWindow extends Window {
         CraftAtlasEntry entry = controller.state().selected;
         if(entry == null) return;
         if(!preferences.favorites.remove(entry.recipeResource)) preferences.favorites.add(entry.recipeResource);
-        if("favorites".equals(section)) applyQuery(); else stateChanged(controller.state());
+        if(preferences.favoriteFilter) applyQuery(); else stateChanged(controller.state());
+        savePreferences();
+    }
+
+    private void openSelectedCraft() {
+        if(controller.openCraft()) recordRecentAction();
+    }
+
+    private void recordRecentAction() {
+        CraftAtlasEntry entry = controller.state().selected;
+        if(entry == null) return;
+        preferences.recordRecent(entry.recipeResource);
+        if(preferences.recentFilter) applyQuery();
         savePreferences();
     }
 
@@ -276,6 +336,7 @@ public class CraftAtlasWindow extends Window {
         try {
             collectionThread = BotExecutor.runAsync("CraftAtlasResourceCollector",
                     new CraftAtlasResourceCollector(plan, snapshot.storageByCandidateId));
+            recordRecentAction();
         } catch(IllegalArgumentException error) {
             showError(error.getMessage());
         }
@@ -313,6 +374,37 @@ public class CraftAtlasWindow extends Window {
         if(gui != null) gui.error(message);
     }
 
+    private void rememberSearch() {
+        preferences.recordSearch(search.text());
+        searchHistory.setItems(preferences.searchHistory);
+        searchHistory.hide();
+        savePreferences();
+    }
+
+    private void showSearchHistory() {
+        if(searchHistory == null || preferences.searchHistory.isEmpty()) return;
+        searchHistory.setItems(preferences.searchHistory);
+        searchHistory.show();
+        searchHistory.raise();
+    }
+
+    private void applySearchExample(String query) {
+        search.settext(query);
+        preferences.recordSearch(query);
+        searchHistory.setItems(preferences.searchHistory);
+        searchHistory.hide();
+        applyQuery();
+        savePreferences();
+    }
+
+    private void showSearchHelp() {
+        if(searchHelp != null) { searchHelp.raise(); return; }
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null) return;
+        searchHelp = new CraftAtlasSearchHelp(section, this::applySearchExample, () -> searchHelp = null);
+        gui.add(searchHelp, gui.sz.sub(searchHelp.sz).div(2).max(Coord.z));
+    }
+
     static Integer parseCraftCount(String text) {
         try {
             int value = Integer.parseInt(text == null ? "" : text.trim());
@@ -334,8 +426,19 @@ public class CraftAtlasWindow extends Window {
     private void applyLayout() {
         Coord content = csz();
         CraftAtlasLayout layout = layoutFor(content, uiScale(), section);
-        back.move(UI.scale(8, 12)); forward.move(UI.scale(48, 12));
-        search.move(UI.scale(96, 12)); search.resize(Math.max(UI.scale(220), content.x - UI.scale(112)));
+        help.move(UI.scale(8, 12)); back.move(UI.scale(48, 12)); forward.move(UI.scale(88, 12));
+        int searchX = UI.scale(128), gap = UI.scale(8), filterWidth = UI.scale(120);
+        int oldSearchWidth = Math.max(UI.scale(220), content.x - UI.scale(112));
+        int availableSearchWidth = content.x - searchX - filterWidth * 2 - gap * 3;
+        int searchWidth = Math.max(UI.scale(160), Math.min(oldSearchWidth / 2, availableSearchWidth));
+        search.move(Coord.of(searchX, UI.scale(12)));
+        search.resize(searchWidth);
+        favoriteFilterButton.move(Coord.of(searchX + searchWidth + gap, UI.scale(12)));
+        recentFilterButton.move(Coord.of(searchX + searchWidth + gap * 2 + filterWidth, UI.scale(12)));
+        favoriteFilterButton.resize(Coord.of(filterWidth, favoriteFilterButton.sz.y));
+        recentFilterButton.resize(Coord.of(filterWidth, recentFilterButton.sz.y));
+        searchHistory.move(Coord.of(searchX, UI.scale(12) + search.sz.y + UI.scale(2)));
+        searchHistory.setWidth(searchWidth);
         int sideY = layout.sidebar.y + UI.scale(8);
         boolean equipmentMenu = CraftAtlasSections.isEquipment(section);
         for(int i = 0; i < sectionButtons.length; i++) {
@@ -384,6 +487,7 @@ public class CraftAtlasWindow extends Window {
         chooser.move(Coord.of(Math.max(0, (content.x - chooser.sz.x) / 2),
                 Math.max(layout.header.h, (content.y - chooser.sz.y) / 2)));
         chooser.raise();
+        if(searchHistory.visible) searchHistory.raise();
     }
 
     static CraftAtlasLayout layoutFor(Coord content, double scale) {
@@ -417,6 +521,7 @@ public class CraftAtlasWindow extends Window {
     @Override public boolean keydown(KeyDownEvent ev) {
         if(ev.code == KeyEvent.VK_F && (ev.mods & KeyMatch.C) != 0) { setfocus(search); return true; }
         if(ev.code == KeyEvent.VK_ESCAPE) {
+            if(searchHistory.visible) { searchHistory.hide(); return true; }
             if(chooser.visible) { chooser.close(); return true; }
             if(narrowDetails) { narrowDetails = false; applyLayout(); return true; }
             hide(); return true;

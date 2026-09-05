@@ -283,15 +283,15 @@ public class CraftAtlasDetails extends Widget {
         if(entry.curiosity != null) {
             CraftAtlasEntry.Curiosity curiosity = entry.curiosity;
             rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.lp"), null,
-                    String.format(Locale.ROOT, "%,d", curiosity.learningPoints), 0, Target.NONE, null, null));
+                    String.format(Locale.ROOT, "%,d", curiosity.learningPoints(quality)), 0, Target.NONE, null, null));
             rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.time"), null,
                     formatStudyTime(curiosity.studyMinutes), 0, Target.NONE, null, null));
             rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.weight"), null,
                     Integer.toString(curiosity.mentalWeight), 0, Target.NONE, null, null));
             rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.lp_hour"), null,
-                    formatUnsigned(curiosity.lpPerHour()), 0, Target.NONE, null, null));
+                    formatUnsigned(curiosity.lpPerHour(quality)), 0, Target.NONE, null, null));
             rows.add(new DetailRow(Kind.CURIOSITY, L10n.get("craft_atlas.curiosity.lp_hour_weight"), null,
-                    formatUnsigned(curiosity.lpPerHourPerWeight()), 0, Target.NONE, null, null));
+                    formatUnsigned(curiosity.lpPerHourPerWeight(quality)), 0, Target.NONE, null, null));
         }
         for(String slot : entry.equipmentSlots)
             rows.add(new DetailRow(Kind.SLOT, formatEquipmentSlots(slot), null, null, 0, Target.NONE, null, null));

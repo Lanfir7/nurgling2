@@ -51,7 +51,14 @@ class CraftAtlasLocalizationTest {
                 "craft_atlas.curiosity.minutes", "craft_atlas.table.name",
                 "craft_atlas.table.more_columns", "craft_atlas.table.lp_hour",
                 "craft_atlas.table.lp_hour_weight", "craft_atlas.table.lp_hour_tip",
-                "craft_atlas.table.lp_hour_weight_tip", "craft_atlas.resize_table_hint"));
+                "craft_atlas.table.lp_hour_weight_tip", "craft_atlas.table.mental_weight",
+                "craft_atlas.table.mental_weight_tip", "craft_atlas.table.study_time",
+                "craft_atlas.table.study_time_tip", "craft_atlas.resize_table_hint",
+                "craft_atlas.filter.favorites", "craft_atlas.filter.recent",
+                "craft_atlas.search_help.title", "craft_atlas.search_help.intro",
+                "craft_atlas.search_help.common", "craft_atlas.search_help.foods",
+                "craft_atlas.search_help.gildings", "craft_atlas.search_help.curiosities",
+                "craft_atlas.search_help.equipment", "craft_atlas.search_history"));
         for(String code : SLOT_CODES)
             required.add("craft_atlas.equipment_slot." + code);
 

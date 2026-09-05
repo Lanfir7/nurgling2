@@ -34,6 +34,7 @@ public class CraftAtlasRecipeList extends Widget {
     private String sortId;
     private boolean descending;
     private int columnOffset;
+    private boolean preserveSourceOrder;
     private final int rowHeight = UI.scale(54);
 
     public CraftAtlasRecipeList(Coord size, CraftAtlasController controller) {
@@ -45,10 +46,18 @@ public class CraftAtlasRecipeList extends Widget {
         String next = value == null ? "all" : value;
         if(next.equals(section)) return;
         section = next;
-        sortId = "curiosities".equals(section) ? "curiosity:lp-hour" : null;
+        sortId = !preserveSourceOrder && "curiosities".equals(section) ? "curiosity:lp-hour" : null;
         descending = sortId != null;
         columnOffset = 0;
         scroll = 0;
+        rebuildTable();
+    }
+
+    public void setPreserveSourceOrder(boolean value) {
+        if(preserveSourceOrder == value) return;
+        preserveSourceOrder = value;
+        sortId = !value && "curiosities".equals(section) ? "curiosity:lp-hour" : null;
+        descending = sortId != null;
         rebuildTable();
     }
 
@@ -63,7 +72,9 @@ public class CraftAtlasRecipeList extends Widget {
         columns = CraftAtlasListTable.columnsFor(section, sourceEntries);
         CraftAtlasListTable.Column sortColumn = column(sortId);
         if(sortId != null && !"name".equals(sortId) && sortColumn == null) sortId = null;
-        if("name".equals(sortId)) {
+        if(preserveSourceOrder) {
+            entries = new ArrayList<>(sourceEntries);
+        } else if("name".equals(sortId)) {
             entries = new ArrayList<>(sourceEntries);
             Comparator<CraftAtlasEntry> order = Comparator.comparing(
                     entry -> entry.displayName, String.CASE_INSENSITIVE_ORDER);
@@ -269,7 +280,7 @@ public class CraftAtlasRecipeList extends Widget {
 
     private void headerClick(int x) {
         if(x < nameWidth()) {
-            changeSort("name", false);
+            if(!preserveSourceOrder) changeSort("name", false);
             return;
         }
         if(pagedColumns()) {
@@ -282,6 +293,7 @@ public class CraftAtlasRecipeList extends Widget {
                 return;
             }
         }
+        if(preserveSourceOrder) return;
         int visible = (x - columnsX()) / columnWidth();
         int index = columnOffset + visible;
         if(visible >= 0 && index >= 0 && index < columns.size()) changeSort(columns.get(index).id, true);

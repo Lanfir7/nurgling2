@@ -87,6 +87,29 @@ class CraftAtlasDetailsTest {
     }
 
     @Test
+    void curiosityLearningPointsReactToSelectedQuality() {
+        String previousLanguage = L10n.getLanguage();
+        try {
+            L10n.setLanguage("en");
+            CraftAtlasEntry entry = CraftAtlasEntry.builder("curio", "Curio")
+                    .category("curiosities")
+                    .curiosity(new CraftAtlasEntry.Curiosity(5000, 120, 5))
+                    .build();
+
+            List<CraftAtlasDetails.DetailRow> rows = CraftAtlasDetails.buildRows(entry,
+                    (resource, name) -> CraftRecipeGraph.LinkState.NONE, 40);
+
+            assertEquals("10,000", find(rows, L10n.get("craft_atlas.curiosity.lp")).value);
+            assertEquals("5000", find(rows, L10n.get("craft_atlas.curiosity.lp_hour")).value);
+            assertEquals("1000", find(rows, L10n.get("craft_atlas.curiosity.lp_hour_weight")).value);
+            assertEquals("2h 0m", find(rows, L10n.get("craft_atlas.curiosity.time")).value);
+            assertEquals("5", find(rows, L10n.get("craft_atlas.curiosity.weight")).value);
+        } finally {
+            L10n.setLanguage(previousLanguage);
+        }
+    }
+
+    @Test
     void alternativeIngredientsShareOneSelectableRecipeSlot() {
         CraftAtlasEntry entry = CraftAtlasEntry.builder("cloth", "Cloth")
                 .input(new CraftAtlasEntry.InputSlot(2, false, Arrays.asList(

@@ -14,6 +14,8 @@ class CraftAtlasSectionsTest {
         assertTrue(CraftAtlasSections.isEquipment("equipment-rings"));
         assertFalse(CraftAtlasSections.isEquipment("foods"));
         assertTrue(CraftAtlasSections.MAIN.contains("curiosities"));
+        assertFalse(CraftAtlasSections.MAIN.contains("favorites"));
+        assertFalse(CraftAtlasSections.MAIN.contains("recent"));
         assertEquals(Arrays.asList("equipment", "equipment-shoes", "equipment-pants", "equipment-shirts",
                         "equipment-shoulders", "equipment-hats", "equipment-capes", "equipment-cloaks", "equipment-rings"),
                 CraftAtlasSections.EQUIPMENT);

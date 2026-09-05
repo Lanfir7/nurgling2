@@ -18,6 +18,9 @@ class CraftAtlasPreferencesTest {
         CraftAtlasPreferences prefs = new CraftAtlasPreferences();
         prefs.favorites.add("recipe/favorite");
         for(int i = 0; i < 60; i++) prefs.recordRecent("recipe/" + i);
+        for(int i = 0; i < 20; i++) prefs.recordSearch("query " + i);
+        prefs.favoriteFilter = true;
+        prefs.recentFilter = true;
         prefs.lastSection = "gildings";
         prefs.windowW = 1120;
         prefs.columnWidths.put("gildings.bonus", 140);
@@ -27,6 +30,10 @@ class CraftAtlasPreferencesTest {
         assertTrue(loaded.favorites.contains("recipe/favorite"));
         assertEquals(50, loaded.recent.size());
         assertEquals("recipe/59", loaded.recent.get(0));
+        assertEquals(CraftAtlasPreferences.SEARCH_HISTORY_LIMIT, loaded.searchHistory.size());
+        assertEquals("query 19", loaded.searchHistory.get(0));
+        assertTrue(loaded.favoriteFilter);
+        assertTrue(loaded.recentFilter);
         assertEquals("gildings", loaded.lastSection);
         assertEquals(Integer.valueOf(140), loaded.columnWidths.get("gildings.bonus"));
     }

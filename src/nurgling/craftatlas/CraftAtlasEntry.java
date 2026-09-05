@@ -175,11 +175,20 @@ public final class CraftAtlasEntry {
         }
 
         public double studyHours() { return studyMinutes / 60.0; }
+        public int learningPoints(double quality) {
+            return (int)Math.round(learningPoints * Math.sqrt(Math.max(1.0, quality) / 10.0));
+        }
         public double lpPerHour() {
             return studyMinutes <= 0 ? Double.NaN : learningPoints * 60.0 / studyMinutes;
         }
+        public double lpPerHour(double quality) {
+            return studyMinutes <= 0 ? Double.NaN : learningPoints(quality) * 60.0 / studyMinutes;
+        }
         public double lpPerHourPerWeight() {
             return mentalWeight <= 0 ? Double.NaN : lpPerHour() / mentalWeight;
+        }
+        public double lpPerHourPerWeight(double quality) {
+            return mentalWeight <= 0 ? Double.NaN : lpPerHour(quality) / mentalWeight;
         }
     }
 }
