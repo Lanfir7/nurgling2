@@ -7,9 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FindNISBoxTest {
     @Test
-    void missingTrackedGobFinishesOtherwiseInfiniteWait() {
-        assertTrue(FindNISBox.targetGone(true, false));
-        assertFalse(FindNISBox.targetGone(false, false));
-        assertFalse(FindNISBox.targetGone(true, true));
+    void trackedGobMustStayMissingBeforeWaitFinishes() {
+        assertFalse(FindNISBox.targetGone(true, false, 1));
+        assertFalse(FindNISBox.targetGone(true, false, 149));
+        assertTrue(FindNISBox.targetGone(true, false, 150));
+        assertFalse(FindNISBox.targetGone(true, true, 150));
     }
 }

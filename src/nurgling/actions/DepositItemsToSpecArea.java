@@ -46,6 +46,10 @@ public class DepositItemsToSpecArea implements Action {
         return itemsThatFit(freeCells, containerStackDepth.getOrDefault(gobid, 1));
     }
 
+    static boolean shouldRefreshSpace(boolean ready, boolean inventoryOpen) {
+        return ready && inventoryOpen;
+    }
+
     private int measureStackDepth(NGameUI gui, Container container) {
         NInventory inventory = gui.getInventory(container.cap);
         if (inventory == null) {
@@ -227,7 +231,7 @@ public class DepositItemsToSpecArea implements Action {
                 // Update container info after transfer (container should still be open from TransferToContainer)
                 Container.ItemCount itemCount = container.getattr(Container.ItemCount.class);
                 Container.Space space = container.getattr(Container.Space.class);
-                if (space.isReady()) {
+                if (shouldRefreshSpace(space.isReady(), gui.getInventory(container.cap) != null)) {
                     space.update();
                     containerFreeSpaceMap.put(container.gobid, space.getFreeSpace());
                 }

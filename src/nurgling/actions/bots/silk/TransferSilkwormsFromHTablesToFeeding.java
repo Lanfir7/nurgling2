@@ -29,6 +29,10 @@ public class TransferSilkwormsFromHTablesToFeeding implements Action {
     public TransferSilkwormsFromHTablesToFeeding(int totalSilkwormsNeeded) {
         this.totalSilkwormsNeeded = totalSilkwormsNeeded;
     }
+
+    static boolean shouldVisitHerbalistTables(int totalSilkwormsNeeded) {
+        return true;
+    }
     
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
@@ -46,7 +50,7 @@ public class TransferSilkwormsFromHTablesToFeeding implements Action {
             feedingContainers = createContainersFromArea(feedingArea);
         }
         
-        if (totalSilkwormsNeeded > 0) {
+        if (shouldVisitHerbalistTables(totalSilkwormsNeeded)) {
             int wormsTransferredTotal = 0;
             
             // Take silkworms from herbalist tables - use container-by-container approach
