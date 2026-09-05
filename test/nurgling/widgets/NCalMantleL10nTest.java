@@ -34,9 +34,9 @@ class NCalMantleL10nTest {
         DayCycleEvents.MantleEta inside = DayCycleEvents.mantleEta(6, 0, WORLD_SPEED);
         DayCycleEvents.MantleEta outside = DayCycleEvents.mantleEta(4, 0, WORLD_SPEED);
         String name = p.getProperty("calendar.mantle_name");
-        assertEquals("Росистая мантия (00:22 РВ ост.)",
+        assertEquals("Росистая манжетка (00:22 РВ ост.)",
                      String.format(p.getProperty("calendar.mantle_left"), name, inside.rlHours, inside.rlMinutes));
-        assertEquals("Росистая мантия через 00:13 РВ",
+        assertEquals("Росистая манжетка через 00:13 РВ",
                      String.format(p.getProperty("calendar.mantle_in"), name, outside.rlHours, outside.rlMinutes));
     }
 
