@@ -136,10 +136,36 @@ public class QuestModel
 
     /** Quest id of the credo currently being pursued, or 0. Straight from the server. */
     private int pqid = 0;
+    /** Pursued credo quest/level counters from {@link SkillWnd.CredoGrid}. */
+    private int pcql, pcqlt, pcl, pclt;
+
+    /** Snapshot of the pursued credo's server progress, or zeros when none. */
+    public static final class CredoProgress
+    {
+        public final int questId;
+        public final int questDone;
+        public final int questTotal;
+        public final int levelDone;
+        public final int levelTotal;
+
+        public CredoProgress(int questId, int questDone, int questTotal, int levelDone, int levelTotal)
+        {
+            this.questId = questId;
+            this.questDone = questDone;
+            this.questTotal = questTotal;
+            this.levelDone = levelDone;
+            this.levelTotal = levelTotal;
+        }
+    }
 
     public int pursuedCredoId()
     {
         return pqid;
+    }
+
+    public CredoProgress pursuedCredoProgress()
+    {
+        return new CredoProgress(pqid, pcql, pcqlt, pcl, pclt);
     }
 
     public int revision()
@@ -338,8 +364,16 @@ public class QuestModel
         SkillWnd.CredoGrid cr = (sk != null) ? sk.credos : null;
         Set<String> credoLeaves = credoLeaves(cr);
         int pqid = (cr != null) ? cr.pqid : 0;
-        if(pqid != this.pqid) {
+        int pcql = (cr != null) ? cr.pcql : 0;
+        int pcqlt = (cr != null) ? cr.pcqlt : 0;
+        int pcl = (cr != null) ? cr.pcl : 0;
+        int pclt = (cr != null) ? cr.pclt : 0;
+        if(pqid != this.pqid || pcql != this.pcql || pcqlt != this.pcqlt || pcl != this.pcl || pclt != this.pclt) {
             this.pqid = pqid;
+            this.pcql = pcql;
+            this.pcqlt = pcqlt;
+            this.pcl = pcl;
+            this.pclt = pclt;
             dirty = true;
         }
         for(TQuest q : quests.values()) {
