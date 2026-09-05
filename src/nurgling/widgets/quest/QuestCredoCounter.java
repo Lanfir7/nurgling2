@@ -20,7 +20,7 @@ public final class QuestCredoCounter {
     }
 
     public static String forGroup(QuestKind kind, int questId, int done, int total, QuestModel.CredoProgress p) {
-        boolean pursued = kind == QuestKind.CREDO && p != null && p.questId != 0 && questId == p.questId;
+        boolean pursued = isPursuedCredo(kind, questId, p);
         int questDone = done;
         int questTotal = total;
         if(pursued && p.questTotal > 0) {
@@ -32,5 +32,22 @@ public final class QuestCredoCounter {
                       includeLevel ? p.levelDone : 0,
                       includeLevel ? p.levelTotal : 0,
                       includeLevel);
+    }
+
+    /**
+     * TASKS-mode action lines have no group header, so the pursued credo's
+     * {@link #forGroup} digits are appended to the condition text instead.
+     */
+    public static String appendToAction(String baseText, QuestKind kind, int questId, QuestModel.CredoProgress p) {
+        if(!isPursuedCredo(kind, questId, p))
+            return baseText;
+        String cnt = forGroup(kind, questId, 0, 0, p);
+        if(cnt.isEmpty())
+            return baseText;
+        return baseText + " " + cnt;
+    }
+
+    static boolean isPursuedCredo(QuestKind kind, int questId, QuestModel.CredoProgress p) {
+        return kind == QuestKind.CREDO && p != null && p.questId != 0 && questId == p.questId;
     }
 }
