@@ -1,7 +1,8 @@
 package nurgling.widgets.quest;
 
 /**
- * Formats the Quest Helper group-header counter.
+ * Formats the Quest Helper group-header counter, and the same digits on
+ * TASKS-mode action lines for the pursued credo.
  *
  * Credo groups that match the pursued credo append {@code [level/levelTotal]}
  * so both quest-condition and credo-level progress are visible without opening
@@ -41,7 +42,7 @@ public final class QuestCredoCounter {
     public static String appendToAction(String baseText, QuestKind kind, int questId, QuestModel.CredoProgress p) {
         if(!isPursuedCredo(kind, questId, p))
             return baseText;
-        String cnt = forGroup(kind, questId, 0, 0, p);
+        String cnt = format(p.questDone, p.questTotal, p.levelDone, p.levelTotal, p.levelTotal > 0);
         if(cnt.isEmpty())
             return baseText;
         return baseText + " " + cnt;
