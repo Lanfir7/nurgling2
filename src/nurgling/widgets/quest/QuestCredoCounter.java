@@ -1,7 +1,8 @@
 package nurgling.widgets.quest;
 
 /**
- * Formats the Quest Helper group-header counter.
+ * Formats the Quest Helper group-header counter, and the same digits on
+ * TASKS-mode action lines for the pursued credo.
  *
  * Credo groups that match the pursued credo append {@code [level/levelTotal]}
  * so both quest-condition and credo-level progress are visible without opening
@@ -20,7 +21,7 @@ public final class QuestCredoCounter {
     }
 
     public static String forGroup(QuestKind kind, int questId, int done, int total, QuestModel.CredoProgress p) {
-        boolean pursued = kind == QuestKind.CREDO && p != null && p.questId != 0 && questId == p.questId;
+        boolean pursued = isPursuedCredo(kind, questId, p);
         int questDone = done;
         int questTotal = total;
         if(pursued && p.questTotal > 0) {
@@ -32,5 +33,22 @@ public final class QuestCredoCounter {
                       includeLevel ? p.levelDone : 0,
                       includeLevel ? p.levelTotal : 0,
                       includeLevel);
+    }
+
+    /**
+     * TASKS-mode action lines have no group header, so the pursued credo's
+     * {@link #forGroup} digits are appended to the condition text instead.
+     */
+    public static String appendToAction(String baseText, QuestKind kind, int questId, QuestModel.CredoProgress p) {
+        if(!isPursuedCredo(kind, questId, p))
+            return baseText;
+        String cnt = format(p.questDone, p.questTotal, p.levelDone, p.levelTotal, p.levelTotal > 0);
+        if(cnt.isEmpty())
+            return baseText;
+        return baseText + " " + cnt;
+    }
+
+    static boolean isPursuedCredo(QuestKind kind, int questId, QuestModel.CredoProgress p) {
+        return kind == QuestKind.CREDO && p != null && p.questId != 0 && questId == p.questId;
     }
 }

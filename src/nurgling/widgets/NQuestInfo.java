@@ -482,8 +482,12 @@ public class NQuestInfo extends Widget
                     return QuestGiverDistance.compareMeters(condMeters(a), condMeters(b));
                 }
             });
-            for(QCond c : list)
-                g.rows.add(condRow(c, false, kinds.get(c.questId)));
+            QuestModel.CredoProgress credo = model.pursuedCredoProgress();
+            for(QCond c : list) {
+                QuestKind kind = kinds.get(c.questId);
+                String text = QuestCredoCounter.appendToAction(displayCond(c), kind, c.questId, credo);
+                g.rows.add(new Row(text, c.ready, c.questId, false, kind, c));
+            }
             g.total = g.rows.size();
             out.add(g);
         }
