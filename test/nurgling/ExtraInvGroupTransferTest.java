@@ -33,13 +33,50 @@ class ExtraInvGroupTransferTest {
         }
     }
 
+    private static boolean sidebarTransparent(NestedItem item) {
+        return item.transparent || ExtraInvGroupTransfer.isExternalBag(item.name);
+    }
+
     @Test
-    void inventoryContainerAndItsContentsAreBothListed() {
+    void knownExternalBagsAreRecognizedByName() {
+        assertTrue(ExtraInvGroupTransfer.isExternalBag("Seedbag"));
+        assertTrue(ExtraInvGroupTransfer.isExternalBag("Creel"));
+        assertTrue(ExtraInvGroupTransfer.isExternalBag("Poacher's Pouch"));
+        assertTrue(ExtraInvGroupTransfer.isExternalBag("Leather Purse"));
+        assertTrue(ExtraInvGroupTransfer.isExternalBag("Silk Purse"));
+        assertFalse(ExtraInvGroupTransfer.isExternalBag("Hammer"));
+        assertFalse(ExtraInvGroupTransfer.isExternalBag("Keyring"));
+        assertFalse(ExtraInvGroupTransfer.isExternalBag(null));
+    }
+
+    @Test
+    void sidebarListsBagContentsWithoutTheBagRow() {
         NestedItem seeds = new NestedItem("Seeds of Barley", false);
         NestedItem seedbag = new NestedItem("Seedbag", false, seeds);
 
-        assertEquals(List.of(seedbag, seeds), ExtraInvGroupTransfer.walkListings(
-                seedbag, item -> item.contents, item -> item.transparent));
+        assertEquals(List.of(seeds), ExtraInvGroupTransfer.walkListings(
+                seedbag, item -> item.contents, ExtraInvGroupTransferTest::sidebarTransparent));
+    }
+
+    @Test
+    void emptyBagDoesNotAppearInSidebar() {
+        NestedItem emptyBag = new NestedItem("Seedbag", false);
+
+        assertTrue(ExtraInvGroupTransfer.walkListings(
+                emptyBag, item -> item.contents, ExtraInvGroupTransferTest::sidebarTransparent)
+                .isEmpty());
+    }
+
+    @Test
+    void nonBagItemsStayListedWithTheirContents() {
+        NestedItem coin = new NestedItem("Coin", false);
+        NestedItem crate = new NestedItem("Crate", false, coin);
+        NestedItem hammer = new NestedItem("Hammer", false);
+
+        assertEquals(List.of(crate, coin), ExtraInvGroupTransfer.walkListings(
+                crate, item -> item.contents, ExtraInvGroupTransferTest::sidebarTransparent));
+        assertEquals(List.of(hammer), ExtraInvGroupTransfer.walkListings(
+                hammer, item -> item.contents, ExtraInvGroupTransferTest::sidebarTransparent));
     }
 
     @Test
@@ -48,7 +85,16 @@ class ExtraInvGroupTransferTest {
         NestedItem stack = new NestedItem("Stack wrapper", true, seeds);
 
         assertEquals(List.of(seeds), ExtraInvGroupTransfer.walkListings(
-                stack, item -> item.contents, item -> item.transparent));
+                stack, item -> item.contents, ExtraInvGroupTransferTest::sidebarTransparent));
+    }
+
+    @Test
+    void emptyTransparentStackDoesNotAppearInSidebar() {
+        NestedItem emptyStack = new NestedItem("Stack wrapper", true);
+
+        assertTrue(ExtraInvGroupTransfer.walkListings(
+                emptyStack, item -> item.contents, ExtraInvGroupTransferTest::sidebarTransparent)
+                .isEmpty());
     }
 
     @Test
@@ -66,7 +112,7 @@ class ExtraInvGroupTransferTest {
         NestedItem seedbag = new NestedItem("Seedbag", false, stack, looseSeed);
 
         List<NestedItem> listed = ExtraInvGroupTransfer.walkListings(
-                seedbag, item -> item.contents, item -> item.transparent);
+                seedbag, item -> item.contents, ExtraInvGroupTransferTest::sidebarTransparent);
         List<Object> targets = ExtraInvGroupTransfer.uniqueTargets(
                 listed,
                 item -> item.leftover && item.name.equals("Seeds of Barley"),
