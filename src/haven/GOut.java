@@ -334,14 +334,11 @@ public class GOut {
     }
 
     public void rect2(Coord ul, Coord br) {
-	ul = ul.add(tx); br = br.add(tx);
-	float h = 0.5f;
-	float[] data = {ul.x + h, ul.y + h,
-			br.x + h, ul.y + h,
-			br.x + h, br.y + h,
-			ul.x + h, br.y + h,
-			ul.x + h, ul.y + h};
-	drawp(Model.Mode.LINE_STRIP, data);
+	/* Outline as four clipped lines so frames cannot paint outside GOut. */
+	line(ul, Coord.of(br.x, ul.y), 1);
+	line(Coord.of(br.x, ul.y), br, 1);
+	line(br, Coord.of(ul.x, br.y), 1);
+	line(Coord.of(ul.x, br.y), ul, 1);
     }
 
     public void rect(Coord ul, Coord sz) {
