@@ -41,10 +41,6 @@ import haven.MapFile.PMarker;
 import haven.MapFile.SMarker;
 import haven.MiniMap.*;
 import haven.BuddyWnd.GroupSelector;
-import nurgling.NConfig;
-import nurgling.map.FloorOverlayAligner;
-import nurgling.overlays.map.MinimapFloorOverlayRenderer;
-import nurgling.widgets.NDropbox;
 import nurgling.widgets.NMiniMap;
 import haven.MiniMap.Location;
 import static haven.MCache.tilesz;
@@ -223,46 +219,11 @@ public class MapWnd extends Window implements Console.Directory {
 	private final Frame listf;
 	private final Button pmbtn, smbtn, nobtn, tobtn, mebtn, mibtn;
 	private TextEntry namesel;
-	private final CheckBox floorOl;
-	private final NDropbox<FloorOverlayAligner.FloorLink> floorDrop;
 
 	private Toolbox() {
 	    super(UI.scale(200, 200));
 	    listf = add(new Frame(UI.scale(new Coord(200, 200)), false), 0, 0);
 	    list = listf.add(new MarkerList(Coord.of(listf.inner().x, 0)), 0, 0);
-	    floorOl = add(new CheckBox("Floor overlay"));
-	    floorOl.state(MinimapFloorOverlayRenderer::enabled);
-	    floorOl.set(a -> {
-		NConfig.set(NConfig.Key.floorOverlayEnable, a);
-		NConfig.needUpdate();
-	    });
-	    floorDrop = add(new NDropbox<FloorOverlayAligner.FloorLink>(UI.scale(200), 8, UI.scale(20)) {
-		    protected FloorOverlayAligner.FloorLink listitem(int i) {
-			java.util.List<FloorOverlayAligner.FloorLink> links = ((NMiniMap) view).floorLinks;
-			if (i < 0 || i >= links.size())
-			    return(null);
-			return(links.get(i));
-		    }
-		    protected int listitems() {
-			return(((NMiniMap) view).floorLinks.size());
-		    }
-		    protected void drawitem(GOut g, FloorOverlayAligner.FloorLink item, int idx) {
-			if(item != null)
-			    g.text(item.label(), Coord.z);
-		    }
-		    public void change(FloorOverlayAligner.FloorLink item) {
-			super.change(item);
-			if(item != null) {
-			    NConfig.set(NConfig.Key.floorOverlaySegId, item.toSegId);
-			    NConfig.needUpdate();
-			    ((NMiniMap) view).selectedFloorLink = item;
-			}
-		    }
-		    public boolean mousedown(MouseDownEvent ev) {
-			((NMiniMap) view).refreshFloorLinks(true);
-			return(super.mousedown(ev));
-		    }
-		});
 	    pmbtn = add(new Button(btnw, "Placed", false) {
 		    public void click() {
 			mflt = pmarkers;
@@ -301,19 +262,15 @@ public class MapWnd extends Window implements Console.Directory {
 
 	public void resize(int h) {
 	    super.resize(new Coord(sz.x, h));
-	    listf.resize(listf.sz.x, sz.y - UI.scale(310));
+	    listf.resize(listf.sz.x, sz.y - UI.scale(250));
 	    listf.c = new Coord(sz.x - listf.sz.x, 0);
 	    list.resize(listf.inner().sub(0,UI.scale(50)));
-	    floorOl.c = new Coord(0, listf.c.y + listf.sz.y + UI.scale(8));
-	    floorDrop.c = new Coord(0, floorOl.c.y + floorOl.sz.y + UI.scale(4));
 	    mebtn.c = new Coord(0, sz.y - mebtn.sz.y);
 	    mibtn.c = new Coord(sz.x - btnw, sz.y - mibtn.sz.y);
 	    nobtn.c = new Coord(0, mebtn.c.y - UI.scale(30) - nobtn.sz.y);
 	    tobtn.c = new Coord(sz.x - btnw, mibtn.c.y - UI.scale(30) - tobtn.sz.y);
 	    pmbtn.c = new Coord(0, nobtn.c.y - UI.scale(5) - pmbtn.sz.y);
 	    smbtn.c = new Coord(sz.x - btnw, tobtn.c.y - UI.scale(5) - smbtn.sz.y);
-	    floorDrop.c = new Coord(0, pmbtn.c.y - UI.scale(8) - floorDrop.sz.y);
-	    floorOl.c = new Coord(0, floorDrop.c.y - UI.scale(4) - floorOl.sz.y);
 	    if(namesel != null) {
 		namesel.c = listf.c.add(0, listf.sz.y + UI.scale(10));
 		mremove.c = pmbtn.c.sub(0, mremove.sz.y + UI.scale(10));
@@ -541,17 +498,6 @@ public class MapWnd extends Window implements Console.Directory {
 	    }
 	}
 	view.markobjs();
-	if(visible && view instanceof NMiniMap) {
-	    NMiniMap nview = (NMiniMap) view;
-	    FloorOverlayAligner.FloorLink selected = nview.selectedFloorLink;
-	    FloorOverlayAligner.FloorLink dropSel = tool.floorDrop.sel;
-	    if(selected == null) {
-		if(dropSel != null)
-		    tool.floorDrop.sel = null;
-	    } else if(dropSel == null || dropSel.toSegId != selected.toSegId) {
-		tool.floorDrop.sel = selected;
-	    }
-	}
 	if(visible) {
 	    if(mrefocus != null) {
 		for(Predicate<Marker> filter : Arrays.asList(pmarkers, smarkers)) {
