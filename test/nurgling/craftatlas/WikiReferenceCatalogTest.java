@@ -1,6 +1,8 @@
 package nurgling.craftatlas;
 
 import org.junit.jupiter.api.Test;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -83,6 +85,26 @@ class WikiReferenceCatalogTest {
     void stableWikiResourcesIgnoreCaseAndPunctuation() {
         assertEquals("wiki-item:taproot-lacing", WikiReferenceCatalog.itemResource("Taproot Lacing"));
         assertEquals(WikiReferenceCatalog.itemResource("Fish Glue"), WikiReferenceCatalog.itemResource("fish-glue"));
+    }
+
+    @Test
+    void excludesStandaloneGemstonesButKeepsGemstoneIngredients() throws Exception {
+        List<String> gemstones = List.of("Amber", "Amethyst", "Diamond", "Emerald", "Jade",
+                "Moonstone", "Onyx", "Opal", "Ruby", "Sapphire", "Topaz", "Turquoise");
+        JSONArray values = new JSONArray();
+        for(String gemstone : gemstones)
+            values.put(new JSONObject().put("id", "wiki:" + gemstone.toLowerCase())
+                    .put("name", gemstone));
+        values.put(new JSONObject().put("id", "wiki:gem-ring").put("name", "Gem Ring")
+                .put("inputs", new JSONArray().put(new JSONObject()
+                        .put("name", "Diamond").put("resource", "wiki-item:diamond"))));
+        byte[] json = new JSONObject().put("entries", values).toString().getBytes(StandardCharsets.UTF_8);
+
+        List<CraftAtlasEntry> entries = WikiReferenceCatalog.parse(new ByteArrayInputStream(json));
+
+        assertEquals(1, entries.size());
+        assertEquals("Gem Ring", entries.get(0).displayName);
+        assertEquals("Diamond", entries.get(0).inputs.get(0).options.get(0).name);
     }
 
     @Test

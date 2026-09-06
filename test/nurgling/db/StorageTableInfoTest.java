@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StorageTableInfoTest {
     @Test
@@ -36,5 +38,13 @@ class StorageTableInfoTest {
         assertEquals("—", StorageTableInfo.storageLabel(null, List.of()));
         assertEquals("Chest", StorageTableInfo.storageLabel("Chest", List.of("Chest", "Chest")));
         assertEquals("Chest +1", StorageTableInfo.storageLabel("Chest", List.of("Chest", "Cupboard")));
+    }
+
+    @Test
+    void unavailableRowRequiresDashesInBothDistanceAndStorage() {
+        assertTrue(StorageTableInfo.isUnavailable(StorageTableInfo.UNKNOWN_DIST, "—"));
+        assertFalse(StorageTableInfo.isUnavailable(26, "—"));
+        assertFalse(StorageTableInfo.isUnavailable(
+                StorageTableInfo.UNKNOWN_DIST, "Stockpile-stone"));
     }
 }

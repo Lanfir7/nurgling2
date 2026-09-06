@@ -526,8 +526,9 @@ public class ChunkNavExecutor implements Action {
             NUtils.openDoorOnAGob(gui, portalGob);
         }
 
-        // Wait for the target grid to be fully loaded (mesh and fog ready)
-        NUtils.getUI().core.addTask(new WaitForMapLoadByGridId(gui, targetGridId));
+        // Wait for the actual player grid to change. getPlayerChunkId() returns -1
+        // until the current grid data is available, so rendering mesh/fog is not required.
+        NUtils.getUI().core.addTask(new WaitForPlayerGridChange(playerGridBefore, graph::getPlayerChunkId));
         NUtils.getUI().core.addTask(new WaitForGobStability());
 
         // Verify the player actually changed grids (didn't get stuck behind a fence etc.)
@@ -1197,14 +1198,16 @@ public class ChunkNavExecutor implements Action {
             return Results.FAIL();
         }
 
+        long playerGridBefore = graph.getPlayerChunkId();
+
         // Portal recording is handled automatically by PortalTraversalTracker via getLastActions()
         NUtils.openDoorOnAGob(gui, portalGob);
 
         if (isLoadingPortal(portal.type)) {
             String exitGobName = GateDetector.getDoorPair(portal.gobName);
 
-            // Wait for the target grid to be fully loaded (mesh and fog ready)
-            NUtils.getUI().core.addTask(new WaitForMapLoadByGridId(gui, targetGridId));
+            // Wait for the actual destination grid instead of a potentially stale recorded ID.
+            NUtils.getUI().core.addTask(new WaitForPlayerGridChange(playerGridBefore, graph::getPlayerChunkId));
 
             if (exitGobName != null) {
                 NUtils.getUI().core.addTask(new WaitForExitPortal(exitGobName));

@@ -12,6 +12,7 @@ import haven.UI;
 import haven.Widget;
 import haven.Window;
 import nurgling.NGameUI;
+import nurgling.NWindowDeco;
 import nurgling.NUtils;
 import nurgling.actions.bots.CraftAtlasResourceCollector;
 import nurgling.craftatlas.CraftAtlasController;
@@ -36,6 +37,10 @@ import java.util.Set;
 
 /** Separate crafting encyclopedia. Crafting itself stays in the normal NCraftWindow. */
 public class CraftAtlasWindow extends Window {
+    @Override protected Deco makedeco() {
+        return new NWindowDeco(false).freeformResize(UI.scale(620, 420));
+    }
+
     private MenuGrid menu;
     private MenuCraftCatalog catalog;
     private final CraftAtlasObservationStore observationStore;

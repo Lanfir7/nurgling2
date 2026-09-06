@@ -29,6 +29,10 @@ public final class StorageTableInfo {
         return tiles < 0 ? "—" : String.valueOf(tiles);
     }
 
+    public static boolean isUnavailable(int distanceTiles, String storageName) {
+        return distanceTiles == UNKNOWN_DIST && "—".equals(storageName);
+    }
+
     public static String containerTitle(String resName) {
         if (resName == null || resName.isEmpty()) {
             return "—";

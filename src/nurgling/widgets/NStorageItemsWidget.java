@@ -226,6 +226,13 @@ public class NStorageItemsWidget extends Window {
         });
         compressBox.settip(L10n.get("storage.compress_tip"));
 
+        add(new Button(UI.scale(70), L10n.get("storage.clear")) {
+            @Override
+            public void click() {
+                clearUnavailableItems();
+            }
+        }, new Coord(UI.scale(WINDOW_WIDTH - 170), y));
+
         // Refresh button
         add(new Button(UI.scale(70), L10n.get("storage.refresh")) {
             @Override
@@ -452,6 +459,54 @@ public class NStorageItemsWidget extends Window {
         }, "StorageItemLoader");
         loader.setDaemon(true);
         loader.start();
+    }
+
+    private void clearUnavailableItems() {
+        if (isLoading) return;
+        if (ui == null || ui.core == null || ui.core.databaseManager == null ||
+                !ui.core.databaseManager.isReady()) {
+            NUtils.getGameUI().msg(L10n.get("storage.db_not_ready"), Color.RED);
+            return;
+        }
+
+        isLoading = true;
+        StorageItemService storageService = new StorageItemService(ui.core.databaseManager);
+        List<String> hashes = unavailableItemHashes(new ArrayList<>(allItems));
+
+        Thread cleaner = new Thread(() -> {
+            int deleted = 0;
+            try {
+                for (String hash : hashes) {
+                    try {
+                        storageService.deleteStorageItem(hash);
+                        deleted++;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                NUtils.getGameUI().msg(L10n.get("storage.cleared_items", deleted));
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                isLoading = false;
+                requestRefresh();
+            }
+        }, "StorageItemCleaner");
+        cleaner.setDaemon(true);
+        cleaner.start();
+    }
+
+    static List<String> unavailableItemHashes(Iterable<GroupedItem> rows) {
+        List<StorageItemDao.StorageItemData> unavailable = new ArrayList<>();
+        if (rows != null) {
+            for (GroupedItem row : rows) {
+                if (row != null && StorageTableInfo.isUnavailable(
+                        row.distanceTiles, row.storageName)) {
+                    unavailable.addAll(row.items);
+                }
+            }
+        }
+        return FetchStorageDbSync.hashesToDelete(unavailable);
     }
 
     private void processLoadedItems(List<StorageItemDao.StorageItemData> items,

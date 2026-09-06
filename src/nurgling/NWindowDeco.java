@@ -9,6 +9,8 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
     public final boolean lg;
     public final IButton cbtn;
     public boolean dragsize;
+    private boolean freeformResize;
+    private Coord minimumResizeSize = Coord.of(1, 1);
     public Area aa, ca;
     private Text cap;
     private boolean cfocus;
@@ -33,6 +35,13 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
 
     public NWindowDeco dragsize(boolean v) {
         this.dragsize = v;
+        return this;
+    }
+
+    public NWindowDeco freeformResize(Coord minimumSize) {
+        this.dragsize = true;
+        this.freeformResize = true;
+        this.minimumResizeSize = Coord.of(Math.max(1, minimumSize.x), Math.max(1, minimumSize.y));
         return this;
     }
 
@@ -175,10 +184,26 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
     // Drag-to-resize support
     private UI.Grab szdrag;
     private Coord szdragc;
+    private NWindowResize.Edge resizeEdge = NWindowResize.Edge.NONE;
+    private Coord resizeStartMouse;
+    private Coord resizeStartPosition;
+    private Coord resizeStartSize;
 
     public boolean mousedown(MouseDownEvent ev) {
         if(dragsize) {
             Coord c = ev.c;
+            if(freeformResize && ev.b == 1) {
+                NWindowResize.Edge edge = NWindowResize.hit(c, sz, UI.scale(5));
+                if(edge != NWindowResize.Edge.NONE) {
+                    Window window = (Window)parent;
+                    szdrag = ui.grabmouse(this);
+                    resizeEdge = edge;
+                    resizeStartPosition = Coord.of(window.c);
+                    resizeStartSize = Coord.of(aa.sz());
+                    resizeStartMouse = window.c.add(c);
+                    return true;
+                }
+            }
             if((ev.b == 1) && (c.x < ca.br.x) && (c.y < ca.br.y) && (c.y >= ca.br.y - UI.scale(25) + (ca.br.x - c.x))) {
                 szdrag = ui.grabmouse(this);
                 szdragc = aa.sz().sub(c);
@@ -189,8 +214,18 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
     }
 
     public void mousemove(MouseMoveEvent ev) {
-        if(szdrag != null)
-            ((Window)parent).resize(ev.c.add(szdragc));
+        if(szdrag != null) {
+            Window window = (Window)parent;
+            if(freeformResize && resizeEdge != NWindowResize.Edge.NONE) {
+                Coord mouse = window.c.add(ev.c);
+                NWindowResize.Result result = NWindowResize.drag(resizeEdge, resizeStartPosition,
+                        resizeStartSize, mouse.sub(resizeStartMouse), minimumResizeSize);
+                window.move(result.position);
+                window.resize(result.size);
+            } else {
+                window.resize(ev.c.add(szdragc));
+            }
+        }
         super.mousemove(ev);
     }
 
@@ -198,6 +233,7 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
         if((ev.b == 1) && (szdrag != null)) {
             szdrag.remove();
             szdrag = null;
+            resizeEdge = NWindowResize.Edge.NONE;
             return(true);
         }
         return(super.mouseup(ev));

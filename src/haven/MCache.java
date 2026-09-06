@@ -179,7 +179,6 @@ public class MCache implements MapSource {
 				for (int i = 0; i < array.length(); i++)
 				{
 					NArea a = new NArea((JSONObject) array.get(i));
-					nurgling.areas.AllowedZonesManager.getInstance().applyLocalHideStatus(a);
 					areas.put(a.id, a);
 				}
 				System.out.println("Loaded " + areas.size() + " areas from file");

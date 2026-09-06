@@ -10,9 +10,12 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,6 +23,9 @@ import java.util.regex.Pattern;
 public final class WikiReferenceCatalog {
     private static final String RESOURCE = "/nurgling/craftatlas/wiki-reference.json";
     private static final Pattern GILD_CHANCE = Pattern.compile("(?i).*?(\\d+(?:\\.\\d+)?)%\\s*[-–]\\s*(\\d+(?:\\.\\d+)?)%");
+    private static final Set<String> GEMSTONES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "amber", "amethyst", "diamond", "emerald", "jade", "moonstone",
+            "onyx", "opal", "ruby", "sapphire", "topaz", "turquoise")));
 
     private WikiReferenceCatalog() { }
 
@@ -43,8 +49,15 @@ public final class WikiReferenceCatalog {
         JSONArray values = new JSONObject(text.toString()).optJSONArray("entries");
         if(values == null) return Collections.emptyList();
         List<CraftAtlasEntry> entries = new ArrayList<>();
-        for(int i = 0; i < values.length(); i++) entries.add(decode(values.getJSONObject(i)));
+        for(int i = 0; i < values.length(); i++) {
+            JSONObject value = values.getJSONObject(i);
+            if(!isGemstone(value.optString("name", ""))) entries.add(decode(value));
+        }
         return Collections.unmodifiableList(entries);
+    }
+
+    private static boolean isGemstone(String name) {
+        return GEMSTONES.contains(name == null ? "" : name.trim().toLowerCase(Locale.ROOT));
     }
 
     public static String itemResource(String name) {
