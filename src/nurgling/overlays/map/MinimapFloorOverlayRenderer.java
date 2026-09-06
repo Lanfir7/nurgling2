@@ -36,7 +36,7 @@ import static haven.MCache.cmaps;
  * Draws another MapFile segment on top of the current minimap, using a private DisplayGrid cache.
  */
 public class MinimapFloorOverlayRenderer {
-    public static final int DEFAULT_ALPHA = 255;
+    public static final int DEFAULT_ALPHA = 120;
     private static final int MAX_CACHE = 256;
 
     private final Map<CacheKey, MiniMap.DisplayGrid> cache = new HashMap<>();
@@ -213,7 +213,9 @@ public class MinimapFloorOverlayRenderer {
     }
 
     public static int overlayAlpha() {
-        return DEFAULT_ALPHA;
+        Object val = NConfig.get(NConfig.Key.floorOverlayAlpha);
+        int alpha = val instanceof Number ? ((Number) val).intValue() : DEFAULT_ALPHA;
+        return Math.max(32, Math.min(255, alpha));
     }
 
     public static long selectedSegId() {
