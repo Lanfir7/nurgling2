@@ -238,6 +238,8 @@ public class GOut {
 
     public void line(Coord c1, Coord c2, double w) {
 	c1 = c1.add(tx); c2 = c2.add(tx);
+	if(RectOutlineClip.aabbMiss(c1, c2, ul, br))
+	    return;
 	if(!c1.isect2(ul, br) || !c2.isect2(ul, br)) {
 	    Line2d cl = Line2d.twixt(Coord2d.of(c1), Coord2d.of(c2)).clip(Coord2d.of(ul), Coord2d.of(br.sub(1, 1)));
 	    if(cl == null)
@@ -334,14 +336,10 @@ public class GOut {
     }
 
     public void rect2(Coord ul, Coord br) {
-	ul = ul.add(tx); br = br.add(tx);
-	float h = 0.5f;
-	float[] data = {ul.x + h, ul.y + h,
-			br.x + h, ul.y + h,
-			br.x + h, br.y + h,
-			ul.x + h, br.y + h,
-			ul.x + h, ul.y + h};
-	drawp(Model.Mode.LINE_STRIP, data);
+	/* Clipped segments — do not restore an unclipped LINE_STRIP. */
+	Coord[] p = RectOutlineClip.corners(ul, br);
+	for(int i = 0; i < 4; i++)
+	    line(p[i], p[(i + 1) % 4], 1);
     }
 
     public void rect(Coord ul, Coord sz) {

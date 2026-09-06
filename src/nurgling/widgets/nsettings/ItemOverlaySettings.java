@@ -1739,8 +1739,8 @@ public class ItemOverlaySettings extends Panel {
         }
         
         @Override
-        public void draw(GOut g) {
-            super.draw(g);
+        public void draw(GOut g, boolean strict) {
+            ListChildClip.drawVisibleChildren(this, g, strict);
         }
     }
     
@@ -1771,10 +1771,16 @@ public class ItemOverlaySettings extends Panel {
         
         @Override
         public void draw(GOut g) {
-            g.chcolor(new Color(30, 35, 40, 180));
-            g.frect(Coord.z, sz);
-            g.chcolor();
-            super.draw(g);
+            GOut clipped = g.reclip(Coord.z, sz);
+            clipped.chcolor(new Color(30, 35, 40, 180));
+            clipped.frect(Coord.z, sz);
+            clipped.chcolor();
+            super.draw(clipped);
+        }
+
+        @Override
+        public void draw(GOut g, boolean strict) {
+            ListChildClip.drawVisibleChildren(this, g, strict);
         }
     }
     
