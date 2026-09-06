@@ -17,20 +17,25 @@ class MinimapFloorOverlayRendererTest {
     }
 
     @Test
-    void floorOverlayDefaultsToEnabledAtMaxAlpha() {
+    void floorOverlayDefaultsToEnabledAtTranslucentAlpha() {
         NConfig.current = new NConfig();
 
         assertTrue(MinimapFloorOverlayRenderer.enabled());
-        assertEquals(255, MinimapFloorOverlayRenderer.overlayAlpha());
+        assertEquals(120, MinimapFloorOverlayRenderer.overlayAlpha());
         assertEquals(Boolean.TRUE, NConfig.get(NConfig.Key.floorOverlayEnable));
-        assertEquals(255, ((Number) NConfig.get(NConfig.Key.floorOverlayAlpha)).intValue());
+        assertEquals(120, ((Number) NConfig.get(NConfig.Key.floorOverlayAlpha)).intValue());
     }
 
     @Test
-    void overlayAlphaStaysMaxEvenIfSavedConfigIsLower() {
+    void overlayAlphaReadsConfigAndClamps() {
         NConfig.current = new NConfig();
-        NConfig.set(NConfig.Key.floorOverlayAlpha, 120);
+        NConfig.set(NConfig.Key.floorOverlayAlpha, 180);
+        assertEquals(180, MinimapFloorOverlayRenderer.overlayAlpha());
 
+        NConfig.set(NConfig.Key.floorOverlayAlpha, 10);
+        assertEquals(32, MinimapFloorOverlayRenderer.overlayAlpha());
+
+        NConfig.set(NConfig.Key.floorOverlayAlpha, 300);
         assertEquals(255, MinimapFloorOverlayRenderer.overlayAlpha());
     }
 
