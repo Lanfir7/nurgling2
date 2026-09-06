@@ -44,14 +44,14 @@ import java.util.HashMap;
  *       those tiers re-acquire per gob.</li>
  *   <li><b>Torch stays equipped</b> — a lit torch is only lit while equipped/in-hand; the apply loop
  *       never routes it through inventory (that extinguishes it).</li>
- *   <li><b>Bots come back</b> — the list constructor bookmarks where the caller was standing and
- *       walks back there once the implement has been released, so a bot does not idle on a shared
- *       torchpost/candelabrum and stays within loading range of the workstations it just lit (a
- *       burnout wait cannot see unloaded gobs).</li>
- *   <li><b>Context menu unchanged</b> — the single-{@link Gob} constructor keeps today's behavior: it
- *       does <i>not</i> fetch a candelabrum from its designated area and does <i>not</i> walk back
- *       afterwards; only the list constructor (used by bots) enables the area fetch, matching the old
- *       {@code LightGob} capability.</li>
+ *   <li><b>Come back after lighting</b> — both constructors bookmark where the caller was standing
+ *       and walk back there once the implement has been released, so MacroKey / context-menu Light
+ *       does not leave the character on a torchpost/candelabrum, and bots stay within loading range
+ *       of the workstations they just lit (a burnout wait cannot see unloaded gobs).</li>
+ *   <li><b>Candelabrum area fetch is bot-only</b> — the single-{@link Gob} constructor (context menu /
+ *       MacroKey) does <i>not</i> fetch a candelabrum from its designated area; only the list
+ *       constructor (used by bots) enables the area fetch, matching the old {@code LightGob}
+ *       capability.</li>
  * </ul>
  */
 public class LightObject implements Action {
@@ -79,13 +79,13 @@ public class LightObject implements Action {
     private static final int SOURCE_INVENTORY = 1;
     private static final int SOURCE_BELT = 2;
 
-    /** Single-target constructor used by the right-click context menu. Preserves legacy behavior:
-     *  does not navigate to a candelabrum area. */
+    /** Single-target constructor used by the right-click context menu / MacroKey. Walks back to the
+     *  start position after lighting; does not navigate to a candelabrum area. */
     public LightObject(Gob target) {
         this.targets = new ArrayList<>();
         this.targets.add(target);
         this.allowCandelabrumAreaFetch = false;
-        this.returnToOrigin = false;
+        this.returnToOrigin = true;
     }
 
     /** Batch constructor used by bots (via {@code LightGob}). Enables candelabrum-area fetch so it is a
@@ -94,6 +94,14 @@ public class LightObject implements Action {
         this.targets = new ArrayList<>(targets);
         this.allowCandelabrumAreaFetch = true;
         this.returnToOrigin = true;
+    }
+
+    boolean returnsToOrigin() {
+        return returnToOrigin;
+    }
+
+    boolean allowsCandelabrumAreaFetch() {
+        return allowCandelabrumAreaFetch;
     }
 
     // --- Config system ---
