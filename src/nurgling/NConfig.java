@@ -477,8 +477,8 @@ public class NConfig
         conf.put(Key.exploredAreaEnable, false);
         conf.put(Key.exploredAreaRecord, false);
         conf.put(Key.chunkNavOverlay, false);
-        conf.put(Key.floorOverlayEnable, false);
-        conf.put(Key.floorOverlayAlpha, 120);
+        conf.put(Key.floorOverlayEnable, true);
+        conf.put(Key.floorOverlayAlpha, 255);
         conf.put(Key.floorOverlaySegId, 0L);
         conf.put(Key.player_box, false);
         conf.put(Key.player_fov, false);
