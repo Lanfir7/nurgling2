@@ -23,8 +23,8 @@ public final class CraftAtlasSearch {
 
     public static final class Query {
         public final String text, bonusResource, category;
-        public final boolean descending, restricted;
-        public final Set<String> favorites, restrictedResources;
+        public final boolean descending, restricted, knownOnly, storedOnly;
+        public final Set<String> favorites, restrictedResources, storedItems;
         public final List<String> preferredOrder;
 
         private Query(Builder b) {
@@ -35,6 +35,14 @@ public final class CraftAtlasSearch {
             favorites = Collections.unmodifiableSet(new LinkedHashSet<>(b.favorites));
             restrictedResources = Collections.unmodifiableSet(new LinkedHashSet<>(b.restrictedResources));
             restricted = b.restricted;
+            knownOnly = b.knownOnly;
+            storedOnly = b.storedOnly;
+            Set<String> normalizedStoredItems = new LinkedHashSet<>();
+            for(String value : b.storedItems) {
+                String normalized = normalize(value);
+                if(!normalized.isEmpty()) normalizedStoredItems.add(normalized);
+            }
+            storedItems = Collections.unmodifiableSet(normalizedStoredItems);
             preferredOrder = Collections.unmodifiableList(new ArrayList<>(b.preferredOrder));
         }
 
@@ -43,13 +51,20 @@ public final class CraftAtlasSearch {
 
         public static final class Builder {
             private String text = "", bonusResource, category = "";
-            private boolean descending, restricted;
+            private boolean descending, restricted, knownOnly, storedOnly;
             private Set<String> favorites = Collections.emptySet(), restrictedResources = Collections.emptySet();
+            private Set<String> storedItems = Collections.emptySet();
             private List<String> preferredOrder = Collections.emptyList();
             public Builder text(String value) { text = value; return this; }
             public Builder bonus(String value) { bonusResource = value; return this; }
             public Builder descending(boolean value) { descending = value; return this; }
             public Builder category(String value) { category = value; return this; }
+            public Builder knownOnly(boolean value) { knownOnly = value; return this; }
+            public Builder storedItems(Set<String> value) {
+                storedItems = value == null ? Collections.emptySet() : value;
+                storedOnly = true;
+                return this;
+            }
             public Builder favorites(Set<String> value) { favorites = value == null ? Collections.emptySet() : value; return this; }
             public Builder restrictTo(Set<String> value) {
                 restrictedResources = value == null ? Collections.emptySet() : value;
@@ -81,6 +96,8 @@ public final class CraftAtlasSearch {
         for(CraftAtlasEntry entry : snapshot.entries) {
             if(!q.favorites.isEmpty() && !q.favorites.contains(entry.recipeResource)) continue;
             if(q.restricted && !q.restrictedResources.contains(entry.recipeResource)) continue;
+            if(q.knownOnly && entry.availability == CraftAtlasEntry.Availability.REFERENCE_ONLY) continue;
+            if(q.storedOnly && !q.storedItems.contains(normalize(entry.displayName))) continue;
             if(!q.category.isEmpty() && !normalizedCategories(entry).contains(q.category)) continue;
             String haystack = searchableText(entry);
             boolean matches = true;

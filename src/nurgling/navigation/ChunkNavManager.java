@@ -6,6 +6,7 @@ import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
 import nurgling.overlays.map.MinimapChunkNavRenderer;
+import nurgling.tools.ClaimLand;
 import nurgling.tools.NFileUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -180,9 +181,8 @@ public class ChunkNavManager {
      * Runs in a background thread to avoid FPS drops.
      */
     private void recordVisibleGrids() {
-        // Skip if ChunkNav overlay is disabled
-        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
-        if (!(val instanceof Boolean) || !(Boolean) val) {
+        // The map toggle controls wilderness recording; claimed land is always recorded.
+        if (!isRecordingAllowed()) {
             return;
         }
 
@@ -241,9 +241,7 @@ public class ChunkNavManager {
      * teleported (e.g., via Hearth Fire skill) to an unrecorded chunk.
      */
     private void ensurePlayerChunkRecorded() {
-        // Skip if ChunkNav overlay is disabled
-        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
-        if (!(val instanceof Boolean) || !(Boolean) val) {
+        if (!isRecordingAllowed()) {
             return;
         }
 
@@ -269,6 +267,12 @@ public class ChunkNavManager {
         } catch (Exception e) {
             // Ignore - best effort
         }
+    }
+
+    private boolean isRecordingAllowed() {
+        boolean overlayEnabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.chunkNavOverlay));
+        boolean onClaim = !overlayEnabled && ClaimLand.isOnClaimOrVillage(NUtils.player());
+        return ClaimLand.shouldRecordChunkNav(overlayEnabled, onClaim);
     }
 
     /**

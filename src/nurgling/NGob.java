@@ -879,7 +879,11 @@ public class NGob
                         else
                             parent.addcustomol(new NMiningSupport(parent, mineSpec.circleRadius));
                     }
-                        if (name.contains("gfx/terobjs/dframe") || name.contains("gfx/terobjs/cheeserack"))
+                        if (NIconSignOverlay.supports(name))
+                        {
+                            NIconSignOverlay.ensureAttached(parent);
+                        }
+                        else if (name.contains("gfx/terobjs/dframe") || name.contains("gfx/terobjs/cheeserack"))
                         {
                             customMask = true;
                         } else if (name.contains("gfx/terobjs/barrel"))

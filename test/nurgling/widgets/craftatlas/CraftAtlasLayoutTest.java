@@ -52,4 +52,16 @@ class CraftAtlasLayoutTest {
         assertEquals(280, tooNarrow.list.w);
         assertEquals(320, tooWide.details.w);
     }
+
+    @Test
+    void fourHeaderFiltersStayInsideACompactAtlasWindow() {
+        CraftAtlasLayout.Rect[] controls = CraftAtlasLayout.headerControls(
+                620, 48, 4, 120, 80, 8, 160);
+
+        assertEquals(5, controls.length);
+        assertTrue(controls[0].w >= 160);
+        assertTrue(controls[4].x + controls[4].w <= 620);
+        for(int i = 1; i < controls.length; i++)
+            assertTrue(controls[i].x >= controls[i - 1].x + controls[i - 1].w + 8);
+    }
 }

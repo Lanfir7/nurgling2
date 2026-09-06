@@ -80,6 +80,29 @@ public final class CraftAtlasLayout {
         return new int[] {first, last};
     }
 
+    /** Search field followed by a responsive row of header filter buttons. */
+    public static Rect[] headerControls(int width, int searchX, int filterCount,
+                                        int preferredFilterWidth, int minimumFilterWidth,
+                                        int gap, int minimumSearchWidth) {
+        int count = Math.max(0, filterCount);
+        int safeGap = Math.max(0, gap);
+        int available = Math.max(0, width - Math.max(0, searchX) - safeGap * count);
+        int filterWidth = count == 0 ? 0 : Math.max(1, Math.min(preferredFilterWidth,
+                Math.max(minimumFilterWidth, (available - minimumSearchWidth) / count)));
+        if(count > 0 && filterWidth * count > available)
+            filterWidth = Math.max(1, available / count);
+        int searchWidth = Math.max(0, available - filterWidth * count);
+        Rect[] result = new Rect[count + 1];
+        result[0] = new Rect(Math.max(0, searchX), 0, searchWidth, 0);
+        int x = result[0].x + searchWidth;
+        for(int i = 0; i < count; i++) {
+            x += safeGap;
+            result[i + 1] = new Rect(x, 0, filterWidth, 0);
+            x += filterWidth;
+        }
+        return result;
+    }
+
     /** Left-to-right footer geometry: quantity, collect, open craft. */
     public static Rect[] footerControls(Rect footer, int quantityW,
                                         int collectW, int craftW, int gap, int margin) {

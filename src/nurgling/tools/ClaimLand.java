@@ -24,6 +24,11 @@ public final class ClaimLand {
         return !onClaim;
     }
 
+    /** ChunkNav records when explicitly enabled or while the player is on claimed land. */
+    public static boolean shouldRecordChunkNav(boolean overlayEnabled, boolean onClaim) {
+        return overlayEnabled || onClaim;
+    }
+
     public static boolean hasClaimOrVillage(Iterable<String> tags) {
         if (tags == null) {
             return false;

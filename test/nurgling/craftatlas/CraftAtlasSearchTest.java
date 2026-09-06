@@ -108,6 +108,37 @@ class CraftAtlasSearchTest {
             org.junit.jupiter.api.Assertions.assertFalse(CraftAtlasSearch.examplesFor(category).isEmpty(), category);
     }
 
+    @Test
+    void headerFiltersKeepOnlyKnownRecipesWhoseProductsExistInBaseStorage() {
+        CraftAtlasEntry storedKnown = CraftAtlasEntry.builder("stored", "Iron Axe")
+                .availability(CraftAtlasEntry.Availability.UNAVAILABLE_NOW).build();
+        CraftAtlasEntry absentKnown = CraftAtlasEntry.builder("absent", "Stone Axe")
+                .availability(CraftAtlasEntry.Availability.OPEN).build();
+        CraftAtlasEntry storedReference = CraftAtlasEntry.builder("reference", "Iron Axe")
+                .availability(CraftAtlasEntry.Availability.REFERENCE_ONLY).build();
+
+        CraftAtlasSearch.Query query = CraftAtlasSearch.Query.builder()
+                .knownOnly(true)
+                .storedItems(Set.of("  IRON AXE  "))
+                .build();
+
+        assertEquals(List.of("stored"), ids(CraftAtlasSearch.query(
+                CraftAtlasSnapshot.of(1, List.of(storedKnown, absentKnown, storedReference)), query)));
+    }
+
+    @Test
+    void disabledHeaderFiltersLeaveKnownReferenceAndUnstoredRecipesVisible() {
+        CraftAtlasEntry known = CraftAtlasEntry.builder("known", "Known").availability(
+                CraftAtlasEntry.Availability.OPEN).build();
+        CraftAtlasEntry reference = CraftAtlasEntry.builder("reference", "Reference").availability(
+                CraftAtlasEntry.Availability.REFERENCE_ONLY).build();
+
+        CraftAtlasSearch.Query query = CraftAtlasSearch.Query.builder().knownOnly(false).build();
+
+        assertEquals(List.of("known", "reference"), ids(CraftAtlasSearch.query(
+                CraftAtlasSnapshot.of(1, List.of(reference, known)), query)));
+    }
+
     private CraftAtlasEntry bonus(String id, Double value) {
         return CraftAtlasEntry.builder(id, id).bonus(new CraftAtlasEntry.Bonus("survive", "Survival", value)).build();
     }

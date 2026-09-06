@@ -27,7 +27,7 @@ public final class CraftAtlasPreferences {
     public final Map<String, Integer> columnWidths = new LinkedHashMap<>();
     public final Map<String, Double> requirementQualities = new LinkedHashMap<>();
     public String lastSection = "all";
-    public boolean favoriteFilter, recentFilter;
+    public boolean favoriteFilter, recentFilter, craftFilter, storageFilter;
     public int windowX = -1, windowY = -1, windowW = -1, windowH = -1;
 
     public void recordRecent(String recipeResource) {
@@ -69,6 +69,8 @@ public final class CraftAtlasPreferences {
             prefs.lastSection = root.optString("lastSection", prefs.lastSection);
             prefs.favoriteFilter = root.optBoolean("favoriteFilter", false);
             prefs.recentFilter = root.optBoolean("recentFilter", false);
+            prefs.craftFilter = root.optBoolean("craftFilter", false);
+            prefs.storageFilter = root.optBoolean("storageFilter", false);
             JSONObject window = root.optJSONObject("window");
             if(window != null) {
                 prefs.windowX = window.optInt("x", prefs.windowX);
@@ -106,6 +108,8 @@ public final class CraftAtlasPreferences {
         root.put("lastSection", lastSection);
         root.put("favoriteFilter", favoriteFilter);
         root.put("recentFilter", recentFilter);
+        root.put("craftFilter", craftFilter);
+        root.put("storageFilter", storageFilter);
         root.put("window", new JSONObject().put("x", windowX).put("y", windowY).put("w", windowW).put("h", windowH));
         root.put("columns", new JSONObject(columnWidths));
         root.put("requirementQualities", new JSONObject(requirementQualities));

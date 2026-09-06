@@ -21,6 +21,8 @@ class CraftAtlasPreferencesTest {
         for(int i = 0; i < 20; i++) prefs.recordSearch("query " + i);
         prefs.favoriteFilter = true;
         prefs.recentFilter = true;
+        prefs.craftFilter = true;
+        prefs.storageFilter = true;
         prefs.lastSection = "gildings";
         prefs.windowW = 1120;
         prefs.columnWidths.put("gildings.bonus", 140);
@@ -36,6 +38,8 @@ class CraftAtlasPreferencesTest {
         assertEquals("query 19", loaded.searchHistory.get(0));
         assertTrue(loaded.favoriteFilter);
         assertTrue(loaded.recentFilter);
+        assertTrue(loaded.craftFilter);
+        assertTrue(loaded.storageFilter);
         assertEquals("gildings", loaded.lastSection);
         assertEquals(Integer.valueOf(140), loaded.columnWidths.get("gildings.bonus"));
         assertEquals(87.5, loaded.requirementQualities.get("station:anvil"));

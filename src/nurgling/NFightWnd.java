@@ -2,6 +2,7 @@ package nurgling;
 
 import haven.*;
 import java.util.*;
+import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.font.TextAttribute;
@@ -11,6 +12,7 @@ import static haven.PUtils.*;
 import static haven.Inventory.invsq;
 import nurgling.i18n.L10n;
 import nurgling.tools.CombatInstructionWrite;
+import nurgling.widgets.TextInputWindow;
 
 public class NFightWnd extends FightWnd {
     private static final int DESC_W = UI.scale(267);
@@ -29,6 +31,10 @@ public class NFightWnd extends FightWnd {
     private static final int BTN_SAVE_GAP = UI.scale(15);
     private static final int SAVE_GAP = UI.scale(9);
     private static final Coord NUM_BOX = UI.scale(new Coord(13, 14));
+    private static final Coord CATEGORY_SIZE = UI.scale(new Coord(31, 28));
+    private static final int CATEGORY_GAP = UI.scale(1);
+    private static final Color CATEGORY_SELECTED = new Color(139, 143, 0, 210);
+    private static final Color UPGRADE_GLOW = new Color(28, 255, 73, 165);
 
     private static final Text.Foundry titleFnd = new Text.Foundry(
 	nurgling.conf.FontSettings.getOpenSansSemibold(), 14, Color.WHITE).aa(true);
@@ -42,14 +48,175 @@ public class NFightWnd extends FightWnd {
 	TextAttribute.FONT, descFont).aa(true);
 
     private static final Text.Foundry numFnd = new Text.Foundry(
-	nurgling.conf.FontSettings.getOpenSansSemibold(), 14, Color.WHITE).aa(true);
+		nurgling.conf.FontSettings.getOpenSansSemibold(), 14, Color.WHITE).aa(true);
+
+    private CombatSchoolUi.Category selectedCategory;
+    private int pendingRename = -1;
+    private TextInputWindow renameWindow;
 
     public NFightWnd(int nsave, int nact, int max) {
 	super(nsave, nact, max);
     }
 
     private static abstract class DropWidget extends Widget implements DropTarget {
-	DropWidget(Coord sz) { super(sz); }
+		DropWidget(Coord sz) { super(sz); }
+    }
+
+    private class CategoryButton extends Widget {
+		private final CombatSchoolUi.Category category;
+		private final Tex icon;
+
+		CategoryButton(CombatSchoolUi.Category category) {
+		    super(CATEGORY_SIZE);
+		    this.category = category;
+		    this.icon = categoryIcon(category);
+		}
+
+		@Override
+		public void draw(GOut g) {
+		    g.chcolor((selectedCategory == category) ? CATEGORY_SELECTED : NStyle.infoBg);
+		    g.frect(Coord.z, sz);
+		    g.chcolor(NStyle.border);
+		    g.rect(Coord.z, sz);
+		    g.chcolor();
+		    g.aimage(icon, sz.div(2), 0.5, 0.5);
+		}
+
+		@Override
+		public boolean mousedown(MouseDownEvent ev) {
+		    if(ev.b == 1 && ev.c.isect(Coord.z, sz)) {
+			selectCategory(category);
+			return true;
+		    }
+		    return super.mousedown(ev);
+		}
+
+		@Override
+		public Object tooltip(Coord c, Widget prev) {
+		    return L10n.get(category.labelKey);
+		}
+    }
+
+    private class UpgradeButton extends NCloseButton {
+		private final int slot;
+		private boolean glowing;
+
+		UpgradeButton(int slot) {
+		    super(NStyle.plusbtni[0], NStyle.plusbtni[1], NStyle.plusbtni[2]);
+		    this.slot = slot;
+		}
+
+		@Override
+		public void tick(double dt) {
+		    Action act = order[slot];
+		    boolean next = act != null && CombatSchoolUi.canIncrease(act.u, act.a);
+		    if(next != glowing) {
+			glowing = next;
+			redraw();
+		    }
+		    super.tick(dt);
+		}
+
+		@Override
+		public void draw(BufferedImage buf) {
+		    super.draw(buf);
+		    if(glowing) {
+			Graphics2D g = buf.createGraphics();
+			g.setComposite(AlphaComposite.SrcAtop);
+			g.setColor(UPGRADE_GLOW);
+			g.fillRect(0, 0, buf.getWidth(), buf.getHeight());
+			g.dispose();
+		    }
+		}
+    }
+
+    private static Tex categoryIcon(CombatSchoolUi.Category category) {
+		String path;
+		switch(category.icon) {
+		case ATTACK: path = "nurgling/hud/combat-tabs/attack"; break;
+		case DEFENCE: path = "nurgling/hud/combat-tabs/restore"; break;
+		case MANEUVER: path = "nurgling/hud/combat-tabs/maneuver"; break;
+		case MOVE: path = "nurgling/hud/combat-tabs/move"; break;
+		case OTHER: path = "gfx/invobjs/missing"; break;
+		case ALL:
+		default: path = "nurgling/hud/combat-tabs/all"; break;
+		}
+		return new TexI(convolvedown(Resource.loadimg(path), UI.scale(22, 22), iconfilter));
+    }
+
+    private List<Action> filteredActions() {
+		if(selectedCategory == null || selectedCategory == CombatSchoolUi.Category.ALL)
+		    return acts;
+		List<Action> filtered = new ArrayList<>();
+		for(Action act : acts) {
+		    try {
+			if(selectedCategory.matches(act.res.get().name))
+			    filtered.add(act);
+		    } catch(Loading ignored) {
+		    }
+		}
+		return filtered;
+    }
+
+    private void selectCategory(CombatSchoolUi.Category category) {
+		if(category == null)
+		    category = CombatSchoolUi.Category.ALL;
+		selectedCategory = category;
+		if(actlist != null) {
+		    actlist.change(null);
+		    actlist.reset();
+		}
+    }
+
+    private void requestRename() {
+		Integer selected = savelist.sel;
+		if(selected == null || selected < 0) {
+		    getparent(GameUI.class).error(L10n.get("char.fight.no_save_selected"));
+		    return;
+		}
+		if(saves[selected] == unused) {
+		    getparent(GameUI.class).error(L10n.get("char.fight.no_rename_unused"));
+		    return;
+		}
+		if(selected != usesave) {
+		    pendingRename = selected;
+		    load(selected);
+		    use(selected);
+		    return;
+		}
+		openRename(selected);
+    }
+
+    private void openRename(int school) {
+		if(renameWindow != null)
+		    return;
+		renameWindow = new TextInputWindow(L10n.get("char.fight.rename_title"),
+			L10n.get("char.fight.rename_prompt"), name -> {
+			    renameWindow = null;
+			    if(name != null) {
+				saves[school] = attrf.render(name);
+				save(school);
+			    }
+			});
+		GameUI gui = getparent(GameUI.class);
+		gui.add(renameWindow, gui.sz.sub(renameWindow.sz).div(2));
+		renameWindow.show();
+    }
+
+    @Override
+    public void load(int n) {
+		selectCategory(CombatSchoolUi.Category.ALL);
+		super.load(n);
+    }
+
+    @Override
+    public void uimsg(String nm, Object... args) {
+		super.uimsg(nm, args);
+		if(nm == "use" && pendingRename >= 0 && pendingRename == usesave) {
+		    int school = pendingRename;
+		    pendingRename = -1;
+		    openRename(school);
+		}
     }
 
     /* Move-list row: must be a DTarget so that interacting with a held item
@@ -195,6 +362,15 @@ public class NFightWnd extends FightWnd {
 
 	// --- Section 2: Moves box (right) — background matches Actions exactly ---
 	int movesX = DESC_W + DESC_MOVES_GAP;
+	selectedCategory = CombatSchoolUi.Category.ALL;
+	CombatSchoolUi.Category[] categories = CombatSchoolUi.Category.values();
+	int categoryRowW = categories.length * CATEGORY_SIZE.x + (categories.length - 1) * CATEGORY_GAP;
+	int categoryX = movesX + MOVES_W - categoryRowW;
+	int categoryY = contentY - CATEGORY_SIZE.y - UI.scale(1);
+	for(int i = 0; i < categories.length; i++) {
+	    CategoryButton button = add(new CategoryButton(categories[i]),
+		    categoryX + i * (CATEGORY_SIZE.x + CATEGORY_GAP), categoryY);
+	}
 	add(new Widget(new Coord(MOVES_W, MOVES_H)) {
 	    public void draw(GOut g) {
 		g.chcolor(NStyle.infoBg);
@@ -204,6 +380,11 @@ public class NFightWnd extends FightWnd {
 	    }
 	}, movesX, contentY);
 	actlist = add(new Actions(new Coord(MOVES_W, MOVES_H), MOVE_ITEM_H) {
+	    @Override
+	    protected List<Action> items() {
+		return filteredActions();
+	    }
+
 	    @Override
 	    protected void drawslot(GOut g, Action item, int idx, Area area) {
 		g.chcolor(((idx % 2) == 0) ? NStyle.rowEven : NStyle.rowOdd);
@@ -368,7 +549,7 @@ public class NFightWnd extends FightWnd {
 		    else act.u(nu);
 		}
 	    }), cx - BTN_BTN_GAP / 2, btnY, 1.0, 0.0);
-	    Widget addw = adda(new NCloseButton(NStyle.plusbtni[0], NStyle.plusbtni[1], NStyle.plusbtni[2]).action(() -> {
+	    Widget addw = adda(new UpgradeButton(si).action(() -> {
 		Action act = order[si];
 		if(act != null) {
 		    int nu = Utils.clip(act.u + 1, 0, act.a);
@@ -378,8 +559,9 @@ public class NFightWnd extends FightWnd {
 	    plusH = Math.max(plusH, addw.sz.y);
 	}
 
-	// "Used X/Y" label — 22px gap, top-aligned with skill bar (offset for text leading)
-	count = add(new Label("", NStyle.nattrf), skillBar.pos("ur").adds(22, -5));
+	// Reserve the fully localized counter width before pack(), then show the actual value.
+	count = add(new Label(CombatSchoolUi.usedText(L10n.get("char.fight.used"), maxact, maxact),
+		NStyle.nattrf), skillBar.pos("ur").adds(22, -5));
 
 	// --- Section 4: Save slots as boxes ---
 	int saveRowY = btnY + plusH + BTN_SAVE_GAP;
@@ -462,20 +644,23 @@ public class NFightWnd extends FightWnd {
 	    }, sx, saveRowY);
 	}
 
-	// Load / Save buttons — 22px gap, Load top-aligned, Save bottom-aligned with save slots
+	// Load / Save / Rename buttons
 	int btnX = saveRowW + UI.scale(22) + 3;
-	add(new Button(UI.scale(104), L10n.get("char.fight.load"), false).action(() -> {
+	Widget loadButton = add(new Button(UI.scale(104), L10n.get("char.fight.load"), false).action(() -> {
 		    load(savelist.sel);
 		    use(savelist.sel);
-	}), btnX, saveRowY - 1);
-	adda(new Button(UI.scale(104), L10n.get("char.fight.save"), false).action(() -> {
+		}), btnX, saveRowY - 1);
+	Widget saveButton = add(new Button(UI.scale(104), L10n.get("char.fight.save"), false).action(() -> {
 		    if(savelist.sel < 0) {
 			getparent(GameUI.class).error(L10n.get("char.fight.no_save_selected"));
 		    } else {
 			save(savelist.sel);
 			use(savelist.sel);
 		    }
-	}), btnX, saveRowY + SAVE_H + 1, 0.0, 1.0);
+		}), btnX, loadButton.pos("bl").y + UI.scale(3));
+	add(new Button(UI.scale(104), L10n.get("char.fight.rename"), false).action(this::requestRename),
+		btnX, saveButton.pos("bl").y + UI.scale(3));
 	pack();
+	recount();
     }
 }

@@ -72,6 +72,22 @@ class CraftAtlasControllerTest {
         assertEquals("wiki:glue", controller.state().selected.recipeResource);
     }
 
+    @Test
+    void externalRecipeSelectionPrefersResourceAndRequiresAnUnambiguousExactNameFallback() {
+        CraftAtlasEntry axe = CraftAtlasEntry.builder("paginae/craft/axe", "Iron Axe").build();
+        CraftAtlasEntry duplicateOne = CraftAtlasEntry.builder("wiki:cup-1", "Wooden Cup").build();
+        CraftAtlasEntry duplicateTwo = CraftAtlasEntry.builder("wiki:cup-2", " wooden cup ").build();
+        CraftAtlasController controller = new CraftAtlasController(
+                CraftAtlasSnapshot.of(1, List.of(axe, duplicateOne, duplicateTwo)), null);
+
+        assertTrue(controller.selectExact("paginae/craft/axe", "wrong name"));
+        assertEquals("paginae/craft/axe", controller.state().selected.recipeResource);
+        assertTrue(controller.selectExact("missing", "  IRON AXE "));
+        assertEquals("paginae/craft/axe", controller.state().selected.recipeResource);
+        assertFalse(controller.selectExact(null, "Wooden Cup"));
+        assertFalse(controller.selectExact(null, "missing"));
+    }
+
     private CraftAtlasEntry recipe(String id, String output, String input) {
         CraftAtlasEntry.Builder b = CraftAtlasEntry.builder(id, id).output(output).availability(CraftAtlasEntry.Availability.OPEN);
         if(input != null) b.input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(

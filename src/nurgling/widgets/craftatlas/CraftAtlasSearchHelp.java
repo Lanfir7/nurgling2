@@ -3,6 +3,9 @@ package nurgling.widgets.craftatlas;
 import haven.Button;
 import haven.Coord;
 import haven.Label;
+import haven.RichText;
+import haven.RichTextBox;
+import haven.Scrollport;
 import haven.UI;
 import haven.Widget;
 import haven.Window;
@@ -20,7 +23,7 @@ final class CraftAtlasSearchHelp extends Window {
     private boolean closing;
 
     CraftAtlasSearchHelp(String activeSection, Consumer<String> apply, Runnable closed) {
-        super(UI.scale(620, 620), L10n.get("craft_atlas.search_help.title"));
+        super(UI.scale(860, 700), L10n.get("craft_atlas.search_help.title"));
         this.closed = closed;
         int margin = UI.scale(14);
         int top = margin;
@@ -28,24 +31,30 @@ final class CraftAtlasSearchHelp extends Window {
         intro.setcolor(new Color(208, 214, 211));
         top += UI.scale(34);
 
-        int[] y = {top, top};
-        int columnWidth = UI.scale(292);
-        int buttonWidth = UI.scale(280);
+        int referenceWidth = UI.scale(400);
+        RichTextBox reference = add(new RichTextBox(
+                Coord.of(referenceWidth, UI.scale(640)),
+                L10n.get("craft_atlas.search_help.reference"), RichText.stdf),
+                Coord.of(margin, top));
+        reference.bg = new Color(10, 15, 17, 220);
+
+        int x = margin + referenceWidth + UI.scale(14);
+        Scrollport examples = add(new Scrollport(Coord.of(UI.scale(414), UI.scale(640))), Coord.of(x, top));
+        int y = 0;
+        int buttonWidth = UI.scale(380);
         for(String section : orderedSections(activeSection)) {
-            int column = y[0] <= y[1] ? 0 : 1;
-            int x = margin + column * columnWidth;
-            Label heading = add(new Label(L10n.get("craft_atlas.search_help." + section)), Coord.of(x, y[column]));
+            Label heading = examples.cont.add(new Label(L10n.get("craft_atlas.search_help." + section)), Coord.of(0, y));
             heading.setcolor(new Color(221, 174, 76));
-            y[column] += UI.scale(22);
+            y += UI.scale(22);
             String exampleSection = "common".equals(section) ? "all" : section;
             for(String example : CraftAtlasSearch.examplesFor(exampleSection)) {
-                add(new Button(buttonWidth, "→  " + example).action(() -> apply.accept(example)),
-                        Coord.of(x, y[column]));
-                y[column] += UI.scale(31);
+                examples.cont.add(new Button(buttonWidth, "→  " + example).action(() -> apply.accept(example)),
+                        Coord.of(0, y));
+                y += UI.scale(31);
             }
-            y[column] += UI.scale(9);
+            y += UI.scale(9);
         }
-        resize(Coord.of(UI.scale(620), Math.max(UI.scale(300), Math.max(y[0], y[1]) + margin)));
+        resize(UI.scale(860, 700));
     }
 
     private static List<String> orderedSections(String active) {

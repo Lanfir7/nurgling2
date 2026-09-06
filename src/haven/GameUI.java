@@ -295,7 +295,9 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	menugridc = brframe.c.add(UI.scale(20), UI.scale(34));
 	Img rbtnimg =add(new Img(rbtnbg), 0, sz.y - rbtnbg.sz().y);
 	rbtnimg.hide();
-	add(new NDraggableWidget(new MainMenu(), "mainmenu", UI.scale(260,109)));
+	MainMenu mainMenu = new MainMenu();
+	add(new NDraggableWidget(mainMenu, "mainmenu",
+		MainMenuLayout.frameSize(mainMenu.sz, NDraggableWidget.delta)));
 	menubuttons(rbtnimg);
 	portrait = add(new NDraggableWidget(Frame.with(new Avaview(Avaview.dasz, plid, "avacam"), false),"portrait", UI.scale(120, 108)));
 	add(new NDraggableWidget(buffs = new Bufflist(),"bufflist",Coord.z));
@@ -1432,7 +1434,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    prev = add(new MenuCheckBox("rbtn/bud/", kb_bud, L10n.get("opt.keybind.kith_kin")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(zerg)).click(() -> togglewnd(zerg));
 	    prev = add(new MenuCheckBox("rbtn/opt/", kb_opt, L10n.get("opt.keybind.options")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(opts)).click(() -> togglewnd(opts));
 
-		// Bottom row - buttons: Areas, Cook Book, Blueprints, Base Planner, Storage
+		// Bottom row - buttons: Areas, Cook Book, Blueprints, Base Planner, Storage, Craft Atlas
 		int secondRowY = firstButton.sz.y + UI.scale(5);
 		prev = add(new MenuCheckBox("rbtn/areas/", kb_areas, L10n.get("area.title")), 0, secondRowY).state(() -> wndstate(areas)).click(() -> togglewnd(areas));
 		prev = add(new MenuCheckBox("rbtn/cookbook/", kb_cookbook, L10n.get("cookbook.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(cookBook)).click(() -> togglewnd(cookBook));

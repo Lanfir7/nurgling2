@@ -36,4 +36,16 @@ class ClaimLandTest {
         assertFalse(ClaimLand.shouldPlaceAnimalMarker(true));
         assertTrue(ClaimLand.shouldPlaceAnimalMarker(false));
     }
+
+    @Test
+    void chunkNavRecordsOnClaimRegardlessOfOverlayToggle() {
+        assertTrue(ClaimLand.shouldRecordChunkNav(false, true));
+        assertTrue(ClaimLand.shouldRecordChunkNav(true, true));
+    }
+
+    @Test
+    void chunkNavStillFollowsOverlayToggleInWilderness() {
+        assertTrue(ClaimLand.shouldRecordChunkNav(true, false));
+        assertFalse(ClaimLand.shouldRecordChunkNav(false, false));
+    }
 }

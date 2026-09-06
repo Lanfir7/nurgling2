@@ -12,6 +12,8 @@ import haven.UI;
 import haven.Widget;
 import haven.Window;
 import nurgling.NGameUI;
+import nurgling.NCore;
+import nurgling.NConfig;
 import nurgling.NWindowDeco;
 import nurgling.NUtils;
 import nurgling.actions.bots.CraftAtlasResourceCollector;
@@ -26,12 +28,15 @@ import nurgling.craftatlas.CraftAtlasSearch;
 import nurgling.craftatlas.CraftExecutionBridge;
 import nurgling.craftatlas.MenuCraftCatalog;
 import nurgling.i18n.L10n;
+import nurgling.db.dao.StorageItemDao;
+import nurgling.db.service.StorageItemService;
 import nurgling.sessions.BotExecutor;
 import monitoring.NGlobalSearchItems;
 
 import java.awt.event.KeyEvent;
 import java.awt.Color;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -55,7 +60,7 @@ public class CraftAtlasWindow extends Window {
     private final CraftAtlasRecipeChooser chooser;
     private final CraftAtlasSearchHistory searchHistory;
     private final TextEntry craftCount;
-    private final Button help, favoriteFilterButton, recentFilterButton;
+    private final Button help, favoriteFilterButton, recentFilterButton, craftFilterButton, storageFilterButton;
     private final FavoriteStar favorite;
     private final Button collectResources, openCraft;
     private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
@@ -70,6 +75,9 @@ public class CraftAtlasWindow extends Window {
     private CraftAtlasEntry selectedEntry;
     private Thread collectionThread;
     private CraftAtlasSearchHelp searchHelp;
+    private Set<String> storedItemNames = Collections.emptySet();
+    private final CraftAtlasStoredItemsState storedItemsState = new CraftAtlasStoredItemsState();
+    private long storedItemsRevision = Long.MIN_VALUE;
 
     public CraftAtlasWindow(MenuGrid menu) {
         this(menu, CraftAtlasPreferences.loadProfile());
@@ -117,6 +125,8 @@ public class CraftAtlasWindow extends Window {
         search.tooltip = L10n.get("craft_atlas.search_placeholder");
         favoriteFilterButton = add(new Button(UI.scale(120), "").action(() -> toggleHeaderFilter(true)));
         recentFilterButton = add(new Button(UI.scale(120), "").action(() -> toggleHeaderFilter(false)));
+        craftFilterButton = add(new Button(UI.scale(120), "").action(this::toggleCraftFilter));
+        storageFilterButton = add(new Button(UI.scale(120), "").action(this::toggleStorageFilter));
         updateFilterButtons();
 
         for(int i = 0; i < CraftAtlasSections.MAIN.size(); i++) {
@@ -161,6 +171,13 @@ public class CraftAtlasWindow extends Window {
     public CraftAtlasRecipeProbe recipeProbe() { return recipeProbe; }
     public CraftAtlasRecipeProbe.Claim claimRecipeProbe(String windowName) { return recipeProbe.claim(windowName); }
     public void onCraftWindowOpened() { controller.onCraftWindowOpened(); }
+
+    /** Open the Atlas from a normal craft window and focus that exact recipe. */
+    public boolean openRecipe(String recipeResource, String displayName) {
+        show();
+        raise();
+        return controller.selectExact(recipeResource, displayName);
+    }
     public void setMenu(MenuGrid value) {
         if(menu == value) return;
         menu = value;
@@ -202,6 +219,16 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void tick(double dt) {
         super.tick(dt);
+        applyPendingStoredItems();
+        if(preferences.storageFilter && !storageDatabaseEnabled()) {
+            preferences.storageFilter = false;
+            storedItemsState.cancel();
+            updateFilterButtons();
+            applyQuery();
+            savePreferences();
+        } else if(preferences.storageFilter && !storedItemsState.loading() && storageDatabaseReady() &&
+                storedItemsRevision != NGlobalSearchItems.storageRevision())
+            requestStoredItems();
         requestRecipeProbe(controller.state().selected);
         if((menu != null && observedMenuRevision != menu.pagseq) || observedStoreRevision != observationStore.revision())
             refreshCatalog();
@@ -236,11 +263,43 @@ public class CraftAtlasWindow extends Window {
         savePreferences();
     }
 
+    private void toggleCraftFilter() {
+        preferences.craftFilter = !preferences.craftFilter;
+        updateFilterButtons();
+        applyQuery();
+        savePreferences();
+    }
+
+    private void toggleStorageFilter() {
+        if(!preferences.storageFilter && !storageDatabaseReady()) {
+            NGameUI gui = NUtils.getGameUI();
+            if(gui != null) gui.msg(L10n.get("storage.db_not_ready"), Color.RED);
+            return;
+        }
+        preferences.storageFilter = !preferences.storageFilter;
+        if(preferences.storageFilter) {
+            storedItemNames = Collections.emptySet();
+            storedItemsRevision = Long.MIN_VALUE;
+            requestStoredItems();
+        } else {
+            storedItemsState.cancel();
+        }
+        updateFilterButtons();
+        applyQuery();
+        savePreferences();
+    }
+
     private void updateFilterButtons() {
         if(favoriteFilterButton != null) favoriteFilterButton.change(
                 (preferences.favoriteFilter ? "\u2713  " : "") + L10n.get("craft_atlas.filter.favorites"));
         if(recentFilterButton != null) recentFilterButton.change(
                 (preferences.recentFilter ? "\u2713  " : "") + L10n.get("craft_atlas.filter.recent"));
+        if(craftFilterButton != null) craftFilterButton.change(
+                (preferences.craftFilter ? "\u2713  " : "") + L10n.get("craft_atlas.filter.craft"));
+        if(storageFilterButton != null) storageFilterButton.change(
+                (preferences.storageFilter
+                        ? (storedItemsRevision == Long.MIN_VALUE ? "\u2026  " : "\u2713  ")
+                        : "") + L10n.get("craft_atlas.filter.storage"));
     }
 
     private void applyQuery() {
@@ -248,6 +307,9 @@ public class CraftAtlasWindow extends Window {
         recipeList.setPreserveSourceOrder(preferences.recentFilter);
         String category = CraftAtlasSections.category(section);
         if(category != null) query.category(category);
+        query.knownOnly(preferences.craftFilter);
+        if(preferences.storageFilter && storedItemsRevision != Long.MIN_VALUE)
+            query.storedItems(storedItemNames);
         Set<String> restricted = null;
         if(preferences.favoriteFilter) restricted = new LinkedHashSet<>(preferences.favorites);
         if(preferences.recentFilter) {
@@ -258,6 +320,52 @@ public class CraftAtlasWindow extends Window {
         }
         if(restricted != null) query.restrictTo(restricted);
         controller.setQuery(query.build());
+    }
+
+    private void requestStoredItems() {
+        if(!preferences.storageFilter || storedItemsState.loading() || !storageDatabaseReady()) return;
+        long revision = NGlobalSearchItems.storageRevision();
+        long request = storedItemsState.begin(revision);
+        Thread loader = new Thread(() -> {
+            try {
+                Set<String> names = new LinkedHashSet<>();
+                StorageItemService service = new StorageItemService(NCore.databaseManager);
+                for(StorageItemDao.StorageItemData item : service.loadAllStorageItems()) {
+                    String name = CraftAtlasSearch.normalize(item.getName());
+                    if(!name.isEmpty()) names.add(name);
+                }
+                storedItemsState.complete(request, names, null);
+            } catch(Exception error) {
+                storedItemsState.complete(request, Collections.emptySet(), error);
+            }
+        }, "CraftAtlasStoredItems");
+        loader.setDaemon(true);
+        loader.start();
+    }
+
+    private void applyPendingStoredItems() {
+        CraftAtlasStoredItemsState.Result result = storedItemsState.take();
+        if(result == null) return;
+        if(result.error != null) {
+            preferences.storageFilter = false;
+            updateFilterButtons();
+            NGameUI gui = NUtils.getGameUI();
+            if(gui != null) gui.msg(L10n.get("storage.db_not_ready"), Color.RED);
+            savePreferences();
+        } else {
+            storedItemNames = result.names;
+            storedItemsRevision = result.revision;
+            updateFilterButtons();
+        }
+        applyQuery();
+    }
+
+    private boolean storageDatabaseEnabled() {
+        return Boolean.TRUE.equals(NConfig.get(NConfig.Key.ndbenable));
+    }
+
+    private boolean storageDatabaseReady() {
+        return storageDatabaseEnabled() && NCore.databaseManager != null && NCore.databaseManager.isReady();
     }
 
     private void stateChanged(CraftAtlasController.ViewState state) {
@@ -507,16 +615,18 @@ public class CraftAtlasWindow extends Window {
         CraftAtlasLayout layout = layoutFor(content, uiScale(), section);
         int buttonY = UI.scale(8), searchY = UI.scale(12);
         help.move(Coord.of(UI.scale(8), buttonY));
-        int searchX = UI.scale(48), gap = UI.scale(8), filterWidth = UI.scale(120);
-        int oldSearchWidth = Math.max(UI.scale(220), content.x - UI.scale(112));
-        int availableSearchWidth = content.x - searchX - filterWidth * 2 - gap * 3;
-        int searchWidth = Math.max(UI.scale(160), Math.min(oldSearchWidth / 2, availableSearchWidth));
+        int searchX = UI.scale(48), gap = UI.scale(8);
+        CraftAtlasLayout.Rect[] headerControls = CraftAtlasLayout.headerControls(content.x, searchX, 4,
+                UI.scale(120), UI.scale(80), gap, UI.scale(160));
+        int searchWidth = headerControls[0].w;
         search.move(Coord.of(searchX, searchY));
         search.resize(searchWidth);
-        favoriteFilterButton.move(Coord.of(searchX + searchWidth + gap, buttonY));
-        recentFilterButton.move(Coord.of(searchX + searchWidth + gap * 2 + filterWidth, buttonY));
-        favoriteFilterButton.resize(Coord.of(filterWidth, favoriteFilterButton.sz.y));
-        recentFilterButton.resize(Coord.of(filterWidth, recentFilterButton.sz.y));
+        Button[] filters = {favoriteFilterButton, recentFilterButton, craftFilterButton, storageFilterButton};
+        for(int i = 0; i < filters.length; i++) {
+            CraftAtlasLayout.Rect control = headerControls[i + 1];
+            filters[i].move(Coord.of(control.x, buttonY));
+            filters[i].resize(Coord.of(control.w, filters[i].sz.y));
+        }
         searchHistory.move(Coord.of(searchX, searchY + search.sz.y + UI.scale(2)));
         searchHistory.setWidth(searchWidth);
         int sideY = layout.sidebar.y + UI.scale(8);

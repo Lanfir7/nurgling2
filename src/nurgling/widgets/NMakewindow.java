@@ -63,7 +63,7 @@ public class NMakewindow extends Widget implements DTarget {
     public boolean autoMode = false;
     public boolean searchMode = false;
     private ICheckBox autoChk = null;
-    private ICheckBox searchChk = null;
+    private IButton atlasBtn = null;
     private Button searchBtn = null;
     private CraftIngredientSearchPanel searchPanel = null;
     private boolean searchRan = false;
@@ -593,27 +593,18 @@ public class NMakewindow extends Widget implements DTarget {
         add(new Button(UI.scale(85), L10n.get("craft.craft")), UI.scale(new Coord(230, 75 + CraftSlotQuality.LINE))).action(() -> craft()).setgkey(kb_make);
         add(craft_num = new TextEntry(UI.scale(55), ""), UI.scale(new Coord(165, 82 + CraftSlotQuality.LINE)));
         add(new Button(UI.scale(85), L10n.get("craft.craft_all")), UI.scale(new Coord(325, 75 + CraftSlotQuality.LINE))).action(() -> craftAll()).setgkey(kb_makeall);
-        searchChk = add(new ICheckBox(NStyle.search[0], NStyle.search[1], NStyle.search[2], NStyle.search[3]){
-            @Override
-            public void changed(boolean val)
-            {
-                super.changed(val);
-                searchMode = val;
-                if (val && autoChk != null && autoChk.a) {
-                    autoChk.set(false);
-                }
-                applyModeUi();
+        atlasBtn = add(new IButton(NStyle.search[0].back, NStyle.search[1].back, NStyle.search[2].back) {
+            @Override public void click() {
+                openCraftAtlas();
             }
         }, UI.scale(new Coord(335, 5)));
+        atlasBtn.settip(L10n.get("craft_atlas.open_current"));
         autoChk = add(new ICheckBox(NStyle.auto[0],NStyle.auto[1],NStyle.auto[2],NStyle.auto[3]){
             @Override
             public void changed(boolean val)
             {
                 super.changed(val);
                 autoMode = val;
-                if (val && searchChk != null && searchChk.a) {
-                    searchChk.set(false);
-                }
                 applyModeUi();
             }
         }, UI.scale(new Coord(365, 5)));
@@ -764,6 +755,13 @@ public class NMakewindow extends Widget implements DTarget {
 
     private void openSavePresetDialog() {
         NUtils.addCentered(new SaveCraftPresetDialog(this));
+    }
+
+    private void openCraftAtlas() {
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null || gui.craftAtlas == null) return;
+        if(!gui.craftAtlas.openRecipe(resolveRecipeResource(), rcpnm))
+            gui.msg(L10n.get("craft_atlas.recipe_not_found"), Color.RED);
     }
 
     // Parse one make-window spec (protocol v31: modular message format).
