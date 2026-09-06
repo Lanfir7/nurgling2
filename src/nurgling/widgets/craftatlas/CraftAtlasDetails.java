@@ -781,6 +781,11 @@ public class CraftAtlasDetails extends Widget {
         return false;
     }
 
+    static void setControlVisible(Widget control, boolean visible) {
+        if(control == null || control.visible == visible) return;
+        control.show(visible);
+    }
+
     private String selectedMaterial(int slotIndex) {
         CraftAtlasMaterialPlanner.Selection selected = selections.get(slotIndex);
         return selected == null || selected.isAll() || selected.isIgnored() ? null : selected.material;
@@ -875,7 +880,7 @@ public class CraftAtlasDetails extends Widget {
     }
 
     private void positionRequirementQualityEntries() {
-        for(TextEntry field : requirementQualityEntries.values()) field.hide();
+        Set<String> shown = new HashSet<>();
         int y = headerHeight - scroll;
         Kind previous = null;
         for(DetailRow row : rows) {
@@ -887,10 +892,12 @@ public class CraftAtlasDetails extends Widget {
                 int right = row.target == Target.NONE ? UI.scale(16) : UI.scale(42);
                 field.move(Coord.of(Math.max(UI.scale(120), sz.x - field.sz.x - right),
                         y + (height - field.sz.y) / 2));
-                field.visible = y >= headerHeight && y + height <= sz.y;
+                if(y >= headerHeight && y + height <= sz.y) shown.add(key);
             }
             y += height;
         }
+        for(Map.Entry<String, TextEntry> field : requirementQualityEntries.entrySet())
+            setControlVisible(field.getValue(), shown.contains(field.getKey()));
     }
 
     private static String qualityKey(DetailRow row) {
@@ -931,7 +938,7 @@ public class CraftAtlasDetails extends Widget {
     }
 
     private void positionSelectors() {
-        for(CraftAtlasIngredientSelector selector : selectors.values()) selector.hide();
+        Set<Integer> shown = new HashSet<>();
         int y = headerHeight - scroll;
         Kind previous = null;
         for(DetailRow row : rows) {
@@ -942,11 +949,13 @@ public class CraftAtlasDetails extends Widget {
                 if(selector != null) {
                     selector.move(Coord.of(Math.max(0, sz.x - selector.sz.x - UI.scale(18)),
                             y + (height - selector.sz.y) / 2));
-                    selector.visible = y >= headerHeight && y + height <= sz.y;
+                    if(y >= headerHeight && y + height <= sz.y) shown.add(row.slotIndex);
                 }
             }
             y += height;
         }
+        for(Map.Entry<Integer, CraftAtlasIngredientSelector> selector : selectors.entrySet())
+            setControlVisible(selector.getValue(), shown.contains(selector.getKey()));
     }
 
     private void notifyPlanChanged() {

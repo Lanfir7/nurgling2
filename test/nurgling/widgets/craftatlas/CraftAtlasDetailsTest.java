@@ -15,6 +15,21 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CraftAtlasDetailsTest {
     @Test
+    void keepingAControlVisibleDoesNotResetItsFocusState() {
+        TrackingWidget control = new TrackingWidget();
+
+        CraftAtlasDetails.setControlVisible(control, true);
+
+        assertEquals(0, control.showCalls);
+        assertEquals(0, control.hideCalls);
+
+        CraftAtlasDetails.setControlVisible(control, false);
+        assertEquals(1, control.hideCalls);
+        CraftAtlasDetails.setControlVisible(control, false);
+        assertEquals(1, control.hideCalls);
+    }
+
+    @Test
     void visibleChildControlOwnsClicksInsideItsBounds() {
         Widget control = new Widget(Coord.of(60, 24));
         control.move(Coord.of(200, 100));
@@ -221,6 +236,14 @@ class CraftAtlasDetailsTest {
     private CraftAtlasDetails.DetailRow find(List<CraftAtlasDetails.DetailRow> rows, String name) {
         for(CraftAtlasDetails.DetailRow row : rows) if(name.equals(row.name)) return row;
         throw new AssertionError(name);
+    }
+
+    private static final class TrackingWidget extends Widget {
+        int showCalls;
+        int hideCalls;
+
+        @Override public void show() { showCalls++; super.show(); }
+        @Override public void hide() { hideCalls++; super.hide(); }
     }
 
 }
