@@ -44,4 +44,34 @@ class QuestCredoCounterTest {
         assertEquals("4/4", QuestCredoCounter.forGroup(QuestKind.WORLD, 42, 4, 4, p));
         assertEquals("", QuestCredoCounter.forGroup(QuestKind.NPC, 1, 0, 0, p));
     }
+
+    @Test
+    void appendToActionAddsPursuedCredoCounter() {
+        QuestModel.CredoProgress p = new QuestModel.CredoProgress(42, 2, 6, 1, 5);
+        assertEquals("Study a bear tooth 2/6[1/5]",
+                QuestCredoCounter.appendToAction("Study a bear tooth", QuestKind.CREDO, 42, p));
+    }
+
+    @Test
+    void appendToActionOmitsLevelWhenMissing() {
+        QuestModel.CredoProgress p = new QuestModel.CredoProgress(42, 2, 6, 0, 0);
+        assertEquals("Study a bear tooth 2/6",
+                QuestCredoCounter.appendToAction("Study a bear tooth", QuestKind.CREDO, 42, p));
+    }
+
+    @Test
+    void appendToActionLeavesNonPursuedAndNpcUnchanged() {
+        QuestModel.CredoProgress p = new QuestModel.CredoProgress(42, 2, 6, 1, 5);
+        assertEquals("Study a bear tooth",
+                QuestCredoCounter.appendToAction("Study a bear tooth", QuestKind.CREDO, 7, p));
+        assertEquals("Study a bear tooth",
+                QuestCredoCounter.appendToAction("Study a bear tooth", QuestKind.NPC, 42, p));
+    }
+
+    @Test
+    void appendToActionLeavesEmptyProgressUnchanged() {
+        QuestModel.CredoProgress p = new QuestModel.CredoProgress(42, 0, 0, 0, 0);
+        assertEquals("Study a bear tooth",
+                QuestCredoCounter.appendToAction("Study a bear tooth", QuestKind.CREDO, 42, p));
+    }
 }

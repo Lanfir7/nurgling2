@@ -301,9 +301,8 @@ public class ItemOverlaySettings extends Panel {
         int y = 0;
         int labelWidth = 110;
         int controlX = labelWidth + 5;
-        int totalWidth = 560;
-        int leftColumnWidth = (totalWidth * 3) / 5;
-        int rightColumnX = leftColumnWidth + 10;
+        ItemOverlayQualityTabLayout layout = ItemOverlayQualityTabLayout.forTab();
+        int rightColumnX = layout.rightColumnX;
         
         // === LEFT COLUMN ===
         
@@ -459,7 +458,7 @@ public class ItemOverlaySettings extends Panel {
         parent.add(new Label(L10n.get("overlay.thresholds_list")), UI.scale(rightColumnX, rightY));
         rightY += 18;
         
-        int listWidth = 210;
+        int listWidth = layout.listWidth;
         thresholdsList = parent.add(new ThresholdsList(UI.scale(new Coord(listWidth, 130)), false), UI.scale(rightColumnX, rightY));
         
         // Add button
@@ -473,7 +472,7 @@ public class ItemOverlaySettings extends Panel {
                     updatePreview();
                 }
             }
-        }, UI.scale(rightColumnX + listWidth - 18, rightY - 20));
+        }, UI.scale(layout.addButtonX(), rightY - 20));
     }
     
     private void buildStackQualityTab(Widget parent) {
@@ -481,9 +480,8 @@ public class ItemOverlaySettings extends Panel {
         int y = 0;
         int labelWidth = 110;
         int controlX = labelWidth + 5;
-        int totalWidth = 560;
-        int leftColumnWidth = (totalWidth * 3) / 5;
-        int rightColumnX = leftColumnWidth + 10;
+        ItemOverlayQualityTabLayout layout = ItemOverlayQualityTabLayout.forTab();
+        int rightColumnX = layout.rightColumnX;
         
         // === LEFT COLUMN ===
         
@@ -633,7 +631,7 @@ public class ItemOverlaySettings extends Panel {
         parent.add(new Label(L10n.get("overlay.thresholds_list")), UI.scale(rightColumnX, rightY));
         rightY += 18;
         
-        int listWidth = 210;
+        int listWidth = layout.listWidth;
         stackThresholdsList = parent.add(new ThresholdsList(UI.scale(new Coord(listWidth, 130)), true), UI.scale(rightColumnX, rightY));
         
         // Add button
@@ -647,7 +645,7 @@ public class ItemOverlaySettings extends Panel {
                     updatePreview();
                 }
             }
-        }, UI.scale(rightColumnX + listWidth - 18, rightY - 20));
+        }, UI.scale(layout.addButtonX(), rightY - 20));
     }
     
     private void buildAmountTab(Widget parent) {
