@@ -129,10 +129,12 @@ public class CraftAtlasRecipeList extends Widget {
         g.chcolor(new Color(19, 23, 27, 235));
         g.frect(Coord.z, sz);
         g.chcolor();
+        CraftAtlasLayout.Rect viewport = CraftAtlasLayout.scrollBody(sz.x, sz.y, headerHeight());
+        GOut body = g.reclip(Coord.of(viewport.x, viewport.y), Coord.of(viewport.w, viewport.h));
+        int[] range = CraftAtlasLayout.visibleRows(scroll, viewport.h, rowHeight, entries.size());
+        for(int i = range[0]; i <= range[1]; i++)
+            drawRow(body, entries.get(i), i, i * rowHeight - scroll);
         if(tableVisible()) drawHeader(g);
-        int[] range = CraftAtlasLayout.visibleRows(scroll, viewportHeight(), rowHeight, entries.size());
-        for(int i = range[0]; i <= range[1]; i++) drawRow(g, entries.get(i), i,
-                headerHeight() + i * rowHeight - scroll);
         super.draw(g);
     }
 

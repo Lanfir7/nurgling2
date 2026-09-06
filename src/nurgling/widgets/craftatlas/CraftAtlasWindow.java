@@ -2,10 +2,12 @@ package nurgling.widgets.craftatlas;
 
 import haven.Button;
 import haven.Coord;
+import haven.GOut;
 import haven.KeyMatch;
 import haven.Loading;
 import haven.MenuGrid;
 import haven.TextEntry;
+import haven.Text;
 import haven.UI;
 import haven.Widget;
 import haven.Window;
@@ -27,6 +29,7 @@ import nurgling.sessions.BotExecutor;
 import monitoring.NGlobalSearchItems;
 
 import java.awt.event.KeyEvent;
+import java.awt.Color;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -48,7 +51,8 @@ public class CraftAtlasWindow extends Window {
     private final CraftAtlasSearchHistory searchHistory;
     private final TextEntry craftCount;
     private final Button help, favoriteFilterButton, recentFilterButton;
-    private final Button favorite, collectResources, openCraft;
+    private final FavoriteStar favorite;
+    private final Button collectResources, openCraft;
     private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
     private final Button[] equipmentButtons = new Button[CraftAtlasSections.EQUIPMENT.size() + 1];
     private String section;
@@ -128,7 +132,7 @@ public class CraftAtlasWindow extends Window {
         details = add(new CraftAtlasDetails(UI.scale(620, 600), controller, preferences, this::savePreferences));
         paneDivider = add(new CraftAtlasPaneDivider(this::movePaneDivider, this::savePreferences));
         paneDivider.tooltip = L10n.get("craft_atlas.resize_table_hint");
-        favorite = add(new Button(UI.scale(42), "\u2606").action(this::toggleFavorite));
+        favorite = add(new FavoriteStar());
         craftCount = add(new TextEntry(UI.scale(54), "1") {
             @Override protected void changed() { super.changed(); craftCountChanged(); }
         });
@@ -262,7 +266,8 @@ public class CraftAtlasWindow extends Window {
         openCraft.disable(state.selected == null || state.selected.availability != CraftAtlasEntry.Availability.OPEN);
         refreshCollectionState();
         boolean starred = state.selected != null && preferences.favorites.contains(state.selected.recipeResource);
-        favorite.change(starred ? "\u2605" : "\u2606");
+        favorite.setStarred(starred);
+        positionFavorite();
         if(state.selected != null) {
             CraftAtlasLayout current = layoutFor(csz(), uiScale(), section);
             if(current.detailsAsPage) { narrowDetails = true; applyLayout(); }
@@ -290,6 +295,29 @@ public class CraftAtlasWindow extends Window {
         if(!preferences.favorites.remove(entry.recipeResource)) preferences.favorites.add(entry.recipeResource);
         if(preferences.favoriteFilter) applyQuery(); else stateChanged(controller.state());
         savePreferences();
+    }
+
+    private final class FavoriteStar extends Widget {
+        private boolean starred;
+
+        private FavoriteStar() {
+            super(Coord.of(UI.scale(28), UI.scale(28)));
+            tooltip = L10n.get("craft_atlas.filter.favorites");
+        }
+
+        private void setStarred(boolean value) { starred = value; }
+
+        @Override public void draw(GOut g) {
+            g.chcolor(starred ? new Color(232, 183, 72) : new Color(180, 187, 187));
+            g.atext(starred ? "\u2605" : "\u2606", Coord.of(sz.x / 2, sz.y / 2), 0.5, 0.5);
+            g.chcolor();
+        }
+
+        @Override public boolean mousedown(MouseDownEvent ev) {
+            if(ev.b != 1) return false;
+            toggleFavorite();
+            return true;
+        }
     }
 
     private void openSelectedCraft() {
@@ -516,18 +544,16 @@ public class CraftAtlasWindow extends Window {
         }
         paneDivider.visible = !layout.detailsAsPage && !narrowDetails;
         CraftAtlasLayout.Rect[] controls = CraftAtlasLayout.footerControls(layout.footer,
-                UI.scale(42), UI.scale(54), UI.scale(160), UI.scale(170),
+                UI.scale(54), UI.scale(160), UI.scale(170),
                 UI.scale(8), UI.scale(12));
-        favorite.resize(Coord.of(controls[0].w, favorite.sz.y));
-        craftCount.resize(controls[1].w);
-        collectResources.resize(Coord.of(controls[2].w, collectResources.sz.y));
-        openCraft.resize(Coord.of(controls[3].w, openCraft.sz.y));
-        favorite.move(Coord.of(controls[0].x, layout.footer.y + Math.max(0, (layout.footer.h - favorite.sz.y) / 2)));
-        craftCount.move(Coord.of(controls[1].x, layout.footer.y + Math.max(0, (layout.footer.h - craftCount.sz.y) / 2)));
-        collectResources.move(Coord.of(controls[2].x,
+        craftCount.resize(controls[0].w);
+        collectResources.resize(Coord.of(controls[1].w, collectResources.sz.y));
+        openCraft.resize(Coord.of(controls[2].w, openCraft.sz.y));
+        positionFavorite();
+        craftCount.move(Coord.of(controls[0].x, layout.footer.y + Math.max(0, (layout.footer.h - craftCount.sz.y) / 2)));
+        collectResources.move(Coord.of(controls[1].x,
                 layout.footer.y + Math.max(0, (layout.footer.h - collectResources.sz.y) / 2)));
-        openCraft.move(Coord.of(controls[3].x, layout.footer.y + Math.max(0, (layout.footer.h - openCraft.sz.y) / 2)));
-        favorite.visible = details.visible;
+        openCraft.move(Coord.of(controls[2].x, layout.footer.y + Math.max(0, (layout.footer.h - openCraft.sz.y) / 2)));
         craftCount.visible = details.visible;
         collectResources.visible = details.visible;
         openCraft.visible = details.visible;
@@ -535,6 +561,15 @@ public class CraftAtlasWindow extends Window {
                 Math.max(layout.header.h, (content.y - chooser.sz.y) / 2)));
         chooser.raise();
         if(searchHistory.visible) searchHistory.raise();
+    }
+
+    private void positionFavorite() {
+        int titleWidth = selectedEntry == null ? 0 : Text.render(selectedEntry.displayName).sz().x;
+        CraftAtlasLayout.Rect bounds = new CraftAtlasLayout.Rect(details.c.x, details.c.y, details.sz.x, details.sz.y);
+        CraftAtlasLayout.Rect star = CraftAtlasLayout.favoriteAfterTitle(bounds,
+                UI.scale(98), titleWidth, favorite.sz.x, UI.scale(6), UI.scale(10));
+        favorite.move(Coord.of(star.x, star.y));
+        favorite.visible = details.visible && selectedEntry != null;
     }
 
     static CraftAtlasLayout layoutFor(Coord content, double scale) {

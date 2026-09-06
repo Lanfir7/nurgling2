@@ -416,18 +416,20 @@ public class CraftAtlasDetails extends Widget {
                     UI.scale(14), UI.scale(24), new Color(169, 179, 181, 220));
         g.chcolor(new Color(75, 83, 86, 175)); g.frect(Coord.of(0, headerHeight - 1), Coord.of(sz.x, 1)); g.chcolor();
 
-        int y = headerHeight - scroll;
+        CraftAtlasLayout.Rect viewport = CraftAtlasLayout.scrollBody(sz.x, sz.y, headerHeight);
+        GOut body = g.reclip(Coord.of(viewport.x, viewport.y), Coord.of(viewport.w, viewport.h));
+        int y = -scroll;
         Kind previous = null;
         int ordinal = 0;
         for(DetailRow row : rows) {
             if(row.kind != previous) {
-                drawSectionHeader(g, row.kind, y);
+                drawSectionHeader(body, row.kind, y, viewport.h);
                 y += sectionHeight;
                 previous = row.kind;
                 ordinal = 0;
             }
             int height = rowHeight(row);
-            if(y + height >= headerHeight && y <= sz.y) drawRow(g, row, y, height, ordinal);
+            if(y + height >= 0 && y <= viewport.h) drawRow(body, row, y, height, ordinal);
             y += height;
             ordinal++;
         }
@@ -440,8 +442,8 @@ public class CraftAtlasDetails extends Widget {
         return Math.round(pmin * 100) + "%–" + Math.round(pmax * 100) + "%";
     }
 
-    private void drawSectionHeader(GOut g, Kind kind, int y) {
-        if(y + sectionHeight < headerHeight || y > sz.y) return;
+    private void drawSectionHeader(GOut g, Kind kind, int y, int viewportHeight) {
+        if(y + sectionHeight < 0 || y > viewportHeight) return;
         String key = kind == Kind.GILDING ? "craft_atlas.gilding" :
                 kind == Kind.BONUS ? "craft_atlas.bonuses" :
                 kind == Kind.CURIOSITY ? "craft_atlas.curiosity" :
@@ -527,7 +529,11 @@ public class CraftAtlasDetails extends Widget {
     private void drawIcon(GOut g, Coord at, int box, String resource, String name) {
         g.chcolor(new Color(9, 13, 16, 205)); g.frect(at, Coord.of(box, box)); g.chcolor();
         CraftAtlasIconCache.draw(g, icons.icon(resource, name), at.add(UI.scale(2), UI.scale(2)), box - UI.scale(4));
-        iconHits.add(new IconHit(at, Coord.of(box, box), name));
+        Coord widgetAt = at.add(0, headerHeight);
+        int top = Math.max(headerHeight, widgetAt.y);
+        int bottom = Math.min(sz.y, widgetAt.y + box);
+        if(bottom > top)
+            iconHits.add(new IconHit(Coord.of(widgetAt.x, top), Coord.of(box, bottom - top), name));
     }
 
     private int rowHeight(DetailRow row) {

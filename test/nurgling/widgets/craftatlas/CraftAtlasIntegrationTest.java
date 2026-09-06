@@ -57,6 +57,18 @@ class CraftAtlasIntegrationTest {
         assertTrue(!atlas.contains("controller::forward"));
     }
 
+    @Test
+    void scrollingPanelsClipContentBelowTheirFixedHeadersAndFavoriteIsFrameless() throws Exception {
+        String list = read("src/nurgling/widgets/craftatlas/CraftAtlasRecipeList.java");
+        String details = read("src/nurgling/widgets/craftatlas/CraftAtlasDetails.java");
+        String atlas = read("src/nurgling/widgets/craftatlas/CraftAtlasWindow.java");
+
+        assertTrue(list.contains("CraftAtlasLayout.scrollBody"));
+        assertTrue(details.contains("CraftAtlasLayout.scrollBody"));
+        assertTrue(atlas.contains("new FavoriteStar()"));
+        assertTrue(!atlas.contains("new Button(UI.scale(42), \"\\u2606\")"));
+    }
+
     private String read(String path) throws Exception {
         return new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
     }

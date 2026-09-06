@@ -20,6 +20,22 @@ public final class CraftAtlasLayout {
         return compute(width, height, scale, false);
     }
 
+    /** Viewport for content that scrolls below a fixed panel header. */
+    public static Rect scrollBody(int width, int height, int headerHeight) {
+        int top = Math.max(0, Math.min(height, headerHeight));
+        return new Rect(0, top, Math.max(0, width), Math.max(0, height - top));
+    }
+
+    /** Places a frameless favorite control after the title while keeping it inside the details pane. */
+    public static Rect favoriteAfterTitle(Rect details, int titleX, int titleWidth,
+                                          int size, int gap, int top) {
+        int safeSize = Math.max(1, Math.min(size, Math.max(1, details.w)));
+        int preferred = details.x + Math.max(0, titleX) + Math.max(0, titleWidth) + Math.max(0, gap);
+        int maximum = details.x + Math.max(0, details.w - safeSize - Math.max(0, gap));
+        return new Rect(Math.max(details.x, Math.min(preferred, maximum)),
+                details.y + Math.max(0, top), safeSize, safeSize);
+    }
+
     public static CraftAtlasLayout compute(int width, int height, double scale, boolean metricTable) {
         return compute(width, height, scale, metricTable, -1);
     }
@@ -64,15 +80,14 @@ public final class CraftAtlasLayout {
         return new int[] {first, last};
     }
 
-    /** Left-to-right footer geometry: favorite, quantity, collect, open craft. */
-    public static Rect[] footerControls(Rect footer, int favoriteW, int quantityW,
+    /** Left-to-right footer geometry: quantity, collect, open craft. */
+    public static Rect[] footerControls(Rect footer, int quantityW,
                                         int collectW, int craftW, int gap, int margin) {
-        int[] widths = {favoriteW, quantityW, collectW, craftW};
-        int[] minimum = {Math.min(favoriteW, 28), Math.min(quantityW, 34),
-                Math.min(collectW, 120), Math.min(craftW, 140)};
-        int available = Math.max(4, footer.w - margin * 2 - gap * 3);
-        int overflow = widths[0] + widths[1] + widths[2] + widths[3] - available;
-        int[] shrinkOrder = {2, 3, 1, 0};
+        int[] widths = {quantityW, collectW, craftW};
+        int[] minimum = {Math.min(quantityW, 34), Math.min(collectW, 120), Math.min(craftW, 140)};
+        int available = Math.max(3, footer.w - margin * 2 - gap * 2);
+        int overflow = widths[0] + widths[1] + widths[2] - available;
+        int[] shrinkOrder = {1, 2, 0};
         for(int index : shrinkOrder) {
             int reduce = Math.min(Math.max(0, overflow), widths[index] - minimum[index]);
             widths[index] -= reduce;
@@ -84,15 +99,13 @@ public final class CraftAtlasLayout {
             overflow -= reduce;
         }
         int y = footer.y;
-        int favoriteX = footer.x + margin;
-        int quantityX = favoriteX + widths[0] + gap;
-        int collectX = quantityX + widths[1] + gap;
-        int craftX = collectX + widths[2] + gap;
+        int quantityX = footer.x + margin;
+        int collectX = quantityX + widths[0] + gap;
+        int craftX = collectX + widths[1] + gap;
         return new Rect[] {
-                new Rect(favoriteX, y, widths[0], footer.h),
-                new Rect(quantityX, y, widths[1], footer.h),
-                new Rect(collectX, y, widths[2], footer.h),
-                new Rect(craftX, y, widths[3], footer.h)
+                new Rect(quantityX, y, widths[0], footer.h),
+                new Rect(collectX, y, widths[1], footer.h),
+                new Rect(craftX, y, widths[2], footer.h)
         };
     }
 }
