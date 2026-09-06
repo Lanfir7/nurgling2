@@ -6,8 +6,9 @@ import haven.Widget;
 
 /**
  * Visibility contract for list rows and nested widgets such as TextEntry.
- * Matches Scrollport's skip-fully-outside-children rule, using a half-open
- * vertical range {@code [viewTop, viewBottom)}.
+ * Half-open vertical range {@code [viewTop, viewBottom)}: skip children with
+ * no overlap (stricter than Scrollport, which still draws a child whose top
+ * sits exactly on {@code sz.y}).
  */
 final class ListChildClip {
     private ListChildClip() {

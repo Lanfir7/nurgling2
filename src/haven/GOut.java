@@ -238,6 +238,8 @@ public class GOut {
 
     public void line(Coord c1, Coord c2, double w) {
 	c1 = c1.add(tx); c2 = c2.add(tx);
+	if(RectOutlineClip.aabbMiss(c1, c2, ul, br))
+	    return;
 	if(!c1.isect2(ul, br) || !c2.isect2(ul, br)) {
 	    Line2d cl = Line2d.twixt(Coord2d.of(c1), Coord2d.of(c2)).clip(Coord2d.of(ul), Coord2d.of(br.sub(1, 1)));
 	    if(cl == null)
@@ -334,11 +336,10 @@ public class GOut {
     }
 
     public void rect2(Coord ul, Coord br) {
-	/* Outline as four clipped lines so frames cannot paint outside GOut. */
-	line(ul, Coord.of(br.x, ul.y), 1);
-	line(Coord.of(br.x, ul.y), br, 1);
-	line(br, Coord.of(ul.x, br.y), 1);
-	line(Coord.of(ul.x, br.y), ul, 1);
+	/* Clipped segments — do not restore an unclipped LINE_STRIP. */
+	Coord[] p = RectOutlineClip.corners(ul, br);
+	for(int i = 0; i < 4; i++)
+	    line(p[i], p[(i + 1) % 4], 1);
     }
 
     public void rect(Coord ul, Coord sz) {
