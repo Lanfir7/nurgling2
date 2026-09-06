@@ -47,7 +47,7 @@ public class CraftAtlasWindow extends Window {
     private final CraftAtlasRecipeChooser chooser;
     private final CraftAtlasSearchHistory searchHistory;
     private final TextEntry craftCount;
-    private final Button help, back, forward, favoriteFilterButton, recentFilterButton;
+    private final Button help, favoriteFilterButton, recentFilterButton;
     private final Button favorite, collectResources, openCraft;
     private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
     private final Button[] equipmentButtons = new Button[CraftAtlasSections.EQUIPMENT.size() + 1];
@@ -84,15 +84,17 @@ public class CraftAtlasWindow extends Window {
         this.controller = new CraftAtlasController(catalog.rebuild(), bridge);
 
         help = add(new Button(UI.scale(34), "?").action(this::showSearchHelp));
-        back = add(new Button(UI.scale(34), "\u2039").action(controller::back));
-        forward = add(new Button(UI.scale(34), "\u203a").action(controller::forward));
         search = add(new TextEntry(UI.scale(520), "") {
             @Override protected void changed() {
                 super.changed();
                 if(searchHistory != null) searchHistory.hide();
                 applyQuery();
             }
-            @Override public void gotfocus() { super.gotfocus(); showSearchHistory(); }
+            @Override public boolean mousedown(MouseDownEvent ev) {
+                boolean handled = super.mousedown(ev);
+                if(ev.b == 1) showSearchHistory();
+                return handled;
+            }
             @Override public boolean keydown(KeyDownEvent ev) {
                 if(ev.code == KeyEvent.VK_ENTER) { rememberSearch(); return true; }
                 if(ev.code == KeyEvent.VK_ESCAPE && searchHistory != null && searchHistory.visible) {
@@ -102,6 +104,7 @@ public class CraftAtlasWindow extends Window {
                 return super.keydown(ev);
             }
         });
+        search.autofocus = false;
         search.tooltip = L10n.get("craft_atlas.search_placeholder");
         favoriteFilterButton = add(new Button(UI.scale(120), "").action(() -> toggleHeaderFilter(true)));
         recentFilterButton = add(new Button(UI.scale(120), "").action(() -> toggleHeaderFilter(false)));
@@ -134,14 +137,13 @@ public class CraftAtlasWindow extends Window {
                 .action(this::collectResources));
         openCraft = add(new Button(UI.scale(170), L10n.get("craft_atlas.open_craft")).action(this::openSelectedCraft));
         openCraft.tooltip = L10n.get("craft_atlas.normal_craft_hint");
-        back.tooltip = L10n.get("craft_atlas.back");
-        forward.tooltip = L10n.get("craft_atlas.forward");
         details.setPlanListener(this::refreshCollectionState);
         chooser = add(new CraftAtlasRecipeChooser(UI.scale(360, 240), controller));
         chooser.hide();
         searchHistory = add(new CraftAtlasSearchHistory(UI.scale(520), this::applySearchExample));
         searchHistory.setItems(preferences.searchHistory);
         searchHistory.hide();
+        releaseSearchFocus();
         applyLayout();
         applyQuery();
     }
@@ -174,6 +176,7 @@ public class CraftAtlasWindow extends Window {
     }
 
     @Override public void show() {
+        releaseSearchFocus();
         refreshCatalog();
         if(parent != null) {
             Coord maximumOuter = parent.sz.sub(UI.scale(20, 20)).max(Coord.of(1, 1));
@@ -256,8 +259,6 @@ public class CraftAtlasWindow extends Window {
         }
         recipeList.setState(state);
         details.setState(state);
-        back.disable(!state.canBack);
-        forward.disable(!state.canForward);
         openCraft.disable(state.selected == null || state.selected.availability != CraftAtlasEntry.Availability.OPEN);
         refreshCollectionState();
         boolean starred = state.selected != null && preferences.favorites.contains(state.selected.recipeResource);
@@ -409,6 +410,19 @@ public class CraftAtlasWindow extends Window {
         searchHistory.raise();
     }
 
+    private void hideSearchHistoryOutside(Coord point) {
+        if(searchHistory == null || !searchHistory.visible) return;
+        if(point.isect(search.c, search.sz) || point.isect(searchHistory.c, searchHistory.sz)) return;
+        searchHistory.hide();
+    }
+
+    private void releaseSearchFocus() {
+        if(search == null) return;
+        search.setcanfocus(false);
+        search.setcanfocus(true);
+        search.autofocus = false;
+    }
+
     private void applySearchExample(String query) {
         search.settext(query);
         preferences.recordSearch(query);
@@ -444,21 +458,33 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void resize(Coord size) { super.resize(size); if(recipeList != null) applyLayout(); }
 
+    @Override public boolean mousedown(MouseDownEvent ev) {
+        hideSearchHistoryOutside(ev.c);
+        return super.mousedown(ev);
+    }
+
+    @Override public void hide() {
+        if(searchHistory != null) searchHistory.hide();
+        releaseSearchFocus();
+        super.hide();
+    }
+
     private void applyLayout() {
         Coord content = csz();
         CraftAtlasLayout layout = layoutFor(content, uiScale(), section);
-        help.move(UI.scale(8, 12)); back.move(UI.scale(48, 12)); forward.move(UI.scale(88, 12));
-        int searchX = UI.scale(128), gap = UI.scale(8), filterWidth = UI.scale(120);
+        int buttonY = UI.scale(8), searchY = UI.scale(12);
+        help.move(Coord.of(UI.scale(8), buttonY));
+        int searchX = UI.scale(48), gap = UI.scale(8), filterWidth = UI.scale(120);
         int oldSearchWidth = Math.max(UI.scale(220), content.x - UI.scale(112));
         int availableSearchWidth = content.x - searchX - filterWidth * 2 - gap * 3;
         int searchWidth = Math.max(UI.scale(160), Math.min(oldSearchWidth / 2, availableSearchWidth));
-        search.move(Coord.of(searchX, UI.scale(12)));
+        search.move(Coord.of(searchX, searchY));
         search.resize(searchWidth);
-        favoriteFilterButton.move(Coord.of(searchX + searchWidth + gap, UI.scale(12)));
-        recentFilterButton.move(Coord.of(searchX + searchWidth + gap * 2 + filterWidth, UI.scale(12)));
+        favoriteFilterButton.move(Coord.of(searchX + searchWidth + gap, buttonY));
+        recentFilterButton.move(Coord.of(searchX + searchWidth + gap * 2 + filterWidth, buttonY));
         favoriteFilterButton.resize(Coord.of(filterWidth, favoriteFilterButton.sz.y));
         recentFilterButton.resize(Coord.of(filterWidth, recentFilterButton.sz.y));
-        searchHistory.move(Coord.of(searchX, UI.scale(12) + search.sz.y + UI.scale(2)));
+        searchHistory.move(Coord.of(searchX, searchY + search.sz.y + UI.scale(2)));
         searchHistory.setWidth(searchWidth);
         int sideY = layout.sidebar.y + UI.scale(8);
         boolean equipmentMenu = CraftAtlasSections.isEquipment(section);

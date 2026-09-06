@@ -46,6 +46,17 @@ class CraftAtlasIntegrationTest {
         assertTrue(atlas.contains("catch(Loading ignored)"));
     }
 
+    @Test
+    void atlasHeaderOnlyShowsHelpSearchAndFiltersWithoutAutofocusingHistory() throws Exception {
+        String atlas = read("src/nurgling/widgets/craftatlas/CraftAtlasWindow.java");
+
+        assertTrue(atlas.contains("search.autofocus = false"));
+        assertTrue(atlas.contains("releaseSearchFocus()"));
+        assertTrue(atlas.contains("hideSearchHistoryOutside"));
+        assertTrue(!atlas.contains("controller::back"));
+        assertTrue(!atlas.contains("controller::forward"));
+    }
+
     private String read(String path) throws Exception {
         return new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
     }

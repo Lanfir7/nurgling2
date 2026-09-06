@@ -564,13 +564,13 @@ public class CraftAtlasDetails extends Widget {
     }
 
     @Override public boolean mousedown(MouseDownEvent ev) {
-        if(super.mousedown(ev)) return true;
+        if(hitsVisibleControl(ev.c, selectors.values()) ||
+                hitsVisibleControl(ev.c, requirementQualityEntries.values())) return false;
         if(ev.b != 1 || entry == null || ev.c.y < headerHeight) return false;
         DetailRow row = rowAt(ev.c.y - headerHeight + scroll);
         if(row == null) return false;
-        if(row.kind == Kind.INPUT && isGroupedSlot(row.slotIndex) &&
-                ev.c.x >= UI.scale(16) && ev.c.x < UI.scale(52)) {
-            openMaterialPicker(row.slotIndex, ev.c);
+        if(ev.c.x >= UI.scale(16) && ev.c.x < UI.scale(52)) {
+            if(row.kind == Kind.INPUT && isGroupedSlot(row.slotIndex)) openMaterialPicker(row.slotIndex, ev.c);
             return true;
         }
         if(row.target == Target.INGREDIENT || row.target == Target.CYCLE) {
@@ -765,6 +765,13 @@ public class CraftAtlasDetails extends Widget {
         if(materials == null || slotIndex < 0) return false;
         for(CraftAtlasMaterialPlanner.SlotRequest slot : materials.slots)
             if(slot.slotIndex == slotIndex) return slot.allowedMaterials.size() > 1;
+        return false;
+    }
+
+    static boolean hitsVisibleControl(Coord point, Iterable<? extends Widget> controls) {
+        if(point == null || controls == null) return false;
+        for(Widget control : controls)
+            if(control != null && control.visible && point.isect(control.c, control.sz)) return true;
         return false;
     }
 

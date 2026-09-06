@@ -1,5 +1,7 @@
 package nurgling.widgets.craftatlas;
 
+import haven.Coord;
+import haven.Widget;
 import nurgling.craftatlas.CraftAtlasEntry;
 import nurgling.craftatlas.CraftRecipeGraph;
 import nurgling.i18n.L10n;
@@ -12,6 +14,17 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CraftAtlasDetailsTest {
+    @Test
+    void visibleChildControlOwnsClicksInsideItsBounds() {
+        Widget control = new Widget(Coord.of(60, 24));
+        control.move(Coord.of(200, 100));
+
+        assertTrue(CraftAtlasDetails.hitsVisibleControl(Coord.of(220, 110), Collections.singleton(control)));
+        assertFalse(CraftAtlasDetails.hitsVisibleControl(Coord.of(180, 110), Collections.singleton(control)));
+        control.hide();
+        assertFalse(CraftAtlasDetails.hitsVisibleControl(Coord.of(220, 110), Collections.singleton(control)));
+    }
+
     @Test
     void availabilityUsesStableLocalizationKeys() {
         assertEquals("craft_atlas.status.open", CraftAtlasDetails.statusKey(CraftAtlasEntry.Availability.OPEN));
