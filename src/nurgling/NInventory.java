@@ -1546,7 +1546,7 @@ public class NInventory extends Inventory
                 item -> item.item,
                 NInventory::listedItemName,
                 item -> listedChildren(item != null && item.item != null ? item.item.contents : null),
-                item -> item != null && item.item != null && item.item.contents instanceof ItemStack));
+                NInventory::listedTransparent));
         return listed;
     }
 
@@ -1588,10 +1588,15 @@ public class NInventory extends Inventory
         }
     }
 
+    static boolean listedTransparent(WItem item) {
+        boolean stack = item != null && item.item != null && item.item.contents instanceof ItemStack;
+        return stack || ExtraInvGroupTransfer.isExternalBag(listedItemName(item));
+    }
+
     static List<WItem> listedWItems(WItem root) {
         return ExtraInvGroupTransfer.walkListings(root,
                 item -> listedChildren(item != null && item.item != null ? item.item.contents : null),
-                item -> item != null && item.item != null && item.item.contents instanceof ItemStack);
+                NInventory::listedTransparent);
     }
 
     private static List<WItem> listedChildren(Widget contents) {

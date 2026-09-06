@@ -23,6 +23,10 @@ public final class ExtraInvGroupTransfer {
 
     private ExtraInvGroupTransfer() {}
 
+    public static boolean isExternalBag(String name) {
+        return name != null && EXTERNAL_BAG_NAMES.contains(name);
+    }
+
     public static final class Listed {
         public final String name;
         public final Double quality;
@@ -70,7 +74,7 @@ public final class ExtraInvGroupTransfer {
             Object candidateIdentity = candidate != null ? identity.apply(candidate) : null;
             String candidateName = candidate != null ? name.apply(candidate) : null;
             if (candidateIdentity == null || !seen.add(candidateIdentity)
-                    || candidateName == null || !EXTERNAL_BAG_NAMES.contains(candidateName)) {
+                    || !isExternalBag(candidateName)) {
                 continue;
             }
             List<T> nested = children.apply(candidate);
@@ -93,7 +97,7 @@ public final class ExtraInvGroupTransfer {
         if (nested == null) {
             nested = Collections.emptyList();
         }
-        if (nested.isEmpty() || !transparent.test(item)) {
+        if (!transparent.test(item)) {
             out.add(item);
         }
         for (T child : nested) {
