@@ -19,11 +19,24 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /** Small texture cache backed by live game resources and the offline wiki icon sheets. */
 final class CraftAtlasIconCache implements Disposable {
     private final Map<String, Tex> textures = new HashMap<>();
     private final Set<String> misses = new HashSet<>();
+    private final Function<String, BufferedImage> gameLoader;
+    private final Function<String, BufferedImage> wikiLoader;
+
+    CraftAtlasIconCache() {
+        this(CraftAtlasIconCache::gameImage, WikiIcons::image);
+    }
+
+    CraftAtlasIconCache(Function<String, BufferedImage> gameLoader,
+                        Function<String, BufferedImage> wikiLoader) {
+        this.gameLoader = gameLoader;
+        this.wikiLoader = wikiLoader;
+    }
 
     Tex recipe(String outputResource, String recipeResource, String name) {
         Tex icon = icon(outputResource, name);
@@ -35,13 +48,31 @@ final class CraftAtlasIconCache implements Disposable {
         String key = (resource == null ? "" : resource) + '\n' + (name == null ? "" : name);
         Tex cached = textures.get(key);
         if(cached != null || misses.contains(key)) return cached;
-        BufferedImage image = gameImage(resource);
-        if(image == null) image = WikiIcons.image(name);
+        BufferedImage image;
+        try {
+            image = loadImage(resource, name, gameLoader, wikiLoader);
+        } catch(Loading pending) {
+            return null;
+        }
         if(image == null) { misses.add(key); return null; }
         image = trimTransparent(image);
         Tex texture = new TexI(image);
         textures.put(key, texture);
         return texture;
+    }
+
+    static BufferedImage loadImage(String resource, String name,
+                                   Function<String, BufferedImage> gameLoader,
+                                   Function<String, BufferedImage> wikiLoader) {
+        try {
+            BufferedImage image = gameLoader.apply(resource);
+            if(image != null) return image;
+        } catch(Loading pending) {
+            BufferedImage fallback = wikiLoader.apply(name);
+            if(fallback != null) return fallback;
+            throw pending;
+        }
+        return wikiLoader.apply(name);
     }
 
     private static BufferedImage gameImage(String resource) {
@@ -50,7 +81,7 @@ final class CraftAtlasIconCache implements Disposable {
             Resource.Image image = Resource.remote().load(resource).get().layer(Resource.imgc);
             return image == null ? null : image.img;
         } catch(Loading pending) {
-            return null;
+            throw pending;
         } catch(RuntimeException failed) {
             return null;
         }

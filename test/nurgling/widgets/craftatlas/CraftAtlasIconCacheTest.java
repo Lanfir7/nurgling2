@@ -1,10 +1,15 @@
 package nurgling.widgets.craftatlas;
 
 import org.junit.jupiter.api.Test;
+import haven.Loading;
 
 import java.awt.image.BufferedImage;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class CraftAtlasIconCacheTest {
     @Test
@@ -18,5 +23,24 @@ class CraftAtlasIconCacheTest {
 
         assertEquals(10, trimmed.getWidth());
         assertEquals(20, trimmed.getHeight());
+    }
+
+    @Test
+    void pendingGameResourceIsRetriedInsteadOfBecomingAPermanentMiss() {
+        AtomicBoolean ready = new AtomicBoolean();
+        AtomicInteger requests = new AtomicInteger();
+        BufferedImage icon = new BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB);
+        CraftAtlasIconCache cache = new CraftAtlasIconCache(resource -> {
+            requests.incrementAndGet();
+            if(!ready.get()) throw new Loading();
+            return icon;
+        }, name -> null);
+
+        assertNull(cache.icon("gfx/invobjs/beeswax", "Beeswax"));
+
+        ready.set(true);
+        assertNotNull(cache.icon("gfx/invobjs/beeswax", "Beeswax"));
+        assertEquals(2, requests.get());
+        cache.dispose();
     }
 }
