@@ -76,6 +76,19 @@ jobs:
           "#Build Number for ANT. Do not edit!`nbuild.number=$buildNum" | Out-File -FilePath "build.num" -Encoding ASCII -NoNewline
           Write-Host "Created build.num with build.number=$buildNum"
 
+      - name: Fetch release-only alarm sounds
+        shell: pwsh
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          git clone --depth 1 --branch ${{ env.RELEASE_BRANCH }} `
+            "https://x-access-token:$env:RELEASE_TOKEN@github.com/${{ env.RELEASE_REPO }}.git" release-input
+          if (!(Test-Path "release-input\AlarmSounds\*.wav")) {
+            throw "No alarm sounds found in ${{ env.RELEASE_REPO }}@${{ env.RELEASE_BRANCH }}"
+          }
+          Copy-Item "release-input\AlarmSounds" "AlarmSounds" -Recurse
+          Remove-Item "release-input" -Recurse -Force
+
       - name: Build with Ant
         run: ant release
 
