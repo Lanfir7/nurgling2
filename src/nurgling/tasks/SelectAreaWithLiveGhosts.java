@@ -50,7 +50,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
             // Check for rotation key (R)
             if (mapView.isAreaSelectionMode.get() && mapView.ui != null) {
                 // Check if R key was pressed (key code 82)
-                if (mapView.ui.modflags() == 0 && checkRotationKey()) {
+                if (checkRotationKey()) {
                     rotationCount = (rotationCount + 1) % 4;
                     /*
                      * IMPORTANT:

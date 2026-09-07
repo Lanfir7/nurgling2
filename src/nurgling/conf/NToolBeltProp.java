@@ -2,6 +2,8 @@ package nurgling.conf;
 
 import haven.*;
 import nurgling.*;
+import nurgling.hotkeys.HotkeyCatalog;
+import nurgling.hotkeys.Hotkeys;
 import org.json.*;
 
 import java.awt.event.*;
@@ -39,7 +41,12 @@ public class NToolBeltProp implements JConf
         for(int i = 0 ; i < kb.size() ; i ++)
         {
             if(this.kb.get(i)==null)
+            {
                 this.kb.set(i, KeyBinding.get (name + i, defaultKey(name, i)));
+                HotkeyCatalog.registerBelt(Hotkeys.registry(), this.kb.get(i), name, i);
+            }
+            else
+                HotkeyCatalog.registerBelt(Hotkeys.registry(), this.kb.get(i), name, i);
         }
     }
 
@@ -54,10 +61,12 @@ public class NToolBeltProp implements JConf
             if (obj.get("code") != null)
             {
                 kb.set(i, KeyBinding.get (name + i, KeyMatch.forcode((Integer) obj.get("code"),(Integer) obj.get("mod"))));
+                HotkeyCatalog.registerBelt(Hotkeys.registry(), kb.get(i), name, i);
             }
             else
             {
                 kb.set(i, KeyBinding.get (name + i, defaultKey(name, i)));
+                HotkeyCatalog.registerBelt(Hotkeys.registry(), kb.get(i), name, i);
             }
             i++;
         }

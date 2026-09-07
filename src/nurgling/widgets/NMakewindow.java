@@ -1,5 +1,7 @@
 package nurgling.widgets;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.Button;
 import haven.*;
 import haven.Frame;
@@ -518,7 +520,7 @@ public class NMakewindow extends Widget implements DTarget {
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
-        if(ev.b == 3 && ui.modmeta && !ui.modshift && !ui.modctrl) {
+        if(Hotkeys.action(Hotkeys.CRAFT_SHOW_RECIPES).current().matchesMouse(ev.b, ui.modflags())) {
             Spec s = specAt(ev.c);
             if(s != null && s.name != null && CraftRecipeLookup.show(this, ev.c, s.name))
                 return true;
@@ -1419,11 +1421,12 @@ public class NMakewindow extends Widget implements DTarget {
     }
 
     public boolean globtype(GlobKeyEvent ev) {
-        if(ev.c == '\n') {
-            if(ui.modctrl)
-                craftAll();
-            else
-                craft();
+        if(Hotkeys.action(Hotkeys.MAKE_ALL).current().matches(ev.awt, 0)) {
+            craftAll();
+            return(true);
+        }
+        if(Hotkeys.action(Hotkeys.MAKE_ONE).current().matches(ev.awt, 0)) {
+            craft();
             return(true);
         }
         return(super.globtype(ev));

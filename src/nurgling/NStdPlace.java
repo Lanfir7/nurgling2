@@ -16,7 +16,7 @@ import nurgling.tools.PlacementSnap;
 public class NStdPlace extends MapView.StdPlace {
     @Override
     public void adjust(MapView.Plob plob, Coord pc, Coord2d mc, int modflags) {
-        if((modflags & UI.MOD_CTRL) != 0) {
+        if(nurgling.hotkeys.Hotkeys.placementMode("world.placement.snap_edges", modflags)) {
             Coord2d snapped = PlacementSnap.snap(plob, mc);
             // snapped == null => footprint unresolved; fall back to free placement
             plob.move(snapped != null ? snapped : mc);

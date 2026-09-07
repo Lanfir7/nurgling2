@@ -26,6 +26,8 @@
 
 package haven;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.MCache.OverlayInfo;
 import haven.render.*;
 import haven.render.sl.Type;
@@ -1957,9 +1959,10 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	boolean freerot = false;
 
 	public void adjust(Plob plob, Coord pc, Coord2d mc, int modflags) {
+	    modflags = Hotkeys.placementPositionMods(modflags);
 	    final boolean altsnap = (modflags & UI.MOD_META) != 0; // ALT is treated as META in this client
 	    Coord2d nc;
-	    if(!altsnap && ((modflags & UI.MOD_SHIFT) == 0)) {
+	    if(!altsnap && !Hotkeys.semanticModifier(modflags, UI.MOD_SHIFT)) {
 		nc = mc.floor(tilesz).mul(tilesz).add(tilesz.div(2));
 	    } else if(plobpgran > 0) {
 		nc = mc.div(tilesz).mul(plobpgran).roundf().div(plobpgran).mul(tilesz);
@@ -2119,11 +2122,11 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 
 	public boolean rotate(Plob plob, MouseWheelEvent data, int modflags) {
-	    if((modflags & (UI.MOD_CTRL | UI.MOD_SHIFT)) == 0)
+	    if(!Hotkeys.semanticModifier(modflags, UI.MOD_CTRL | UI.MOD_SHIFT))
 		return(false);
 	    freerot = true;
 	    double na;
-	    if((modflags & UI.MOD_SHIFT) == 0)
+	    if(!Hotkeys.semanticModifier(modflags, UI.MOD_SHIFT))
 		na = (Math.PI / 4) * (Math.round(plob.a / (Math.PI / 4)) + data.a);
 	    else
 		na = plob.a + data.s * Math.PI / plobagran;
@@ -2409,10 +2412,22 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
     protected class Click extends Hittest {
 	int clickb;
+	int modflags;
+	String actionId;
 	
 	protected Click(Coord c, int b) {
+	    this(c, b, ui.modflags());
+	}
+
+	protected Click(Coord c, int b, int modflags) {
 	    super(c);
 	    clickb = b;
+	    this.modflags = modflags;
+	}
+
+	protected Click(Coord c, nurgling.hotkeys.HotkeyAction action) {
+	    this(c, action.defaultGesture().code(), action.canonicalMods() == null ? 0 : action.canonicalMods());
+	    actionId = action.id();
 	}
 	
 	protected void hit(Coord pc, Coord2d mc, ClickData inf) {
@@ -2421,9 +2436,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		if(NMapView.isRecordingRoutePoint) {
 			return;
 		}
-	    Object[] args = {pc, mc.floor(posres), clickb, ui.modflags()};
-	    if(inf != null)
-		args = Utils.extend(args, inf.clickargs());
 		if(inf!=null)
 		{
 			if(inf.ci instanceof Composited.CompositeClick)
@@ -2440,28 +2452,38 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		else
 			clickedGob = null;
 
-		if(ui.modmeta && ui.modshift && !ui.modctrl && clickb == 1) {
+	    boolean worldPing = Hotkeys.WORLD_PING.equals(actionId);
+	    boolean mapPing = Hotkeys.MAP_PING.equals(actionId);
+	    if(worldPing || mapPing) {
+		Integer canonical = worldPing ? Hotkeys.action(Hotkeys.WORLD_PING).canonicalMods() : Hotkeys.action(Hotkeys.MAP_PING).canonicalMods();
+		if(canonical != null)
+		    modflags = canonical;
 			if(clickedGob != null) {
 				if(nurgling.NMapView.sendToSelectedChat(String.format("@%d", clickedGob.gob.id)))
 					return;
 			} else if(MapView.this instanceof nurgling.NMapView) {
 				if(((nurgling.NMapView)MapView.this).sendPointPing(mc))
 					return;
-			}
 		}
-
-		if(ui.modmeta && !ui.modshift && !ui.modctrl && clickb == 1) {
+		}
+	    if(Hotkeys.WORLD_QUEUE_WAYPOINT.equals(actionId)) {
+		Integer canonical = Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).canonicalMods();
+		if(canonical != null)
+		    modflags = canonical;
 			if(MapView.this instanceof nurgling.NMapView) {
 				if(((nurgling.NMapView)MapView.this).addWaypointAt(mc))
 					return;
 			}
 		}
+	    Object[] args = {pc, mc.floor(posres), clickb, modflags};
+	    if(inf != null)
+		args = Utils.extend(args, inf.clickargs());
 		
 		if(clickedGob != null) {
 			monitoring.StockpileStorageTracker.onGob(clickedGob.gob);
 			if (nurgling.db.StockpileStoragePolicy.isStockpileRes(
 					clickedGob.gob.ngob != null ? clickedGob.gob.ngob.name : null)) {
-				NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
+				NUtils.getUI().core.setLastAction(clickedGob.gob, (modflags & UI.MOD_META) != 0);
 			}
 		}
 			if(clickb==3 && clickedGob!=null)
@@ -2471,8 +2493,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 					if (ngui.foragePickupMarker != null)
 						ngui.foragePickupMarker.noteCritterInteraction(clickedGob.gob);
 				}
-				NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
-			if (ui.modmeta && isTreeStump(clickedGob.gob)) {
+				NUtils.getUI().core.setLastAction(clickedGob.gob, (modflags & UI.MOD_META) != 0);
+			if (Hotkeys.WORLD_REMOVE_STUMP.equals(actionId) && isTreeStump(clickedGob.gob)) {
 				ui.root.add(new NFlowerMenu(new String[]{L10n.get(NFlowerMenu.KEY_REMOVE_STUMP)}), ui.mc);
 				return;
 			}
@@ -2490,6 +2512,15 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    wdgmsg("click", args);
 	}
     }
+
+    /** Dispatch a held-item action as an ordinary map RMB with explicit modifiers. */
+    public boolean heldItemRmb(Coord c, int mods) {
+	runHitTest(new Click(c, 3, mods));
+	return true;
+    }
+
+    /** Rendering boundary shared by all semantic pointer actions. */
+    protected void runHitTest(Hittest test) { test.run(); }
 
     private static boolean isTreeStump(Gob gob) {
         return (gob != null) &&
@@ -2510,6 +2541,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
     
     private UI.Grab camdrag = null;
 
+    /** Modal tools own pointer delivery before ordinary world shortcuts. */
+    protected boolean hasModalMouseGrab() { return grab != null; }
+
+    protected boolean hasModalMouseCapture() {
+        return hasModalMouseGrab() || (placing != null && placing.done());
+    }
+
     public boolean mousedown(MouseDownEvent ev) {
 	// Block all clicks in DRAG mode to prevent character movement during UI adjustment
 	if(ui.core.mode == nurgling.NCore.Mode.DRAG) {
@@ -2517,20 +2555,27 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 	
 	parent.setfocus(this);
+	if((grab != null) && grab.mmousedown(ev.c, ev.b)) return true;
 	Loader.Future<Plob> placing_l = this.placing;
-	if(ev.b == 2) {
-	    if((camdrag == null) && camera.click(ev.c)) {
-		camdrag = ui.grabmouse(this);
-	    }
-	} else if((placing_l != null) && placing_l.done()) {
+	if((placing_l != null) && placing_l.done() && ev.b != 2) {
 	    Plob placing = placing_l.get();
 	    if(placing.lastmc != null) {
 		monitoring.StockpileStorageTracker.onPlace(placing);
 		wdgmsg("place", placing.rc.floor(posres), (int)Math.round(placing.a * 32768 / Math.PI), ev.b, ui.modflags());
 	    }
-	} else if((grab != null) && grab.mmousedown(ev.c, ev.b)) {
+	    return true;
+	}
+	 nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
+	if(worldAction != null && !hasModalMouseCapture()) {
+	    runHitTest(new Click(ev.c, worldAction));
+	    return true;
+	}
+	if(ev.b == 2) {
+	    if((camdrag == null) && camera.click(ev.c)) {
+		camdrag = ui.grabmouse(this);
+	    }
 	} else {
-	    new Click(ev.c, ev.b).run();
+	    runHitTest(new Click(ev.c, ev.b));
 	}
 	return(true);
     }
@@ -2573,23 +2618,36 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    return(true);
 	if((placing_l != null) && placing_l.done()) {
 	    Plob placing = placing_l.get();
-	    if(placing.adjust.rotate(placing, ev, ui.modflags()))
-		return(true);
+	    for(String id : Hotkeys.PLACEMENT_WHEELS) {
+	        nurgling.hotkeys.HotkeyAction action = Hotkeys.action(id);
+	        if(action.current().matchesWheel(ev.a, ui.modflags()) && placing.adjust.rotate(placing,
+	                new MouseWheelEvent(ev.c, Hotkeys.placementDirection(id) * Math.abs(ev.a),
+	                        Hotkeys.placementDirection(id) * Math.abs(ev.s)), action.canonicalMods()))
+	            return true;
+	    }
 	}
 	return(camera.wheel(ev));
     }
     
     public boolean drop(final Coord cc, Coord ul) {
-	new Hittest(cc) {
+	return drop(cc, ul, 0);
+    }
+
+    public boolean drop(final Coord cc, Coord ul, final int mods) {
+	if(!Hotkeys.semanticModifier(mods, UI.MOD_CTRL)) return false;
+	runHitTest(new Hittest(cc) {
 	    public void hit(Coord pc, Coord2d mc, ClickData inf) {
-			if(ui.modctrl)
-				wdgmsg("drop", pc, mc.floor(posres), ui.modflags());
+		wdgmsg("drop", pc, mc.floor(posres), mods);
 	    }
-	}.run();
-	return(ui.modctrl);
+	});
+	return true;
     }
     
     public boolean iteminteract(Coord cc, Coord ul) {
+	return iteminteract(cc, ul, ui.modflags());
+    }
+
+    public boolean iteminteract(Coord cc, Coord ul, final int mods) {
 	NGameUI gui = NUtils.getGameUI();
 	if (gui != null && gui.vhand != null) {
 	    monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
@@ -2600,7 +2658,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
 		}
 		monitoring.StockpileStorageTracker.onClickData(inf);
-		Object[] args = {pc, mc.floor(posres), ui.modflags()};
+		Object[] args = {pc, mc.floor(posres), mods};
 		if(inf != null)
 		    args = Utils.extend(args, inf.clickargs());
 		wdgmsg("itemact", args);
@@ -2613,10 +2671,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	Loader.Future<Plob> placing_l = this.placing;
 	if((placing_l != null) && placing_l.done()) {
 	    Plob placing = placing_l.get();
-	    if((ev.code == KeyEvent.VK_LEFT) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, -1, -1), ui.modflags()))
-		return(true);
-	    if((ev.code == KeyEvent.VK_RIGHT) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, 1, 1), ui.modflags()))
-		return(true);
+	    for(String id : Hotkeys.PLACEMENT_KEYS) {
+	        nurgling.hotkeys.HotkeyAction action = Hotkeys.action(id);
+	        int direction = Hotkeys.placementDirection(id);
+	        if(action.current().matches(ev.awt, 0) && placing.adjust.rotate(placing,
+	                new MouseWheelEvent(Coord.z, direction, direction), action.canonicalMods()))
+	            return true;
+	    }
 	}
 	if(camera.keydown(ev))
 	    return(true);

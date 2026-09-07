@@ -28,13 +28,17 @@ package haven;
 
 public interface DTarget {
     public default boolean drop(Coord cc, Coord ul) {return(false);}
+    public default boolean drop(Coord cc, Coord ul, int mods) {return(drop(cc, ul));}
     public default boolean iteminteract(Coord cc, Coord ul) {return(false);}
+    public default boolean iteminteract(Coord cc, Coord ul, int mods) {
+	return(iteminteract(cc, ul));
+    }
 
     public default boolean drop(Drop ev) {
-	return(drop(ev.c, ev.c.sub(ev.src.doff)));
+	return(drop(ev.c, ev.src == null ? Coord.z : ev.c.sub(ev.src.doff), ev.mods));
     }
     public default boolean iteminteract(Interact ev) {
-	return(iteminteract(ev.c, ev.c.sub(ev.src.doff)));
+	return(iteminteract(ev.c, ev.src == null ? Coord.z : ev.c.sub(ev.src.doff), ev.mods));
     }
 
     public abstract static class ItemEvent extends Widget.MouseEvent {
@@ -55,8 +59,10 @@ public interface DTarget {
     }
 
     public static class Drop extends ItemEvent {
-	public Drop(Coord c, ItemDrag src) {super(c, src);}
-	public Drop(Drop from, Coord c) {super(from, c);}
+	public final int mods;
+	public Drop(Coord c, ItemDrag src) {this(c, src, 0);}
+	public Drop(Coord c, ItemDrag src, int mods) {super(c, src); this.mods = mods;}
+	public Drop(Drop from, Coord c) {super(from, c); this.mods = from.mods;}
 	public Drop derive(Coord c) {return(new Drop(this, c));}
 
 	protected boolean shandle(Widget w) {
@@ -69,8 +75,10 @@ public interface DTarget {
     }
 
     public static class Interact extends ItemEvent {
-	public Interact(Coord c, ItemDrag src) {super(c, src);}
-	public Interact(Interact from, Coord c) {super(from, c);}
+	public final int mods;
+	public Interact(Coord c, ItemDrag src) {this(c, src, src == null || src.ui == null ? 0 : src.ui.modflags());}
+	public Interact(Coord c, ItemDrag src, int mods) {super(c, src); this.mods = mods;}
+	public Interact(Interact from, Coord c) {super(from, c); this.mods = from.mods;}
 	public Interact derive(Coord c) {return(new Interact(this, c));}
 
 	protected boolean shandle(Widget w) {

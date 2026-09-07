@@ -2,12 +2,10 @@ package nurgling.widgets.nsettings;
 
 import haven.*;
 import nurgling.NConfig;
-import nurgling.NMapView;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NModelBox;
 import nurgling.tools.GobHide;
 import nurgling.widgets.NColorWidget;
-import nurgling.widgets.NKeyBindButton;
 
 import java.awt.Color;
 import java.util.EnumMap;
@@ -81,13 +79,6 @@ public class ObjectHiding extends Panel {
                 a = val;
             }
         }, prev.pos("bl").adds(0, 5));
-
-        // Hotkey row. Unlike everything else on this panel the binding is applied immediately -
-        // KeyBinding owns its own persistence, so there is nothing sensible to stage until Save.
-        Label hotkeyLabel = content.add(new Label(L10n.get("hiding.hotkey")), prev.pos("bl").adds(0, 12));
-        content.add(new NKeyBindButton(UI.scale(175), NMapView.kb_togglenature),
-                hotkeyLabel.pos("ur").adds(10, -4));
-        prev = hotkeyLabel;
 
         // Box appearance
         prev = content.add(new Label("● " + L10n.get("hiding.section.box")), prev.pos("bl").adds(0, 20));

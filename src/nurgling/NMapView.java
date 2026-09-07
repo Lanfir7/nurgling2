@@ -1,5 +1,7 @@
 package nurgling;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import haven.render.RenderTree;
 
@@ -66,12 +68,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
      * their customisation.
      */
     private static KeyBinding togglenatureBinding() {
-        String legacy = Utils.getpref("keybind/mwnd_nature", "");
-        if(!legacy.isEmpty() && Utils.getpref("keybind/togglenature", "").isEmpty()) {
-            Utils.setpref("keybind/togglenature", legacy);
-            Utils.setpref("keybind/mwnd_nature", "");
-        }
-        return KeyBinding.get("togglenature", KeyMatch.forcode(KeyEvent.VK_H, KeyMatch.C));
+        return KeyBinding.getMigrated("togglenature",
+                KeyMatch.forcode(KeyEvent.VK_H, KeyMatch.C), "mwnd_nature");
     }
     public static final KeyBinding kb_cleardmg = KeyBinding.get("cleardmg", KeyMatch.forcode(KeyEvent.VK_D, KeyMatch.C | KeyMatch.S));
     public static final KeyBinding kb_flatworld = KeyBinding.get("flatworld", KeyMatch.forcode(KeyEvent.VK_F, KeyMatch.C | KeyMatch.S));
@@ -529,7 +527,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
      * (rate limit, minimum distance) lives in HoldToMove.
      */
     private void steerHold(Coord c) {
-        if((ui.modflags() != 0) || !holdMove.due())
+        if(!Hotkeys.isPlainLeftClick(1, ui.modflags()) || !holdMove.due())
             return;
         // The grab keeps delivering pointer positions after the cursor has left the view;
         // clamping keeps steering towards that edge instead of hit-testing off-screen.
@@ -1595,6 +1593,9 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if(ui.core.mode == NCore.Mode.DRAG) {
             return true;
         }
+        if(hasModalMouseGrab()) return super.mousedown(ev);
+
+        nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
 
         /* Grab a movement waypoint drawn on the ground instead of walking there.
          *
@@ -1603,7 +1604,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
          * modified click steals them whenever the cursor happens to be within a node's grab radius
          * - which, while laying a path out, it very often is, because the node you just placed is
          * right where you are still clicking. Same rule as the minimap (NMiniMap.mousedown). */
-        if(ev.b == 1 && wpGrab == null && !ui.modmeta && !ui.modshift && !ui.modctrl) {
+        if(!hasModalMouseCapture() && worldAction == null && Hotkeys.isPlainLeftClick(ev.b, ui.modflags()) && wpGrab == null) {
             long wpid = worldWaypointAt(ev.c);
             if(wpid >= 0) {
                 wpDragOrigin = waypointWorldPos(wpid);
@@ -1627,7 +1628,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 return super.mousedown(ev);
             }
             // LMB during placement: capture as ghost instead of committing to server.
-            if (ev.b == 1 && !ui.modctrl && !ui.modshift && !ui.modmeta) {
+            if (Hotkeys.isPlainLeftClick(ev.b, ui.modflags())) {
                 Loader.Future<Plob> placing_l = this.placing;
                 if (placing_l != null && placing_l.done()) {
                     Plob plob = placing_l.get();
@@ -1651,7 +1652,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 }
             }
             // Shift+RMB removes the planning ghost under cursor.
-            if (ev.b == 3 && ui.modshift && !ui.modctrl && !ui.modmeta) {
+            if (Hotkeys.action(Hotkeys.WORLD_PLANNER_REMOVE_GHOST).current().matchesMouse(ev.b, ui.modflags())) {
                 final boolean[] consumed = {false};
                 new Maptest(ev.c) {
                     @Override public void hit(Coord pc, Coord2d worldPos) {
@@ -1664,7 +1665,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 if (consumed[0]) return true;
             }
             // MMB on a ghost: re-enter placement with that resource (clone-pick).
-            if (ev.b == 2 && !ui.modctrl && !ui.modshift && !ui.modmeta) {
+            if (Hotkeys.action(Hotkeys.WORLD_PLANNER_CLONE_GHOST).current().matchesMouse(ev.b, ui.modflags())) {
                 final boolean[] consumed = {false};
                 new Maptest(ev.c) {
                     @Override public void hit(Coord pc, Coord2d worldPos) {
@@ -1680,8 +1681,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             }
         }
 
+        if(hasModalMouseCapture()) return super.mousedown(ev);
+
         // Alt+Ctrl+LMB activates area selection for chat sharing
-        if(ev.b == 1 && ui.modmeta && ui.modctrl) {
+        if (Hotkeys.action(Hotkeys.WORLD_SHARE_CHAT_AREA).current().matchesMouse(ev.b, ui.modflags())) {
             if(!isAreaSelectionMode.get()) {
                 isAreaSelectionMode.set(true);
                 isChatAreaSharingMode.set(true); // Mark this as chat sharing mode
@@ -1727,7 +1730,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         
         // Alt+MMB drops a map marker at the clicked spot, named after the gob under
         // the cursor (if any).
-        if (QuickMapMarkerGesture.matches(ev.b, ui.modmeta, ui.modctrl, ui.modshift)) {
+        if (Hotkeys.action(Hotkeys.MAP_QUICK_MARKER).current().matchesMouse(ev.b, ui.modflags())) {
             NGameUI gui = NUtils.getGameUI();
             if ((gui != null) && (gui.mapfile != null))
                 gui.mapfile.quickmark(ev.c);
@@ -1735,7 +1738,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         }
 
         // Ctrl+MMB to toggle ring setting for clicked object
-        if (ev.b == 2 && ui.modctrl) { // Middle mouse button + Ctrl
+        if (Hotkeys.action(Hotkeys.WORLD_TOGGLE_OBJECT_RING).current().matchesMouse(ev.b, ui.modflags())) {
             new Click(ev.c, ev.b) {
                 @Override
                 protected void hit(Coord pc, Coord2d mc, ClickData inf) {
@@ -1753,7 +1756,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         // Plain LMB/RMB on a gem's floating icon: redirect the click to the gem gob
         // so the small ground item is easy to hit. Only fires without modifiers; all
         // modifier combos keep their existing behavior.
-        if ((ev.b == 1 || ev.b == 3) && !ui.modctrl && !ui.modshift && !ui.modmeta) {
+        if (worldAction == null && Hotkeys.isPlainMouseClick(ev.b, ui.modflags())) {
             Gob iconTarget = findClickThroughIconGob(ev.c);
             if (iconTarget != null) {
                 Coord2d gc = iconTarget.rc;
@@ -1769,8 +1772,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         }
 
         // Ctrl+RMB (without Shift): gob menu, else zone flower menu, else tile/server
-        if (ev.b == 3 && ui.modctrl && !ui.modshift) {
-            new Click(ev.c, ev.b) {
+        if (Hotkeys.action(Hotkeys.WORLD_CONTEXT_MENU).current().matchesMouse(ev.b, ui.modflags())) {
+            runHitTest(new Click(ev.c, Hotkeys.action(Hotkeys.WORLD_CONTEXT_MENU)) {
                 @Override
                 protected void hit(Coord pc, Coord2d mc, ClickData inf) {
                     Gob target = null;
@@ -1821,13 +1824,15 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                     }
                     }
                 }
-            }.run();
+            });
             return true;
         }
 
         // Press-and-hold steering arms last, so every other meaning of the left button
         // keeps priority. The event is not consumed - the press stays a normal click.
-        if(ev.b == 1 && (ui.modflags() == 0) && canHoldSteer())
+        if(worldAction != null)
+            return super.mousedown(ev);
+        if(Hotkeys.isPlainLeftClick(ev.b, ui.modflags()) && canHoldSteer())
             armHoldSteer(ev.c);
 
         return super.mousedown(ev);
@@ -1922,7 +1927,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     @Override
     public boolean keyup(KeyUpEvent ev) {
-        if(ev.code == 16) {
+        if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
             shiftPressed = false;
             ttip.clear();
         }
@@ -1931,7 +1936,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     @Override
     public boolean keydown(KeyDownEvent ev) {
-        if(ev.code == 16) {
+        if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
             shiftPressed = true;
         }
 
@@ -1979,13 +1984,13 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         }
 
         // Handle R key for rotation during area selection
-        if(ev.code == 82 && isAreaSelectionMode.get()) {  // R key
+        if(Hotkeys.action(Hotkeys.WORLD_SELECTION_ROTATE).current().matches(ev.awt, 0) && isAreaSelectionMode.get()) {
             rotationRequested = true;
             return true;
         }
 
         // Handle C key for grid mode toggle during area selection
-        if(ev.code == KeyEvent.VK_C && isAreaSelectionMode.get()) {
+        if(Hotkeys.action(Hotkeys.WORLD_SELECTION_TOGGLE_GRID).current().matches(ev.awt, 0) && isAreaSelectionMode.get()) {
             gridMode = !gridMode;
             gridModeRequested = true;
             if(NUtils.getGameUI() != null) {

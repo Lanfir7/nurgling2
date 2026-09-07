@@ -26,6 +26,8 @@
 
 package haven;
 
+import nurgling.hotkeys.Hotkeys;
+
 import nurgling.NStyle;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
@@ -981,7 +983,7 @@ public class GobIcon extends GAttrib {
 	    }
 
 	    public boolean keydown(KeyDownEvent ev) {
-		if(ev.code == ev.awt.VK_SPACE) {
+		if(Hotkeys.action(Hotkeys.WINDOW_MAP_ICONS_TOGGLE_SELECTED).current().matches(ev.awt, 0)) {
 		    if(sel != null) {
 			sel.conf.show = !sel.conf.show;
 			conf.dsave();

@@ -36,6 +36,7 @@ import static haven.PType.*;
 
 import nurgling.*;
 import nurgling.actions.SortInventory;
+import nurgling.hotkeys.Hotkeys;
 import nurgling.i18n.L10n;
 import nurgling.widgets.*;
 import nurgling.widgets.craftatlas.CraftAtlasWindow;
@@ -1654,112 +1655,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	wdgmsg("act", al);
     }
 
-    public class FKeyBelt extends Belt implements DTarget, DropTarget {
-	public final int beltkeys[] = {KeyEvent.VK_F1, KeyEvent.VK_F2, KeyEvent.VK_F3, KeyEvent.VK_F4,
-				       KeyEvent.VK_F5, KeyEvent.VK_F6, KeyEvent.VK_F7, KeyEvent.VK_F8,
-				       KeyEvent.VK_F9, KeyEvent.VK_F10, KeyEvent.VK_F11, KeyEvent.VK_F12};
-	public int curbelt = 0;
-
-	public FKeyBelt() {
-	    super(UI.scale(new Coord(450, 34)));
-	}
-
-	private Coord beltc(int i) {
-	    return(new Coord((((invsq.sz().x + UI.scale(2)) * i) + (10 * (i / 4))), 0));
-	}
-    
-	public int beltslot(Coord c) {
-	    for(int i = 0; i < 12; i++) {
-		if(c.isect(beltc(i), invsq.sz()))
-		    return(i + (curbelt * 12));
-	    }
-	    return(-1);
-	}
-    
-	public void draw(GOut g) {
-	    for(int i = 0; i < 12; i++) {
-		int slot = i + (curbelt * 12);
-		Coord c = beltc(i);
-		g.image(invsq, beltc(i));
-		try {
-		    if(belt[slot] != null)
-			belt[slot].draw(g.reclip(c.add(UI.scale(1), UI.scale(1)), invsq.sz().sub(UI.scale(2), UI.scale(2))));
-		} catch(Loading e) {}
-		g.chcolor(156, 180, 158, 255);
-		FastText.aprintf(g, c.add(invsq.sz().sub(UI.scale(2), 0)), 1, 1, "F%d", i + 1);
-		g.chcolor();
-	    }
-	}
-	
-	public boolean globtype(GlobKeyEvent ev) {
-	    boolean M = (ev.mods & KeyMatch.M) != 0;
-	    for(int i = 0; i < beltkeys.length; i++) {
-		if(ev.code == beltkeys[i]) {
-		    if(M) {
-			curbelt = i;
-			return(true);
-		    } else {
-			keyact(i + (curbelt * 12));
-			return(true);
-		    }
-		}
-	    }
-	    return(super.globtype(ev));
-	}
-    }
-    
-    private static final Tex nkeybg = Resource.loadtex("gfx/hud/hb-main");
-    public class NKeyBelt extends Belt {
-	public int curbelt = 0;
-	final Coord pagoff = UI.scale(new Coord(5, 25));
-
-	public NKeyBelt() {
-	    super(nkeybg.sz());
-	}
-	
-	private Coord beltc(int i) {
-	    return(pagoff.add(UI.scale((36 * i) + (10 * (i / 5))), 0));
-	}
-    
-	public int beltslot(Coord c) {
-	    for(int i = 0; i < 10; i++) {
-		if(c.isect(beltc(i), invsq.sz()))
-		    return(i + (curbelt * 12));
-	    }
-	    return(-1);
-	}
-    
-	public void draw(GOut g) {
-	    g.image(nkeybg, Coord.z);
-	    for(int i = 0; i < 10; i++) {
-		int slot = i + (curbelt * 12);
-		Coord c = beltc(i);
-		g.image(invsq, beltc(i));
-		try {
-		    if(belt[slot] != null) {
-			belt[slot].draw(g.reclip(c.add(UI.scale(1), UI.scale(1)), invsq.sz().sub(UI.scale(2), UI.scale(2))));
-		    }
-		} catch(Loading e) {}
-		g.chcolor(156, 180, 158, 255);
-		FastText.aprintf(g, c.add(invsq.sz().sub(UI.scale(2), 0)), 1, 1, "%d", (i + 1) % 10);
-		g.chcolor();
-	    }
-	    super.draw(g);
-	}
-	
-	public boolean globtype(GlobKeyEvent ev) {
-	    if((ev.code < KeyEvent.VK_0) || (ev.code > KeyEvent.VK_9))
-		return(super.globtype(ev));
-	    int i = Utils.floormod(ev.code - KeyEvent.VK_0 - 1, 10);
-	    boolean M = (ev.mods & KeyMatch.M) != 0;
-	    if(M) {
-		curbelt = i;
-	    } else {
-		keyact(i + (curbelt * 12));
-	    }
-	    return(true);
-	}
-    }
+    // Nurgling's registered NToolBelt replaces the unused stock belt widgets.
 
     private Map<String, Console.Command> cmdmap = new TreeMap<String, Console.Command>();
     {

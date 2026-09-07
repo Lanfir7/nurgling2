@@ -1,5 +1,7 @@
 package nurgling.widgets;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import haven.res.ui.obj.buddy.Buddy;
 import nurgling.*;
@@ -1112,7 +1114,7 @@ NMiniMap extends MiniMap {
     }
 
     private void steerHold(Coord c) {
-        if((ui.modflags() != 0) || !holdMove.due())
+        if(!Hotkeys.isPlainLeftClick(1, ui.modflags()) || !holdMove.due())
             return;
         NGameUI gui = NUtils.getGameUI();
         if((gui == null) || (gui.map == null) || (sessloc == null))
@@ -2465,7 +2467,7 @@ NMiniMap extends MiniMap {
 
     private String getTerrainTooltip(Coord c) {
         // Only show terrain tooltip when Shift is pressed
-        if(ui == null || !ui.modshift) {
+        if(!nurgling.hotkeys.InputNavigation.expandedTooltip(ui)) {
             return null;
         }
         return getTerrainNameAtCoord(c);
@@ -3280,13 +3282,13 @@ NMiniMap extends MiniMap {
         // maps it already means "walk here next" - it queues a movement waypoint
         // (NMapWnd.mouseup, NMiniMapWnd.clickloc, NMapView.addWaypointAt). Checked first
         // so the ping never doubles as a walk, a waypoint grab, or labeled-mark ChunkNav.
-        if(ev.b == 1 && ui.modmeta && ui.modshift && !ui.modctrl) {
+        if(Hotkeys.action(Hotkeys.MAP_PING).current().matchesMouse(ev.b, ui.modflags())) {
             if(sendPointPing(ev.c))
                 return true;
         }
 
         // Handle Alt+left-click on labeled marks - navigate via ChunkNav
-        if(ev.b == 1 && ui.modmeta && dloc != null && sessloc != null) {
+        if(Hotkeys.action(Hotkeys.MAP_MARKER_EDIT).current().matchesMouse(ev.b, ui.modflags()) && dloc != null && sessloc != null) {
             LabeledMinimapMark labeledMark = labeledMarkAt(ev.c);
             if(labeledMark != null) {
                 NGameUI gui = NUtils.getGameUI();
@@ -3364,7 +3366,7 @@ NMiniMap extends MiniMap {
         }
         
         // Handle Shift+left-click on permanent markers (SMarker) - delete them
-        if(ev.b == 1 && ui.modshift && dloc != null && sessloc != null && display != null && dgext != null) {
+        if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags()) && dloc != null && sessloc != null && display != null && dgext != null) {
             Coord hsz = sz.div(2);
             int threshold = UI.scale(10);
             
@@ -3406,14 +3408,19 @@ NMiniMap extends MiniMap {
             }
         }
 
+        // A rebound marker-delete gesture takes priority over path recording, including plain LMB.
+        if(Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags()) && dloc != null && sessloc != null &&
+                labeledMarkAt(ev.c) != null)
+            return true;
+
         // Pick up a queued waypoint under the cursor instead of panning/walking. Plain left
         // button only: alt+LMB is "queue a waypoint here" (NMiniMapWnd.clickloc, NMapWnd.mouseup)
         // and would otherwise be swallowed whenever the cursor sat near a node already queued.
-        if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && startWaypointDrag(ev.c))
+        if(Hotkeys.isPlainLeftClick(ev.b, ui.modflags()) && startWaypointDrag(ev.c))
             return true;
 
         // Handle left-click for forager path recording - prevent player movement
-        if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
+        if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags()) && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
                 // Find a PathRecordable window (Forager or TrufflePigHunter)
@@ -3520,7 +3527,7 @@ NMiniMap extends MiniMap {
 
         // Press-and-hold steering arms last, so every other meaning of the left button
         // keeps priority. The event is not consumed - the press still walks as before.
-        if(ev.b == 1 && ui.modflags() == 0)
+        if(Hotkeys.isPlainLeftClick(ev.b, ui.modflags()))
             startHoldSteer(ev.c);
 
         return super.mousedown(ev);
@@ -3539,7 +3546,7 @@ NMiniMap extends MiniMap {
         }
 
         // Handle left-click for forager path recording (without modifiers)
-        if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
+        if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags()) && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
                 // Find a PathRecordable window (Forager or TrufflePigHunter)
@@ -3609,8 +3616,8 @@ NMiniMap extends MiniMap {
             }
         }
 
-        // Handle right-click release on labeled mark
-        if(ev.b == 3 && dloc != null && sessloc != null) {
+        // Handle right-click release on labeled mark, or the rebound delete gesture
+        if((ev.b == 3 || Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) && dloc != null && sessloc != null) {
             LabeledMinimapMark labeledMark = labeledMarkAt(ev.c);
             if(labeledMark != null) {
                 NGameUI gui = NUtils.getGameUI();
@@ -3618,7 +3625,7 @@ NMiniMap extends MiniMap {
                     // Если это метка квариарца
                     if("Quarryartz".equals(labeledMark.resourceType)) {
                         // Shift+ПКМ - удалить конкретную метку
-                        if((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                        if(Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;
@@ -3634,7 +3641,7 @@ NMiniMap extends MiniMap {
                         }
                         return true;
                     } else if (isForageMark(labeledMark)) {
-                        if ((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                        if (Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;
@@ -3642,7 +3649,7 @@ NMiniMap extends MiniMap {
                         return true;
                     } else if(isOreSpotMark(labeledMark)) {
                         // Если это метка спота руды - Shift+ПКМ удаляет
-                        if((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                        if(Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;

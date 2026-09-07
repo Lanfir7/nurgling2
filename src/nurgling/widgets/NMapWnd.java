@@ -1,5 +1,7 @@
 package nurgling.widgets;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import nurgling.NConfig;
 import nurgling.NGameUI;
@@ -136,7 +138,7 @@ public class NMapWnd extends MapWnd {
             
             @Override
             public boolean keydown(KeyDownEvent ev) {
-                if(ev.code == java.awt.event.KeyEvent.VK_ENTER) {
+                    if(nurgling.hotkeys.InputNavigation.confirm(ev.code)) {
                     applyMarkerSearch();
                     return true;
                 }
@@ -723,7 +725,7 @@ public class NMapWnd extends MapWnd {
                viewCoord.y >= 0 && viewCoord.y < view.sz.y) {
 
                 // Shift+right-click for resource timers and tree locations
-                if(ev.b == 3 && ui.modshift) {
+                if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
                     // First check for tree icons
                     if(handleTreeSaveClick(viewCoord)) {
                         return true; // Consume the event
@@ -749,7 +751,7 @@ public class NMapWnd extends MapWnd {
                viewCoord.y >= 0 && viewCoord.y < view.sz.y) {
 
                 // Left-click for forager path recording (without modifier)
-                if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl) {
+                if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags())) {
                     if(handleForagerRecordingClick(viewCoord)) {
                         return true; // Consume the event
                     }
@@ -757,14 +759,14 @@ public class NMapWnd extends MapWnd {
                 
                 // alt+left-click for waypoint queueing; shift is excluded because
                 // alt+shift+left-click is the map ping (NMiniMap.sendPointPing)
-                if(ev.b == 1 && ui.modmeta && !ui.modshift) {
+                if(Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).current().matchesMouse(ev.b, ui.modflags())) {
                     if(handleWaypointClick(viewCoord)) {
                         return true; // Consume the event
                     }
                 }
 
                 // Right-click for clearing waypoint queue (fish handling is in parent NMiniMap)
-                if(ev.b == 3 && !ui.modshift) {
+                if(Hotkeys.action("map.clear_waypoints").current().matchesMouse(ev.b, ui.modflags())) {
                     // Clear waypoint queue on regular right-click (if not on fish/marker)
                     NGameUI gui = (NGameUI) NUtils.getGameUI();
                     if(gui != null && gui.waypointMovementService != null) {

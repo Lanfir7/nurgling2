@@ -392,7 +392,8 @@ public class Fightsess extends Widget {
 	KeyBinding.get("fgt/8", KeyMatch.forcode(KeyEvent.VK_4, KeyMatch.S)),
 	KeyBinding.get("fgt/9", KeyMatch.forcode(KeyEvent.VK_5, KeyMatch.S)),
     };
-    public static final KeyBinding kb_relcycle =  KeyBinding.get("fgt-cycle", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C), KeyMatch.S);
+    public static final KeyBinding kb_relcycle =  KeyBinding.get("fgt-cycle", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C));
+    public static final KeyBinding kb_relcycle_prev =  KeyBinding.get("fgt-cycle-prev", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C | KeyMatch.S));
 
     /* XXX: This is a bit ugly, but release message do need to be
      * properly sequenced with use messages in some way. */
@@ -450,22 +451,22 @@ public class Fightsess extends Widget {
 		return(true);
 	    }
 	}
-	if(kb_relcycle.key().match(ev.awt, KeyMatch.S)) {
-	    if((ev.mods & KeyMatch.S) == 0) {
+	if(kb_relcycle.key().match(ev.awt)) {
 		Fightview.Relation cur = fv.current;
 		if(cur != null) {
 		    fv.lsrel.remove(cur);
 		    fv.lsrel.addLast(cur);
 		}
-	    } else {
+		fv.wdgmsg("bump", (int)fv.lsrel.get(0).gobid);
+		return(true);
+	} else if(kb_relcycle_prev.key().match(ev.awt)) {
 		Fightview.Relation last = fv.lsrel.getLast();
 		if(last != null) {
 		    fv.lsrel.remove(last);
 		    fv.lsrel.addFirst(last);
 		}
-	    }
-	    fv.wdgmsg("bump", (int)fv.lsrel.get(0).gobid);
-	    return(true);
+		fv.wdgmsg("bump", (int)fv.lsrel.get(0).gobid);
+		return(true);
 	}
 	return(super.globtype(ev));
     }

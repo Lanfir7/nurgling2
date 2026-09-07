@@ -1,5 +1,7 @@
 package nurgling.widgets;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import haven.Window;
 import nurgling.*;
@@ -208,8 +210,7 @@ public class NDraggableWidget extends Widget
 
     @Override
     public boolean globtype(GlobKeyEvent ev) {
-        if((ui.core.mode == NCore.Mode.DRAG) && (ev.code == java.awt.event.KeyEvent.VK_Z)
-           && ((ui.modflags() & UI.MOD_CTRL) != 0)) {
+        if((ui.core.mode == NCore.Mode.DRAG) && Hotkeys.action(Hotkeys.LAYOUT_UNDO).current().matches(ev.awt, 0)) {
             /* Delivered to whichever draggable widget the traversal reaches
              * first; the history itself is shared, so it does not matter which. */
             return(undoLast());

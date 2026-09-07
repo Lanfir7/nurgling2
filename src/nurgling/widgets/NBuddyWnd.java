@@ -1,5 +1,7 @@
 package nurgling.widgets;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import nurgling.*;
 import nurgling.conf.*;
@@ -136,7 +138,7 @@ public class NBuddyWnd extends BuddyWnd
             public void click()
             {
                 super.click();
-                startPull(ui.modshift);
+                startPull(Hotkeys.action(Hotkeys.BUDDY_PULL_MODE).current().matchesModifiers(ui.modflags()));
             }
         }, new Coord(bx, by));
         pullBtn.tooltip = Text.render(L10n.get("kin.pull_db_tip")).tex();

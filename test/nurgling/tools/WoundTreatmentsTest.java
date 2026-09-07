@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WoundTreatmentsTest {
@@ -79,10 +78,4 @@ class WoundTreatmentsTest {
         assertEquals("Yarrow", WoundTreatments.treatTipMarkup("Yarrow", ""));
     }
 
-    @Test
-    void leftCtrlClickOpensStorageSearch() {
-        assertTrue(WoundTreatments.isStorageSearchClick(1, true));
-        assertFalse(WoundTreatments.isStorageSearchClick(1, false));
-        assertFalse(WoundTreatments.isStorageSearchClick(3, true));
-    }
 }

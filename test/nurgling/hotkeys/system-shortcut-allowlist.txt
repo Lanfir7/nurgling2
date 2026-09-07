@@ -1,0 +1,112 @@
+# Exact complete predicates only. Each exception is fixed widget navigation,
+# input infrastructure, tooltip presentation or basic pointer selection.
+nurgling/hotkeys/InputGesture.java|if(chr >= '0' && chr <= '9' && physical.code == KeyEvent.VK_NUMPAD0 + (chr - '0'))|Low-level numeric-keypad character/code overlap, never dispatch
+nurgling/hotkeys/Hotkeys.java|return action(MAP_MARKER_DELETE).current().matchesMouse(button, mods);|Public routing helper delegates solely to the registered marker-delete gesture
+nurgling/hotkeys/HotkeyResolver.java|if(matchesContext(action, context) && action.current().matchesMouse(button, mods))|Core resolver iterates registered actions and applies their configured mouse gesture
+nurgling/hotkeys/HotkeyResolver.java|if(matchesContext(action, context) && action.current().matchesWheel(amount, mods))|Core resolver iterates registered actions and applies their configured wheel gesture
+nurgling/hotkeys/Hotkeys.java|return ((button == 1) && frameHit) || action(MAP_MARKER_WAYPOINT).current().matchesMouse(button, mods);|Basic map-frame pointer selection or explicit registered waypoint action
+nurgling/hotkeys/InputGesture.java|if((code >= KeyEvent.VK_A && code <= KeyEvent.VK_Z) || (code >= KeyEvent.VK_0 && code <= KeyEvent.VK_9) || (code >= KeyEvent.VK_NUMPAD0 && code <= KeyEvent.VK_DIVIDE) || code >= 0x01000000)|Low-level conservative character-producing virtual-key classification, never dispatch
+haven/KeyMatch.java|return(ev.getExtendedKeyCode() == code);|Low-level matching implementation for every registered keyboard action
+haven/KeyMatch.java|return(ev.getKeyCode() == code);|Low-level matching implementation for every registered keyboard action
+haven/TextEntry.java|if (ALLOWED_KEYS.contains(keyCode))|Numeric text widget rejects characters outside its fixed editing alphabet
+haven/Charlist.java|if(ev.code == ev.awt.VK_UP)|Character-list selection and activation
+haven/Charlist.java|if(ev.code == ev.awt.VK_DOWN)|Character-list selection and activation
+haven/Charlist.java|if(ev.code == ev.awt.VK_ENTER)|Character-list selection and activation
+haven/ChatUI.java|if(!ui.modshift)|Chat scroll/history navigation
+haven/ChatUI.java|if(M && (ev.code == ev.awt.VK_UP))|Chat scroll/history navigation
+haven/ChatUI.java|if(M && (ev.code == ev.awt.VK_DOWN))|Chat scroll/history navigation
+haven/DynresWindow.java|if(((ev.c == 'v') && (ev.mods == KeyMatch.C)) || ((ev.code == KeyEvent.VK_INSERT) && (ev.mods == KeyMatch.S)))|Paste into resource editor
+haven/GameUI.java|if(ev.code == KeyEvent.VK_TAB)|Tab focus traversal
+haven/iosys/tk/AWTToolkit.java|if(ec == java.awt.event.KeyEvent.VK_UNDEFINED)|Low-level keyboard event conversion
+haven/iosys/tk/AWTToolkit.java|if(pc != java.awt.event.KeyEvent.VK_UNDEFINED)|Low-level keyboard event conversion
+haven/iosys/tk/NEWTContext.java|return(this.code == that.code);|Low-level key identity equality
+haven/KeyMatch.java|if(code != VK_UNDEFINED)|Binding capture, matching and modifier display
+haven/KeyMatch.java|if(code == KeyEvent.VK_ESCAPE)|Binding capture, matching and modifier display
+haven/KeyMatch.java|if(code == KeyEvent.VK_DELETE)|Binding capture, matching and modifier display
+haven/KeyMatch.java|if(mods == 0)|Binding capture, matching and modifier display
+haven/KeyMatch.java|if((mods & S) != 0)|Binding capture, matching and modifier display
+haven/KeyMatch.java|if((mods & C) != 0)|Binding capture, matching and modifier display
+haven/KeyMatch.java|if((mods & M) != 0)|Binding capture, matching and modifier display
+haven/KeyMatch.java|return((this.chr == that.chr) && (this.casematch == that.casematch) && (this.code == that.code) && (this.extmatch == that.extmatch) && (this.modmask == that.modmask) && (this.modmatch == that.modmatch));|Binding capture, matching and modifier display
+haven/ReadLine.java|if(ev.getKeyCode() == KeyEvent.VK_BACK_SPACE)|Text editing and command-line navigation
+haven/ReadLine.java|if(ev.getKeyCode() == KeyEvent.VK_ENTER)|Text editing and command-line navigation
+haven/ReadLine.java|if(ev.getKeyCode() == KeyEvent.VK_TAB)|Text editing and command-line navigation
+haven/ReadLine.java|if(ev.getKeyCode() == KeyEvent.VK_ESCAPE)|Text editing and command-line navigation
+haven/ReadLine.java|if((code == KeyEvent.VK_LEFT) && (mod == 0))|Text editing and command-line navigation
+haven/ReadLine.java|if((code == KeyEvent.VK_LEFT) && (mod == C))|Text editing and command-line navigation
+haven/ReadLine.java|if((code == KeyEvent.VK_RIGHT) && (mod == 0))|Text editing and command-line navigation
+haven/ReadLine.java|if((code == KeyEvent.VK_RIGHT) && (mod == C))|Text editing and command-line navigation
+haven/ReadLine.java|if((code == KeyEvent.VK_HOME) && (mod == 0))|Text editing and command-line navigation
+haven/ReadLine.java|if((code == KeyEvent.VK_END) && (mod == 0))|Text editing and command-line navigation
+haven/render/jogl/Test.java|if(ev.getKeyCode() == KeyEvent.VK_ESCAPE)|Developer renderer test exit
+haven/res/ui/tt/slots/ISlots.java|if(!(owner instanceof NGItem) || ((NGItem)owner).ui.modshift)|Expanded tooltip presentation
+haven/RootWidget.java|if(modtip && (ui.modflags() != 0))|Modifier tooltip presentation
+haven/Searchbox.java|if((ev.mods & InputEvent.CTRL_DOWN_MASK) != 0)|Search-field editing and selection
+haven/Searchbox.java|if((ev.mods & (InputEvent.META_DOWN_MASK | InputEvent.ALT_DOWN_MASK)) != 0)|Search-field editing and selection
+haven/Searchbox.java|if(code == KeyEvent.VK_UP)|Search-field editing and selection
+haven/Searchbox.java|if(code == KeyEvent.VK_DOWN)|Search-field editing and selection
+haven/SSearchBox.java|if((ev.mods & (KeyMatch.C | KeyMatch.M)) == 0)|Search-field editing and selection
+haven/SSearchBox.java|if(ev.code == ev.awt.VK_UP)|Search-field editing and selection
+haven/SSearchBox.java|if(ev.code == ev.awt.VK_DOWN)|Search-field editing and selection
+haven/TextEntry.java|if(keyCode == 0)|Text input code normalization
+haven/Widget.java|if(((mods & KeyMatch.C) != 0) && (c < 32))|Widget key conversion and focus traversal
+haven/Widget.java|if(code == KeyEvent.VK_BACK_SPACE)|Widget key conversion and focus traversal
+haven/Widget.java|if(code == KeyEvent.VK_ENTER)|Widget key conversion and focus traversal
+haven/Widget.java|if(code == KeyEvent.VK_TAB)|Widget key conversion and focus traversal
+haven/Widget.java|if(code == KeyEvent.VK_ESCAPE)|Widget key conversion and focus traversal
+haven/Widget.java|if((mods & KeyMatch.S) != 0)|Widget key conversion and focus traversal
+haven/Widget.java|if((ev.mods & KeyMatch.S) == 0)|Widget key conversion and focus traversal
+haven/Window.java|if(ev.code == java.awt.event.KeyEvent.VK_TAB)|Window focus traversal
+nurgling/hotkeys/Hotkeys.java|return gesture.type() == InputGesture.Type.MOUSE_BUTTON && (mods & gesture.modmask()) == (gesture.modmatch() & gesture.modmask());|Configured waypoint modifier matching
+nurgling/hotkeys/Hotkeys.java|return button == 1 && (mods & KeyMatch.MODS) == 0 && !matchesMapMarkerDelete(button, mods);|Basic pointer routing and recording selection; yields to configured marker deletion
+nurgling/hotkeys/Hotkeys.java|return (button == 1 || button == 3) && (mods & KeyMatch.MODS) == 0;|Basic pointer routing and recording selection; yields to configured marker deletion
+nurgling/hotkeys/Hotkeys.java|return button == 1 && (mods & KeyMatch.MODS) == 0;|Basic pointer routing and recording selection; yields to configured marker deletion
+nurgling/hotkeys/Hotkeys.java|return button == 3 && (mods & KeyMatch.MODS) == 0;|Basic pointer routing and recording selection; yields to configured marker deletion
+nurgling/hotkeys/InputGesture.java|return type == Type.MODIFIER && code == (mods & KeyMatch.MODS);|Configured modifier-family matcher
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_ESCAPE;|Fixed widget navigation and tooltip presentation
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_ENTER;|Fixed widget navigation and tooltip presentation
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_UP;|Fixed widget navigation and tooltip presentation
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_DOWN;|Fixed widget navigation and tooltip presentation
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_SHIFT;|Fixed widget navigation and tooltip presentation
+nurgling/hotkeys/InputNavigation.java|return ui != null && ui.modshift;|Fixed widget navigation and tooltip presentation
+nurgling/hotkeys/InputNavigation.java|return key != null && key != KeyMatch.nil && key.code != KeyEvent.VK_UNDEFINED;|Fixed widget navigation and tooltip presentation
+nurgling/NGItem.java|return this.ui.modshift!=((ISlots)inf).isShifted;|Expanded tooltip cache invalidation
+nurgling/NUI.java|if (ev.getKeyCode() == KeyEvent.VK_SHIFT)|Tooltip modifier tracking
+nurgling/widgets/ActionConfigWindow.java|if (ev.code == KeyEvent.VK_ENTER)|Dialog confirmation and cancellation
+nurgling/widgets/ActionConfigWindow.java|if (ev.code == KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/AgentWindow.java|if (ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/AutoLogoutPopup.java|if (ev.code == KeyEvent.VK_ESCAPE || ev.code == KeyEvent.VK_ENTER)|Dialog confirmation and cancellation
+nurgling/widgets/craftatlas/CraftAtlasRecipeChooser.java|if(ev.code == KeyEvent.VK_ESCAPE)|Search selection, focus and confirmation
+nurgling/widgets/craftatlas/CraftAtlasRecipeChooser.java|if(ev.code == KeyEvent.VK_UP)|Search selection, focus and confirmation
+nurgling/widgets/craftatlas/CraftAtlasRecipeChooser.java|if(ev.code == KeyEvent.VK_DOWN)|Search selection, focus and confirmation
+nurgling/widgets/craftatlas/CraftAtlasRecipeChooser.java|if(ev.code == KeyEvent.VK_ENTER)|Search selection, focus and confirmation
+nurgling/widgets/craftatlas/CraftAtlasWindow.java|if(ev.code == KeyEvent.VK_ENTER)|Search selection, focus and confirmation
+nurgling/widgets/craftatlas/CraftAtlasWindow.java|if(ev.code == KeyEvent.VK_ESCAPE && searchHistory != null && searchHistory.visible)|Search selection, focus and confirmation
+nurgling/widgets/craftatlas/CraftAtlasWindow.java|if(ev.code == KeyEvent.VK_F && (ev.mods & KeyMatch.C) != 0)|Search selection, focus and confirmation
+nurgling/widgets/craftatlas/CraftAtlasWindow.java|if(ev.code == KeyEvent.VK_ESCAPE)|Search selection, focus and confirmation
+nurgling/widgets/LocalizedResourceTimerDialog.java|if(ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/MapToolsWindow.java|if(ev.code == java.awt.event.KeyEvent.VK_ENTER)|Dialog confirmation and cancellation
+nurgling/widgets/NBasePlannerWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_ENTER)|Dialog confirmation and cancellation
+nurgling/widgets/NBasePlannerWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/NCraftWindow.java|if(visible && ev.code == 9 && (ev.mods & KeyMatch.S)!=0)|Shift-Tab focus traversal
+nurgling/widgets/NQuantitySelector.java|if (ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/NQuantitySelector.java|if (ev.code == java.awt.event.KeyEvent.VK_ENTER)|Dialog confirmation and cancellation
+nurgling/widgets/nsettings/HotkeyCapturePolicy.java|if(keyCode == KeyEvent.VK_ESCAPE)|Capture cancel, reset and disable commands
+nurgling/widgets/nsettings/HotkeyCapturePolicy.java|if(keyCode == KeyEvent.VK_BACK_SPACE)|Capture cancel, reset and disable commands
+nurgling/widgets/nsettings/HotkeyCapturePolicy.java|if(keyCode == KeyEvent.VK_DELETE)|Capture cancel, reset and disable commands
+nurgling/widgets/NSettingsWindow.java|if(ev.code == KeyEvent.VK_DOWN)|Settings category selection
+nurgling/widgets/NSettingsWindow.java|if(ev.code == KeyEvent.VK_UP)|Settings category selection
+nurgling/widgets/NTextArea.java|if ((code == KeyEvent.VK_UP) && (m == 0))|Text editing navigation
+nurgling/widgets/NTextArea.java|if ((code == KeyEvent.VK_DOWN) && (m == 0))|Text editing navigation
+nurgling/widgets/NTextArea.java|if ((code == KeyEvent.VK_PAGE_UP) && (m == 0))|Text editing navigation
+nurgling/widgets/NTextArea.java|if ((code == KeyEvent.VK_PAGE_DOWN) && (m == 0))|Text editing navigation
+nurgling/widgets/NTextArea.java|if ((code == KeyEvent.VK_HOME) && (m == 0))|Text editing navigation
+nurgling/widgets/NTextArea.java|if ((code == KeyEvent.VK_END) && (m == 0))|Text editing navigation
+nurgling/widgets/SearchWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Search selection, focus and confirmation
+nurgling/widgets/SearchWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_ENTER)|Search selection, focus and confirmation
+nurgling/widgets/StarvationAlertPopup.java|if (ev.code == KeyEvent.VK_ESCAPE || ev.code == KeyEvent.VK_ENTER)|Dialog confirmation and cancellation
+nurgling/widgets/TerrainSearchPanel.java|if(ev.code == java.awt.event.KeyEvent.VK_ENTER)|Search selection, focus and confirmation
+nurgling/widgets/TextInputWindow.java|if (ev.code == KeyEvent.VK_ENTER)|Dialog confirmation and cancellation
+nurgling/widgets/TextInputWindow.java|if (ev.code == KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/TrellisDirectionDialog.java|if(ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/TunnelingDialog.java|if (ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
