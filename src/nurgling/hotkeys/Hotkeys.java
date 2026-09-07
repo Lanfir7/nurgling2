@@ -38,6 +38,7 @@ public final class Hotkeys {
     public static final String HELD_DROP_ON_GROUND = "held.drop_on_ground";
     public static final String HELD_OPEN_WITH_CONTROL = "held.open_with_control";
     public static final String HELD_INTERACT_WITH_TARGET = "held.interact_with_target";
+    public static final String HELD_INTERACT_ONE_WITH_TARGET = "held.interact_one_with_target";
     public static final String HELD_INTERACT_ALL_WITH_TARGET = "held.interact_all_with_target";
     public static final String HELD_OPEN_WITHOUT_USING = "held.open_without_using";
     public static final String HELD_LIGHT_FROM_FIRE = "held.light_from_fire";

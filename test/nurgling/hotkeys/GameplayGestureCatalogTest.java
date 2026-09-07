@@ -10,6 +10,24 @@ import java.util.EnumSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GameplayGestureCatalogTest {
+    @Test void shiftRightClickOnHeldItemLoadsOneFuelAtATime() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyCatalog.registerCore(registry);
+
+        HotkeyAction action = null;
+        for(HotkeyAction candidate : registry.snapshot()) {
+            if(candidate.contexts().contains(HotkeyContext.HELD_ITEM) &&
+                    candidate.defaultGesture().matchesMouse(3, UI.MOD_SHIFT)) {
+                action = candidate;
+                break;
+            }
+        }
+
+        assertNotNull(action);
+        assertEquals("held.interact_one_with_target", action.id());
+        assertEquals(Integer.valueOf(UI.MOD_SHIFT), action.canonicalMods());
+    }
+
     @Test void ctrlShiftRightClickOnHeldItemLoadsAllMatchingFuel() {
         HotkeyRegistry registry = new HotkeyRegistry();
         HotkeyCatalog.registerCore(registry);

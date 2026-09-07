@@ -70,6 +70,7 @@ public class ItemDrag extends NWItem
 	}
 	if(action != null && (nurgling.hotkeys.Hotkeys.HELD_LIGHT_FROM_FIRE.equals(action.id()) ||
 		nurgling.hotkeys.Hotkeys.HELD_INTERACT_WITH_TARGET.equals(action.id()) ||
+		nurgling.hotkeys.Hotkeys.HELD_INTERACT_ONE_WITH_TARGET.equals(action.id()) ||
 		nurgling.hotkeys.Hotkeys.HELD_INTERACT_ALL_WITH_TARGET.equals(action.id())) &&
 		ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
 			action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)

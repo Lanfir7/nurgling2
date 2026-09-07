@@ -313,6 +313,9 @@ public final class HotkeyCatalog {
                 EnumSet.of(HotkeyContext.HELD_ITEM), 0, order);
         gesture(registry, "held.interact_with_target", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
+        gesture(registry, Hotkeys.HELD_INTERACT_ONE_WITH_TARGET,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(haven.UI.MOD_SHIFT), order);
         gesture(registry, Hotkeys.HELD_INTERACT_ALL_WITH_TARGET,
                 InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C | KeyMatch.S), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(haven.UI.MOD_CTRL | haven.UI.MOD_SHIFT), order);
