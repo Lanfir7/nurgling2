@@ -50,7 +50,7 @@ class HotkeyCatalogTest {
     @Test void catalogPreservesSpecialBindingInitializationSemantics() {
         HotkeyRegistry registry = new HotkeyRegistry();
         HotkeyCatalog.registerCore(registry);
-        assertEquals(KeyMatch.S, KeyBinding.get("fgt-cycle").modign);
+        assertEquals(0, KeyBinding.get("fgt-cycle").modign);
     }
 
     @Test void catalogRunsNaturePreferenceMigrationBeforeResolvingBinding() {

@@ -1,6 +1,8 @@
 /* Preprocessed source code */
 package haven.res.ui.surv;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import haven.render.*;
 import haven.render.sl.*;
@@ -161,7 +163,7 @@ public class LandSurvey extends Window {
 		if(((MouseDownEvent)ev).b == 1) {
 		    Coord sel = dsp.mousetest(ev.c, false);
 		    if(sel != null) {
-			if(ui.modshift) {
+			if(Hotkeys.action(Hotkeys.WORLD_SURVEY_NEW_SELECTION).current().matchesMouse(((MouseDownEvent)ev).b, ui.modflags())) {
 			    mode(new Selector(sel));
 			} else {
 			    Area vsel = (selection == null) ? null : Area.corn(selection.ul, selection.br.add(1, 1));

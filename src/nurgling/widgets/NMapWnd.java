@@ -1,5 +1,7 @@
 package nurgling.widgets;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import nurgling.NConfig;
 import nurgling.NGameUI;
@@ -723,7 +725,7 @@ public class NMapWnd extends MapWnd {
                viewCoord.y >= 0 && viewCoord.y < view.sz.y) {
 
                 // Shift+right-click for resource timers and tree locations
-                if(ev.b == 3 && ui.modshift) {
+                if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
                     // First check for tree icons
                     if(handleTreeSaveClick(viewCoord)) {
                         return true; // Consume the event
@@ -757,7 +759,7 @@ public class NMapWnd extends MapWnd {
                 
                 // alt+left-click for waypoint queueing; shift is excluded because
                 // alt+shift+left-click is the map ping (NMiniMap.sendPointPing)
-                if(ev.b == 1 && ui.modmeta && !ui.modshift) {
+                if(Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).current().matchesMouse(ev.b, ui.modflags())) {
                     if(handleWaypointClick(viewCoord)) {
                         return true; // Consume the event
                     }

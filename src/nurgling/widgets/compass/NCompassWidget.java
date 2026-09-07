@@ -6,6 +6,7 @@ import haven.UI;
 import nurgling.conf.NDragProp;
 import nurgling.conf.NResizeProp;
 import nurgling.widgets.NDraggableWidget;
+import nurgling.hotkeys.Hotkeys;
 
 public class NCompassWidget extends NDraggableWidget {
     public static final String NAME = "compass";
@@ -45,7 +46,7 @@ public class NCompassWidget extends NDraggableWidget {
 
     @Override
     public boolean mousedown(MouseDownEvent ev) {
-        if (ev.b == 1 && ui.modctrl && !btnLock.a && resizeGrab == null && ui.grabs.isEmpty()) {
+        if (Hotkeys.action(Hotkeys.LAYOUT_COMPASS_RESIZE).current().matchesMouse(ev.b, ui.modflags()) && !btnLock.a && resizeGrab == null && ui.grabs.isEmpty()) {
             NCompassResize.Edge edge = edgeAt(ev.c);
             if (edge != null) {
                 resizeEdge = edge;
@@ -99,7 +100,7 @@ public class NCompassWidget extends NDraggableWidget {
         super.draw(g);
         Coord mouse = ui.mc.sub(rootpos());
         NCompassResize.Edge edge = edgeAt(mouse);
-        if (resizeGrab != null || (ui.modctrl && edge != null)) {
+        if (resizeGrab != null || (Hotkeys.action(Hotkeys.LAYOUT_COMPASS_RESIZE).current().matchesModifiers(ui.modflags()) && edge != null)) {
             NCompassResize.Edge active = resizeGrab != null ? resizeEdge : edge;
             int x = active == NCompassResize.Edge.LEFT ? off.x : off.x + content.sz.x - 1;
             g.chcolor(255, 221, 120, 230);

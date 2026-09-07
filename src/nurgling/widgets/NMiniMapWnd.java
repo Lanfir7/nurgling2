@@ -9,6 +9,7 @@ import nurgling.NUtils;
 import nurgling.areas.AreaLabelSync;
 import nurgling.i18n.L10n;
 import nurgling.tools.ExploredArea;
+import nurgling.hotkeys.Hotkeys;
 
 import java.net.MalformedURLException;
 
@@ -386,7 +387,7 @@ public class NMiniMapWnd extends Widget{
 
         public boolean clickmarker(DisplayMarker mark, Location loc, int button, boolean press) {
             // Handle shift+right-click on resource markers for timer functionality
-            if(button == 3 && ui.modshift && mark.m instanceof MapFile.SMarker) {
+            if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(button, ui.modflags()) && mark.m instanceof MapFile.SMarker) {
                 MapFile.SMarker smarker = (MapFile.SMarker) mark.m;
                 
                 // Check if this is a localized resource (map resource) and handle through service
@@ -416,7 +417,7 @@ public class NMiniMapWnd extends Widget{
         public boolean clickloc(Location loc, int button, boolean press) {
             // Handle alt+left-click for waypoint queueing; shift is excluded because
             // alt+shift+left-click is the map ping (NMiniMap.sendPointPing)
-            if(!press && button == 1 && ui.modmeta && !ui.modshift && sessloc != null && loc.seg.id == sessloc.seg.id) {
+            if(!press && Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).current().matchesMouse(button, ui.modflags()) && sessloc != null && loc.seg.id == sessloc.seg.id) {
                 NGameUI gui = (NGameUI) NUtils.getGameUI();
                 if(gui != null && gui.waypointMovementService != null) {
                     gui.waypointMovementService.addWaypoint(loc, sessloc);

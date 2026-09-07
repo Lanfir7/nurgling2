@@ -1,6 +1,8 @@
 /* Preprocessed source code */
 package haven.res.ui.croster;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import haven.render.*;
 import java.util.*;
@@ -39,7 +41,7 @@ public class RosterButton extends MenuGrid.PagButton {
     }
 
     public void use(MenuGrid.Interaction iact) {
-	if(pag.scm.ui.modshift) {
+	if(Hotkeys.action(Hotkeys.ACTION_MENU_OPEN_ALL_ROSTERS).current().matchesModifiers(pag.scm.ui.modflags())) {
 	    pag.scm.wdgmsg("act", "croster", "a");
 	} else if(wnd == null) {
 	    pag.scm.wdgmsg("act", "croster");

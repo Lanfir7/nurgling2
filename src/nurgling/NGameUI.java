@@ -1,5 +1,7 @@
 package nurgling;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import haven.res.ui.rbuff.RealmBuff;
 import haven.res.ui.relcnt.RelCont;
@@ -1699,7 +1701,7 @@ public class NGameUI extends GameUI
         nurgling.tasks.WaitKeyPress.setLastKeyPressed(ev.code);
 
         // F11 - Toggle DB stats overlay
-        if (ev.code == KeyEvent.VK_F11 && (Boolean) NConfig.get(NConfig.Key.ndbenable)) {
+        if (Hotkeys.action(Hotkeys.WINDOW_DB_STATS_TOGGLE).current().matches(ev.awt, 0) && (Boolean) NConfig.get(NConfig.Key.ndbenable)) {
             if (dbStatsOverlay != null) {
                 if (dbStatsOverlay.visible()) {
                     dbStatsOverlay.hide();
@@ -1712,12 +1714,19 @@ public class NGameUI extends GameUI
         }
 
         // F10 - toggle LLM agent window
-        if (ev.code == KeyEvent.VK_F10) {
+        if (Hotkeys.action(Hotkeys.WINDOW_AGENT_TOGGLE).current().matches(ev.awt, 0)) {
             toggleAgentWindow();
             return true;
         }
 
-        return super.keydown(ev);
+        if (super.keydown(ev))
+            return true;
+        if (Hotkeys.action(Hotkeys.SYSTEM_RENDERING_TOGGLE).current().matches(ev.awt, 0)) {
+            haven.UILoop.renderDisabled = !haven.UILoop.renderDisabled;
+            msg("Рендеринг " + (haven.UILoop.renderDisabled ? "отключен" : "включен"));
+            return true;
+        }
+        return false;
     }
 
     @Override

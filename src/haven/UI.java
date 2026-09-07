@@ -923,12 +923,6 @@ public class UI {
 
     public void keydown(KeyEvent ev) {
 	setmods(ev);
-	// Обработка F8 для переключения рендеринга
-	if(ev.getKeyCode() == KeyEvent.VK_F8) {
-	    UILoop.renderDisabled = !UILoop.renderDisabled;
-	    msg("Рендеринг " + (UILoop.renderDisabled ? "отключен" : "включен"));
-	    return;
-	}
 	if(!dispatch(root, new KeyDownEvent(ev)))
 	    dispatch(root, new GlobKeyEvent(ev));
     }

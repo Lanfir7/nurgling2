@@ -1,6 +1,8 @@
 /* Preprocessed source code */
 package haven.res.ui.stackinv;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import nurgling.NWItem;
 import java.util.*;
@@ -58,7 +60,8 @@ public class ItemStack extends Widget implements DTarget {
     }
 
     public boolean mousewheel(MouseWheelEvent ev) {
-	if(ui.modshift) {
+	if(Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_TO_MAIN).current().matchesWheel(ev.a, ui.modflags()) ||
+	   Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_FROM_MAIN).current().matchesWheel(ev.a, ui.modflags())) {
 	    Inventory minv = getparent(GameUI.class).maininv;
 	    if(ev.a < 0)
 		wdgmsg("invxf", minv.wdgid(), 1);

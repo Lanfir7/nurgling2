@@ -10,6 +10,7 @@ import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
 import nurgling.tools.ForageMarkerLogic;
 import nurgling.widgets.NProspecting;
+import nurgling.hotkeys.Hotkeys;
 
 import java.util.*;
 
@@ -50,8 +51,8 @@ public class NFlowerMenu extends FlowerMenu
         // Use the factory-provided ui parameter — this constructor runs on a Loader
         // thread which has no ThreadLocalUI, so NUtils.getGameUI() would return the
         // wrong (active visual) session's GUI or null, causing NPE or cross-session state.
-        shiftMode = ui.gui != null && ui.gui.map instanceof NMapView && ((NMapView) ui.gui.map).shiftPressed;
-        ctrlMode = ui.modctrl;
+        shiftMode = Hotkeys.action(Hotkeys.FLOWER_FORCE_MANUAL).current().matchesModifiers(ui.modflags());
+        ctrlMode = Hotkeys.action(Hotkeys.FLOWER_CONTROL_MODE).current().matchesModifiers(ui.modflags());
         captureForageSource(ui);
         initOpts(opts);
     }
@@ -61,8 +62,8 @@ public class NFlowerMenu extends FlowerMenu
     {
         super();
         NGameUI gui = NUtils.getGameUI();
-        shiftMode = gui != null && gui.map instanceof NMapView && ((NMapView) gui.map).shiftPressed;
-        ctrlMode = gui != null && gui.ui != null && gui.ui.modctrl;
+        shiftMode = gui != null && gui.ui != null && Hotkeys.action(Hotkeys.FLOWER_FORCE_MANUAL).current().matchesModifiers(gui.ui.modflags());
+        ctrlMode = gui != null && gui.ui != null && Hotkeys.action(Hotkeys.FLOWER_CONTROL_MODE).current().matchesModifiers(gui.ui.modflags());
         captureForageSource(gui != null ? gui.ui : null);
         initOpts(opts);
     }
@@ -178,7 +179,7 @@ public class NFlowerMenu extends FlowerMenu
         }
         boolean botRunning = NContext.waitBot.get()
             || (ui.gui != null && ui.gui.biw != null && ui.gui.biw.waitBot.get());
-        if(!ui.modshift && (Boolean) NConfig.get(NConfig.Key.asenable) && !botRunning) {
+        if(!Hotkeys.action(Hotkeys.FLOWER_FORCE_MANUAL).current().matchesModifiers(ui.modflags()) && (Boolean) NConfig.get(NConfig.Key.asenable) && !botRunning) {
             if ((Boolean) NConfig.get(NConfig.Key.singlePetal) && nopts.length == 1 && (NUtils.getUI().core.getLastActions()==null || NUtils.getUI().core.getLastActions().item == null)) {
                 nchoose(nopts[0]);
             } else {
@@ -275,7 +276,7 @@ public class NFlowerMenu extends FlowerMenu
                 }
             }
         }
-        if(!ui.modshift && !NUtils.getUI().core.isBotmod() && ctrlMode)
+        if(!Hotkeys.action(Hotkeys.FLOWER_FORCE_MANUAL).current().matchesModifiers(ui.modflags()) && !NUtils.getUI().core.isBotmod() && ctrlMode)
         {
             if (option != null && NUtils.getUI().core.getLastActions()!=null)
             {

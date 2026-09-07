@@ -26,6 +26,8 @@
 
 package haven;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.MCache.OverlayInfo;
 import haven.render.*;
 import haven.render.sl.Type;
@@ -2409,7 +2411,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
     protected class Click extends Hittest {
 	int clickb;
-	final int modflags;
+	int modflags;
 	
 	protected Click(Coord c, int b) {
 	    this(c, b, ui.modflags());
@@ -2446,8 +2448,14 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		else
 			clickedGob = null;
 
-		if((modflags & UI.MOD_META) != 0 && (modflags & UI.MOD_SHIFT) != 0 &&
-			(modflags & UI.MOD_CTRL) == 0 && clickb == 1) {
+	    boolean worldPing = (MapView.this instanceof nurgling.NMapView) &&
+		Hotkeys.action(Hotkeys.WORLD_PING).current().matchesMouse(clickb, modflags);
+	    boolean mapPing = !(MapView.this instanceof nurgling.NMapView) &&
+		Hotkeys.action(Hotkeys.MAP_PING).current().matchesMouse(clickb, modflags);
+	    if(worldPing || mapPing) {
+		Integer canonical = worldPing ? Hotkeys.action(Hotkeys.WORLD_PING).canonicalMods() : Hotkeys.action(Hotkeys.MAP_PING).canonicalMods();
+		if(canonical != null)
+		    modflags = canonical;
 			if(clickedGob != null) {
 				if(nurgling.NMapView.sendToSelectedChat(String.format("@%d", clickedGob.gob.id)))
 					return;
@@ -2457,8 +2465,11 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			}
 		}
 
-		if((modflags & UI.MOD_META) != 0 && (modflags & UI.MOD_SHIFT) == 0 &&
-			(modflags & UI.MOD_CTRL) == 0 && clickb == 1) {
+	    if(MapView.this instanceof nurgling.NMapView &&
+		Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).current().matchesMouse(clickb, modflags)) {
+		Integer canonical = Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).canonicalMods();
+		if(canonical != null)
+		    modflags = canonical;
 			if(MapView.this instanceof nurgling.NMapView) {
 				if(((nurgling.NMapView)MapView.this).addWaypointAt(mc))
 					return;
@@ -2631,9 +2642,9 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	Loader.Future<Plob> placing_l = this.placing;
 	if((placing_l != null) && placing_l.done()) {
 	    Plob placing = placing_l.get();
-	    if((ev.code == KeyEvent.VK_LEFT) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, -1, -1), ui.modflags()))
+	    if(Hotkeys.action(Hotkeys.WORLD_PLACEMENT_ROTATE_LEFT).current().matches(ev.awt, 0) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, -1, -1), ui.modflags()))
 		return(true);
-	    if((ev.code == KeyEvent.VK_RIGHT) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, 1, 1), ui.modflags()))
+	    if(Hotkeys.action(Hotkeys.WORLD_PLACEMENT_ROTATE_RIGHT).current().matches(ev.awt, 0) && placing.adjust.rotate(placing, new MouseWheelEvent(Coord.z, 1, 1), ui.modflags()))
 		return(true);
 	}
 	if(camera.keydown(ev))

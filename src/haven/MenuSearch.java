@@ -26,6 +26,8 @@
 
 package haven;
 
+import nurgling.hotkeys.Hotkeys;
+
 import java.util.*;
 import java.awt.image.BufferedImage;
 import haven.MenuGrid.Pagina;
@@ -196,7 +198,7 @@ public abstract class MenuSearch extends Window {
 		public void activate(String text) {
 		    if(rls.sel != null)
 			activateResult(rls.sel);
-		    if(!ui.modctrl) {
+		    if(!Hotkeys.action(Hotkeys.ACTION_MENU_KEEP_SEARCH_OPEN).current().matchesModifiers(ui.modflags())) {
 			reqclose();
 			settext("");
 			refilter();

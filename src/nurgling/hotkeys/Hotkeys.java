@@ -32,6 +32,46 @@ public final class Hotkeys {
     public static final String HELD_INTERACT_WITH_TARGET = "held.interact_with_target";
     public static final String HELD_OPEN_WITHOUT_USING = "held.open_without_using";
     public static final String HELD_LIGHT_FROM_FIRE = "held.light_from_fire";
+    public static final String WORLD_PLANNER_REMOVE_GHOST = "world.planner.remove_ghost";
+    public static final String WORLD_PLANNER_CLONE_GHOST = "world.planner.clone_ghost";
+    public static final String WORLD_SHARE_CHAT_AREA = "world.share_chat_area";
+    public static final String MAP_QUICK_MARKER = "map.quick_marker";
+    public static final String WORLD_TOGGLE_OBJECT_RING = "world.toggle_object_ring";
+    public static final String WORLD_CONTEXT_MENU = "world.context_menu";
+    public static final String WORLD_QUEUE_WAYPOINT = "world.queue_waypoint";
+    public static final String WORLD_PING = "world.ping";
+    public static final String WORLD_PLACEMENT_ROTATE_LEFT = "world.placement.rotate_left";
+    public static final String WORLD_PLACEMENT_ROTATE_RIGHT = "world.placement.rotate_right";
+    public static final String WORLD_SELECTION_ROTATE = "world.selection.rotate";
+    public static final String WORLD_SELECTION_TOGGLE_GRID = "world.selection.toggle_grid";
+    public static final String MAP_MARKER_DELETE = "map.marker.delete";
+    public static final String MAP_MARKER_EDIT = "map.marker.edit";
+    public static final String MAP_MARKER_WAYPOINT = "map.marker.waypoint";
+    public static final String MAP_PING = "map.ping";
+    public static final String FLOWER_FORCE_MANUAL = "flower.force_manual";
+    public static final String FLOWER_CONTROL_MODE = "flower.control_mode";
+    public static final String ACTION_MENU_KEEP_SEARCH_OPEN = "action_menu.keep_search_open";
+    public static final String ACTION_MENU_OPEN_ALL_ROSTERS = "action_menu.open_all_rosters";
+    public static final String CRAFT_SHOW_RECIPES = "craft.show_recipes";
+    public static final String COMBAT_ACTION_POINTS_INCREASE = "combat.action_points.increase";
+    public static final String COMBAT_ACTION_POINTS_DECREASE = "combat.action_points.decrease";
+    public static final String FGT_CYCLE = "fgt-cycle";
+    public static final String FGT_CYCLE_PREV = "fgt-cycle-prev";
+    public static final String STOCKPILE_TRANSFER_ALL = "stockpile.transfer_all";
+    public static final String STOCKPILE_TRANSFER_OUT = "stockpile.transfer_out";
+    public static final String STOCKPILE_TRANSFER_IN = "stockpile.transfer_in";
+    public static final String INVENTORY_STACK_TRANSFER_TO_MAIN = "inventory.stack.transfer_to_main";
+    public static final String INVENTORY_STACK_TRANSFER_FROM_MAIN = "inventory.stack.transfer_from_main";
+    public static final String BUDDY_PULL_MODE = "buddy.pull_mode";
+    public static final String WOUND_FIND_TREATMENT_STORAGE = "wound.find_treatment_storage";
+    public static final String LAYOUT_UNDO = "layout.undo";
+    public static final String LAYOUT_COMPASS_RESIZE = "layout.compass_resize";
+    public static final String WORLD_SURVEY_NEW_SELECTION = "world.survey.new_selection";
+    public static final String WINDOW_DB_STATS_TOGGLE = "window.db_stats.toggle";
+    public static final String WINDOW_AGENT_TOGGLE = "window.agent.toggle";
+    public static final String WINDOW_RESOURCE_TIMERS_REFRESH = "window.resource_timers.refresh";
+    public static final String WINDOW_MAP_ICONS_TOGGLE_SELECTED = "window.map_icons.toggle_selected";
+    public static final String SYSTEM_RENDERING_TOGGLE = "system.rendering.toggle";
 
     private static final HotkeyRegistry REGISTRY = new HotkeyRegistry();
     private static boolean initialized;
@@ -46,5 +86,12 @@ public final class Hotkeys {
             HotkeyCatalog.registerCore(REGISTRY);
         }
         return REGISTRY;
+    }
+
+    public static HotkeyAction action(String id) {
+        HotkeyAction action = registry().find(id);
+        if(action == null)
+            throw new IllegalStateException("unknown hotkey: " + id);
+        return action;
     }
 }

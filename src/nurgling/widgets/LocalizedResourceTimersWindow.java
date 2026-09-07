@@ -1,5 +1,7 @@
 package nurgling.widgets;
 
+import nurgling.hotkeys.Hotkeys;
+
 import haven.*;
 import nurgling.LocalizedResourceTimer;
 import nurgling.LocalizedResourceTimerService;
@@ -208,7 +210,7 @@ public class LocalizedResourceTimersWindow extends Window {
         if(ev.code == java.awt.event.KeyEvent.VK_ESCAPE) {
             hide();
             return true;
-        } else if(ev.code == java.awt.event.KeyEvent.VK_F5) {
+        } else if(Hotkeys.action(Hotkeys.WINDOW_RESOURCE_TIMERS_REFRESH).current().matches(ev.awt, 0)) {
             refreshTimers();
             return true;
         }

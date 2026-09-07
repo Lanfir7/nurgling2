@@ -92,7 +92,7 @@ public final class HotkeyCatalog {
         core(registry, binding("scm-itemcraft", KeyMatch.nil), HotkeyCategory.CRAFTING, HotkeyContext.CRAFT_WINDOW, order);
         for(int i = 0; i < 10; i++)
             core(registry, binding("fgt/" + i, KeyMatch.forcode(KeyEvent.VK_1 + (i % 5), i < 5 ? 0 : KeyMatch.S)), HotkeyCategory.COMBAT, HotkeyContext.COMBAT_UI, order);
-        core(registry, binding("fgt-cycle", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C), KeyMatch.S), HotkeyCategory.COMBAT, HotkeyContext.COMBAT_UI, order);
+        core(registry, binding("fgt-cycle", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C)), HotkeyCategory.COMBAT, HotkeyContext.COMBAT_UI, order);
         core(registry, binding("scm-root", KeyMatch.forcode(KeyEvent.VK_ESCAPE, 0)), HotkeyCategory.ACTION_MENU, HotkeyContext.ACTION_MENU, order);
         core(registry, binding("scm-back", KeyMatch.forcode(KeyEvent.VK_BACK_SPACE, 0)), HotkeyCategory.ACTION_MENU, HotkeyContext.ACTION_MENU, order);
         core(registry, binding("scm-next", KeyMatch.forchar('N', KeyMatch.S | KeyMatch.C | KeyMatch.M, KeyMatch.S)), HotkeyCategory.ACTION_MENU, HotkeyContext.ACTION_MENU, order);
@@ -102,10 +102,130 @@ public final class HotkeyCatalog {
         core(registry, binding("session-prev", KeyMatch.forcode(KeyEvent.VK_OPEN_BRACKET, KeyMatch.M)), HotkeyCategory.SESSIONS, HotkeyContext.SESSION_SWITCHER, order);
 
         registerItemActions(registry, order);
+        registerGameplayGestures(registry, order);
 
         for(int slot = 0; slot < 12; slot++)
             registerBelt(registry, KeyBinding.get("belt0" + slot,
                     NToolBeltProp.defaultKey("belt0", slot)), "belt0", slot);
+    }
+
+    private static void registerGameplayGestures(HotkeyRegistry registry, int[] order) {
+        gesture(registry, Hotkeys.WORLD_PLANNER_REMOVE_GHOST,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_PLANNER_CLONE_GHOST,
+                InputGesture.mouse(2, KeyMatch.MODS, 0), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_SHARE_CHAT_AREA,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.M), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), Integer.valueOf(haven.UI.MOD_CTRL | haven.UI.MOD_META), order);
+        gesture(registry, Hotkeys.MAP_QUICK_MARKER,
+                InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_TOGGLE_OBJECT_RING,
+                InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_CONTEXT_MENU,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), Integer.valueOf(haven.UI.MOD_CTRL), order);
+        gesture(registry, Hotkeys.WORLD_QUEUE_WAYPOINT,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), Integer.valueOf(haven.UI.MOD_META), order);
+        gesture(registry, Hotkeys.WORLD_PING,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S | KeyMatch.M), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), Integer.valueOf(haven.UI.MOD_META | haven.UI.MOD_SHIFT), order);
+        gesture(registry, Hotkeys.WORLD_PLACEMENT_ROTATE_LEFT,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_LEFT, 0)), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_PLACEMENT_ROTATE_RIGHT,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_RIGHT, 0)), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_SELECTION_ROTATE,
+                InputGesture.key(KeyMatch.forchar('R', 0)), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_SELECTION_TOGGLE_GRID,
+                InputGesture.key(KeyMatch.forchar('C', 0)), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+
+        gesture(registry, Hotkeys.MAP_MARKER_DELETE,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_SURFACE), null, order);
+        gesture(registry, Hotkeys.MAP_MARKER_EDIT,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_SURFACE), null, order);
+        gesture(registry, Hotkeys.MAP_MARKER_WAYPOINT,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_SURFACE), Integer.valueOf(haven.UI.MOD_SHIFT), order);
+        gesture(registry, Hotkeys.MAP_PING,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S | KeyMatch.M), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_SURFACE), Integer.valueOf(haven.UI.MOD_META | haven.UI.MOD_SHIFT), order);
+
+        gesture(registry, Hotkeys.FLOWER_FORCE_MANUAL, InputGesture.modifier(KeyMatch.S), HotkeyCategory.COMBAT,
+                EnumSet.of(HotkeyContext.FLOWER_MENU_MODE), null, order);
+        gesture(registry, Hotkeys.FLOWER_CONTROL_MODE, InputGesture.modifier(KeyMatch.C), HotkeyCategory.COMBAT,
+                EnumSet.of(HotkeyContext.FLOWER_MENU_MODE), null, order);
+        gesture(registry, Hotkeys.ACTION_MENU_KEEP_SEARCH_OPEN, InputGesture.modifier(KeyMatch.C), HotkeyCategory.ACTION_MENU,
+                EnumSet.of(HotkeyContext.MENU_SEARCH_MODE), null, order);
+        gesture(registry, Hotkeys.ACTION_MENU_OPEN_ALL_ROSTERS, InputGesture.modifier(KeyMatch.S), HotkeyCategory.ACTION_MENU,
+                EnumSet.of(HotkeyContext.ROSTER_BUTTON_MODE), null, order);
+        gesture(registry, Hotkeys.CRAFT_SHOW_RECIPES,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.CRAFTING,
+                EnumSet.of(HotkeyContext.CRAFT_WINDOW), null, order);
+        gesture(registry, Hotkeys.COMBAT_ACTION_POINTS_INCREASE,
+                InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.COMBAT,
+                EnumSet.of(HotkeyContext.COMBAT_UI), null, order);
+        gesture(registry, Hotkeys.COMBAT_ACTION_POINTS_DECREASE,
+                InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.COMBAT,
+                EnumSet.of(HotkeyContext.COMBAT_UI), null, order);
+        gesture(registry, Hotkeys.FGT_CYCLE_PREV,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C | KeyMatch.S)), HotkeyCategory.COMBAT,
+                EnumSet.of(HotkeyContext.COMBAT_UI), null, order);
+
+        gesture(registry, Hotkeys.STOCKPILE_TRANSFER_ALL,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
+        gesture(registry, Hotkeys.STOCKPILE_TRANSFER_OUT,
+                InputGesture.wheel(-1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), Integer.valueOf(0), order);
+        gesture(registry, Hotkeys.STOCKPILE_TRANSFER_IN,
+                InputGesture.wheel(1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), Integer.valueOf(0), order);
+        gesture(registry, Hotkeys.INVENTORY_STACK_TRANSFER_TO_MAIN,
+                InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
+        gesture(registry, Hotkeys.INVENTORY_STACK_TRANSFER_FROM_MAIN,
+                InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
+        gesture(registry, Hotkeys.BUDDY_PULL_MODE,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.BUDDY_WINDOW), null, order);
+        gesture(registry, Hotkeys.WOUND_FIND_TREATMENT_STORAGE,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.WOUND_WINDOW), Integer.valueOf(haven.UI.MOD_CTRL), order);
+        gesture(registry, Hotkeys.LAYOUT_UNDO,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_Z, KeyMatch.C)), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.LAYOUT_EDIT), null, order);
+        gesture(registry, Hotkeys.LAYOUT_COMPASS_RESIZE,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.COMPASS_WIDGET), null, order);
+        gesture(registry, Hotkeys.WORLD_SURVEY_NEW_SELECTION,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.LAND_SURVEY), null, order);
+        gesture(registry, Hotkeys.WINDOW_DB_STATS_TOGGLE,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_F11, 0)), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.GLOBAL), null, order);
+        gesture(registry, Hotkeys.WINDOW_AGENT_TOGGLE,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_F10, 0)), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.GLOBAL), null, order);
+        gesture(registry, Hotkeys.WINDOW_RESOURCE_TIMERS_REFRESH,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_F5, 0)), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.RESOURCE_TIMERS_WINDOW), null, order);
+        gesture(registry, Hotkeys.WINDOW_MAP_ICONS_TOGGLE_SELECTED,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_SPACE, 0)), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_ICON_SETTINGS), null, order);
+        gesture(registry, Hotkeys.SYSTEM_RENDERING_TOGGLE,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_F8, 0)), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.GLOBAL), null, order);
     }
 
     private static void registerItemActions(HotkeyRegistry registry, int[] order) {
@@ -151,6 +271,12 @@ public final class HotkeyCatalog {
                                 HotkeyCategory category, Set<HotkeyContext> contexts,
                                 Integer canonicalMods, int[] order) {
         InputGesture.Type type = defaultGesture.type();
+        if(type == InputGesture.Type.KEY) {
+            KeyBinding kb = KeyBinding.get(id, defaultGesture.key());
+            registry.register(new HotkeyAction(id, null, id, category, contexts,
+                    KEY, wrapper(kb), canonicalMods, order[0]++, false));
+            return;
+        }
         HotkeyBinding binding = GESTURE_WRAPPERS.get(id);
         if(binding == null) {
             binding = new GestureBinding(id, defaultGesture, PreferenceStore.SYSTEM);
