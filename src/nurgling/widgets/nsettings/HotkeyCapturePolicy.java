@@ -58,6 +58,27 @@ public final class HotkeyCapturePolicy {
         return key(keyCode, action.allowedTypes());
     }
 
+    public static Decision key(int keyCode, int modifiers, HotkeyAction action) {
+        if(action == null)
+            throw new NullPointerException("action");
+        Set<InputGesture.Type> types = action.allowedTypes();
+        if(keyCode == KeyEvent.VK_ESCAPE)
+            return new Decision(CANCEL, null);
+        if(keyCode == KeyEvent.VK_BACK_SPACE)
+            return new Decision(RESET, null);
+        if(keyCode == KeyEvent.VK_DELETE)
+            return new Decision(DISABLE, null);
+        int modifier = modifier(keyCode);
+        if(modifier != 0) {
+            if(!types.contains(InputGesture.Type.MODIFIER))
+                return new Decision(IGNORE_MODIFIER, null);
+            return new Decision(ASSIGN, InputGesture.modifier(modifier));
+        }
+        if(!types.contains(InputGesture.Type.KEY))
+            return new Decision(REJECT_TYPE, null);
+        return new Decision(ASSIGN, InputGesture.key(KeyMatch.forcode(keyCode, modifiers)));
+    }
+
     public static Decision mouse(int button, int modifiers, Set<InputGesture.Type> allowed) {
         Set<InputGesture.Type> types = allowed == null ? Collections.<InputGesture.Type>emptySet() : allowed;
         if(!types.contains(InputGesture.Type.MOUSE_BUTTON))
@@ -69,6 +90,14 @@ public final class HotkeyCapturePolicy {
         if(action == null)
             throw new NullPointerException("action");
         return mouse(button, modifiers, action.allowedTypes());
+    }
+
+    public static Decision wheel(int amount, int modifiers, HotkeyAction action) {
+        if(action == null)
+            throw new NullPointerException("action");
+        if(!action.allowedTypes().contains(InputGesture.Type.MOUSE_WHEEL))
+            return new Decision(REJECT_TYPE, null);
+        return new Decision(ASSIGN, InputGesture.wheel(amount, KeyMatch.MODS, modifiers));
     }
 
     private static int modifier(int keyCode) {

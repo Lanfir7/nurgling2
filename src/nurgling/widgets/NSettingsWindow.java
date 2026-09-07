@@ -16,6 +16,7 @@ import java.awt.event.KeyEvent;
 import java.util.*;
 
 public class NSettingsWindow extends Widget {
+    public static final String HOTKEY_PAGE_ID = "hotkeys";
 
     private static TexI rbtn = new TexI(Resource.loadsimg("nurgling/hud/buttons/right/u"));
     private static TexI dbtn = new TexI(Resource.loadsimg("nurgling/hud/buttons/down/u"));
@@ -112,6 +113,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem(L10n.get("nsettings.item.quick_actions"), qa = new QuickActions(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.discord"), new DiscordSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.llm_agent"), new AgentSettings(), container));
+        general.addChild(new SettingsItem(HOTKEY_PAGE_ID, L10n.get("nsettings.item.hotkeys"), new HotkeySettings(), container));
 
         SettingsCategory gameenvironment = new SettingsCategory(L10n.get("nsettings.cat.game_environment"), new Panel(L10n.get("nsettings.cat.game_environment")), container);
         gameenvironment.addChild(new SettingsItem(L10n.get("nsettings.item.world"), world = new World(), container));
@@ -236,10 +238,16 @@ public class NSettingsWindow extends Widget {
         public final SettingsPageFrame frame;
         private boolean expanded = false;
         private final String name;
+        private final String id;
         private final List<SettingsItem> children = new ArrayList<>();
         private SettingsItem parent;
 
         public SettingsItem(String name, Widget panel, Widget container) {
+            this(null, name, panel, container);
+        }
+
+        public SettingsItem(String id, String name, Widget panel, Widget container) {
+            this.id = id;
             this.name = name;
             this.panel = panel;
             this.frame = new SettingsPageFrame((Panel)panel, name);
@@ -248,6 +256,7 @@ public class NSettingsWindow extends Widget {
         }
 
         public String getName() { return name; }
+        public String getId() { return id; }
         public List<SettingsItem> getChildren() { return children; }
 
         public void addChild(SettingsItem child) {
@@ -276,6 +285,44 @@ public class NSettingsWindow extends Widget {
         fitCurrentPage();
         settingsView.bar.ch(-settingsView.bar.val);
         settingsView.cont.update();
+    }
+
+    public boolean showPage(String id) {
+        SettingsItem item = findById(id);
+        if(item == null)
+            return false;
+        expandAncestors(item);
+        list.update();
+        list.change(item);
+        showSettings(item);
+        return true;
+    }
+
+    private SettingsItem findById(String id) {
+        if(id == null)
+            return null;
+        for(SettingsCategory category : list.categories) {
+            SettingsItem found = findById(category, id);
+            if(found != null)
+                return found;
+        }
+        return null;
+    }
+
+    private SettingsItem findById(SettingsItem item, String id) {
+        if(id.equals(item.getId()))
+            return item;
+        for(SettingsItem child : item.getChildren()) {
+            SettingsItem found = findById(child, id);
+            if(found != null)
+                return found;
+        }
+        return null;
+    }
+
+    private void expandAncestors(SettingsItem item) {
+        for(SettingsItem parent = item.parent; parent != null; parent = parent.parent)
+            parent.expanded = true;
     }
 
     private void fitCurrentPage() {
