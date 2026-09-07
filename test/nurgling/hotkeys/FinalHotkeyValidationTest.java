@@ -8,7 +8,32 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FinalHotkeyValidationTest {
-    @Test void fullCatalogDefaultsAndResetCanSave() {
+    @Test void shiftedAndLayoutDependentCharactersOverlapTheirCapturedPhysicalEvents() {
+        for(Object[] sample : new Object[][]{{'!', KeyEvent.VK_1, KeyEvent.SHIFT_DOWN_MASK, KeyMatch.S},
+                {'@', KeyEvent.VK_Q, KeyEvent.CTRL_DOWN_MASK | KeyEvent.ALT_DOWN_MASK, KeyMatch.C | KeyMatch.M},
+                {'ф', KeyEvent.VK_A, 0, 0}, {'1', KeyEvent.VK_NUMPAD1, 0, 0}}) {
+            KeyEvent event = new KeyEvent(new Canvas(), KeyEvent.KEY_PRESSED, 0,
+                    (int)sample[2], (int)sample[1], (char)sample[0]);
+            InputGesture character = InputGesture.key(KeyMatch.forchar((char)sample[0], (int)sample[3]));
+            InputGesture captured = InputGesture.key(KeyMatch.forevent(event, KeyMatch.MODS));
+            assertTrue(character.matches(event, 0));
+            assertTrue(captured.matches(event, 0));
+            assertConflict(character, captured);
+        }
+    }
+
+    @Test void quickChatReassignedToSessionShortcutIsAGlobalConflict() {
+        HotkeyRegistry registry = defaultCatalog();
+        InputGesture session = registry.find("session-next").defaultGesture();
+        assertTrue(registry.conflicts("chat-quick", session).stream()
+                .anyMatch(c -> c.conflictingAction().id().equals("session-next")));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+        draft.assign("chat-quick", session);
+        assertTrue(draft.conflicts().stream().anyMatch(c -> c.action().id().equals("chat-quick") || c.conflictingAction().id().equals("chat-quick")));
+        assertThrows(IllegalStateException.class, draft::save);
+    }
+
+    private static HotkeyRegistry defaultCatalog() {
         HotkeyRegistry source = new HotkeyRegistry();
         HotkeyCatalog.registerCore(source);
         HotkeyRegistry registry = new HotkeyRegistry();
@@ -16,6 +41,11 @@ class FinalHotkeyValidationTest {
             registry.register(new HotkeyAction(a.id(), a.labelKey(), a.literalLabel(), a.category(),
                     a.contexts(), a.allowedTypes(), new HotkeyRegistryTest.MemoryBinding(a.id(), a.defaultGesture()),
                     a.canonicalMods(), a.order(), a.dynamic()));
+        return registry;
+    }
+
+    @Test void fullCatalogDefaultsAndResetCanSave() {
+        HotkeyRegistry registry = defaultCatalog();
         HotkeyDraftModel draft = new HotkeyDraftModel(registry);
         List<String> conflicts = new ArrayList<>();
         for(HotkeyConflict c : draft.conflicts()) conflicts.add(c.action().id() + " / " + c.conflictingAction().id());

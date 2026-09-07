@@ -23,6 +23,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Completeness guard for gameplay shortcut registration and action labels. */
 class GameplayHotkeyAuditTest {
+    @Test void configuredCallsCannotLaunderPhysicalAliasClauses() {
+        String aliasSource = "boolean control=ui.modctrl; if(Hotkeys.matchesKey(id, ev.awt)||control) gameplay();";
+        String aliasCondition = extractConditions(aliasSource).get(0);
+        assertFalse(isSourceConditionAllowed("nurgling/NMapView.java", aliasCondition, aliasSource, new ArrayList<>()));
+    }
+
+    @Test void fixedNavigationCannotLaunderUnregisteredMatcherClauses() {
+        String rawCondition = "if(InputNavigation.confirm(ev.code)||raw.matchesMouse(ev.b, ui.modflags()))";
+        assertFalse(isDirectConditionAllowed("nurgling/NMapView.java", 0, rawCondition, new ArrayList<>()));
+        assertEquals(Arrays.asList(rawCondition), extractConditions(rawCondition + " gameplay();"));
+        assertEquals(Arrays.asList("return raw.matchesMouse(button, mods);"),
+                extractConditions("boolean raw(int button,int mods) { return raw.matchesMouse(button, mods); }"));
+    }
     @Test void extractedConditionsIncludeKeysOperatorsAndAddedGameplayClauses() {
         String original = "if(ev.code == KeyEvent.VK_ESCAPE) cancel();";
         List<String> allowed = Arrays.asList("haven/Widget.java|if(ev.code == KeyEvent.VK_ESCAPE)|cancel dialog");
@@ -67,9 +80,7 @@ class GameplayHotkeyAuditTest {
 
     private static List<String> extractConditions(String source) {
         List<String> result = new ArrayList<>();
-        Set<String> aliases = new HashSet<>();
-        Matcher assignments = Pattern.compile("\\b(\\w+)\\s*=\\s*\\(*\\s*(?:(?:\\w+\\.)*ui\\.mod(?:flags\\(\\)|shift|ctrl|meta)|(?:ev|event)\\.(?:mods|code)|(?:ev|event)\\.getKeyCode\\(\\))").matcher(mask(source, true));
-        while(assignments.find()) aliases.add(assignments.group(1));
+        Set<String> aliases = inputAliases(source);
         Set<String> booleanAliases = new HashSet<>();
         Matcher booleans = Pattern.compile("\\bboolean\\s+(\\w+)\\s*=").matcher(mask(source, true));
         while(booleans.find())
@@ -87,14 +98,21 @@ class GameplayHotkeyAuditTest {
             boolean booleanInput = Pattern.compile("\\bui\\.mod(?:ctrl|shift|meta)\\b").matcher(predicate).find();
             for(String alias : booleanAliases)
                 booleanInput |= Pattern.compile("\\b" + Pattern.quote(alias) + "\\b").matcher(predicate).find();
-            if(booleanInput || (Pattern.compile("[!=]=|&&|\\|\\||[<>]=?").matcher(predicate).find() && usesInput(predicate, aliases)))
+            if(booleanInput || UNVERIFIED_MATCHER.matcher(predicate).find() || (Pattern.compile("[!=]=|&&|\\|\\||[<>]=?").matcher(predicate).find() && usesInput(predicate, aliases)))
                 result.add(normalize(expression));
         }
         return result;
     }
 
+    private static Set<String> inputAliases(String source) {
+        Set<String> aliases = new HashSet<>();
+        Matcher assignments = Pattern.compile("\\b(\\w+)\\s*=\\s*\\(*\\s*(?:(?:\\w+\\.)*ui\\.mod(?:flags\\(\\)|shift|ctrl|meta)|(?:ev|event)\\.(?:mods|code)|(?:ev|event)\\.getKeyCode\\(\\))").matcher(mask(source, true));
+        while(assignments.find()) aliases.add(assignments.group(1));
+        return aliases;
+    }
+
     private static boolean usesInput(String text, Set<String> aliases) {
-        if(DIRECT_CONDITION.matcher(text).find()) return true;
+        if(DIRECT_CONDITION.matcher(text).find() || UNVERIFIED_MATCHER.matcher(text).find()) return true;
         for(String alias : aliases)
             if(Pattern.compile("\\b" + Pattern.quote(alias) + "\\b").matcher(text).find()) return true;
         return false;
@@ -127,6 +145,7 @@ class GameplayHotkeyAuditTest {
     }
     private static final Pattern DIRECT_CONDITION = Pattern.compile(
             "ui\\.mod(?:shift|ctrl|meta|flags\\s*\\()|\\b(?:ev|event)\\.(?:mods|code)\\b|KeyEvent\\.VK_|\\b(?:mods|modflags)\\s*(?:[&|]|[!=]=(?!\\s*null))|\\bUI\\.MOD_");
+    private static final Pattern UNVERIFIED_MATCHER = Pattern.compile("\\.matches(?:Mouse|Wheel|Modifiers)\\s*\\(");
     private static final Pattern KEY_ID = Pattern.compile(
             "KeyBinding\\.get\\(\\s*\"([^\"]+)\"");
     @Test
@@ -153,7 +172,7 @@ class GameplayHotkeyAuditTest {
                     }
                     String source = mask(String.join("\n", lines), false);
                     for(String condition : extractConditions(source))
-                        if(!isDirectConditionAllowed(relative, 0, condition, allowlist))
+                        if(!isSourceConditionAllowed(relative, condition, source, allowlist))
                             findings.add(relative + "|" + condition);
                 } catch(IOException e) {
                     throw new AuditFailure(e);
@@ -237,23 +256,55 @@ class GameplayHotkeyAuditTest {
     }
 
     private static boolean isDirectConditionAllowed(String relative, int line, String condition, List<String> allowlist) {
-        return hasHotkeysReference(condition) ||
+        return isSourceConditionAllowed(relative, condition, "", allowlist);
+    }
+
+    private static boolean isSourceConditionAllowed(String relative, String condition, String source, List<String> allowlist) {
+        return hasHotkeysReference(condition, inputAliases(source), registryAliases(source)) ||
                 isAllowlisted(relative, condition, allowlist);
     }
 
-    private static boolean hasHotkeysReference(String text) {
-        if(!text.contains("Hotkeys.") && !text.contains("InputNavigation.")) return false;
-        // Removing only matcher calls ensures adding a raw gameplay clause beside
-        // an existing configured action cannot inherit its exemption.
+    private static Set<String> registryAliases(String source) {
+        Set<String> good = new HashSet<>(), bad = new HashSet<>();
+        Matcher assignments = Pattern.compile("\\b(\\w+)\\s*=(?!=)\\s*([^;]+);").matcher(mask(source, true));
+        while(assignments.find()) {
+            if(assignments.group(2).matches("(?:nurgling\\.hotkeys\\.)?Hotkeys\\.action\\([\\s\\S]*")) good.add(assignments.group(1));
+            else bad.add(assignments.group(1));
+        }
+        good.removeAll(bad);
+        return good;
+    }
+
+    private static boolean hasHotkeysReference(String text, Set<String> inputAliases, Set<String> registryAliases) {
         String remaining = text;
-        Matcher calls = Pattern.compile("(?:(?:Hotkeys|InputNavigation)\\.\\w+|\\.matches(?:Mouse|Wheel|Modifiers)?)\\s*\\(").matcher(remaining);
+        boolean configured = false;
+        // Consume the complete verified action.current().matches(...) chain;
+        // a similarly named method on any arbitrary object gets no exemption.
+        Pattern actionCall = Pattern.compile("\\bHotkeys\\.action\\s*\\(");
+        Matcher calls = actionCall.matcher(remaining);
         while(calls.find()) {
             int start = calls.start();
             int end = balancedEnd(remaining, remaining.indexOf('(', start));
+            Matcher tail = Pattern.compile("\\s*\\.current\\(\\)\\s*\\.matches(?:Mouse|Wheel|Modifiers)?\\s*\\(").matcher(remaining);
+            tail.region(end, remaining.length());
+            if(!tail.lookingAt()) continue;
+            end = balancedEnd(remaining, remaining.indexOf('(', tail.end() - 1));
             remaining = remaining.substring(0, start) + "configured" + remaining.substring(end);
-            calls = Pattern.compile("(?:(?:Hotkeys|InputNavigation)\\.\\w+|\\.matches(?:Mouse|Wheel|Modifiers)?)\\s*\\(").matcher(remaining);
+            configured = true;
+            calls = actionCall.matcher(remaining);
         }
-        return !DIRECT_CONDITION.matcher(remaining).find();
+        String verified = "(?:Hotkeys|InputNavigation)\\.(?!action\\b)\\w+";
+        for(String alias : registryAliases)
+            verified += "|\\b" + Pattern.quote(alias) + "\\.current\\(\\)\\.matches(?:Mouse|Wheel|Modifiers)?";
+        Pattern helpers = Pattern.compile("(?:" + verified + ")\\s*\\(");
+        calls = helpers.matcher(remaining);
+        while(calls.find()) {
+            int start = calls.start(), end = balancedEnd(remaining, remaining.indexOf('(', calls.end() - 1));
+            remaining = remaining.substring(0, start) + "configured" + remaining.substring(end);
+            configured = true;
+            calls = helpers.matcher(remaining);
+        }
+        return configured && !usesInput(remaining, inputAliases);
     }
 
     private static String normalize(String condition) {

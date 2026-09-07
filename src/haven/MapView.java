@@ -2541,6 +2541,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
     
     private UI.Grab camdrag = null;
 
+    /** Modal tools own pointer delivery before ordinary world shortcuts. */
+    protected boolean hasModalMouseGrab() { return grab != null; }
+
+    protected boolean hasModalMouseCapture() {
+        return hasModalMouseGrab() || (placing != null && placing.done());
+    }
+
     public boolean mousedown(MouseDownEvent ev) {
 	// Block all clicks in DRAG mode to prevent character movement during UI adjustment
 	if(ui.core.mode == nurgling.NCore.Mode.DRAG) {
@@ -2548,23 +2555,25 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 	
 	parent.setfocus(this);
-	 nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
-	if(worldAction != null) {
-	    runHitTest(new Click(ev.c, worldAction));
-	    return true;
-	}
+	if((grab != null) && grab.mmousedown(ev.c, ev.b)) return true;
 	Loader.Future<Plob> placing_l = this.placing;
-	if(ev.b == 2) {
-	    if((camdrag == null) && camera.click(ev.c)) {
-		camdrag = ui.grabmouse(this);
-	    }
-	} else if((placing_l != null) && placing_l.done()) {
+	if((placing_l != null) && placing_l.done() && ev.b != 2) {
 	    Plob placing = placing_l.get();
 	    if(placing.lastmc != null) {
 		monitoring.StockpileStorageTracker.onPlace(placing);
 		wdgmsg("place", placing.rc.floor(posres), (int)Math.round(placing.a * 32768 / Math.PI), ev.b, ui.modflags());
 	    }
-	} else if((grab != null) && grab.mmousedown(ev.c, ev.b)) {
+	    return true;
+	}
+	 nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
+	if(worldAction != null && !hasModalMouseCapture()) {
+	    runHitTest(new Click(ev.c, worldAction));
+	    return true;
+	}
+	if(ev.b == 2) {
+	    if((camdrag == null) && camera.click(ev.c)) {
+		camdrag = ui.grabmouse(this);
+	    }
 	} else {
 	    runHitTest(new Click(ev.c, ev.b));
 	}

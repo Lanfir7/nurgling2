@@ -79,14 +79,17 @@ public final class HotkeyAction {
     }
 
     /** Retained legacy defaults: GameUI logout precedes the child area button;
-     * layout undo and action search share Ctrl+Z through contextual precedence.
+     * layout undo and action search share Ctrl+Z through contextual precedence;
+     * quick chat and focused crafting share default Enter through event consumption.
      * Only these original pairs of defaults are shared;
      * assigning either action a different occupied gesture still conflicts. */
     boolean sharesDefaultWith(HotkeyAction other, InputGesture mine, InputGesture theirs) {
         boolean legacyPair = (id.equals("areas") && other.id.equals("instantLogoutKB")) ||
                 (id.equals("instantLogoutKB") && other.id.equals("areas")) ||
                 (id.equals("scm-srch") && other.id.equals("layout.undo")) ||
-                (id.equals("layout.undo") && other.id.equals("scm-srch"));
+                (id.equals("layout.undo") && other.id.equals("scm-srch")) ||
+                (id.equals("chat-quick") && other.id.equals("make/one")) ||
+                (id.equals("make/one") && other.id.equals("chat-quick"));
         return legacyPair && mine.equals(defaultGesture()) && theirs.equals(other.defaultGesture());
     }
 

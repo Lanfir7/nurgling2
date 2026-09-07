@@ -87,6 +87,61 @@ class FinalGameplayHandlersTest {
         assertArrayEquals(new Object[]{"click", Coord.z, Coord2d.of(22, 33).floor(OCache.posres), 1, 5}, map.messages.get(0));
     }
 
+    @Test void consumingModalGrabberPrecedesConfiguredWorldClick() throws Exception {
+        bind(Hotkeys.WORLD_PING, InputGesture.mouse(2, 7, KeyMatch.C)); mods(KeyMatch.C);
+        final int[] presses = {0};
+        map.grab(new MapView.Grabber() {
+            public boolean mmousedown(Coord c, int button) { presses[0]++; return true; }
+            public boolean mmouseup(Coord c, int button) { return false; }
+            public boolean mmousewheel(Coord c, int amount) { return false; }
+            public void mmousemove(Coord c) { }
+        });
+        assertTrue(map.mousedown(new Widget.MouseDownEvent(Coord.z, 2)));
+        assertEquals(1, presses[0]);
+        assertTrue(map.messages.isEmpty());
+        assertEquals(0, map.cameraClicks);
+        TestNMap nmap = allocate(TestNMap.class);
+        nmap.ui = ui; nmap.parent = map.parent; nmap.camera = map.camera; nmap.messages = new ArrayList<>();
+        nmap.grab(new MapView.Grabber() {
+            public boolean mmousedown(Coord c, int button) { presses[0]++; return true; }
+            public boolean mmouseup(Coord c, int button) { return false; }
+            public boolean mmousewheel(Coord c, int amount) { return false; }
+            public void mmousemove(Coord c) { }
+        });
+        assertTrue(nmap.mousedown(new Widget.MouseDownEvent(Coord.z, 2)));
+        assertEquals(2, presses[0]);
+        assertTrue(nmap.messages.isEmpty());
+        assertEquals(0, map.cameraClicks);
+    }
+
+    @Test void placementConsumesWorldShortcutBeforeOrdinaryClickRouting() throws Exception {
+        bind(Hotkeys.WORLD_PING, InputGesture.mouse(1, 7, KeyMatch.C)); mods(KeyMatch.C);
+        TestMap.TestPlob plob = allocate(TestMap.TestPlob.class);
+        field(MapView.Plob.class, "this$0").set(plob, map);
+        plob.rc = Coord2d.of(22, 33); plob.lastmc = Coord.z;
+        Loader.Future<MapView.Plob> future = allocate(Loader.Future.class);
+        field(Loader.Future.class, "val").set(future, plob);
+        field(Loader.Future.class, "done").set(future, true); map.placing = future;
+        assertTrue(map.mousedown(new Widget.MouseDownEvent(Coord.z, 1)));
+        assertEquals(1, map.messages.size());
+        assertEquals("place", map.messages.get(0)[0]);
+        assertEquals(0, map.cameraClicks);
+    }
+
+    @Test void quickChatConsumesDefaultAndReboundGlobalKeyButNotDisabledBinding() throws Exception {
+        for(InputGesture gesture : new InputGesture[]{Hotkeys.action("chat-quick").defaultGesture(),
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_CLOSE_BRACKET, KeyMatch.M)), InputGesture.none()}) {
+            bind("chat-quick", gesture);
+            ChatUI chat = allocate(ChatUI.class);
+            chat.ui = ui; chat.sel = allocate(ChatUI.SimpleChat.class); chat.visible = false;
+            Widget.GlobKeyEvent event = new Widget.GlobKeyEvent(key(
+                    gesture.type() == InputGesture.Type.NONE ? KeyEvent.VK_ENTER : gesture.key().code,
+                    gesture.type() == InputGesture.Type.NONE ? 0 : gesture.modmatch()).awt);
+            assertEquals(gesture.type() != InputGesture.Type.NONE, chat.globtype(event));
+            assertEquals(gesture.type() != InputGesture.Type.NONE, field(ChatUI.class, "qgrab").get(chat) != null);
+        }
+    }
+
     @Test void heldControlLeftDropReachesWorldWithCanonicalControlAfterRebinding() throws Exception {
         String id = "held.drop_on_ground";
         assertNotNull(Hotkeys.registry().find(id));

@@ -91,3 +91,5 @@ Final review: 8 Important open — unsavable full-catalog defaults; runtime-over
 Final review: 3 Minor open — reversed wheel labels; duplicated locale fallback metadata/literal capture feedback; deferred registry/draft focused coverage.
 
 Final integrated fix pass: all 8 Important and 3 Minor findings addressed; see `final-fix-report.md` for RED/GREEN evidence, canonical input/context decisions and audit mutations. Focused 90/90; full `rtk ant test` 1691/1691; `rtk ant` successful; diff whitespace and forbidden-editor/helper searches clean. Remaining validation limitation: no live game-server/GPU interactive smoke test.
+
+Scoped re-review follow-up from 175fbdd2: four new Important counterexamples reproduced RED and addressed (modal grab/placement precedence; punctuation/layout/keypad runtime overlap; preserved audit alias provenance and verified matcher chains; actual global quick-chat context with exact default Enter sharing). Focused 97/97; full `rtk ant test` 1698/1698; `rtk ant` successful; diff/forbidden searches clean. See appended follow-up section in `final-fix-report.md` for explicit self-review of each counterexample.

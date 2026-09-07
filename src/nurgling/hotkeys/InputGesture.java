@@ -99,7 +99,40 @@ public final class InputGesture {
             return key.code == other.key.code;
         KeyMatch character = key.chr != 0 ? key : other.key;
         KeyMatch physical = key.chr == 0 ? key : other.key;
-        return KeyEvent.getExtendedKeyCodeForChar(Character.toUpperCase(character.chr)) == physical.code;
+        if(KeyEvent.getExtendedKeyCodeForChar(Character.toUpperCase(character.chr)) == physical.code)
+            return true;
+        // AWT virtual letter/digit codes identify Latin letters/digits, not scan
+        // positions. Symbols and non-Latin characters have no unique inverse:
+        // Shift+1 may produce !, AltGr+Q @, and a Cyrillic layout A -> ф.
+        // Do not guess a US punctuation layout; conservatively include every
+        // character-producing virtual key for those layout-dependent characters.
+        char chr = Character.toUpperCase(character.chr);
+        if(chr >= '0' && chr <= '9' && physical.code == KeyEvent.VK_NUMPAD0 + (chr - '0'))
+            return true;
+        return !(chr >= 'A' && chr <= 'Z') && !(chr >= '0' && chr <= '9') &&
+                !Character.isISOControl(chr) && chr != KeyEvent.CHAR_UNDEFINED && printableKey(physical.code);
+    }
+
+    private static boolean printableKey(int code) {
+        if((code >= KeyEvent.VK_A && code <= KeyEvent.VK_Z) ||
+                (code >= KeyEvent.VK_0 && code <= KeyEvent.VK_9) ||
+                (code >= KeyEvent.VK_NUMPAD0 && code <= KeyEvent.VK_DIVIDE) || code >= 0x01000000)
+            return true;
+        switch(code) {
+        case KeyEvent.VK_SPACE: case KeyEvent.VK_COMMA: case KeyEvent.VK_PERIOD:
+        case KeyEvent.VK_SLASH: case KeyEvent.VK_SEMICOLON: case KeyEvent.VK_EQUALS:
+        case KeyEvent.VK_OPEN_BRACKET: case KeyEvent.VK_BACK_SLASH: case KeyEvent.VK_CLOSE_BRACKET:
+        case KeyEvent.VK_MINUS: case KeyEvent.VK_BACK_QUOTE: case KeyEvent.VK_QUOTE:
+        case KeyEvent.VK_AMPERSAND: case KeyEvent.VK_ASTERISK: case KeyEvent.VK_QUOTEDBL:
+        case KeyEvent.VK_LESS: case KeyEvent.VK_GREATER: case KeyEvent.VK_BRACELEFT:
+        case KeyEvent.VK_BRACERIGHT: case KeyEvent.VK_AT: case KeyEvent.VK_COLON:
+        case KeyEvent.VK_CIRCUMFLEX: case KeyEvent.VK_DOLLAR: case KeyEvent.VK_EURO_SIGN:
+        case KeyEvent.VK_EXCLAMATION_MARK: case KeyEvent.VK_INVERTED_EXCLAMATION_MARK:
+        case KeyEvent.VK_LEFT_PARENTHESIS: case KeyEvent.VK_NUMBER_SIGN: case KeyEvent.VK_PLUS:
+        case KeyEvent.VK_RIGHT_PARENTHESIS: case KeyEvent.VK_UNDERSCORE:
+            return true;
+        default: return false;
+        }
     }
 
     public boolean matches(KeyEvent event, int ignored) {

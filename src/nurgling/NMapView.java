@@ -1593,6 +1593,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if(ui.core.mode == NCore.Mode.DRAG) {
             return true;
         }
+        if(hasModalMouseGrab()) return super.mousedown(ev);
 
         nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
 
@@ -1603,7 +1604,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
          * modified click steals them whenever the cursor happens to be within a node's grab radius
          * - which, while laying a path out, it very often is, because the node you just placed is
          * right where you are still clicking. Same rule as the minimap (NMiniMap.mousedown). */
-        if(worldAction == null && Hotkeys.isPlainLeftClick(ev.b, ui.modflags()) && wpGrab == null) {
+        if(!hasModalMouseCapture() && worldAction == null && Hotkeys.isPlainLeftClick(ev.b, ui.modflags()) && wpGrab == null) {
             long wpid = worldWaypointAt(ev.c);
             if(wpid >= 0) {
                 wpDragOrigin = waypointWorldPos(wpid);
@@ -1679,6 +1680,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 if (consumed[0]) return true;
             }
         }
+
+        if(hasModalMouseCapture()) return super.mousedown(ev);
 
         // Alt+Ctrl+LMB activates area selection for chat sharing
         if (Hotkeys.action(Hotkeys.WORLD_SHARE_CHAT_AREA).current().matchesMouse(ev.b, ui.modflags())) {

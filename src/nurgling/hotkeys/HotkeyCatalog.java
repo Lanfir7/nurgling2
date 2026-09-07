@@ -353,7 +353,6 @@ public final class HotkeyCatalog {
         if(binding.id.startsWith("cam-")) context = HotkeyContext.WORLD_CAMERA;
         if(binding.id.startsWith("mapwnd/")) context = HotkeyContext.MAP_WINDOW;
         if(binding.id.startsWith("login/")) context = HotkeyContext.LOGIN;
-        if(binding.id.equals("chat-quick")) context = HotkeyContext.CHAT_ENTRY;
         registry.register(new HotkeyAction(binding.id, labelKey(binding.id), null, category,
                 EnumSet.of(context), KEY, wrapper(binding), null, order[0]++, false));
     }
