@@ -8,6 +8,10 @@ import nurgling.hotkeys.HotkeyDraftModel;
 import nurgling.hotkeys.HotkeyRegistry;
 import nurgling.hotkeys.HotkeyBinding;
 import nurgling.hotkeys.InputGesture;
+import nurgling.hotkeys.presets.HotkeyPreset;
+import nurgling.hotkeys.presets.HotkeyPresetLibrary;
+import nurgling.hotkeys.presets.HotkeyPresetRepository;
+import nurgling.hotkeys.presets.HotkeyPresetStore;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -18,8 +22,44 @@ import java.util.Set;
 import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class HotkeySettingsModelTest {
+    @Test void assigningGestureForksBuiltInAndSaveUpdatesSameUserPreset() {
+        HotkeyRegistry registry = singleActionRegistry();
+        MemoryRepository repository = new MemoryRepository(
+                new HotkeyPresetLibrary("builtin.default", java.util.Collections.emptyList()));
+        HotkeySettingsModel model = HotkeySettingsModel.open(registry, repository);
+
+        model.assign("item.take", InputGesture.none());
+        String userId = model.presets().selected().id();
+        assertFalse(model.presets().selected().builtIn());
+        model.save();
+        InputGesture replacement = InputGesture.mouse(3, KeyMatch.MODS, 0);
+        model.assign("item.take", replacement);
+        model.save();
+
+        assertEquals(userId, model.presets().selected().id());
+        assertEquals(replacement, model.presets().selected().gesture("item.take"));
+    }
+
+    @Test void selectingPresetStagesRowsUntilSaveAndCancelRestoresView() {
+        HotkeyRegistry registry = singleActionRegistry();
+        HotkeyPreset user = new HotkeyPreset("user-1", "Custom", false,
+                java.util.Collections.singletonMap("item.take", InputGesture.none()));
+        MemoryRepository repository = new MemoryRepository(
+                new HotkeyPresetLibrary("builtin.default", java.util.Collections.singletonList(user)));
+        HotkeySettingsModel model = HotkeySettingsModel.open(registry, repository);
+        InputGesture runtimeBefore = registry.find("item.take").current();
+
+        model.selectPreset("user-1");
+        assertEquals(InputGesture.none(), model.draft().effective("item.take"));
+        assertEquals(runtimeBefore, registry.find("item.take").current());
+        model.cancel();
+
+        assertEquals(model.savedPresetId(), model.presets().selected().id());
+        assertEquals(runtimeBefore, model.draft().effective("item.take"));
+    }
     @Test void querySearchesEveryCategoryAndClearingRestoresPreviousTab() {
         HotkeySettingsModel model = modelWith("Inventory", "Transfer item", "Map", "Quick marker");
         model.selectCategory(HotkeyCategory.INVENTORY);
@@ -51,6 +91,26 @@ class HotkeySettingsModelTest {
         registry.register(action(secondId, secondLabel, second, context(first == second ? first : second),
                 InputGesture.mouse(1, KeyMatch.MODS, 0)));
         return new HotkeySettingsModel(registry, new HotkeyDraftModel(registry));
+    }
+
+    private static HotkeyRegistry singleActionRegistry() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("item.take", "Take", HotkeyCategory.INVENTORY,
+                HotkeyContext.INVENTORY_ITEM_GENERIC, InputGesture.mouse(1, KeyMatch.MODS, 0)));
+        return registry;
+    }
+
+    private static final class MemoryRepository implements HotkeyPresetRepository {
+        private HotkeyPresetLibrary library;
+        MemoryRepository(HotkeyPresetLibrary library) { this.library = library; }
+        public HotkeyPresetStore.LoadResult load() { return HotkeyPresetStore.LoadResult.loaded(library); }
+        public void save(HotkeyPresetLibrary library) { this.library = library; }
+        public Checkpoint checkpoint() { return new Saved(library); }
+        public void restore(Checkpoint checkpoint) { library = ((Saved)checkpoint).library; }
+        private static final class Saved implements Checkpoint {
+            final HotkeyPresetLibrary library;
+            Saved(HotkeyPresetLibrary library) { this.library = library; }
+        }
     }
 
     private static HotkeyCategory category(String value) {

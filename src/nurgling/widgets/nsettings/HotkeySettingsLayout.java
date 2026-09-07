@@ -22,6 +22,9 @@ public final class HotkeySettingsLayout {
     }
 
     public final Rect viewport;
+    public final Rect presets;
+    public final Rect search;
+    public final Rect tabs;
     public final Rect filter;
     public final Rect rows;
     public final Rect capture;
@@ -50,14 +53,21 @@ public final class HotkeySettingsLayout {
             throw new NullPointerException("model");
         this.model = model;
         this.viewport = null;
+        this.presets = null;
+        this.search = null;
+        this.tabs = null;
         this.filter = null;
         this.rows = null;
         this.capture = null;
     }
 
-    private HotkeySettingsLayout(Rect viewport, Rect filter, Rect rows, Rect capture) {
+    private HotkeySettingsLayout(Rect viewport, Rect presets, Rect search, Rect tabs,
+                                 Rect filter, Rect rows, Rect capture) {
         this.model = null;
         this.viewport = viewport;
+        this.presets = presets;
+        this.search = search;
+        this.tabs = tabs;
         this.filter = filter;
         this.rows = rows;
         this.capture = capture;
@@ -66,17 +76,28 @@ public final class HotkeySettingsLayout {
     public static HotkeySettingsLayout calculate(int width, int viewportHeight,
                                                   int searchHeight, int tabsHeight,
                                                   int filterHeight, int rowHeight) {
+        return calculate(width, viewportHeight, 0, searchHeight, tabsHeight,
+                filterHeight, rowHeight);
+    }
+
+    public static HotkeySettingsLayout calculate(int width, int viewportHeight,
+                                                  int presetHeight, int searchHeight,
+                                                  int tabsHeight, int filterHeight,
+                                                  int rowHeight) {
         if(width < 0 || viewportHeight < 0 || searchHeight < 0 || tabsHeight < 0 ||
-                filterHeight < 0 || rowHeight < 0)
+                presetHeight < 0 || filterHeight < 0 || rowHeight < 0)
             throw new IllegalArgumentException("negative hotkey layout dimension");
         Rect viewport = new Rect(0, 0, width, viewportHeight);
-        Rect filter = new Rect(0, searchHeight + tabsHeight, width, filterHeight);
+        Rect presets = new Rect(0, 0, width, presetHeight);
+        Rect search = new Rect(0, presets.y + presets.h, width, searchHeight);
+        Rect tabs = new Rect(0, search.y + search.h, width, tabsHeight);
+        Rect filter = new Rect(0, tabs.y + tabs.h, width, filterHeight);
         int rowsY = filter.y + filter.h;
         Rect rows = new Rect(0, rowsY, width, Math.max(0, viewportHeight - rowsY));
         int captureWidth = Math.min(UI_SCALE_CAPTURE, width);
         Rect capture = new Rect(Math.max(0, width - captureWidth), rowsY,
                 captureWidth, rowHeight);
-        return new HotkeySettingsLayout(viewport, filter, rows, capture);
+        return new HotkeySettingsLayout(viewport, presets, search, tabs, filter, rows, capture);
     }
 
     private static final int UI_SCALE_CAPTURE = 175;

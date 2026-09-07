@@ -14,6 +14,16 @@ class HotkeySettingsLayoutTest {
     }
 
     @Test
+    void presetRowLeavesSearchTabsAndRowsNonOverlappingAtLargeFonts() {
+        HotkeySettingsLayout layout = HotkeySettingsLayout.calculate(
+                560, 530, 28, 32, 40, 30, 44);
+        assertTrue(layout.presets.y + layout.presets.h <= layout.search.y);
+        assertTrue(layout.search.y + layout.search.h <= layout.tabs.y);
+        assertTrue(layout.tabs.y + layout.tabs.h <= layout.filter.y);
+        assertTrue(layout.filter.y + layout.filter.h <= layout.rows.y);
+    }
+
+    @Test
     void selectedOverflowTabIsFullyReachable() {
         HotkeyTabLayout layout = HotkeyTabLayout.calculate(
                 new int[] {72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72},

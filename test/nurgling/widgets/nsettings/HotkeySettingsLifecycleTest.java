@@ -264,6 +264,24 @@ class HotkeySettingsLifecycleTest {
         assertEquals(0, registry.listenerCount());
     }
 
+    @Test
+    void destroyingPageStopsPresetClipboardCallbacks() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        try {
+            HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(new HotkeyRegistry()));
+            assertTrue(page.controls().acceptsClipboardResult());
+            page.disposeLifecycle();
+            org.junit.jupiter.api.Assertions.assertFalse(page.controls().acceptsClipboardResult());
+            org.junit.jupiter.api.Assertions.assertFalse(page.controls().hasOpenPrompt());
+        } finally {
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+    }
+
     private static NSettingsWindow parentWith(HotkeySettings page) throws Exception {
         NSettingsWindow window = (NSettingsWindow) unsafe().allocateInstance(NSettingsWindow.class);
         Object category = unsafe().allocateInstance(
