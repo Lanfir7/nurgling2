@@ -1421,11 +1421,12 @@ public class NMakewindow extends Widget implements DTarget {
     }
 
     public boolean globtype(GlobKeyEvent ev) {
-        if(ev.c == '\n') {
-            if(Hotkeys.action(Hotkeys.MAKE_ALL).current().matches(ev.awt, 0))
-                craftAll();
-            else if(Hotkeys.action(Hotkeys.MAKE_ONE).current().matches(ev.awt, 0))
-                craft();
+        if(Hotkeys.action(Hotkeys.MAKE_ALL).current().matches(ev.awt, 0)) {
+            craftAll();
+            return(true);
+        }
+        if(Hotkeys.action(Hotkeys.MAKE_ONE).current().matches(ev.awt, 0)) {
+            craft();
             return(true);
         }
         return(super.globtype(ev));

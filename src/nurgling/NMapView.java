@@ -1751,7 +1751,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         // Plain LMB/RMB on a gem's floating icon: redirect the click to the gem gob
         // so the small ground item is easy to hit. Only fires without modifiers; all
         // modifier combos keep their existing behavior.
-        if ((ev.b == 1 || ev.b == 3) && !ui.modctrl && !ui.modshift && !ui.modmeta) {
+        if (Hotkeys.isPlainMouseClick(ev.b, ui.modflags())) {
             Gob iconTarget = findClickThroughIconGob(ev.c);
             if (iconTarget != null) {
                 Coord2d gc = iconTarget.rc;

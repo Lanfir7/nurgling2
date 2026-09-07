@@ -6,7 +6,6 @@ haven/ChatUI.java|if(M && (ev.code|chat history navigation
 haven/ChatUI.java|else if(M && (ev.code|chat history navigation
 haven/DynresWindow.java|if(((ev.c == 'v') && (ev.mods|paste editing
 haven/GameUI.java|if(ev.code == KeyEvent.VK_|system navigation
-haven/GameUI.java|if(ev.code|system navigation
 haven/GameUI.java|if((ev.code < KeyEvent.VK_|system navigation
 haven/iosys/tk/AWTToolkit.java|if(ec == java.awt.event.KeyEvent.VK_|low-level event conversion
 haven/iosys/tk/AWTToolkit.java|if(pc != java.awt.event.KeyEvent.VK_|low-level event conversion
@@ -15,7 +14,7 @@ haven/ReadLine.java|if(ev.getKeyCode() == KeyEvent.VK_|editing
 haven/ReadLine.java|else if(ev.getKeyCode() == KeyEvent.VK_|editing
 haven/ReadLine.java|else if((code == KeyEvent.VK_|editing
 haven/render/jogl/Test.java|if(ev.getKeyCode() == KeyEvent.VK_|developer debug key
-haven/res/ui/tt/slots/ISlots.java|if(!(owner instanceof NGItem) || ((owner).ui.modshift|expanded tooltip
+haven/res/ui/tt/slots/ISlots.java|if(!(owner instanceof NGItem) || ((NGItem)owner).ui.modshift|expanded tooltip
 haven/Searchbox.java|if((ev.mods|search editing
 haven/Searchbox.java|if((ev.mods|search editing
 haven/Searchbox.java|else if(code == KeyEvent.VK_|search editing
@@ -26,7 +25,6 @@ haven/Widget.java|if(code == KeyEvent.VK_|focus traversal
 haven/Widget.java|else if(code == KeyEvent.VK_|focus traversal
 haven/Widget.java|if((ev.mods|editing
 haven/Window.java|if(ev.code == java.awt.event.KeyEvent.VK_|system navigation
-haven/WItem.java|if(ui.modshift|expanded tooltip
 nurgling/NUI.java|if (ev.getKeyCode() == KeyEvent.VK_|system navigation
 nurgling/widgets/ActionConfigWindow.java|if (ev.code == KeyEvent.VK_|system navigation
 nurgling/widgets/ActionConfigWindow.java|else if (ev.code == KeyEvent.VK_|system navigation

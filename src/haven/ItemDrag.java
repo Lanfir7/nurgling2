@@ -26,6 +26,8 @@
 
 package haven;
 
+import nurgling.hotkeys.Hotkeys;
+
 import nurgling.NWItem;
 import nurgling.tools.*;
 
@@ -71,7 +73,7 @@ public class ItemDrag extends NWItem
 		ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
 			action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
 		return(true);
-	if(action == null && ev.b == 3 && ui.modctrl && !ui.modshift && !ui.modmeta) {
+	if(action == null && Hotkeys.matchesLegacyHeldCtrlRmb(ev.b, ui.modflags())) {
 	    /* XXX */
 	    GameUI gui = getparent(GameUI.class);
 	    if((gui != null) && (gui.map != null)) {

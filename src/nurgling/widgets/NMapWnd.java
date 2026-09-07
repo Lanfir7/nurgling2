@@ -751,7 +751,7 @@ public class NMapWnd extends MapWnd {
                viewCoord.y >= 0 && viewCoord.y < view.sz.y) {
 
                 // Left-click for forager path recording (without modifier)
-                if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl) {
+                if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags())) {
                     if(handleForagerRecordingClick(viewCoord)) {
                         return true; // Consume the event
                     }
@@ -766,7 +766,7 @@ public class NMapWnd extends MapWnd {
                 }
 
                 // Right-click for clearing waypoint queue (fish handling is in parent NMiniMap)
-                if(ev.b == 3 && !ui.modshift) {
+                if(Hotkeys.isUnshiftedRightClick(ev.b, ui.modflags())) {
                     // Clear waypoint queue on regular right-click (if not on fish/marker)
                     NGameUI gui = (NGameUI) NUtils.getGameUI();
                     if(gui != null && gui.waypointMovementService != null) {

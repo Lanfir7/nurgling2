@@ -36,6 +36,7 @@ import static haven.PType.*;
 
 import nurgling.*;
 import nurgling.actions.SortInventory;
+import nurgling.hotkeys.Hotkeys;
 import nurgling.i18n.L10n;
 import nurgling.widgets.*;
 import nurgling.widgets.craftatlas.CraftAtlasWindow;
@@ -1694,7 +1695,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	public boolean globtype(GlobKeyEvent ev) {
 	    boolean M = (ev.mods & KeyMatch.M) != 0;
 	    for(int i = 0; i < beltkeys.length; i++) {
-		if(ev.code == beltkeys[i]) {
+		if(Hotkeys.matchesFixedBeltKey(ev.code, beltkeys[i])) {
 		    if(M) {
 			curbelt = i;
 			return(true);
@@ -1748,7 +1749,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	}
 	
 	public boolean globtype(GlobKeyEvent ev) {
-	    if((ev.code < KeyEvent.VK_0) || (ev.code > KeyEvent.VK_9))
+	    if(!Hotkeys.isNumericKey(ev.code))
 		return(super.globtype(ev));
 	    int i = Utils.floormod(ev.code - KeyEvent.VK_0 - 1, 10);
 	    boolean M = (ev.mods & KeyMatch.M) != 0;

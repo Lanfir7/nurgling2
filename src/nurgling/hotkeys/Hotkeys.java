@@ -140,4 +140,38 @@ public final class Hotkeys {
     public static boolean matchesMapDrop(int mods) {
         return (mods & haven.UI.MOD_CTRL) != 0;
     }
+
+    /** Preserve the fixed held Ctrl+RMB interaction used by item dragging. */
+    public static boolean matchesLegacyHeldCtrlRmb(int button, int mods) {
+        return button == 3 && (mods & haven.UI.MOD_CTRL) != 0 &&
+                (mods & (haven.UI.MOD_SHIFT | haven.UI.MOD_META)) == 0;
+    }
+
+    /** Match an unmodified mouse click used by fixed map routing. */
+    public static boolean isPlainMouseClick(int button, int mods) {
+        return (button == 1 || button == 3) && (mods & KeyMatch.MODS) == 0;
+    }
+
+    public static boolean isPlainLeftClick(int button, int mods) {
+        return button == 1 && (mods & KeyMatch.MODS) == 0;
+    }
+
+    public static boolean isPlainRightClick(int button, int mods) {
+        return button == 3 && (mods & KeyMatch.MODS) == 0;
+    }
+
+    /** Match the legacy queue-clearing right-click, which only excludes Shift. */
+    public static boolean isUnshiftedRightClick(int button, int mods) {
+        return button == 3 && (mods & haven.UI.MOD_SHIFT) == 0;
+    }
+
+    /** Preserve the stock F-key belt's physical-key routing. */
+    public static boolean matchesFixedBeltKey(int code, int beltKey) {
+        return code == beltKey;
+    }
+
+    /** Match the stock numeric belt key range before dispatching its slot. */
+    public static boolean isNumericKey(int code) {
+        return code >= KeyEvent.VK_0 && code <= KeyEvent.VK_9;
+    }
 }
