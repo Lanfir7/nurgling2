@@ -2,7 +2,11 @@ package nurgling.widgets.nsettings;
 
 import nurgling.hotkeys.HotkeyAction;
 import nurgling.hotkeys.HotkeyRegistry;
+import haven.Button;
+import haven.Coord;
 import haven.Resource;
+import haven.UI;
+import haven.Widget;
 import nurgling.widgets.NSettingsWindow;
 import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
@@ -14,8 +18,108 @@ import java.util.function.Consumer;
 import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HotkeySettingsLifecycleTest {
+    @Test void localizedCategoryTabsFitTheirTextAndMarkTheSelection() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        java.util.Locale previous = nurgling.i18n.L10n.getLocale();
+        try {
+            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
+            nurgling.i18n.L10n.setLocale(java.util.Locale.forLanguageTag("ru"));
+            HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(new HotkeyRegistry()));
+            @SuppressWarnings("unchecked")
+            List<Button> tabs = (List<Button>)findField(HotkeySettings.class, "tabButtons").get(page);
+            Widget tabsHost = (Widget)findField(HotkeySettings.class, "tabsHost").get(page);
+
+            for(Button tab : tabs)
+                assertTrue(tab.sz.x >= tab.text.sz().x + Button.margin,
+                        "localized tab text must fit inside its button: " + tab.text.text);
+            assertTrue(tabsHost.sz.y >= tabs.get(0).sz.y,
+                    "the selected-state underline must not be clipped by the tab viewport");
+            assertNotNull(tabs.get(0).tint, "selected category must be visibly marked");
+
+            tabs.get(1).click();
+            assertNull(tabs.get(0).tint);
+            assertNotNull(tabs.get(1).tint);
+
+            nurgling.conf.FontSettings larger = new nurgling.conf.FontSettings();
+            nurgling.fonts.FontRoleConfig system = larger.config(nurgling.fonts.FontRole.SYSTEM);
+            system.size = 24;
+            larger.set(nurgling.fonts.FontRole.SYSTEM, system);
+            nurgling.fonts.FontTheme.install(larger);
+            page.fontThemeChanged(nurgling.fonts.FontTheme.revision());
+
+            Button previousVisible = null;
+            for(Button tab : tabs) {
+                if(!tab.visible)
+                    continue;
+                if(previousVisible != null)
+                    assertTrue(previousVisible.c.x + previousVisible.sz.x <= tab.c.x,
+                            "resized localized tabs must be laid out again");
+                previousVisible = tab;
+            }
+            Button resetCategory = findButton(page, nurgling.i18n.L10n.get("hotkeys.reset_category"));
+            Button resetAll = findButton(page, nurgling.i18n.L10n.get("hotkeys.reset_all"));
+            assertTrue(resetCategory.c.x + resetCategory.sz.x + UI.scale(5) <= resetAll.c.x,
+                    "resized reset buttons must be laid out again");
+        } finally {
+            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
+            nurgling.i18n.L10n.setLocale(previous);
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+    }
+
+    @Test void longActionTextIsEllipsizedWithoutOverlappingControls() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        try {
+            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
+            String fullLabel = "Очень длинное локализованное название действия, которое не должно заходить на кнопку назначения клавиши";
+            nurgling.hotkeys.PreferenceStore preferences = new nurgling.hotkeys.PreferenceStore() {
+                public String get(String key, String fallback) { return fallback; }
+                public void set(String key, String value) { }
+            };
+            nurgling.hotkeys.InputGesture gesture = nurgling.hotkeys.InputGesture.none();
+            HotkeyAction action = new HotkeyAction("long-action", null, fullLabel,
+                    nurgling.hotkeys.HotkeyCategory.WORLD,
+                    java.util.EnumSet.of(nurgling.hotkeys.HotkeyContext.WORLD_SURFACE),
+                    java.util.EnumSet.of(nurgling.hotkeys.InputGesture.Type.KEY),
+                    new nurgling.hotkeys.GestureBinding("long-action", gesture, preferences),
+                    null, 0, false);
+
+            HotkeyActionRow row = new HotkeyActionRow(UI.scale(560), action, gesture,
+                    ignored -> { }, () -> { });
+            Widget label = (Widget)findField(HotkeyActionRow.class, "actionLabel").get(row);
+
+            assertTrue(label.c.x + label.sz.x <= row.capture().c.x - UI.scale(4),
+                    "action label must not overlap the binding control");
+            assertEquals(fullLabel, label.tooltip(Coord.z, null),
+                    "the complete localized label must remain available as a tooltip");
+
+            nurgling.conf.FontSettings larger = new nurgling.conf.FontSettings();
+            nurgling.fonts.FontRoleConfig system = larger.config(nurgling.fonts.FontRole.SYSTEM);
+            system.size = 24;
+            larger.set(nurgling.fonts.FontRole.SYSTEM, system);
+            nurgling.fonts.FontTheme.install(larger);
+            row.fontThemeChanged(nurgling.fonts.FontTheme.revision());
+            assertTrue(label.c.x + label.sz.x <= row.capture().c.x - UI.scale(4),
+                    "action label must be ellipsized again after a font-theme change");
+        } finally {
+            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+    }
+
     @Test void captureInputFamilyFeedbackUsesTheSelectedLanguage() throws Exception {
         nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
         nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
@@ -153,6 +257,13 @@ class HotkeySettingsLifecycleTest {
         setObject(list, "categories", categories);
         setObject(window, "list", list);
         return window;
+    }
+
+    private static Button findButton(Widget parent, String text) {
+        for(Widget child : parent.children())
+            if(child instanceof Button && ((Button)child).text.text.equals(text))
+                return (Button)child;
+        throw new AssertionError("button not found: " + text);
     }
 
     private static HotkeySettings detachedPage(HotkeyRegistry registry) throws Exception {

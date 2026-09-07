@@ -3,6 +3,7 @@ package nurgling.widgets.nsettings;
 import haven.Button;
 import haven.Coord;
 import haven.Label;
+import haven.Text;
 import haven.UI;
 import nurgling.hotkeys.HotkeyAction;
 import nurgling.hotkeys.HotkeyContext;
@@ -18,6 +19,8 @@ public class HotkeyActionRow extends Panel {
     private final Label contextLabel;
     private final NHotkeyCapture capture;
     private final Button reset;
+    private final String actionText;
+    private final String contextText;
 
     public HotkeyActionRow(int width, HotkeyAction action, InputGesture gesture,
                            Consumer<HotkeyCapturePolicy.Decision> captureSink,
@@ -26,11 +29,13 @@ public class HotkeyActionRow extends Panel {
         if(action == null || gesture == null || captureSink == null || resetAction == null)
             throw new NullPointerException();
         resize(Coord.of(width, UI.scale(38)));
-        actionLabel = add(new Label(action.label()), Coord.of(0, UI.scale(3)));
-        contextLabel = add(new Label(contexts(action)), Coord.of(0, UI.scale(20)));
+        actionText = action.label();
+        contextText = contexts(action);
+        actionLabel = add(new Label(actionText), Coord.of(0, UI.scale(3)));
+        contextLabel = add(new Label(contextText), Coord.of(0, UI.scale(20)));
         capture = add(new NHotkeyCapture(UI.scale(175), action, captureSink), Coord.z);
         capture.setGesture(gesture);
-        reset = add(new Button(UI.scale(75), L10n.get("hotkeys.reset"), false).action(resetAction), Coord.z);
+        reset = add(new HotkeyTextButton(UI.scale(75), L10n.get("hotkeys.reset")).action(resetAction), Coord.z);
         resize(sz);
     }
 
@@ -45,6 +50,22 @@ public class HotkeyActionRow extends Panel {
         int captureX = Math.max(0, size.x - capture.sz.x - reset.sz.x - UI.scale(8));
         capture.move(Coord.of(captureX, (size.y - capture.sz.y) / 2));
         reset.move(Coord.of(size.x - reset.sz.x, (size.y - reset.sz.y) / 2));
+        fitLabel(actionLabel, actionText, captureX - UI.scale(4));
+        fitLabel(contextLabel, contextText, captureX - UI.scale(4));
+    }
+
+    private static void fitLabel(Label label, String fullText, int maxWidth) {
+        Text.Line fitted = label.f.ellipsize(fullText, Math.max(1, maxWidth));
+        String displayed = fitted.text;
+        fitted.dispose();
+        label.settext(displayed);
+        label.tooltip = displayed.equals(fullText) ? null : fullText;
+    }
+
+    @Override
+    public void fontThemeChanged(long revision) {
+        super.fontThemeChanged(revision);
+        resize(sz);
     }
 
     private static String contexts(HotkeyAction action) {

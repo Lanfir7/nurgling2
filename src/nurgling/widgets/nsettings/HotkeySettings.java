@@ -32,6 +32,8 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     private final Widget tabsHost;
     private final Button tabsLeft;
     private final Button tabsRight;
+    private final Button resetCategory;
+    private final Button resetAll;
     private final List<Button> tabButtons = new ArrayList<>();
     private final Consumer<List<HotkeyAction>> registryListener = ignored -> rebuildRows();
     private boolean registryListening;
@@ -77,13 +79,13 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
         int tabsY = UI.scale(30);
         tabsLeft = add(new Button(UI.scale(24), "<", false), Coord.of(0, tabsY));
-        tabsHost = add(new Widget(Coord.of(width - UI.scale(48), UI.scale(24))),
+        tabsHost = add(new Widget(Coord.of(width - UI.scale(48), UI.scale(1))),
                 Coord.of(UI.scale(24), tabsY));
         tabsRight = add(new Button(UI.scale(24), ">", false), Coord.of(width - UI.scale(24), tabsY));
         tabsLeft.action(() -> moveCategory(-1));
         tabsRight.action(() -> moveCategory(1));
         for(final HotkeyCategory category : HotkeyCategory.values()) {
-            final Button tab = new Button(UI.scale(72), tabLabel(category), false);
+            final Button tab = new HotkeyCategoryButton(tabLabel(category));
             tabsHost.add(tab, Coord.z);
             tabButtons.add(tab);
             tab.action(() -> {
@@ -93,16 +95,16 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
             });
         }
 
-        add(new Button(UI.scale(110), L10n.get("hotkeys.reset_category"), false)
+        resetCategory = add(new HotkeyTextButton(UI.scale(110), L10n.get("hotkeys.reset_category"))
                 .action(() -> {
                     model.draft().resetCategory(model.selectedCategory());
                     rebuildRows();
                 }), Coord.of(0, UI.scale(60)));
-        add(new Button(UI.scale(90), L10n.get("hotkeys.reset_all"), false)
+        resetAll = add(new HotkeyTextButton(UI.scale(90), L10n.get("hotkeys.reset_all"))
                 .action(() -> {
                     model.draft().resetAll();
                     rebuildRows();
-                }), Coord.of(UI.scale(115), UI.scale(60)));
+                }), Coord.of(resetCategory.sz.x + UI.scale(5), UI.scale(60)));
 
         rowsScroll = add(new Scrollport(Coord.of(width, UI.scale(420))), Coord.of(0, UI.scale(94)));
         rows = rowsScroll.cont;
@@ -200,15 +202,31 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         int margin = UI.scale(4);
         search.move(Coord.of(0, 0));
         conflictsOnly.move(Coord.of(search.sz.x + margin, 0));
-        tabsHost.move(Coord.of(UI.scale(24), UI.scale(30)));
-        tabsHost.resize(Coord.of(Math.max(1, size.x - UI.scale(48)), UI.scale(24)));
-        tabsLeft.move(Coord.of(0, UI.scale(30)));
-        tabsRight.move(Coord.of(Math.max(0, size.x - UI.scale(24)), UI.scale(30)));
+        int tabsY = UI.scale(30);
+        int arrowWidth = UI.scale(24);
+        int tabHeight = Math.max(tabsLeft.sz.y, tabsRight.sz.y);
+        for(Button tab : tabButtons)
+            tabHeight = Math.max(tabHeight, tab.sz.y);
+        tabsHost.move(Coord.of(arrowWidth, tabsY));
+        tabsHost.resize(Coord.of(Math.max(1, size.x - arrowWidth * 2), tabHeight));
+        tabsLeft.move(Coord.of(0, tabsY));
+        tabsRight.move(Coord.of(Math.max(0, size.x - arrowWidth), tabsY));
         layoutTabs();
-        rowsScroll.move(Coord.of(0, UI.scale(94)));
+        int resetY = tabsY + tabHeight + UI.scale(4);
+        resetCategory.move(Coord.of(0, resetY));
+        resetAll.move(Coord.of(resetCategory.sz.x + UI.scale(5), resetY));
+        int resetHeight = Math.max(resetCategory.sz.y, resetAll.sz.y);
+        rowsScroll.move(Coord.of(0, resetY + resetHeight + UI.scale(2)));
         rowsScroll.resize(Coord.of(Math.max(1, size.x), Math.max(1, size.y - rowsScroll.c.y)));
         contentWidth = rowsScroll.cont.sz.x;
         rebuildRows();
+    }
+
+    @Override
+    public void fontThemeChanged(long revision) {
+        super.fontThemeChanged(revision);
+        if(search != null)
+            resize(sz);
     }
 
     private void moveCategory(int direction) {
@@ -230,8 +248,10 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         HotkeyTabLayout.VisibleRange visible = layout.visibleRange();
         for(int i = 0; i < tabButtons.size(); i++) {
             HotkeyTabLayout.Rect rect = layout.rect(i);
-            tabButtons.get(i).move(Coord.of(rect.x, 0));
-            tabButtons.get(i).visible = visible.contains(i);
+            Button tab = tabButtons.get(i);
+            tab.move(Coord.of(rect.x, 0));
+            tab.visible = visible.contains(i);
+            ((HotkeyCategoryButton)tab).setSelected(i == model.selectedCategory().ordinal());
         }
         tabsLeft.visible = layout.canScrollLeft();
         tabsRight.visible = layout.canScrollRight();

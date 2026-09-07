@@ -97,7 +97,7 @@ public final class HotkeyTabLayout {
         int end = 0;
         for(int i = 0; i < copy.length; i++) {
             rects[i] = new Rect(x, copy[i]);
-            if(x + copy[i] > 0 && x < viewportWidth) {
+            if(x >= 0 && x + copy[i] <= viewportWidth) {
                 start = Math.min(start, i);
                 end = i + 1;
             }

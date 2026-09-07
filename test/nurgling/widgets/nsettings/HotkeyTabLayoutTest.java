@@ -17,7 +17,8 @@ class HotkeyTabLayoutTest {
     @Test void visibleRangeAndRightScrollBoundaryAreReported() {
         HotkeyTabLayout layout = HotkeyTabLayout.calculate(widths(70, 80, 90, 100), 180, 0, 6);
         assertEquals(0, layout.visibleRange().start);
-        assertEquals(3, layout.visibleRange().end);
+        assertEquals(2, layout.visibleRange().end,
+                "partially clipped tabs must stay hidden");
         assertFalse(layout.canScrollLeft());
         assertTrue(layout.canScrollRight());
 
