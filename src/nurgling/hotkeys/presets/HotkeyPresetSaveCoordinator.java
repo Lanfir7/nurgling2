@@ -30,7 +30,7 @@ public final class HotkeyPresetSaveCoordinator {
     public void save() {
         if(!hotkeys.conflicts().isEmpty())
             throw new IllegalStateException("hotkey conflicts must be resolved before save");
-        Map<String, InputGesture> runtimeBefore = runtimeSnapshot();
+        Map<String, Object> runtimeBefore = bindingCheckpoints();
         HotkeyDraftModel.Checkpoint hotkeysBefore = hotkeys.checkpoint();
         HotkeyPresetDraftModel.Checkpoint presetsBefore = presets.checkpoint();
         HotkeyPresetRepository.Checkpoint storeBefore;
@@ -61,18 +61,19 @@ public final class HotkeyPresetSaveCoordinator {
         presets.restoreSavedState();
     }
 
-    private Map<String, InputGesture> runtimeSnapshot() {
-        Map<String, InputGesture> result = new LinkedHashMap<>();
-        for(HotkeyAction action : registry.snapshot()) result.put(action.id(), action.current());
+    private Map<String, Object> bindingCheckpoints() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for(HotkeyAction action : registry.snapshot())
+            result.put(action.id(), action.binding().checkpoint());
         return result;
     }
 
-    private void restoreRuntime(Map<String, InputGesture> snapshot, RuntimeException failure) {
+    private void restoreRuntime(Map<String, Object> snapshot, RuntimeException failure) {
         for(HotkeyAction action : registry.snapshot()) {
-            InputGesture original = snapshot.get(action.id());
+            Object original = snapshot.get(action.id());
             if(original == null) continue;
             try {
-                action.binding().set(original);
+                action.binding().restore(original);
             } catch(RuntimeException rollbackFailure) {
                 if(rollbackFailure != failure) failure.addSuppressed(rollbackFailure);
             }

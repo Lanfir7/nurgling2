@@ -55,7 +55,10 @@ public final class HotkeyPresetStore implements HotkeyPresetRepository {
     @Override
     public void save(HotkeyPresetLibrary library) throws IOException {
         if(library == null) throw new NullPointerException("library");
-        NFileUtils.writeAtomically(file.toString(), encode(library).toString(2));
+        String json = encode(library).toString(2);
+        if(json.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_BYTES)
+            throw new IllegalArgumentException("preset file is too large");
+        NFileUtils.writeAtomically(file.toString(), json);
     }
 
     @Override
@@ -128,6 +131,7 @@ public final class HotkeyPresetStore implements HotkeyPresetRepository {
         requireName(preset.name());
         if(preset.gestures().size() > MAX_BINDINGS)
             throw new IllegalArgumentException("too many bindings");
+        for(String actionId : preset.gestures().keySet()) requireId(actionId);
     }
 
     private static String requireId(String value) {

@@ -7,49 +7,26 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Keeps map-icon visibility scoped to the quests that require it.
- * Writes the real Icon Settings {@code show} flag only when an id enters or leaves the claimed set.
- */
+/** Keeps temporary map-icon visibility scoped to the quests that require it. */
 public class QuestTreeIconClaims<K> {
     public interface Visibility<K> {
-        boolean shown(K key);
-        void setShown(K key, boolean shown);
-        void clearOverride(K key);
+        void setOverride(K key, Boolean visible);
     }
 
     private Map<Integer, Set<K>> quests = Collections.emptyMap();
-    private final Map<K, Boolean> previousShow = new HashMap<>();
 
     public void reconcile(Map<Integer, ? extends Collection<K>> required, Visibility<K> visibility) {
         Set<K> before = resources(quests);
         Map<Integer, Set<K>> next = copy(required);
         Set<K> after = resources(next);
 
-        for(K key : after) {
-            if(!before.contains(key))
-                claim(key, visibility);
-        }
+        for(K key : after)
+            visibility.setOverride(key, true);
         for(K key : before) {
             if(!after.contains(key))
-                release(key, visibility);
+                visibility.setOverride(key, null);
         }
         quests = next;
-    }
-
-    private void claim(K key, Visibility<K> visibility) {
-        boolean was = visibility.shown(key);
-        previousShow.put(key, was);
-        if(!was)
-            visibility.setShown(key, true);
-        visibility.clearOverride(key);
-    }
-
-    private void release(K key, Visibility<K> visibility) {
-        Boolean was = previousShow.remove(key);
-        if(was != null && visibility.shown(key) != was)
-            visibility.setShown(key, was);
-        visibility.clearOverride(key);
     }
 
     private Map<Integer, Set<K>> copy(Map<Integer, ? extends Collection<K>> source) {

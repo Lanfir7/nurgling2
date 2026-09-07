@@ -33,6 +33,7 @@ public final class HotkeyPresetCodec {
         validateName(preset.name());
         if(preset.gestures().size() > MAX_BINDINGS)
             throw new IllegalArgumentException("too many bindings");
+        for(String id : preset.gestures().keySet()) validateId(id);
         byte[] json = toJson(preset).toString().getBytes(StandardCharsets.UTF_8);
         if(json.length > MAX_JSON_BYTES)
             throw new IllegalArgumentException("preset is too large");
@@ -59,8 +60,8 @@ public final class HotkeyPresetCodec {
             Map<String, InputGesture> values = new TreeMap<>();
             for(int i = 0; i < bindings.length(); i++) {
                 JSONObject binding = bindings.getJSONObject(i);
-                String id = binding.getString("id");
-                if(id.isEmpty() || !seen.add(id))
+                String id = validateId(binding.getString("id"));
+                if(!seen.add(id))
                     throw new IllegalArgumentException("duplicate binding");
                 values.put(id, InputGesture.decode(binding.getString("gesture")));
             }
@@ -91,6 +92,12 @@ public final class HotkeyPresetCodec {
         if(name.isEmpty() || name.length() > MAX_NAME_CHARS)
             throw new IllegalArgumentException("invalid preset name");
         return name;
+    }
+
+    private static String validateId(String value) {
+        if(value == null || value.isEmpty() || value.length() > 256)
+            throw new IllegalArgumentException("invalid binding id");
+        return value;
     }
 
     private static byte[] gzip(byte[] bytes) {

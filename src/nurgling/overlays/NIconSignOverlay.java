@@ -1,6 +1,7 @@
 package nurgling.overlays;
 
 import haven.*;
+import haven.render.RenderTree;
 import nurgling.conf.FontSettings;
 
 import java.awt.BasicStroke;
@@ -10,38 +11,49 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /** Floating item-name caption for an icon sign. */
 public final class NIconSignOverlay extends NObjectTexLabel {
     public static final String RESOURCE_NAME = "gfx/terobjs/iconsign";
-    private static final Map<String, TexI> LABELS = new ConcurrentHashMap<>();
+    public static final String PARCHMENT_DECAL_RESOURCE = "gfx/terobjs/items/parchment-decal";
+    private static final String DECAL_RESOURCE_PREFIX = "gfx/terobjs/items/decal-";
 
     private final Gob gob;
     private String shownText = "";
-    private ResDrawable trackedDrawable;
-    private MessageBuf trackedData;
+    private Object trackedData;
+    private int trackedResourceId = -1;
     private Indir<Resource> itemResource;
     private Resource loadedItem;
+    private int renderedFontSize = -1;
+    private int renderedOpacity = -1;
+    private Gob.Overlay parchmentOverlay;
+    private NObjectLabelSettings settings;
+    private long settingsRevision = Long.MIN_VALUE;
+    private int renderSlots;
 
     public NIconSignOverlay(Gob gob) {
         super(gob);
         this.gob = gob;
-        this.pos = new Coord3f(0, 0, 8);
+        this.pos = new Coord3f(0, 0, 5);
         this.forced = true;
+        this.parchmentOverlay = findParchmentOverlay(gob);
     }
 
     public static boolean supports(String resourceName) {
         return RESOURCE_NAME.equals(resourceName);
     }
 
-    static void scheduleAttachment(Consumer<Runnable> defer, BooleanSupplier isSignNow,
+    public static boolean supportsParchment(String resourceName) {
+        return resourceName != null && (resourceName.startsWith(PARCHMENT_DECAL_RESOURCE) ||
+                resourceName.startsWith(DECAL_RESOURCE_PREFIX));
+    }
+
+    static void scheduleAttachment(Consumer<Runnable> defer, BooleanSupplier isSupportedNow,
                                    BooleanSupplier alreadyAttached, Runnable attach) {
         defer.accept(() -> {
-            if (isSignNow.getAsBoolean() && !alreadyAttached.getAsBoolean())
+            if (isSupportedNow.getAsBoolean() && !alreadyAttached.getAsBoolean())
                 attach.run();
         });
     }
@@ -50,11 +62,29 @@ public final class NIconSignOverlay extends NObjectTexLabel {
         scheduleAttachment(gob::defer,
                 () -> {
                     Drawable drawable = gob.getattr(Drawable.class);
-                    return drawable instanceof ResDrawable && drawable.getres() != null &&
-                            supports(drawable.getres().name);
+                    if (drawable instanceof ResDrawable && drawable.getres() != null &&
+                            supports(drawable.getres().name))
+                        return true;
+                    return findParchmentData(gob) != null;
                 },
                 () -> gob.findol(NIconSignOverlay.class) != null,
                 () -> gob.addol(new Gob.Overlay(gob, new NIconSignOverlay(gob)), false));
+    }
+
+    public static void parchmentAdded(Gob gob, Gob.Overlay source) {
+        ensureAttached(gob);
+        Gob.Overlay label = gob.findol(NIconSignOverlay.class);
+        if (label != null && label.spr instanceof NIconSignOverlay)
+            ((NIconSignOverlay) label.spr).parchmentOverlay = source;
+    }
+
+    public static void parchmentRemoved(Gob gob, Gob.Overlay source) {
+        Gob.Overlay label = gob.findol(NIconSignOverlay.class);
+        if (label != null && label.spr instanceof NIconSignOverlay) {
+            NIconSignOverlay overlay = (NIconSignOverlay) label.spr;
+            if (overlay.parchmentOverlay == source)
+                overlay.parchmentOverlay = findParchmentOverlay(gob);
+        }
     }
 
     static int contentResourceId(MessageBuf data) {
@@ -67,6 +97,22 @@ public final class NIconSignOverlay extends NObjectTexLabel {
         if (copy.eom())
             return -1;
         return lo | (copy.uint8() << 8);
+    }
+
+    static int parchmentContentResourceId(byte[] data) {
+        if (data == null || data.length < 6)
+            return -1;
+        return contentResourceId(new MessageBuf(data, 4, data.length - 4)) & 0x7fff;
+    }
+
+    static byte[] parchmentData(Gob.Overlay overlay, String resourceName) {
+        if (overlay == null || !supportsParchment(resourceName))
+            return null;
+        if (overlay.sm instanceof OCache.OlSprite)
+            return ((OCache.OlSprite) overlay.sm).sdt;
+        if (overlay.sm instanceof Sprite.Mill.FromRes)
+            return ((Sprite.Mill.FromRes) overlay.sm).sdt;
+        return null;
     }
 
     static String displayText(String tooltip, String resourceName) {
@@ -82,7 +128,11 @@ public final class NIconSignOverlay extends NObjectTexLabel {
     }
 
     static BufferedImage renderLabel(String value) {
-        Font font = FontSettings.getOpenSansSemibold().deriveFont(Font.BOLD, (float) UI.scale(12));
+        return renderLabel(value, 12, 50);
+    }
+
+    static BufferedImage renderLabel(String value, int fontSize, int backgroundOpacity) {
+        Font font = FontSettings.getOpenSansSemibold().deriveFont(Font.BOLD, (float) UI.scale(fontSize));
         BufferedImage measure = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
         Graphics2D mg = measure.createGraphics();
         mg.setFont(font);
@@ -109,7 +159,8 @@ public final class NIconSignOverlay extends NObjectTexLabel {
         int height = out.getHeight() - shadow - UI.scale(2);
         g.setColor(new Color(0, 0, 0, 105));
         g.fillRoundRect(x, y + shadow, width, height, arc, arc);
-        g.setColor(new Color(37, 32, 27, 218));
+        int alpha = Math.round(Math.max(0, Math.min(100, backgroundOpacity)) * 255f / 100f);
+        g.setColor(new Color(37, 32, 27, alpha));
         g.fillRoundRect(x, y, width, height, arc, arc);
         g.setColor(new Color(196, 153, 83, 205));
         g.setStroke(new BasicStroke(border));
@@ -123,41 +174,142 @@ public final class NIconSignOverlay extends NObjectTexLabel {
 
     @Override
     public boolean tick(double dt) {
-        Drawable drawable = gob.getattr(Drawable.class);
-        if (!(drawable instanceof ResDrawable) || !supports(drawable.getres().name))
-            return true;
-
-        ResDrawable sign = (ResDrawable) drawable;
-        if (sign != trackedDrawable || sign.sdt != trackedData) {
-            trackedDrawable = sign;
-            trackedData = sign.sdt;
+        NObjectLabelSettings settings = settings();
+        this.pos = new Coord3f(0, 0, settings.height);
+        Content content = findContent(settings);
+        if (content == null) {
+            trackedData = null;
+            trackedResourceId = -1;
             itemResource = null;
             loadedItem = null;
-            setText("");
-            int resourceId = contentResourceId(sign.sdt);
-            if (resourceId >= 0)
-                itemResource = gob.context(Resource.Resolver.class).getres(resourceId);
+            setText("", settings);
+            return false;
+        }
+
+        if (content.data != trackedData || content.resourceId != trackedResourceId) {
+            trackedData = content.data;
+            trackedResourceId = content.resourceId;
+            itemResource = null;
+            loadedItem = null;
+            setText("", settings);
+            if (content.resourceId >= 0)
+                itemResource = gob.context(Resource.Resolver.class).getres(content.resourceId);
         }
 
         if (itemResource != null && loadedItem == null) {
             try {
                 loadedItem = itemResource.get();
                 Resource.Tooltip tooltip = loadedItem.layer(Resource.tooltip);
-                setText(displayText(tooltip == null ? null : tooltip.text(), loadedItem.name));
+                setText(displayText(tooltip == null ? null : tooltip.text(), loadedItem.name), settings);
             } catch (Loading ignored) {
                 // Retry after the displayed item resource finishes loading.
             }
         }
+        if (renderedFontSize != settings.fontSize || renderedOpacity != settings.backgroundOpacity)
+            setText(shownText, settings, true);
         return false;
     }
 
-    private void setText(String value) {
-        if (value.equals(shownText))
+    private NObjectLabelSettings settings() {
+        long revision = NObjectLabelSettings.revision();
+        if (settings == null || settingsRevision != revision) {
+            settings = NObjectLabelSettings.current();
+            settingsRevision = revision;
+        }
+        return settings;
+    }
+
+    private Content findContent(NObjectLabelSettings settings) {
+        if (!settings.enabled)
+            return null;
+        Drawable drawable = gob.getattr(Drawable.class);
+        if (settings.iconSigns && drawable instanceof ResDrawable && drawable.getres() != null &&
+                supports(drawable.getres().name)) {
+            MessageBuf data = ((ResDrawable) drawable).sdt;
+            return new Content(data, contentResourceId(data));
+        }
+        if (settings.parchments) {
+            byte[] data = parchmentData(parchmentOverlay);
+            if (data != null)
+                return new Content(data, parchmentContentResourceId(data));
+        }
+        return null;
+    }
+
+    private static byte[] findParchmentData(Gob gob) {
+        Gob.Overlay overlay = findParchmentOverlay(gob);
+        return parchmentData(overlay);
+    }
+
+    private static Gob.Overlay findParchmentOverlay(Gob gob) {
+        for (Gob.Overlay overlay : gob.ols) {
+            if (parchmentData(overlay) != null)
+                return overlay;
+        }
+        return null;
+    }
+
+    private static byte[] parchmentData(Gob.Overlay overlay) {
+        if (overlay == null || overlay.spr == null || overlay.spr.res == null)
+            return null;
+        return parchmentData(overlay, overlay.spr.res.name);
+    }
+
+    void setText(String value, NObjectLabelSettings settings) {
+        setText(value, settings, false);
+    }
+
+    private synchronized void setText(String value, NObjectLabelSettings settings, boolean force) {
+        if (!force && value.equals(shownText) && renderedFontSize == settings.fontSize &&
+                renderedOpacity == settings.backgroundOpacity && (value.isEmpty() || label != null))
             return;
+        this.settings = settings;
         shownText = value;
-        TexI texture = value.isEmpty() ? null : LABELS.computeIfAbsent(value,
-                text -> new TexI(renderLabel(text)));
+        renderedFontSize = settings.fontSize;
+        renderedOpacity = settings.backgroundOpacity;
+        TexI previous = label;
+        TexI texture = value.isEmpty() ? null :
+                new TexI(renderLabel(value, settings.fontSize, settings.backgroundOpacity));
         label = texture;
         img = texture;
+        if (previous != null)
+            previous.dispose();
+    }
+
+    @Override
+    public synchronized void added(RenderTree.Slot slot) {
+        renderSlots++;
+        if (renderSlots == 1 && label == null && !shownText.isEmpty() && settings != null)
+            setText(shownText, settings, true);
+    }
+
+    @Override
+    public synchronized void removed(RenderTree.Slot slot) {
+        if (renderSlots > 0 && --renderSlots == 0)
+            releaseTexture();
+    }
+
+    private synchronized void releaseTexture() {
+        TexI texture = label;
+        label = null;
+        img = null;
+        if (texture != null)
+            texture.dispose();
+    }
+
+    @Override
+    public void dispose() {
+        releaseTexture();
+        super.dispose();
+    }
+
+    private static final class Content {
+        final Object data;
+        final int resourceId;
+
+        Content(Object data, int resourceId) {
+            this.data = data;
+            this.resourceId = resourceId;
+        }
     }
 }

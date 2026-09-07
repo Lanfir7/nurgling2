@@ -60,6 +60,26 @@ class HotkeySettingsModelTest {
         assertEquals(model.savedPresetId(), model.presets().selected().id());
         assertEquals(runtimeBefore, model.draft().effective("item.take"));
     }
+
+    @Test void incompatibleImportLeavesPresetAndBindingDraftsUntouched() {
+        HotkeyRegistry registry = singleActionRegistry();
+        MemoryRepository repository = new MemoryRepository(
+                new HotkeyPresetLibrary("builtin.default", java.util.Collections.emptyList()));
+        HotkeySettingsModel model = HotkeySettingsModel.open(registry, repository);
+        String selectedBefore = model.presets().selected().id();
+        int countBefore = model.presets().presets().size();
+        InputGesture bindingBefore = model.draft().effective("item.take");
+        HotkeyPreset incompatible = new HotkeyPreset("import", "Wrong family", false,
+                java.util.Collections.singletonMap("item.take",
+                        InputGesture.wheel(1, KeyMatch.MODS, 0)));
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> model.importPreset(nurgling.hotkeys.presets.HotkeyPresetCodec.encode(incompatible)));
+
+        assertEquals(selectedBefore, model.presets().selected().id());
+        assertEquals(countBefore, model.presets().presets().size());
+        assertEquals(bindingBefore, model.draft().effective("item.take"));
+    }
     @Test void querySearchesEveryCategoryAndClearingRestoresPreviousTab() {
         HotkeySettingsModel model = modelWith("Inventory", "Transfer item", "Map", "Quick marker");
         model.selectCategory(HotkeyCategory.INVENTORY);

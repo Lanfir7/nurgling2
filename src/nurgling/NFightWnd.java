@@ -646,20 +646,26 @@ public class NFightWnd extends FightWnd {
 
 	// Load / Save / Rename buttons
 	int btnX = saveRowW + UI.scale(22) + 3;
-	Widget loadButton = add(new Button(UI.scale(104), L10n.get("char.fight.load"), false).action(() -> {
+	int btnW = UI.scale(104);
+	int btnGap = UI.scale(3);
+	int halfBtnW = (btnW - btnGap) / 2;
+	Widget loadButton = new Button(halfBtnW, L10n.get("char.fight.load"), false).action(() -> {
 		    load(savelist.sel);
 		    use(savelist.sel);
-		}), btnX, saveRowY - 1);
-	Widget saveButton = add(new Button(UI.scale(104), L10n.get("char.fight.save"), false).action(() -> {
+		});
+	Widget saveButton = new Button(btnW - btnGap - halfBtnW, L10n.get("char.fight.save"), false).action(() -> {
 		    if(savelist.sel < 0) {
 			getparent(GameUI.class).error(L10n.get("char.fight.no_save_selected"));
 		    } else {
 			save(savelist.sel);
 			use(savelist.sel);
 		    }
-		}), btnX, loadButton.pos("bl").y + UI.scale(3));
-	add(new Button(UI.scale(104), L10n.get("char.fight.rename"), false).action(this::requestRename),
-		btnX, saveButton.pos("bl").y + UI.scale(3));
+		});
+	Widget renameButton = new Button(btnW, L10n.get("char.fight.rename"), false).action(this::requestRename);
+	int controlsY = saveRowY + SAVE_H - loadButton.sz.y - btnGap - renameButton.sz.y;
+	add(loadButton, btnX, controlsY);
+	add(saveButton, btnX + halfBtnW + btnGap, controlsY);
+	add(renameButton, btnX, loadButton.pos("bl").y + btnGap);
 	pack();
 	recount();
     }

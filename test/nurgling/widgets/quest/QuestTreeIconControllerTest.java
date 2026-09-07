@@ -47,23 +47,33 @@ class QuestTreeIconControllerTest {
     }
 
     @Test
-    void claimWritesPersistedShowAndClearsLeftoverOverride() {
+    void claimUsesTemporaryOverrideAndReplacesLeftoverOverride() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
-        settings.setShowOverride(oak.id, true);
+        settings.setShowOverride(oak.id, false);
 
         QuestTreeIconController controller = new QuestTreeIconController();
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertTrue(oak.show);
+        assertFalse(oak.show);
         assertTrue(settings.shown(oak));
-        oak.show = false;
-        assertFalse(settings.shown(oak));
     }
 
     @Test
-    void releaseRestoresPreviousShowAndClearsOverride() {
+    void questClaimDoesNotPersistMarkerIntoNextSession() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
+        settings.settings.put(oak.id, oak);
+
+        new QuestTreeIconController().reconcile(Collections.singletonList(oakQuest(1)), settings);
+
+        assertFalse(oak.show);
+        assertTrue(settings.shown(oak));
+    }
+
+    @Test
+    void releaseClearsOverrideAndRevealsPersistedChoice() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
@@ -109,12 +119,12 @@ class QuestTreeIconControllerTest {
 
         new QuestTreeIconController().reconcile(Collections.singletonList(q), settings);
 
-        assertTrue(oak.show);
+        assertFalse(oak.show);
         assertTrue(settings.shown(oak));
     }
 
     @Test
-    void alreadyShownIconIsNotForcedOnEveryTick() {
+    void userPreferenceChangedDuringQuestIsUsedAfterRelease() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], true);
         settings.settings.put(oak.id, oak);
@@ -124,10 +134,10 @@ class QuestTreeIconControllerTest {
         oak.show = false;
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertFalse(oak.show);
+        assertTrue(settings.shown(oak));
 
         controller.release(settings);
-        assertTrue(oak.show);
+        assertFalse(settings.shown(oak));
     }
 
     private static QuestModel.TQuest oakQuest(int id) {

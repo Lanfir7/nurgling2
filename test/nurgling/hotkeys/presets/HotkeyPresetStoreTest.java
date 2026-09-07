@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -79,6 +81,37 @@ class HotkeyPresetStoreTest {
 
         assertTrue(loaded.migrationRequired());
         assertEquals("hotkeys.presets.warning.corrupt", loaded.warningKey());
+    }
+
+    @Test void saveRejectsLibrariesLargerThanTheLoadLimit(@TempDir Path dir) {
+        Path file = dir.resolve("hotkey-presets.json");
+        List<HotkeyPreset> presets = new ArrayList<>();
+        String padding = repeated('x', 180);
+        for(int preset = 0; preset < 100; preset++) {
+            Map<String, InputGesture> values = new LinkedHashMap<>();
+            for(int binding = 0; binding < 512; binding++)
+                values.put("action." + preset + "." + binding + "." + padding, InputGesture.none());
+            presets.add(new HotkeyPreset("user-" + preset, "Preset " + preset, false, values));
+        }
+        HotkeyPresetLibrary library = new HotkeyPresetLibrary("user-0", presets);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> new HotkeyPresetStore(file).save(library));
+        assertFalse(Files.exists(file));
+    }
+
+    @Test void saveRejectsActionIdsThatLoadWouldReject(@TempDir Path dir) {
+        String longId = repeated('x', 257);
+        HotkeyPreset preset = userPreset("user-long", "Long", longId, InputGesture.none());
+        assertThrows(IllegalArgumentException.class, () -> new HotkeyPresetStore(
+                dir.resolve("hotkey-presets.json")).save(new HotkeyPresetLibrary(
+                "user-long", Collections.singletonList(preset))));
+    }
+
+    private static String repeated(char value, int count) {
+        char[] chars = new char[count];
+        java.util.Arrays.fill(chars, value);
+        return new String(chars);
     }
 
     private static HotkeyPreset userPreset(String id, String name, String actionId, InputGesture gesture) {

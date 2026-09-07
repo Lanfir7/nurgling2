@@ -106,9 +106,24 @@ public final class HotkeySettingsModel {
     }
 
     public HotkeyPreset importPreset(String code) {
-        HotkeyPreset imported = presets.importPreset(HotkeyPresetCodec.decode(code));
-        draft.stageSnapshot(HotkeyPresetDraftModel.valuesFor(registry, imported));
-        return imported;
+        HotkeyPreset decoded = validateImportCode(code);
+        HotkeyDraftModel.Checkpoint hotkeysBefore = draft.checkpoint();
+        HotkeyPresetDraftModel.Checkpoint presetsBefore = presets.checkpoint();
+        try {
+            HotkeyPreset imported = presets.importPreset(decoded);
+            draft.stageSnapshot(HotkeyPresetDraftModel.valuesFor(registry, imported));
+            return imported;
+        } catch(RuntimeException failure) {
+            draft.restore(hotkeysBefore);
+            presets.restore(presetsBefore);
+            throw failure;
+        }
+    }
+
+    public HotkeyPreset validateImportCode(String code) {
+        HotkeyPreset decoded = HotkeyPresetCodec.decode(code);
+        HotkeyPresetDraftModel.valuesFor(registry, decoded);
+        return decoded;
     }
 
     public String copyPresetCode() {

@@ -43,6 +43,22 @@ public final class GestureBinding implements HotkeyBinding {
         current = defaultGesture;
     }
 
+    @Override
+    public Object checkpoint() {
+        String encoded = preferences.get(preferenceKey, null);
+        return new Snapshot(encoded != null, encoded, current);
+    }
+
+    @Override
+    public void restore(Object checkpoint) {
+        if(!(checkpoint instanceof Snapshot))
+            throw new IllegalArgumentException("foreign gesture checkpoint");
+        Snapshot saved = (Snapshot)checkpoint;
+        if(saved.existed) preferences.set(preferenceKey, saved.encoded);
+        else preferences.remove(preferenceKey);
+        current = saved.current;
+    }
+
     private InputGesture readCurrent() {
         String encoded = preferences.get(preferenceKey, "");
         if(encoded == null || encoded.length() == 0)
@@ -63,5 +79,16 @@ public final class GestureBinding implements HotkeyBinding {
         if(defaultGesture != null && gesture.type() != InputGesture.Type.NONE &&
                 gesture.type() != defaultGesture.type())
             throw new IllegalArgumentException("gesture binding must retain its input family");
+    }
+
+    private static final class Snapshot {
+        final boolean existed;
+        final String encoded;
+        final InputGesture current;
+        Snapshot(boolean existed, String encoded, InputGesture current) {
+            this.existed = existed;
+            this.encoded = encoded;
+            this.current = current;
+        }
     }
 }

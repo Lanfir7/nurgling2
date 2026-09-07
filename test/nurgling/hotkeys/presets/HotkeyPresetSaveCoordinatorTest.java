@@ -8,6 +8,8 @@ import nurgling.hotkeys.HotkeyContext;
 import nurgling.hotkeys.HotkeyDraftModel;
 import nurgling.hotkeys.HotkeyRegistry;
 import nurgling.hotkeys.InputGesture;
+import nurgling.hotkeys.GestureBinding;
+import nurgling.hotkeys.PreferenceStore;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -75,6 +77,30 @@ class HotkeyPresetSaveCoordinatorTest {
         assertEquals(HotkeyPresetCatalog.DEFAULT_ID, f.presets.selected().id());
         assertFalse(f.hotkeys.isDirty());
         assertFalse(f.presets.isDirty());
+    }
+
+    @Test void failedSaveRestoresMissingPreferenceInsteadOfPinningCurrentDefault() {
+        MemoryPreferences preferences = new MemoryPreferences();
+        HotkeyRegistry registry = new HotkeyRegistry();
+        InputGesture original = InputGesture.mouse(1, KeyMatch.MODS, 0);
+        GestureBinding binding = new GestureBinding("item.take", original, preferences);
+        registry.register(new HotkeyAction("item.take", null, "item.take", HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_ITEM_GENERIC),
+                EnumSet.of(InputGesture.Type.MOUSE_BUTTON), binding, null, 0, false));
+        HotkeyDraftModel hotkeys = new HotkeyDraftModel(registry);
+        HotkeyPresetLibrary library = new HotkeyPresetLibrary(
+                HotkeyPresetCatalog.DEFAULT_ID, Collections.emptyList());
+        FakeRepository repository = new FakeRepository(library);
+        repository.failure = new IOException("disk full");
+        HotkeyPresetDraftModel presets = HotkeyPresetDraftModel.open(registry,
+                HotkeyPresetCatalog.builtIns(registry), HotkeyPresetStore.LoadResult.loaded(library));
+        HotkeyPresetSaveCoordinator coordinator = new HotkeyPresetSaveCoordinator(
+                registry, hotkeys, presets, repository);
+
+        assertThrows(RuntimeException.class, coordinator::save);
+
+        assertFalse(preferences.values.containsKey("gesturebind/item.take"));
+        assertEquals(original, binding.current());
     }
 
     private static Fixture fixture(boolean withOther) {
@@ -163,5 +189,16 @@ class HotkeyPresetSaveCoordinatorTest {
     private static final class FakeCheckpoint implements HotkeyPresetRepository.Checkpoint {
         final HotkeyPresetLibrary value;
         FakeCheckpoint(HotkeyPresetLibrary value) { this.value = value; }
+    }
+
+    private static final class MemoryPreferences implements PreferenceStore {
+        final Map<String, String> values = new LinkedHashMap<>();
+        public String get(String key, String fallback) {
+            return values.containsKey(key) ? values.get(key) : fallback;
+        }
+        public void set(String key, String value) {
+            if(value == null) values.remove(key);
+            else values.put(key, value);
+        }
     }
 }

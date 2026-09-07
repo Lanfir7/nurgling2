@@ -8,10 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Applies quest-owned tree icon visibility by writing Icon Settings {@code show}
- * and persisting it the same way the Icon Settings checkbox does.
- */
+/** Applies quest-owned tree icon visibility without changing the persisted Icon Settings choice. */
 public class QuestTreeIconController {
     private final QuestTreeIconClaims<GobIcon.Setting.ID> claims = new QuestTreeIconClaims<>();
     private final QuestObjectiveActionResolver resolver = new QuestObjectiveActionResolver();
@@ -65,30 +62,8 @@ public class QuestTreeIconController {
     private static QuestTreeIconClaims.Visibility<GobIcon.Setting.ID> visibility(GobIcon.Settings settings) {
         return new QuestTreeIconClaims.Visibility<GobIcon.Setting.ID>() {
             @Override
-            public boolean shown(GobIcon.Setting.ID id) {
-                GobIcon.Setting setting = setting(id);
-                return setting != null && setting.show;
-            }
-
-            @Override
-            public void setShown(GobIcon.Setting.ID id, boolean shown) {
-                GobIcon.Setting setting = setting(id);
-                if(setting == null || setting.show == shown)
-                    return;
-                setting.show = shown;
-                settings.dsave();
-            }
-
-            @Override
-            public void clearOverride(GobIcon.Setting.ID id) {
-                settings.setShowOverride(id, null);
-            }
-
-            private GobIcon.Setting setting(GobIcon.Setting.ID id) {
-                Map<GobIcon.Setting.ID, GobIcon.Setting> loaded = settings.settings;
-                synchronized(loaded) {
-                    return loaded.get(id);
-                }
+            public void setOverride(GobIcon.Setting.ID id, Boolean visible) {
+                settings.setShowOverride(id, visible);
             }
         };
     }

@@ -1338,6 +1338,10 @@ public class NGob
                 {
                     tryAddTrackingVectors(parent, ol);
                 }
+                if (NIconSignOverlay.supportsParchment(res.name))
+                {
+                    NIconSignOverlay.parchmentAdded(parent, ol);
+                }
             }
         }
     }
@@ -1372,6 +1376,8 @@ public class NGob
 
     public void removeol(Gob.Overlay ol)
     {
+        if (ol.spr != null && ol.spr.res != null && NIconSignOverlay.supportsParchment(ol.spr.res.name))
+            NIconSignOverlay.parchmentRemoved(parent, ol);
         if (name != null)
             if (name.equals("gfx/terobjs/dframe") || name.equals("gfx/terobjs/barrel"))
             {

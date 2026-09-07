@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.*;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NModelBox;
+import nurgling.overlays.NObjectLabelSettings;
 import nurgling.tools.FlatWorld;
 import nurgling.tools.GobHide;
 import nurgling.widgets.NColorWidget;
@@ -23,6 +24,12 @@ public class World extends Panel {
         boolean showDamageShields;
         boolean showGridWalls;
         boolean persistentBarrelLabels;
+        boolean objectLabelsEnabled = true;
+        boolean objectLabelIconSigns = true;
+        boolean objectLabelParchments = true;
+        int objectLabelFontSize = 12;
+        int objectLabelHeight = 5;
+        int objectLabelBackgroundOpacity = 50;
         boolean disableTileSmoothing;
         boolean disableTileTransitions;
         boolean disableCloudShadows;
@@ -44,6 +51,9 @@ public class World extends Panel {
     private CheckBox damageShields;
     private CheckBox gridWalls;
     private CheckBox persistentBarrels;
+    private CheckBox objectLabelsEnabled;
+    private CheckBox objectLabelIconSigns;
+    private CheckBox objectLabelParchments;
     private CheckBox disableTileSmoothing;
     private CheckBox disableTileTransitions;
     private CheckBox disableCloudShadows;
@@ -53,6 +63,12 @@ public class World extends Panel {
     private NColorWidget edgeColorWidget;
     private HSlider lineWidthSlider;
     private Label lineWidthLabel;
+    private HSlider objectLabelFontSizeSlider;
+    private HSlider objectLabelHeightSlider;
+    private HSlider objectLabelOpacitySlider;
+    private Label objectLabelFontSizeLabel;
+    private Label objectLabelHeightLabel;
+    private Label objectLabelOpacityLabel;
     
     private Widget content;
 
@@ -175,8 +191,60 @@ public class World extends Panel {
             }
         }, prev.pos("bl").adds(-20, 5));
 
+        prev = objectLabelsEnabled = content.add(new CheckBox(L10n.get("world.object_labels.enabled")) {
+            public void set(boolean val) {
+                tempSettings.objectLabelsEnabled = val;
+                a = val;
+            }
+        }, prev.pos("bl").adds(0, 5));
+
+        prev = objectLabelIconSigns = content.add(new CheckBox(L10n.get("world.object_labels.icon_signs")) {
+            public void set(boolean val) {
+                tempSettings.objectLabelIconSigns = val;
+                a = val;
+            }
+        }, prev.pos("bl").adds(20, 5));
+
+        prev = objectLabelParchments = content.add(new CheckBox(L10n.get("world.object_labels.parchments")) {
+            public void set(boolean val) {
+                tempSettings.objectLabelParchments = val;
+                a = val;
+            }
+        }, prev.pos("bl").adds(0, 5));
+
+        prev = objectLabelFontSizeLabel = content.add(new Label(""), prev.pos("bl").adds(0, 5));
+        prev = objectLabelFontSizeSlider = content.add(new HSlider(UI.scale(160),
+                NObjectLabelSettings.MIN_FONT_SIZE, NObjectLabelSettings.MAX_FONT_SIZE,
+                tempSettings.objectLabelFontSize) {
+            public void changed() {
+                tempSettings.objectLabelFontSize = val;
+                updateObjectLabelCaptions();
+            }
+        }, prev.pos("bl").adds(0, 3));
+
+        prev = objectLabelHeightLabel = content.add(new Label(""), prev.pos("bl").adds(0, 5));
+        prev = objectLabelHeightSlider = content.add(new HSlider(UI.scale(160),
+                NObjectLabelSettings.MIN_HEIGHT, NObjectLabelSettings.MAX_HEIGHT,
+                tempSettings.objectLabelHeight) {
+            public void changed() {
+                tempSettings.objectLabelHeight = val;
+                updateObjectLabelCaptions();
+            }
+        }, prev.pos("bl").adds(0, 3));
+
+        prev = objectLabelOpacityLabel = content.add(new Label(""), prev.pos("bl").adds(0, 5));
+        prev = objectLabelOpacitySlider = content.add(new HSlider(UI.scale(160),
+                NObjectLabelSettings.MIN_OPACITY, NObjectLabelSettings.MAX_OPACITY,
+                tempSettings.objectLabelBackgroundOpacity) {
+            public void changed() {
+                tempSettings.objectLabelBackgroundOpacity = val;
+                updateObjectLabelCaptions();
+            }
+        }, prev.pos("bl").adds(0, 3));
+        updateObjectLabelCaptions();
+
         // Bounding box colors section
-        prev = content.add(new Label("● " + L10n.get("world.section.bbox_colors")), prev.pos("bl").adds(0, 15));
+        prev = content.add(new Label("● " + L10n.get("world.section.bbox_colors")), prev.pos("bl").adds(-20, 15));
         
         prev = fillColorWidget = content.add(new NColorWidget(L10n.get("world.fill")), prev.pos("bl").adds(0, 5));
         fillColorWidget.color = tempSettings.boxFillColor;
@@ -222,6 +290,13 @@ public class World extends Panel {
         tempSettings.showDamageShields = (Boolean) NConfig.get(NConfig.Key.showDamageShields);
         tempSettings.showGridWalls = (Boolean) NConfig.get(NConfig.Key.gridbox);
         tempSettings.persistentBarrelLabels = (Boolean) NConfig.get(NConfig.Key.persistentBarrelLabels);
+        NObjectLabelSettings objectLabels = NObjectLabelSettings.current();
+        tempSettings.objectLabelsEnabled = objectLabels.enabled;
+        tempSettings.objectLabelIconSigns = objectLabels.iconSigns;
+        tempSettings.objectLabelParchments = objectLabels.parchments;
+        tempSettings.objectLabelFontSize = objectLabels.fontSize;
+        tempSettings.objectLabelHeight = objectLabels.height;
+        tempSettings.objectLabelBackgroundOpacity = objectLabels.backgroundOpacity;
         tempSettings.disableTileSmoothing = (Boolean) NConfig.get(NConfig.Key.disableTileSmoothing);
         tempSettings.disableTileTransitions = (Boolean) NConfig.get(NConfig.Key.disableTileTransitions);
         tempSettings.disableCloudShadows = (Boolean) NConfig.get(NConfig.Key.disableCloudShadows);
@@ -248,6 +323,13 @@ public class World extends Panel {
         damageShields.a = tempSettings.showDamageShields;
         gridWalls.a = tempSettings.showGridWalls;
         persistentBarrels.a = tempSettings.persistentBarrelLabels;
+        objectLabelsEnabled.a = tempSettings.objectLabelsEnabled;
+        objectLabelIconSigns.a = tempSettings.objectLabelIconSigns;
+        objectLabelParchments.a = tempSettings.objectLabelParchments;
+        objectLabelFontSizeSlider.val = tempSettings.objectLabelFontSize;
+        objectLabelHeightSlider.val = tempSettings.objectLabelHeight;
+        objectLabelOpacitySlider.val = tempSettings.objectLabelBackgroundOpacity;
+        updateObjectLabelCaptions();
         disableTileSmoothing.a = tempSettings.disableTileSmoothing;
         disableTileTransitions.a = tempSettings.disableTileTransitions;
         disableCloudShadows.a = tempSettings.disableCloudShadows;
@@ -276,6 +358,13 @@ public class World extends Panel {
         NConfig.set(NConfig.Key.gridbox, tempSettings.showGridWalls);
 
         NConfig.set(NConfig.Key.persistentBarrelLabels, tempSettings.persistentBarrelLabels);
+        NConfig.set(NConfig.Key.objectLabelsEnabled, tempSettings.objectLabelsEnabled);
+        NConfig.set(NConfig.Key.objectLabelIconSigns, tempSettings.objectLabelIconSigns);
+        NConfig.set(NConfig.Key.objectLabelParchments, tempSettings.objectLabelParchments);
+        NConfig.set(NConfig.Key.objectLabelFontSize, tempSettings.objectLabelFontSize);
+        NConfig.set(NConfig.Key.objectLabelHeight, tempSettings.objectLabelHeight);
+        NConfig.set(NConfig.Key.objectLabelBackgroundOpacity, tempSettings.objectLabelBackgroundOpacity);
+        NObjectLabelSettings.changed();
         
         // Save tile rendering settings
         boolean oldTileSmoothing = (Boolean) NConfig.get(NConfig.Key.disableTileSmoothing);
@@ -339,6 +428,15 @@ public class World extends Panel {
         
         // Mark configuration as needing update to file
         NConfig.needUpdate();
+    }
+
+    private void updateObjectLabelCaptions() {
+        objectLabelFontSizeLabel.settext(L10n.get("world.object_labels.font_size") + " " +
+                tempSettings.objectLabelFontSize);
+        objectLabelHeightLabel.settext(L10n.get("world.object_labels.height") + " " +
+                tempSettings.objectLabelHeight);
+        objectLabelOpacityLabel.settext(L10n.get("world.object_labels.background_opacity") + " " +
+                tempSettings.objectLabelBackgroundOpacity + "%");
     }
 
     public static Color getBoxFillColor() {

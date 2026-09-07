@@ -132,6 +132,12 @@ public class NConfig
         fillCompostWithSwill,
         ignoreStrawInFarmers,
         persistentBarrelLabels,
+        objectLabelsEnabled,
+        objectLabelIconSigns,
+        objectLabelParchments,
+        objectLabelFontSize,
+        objectLabelHeight,
+        objectLabelBackgroundOpacity,
         uniformBiomeColors,
         inventoryRightPanelShow,
         inventoryRightPanelMode,
@@ -504,6 +510,12 @@ public class NConfig
         conf.put(Key.printpfmap, false);
         conf.put(Key.boxLineWidth, 4);
         conf.put(Key.persistentBarrelLabels, false);
+        conf.put(Key.objectLabelsEnabled, true);
+        conf.put(Key.objectLabelIconSigns, true);
+        conf.put(Key.objectLabelParchments, true);
+        conf.put(Key.objectLabelFontSize, 12);
+        conf.put(Key.objectLabelHeight, 5);
+        conf.put(Key.objectLabelBackgroundOpacity, 50);
         conf.put(Key.uniformBiomeColors, false);
         conf.put(Key.inventoryRightPanelShow, false);
         conf.put(Key.inventoryRightPanelMode, "EXPANDED");

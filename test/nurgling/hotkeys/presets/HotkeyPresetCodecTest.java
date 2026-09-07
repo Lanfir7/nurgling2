@@ -54,6 +54,23 @@ class HotkeyPresetCodecTest {
         assertThrows(IllegalArgumentException.class, () -> HotkeyPresetCodec.encode(builtIn));
     }
 
+    @Test void overlongActionIdsAreRejectedForEncodeAndDecode() {
+        String longId = repeated('x', 257);
+        Map<String, InputGesture> values = new LinkedHashMap<>();
+        values.put(longId, InputGesture.none());
+        assertThrows(IllegalArgumentException.class, () -> HotkeyPresetCodec.encode(
+                new HotkeyPreset("user-long", "Long", false, values)));
+        assertThrows(IllegalArgumentException.class, () -> HotkeyPresetCodec.decode(codeForJson(
+                "{\"version\":1,\"name\":\"Long\",\"bindings\":[" +
+                        "{\"id\":\"" + longId + "\",\"gesture\":\"n\"}]}")));
+    }
+
+    private static String repeated(char value, int count) {
+        char[] chars = new char[count];
+        Arrays.fill(chars, value);
+        return new String(chars);
+    }
+
     private static HotkeyPreset presetInOrder(String first, String second) {
         Map<String, InputGesture> values = new LinkedHashMap<>();
         values.put(first, first.equals("a") ? InputGesture.none() : InputGesture.modifier(KeyMatch.S));

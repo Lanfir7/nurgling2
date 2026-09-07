@@ -18,7 +18,7 @@ class QuestTreeIconClaimsTest {
     @Test
     void hiddenIconIsVisibleOnlyWhileClaimed() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak", false);
+        visibility.base.put("oak", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
         claims.reconcile(requirements(1, "oak"), visibility);
@@ -31,7 +31,7 @@ class QuestTreeIconClaimsTest {
     @Test
     void visibleIconRemainsVisibleAfterClaimIsReleased() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak", true);
+        visibility.base.put("oak", true);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
         claims.reconcile(requirements(1, "oak"), visibility);
@@ -43,7 +43,7 @@ class QuestTreeIconClaimsTest {
     @Test
     void sharedIconStaysVisibleUntilLastQuestIsRemoved() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak", false);
+        visibility.base.put("oak", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
         Map<Integer, Set<String>> both = requirements(1, "oak");
         both.put(2, Collections.singleton("oak"));
@@ -59,7 +59,7 @@ class QuestTreeIconClaimsTest {
     @Test
     void lateLoadedVisibleSettingKeepsItsPersistedStateOnRelease() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak:ripe", true);
+        visibility.base.put("oak:ripe", true);
         visibility.overrides.put("oak:ripe", true);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
@@ -74,8 +74,8 @@ class QuestTreeIconClaimsTest {
     @Test
     void settingsWithSameResourceKeepIndependentPersistedStates() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak:plain", false);
-        visibility.show.put("oak:ripe", true);
+        visibility.base.put("oak:plain", false);
+        visibility.base.put("oak:ripe", true);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
         Map<Integer, Set<String>> required = new LinkedHashMap<>();
         required.put(1, new HashSet<>(Arrays.asList("oak:plain", "oak:ripe")));
@@ -90,39 +90,39 @@ class QuestTreeIconClaimsTest {
     }
 
     @Test
-    void playerUncheckWhileClaimedIsNotForcedBackOnNextReconcile() {
+    void questOverrideRemainsActiveAcrossReconcile() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak", false);
+        visibility.base.put("oak", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
         claims.reconcile(requirements(1, "oak"), visibility);
         assertTrue(visibility.shown("oak"));
 
-        visibility.show.put("oak", false);
+        visibility.base.put("oak", false);
         int writes = visibility.writes;
         claims.reconcile(requirements(1, "oak"), visibility);
 
-        assertFalse(visibility.shown("oak"));
-        assertEquals(writes, visibility.writes);
+        assertTrue(visibility.shown("oak"));
+        assertEquals(writes + 1, visibility.writes);
     }
 
     @Test
-    void releaseRestoresPreClaimShowNotWhateverPlayerLeft() {
+    void releaseUsesCurrentPersistedChoice() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak", true);
+        visibility.base.put("oak", true);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
         claims.reconcile(requirements(1, "oak"), visibility);
-        visibility.show.put("oak", false);
+        visibility.base.put("oak", false);
         claims.reconcile(Collections.emptyMap(), visibility);
 
-        assertTrue(visibility.shown("oak"));
+        assertFalse(visibility.shown("oak"));
     }
 
     @Test
     void leftoverOverrideIsClearedOnRelease() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.show.put("oak", false);
+        visibility.base.put("oak", false);
         visibility.overrides.put("oak", true);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
@@ -140,24 +140,21 @@ class QuestTreeIconClaimsTest {
     }
 
     private static class VisibilityState<K> implements QuestTreeIconClaims.Visibility<K> {
-        final Map<K, Boolean> show = new HashMap<>();
+        final Map<K, Boolean> base = new HashMap<>();
         final Map<K, Boolean> overrides = new HashMap<>();
         int writes;
 
-        @Override
         public boolean shown(K key) {
-            return Boolean.TRUE.equals(show.get(key));
+            return overrides.getOrDefault(key, Boolean.TRUE.equals(base.get(key)));
         }
 
         @Override
-        public void setShown(K key, boolean visible) {
+        public void setOverride(K key, Boolean visible) {
             writes++;
-            show.put(key, visible);
-        }
-
-        @Override
-        public void clearOverride(K key) {
-            overrides.remove(key);
+            if(visible == null)
+                overrides.remove(key);
+            else
+                overrides.put(key, visible);
         }
     }
 }
