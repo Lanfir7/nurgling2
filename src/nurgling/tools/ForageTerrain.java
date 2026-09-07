@@ -31,6 +31,7 @@ public final class ForageTerrain {
         add("Cloud Range");
         add("Deep Tangle");
         add("Dry Flat");
+        add("Dry Weald");
         add("Fen");
         add("Flower Meadow");
         add("Grass");
@@ -40,6 +41,8 @@ public final class ForageTerrain {
         add("Hard Steppe");
         add("Heath");
         add("Highground");
+        add("Leaf");
+        add("Leaf Detritus");
         add("Leaf Patch");
         add("Lichen Wold");
         add("Lush Field");
@@ -62,14 +65,20 @@ public final class ForageTerrain {
         add("Tidepool");
         add("Timber Land");
         add("Wald");
+        add("Wild Moor");
         add("Wild Turf");
+        add("Ashland");
+        add("Gleam Grotto");
+        add("Warm Depth");
+        add("Wild Cavern");
 
-        group("Forest", "Beech Grove", "Black Wood", "Deep Tangle", "Green Brake", "Grove",
-                "Leaf Patch", "Lichen Wold", "Moss Brush", "Oak Wilds", "Pine Barren", "Root Bosk",
-                "Shady Copse", "Sombre Bramble", "Sour Timber", "Timber Land", "Wald");
+        group("Forest", "Beech Grove", "Black Wood", "Deep Tangle", "Dry Weald", "Green Brake", "Grove",
+                "Leaf", "Leaf Detritus", "Leaf Patch", "Lichen Wold", "Moss Brush", "Oak Wilds",
+                "Pine Barren", "Root Bosk", "Shady Copse", "Sombre Bramble", "Sour Timber",
+                "Timber Land", "Wald");
         group("Grassland", "Blue Sod", "Bounty Acre", "Cloud Range", "Dry Flat", "Flower Meadow",
                 "Grass", "Greens Ward", "Hard Steppe", "Highground", "Lush Field", "Moor",
-                "Ox Pasture", "Red Plain", "Wild Turf");
+                "Ox Pasture", "Red Plain", "Wild Moor", "Wild Turf");
         add("Shallow Water", "water", "owater");
         add("Water Terrain", "water", "owater", "deep", "odeep", "vdeep", "ovdeep");
 
@@ -105,8 +114,11 @@ public final class ForageTerrain {
             if(offset >= trimmed.length())
                 break;
             String match = matchAt(trimmed, offset);
-            if(match == null)
+            if(match == null) {
+                if(offset == 0)
+                    return Collections.singletonList(canonicalName(trimmed));
                 return Collections.singletonList(trimmed);
+            }
             result.add(match);
             offset += match.length();
         }

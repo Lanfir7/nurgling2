@@ -8,6 +8,7 @@ import java.util.List;
 public final class QuestObjectiveAction {
     public enum Kind {
         FORAGE_TERRAIN,
+        TREE_TERRAIN,
         ROCK_TERRAIN,
         CRAFT
     }

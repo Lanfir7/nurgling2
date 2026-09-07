@@ -14,7 +14,7 @@ public class QCond
 {
     public enum Verb
     {
-        TELL, KILL, PICK, BRING, GREET, LAUGH, RAGE, WAVE, GAIN, CAVE, LIGHT, CREATE, OTHER
+        TELL, KILL, PICK, BRING, GREET, LAUGH, RAGE, WAVE, GAIN, CAVE, LIGHT, CREATE, FELL, OTHER
     }
 
     /** Owning quest id. */
@@ -92,6 +92,8 @@ public class QCond
             return Verb.GAIN;
         if(t.contains("Create"))
             return Verb.CREATE;
+        if(t.contains("Fell") || t.contains("Chop"))
+            return Verb.FELL;
         if(t.contains("Tell"))
             return Verb.TELL;
         if(t.contains("cave"))
@@ -151,14 +153,26 @@ public class QCond
 
     private static String itemTarget(Verb verb, String info, String bringItem)
     {
+        String target;
         if(verb == Verb.BRING)
-            return bringItem;
-        if(verb != Verb.PICK && verb != Verb.CREATE)
+            target = bringItem;
+        else if(verb == Verb.PICK || verb == Verb.CREATE || verb == Verb.FELL)
+            target = trimToNull(tail(info));
+        else
             return null;
-        String target = trimToNull(tail(info));
         if(target == null || target.equals(verb.name().toLowerCase(Locale.ROOT)))
             return null;
-        return target.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
+        return stripDecorations(target.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT));
+    }
+
+    /** Drop quest quantity/progress suffixes such as {@code (x2)} and {@code 2/6[3/5]}. */
+    private static String stripDecorations(String target)
+    {
+        if(target == null)
+            return null;
+        target = target.replaceAll("\\s*\\(x\\d+\\)", "");
+        target = target.replaceAll("\\s*\\d+\\s*/\\s*\\d+(?:\\s*\\[\\d+\\s*/\\s*\\d+\\])?\\s*$", "");
+        return trimToNull(target.replaceAll("\\s+", " ").trim());
     }
 
     /** Text after the leading article, lowercased - the common prefix of both target parsers. */

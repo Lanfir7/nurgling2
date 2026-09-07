@@ -31,6 +31,7 @@ public final class QuestObjectiveActions {
             return false;
         switch(action.kind) {
             case FORAGE_TERRAIN:
+            case TREE_TERRAIN:
                 MapToolsWindow.openTerrainSearch(action.targets);
                 return true;
             case ROCK_TERRAIN:

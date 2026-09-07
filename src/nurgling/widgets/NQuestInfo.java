@@ -445,7 +445,7 @@ public class NQuestInfo extends Widget
         "Reward", "char.quest.section.reward", new QCond.Verb[] {QCond.Verb.TELL},
         "Attributes", "char.quest.section.attributes", new QCond.Verb[] {QCond.Verb.GAIN},
         "Craft", "char.quest.section.craft", new QCond.Verb[] {QCond.Verb.CREATE},
-        "Other", "char.quest.section.other", new QCond.Verb[] {QCond.Verb.CAVE, QCond.Verb.LIGHT, QCond.Verb.OTHER},
+        "Other", "char.quest.section.other", new QCond.Verb[] {QCond.Verb.CAVE, QCond.Verb.LIGHT, QCond.Verb.FELL, QCond.Verb.OTHER},
     };
 
     private List<Group> taskGroups(NQuestTrackerProp p)
