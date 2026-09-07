@@ -2590,6 +2590,10 @@ public class MapView extends PView implements DTarget, Console.Directory {
     }
     
     public boolean iteminteract(Coord cc, Coord ul) {
+	return iteminteract(cc, ul, ui.modflags());
+    }
+
+    public boolean iteminteract(Coord cc, Coord ul, final int mods) {
 	NGameUI gui = NUtils.getGameUI();
 	if (gui != null && gui.vhand != null) {
 	    monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
@@ -2600,7 +2604,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
 		}
 		monitoring.StockpileStorageTracker.onClickData(inf);
-		Object[] args = {pc, mc.floor(posres), ui.modflags()};
+		Object[] args = {pc, mc.floor(posres), mods};
 		if(inf != null)
 		    args = Utils.extend(args, inf.clickargs());
 		wdgmsg("itemact", args);

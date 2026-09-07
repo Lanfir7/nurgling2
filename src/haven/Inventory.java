@@ -111,12 +111,16 @@ public class Inventory extends Widget implements DTarget {
     }
     
     public boolean mousewheel(MouseWheelEvent ev) {
-	if(ui.modshift) {
+	 nurgling.hotkeys.HotkeyResolver resolver =
+	        new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
+	 nurgling.hotkeys.HotkeyAction action = resolver.firstWheel(
+	        nurgling.hotkeys.HotkeyContext.INVENTORY_BACKGROUND, ev.a, ui.modflags());
+	 if(action != null) {
 	    Inventory minv = getparent(GameUI.class).maininv;
 	    if(minv != this) {
-		if(ev.a < 0)
+		if(nurgling.hotkeys.Hotkeys.INVENTORY_TRANSFER_TO_MAIN.equals(action.id()))
 		    wdgmsg("invxf", minv.wdgid(), 1);
-		else if(ev.a > 0)
+		else if(nurgling.hotkeys.Hotkeys.INVENTORY_TRANSFER_FROM_MAIN.equals(action.id()))
 		    minv.wdgmsg("invxf", this.wdgid(), 1);
 	    }
 	}

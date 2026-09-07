@@ -308,36 +308,24 @@ public class NWItem extends WItem
     @Override
     public boolean mousedown(MouseDownEvent ev)
     {
-        // Alt+RMB: recipes that use or produce this item
-        if(ev.b == 3 && ui.modmeta && !ui.modshift && !ui.modctrl)
-        {
-            if(showCraftRecipes(ev.c))
-                return true;
-        }
-        // Alt+Shift+Click: transfer all same items sorted by quality
-        // Right-click (button 3): ascending order (lowest quality first)
-        // Left-click (button 1): descending order (highest quality first)
-        if(ui.modshift)
-        {
-            if (ui.modmeta)
-            {
-                if (parent instanceof NInventory)
-                {
-                    wdgmsg("transfer-same", item, ev.b == 3);
+        if(ev.b == 1 || ev.b == 3) {
+            nurgling.hotkeys.HotkeyResolver resolver =
+                    new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
+            nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(
+                    nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
+            if(action != null && parent instanceof NInventory) {
+                if(nurgling.hotkeys.Hotkeys.ITEM_RECIPES.equals(action.id())) {
+                    if(showCraftRecipes(ev.c))
+                        return true;
+                } else if(nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_DESC.equals(action.id()) ||
+                        nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id())) {
+                    wdgmsg("transfer-same", item,
+                            nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id()));
                     return true;
-                }
-            }
-        }
-        // Alt+Ctrl+Click: drop all same items sorted by quality
-        // Right-click (button 3): ascending order (lowest quality first)
-        // Left-click (button 1): descending order (highest quality first)
-        else if(ui.modctrl)
-        {
-            if (ui.modmeta)
-            {
-                if (parent instanceof NInventory)
-                {
-                    wdgmsg("drop-same", item, ev.b == 3);
+                } else if(nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_DESC.equals(action.id()) ||
+                        nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id())) {
+                    wdgmsg("drop-same", item,
+                            nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id()));
                     return true;
                 }
             }

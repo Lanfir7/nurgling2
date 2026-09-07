@@ -54,27 +54,37 @@ public class ItemDrag extends NWItem
 	if(!ev.grabbed)
 	    return(false);
 	if(ev.b == 1) {
-		if(ui.dispatchq(parent, new Drop(ev.c.add(this.c), this)).handled)
+		 nurgling.hotkeys.HotkeyResolver resolver = new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
+		 nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(nurgling.hotkeys.HotkeyContext.HELD_ITEM, ev.b, ui.modflags());
+		if(action != null && nurgling.hotkeys.Hotkeys.HELD_DROP_ON_TARGET.equals(action.id()) &&
+			ui.dispatchq(parent, new Drop(ev.c.add(this.c), this)).handled)
 			return(true);
 	} else if(ev.b == 3) {
 		monitoring.StockpileStorageTracker.rememberHand(this);
+		 nurgling.hotkeys.HotkeyResolver resolver = new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
+		 nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(nurgling.hotkeys.HotkeyContext.HELD_ITEM, ev.b, ui.modflags());
 		// Alt+RightClick: Open container without using the held item
-		// Useful when you have a full inventory and hold a live animal
-		if(ui.modmeta && !ui.modctrl && !ui.modshift) {
+		if(action != null && nurgling.hotkeys.Hotkeys.HELD_OPEN_WITHOUT_USING.equals(action.id())) {
 		    GameUI gui = getparent(GameUI.class);
 		    if((gui != null) && (gui.map != null)) {
 			// Dispatch as regular right-click to map (opens container)
 			return(ev.derive(gui.map.rootxlate(ev.c.add(rootpos()))).dispatch(gui.map));
 		    }
 		}
-		if(ui.dispatchq(parent, new Interact(ev.c.add(this.c), this)).handled)
+		if(action != null && nurgling.hotkeys.Hotkeys.HELD_LIGHT_FROM_FIRE.equals(action.id())) {
+		    if(ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
+			    action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
+			return true;
+		}
+		if(action != null && nurgling.hotkeys.Hotkeys.HELD_INTERACT_WITH_TARGET.equals(action.id()) &&
+			ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
+				action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
 			return(true);
 	}
 	if((ui.modctrl && ev.b != 1) && !ui.modshift && !ui.modmeta) {
 	    /* XXX */
 	    GameUI gui = getparent(GameUI.class);
 	    if((gui != null) && (gui.map != null)) {
-		ui.modctrl = false;
 		return(ev.derive(gui.map.rootxlate(ev.c.add(rootpos()))).dispatch(gui.map));
 	    }
 	}

@@ -8,11 +8,14 @@ import java.awt.event.KeyEvent;
 import java.util.EnumSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
 
 /** Definitions for the legacy key bindings exposed by the unified settings UI. */
 public final class HotkeyCatalog {
     private static final EnumSet<InputGesture.Type> KEY = EnumSet.of(InputGesture.Type.KEY);
     private static final Map<KeyBinding, HotkeyBinding> WRAPPERS = new IdentityHashMap<>();
+    private static final Map<String, HotkeyBinding> GESTURE_WRAPPERS = new HashMap<>();
 
     private HotkeyCatalog() {
     }
@@ -98,9 +101,63 @@ public final class HotkeyCatalog {
         core(registry, binding("session-next", KeyMatch.forcode(KeyEvent.VK_CLOSE_BRACKET, KeyMatch.M)), HotkeyCategory.SESSIONS, HotkeyContext.SESSION_SWITCHER, order);
         core(registry, binding("session-prev", KeyMatch.forcode(KeyEvent.VK_OPEN_BRACKET, KeyMatch.M)), HotkeyCategory.SESSIONS, HotkeyContext.SESSION_SWITCHER, order);
 
+        registerItemActions(registry, order);
+
         for(int slot = 0; slot < 12; slot++)
             registerBelt(registry, KeyBinding.get("belt0" + slot,
                     NToolBeltProp.defaultKey("belt0", slot)), "belt0", slot);
+    }
+
+    private static void registerItemActions(HotkeyRegistry registry, int[] order) {
+        EnumSet<HotkeyContext> itemContexts = EnumSet.of(HotkeyContext.INVENTORY_ITEM_GENERIC,
+                HotkeyContext.INVENTORY_ITEM_NURGLING);
+        gesture(registry, "item.take", InputGesture.mouse(1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
+                itemContexts, null, order);
+        gesture(registry, "item.interact", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
+                itemContexts, Integer.valueOf(0), order);
+        gesture(registry, "item.transfer.one", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                itemContexts, null, order);
+        gesture(registry, "item.transfer.all", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.S), HotkeyCategory.INVENTORY,
+                itemContexts, null, order);
+        gesture(registry, "item.drop.one", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.INVENTORY,
+                itemContexts, null, order);
+        gesture(registry, "item.drop.all", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.M), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_ITEM_GENERIC), null, order);
+        gesture(registry, "item.recipes", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_ITEM_NURGLING), null, order);
+        gesture(registry, "item.transfer_same.desc", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.M | KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_ITEM_NURGLING), null, order);
+        gesture(registry, "item.transfer_same.asc", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M | KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_ITEM_NURGLING), null, order);
+        gesture(registry, "item.drop_same.desc", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.M), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_ITEM_NURGLING), null, order);
+        gesture(registry, "item.drop_same.asc", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C | KeyMatch.M), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_ITEM_NURGLING), null, order);
+        gesture(registry, "inventory.transfer_to_main", InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
+        gesture(registry, "inventory.transfer_from_main", InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
+        gesture(registry, "held.drop_on_target", InputGesture.mouse(1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), null, order);
+        gesture(registry, "held.interact_with_target", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
+        gesture(registry, "held.open_without_using", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
+        gesture(registry, "held.light_from_fire", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C | KeyMatch.M), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(haven.UI.MOD_CTRL | haven.UI.MOD_META), order);
+    }
+
+    private static void gesture(HotkeyRegistry registry, String id, InputGesture defaultGesture,
+                                HotkeyCategory category, Set<HotkeyContext> contexts,
+                                Integer canonicalMods, int[] order) {
+        InputGesture.Type type = defaultGesture.type();
+        HotkeyBinding binding = GESTURE_WRAPPERS.get(id);
+        if(binding == null) {
+            binding = new GestureBinding(id, defaultGesture, PreferenceStore.SYSTEM);
+            GESTURE_WRAPPERS.put(id, binding);
+        }
+        registry.register(new HotkeyAction(id, null, id, category, contexts,
+                EnumSet.of(type), binding, canonicalMods, order[0]++, false));
     }
 
     public static void registerMenuAction(HotkeyRegistry registry, KeyBinding binding, String label) {

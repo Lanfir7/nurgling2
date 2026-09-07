@@ -178,24 +178,32 @@ public class WItem extends Widget implements DTarget {
     }
 
     public boolean mousedown(MouseDownEvent ev) {
-	if(ev.b == 1) {
-	    if(ui.modshift) {
-		int n = ui.modctrl ? -1 : 1;
-		item.wdgmsg("transfer", ev.c, n);
-	    } else if(ui.modctrl) {
-		int n = ui.modmeta ? -1 : 1;
-		item.wdgmsg("drop", ev.c, n);
-	    } else {
-		monitoring.StockpileStorageTracker.rememberHand(this);
-		item.wdgmsg("take", ev.c);
-	    }
-	    return(true);
-	} else if(ev.b == 3) {
-        {
-            item.wdgmsg("iact", ev.c, ui.modflags());
-            NUtils.getUI().core.setLastAction(this);
-        }
-        return(true);
+	if(ev.b == 1 || ev.b == 3) {
+            nurgling.hotkeys.HotkeyResolver resolver =
+                    new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
+            nurgling.hotkeys.HotkeyContext context = nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_GENERIC;
+            nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(context, ev.b, ui.modflags());
+            if(action == null)
+                return super.mousedown(ev);
+            String id = action.id();
+            if(nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_ALL.equals(id) ||
+                    nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_ONE.equals(id)) {
+                item.wdgmsg("transfer", ev.c,
+                        nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_ALL.equals(id) ? -1 : 1);
+            } else if(nurgling.hotkeys.Hotkeys.ITEM_DROP_ALL.equals(id) ||
+                    nurgling.hotkeys.Hotkeys.ITEM_DROP_ONE.equals(id)) {
+                item.wdgmsg("drop", ev.c,
+                        nurgling.hotkeys.Hotkeys.ITEM_DROP_ALL.equals(id) ? -1 : 1);
+            } else if(nurgling.hotkeys.Hotkeys.ITEM_TAKE.equals(id)) {
+                monitoring.StockpileStorageTracker.rememberHand(this);
+                item.wdgmsg("take", ev.c);
+            } else if(nurgling.hotkeys.Hotkeys.ITEM_INTERACT.equals(id)) {
+                item.wdgmsg("iact", ev.c, action.canonicalMods() == null ? 0 : action.canonicalMods());
+                NUtils.getUI().core.setLastAction(this);
+            } else {
+                return super.mousedown(ev);
+            }
+            return true;
 	}
 	return(super.mousedown(ev));
     }
@@ -205,11 +213,15 @@ public class WItem extends Widget implements DTarget {
     }
 
     public boolean iteminteract(Coord cc, Coord ul) {
+	return iteminteract(cc, ul, ui.modflags());
+    }
+
+    public boolean iteminteract(Coord cc, Coord ul, int mods) {
 	GameUI gui = getparent(GameUI.class);
 	if (gui != null && gui.vhand != null) {
 	    monitoring.StockpileStorageTracker.rememberHand(gui.vhand);
 	}
-	item.wdgmsg("itemact", ui.modflags());
+	item.wdgmsg("itemact", mods);
 	return(true);
     }
 
