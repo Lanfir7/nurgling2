@@ -5,9 +5,13 @@ public final class FeedbackFormatter {
     }
 
     public static String message(FeedbackSubmission submission) {
+        String discord = submission.discordContact().isEmpty()
+                ? ""
+                : "Discord: " + submission.discordContact() + "\n";
         return "Report: " + submission.reportId() + "\n"
                 + "Type: " + submission.type().name() + "\n"
-                + "Subject: " + submission.subject() + "\n\n"
+                + "Subject: " + submission.subject() + "\n"
+                + discord + "\n"
                 + submission.description();
     }
 

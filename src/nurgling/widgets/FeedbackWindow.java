@@ -39,6 +39,7 @@ public final class FeedbackWindow extends Window {
     private final Button typeBug;
     private final Button typeSuggestion;
     private final TextEntry subject;
+    private final TextEntry discordContact;
     private final NTextArea description;
     private final Button snip;
     private final Button send;
@@ -72,6 +73,16 @@ public final class FeedbackWindow extends Window {
                 syncDraft();
             }
         }, Coord.of(0, layout.subjectY()));
+
+        add(new Label(L10n.get("feedback.discord_contact")),
+                Coord.of(0, layout.discordY() - UI.scale(18)));
+        discordContact = add(new TextEntry(CONTENT_WIDTH, "") {
+            @Override
+            protected void changed() {
+                super.changed();
+                syncDraft();
+            }
+        }, Coord.of(0, layout.discordY()));
 
         add(new Label(L10n.get("feedback.description")),
                 Coord.of(0, layout.descriptionY() - UI.scale(18)));
@@ -138,9 +149,10 @@ public final class FeedbackWindow extends Window {
     }
 
     private void syncDraft() {
-        if(subject == null || description == null)
+        if(subject == null || discordContact == null || description == null)
             return;
         draft.setSubject(subject.text());
+        draft.setDiscordContact(discordContact.text());
         draft.setDescription(description.text());
     }
 
@@ -151,6 +163,7 @@ public final class FeedbackWindow extends Window {
         typeBug.disable(locked);
         typeSuggestion.disable(locked);
         subject.setcanfocus(!locked);
+        discordContact.setcanfocus(!locked);
         description.setcanfocus(!locked);
         for(Widget widget : attachmentWidgets)
             ((AttachmentWidget)widget).setLocked(locked);
@@ -231,6 +244,7 @@ public final class FeedbackWindow extends Window {
         case SUBJECT_TOO_LONG: return "feedback.error.subject_too_long";
         case DESCRIPTION_REQUIRED: return "feedback.error.description_required";
         case DESCRIPTION_TOO_LONG: return "feedback.error.description_too_long";
+        case DISCORD_CONTACT_TOO_LONG: return "feedback.error.discord_contact_too_long";
         default: return "feedback.error.delivery";
         }
     }

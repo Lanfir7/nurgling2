@@ -51,7 +51,7 @@ class FeedbackSubmissionServiceTest {
     @Test
     void formatterContainsOnlyExplicitReportData() {
         FeedbackSubmission report = new FeedbackSubmission("R-8", FeedbackType.SUGGESTION,
-                "Craft window", "Please add favorites", Collections.emptyList());
+                "Craft window", "Please add favorites", "bug-hunter", Collections.emptyList());
 
         String text = FeedbackFormatter.message(report);
 
@@ -59,16 +59,26 @@ class FeedbackSubmissionServiceTest {
         assertTrue(text.contains("SUGGESTION"));
         assertTrue(text.contains("Craft window"));
         assertTrue(text.contains("Please add favorites"));
+        assertTrue(text.contains("Discord: bug-hunter"));
         assertFalse(text.toLowerCase().contains("character"));
         assertFalse(text.toLowerCase().contains("machine"));
+    }
+
+    @Test
+    void formatterOmitsEmptyDiscordContact() {
+        FeedbackSubmission report = new FeedbackSubmission("R-8", FeedbackType.BUG,
+                "Crash", "Steps", "", Collections.emptyList());
+
+        assertFalse(FeedbackFormatter.message(report).contains("Discord:"));
     }
 
     @Test
     void maximumValidReportFitsTelegramMessageLimit() {
         String subject = repeat('s', FeedbackDraft.MAX_SUBJECT);
         String description = repeat('d', FeedbackDraft.MAX_DESCRIPTION);
+        String discordContact = repeat('u', FeedbackDraft.MAX_DISCORD_CONTACT);
         FeedbackSubmission report = new FeedbackSubmission("R-12345678", FeedbackType.SUGGESTION,
-                subject, description, Collections.emptyList());
+                subject, description, discordContact, Collections.emptyList());
 
         assertTrue(FeedbackFormatter.message(report).length() <= 4096);
     }

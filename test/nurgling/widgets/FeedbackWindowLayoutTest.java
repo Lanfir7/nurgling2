@@ -20,4 +20,12 @@ class FeedbackWindowLayoutTest {
         assertEquals(FeedbackWindowLayout.calculate(560, 0).sendY(),
                 FeedbackWindowLayout.calculate(560, 3).sendY());
     }
+
+    @Test
+    void discordFieldSitsBetweenSubjectAndDescription() {
+        FeedbackWindowLayout layout = FeedbackWindowLayout.calculate(560, 0);
+
+        assertTrue(layout.discordY() > layout.subjectY());
+        assertTrue(layout.descriptionY() > layout.discordY());
+    }
 }

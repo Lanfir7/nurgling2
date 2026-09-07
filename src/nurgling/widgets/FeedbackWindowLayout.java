@@ -14,6 +14,7 @@ public final class FeedbackWindowLayout {
 
     private final int typeY;
     private final int subjectY;
+    private final int discordY;
     private final int descriptionY;
     private final int attachmentsY;
     private final int statusY;
@@ -21,10 +22,11 @@ public final class FeedbackWindowLayout {
     private final int thumbnailSize;
     private final List<Coord> thumbnails;
 
-    private FeedbackWindowLayout(int typeY, int subjectY, int descriptionY, int attachmentsY,
+    private FeedbackWindowLayout(int typeY, int subjectY, int discordY, int descriptionY, int attachmentsY,
                                  int statusY, int sendY, int thumbnailSize, List<Coord> thumbnails) {
         this.typeY = typeY;
         this.subjectY = subjectY;
+        this.discordY = discordY;
         this.descriptionY = descriptionY;
         this.attachmentsY = attachmentsY;
         this.statusY = statusY;
@@ -40,7 +42,8 @@ public final class FeedbackWindowLayout {
         int thumbnail = scaled(THUMBNAIL, scale);
         int typeY = scaled(20, scale);
         int subjectY = typeY + field + scaled(20, scale);
-        int descriptionY = subjectY + field + scaled(20, scale);
+        int discordY = subjectY + field + scaled(20, scale);
+        int descriptionY = discordY + field + scaled(20, scale);
         int attachmentsY = descriptionY + scaled(DESCRIPTION, scale) + scaled(28, scale);
         int statusY = attachmentsY + thumbnail + field + gap;
         int sendY = statusY + field;
@@ -49,7 +52,7 @@ public final class FeedbackWindowLayout {
         List<Coord> thumbnails = new ArrayList<>(count);
         for(int index = 0; index < count; index++)
             thumbnails.add(Coord.of(index * (slotWidth + gap), attachmentsY));
-        return new FeedbackWindowLayout(typeY, subjectY, descriptionY, attachmentsY,
+        return new FeedbackWindowLayout(typeY, subjectY, discordY, descriptionY, attachmentsY,
                 statusY, sendY, thumbnail, thumbnails);
     }
 
@@ -59,6 +62,7 @@ public final class FeedbackWindowLayout {
 
     public int typeY() { return typeY; }
     public int subjectY() { return subjectY; }
+    public int discordY() { return discordY; }
     public int descriptionY() { return descriptionY; }
     public int attachmentsY() { return attachmentsY; }
     public int statusY() { return statusY; }

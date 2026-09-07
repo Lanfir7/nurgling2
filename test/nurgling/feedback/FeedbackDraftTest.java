@@ -49,12 +49,29 @@ class FeedbackDraftTest {
         FeedbackDraft draft = new FeedbackDraft();
         draft.setType(FeedbackType.SUGGESTION);
         draft.setSubject("idea");
+        draft.setDiscordContact("  bug-hunter  ");
         assertTrue(draft.dirty());
 
         draft.clear();
 
         assertEquals(FeedbackType.BUG, draft.type());
+        assertEquals("", draft.discordContact());
         assertFalse(draft.dirty());
+    }
+
+    @Test
+    void optionalDiscordContactIsTrimmedAndLimited() {
+        FeedbackDraft draft = new FeedbackDraft();
+        draft.setSubject("crash");
+        draft.setDescription("steps");
+        assertEquals(FeedbackDraft.Validation.OK, draft.validate());
+
+        draft.setDiscordContact("  bug-hunter  ");
+        assertEquals(FeedbackDraft.Validation.OK, draft.validate());
+        assertEquals("bug-hunter", draft.submission("R-11").discordContact());
+
+        draft.setDiscordContact(repeat('d', FeedbackDraft.MAX_DISCORD_CONTACT + 1));
+        assertEquals(FeedbackDraft.Validation.DISCORD_CONTACT_TOO_LONG, draft.validate());
     }
 
     private static String repeat(char value, int count) {

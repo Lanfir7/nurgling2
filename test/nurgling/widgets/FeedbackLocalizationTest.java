@@ -16,13 +16,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class FeedbackLocalizationTest {
     private static final List<String> REQUIRED = Arrays.asList(
             "feedback.entry", "feedback.title", "feedback.type", "feedback.type.bug",
-            "feedback.type.suggestion", "feedback.subject", "feedback.description",
+            "feedback.type.suggestion", "feedback.subject", "feedback.discord_contact",
+            "feedback.description",
             "feedback.attachments", "feedback.snip", "feedback.snip.instruction",
             "feedback.send", "feedback.cancel", "feedback.retry", "feedback.remove",
             "feedback.preview", "feedback.discard.title", "feedback.discard.question",
             "feedback.discard", "feedback.keep_editing", "feedback.error.subject_required",
             "feedback.error.subject_too_long", "feedback.error.description_required",
-            "feedback.error.description_too_long", "feedback.error.configuration",
+            "feedback.error.description_too_long", "feedback.error.discord_contact_too_long",
+            "feedback.error.configuration",
             "feedback.error.capture", "feedback.error.delivery", "feedback.status.sending",
             "feedback.status.sent");
 

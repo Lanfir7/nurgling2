@@ -7,6 +7,7 @@ import java.util.List;
 public final class FeedbackDraft {
     public static final int MAX_SUBJECT = 120;
     public static final int MAX_DESCRIPTION = 3800;
+    public static final int MAX_DISCORD_CONTACT = 64;
     public static final int MAX_ATTACHMENTS = 3;
 
     public enum Validation {
@@ -14,12 +15,14 @@ public final class FeedbackDraft {
         SUBJECT_REQUIRED,
         SUBJECT_TOO_LONG,
         DESCRIPTION_REQUIRED,
-        DESCRIPTION_TOO_LONG
+        DESCRIPTION_TOO_LONG,
+        DISCORD_CONTACT_TOO_LONG
     }
 
     private FeedbackType type = FeedbackType.BUG;
     private String subject = "";
     private String description = "";
+    private String discordContact = "";
     private final List<FeedbackAttachment> attachments = new ArrayList<>();
 
     public FeedbackType type() { return type; }
@@ -28,6 +31,10 @@ public final class FeedbackDraft {
     public void setSubject(String subject) { this.subject = subject == null ? "" : subject; }
     public String description() { return description; }
     public void setDescription(String description) { this.description = description == null ? "" : description; }
+    public String discordContact() { return discordContact; }
+    public void setDiscordContact(String discordContact) {
+        this.discordContact = discordContact == null ? "" : discordContact;
+    }
     public List<FeedbackAttachment> attachments() { return Collections.unmodifiableList(attachments); }
 
     public Validation validate() {
@@ -37,6 +44,7 @@ public final class FeedbackDraft {
         if(cleanSubject.length() > MAX_SUBJECT) return Validation.SUBJECT_TOO_LONG;
         if(cleanDescription.isEmpty()) return Validation.DESCRIPTION_REQUIRED;
         if(cleanDescription.length() > MAX_DESCRIPTION) return Validation.DESCRIPTION_TOO_LONG;
+        if(discordContact.trim().length() > MAX_DISCORD_CONTACT) return Validation.DISCORD_CONTACT_TOO_LONG;
         return Validation.OK;
     }
 
@@ -53,19 +61,21 @@ public final class FeedbackDraft {
 
     public boolean dirty() {
         return type != FeedbackType.BUG || !subject.trim().isEmpty() ||
-                !description.trim().isEmpty() || !attachments.isEmpty();
+                !description.trim().isEmpty() || !discordContact.trim().isEmpty() || !attachments.isEmpty();
     }
 
     public void clear() {
         type = FeedbackType.BUG;
         subject = "";
         description = "";
+        discordContact = "";
         attachments.clear();
     }
 
     public FeedbackSubmission submission(String reportId) {
         if(validate() != Validation.OK)
             throw new IllegalStateException("Feedback draft is invalid");
-        return new FeedbackSubmission(reportId, type, subject.trim(), description.trim(), attachments);
+        return new FeedbackSubmission(reportId, type, subject.trim(), description.trim(),
+                discordContact.trim(), attachments);
     }
 }
