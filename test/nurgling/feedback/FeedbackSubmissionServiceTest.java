@@ -84,6 +84,31 @@ class FeedbackSubmissionServiceTest {
         assertTrue(listener.succeeded);
     }
 
+    @Test
+    void failureListenerCanImmediatelyRetryTheSameAttempt() throws Exception {
+        AtomicBoolean failOnce = new AtomicBoolean(true);
+        FeedbackSender sender = new FeedbackSender() {
+            public void sendMessage(String text) throws IOException {
+                if(failOnce.getAndSet(false))
+                    throw new IOException("offline");
+            }
+            public void sendPhoto(byte[] png, String filename, String caption) { }
+        };
+        FeedbackSubmissionService service = new FeedbackSubmissionService(sender, Runnable::run);
+        FeedbackSubmissionService.Attempt attempt = service.begin(new FeedbackSubmission(
+                "R-10", FeedbackType.BUG, "Broken", "Steps", Collections.emptyList()));
+        AtomicBoolean succeeded = new AtomicBoolean();
+        FeedbackSubmissionService.Listener listener = new FeedbackSubmissionService.Listener() {
+            public void succeeded() { succeeded.set(true); }
+            public void failed(IOException failure) { service.submit(attempt, this); }
+        };
+
+        service.submit(attempt, listener);
+
+        assertTrue(succeeded.get());
+        assertFalse(attempt.running());
+    }
+
     private static FeedbackSubmission submissionWithThreeImages(String id) throws IOException {
         List<FeedbackAttachment> images = new ArrayList<>();
         for(int i = 0; i < 3; i++)

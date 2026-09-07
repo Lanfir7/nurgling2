@@ -36,6 +36,7 @@ public final class FeedbackSubmissionService {
         if(!attempt.start())
             return;
         executor.execute(() -> {
+            IOException deliveryFailure = null;
             try {
                 if(!attempt.messageSent()) {
                     sender.sendMessage(FeedbackFormatter.message(attempt.submission()));
@@ -48,12 +49,15 @@ public final class FeedbackSubmissionService {
                             FeedbackFormatter.photoCaption(attempt.submission(), index));
                     attempt.markPhotoSent();
                 }
-                listener.succeeded();
             } catch(IOException failure) {
-                listener.failed(failure);
+                deliveryFailure = failure;
             } finally {
                 attempt.finish();
             }
+            if(deliveryFailure == null)
+                listener.succeeded();
+            else
+                listener.failed(deliveryFailure);
         });
     }
 
