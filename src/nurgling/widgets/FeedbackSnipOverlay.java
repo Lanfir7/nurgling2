@@ -63,7 +63,7 @@ public final class FeedbackSnipOverlay extends Widget {
             g.frect(Coord.z, sz);
         }
         g.chcolor(Color.WHITE);
-        g.atext(L10n.get("feedback.snip.instructions"), Coord.of(sz.x / 2, UI.scale(18)), 0.5, 0.0);
+        g.atext(L10n.get("feedback.snip.instruction"), Coord.of(sz.x / 2, UI.scale(18)), 0.5, 0.0);
         g.chcolor();
     }
 

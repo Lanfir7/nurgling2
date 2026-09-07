@@ -234,6 +234,7 @@
       </fileset>
     </copy>
     <copy file="etc/ansgar-config.properties" tofile="bin/haven-config.properties" />
+    <copy file="local-feedback.properties" tofile="bin/feedback.properties" failonerror="false" quiet="true" />
     <chmod file="bin/hafen.jar" perm="a+x" />
   </target>
 

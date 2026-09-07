@@ -150,6 +150,8 @@ public final class FeedbackWindow extends Window {
         typeSuggestion.tint = draft.type() == FeedbackType.SUGGESTION ? new Color(150, 220, 130) : null;
         typeBug.disable(locked);
         typeSuggestion.disable(locked);
+        for(Widget widget : attachmentWidgets)
+            ((AttachmentWidget)widget).setLocked(locked);
         attachmentCount.settext(draft.attachments().size() + "/" + FeedbackDraft.MAX_ATTACHMENTS);
         snip.disable(locked || draft.attachments().size() >= FeedbackDraft.MAX_ATTACHMENTS);
         boolean running = attempt != null && attempt.running();
@@ -198,6 +200,7 @@ public final class FeedbackWindow extends Window {
         status.settext(L10n.get("feedback.status.sending"));
         send.change(L10n.get("feedback.send"));
         refreshState();
+        send.disable(true);
         service.submit(attempt, new FeedbackSubmissionService.Listener() {
             public void succeeded() {
                 synchronized(ui) {
@@ -264,12 +267,13 @@ public final class FeedbackWindow extends Window {
     private final class AttachmentWidget extends Widget {
         private final TexI texture;
         private final int index;
+        private final Button remove;
 
         private AttachmentWidget(FeedbackAttachment attachment, int index) {
             super(Coord.of(UI.scale(181), layout.thumbnailSize()));
             this.texture = new TexI(attachment.image());
             this.index = index;
-            Button remove = add(new Button(UI.scale(77), L10n.get("feedback.remove"), this::removeAttachment),
+            remove = add(new Button(UI.scale(77), L10n.get("feedback.remove"), this::removeAttachment),
                     Coord.of(layout.thumbnailSize() + GAP, UI.scale(33)));
             remove.disable(attempt != null);
         }
@@ -307,6 +311,10 @@ public final class FeedbackWindow extends Window {
                 return;
             draft.removeAttachment(index);
             refreshAttachments();
+        }
+
+        private void setLocked(boolean locked) {
+            remove.disable(locked);
         }
     }
 

@@ -64,6 +64,16 @@ class FeedbackSubmissionServiceTest {
     }
 
     @Test
+    void maximumValidReportFitsTelegramMessageLimit() {
+        String subject = repeat('s', FeedbackDraft.MAX_SUBJECT);
+        String description = repeat('d', FeedbackDraft.MAX_DESCRIPTION);
+        FeedbackSubmission report = new FeedbackSubmission("R-12345678", FeedbackType.SUGGESTION,
+                subject, description, Collections.emptyList());
+
+        assertTrue(FeedbackFormatter.message(report).length() <= 4096);
+    }
+
+    @Test
     void duplicateSubmitIsIgnoredWhileAttemptIsRunning() throws Exception {
         QueuedExecutor executor = new QueuedExecutor();
         List<String> calls = new ArrayList<>();
@@ -114,6 +124,12 @@ class FeedbackSubmissionServiceTest {
         for(int i = 0; i < 3; i++)
             images.add(FeedbackAttachment.from(new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB)));
         return new FeedbackSubmission(id, FeedbackType.BUG, "Broken", "Steps", images);
+    }
+
+    private static String repeat(char value, int count) {
+        char[] chars = new char[count];
+        Arrays.fill(chars, value);
+        return new String(chars);
     }
 
     private static final class RecordingListener implements FeedbackSubmissionService.Listener {

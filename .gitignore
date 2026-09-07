@@ -85,3 +85,5 @@ AlarmSounds/ND_YoHeadsUp.wav
 AlarmSounds/settings/defaultAlarms
 /plugins/
 /.worktrees/
+/local-feedback.properties
+/bin/feedback.properties

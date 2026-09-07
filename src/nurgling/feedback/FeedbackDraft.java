@@ -6,7 +6,7 @@ import java.util.List;
 
 public final class FeedbackDraft {
     public static final int MAX_SUBJECT = 120;
-    public static final int MAX_DESCRIPTION = 4000;
+    public static final int MAX_DESCRIPTION = 3800;
     public static final int MAX_ATTACHMENTS = 3;
 
     public enum Validation {

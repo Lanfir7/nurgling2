@@ -31,6 +31,9 @@ import nurgling.*;
 import nurgling.conf.*;
 import nurgling.i18n.L10n;
 import nurgling.widgets.EncyclopediaWindow;
+import nurgling.widgets.FeedbackButton;
+import nurgling.widgets.FeedbackEntryLayout;
+import nurgling.widgets.FeedbackWindow;
 import nurgling.widgets.NMiniMapWnd;
 import nurgling.widgets.NSettingsWindow;
 import nurgling.widgets.options.*;
@@ -894,7 +897,10 @@ public class OptWnd extends Window {
 	Widget prev;
 	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.interface"), 'v', () -> new InterfacePanel(main)), 0, y)).pos("bl").adds(0, 5).y;
 	x = prev.pos("ur").adds(10, 0).x;
-	main.add(new PButton(UI.scale(200), L10n.get("opt.main.nurgling"), 'k', nqolwnd), x, prev.pos("ur").y);
+	Widget nurglingSettings = main.add(new PButton(UI.scale(200), L10n.get("opt.main.nurgling"), 'k', nqolwnd), x, prev.pos("ur").y);
+	main.add(new FeedbackButton(UI.scale(200), L10n.get("feedback.entry"), () ->
+		FeedbackWindow.open(getparent(GameUI.class), OptWnd.this)),
+		FeedbackEntryLayout.below(nurglingSettings.c, nurglingSettings.sz, UI.scale(5)));
 	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.video"), 'v', () -> new VideoPanel(ui, main)), 0, y)).pos("bl").adds(0, 5).y;
 	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.audio"), 'a', () -> new AudioPanel(ui, main)), 0, y)).pos("bl").adds(0, 5).y;
 	y = (prev = main.add(new PButton(UI.scale(200), L10n.get("opt.main.keybind"), 'k', nqolwnd) {
