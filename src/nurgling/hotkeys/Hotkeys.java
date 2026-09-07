@@ -94,4 +94,21 @@ public final class Hotkeys {
             throw new IllegalStateException("unknown hotkey: " + id);
         return action;
     }
+
+    /** Match the map-frame drag/waypoint gesture without imposing a button on the action. */
+    public static boolean matchesMapMarkerWaypoint(int button, int mods, boolean frameHit) {
+        return ((button == 1) && frameHit) || action(MAP_MARKER_WAYPOINT).current().matchesMouse(button, mods);
+    }
+
+    /** Match a waypoint mouse action's modifiers when a surrounding widget has no mouse button. */
+    public static boolean matchesMapMarkerWaypointModifiers(int mods) {
+        InputGesture gesture = action(MAP_MARKER_WAYPOINT).current();
+        return gesture.type() == InputGesture.Type.MOUSE_BUTTON &&
+                (mods & gesture.modmask()) == (gesture.modmatch() & gesture.modmask());
+    }
+
+    /** Match labeled-marker deletion using the action's currently bound mouse button. */
+    public static boolean matchesMapMarkerDelete(int button, int mods) {
+        return action(MAP_MARKER_DELETE).current().matchesMouse(button, mods);
+    }
 }

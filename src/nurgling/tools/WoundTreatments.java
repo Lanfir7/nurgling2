@@ -44,10 +44,6 @@ public final class WoundTreatments {
         return items == null ? Collections.emptyList() : items;
     }
 
-    public static boolean isStorageSearchClick(int button, boolean ctrl) {
-        return button == 1 && ctrl;
-    }
-
     /** Recipe tooltip plus a faded click-hint footer. */
     public static String treatTipMarkup(String itemName, String hint) {
         String tip = CraftRecipeLookup.ingredientTooltip(itemName);

@@ -24,6 +24,29 @@
 - Existing resource-processing and test-fixture diagnostics remain noisy but are non-failing and pre-existing.
 - Task 9 source-audit and localization-completeness work remains deferred as requested.
 
+## Review fix round 2
+
+### TDD evidence
+
+- Replaced the source-text-only review test with behavioral rebinding tests for waypoint and labeled-marker deletion.
+- RED run: `ant test-compile` failed because the production dispatch helpers were not yet present.
+- GREEN run: focused `Task8GameplayRebindingTest` passed 3/3, including rebound and disabled bindings.
+
+### Fixes and checks
+
+- MapWnd now keeps ordinary frame dragging on LMB while matching `map.marker.waypoint` against the actual event button; wheel modifier gating no longer hardcodes LMB.
+- NMiniMap labeled-marker deletion now accepts the action's rebound button while ordinary RMB-only marker behavior remains separate.
+- Removed the stale `WoundTreatments.isStorageSearchClick` API and its conflicting Ctrl+LMB test.
+- `ant test`: PASS (1,657/1,657).
+- `ant`: PASS.
+- `git diff --check`: PASS.
+- Generated `bin/hafen.jar` and `bin/hafen-panama.jar` were restored/removed after the exact post-build status check.
+
+### Concerns
+
+- Resource processing and test-fixture diagnostics remain noisy but non-failing and pre-existing.
+- Task 9 source-audit and localization-completeness work remains deferred as requested.
+
 ## Review fix round 1
 
 ### TDD evidence

@@ -3611,8 +3611,8 @@ NMiniMap extends MiniMap {
             }
         }
 
-        // Handle right-click release on labeled mark
-        if(ev.b == 3 && dloc != null && sessloc != null) {
+        // Handle right-click release on labeled mark, or the rebound delete gesture
+        if((ev.b == 3 || Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) && dloc != null && sessloc != null) {
             LabeledMinimapMark labeledMark = labeledMarkAt(ev.c);
             if(labeledMark != null) {
                 NGameUI gui = NUtils.getGameUI();
@@ -3620,7 +3620,7 @@ NMiniMap extends MiniMap {
                     // Если это метка квариарца
                     if("Quarryartz".equals(labeledMark.resourceType)) {
                         // Shift+ПКМ - удалить конкретную метку
-                        if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
+                        if(Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;
@@ -3636,7 +3636,7 @@ NMiniMap extends MiniMap {
                         }
                         return true;
                     } else if (isForageMark(labeledMark)) {
-                        if (Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
+                        if (Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;
@@ -3644,7 +3644,7 @@ NMiniMap extends MiniMap {
                         return true;
                     } else if(isOreSpotMark(labeledMark)) {
                         // Если это метка спота руды - Shift+ПКМ удаляет
-                        if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
+                        if(Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;

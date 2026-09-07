@@ -124,8 +124,7 @@ public class MapWnd extends Window implements Console.Directory {
 	    .settip("Compact mode").setgkey(kb_compact);
 	toolbar.add(new ICheckBox("gfx/hud/mmap/prov", "", "-d", "-h", "-dh") {
 		public boolean mousewheel(MouseWheelEvent ev) {
-		    if(!checkhit(ev.c) || !Hotkeys.action(Hotkeys.MAP_MARKER_WAYPOINT).current()
-			    .matchesMouse(1, ui.modflags()) || !a)
+		    if(!checkhit(ev.c) || !Hotkeys.matchesMapMarkerWaypointModifiers(ui.modflags()) || !a)
 			return(super.mousewheel(ev));
 		    olalpha = Utils.clip(olalpha + (ev.a * -32), 32, 256);
 		    return(true);
@@ -188,8 +187,7 @@ public class MapWnd extends Window implements Console.Directory {
 	    /* XXX: Shift-clicks that do not drag should be propagated to the map. */
 	    /* Alt+shift is excluded: it is the map ping (NMiniMap.sendPointPing), and this
 	     * blanket shift grab would otherwise eat it before the view ever sees it. */
-	    if((ev.b == 1) && (checkhit(c) || Hotkeys.action(Hotkeys.MAP_MARKER_WAYPOINT).current()
-		    .matchesMouse(ev.b, ui.modflags()))) {
+	    if(Hotkeys.matchesMapMarkerWaypoint(ev.b, ui.modflags(), checkhit(c))) {
 		MapWnd.this.drag(parentpos(MapWnd.this, c));
 		return(true);
 	    }
