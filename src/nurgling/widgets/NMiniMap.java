@@ -3408,6 +3408,11 @@ NMiniMap extends MiniMap {
             }
         }
 
+        // A rebound marker-delete gesture takes priority over path recording, including plain LMB.
+        if(Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags()) && dloc != null && sessloc != null &&
+                labeledMarkAt(ev.c) != null)
+            return true;
+
         // Pick up a queued waypoint under the cursor instead of panning/walking. Plain left
         // button only: alt+LMB is "queue a waypoint here" (NMiniMapWnd.clickloc, NMapWnd.mouseup)
         // and would otherwise be swallowed whenever the cursor sat near a node already queued.
@@ -3415,7 +3420,7 @@ NMiniMap extends MiniMap {
             return true;
 
         // Handle left-click for forager path recording - prevent player movement
-        if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
+        if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags()) && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
                 // Find a PathRecordable window (Forager or TrufflePigHunter)
@@ -3541,7 +3546,7 @@ NMiniMap extends MiniMap {
         }
 
         // Handle left-click for forager path recording (without modifiers)
-        if(ev.b == 1 && !ui.modmeta && !ui.modshift && !ui.modctrl && dloc != null && sessloc != null) {
+        if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags()) && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
                 // Find a PathRecordable window (Forager or TrufflePigHunter)

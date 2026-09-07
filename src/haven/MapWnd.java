@@ -187,10 +187,9 @@ public class MapWnd extends Window implements Console.Directory {
 	    /* XXX: Shift-clicks that do not drag should be propagated to the map. */
 	    /* Alt+shift is excluded: it is the map ping (NMiniMap.sendPointPing), and this
 	     * blanket shift grab would otherwise eat it before the view ever sees it. */
-	    if(Hotkeys.matchesMapMarkerWaypoint(ev.b, ui.modflags(), checkhit(c))) {
-		MapWnd.this.drag(parentpos(MapWnd.this, c));
+	    if(Hotkeys.dispatchMapMarkerWaypoint(ev.b, ui.modflags(), checkhit(c),
+		    () -> MapWnd.this.drag(parentpos(MapWnd.this, c))))
 		return(true);
-	    }
 	    return(super.mousedown(ev));
 	}
 

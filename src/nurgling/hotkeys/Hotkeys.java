@@ -1,5 +1,7 @@
 package nurgling.hotkeys;
 
+import haven.KeyMatch;
+
 /** Entry point for the unified keyboard-action registry. */
 public final class Hotkeys {
     public static final String INV = "inv";
@@ -100,6 +102,14 @@ public final class Hotkeys {
         return ((button == 1) && frameHit) || action(MAP_MARKER_WAYPOINT).current().matchesMouse(button, mods);
     }
 
+    /** Dispatch a map waypoint/drag event after matching the actual event button. */
+    public static boolean dispatchMapMarkerWaypoint(int button, int mods, boolean frameHit, Runnable handler) {
+        if(!matchesMapMarkerWaypoint(button, mods, frameHit))
+            return false;
+        handler.run();
+        return true;
+    }
+
     /** Match a waypoint mouse action's modifiers when a surrounding widget has no mouse button. */
     public static boolean matchesMapMarkerWaypointModifiers(int mods) {
         InputGesture gesture = action(MAP_MARKER_WAYPOINT).current();
@@ -110,5 +120,10 @@ public final class Hotkeys {
     /** Match labeled-marker deletion using the action's currently bound mouse button. */
     public static boolean matchesMapMarkerDelete(int button, int mods) {
         return action(MAP_MARKER_DELETE).current().matchesMouse(button, mods);
+    }
+
+    /** Plain LMB path recording must yield to a matching marker-delete action. */
+    public static boolean allowsForagerPathRecording(int button, int mods) {
+        return button == 1 && (mods & KeyMatch.MODS) == 0 && !matchesMapMarkerDelete(button, mods);
     }
 }

@@ -24,6 +24,24 @@
 - Existing resource-processing and test-fixture diagnostics remain noisy but are non-failing and pre-existing.
 - Task 9 source-audit and localization-completeness work remains deferred as requested.
 
+## Review fix round 3
+
+### Fixes and behavioral checks
+
+- MapWnd waypoint dispatch now goes through an event-level callback guard, so rebound MMB/RMB gestures are handled without a physical-LMB wrapper.
+- NMiniMap prioritizes a matching `map.marker.delete` gesture before queued-waypoint and PathRecordable handling; ordinary unmodified LMB recording remains enabled when delete is not bound there.
+- Strengthened `Task8GameplayRebindingTest` with callback dispatch and LMB-delete-vs-recording control-flow tests, including disabled bindings.
+- Focused `Task8GameplayRebindingTest`: PASS (4/4).
+- `ant test`: PASS (1,658/1,658).
+- `ant`: PASS.
+- `git diff --check`: PASS.
+- Generated `bin/hafen.jar` and `bin/hafen-panama.jar` were restored/removed after exact post-build status checks.
+
+### Concerns
+
+- Resource processing and test-fixture diagnostics remain noisy but non-failing and pre-existing.
+- Task 9 source-audit and localization-completeness work remains deferred as requested.
+
 ## Review fix round 2
 
 ### TDD evidence

@@ -3,6 +3,8 @@ package nurgling.hotkeys;
 import haven.KeyMatch;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class Task8GameplayRebindingTest {
@@ -13,6 +15,10 @@ class Task8GameplayRebindingTest {
         try {
             assertTrue(Hotkeys.matchesMapMarkerWaypoint(2, KeyMatch.C, false));
             assertTrue(Hotkeys.matchesMapMarkerWaypointModifiers(KeyMatch.C));
+            AtomicBoolean handled = new AtomicBoolean();
+            assertTrue(Hotkeys.dispatchMapMarkerWaypoint(2, KeyMatch.C, false,
+                    () -> handled.set(true)));
+            assertTrue(handled.get());
             assertFalse(Hotkeys.matchesMapMarkerWaypoint(1, KeyMatch.C, false));
             assertFalse(Hotkeys.matchesMapMarkerWaypoint(2, 0, false));
             action.binding().set(InputGesture.none());
@@ -42,5 +48,18 @@ class Task8GameplayRebindingTest {
         } finally {
             action.binding().reset();
         }
+    }
+
+    @Test
+    void markerDeleteWinsOverUnmodifiedForagerRecording() {
+        HotkeyAction action = Hotkeys.action(Hotkeys.MAP_MARKER_DELETE);
+        action.binding().set(InputGesture.mouse(1, 0, 0));
+        try {
+            assertTrue(Hotkeys.matchesMapMarkerDelete(1, 0));
+            assertFalse(Hotkeys.allowsForagerPathRecording(1, 0));
+        } finally {
+            action.binding().reset();
+        }
+        assertTrue(Hotkeys.allowsForagerPathRecording(1, 0));
     }
 }
