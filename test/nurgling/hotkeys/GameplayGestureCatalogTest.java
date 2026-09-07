@@ -10,6 +10,18 @@ import java.util.EnumSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GameplayGestureCatalogTest {
+    @Test void ctrlShiftRightClickOnHeldItemLoadsAllMatchingFuel() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyCatalog.registerCore(registry);
+
+        HotkeyAction action = registry.find(Hotkeys.HELD_INTERACT_ALL_WITH_TARGET);
+
+        assertNotNull(action);
+        assertTrue(action.defaultGesture().matchesMouse(3, UI.MOD_CTRL | UI.MOD_SHIFT));
+        assertFalse(action.defaultGesture().matchesMouse(3, UI.MOD_SHIFT));
+        assertEquals(Integer.valueOf(UI.MOD_CTRL | UI.MOD_SHIFT), action.canonicalMods());
+    }
+
     @Test void gameplayGesturesAreRegisteredWithDefaultsAndContexts() {
         HotkeyRegistry registry = new HotkeyRegistry();
         HotkeyCatalog.registerCore(registry);

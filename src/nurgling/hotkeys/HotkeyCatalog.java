@@ -314,8 +314,8 @@ public final class HotkeyCatalog {
         gesture(registry, "held.interact_with_target", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
         gesture(registry, Hotkeys.HELD_INTERACT_ALL_WITH_TARGET,
-                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
-                EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(haven.UI.MOD_SHIFT), order);
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C | KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(haven.UI.MOD_CTRL | haven.UI.MOD_SHIFT), order);
         gesture(registry, "held.open_without_using", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
         gesture(registry, "held.light_from_fire", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C | KeyMatch.M), HotkeyCategory.INVENTORY,
