@@ -15,6 +15,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -26,6 +27,8 @@ class HotkeySettingsModelTest {
         assertEquals(Arrays.asList("quick-marker"), ids(model.visibleActions()));
         model.setQuery("");
         assertEquals(HotkeyCategory.INVENTORY, model.selectedCategory());
+        assertEquals(Arrays.asList("transfer-item"), ids(model.visibleActions()));
+        model.setQuery("Инвентарь");
         assertEquals(Arrays.asList("transfer-item"), ids(model.visibleActions()));
     }
 
@@ -41,11 +44,22 @@ class HotkeySettingsModelTest {
         HotkeyRegistry registry = new HotkeyRegistry();
         String firstId = firstLabel.equals("First") ? "first" : "transfer-item";
         String secondId = secondLabel.equals("Second") ? "second" : "quick-marker";
-        registry.register(action(firstId, firstLabel, HotkeyCategory.INVENTORY,
-                HotkeyContext.INVENTORY_BACKGROUND, InputGesture.mouse(1, KeyMatch.MODS, 0)));
-        registry.register(action(secondId, secondLabel, HotkeyCategory.MAP,
-                HotkeyContext.INVENTORY_BACKGROUND, InputGesture.mouse(1, KeyMatch.MODS, 0)));
+        HotkeyCategory first = category(firstCategory);
+        HotkeyCategory second = category(secondCategory);
+        registry.register(action(firstId, firstLabel, first, context(first),
+                InputGesture.mouse(1, KeyMatch.MODS, 0)));
+        registry.register(action(secondId, secondLabel, second, context(first == second ? first : second),
+                InputGesture.mouse(1, KeyMatch.MODS, 0)));
         return new HotkeySettingsModel(registry, new HotkeyDraftModel(registry));
+    }
+
+    private static HotkeyCategory category(String value) {
+        return HotkeyCategory.valueOf(value.toUpperCase(Locale.ROOT));
+    }
+
+    private static HotkeyContext context(HotkeyCategory category) {
+        return category == HotkeyCategory.INVENTORY ? HotkeyContext.INVENTORY_BACKGROUND :
+                category == HotkeyCategory.MAP ? HotkeyContext.MAP_SURFACE : HotkeyContext.GLOBAL;
     }
 
     private static HotkeyAction action(String id, String label, HotkeyCategory category,
@@ -62,6 +76,15 @@ class HotkeySettingsModelTest {
 
     private static Set<String> idSet(List<HotkeyAction> actions) {
         return new HashSet<>(ids(actions));
+    }
+
+    @Test void categoriesAndContextsExposeStableLocalizedMetadata() {
+        assertEquals("hotkey.category.inventory", HotkeyCategory.INVENTORY.labelKey());
+        assertEquals("Inventory", HotkeyCategory.INVENTORY.englishLabel());
+        assertEquals("Инвентарь", HotkeyCategory.INVENTORY.russianLabel());
+        assertEquals("hotkey.context.inventory_background", HotkeyContext.INVENTORY_BACKGROUND.labelKey());
+        assertEquals("Inventory background", HotkeyContext.INVENTORY_BACKGROUND.englishLabel());
+        assertEquals("Фон инвентаря", HotkeyContext.INVENTORY_BACKGROUND.russianLabel());
     }
 
     private static final class MemoryBinding implements HotkeyBinding {

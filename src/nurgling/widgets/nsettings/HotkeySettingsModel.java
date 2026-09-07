@@ -5,7 +5,6 @@ import nurgling.hotkeys.HotkeyCategory;
 import nurgling.hotkeys.HotkeyContext;
 import nurgling.hotkeys.HotkeyDraftModel;
 import nurgling.hotkeys.HotkeyRegistry;
-import nurgling.i18n.L10n;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -76,11 +75,11 @@ public final class HotkeySettingsModel {
         if(contains(action.id(), needle) || contains(action.label(), needle) ||
                 contains(action.labelKey(), needle) || contains(action.category().name(), needle) ||
                 contains(displayName(action.category()), needle) ||
-                contains(localizedCategory(action.category()), needle))
+                contains(action.category().label(), needle))
             return true;
         for(HotkeyContext context : action.contexts())
             if(contains(context.name(), needle) || contains(displayName(context), needle) ||
-                    contains(localizedContext(context), needle))
+                    contains(context.label(), needle))
                 return true;
         return false;
     }
@@ -106,21 +105,4 @@ public final class HotkeySettingsModel {
         return result.toString();
     }
 
-    private static String localizedCategory(HotkeyCategory category) {
-        return localized("hotkeys.category." + category.name().toLowerCase(Locale.ROOT),
-                "nsettings.hotkey.category." + category.name().toLowerCase(Locale.ROOT));
-    }
-
-    private static String localizedContext(HotkeyContext context) {
-        return localized("hotkeys.context." + context.name().toLowerCase(Locale.ROOT),
-                "nsettings.hotkey.context." + context.name().toLowerCase(Locale.ROOT));
-    }
-
-    private static String localized(String first, String second) {
-        String value = L10n.get(first);
-        if(value != null && !value.equals(first) && !value.equals("[" + first + "]"))
-            return value;
-        value = L10n.get(second);
-        return value != null && !value.equals(second) && !value.equals("[" + second + "]") ? value : null;
-    }
 }
