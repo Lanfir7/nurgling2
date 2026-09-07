@@ -34,4 +34,13 @@ class ForageTerrainTest {
         assertTrue(resources.contains("gfx/tiles/beechgrove"));
         assertTrue(resources.contains("gfx/tiles/pinebarren"));
     }
+
+    @Test
+    void knownTreeBiomesCanonicalizeWikiAliases() {
+        assertTrue(ForageTerrain.known("Dry Weald"));
+        assertTrue(ForageTerrain.known("Wild Moor"));
+        assertEquals(java.util.List.of("Black Wood"), ForageTerrain.parse("Blackwood"));
+        assertEquals(java.util.List.of("Scrub Veld"), ForageTerrain.parse("Scrubveld"));
+        assertEquals(java.util.List.of("Leaf Detritus"), ForageTerrain.parse("Leaf Detritus"));
+    }
 }

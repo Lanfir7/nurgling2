@@ -33,4 +33,29 @@ class QCondTest {
         assertNull(new QCond(7, false, "Create", null).itemTarget);
         assertNull(new QCond(7, false, "Bring to Jenny", null).itemTarget);
     }
+
+    @Test
+    void fellAlmondTreeExposesTreeName() {
+        QCond cond = new QCond(7, false, "Fell an almond tree (x2) 2/6[3/5]", null);
+
+        assertEquals(QCond.Verb.FELL, cond.verb);
+        assertEquals("almond tree", cond.itemTarget);
+        assertNull(cond.gobTarget);
+    }
+
+    @Test
+    void chopTreeIsTheSameVerbAsFell() {
+        QCond cond = new QCond(7, false, "Chop a pine tree", null);
+
+        assertEquals(QCond.Verb.FELL, cond.verb);
+        assertEquals("pine tree", cond.itemTarget);
+    }
+
+    @Test
+    void unknownLinesStayOtherWithoutTargets() {
+        QCond cond = new QCond(7, false, "Admire the sunset", null);
+
+        assertEquals(QCond.Verb.OTHER, cond.verb);
+        assertNull(cond.itemTarget);
+    }
 }

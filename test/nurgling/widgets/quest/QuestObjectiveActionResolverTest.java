@@ -58,4 +58,49 @@ class QuestObjectiveActionResolverTest {
                 new QCond(1, true, "Bring a Board of Oak to Jenny", null))
                 .isEmpty());
     }
+
+    @Test
+    void fellAlmondTreeHighlightsKnownBiomes() {
+        QuestObjectiveAction action = resolver.resolve(
+                new QCond(1, false, "Fell an almond tree (x2) 2/6[3/5]", null));
+
+        assertEquals(QuestObjectiveAction.Kind.TREE_TERRAIN, action.kind);
+        assertTrue(action.targets.contains("Deep Tangle"));
+        assertTrue(action.targets.contains("Blue Sod"));
+    }
+
+    @Test
+    void pickAlmondsResolvesTreeTerrainsFromProduct() {
+        QuestObjectiveAction action = resolver.resolve(
+                new QCond(1, false, "Pick Almonds", null));
+
+        assertEquals(QuestObjectiveAction.Kind.TREE_TERRAIN, action.kind);
+        assertTrue(action.targets.contains("Deep Tangle"));
+        assertEquals("gfx/terobjs/trees/almondtree",
+                resolver.treeResources(new QCond(1, false, "Pick Almonds", null))
+                        .iterator().next());
+    }
+
+    @Test
+    void forageAndRockButtonsStillWinOverTreeProducts() {
+        assertEquals(QuestObjectiveAction.Kind.FORAGE_TERRAIN, resolver.resolve(
+                new QCond(1, false, "Pick a Chiming Bluebell", null)).kind);
+        assertEquals(QuestObjectiveAction.Kind.ROCK_TERRAIN, resolver.resolve(
+                new QCond(1, false, "Bring a Quartz to Jenny", null)).kind);
+    }
+
+    @Test
+    void unknownAndReadyTreeObjectivesHaveNoTerrainButton() {
+        assertNull(resolver.resolve(new QCond(1, false, "Fell a mallorn tree", null)));
+        assertNull(resolver.resolve(new QCond(1, false, "Fell an unknown tree", null)));
+        assertNull(resolver.resolve(new QCond(1, true, "Fell an almond tree", null)));
+        assertNull(resolver.resolve(new QCond(1, false, "Admire the sunset", null)));
+    }
+
+    @Test
+    void fellAlmondTreeAlsoExposesLivingTreeResource() {
+        assertTrue(resolver.treeResources(
+                new QCond(1, false, "Fell an almond tree", null))
+                .contains("gfx/terobjs/trees/almondtree"));
+    }
 }

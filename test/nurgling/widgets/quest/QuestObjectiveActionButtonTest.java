@@ -12,10 +12,13 @@ class QuestObjectiveActionButtonTest {
     void usesDistinctMapAndCraftGlyphs() {
         QuestObjectiveAction map = new QuestObjectiveAction(
                 QuestObjectiveAction.Kind.FORAGE_TERRAIN, Collections.singleton("Bog"));
+        QuestObjectiveAction trees = new QuestObjectiveAction(
+                QuestObjectiveAction.Kind.TREE_TERRAIN, Collections.singleton("Deep Tangle"));
         QuestObjectiveAction craft = new QuestObjectiveAction(
                 QuestObjectiveAction.Kind.CRAFT, Collections.singleton("stone axe"));
 
         assertEquals("M", QuestObjectiveActionButton.glyphFor(map));
+        assertEquals("M", QuestObjectiveActionButton.glyphFor(trees));
         assertEquals("C", QuestObjectiveActionButton.glyphFor(craft));
     }
 
