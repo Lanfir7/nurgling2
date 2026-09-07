@@ -4,6 +4,7 @@ import nurgling.hotkeys.HotkeyAction;
 import nurgling.hotkeys.HotkeyRegistry;
 import haven.Button;
 import haven.Coord;
+import haven.Label;
 import haven.Resource;
 import haven.UI;
 import haven.Widget;
@@ -11,6 +12,7 @@ import nurgling.widgets.NSettingsWindow;
 import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
 
+import java.awt.Color;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
@@ -95,6 +97,43 @@ class HotkeySettingsLifecycleTest {
             assertEquals(fullLabel, label.tooltip(Coord.z, null),
                     "the complete localized label must remain available as a tooltip");
 
+        } finally {
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+    }
+
+    @Test void contextTextIsVisuallyMutedBelowTheAction() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        try {
+            nurgling.hotkeys.PreferenceStore preferences = new nurgling.hotkeys.PreferenceStore() {
+                public String get(String key, String fallback) { return fallback; }
+                public void set(String key, String value) { }
+            };
+            nurgling.hotkeys.InputGesture gesture = nurgling.hotkeys.InputGesture.none();
+            HotkeyAction action = new HotkeyAction("muted-context", null, "Transfer one item",
+                    nurgling.hotkeys.HotkeyCategory.INVENTORY,
+                    java.util.EnumSet.of(nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_GENERIC),
+                    java.util.EnumSet.of(nurgling.hotkeys.InputGesture.Type.KEY),
+                    new nurgling.hotkeys.GestureBinding("muted-context", gesture, preferences),
+                    null, 0, false);
+
+            HotkeyActionRow row = new HotkeyActionRow(UI.scale(560), action, gesture,
+                    ignored -> { }, () -> { });
+            Label actionLabel = (Label)findField(HotkeyActionRow.class, "actionLabel").get(row);
+            Label contextLabel = (Label)findField(HotkeyActionRow.class, "contextLabel").get(row);
+            Color contextColor = contextLabel.col;
+
+            assertEquals(Color.WHITE, actionLabel.col);
+            assertEquals(contextColor.getRed(), contextColor.getGreen());
+            assertEquals(contextColor.getGreen(), contextColor.getBlue());
+            assertTrue(contextColor.getRed() < actionLabel.col.getRed(),
+                    "context must be visually quieter than the action");
+            assertTrue(contextColor.getRed() >= 100,
+                    "muted context must remain readable on the dark background");
         } finally {
             if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
             else nurgling.sessions.ThreadLocalUI.set(oldUI);

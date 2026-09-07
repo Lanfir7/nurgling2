@@ -11,6 +11,7 @@ import nurgling.hotkeys.InputGesture;
 import nurgling.i18n.L10n;
 import nurgling.widgets.NHotkeyCapture;
 
+import java.awt.Color;
 import java.util.function.Consumer;
 
 /** One action row in the categorized hotkey settings page. */
@@ -33,6 +34,7 @@ public class HotkeyActionRow extends Panel {
         contextText = contexts(action);
         actionLabel = add(new Label(actionText), Coord.of(0, UI.scale(3)));
         contextLabel = add(new Label(contextText), Coord.of(0, UI.scale(20)));
+        contextLabel.setcolor(new Color(150, 150, 150));
         capture = add(new NHotkeyCapture(UI.scale(175), action, captureSink), Coord.z);
         capture.setGesture(gesture);
         reset = add(new HotkeyTextButton(UI.scale(75), L10n.get("hotkeys.reset")).action(resetAction), Coord.z);
