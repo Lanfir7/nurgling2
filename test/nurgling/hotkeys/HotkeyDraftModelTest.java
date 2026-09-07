@@ -36,6 +36,21 @@ class HotkeyDraftModelTest {
         assertEquals(original, binding.current());
     }
 
+    @Test void conflictCancelRestoresPriorResetOperation() {
+        HotkeyRegistryTest.MemoryBinding old = binding("old", InputGesture.key(KeyMatch.forcode(KeyEvent.VK_Q, 0)));
+        HotkeyRegistryTest.MemoryBinding next = binding("next", InputGesture.key(KeyMatch.forcode(KeyEvent.VK_W, 0)));
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("old", old));
+        registry.register(action("next", next));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+        draft.reset("next");
+        HotkeyDraftModel.Checkpoint beforeConflict = draft.checkpoint();
+        assertFalse(draft.assign("next", old.current()).isEmpty());
+        draft.restore(beforeConflict);
+        assertEquals(next.defaultGesture(), draft.effective("next"));
+        assertTrue(draft.isDirty());
+    }
+
     private static HotkeyRegistryTest.MemoryBinding binding(String id, InputGesture gesture) {
         return new HotkeyRegistryTest.MemoryBinding(id, gesture);
     }

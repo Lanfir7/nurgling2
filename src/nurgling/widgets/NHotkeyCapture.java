@@ -5,6 +5,7 @@ import haven.UI;
 import haven.Widget;
 import nurgling.hotkeys.HotkeyAction;
 import nurgling.hotkeys.InputGesture;
+import nurgling.i18n.L10n;
 import nurgling.widgets.nsettings.HotkeyCapturePolicy;
 
 import java.util.function.Consumer;
@@ -45,7 +46,7 @@ public class NHotkeyCapture extends Button {
         }
         if(ui == null)
             return;
-        change("…");
+        change(L10n.get("hotkeys.capture"));
         keyGrab = ui.grabkeys(this);
         mouseGrab = ui.grabmouse(this);
     }
@@ -57,7 +58,7 @@ public class NHotkeyCapture extends Button {
         case IGNORE_MODIFIER:
             return;
         case REJECT_TYPE:
-            change("!");
+            change(String.format(L10n.get("hotkeys.capture.wrong_type"), requiredTypes()));
             return;
         case CANCEL:
             releaseGrabs();
@@ -75,6 +76,18 @@ public class NHotkeyCapture extends Button {
         default:
             throw new AssertionError(decision.kind());
         }
+    }
+
+    private String requiredTypes() {
+        StringBuilder result = new StringBuilder();
+        for(InputGesture.Type type : action.allowedTypes()) {
+            if(type == InputGesture.Type.NONE)
+                continue;
+            if(result.length() > 0)
+                result.append(", ");
+            result.append(type.name().toLowerCase().replace('_', ' '));
+        }
+        return result.toString();
     }
 
     public void cancelCapture() {

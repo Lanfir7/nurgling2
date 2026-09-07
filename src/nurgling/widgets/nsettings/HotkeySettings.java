@@ -20,6 +20,7 @@ import nurgling.widgets.AdaptiveSettingsPanel;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /** Categorized, conflict-aware editor for the unified hotkey registry. */
 public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
@@ -28,6 +29,12 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     private final CheckBox conflictsOnly;
     private final Scrollport rowsScroll;
     private final Widget rows;
+    private final Widget tabsHost;
+    private final Button tabsLeft;
+    private final Button tabsRight;
+    private final List<Button> tabButtons = new ArrayList<>();
+    private final Consumer<List<HotkeyAction>> registryListener = ignored -> rebuildRows();
+    private boolean registryListening;
     private Widget conflictBox;
     private int contentWidth;
 
@@ -69,15 +76,21 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         }, Coord.z);
 
         int tabsY = UI.scale(30);
-        int tabX = 0;
+        tabsLeft = add(new Button(UI.scale(24), "<", false), Coord.of(0, tabsY));
+        tabsHost = add(new Widget(Coord.of(width - UI.scale(48), UI.scale(24))),
+                Coord.of(UI.scale(24), tabsY));
+        tabsRight = add(new Button(UI.scale(24), ">", false), Coord.of(width - UI.scale(24), tabsY));
+        tabsLeft.action(() -> moveCategory(-1));
+        tabsRight.action(() -> moveCategory(1));
         for(final HotkeyCategory category : HotkeyCategory.values()) {
             final Button tab = new Button(UI.scale(72), tabLabel(category), false);
-            add(tab, Coord.of(tabX, tabsY));
+            tabsHost.add(tab, Coord.z);
+            tabButtons.add(tab);
             tab.action(() -> {
                 model.selectCategory(category);
+                layoutTabs();
                 rebuildRows();
             });
-            tabX += tab.sz.x + UI.scale(2);
         }
 
         add(new Button(UI.scale(110), L10n.get("hotkeys.reset_category"), false)
@@ -95,10 +108,20 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         rows = rowsScroll.cont;
         contentWidth = width;
         resize(Coord.of(width, UI.scale(530)));
+        layoutTabs();
         rebuildRows();
     }
 
     public HotkeySettingsModel model() { return model; }
+
+    @Override
+    protected void added() {
+        super.added();
+        if(!registryListening) {
+            model.registry().addListener(registryListener);
+            registryListening = true;
+        }
+    }
 
     @Override
     public void load() {
@@ -130,6 +153,33 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     @Override
     public boolean ownsVerticalScroll() { return true; }
 
+    public void cancelCaptures() {
+        for(Widget child : new ArrayList<>(rows.children())) {
+            if(child instanceof HotkeyActionRow)
+                ((HotkeyActionRow)child).capture().cancelCapture();
+        }
+    }
+
+    private void stopListening() {
+        if(registryListening) {
+            model.registry().removeListener(registryListener);
+            registryListening = false;
+        }
+    }
+
+    @Override
+    public void hide() {
+        cancelCaptures();
+        super.hide();
+    }
+
+    @Override
+    public void remove() {
+        cancelCaptures();
+        stopListening();
+        super.remove();
+    }
+
     @Override
     public void resize(Coord size) {
         super.resize(size);
@@ -138,10 +188,41 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         int margin = UI.scale(4);
         search.move(Coord.of(0, 0));
         conflictsOnly.move(Coord.of(search.sz.x + margin, 0));
+        tabsHost.move(Coord.of(UI.scale(24), UI.scale(30)));
+        tabsHost.resize(Coord.of(Math.max(1, size.x - UI.scale(48)), UI.scale(24)));
+        tabsLeft.move(Coord.of(0, UI.scale(30)));
+        tabsRight.move(Coord.of(Math.max(0, size.x - UI.scale(24)), UI.scale(30)));
+        layoutTabs();
         rowsScroll.move(Coord.of(0, UI.scale(94)));
         rowsScroll.resize(Coord.of(Math.max(1, size.x), Math.max(1, size.y - rowsScroll.c.y)));
         contentWidth = rowsScroll.cont.sz.x;
         rebuildRows();
+    }
+
+    private void moveCategory(int direction) {
+        int index = model.selectedCategory().ordinal() + direction;
+        index = Math.max(0, Math.min(HotkeyCategory.values().length - 1, index));
+        model.selectCategory(HotkeyCategory.values()[index]);
+        layoutTabs();
+        rebuildRows();
+    }
+
+    private void layoutTabs() {
+        if(tabsHost == null || tabButtons.isEmpty())
+            return;
+        int[] widths = new int[tabButtons.size()];
+        for(int i = 0; i < tabButtons.size(); i++)
+            widths[i] = tabButtons.get(i).sz.x;
+        HotkeyTabLayout layout = HotkeyTabLayout.calculate(widths, tabsHost.sz.x,
+                model.selectedCategory().ordinal(), UI.scale(2));
+        HotkeyTabLayout.VisibleRange visible = layout.visibleRange();
+        for(int i = 0; i < tabButtons.size(); i++) {
+            HotkeyTabLayout.Rect rect = layout.rect(i);
+            tabButtons.get(i).move(Coord.of(rect.x, 0));
+            tabButtons.get(i).visible = visible.contains(i);
+        }
+        tabsLeft.visible = layout.canScrollLeft();
+        tabsRight.visible = layout.canScrollRight();
     }
 
     private void rebuildRows() {
@@ -175,6 +256,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
             rebuildRows();
             return;
         case ASSIGN:
+            HotkeyDraftModel.Checkpoint beforeConflict = model.draft().checkpoint();
             List<HotkeyConflict> conflicts = model.draft().assign(action.id(), decision.gesture());
             if(conflicts.isEmpty())
                 rebuildRows();
@@ -183,7 +265,10 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
                         () -> {
                             model.draft().replace(conflicts.get(0));
                             rebuildRows();
-                        }, this::rebuildRows);
+                        }, () -> {
+                            model.draft().restore(beforeConflict);
+                            rebuildRows();
+                        });
             return;
         default:
             return;

@@ -12,4 +12,15 @@ class HotkeySettingsLayoutTest {
         assertEquals(478, layout.viewport.h);
         assertTrue(layout.capture.x + layout.capture.w <= 560);
     }
+
+    @Test
+    void selectedOverflowTabIsFullyReachable() {
+        HotkeyTabLayout layout = HotkeyTabLayout.calculate(
+                new int[] {72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72},
+                480, 10, 2);
+        HotkeyTabLayout.Rect selected = layout.rect(10);
+        assertTrue(selected.x >= 0);
+        assertTrue(selected.right() <= layout.viewportWidth());
+        assertTrue(layout.visibleRange().contains(10));
+    }
 }

@@ -20,6 +20,16 @@
 - `rtk rg -n "NKeyBindButton|BindingPanel|PointBind" src`: ссылок нет.
 - `rtk git diff --check`: без ошибок.
 
+## Review round 1 fixes
+
+- `HotkeySettings` now subscribes to registry changes in `added()` and unsubscribes during removal; row rebuilds retain the existing draft.
+- Tabs use `HotkeyTabLayout` with a clipped overflow host and previous/next arrows; selected tabs remain fully reachable.
+- Active captures are cancelled on page switching, window hide, panel removal, and capture-widget destruction.
+- Conflict dialogs checkpoint and restore the exact draft operation on Cancel; Replace still assigns the new gesture and disables the previous action.
+- Capture and wrong-type feedback use localized `hotkeys.capture` / `hotkeys.capture.wrong_type` strings.
+- Added regression coverage for overflow-tab reachability and restoration of a prior RESET operation.
+- Covering/full `rtk ant test`: GREEN, 1642/1642 tests successful.
+
 ## Self-review / concerns
 
 - Захват освобождает keyboard и mouse grabs при cancel/reset/disable/assign, hide и remove.

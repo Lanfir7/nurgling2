@@ -18,6 +18,14 @@ public final class HotkeyDraftModel {
     private final HotkeyRegistry registry;
     private final Map<String, Change> changes = new LinkedHashMap<>();
 
+    /** Immutable point-in-time copy of staged operations for a cancelable dialog. */
+    public static final class Checkpoint {
+        private final Map<String, Change> changes;
+        private Checkpoint(Map<String, Change> changes) {
+            this.changes = changes;
+        }
+    }
+
     public HotkeyDraftModel(HotkeyRegistry registry) {
         if(registry == null)
             throw new NullPointerException("registry");
@@ -142,6 +150,17 @@ public final class HotkeyDraftModel {
     }
 
     public boolean isDirty() { return !changes.isEmpty(); }
+
+    public Checkpoint checkpoint() {
+        return new Checkpoint(new LinkedHashMap<>(changes));
+    }
+
+    public void restore(Checkpoint checkpoint) {
+        if(checkpoint == null)
+            throw new NullPointerException("checkpoint");
+        changes.clear();
+        changes.putAll(checkpoint.changes);
+    }
 
     private HotkeyAction requireAction(String id) {
         HotkeyAction action = registry.find(id);

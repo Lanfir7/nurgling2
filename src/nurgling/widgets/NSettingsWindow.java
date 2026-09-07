@@ -276,6 +276,7 @@ public class NSettingsWindow extends Widget {
     }
 
     private void showSettings(SettingsItem item) {
+        releaseActiveCaptures();
         if(currentFrame != null)
             currentFrame.hide();
         currentFrame = item.frame;
@@ -285,6 +286,23 @@ public class NSettingsWindow extends Widget {
         fitCurrentPage();
         settingsView.bar.ch(-settingsView.bar.val);
         settingsView.cont.update();
+    }
+
+    private void releaseActiveCaptures() {
+        if(currentPanel instanceof HotkeySettings)
+            ((HotkeySettings)currentPanel).cancelCaptures();
+    }
+
+    @Override
+    public void hide() {
+        releaseActiveCaptures();
+        super.hide();
+    }
+
+    @Override
+    public void remove() {
+        releaseActiveCaptures();
+        super.remove();
     }
 
     public boolean showPage(String id) {
