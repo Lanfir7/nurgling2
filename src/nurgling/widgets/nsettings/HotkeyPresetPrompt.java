@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 public final class HotkeyPresetPrompt extends Window {
     private final TextEntry entry;
     private final Runnable closed;
+    private final Runnable cancel;
     private boolean completed;
 
     private HotkeyPresetPrompt(String title, String message, boolean asksName,
@@ -22,6 +23,7 @@ public final class HotkeyPresetPrompt extends Window {
                                Consumer<String> accept, Runnable cancel, Runnable closed) {
         super(Coord.of(UI.scale(500), UI.scale(asksName ? 92 : 76)), title);
         this.closed = closed == null ? () -> { } : closed;
+        this.cancel = cancel == null ? () -> { } : cancel;
         add(new Label(message), Coord.of(UI.scale(6), UI.scale(6)));
         entry = asksName ? add(new TextEntry(UI.scale(480), ""),
                 Coord.of(UI.scale(6), UI.scale(28))) : null;
@@ -73,7 +75,10 @@ public final class HotkeyPresetPrompt extends Window {
 
     @Override
     public void destroy() {
-        if(!completed) completed = true;
+        if(!completed) {
+            completed = true;
+            cancel.run();
+        }
         try {
             super.destroy();
         } finally {
@@ -83,7 +88,7 @@ public final class HotkeyPresetPrompt extends Window {
 
     @Override
     public void wdgmsg(Widget sender, String msg, Object... args) {
-        if(sender == this && msg == "close") finish(() -> { });
+        if(sender == this && msg == "close") finish(cancel);
         else super.wdgmsg(sender, msg, args);
     }
 }

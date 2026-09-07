@@ -79,6 +79,7 @@ public final class HotkeyPresetStore implements HotkeyPresetRepository {
     }
 
     private static JSONObject encode(HotkeyPresetLibrary library) {
+        requireId(library.selectedPresetId());
         if(library.userPresets().size() > MAX_PRESETS)
             throw new IllegalArgumentException("too many presets");
         JSONArray presets = new JSONArray();
