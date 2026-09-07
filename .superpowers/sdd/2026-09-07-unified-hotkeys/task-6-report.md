@@ -39,6 +39,13 @@
 - Полный `rtk ant test`: GREEN, 1644/1644 tests successful.
 - `rtk git diff --check`: без ошибок.
 
+## Review round 3 fixes
+
+- Добавлен отдельный regression-тест `parentDestroyDisposesNestedHotkeyPageIdempotently`: `NSettingsWindow.destroy()` снимает listener, а повторные `destroy()`/`remove()` остаются безопасными.
+- Focused `HotkeySettingsLifecycleTest`: GREEN, 3/3.
+- Полный `rtk ant test`: GREEN, 1645/1645 tests successful.
+- `rtk git diff --check`: без ошибок.
+
 ## Self-review / concerns
 
 - Захват освобождает keyboard и mouse grabs при cancel/reset/disable/assign, hide и remove.

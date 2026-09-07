@@ -32,9 +32,27 @@ class HotkeySettingsLifecycleTest {
     void parentRemovalDisposesNestedHotkeyPage() throws Exception {
         HotkeyRegistry registry = new HotkeyRegistry();
         HotkeySettings page = detachedPage(registry);
+        NSettingsWindow window = parentWith(page);
+        window.remove();
+        assertEquals(0, registry.listenerCount());
+    }
+
+    @Test
+    void parentDestroyDisposesNestedHotkeyPageIdempotently() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeySettings page = detachedPage(registry);
+        NSettingsWindow window = parentWith(page);
+
+        window.destroy();
+        assertEquals(0, registry.listenerCount());
+        window.destroy();
+        window.remove();
+        assertEquals(0, registry.listenerCount());
+    }
+
+    private static NSettingsWindow parentWith(HotkeySettings page) throws Exception {
         Resource.local().add(new Resource.FileSource(Paths.get("resources", "compiled", "res")));
         NSettingsWindow window = (NSettingsWindow) unsafe().allocateInstance(NSettingsWindow.class);
-
         Object category = unsafe().allocateInstance(
                 Class.forName("nurgling.widgets.NSettingsWindow$SettingsCategory"));
         setObject(category, "panel", page);
@@ -45,9 +63,7 @@ class HotkeySettingsLifecycleTest {
         categories.add(category);
         setObject(list, "categories", categories);
         setObject(window, "list", list);
-
-        window.remove();
-        assertEquals(0, registry.listenerCount());
+        return window;
     }
 
     private static HotkeySettings detachedPage(HotkeyRegistry registry) throws Exception {
