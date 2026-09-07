@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 
 import java.awt.event.KeyEvent;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -73,6 +75,26 @@ class HotkeyDraftModelTest {
         draft.restore(beforeConflict);
         assertEquals(next.defaultGesture(), draft.effective("next"));
         assertTrue(draft.isDirty());
+    }
+
+    @Test void stageSnapshotUsesDefaultsForMissingActionsAndRejectsWrongFamiliesAtomically() {
+        HotkeyRegistryTest.MemoryBinding mouse = binding("mouse", InputGesture.mouse(1, KeyMatch.MODS, 0));
+        HotkeyRegistryTest.MemoryBinding wheel = binding("wheel", InputGesture.wheel(-1, KeyMatch.MODS, 0));
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("mouse", mouse));
+        registry.register(action("wheel", wheel));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+        Map<String, InputGesture> values = new HashMap<>();
+        values.put("mouse", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S));
+
+        draft.stageSnapshot(values);
+
+        assertEquals(values.get("mouse"), draft.effective("mouse"));
+        assertEquals(wheel.defaultGesture(), draft.effective("wheel"));
+        Map<String, InputGesture> beforeFailure = draft.effectiveSnapshot();
+        values.put("mouse", InputGesture.wheel(1, KeyMatch.MODS, 0));
+        assertThrows(IllegalArgumentException.class, () -> draft.stageSnapshot(values));
+        assertEquals(beforeFailure, draft.effectiveSnapshot());
     }
 
     private static HotkeyRegistryTest.MemoryBinding binding(String id, InputGesture gesture) {

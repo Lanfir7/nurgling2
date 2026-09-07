@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /** Staged, conflict-aware edits for the hotkey settings page. */
 public final class HotkeyDraftModel {
@@ -66,6 +67,31 @@ public final class HotkeyDraftModel {
         if(change == null)
             return action.binding().current();
         return change.kind == ChangeKind.RESET ? action.binding().defaultGesture() : change.value;
+    }
+
+    public Map<String, InputGesture> effectiveSnapshot() {
+        Map<String, InputGesture> values = new TreeMap<>();
+        for(HotkeyAction action : registry.snapshot())
+            values.put(action.id(), effective(action.id()));
+        return Collections.unmodifiableMap(values);
+    }
+
+    /** Replaces the whole draft atomically; absent current actions use their defaults. */
+    public void stageSnapshot(Map<String, InputGesture> values) {
+        if(values == null) throw new NullPointerException("values");
+        Map<String, Change> replacement = new LinkedHashMap<>();
+        for(HotkeyAction action : registry.snapshot()) {
+            InputGesture value = values.get(action.id());
+            if(value == null) value = action.defaultGesture();
+            if(!action.allows(value.type()))
+                throw new IllegalArgumentException("gesture type is not allowed for " + action.id());
+            if(value.equals(action.current()))
+                continue;
+            replacement.put(action.id(), value.equals(action.defaultGesture())
+                    ? new Change(ChangeKind.RESET, null) : new Change(ChangeKind.SET, value));
+        }
+        changes.clear();
+        changes.putAll(replacement);
     }
 
     public List<HotkeyConflict> conflicts(String id) {
