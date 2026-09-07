@@ -46,6 +46,15 @@
 - Полный `rtk ant test`: GREEN, 1645/1645 tests successful.
 - `rtk git diff --check`: без ошибок.
 
+## Review round 4 fixes
+
+- Moved lifecycle-test `FileSource` registration from `parentWith()` into a static class initializer, so repeated parent fixtures no longer append duplicate sources to `Resource.local()`.
+- Production code unchanged; the three existing lifecycle tests retain their assertions.
+- `rtk ant test-compile`: GREEN.
+- Focused `HotkeySettingsLifecycleTest`: GREEN, 3/3.
+- Full `rtk ant test`: GREEN, 1645/1645 tests successful.
+- `rtk git diff --check`: clean.
+
 ## Self-review / concerns
 
 - Захват освобождает keyboard и mouse grabs при cancel/reset/disable/assign, hide и remove.

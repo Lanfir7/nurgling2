@@ -16,6 +16,10 @@ import java.nio.file.Paths;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class HotkeySettingsLifecycleTest {
+    static {
+        Resource.local().add(new Resource.FileSource(Paths.get("resources", "compiled", "res")));
+    }
+
     @Test
     void removalUnregistersRegistryListenerExactlyOnce() throws Exception {
         HotkeyRegistry registry = new HotkeyRegistry();
@@ -51,7 +55,6 @@ class HotkeySettingsLifecycleTest {
     }
 
     private static NSettingsWindow parentWith(HotkeySettings page) throws Exception {
-        Resource.local().add(new Resource.FileSource(Paths.get("resources", "compiled", "res")));
         NSettingsWindow window = (NSettingsWindow) unsafe().allocateInstance(NSettingsWindow.class);
         Object category = unsafe().allocateInstance(
                 Class.forName("nurgling.widgets.NSettingsWindow$SettingsCategory"));
