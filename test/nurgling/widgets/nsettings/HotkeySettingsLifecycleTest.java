@@ -65,6 +65,34 @@ class HotkeySettingsLifecycleTest {
             else nurgling.sessions.ThreadLocalUI.set(oldUI);
         }
     }
+
+    @Test void hotkeyPageIsBuiltOnlyOnFirstOpen() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        HotkeyRegistry registry = nurgling.hotkeys.Hotkeys.registry();
+        int listenersBefore = registry.listenerCount();
+        NSettingsWindow window = null;
+        try {
+            window = new NSettingsWindow();
+            assertEquals(listenersBefore, registry.listenerCount(),
+                    "constructing the hidden settings window must not build the hotkey page");
+
+            org.junit.jupiter.api.Assertions.assertTrue(window.showPage(NSettingsWindow.HOTKEY_PAGE_ID));
+            assertEquals(listenersBefore + 1, registry.listenerCount());
+
+            org.junit.jupiter.api.Assertions.assertTrue(window.showPage(NSettingsWindow.HOTKEY_PAGE_ID));
+            assertEquals(listenersBefore + 1, registry.listenerCount(),
+                    "reopening the page must reuse the same instance");
+        } finally {
+            if(window != null)
+                window.destroy();
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+        assertEquals(listenersBefore, registry.listenerCount());
+    }
     static {
         Resource.local().add(new Resource.FileSource(Paths.get("resources", "compiled", "res")));
         try {

@@ -14,6 +14,7 @@ import nurgling.widgets.options.*;
 
 import java.awt.event.KeyEvent;
 import java.util.*;
+import java.util.function.Supplier;
 
 public class NSettingsWindow extends Widget {
     public static final String HOTKEY_PAGE_ID = "hotkeys";
@@ -113,7 +114,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem(L10n.get("nsettings.item.quick_actions"), qa = new QuickActions(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.discord"), new DiscordSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.llm_agent"), new AgentSettings(), container));
-        general.addChild(new SettingsItem(HOTKEY_PAGE_ID, L10n.get("nsettings.item.hotkeys"), new HotkeySettings(), container));
+        general.addChild(new SettingsItem(HOTKEY_PAGE_ID, L10n.get("nsettings.item.hotkeys"), HotkeySettings::new, container));
 
         SettingsCategory gameenvironment = new SettingsCategory(L10n.get("nsettings.cat.game_environment"), new Panel(L10n.get("nsettings.cat.game_environment")), container);
         gameenvironment.addChild(new SettingsItem(L10n.get("nsettings.item.world"), world = new World(), container));
@@ -235,10 +236,12 @@ public class NSettingsWindow extends Widget {
 
     private class SettingsItem {
         public Widget panel;
-        public final SettingsPageFrame frame;
+        public SettingsPageFrame frame;
         private boolean expanded = false;
         private final String name;
         private final String id;
+        private final Supplier<? extends Panel> panelFactory;
+        private final Widget container;
         private final List<SettingsItem> children = new ArrayList<>();
         private SettingsItem parent;
 
@@ -249,10 +252,28 @@ public class NSettingsWindow extends Widget {
         public SettingsItem(String id, String name, Widget panel, Widget container) {
             this.id = id;
             this.name = name;
-            this.panel = panel;
-            this.frame = new SettingsPageFrame((Panel)panel, name);
+            this.panelFactory = null;
+            this.container = container;
+            install((Panel)panel);
+        }
+
+        public SettingsItem(String id, String name, Supplier<? extends Panel> panelFactory, Widget container) {
+            this.id = id;
+            this.name = name;
+            this.panelFactory = Objects.requireNonNull(panelFactory);
+            this.container = container;
+        }
+
+        private void install(Panel panel) {
+            this.panel = Objects.requireNonNull(panel);
+            this.frame = new SettingsPageFrame(panel, name);
             container.add(frame, Coord.z);
             frame.hide();
+        }
+
+        private void ensureCreated() {
+            if(panel == null)
+                install(panelFactory.get());
         }
 
         public String getName() { return name; }
@@ -279,6 +300,7 @@ public class NSettingsWindow extends Widget {
         releaseActiveCaptures();
         if(currentFrame != null)
             currentFrame.hide();
+        item.ensureCreated();
         currentFrame = item.frame;
         currentPanel = (Panel)item.panel;
         currentFrame.show();
