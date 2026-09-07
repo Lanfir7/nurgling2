@@ -104,7 +104,7 @@ The runtime keys are:
 - `nurgling.feedback.bot-token`
 - `nurgling.feedback.chat-id`
 
-Values are resolved first from Java system properties and then from `feedback.properties` in the working directory. Missing or malformed configuration leaves the form usable but disables **Send** and shows a localized configuration error. Tokens must never be printed in exceptions, logs, URLs, or UI messages.
+Values are resolved first from Java system properties and then from `feedback.properties` beside the running client JAR. Missing or malformed configuration leaves the form usable but disables **Send** and shows a localized configuration error. The token appears only in the Telegram request path required by the Bot API; it must be redacted from exceptions and never printed in logs or UI messages.
 
 ## Error handling
 
@@ -134,4 +134,3 @@ Implementation follows test-driven development. Automated coverage includes:
 - required English and Russian localization keys.
 
 The final verification runs the focused feedback tests, the full project test suite, and the Ant client build. A manual smoke test verifies UI scaling, the frozen-frame selection interaction, thumbnail removal/preview, and delivery of one report with zero, one, and three screenshots.
-
