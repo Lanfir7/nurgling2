@@ -154,10 +154,18 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     public boolean ownsVerticalScroll() { return true; }
 
     public void cancelCaptures() {
+        if(rows == null)
+            return;
         for(Widget child : new ArrayList<>(rows.children())) {
             if(child instanceof HotkeyActionRow)
                 ((HotkeyActionRow)child).capture().cancelCapture();
         }
+    }
+
+    /** Idempotent lifecycle cleanup used when an owning settings window is destroyed. */
+    public void disposeLifecycle() {
+        cancelCaptures();
+        stopListening();
     }
 
     private void stopListening() {
@@ -175,8 +183,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     @Override
     public void remove() {
-        cancelCaptures();
-        stopListening();
+        disposeLifecycle();
         super.remove();
     }
 

@@ -110,6 +110,13 @@ public final class HotkeyRegistry {
         }
     }
 
+    /** Number of active UI observers; primarily useful for lifecycle diagnostics. */
+    public int listenerCount() {
+        synchronized(lock) {
+            return listeners.size();
+        }
+    }
+
     private List<HotkeyAction> orderedSnapshotLocked() {
         List<HotkeyAction> result = new ArrayList<>(actions.values());
         Collections.sort(result, ACTION_ORDER);

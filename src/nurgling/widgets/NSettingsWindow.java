@@ -293,6 +293,18 @@ public class NSettingsWindow extends Widget {
             ((HotkeySettings)currentPanel).cancelCaptures();
     }
 
+    private void disposeHotkeyPages() {
+        for(SettingsCategory category : list.categories)
+            disposeHotkeyPages(category);
+    }
+
+    private void disposeHotkeyPages(SettingsItem item) {
+        if(item.panel instanceof HotkeySettings)
+            ((HotkeySettings)item.panel).disposeLifecycle();
+        for(SettingsItem child : item.children)
+            disposeHotkeyPages(child);
+    }
+
     @Override
     public void hide() {
         releaseActiveCaptures();
@@ -301,8 +313,14 @@ public class NSettingsWindow extends Widget {
 
     @Override
     public void remove() {
-        releaseActiveCaptures();
+        disposeHotkeyPages();
         super.remove();
+    }
+
+    @Override
+    public void destroy() {
+        disposeHotkeyPages();
+        super.destroy();
     }
 
     public boolean showPage(String id) {
