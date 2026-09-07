@@ -24,6 +24,26 @@
 - Existing resource-processing and test-fixture diagnostics remain noisy but are non-failing and pre-existing.
 - Task 9 source-audit and localization-completeness work remains deferred as requested.
 
+## Review fix round 4
+
+### Event-level coverage
+
+- Replaced helper-only rebinding checks with a headless production-event harness in `Task8GameplayRebindingTest`.
+- Real `MapWnd.ViewFrame.mousedown` handles both Ctrl+MMB and Ctrl+RMB rebindings, acquires the real window mouse grab, and preserves its translated drag offset. Wrong buttons, wrong modifiers, and disabled bindings do not drag; ordinary LMB border dragging still works.
+- Real `NMiniMap.mousedown`/`mouseup` consumes rebound plain-LMB labeled deletion before consulting an actively recording `PathRecordable`, removes the hit marker through the real `LabeledMarkService` on release, and records no waypoint.
+- With deletion disabled, the same labeled click keeps the marker and records exactly one waypoint at segment 42, tile (240, 360).
+- The harness restores original binding values and exact preference encodings (including missing preferences), local/remote resource pools, and thread-local UI. Resource-jar readers close and the temporary mark service is disposed.
+- No production changes were needed.
+
+### Checks
+
+- Focused headless `Task8GameplayRebindingTest`: PASS (5/5).
+- `rtk ant test`: PASS (1,659/1,659).
+- `rtk ant`: PASS.
+- `rtk git diff --check`: PASS.
+- Only verified generated jars were cleaned: tracked `bin/hafen.jar` restored from HEAD and untracked `bin/hafen-panama.jar` removed.
+- Existing resource/test diagnostics remain non-failing; headless toolkit scaling also reports its fallback warning.
+
 ## Review fix round 3
 
 ### Fixes and behavioral checks
