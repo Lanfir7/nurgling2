@@ -308,26 +308,24 @@ public class NWItem extends WItem
     @Override
     public boolean mousedown(MouseDownEvent ev)
     {
-        if(ev.b == 1 || ev.b == 3) {
-            nurgling.hotkeys.HotkeyResolver resolver =
-                    new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
-            nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(
-                    nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
-            if(action != null && parent instanceof NInventory) {
-                if(nurgling.hotkeys.Hotkeys.ITEM_RECIPES.equals(action.id())) {
-                    if(showCraftRecipes(ev.c))
-                        return true;
-                } else if(nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_DESC.equals(action.id()) ||
-                        nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id())) {
-                    wdgmsg("transfer-same", item,
-                            nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id()));
+        nurgling.hotkeys.HotkeyResolver resolver =
+                new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
+        nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(
+                nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
+        if(action != null && parent instanceof NInventory) {
+            if(nurgling.hotkeys.Hotkeys.ITEM_RECIPES.equals(action.id())) {
+                if(showCraftRecipes(ev.c))
                     return true;
-                } else if(nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_DESC.equals(action.id()) ||
-                        nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id())) {
-                    wdgmsg("drop-same", item,
-                            nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id()));
-                    return true;
-                }
+            } else if(nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_DESC.equals(action.id()) ||
+                    nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id())) {
+                wdgmsg("transfer-same", item,
+                        nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id()));
+                return true;
+            } else if(nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_DESC.equals(action.id()) ||
+                    nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id())) {
+                wdgmsg("drop-same", item,
+                        nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id()));
+                return true;
             }
         }
         return super.mousedown(ev);

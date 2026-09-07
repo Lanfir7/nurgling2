@@ -4,6 +4,9 @@ import haven.KeyMatch;
 import haven.UI;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.EnumSet;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -45,6 +48,53 @@ class InventoryHotkeysTest {
         HotkeyResolver resolver = new HotkeyResolver(registry);
         assertSame(take, resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_GENERIC, 2, KeyMatch.C));
         assertNull(resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_GENERIC, 1, 0));
+    }
+
+    @Test void specializedActionsKeepDirectionAndCountWhenRebound() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyCatalog.registerCore(registry);
+        HotkeyAction dropDesc = registry.find("item.drop_same.desc");
+        HotkeyAction dropAsc = registry.find("item.drop_same.asc");
+        try {
+            dropDesc.binding().set(InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.C | KeyMatch.M));
+            dropAsc.binding().set(InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.M));
+
+            HotkeyResolver resolver = new HotkeyResolver(registry);
+            assertSame(dropDesc, resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_NURGLING,
+                    2, KeyMatch.C | KeyMatch.M));
+            assertSame(dropAsc, resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_NURGLING,
+                    1, KeyMatch.C | KeyMatch.M));
+            assertEquals("item.drop_same.desc", dropDesc.id());
+            assertEquals("item.drop_same.asc", dropAsc.id());
+        } finally {
+            dropDesc.binding().set(dropDesc.defaultGesture());
+            dropAsc.binding().set(dropAsc.defaultGesture());
+        }
+    }
+
+    @Test void handlersResolveMiddleButtonBeforePhysicalButtonBranches() throws Exception {
+        assertFalse(source("src/haven/WItem.java").contains("if(ev.b == 1 || ev.b == 3)"));
+        assertFalse(source("src/nurgling/NWItem.java").contains("if(ev.b == 1 || ev.b == 3)"));
+        assertFalse(source("src/nurgling/NInventory.java").contains("if (ev.b == 1 || ev.b == 3)"));
+        assertFalse(source("src/haven/ItemDrag.java").contains("if(ev.b == 1)"));
+    }
+
+    @Test void specializedInventorySemanticsDoNotDeriveDirectionFromPhysicalButton() throws Exception {
+        String source = source("src/nurgling/NInventory.java");
+        assertFalse(source.contains("processGroupItems(group, ev.b == 3"));
+        assertFalse(source.contains("wdgmsg(\"drop-same\", item, ev.b == 3"));
+        assertTrue(source.contains("groupedAscending(action.id())"));
+        assertTrue(source.contains("groupedAll(action.id())"));
+    }
+
+    @Test void legacyHeldCtrlRmbUsesAnExplicitUnmodifiedMapPath() throws Exception {
+        String source = source("src/haven/ItemDrag.java");
+        assertFalse(source.contains("ui.modctrl = false"));
+        assertTrue(source.contains("heldItemRmb(gui.map.rootxlate(ev.c.add(rootpos())), 0)"));
+    }
+
+    private static String source(String path) throws Exception {
+        return new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
     }
 
     private static void assertGesture(HotkeyRegistry registry, String id, InputGesture expected) {

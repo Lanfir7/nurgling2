@@ -53,39 +53,29 @@ public class ItemDrag extends NWItem
     public boolean mousedown(MouseDownEvent ev) {
 	if(!ev.grabbed)
 	    return(false);
-	if(ev.b == 1) {
-		 nurgling.hotkeys.HotkeyResolver resolver = new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
-		 nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(nurgling.hotkeys.HotkeyContext.HELD_ITEM, ev.b, ui.modflags());
-		if(action != null && nurgling.hotkeys.Hotkeys.HELD_DROP_ON_TARGET.equals(action.id()) &&
-			ui.dispatchq(parent, new Drop(ev.c.add(this.c), this)).handled)
-			return(true);
-	} else if(ev.b == 3) {
+	 nurgling.hotkeys.HotkeyResolver resolver = new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
+	 nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(nurgling.hotkeys.HotkeyContext.HELD_ITEM, ev.b, ui.modflags());
+	if(action != null && nurgling.hotkeys.Hotkeys.HELD_DROP_ON_TARGET.equals(action.id()) &&
+		ui.dispatchq(parent, new Drop(ev.c.add(this.c), this)).handled)
+		return(true);
+	if(action != null && nurgling.hotkeys.Hotkeys.HELD_OPEN_WITHOUT_USING.equals(action.id())) {
 		monitoring.StockpileStorageTracker.rememberHand(this);
-		 nurgling.hotkeys.HotkeyResolver resolver = new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
-		 nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(nurgling.hotkeys.HotkeyContext.HELD_ITEM, ev.b, ui.modflags());
-		// Alt+RightClick: Open container without using the held item
-		if(action != null && nurgling.hotkeys.Hotkeys.HELD_OPEN_WITHOUT_USING.equals(action.id())) {
-		    GameUI gui = getparent(GameUI.class);
-		    if((gui != null) && (gui.map != null)) {
-			// Dispatch as regular right-click to map (opens container)
-			return(ev.derive(gui.map.rootxlate(ev.c.add(rootpos()))).dispatch(gui.map));
-		    }
+	    GameUI gui = getparent(GameUI.class);
+	    if((gui != null) && (gui.map != null)) {
+		return gui.map.heldItemRmb(gui.map.rootxlate(ev.c.add(rootpos())),
+			action.canonicalMods() == null ? 0 : action.canonicalMods());
 		}
-		if(action != null && nurgling.hotkeys.Hotkeys.HELD_LIGHT_FROM_FIRE.equals(action.id())) {
-		    if(ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
-			    action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
-			return true;
-		}
-		if(action != null && nurgling.hotkeys.Hotkeys.HELD_INTERACT_WITH_TARGET.equals(action.id()) &&
-			ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
-				action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
-			return(true);
 	}
-	if((ui.modctrl && ev.b != 1) && !ui.modshift && !ui.modmeta) {
+	if(action != null && (nurgling.hotkeys.Hotkeys.HELD_LIGHT_FROM_FIRE.equals(action.id()) ||
+		nurgling.hotkeys.Hotkeys.HELD_INTERACT_WITH_TARGET.equals(action.id())) &&
+		ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
+			action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
+		return(true);
+	if(action == null && ev.b == 3 && ui.modctrl && !ui.modshift && !ui.modmeta) {
 	    /* XXX */
 	    GameUI gui = getparent(GameUI.class);
 	    if((gui != null) && (gui.map != null)) {
-		return(ev.derive(gui.map.rootxlate(ev.c.add(rootpos()))).dispatch(gui.map));
+		return gui.map.heldItemRmb(gui.map.rootxlate(ev.c.add(rootpos())), 0);
 	    }
 	}
 

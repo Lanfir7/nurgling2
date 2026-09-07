@@ -1747,32 +1747,29 @@ public class NInventory extends Inventory
 
                 @Override
                 public boolean mousedown(MouseDownEvent ev) {
-                    if (ev.b == 1 || ev.b == 3) {
-                        nurgling.hotkeys.HotkeyAction action = new nurgling.hotkeys.HotkeyResolver(
-                                nurgling.hotkeys.Hotkeys.registry()).firstMouse(
-                                nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
+                    nurgling.hotkeys.HotkeyAction action = new nurgling.hotkeys.HotkeyResolver(
+                            nurgling.hotkeys.Hotkeys.registry()).firstMouse(
+                            nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
+                    if (action != null) {
                         if (action != null && (nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_ONE.equals(action.id()) ||
                                 nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_ALL.equals(action.id()) ||
                                 nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_DESC.equals(action.id()) ||
                                 nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id()))) {
-                            processGroupItems(group, ev.b == 3, "transfer", true);
+                            processGroupItems(group, groupedAscending(action.id()), "transfer", true);
                             return true;
                         }
                         if (action != null && (nurgling.hotkeys.Hotkeys.ITEM_DROP_ONE.equals(action.id()) ||
                                 nurgling.hotkeys.Hotkeys.ITEM_DROP_ALL.equals(action.id()) ||
                                 nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_DESC.equals(action.id()) ||
                                 nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id()))) {
-                            processGroupItems(group, ev.b == 3, "drop",
-                                    nurgling.hotkeys.Hotkeys.ITEM_DROP_ALL.equals(action.id()) ||
-                                    nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id()));
+                            processGroupItems(group, groupedAscending(action.id()), "drop",
+                                    groupedAll(action.id()));
                             return true;
                         }
                     }
-                    if (ev.b == 1 && !group.wItems.isEmpty()) {
+                    if (action != null && nurgling.hotkeys.Hotkeys.ITEM_TAKE.equals(action.id()) &&
+                            !group.wItems.isEmpty()) {
                         WItem wItem = group.wItems.get(0);
-                        nurgling.hotkeys.HotkeyAction action = new nurgling.hotkeys.HotkeyResolver(
-                                nurgling.hotkeys.Hotkeys.registry()).firstMouse(
-                                nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
                         if (action != null && nurgling.hotkeys.Hotkeys.ITEM_TAKE.equals(action.id()) &&
                                 wItem != null && wItem.parent != null)
                             wItem.item.wdgmsg("take", new Coord(sqsz.x / 2, sqsz.y / 2));
@@ -1883,33 +1880,30 @@ public class NInventory extends Inventory
             
             @Override
             public boolean mousedown(MouseDownEvent ev) {
-                if (ev.b == 1 || ev.b == 3) {
-                    nurgling.hotkeys.HotkeyAction action = new nurgling.hotkeys.HotkeyResolver(
-                            nurgling.hotkeys.Hotkeys.registry()).firstMouse(
-                            nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
+                nurgling.hotkeys.HotkeyAction action = new nurgling.hotkeys.HotkeyResolver(
+                        nurgling.hotkeys.Hotkeys.registry()).firstMouse(
+                        nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
+                if (action != null) {
                     if (action != null && (nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_ONE.equals(action.id()) ||
                             nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_ALL.equals(action.id()) ||
                             nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_DESC.equals(action.id()) ||
                             nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(action.id()))) {
-                        processGroupItems(group, ev.b == 3, "transfer", true);
+                        processGroupItems(group, groupedAscending(action.id()), "transfer", true);
                         return true;
                     }
                     if (action != null && (nurgling.hotkeys.Hotkeys.ITEM_DROP_ONE.equals(action.id()) ||
                             nurgling.hotkeys.Hotkeys.ITEM_DROP_ALL.equals(action.id()) ||
                             nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_DESC.equals(action.id()) ||
                             nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id()))) {
-                        processGroupItems(group, ev.b == 3, "drop",
-                                nurgling.hotkeys.Hotkeys.ITEM_DROP_ALL.equals(action.id()) ||
-                                nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(action.id()));
+                        processGroupItems(group, groupedAscending(action.id()), "drop",
+                                groupedAll(action.id()));
                         return true;
                     }
                 }
 
-                if (ev.b == 1 && !group.wItems.isEmpty()) {
+                if (action != null && nurgling.hotkeys.Hotkeys.ITEM_TAKE.equals(action.id()) &&
+                        !group.wItems.isEmpty()) {
                     WItem wItem = group.wItems.get(0);
-                    nurgling.hotkeys.HotkeyAction action = new nurgling.hotkeys.HotkeyResolver(
-                            nurgling.hotkeys.Hotkeys.registry()).firstMouse(
-                            nurgling.hotkeys.HotkeyContext.INVENTORY_ITEM_NURGLING, ev.b, ui.modflags());
                     if (action != null && nurgling.hotkeys.Hotkeys.ITEM_TAKE.equals(action.id()) &&
                             wItem != null && wItem.parent != null) {
                         wItem.item.wdgmsg("take", new Coord(sqsz.x / 2, sqsz.y / 2));
@@ -1982,6 +1976,17 @@ public class NInventory extends Inventory
             leftoverWait = LEFTOVER_DELAY_TICKS;
             leftoverPass = 0;
         }
+    }
+
+    private static boolean groupedAscending(String id) {
+        return nurgling.hotkeys.Hotkeys.ITEM_TRANSFER_SAME_ASC.equals(id) ||
+                nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(id);
+    }
+
+    private static boolean groupedAll(String id) {
+        return nurgling.hotkeys.Hotkeys.ITEM_DROP_ALL.equals(id) ||
+                nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_DESC.equals(id) ||
+                nurgling.hotkeys.Hotkeys.ITEM_DROP_SAME_ASC.equals(id);
     }
 
     private void sendTypeBulk(List<WItem> items, String action) {

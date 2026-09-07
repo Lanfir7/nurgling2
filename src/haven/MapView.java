@@ -2409,10 +2409,16 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
     protected class Click extends Hittest {
 	int clickb;
+	final int modflags;
 	
 	protected Click(Coord c, int b) {
+	    this(c, b, ui.modflags());
+	}
+
+	protected Click(Coord c, int b, int modflags) {
 	    super(c);
 	    clickb = b;
+	    this.modflags = modflags;
 	}
 	
 	protected void hit(Coord pc, Coord2d mc, ClickData inf) {
@@ -2421,7 +2427,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		if(NMapView.isRecordingRoutePoint) {
 			return;
 		}
-	    Object[] args = {pc, mc.floor(posres), clickb, ui.modflags()};
+	    Object[] args = {pc, mc.floor(posres), clickb, modflags};
 	    if(inf != null)
 		args = Utils.extend(args, inf.clickargs());
 		if(inf!=null)
@@ -2440,7 +2446,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		else
 			clickedGob = null;
 
-		if(ui.modmeta && ui.modshift && !ui.modctrl && clickb == 1) {
+		if((modflags & UI.MOD_META) != 0 && (modflags & UI.MOD_SHIFT) != 0 &&
+			(modflags & UI.MOD_CTRL) == 0 && clickb == 1) {
 			if(clickedGob != null) {
 				if(nurgling.NMapView.sendToSelectedChat(String.format("@%d", clickedGob.gob.id)))
 					return;
@@ -2450,7 +2457,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			}
 		}
 
-		if(ui.modmeta && !ui.modshift && !ui.modctrl && clickb == 1) {
+		if((modflags & UI.MOD_META) != 0 && (modflags & UI.MOD_SHIFT) == 0 &&
+			(modflags & UI.MOD_CTRL) == 0 && clickb == 1) {
 			if(MapView.this instanceof nurgling.NMapView) {
 				if(((nurgling.NMapView)MapView.this).addWaypointAt(mc))
 					return;
@@ -2461,7 +2469,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			monitoring.StockpileStorageTracker.onGob(clickedGob.gob);
 			if (nurgling.db.StockpileStoragePolicy.isStockpileRes(
 					clickedGob.gob.ngob != null ? clickedGob.gob.ngob.name : null)) {
-				NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
+				NUtils.getUI().core.setLastAction(clickedGob.gob, (modflags & UI.MOD_META) != 0);
 			}
 		}
 			if(clickb==3 && clickedGob!=null)
@@ -2471,8 +2479,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 					if (ngui.foragePickupMarker != null)
 						ngui.foragePickupMarker.noteCritterInteraction(clickedGob.gob);
 				}
-				NUtils.getUI().core.setLastAction(clickedGob.gob, ui.modmeta);
-			if (ui.modmeta && isTreeStump(clickedGob.gob)) {
+				NUtils.getUI().core.setLastAction(clickedGob.gob, (modflags & UI.MOD_META) != 0);
+			if ((modflags & UI.MOD_META) != 0 && isTreeStump(clickedGob.gob)) {
 				ui.root.add(new NFlowerMenu(new String[]{L10n.get(NFlowerMenu.KEY_REMOVE_STUMP)}), ui.mc);
 				return;
 			}
@@ -2489,6 +2497,12 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		
 	    wdgmsg("click", args);
 	}
+    }
+
+    /** Dispatch a held-item action as an ordinary map RMB with explicit modifiers. */
+    public boolean heldItemRmb(Coord c, int mods) {
+	new Click(c, 3, mods).run();
+	return true;
     }
 
     private static boolean isTreeStump(Gob gob) {
