@@ -82,7 +82,7 @@ public final class HotkeyAction {
         return other != null && id.equals(other.id) && Objects.equals(labelKey, other.labelKey) &&
                 Objects.equals(literalLabel, other.literalLabel) && category == other.category &&
                 contexts.equals(other.contexts) && allowedTypes.equals(other.allowedTypes) &&
-                binding.id().equals(other.binding.id()) && Objects.equals(canonicalMods, other.canonicalMods) &&
+                binding == other.binding && Objects.equals(canonicalMods, other.canonicalMods) &&
                 order == other.order && dynamic == other.dynamic;
     }
 }

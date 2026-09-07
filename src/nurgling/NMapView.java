@@ -66,12 +66,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
      * their customisation.
      */
     private static KeyBinding togglenatureBinding() {
-        String legacy = Utils.getpref("keybind/mwnd_nature", "");
-        if(!legacy.isEmpty() && Utils.getpref("keybind/togglenature", "").isEmpty()) {
-            Utils.setpref("keybind/togglenature", legacy);
-            Utils.setpref("keybind/mwnd_nature", "");
-        }
-        return KeyBinding.get("togglenature", KeyMatch.forcode(KeyEvent.VK_H, KeyMatch.C));
+        return KeyBinding.getMigrated("togglenature",
+                KeyMatch.forcode(KeyEvent.VK_H, KeyMatch.C), "mwnd_nature");
     }
     public static final KeyBinding kb_cleardmg = KeyBinding.get("cleardmg", KeyMatch.forcode(KeyEvent.VK_D, KeyMatch.C | KeyMatch.S));
     public static final KeyBinding kb_flatworld = KeyBinding.get("flatworld", KeyMatch.forcode(KeyEvent.VK_F, KeyMatch.C | KeyMatch.S));

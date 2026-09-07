@@ -80,6 +80,18 @@ public class KeyBinding {
 	return(get(id, defkey,0));
     }
 
+    /** Load a binding after moving a legacy preference to its current ID. */
+    public static KeyBinding getMigrated(String id, KeyMatch defkey, String legacyId) {
+	if(legacyId == null)
+	    throw(new NullPointerException());
+	String legacy = Utils.getpref("keybind/" + legacyId, "");
+	if(!legacy.isEmpty() && Utils.getpref("keybind/" + id, "").isEmpty()) {
+	    Utils.setpref("keybind/" + id, legacy);
+	    Utils.setpref("keybind/" + legacyId, "");
+	}
+	return(get(id, defkey));
+    }
+
 	public static KeyBinding get(String id) {
 	    synchronized(bindings) {
 		return(bindings.get(id));

@@ -6,10 +6,13 @@ import nurgling.conf.NToolBeltProp;
 import haven.KeyMatch;
 import java.awt.event.KeyEvent;
 import java.util.EnumSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 /** Definitions for the legacy key bindings exposed by the unified settings UI. */
 public final class HotkeyCatalog {
     private static final EnumSet<InputGesture.Type> KEY = EnumSet.of(InputGesture.Type.KEY);
+    private static final Map<KeyBinding, HotkeyBinding> WRAPPERS = new IdentityHashMap<>();
 
     private HotkeyCatalog() {
     }
@@ -73,7 +76,7 @@ public final class HotkeyCatalog {
             core(registry, binding(id, KeyMatch.nil), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("togglebb", KeyMatch.forcode(KeyEvent.VK_N, KeyMatch.C)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("cyclebbmode", KeyMatch.forcode(KeyEvent.VK_N, KeyMatch.C | KeyMatch.S)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
-        core(registry, binding("togglenature", KeyMatch.forcode(KeyEvent.VK_H, KeyMatch.C)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
+        core(registry, bindingMigratedTogglenature(), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("cleardmg", KeyMatch.forcode(KeyEvent.VK_D, KeyMatch.C | KeyMatch.S)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("flatworld", KeyMatch.forcode(KeyEvent.VK_F, KeyMatch.C | KeyMatch.S)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
 
@@ -86,7 +89,7 @@ public final class HotkeyCatalog {
         core(registry, binding("scm-itemcraft", KeyMatch.nil), HotkeyCategory.CRAFTING, HotkeyContext.CRAFT_WINDOW, order);
         for(int i = 0; i < 10; i++)
             core(registry, binding("fgt/" + i, KeyMatch.forcode(KeyEvent.VK_1 + (i % 5), i < 5 ? 0 : KeyMatch.S)), HotkeyCategory.COMBAT, HotkeyContext.COMBAT_UI, order);
-        core(registry, binding("fgt-cycle", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C)), HotkeyCategory.COMBAT, HotkeyContext.COMBAT_UI, order);
+        core(registry, binding("fgt-cycle", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C), KeyMatch.S), HotkeyCategory.COMBAT, HotkeyContext.COMBAT_UI, order);
         core(registry, binding("scm-root", KeyMatch.forcode(KeyEvent.VK_ESCAPE, 0)), HotkeyCategory.ACTION_MENU, HotkeyContext.ACTION_MENU, order);
         core(registry, binding("scm-back", KeyMatch.forcode(KeyEvent.VK_BACK_SPACE, 0)), HotkeyCategory.ACTION_MENU, HotkeyContext.ACTION_MENU, order);
         core(registry, binding("scm-next", KeyMatch.forchar('N', KeyMatch.S | KeyMatch.C | KeyMatch.M, KeyMatch.S)), HotkeyCategory.ACTION_MENU, HotkeyContext.ACTION_MENU, order);
@@ -121,7 +124,7 @@ public final class HotkeyCatalog {
         if(binding == null)
             return;
         registry.register(new HotkeyAction(binding.id, null, binding.id, category,
-                EnumSet.of(context), KEY, new KeyBindingHotkey(binding), null, order[0]++, false));
+                EnumSet.of(context), KEY, wrapper(binding), null, order[0]++, false));
     }
 
     private static void registerDynamic(HotkeyRegistry registry, KeyBinding binding, String label,
@@ -131,14 +134,8 @@ public final class HotkeyCatalog {
         if(binding == null)
             throw new NullPointerException("binding");
         String text = label == null ? binding.id : label;
-        HotkeyAction previous = registry.find(binding.id);
-        if(previous != null) {
-            if(previous.dynamic() && previous.label().equals(text) && previous.category() == category &&
-                    previous.contexts().equals(EnumSet.of(context)))
-                return;
-        }
         registry.register(new HotkeyAction(binding.id, null, text, category,
-                EnumSet.of(context), KEY, new KeyBindingHotkey(binding), null, Integer.MAX_VALUE, true));
+                EnumSet.of(context), KEY, wrapper(binding), null, Integer.MAX_VALUE, true));
     }
 
     private static KeyBinding binding(String id) {
@@ -147,5 +144,23 @@ public final class HotkeyCatalog {
 
     private static KeyBinding binding(String id, KeyMatch defaultKey) {
         return KeyBinding.get(id, defaultKey);
+    }
+
+    private static KeyBinding binding(String id, KeyMatch defaultKey, int modign) {
+        return KeyBinding.get(id, defaultKey, modign);
+    }
+
+    private static KeyBinding bindingMigratedTogglenature() {
+        return KeyBinding.getMigrated("togglenature",
+                KeyMatch.forcode(KeyEvent.VK_H, KeyMatch.C), "mwnd_nature");
+    }
+
+    private static synchronized HotkeyBinding wrapper(KeyBinding binding) {
+        HotkeyBinding result = WRAPPERS.get(binding);
+        if(result == null) {
+            result = new KeyBindingHotkey(binding);
+            WRAPPERS.put(binding, result);
+        }
+        return result;
     }
 }

@@ -21,3 +21,10 @@
 ## Проблемы / concerns
 
 Build выводит уже существующие ошибки декодирования resource-файлов и предупреждения тестовой компиляции; тесты завершаются успешно. Каталог разрешает core IDs через `KeyBinding.get`, не инициализируя тяжёлые UI-классы в headless-тестах; поздняя инициализация классов получает те же singleton bindings.
+
+## Review round 1
+
+- RED: добавленные regression-тесты сначала получили 2 failures: same-ID/different-binding был принят, а `fgt-cycle.modign` был `0` вместо `KeyMatch.S`; прямое обращение к `NMapView` также выявило headless resource initialization failure.
+- Fix: восстановлена identity-семантика `HotkeyAction.metadataEquals`; dynamic fast path удалён, wrappers кэшируются по identity `KeyBinding`, поэтому полный `HotkeyRegistry.register` проверяет metadata.
+- Fix: legacy migration вынесена в `KeyBinding.getMigrated`; и `NMapView`, и каталог используют одну миграцию `mwnd_nature -> togglenature`. Для `fgt-cycle` каталог передаёт `modign = KeyMatch.S`.
+- GREEN/full: повторный `rtk run "ant test"` — BUILD SUCCESSFUL, 1632 tests, 0 failures.
