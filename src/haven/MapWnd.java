@@ -41,6 +41,11 @@ import haven.MapFile.PMarker;
 import haven.MapFile.SMarker;
 import haven.MiniMap.*;
 import haven.BuddyWnd.GroupSelector;
+import nurgling.NGameUI;
+import nurgling.i18n.L10n;
+import nurgling.map.SharedMarkerCode;
+import nurgling.map.SharedMarkerLocator;
+import nurgling.navigation.MapMarkerNavigation;
 import nurgling.widgets.NMiniMap;
 import nurgling.hotkeys.Hotkeys;
 import haven.MiniMap.Location;
@@ -62,7 +67,7 @@ public class MapWnd extends Window implements Console.Directory {
     private final MarkerObjs mvmarks = new MarkerObjs(this);
     private GroupSelector colsel;
     private CheckBox onmapbtn;
-    private Button mremove;
+    private Button mremove, mshare;
     private Predicate<Marker> mflt = pmarkers;
     private Comparator<ListMarker> mcmp = namecmp;
     private List<ListMarker> markers = Collections.emptyList();
@@ -274,6 +279,7 @@ public class MapWnd extends Window implements Console.Directory {
 	    if(namesel != null) {
 		namesel.c = listf.c.add(0, listf.sz.y + UI.scale(10));
 		mremove.c = pmbtn.c.sub(0, mremove.sz.y + UI.scale(10));
+		mshare.c = mremove.c.add(UI.scale(105), 0);
 		if(colsel != null) {
 		    colsel.c   = namesel.c.add(0, namesel.sz.y + UI.scale(10));
 		    onmapbtn.c =  colsel.c.add(0,  colsel.sz.y + UI.scale(5));
@@ -307,6 +313,11 @@ public class MapWnd extends Window implements Console.Directory {
 	}
 
 	public boolean clickmarker(DisplayMarker mark, Location loc, int button, boolean press) {
+	    if(Hotkeys.matchesMapMarkerNavigate(button, ui.modflags())) {
+		if(!press)
+		    MapMarkerNavigation.start(file, mark.m, loc, sessloc);
+		return(true);
+	    }
 	    if(button == 1) {
 		if(!compact() && !press) {
 		    focus(mark.m);
@@ -797,6 +808,8 @@ public class MapWnd extends Window implements Console.Directory {
 		tool.namesel = null;
 		ui.destroy(mremove);
 		mremove = null;
+		ui.destroy(mshare);
+		mshare = null;
 		if(colsel != null) {
 		    ui.destroy(colsel);
 		    ui.destroy(onmapbtn);
@@ -837,15 +850,37 @@ public class MapWnd extends Window implements Console.Directory {
 			uploadpmarker(mark);
 		    });
 		}
-		mremove = tool.add(new Button(UI.scale(200), "Remove", false) {
+		mremove = tool.add(new Button(btnw, "Remove", false) {
 			public void click() {
 			    view.file.remove(mark);
 			    change2(null);
 			}
 		    });
+		mshare = tool.add(new Button(btnw, L10n.get("marker.share.copy"), false) {
+			public void click() {
+			    copyMarkerCode(mark);
+			}
+		    });
 		MapWnd.this.resize(csz());
 	    }
 	}
+    }
+
+    private void copyMarkerCode(Marker marker) {
+	SharedMarkerLocator.Ref ref = SharedMarkerLocator.export(file, marker);
+	GameUI gui = getparent(GameUI.class);
+	if(ref == null || gui == null) {
+	    if(gui != null)
+		gui.msg(L10n.get("marker.share.unavailable"), new Color(240, 190, 90));
+	    return;
+	}
+	Color color = (marker instanceof PMarker) ? ((PMarker)marker).color : Color.YELLOW;
+	String code = SharedMarkerCode.encode(marker.nm, gui.genus, ref.gridId, ref.local, color);
+	ui.wnd.clipboard(Clipboard.Std.CLIPBOARD).put(new Clipboard.Contents(
+		new Clipboard.Item<CharSequence>(Clipboard.Format.TEXT, code)));
+	if(gui instanceof NGameUI)
+	    ((NGameUI)gui).ignoreSharedMarkerClipboard(code);
+	gui.msg(L10n.get("marker.share.copied"), new Color(120, 220, 140));
     }
 
     public void resize(Coord sz) {

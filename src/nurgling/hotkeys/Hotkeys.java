@@ -22,6 +22,7 @@ public final class Hotkeys {
     public static final String SESSION_NEXT = "session-next";
     public static final String ITEM_TAKE = "item.take";
     public static final String ITEM_INTERACT = "item.interact";
+    public static final String ITEM_INTERACT_ALL = "item.interact.all";
     public static final String ITEM_TRANSFER_ONE = "item.transfer.one";
     public static final String ITEM_TRANSFER_ALL = "item.transfer.all";
     public static final String ITEM_DROP_ONE = "item.drop.one";
@@ -37,6 +38,7 @@ public final class Hotkeys {
     public static final String HELD_DROP_ON_GROUND = "held.drop_on_ground";
     public static final String HELD_OPEN_WITH_CONTROL = "held.open_with_control";
     public static final String HELD_INTERACT_WITH_TARGET = "held.interact_with_target";
+    public static final String HELD_INTERACT_ALL_WITH_TARGET = "held.interact_all_with_target";
     public static final String HELD_OPEN_WITHOUT_USING = "held.open_without_using";
     public static final String HELD_LIGHT_FROM_FIRE = "held.light_from_fire";
     public static final String WORLD_PLANNER_REMOVE_GHOST = "world.planner.remove_ghost";
@@ -55,6 +57,7 @@ public final class Hotkeys {
     public static final String MAP_MARKER_DELETE = "map.marker.delete";
     public static final String MAP_MARKER_EDIT = "map.marker.edit";
     public static final String MAP_MARKER_WAYPOINT = "map.marker.waypoint";
+    public static final String MAP_MARKER_NAVIGATE = "map.marker.navigate";
     public static final String MAP_PING = "map.ping";
     public static final String FLOWER_FORCE_MANUAL = "flower.force_manual";
     public static final String FLOWER_CONTROL_MODE = "flower.control_mode";
@@ -68,6 +71,8 @@ public final class Hotkeys {
     public static final String STOCKPILE_TRANSFER_ALL = "stockpile.transfer_all";
     public static final String STOCKPILE_TRANSFER_OUT = "stockpile.transfer_out";
     public static final String STOCKPILE_TRANSFER_IN = "stockpile.transfer_in";
+    public static final String STOCKPILE_TRANSFER_OUT_ALL = "stockpile.transfer_out_all";
+    public static final String STOCKPILE_TRANSFER_IN_ALL = "stockpile.transfer_in_all";
     public static final String INVENTORY_STACK_TRANSFER_TO_MAIN = "inventory.stack.transfer_to_main";
     public static final String INVENTORY_STACK_TRANSFER_FROM_MAIN = "inventory.stack.transfer_from_main";
     public static final String BUDDY_PULL_MODE = "buddy.pull_mode";
@@ -126,6 +131,11 @@ public final class Hotkeys {
     /** Match labeled-marker deletion using the action's currently bound mouse button. */
     public static boolean matchesMapMarkerDelete(int button, int mods) {
         return action(MAP_MARKER_DELETE).current().matchesMouse(button, mods);
+    }
+
+    /** Match the configurable marker-navigation gesture in either map view. */
+    public static boolean matchesMapMarkerNavigate(int button, int mods) {
+        return action(MAP_MARKER_NAVIGATE).current().matchesMouse(button, mods);
     }
 
     /** Plain LMB path recording must yield to a matching marker-delete action. */

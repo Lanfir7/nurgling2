@@ -192,6 +192,9 @@ public final class HotkeyCatalog {
         gesture(registry, Hotkeys.MAP_MARKER_WAYPOINT,
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.MAP,
                 EnumSet.of(HotkeyContext.MAP_SURFACE), Integer.valueOf(haven.UI.MOD_SHIFT), order);
+        gesture(registry, Hotkeys.MAP_MARKER_NAVIGATE,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_SURFACE), null, order);
         gesture(registry, Hotkeys.MAP_PING,
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S | KeyMatch.M), HotkeyCategory.MAP,
                 EnumSet.of(HotkeyContext.MAP_SURFACE), Integer.valueOf(haven.UI.MOD_META | haven.UI.MOD_SHIFT), order);
@@ -222,10 +225,16 @@ public final class HotkeyCatalog {
                 EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
         gesture(registry, Hotkeys.STOCKPILE_TRANSFER_OUT,
                 InputGesture.wheel(-1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
-                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), Integer.valueOf(0), order);
+                EnumSet.of(HotkeyContext.STOCKPILE), Integer.valueOf(0), order);
         gesture(registry, Hotkeys.STOCKPILE_TRANSFER_IN,
                 InputGesture.wheel(1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
-                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), Integer.valueOf(0), order);
+                EnumSet.of(HotkeyContext.STOCKPILE), Integer.valueOf(0), order);
+        gesture(registry, Hotkeys.STOCKPILE_TRANSFER_OUT_ALL,
+                InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.STOCKPILE), Integer.valueOf(haven.UI.MOD_SHIFT), order);
+        gesture(registry, Hotkeys.STOCKPILE_TRANSFER_IN_ALL,
+                InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.STOCKPILE), Integer.valueOf(haven.UI.MOD_SHIFT), order);
         gesture(registry, Hotkeys.INVENTORY_STACK_TRANSFER_TO_MAIN,
                 InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
@@ -271,6 +280,9 @@ public final class HotkeyCatalog {
                 itemContexts, null, order);
         gesture(registry, "item.interact", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 itemContexts, Integer.valueOf(0), order);
+        gesture(registry, Hotkeys.ITEM_INTERACT_ALL,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.INVENTORY,
+                itemContexts, Integer.valueOf(haven.UI.MOD_CTRL), order);
         gesture(registry, "item.transfer.one", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
                 itemContexts, null, order);
         gesture(registry, "item.transfer.all", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.S), HotkeyCategory.INVENTORY,
@@ -301,6 +313,9 @@ public final class HotkeyCatalog {
                 EnumSet.of(HotkeyContext.HELD_ITEM), 0, order);
         gesture(registry, "held.interact_with_target", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
+        gesture(registry, Hotkeys.HELD_INTERACT_ALL_WITH_TARGET,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(haven.UI.MOD_SHIFT), order);
         gesture(registry, "held.open_without_using", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
         gesture(registry, "held.light_from_fire", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C | KeyMatch.M), HotkeyCategory.INVENTORY,

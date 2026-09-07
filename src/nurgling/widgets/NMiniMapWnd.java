@@ -8,6 +8,7 @@ import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.areas.AreaLabelSync;
 import nurgling.i18n.L10n;
+import nurgling.navigation.MapMarkerNavigation;
 import nurgling.tools.ExploredArea;
 import nurgling.hotkeys.Hotkeys;
 
@@ -386,6 +387,12 @@ public class NMiniMapWnd extends Widget{
         }
 
         public boolean clickmarker(DisplayMarker mark, Location loc, int button, boolean press) {
+            if(Hotkeys.matchesMapMarkerNavigate(button, ui.modflags())) {
+                if(!press)
+                    MapMarkerNavigation.start(file, mark.m, loc, sessloc);
+                return true;
+            }
+
             // Handle shift+right-click on resource markers for timer functionality
             if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(button, ui.modflags()) && mark.m instanceof MapFile.SMarker) {
                 MapFile.SMarker smarker = (MapFile.SMarker) mark.m;

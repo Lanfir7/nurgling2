@@ -27,6 +27,9 @@
 package haven;
 
 import nurgling.hotkeys.Hotkeys;
+import nurgling.hotkeys.HotkeyAction;
+import nurgling.hotkeys.HotkeyContext;
+import nurgling.hotkeys.HotkeyResolver;
 
 import java.awt.Color;
 import nurgling.*;
@@ -106,15 +109,21 @@ public class ISBox extends Widget implements DTarget {
     }
 
     public boolean mousewheel(MouseWheelEvent ev) {
-		if(Hotkeys.action(Hotkeys.STOCKPILE_TRANSFER_OUT).current().matchesWheel(ev.a, ui.modflags())) {
-		    beginTransfer(StockpileStoragePolicy.TransferDirection.OUT_OF_PILE);
-		    wdgmsg("xfer2", -1, 0);
-		}
-		if(Hotkeys.action(Hotkeys.STOCKPILE_TRANSFER_IN).current().matchesWheel(ev.a, ui.modflags())) {
-		    beginTransfer(StockpileStoragePolicy.TransferDirection.INTO_PILE);
-		    wdgmsg("xfer2", 1, 0);
-		}
-	return(true);
+        HotkeyAction action = new HotkeyResolver(Hotkeys.registry()).firstWheel(
+                HotkeyContext.STOCKPILE, ev.a, ui.modflags());
+        if(action == null)
+            return(super.mousewheel(ev));
+        boolean out = Hotkeys.STOCKPILE_TRANSFER_OUT.equals(action.id()) ||
+                Hotkeys.STOCKPILE_TRANSFER_OUT_ALL.equals(action.id());
+        boolean in = Hotkeys.STOCKPILE_TRANSFER_IN.equals(action.id()) ||
+                Hotkeys.STOCKPILE_TRANSFER_IN_ALL.equals(action.id());
+        if(!out && !in)
+            return(super.mousewheel(ev));
+        beginTransfer(out ? StockpileStoragePolicy.TransferDirection.OUT_OF_PILE :
+                StockpileStoragePolicy.TransferDirection.INTO_PILE);
+        wdgmsg("xfer2", out ? -1 : 1,
+                action.canonicalMods() == null ? 0 : action.canonicalMods());
+        return(true);
     }
 
     public boolean drop(Coord cc, Coord ul) {

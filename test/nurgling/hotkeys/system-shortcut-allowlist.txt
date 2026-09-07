@@ -2,6 +2,7 @@
 # input infrastructure, tooltip presentation or basic pointer selection.
 nurgling/hotkeys/InputGesture.java|if(chr >= '0' && chr <= '9' && physical.code == KeyEvent.VK_NUMPAD0 + (chr - '0'))|Low-level numeric-keypad character/code overlap, never dispatch
 nurgling/hotkeys/Hotkeys.java|return action(MAP_MARKER_DELETE).current().matchesMouse(button, mods);|Public routing helper delegates solely to the registered marker-delete gesture
+nurgling/hotkeys/Hotkeys.java|return action(MAP_MARKER_NAVIGATE).current().matchesMouse(button, mods);|Public routing helper delegates solely to the registered marker-navigation gesture
 nurgling/hotkeys/HotkeyResolver.java|if(matchesContext(action, context) && action.current().matchesMouse(button, mods))|Core resolver iterates registered actions and applies their configured mouse gesture
 nurgling/hotkeys/HotkeyResolver.java|if(matchesContext(action, context) && action.current().matchesWheel(amount, mods))|Core resolver iterates registered actions and applies their configured wheel gesture
 nurgling/hotkeys/Hotkeys.java|return ((button == 1) && frameHit) || action(MAP_MARKER_WAYPOINT).current().matchesMouse(button, mods);|Basic map-frame pointer selection or explicit registered waypoint action

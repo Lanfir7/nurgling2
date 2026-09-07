@@ -47,6 +47,8 @@ class GameplayGestureCatalogTest {
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.M), HotkeyContext.MAP_SURFACE, null);
         assertGesture(registry, "map.marker.waypoint",
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.MAP_SURFACE, Integer.valueOf(UI.MOD_SHIFT));
+        assertGesture(registry, "map.marker.navigate",
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyContext.MAP_SURFACE, null);
         assertGesture(registry, "map.ping",
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S | KeyMatch.M), HotkeyContext.MAP_SURFACE,
                 Integer.valueOf(UI.MOD_META | UI.MOD_SHIFT));

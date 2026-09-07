@@ -9,6 +9,7 @@ import nurgling.conf.NDiscordNotification;
 import nurgling.conf.NToolBeltProp;
 import nurgling.craftatlas.CraftAtlasRecipeProbe;
 import nurgling.i18n.L10n;
+import nurgling.map.SharedMarkerClipboardService;
 import nurgling.notifications.DiscordHookObject;
 import nurgling.overlays.QualityOl;
 import nurgling.tools.NAlias;
@@ -43,6 +44,7 @@ import static haven.Inventory.invsq;
 
 public class NGameUI extends GameUI
 {
+    private final SharedMarkerClipboardService sharedMarkerClipboardService;
     public boolean nomadMod = false;
     public NBotsMenu botsMenu;
     public NAlarmWdg alarmWdg;
@@ -205,6 +207,10 @@ public class NGameUI extends GameUI
         return genus;
     }
 
+    public void ignoreSharedMarkerClipboard(String clipboard) {
+        sharedMarkerClipboardService.ignore(clipboard);
+    }
+
     /**
      * Удаляет маркер животного из БД (вызывается при любом удалении метки animal_ — с карты или из окна поиска).
      */
@@ -255,6 +261,7 @@ public class NGameUI extends GameUI
     {
         super(chrid, plid, genus, nui);
         foragePickupMarker = new ForagePickupMarker(this);
+        sharedMarkerClipboardService = new SharedMarkerClipboardService(this);
 
         // Initialize world-specific profile
         nurgling.profiles.ConfigFactory.initializeProfile(genus);
@@ -509,6 +516,7 @@ public class NGameUI extends GameUI
 
     @Override
     public void dispose() {
+        sharedMarkerClipboardService.dispose();
         if (heavyWidgetsThread != null) {
             heavyWidgetsThread.interrupt();
             heavyWidgetsThread = null;
@@ -901,6 +909,7 @@ public class NGameUI extends GameUI
     public void tick(double dt)
     {
         super.tick(dt);
+        sharedMarkerClipboardService.tick(dt);
         if(!layoutPickerDone && sz.x > 0)
         {
             layoutPickerDone = true;
