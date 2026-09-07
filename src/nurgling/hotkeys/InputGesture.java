@@ -29,7 +29,8 @@ public final class InputGesture {
     public static InputGesture key(KeyMatch key) {
         if(key == null || key == KeyMatch.nil)
             return none();
-        return new InputGesture(Type.KEY, key, 0, key.modmask, key.modmatch);
+        KeyMatch copy = copyKey(key);
+        return new InputGesture(Type.KEY, copy, 0, copy.modmask, copy.modmatch);
     }
 
     public static InputGesture mouse(int button, int mask, int match) {
@@ -53,7 +54,7 @@ public final class InputGesture {
     }
 
     public KeyMatch key() {
-        return key;
+        return copyKey(key);
     }
 
     public int code() {
@@ -113,7 +114,7 @@ public final class InputGesture {
                 return none();
             if(encoded.startsWith("k:")) {
                 KeyMatch key = KeyMatch.restore(encoded.substring(2));
-                if(key == null)
+                if(key == null || key == KeyMatch.nil)
                     throw new IllegalArgumentException("invalid key gesture");
                 return key(key);
             }
@@ -187,6 +188,21 @@ public final class InputGesture {
         default:
             throw new AssertionError(mod);
         }
+    }
+
+    private static KeyMatch copyKey(KeyMatch source) {
+        if(source == null)
+            return null;
+        KeyMatch copy = new KeyMatch(source.chr, source.casematch, source.code,
+                source.extmatch, source.keyname, source.modmask, source.modmatch);
+        copy.chr = source.chr;
+        copy.casematch = source.casematch;
+        copy.code = source.code;
+        copy.extmatch = source.extmatch;
+        copy.keyname = source.keyname;
+        copy.modmask = source.modmask;
+        copy.modmatch = source.modmatch;
+        return copy;
     }
 
     @Override

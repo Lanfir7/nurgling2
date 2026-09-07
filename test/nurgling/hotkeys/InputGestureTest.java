@@ -27,6 +27,30 @@ class InputGestureTest {
         assertTrue(g.matches(q, 0));
     }
 
+    @Test void keyboardGestureCopiesMutableKeyMatchOnInputAndOutput() {
+        KeyMatch source = KeyMatch.forcode(KeyEvent.VK_Q, KeyMatch.C);
+        InputGesture g = InputGesture.key(source);
+        InputGesture expected = InputGesture.key(KeyMatch.forcode(KeyEvent.VK_Q, KeyMatch.C));
+        String encoded = g.encode();
+
+        source.code = KeyEvent.VK_F;
+        source.keyname = "F";
+        source.modmask = 0;
+        source.modmatch = 0;
+        assertEquals(expected, g);
+        assertEquals(encoded, g.encode());
+        assertEquals("Ctrl+Q", g.displayName());
+
+        KeyMatch exposed = g.key();
+        exposed.code = KeyEvent.VK_F;
+        exposed.keyname = "F";
+        exposed.modmask = 0;
+        exposed.modmatch = 0;
+        assertEquals(expected, g);
+        assertEquals(encoded, g.encode());
+        assertEquals("Ctrl+Q", g.displayName());
+    }
+
     @Test void everyGestureRoundTripsAndCorruptionIsRejected() {
         InputGesture[] values = {
                 InputGesture.none(),
@@ -38,6 +62,7 @@ class InputGestureTest {
         for(InputGesture value : values)
             assertEquals(value, InputGesture.decode(value.encode()));
         assertThrows(IllegalArgumentException.class, () -> InputGesture.decode("b:broken"));
+        assertThrows(IllegalArgumentException.class, () -> InputGesture.decode("k:n"));
     }
 
     @Test void modifierModeRequiresExactlyOneHeldModifier() {
@@ -48,5 +73,26 @@ class InputGestureTest {
                 () -> InputGesture.modifier(KeyMatch.C | KeyMatch.S));
         assertThrows(IllegalArgumentException.class,
                 () -> InputGesture.modifier(1 << 12));
+    }
+
+    @Test void malformedModifierPayloadsAreRejected() {
+        assertThrows(IllegalArgumentException.class, () -> InputGesture.decode("m:0"));
+        assertThrows(IllegalArgumentException.class, () -> InputGesture.decode("m:3"));
+        assertThrows(IllegalArgumentException.class, () -> InputGesture.decode("m:8"));
+        assertThrows(IllegalArgumentException.class, () -> InputGesture.decode("m:broken"));
+    }
+
+    @Test void displayNamesUseStableGestureLabels() {
+        assertEquals("None", InputGesture.none().displayName());
+        assertEquals("Ctrl+Q", InputGesture.key(KeyMatch.forcode(KeyEvent.VK_Q, KeyMatch.C)).displayName());
+        assertEquals("Ctrl+LMB", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C).displayName());
+        assertEquals("MMB", InputGesture.mouse(2, KeyMatch.MODS, 0).displayName());
+        assertEquals("RMB", InputGesture.mouse(3, KeyMatch.MODS, 0).displayName());
+        assertEquals("Button 4", InputGesture.mouse(4, KeyMatch.MODS, 0).displayName());
+        assertEquals("Shift+Wheel Up", InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S).displayName());
+        assertEquals("Wheel Down", InputGesture.wheel(-1, KeyMatch.MODS, 0).displayName());
+        assertEquals("Shift", InputGesture.modifier(KeyMatch.S).displayName());
+        assertEquals("Ctrl", InputGesture.modifier(KeyMatch.C).displayName());
+        assertEquals("Alt", InputGesture.modifier(KeyMatch.M).displayName());
     }
 }
