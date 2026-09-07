@@ -150,6 +150,8 @@ public final class FeedbackWindow extends Window {
         typeSuggestion.tint = draft.type() == FeedbackType.SUGGESTION ? new Color(150, 220, 130) : null;
         typeBug.disable(locked);
         typeSuggestion.disable(locked);
+        subject.setcanfocus(!locked);
+        description.setcanfocus(!locked);
         for(Widget widget : attachmentWidgets)
             ((AttachmentWidget)widget).setLocked(locked);
         attachmentCount.settext(draft.attachments().size() + "/" + FeedbackDraft.MAX_ATTACHMENTS);
