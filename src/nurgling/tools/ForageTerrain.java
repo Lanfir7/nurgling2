@@ -114,8 +114,11 @@ public final class ForageTerrain {
             if(offset >= trimmed.length())
                 break;
             String match = matchAt(trimmed, offset);
-            if(match == null)
+            if(match == null) {
+                if(offset == 0)
+                    return Collections.singletonList(canonicalName(trimmed));
                 return Collections.singletonList(trimmed);
+            }
             result.add(match);
             offset += match.length();
         }
