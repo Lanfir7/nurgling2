@@ -80,11 +80,18 @@ public class KeyBinding {
 	return(get(id, defkey,0));
     }
 
-    public static KeyBinding get(String id) {
-	synchronized(bindings) {
-	    return(bindings.get(id));
+	public static KeyBinding get(String id) {
+	    synchronized(bindings) {
+		return(bindings.get(id));
+	    }
 	}
-    }
+
+	/** Return a stable, read-only view of every binding known to the client. */
+	public static Collection<KeyBinding> snapshot() {
+	    synchronized(bindings) {
+		return(Collections.unmodifiableList(new ArrayList<>(bindings.values())));
+	    }
+	}
 
     public static interface Bindable {
 	public KeyBinding getbinding(Coord cc);

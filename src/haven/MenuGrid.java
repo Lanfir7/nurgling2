@@ -40,6 +40,8 @@ import nurgling.NConfig;
 import nurgling.NInventory;
 import nurgling.NRecipeTooltip;
 import nurgling.NUtils;
+import nurgling.hotkeys.HotkeyCatalog;
+import nurgling.hotkeys.Hotkeys;
 
 public class MenuGrid extends Widget implements KeyBinding.Bindable {
     public static Pagina lastPagina = null;
@@ -175,7 +177,9 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 	    return(KeyMatch.forchar(Character.toUpperCase(hk), KeyMatch.MODS & ~KeyMatch.S, 0));
 	}
 	public KeyBinding binding() {
-	    return(KeyBinding.get("scm/" + res.name, hotkey()));
+	    KeyBinding key = KeyBinding.get("scm/" + res.name, hotkey());
+	    HotkeyCatalog.registerMenuAction(Hotkeys.registry(), key, name());
+	    return(key);
 	}
 	public void use(Interaction iact) {
 	    Object[] eact = new Object[] {pag.scm.ui.modflags()};

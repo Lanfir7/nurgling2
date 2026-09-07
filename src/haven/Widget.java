@@ -27,6 +27,8 @@
 package haven;
 
 import java.util.*;
+import nurgling.hotkeys.HotkeyCatalog;
+import nurgling.hotkeys.Hotkeys;
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -789,12 +791,14 @@ public class Widget {
 	} else if(msg == "gk") {
 	    if(args[0] instanceof Integer) {
 		KeyMatch key = gkeymatch(Utils.iv(args[0]));
-		if(args.length > 1) {
-		    int modign = 0;
-		    if(args.length > 2)
-			modign = Utils.iv(args[2]);
-		    setgkey(KeyBinding.get("wgk/" + (String)args[1], key, modign));
-		} else {
+		    if(args.length > 1) {
+			int modign = 0;
+			if(args.length > 2)
+			    modign = Utils.iv(args[2]);
+			KeyBinding binding = KeyBinding.get("wgk/" + (String)args[1], key, modign);
+			setgkey(binding);
+			HotkeyCatalog.registerWidgetAction(Hotkeys.registry(), binding, (String)args[1]);
+		    } else {
 		    gkey = key;
 		}
 	    }
