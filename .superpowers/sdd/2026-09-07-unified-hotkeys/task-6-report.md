@@ -33,10 +33,10 @@
 ## Review round 2 fixes
 
 - `NSettingsWindow.remove()` и `destroy()` рекурсивно вызывают идемпотентный `HotkeySettings.disposeLifecycle()` для всех вложенных страниц; listener снимается вместе с capture cleanup, без `rebuildRows` после detach.
-- Добавлен `HotkeyRegistry.listenerCount()` для lifecycle-проверки и regression-тест `HotkeySettingsLifecycleTest`: повторный `remove()` оставляет ровно ноль активных observers.
+- Добавлен `HotkeyRegistry.listenerCount()` для lifecycle-проверки и regression-тест `HotkeySettingsLifecycleTest`: повторный `remove()` и удаление родительского `NSettingsWindow` оставляют ровно ноль активных observers.
 - `rtk ant test-compile`: GREEN.
-- Focused `HotkeySettingsLifecycleTest`: GREEN, 1/1.
-- Полный `rtk ant test`: GREEN, 1643/1643 tests successful.
+- Focused `HotkeySettingsLifecycleTest`: GREEN, 2/2.
+- Полный `rtk ant test`: GREEN, 1644/1644 tests successful.
 - `rtk git diff --check`: без ошибок.
 
 ## Self-review / concerns
