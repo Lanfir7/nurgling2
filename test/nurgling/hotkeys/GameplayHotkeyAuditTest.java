@@ -204,6 +204,31 @@ class GameplayHotkeyAuditTest {
     }
 
     @Test
+    void englishAndRussianBundlesContainEveryPresetLabel() throws IOException {
+        Properties en = loadProperties(Paths.get("src", "lang", "messages.properties"));
+        Properties ru = loadProperties(Paths.get("src", "lang", "messages_ru.properties"));
+        Set<String> required = new HashSet<>(Arrays.asList(
+                "hotkeys.presets.label", "hotkeys.presets.default",
+                "hotkeys.presets.create", "hotkeys.presets.copy", "hotkeys.presets.paste",
+                "hotkeys.presets.delete", "hotkeys.presets.user_name",
+                "hotkeys.presets.name.title", "hotkeys.presets.name.question",
+                "hotkeys.presets.name.empty", "hotkeys.presets.discard.title",
+                "hotkeys.presets.discard.question", "hotkeys.presets.discard",
+                "hotkeys.presets.keep_editing", "hotkeys.presets.confirm",
+                "hotkeys.presets.error.invalid_code", "hotkeys.presets.error.clipboard",
+                "hotkeys.presets.error.store", "hotkeys.presets.error.create",
+                "hotkeys.presets.error.select", "hotkeys.presets.warning.corrupt"));
+        Set<String> englishKeys = prefixedKeys(en, "hotkeys.presets.");
+        Set<String> russianKeys = prefixedKeys(ru, "hotkeys.presets.");
+        assertEquals(englishKeys, russianKeys, "EN/RU preset-key coverage must match exactly");
+        assertTrue(englishKeys.containsAll(required), "Missing preset labels: " + missing(required, englishKeys));
+        for(String key : required) {
+            assertFalse(isMissingLocalization(en.getProperty(key), key), "Missing English value: " + key);
+            assertFalse(isMissingLocalization(ru.getProperty(key), key), "Missing Russian value: " + key);
+        }
+    }
+
+    @Test
     void auditDoesNotBlessAWholeMethodContainingHotkeys() {
         assertFalse(isDirectConditionAllowed("nurgling/NMapView.java", 1754, "if(ev.code == KeyEvent.VK_ESCAPE)", new ArrayList<>()));
         assertTrue(isDirectConditionAllowed("nurgling/NMapView.java", 1754, "if(Hotkeys.matchesKey(id, ev.awt))", new ArrayList<>()));
@@ -364,6 +389,19 @@ class GameplayHotkeyAuditTest {
             if(key.startsWith("hotkeys.action."))
                 result.add(key);
         }
+        return result;
+    }
+
+    private static Set<String> prefixedKeys(Properties properties, String prefix) {
+        Set<String> result = new HashSet<>();
+        for(String key : properties.stringPropertyNames())
+            if(key.startsWith(prefix)) result.add(key);
+        return result;
+    }
+
+    private static Set<String> missing(Set<String> required, Set<String> actual) {
+        Set<String> result = new HashSet<>(required);
+        result.removeAll(actual);
         return result;
     }
 

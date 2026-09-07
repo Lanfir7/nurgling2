@@ -18,29 +18,37 @@ public final class HotkeyPresetPrompt extends Window {
     private boolean completed;
 
     private HotkeyPresetPrompt(String title, String message, boolean asksName,
+                               String acceptLabel, String cancelLabel,
                                Consumer<String> accept, Runnable cancel, Runnable closed) {
-        super(Coord.of(UI.scale(340), UI.scale(asksName ? 92 : 76)), title);
+        super(Coord.of(UI.scale(500), UI.scale(asksName ? 92 : 76)), title);
         this.closed = closed == null ? () -> { } : closed;
         add(new Label(message), Coord.of(UI.scale(6), UI.scale(6)));
-        entry = asksName ? add(new TextEntry(UI.scale(320), ""),
+        entry = asksName ? add(new TextEntry(UI.scale(480), ""),
                 Coord.of(UI.scale(6), UI.scale(28))) : null;
         int buttonY = UI.scale(asksName ? 58 : 42);
-        add(new Button(UI.scale(90), L10n.get("hotkeys.presets.confirm"), false)
-                .action(() -> submit(accept)), Coord.of(UI.scale(142), buttonY));
-        add(new Button(UI.scale(90), L10n.get("hotkeys.cancel"), false)
-                .action(() -> finish(cancel)), Coord.of(UI.scale(238), buttonY));
+        Button cancelButton = new HotkeyTextButton(UI.scale(90), cancelLabel)
+                .action(() -> finish(cancel));
+        Button acceptButton = new HotkeyTextButton(UI.scale(90), acceptLabel)
+                .action(() -> submit(accept));
+        int cancelX = sz.x - UI.scale(6) - cancelButton.sz.x;
+        int acceptX = cancelX - UI.scale(6) - acceptButton.sz.x;
+        add(acceptButton, Coord.of(Math.max(0, acceptX), buttonY));
+        add(cancelButton, Coord.of(Math.max(0, cancelX), buttonY));
     }
 
     public static HotkeyPresetPrompt name(Consumer<String> accept, Runnable cancel,
                                           Runnable closed) {
         return new HotkeyPresetPrompt(L10n.get("hotkeys.presets.name.title"),
-                L10n.get("hotkeys.presets.name.question"), true, accept, cancel, closed);
+                L10n.get("hotkeys.presets.name.question"), true,
+                L10n.get("hotkeys.presets.confirm"), L10n.get("hotkeys.cancel"),
+                accept, cancel, closed);
     }
 
     public static HotkeyPresetPrompt confirm(Runnable accept, Runnable cancel,
                                              Runnable closed) {
         return new HotkeyPresetPrompt(L10n.get("hotkeys.presets.discard.title"),
                 L10n.get("hotkeys.presets.discard.question"), false,
+                L10n.get("hotkeys.presets.discard"), L10n.get("hotkeys.presets.keep_editing"),
                 ignored -> accept.run(), cancel, closed);
     }
 

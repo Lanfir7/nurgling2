@@ -47,10 +47,10 @@ public final class HotkeyPresetControls extends Widget {
             protected HotkeyPreset listitem(int index) { return actions.presets().get(index); }
             protected int listitems() { return actions.presets().size(); }
             protected void drawitem(GOut g, HotkeyPreset item, int index) {
-                g.text(item.name(), Coord.of(UI.scale(3), UI.scale(2)));
+                g.text(displayName(item), Coord.of(UI.scale(3), UI.scale(2)));
             }
             public Object tooltip(Coord c, Widget prev) {
-                return sel == null ? null : sel.name();
+                return sel == null ? null : displayName(sel);
             }
             public void change(HotkeyPreset item) {
                 if(item == null) return;
@@ -74,7 +74,7 @@ public final class HotkeyPresetControls extends Widget {
 
     public String selectedName() {
         HotkeyPreset selected = selectedPreset();
-        return selected == null ? "" : selected.name();
+        return selected == null ? "" : displayName(selected);
     }
 
     public boolean copyEnabled() { return !isBuiltInSelection(); }
@@ -197,6 +197,11 @@ public final class HotkeyPresetControls extends Widget {
     private boolean isBuiltInSelection() {
         HotkeyPreset selected = selectedPreset();
         return selected == null || selected.builtIn();
+    }
+
+    private static String displayName(HotkeyPreset preset) {
+        return preset != null && "builtin.default".equals(preset.id())
+                ? L10n.get("hotkeys.presets.default") : preset.name();
     }
 
     private void showPrompt(HotkeyPresetPrompt value) {

@@ -40,6 +40,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     private final List<Button> tabButtons = new ArrayList<>();
     private final Consumer<List<HotkeyAction>> registryListener = ignored -> rebuildRows();
     private boolean registryListening;
+    private boolean presetWarningShown;
     private Widget conflictBox;
     private int contentWidth;
 
@@ -165,7 +166,11 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
             NConfig.needUpdate();
             rebuildRows();
         } catch(RuntimeException failure) {
-            if(ui != null) ui.error(L10n.get("hotkeys.presets.error.save"));
+            if(ui != null) ui.error(L10n.get("hotkeys.presets.error.store"));
+        }
+        if(!presetWarningShown && model.presets().warningKey() != null && ui != null) {
+            presetWarningShown = true;
+            ui.error(L10n.get(model.presets().warningKey()));
         }
     }
 

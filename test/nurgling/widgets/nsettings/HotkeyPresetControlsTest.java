@@ -33,7 +33,7 @@ class HotkeyPresetControlsTest {
     @Test void controlsShowSelectionAndRestrictBuiltInButtons() {
         FakeActions actions = new FakeActions();
         HotkeyPresetControls controls = new HotkeyPresetControls(560, actions);
-        assertEquals("Default", controls.selectedName());
+        assertEquals(nurgling.i18n.L10n.get("hotkeys.presets.default"), controls.selectedName());
         assertFalse(controls.copyEnabled());
         assertFalse(controls.deleteEnabled());
 
