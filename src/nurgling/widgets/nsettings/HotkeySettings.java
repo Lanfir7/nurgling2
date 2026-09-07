@@ -222,13 +222,6 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         rebuildRows();
     }
 
-    @Override
-    public void fontThemeChanged(long revision) {
-        super.fontThemeChanged(revision);
-        if(search != null)
-            resize(sz);
-    }
-
     private void moveCategory(int direction) {
         int index = model.selectedCategory().ordinal() + direction;
         index = Math.max(0, Math.min(HotkeyCategory.values().length - 1, index));

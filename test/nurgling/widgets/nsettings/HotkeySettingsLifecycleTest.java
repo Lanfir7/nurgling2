@@ -30,7 +30,6 @@ class HotkeySettingsLifecycleTest {
         nurgling.sessions.ThreadLocalUI.set(local);
         java.util.Locale previous = nurgling.i18n.L10n.getLocale();
         try {
-            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
             nurgling.i18n.L10n.setLocale(java.util.Locale.forLanguageTag("ru"));
             HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(new HotkeyRegistry()));
             @SuppressWarnings("unchecked")
@@ -48,13 +47,6 @@ class HotkeySettingsLifecycleTest {
             assertNull(tabs.get(0).tint);
             assertNotNull(tabs.get(1).tint);
 
-            nurgling.conf.FontSettings larger = new nurgling.conf.FontSettings();
-            nurgling.fonts.FontRoleConfig system = larger.config(nurgling.fonts.FontRole.SYSTEM);
-            system.size = 24;
-            larger.set(nurgling.fonts.FontRole.SYSTEM, system);
-            nurgling.fonts.FontTheme.install(larger);
-            page.fontThemeChanged(nurgling.fonts.FontTheme.revision());
-
             Button previousVisible = null;
             for(Button tab : tabs) {
                 if(!tab.visible)
@@ -69,7 +61,6 @@ class HotkeySettingsLifecycleTest {
             assertTrue(resetCategory.c.x + resetCategory.sz.x + UI.scale(5) <= resetAll.c.x,
                     "resized reset buttons must be laid out again");
         } finally {
-            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
             nurgling.i18n.L10n.setLocale(previous);
             if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
             else nurgling.sessions.ThreadLocalUI.set(oldUI);
@@ -82,7 +73,6 @@ class HotkeySettingsLifecycleTest {
         local.sessionConfig = new nurgling.NConfig();
         nurgling.sessions.ThreadLocalUI.set(local);
         try {
-            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
             String fullLabel = "Очень длинное локализованное название действия, которое не должно заходить на кнопку назначения клавиши";
             nurgling.hotkeys.PreferenceStore preferences = new nurgling.hotkeys.PreferenceStore() {
                 public String get(String key, String fallback) { return fallback; }
@@ -105,16 +95,7 @@ class HotkeySettingsLifecycleTest {
             assertEquals(fullLabel, label.tooltip(Coord.z, null),
                     "the complete localized label must remain available as a tooltip");
 
-            nurgling.conf.FontSettings larger = new nurgling.conf.FontSettings();
-            nurgling.fonts.FontRoleConfig system = larger.config(nurgling.fonts.FontRole.SYSTEM);
-            system.size = 24;
-            larger.set(nurgling.fonts.FontRole.SYSTEM, system);
-            nurgling.fonts.FontTheme.install(larger);
-            row.fontThemeChanged(nurgling.fonts.FontTheme.revision());
-            assertTrue(label.c.x + label.sz.x <= row.capture().c.x - UI.scale(4),
-                    "action label must be ellipsized again after a font-theme change");
         } finally {
-            nurgling.fonts.FontTheme.install(new nurgling.conf.FontSettings());
             if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
             else nurgling.sessions.ThreadLocalUI.set(oldUI);
         }

@@ -8,13 +8,9 @@ class HotkeyTextButton extends Button {
     private final int minimumWidth;
 
     HotkeyTextButton(int minimumWidth, String label) {
-        super(fittedWidth(minimumWidth, label), label, false);
+        super(minimumWidth, label, false);
         this.minimumWidth = minimumWidth;
-    }
-
-    private static int fittedWidth(int minimumWidth, String label) {
-        return Math.max(minimumWidth,
-                nurgling.fonts.FontTheme.foundry(DEFAULT_FONT_ROLE).strsize(label).x + margin);
+        fitToText();
     }
 
     private void fitToText() {
@@ -25,9 +21,4 @@ class HotkeyTextButton extends Button {
         }
     }
 
-    @Override
-    public void fontThemeChanged(long revision) {
-        super.fontThemeChanged(revision);
-        fitToText();
-    }
 }

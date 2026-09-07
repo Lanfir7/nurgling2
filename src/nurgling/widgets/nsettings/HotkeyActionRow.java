@@ -62,12 +62,6 @@ public class HotkeyActionRow extends Panel {
         label.tooltip = displayed.equals(fullText) ? null : fullText;
     }
 
-    @Override
-    public void fontThemeChanged(long revision) {
-        super.fontThemeChanged(revision);
-        resize(sz);
-    }
-
     private static String contexts(HotkeyAction action) {
         StringBuilder result = new StringBuilder();
         for(HotkeyContext context : action.contexts()) {
