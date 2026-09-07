@@ -1443,7 +1443,7 @@ public class NGameUI extends GameUI
 
         static KeyMatch effective(KeyBinding kb) {
             KeyMatch k = kb.key();
-            if (k == null || k == KeyMatch.nil || k.code == KeyEvent.VK_UNDEFINED)
+            if (!nurgling.hotkeys.InputNavigation.defined(k))
                 return null;
             return k;
         }

@@ -80,11 +80,27 @@ class HotkeySettingsModelTest {
 
     @Test void categoriesAndContextsExposeStableLocalizedMetadata() {
         assertEquals("hotkey.category.inventory", HotkeyCategory.INVENTORY.labelKey());
-        assertEquals("Inventory", HotkeyCategory.INVENTORY.englishLabel());
-        assertEquals("Инвентарь", HotkeyCategory.INVENTORY.russianLabel());
         assertEquals("hotkey.context.inventory_background", HotkeyContext.INVENTORY_BACKGROUND.labelKey());
-        assertEquals("Inventory background", HotkeyContext.INVENTORY_BACKGROUND.englishLabel());
-        assertEquals("Фон инвентаря", HotkeyContext.INVENTORY_BACKGROUND.russianLabel());
+        java.util.Locale previous = nurgling.i18n.L10n.getLocale();
+        try {
+            nurgling.i18n.L10n.setLocale(java.util.Locale.ENGLISH);
+            assertEquals("Inventory", HotkeyCategory.INVENTORY.label());
+            assertEquals("Inventory background", HotkeyContext.INVENTORY_BACKGROUND.label());
+            nurgling.i18n.L10n.setLocale(java.util.Locale.forLanguageTag("ru"));
+            assertEquals("Инвентарь", HotkeyCategory.INVENTORY.label());
+            assertEquals("Фон инвентаря", HotkeyContext.INVENTORY_BACKGROUND.label());
+        } finally { nurgling.i18n.L10n.setLocale(previous); }
+    }
+
+    @Test void missingCategoryAndContextLabelsUseTechnicalIdentifiers() throws Exception {
+        java.lang.reflect.Field field = nurgling.i18n.L10n.class.getDeclaredField("messages");
+        field.setAccessible(true);
+        java.util.Properties previous = (java.util.Properties)field.get(null);
+        try {
+            field.set(null, new java.util.Properties());
+            assertEquals("INVENTORY", HotkeyCategory.INVENTORY.label());
+            assertEquals("INVENTORY_BACKGROUND", HotkeyContext.INVENTORY_BACKGROUND.label());
+        } finally { field.set(null, previous); }
     }
 
     private static final class MemoryBinding implements HotkeyBinding {

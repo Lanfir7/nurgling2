@@ -34,13 +34,13 @@ public final class GestureBinding implements HotkeyBinding {
         if(gesture == null)
             throw new IllegalArgumentException("gesture is null");
         ensureSupported(gesture);
-        current = gesture;
         preferences.set(preferenceKey, gesture.encode());
+        current = gesture;
     }
 
     public void reset() {
-        current = defaultGesture;
         preferences.set(preferenceKey, "");
+        current = defaultGesture;
     }
 
     private InputGesture readCurrent() {
@@ -52,12 +52,16 @@ public final class GestureBinding implements HotkeyBinding {
             ensureSupported(gesture);
             return gesture;
         } catch(IllegalArgumentException e) {
+            preferences.set(preferenceKey, "");
             return defaultGesture;
         }
     }
 
-    private static void ensureSupported(InputGesture gesture) {
+    private void ensureSupported(InputGesture gesture) {
         if(gesture.type() == InputGesture.Type.KEY)
             throw new IllegalArgumentException("gesture binding cannot store KEY gestures");
+        if(defaultGesture != null && gesture.type() != InputGesture.Type.NONE &&
+                gesture.type() != defaultGesture.type())
+            throw new IllegalArgumentException("gesture binding must retain its input family");
     }
 }

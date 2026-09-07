@@ -34,6 +34,8 @@ public final class Hotkeys {
     public static final String INVENTORY_TRANSFER_TO_MAIN = "inventory.transfer_to_main";
     public static final String INVENTORY_TRANSFER_FROM_MAIN = "inventory.transfer_from_main";
     public static final String HELD_DROP_ON_TARGET = "held.drop_on_target";
+    public static final String HELD_DROP_ON_GROUND = "held.drop_on_ground";
+    public static final String HELD_OPEN_WITH_CONTROL = "held.open_with_control";
     public static final String HELD_INTERACT_WITH_TARGET = "held.interact_with_target";
     public static final String HELD_OPEN_WITHOUT_USING = "held.open_without_using";
     public static final String HELD_LIGHT_FROM_FIRE = "held.light_from_fire";
@@ -45,6 +47,7 @@ public final class Hotkeys {
     public static final String WORLD_CONTEXT_MENU = "world.context_menu";
     public static final String WORLD_QUEUE_WAYPOINT = "world.queue_waypoint";
     public static final String WORLD_PING = "world.ping";
+    public static final String WORLD_REMOVE_STUMP = "world.remove_stump";
     public static final String WORLD_PLACEMENT_ROTATE_LEFT = "world.placement.rotate_left";
     public static final String WORLD_PLACEMENT_ROTATE_RIGHT = "world.placement.rotate_right";
     public static final String WORLD_SELECTION_ROTATE = "world.selection.rotate";
@@ -136,15 +139,41 @@ public final class Hotkeys {
         return action != null && action.current().matches(event, 0);
     }
 
-    /** Preserve the fixed Ctrl modifier used by the held-item drop target path. */
-    public static boolean matchesMapDrop(int mods) {
-        return (mods & haven.UI.MOD_CTRL) != 0;
+    /** Convert independent held placement modes into semantic flags. */
+    public static int placementPositionMods(int physicalMods) {
+        int result = 0;
+        for(String id : new String[]{"world.placement.snap_neighbors", "world.placement.free_position"}) {
+            HotkeyAction action = action(id);
+            InputGesture gesture = action.current();
+            if(gesture.type() == InputGesture.Type.MODIFIER && (physicalMods & gesture.code()) != 0)
+                result |= action.canonicalMods();
+        }
+        return result;
     }
 
-    /** Preserve the fixed held Ctrl+RMB interaction used by item dragging. */
-    public static boolean matchesLegacyHeldCtrlRmb(int button, int mods) {
-        return button == 3 && (mods & haven.UI.MOD_CTRL) != 0 &&
-                (mods & (haven.UI.MOD_SHIFT | haven.UI.MOD_META)) == 0;
+    public static boolean placementMode(String id, int physicalMods) {
+        InputGesture gesture = action(id).current();
+        return gesture.type() == InputGesture.Type.MODIFIER && (physicalMods & gesture.code()) != 0;
+    }
+
+    /** Interpret explicit command flags; these are not physical input matching. */
+    public static boolean semanticModifier(int commandMods, int flag) { return (commandMods & flag) != 0; }
+
+    public static final String[] PLACEMENT_KEYS = {
+            WORLD_PLACEMENT_ROTATE_LEFT, WORLD_PLACEMENT_ROTATE_RIGHT,
+            "world.placement.coarse_left", "world.placement.coarse_right",
+            "world.placement.fine_left", "world.placement.fine_right"};
+    public static final String[] PLACEMENT_WHEELS = {
+            "world.placement.coarse_wheel_left", "world.placement.coarse_wheel_right",
+            "world.placement.fine_wheel_left", "world.placement.fine_wheel_right"};
+
+    public static int placementDirection(String id) { return id.endsWith("left") ? -1 : 1; }
+
+    /** Resolve semantic world clicks before basic waypoint, icon, steering or camera routing. */
+    public static HotkeyAction worldClickAction(int button, int mods) {
+        return new HotkeyResolver(registry()).firstMouse(java.util.Arrays.asList(
+                action(WORLD_CONTEXT_MENU), action(WORLD_PING), action(WORLD_QUEUE_WAYPOINT),
+                action(WORLD_REMOVE_STUMP)), button, mods);
     }
 
     /** Match an unmodified mouse click used by fixed map routing. */
@@ -160,18 +189,4 @@ public final class Hotkeys {
         return button == 3 && (mods & KeyMatch.MODS) == 0;
     }
 
-    /** Match the legacy queue-clearing right-click, which only excludes Shift. */
-    public static boolean isUnshiftedRightClick(int button, int mods) {
-        return button == 3 && (mods & haven.UI.MOD_SHIFT) == 0;
-    }
-
-    /** Preserve the stock F-key belt's physical-key routing. */
-    public static boolean matchesFixedBeltKey(int code, int beltKey) {
-        return code == beltKey;
-    }
-
-    /** Match the stock numeric belt key range before dispatching its slot. */
-    public static boolean isNumericKey(int code) {
-        return code >= KeyEvent.VK_0 && code <= KeyEvent.VK_9;
-    }
 }

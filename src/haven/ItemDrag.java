@@ -57,10 +57,10 @@ public class ItemDrag extends NWItem
 	    return(false);
 	 nurgling.hotkeys.HotkeyResolver resolver = new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
 	 nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(nurgling.hotkeys.HotkeyContext.HELD_ITEM, ev.b, ui.modflags());
-	if(action != null && nurgling.hotkeys.Hotkeys.HELD_DROP_ON_TARGET.equals(action.id()) &&
-		ui.dispatchq(parent, new Drop(ev.c.add(this.c), this)).handled)
+	if(action != null && (Hotkeys.HELD_DROP_ON_TARGET.equals(action.id()) || Hotkeys.HELD_DROP_ON_GROUND.equals(action.id())) &&
+		ui.dispatchq(parent, new Drop(ev.c.add(this.c), this, action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
 		return(true);
-	if(action != null && nurgling.hotkeys.Hotkeys.HELD_OPEN_WITHOUT_USING.equals(action.id())) {
+	if(action != null && (Hotkeys.HELD_OPEN_WITHOUT_USING.equals(action.id()) || Hotkeys.HELD_OPEN_WITH_CONTROL.equals(action.id()))) {
 		monitoring.StockpileStorageTracker.rememberHand(this);
 	    GameUI gui = getparent(GameUI.class);
 	    if((gui != null) && (gui.map != null)) {
@@ -73,13 +73,6 @@ public class ItemDrag extends NWItem
 		ui.dispatchq(parent, new Interact(ev.c.add(this.c), this,
 			action.canonicalMods() == null ? 0 : action.canonicalMods())).handled)
 		return(true);
-	if(action == null && Hotkeys.matchesLegacyHeldCtrlRmb(ev.b, ui.modflags())) {
-	    /* XXX */
-	    GameUI gui = getparent(GameUI.class);
-	    if((gui != null) && (gui.map != null)) {
-		return gui.map.heldItemRmb(gui.map.rootxlate(ev.c.add(rootpos())), 0);
-	    }
-	}
 
 	return(false);
     }

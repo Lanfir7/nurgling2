@@ -10,6 +10,28 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HotkeyRegistryTest {
+    @Test void reentrantRegistrationDeliversSnapshotsInRegistrationOrder() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        java.util.List<Integer> observed = new java.util.ArrayList<>();
+        registry.addListener(snapshot -> {
+            assertFalse(Thread.holdsLock(registry));
+            if(snapshot.size() == 1)
+                registry.register(action("second", HotkeyContext.WORLD_SURFACE, InputGesture.mouse(2, 7, 0)));
+        });
+        registry.addListener(snapshot -> observed.add(snapshot.size()));
+        registry.register(action("first", HotkeyContext.WORLD_SURFACE, InputGesture.mouse(1, 7, 0)));
+        assertEquals(java.util.Arrays.asList(1, 2), observed);
+    }
+
+    @Test void equalCategoryOrderAndLabelsAreSortedByTechnicalId() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        for(String id : new String[]{"z", "a"})
+            registry.register(new HotkeyAction(id, null, "Same", HotkeyCategory.MAP,
+                    EnumSet.of(HotkeyContext.MAP_SURFACE), EnumSet.of(InputGesture.Type.MOUSE_BUTTON),
+                    new MemoryBinding(id, InputGesture.mouse(1, 7, 0)), null, 0, false));
+        assertEquals("a", registry.snapshot().get(0).id());
+        assertEquals("z", registry.snapshot().get(1).id());
+    }
     @Test void globalConflictsWithEveryContextButSeparateSurfacesCanReuseGesture() {
         InputGesture g = InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C);
         HotkeyRegistry registry = registryWithGlobalInventoryAndMap(g);

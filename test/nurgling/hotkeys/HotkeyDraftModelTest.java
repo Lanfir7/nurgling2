@@ -9,6 +9,30 @@ import java.util.EnumSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HotkeyDraftModelTest {
+    @Test void failedSaveRestoresEarlierBindingsKeepsDraftAndReportsRollbackFailures() {
+        InputGesture original = InputGesture.mouse(1, 7, 0);
+        HotkeyRegistryTest.MemoryBinding first = binding("a", original);
+        RuntimeException failure = new IllegalStateException("write failed");
+        HotkeyBinding broken = new HotkeyBinding() {
+            int writes;
+            public String id() { return "b"; }
+            public InputGesture defaultGesture() { return InputGesture.mouse(2, 7, 0); }
+            public InputGesture current() { return defaultGesture(); }
+            public void set(InputGesture value) {
+                if(writes++ == 0) throw failure;
+                throw new IllegalStateException("rollback failed");
+            }
+            public void reset() { set(defaultGesture()); }
+        };
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("a", first)); registry.register(action("b", broken));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+        draft.assign("a", InputGesture.none()); draft.assign("b", InputGesture.none());
+        assertSame(failure, assertThrows(IllegalStateException.class, draft::save));
+        assertEquals(original, first.current());
+        assertTrue(draft.isDirty());
+        assertEquals(1, failure.getSuppressed().length);
+    }
     @Test void replacementDisablesOldActionAndSaveIsAtomicFromTheModel() {
         HotkeyRegistryTest.MemoryBinding old = binding("old", InputGesture.key(KeyMatch.forcode(KeyEvent.VK_Q, 0)));
         HotkeyRegistryTest.MemoryBinding next = binding("next", InputGesture.key(KeyMatch.forcode(KeyEvent.VK_W, 0)));

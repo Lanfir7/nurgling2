@@ -89,8 +89,8 @@ class InputGestureTest {
         assertEquals("MMB", InputGesture.mouse(2, KeyMatch.MODS, 0).displayName());
         assertEquals("RMB", InputGesture.mouse(3, KeyMatch.MODS, 0).displayName());
         assertEquals("Button 4", InputGesture.mouse(4, KeyMatch.MODS, 0).displayName());
-        assertEquals("Shift+Wheel Up", InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S).displayName());
-        assertEquals("Wheel Down", InputGesture.wheel(-1, KeyMatch.MODS, 0).displayName());
+        assertEquals("Shift+Wheel Up", InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S).displayName());
+        assertEquals("Wheel Down", InputGesture.wheel(1, KeyMatch.MODS, 0).displayName());
         assertEquals("Shift", InputGesture.modifier(KeyMatch.S).displayName());
         assertEquals("Ctrl", InputGesture.modifier(KeyMatch.C).displayName());
         assertEquals("Alt", InputGesture.modifier(KeyMatch.M).displayName());

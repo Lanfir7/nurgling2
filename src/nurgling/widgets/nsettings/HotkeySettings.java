@@ -133,8 +133,13 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     @Override
     public void save() {
-        if(!model.draft().conflicts().isEmpty())
-            throw new IllegalStateException("hotkey conflicts must be resolved before save");
+        List<HotkeyConflict> conflicts = model.draft().conflicts();
+        if(!conflicts.isEmpty()) {
+            HotkeyConflict conflict = conflicts.get(0);
+            showConflict(conflict.action(), conflict,
+                    () -> { model.draft().replace(conflict); rebuildRows(); }, this::rebuildRows);
+            return;
+        }
         model.draft().save();
         NConfig.needUpdate();
         rebuildRows();

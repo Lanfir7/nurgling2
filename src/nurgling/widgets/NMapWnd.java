@@ -138,7 +138,7 @@ public class NMapWnd extends MapWnd {
             
             @Override
             public boolean keydown(KeyDownEvent ev) {
-                if(ev.code == java.awt.event.KeyEvent.VK_ENTER) {
+                    if(nurgling.hotkeys.InputNavigation.confirm(ev.code)) {
                     applyMarkerSearch();
                     return true;
                 }
@@ -766,7 +766,7 @@ public class NMapWnd extends MapWnd {
                 }
 
                 // Right-click for clearing waypoint queue (fish handling is in parent NMiniMap)
-                if(Hotkeys.isUnshiftedRightClick(ev.b, ui.modflags())) {
+                if(Hotkeys.action("map.clear_waypoints").current().matchesMouse(ev.b, ui.modflags())) {
                     // Clear waypoint queue on regular right-click (if not on fish/marker)
                     NGameUI gui = (NGameUI) NUtils.getGameUI();
                     if(gui != null && gui.waypointMovementService != null) {

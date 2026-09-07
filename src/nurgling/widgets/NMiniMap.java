@@ -1114,7 +1114,7 @@ NMiniMap extends MiniMap {
     }
 
     private void steerHold(Coord c) {
-        if((ui.modflags() != 0) || !holdMove.due())
+        if(!Hotkeys.isPlainLeftClick(1, ui.modflags()) || !holdMove.due())
             return;
         NGameUI gui = NUtils.getGameUI();
         if((gui == null) || (gui.map == null) || (sessloc == null))
@@ -2467,7 +2467,7 @@ NMiniMap extends MiniMap {
 
     private String getTerrainTooltip(Coord c) {
         // Only show terrain tooltip when Shift is pressed
-        if(ui == null || !ui.modshift) {
+        if(!nurgling.hotkeys.InputNavigation.expandedTooltip(ui)) {
             return null;
         }
         return getTerrainNameAtCoord(c);
@@ -3527,7 +3527,7 @@ NMiniMap extends MiniMap {
 
         // Press-and-hold steering arms last, so every other meaning of the left button
         // keeps priority. The event is not consumed - the press still walks as before.
-        if(ev.b == 1 && ui.modflags() == 0)
+        if(Hotkeys.isPlainLeftClick(ev.b, ui.modflags()))
             startHoldSteer(ev.c);
 
         return super.mousedown(ev);

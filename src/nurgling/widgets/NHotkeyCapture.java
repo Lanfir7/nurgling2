@@ -85,7 +85,7 @@ public class NHotkeyCapture extends Button {
                 continue;
             if(result.length() > 0)
                 result.append(", ");
-            result.append(type.name().toLowerCase().replace('_', ' '));
+            result.append(L10n.get("hotkeys.type." + type.name().toLowerCase(java.util.Locale.ROOT)));
         }
         return result.toString();
     }

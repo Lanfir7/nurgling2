@@ -14,6 +14,8 @@ public final class HotkeyRegistry {
     private final Object lock = new Object();
     private final Map<String, HotkeyAction> actions = new HashMap<>();
     private final List<Consumer<List<HotkeyAction>>> listeners = new ArrayList<>();
+    private final java.util.ArrayDeque<Runnable> notifications = new java.util.ArrayDeque<>();
+    private boolean notifying;
 
     public void register(HotkeyAction action) {
         if(action == null)
@@ -30,9 +32,25 @@ public final class HotkeyRegistry {
             actions.put(action.id(), action);
             state = orderedSnapshotLocked();
             notify = new ArrayList<>(listeners);
+            notifications.add(() -> {
+                for(Consumer<List<HotkeyAction>> listener : notify) listener.accept(state);
+            });
+            if(notifying) return;
+            notifying = true;
         }
-        for(Consumer<List<HotkeyAction>> listener : notify)
-            listener.accept(state);
+        try {
+            while(true) {
+                Runnable notification;
+                synchronized(lock) {
+                    notification = notifications.poll();
+                    if(notification == null) { notifying = false; return; }
+                }
+                notification.run();
+            }
+        } catch(RuntimeException | Error failure) {
+            synchronized(lock) { notifying = false; }
+            throw failure;
+        }
     }
 
     public List<HotkeyAction> snapshot() {
@@ -78,23 +96,15 @@ public final class HotkeyRegistry {
             if(candidate.id().equals(selected.id()))
                 continue;
             InputGesture candidateGesture = effective == null ? candidate.binding().current() : effective.get(candidate.id());
-            if(candidateGesture == null || !candidateGesture.equals(gesture) ||
+            if(candidateGesture == null || !candidateGesture.overlaps(gesture) ||
                     candidateGesture.type() == InputGesture.Type.NONE)
                 continue;
-            if(overlaps(selected.contexts(), candidate.contexts()))
+            if(selected.overlapsContext(candidate) && !selected.sharesDefaultWith(candidate, gesture, candidateGesture))
                 result.add(new HotkeyConflict(selected, candidate, gesture));
         }
         return result;
     }
 
-    private static boolean overlaps(Set<HotkeyContext> left, Set<HotkeyContext> right) {
-        if(left.contains(HotkeyContext.GLOBAL) || right.contains(HotkeyContext.GLOBAL))
-            return true;
-        for(HotkeyContext context : left)
-            if(right.contains(context))
-                return true;
-        return false;
-    }
 
     public void addListener(Consumer<List<HotkeyAction>> listener) {
         if(listener == null)

@@ -23,8 +23,110 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Completeness guard for gameplay shortcut registration and action labels. */
 class GameplayHotkeyAuditTest {
+    @Test void extractedConditionsIncludeKeysOperatorsAndAddedGameplayClauses() {
+        String original = "if(ev.code == KeyEvent.VK_ESCAPE) cancel();";
+        List<String> allowed = Arrays.asList("haven/Widget.java|if(ev.code == KeyEvent.VK_ESCAPE)|cancel dialog");
+        assertEquals(Arrays.asList("if(ev.code == KeyEvent.VK_ESCAPE)"), extractConditions(original));
+        assertTrue(isAllowlisted("haven/Widget.java", extractConditions(original).get(0), allowed));
+        for(String changed : Arrays.asList(original.replace("VK_ESCAPE", "VK_F9"),
+                original.replace(" == ", " != "), original.replace(") cancel", " || gameplay()) cancel")))
+            assertFalse(isAllowlisted("haven/Widget.java", extractConditions(changed).get(0), allowed), changed);
+    }
+
+    @Test void mutationsOfActualAllowlistedSourceMustFailAudit() throws IOException {
+        String source = new String(Files.readAllBytes(Paths.get("src/haven/Widget.java")), StandardCharsets.UTF_8);
+        String original = "if(code == KeyEvent.VK_ESCAPE)";
+        assertTrue(source.contains(original));
+        List<String> allowed = readAllowlist();
+        assertTrue(isAllowlisted("haven/Widget.java", original, allowed));
+        for(String changed : Arrays.asList(original.replace("VK_ESCAPE", "VK_F9"),
+                original.replace(" == ", " != "), original.replace(")", " || gameplay())"))) {
+            List<String> conditions = extractConditions(source.replace(original, changed));
+            assertTrue(conditions.contains(changed));
+            assertFalse(isDirectConditionAllowed("haven/Widget.java", 0, changed, allowed));
+        }
+    }
+
+    @Test void aliasesHelperReturnsAndMixedConfiguredConditionsRemainAudited() {
+        assertEquals(Arrays.asList("if(flags == 2)"), extractConditions(
+                "int flags = ui.modflags(); if(flags == 2) act();"));
+        assertEquals(Arrays.asList("return button == 3 && (flags & UI.MOD_CTRL) != 0;"), extractConditions(
+                "boolean legacy(int button, int flags) { return button == 3 && (flags & UI.MOD_CTRL) != 0; }"));
+        assertFalse(isDirectConditionAllowed("nurgling/NMapView.java", 0,
+                "if(Hotkeys.matchesKey(id, ev.awt) || ev.code == KeyEvent.VK_F9)", new ArrayList<>()));
+    }
+
+    @Test void booleanAliasesOfPhysicalModifiersCannotHideGameplayBranches() {
+        assertEquals(Arrays.asList("if(control)"), extractConditions(
+                "boolean control = (ev.mods & KeyMatch.C) != 0; if(control) gameplay();"));
+        assertEquals(Arrays.asList("return ui.modctrl;"), extractConditions(
+                "boolean legacy() { return ui.modctrl; }"));
+        assertEquals(Arrays.asList("return control;"), extractConditions(
+                "boolean legacy() { boolean control = ui.modctrl; return control; }"));
+    }
+
+    private static List<String> extractConditions(String source) {
+        List<String> result = new ArrayList<>();
+        Set<String> aliases = new HashSet<>();
+        Matcher assignments = Pattern.compile("\\b(\\w+)\\s*=\\s*\\(*\\s*(?:(?:\\w+\\.)*ui\\.mod(?:flags\\(\\)|shift|ctrl|meta)|(?:ev|event)\\.(?:mods|code)|(?:ev|event)\\.getKeyCode\\(\\))").matcher(mask(source, true));
+        while(assignments.find()) aliases.add(assignments.group(1));
+        Set<String> booleanAliases = new HashSet<>();
+        Matcher booleans = Pattern.compile("\\bboolean\\s+(\\w+)\\s*=").matcher(mask(source, true));
+        while(booleans.find())
+            if(aliases.contains(booleans.group(1))) booleanAliases.add(booleans.group(1));
+        Matcher matcher = Pattern.compile("\\bif\\s*\\(").matcher(mask(source, true));
+        while(matcher.find()) {
+            int end = balancedEnd(source, source.indexOf('(', matcher.start()));
+            String condition = source.substring(matcher.start(), end);
+            if(usesInput(condition, aliases)) result.add(normalize(condition));
+        }
+        Matcher returns = Pattern.compile("\\breturn\\b([^;]+);").matcher(mask(source, true));
+        while(returns.find()) {
+            String expression = source.substring(returns.start(), returns.end());
+            String predicate = mask(expression, true).replaceAll("ui\\.modflags\\(\\)(?=\\s*[,\\)])|ev\\.mods(?=\\s*[,\\)])", "forwarded");
+            boolean booleanInput = Pattern.compile("\\bui\\.mod(?:ctrl|shift|meta)\\b").matcher(predicate).find();
+            for(String alias : booleanAliases)
+                booleanInput |= Pattern.compile("\\b" + Pattern.quote(alias) + "\\b").matcher(predicate).find();
+            if(booleanInput || (Pattern.compile("[!=]=|&&|\\|\\||[<>]=?").matcher(predicate).find() && usesInput(predicate, aliases)))
+                result.add(normalize(expression));
+        }
+        return result;
+    }
+
+    private static boolean usesInput(String text, Set<String> aliases) {
+        if(DIRECT_CONDITION.matcher(text).find()) return true;
+        for(String alias : aliases)
+            if(Pattern.compile("\\b" + Pattern.quote(alias) + "\\b").matcher(text).find()) return true;
+        return false;
+    }
+
+    private static String mask(String source, boolean literals) {
+        StringBuilder result = new StringBuilder(source);
+        Matcher tokens = Pattern.compile("\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|/\\*[\\s\\S]*?\\*/|//[^\\n]*").matcher(source);
+        while(tokens.find()) {
+            if(literals || tokens.group().startsWith("/"))
+                for(int i = tokens.start(); i < tokens.end(); i++)
+                    if(result.charAt(i) != '\n') result.setCharAt(i, ' ');
+        }
+        return result.toString();
+    }
+
+    private static int balancedEnd(String source, int start) {
+        int depth = 0;
+        char quote = 0;
+        for(int i = start; i < source.length(); i++) {
+            char c = source.charAt(i);
+            if(quote != 0) {
+                if(c == '\\') { i++; continue; }
+                if(c == quote) quote = 0;
+            } else if(c == '\'' || c == '"') quote = c;
+            else if(c == '(') depth++;
+            else if(c == ')' && --depth == 0) return i + 1;
+        }
+        throw new AssertionError("Unbalanced input condition: " + source.substring(start));
+    }
     private static final Pattern DIRECT_CONDITION = Pattern.compile(
-            "\\b(?:if|else\\s+if)\\s*\\([^\\n]*(?:ui\\.mod(?:shift|ctrl|meta)|ev\\.mods|ev\\.code|KeyEvent\\.VK_)");
+            "ui\\.mod(?:shift|ctrl|meta|flags\\s*\\()|\\b(?:ev|event)\\.(?:mods|code)\\b|KeyEvent\\.VK_|\\b(?:mods|modflags)\\s*(?:[&|]|[!=]=(?!\\s*null))|\\bUI\\.MOD_");
     private static final Pattern KEY_ID = Pattern.compile(
             "KeyBinding\\.get\\(\\s*\"([^\"]+)\"");
     @Test
@@ -48,14 +150,11 @@ class GameplayHotkeyAuditTest {
                             if(!knownIds.contains(id) && !isExplicitDynamicId(id, relative, line))
                                 findings.add(relative + ":" + (i + 1) + ": KeyBinding.get(\"" + id + "\")");
                         }
-                        Matcher conditions = DIRECT_CONDITION.matcher(line);
-                        while(conditions.find()) {
-                            String normalized = normalize(conditions.group());
-                            String record = relative + ":" + (i + 1) + ": " + normalized;
-                            if(!isDirectConditionAllowed(relative, i + 1, normalized, allowlist))
-                                findings.add(record);
-                        }
                     }
+                    String source = mask(String.join("\n", lines), false);
+                    for(String condition : extractConditions(source))
+                        if(!isDirectConditionAllowed(relative, 0, condition, allowlist))
+                            findings.add(relative + "|" + condition);
                 } catch(IOException e) {
                     throw new AuditFailure(e);
                 }
@@ -137,17 +236,24 @@ class GameplayHotkeyAuditTest {
                 || (id.equals("belt0") && relative.endsWith("NToolBeltProp.java") && sourceLine.contains("\"belt0\" +"));
     }
 
-    private static boolean isExactlyClassified(String relative, int line, String condition) {
-        return EXACT_CLASSIFIED_CONDITIONS.contains(relative + ":" + line + "|" + condition);
-    }
-
     private static boolean isDirectConditionAllowed(String relative, int line, String condition, List<String> allowlist) {
-        return hasHotkeysReference(condition) || isExactlyClassified(relative, line, condition) ||
+        return hasHotkeysReference(condition) ||
                 isAllowlisted(relative, condition, allowlist);
     }
 
     private static boolean hasHotkeysReference(String text) {
-        return text.contains("Hotkeys.");
+        if(!text.contains("Hotkeys.") && !text.contains("InputNavigation.")) return false;
+        // Removing only matcher calls ensures adding a raw gameplay clause beside
+        // an existing configured action cannot inherit its exemption.
+        String remaining = text;
+        Matcher calls = Pattern.compile("(?:(?:Hotkeys|InputNavigation)\\.\\w+|\\.matches(?:Mouse|Wheel|Modifiers)?)\\s*\\(").matcher(remaining);
+        while(calls.find()) {
+            int start = calls.start();
+            int end = balancedEnd(remaining, remaining.indexOf('(', start));
+            remaining = remaining.substring(0, start) + "configured" + remaining.substring(end);
+            calls = Pattern.compile("(?:(?:Hotkeys|InputNavigation)\\.\\w+|\\.matches(?:Mouse|Wheel|Modifiers)?)\\s*\\(").matcher(remaining);
+        }
+        return !DIRECT_CONDITION.matcher(remaining).find();
     }
 
     private static String normalize(String condition) {
@@ -215,28 +321,15 @@ class GameplayHotkeyAuditTest {
             throw new AuditFailure(new IOException("Missing required hotkey audit source root: " + path.toAbsolutePath()));
     }
 
-    private static final Set<String> EXACT_CLASSIFIED_CONDITIONS = new HashSet<>(Arrays.asList(
-            "haven/WItem.java:101|if(ui.modshift",
-            "nurgling/NWItem.java:85|if (ui.modshift",
-            "haven/MenuSearch.java:343|if(ev.code",
-            "haven/MenuSearch.java:351|else if(ev.code",
-            "nurgling/NGameUI.java:1446|if (k == null || k == KeyMatch.nil || k.code == KeyEvent.VK_",
-            "nurgling/NMapView.java:1923|if(ev.code",
-            "nurgling/NMapView.java:1932|if(ev.code",
-            "nurgling/widgets/NMiniMap.java:2470|if(ui == null || !ui.modshift",
-            "nurgling/widgets/NMapWnd.java:141|if(ev.code == java.awt.event.KeyEvent.VK_",
-            "nurgling/widgets/LocalizedResourceTimersWindow.java:210|if(ev.code == java.awt.event.KeyEvent.VK_"
-    ));
-
     private static final Set<String> TASK_HANDLER_FILES = new HashSet<>(Arrays.asList(
             "haven/WItem.java", "nurgling/NWItem.java", "haven/Inventory.java", "nurgling/NInventory.java",
             "haven/ItemDrag.java", "haven/MapView.java", "nurgling/NMapView.java", "nurgling/widgets/NMiniMap.java",
-            "nurgling/widgets/NMapWnd.java", "nurgling/NMiniMapWnd.java", "nurgling/NFlowerMenu.java",
+            "nurgling/widgets/NMapWnd.java", "nurgling/widgets/NMiniMapWnd.java", "nurgling/NFlowerMenu.java",
             "nurgling/widgets/NMakewindow.java", "haven/FightWnd.java", "haven/ISBox.java",
-            "nurgling/NBuddyWnd.java", "nurgling/NWoundBox.java", "nurgling/NDraggableWidget.java",
-            "nurgling/NCompassWidget.java", "nurgling/NGameUI.java",
+            "nurgling/widgets/NBuddyWnd.java", "nurgling/NWoundBox.java", "nurgling/widgets/NDraggableWidget.java",
+            "nurgling/widgets/compass/NCompassWidget.java", "nurgling/NGameUI.java",
             "nurgling/widgets/LocalizedResourceTimersWindow.java", "haven/GobIcon.java", "haven/MenuSearch.java",
-            "nurgling/RosterButton.java", "nurgling/ItemStack.java", "nurgling/LandSurvey.java", "haven/Fightsess.java"));
+            "haven/res/ui/croster/RosterButton.java", "haven/res/ui/stackinv/ItemStack.java", "haven/res/ui/surv/LandSurvey.java", "haven/Fightsess.java"));
 
     private static final class AuditFailure extends RuntimeException {
         AuditFailure(IOException cause) { super(cause); }

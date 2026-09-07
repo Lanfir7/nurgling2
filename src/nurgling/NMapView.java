@@ -527,7 +527,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
      * (rate limit, minimum distance) lives in HoldToMove.
      */
     private void steerHold(Coord c) {
-        if((ui.modflags() != 0) || !holdMove.due())
+        if(!Hotkeys.isPlainLeftClick(1, ui.modflags()) || !holdMove.due())
             return;
         // The grab keeps delivering pointer positions after the cursor has left the view;
         // clamping keeps steering towards that edge instead of hit-testing off-screen.
@@ -1594,6 +1594,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             return true;
         }
 
+        nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
+
         /* Grab a movement waypoint drawn on the ground instead of walking there.
          *
          * Plain left button only. Alt+LMB means "queue a waypoint here" and alt+shift+LMB is the
@@ -1601,7 +1603,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
          * modified click steals them whenever the cursor happens to be within a node's grab radius
          * - which, while laying a path out, it very often is, because the node you just placed is
          * right where you are still clicking. Same rule as the minimap (NMiniMap.mousedown). */
-        if(ev.b == 1 && wpGrab == null && ui.modflags() == 0) {
+        if(worldAction == null && Hotkeys.isPlainLeftClick(ev.b, ui.modflags()) && wpGrab == null) {
             long wpid = worldWaypointAt(ev.c);
             if(wpid >= 0) {
                 wpDragOrigin = waypointWorldPos(wpid);
@@ -1625,7 +1627,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 return super.mousedown(ev);
             }
             // LMB during placement: capture as ghost instead of committing to server.
-            if (ev.b == 1 && ui.modflags() == 0) {
+            if (Hotkeys.isPlainLeftClick(ev.b, ui.modflags())) {
                 Loader.Future<Plob> placing_l = this.placing;
                 if (placing_l != null && placing_l.done()) {
                     Plob plob = placing_l.get();
@@ -1751,7 +1753,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         // Plain LMB/RMB on a gem's floating icon: redirect the click to the gem gob
         // so the small ground item is easy to hit. Only fires without modifiers; all
         // modifier combos keep their existing behavior.
-        if (Hotkeys.isPlainMouseClick(ev.b, ui.modflags())) {
+        if (worldAction == null && Hotkeys.isPlainMouseClick(ev.b, ui.modflags())) {
             Gob iconTarget = findClickThroughIconGob(ev.c);
             if (iconTarget != null) {
                 Coord2d gc = iconTarget.rc;
@@ -1768,7 +1770,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
         // Ctrl+RMB (without Shift): gob menu, else zone flower menu, else tile/server
         if (Hotkeys.action(Hotkeys.WORLD_CONTEXT_MENU).current().matchesMouse(ev.b, ui.modflags())) {
-            new Click(ev.c, ev.b, Hotkeys.action(Hotkeys.WORLD_CONTEXT_MENU).canonicalMods() == null ? ui.modflags() : Hotkeys.action(Hotkeys.WORLD_CONTEXT_MENU).canonicalMods()) {
+            runHitTest(new Click(ev.c, Hotkeys.action(Hotkeys.WORLD_CONTEXT_MENU)) {
                 @Override
                 protected void hit(Coord pc, Coord2d mc, ClickData inf) {
                     Gob target = null;
@@ -1819,13 +1821,15 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                     }
                     }
                 }
-            }.run();
+            });
             return true;
         }
 
         // Press-and-hold steering arms last, so every other meaning of the left button
         // keeps priority. The event is not consumed - the press stays a normal click.
-        if(ev.b == 1 && (ui.modflags() == 0) && canHoldSteer())
+        if(worldAction != null)
+            return super.mousedown(ev);
+        if(Hotkeys.isPlainLeftClick(ev.b, ui.modflags()) && canHoldSteer())
             armHoldSteer(ev.c);
 
         return super.mousedown(ev);
@@ -1920,7 +1924,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     @Override
     public boolean keyup(KeyUpEvent ev) {
-        if(ev.code == 16) {
+        if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
             shiftPressed = false;
             ttip.clear();
         }
@@ -1929,7 +1933,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     @Override
     public boolean keydown(KeyDownEvent ev) {
-        if(ev.code == 16) {
+        if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
             shiftPressed = true;
         }
 

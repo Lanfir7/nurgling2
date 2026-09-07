@@ -82,7 +82,7 @@ public class NWItem extends WItem
         if (info.size() < 1)
             return null;
         // Reset tooltip cache if Shift state changed
-        if (ui.modshift != nlastModshift) {
+        if (nurgling.hotkeys.InputNavigation.tooltipChanged(ui, nlastModshift)) {
             nlongtip = null;
             nlastModshift = ui.modshift;
         }

@@ -116,6 +116,29 @@ public final class HotkeyCatalog {
 
         registerItemActions(registry, order);
         registerGameplayGestures(registry, order);
+        for(int i = 2; i < Hotkeys.PLACEMENT_KEYS.length; i++) {
+            boolean fine = i >= 4;
+            gesture(registry, Hotkeys.PLACEMENT_KEYS[i], InputGesture.key(KeyMatch.forcode(
+                    (i % 2 == 0) ? KeyEvent.VK_LEFT : KeyEvent.VK_RIGHT,
+                    fine ? KeyMatch.S : KeyMatch.S | KeyMatch.C, fine ? KeyMatch.S : KeyMatch.C)),
+                    HotkeyCategory.WORLD, EnumSet.of(HotkeyContext.WORLD_PLACEMENT), fine ? haven.UI.MOD_SHIFT : haven.UI.MOD_CTRL, order);
+        }
+        for(int i = 0; i < Hotkeys.PLACEMENT_WHEELS.length; i++) {
+            boolean fine = i >= 2;
+            gesture(registry, Hotkeys.PLACEMENT_WHEELS[i], InputGesture.wheel(i % 2 == 0 ? -1 : 1,
+                    fine ? KeyMatch.S : KeyMatch.S | KeyMatch.C, fine ? KeyMatch.S : KeyMatch.C), HotkeyCategory.WORLD,
+                    EnumSet.of(HotkeyContext.WORLD_PLACEMENT), fine ? haven.UI.MOD_SHIFT : haven.UI.MOD_CTRL, order);
+        }
+        gesture(registry, "world.placement.snap_neighbors", InputGesture.modifier(KeyMatch.M), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_PLACEMENT), haven.UI.MOD_META, order);
+        gesture(registry, "world.placement.free_position", InputGesture.modifier(KeyMatch.S), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_PLACEMENT), haven.UI.MOD_SHIFT, order);
+        gesture(registry, "world.placement.snap_edges", InputGesture.modifier(KeyMatch.C), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_PLACEMENT), haven.UI.MOD_CTRL, order);
+        gesture(registry, Hotkeys.WORLD_REMOVE_STUMP, InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), haven.UI.MOD_META, order);
+        gesture(registry, "map.clear_waypoints", InputGesture.mouse(3, KeyMatch.S, 0), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_SURFACE), null, order);
 
         for(int slot = 0; slot < 12; slot++)
             registerBelt(registry, KeyBinding.get("belt0" + slot,
@@ -272,6 +295,10 @@ public final class HotkeyCatalog {
                 EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
         gesture(registry, "held.drop_on_target", InputGesture.mouse(1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), null, order);
+        gesture(registry, Hotkeys.HELD_DROP_ON_GROUND, InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), haven.UI.MOD_CTRL, order);
+        gesture(registry, Hotkeys.HELD_OPEN_WITH_CONTROL, InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.INVENTORY,
+                EnumSet.of(HotkeyContext.HELD_ITEM), 0, order);
         gesture(registry, "held.interact_with_target", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.HELD_ITEM), Integer.valueOf(0), order);
         gesture(registry, "held.open_without_using", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.INVENTORY,
@@ -283,6 +310,10 @@ public final class HotkeyCatalog {
     private static void gesture(HotkeyRegistry registry, String id, InputGesture defaultGesture,
                                 HotkeyCategory category, Set<HotkeyContext> contexts,
                                 Integer canonicalMods, int[] order) {
+        if(id.startsWith("world.placement.")) contexts = EnumSet.of(HotkeyContext.WORLD_PLACEMENT);
+        if(id.equals(Hotkeys.WORLD_PLACEMENT_ROTATE_LEFT) || id.equals(Hotkeys.WORLD_PLACEMENT_ROTATE_RIGHT)) canonicalMods = haven.UI.MOD_CTRL;
+        if(id.startsWith("inventory.stack.")) contexts = EnumSet.of(HotkeyContext.STACK_INVENTORY);
+        if(id.startsWith("stockpile.")) contexts = EnumSet.of(HotkeyContext.STOCKPILE);
         InputGesture.Type type = defaultGesture.type();
         if(type == InputGesture.Type.KEY) {
             KeyBinding kb = KeyBinding.get(id, defaultGesture.key());
@@ -319,6 +350,10 @@ public final class HotkeyCatalog {
                              HotkeyCategory category, HotkeyContext context, int[] order) {
         if(binding == null)
             return;
+        if(binding.id.startsWith("cam-")) context = HotkeyContext.WORLD_CAMERA;
+        if(binding.id.startsWith("mapwnd/")) context = HotkeyContext.MAP_WINDOW;
+        if(binding.id.startsWith("login/")) context = HotkeyContext.LOGIN;
+        if(binding.id.equals("chat-quick")) context = HotkeyContext.CHAT_ENTRY;
         registry.register(new HotkeyAction(binding.id, labelKey(binding.id), null, category,
                 EnumSet.of(context), KEY, wrapper(binding), null, order[0]++, false));
     }

@@ -34,10 +34,14 @@ public final class InputGesture {
     }
 
     public static InputGesture mouse(int button, int mask, int match) {
+        if(button < 1 || button > 20)
+            throw new IllegalArgumentException("invalid mouse button");
+        validateMods(mask, match);
         return new InputGesture(Type.MOUSE_BUTTON, null, button, mask, match);
     }
 
     public static InputGesture wheel(int direction, int mask, int match) {
+        validateMods(mask, match);
         if(direction == 0)
             throw new IllegalArgumentException("wheel direction is zero");
         return new InputGesture(Type.MOUSE_WHEEL, null, Integer.signum(direction), mask, match);
@@ -71,6 +75,31 @@ public final class InputGesture {
 
     private boolean mods(int actual) {
         return (actual & modmask) == (modmatch & modmask);
+    }
+
+    private static void validateMods(int mask, int match) {
+        if((mask & ~KeyMatch.MODS) != 0 || (match & ~mask) != 0)
+            throw new IllegalArgumentException("invalid modifier mask");
+    }
+
+    /** Whether at least one runtime event can satisfy both gestures. */
+    public boolean overlaps(InputGesture other) {
+        if(type == Type.NONE || type != other.type)
+            return false;
+        if(type == Type.MODIFIER)
+            return code == other.code;
+        if(((modmatch ^ other.modmatch) & modmask & other.modmask) != 0)
+            return false;
+        if(type != Type.KEY)
+            return code == other.code;
+        if(key.chr != 0 && other.key.chr != 0)
+            return key.casematch && other.key.casematch ? key.chr == other.key.chr :
+                    Character.toUpperCase(key.chr) == Character.toUpperCase(other.key.chr);
+        if(key.chr == 0 && other.key.chr == 0)
+            return key.code == other.key.code;
+        KeyMatch character = key.chr != 0 ? key : other.key;
+        KeyMatch physical = key.chr == 0 ? key : other.key;
+        return KeyEvent.getExtendedKeyCodeForChar(Character.toUpperCase(character.chr)) == physical.code;
     }
 
     public boolean matches(KeyEvent event, int ignored) {
@@ -125,6 +154,8 @@ public final class InputGesture {
                 int code = Integer.parseInt(parts[1]);
                 int mask = Integer.parseInt(parts[2]);
                 int match = Integer.parseInt(parts[3]);
+                if(parts[0].equals("w") && code != -1 && code != 1)
+                    throw new IllegalArgumentException("invalid wheel direction");
                 return parts[0].equals("b") ? mouse(code, mask, match) : wheel(code, mask, match);
             }
             if(encoded.startsWith("m:")) {
@@ -150,7 +181,7 @@ public final class InputGesture {
         case MOUSE_BUTTON:
             return withModifiers(buttonName(code));
         case MOUSE_WHEEL:
-            return withModifiers(code > 0 ? "Wheel Up" : "Wheel Down");
+            return withModifiers(code < 0 ? "Wheel Up" : "Wheel Down");
         case MODIFIER:
             return modifierName(code);
         default:

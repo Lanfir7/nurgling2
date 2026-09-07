@@ -87,10 +87,10 @@ class InventoryHotkeysTest {
         assertTrue(source.contains("groupedAll(action.id())"));
     }
 
-    @Test void legacyHeldCtrlRmbUsesAnExplicitUnmodifiedMapPath() throws Exception {
-        String source = source("src/haven/ItemDrag.java");
-        assertFalse(source.contains("ui.modctrl = false"));
-        assertTrue(source.contains("heldItemRmb(gui.map.rootxlate(ev.c.add(rootpos())), 0)"));
+    @Test void heldCtrlRmbIsAnEditableActionWithUnmodifiedServerMeaning() {
+        HotkeyAction action = Hotkeys.action(Hotkeys.HELD_OPEN_WITH_CONTROL);
+        assertTrue(action.defaultGesture().matchesMouse(3, KeyMatch.C));
+        assertEquals(Integer.valueOf(0), action.canonicalMods());
     }
 
     private static String source(String path) throws Exception {

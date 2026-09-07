@@ -78,8 +78,8 @@ public final class HotkeyDraftModel {
             if(candidate.id().equals(id))
                 continue;
             InputGesture other = effective(candidate.id());
-            if(other.equals(requested) && other.type() != InputGesture.Type.NONE &&
-                    overlaps(selected, candidate))
+            if(other.overlaps(requested) && other.type() != InputGesture.Type.NONE &&
+                    selected.overlapsContext(candidate) && !selected.sharesDefaultWith(candidate, requested, other))
                 result.add(new HotkeyConflict(selected, candidate, requested));
         }
         return result;
@@ -136,8 +136,8 @@ public final class HotkeyDraftModel {
             for(Map.Entry<String, InputGesture> entry : original.entrySet()) {
                 try {
                     requireAction(entry.getKey()).binding().set(entry.getValue());
-                } catch(RuntimeException ignored) {
-                    // Preserve the original failure; bindings should be well-behaved.
+                } catch(RuntimeException rollbackFailure) {
+                    if(rollbackFailure != failure) failure.addSuppressed(rollbackFailure);
                 }
             }
             throw failure;
@@ -169,12 +169,4 @@ public final class HotkeyDraftModel {
         return action;
     }
 
-    private static boolean overlaps(HotkeyAction left, HotkeyAction right) {
-        if(left.contexts().contains(HotkeyContext.GLOBAL) || right.contexts().contains(HotkeyContext.GLOBAL))
-            return true;
-        for(HotkeyContext context : left.contexts())
-            if(right.contexts().contains(context))
-                return true;
-        return false;
-    }
 }

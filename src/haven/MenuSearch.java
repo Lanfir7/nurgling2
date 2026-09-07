@@ -340,7 +340,7 @@ public abstract class MenuSearch extends Window {
     }
 
     public boolean keydown(KeyDownEvent ev) {
-	if(ev.code == ev.awt.VK_DOWN) {
+	if(nurgling.hotkeys.InputNavigation.nextRow(ev.code)) {
 	    int idx = filtered.indexOf(rls.sel);
 	    if((idx >= 0) && (idx < filtered.size() - 1)) {
 		idx++;
@@ -348,7 +348,7 @@ public abstract class MenuSearch extends Window {
 		rls.display(idx);
 	    }
 	    return(true);
-	} else if(ev.code == ev.awt.VK_UP) {
+	} else if(nurgling.hotkeys.InputNavigation.previousRow(ev.code)) {
 	    int idx = filtered.indexOf(rls.sel);
 	    if(idx > 0) {
 		idx--;

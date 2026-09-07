@@ -17,11 +17,20 @@ public final class KeyBindingHotkey implements HotkeyBinding {
     }
 
     public InputGesture defaultGesture() {
-        return InputGesture.key(binding.defkey);
+        return effective(binding.defkey);
     }
 
     public InputGesture current() {
-        return InputGesture.key(binding.key());
+        return effective(binding.key());
+    }
+
+    private InputGesture effective(KeyMatch key) {
+        InputGesture gesture = InputGesture.key(key);
+        if(gesture.type() != InputGesture.Type.KEY) return gesture;
+        KeyMatch effective = gesture.key();
+        effective.modmask &= ~binding.modign;
+        effective.modmatch &= ~binding.modign;
+        return InputGesture.key(effective);
     }
 
     public void set(InputGesture gesture) {

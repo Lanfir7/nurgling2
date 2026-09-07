@@ -1,0 +1,39 @@
+# Unified hotkeys — integrated final fixes
+
+Base: `fdbef46b766f5b13ca71bd62e0fef79aea938b77`. All eight Important findings and the three Minor findings were handled in one integrated pass. No subagents or dependency/build-setting changes were used. CodeGraph was attempted first; its index pointed at the other checkout and did not contain these new symbols, so targeted source inspection was used without rebuilding the user's index.
+
+## Decisions and regression evidence
+
+1. **Complete-catalog save/reset and conflicts.** Full default-catalog draft initially failed with the reported overlapping defaults. Delivery contexts now distinguish login, chat entry, world camera, placement, map window, stack inventory and stockpile. GLOBAL still conflicts with gameplay contexts, but not the separate login screen. Exactly two original default pairs retain legacy contextual precedence: `areas` / `instantLogoutKB` (Ctrl+L), and `scm-srch` / `layout.undo` (Ctrl+Z, additionally exposed by character/code overlap detection). These are not general exclusions: changing either to another occupied gesture still conflicts. The complete catalog is cloned with in-memory stores and tested through unchanged save, unrelated edit/save, resetAll/save and clean draft state. Actual settings save now displays the conflict dialog and writes nothing instead of throwing an uncaught validation exception.
+
+2. **Runtime event overlap.** RED: captured Ctrl+E and legacy character Ctrl+E matched the same KeyEvent but produced no conflict; partially ignored masks and legacy `KeyBinding.modign` likewise failed. GREEN: conflicts compare intersecting event/modifier sets, normalize effective ignored keyboard modifiers, and compare character/code representations. Both registry and draft use the same context/default-sharing rules.
+
+3. **Held-item ground drop.** RED: the Ctrl+LMB default had no registered held-item path to world drop. `held.drop_on_ground` is explicit, default Ctrl+LMB, canonical server Ctrl. `DTarget.Drop` carries canonical modifiers across event derivation; ItemDrag dispatch reaches real MapView drop and its server message. Tests cover default, Shift+MMB rebinding, and disabling. Ordinary target drop remains a separate action.
+
+4. **Placement semantics.** RED: unmodified arrow action matched but StdPlace rejected its physical zero modifiers; rotation and positioning were partly uneditable. Unmodified Left/Right remain coarse rotation; separate Ctrl-arrow coarse and Shift-arrow fine actions preserve legacy combinations. Four wheel actions represent coarse/fine and left/right, preserving wheel magnitude and smooth fine movement. Canonical rotation parameters are Ctrl/coarse or Shift/fine, independent of captured modifiers. Separate held modes cover Alt neighbor snapping, Shift fine-grid positioning and the adjacent NStdPlace Ctrl edge-snap path. Actual MapView/StdPlace/NStdPlace tests cover defaults, rebind, disable, both directions, Ctrl/Shift/Alt combinations and all modifiers held after disable.
+
+5. **World mouse routing.** RED: rebound MMB reached the camera, and server button followed the physical button. A semantic Click now carries action identity, immutable default/logical server button and canonical modifiers; ping/queue hit handling consumes action identity rather than re-matching transformed input. World actions resolve before camera. Additional RED found during adjacent review: plain-LMB rebinding over a visible waypoint produced zero server messages because dragging stole it. Common world-action resolution now also takes precedence over basic waypoint, icon and hold-steering routing. Actual NMapView mouse handlers/server fallback are tested for context/ping/queue on all three buttons with both no modifiers and all modifiers, including a waypoint under the cursor. Modal tools retain their explicit routing.
+
+6. **Remaining gameplay paths.** The hardcoded held Ctrl+RMB fallback became `held.open_with_control`, preserving its unmodified logical RMB transport and allowing rebinding/disabling without fallback. Registered adjacent Alt+RMB stump removal and map queue-clear behavior. Removed unused stock FKeyBelt/NKeyBelt classes after a source-wide reference check found no callers; active NToolBelt remains registered. Fixed widget navigation/tooltip predicates were moved to a narrowly scoped InputNavigation helper whose exact predicates remain audited. Task 7/8 gameplay files have no allowlist entries.
+
+7. **Completeness audit.** RED: extraction stopped at `KeyEvent.VK_`; changing the key suffix passed the old exemption. Balanced extraction now keeps the entire condition, handles multiline/nested expressions and masks comments/literals. Exact condition/return entries have individual reasons, not prefix or line-number exemptions. Modifier access through `ui.modflags()`, integer/boolean aliases and helper-return predicates is detected. Configured helper calls are removed from a condition only before checking for additional raw clauses. Mutations of actual Widget source change the key, comparison operator and add a gameplay clause; every mutation fails classification. Further RED/GREEN checks cover boolean aliases, naked boolean helper returns and mixed configured/raw conditions. Audit suite: 12/12 passing.
+
+8. **Persistence validation.** RED: cross-family/corrupt persisted values survived. GestureBinding enforces its default non-key input family (NONE remains allowed), validates mouse buttons 1..20, normalized persisted wheel signs -1/+1, supported masks/match subsets and single supported modifier modes. Corrupt/cross-family values fall back and clear the bad preference. Writes happen before changing in-memory current state, so failed persistence does not silently change the live binding.
+
+## Minor findings
+
+- Wheel display uses captured negative direction as Up and positive as Down (RED/GREEN captured-display assertions).
+- Capture family feedback uses EN/RU resources, not literal enum names (RED: Russian expected `клавиша`, actual `key`). Category/context enums now hold only resource-key metadata and use a technical enum-name fallback; unused English/Russian/explicit-locale accessors were removed after checking all consumers. Translation and missing-resource fallback tests pass (RED: expected `INVENTORY`, actual hardcoded `Inventory`). No global localization infrastructure was changed.
+- Added listener reentrancy and stable order coverage, complete-catalog reset coverage, rollback restoration/dirty-state tests and secondary rollback-failure evidence. RED listener order was `[2, 1]`; queued snapshot notifications now preserve `[1, 2]` outside the registry lock. RED rollback lost its secondary exception; it is now suppressed on the primary failure while previously written bindings are restored.
+
+## Final verification
+
+- Focused hotkey/settings packages plus actual gameplay handlers: **90/90**, zero skipped/failed.
+- Full `rtk ant test`: **1691/1691**, zero skipped/aborted/failed; BUILD SUCCESSFUL.
+- `rtk ant`: BUILD SUCCESSFUL (11 seconds).
+- `rtk git diff --check`: clean.
+- Forbidden-source search for `BindingPanel`, `PointBind`, `NKeyBindButton`, `matchesLegacyHeldCtrlRmb`, `matchesFixedBeltKey`, `matchesMapDrop`, `englishLabel`, and `russianLabel`: no matches in `src`.
+
+The accepted baseline resource decoder/compiler/Unsafe warnings remain. No live game-server/GPU interactive smoke test was performed: handler tests replace only rendering picks and message transport, while executing actual dispatch, hit callbacks, StdPlace/NStdPlace adjustments, and settings validation. No known Important or Minor review finding remains; this is the remaining validation limitation.
+
+After verifying exact status, only generated outputs were cleaned: `bin/hafen.jar` restored from HEAD and newly generated `bin/hafen-panama.jar` removed. They are reproducible by `rtk ant`; no user source or resource edits were discarded.

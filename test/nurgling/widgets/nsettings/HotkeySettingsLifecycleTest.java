@@ -16,8 +16,66 @@ import java.nio.file.Paths;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class HotkeySettingsLifecycleTest {
+    @Test void captureInputFamilyFeedbackUsesTheSelectedLanguage() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        java.util.Locale previous = nurgling.i18n.L10n.getLocale();
+        try {
+            nurgling.i18n.L10n.setLocale(java.util.Locale.forLanguageTag("ru"));
+            String[] ids = {"world.placement.rotate_left", "held.drop_on_ground",
+                    "world.placement.fine_wheel_left", "world.placement.free_position"};
+            String[] labels = {"клавиша", "кнопка мыши", "колесо мыши", "модификатор"};
+            java.lang.reflect.Method method = nurgling.widgets.NHotkeyCapture.class.getDeclaredMethod("requiredTypes");
+            method.setAccessible(true);
+            for(int i = 0; i < ids.length; i++) {
+                Object capture = unsafe().allocateInstance(nurgling.widgets.NHotkeyCapture.class);
+                setObject(capture, "action", nurgling.hotkeys.Hotkeys.action(ids[i]));
+                assertEquals(labels[i], method.invoke(capture));
+            }
+        } finally {
+            nurgling.i18n.L10n.setLocale(previous);
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+    }
+    @Test void unresolvedConflictIsShownWithoutThrowingOrSaving() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        try {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        nurgling.hotkeys.InputGesture gesture = nurgling.hotkeys.InputGesture.mouse(1, 7, 0);
+        nurgling.hotkeys.PreferenceStore preferences = new nurgling.hotkeys.PreferenceStore() {
+            public String get(String k, String fallback) { return fallback; }
+            public void set(String k, String v) { throw new AssertionError("must not save conflicts"); }
+        };
+        for(String id : new String[]{"one", "two"})
+            registry.register(new HotkeyAction(id, null, id, nurgling.hotkeys.HotkeyCategory.WORLD,
+                    java.util.EnumSet.of(nurgling.hotkeys.HotkeyContext.WORLD_SURFACE),
+                    java.util.EnumSet.of(gesture.type()), new nurgling.hotkeys.GestureBinding(id, gesture, preferences),
+                    null, 0, false));
+        HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(page::save);
+        org.junit.jupiter.api.Assertions.assertNotNull(findField(HotkeySettings.class, "conflictBox").get(page));
+        } finally {
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+    }
     static {
         Resource.local().add(new Resource.FileSource(Paths.get("resources", "compiled", "res")));
+        try {
+            java.net.URLClassLoader resources = new java.net.URLClassLoader(new java.net.URL[]{
+                    Paths.get("bin", "builtin-res.jar").toUri().toURL(), Paths.get("bin", "hafen-res.jar").toUri().toURL()});
+            Resource.local().add(name -> {
+                java.io.InputStream stream = resources.getResourceAsStream("res/" + name + ".res");
+                if(stream == null) throw new java.io.FileNotFoundException(name);
+                return stream;
+            });
+        } catch(java.net.MalformedURLException e) { throw new AssertionError(e); }
     }
 
     @Test

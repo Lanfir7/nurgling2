@@ -98,7 +98,7 @@ public class WItem extends Widget implements DTarget {
 	if(info.size() < 1)
 		return(null);
 	// Reset tooltip cache if Shift state changed
-	if(ui.modshift != lastModshift) {
+	if(nurgling.hotkeys.InputNavigation.tooltipChanged(ui, lastModshift)) {
 		shorttip = longtip = null;
 		lastModshift = ui.modshift;
 	}

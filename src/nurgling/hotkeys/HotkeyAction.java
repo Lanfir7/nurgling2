@@ -78,6 +78,29 @@ public final class HotkeyAction {
         return type == InputGesture.Type.NONE || allowedTypes.contains(type);
     }
 
+    /** Retained legacy defaults: GameUI logout precedes the child area button;
+     * layout undo and action search share Ctrl+Z through contextual precedence.
+     * Only these original pairs of defaults are shared;
+     * assigning either action a different occupied gesture still conflicts. */
+    boolean sharesDefaultWith(HotkeyAction other, InputGesture mine, InputGesture theirs) {
+        boolean legacyPair = (id.equals("areas") && other.id.equals("instantLogoutKB")) ||
+                (id.equals("instantLogoutKB") && other.id.equals("areas")) ||
+                (id.equals("scm-srch") && other.id.equals("layout.undo")) ||
+                (id.equals("layout.undo") && other.id.equals("scm-srch"));
+        return legacyPair && mine.equals(defaultGesture()) && theirs.equals(other.defaultGesture());
+    }
+
+    boolean overlapsContext(HotkeyAction other) {
+        // Login is a separate root screen from gameplay globals.
+        if(contexts.contains(HotkeyContext.GLOBAL) || other.contexts.contains(HotkeyContext.GLOBAL)) {
+            Set<HotkeyContext> local = contexts.contains(HotkeyContext.GLOBAL) ? other.contexts : contexts;
+            return !local.contains(HotkeyContext.LOGIN);
+        }
+        for(HotkeyContext context : contexts)
+            if(other.contexts.contains(context)) return true;
+        return false;
+    }
+
     boolean metadataEquals(HotkeyAction other) {
         return other != null && id.equals(other.id) && Objects.equals(labelKey, other.labelKey) &&
                 Objects.equals(literalLabel, other.literalLabel) && category == other.category &&

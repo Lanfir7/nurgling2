@@ -33,9 +33,9 @@ class GameplayGestureCatalogTest {
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S | KeyMatch.M), HotkeyContext.WORLD_SURFACE,
                 Integer.valueOf(UI.MOD_META | UI.MOD_SHIFT));
         assertGesture(registry, "world.placement.rotate_left",
-                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_LEFT, 0)), HotkeyContext.WORLD_SURFACE, null);
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_LEFT, 0)), HotkeyContext.WORLD_PLACEMENT, Integer.valueOf(UI.MOD_CTRL));
         assertGesture(registry, "world.placement.rotate_right",
-                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_RIGHT, 0)), HotkeyContext.WORLD_SURFACE, null);
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_RIGHT, 0)), HotkeyContext.WORLD_PLACEMENT, Integer.valueOf(UI.MOD_CTRL));
         assertGesture(registry, "world.selection.rotate",
                 InputGesture.key(KeyMatch.forchar('R', 0)), HotkeyContext.WORLD_SURFACE, null);
         assertGesture(registry, "world.selection.toggle_grid",
@@ -71,15 +71,15 @@ class GameplayGestureCatalogTest {
                 InputGesture.key(KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C | KeyMatch.S)), HotkeyContext.COMBAT_UI, null);
 
         assertGesture(registry, "stockpile.transfer_all",
-                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.INVENTORY_BACKGROUND, null);
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.STOCKPILE, null);
         assertGesture(registry, "stockpile.transfer_out",
-                InputGesture.wheel(-1, KeyMatch.MODS, 0), HotkeyContext.INVENTORY_BACKGROUND, Integer.valueOf(0));
+                InputGesture.wheel(-1, KeyMatch.MODS, 0), HotkeyContext.STOCKPILE, Integer.valueOf(0));
         assertGesture(registry, "stockpile.transfer_in",
-                InputGesture.wheel(1, KeyMatch.MODS, 0), HotkeyContext.INVENTORY_BACKGROUND, Integer.valueOf(0));
+                InputGesture.wheel(1, KeyMatch.MODS, 0), HotkeyContext.STOCKPILE, Integer.valueOf(0));
         assertGesture(registry, "inventory.stack.transfer_to_main",
-                InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.INVENTORY_BACKGROUND, null);
+                InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.STACK_INVENTORY, null);
         assertGesture(registry, "inventory.stack.transfer_from_main",
-                InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.INVENTORY_BACKGROUND, null);
+                InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.STACK_INVENTORY, null);
         assertGesture(registry, "buddy.pull_mode", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S),
                 HotkeyContext.BUDDY_WINDOW, null);
         assertGesture(registry, "wound.find_treatment_storage", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C),
