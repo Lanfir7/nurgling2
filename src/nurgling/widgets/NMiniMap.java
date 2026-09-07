@@ -3620,7 +3620,7 @@ NMiniMap extends MiniMap {
                     // Если это метка квариарца
                     if("Quarryartz".equals(labeledMark.resourceType)) {
                         // Shift+ПКМ - удалить конкретную метку
-                        if((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                        if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;
@@ -3636,7 +3636,7 @@ NMiniMap extends MiniMap {
                         }
                         return true;
                     } else if (isForageMark(labeledMark)) {
-                        if ((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                        if (Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;
@@ -3644,7 +3644,7 @@ NMiniMap extends MiniMap {
                         return true;
                     } else if(isOreSpotMark(labeledMark)) {
                         // Если это метка спота руды - Shift+ПКМ удаляет
-                        if((ui.modflags() & UI.MOD_SHIFT) != 0) {
+                        if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);
                             return true;

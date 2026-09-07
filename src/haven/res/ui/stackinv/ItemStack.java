@@ -2,6 +2,7 @@
 package haven.res.ui.stackinv;
 
 import nurgling.hotkeys.Hotkeys;
+import nurgling.hotkeys.HotkeyAction;
 
 import haven.*;
 import nurgling.NWItem;
@@ -59,13 +60,17 @@ public class ItemStack extends Widget implements DTarget {
 	dirty = true;
     }
 
-    public boolean mousewheel(MouseWheelEvent ev) {
-	if(Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_TO_MAIN).current().matchesWheel(ev.a, ui.modflags()) ||
-	   Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_FROM_MAIN).current().matchesWheel(ev.a, ui.modflags())) {
+	public boolean mousewheel(MouseWheelEvent ev) {
+	HotkeyAction action = null;
+	if(Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_TO_MAIN).current().matchesWheel(ev.a, ui.modflags()))
+	    action = Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_TO_MAIN);
+	else if(Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_FROM_MAIN).current().matchesWheel(ev.a, ui.modflags()))
+	    action = Hotkeys.action(Hotkeys.INVENTORY_STACK_TRANSFER_FROM_MAIN);
+	if(action != null) {
 	    Inventory minv = getparent(GameUI.class).maininv;
-	    if(ev.a < 0)
+	    if(Hotkeys.INVENTORY_STACK_TRANSFER_TO_MAIN.equals(action.id()))
 		wdgmsg("invxf", minv.wdgid(), 1);
-	    else if(ev.a > 0)
+	    else
 		minv.wdgmsg("invxf", this.wdgid(), 1);
 	}
 	return(true);

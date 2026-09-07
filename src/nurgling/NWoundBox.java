@@ -389,8 +389,8 @@ public class NWoundBox extends WoundWnd.WoundBox {
 	    Coord cc = ev.c.sub(marg()).add(0, sb.val);
 	    for(Hover h : hv) {
 		if(h.area.contains(cc)) {
-		    if(WoundTreatments.isStorageSearchClick(ev.b, ui != null &&
-			    Hotkeys.action(Hotkeys.WOUND_FIND_TREATMENT_STORAGE).current().matchesMouse(ev.b, ui.modflags()))) {
+		    if(ui != null && Hotkeys.action(Hotkeys.WOUND_FIND_TREATMENT_STORAGE).current()
+			    .matchesMouse(ev.b, ui.modflags())) {
 			openStorageSearch(h.name);
 			return true;
 		    }

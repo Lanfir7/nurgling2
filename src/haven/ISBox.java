@@ -108,11 +108,11 @@ public class ISBox extends Widget implements DTarget {
     public boolean mousewheel(MouseWheelEvent ev) {
 		if(Hotkeys.action(Hotkeys.STOCKPILE_TRANSFER_OUT).current().matchesWheel(ev.a, ui.modflags())) {
 		    beginTransfer(StockpileStoragePolicy.TransferDirection.OUT_OF_PILE);
-		    wdgmsg("xfer2", -1, ui.modflags());
+		    wdgmsg("xfer2", -1, 0);
 		}
 		if(Hotkeys.action(Hotkeys.STOCKPILE_TRANSFER_IN).current().matchesWheel(ev.a, ui.modflags())) {
 		    beginTransfer(StockpileStoragePolicy.TransferDirection.INTO_PILE);
-		    wdgmsg("xfer2", 1, ui.modflags());
+		    wdgmsg("xfer2", 1, 0);
 		}
 	return(true);
     }

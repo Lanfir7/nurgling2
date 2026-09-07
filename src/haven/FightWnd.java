@@ -27,6 +27,7 @@
 package haven;
 
 import nurgling.hotkeys.Hotkeys;
+import nurgling.hotkeys.HotkeyAction;
 
 import java.util.*;
 import java.awt.Color;
@@ -184,9 +185,13 @@ public class FightWnd extends Widget {
 	    }
 
 	    public boolean mousewheel(MouseWheelEvent ev) {
-		if(Hotkeys.action(Hotkeys.COMBAT_ACTION_POINTS_INCREASE).current().matchesWheel(ev.a, ui.modflags()) ||
-		   Hotkeys.action(Hotkeys.COMBAT_ACTION_POINTS_DECREASE).current().matchesWheel(ev.a, ui.modflags())) {
-		    setu(item.u - ev.a);
+		HotkeyAction action = null;
+		if(Hotkeys.action(Hotkeys.COMBAT_ACTION_POINTS_INCREASE).current().matchesWheel(ev.a, ui.modflags()))
+		    action = Hotkeys.action(Hotkeys.COMBAT_ACTION_POINTS_INCREASE);
+		else if(Hotkeys.action(Hotkeys.COMBAT_ACTION_POINTS_DECREASE).current().matchesWheel(ev.a, ui.modflags()))
+		    action = Hotkeys.action(Hotkeys.COMBAT_ACTION_POINTS_DECREASE);
+		if(action != null) {
+		    setu(item.u + (Hotkeys.COMBAT_ACTION_POINTS_INCREASE.equals(action.id()) ? 1 : -1));
 		    return(true);
 		}
 		return(super.mousewheel(ev));

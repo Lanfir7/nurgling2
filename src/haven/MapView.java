@@ -2429,9 +2429,6 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		if(NMapView.isRecordingRoutePoint) {
 			return;
 		}
-	    Object[] args = {pc, mc.floor(posres), clickb, modflags};
-	    if(inf != null)
-		args = Utils.extend(args, inf.clickargs());
 		if(inf!=null)
 		{
 			if(inf.ci instanceof Composited.CompositeClick)
@@ -2462,9 +2459,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			} else if(MapView.this instanceof nurgling.NMapView) {
 				if(((nurgling.NMapView)MapView.this).sendPointPing(mc))
 					return;
-			}
 		}
-
+		}
 	    if(MapView.this instanceof nurgling.NMapView &&
 		Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).current().matchesMouse(clickb, modflags)) {
 		Integer canonical = Hotkeys.action(Hotkeys.WORLD_QUEUE_WAYPOINT).canonicalMods();
@@ -2475,6 +2471,9 @@ public class MapView extends PView implements DTarget, Console.Directory {
 					return;
 			}
 		}
+	    Object[] args = {pc, mc.floor(posres), clickb, modflags};
+	    if(inf != null)
+		args = Utils.extend(args, inf.clickargs());
 		
 		if(clickedGob != null) {
 			monitoring.StockpileStorageTracker.onGob(clickedGob.gob);

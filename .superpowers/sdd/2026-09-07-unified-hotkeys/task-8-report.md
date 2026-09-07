@@ -23,3 +23,25 @@
 
 - Existing resource-processing and test-fixture diagnostics remain noisy but are non-failing and pre-existing.
 - Task 9 source-audit and localization-completeness work remains deferred as requested.
+
+## Review fix round 1
+
+### TDD evidence
+
+- Added `Task8ReviewFixTest` before the production fixes.
+- RED run: `ant test` found 3 failing focused assertions for the unresolved action dispatch, map gates, and click-argument ordering.
+- GREEN run: focused `Task8ReviewFixTest` passed 3/3, followed by the full suite passing 1,658/1,658.
+
+### Fixes and checks
+
+- Wound storage search now dispatches the resolved `wound.find_treatment_storage` mouse action, including default Ctrl+RMB.
+- Combat points and inventory stack wheel handlers execute the matched action ID semantics; stockpile `xfer2` receives canonical modifier flags `0`.
+- Map waypoint gates and labeled-marker deletion use catalog actions, and map click arguments are built after canonical modifier selection.
+- `ant test`: PASS (1,658/1,658).
+- `ant`: PASS.
+- `git diff --check`: PASS.
+
+### Concerns
+
+- Resource processing and test-fixture diagnostics remain noisy but non-failing and pre-existing.
+- Task 9 source-audit and localization-completeness work remains deferred as requested.
