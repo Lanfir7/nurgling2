@@ -10,6 +10,8 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 
 /** Definitions for the legacy key bindings exposed by the unified settings UI. */
 public final class HotkeyCatalog {
@@ -18,6 +20,17 @@ public final class HotkeyCatalog {
     private static final Map<String, HotkeyBinding> GESTURE_WRAPPERS = new HashMap<>();
 
     private HotkeyCatalog() {
+    }
+
+    /** Literal IDs owned by the static catalog, excluding runtime registrations. */
+    public static Set<String> knownStaticIds() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registerCore(registry);
+        Set<String> ids = new LinkedHashSet<>();
+        for(HotkeyAction action : registry.snapshot())
+            if(!action.dynamic())
+                ids.add(action.id());
+        return Collections.unmodifiableSet(ids);
     }
 
     /** Register every core action. Repeating this call is safe. */
@@ -68,7 +81,7 @@ public final class HotkeyCatalog {
         core(registry, binding("mapwnd/hmark", KeyMatch.forchar('M', KeyMatch.C)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("mapwnd/compact", KeyMatch.forchar('A', KeyMatch.M)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("mapwnd/prov", KeyMatch.nil), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
-        String[] minimap = {"mwnd_night", "mwnd_fog", "mwnd_resourcetimers", "ol-eye", "ol-mgrid", "ol-mpath", "ol-treeharv", "ol-hidenature", "ol-minesup"};
+        String[] minimap = {"mwnd_night", "mwnd_fog", "mwnd_resourcetimers", "ol-eye", "ol-mgrid", "ol-mpath", "ol-treeharv", "ol-hidenature", "ol-minesup", "ol-showzones", "ol-animals", "ol-flooroverlay"};
         for(String id : minimap)
             core(registry, binding(id, KeyMatch.nil), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("quickaction", KeyMatch.forcode(KeyEvent.VK_Q, 0)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
@@ -273,7 +286,7 @@ public final class HotkeyCatalog {
         InputGesture.Type type = defaultGesture.type();
         if(type == InputGesture.Type.KEY) {
             KeyBinding kb = KeyBinding.get(id, defaultGesture.key());
-            registry.register(new HotkeyAction(id, null, id, category, contexts,
+            registry.register(new HotkeyAction(id, labelKey(id), null, category, contexts,
                     KEY, wrapper(kb), canonicalMods, order[0]++, false));
             return;
         }
@@ -282,7 +295,7 @@ public final class HotkeyCatalog {
             binding = new GestureBinding(id, defaultGesture, PreferenceStore.SYSTEM);
             GESTURE_WRAPPERS.put(id, binding);
         }
-        registry.register(new HotkeyAction(id, null, id, category, contexts,
+        registry.register(new HotkeyAction(id, labelKey(id), null, category, contexts,
                 EnumSet.of(type), binding, canonicalMods, order[0]++, false));
     }
 
@@ -306,7 +319,7 @@ public final class HotkeyCatalog {
                              HotkeyCategory category, HotkeyContext context, int[] order) {
         if(binding == null)
             return;
-        registry.register(new HotkeyAction(binding.id, null, binding.id, category,
+        registry.register(new HotkeyAction(binding.id, labelKey(binding.id), null, category,
                 EnumSet.of(context), KEY, wrapper(binding), null, order[0]++, false));
     }
 
@@ -319,6 +332,10 @@ public final class HotkeyCatalog {
         String text = label == null ? binding.id : label;
         registry.register(new HotkeyAction(binding.id, null, text, category,
                 EnumSet.of(context), KEY, wrapper(binding), null, Integer.MAX_VALUE, true));
+    }
+
+    private static String labelKey(String id) {
+        return "hotkeys.action." + id;
     }
 
     private static KeyBinding binding(String id) {

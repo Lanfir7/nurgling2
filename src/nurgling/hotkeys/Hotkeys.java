@@ -2,6 +2,8 @@ package nurgling.hotkeys;
 
 import haven.KeyMatch;
 
+import java.awt.event.KeyEvent;
+
 /** Entry point for the unified keyboard-action registry. */
 public final class Hotkeys {
     public static final String INV = "inv";
@@ -13,6 +15,7 @@ public final class Hotkeys {
     public static final String CAM_LEFT = "cam-left";
     public static final String MAPWND_PROV = "mapwnd/prov";
     public static final String MAKE_ONE = "make/one";
+    public static final String MAKE_ALL = "make/all";
     public static final String FIGHT_0 = "fgt/0";
     public static final String QUICK_ACTION = "quickaction";
     public static final String MINIMAP_FOG = "mwnd_fog";
@@ -125,5 +128,16 @@ public final class Hotkeys {
     /** Plain LMB path recording must yield to a matching marker-delete action. */
     public static boolean allowsForagerPathRecording(int button, int mods) {
         return button == 1 && (mods & KeyMatch.MODS) == 0 && !matchesMapMarkerDelete(button, mods);
+    }
+
+    /** Match a registered keyboard action, including runtime belt registrations. */
+    public static boolean matchesKey(String id, KeyEvent event) {
+        HotkeyAction action = registry().find(id);
+        return action != null && action.current().matches(event, 0);
+    }
+
+    /** Preserve the fixed Ctrl modifier used by the held-item drop target path. */
+    public static boolean matchesMapDrop(int mods) {
+        return (mods & haven.UI.MOD_CTRL) != 0;
     }
 }

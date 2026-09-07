@@ -2606,11 +2606,11 @@ public class MapView extends PView implements DTarget, Console.Directory {
     public boolean drop(final Coord cc, Coord ul) {
 	new Hittest(cc) {
 	    public void hit(Coord pc, Coord2d mc, ClickData inf) {
-			if(ui.modctrl)
+			if(Hotkeys.matchesMapDrop(ui.modflags()))
 				wdgmsg("drop", pc, mc.floor(posres), ui.modflags());
 	    }
 	}.run();
-	return(ui.modctrl);
+	return(Hotkeys.matchesMapDrop(ui.modflags()));
     }
     
     public boolean iteminteract(Coord cc, Coord ul) {

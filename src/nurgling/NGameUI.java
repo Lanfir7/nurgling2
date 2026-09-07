@@ -1379,7 +1379,7 @@ public class NGameUI extends GameUI
                 return false;
             }
             for (int i = 0; i < beltkeys.size(); i++) {
-                if ((beltkeys.get(i).key != null && ev.code == beltkeys.get(i).key.code && ui.modflags() == beltkeys.get(i).key.modmatch)) {
+                if (beltkeys.get(i).key != null && Hotkeys.matchesKey(beltkeys.get(i).kb.id, ev.awt)) {
                     keyact(slot(i));
                     return true;
                 }

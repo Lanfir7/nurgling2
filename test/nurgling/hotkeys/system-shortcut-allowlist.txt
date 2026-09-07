@@ -1,0 +1,61 @@
+# Fixed system/navigation shortcuts. Entries are exact normalized audit records.
+haven/Charlist.java|if(ev.code|list navigation
+haven/Charlist.java|else if(ev.code|list navigation
+haven/ChatUI.java|if(!ui.modshift|chat history navigation
+haven/ChatUI.java|if(M && (ev.code|chat history navigation
+haven/ChatUI.java|else if(M && (ev.code|chat history navigation
+haven/DynresWindow.java|if(((ev.c == 'v') && (ev.mods|paste editing
+haven/GameUI.java|if(ev.code == KeyEvent.VK_|system navigation
+haven/GameUI.java|if(ev.code|system navigation
+haven/GameUI.java|if((ev.code < KeyEvent.VK_|system navigation
+haven/iosys/tk/AWTToolkit.java|if(ec == java.awt.event.KeyEvent.VK_|low-level event conversion
+haven/iosys/tk/AWTToolkit.java|if(pc != java.awt.event.KeyEvent.VK_|low-level event conversion
+haven/KeyMatch.java|if(code == KeyEvent.VK_|binding capture
+haven/ReadLine.java|if(ev.getKeyCode() == KeyEvent.VK_|editing
+haven/ReadLine.java|else if(ev.getKeyCode() == KeyEvent.VK_|editing
+haven/ReadLine.java|else if((code == KeyEvent.VK_|editing
+haven/render/jogl/Test.java|if(ev.getKeyCode() == KeyEvent.VK_|developer debug key
+haven/res/ui/tt/slots/ISlots.java|if(!(owner instanceof NGItem) || ((owner).ui.modshift|expanded tooltip
+haven/Searchbox.java|if((ev.mods|search editing
+haven/Searchbox.java|if((ev.mods|search editing
+haven/Searchbox.java|else if(code == KeyEvent.VK_|search editing
+haven/SSearchBox.java|if((ev.mods|search editing
+haven/SSearchBox.java|else if(ev.code|search editing
+haven/SSearchBox.java|else if(code == KeyEvent.VK_|search editing
+haven/Widget.java|if(code == KeyEvent.VK_|focus traversal
+haven/Widget.java|else if(code == KeyEvent.VK_|focus traversal
+haven/Widget.java|if((ev.mods|editing
+haven/Window.java|if(ev.code == java.awt.event.KeyEvent.VK_|system navigation
+haven/WItem.java|if(ui.modshift|expanded tooltip
+nurgling/NUI.java|if (ev.getKeyCode() == KeyEvent.VK_|system navigation
+nurgling/widgets/ActionConfigWindow.java|if (ev.code == KeyEvent.VK_|system navigation
+nurgling/widgets/ActionConfigWindow.java|else if (ev.code == KeyEvent.VK_|system navigation
+nurgling/widgets/AgentWindow.java|if (ev.code == java.awt.event.KeyEvent.VK_|system navigation
+nurgling/widgets/AutoLogoutPopup.java|if (ev.code == KeyEvent.VK_ESCAPE || ev.code == KeyEvent.VK_|system navigation
+nurgling/widgets/craftatlas/CraftAtlasRecipeChooser.java|if(ev.code == KeyEvent.VK_|search field
+nurgling/widgets/craftatlas/CraftAtlasWindow.java|if(ev.code == KeyEvent.VK_|search field
+nurgling/widgets/craftatlas/CraftAtlasWindow.java|if(ev.code == KeyEvent.VK_F && (ev.mods|search field
+nurgling/widgets/LocalizedResourceTimerDialog.java|if(ev.code == java.awt.event.KeyEvent.VK_|system navigation
+nurgling/widgets/MapToolsWindow.java|if(ev.code == java.awt.event.KeyEvent.VK_|system navigation
+nurgling/widgets/NBasePlannerWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_|system navigation
+nurgling/widgets/NBasePlannerWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_|system navigation
+nurgling/widgets/NCraftWindow.java|if(visible && ev.code == 9 && (ev.mods|focus traversal
+nurgling/widgets/NQuantitySelector.java|if (ev.code == java.awt.event.KeyEvent.VK_|editing
+nurgling/widgets/NQuantitySelector.java|else if (ev.code == java.awt.event.KeyEvent.VK_|editing
+nurgling/widgets/nsettings/HotkeyCapturePolicy.java|if(keyCode == KeyEvent.VK_|binding capture
+nurgling/widgets/nsettings/HotkeyCapturePolicy.java|if(keyCode == KeyEvent.VK_|binding capture
+nurgling/widgets/nsettings/HotkeyCapturePolicy.java|if(keyCode == KeyEvent.VK_|binding capture
+nurgling/widgets/nsettings/HotkeyCapturePolicy.java|if(keyCode == KeyEvent.VK_|if(keyCode == KeyEvent.VK_|binding capture
+nurgling/widgets/NSettingsWindow.java|if(ev.code == KeyEvent.VK_|system navigation
+nurgling/widgets/NSettingsWindow.java|if(ev.code == KeyEvent.VK_|system navigation
+nurgling/widgets/NTextArea.java|else if ((code == KeyEvent.VK_|editing
+nurgling/widgets/NTextArea.java|if ((code == KeyEvent.VK_|editing
+nurgling/widgets/SearchWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_|search field
+nurgling/widgets/SearchWidget.java|if (ev.code == java.awt.event.KeyEvent.VK_|search field
+nurgling/widgets/StarvationAlertPopup.java|if (ev.code == KeyEvent.VK_ESCAPE || ev.code == KeyEvent.VK_|system navigation
+nurgling/widgets/TerrainSearchPanel.java|if(ev.code == java.awt.event.KeyEvent.VK_|search field
+nurgling/widgets/TextInputWindow.java|if (ev.code == KeyEvent.VK_|editing
+nurgling/widgets/TextInputWindow.java|else if (ev.code == KeyEvent.VK_|editing
+nurgling/widgets/TrellisDirectionDialog.java|if(ev.code == java.awt.event.KeyEvent.VK_|system navigation
+nurgling/widgets/TunnelingDialog.java|if (ev.code == KeyEvent.VK_|system navigation
+nurgling/widgets/TunnelingDialog.java|if (ev.code == java.awt.event.KeyEvent.VK_|system navigation
