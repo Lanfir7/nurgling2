@@ -1,7 +1,9 @@
 package nurgling.hotkeys.presets;
 
+import haven.KeyMatch;
 import nurgling.hotkeys.HotkeyAction;
 import nurgling.hotkeys.HotkeyBinding;
+import nurgling.hotkeys.HotkeyCatalog;
 import nurgling.hotkeys.HotkeyCategory;
 import nurgling.hotkeys.HotkeyContext;
 import nurgling.hotkeys.HotkeyRegistry;
@@ -50,8 +52,37 @@ class HotkeyPresetCatalogTest {
 
         List<HotkeyPreset> builtIns = HotkeyPresetCatalog.builtIns(registry);
 
-        assertEquals(1, builtIns.size());
+        assertEquals(2, builtIns.size());
+        assertEquals(1, builtIns.get(1).gestures().size());
         assertThrows(UnsupportedOperationException.class, builtIns::clear);
+    }
+
+    @Test void enderPresetUsesEnderBindingsAndKeepsNurglingOnlyDefaults() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyCatalog.registerCore(registry);
+
+        HotkeyPreset preset = null;
+        for(HotkeyPreset candidate : HotkeyPresetCatalog.builtIns(registry)) {
+            if("builtin.ender".equals(candidate.id())) {
+                preset = candidate;
+                break;
+            }
+        }
+
+        assertNotNull(preset);
+        assertEquals("builtin.ender", preset.id());
+        assertEquals("Ender", preset.name());
+        assertTrue(preset.builtIn());
+        assertEquals(InputGesture.key(KeyMatch.forchar('S', KeyMatch.C)), preset.gesture("screenshot"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('A', KeyMatch.M)), preset.gesture("scm-srch"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('X', KeyMatch.M)), preset.gesture("craft-atlas"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('H', KeyMatch.C)), preset.gesture("togglebb"));
+        assertEquals(InputGesture.none(), preset.gesture("togglenature"));
+        assertEquals(InputGesture.none(), preset.gesture("cleardmg"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('L', KeyMatch.C)), preset.gesture("areas"));
+        assertEquals(InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S),
+                preset.gesture("item.interact.shift"));
+        assertEquals(registry.snapshot().size(), preset.gestures().size());
     }
 
     private static HotkeyAction action(String id, InputGesture gesture) {

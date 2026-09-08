@@ -10,6 +10,20 @@ import java.util.EnumSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GameplayGestureCatalogTest {
+    @Test void shiftRightClickOnInventoryItemKeepsVanillaSeedInteraction() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyCatalog.registerCore(registry);
+
+        HotkeyAction action = new HotkeyResolver(registry).firstMouse(
+                HotkeyContext.INVENTORY_ITEM_GENERIC, 3, UI.MOD_SHIFT);
+
+        assertNotNull(action);
+        assertEquals("item.interact.shift", action.id());
+        assertEquals(Integer.valueOf(UI.MOD_SHIFT), action.canonicalMods());
+        assertFalse(action.defaultGesture().matchesMouse(3, 0));
+        assertFalse(action.defaultGesture().matchesMouse(3, UI.MOD_CTRL));
+    }
+
     @Test void shiftRightClickOnHeldItemLoadsOneFuelAtATime() {
         HotkeyRegistry registry = new HotkeyRegistry();
         HotkeyCatalog.registerCore(registry);

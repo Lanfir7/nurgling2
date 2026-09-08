@@ -197,6 +197,7 @@ public class WItem extends Widget implements DTarget {
 	    monitoring.StockpileStorageTracker.rememberHand(this);
 	    item.wdgmsg("take", ev.c);
 	} else if(nurgling.hotkeys.Hotkeys.ITEM_INTERACT.equals(id) ||
+		nurgling.hotkeys.Hotkeys.ITEM_INTERACT_SHIFT.equals(id) ||
 		nurgling.hotkeys.Hotkeys.ITEM_INTERACT_ALL.equals(id)) {
 	    item.wdgmsg("iact", ev.c, action.canonicalMods() == null ? 0 : action.canonicalMods());
 	    NUtils.getUI().core.setLastAction(this);

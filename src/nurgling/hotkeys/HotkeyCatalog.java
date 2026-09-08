@@ -280,6 +280,9 @@ public final class HotkeyCatalog {
                 itemContexts, null, order);
         gesture(registry, "item.interact", InputGesture.mouse(3, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 itemContexts, Integer.valueOf(0), order);
+        gesture(registry, Hotkeys.ITEM_INTERACT_SHIFT,
+                InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
+                itemContexts, Integer.valueOf(haven.UI.MOD_SHIFT), order);
         gesture(registry, Hotkeys.ITEM_INTERACT_ALL,
                 InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.INVENTORY,
                 itemContexts, Integer.valueOf(haven.UI.MOD_CTRL), order);

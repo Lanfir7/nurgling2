@@ -22,6 +22,7 @@ public final class Hotkeys {
     public static final String SESSION_NEXT = "session-next";
     public static final String ITEM_TAKE = "item.take";
     public static final String ITEM_INTERACT = "item.interact";
+    public static final String ITEM_INTERACT_SHIFT = "item.interact.shift";
     public static final String ITEM_INTERACT_ALL = "item.interact.all";
     public static final String ITEM_TRANSFER_ONE = "item.transfer.one";
     public static final String ITEM_TRANSFER_ALL = "item.transfer.all";
