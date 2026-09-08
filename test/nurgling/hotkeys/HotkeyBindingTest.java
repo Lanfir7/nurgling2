@@ -2,6 +2,7 @@ package nurgling.hotkeys;
 
 import haven.KeyBinding;
 import haven.KeyMatch;
+import haven.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.awt.event.KeyEvent;
@@ -56,6 +57,28 @@ class HotkeyBindingTest {
         binding.reset();
         assertEquals(def, binding.current());
         assertEquals("", prefs.get("gesturebind/item-transfer-reset", "missing"));
+    }
+
+    @Test void legacyCheckpointPreservesExplicitOverrideEqualToDefault() {
+        String id = "test/unified-hotkeys/checkpoint-explicit-default";
+        String preferenceKey = "keybind/" + id;
+        KeyMatch defaultKey = KeyMatch.forcode(KeyEvent.VK_Q, KeyMatch.C);
+        KeyBinding key = KeyBinding.get(id, defaultKey);
+        try {
+            key.set(defaultKey);
+            KeyBindingHotkey binding = new KeyBindingHotkey(key);
+            Object checkpoint = binding.checkpoint();
+            key.set(KeyMatch.forcode(KeyEvent.VK_E, 0));
+
+            binding.restore(checkpoint);
+
+            assertTrue(key.set(), "explicit default override must remain explicit");
+            assertEquals(KeyMatch.reduce(defaultKey), Utils.getpref(preferenceKey, null));
+            assertEquals(KeyEvent.VK_Q, key.key.code);
+        } finally {
+            Utils.setpref(preferenceKey, null);
+            key.key = null;
+        }
     }
 
     private static class MemoryPreferences implements PreferenceStore {

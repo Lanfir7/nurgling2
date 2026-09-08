@@ -206,6 +206,12 @@ class HotkeySettingsLifecycleTest {
             org.junit.jupiter.api.Assertions.assertTrue(window.showPage(NSettingsWindow.HOTKEY_PAGE_ID));
             assertEquals(listenersBefore + 1, registry.listenerCount());
 
+            HotkeySettings page = (HotkeySettings)window.currentPanel;
+            int clipboardGeneration = page.controls().clipboardGeneration();
+            window.hide();
+            assertTrue(page.controls().clipboardGeneration() > clipboardGeneration,
+                    "hiding settings must invalidate pending clipboard callbacks");
+
             org.junit.jupiter.api.Assertions.assertTrue(window.showPage(NSettingsWindow.HOTKEY_PAGE_ID));
             assertEquals(listenersBefore + 1, registry.listenerCount(),
                     "reopening the page must reuse the same instance");

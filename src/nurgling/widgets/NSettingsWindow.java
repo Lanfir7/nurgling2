@@ -312,7 +312,7 @@ public class NSettingsWindow extends Widget {
 
     private void releaseActiveCaptures() {
         if(currentPanel instanceof HotkeySettings)
-            ((HotkeySettings)currentPanel).cancelCaptures();
+            ((HotkeySettings)currentPanel).cancelTransientActions();
     }
 
     private void disposeHotkeyPages() {

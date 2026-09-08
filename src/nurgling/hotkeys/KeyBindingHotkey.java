@@ -2,6 +2,7 @@ package nurgling.hotkeys;
 
 import haven.KeyBinding;
 import haven.KeyMatch;
+import haven.Utils;
 
 public final class KeyBindingHotkey implements HotkeyBinding {
     private final KeyBinding binding;
@@ -50,5 +51,31 @@ public final class KeyBindingHotkey implements HotkeyBinding {
 
     public void reset() {
         binding.set(null);
+    }
+
+    @Override
+    public Object checkpoint() {
+        String encoded = Utils.getpref("keybind/" + binding.id, null);
+        return new Snapshot(encoded != null, encoded, binding.key);
+    }
+
+    @Override
+    public void restore(Object checkpoint) {
+        if(!(checkpoint instanceof Snapshot))
+            throw new IllegalArgumentException("foreign key binding checkpoint");
+        Snapshot saved = (Snapshot)checkpoint;
+        Utils.setpref("keybind/" + binding.id, saved.existed ? saved.encoded : null);
+        binding.key = saved.key;
+    }
+
+    private static final class Snapshot {
+        final boolean existed;
+        final String encoded;
+        final KeyMatch key;
+        Snapshot(boolean existed, String encoded, KeyMatch key) {
+            this.existed = existed;
+            this.encoded = encoded;
+            this.key = key;
+        }
     }
 }

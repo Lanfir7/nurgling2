@@ -58,6 +58,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         controls = add(new HotkeyPresetControls(width, new HotkeyPresetControls.Actions() {
             public List<HotkeyPreset> presets() { return model.presets().presets(); }
             public String selectedPresetId() { return model.presets().selected().id(); }
+            public void validateImportCode(String code) { model.validateImportCode(code); }
             public void select(String presetId) { model.selectPreset(presetId); rebuildRows(); }
             public void discardChanges() { model.cancel(); }
             public void create(String name) { model.createPreset(name); rebuildRows(); }
@@ -144,6 +145,8 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     @Override
     public void load() {
+        controls.cancelTransientActions();
+        controls.resumeLifecycle();
         model.cancel();
         controls.refreshSelection();
         conflictsOnly.a = model.conflictsOnly();
@@ -196,6 +199,12 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         }
     }
 
+    public void cancelTransientActions() {
+        cancelCaptures();
+        if(controls != null)
+            controls.cancelTransientActions();
+    }
+
     /** Idempotent lifecycle cleanup used when an owning settings window is destroyed. */
     public void disposeLifecycle() {
         cancelCaptures();
@@ -213,7 +222,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     @Override
     public void hide() {
-        cancelCaptures();
+        cancelTransientActions();
         super.hide();
     }
 
