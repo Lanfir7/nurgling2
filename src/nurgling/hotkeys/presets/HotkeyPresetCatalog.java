@@ -31,7 +31,7 @@ public final class HotkeyPresetCatalog {
         if(registry == null) throw new NullPointerException("registry");
         Map<String, InputGesture> values = snapshot(registry);
         replace(values, "screenshot", InputGesture.key(KeyMatch.forchar('S', KeyMatch.C)));
-        replace(values, "scm-srch", InputGesture.key(KeyMatch.forchar('A', KeyMatch.M)));
+        replace(values, "scm-srch", InputGesture.none());
         replace(values, "craft-atlas", InputGesture.key(KeyMatch.forchar('X', KeyMatch.M)));
         replace(values, "togglebb", InputGesture.key(KeyMatch.forchar('H', KeyMatch.C)));
         replace(values, "togglenature", InputGesture.none());

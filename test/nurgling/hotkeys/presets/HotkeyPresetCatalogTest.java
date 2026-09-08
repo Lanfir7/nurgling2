@@ -6,6 +6,7 @@ import nurgling.hotkeys.HotkeyBinding;
 import nurgling.hotkeys.HotkeyCatalog;
 import nurgling.hotkeys.HotkeyCategory;
 import nurgling.hotkeys.HotkeyContext;
+import nurgling.hotkeys.HotkeyDraftModel;
 import nurgling.hotkeys.HotkeyRegistry;
 import nurgling.hotkeys.InputGesture;
 import org.junit.jupiter.api.Test;
@@ -74,7 +75,7 @@ class HotkeyPresetCatalogTest {
         assertEquals("Ender", preset.name());
         assertTrue(preset.builtIn());
         assertEquals(InputGesture.key(KeyMatch.forchar('S', KeyMatch.C)), preset.gesture("screenshot"));
-        assertEquals(InputGesture.key(KeyMatch.forchar('A', KeyMatch.M)), preset.gesture("scm-srch"));
+        assertEquals(InputGesture.none(), preset.gesture("scm-srch"));
         assertEquals(InputGesture.key(KeyMatch.forchar('X', KeyMatch.M)), preset.gesture("craft-atlas"));
         assertEquals(InputGesture.key(KeyMatch.forchar('H', KeyMatch.C)), preset.gesture("togglebb"));
         assertEquals(InputGesture.none(), preset.gesture("togglenature"));
@@ -83,6 +84,17 @@ class HotkeyPresetCatalogTest {
         assertEquals(InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S),
                 preset.gesture("item.interact.shift"));
         assertEquals(registry.snapshot().size(), preset.gestures().size());
+    }
+
+    @Test void everyBuiltInPresetCanBeAppliedWithoutHotkeyConflicts() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyCatalog.registerCore(registry);
+
+        for(HotkeyPreset preset : HotkeyPresetCatalog.builtIns(registry)) {
+            HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+            draft.stageSnapshot(preset.gestures());
+            assertTrue(draft.conflicts().isEmpty(), preset.name());
+        }
     }
 
     private static HotkeyAction action(String id, InputGesture gesture) {
