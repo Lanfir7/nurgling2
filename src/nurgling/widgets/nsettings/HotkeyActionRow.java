@@ -22,6 +22,7 @@ public class HotkeyActionRow extends Panel {
     private final Button reset;
     private final String actionText;
     private final String contextText;
+    private int fittedLabelWidth = -1;
 
     public HotkeyActionRow(int width, HotkeyAction action, InputGesture gesture,
                            Consumer<HotkeyCapturePolicy.Decision> captureSink,
@@ -43,6 +44,11 @@ public class HotkeyActionRow extends Panel {
 
     public NHotkeyCapture capture() { return capture; }
     public Button resetButton() { return reset; }
+    public HotkeyAction action() { return capture.action(); }
+
+    public void setGesture(InputGesture gesture) {
+        capture.setGesture(gesture);
+    }
 
     @Override
     public void resize(Coord size) {
@@ -52,8 +58,12 @@ public class HotkeyActionRow extends Panel {
         int captureX = Math.max(0, size.x - capture.sz.x - reset.sz.x - UI.scale(8));
         capture.move(Coord.of(captureX, (size.y - capture.sz.y) / 2));
         reset.move(Coord.of(size.x - reset.sz.x, (size.y - reset.sz.y) / 2));
-        fitLabel(actionLabel, actionText, captureX - UI.scale(4));
-        fitLabel(contextLabel, contextText, captureX - UI.scale(4));
+        int labelWidth = captureX - UI.scale(4);
+        if(labelWidth != fittedLabelWidth) {
+            fitLabel(actionLabel, actionText, labelWidth);
+            fitLabel(contextLabel, contextText, labelWidth);
+            fittedLabelWidth = labelWidth;
+        }
     }
 
     private static void fitLabel(Label label, String fullText, int maxWidth) {

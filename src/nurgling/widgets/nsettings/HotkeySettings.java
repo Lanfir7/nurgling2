@@ -5,6 +5,7 @@ import haven.CheckBox;
 import haven.Coord;
 import haven.Label;
 import haven.Scrollport;
+import haven.Text;
 import haven.TextEntry;
 import haven.UI;
 import haven.Widget;
@@ -38,10 +39,17 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     private final Button resetCategory;
     private final Button resetAll;
     private final List<Button> tabButtons = new ArrayList<>();
+    private final List<HotkeyActionRow> actionRows = new ArrayList<>();
     private final Consumer<List<HotkeyAction>> registryListener = ignored -> rebuildRows();
     private boolean registryListening;
     private boolean presetWarningShown;
     private Widget conflictBox;
+    private Label conflictLabel;
+    private String conflictText;
+    private Button conflictReplace;
+    private Button conflictCancel;
+    private int conflictReplaceWidth;
+    private int conflictCancelWidth;
     private int contentWidth;
 
     public HotkeySettings() {
@@ -131,8 +139,6 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         rows = rowsScroll.cont;
         contentWidth = width;
         resize(Coord.of(width, UI.scale(530)));
-        layoutTabs();
-        rebuildRows();
     }
 
     public HotkeySettingsModel model() { return model; }
@@ -149,6 +155,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     @Override
     public void load() {
+        closeConflict();
         controls.cancelTransientActions();
         controls.resumeLifecycle();
         model.cancel();
@@ -269,6 +276,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         rowsScroll.resize(Coord.of(Math.max(1, geometry.rows.w), Math.max(1, geometry.rows.h)));
         contentWidth = rowsScroll.cont.sz.x;
         rebuildRows();
+        layoutConflict();
     }
 
     private void moveCategory(int direction) {
@@ -303,21 +311,46 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         if(rows == null)
             return;
         controls.refreshSelection();
-        for(Widget child : new ArrayList<>(rows.children()))
-            child.destroy();
+        List<HotkeyAction> actions = model.visibleActions();
+        boolean reusable = actionRows.size() == actions.size();
+        if(reusable) {
+            for(int i = 0; i < actions.size(); i++) {
+                HotkeyActionRow row = actionRows.get(i);
+                if(row.parent != rows || !row.action().id().equals(actions.get(i).id())) {
+                    reusable = false;
+                    break;
+                }
+            }
+        }
+        if(!reusable) {
+            for(Widget child : new ArrayList<>(rows.children()))
+                child.destroy();
+            actionRows.clear();
+        }
         int y = 0;
-        for(final HotkeyAction action : model.visibleActions()) {
-            final HotkeyActionRow row = new HotkeyActionRow(contentWidth, action,
-                    model.draft().effective(action.id()),
-                    decision -> handleCapture(action, decision),
-                    () -> {
-                        model.reset(action.id());
-                        rebuildRows();
-                    });
-            rows.add(row, Coord.of(0, y));
+        for(int i = 0; i < actions.size(); i++) {
+            final HotkeyAction action = actions.get(i);
+            HotkeyActionRow row;
+            if(reusable) {
+                row = actionRows.get(i);
+                row.setGesture(model.draft().effective(action.id()));
+                row.resize(Coord.of(contentWidth, row.sz.y));
+                row.move(Coord.of(0, y));
+            } else {
+                row = new HotkeyActionRow(contentWidth, action,
+                        model.draft().effective(action.id()),
+                        decision -> handleCapture(action, decision),
+                        () -> {
+                            model.reset(action.id());
+                            rebuildRows();
+                        });
+                rows.add(row, Coord.of(0, y));
+                actionRows.add(row);
+            }
             y += row.sz.y + UI.scale(2);
         }
         rowsScroll.cont.update();
+        rowsScroll.bar.ch(0);
     }
 
     private void handleCapture(HotkeyAction action, HotkeyCapturePolicy.Decision decision) {
@@ -352,17 +385,83 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     private void showConflict(HotkeyAction action, HotkeyConflict conflict,
                               Runnable replace, Runnable cancel) {
+        closeConflict();
+        resetCategory.hide();
+        resetAll.hide();
+        conflictBox = add(new Widget(Coord.z), Coord.of(0, resetCategory.c.y));
+        conflictText = action.label() + " / " + conflict.conflictingAction().label();
+        conflictLabel = conflictBox.add(new Label(conflictText), Coord.z);
+        conflictReplace = conflictBox.add(new HotkeyTextButton(UI.scale(120),
+                L10n.get("hotkeys.replace")).action(() -> {
+                    replace.run();
+                    closeConflict();
+                }), Coord.z);
+        conflictCancel = conflictBox.add(new HotkeyTextButton(UI.scale(80),
+                L10n.get("hotkeys.cancel")).action(() -> {
+                    cancel.run();
+                    closeConflict();
+                }), Coord.z);
+        conflictReplaceWidth = conflictReplace.sz.x;
+        conflictCancelWidth = conflictCancel.sz.x;
+        layoutConflict();
+    }
+
+    private void layoutConflict() {
+        if(conflictBox == null)
+            return;
+        int gap = UI.scale(4);
+        int height = Math.max(UI.scale(1), rowsScroll.c.y - resetCategory.c.y);
+        conflictBox.move(Coord.of(0, resetCategory.c.y));
+        conflictBox.resize(Coord.of(sz.x, height));
+        int buttonGap = gap;
+        int replaceWidth = conflictReplaceWidth;
+        int cancelWidth = conflictCancelWidth;
+        if(replaceWidth + buttonGap + cancelWidth > conflictBox.sz.x) {
+            buttonGap = Math.min(buttonGap, Math.max(0, conflictBox.sz.x - 2));
+            int available = Math.max(2, conflictBox.sz.x - buttonGap);
+            replaceWidth = Math.max(1, (available * 3) / 5);
+            cancelWidth = Math.max(1, available - replaceWidth);
+        }
+        resizeConflictButton(conflictReplace, replaceWidth);
+        resizeConflictButton(conflictCancel, cancelWidth);
+        int cancelX = Math.max(0, conflictBox.sz.x - cancelWidth);
+        int replaceX = Math.max(0, cancelX - buttonGap - replaceWidth);
+        conflictCancel.move(Coord.of(cancelX, (height - conflictCancel.sz.y) / 2));
+        conflictReplace.move(Coord.of(replaceX, (height - conflictReplace.sz.y) / 2));
+        int labelWidth = Math.max(1, replaceX - gap);
+        if(labelWidth < conflictLabel.f.strsize("\u2026").x) {
+            conflictLabel.hide();
+            return;
+        }
+        conflictLabel.show();
+        Text.Line fitted = conflictLabel.f.ellipsize(conflictText, labelWidth);
+        String fullText = conflictText;
+        String displayed = fitted.text;
+        fitted.dispose();
+        conflictLabel.settext(displayed);
+        conflictLabel.tooltip = displayed.equals(fullText) ? null : fullText;
+        conflictLabel.move(Coord.of(0, (height - conflictLabel.sz.y) / 2));
+    }
+
+    private static void resizeConflictButton(Button button, int width) {
+        if(button.sz.x == width)
+            return;
+        button.resize(Coord.of(width, button.sz.y));
+        button.redraw();
+    }
+
+    private void closeConflict() {
         if(conflictBox != null)
             conflictBox.destroy();
-        conflictBox = add(new Widget(Coord.of(sz.x, UI.scale(28))),
-                Coord.of(0, resetCategory.c.y));
-        conflictBox.add(new Label(action.label() + " / " + conflict.conflictingAction().label()), Coord.z);
-        conflictBox.add(new Button(UI.scale(80), L10n.get("hotkeys.replace"), false)
-                .action(() -> { replace.run(); conflictBox.destroy(); conflictBox = null; }),
-                Coord.of(UI.scale(250), 0));
-        conflictBox.add(new Button(UI.scale(70), L10n.get("hotkeys.cancel"), false)
-                .action(() -> { cancel.run(); conflictBox.destroy(); conflictBox = null; }),
-                Coord.of(UI.scale(335), 0));
+        conflictBox = null;
+        conflictLabel = null;
+        conflictText = null;
+        conflictReplace = null;
+        conflictCancel = null;
+        conflictReplaceWidth = 0;
+        conflictCancelWidth = 0;
+        if(resetCategory != null) resetCategory.show();
+        if(resetAll != null) resetAll.show();
     }
 
     private static String tabLabel(HotkeyCategory category) {

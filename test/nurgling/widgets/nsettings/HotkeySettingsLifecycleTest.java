@@ -9,6 +9,8 @@ import haven.Resource;
 import haven.UI;
 import haven.Widget;
 import nurgling.widgets.NSettingsWindow;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
 
@@ -20,11 +22,128 @@ import java.util.function.Consumer;
 import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HotkeySettingsLifecycleTest {
+    private nurgling.NUI previousUi;
+
+    @BeforeEach void installTestUi() throws Exception {
+        previousUi = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+    }
+
+    @AfterEach void restoreTestUi() {
+        if(previousUi == null) nurgling.sessions.ThreadLocalUI.clear();
+        else nurgling.sessions.ThreadLocalUI.set(previousUi);
+    }
+
+    @Test void openingBuildsEachActionRowOnlyOnce() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        CountingBinding binding = new CountingBinding("single-action",
+                nurgling.hotkeys.InputGesture.none());
+        registry.register(action("single-action", "Single action", binding));
+        HotkeySettingsModel model = new HotkeySettingsModel(registry);
+        binding.currentCalls = 0;
+
+        new HotkeySettings(model);
+
+        assertEquals(3, binding.currentCalls,
+                "opening must not render the complete action list more than once");
+    }
+
+    @Test void unchangedLoadAndResizeReuseActionRows() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        CountingBinding binding = new CountingBinding("stable-action",
+                nurgling.hotkeys.InputGesture.none());
+        registry.register(action("stable-action", "Stable action", binding));
+        HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+        HotkeyActionRow original = firstActionRow(page);
+
+        page.load();
+        page.resize(page.sz);
+
+        assertSame(original, firstActionRow(page),
+                "unchanged lifecycle refreshes must reuse the already rendered rows");
+    }
+
+    @Test void reusedActionRowReceivesTheChangedDraftGesture() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        CountingBinding binding = new CountingBinding("updated-action",
+                nurgling.hotkeys.InputGesture.none());
+        registry.register(action("updated-action", "Updated action", binding));
+        HotkeySettingsModel model = new HotkeySettingsModel(registry);
+        HotkeySettings page = new HotkeySettings(model);
+        HotkeyActionRow row = firstActionRow(page);
+        nurgling.hotkeys.InputGesture changed = nurgling.hotkeys.InputGesture.mouse(2, 0, 0);
+
+        model.assign("updated-action", changed);
+        page.resize(page.sz);
+
+        assertSame(row, firstActionRow(page));
+        assertEquals(changed, row.capture().gesture());
+    }
+
+    @Test void conflictPromptReplacesResetControlsWithoutTextOverlap() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        nurgling.hotkeys.InputGesture gesture = nurgling.hotkeys.InputGesture.mouse(1, 7, 0);
+        CountingBinding first = new CountingBinding("first-conflict", gesture);
+        CountingBinding second = new CountingBinding("second-conflict", gesture);
+        registry.register(action("first-conflict",
+                "A very long localized action description which must not cover the decision buttons", first));
+        registry.register(action("second-conflict",
+                "Another very long localized action description", second));
+        HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+
+        page.save();
+
+        Button resetCategory = (Button)findField(HotkeySettings.class, "resetCategory").get(page);
+        Button resetAll = (Button)findField(HotkeySettings.class, "resetAll").get(page);
+        Widget conflict = (Widget)findField(HotkeySettings.class, "conflictBox").get(page);
+        assertNotNull(conflict);
+        assertFalse(resetCategory.visible, "the conflict prompt must replace the reset controls");
+        assertFalse(resetAll.visible, "the conflict prompt must replace the reset controls");
+        Label label = null;
+        List<Button> buttons = new ArrayList<>();
+        int firstButtonX = Integer.MAX_VALUE;
+        for(Widget child : conflict.children()) {
+            if(child instanceof Label) label = (Label)child;
+            if(child instanceof Button) {
+                buttons.add((Button)child);
+                firstButtonX = Math.min(firstButtonX, child.c.x);
+            }
+        }
+        assertNotNull(label);
+        assertTrue(label.c.x + label.sz.x + UI.scale(4) <= firstButtonX,
+                "the conflict description must be fitted before its decision buttons");
+
+        buttons.sort((left, right) -> Integer.compare(left.c.x, right.c.x));
+        Coord wideSize = page.sz;
+        int firstPreferredWidth = buttons.get(0).sz.x;
+        int secondPreferredWidth = buttons.get(1).sz.x;
+        for(Button button : buttons)
+            setObject(button, "surf", new haven.TexI(haven.TexI.mkbuf(button.sz)));
+        page.resize(Coord.of(UI.scale(150), page.sz.y));
+        assertTrue(buttons.get(0).c.x + buttons.get(0).sz.x <= buttons.get(1).c.x,
+                "conflict decision buttons must not overlap in a narrow viewport");
+        for(Button button : buttons)
+            assertNull(findField(haven.SIWidget.class, "surf").get(button),
+                    "resizing a rendered conflict button must invalidate its cached surface");
+
+        for(Button button : buttons)
+            setObject(button, "surf", new haven.TexI(haven.TexI.mkbuf(button.sz)));
+        page.resize(wideSize);
+        assertEquals(firstPreferredWidth, buttons.get(0).sz.x);
+        assertEquals(secondPreferredWidth, buttons.get(1).sz.x);
+        for(Button button : buttons)
+            assertNull(findField(haven.SIWidget.class, "surf").get(button));
+    }
+
     @Test void localizedCategoryTabsFitTheirTextAndMarkTheSelection() throws Exception {
         nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
         nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
@@ -355,6 +474,41 @@ class HotkeySettingsLifecycleTest {
         setBoolean(page, "registryListening", true);
         registry.addListener(listener);
         return page;
+    }
+
+    private static HotkeyActionRow firstActionRow(HotkeySettings page) throws Exception {
+        Widget rows = (Widget)findField(HotkeySettings.class, "rows").get(page);
+        for(Widget child : rows.children())
+            if(child instanceof HotkeyActionRow)
+                return (HotkeyActionRow)child;
+        throw new AssertionError("action row not found");
+    }
+
+    private static HotkeyAction action(String id, String label,
+                                       nurgling.hotkeys.HotkeyBinding binding) {
+        return new HotkeyAction(id, null, label, nurgling.hotkeys.HotkeyCategory.WORLD,
+                java.util.EnumSet.of(nurgling.hotkeys.HotkeyContext.WORLD_SURFACE),
+                java.util.EnumSet.of(nurgling.hotkeys.InputGesture.Type.MOUSE_BUTTON),
+                binding, null, 0, false);
+    }
+
+    private static final class CountingBinding implements nurgling.hotkeys.HotkeyBinding {
+        private final String id;
+        private final nurgling.hotkeys.InputGesture defaultGesture;
+        private nurgling.hotkeys.InputGesture current;
+        int currentCalls;
+
+        CountingBinding(String id, nurgling.hotkeys.InputGesture defaultGesture) {
+            this.id = id;
+            this.defaultGesture = defaultGesture;
+            this.current = defaultGesture;
+        }
+
+        public String id() { return id; }
+        public nurgling.hotkeys.InputGesture defaultGesture() { return defaultGesture; }
+        public nurgling.hotkeys.InputGesture current() { currentCalls++; return current; }
+        public void set(nurgling.hotkeys.InputGesture gesture) { current = gesture; }
+        public void reset() { current = defaultGesture; }
     }
 
     private static void setObject(Object target, String name, Object value) throws Exception {
