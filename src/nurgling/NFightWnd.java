@@ -32,6 +32,7 @@ public class NFightWnd extends FightWnd {
     private static final int SAVE_GAP = UI.scale(9);
     private static final Coord NUM_BOX = UI.scale(new Coord(13, 14));
     private static final Coord CATEGORY_SIZE = UI.scale(new Coord(31, 28));
+    private static final Coord CATEGORY_ICON_SIZE = UI.scale(new Coord(20, 20));
     private static final int CATEGORY_GAP = UI.scale(1);
     private static final Color CATEGORY_SELECTED = new Color(139, 143, 0, 210);
     private static final Color UPGRADE_GLOW = new Color(28, 255, 73, 165);
@@ -76,10 +77,11 @@ public class NFightWnd extends FightWnd {
 		public void draw(GOut g) {
 		    g.chcolor((selectedCategory == category) ? CATEGORY_SELECTED : NStyle.infoBg);
 		    g.frect(Coord.z, sz);
+		    g.chcolor();
+		    g.aimage(icon, sz.div(2), 0.5, 0.5);
 		    g.chcolor(NStyle.border);
 		    g.rect(Coord.z, sz);
 		    g.chcolor();
-		    g.aimage(icon, sz.div(2), 0.5, 0.5);
 		}
 
 		@Override
@@ -141,7 +143,7 @@ public class NFightWnd extends FightWnd {
 		case ALL:
 		default: path = "nurgling/hud/combat-tabs/all"; break;
 		}
-		return new TexI(convolvedown(Resource.loadimg(path), UI.scale(22, 22), iconfilter));
+		return new TexI(convolvedown(Resource.loadimg(path), CATEGORY_ICON_SIZE, iconfilter));
     }
 
     private List<Action> filteredActions() {
@@ -365,7 +367,7 @@ public class NFightWnd extends FightWnd {
 	selectedCategory = CombatSchoolUi.Category.ALL;
 	CombatSchoolUi.Category[] categories = CombatSchoolUi.Category.values();
 	int categoryRowW = categories.length * CATEGORY_SIZE.x + (categories.length - 1) * CATEGORY_GAP;
-	int categoryX = movesX + MOVES_W - categoryRowW;
+	int categoryX = movesX + (MOVES_W - categoryRowW) / 2;
 	int categoryY = contentY - CATEGORY_SIZE.y - UI.scale(1);
 	for(int i = 0; i < categories.length; i++) {
 	    CategoryButton button = add(new CategoryButton(categories[i]),

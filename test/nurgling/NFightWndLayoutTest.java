@@ -6,10 +6,30 @@ import haven.Widget;
 import nurgling.i18n.L10n;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NFightWndLayoutTest {
+    @Test
+    void combatCategoryButtonsAreCenteredAboveActionList() {
+        NFightWnd window = new NFightWnd(5, 10, 30);
+        List<Widget> categories = window.children().stream()
+                .filter(child -> child.getClass().getSimpleName().equals("CategoryButton"))
+                .collect(Collectors.toList());
+
+        assertEquals(6, categories.size());
+        int categoryLeft = categories.stream().mapToInt(child -> child.c.x).min().orElseThrow(AssertionError::new);
+        int categoryRight = categories.stream().mapToInt(child -> child.c.x + child.sz.x).max().orElseThrow(AssertionError::new);
+        int categoryCenterTwice = categoryLeft + categoryRight;
+        int actionListCenterTwice = window.actlist.c.x * 2 + window.actlist.sz.x;
+
+        assertTrue(Math.abs(categoryCenterTwice - actionListCenterTwice) <= 1,
+                "Combat category buttons must be centered over the action list");
+    }
+
     @Test
     void schoolControlsFitWithinSaveSlotRow() {
         NFightWnd window = new NFightWnd(5, 10, 30);
