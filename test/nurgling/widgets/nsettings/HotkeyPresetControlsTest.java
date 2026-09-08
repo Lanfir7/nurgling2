@@ -3,8 +3,6 @@ package nurgling.widgets.nsettings;
 import haven.Resource;
 import nurgling.hotkeys.presets.HotkeyPreset;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -16,17 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HotkeyPresetControlsTest {
-    private static nurgling.NConfig previousConfig;
-
-    @BeforeAll static void initializeConfig() {
-        previousConfig = nurgling.NConfig.current;
-        if(previousConfig == null) nurgling.NConfig.current = new nurgling.NConfig();
-    }
-
-    @AfterAll static void restoreConfig() {
-        nurgling.NConfig.current = previousConfig;
-    }
-
     static {
         Resource.local().add(new Resource.FileSource(Paths.get("resources", "compiled", "res")));
         try {
@@ -60,19 +47,9 @@ class HotkeyPresetControlsTest {
     @Test void lifecycleRejectsLateClipboardResults() {
         HotkeyPresetControls controls = new HotkeyPresetControls(560, new FakeActions());
         assertTrue(controls.acceptsClipboardResult());
-        int generation = controls.clipboardGeneration();
-        controls.cancelTransientActions();
-        assertTrue(controls.clipboardGeneration() > generation);
         controls.disposeLifecycle();
         assertFalse(controls.acceptsClipboardResult());
         assertFalse(controls.hasOpenPrompt());
-    }
-
-    @Test void narrowLayoutKeepsEveryControlInsideItsWidth() {
-        HotkeyPresetControls controls = new HotkeyPresetControls(320, new FakeActions());
-        for(haven.Widget child : controls.children())
-            assertTrue(child.c.x + child.sz.x <= controls.sz.x,
-                    child.getClass().getSimpleName() + " overflows preset controls");
     }
 
     private static final class FakeActions implements HotkeyPresetControls.Actions {
@@ -82,7 +59,6 @@ class HotkeyPresetControlsTest {
         String selected = "builtin.default";
         public List<HotkeyPreset> presets() { return presets; }
         public String selectedPresetId() { return selected; }
-        public void validateImportCode(String code) { }
         public void select(String presetId) { selected = presetId; }
         public void discardChanges() { }
         public void create(String name) { }

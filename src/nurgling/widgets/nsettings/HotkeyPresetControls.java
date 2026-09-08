@@ -6,7 +6,6 @@ import haven.Dropbox;
 import haven.GOut;
 import haven.Label;
 import haven.ReadLine;
-import haven.Text;
 import haven.UI;
 import haven.Widget;
 import haven.iosys.tk.Clipboard;
@@ -20,7 +19,6 @@ public final class HotkeyPresetControls extends Widget {
     public interface Actions {
         List<HotkeyPreset> presets();
         String selectedPresetId();
-        void validateImportCode(String code);
         void select(String presetId);
         void discardChanges();
         void create(String name);
@@ -39,7 +37,6 @@ public final class HotkeyPresetControls extends Widget {
     private final Button deleteButton;
     private HotkeyPresetPrompt prompt;
     private boolean acceptsClipboardResult = true;
-    private int clipboardGeneration;
 
     public HotkeyPresetControls(int width, Actions actions) {
         super(Coord.of(Math.max(1, width), UI.scale(26)));
@@ -50,11 +47,7 @@ public final class HotkeyPresetControls extends Widget {
             protected HotkeyPreset listitem(int index) { return actions.presets().get(index); }
             protected int listitems() { return actions.presets().size(); }
             protected void drawitem(GOut g, HotkeyPreset item, int index) {
-                Text.Line fitted = Text.std.ellipsize(displayName(item),
-                        Math.max(1, sz.x - Dropbox.drop.sz().x - UI.scale(6)));
-                String displayed = fitted.text;
-                fitted.dispose();
-                g.text(displayed, Coord.of(UI.scale(3), UI.scale(2)));
+                g.text(displayName(item), Coord.of(UI.scale(3), UI.scale(2)));
             }
             public Object tooltip(Coord c, Widget prev) {
                 return sel == null ? null : displayName(sel);
@@ -88,7 +81,6 @@ public final class HotkeyPresetControls extends Widget {
     public boolean deleteEnabled() { return !isBuiltInSelection(); }
     public boolean hasOpenPrompt() { return prompt != null && prompt.parent != null; }
     public boolean acceptsClipboardResult() { return acceptsClipboardResult; }
-    int clipboardGeneration() { return clipboardGeneration; }
 
     public void select(String id) { requestSelect(id); }
 
@@ -106,17 +98,11 @@ public final class HotkeyPresetControls extends Widget {
 
     public void disposeLifecycle() {
         acceptsClipboardResult = false;
-        cancelTransientActions();
-    }
-
-    public void resumeLifecycle() { acceptsClipboardResult = true; }
-
-    public void cancelTransientActions() {
-        clipboardGeneration++;
-        if(prompt == null) return;
-        HotkeyPresetPrompt closing = prompt;
-        prompt = null;
-        closing.reqdestroy();
+        if(prompt != null) {
+            HotkeyPresetPrompt closing = prompt;
+            prompt = null;
+            closing.reqdestroy();
+        }
     }
 
     public int preferredHeight() { return sz.y; }
@@ -164,22 +150,15 @@ public final class HotkeyPresetControls extends Widget {
 
     private void paste() {
         if(ui == null) return;
-        final int generation = ++clipboardGeneration;
         ReadLine.PCLine.cliptext(ui.wnd.clipboard(Clipboard.Std.CLIPBOARD)).callback(text -> {
             synchronized(ui) {
-                if(!acceptsClipboardResult || generation != clipboardGeneration) return;
+                if(!acceptsClipboardResult) return;
                 importCode(text == null ? "" : text.toString());
             }
         }, failure -> reportError("hotkeys.presets.error.clipboard"), () -> { });
     }
 
     private void importCode(String code) {
-        try {
-            actions.validateImportCode(code);
-        } catch(RuntimeException failure) {
-            reportError("hotkeys.presets.error.invalid_code");
-            return;
-        }
         Runnable apply = () -> {
             try {
                 actions.importCode(code);
@@ -244,18 +223,17 @@ public final class HotkeyPresetControls extends Widget {
         selector.move(Coord.of(label.sz.x + gap, 0));
         int x = selector.c.x + selector.sz.x + gap;
         Button[] buttons = {createButton, copyButton, pasteButton, deleteButton};
-        int rowHeight = selector.sz.y;
+        int buttonsWidth = 0;
+        for(Button button : buttons) buttonsWidth += button.sz.x + gap;
+        if(x + buttonsWidth > width) {
+            x = 0;
+            y = selector.sz.y + gap;
+        }
         for(Button button : buttons) {
-            if(x > 0 && x + button.sz.x > width) {
-                x = 0;
-                y += rowHeight + gap;
-                rowHeight = 0;
-            }
             button.move(Coord.of(x, y));
             x += button.sz.x + gap;
-            rowHeight = Math.max(rowHeight, button.sz.y);
         }
-        int height = Math.max(selector.sz.y, y + rowHeight);
+        int height = Math.max(selector.sz.y, y + createButton.sz.y);
         super.resize(Coord.of(Math.max(1, width), height));
     }
 }
