@@ -11,6 +11,7 @@ import nurgling.hotkeys.HotkeyRegistry;
 import nurgling.hotkeys.InputGesture;
 import org.junit.jupiter.api.Test;
 
+import java.awt.event.KeyEvent;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -53,7 +54,7 @@ class HotkeyPresetCatalogTest {
 
         List<HotkeyPreset> builtIns = HotkeyPresetCatalog.builtIns(registry);
 
-        assertEquals(2, builtIns.size());
+        assertEquals(3, builtIns.size());
         assertEquals(1, builtIns.get(1).gestures().size());
         assertThrows(UnsupportedOperationException.class, builtIns::clear);
     }
@@ -80,6 +81,52 @@ class HotkeyPresetCatalogTest {
         assertEquals(InputGesture.key(KeyMatch.forchar('H', KeyMatch.C)), preset.gesture("togglebb"));
         assertEquals(InputGesture.none(), preset.gesture("togglenature"));
         assertEquals(InputGesture.none(), preset.gesture("cleardmg"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('L', KeyMatch.C)), preset.gesture("areas"));
+        assertEquals(InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S),
+                preset.gesture("item.interact.shift"));
+        assertEquals(registry.snapshot().size(), preset.gestures().size());
+    }
+
+    @Test void hurricanePresetUsesHurricaneBindingsAndKeepsNurglingOnlyDefaults() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyCatalog.registerCore(registry);
+
+        HotkeyPreset preset = null;
+        for(HotkeyPreset candidate : HotkeyPresetCatalog.builtIns(registry)) {
+            if("builtin.hurricane".equals(candidate.id())) {
+                preset = candidate;
+                break;
+            }
+        }
+
+        assertNotNull(preset);
+        assertEquals("Hurricane", preset.name());
+        assertTrue(preset.builtIn());
+        assertEquals(InputGesture.key(KeyMatch.forchar('D', KeyMatch.M)), preset.gesture("inv"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('A', KeyMatch.M)), preset.gesture("chr"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('F', KeyMatch.C)), preset.gesture("scm-srch"));
+        assertEquals(InputGesture.none(), preset.gesture("searchWidget"));
+        assertEquals(InputGesture.none(), preset.gesture("instantLogoutKB"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('W', KeyMatch.C)), preset.gesture("map"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('I', KeyMatch.C)), preset.gesture("map-icons"));
+        assertEquals(InputGesture.none(), preset.gesture("storage"));
+        assertEquals(InputGesture.none(), preset.gesture("cam-left"));
+        assertEquals(InputGesture.none(), preset.gesture("cam-right"));
+        assertEquals(InputGesture.none(), preset.gesture("cam-in"));
+        assertEquals(InputGesture.none(), preset.gesture("cam-out"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('W', KeyMatch.M)), preset.gesture("mapwnd/compact"));
+        assertEquals(InputGesture.key(KeyMatch.forcode(KeyEvent.VK_F11, KeyMatch.C | KeyMatch.S)),
+                preset.gesture("mapwnd/prov"));
+        assertEquals(InputGesture.none(), preset.gesture("speed-up"));
+        assertEquals(InputGesture.none(), preset.gesture("speed-down"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('W', KeyMatch.S)), preset.gesture("speed-set/1"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('E', KeyMatch.S)), preset.gesture("speed-set/2"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('R', KeyMatch.S)), preset.gesture("speed-set/3"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('R', 0)), preset.gesture("fgt/3"));
+        assertEquals(InputGesture.key(KeyMatch.forchar('F', 0)), preset.gesture("fgt/4"));
+        assertEquals(InputGesture.key(KeyMatch.forcode(KeyEvent.VK_F2, 0)), preset.gesture("fgt/8"));
+        assertEquals(InputGesture.key(KeyMatch.forcode(KeyEvent.VK_F1, 0)), preset.gesture("fgt/9"));
+        assertEquals(InputGesture.key(KeyMatch.forcode(KeyEvent.VK_TAB, 0)), preset.gesture("fgt-cycle"));
         assertEquals(InputGesture.key(KeyMatch.forchar('L', KeyMatch.C)), preset.gesture("areas"));
         assertEquals(InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S),
                 preset.gesture("item.interact.shift"));

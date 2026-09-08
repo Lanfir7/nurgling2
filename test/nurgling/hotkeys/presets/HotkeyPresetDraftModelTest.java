@@ -38,7 +38,7 @@ class HotkeyPresetDraftModelTest {
                 HotkeyPresetCatalog.builtIns(registry), HotkeyPresetStore.LoadResult.migrationRequired(null));
 
         assertEquals(HotkeyPresetCatalog.DEFAULT_ID, presets.selected().id());
-        assertEquals(2, presets.presets().size());
+        assertEquals(3, presets.presets().size());
     }
 
     @Test void editingBuiltInForksOnceAndFurtherEditsUpdateSameUserPreset() {
