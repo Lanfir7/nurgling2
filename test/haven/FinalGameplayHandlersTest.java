@@ -214,6 +214,36 @@ class FinalGameplayHandlersTest {
         assertTrue(map.messages.isEmpty());
     }
 
+    @Test void stockpileWheelPreservesModifiersAndRejectsDisabledGesture() throws Exception {
+        TestISBox box = allocate(TestISBox.class);
+        box.ui = ui;
+        box.messages = new ArrayList<>();
+        bind(Hotkeys.STOCKPILE_TRANSFER_OUT, InputGesture.wheel(-1, KeyMatch.MODS, 0));
+        mods(KeyMatch.S);
+
+        assertTrue(box.mousewheel(new Widget.MouseWheelEvent(Coord.z, -1, -1)));
+        assertArrayEquals(new Object[]{"xfer2", -1, KeyMatch.S}, box.messages.get(0));
+
+        bind(Hotkeys.STOCKPILE_TRANSFER_OUT, InputGesture.none());
+        bind(Hotkeys.STOCKPILE_TRANSFER_OUT_ALL, InputGesture.none());
+        box.messages.clear();
+        assertFalse(box.mousewheel(new Widget.MouseWheelEvent(Coord.z, -1, -1)));
+        assertTrue(box.messages.isEmpty());
+    }
+
+    @Test void controlRightClickOnInventoryItemOpensFlowerMenuForAllMatchingItems() throws Exception {
+        TestGItem item = new TestGItem();
+        WItem widget = new WItem(item);
+        widget.ui = ui;
+        widget.parent = allocate(NInventory.class);
+        widget.parent.ui = ui;
+        mods(KeyMatch.C);
+
+        assertTrue(widget.mousedown(new Widget.MouseDownEvent(Coord.z, 3)));
+        assertArrayEquals(new Object[]{"iact", Coord.z, UI.MOD_CTRL}, item.messages.get(0));
+        assertSame(widget, ui.core.getLastActions().item);
+    }
+
     @Test void placementKeyboardCoarseAndFineUseLogicalRotationParameters() throws Exception {
         TestMap.TestPlob plob = allocate(TestMap.TestPlob.class);
         field(MapView.Plob.class, "this$0").set(plob, map);
@@ -360,6 +390,26 @@ class FinalGameplayHandlersTest {
         protected void runHitTest(Hittest test) { test.hit(Coord.z, Coord2d.of(22, 33), null); }
         public boolean sendPointPing(Coord2d c) { return false; }
         public boolean addWaypointAt(Coord2d c) { return false; }
+        public void wdgmsg(String name, Object... args) {
+            Object[] message = new Object[args.length + 1]; message[0] = name;
+            System.arraycopy(args, 0, message, 1, args.length); messages.add(message);
+        }
+    }
+
+    private static class TestISBox extends ISBox {
+        List<Object[]> messages;
+        TestISBox() { super(null, 0, 0, -1); }
+        public String stockpileItemName() { return null; }
+        public void wdgmsg(String name, Object... args) {
+            Object[] message = new Object[args.length + 1]; message[0] = name;
+            System.arraycopy(args, 0, message, 1, args.length); messages.add(message);
+        }
+    }
+
+    private static class TestGItem extends GItem {
+        final List<Object[]> messages = new ArrayList<>();
+        TestGItem() { super(null); }
+        protected void updateraw() { }
         public void wdgmsg(String name, Object... args) {
             Object[] message = new Object[args.length + 1]; message[0] = name;
             System.arraycopy(args, 0, message, 1, args.length); messages.add(message);

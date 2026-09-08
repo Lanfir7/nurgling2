@@ -122,6 +122,10 @@ class GameplayGestureCatalogTest {
                 InputGesture.wheel(-1, KeyMatch.MODS, 0), HotkeyContext.STOCKPILE, Integer.valueOf(0));
         assertGesture(registry, "stockpile.transfer_in",
                 InputGesture.wheel(1, KeyMatch.MODS, 0), HotkeyContext.STOCKPILE, Integer.valueOf(0));
+        assertGesture(registry, "stockpile.transfer_out_all",
+                InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.STOCKPILE, Integer.valueOf(UI.MOD_SHIFT));
+        assertGesture(registry, "stockpile.transfer_in_all",
+                InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.STOCKPILE, Integer.valueOf(UI.MOD_SHIFT));
         assertGesture(registry, "inventory.stack.transfer_to_main",
                 InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S), HotkeyContext.STACK_INVENTORY, null);
         assertGesture(registry, "inventory.stack.transfer_from_main",

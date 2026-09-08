@@ -222,7 +222,7 @@ public final class HotkeyCatalog {
 
         gesture(registry, Hotkeys.STOCKPILE_TRANSFER_ALL,
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.INVENTORY,
-                EnumSet.of(HotkeyContext.INVENTORY_BACKGROUND), null, order);
+                EnumSet.of(HotkeyContext.STOCKPILE), null, order);
         gesture(registry, Hotkeys.STOCKPILE_TRANSFER_OUT,
                 InputGesture.wheel(-1, KeyMatch.MODS, 0), HotkeyCategory.INVENTORY,
                 EnumSet.of(HotkeyContext.STOCKPILE), Integer.valueOf(0), order);

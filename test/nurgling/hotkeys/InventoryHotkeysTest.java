@@ -18,6 +18,7 @@ class InventoryHotkeysTest {
 
         assertGesture(registry, "item.take", InputGesture.mouse(1, KeyMatch.MODS, 0));
         assertGesture(registry, "item.interact", InputGesture.mouse(3, KeyMatch.MODS, 0));
+        assertGesture(registry, "item.interact.all", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C));
         assertGesture(registry, "item.transfer.one", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S));
         assertGesture(registry, "item.transfer.all", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.S));
         assertGesture(registry, "item.drop.one", InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C));
@@ -37,6 +38,13 @@ class InventoryHotkeysTest {
         assertEquals(Integer.valueOf(UI.MOD_CTRL | UI.MOD_META), registry.find("held.light_from_fire").canonicalMods());
         assertEquals(EnumSet.of(HotkeyContext.INVENTORY_ITEM_GENERIC), registry.find("item.drop.all").contexts());
         assertEquals(EnumSet.of(HotkeyContext.INVENTORY_ITEM_NURGLING), registry.find("item.drop_same.desc").contexts());
+        assertGesture(registry, Hotkeys.STOCKPILE_TRANSFER_OUT, InputGesture.wheel(-1, KeyMatch.MODS, 0));
+        assertGesture(registry, Hotkeys.STOCKPILE_TRANSFER_IN, InputGesture.wheel(1, KeyMatch.MODS, 0));
+        assertGesture(registry, "stockpile.transfer_out_all", InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.S));
+        assertGesture(registry, "stockpile.transfer_in_all", InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.S));
+        assertEquals(EnumSet.of(HotkeyContext.STOCKPILE), registry.find(Hotkeys.STOCKPILE_TRANSFER_OUT).contexts());
+        assertEquals(EnumSet.of(HotkeyContext.STOCKPILE), registry.find(Hotkeys.STOCKPILE_TRANSFER_IN).contexts());
+        assertEquals(Integer.valueOf(UI.MOD_CTRL), registry.find("item.interact.all").canonicalMods());
     }
 
     @Test void resolverUsesReboundGestureAndPreservesActionOrder() {
