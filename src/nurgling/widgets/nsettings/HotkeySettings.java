@@ -59,7 +59,11 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
             public List<HotkeyPreset> presets() { return model.presets().presets(); }
             public String selectedPresetId() { return model.presets().selected().id(); }
             public void validateImportCode(String code) { model.validateImportCode(code); }
-            public void select(String presetId) { model.selectPreset(presetId); rebuildRows(); }
+            public void select(String presetId) {
+                model.selectPreset(presetId);
+                rebuildRows();
+                rowsScroll.bar.ch(-rowsScroll.bar.val);
+            }
             public void discardChanges() { model.cancel(); }
             public void create(String name) { model.createPreset(name); rebuildRows(); }
             public String copyCode() { return model.copyPresetCode(); }

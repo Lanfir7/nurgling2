@@ -190,6 +190,43 @@ class HotkeySettingsLifecycleTest {
         }
     }
 
+    @Test void selectingPresetResetsTheRebuiltActionListToItsTop() throws Exception {
+        nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
+        nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
+        local.sessionConfig = new nurgling.NConfig();
+        nurgling.sessions.ThreadLocalUI.set(local);
+        try {
+            HotkeyRegistry registry = new HotkeyRegistry();
+            nurgling.hotkeys.PreferenceStore preferences = new nurgling.hotkeys.PreferenceStore() {
+                public String get(String key, String fallback) { return fallback; }
+                public void set(String key, String value) { }
+            };
+            for(int i = 0; i < 20; i++) {
+                String id = "scroll-action-" + i;
+                registry.register(new HotkeyAction(id, null, id,
+                        nurgling.hotkeys.HotkeyCategory.WINDOWS,
+                        java.util.EnumSet.of(nurgling.hotkeys.HotkeyContext.GLOBAL),
+                        java.util.EnumSet.of(nurgling.hotkeys.InputGesture.Type.KEY),
+                        new nurgling.hotkeys.GestureBinding(id,
+                                nurgling.hotkeys.InputGesture.none(), preferences), null, i, false));
+            }
+            HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+            haven.Scrollport scroll = (haven.Scrollport)findField(
+                    HotkeySettings.class, "rowsScroll").get(page);
+            assertTrue(scroll.bar.max > 0);
+            scroll.bar.ch(scroll.bar.max);
+            assertTrue(scroll.cont.sy > 0);
+
+            page.controls().select(nurgling.hotkeys.presets.HotkeyPresetCatalog.ENDER_ID);
+
+            assertEquals(0, scroll.bar.val);
+            assertEquals(0, scroll.cont.sy);
+        } finally {
+            if(oldUI == null) nurgling.sessions.ThreadLocalUI.clear();
+            else nurgling.sessions.ThreadLocalUI.set(oldUI);
+        }
+    }
+
     @Test void hotkeyPageIsBuiltOnlyOnFirstOpen() throws Exception {
         nurgling.NUI oldUI = nurgling.sessions.ThreadLocalUI.get();
         nurgling.NUI local = (nurgling.NUI)unsafe().allocateInstance(nurgling.NUI.class);
