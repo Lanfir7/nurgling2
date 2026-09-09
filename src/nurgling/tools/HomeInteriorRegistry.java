@@ -53,6 +53,19 @@ public final class HomeInteriorRegistry {
         return new HomeInteriorRegistry(Collections.unmodifiableMap(next), suppressed);
     }
 
+    public HomeInteriorRegistry applyRemovals(Collection<String> bindingIds) {
+        if (bindingIds == null)
+            return this;
+        HomeInteriorRegistry result = this;
+        for (String bindingId : bindingIds)
+            result = result.remove(bindingId, true);
+        return result;
+    }
+
+    public Binding find(String bindingId) {
+        return bindingId == null ? null : byId.get(bindingId);
+    }
+
     public HomeInteriorRegistry markManual(long instanceId, Collection<Long> gridIds, String displayName) {
         Binding existing = bindingForInstance(instanceId);
         LinkedHashSet<Long> grids = new LinkedHashSet<Long>();

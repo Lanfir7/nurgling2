@@ -14,18 +14,28 @@ import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.i18n.L10n;
 import nurgling.tools.CurrentHomeTerritories;
+import nurgling.tools.HomeInteriorRegistry;
+import nurgling.tools.HomeInteriorStore;
 import nurgling.tools.HomeTerritories;
 import nurgling.tools.HomeTerritoryDebug;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /** Configures territories that are treated as home for the current game world. */
 public class HomeSetup extends Panel {
     private List<HomeTerritories.Entry> homes = new ArrayList<>();
     private List<HomeTerritories.Entry> loadedHomes = new ArrayList<>();
+    private HomeInteriorRegistry indoorSnapshot = HomeInteriorRegistry.empty();
+    private final Set<String> removedIndoorBindingIds = new LinkedHashSet<String>();
+    private List<HomeInteriorRegistry.Binding> indoorItems = new ArrayList<HomeInteriorRegistry.Binding>();
     private final HomeTerritoryList homeList;
+    private final IndoorHomeList indoorList;
 
     public HomeSetup() {
         super();
@@ -45,6 +55,10 @@ public class HomeSetup extends Panel {
         }, saveCurrent.pos("ur").adds(5, 0));
         homeList = add(new HomeTerritoryList(UI.scale(430, 260)),
                 saveCurrent.pos("bl").adds(0, 8));
+        Widget indoorTitle = add(new Label("● " + L10n.get("world.home.indoor.section")),
+                homeList.pos("bl").adds(0, 10));
+        indoorList = add(new IndoorHomeList(UI.scale(430, 140)),
+                indoorTitle.pos("bl").adds(0, 8));
     }
 
     @Override
@@ -53,6 +67,9 @@ public class HomeSetup extends Panel {
                 NConfig.get(NConfig.Key.homeTerritories), currentWorldGenus());
         homes = new ArrayList<>(loadedHomes);
         homeList.update();
+        indoorSnapshot = HomeInteriorStore.load(currentWorldGenus());
+        removedIndoorBindingIds.clear();
+        refreshIndoorItems();
     }
 
     @Override
@@ -68,6 +85,10 @@ public class HomeSetup extends Panel {
         loadedHomes = HomeTerritories.decodeForWorld(updated, genus);
         homes = new ArrayList<>(loadedHomes);
         homeList.update();
+        indoorSnapshot = HomeInteriorStore.update(genus,
+                current -> current.applyRemovals(removedIndoorBindingIds));
+        removedIndoorBindingIds.clear();
+        refreshIndoorItems();
         NConfig.needUpdate();
     }
 
@@ -88,6 +109,8 @@ public class HomeSetup extends Panel {
         }
         homes = HomeTerritories.merge(homes, detection.entries);
         homeList.update();
+        indoorList.reset();
+        indoorList.update();
     }
 
     private void showCurrentLocation() {
@@ -174,6 +197,64 @@ public class HomeSetup extends Panel {
             gui.error(L10n.get("world.home.none_detected"));
     }
 
+    private void refreshIndoorItems() {
+        indoorItems = new ArrayList<HomeInteriorRegistry.Binding>();
+        for (HomeInteriorRegistry.Binding binding : indoorSnapshot.bindings()) {
+            if (!removedIndoorBindingIds.contains(binding.id))
+                indoorItems.add(binding);
+        }
+        indoorList.reset();
+        indoorList.update();
+    }
+
+    private String formatIndoorRow(HomeInteriorRegistry.Binding binding) {
+        String name = indoorDisplayName(binding);
+        if (binding.manual)
+            return name + " — " + L10n.get("world.home.indoor.manual");
+        return name + " — " + L10n.get("world.home.indoor.auto") + " — " + indoorOriginText(binding);
+    }
+
+    private static String indoorDisplayName(HomeInteriorRegistry.Binding binding) {
+        if (binding.displayName != null && !binding.displayName.isEmpty())
+            return binding.displayName;
+        if (binding.rootPortal != null && binding.rootPortal.resource != null) {
+            String resource = binding.rootPortal.resource;
+            int slash = resource.lastIndexOf('/');
+            if (slash >= 0 && slash + 1 < resource.length())
+                return resource.substring(slash + 1);
+            return resource;
+        }
+        return binding.id;
+    }
+
+    private String indoorOriginText(HomeInteriorRegistry.Binding binding) {
+        TreeSet<String> names = new TreeSet<String>();
+        for (HomeInteriorRegistry.OriginKey origin : binding.origins) {
+            if (origin == null || !origin.matches(homes))
+                continue;
+            String label = originDisplayName(origin);
+            if (label != null && !label.isEmpty())
+                names.add(label);
+        }
+        if (names.isEmpty())
+            return L10n.get("world.home.indoor.inactive");
+        StringBuilder text = new StringBuilder();
+        for (String name : names) {
+            if (text.length() > 0)
+                text.append(", ");
+            text.append(name);
+        }
+        return text.toString();
+    }
+
+    private String originDisplayName(HomeInteriorRegistry.OriginKey origin) {
+        for (HomeTerritories.Entry entry : homes) {
+            if (entry != null && origin.matches(Collections.singletonList(entry)))
+                return entry.displayName();
+        }
+        return null;
+    }
+
     private class HomeTerritoryList extends SListBox<HomeTerritories.Entry, Widget> {
         private final Color background = new Color(30, 40, 40, 160);
 
@@ -195,6 +276,55 @@ public class HomeSetup extends Panel {
                     public void click() {
                         homes.remove(entry);
                         homeList.update();
+                        indoorList.reset();
+                        indoorList.update();
+                    }
+                });
+
+                {
+                    resize(size);
+                }
+
+                @Override
+                public void resize(Coord newSize) {
+                    super.resize(newSize);
+                    label.move(new Coord(UI.scale(5), (newSize.y - label.sz.y) / 2));
+                    remove.move(new Coord(newSize.x - remove.sz.x - UI.scale(5),
+                            (newSize.y - remove.sz.y) / 2));
+                }
+            };
+        }
+
+        @Override
+        public void draw(GOut g) {
+            g.chcolor(background);
+            g.frect(Coord.z, g.sz());
+            g.chcolor();
+            super.draw(g);
+        }
+    }
+
+    private class IndoorHomeList extends SListBox<HomeInteriorRegistry.Binding, Widget> {
+        private final Color background = new Color(30, 40, 40, 160);
+
+        IndoorHomeList(Coord size) {
+            super(size, UI.scale(24));
+        }
+
+        @Override
+        protected List<HomeInteriorRegistry.Binding> items() {
+            return indoorItems;
+        }
+
+        @Override
+        protected Widget makeitem(HomeInteriorRegistry.Binding binding, int index, Coord size) {
+            return new SListWidget.ItemWidget<HomeInteriorRegistry.Binding>(this, size, binding) {
+                private final Label label = add(new Label(formatIndoorRow(binding)), UI.scale(5, 3));
+                private final Button remove = add(new Button(UI.scale(24), "×") {
+                    @Override
+                    public void click() {
+                        removedIndoorBindingIds.add(binding.id);
+                        refreshIndoorItems();
                     }
                 });
 

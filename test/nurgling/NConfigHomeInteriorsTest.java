@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -99,6 +100,34 @@ class NConfigHomeInteriorsTest {
             releaseFirst.countDown();
             NConfig.current = previous;
         }
+    }
+
+    @Test
+    void stagedRemovalPreservesBindingLearnedWhileSettingsWereOpen() {
+        HomeInteriorRegistry baseline = registryWithBindings("old-home");
+        HomeInteriorRegistry concurrent = baseline.put(binding("new-home"));
+
+        HomeInteriorRegistry result = concurrent.applyRemovals(
+                Collections.singleton("old-home"));
+
+        assertNull(result.find("old-home"));
+        assertNotNull(result.find("new-home"));
+        assertTrue(result.isSuppressed(portalOf("old-home")));
+    }
+
+    private static HomeInteriorRegistry registryWithBindings(String id) {
+        return HomeInteriorRegistry.empty().put(binding(id));
+    }
+
+    private static HomeInteriorRegistry.Binding binding(String id) {
+        return HomeInteriorRegistry.Binding.automatic(
+                id, 1L, Collections.singleton(1L),
+                Collections.singleton(HomeInteriorRegistry.OriginKey.parse("claim-owner:" + id)),
+                portalOf(id), id, 1L);
+    }
+
+    private static HomeInteriorRegistry.PortalIdentity portalOf(String id) {
+        return new HomeInteriorRegistry.PortalIdentity(1L, 0, 0, "gfx/" + id);
     }
 
     private static HomeInteriorRegistry.Binding learnedBinding() {
