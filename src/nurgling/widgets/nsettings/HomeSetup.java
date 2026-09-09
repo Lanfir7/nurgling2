@@ -96,7 +96,7 @@ public class HomeSetup extends Panel {
             return;
         CurrentHomeTerritories.Detection detection = CurrentHomeTerritories.detect(gui);
         HomeTerritoryDebug.Snapshot snapshot = HomeTerritoryDebug.inspect(
-                homes, detection.entries, detection.claimArea, detection.loading);
+                homes, detection.entries, CurrentHomeTerritories.status(gui));
         Window window = new Window(Coord.z, L10n.get("home.debug.title")) {
             @Override
             public void reqclose() {
@@ -115,6 +115,15 @@ public class HomeSetup extends Panel {
                 yesNo(snapshot.claimHome))), previous.pos("bl").adds(0, 6));
         previous = window.add(new Label(valueLine("home.debug.home_zone",
                 yesNo(snapshot.home))), previous.pos("bl").adds(0, 6));
+        previous = window.add(new Label(valueLine("home.debug.indoor_home",
+                yesNoUnknown(snapshot.indoorHome, snapshot.navigationLoading))),
+                previous.pos("bl").adds(0, 6));
+        previous = window.add(new Label(valueLine("home.debug.home_source",
+                homeSourceText(snapshot))), previous.pos("bl").adds(0, 6));
+        previous = window.add(new Label(valueLine("home.debug.stable_grid",
+                Long.toString(snapshot.gridId))), previous.pos("bl").adds(0, 6));
+        previous = window.add(new Label(valueLine("home.debug.instance",
+                Long.toString(snapshot.instanceId))), previous.pos("bl").adds(0, 6));
         window.add(new Label(valueLine("home.debug.claim_tiles",
                 Integer.toString(snapshot.claimTiles))), previous.pos("bl").adds(0, 6));
         window.pack();
@@ -132,6 +141,26 @@ public class HomeSetup extends Panel {
 
     private static String yesNo(boolean value) {
         return L10n.get(value ? "common.yes" : "common.no");
+    }
+
+    private static String yesNoUnknown(boolean value, boolean unknown) {
+        return unknown ? L10n.get("common.unknown") : yesNo(value);
+    }
+
+    private static String homeSourceText(HomeTerritoryDebug.Snapshot snapshot) {
+        switch (snapshot.source) {
+            case DIRECT_VILLAGE:
+                return L10n.get("home.debug.source.village");
+            case DIRECT_CLAIM:
+                return L10n.get("home.debug.source.claim");
+            case DIRECT_BOTH:
+                return L10n.get("home.debug.source.both");
+            case INDOOR_AUTO:
+            case INDOOR_MANUAL:
+                return valueOrNone(snapshot.homeSource);
+            default:
+                return L10n.get("common.none");
+        }
     }
 
     private String currentWorldGenus() {

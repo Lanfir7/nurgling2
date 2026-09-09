@@ -8,6 +8,9 @@ import haven.MCache;
 import haven.Polity;
 import nurgling.NConfig;
 import nurgling.NGameUI;
+import nurgling.NMapView;
+import nurgling.navigation.ChunkNavData;
+import nurgling.navigation.ChunkNavManager;
 import nurgling.widgets.NZergwnd;
 
 import java.util.Collection;
@@ -149,21 +152,45 @@ public final class CurrentHomeTerritories {
         return true;
     }
 
-    /** Independent village/claim checks for storage and workstation consumers. */
-    public static HomeTerritories.HomeStatus status(NGameUI gui) {
+    /** Independent village/claim/indoor checks for storage and workstation consumers. */
+    public static HomeLocationResolver.Status status(NGameUI gui) {
         Detection detection = detect(gui);
         if (gui == null)
-            return HomeTerritories.status(Collections.emptyList(), Collections.emptyList(), null);
+            return HomeLocationResolver.resolve(Collections.emptyList(), Collections.emptyList(),
+                    null, false, HomeInteriorRegistry.empty(), -1L, 0L, false);
         List<HomeTerritories.Entry> saved = HomeTerritories.decodeForWorld(
                 NConfig.get(NConfig.Key.homeTerritories), gui.getGenus());
-        return HomeTerritories.status(saved, detection.entries, detection.claimArea);
+        long gridId = -1L;
+        long instanceId = 0L;
+        boolean navigationReady = false;
+        if (gui.map instanceof NMapView) {
+            ChunkNavManager manager = ((NMapView) gui.map).getChunkNavManager();
+            if (manager != null && manager.isInitialized() && manager.getGraph() != null) {
+                gridId = manager.getGraph().getPlayerChunkId();
+                ChunkNavData chunk = manager.getGraph().getChunk(gridId);
+                if (chunk != null)
+                    instanceId = chunk.instanceId;
+                navigationReady = chunk != null && gridId != -1L && instanceId != 0L;
+            }
+        }
+        return HomeLocationResolver.resolve(saved, detection.entries, detection.claimArea,
+                detection.loading, HomeInteriorStore.load(gui.getGenus()),
+                gridId, instanceId, navigationReady);
     }
 
     public static boolean isCurrentVillageHome(NGameUI gui) {
-        return status(gui).village;
+        return status(gui).villageHome;
     }
 
     public static boolean isCurrentClaimHome(NGameUI gui) {
-        return status(gui).claim;
+        return status(gui).claimHome;
+    }
+
+    public static boolean isCurrentIndoorHome(NGameUI gui) {
+        return status(gui).indoorHome;
+    }
+
+    public static boolean isCurrentHome(NGameUI gui) {
+        return status(gui).home;
     }
 }
