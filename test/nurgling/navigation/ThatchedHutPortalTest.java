@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ThatchedHutPortalTest {
     private static final String EXTERIOR = "gfx/terobjs/arch/thatchedhut";
     private static final String INTERIOR_DOOR = "gfx/terobjs/arch/thatchedhut-door";
+    private static final String TENT_EXTERIOR = "gfx/terobjs/arch/primitivetent";
+    private static final String TENT_INTERIOR_DOOR = "gfx/terobjs/arch/primitivetent-door";
 
     @Test
     void thatchedHutResourcesFormTraversablePortalPair() {
@@ -32,6 +34,21 @@ class ThatchedHutPortalTest {
 
         assertTrue((Boolean) isPortalGob.invoke(tracker, EXTERIOR));
         assertTrue((Boolean) isPortalGob.invoke(tracker, INTERIOR_DOOR));
+    }
+
+    @Test
+    void primitiveTentIsTrackableAndInteriorDoorsAreInside() throws Exception {
+        PortalTraversalTracker tracker = new PortalTraversalTracker(null, null, null);
+        Method isPortalGob = PortalTraversalTracker.class.getDeclaredMethod("isPortalGob", String.class);
+        isPortalGob.setAccessible(true);
+        Method determineLayer = PortalTraversalTracker.class
+                .getDeclaredMethod("determineLayerFromExitPortal", String.class);
+        determineLayer.setAccessible(true);
+
+        assertTrue((Boolean) isPortalGob.invoke(tracker, TENT_EXTERIOR));
+        assertTrue((Boolean) isPortalGob.invoke(tracker, TENT_INTERIOR_DOOR));
+        assertEquals("inside", determineLayer.invoke(tracker, TENT_INTERIOR_DOOR));
+        assertEquals("inside", determineLayer.invoke(tracker, INTERIOR_DOOR));
     }
 
     @Test

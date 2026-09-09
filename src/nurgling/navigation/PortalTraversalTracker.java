@@ -6,6 +6,7 @@ import nurgling.NCore;
 import nurgling.NUtils;
 import nurgling.tasks.GateDetector;
 import nurgling.tools.Finder;
+import nurgling.tools.HomeInteriorRegistry;
 import nurgling.tools.NAlias;
 
 import java.util.*;
@@ -25,6 +26,8 @@ public class PortalTraversalTracker {
     private final ChunkNavGraph graph;
     private final ChunkNavRecorder recorder;
     private final ChunkNavManager manager;
+    private final HomePortalLearningService homeLearning;
+    private HomePortalLearningService.Pending pendingHomeLearning;
 
     // State tracking
     private long lastGridId = -1;
@@ -45,8 +48,8 @@ public class PortalTraversalTracker {
 
     private static final long CHECK_INTERVAL_MS = 100;
 
-    // Track recording state to detect OFF -> ON transitions
-    private boolean wasRecordingEnabled = false;
+    // Track combined overlay/home-learning state to detect false -> true transitions
+    private boolean wasTrackingEnabled = false;
 
     // Layer mappings based on portal exit type
     // Maps portal exit name patterns to the layer the destination chunk should be assigned
@@ -66,6 +69,8 @@ public class PortalTraversalTracker {
         PORTAL_TO_LAYER.put("greathall-door", "inside");
         PORTAL_TO_LAYER.put("stonetower-door", "inside");
         PORTAL_TO_LAYER.put("windmill-door", "inside");
+        PORTAL_TO_LAYER.put("thatchedhut-door", "inside");
+        PORTAL_TO_LAYER.put("primitivetent-door", "inside");
 
         // Stairs between floors (still inside)
         PORTAL_TO_LAYER.put("downstairs", "inside");
@@ -94,13 +99,20 @@ public class PortalTraversalTracker {
         "greathall",
         "stonetower",
         "windmill",
-        "thatchedhut"
+        "thatchedhut",
+        "primitivetent"
     };
 
     public PortalTraversalTracker(ChunkNavGraph graph, ChunkNavRecorder recorder, ChunkNavManager manager) {
+        this(graph, recorder, manager, HomePortalLearningService.disabled());
+    }
+
+    public PortalTraversalTracker(ChunkNavGraph graph, ChunkNavRecorder recorder, ChunkNavManager manager,
+            HomePortalLearningService homeLearning) {
         this.graph = graph;
         this.recorder = recorder;
         this.manager = manager;
+        this.homeLearning = homeLearning != null ? homeLearning : HomePortalLearningService.disabled();
     }
 
     /**
@@ -108,24 +120,22 @@ public class PortalTraversalTracker {
      * Safe to call frequently - internally throttled.
      */
     public void tick() {
-        // Check if ChunkNav overlay is enabled
-        Object val = NConfig.get(NConfig.Key.chunkNavOverlay);
-        boolean recordingEnabled = (val instanceof Boolean) && (Boolean) val;
+        boolean chunkOverlayEnabled = Boolean.TRUE.equals(NConfig.get(NConfig.Key.chunkNavOverlay));
+        boolean trackingEnabled = homeLearning.shouldTrack(chunkOverlayEnabled);
 
-        // Detect recording state change: OFF -> ON
-        // When recording is turned back on, reset state to prevent detecting stale grid changes
-        // that happened while recording was off. This fixes the bug where exiting a building,
+        // Detect tracking state change: OFF -> ON
+        // When tracking is turned back on, reset state to prevent detecting stale grid changes
+        // that happened while tracking was off. This fixes the bug where exiting a building,
         // turning off recording, walking away, then turning recording back on would cause
         // the exit portal to be recorded at the wrong location.
-        if (recordingEnabled && !wasRecordingEnabled) {
+        if (trackingEnabled && !wasTrackingEnabled) {
             reset();
             // Set lastGridId to current grid so we start fresh from current state
             lastGridId = graph.getPlayerChunkId();
         }
-        wasRecordingEnabled = recordingEnabled;
+        wasTrackingEnabled = trackingEnabled;
 
-        // Skip if ChunkNav overlay is disabled
-        if (!recordingEnabled) {
+        if (!trackingEnabled) {
             return;
         }
 
@@ -208,6 +218,7 @@ public class PortalTraversalTracker {
                     long gobGridId = getGobGridId(lastActions.gob);
                     cachedLastActionsGobGridId = (gobGridId != -1) ? gobGridId : currentGridId;
                 }
+                pendingHomeLearning = captureHomeLearning(gobName, currentGridId);
             }
         }
     }
@@ -229,6 +240,7 @@ public class PortalTraversalTracker {
             lastProcessedFromGridId = fromGridId;
             lastProcessedToGridId = toGridId;
             lastProcessedTime = now;
+            pendingHomeLearning = null;
             return;
         }
 
@@ -262,6 +274,7 @@ public class PortalTraversalTracker {
 
         // If we don't know what exit to look for, we didn't click a known portal - don't record anything
         if (expectedExitName == null) {
+            pendingHomeLearning = null;
             return;
         }
 
@@ -269,6 +282,7 @@ public class PortalTraversalTracker {
         exitPortal = Finder.findGob(new NAlias(expectedExitName));
 
         if (exitPortal == null || exitPortal.ngob == null) {
+            pendingHomeLearning = null;
             return;
         }
 
@@ -284,6 +298,7 @@ public class PortalTraversalTracker {
 
         // Update instanceId context for subsequent chunk recordings
         updateInstanceIdAfterTraversal(toGridId, exitName);
+        confirmHomeLearning(toGridId, exitName);
 
         // Record: entrance portal on its actual grid connects to toGrid
         // We determine entranceGridId first so we can use it for the exit portal's back-connection
@@ -339,6 +354,7 @@ public class PortalTraversalTracker {
         }
 
         // Clear tracking state after use
+        pendingHomeLearning = null;
         cachedLastActionsGob = null;
         cachedLastActionsGobLocalCoord = null;
         cachedLastActionsGobGridId = -1;
@@ -753,5 +769,52 @@ public class PortalTraversalTracker {
         cachedLastActionsGobLocalCoord = null;
         cachedLastActionsGobGridId = -1;
         lastProcessedPortalGobId = -1;
+        pendingHomeLearning = null;
+    }
+
+    private HomePortalLearningService.Pending captureHomeLearning(String portalResource, long fallbackGridId) {
+        long sourceGridId = cachedLastActionsGobGridId != -1 ? cachedLastActionsGobGridId : fallbackGridId;
+        long instanceId = manager == null ? ChunkNavManager.SURFACE_INSTANCE : manager.getCurrentInstanceId();
+        return homeLearning.capture(sourceGridId, cachedLastActionsGobLocalCoord, portalResource,
+                instanceId, layerOf(sourceGridId));
+    }
+
+    private void confirmHomeLearning(long toGridId, String exitName) {
+        if (pendingHomeLearning == null || pendingHomeLearning.portalCoord == null
+                || pendingHomeLearning.portalResource == null)
+            return;
+        String fromLayer = pendingHomeLearning.sourceLayer;
+        String toLayer = determineLayerFromExitPortal(exitName);
+        if (toLayer == null)
+            toLayer = "outside";
+        ChunkNavData fromChunk = graph == null ? null : graph.getChunk(pendingHomeLearning.sourceGridId);
+        ChunkNavData toChunk = graph == null ? null : graph.getChunk(toGridId);
+        if (fromChunk != null && fromChunk.layer != null && !fromChunk.layer.isEmpty())
+            fromLayer = fromChunk.layer;
+        if (toChunk != null && toChunk.layer != null && !toChunk.layer.isEmpty())
+            toLayer = toChunk.layer;
+        long fromInstance = pendingHomeLearning.sourceInstanceId;
+        long toInstance = manager == null ? 0L : manager.getCurrentInstanceId();
+        if (toChunk != null && toChunk.instanceId != 0)
+            toInstance = toChunk.instanceId;
+        HomeInteriorRegistry.PortalIdentity root = new HomeInteriorRegistry.PortalIdentity(
+                pendingHomeLearning.sourceGridId,
+                pendingHomeLearning.portalCoord.x,
+                pendingHomeLearning.portalCoord.y,
+                pendingHomeLearning.portalResource);
+        HomePortalInheritance.Traversal traversal = new HomePortalInheritance.Traversal(
+                pendingHomeLearning.sourceGridId, toGridId, fromInstance, toInstance,
+                fromLayer, toLayer, ChunkPortal.classifyPortal(pendingHomeLearning.portalResource),
+                root, exitName, true, false, System.currentTimeMillis());
+        homeLearning.confirm(pendingHomeLearning, traversal);
+    }
+
+    private String layerOf(long gridId) {
+        if (graph == null)
+            return "outside";
+        ChunkNavData chunk = graph.getChunk(gridId);
+        if (chunk == null || chunk.layer == null || chunk.layer.isEmpty())
+            return "outside";
+        return chunk.layer;
     }
 }

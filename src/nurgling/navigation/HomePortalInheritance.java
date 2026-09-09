@@ -70,12 +70,21 @@ public final class HomePortalInheritance {
         }
     }
 
+    static boolean isMineOrCaveLayer(String layer) {
+        if (layer == null)
+            return false;
+        String lower = layer.toLowerCase();
+        return lower.startsWith("mine") || lower.startsWith("cave");
+    }
+
     private HomePortalInheritance() {
     }
 
     public static boolean canInherit(ChunkPortal.PortalType type, String fromLayer,
             String toLayer, boolean confirmed, boolean teleport) {
         if (!confirmed || teleport || type == null || toLayer == null)
+            return false;
+        if (isMineOrCaveLayer(fromLayer))
             return false;
         if (!"inside".equals(toLayer) && !"cellar".equals(toLayer))
             return false;

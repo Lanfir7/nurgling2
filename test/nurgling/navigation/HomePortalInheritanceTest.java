@@ -62,6 +62,20 @@ class HomePortalInheritanceTest {
                 ChunkPortal.PortalType.DOOR, "outside", "mine1", true, false));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ChunkPortal.PortalType.class,
+            names = {"DOOR", "STAIRS_UP", "STAIRS_DOWN", "CELLAR"})
+    void neverInheritsFromMineOrCaveSource(ChunkPortal.PortalType type) {
+        assertFalse(HomePortalInheritance.canInherit(type, "mine1", "inside", true, false));
+        assertFalse(HomePortalInheritance.canInherit(type, "mine2", "cellar", true, false));
+        assertFalse(HomePortalInheritance.canInherit(type, "cave", "inside", true, false));
+        HomePortalInheritance.Change change = HomePortalInheritance.apply(
+                HomeInteriorRegistry.empty(), surfaceHome(),
+                traversal(type, "mine1", "inside", true, false, 1001L));
+        assertFalse(change.changed);
+        assertTrue(change.registry.bindings().isEmpty());
+    }
+
     @Test
     void marketBuildingDoesNotBecomeHomeWithoutAHomeSource() {
         HomePortalInheritance.Change change = HomePortalInheritance.apply(

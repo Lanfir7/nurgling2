@@ -75,7 +75,8 @@ public class ChunkNavManager {
         this.recorder = new ChunkNavRecorder(graph);
         this.recorder.setManager(this);
         this.planner = new ChunkNavPlanner(graph);
-        this.portalTracker = new PortalTraversalTracker(graph, recorder, this);
+        this.portalTracker = new PortalTraversalTracker(graph, recorder, this,
+                new HomePortalLearningService(this));
 
         // Create single-thread executor for background recording
         this.recordingExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -91,6 +92,10 @@ public class ChunkNavManager {
 
         // Set static reference for backward compatibility
         instance = this;
+    }
+
+    public String getCurrentGenus() {
+        return currentGenus;
     }
 
     /**
@@ -135,7 +140,8 @@ public class ChunkNavManager {
             this.recorder = new ChunkNavRecorder(graph);
             this.recorder.setManager(this);
             this.planner = new ChunkNavPlanner(graph);
-            this.portalTracker = new PortalTraversalTracker(graph, recorder, this);
+            this.portalTracker = new PortalTraversalTracker(graph, recorder, this,
+                    new HomePortalLearningService(this));
             this.fileStore = new ChunkNavFileStore(genus);
             this.currentInstanceId = SURFACE_INSTANCE;
 
