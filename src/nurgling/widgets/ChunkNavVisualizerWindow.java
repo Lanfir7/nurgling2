@@ -2,7 +2,11 @@ package nurgling.widgets;
 
 import haven.*;
 import nurgling.*;
+import nurgling.i18n.L10n;
 import nurgling.navigation.*;
+import nurgling.tools.HomeInteriorRegistry;
+import nurgling.tools.HomeInteriorStore;
+import nurgling.tools.HomeTerritories;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -40,6 +44,7 @@ public class ChunkNavVisualizerWindow extends Window {
     private static final Color COLOR_PATH_START = new Color(0, 255, 0);
     private static final Color COLOR_PATH_END = new Color(255, 0, 0);
     private static final Color COLOR_GRID = new Color(100, 100, 100);
+    private static final Color COLOR_HOME = new Color(196, 168, 48);
 
     // UI State
     private boolean showPortals = true;
@@ -59,6 +64,8 @@ public class ChunkNavVisualizerWindow extends Window {
 
     // Data
     private List<ChunkNavData> chunks = new ArrayList<>();
+    private HomeInteriorRegistry indoorRegistry = HomeInteriorRegistry.empty();
+    private List<HomeTerritories.Entry> savedHomes = new ArrayList<>();
     private Map<Long, Coord> positions = new HashMap<>();  // gridId -> (x, y) in grid coords
     private Map<String, int[]> layerBounds = new HashMap<>();  // layer -> [minY, maxY] in grid coords
     private Coord worldBoundsMin = Coord.z;
@@ -83,6 +90,7 @@ public class ChunkNavVisualizerWindow extends Window {
     private final CheckBox gridCb;
     private final CheckBox cellLinesCb;
     private final Button deleteChunkBtn;
+    private final Button homeActionBtn;
     private final Button deleteAllBtn;
 
     public ChunkNavVisualizerWindow() {
@@ -147,7 +155,7 @@ public class ChunkNavVisualizerWindow extends Window {
         add(new Label("SELECTED"), new Coord(UI.scale(10), y));
         y += UI.scale(18);
         selectedLabel = add(new Label("None"), new Coord(UI.scale(10), y));
-        y += UI.scale(30);
+        y += UI.scale(80);
 
         add(new Button(UI.scale(SETTINGS_WIDTH - 20), "Reload") {
             @Override
@@ -166,6 +174,16 @@ public class ChunkNavVisualizerWindow extends Window {
             }
         }, new Coord(UI.scale(10), y));
         deleteChunkBtn.disable(true);  // Disabled until a chunk is selected
+        y += UI.scale(30);
+
+        homeActionBtn = add(new Button(UI.scale(SETTINGS_WIDTH - 20), L10n.get("world.home.indoor.mark")) {
+            @Override
+            public void click() {
+                super.click();
+                toggleSelectedHome();
+            }
+        }, new Coord(UI.scale(10), y));
+        homeActionBtn.disable(true);
         y += UI.scale(30);
 
         deleteAllBtn = add(new Button(UI.scale(SETTINGS_WIDTH - 20), "Delete All") {
@@ -211,9 +229,13 @@ public class ChunkNavVisualizerWindow extends Window {
     }
 
     private void reloadData() {
+        long selectedGridId = selectedGridId();
         ChunkNavManager manager = getChunkNavManager();
         if (manager == null || !manager.isInitialized()) {
+            indoorRegistry = HomeInteriorRegistry.empty();
+            savedHomes = new ArrayList<>();
             statusLabel.settext("ChunkNav not initialized");
+            updateSelectedLabel();
             return;
         }
 
@@ -224,8 +246,15 @@ public class ChunkNavVisualizerWindow extends Window {
         // Get last planned path
         lastPath = manager.getLastPlannedPath();
 
+        String genus = manager.getCurrentGenus();
+        indoorRegistry = HomeInteriorStore.load(genus);
+        savedHomes = HomeTerritories.decodeForWorld(
+                NConfig.get(NConfig.Key.homeTerritories), genus);
+
         // Build positions from neighbor relationships
         buildPositions();
+        restoreSelection(selectedGridId);
+        updateSelectedLabel();
 
         // Generate textures
         regenerateTextures();
@@ -583,6 +612,7 @@ public class ChunkNavVisualizerWindow extends Window {
 
         // Draw walkability at cell level
         float cellSize = (float) texSize / CELLS_PER_EDGE;
+        boolean home = isActiveHome(chunk);
         for (int cy = 0; cy < CELLS_PER_EDGE; cy++) {
             for (int cx = 0; cx < CELLS_PER_EDGE; cx++) {
                 boolean obs = chunk.observed[cx][cy];
@@ -596,6 +626,7 @@ public class ChunkNavVisualizerWindow extends Window {
                 } else {
                     color = COLOR_BLOCKED;
                 }
+                color = withHomeTint(color, home);
 
                 int px = (int) (cx * cellSize);
                 int py = (int) (cy * cellSize);
@@ -678,6 +709,7 @@ public class ChunkNavVisualizerWindow extends Window {
     private void drawScaledChunk(WritableRaster buf, ChunkNavData chunk, int px, int py, int chunkSize) {
         float stepX = (float) CELLS_PER_EDGE / chunkSize;
         float stepY = (float) CELLS_PER_EDGE / chunkSize;
+        boolean home = isActiveHome(chunk);
 
         for (int y = 0; y < chunkSize; y++) {
             for (int x = 0; x < chunkSize; x++) {
@@ -701,6 +733,7 @@ public class ChunkNavVisualizerWindow extends Window {
                 } else {
                     color = COLOR_BLOCKED;
                 }
+                color = withHomeTint(color, home);
 
                 setPixel(buf, imgX, imgY, color);
             }
@@ -834,6 +867,8 @@ public class ChunkNavVisualizerWindow extends Window {
     }
 
     private void updateSelectedLabel() {
+        ChunkHomePresentation presentation = selectedPresentation();
+        updateHomeActionButton(presentation);
         if (selectedChunkIdx >= 0 && selectedChunkIdx < chunks.size()) {
             ChunkNavData chunk = chunks.get(selectedChunkIdx);
             int portalCount = chunk.portals.size();
@@ -845,13 +880,116 @@ public class ChunkNavVisualizerWindow extends Window {
             }
             int obsPct = observedCount * 100 / (CELLS_PER_EDGE * CELLS_PER_EDGE);
             String layer = chunk.layer != null ? chunk.layer : "outside";
-            selectedLabel.settext(String.format("%s\nID: %d\nPortals: %d\nObs: %d%%",
+            StringBuilder text = new StringBuilder();
+            text.append(String.format("%s\nID: %d\nPortals: %d\nObs: %d%%",
                     layer, chunk.gridId, portalCount, obsPct));
+            text.append('\n').append(L10n.get("home.debug.instance")).append(": ").append(chunk.instanceId);
+            text.append('\n').append(L10n.get("world.home.indoor.status")).append(": ")
+                    .append(homeKindText(presentation.kind));
+            if (!presentation.sourceLabel.isEmpty()) {
+                text.append('\n').append(L10n.get("world.home.indoor.source")).append(": ")
+                        .append(presentation.sourceLabel);
+            }
+            selectedLabel.settext(text.toString());
             deleteChunkBtn.disable(false);  // Enable delete button
         } else {
             selectedLabel.settext("None");
             deleteChunkBtn.disable(true);   // Disable delete button
         }
+    }
+
+    private ChunkHomePresentation selectedPresentation() {
+        if (selectedChunkIdx < 0 || selectedChunkIdx >= chunks.size())
+            return ChunkHomePresentation.forChunk(null, indoorRegistry, savedHomes);
+        return ChunkHomePresentation.forChunk(chunks.get(selectedChunkIdx), indoorRegistry, savedHomes);
+    }
+
+    private void updateHomeActionButton(ChunkHomePresentation presentation) {
+        if (presentation.canUnmarkManual) {
+            homeActionBtn.change(L10n.get("world.home.indoor.unmark"));
+            homeActionBtn.disable(false);
+        } else {
+            homeActionBtn.change(L10n.get("world.home.indoor.mark"));
+            homeActionBtn.disable(!presentation.canMarkManual);
+        }
+    }
+
+    private static String homeKindText(ChunkHomePresentation.Kind kind) {
+        switch (kind) {
+            case AUTO:
+                return L10n.get("world.home.indoor.auto");
+            case MANUAL:
+                return L10n.get("world.home.indoor.manual");
+            default:
+                return L10n.get("common.no");
+        }
+    }
+
+    private boolean isActiveHome(ChunkNavData chunk) {
+        return ChunkHomePresentation.forChunk(chunk, indoorRegistry, savedHomes).active;
+    }
+
+    private static Color withHomeTint(Color base, boolean home) {
+        if (!home || base == null)
+            return base;
+        float t = 0.42f;
+        return new Color(
+                Math.round(base.getRed() + (COLOR_HOME.getRed() - base.getRed()) * t),
+                Math.round(base.getGreen() + (COLOR_HOME.getGreen() - base.getGreen()) * t),
+                Math.round(base.getBlue() + (COLOR_HOME.getBlue() - base.getBlue()) * t),
+                base.getAlpha());
+    }
+
+    private long selectedGridId() {
+        if (selectedChunkIdx < 0 || selectedChunkIdx >= chunks.size())
+            return -1L;
+        return chunks.get(selectedChunkIdx).gridId;
+    }
+
+    private void restoreSelection(long selectedGridId) {
+        if (selectedGridId == -1L) {
+            selectedChunkIdx = -1;
+            return;
+        }
+        for (int i = 0; i < chunks.size(); i++) {
+            if (chunks.get(i).gridId == selectedGridId) {
+                selectedChunkIdx = i;
+                return;
+            }
+        }
+        selectedChunkIdx = -1;
+    }
+
+    private void toggleSelectedHome() {
+        if (selectedChunkIdx < 0 || selectedChunkIdx >= chunks.size())
+            return;
+        ChunkNavManager manager = getChunkNavManager();
+        if (manager == null || !manager.isInitialized())
+            return;
+        ChunkNavData chunk = chunks.get(selectedChunkIdx);
+        ChunkHomePresentation presentation = ChunkHomePresentation.forChunk(
+                chunk, indoorRegistry, savedHomes);
+        String genus = manager.getCurrentGenus();
+        if (presentation.canUnmarkManual) {
+            HomeInteriorStore.update(genus, current -> current.unmarkManual(chunk.instanceId));
+        } else if (presentation.canMarkManual) {
+            HomeInteriorStore.update(genus, current -> current.markManual(
+                    chunk.instanceId, gridsForInstance(chunk.instanceId), null));
+        } else {
+            return;
+        }
+        reloadData();
+    }
+
+    private Collection<Long> gridsForInstance(long instanceId) {
+        LinkedHashSet<Long> grids = new LinkedHashSet<Long>();
+        if (instanceId <= ChunkNavManager.SURFACE_INSTANCE)
+            return grids;
+        for (ChunkNavData chunk : chunks) {
+            if (chunk != null && chunk.instanceId == instanceId)
+                grids.add(chunk.gridId);
+        }
+        return grids;
     }
 
     /**
