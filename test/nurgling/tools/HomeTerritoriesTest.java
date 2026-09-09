@@ -110,6 +110,55 @@ class HomeTerritoriesTest {
                 HomeTerritories.matchingHomes(saved,
                         Collections.singletonList(new HomeTerritories.Entry(
                                 HomeTerritories.Type.VILLAGE, "Market Town")), homeArea));
+
+        HomeTerritories.HomeStatus atHome = HomeTerritories.status(saved, current, homeArea);
+        HomeTerritories.HomeStatus villageOnly = HomeTerritories.status(saved,
+                Collections.singletonList(new HomeTerritories.Entry(
+                        HomeTerritories.Type.VILLAGE, "Moria")),
+                new ClaimArea(new ClaimArea.Tile(8L, 10, 10), Collections.singletonList(
+                        new ClaimArea.Tile(8L, 10, 10))));
+        HomeTerritories.HomeStatus mixedCaseVillage = HomeTerritories.status(saved,
+                Collections.singletonList(new HomeTerritories.Entry(
+                        HomeTerritories.Type.VILLAGE, "moria")),
+                new ClaimArea(new ClaimArea.Tile(8L, 10, 10), Collections.singletonList(
+                        new ClaimArea.Tile(8L, 10, 10))));
+        HomeTerritories.HomeStatus claimOnly = HomeTerritories.status(saved,
+                Collections.singletonList(new HomeTerritories.Entry(
+                        HomeTerritories.Type.VILLAGE, "Market Town")), homeArea);
+
+        assertTrue(atHome.village);
+        assertTrue(atHome.claim);
+        assertTrue(villageOnly.village);
+        assertFalse(villageOnly.claim);
+        assertTrue(mixedCaseVillage.village);
+        assertFalse(mixedCaseVillage.claim);
+        assertFalse(claimOnly.village);
+        assertTrue(claimOnly.claim);
+    }
+
+    @Test
+    void mergeAndStatusTreatMixedCaseVillageAndClaimNamesAsTheSameHome() {
+        HomeTerritories.Entry savedVillage = new HomeTerritories.Entry(
+                HomeTerritories.Type.VILLAGE, "Moria");
+        HomeTerritories.Entry currentVillage = new HomeTerritories.Entry(
+                HomeTerritories.Type.VILLAGE, "moria");
+        HomeTerritories.Entry savedClaim = new HomeTerritories.Entry(
+                HomeTerritories.Type.CLAIM, "Lanfir");
+        HomeTerritories.Entry currentClaim = new HomeTerritories.Entry(
+                HomeTerritories.Type.CLAIM, "lanfir");
+
+        List<HomeTerritories.Entry> merged = HomeTerritories.merge(
+                Arrays.asList(savedVillage, savedClaim),
+                Arrays.asList(currentVillage, currentClaim));
+        HomeTerritories.HomeStatus atHome = HomeTerritories.status(
+                Arrays.asList(savedVillage, savedClaim),
+                Arrays.asList(currentVillage, currentClaim), null);
+
+        assertEquals(2, merged.size());
+        assertEquals("Moria", merged.get(0).name);
+        assertEquals("Lanfir", merged.get(1).name);
+        assertTrue(atHome.village);
+        assertTrue(atHome.claim);
     }
 
     @Test

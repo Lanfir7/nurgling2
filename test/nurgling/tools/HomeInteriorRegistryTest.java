@@ -140,6 +140,21 @@ class HomeInteriorRegistryTest {
                 new HomeTerritories.Entry(HomeTerritories.Type.CLAIM, "Other"))));
     }
 
+    @Test
+    void removeWithSuppressionKeepsTombstoneAfterManualMark() {
+        HomeInteriorRegistry.Binding binding = automaticBinding(
+                "auto:42:7:9:gfx/terobjs/arch/stonemansion", 9001L,
+                setOf(1001L), "claim-anchor:42:7:9");
+        HomeInteriorRegistry.PortalIdentity portal = binding.rootPortal;
+        HomeInteriorRegistry registry = HomeInteriorRegistry.empty()
+                .put(binding)
+                .markManual(9001L, setOf(1001L), "Manual")
+                .remove(binding.id, true);
+
+        assertTrue(registry.bindings().isEmpty());
+        assertTrue(registry.isSuppressed(portal));
+    }
+
     @SafeVarargs
     private static <T> Set<T> setOf(T... values) {
         return new LinkedHashSet<T>(Arrays.asList(values));

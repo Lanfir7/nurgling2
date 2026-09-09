@@ -187,10 +187,10 @@ public final class HomeTerritories {
         if (first == null || second == null || first.type != second.type)
             return false;
         if (first.type == Type.VILLAGE)
-            return first.name.equals(second.name);
+            return namesMatch(first.name, second.name);
         if (first.area != null && second.area != null)
             return first.area.overlaps(second.area);
-        return !first.name.isEmpty() && first.name.equals(second.name);
+        return !first.name.isEmpty() && namesMatch(first.name, second.name);
     }
 
     private static Entry mergeEntries(Entry saved, Entry current) {

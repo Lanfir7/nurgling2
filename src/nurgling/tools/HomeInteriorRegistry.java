@@ -48,7 +48,7 @@ public final class HomeInteriorRegistry {
         LinkedHashMap<String, Binding> next = copyBindings();
         next.remove(bindingId);
         Set<PortalIdentity> suppressed = suppressedPortals;
-        if (suppressAutomatic && binding != null && !binding.manual && binding.rootPortal != null)
+        if (suppressAutomatic && binding != null && binding.rootPortal != null)
             suppressed = withSuppressed(binding.rootPortal);
         return new HomeInteriorRegistry(Collections.unmodifiableMap(next), suppressed);
     }
