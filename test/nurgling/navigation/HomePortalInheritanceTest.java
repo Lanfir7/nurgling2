@@ -159,6 +159,36 @@ class HomePortalInheritanceTest {
         assertFalse(onlyBinding(change.registry).gridIds.contains(100L));
     }
 
+    @Test
+    void reenteringSameRootFromSurfaceKeepsMergedFloorAndCellarGrids() {
+        HomePortalInheritance.Change first = HomePortalInheritance.apply(
+                HomeInteriorRegistry.empty(), surfaceHome(), buildingTraversal());
+        HomeInteriorRegistry.Binding indoor = onlyBinding(first.registry);
+        HomePortalInheritance.Change floor = HomePortalInheritance.apply(first.registry,
+                new HomePortalInheritance.SourceContext(
+                        Collections.<HomeInteriorRegistry.OriginKey>emptySet(), indoor),
+                traversal(ChunkPortal.PortalType.STAIRS_UP, "inside", "inside", true, false, 1002L));
+        HomeInteriorRegistry.Binding withFloor = onlyBinding(floor.registry);
+        HomePortalInheritance.Change cellar = HomePortalInheritance.apply(floor.registry,
+                new HomePortalInheritance.SourceContext(
+                        Collections.<HomeInteriorRegistry.OriginKey>emptySet(), withFloor),
+                traversal(ChunkPortal.PortalType.CELLAR, "inside", "cellar", true, false, 1004L));
+        HomeInteriorRegistry afterLeave = HomePortalInheritance.apply(cellar.registry,
+                new HomePortalInheritance.SourceContext(
+                        Collections.<HomeInteriorRegistry.OriginKey>emptySet(),
+                        onlyBinding(cellar.registry)),
+                traversal(ChunkPortal.PortalType.DOOR, "inside", "outside", true, false, 100L)).registry;
+        HomePortalInheritance.Change reenter = HomePortalInheritance.apply(
+                afterLeave, surfaceHome(), buildingTraversal());
+        HomeInteriorRegistry.Binding restored = onlyBinding(reenter.registry);
+        assertEquals(indoor.id, restored.id);
+        assertEquals(setOf(1001L, 1002L, 1004L), restored.gridIds);
+        assertEquals(indoor.origins, restored.origins);
+        assertEquals(indoor.rootPortal, restored.rootPortal);
+        assertEquals(indoor.displayName, restored.displayName);
+        assertFalse(restored.manual);
+    }
+
     private static HomeInteriorRegistry.PortalIdentity doorPortal() {
         return new HomeInteriorRegistry.PortalIdentity(42L, 7, 9,
                 "gfx/terobjs/arch/stonemansion-door");

@@ -99,11 +99,16 @@ public final class HomePortalInheritance {
                 traversal.confirmed, traversal.teleport))
             return unchanged(current);
         if (source.inheritedBinding != null)
-            return putBinding(current, mergeDestination(source.inheritedBinding, traversal));
+            return putBinding(current, mergeDestination(source.inheritedBinding, traversal,
+                    Collections.<HomeInteriorRegistry.OriginKey>emptySet()));
         if (source.directOrigins.isEmpty() || traversal.rootPortal == null)
             return unchanged(current);
+        String autoId = "auto:" + traversal.rootPortal.stableKey();
+        HomeInteriorRegistry.Binding existing = bindingWithId(current, autoId);
+        if (existing != null)
+            return putBinding(current, mergeDestination(existing, traversal, source.directOrigins));
         return putBinding(current, HomeInteriorRegistry.Binding.automatic(
-                "auto:" + traversal.rootPortal.stableKey(),
+                autoId,
                 traversal.toInstanceId,
                 Collections.singleton(traversal.toGridId),
                 source.directOrigins,
@@ -112,8 +117,17 @@ public final class HomePortalInheritance {
                 traversal.occurredAt));
     }
 
+    private static HomeInteriorRegistry.Binding bindingWithId(HomeInteriorRegistry registry, String id) {
+        for (HomeInteriorRegistry.Binding binding : registry.bindings()) {
+            if (id.equals(binding.id))
+                return binding;
+        }
+        return null;
+    }
+
     private static HomeInteriorRegistry.Binding mergeDestination(
-            HomeInteriorRegistry.Binding existing, Traversal traversal) {
+            HomeInteriorRegistry.Binding existing, Traversal traversal,
+            Set<HomeInteriorRegistry.OriginKey> extraOrigins) {
         HomeInteriorRegistry.PortalIdentity root = existing.rootPortal != null
                 ? existing.rootPortal : traversal.rootPortal;
         if (root == null)
@@ -122,7 +136,7 @@ public final class HomePortalInheritance {
                 existing.id,
                 traversal.toInstanceId,
                 Collections.singleton(traversal.toGridId),
-                Collections.<HomeInteriorRegistry.OriginKey>emptySet(),
+                extraOrigins,
                 root,
                 existing.displayName,
                 traversal.occurredAt));
