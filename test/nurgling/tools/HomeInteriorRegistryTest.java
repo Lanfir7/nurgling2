@@ -1,5 +1,6 @@
 package nurgling.tools;
 
+import nurgling.navigation.ChunkNavManager;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -93,6 +94,17 @@ class HomeInteriorRegistryTest {
         payload.put("version", HomeInteriorRegistry.VERSION + 1);
 
         assertTrue(HomeInteriorRegistry.decodeForWorld(stored, "world-one").bindings().isEmpty());
+    }
+
+    @Test
+    void surfaceInstanceDoesNotMatchAnotherSurfaceGrid() {
+        HomeInteriorRegistry.Binding indoor = automaticBinding(
+                "auto-surface", ChunkNavManager.SURFACE_INSTANCE, setOf(1001L),
+                "claim-anchor:42:7:9");
+        HomeInteriorRegistry registry = HomeInteriorRegistry.empty().put(indoor);
+
+        assertEquals(indoor, registry.findActive(1001L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
+        assertEquals(null, registry.findActive(42L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
     }
 
     @Test

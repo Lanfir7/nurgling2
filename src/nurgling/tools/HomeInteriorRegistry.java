@@ -103,7 +103,8 @@ public final class HomeInteriorRegistry {
                 continue;
             if (byGrid == null && binding.gridIds.contains(gridId))
                 byGrid = binding;
-            if (byInstance == null && instanceId != 0L && binding.instanceId == instanceId)
+            if (byInstance == null && instanceId > nurgling.navigation.ChunkNavManager.SURFACE_INSTANCE
+                    && binding.instanceId == instanceId)
                 byInstance = binding;
         }
         return byGrid != null ? byGrid : byInstance;
@@ -492,9 +493,43 @@ public final class HomeInteriorRegistry {
             LinkedHashSet<OriginKey> mergedOrigins = new LinkedHashSet<OriginKey>(origins);
             mergedOrigins.addAll(incoming.origins);
             String name = incoming.displayName.isEmpty() ? displayName : incoming.displayName;
-            return new Binding(id, instanceId != 0L ? instanceId : incoming.instanceId, grids,
+            long keptInstance = instanceId > nurgling.navigation.ChunkNavManager.SURFACE_INSTANCE
+                    ? instanceId : incoming.instanceId;
+            return new Binding(id, keptInstance, grids,
                     mergedOrigins, rootPortal != null ? rootPortal : incoming.rootPortal,
                     manual || incoming.manual, name, Math.max(lastSeen, incoming.lastSeen));
+        }
+
+        public String sourceLabel(Collection<HomeTerritories.Entry> saved) {
+            if (!displayName.isEmpty())
+                return displayName;
+            return activeOriginNames(saved);
+        }
+
+        public String activeOriginNames(Collection<HomeTerritories.Entry> saved) {
+            Collection<HomeTerritories.Entry> homes = saved == null
+                    ? Collections.<HomeTerritories.Entry>emptyList() : saved;
+            TreeSet<String> names = new TreeSet<String>();
+            for (OriginKey origin : origins) {
+                if (origin == null || !origin.matches(homes))
+                    continue;
+                for (HomeTerritories.Entry entry : homes) {
+                    if (entry != null && origin.matches(Collections.singletonList(entry))) {
+                        String name = entry.displayName();
+                        if (name != null && !name.isEmpty())
+                            names.add(name);
+                    }
+                }
+            }
+            if (names.isEmpty())
+                return "";
+            StringBuilder text = new StringBuilder();
+            for (String name : names) {
+                if (text.length() > 0)
+                    text.append(", ");
+                text.append(name);
+            }
+            return text.toString();
         }
 
         public boolean active(Collection<HomeTerritories.Entry> saved) {

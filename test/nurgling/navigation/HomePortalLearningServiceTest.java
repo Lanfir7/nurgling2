@@ -284,6 +284,94 @@ class HomePortalLearningServiceTest {
     }
 
     @Test
+    void surfaceInstanceConfirmDoesNotPersistAutomaticBinding() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        HomePortalLearningService service = service(store, savedClaimContext());
+        HomePortalLearningService.Pending pending = service.capture(
+                42L, 7, 9, "gfx/terobjs/arch/thatchedhut", 1L, "outside");
+
+        service.confirm(pending, confirmedInsideTraversal(901L, ChunkNavManager.SURFACE_INSTANCE));
+        service.confirm(pending, confirmedInsideTraversal(901L, 0L));
+
+        assertEquals(0, store.updateCount);
+        assertTrue(store.registry.bindings().isEmpty());
+        assertNull(store.registry.findActive(42L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
+    }
+
+    @Test
+    void firstTimeReenterAssignsInteriorInstanceBeforeLearning() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        HomePortalLearningService service = service(store, savedClaimContext());
+        ChunkNavData dest = new ChunkNavData(901L);
+        dest.instanceId = ChunkNavManager.SURFACE_INSTANCE;
+        dest.layer = "inside";
+
+        long assigned = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                dest, 901L, "gfx/terobjs/arch/thatchedhut-door");
+        PortalTraversalTracker.stampDestinationInstance(dest, assigned);
+
+        assertEquals(901L, assigned);
+        assertEquals(901L, dest.instanceId);
+        assertTrue(assigned > ChunkNavManager.SURFACE_INSTANCE);
+
+        HomePortalLearningService.Pending pending = service.capture(
+                42L, 7, 9, "gfx/terobjs/arch/thatchedhut",
+                ChunkNavManager.SURFACE_INSTANCE, "outside");
+        service.confirm(pending, confirmedInsideTraversal(901L, dest.instanceId));
+
+        HomeInteriorRegistry.Binding learned = store.registry.findActive(901L, dest.instanceId, savedClaim());
+        assertNotNull(learned);
+        assertEquals(901L, learned.instanceId);
+        assertNull(store.registry.findActive(42L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
+    }
+
+    @Test
+    void validInteriorInstanceIsPreservedOnReentry() {
+        ChunkNavData dest = new ChunkNavData(901L);
+        dest.instanceId = 8001L;
+        dest.layer = "inside";
+
+        long assigned = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                dest, 901L, "gfx/terobjs/arch/thatchedhut-door");
+        PortalTraversalTracker.stampDestinationInstance(dest, assigned);
+
+        assertEquals(8001L, assigned);
+        assertEquals(8001L, dest.instanceId);
+    }
+
+    @Test
+    void backfillMergesIntoLiveRegistryRatherThanReplacingIt() {
+        HomeInteriorRegistry concurrent = HomeInteriorRegistry.empty().put(concurrentCabin());
+        HomeInteriorRegistry result = backfill(claimedHutGraph(), savedClaim(), concurrent);
+
+        assertNotNull(result.find(concurrentCabin().id));
+        assertNotNull(result.findActive(901L, 8001L, savedClaim()));
+        assertEquals(2, result.bindings().size());
+    }
+
+    @Test
+    void claimBackfillUpdaterUsesLiveCurrentNotClosedSnapshot() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        store.registry = HomeInteriorRegistry.empty().put(concurrentCabin());
+        HomePortalLearningService service = service(store, savedClaimContext());
+        HomeInteriorRegistry snapshot = HomeInteriorRegistry.empty();
+
+        store.update("test-world", HomePortalLearningService.claimBackfillUpdater(
+                claimedHutGraph(), savedClaim(), service));
+
+        assertNotNull(store.registry.find(concurrentCabin().id));
+        assertNotNull(store.registry.findActive(901L, 8001L, savedClaim()));
+        assertEquals(2, store.registry.bindings().size());
+        assertEquals(1, store.updateCount);
+
+        HomeInteriorRegistry unchanged = store.registry;
+        store.update("test-world", HomePortalLearningService.claimBackfillUpdater(
+                claimedHutGraph(), savedClaim(), service));
+        assertEquals(unchanged, store.registry);
+        assertEquals(snapshot, HomeInteriorRegistry.empty());
+    }
+
+    @Test
     void backfillCreatesBindingWhenSavedClaimContainsPortalTile() {
         HomeInteriorRegistry result = backfill(claimedHutGraph(), savedClaim(),
                 HomeInteriorRegistry.empty());
@@ -433,6 +521,14 @@ class HomePortalLearningServiceTest {
                 "auto:" + hutPortal().stableKey(), instanceId, setOf(gridId),
                 setOf(HomeInteriorRegistry.OriginKey.parse("claim-anchor:42:7:9")),
                 hutPortal(), "", 1000L);
+    }
+
+    private static HomeInteriorRegistry.Binding concurrentCabin() {
+        return HomeInteriorRegistry.Binding.automatic(
+                "auto:concurrent", 8L, setOf(3001L),
+                setOf(HomeInteriorRegistry.OriginKey.parse("claim-anchor:42:7:9")),
+                new HomeInteriorRegistry.PortalIdentity(99L, 1, 1, "gfx/terobjs/arch/logcabin-door"),
+                "", 1L);
     }
 
     private static HomePortalInheritance.Traversal confirmedInsideTraversal(long toGridId,

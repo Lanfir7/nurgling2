@@ -160,6 +160,21 @@ public final class HomePortalLearningService {
         return new Pending(sourceGridId, portalCoord, portalResource, sourceInstanceId, sourceLayer, source);
     }
 
+    public static UnaryOperator<HomeInteriorRegistry> claimBackfillUpdater(
+            final ChunkNavGraph graph,
+            final Collection<HomeTerritories.Entry> savedHomes,
+            final HomePortalLearningService learning) {
+        return new UnaryOperator<HomeInteriorRegistry>() {
+            @Override
+            public HomeInteriorRegistry apply(HomeInteriorRegistry current) {
+                HomeInteriorRegistry base = current == null
+                        ? HomeInteriorRegistry.empty() : current;
+                HomeInteriorRegistry next = learning.backfillClaims(graph, savedHomes, base);
+                return next.equals(base) ? base : next;
+            }
+        };
+    }
+
     public HomeInteriorRegistry backfillClaims(ChunkNavGraph graph,
             Collection<HomeTerritories.Entry> savedHomes,
             HomeInteriorRegistry registry) {

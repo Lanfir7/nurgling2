@@ -16,6 +16,8 @@ public final class HomeInteriorStore {
         Object stored = NConfig.update(NConfig.Key.homeInteriors, raw -> {
             HomeInteriorRegistry current = HomeInteriorRegistry.decodeForWorld(raw, genus);
             HomeInteriorRegistry changed = Objects.requireNonNull(updater.apply(current));
+            if (changed.equals(current))
+                return raw;
             return HomeInteriorRegistry.encodeForWorld(raw, genus, changed);
         });
         return HomeInteriorRegistry.decodeForWorld(stored, genus);

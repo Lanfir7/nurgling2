@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -98,6 +99,21 @@ class NConfigHomeInteriorsTest {
             assertEquals(1, HomeInteriorRegistry.decodeForWorld(stored, "world-two").bindings().size());
         } finally {
             releaseFirst.countDown();
+            NConfig.current = previous;
+        }
+    }
+
+    @Test
+    void noOpUpdateDoesNotMarkConfigDirty() {
+        NConfig previous = NConfig.current;
+        try {
+            NConfig.current = new NConfig();
+            assertFalse(NConfig.current.isUpdated());
+            HomeInteriorStore.update("world-one", registry -> registry);
+            assertFalse(NConfig.current.isUpdated());
+            HomeInteriorStore.update("world-one", registry -> registry.put(learnedBinding()));
+            assertTrue(NConfig.current.isUpdated());
+        } finally {
             NConfig.current = previous;
         }
     }

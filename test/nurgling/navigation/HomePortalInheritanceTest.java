@@ -86,6 +86,26 @@ class HomePortalInheritanceTest {
     }
 
     @Test
+    void surfaceInstanceDoesNotCreateAutomaticBinding() {
+        HomePortalInheritance.Change change = HomePortalInheritance.apply(
+                HomeInteriorRegistry.empty(), surfaceHome(),
+                traversal(ChunkPortal.PortalType.DOOR, "outside", "inside", true, false,
+                        1001L, ChunkNavManager.SURFACE_INSTANCE));
+        assertFalse(change.changed);
+        assertTrue(change.registry.bindings().isEmpty());
+    }
+
+    @Test
+    void zeroInstanceDoesNotCreateAutomaticBinding() {
+        HomePortalInheritance.Change change = HomePortalInheritance.apply(
+                HomeInteriorRegistry.empty(), surfaceHome(),
+                traversal(ChunkPortal.PortalType.DOOR, "outside", "inside", true, false,
+                        1001L, 0L));
+        assertFalse(change.changed);
+        assertTrue(change.registry.bindings().isEmpty());
+    }
+
+    @Test
     void surfaceHomeDoorCreatesIndoorBinding() {
         assertTrue(HomePortalInheritance.canInherit(
                 ChunkPortal.PortalType.DOOR, "outside", "inside", true, false));
@@ -220,8 +240,14 @@ class HomePortalInheritanceTest {
 
     private static HomePortalInheritance.Traversal traversal(ChunkPortal.PortalType type,
             String fromLayer, String toLayer, boolean confirmed, boolean teleport, long toGridId) {
+        return traversal(type, fromLayer, toLayer, confirmed, teleport, toGridId, 2L);
+    }
+
+    private static HomePortalInheritance.Traversal traversal(ChunkPortal.PortalType type,
+            String fromLayer, String toLayer, boolean confirmed, boolean teleport, long toGridId,
+            long toInstanceId) {
         return new HomePortalInheritance.Traversal(
-                100L, toGridId, 1L, 2L, fromLayer, toLayer, type, doorPortal(),
+                100L, toGridId, 1L, toInstanceId, fromLayer, toLayer, type, doorPortal(),
                 "gfx/terobjs/arch/stonemansion-door", confirmed, teleport, 1234L);
     }
 

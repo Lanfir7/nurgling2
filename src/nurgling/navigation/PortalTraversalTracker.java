@@ -715,10 +715,11 @@ public class PortalTraversalTracker {
         return -1;
     }
 
-    /**
+        /**
      * Update the current instanceId after a portal traversal.
      * Rules:
-     * - If destination chunk already has a known instanceId, inherit it
+     * - If destination chunk already has a known indoor instanceId, inherit it
+     * - If an inside/cellar destination still carries 0 or SURFACE_INSTANCE, assign toGridId
      * - If going to surface (exiting mine/building), use SURFACE_INSTANCE
      * - If entering a new instance (mine, building interior, cellar), use toGridId as instanceId
      */
@@ -726,20 +727,40 @@ public class PortalTraversalTracker {
         if (manager == null) return;
 
         ChunkNavData destChunk = graph.getChunk(toGridId);
-        if (destChunk != null && destChunk.instanceId != 0) {
-            manager.setCurrentInstanceId(destChunk.instanceId);
-            return;
-        }
-
-        long newInstanceId = determineInstanceIdFromExitPortal(toGridId, exitPortalName);
+        long newInstanceId = destinationInstanceAfterTraversal(destChunk, toGridId, exitPortalName);
         manager.setCurrentInstanceId(newInstanceId);
+        stampDestinationInstance(destChunk, newInstanceId);
+    }
 
-        if (destChunk != null && destChunk.instanceId == 0) {
-            destChunk.instanceId = newInstanceId;
+    static boolean indoorHomeLayer(String layer) {
+        return "inside".equals(layer) || "cellar".equals(layer);
+    }
+
+    static long destinationInstanceAfterTraversal(ChunkNavData destChunk, long toGridId,
+            String exitPortalName) {
+        String layer = destChunk != null && destChunk.layer != null && !destChunk.layer.isEmpty()
+                ? destChunk.layer : null;
+        if (indoorHomeLayer(layer)) {
+            if (destChunk != null && destChunk.instanceId > ChunkNavManager.SURFACE_INSTANCE)
+                return destChunk.instanceId;
+            return toGridId;
+        }
+        if (destChunk != null && destChunk.instanceId != 0)
+            return destChunk.instanceId;
+        return determineInstanceIdFromExitPortal(toGridId, exitPortalName);
+    }
+
+    static void stampDestinationInstance(ChunkNavData destChunk, long instanceId) {
+        if (destChunk == null)
+            return;
+        if (destChunk.instanceId == 0
+                || (indoorHomeLayer(destChunk.layer)
+                        && destChunk.instanceId <= ChunkNavManager.SURFACE_INSTANCE)) {
+            destChunk.instanceId = instanceId;
         }
     }
 
-    private long determineInstanceIdFromExitPortal(long toGridId, String exitPortalName) {
+    private static long determineInstanceIdFromExitPortal(long toGridId, String exitPortalName) {
         if (exitPortalName == null) return ChunkNavManager.SURFACE_INSTANCE;
         String lower = exitPortalName.toLowerCase();
 
@@ -804,8 +825,10 @@ public class PortalTraversalTracker {
             toLayer = toChunk.layer;
         long fromInstance = pendingHomeLearning.sourceInstanceId;
         long toInstance = manager == null ? 0L : manager.getCurrentInstanceId();
-        if (toChunk != null && toChunk.instanceId != 0)
+        if (toChunk != null && toChunk.instanceId > ChunkNavManager.SURFACE_INSTANCE)
             toInstance = toChunk.instanceId;
+        else if (indoorHomeLayer(toLayer) && toInstance <= ChunkNavManager.SURFACE_INSTANCE)
+            toInstance = toGridId;
         HomeInteriorRegistry.PortalIdentity root = new HomeInteriorRegistry.PortalIdentity(
                 pendingHomeLearning.sourceGridId,
                 pendingHomeLearning.portalCoord.x,

@@ -21,11 +21,9 @@ import nurgling.tools.HomeTerritoryDebug;
 
 import java.awt.Color;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 
 /** Configures territories that are treated as home for the current game world. */
 public class HomeSetup extends Panel {
@@ -228,31 +226,8 @@ public class HomeSetup extends Panel {
     }
 
     private String indoorOriginText(HomeInteriorRegistry.Binding binding) {
-        TreeSet<String> names = new TreeSet<String>();
-        for (HomeInteriorRegistry.OriginKey origin : binding.origins) {
-            if (origin == null || !origin.matches(homes))
-                continue;
-            String label = originDisplayName(origin);
-            if (label != null && !label.isEmpty())
-                names.add(label);
-        }
-        if (names.isEmpty())
-            return L10n.get("world.home.indoor.inactive");
-        StringBuilder text = new StringBuilder();
-        for (String name : names) {
-            if (text.length() > 0)
-                text.append(", ");
-            text.append(name);
-        }
-        return text.toString();
-    }
-
-    private String originDisplayName(HomeInteriorRegistry.OriginKey origin) {
-        for (HomeTerritories.Entry entry : homes) {
-            if (entry != null && origin.matches(Collections.singletonList(entry)))
-                return entry.displayName();
-        }
-        return null;
+        String names = binding.activeOriginNames(homes);
+        return names.isEmpty() ? L10n.get("world.home.indoor.inactive") : names;
     }
 
     private class HomeTerritoryList extends SListBox<HomeTerritories.Entry, Widget> {

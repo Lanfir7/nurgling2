@@ -55,6 +55,22 @@ class HomeTerritoryDebugTest {
     }
 
     @Test
+    void emptyDisplayNameStillYieldsOriginHomeSource() {
+        HomeLocationResolver.Status status = indoorAutoStatus("", 701L, 700L);
+        HomeTerritoryDebug.Snapshot snapshot = HomeTerritoryDebug.inspect(
+                Collections.singletonList(new HomeTerritories.Entry(
+                        HomeTerritories.Type.CLAIM, "Lanfir",
+                        new ClaimArea(new ClaimArea.Tile(42L, 7, 9),
+                                Collections.singleton(new ClaimArea.Tile(42L, 7, 9))))),
+                null, status);
+
+        assertTrue(snapshot.indoorHome);
+        assertTrue(snapshot.home);
+        assertFalse(snapshot.homeSource.isEmpty());
+        assertEquals("Lanfir's Claim", snapshot.homeSource);
+    }
+
+    @Test
     void navigationLoadingDisplaysIndoorHomeUnknownRatherThanYes() {
         HomeLocationResolver.Status status = HomeLocationResolver.resolve(
                 Collections.emptyList(), Collections.emptyList(), null, false,

@@ -186,6 +186,46 @@ class HomeInteriorFlowTest {
     }
 
     @Test
+    void firstTimeAlreadyInsideExitReenterDoesNotHomeTheSurface() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        List<HomeTerritories.Entry> saved = savedClaimAndVillage();
+        HomePortalLearningService service = new HomePortalLearningService(
+                "test-world", store, fixtureContext(store, saved), saved);
+        ChunkNavData dest = chunk(BUILDING_GRID, ChunkNavManager.SURFACE_INSTANCE, "inside");
+
+        long assigned = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                dest, BUILDING_GRID, DOOR_RES);
+        PortalTraversalTracker.stampDestinationInstance(dest, assigned);
+        assertEquals(BUILDING_GRID, assigned);
+        assertTrue(assigned > ChunkNavManager.SURFACE_INSTANCE);
+
+        service.confirm(service.capture(SURFACE_GRID, 7, 9, DOOR_RES,
+                ChunkNavManager.SURFACE_INSTANCE, "outside"),
+                traversal(ChunkPortal.PortalType.DOOR, "outside", "inside",
+                        true, false, BUILDING_GRID, dest.instanceId));
+
+        HomeInteriorRegistry.Binding learned = onlyBinding(store.registry);
+        assertEquals(BUILDING_GRID, learned.instanceId);
+        assertTrue(learned.gridIds.contains(BUILDING_GRID));
+        assertFalse(learned.gridIds.contains(SURFACE_GRID));
+
+        HomeLocationResolver.Status wilderness = resolve(saved, Collections.emptyList(), null,
+                store.registry, 99L, ChunkNavManager.SURFACE_INSTANCE);
+        assertFalse(wilderness.indoorHome);
+        assertFalse(wilderness.home);
+
+        HomeLocationResolver.Status inside = resolve(saved, Collections.emptyList(), null,
+                store.registry, BUILDING_GRID, dest.instanceId);
+        assertTrue(inside.indoorHome);
+        assertTrue(inside.home);
+        assertEquals(learned.id, inside.bindingId);
+
+        HomeLocationResolver.Status restartOnExactGrid = resolve(saved, Collections.emptyList(), null,
+                store.registry, BUILDING_GRID, ChunkNavManager.SURFACE_INSTANCE);
+        assertTrue(restartOnExactGrid.indoorHome);
+    }
+
+    @Test
     void overlayIndependentLearningRejectsGateTeleportAndUnknown() {
         FakeRegistryAccess store = new FakeRegistryAccess();
         List<HomeTerritories.Entry> saved = savedClaimAndVillage();

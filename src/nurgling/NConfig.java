@@ -957,9 +957,14 @@ public class NConfig
             NConfig cur = getGlobalInstance();
             Object val;
             synchronized (cur.conf) {
-                val = updater.apply(cur.conf.get(key));
-                cur.conf.put(key, val);
-                cur.writeState().markDirty();
+                Object previous = cur.conf.get(key);
+                val = updater.apply(previous);
+                if (val != previous) {
+                    cur.conf.put(key, val);
+                    cur.writeState().markDirty();
+                } else {
+                    val = previous;
+                }
             }
             for (SessionContext ctx : SessionManager.getInstance().getAllSessions())
             {

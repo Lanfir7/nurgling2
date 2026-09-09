@@ -52,7 +52,7 @@ public final class HomeLocationResolver {
         Source source = sourceOf(villageHome, claimHome, indoor);
         return new Status(villageHome, claimHome, indoorHome,
                 villageHome || claimHome || indoorHome, territoryLoading, !navigationReady,
-                source, sourceLabel(source, indoor), gridId, instanceId,
+                source, sourceLabel(source, indoor, saved), gridId, instanceId,
                 indoor != null ? indoor.id : "");
     }
 
@@ -69,7 +69,8 @@ public final class HomeLocationResolver {
         return Source.NONE;
     }
 
-    private static String sourceLabel(Source source, HomeInteriorRegistry.Binding indoor) {
+    private static String sourceLabel(Source source, HomeInteriorRegistry.Binding indoor,
+            Collection<HomeTerritories.Entry> saved) {
         switch (source) {
             case DIRECT_VILLAGE:
                 return "village";
@@ -79,7 +80,7 @@ public final class HomeLocationResolver {
                 return "village+claim";
             case INDOOR_AUTO:
             case INDOOR_MANUAL:
-                return indoor != null ? indoor.displayName : "";
+                return indoor != null ? indoor.sourceLabel(saved) : "";
             default:
                 return "";
         }

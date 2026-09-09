@@ -1,5 +1,6 @@
 package nurgling.tools;
 
+import nurgling.navigation.ChunkNavManager;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -10,6 +11,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HomeLocationResolverTest {
@@ -155,6 +157,52 @@ class HomeLocationResolverTest {
 
         assertFalse(status.indoorHome);
         assertFalse(status.home);
+    }
+
+    @Test
+    void surfaceInstanceFallbackDoesNotMatchUnrelatedSurfaceGrid() {
+        HomeInteriorRegistry registry = registryWithAutomaticBinding(
+                ChunkNavManager.SURFACE_INSTANCE, setOf(1001L), "claim-anchor:42:7:9");
+        HomeLocationResolver.Status wilderness = HomeLocationResolver.resolve(
+                savedClaim(), Collections.emptyList(), null, false,
+                registry, 42L, ChunkNavManager.SURFACE_INSTANCE, true);
+
+        assertFalse(wilderness.indoorHome);
+        assertFalse(wilderness.home);
+        assertEquals(HomeLocationResolver.Source.NONE, wilderness.source);
+        assertEquals("", wilderness.bindingId);
+    }
+
+    @Test
+    void exactGridStillMatchesWhenSessionInstanceIsSurfaceSentinel() {
+        HomeInteriorRegistry registry = registryWithAutomaticBinding(
+                700L, setOf(1001L), "claim-anchor:42:7:9");
+        HomeLocationResolver.Status inside = HomeLocationResolver.resolve(
+                savedClaim(), Collections.emptyList(), null, false,
+                registry, 1001L, ChunkNavManager.SURFACE_INSTANCE, true);
+
+        assertTrue(inside.indoorHome);
+        assertTrue(inside.home);
+        assertEquals(HomeLocationResolver.Source.INDOOR_AUTO, inside.source);
+    }
+
+    @Test
+    void emptyDisplayNameFallsBackToActiveOriginNames() {
+        HomeInteriorRegistry.Binding binding = HomeInteriorRegistry.Binding.automatic(
+                "auto:empty", 700L, setOf(701L),
+                setOf(HomeInteriorRegistry.OriginKey.parse("claim-anchor:42:7:9")),
+                new HomeInteriorRegistry.PortalIdentity(42L, 7, 9,
+                        "gfx/terobjs/arch/stonemansion"),
+                "", 1L);
+        HomeLocationResolver.Status status = HomeLocationResolver.resolve(
+                savedClaim(), Collections.emptyList(), null, false,
+                HomeInteriorRegistry.empty().put(binding), 701L, 700L, true);
+
+        assertTrue(status.indoorHome);
+        assertEquals(HomeLocationResolver.Source.INDOOR_AUTO, status.source);
+        assertFalse(status.sourceLabel.isEmpty());
+        assertEquals("Lanfir's Claim", status.sourceLabel);
+        assertNotEquals("None", status.sourceLabel);
     }
 
     @SafeVarargs
