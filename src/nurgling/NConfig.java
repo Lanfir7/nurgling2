@@ -133,6 +133,7 @@ public class NConfig
         ignoreStrawInFarmers,
         persistentBarrelLabels,
         homeTerritories,
+        homeInteriors,
         objectLabelsEnabled,
         objectLabelIconSigns,
         objectLabelParchments,
@@ -512,6 +513,7 @@ public class NConfig
         conf.put(Key.boxLineWidth, 4);
         conf.put(Key.persistentBarrelLabels, false);
         conf.put(Key.homeTerritories, new ArrayList<Object>());
+        conf.put(Key.homeInteriors, new LinkedHashMap<String, Object>());
         conf.put(Key.objectLabelsEnabled, true);
         conf.put(Key.objectLabelIconSigns, true);
         conf.put(Key.objectLabelParchments, true);
