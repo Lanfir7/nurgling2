@@ -1,5 +1,6 @@
 package nurgling.navigation;
 
+import haven.Coord;
 import nurgling.tools.ClaimArea;
 import nurgling.tools.HomeInteriorRegistry;
 import nurgling.tools.HomeTerritories;
@@ -169,6 +170,81 @@ class HomePortalLearningServiceTest {
         assertEquals(0, store.updateCount);
         assertTrue(store.registry.isSuppressed(portal));
         assertNull(store.registry.findActive(901L, 8001L, savedClaim()));
+    }
+
+    @Test
+    void nullLocalCoordDoesNotCaptureOrPersist() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        RecordingContextSupplier contexts = new RecordingContextSupplier(savedClaimContext());
+        HomePortalLearningService service = new HomePortalLearningService(
+                "test-world", store, contexts, savedClaim());
+
+        HomePortalLearningService.Pending pending = service.capture(
+                42L, null, "gfx/terobjs/arch/thatchedhut", 1L, "outside");
+
+        assertNull(pending);
+        assertEquals(0, contexts.calls);
+        service.confirm(pending, confirmedInsideTraversal(901L, 8001L));
+        assertEquals(0, store.updateCount);
+        assertTrue(store.registry.bindings().isEmpty());
+    }
+
+    @Test
+    void unresolvedSourceGridDoesNotCaptureOrPersist() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        RecordingContextSupplier contexts = new RecordingContextSupplier(savedClaimContext());
+        HomePortalLearningService service = new HomePortalLearningService(
+                "test-world", store, contexts, savedClaim());
+
+        HomePortalLearningService.Pending pending = service.capture(
+                -1L, new Coord(7, 9), "gfx/terobjs/arch/thatchedhut", 1L, "outside");
+
+        assertNull(pending);
+        assertEquals(0, contexts.calls);
+        service.confirm(pending, confirmedInsideTraversal(901L, 8001L));
+        assertEquals(0, store.updateCount);
+    }
+
+    @Test
+    void stalePreviousLocalCoordIsNotReusedForNewUnresolvedPortal() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        RecordingContextSupplier contexts = new RecordingContextSupplier(savedClaimContext());
+        HomePortalLearningService service = new HomePortalLearningService(
+                "test-world", store, contexts, savedClaim());
+        PortalTraversalTracker tracker = new PortalTraversalTracker(null, null, null, service);
+
+        HomePortalLearningService.Pending first = tracker.bindLastActionPortal(
+                null, new Coord(7, 9), 42L, "gfx/terobjs/arch/thatchedhut");
+        assertNotNull(first);
+        assertEquals(7, first.portalCoord.x);
+        assertEquals(9, first.portalCoord.y);
+        assertEquals(1, contexts.calls);
+
+        HomePortalLearningService.Pending second = tracker.bindLastActionPortal(
+                null, null, 99L, "gfx/terobjs/arch/thatchedhut");
+        assertNull(second);
+        assertEquals(1, contexts.calls);
+        service.confirm(second, confirmedInsideTraversal(901L, 8001L));
+        assertEquals(0, store.updateCount);
+        assertTrue(store.registry.bindings().isEmpty());
+    }
+
+    @Test
+    void resolvedPortalIdentityStillCaptures() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        HomePortalLearningService service = service(store, savedClaimContext());
+        PortalTraversalTracker tracker = new PortalTraversalTracker(null, null, null, service);
+
+        HomePortalLearningService.Pending pending = tracker.bindLastActionPortal(
+                null, new Coord(7, 9), 42L, "gfx/terobjs/arch/thatchedhut");
+
+        assertNotNull(pending);
+        assertEquals(42L, pending.sourceGridId);
+        assertEquals(7, pending.portalCoord.x);
+        assertEquals(9, pending.portalCoord.y);
+        service.confirm(pending, confirmedInsideTraversal(901L, 8001L));
+        assertEquals(1, store.updateCount);
+        assertNotNull(store.registry.findActive(901L, 8001L, savedClaim()));
     }
 
     @Test

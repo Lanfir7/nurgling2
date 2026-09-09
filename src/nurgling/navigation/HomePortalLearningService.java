@@ -148,15 +148,16 @@ public final class HomePortalLearningService {
 
     public Pending capture(long sourceGridId, Coord portalCoord, String portalResource,
             long sourceInstanceId, String sourceLayer) {
-        Coord coord = portalCoord == null ? new Coord(0, 0) : portalCoord;
+        if (sourceGridId == -1 || portalCoord == null)
+            return null;
         HomePortalInheritance.SourceContext source = HomePortalInheritance.SourceContext.notHome();
         if (!disabled && !HomePortalInheritance.isMineOrCaveLayer(sourceLayer) && contexts != null) {
             HomePortalInheritance.SourceContext captured = contexts.capture(
-                    sourceGridId, coord.x, coord.y);
+                    sourceGridId, portalCoord.x, portalCoord.y);
             if (captured != null)
                 source = captured;
         }
-        return new Pending(sourceGridId, coord, portalResource, sourceInstanceId, sourceLayer, source);
+        return new Pending(sourceGridId, portalCoord, portalResource, sourceInstanceId, sourceLayer, source);
     }
 
     public void confirm(Pending pending, HomePortalInheritance.Traversal traversal) {

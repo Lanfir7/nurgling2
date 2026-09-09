@@ -175,12 +175,8 @@ public class PortalTraversalTracker {
             String gobName = lastActions.gob.ngob.name;
             // Only capture if it's a portal AND it's not the same one we already processed
             if (isPortalGob(gobName) && lastActions.gob.id != lastProcessedPortalGobId) {
-                cachedLastActionsGob = lastActions.gob;
-                // Use getPortalLocalCoord which offsets buildings toward player for stable door position
                 Coord portalCoord = getPortalLocalCoord(lastActions.gob, player);
-                if (portalCoord != null) {
-                    cachedLastActionsGobLocalCoord = portalCoord;
-                }
+                long portalGridId = -1;
 
                 // Always use the PORTAL's actual grid, not the player's grid.
                 // Player might be standing in grid A while clicking a portal in grid B.
@@ -198,17 +194,18 @@ public class PortalTraversalTracker {
                         DoorGridInfo doorInfo = getDoorGridInfo(lastActions.gob, player, offset);
                         if (doorInfo != null) {
                             // Both gridId and localCoord come from the door position
-                            cachedLastActionsGobGridId = doorInfo.gridId;
-                            cachedLastActionsGobLocalCoord = doorInfo.localCoord;
+                            portalGridId = doorInfo.gridId;
+                            portalCoord = doorInfo.localCoord;
                         } else {
-                            // Fallback: use building center (shouldn't happen normally)
                             long gobGridId = getGobGridId(lastActions.gob);
-                            cachedLastActionsGobGridId = (gobGridId != -1) ? gobGridId : currentGridId;
+                            if (gobGridId != -1)
+                                portalGridId = gobGridId;
                         }
                     } else {
                         // Interior door (no offset) - use gob position directly
                         long gobGridId = getGobGridId(lastActions.gob);
-                        cachedLastActionsGobGridId = (gobGridId != -1) ? gobGridId : currentGridId;
+                        if (gobGridId != -1)
+                            portalGridId = gobGridId;
                     }
                 } else {
                     // Non-building portals (ladders, mineholes, cellars, doors):
@@ -216,9 +213,10 @@ public class PortalTraversalTracker {
                     // This handles the case where player clicks a portal near grid boundary
                     // while standing in an adjacent grid.
                     long gobGridId = getGobGridId(lastActions.gob);
-                    cachedLastActionsGobGridId = (gobGridId != -1) ? gobGridId : currentGridId;
+                    if (gobGridId != -1)
+                        portalGridId = gobGridId;
                 }
-                pendingHomeLearning = captureHomeLearning(gobName, currentGridId);
+                bindLastActionPortal(lastActions.gob, portalCoord, portalGridId, gobName);
             }
         }
     }
@@ -772,11 +770,22 @@ public class PortalTraversalTracker {
         pendingHomeLearning = null;
     }
 
-    private HomePortalLearningService.Pending captureHomeLearning(String portalResource, long fallbackGridId) {
-        long sourceGridId = cachedLastActionsGobGridId != -1 ? cachedLastActionsGobGridId : fallbackGridId;
+    HomePortalLearningService.Pending bindLastActionPortal(Gob gob, Coord local, long gridId,
+            String resource) {
+        cachedLastActionsGob = gob;
+        cachedLastActionsGobLocalCoord = local;
+        cachedLastActionsGobGridId = gridId;
+        if (local == null || gridId == -1)
+            pendingHomeLearning = null;
+        else
+            pendingHomeLearning = captureHomeLearning(resource);
+        return pendingHomeLearning;
+    }
+
+    private HomePortalLearningService.Pending captureHomeLearning(String portalResource) {
         long instanceId = manager == null ? ChunkNavManager.SURFACE_INSTANCE : manager.getCurrentInstanceId();
-        return homeLearning.capture(sourceGridId, cachedLastActionsGobLocalCoord, portalResource,
-                instanceId, layerOf(sourceGridId));
+        return homeLearning.capture(cachedLastActionsGobGridId, cachedLastActionsGobLocalCoord, portalResource,
+                instanceId, layerOf(cachedLastActionsGobGridId));
     }
 
     private void confirmHomeLearning(long toGridId, String exitName) {
