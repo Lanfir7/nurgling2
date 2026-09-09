@@ -15,6 +15,9 @@ public class SelectAreaWithLiveGhosts extends NTask {
     private Gob player = null;
     private int rotationCount = 0; // 0, 1, 2, 3 for 0°, 90°, 180°, 270°
     private NHitBox currentHitBox;
+    private final int placementLimit;
+    private Coord selectionStart = null;
+    private Coord selectionEnd = null;
 
     public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource) {
         this(hitBox, resource, Message.nil);
@@ -29,12 +32,18 @@ public class SelectAreaWithLiveGhosts extends NTask {
     }
 
     public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt, int rotationCount, NGameUI gui) {
+        this(hitBox, resource, sdt, rotationCount, gui, Integer.MAX_VALUE);
+    }
+
+    public SelectAreaWithLiveGhosts(NHitBox hitBox, Indir<Resource> resource, Message sdt,
+                                    int rotationCount, NGameUI gui, int placementLimit) {
         this.originalHitBox = hitBox;
         this.currentHitBox = hitBox;
         this.buildingResource = resource;
         this.spriteData = sdt;
         this.rotationCount = rotationCount;
         this.boundGui = gui;
+        this.placementLimit = Math.max(0, placementLimit);
     }
 
     private NGameUI gui() {
@@ -46,6 +55,7 @@ public class SelectAreaWithLiveGhosts extends NTask {
         NGameUI gui = gui();
         if (gui != null && gui.map != null) {
             NMapView mapView = (NMapView) gui.map;
+            rememberSelectionDirection(mapView);
             
             // Check for rotation key (R)
             if (mapView.isAreaSelectionMode.get() && mapView.ui != null) {
@@ -89,11 +99,13 @@ public class SelectAreaWithLiveGhosts extends NTask {
                         player = gui.map.player();
                         if (player != null) {
                             ghostPreview = new BuildGhostPreview(player, currentArea, currentHitBox, buildingResource, rotationCount, spriteData);
+                            configurePreview();
                             ghostPreview.setGridMode(mapView.getGridMode());
                             player.setattr(ghostPreview);
                         }
                     } else if (ghostPreview != null) {
                         ghostPreview.update(currentArea);
+                        configurePreview();
                     }
                 }
             }
@@ -106,11 +118,13 @@ public class SelectAreaWithLiveGhosts extends NTask {
                     player = gui.map.player();
                 if (player != null && currentArea != null) {
                         ghostPreview = new BuildGhostPreview(player, currentArea, currentHitBox, buildingResource, rotationCount, spriteData);
+                        configurePreview();
                         ghostPreview.setGridMode(mapView.getGridMode());
                         player.setattr(ghostPreview);
                     }
                 } else if (ghostPreview != null && currentArea != null) {
                     ghostPreview.update(currentArea);
+                    configurePreview();
                 }
             }
 
@@ -129,9 +143,11 @@ public class SelectAreaWithLiveGhosts extends NTask {
                     if (ghostPreview != null) {
                         // Update existing preview with final area
                         ghostPreview.update(finalArea);
+                        configurePreview();
                     } else {
                         // Create new preview with final area
                         ghostPreview = new BuildGhostPreview(player, finalArea, currentHitBox, buildingResource, rotationCount, spriteData);
+                        configurePreview();
                         ghostPreview.setGridMode(mapView.getGridMode());
                         player.setattr(ghostPreview);
                     }
@@ -149,6 +165,20 @@ public class SelectAreaWithLiveGhosts extends NTask {
     
     public int getRotationCount() {
         return rotationCount;
+    }
+
+    private void rememberSelectionDirection(NMapView mapView) {
+        Pair<Coord, Coord> drag = mapView.currentSelectionDrag;
+        if (drag != null) {
+            selectionStart = drag.a;
+            selectionEnd = drag.b;
+        }
+    }
+
+    private void configurePreview() {
+        if (ghostPreview != null) {
+            ghostPreview.configurePlacement(placementLimit, selectionStart, selectionEnd);
+        }
     }
     
     private boolean checkRotationKey() {

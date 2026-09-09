@@ -32,6 +32,10 @@ import nurgling.i18n.L10n;
 
 public class NAreasWidget extends Window
 {
+    private static final Color COLLAPSE_TAB_BG = new Color(29, 43, 43, 245);
+    private static final Color COLLAPSE_TAB_BORDER = new Color(218, 139, 40);
+    private static final Color COLLAPSE_TAB_ARROW = new Color(246, 181, 68);
+
     public IngredientContainer in_items;
     public IngredientContainer out_items;
     CurrentSpecialisationList csl;
@@ -39,6 +43,9 @@ public class NAreasWidget extends Window
     public boolean createMode = false;
     public String currentPath = "";
     public String searchQuery = "";
+    private final List<Widget> detailWidgets = new ArrayList<>();
+    private AreasWindowCollapseState collapseState;
+    private CollapseTab collapseTab;
     final static Tex folderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/d"));
     final static Tex openfolderIcon = new TexI(Resource.loadsimg("nurgling/hud/folder/u"));
     NCatSelection catSelection;
@@ -134,15 +141,6 @@ public class NAreasWidget extends Window
         },importbt.pos("ur").adds(UI.scale(5,0)));
         exportbt.settip(get("area.btn.export"));
 
-        haven.Button syncLogBtn = add(new haven.Button(UI.scale(70), "Sync log") {
-            @Override
-            public void click() {
-                super.click();
-                nurgling.widgets.NAreaSyncHistoryWidget.open();
-            }
-        }, exportbt.pos("ur").adds(UI.scale(10, 0)));
-        syncLogBtn.settip("Recent area sync events (auto-merges, conflicts, deletes)");
-
 //        // Export to Database button
 //        haven.Button exportDbBtn;
 //        add(exportDbBtn = new haven.Button(UI.scale(80), "Export to DB") {
@@ -211,12 +209,78 @@ public class NAreasWidget extends Window
         },prev.pos("br").sub(UI.scale(17,-5)));
 
         prev = add(Frame.with(in_items = new IngredientContainer("in"),true), prev.pos("ur").add(UI.scale(5,-5)));
-        add(new Label(get("area.label.take"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20)));
-        add(new IngredientContainer.RuleButton(in_items ),prev.pos("ur").sub(UI.scale(30,20)));
+        detailWidgets.add(prev);
+        detailWidgets.add(add(new Label(get("area.label.take"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20))));
+        detailWidgets.add(add(new IngredientContainer.RuleButton(in_items ),prev.pos("ur").sub(UI.scale(30,20))));
         prev = add(Frame.with(out_items = new IngredientContainer("out"),true), prev.pos("ur").adds(UI.scale(5, 0)));
-        add(new Label(get("area.label.put"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20)));
-        add(new IngredientContainer.RuleButton(out_items ),prev.pos("ur").sub(UI.scale(30,20)));
+        detailWidgets.add(prev);
+        detailWidgets.add(add(new Label(get("area.label.put"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20))));
+        detailWidgets.add(add(new IngredientContainer.RuleButton(out_items ),prev.pos("ur").sub(UI.scale(30,20))));
         pack();
+
+        int tabWidth = UI.scale(18);
+        int compactWidth = al.c.x + al.sz.x + tabWidth;
+        collapseState = new AreasWindowCollapseState(csz(), compactWidth);
+        searchField.resize(Coord.of(collapseState.searchWidth(), searchField.sz.y));
+        collapseTab = add(new CollapseTab(), Coord.z);
+        applyCollapseState();
+    }
+
+    private void toggleCollapsed() {
+        collapseState.toggle();
+        applyCollapseState();
+    }
+
+    private void collapse() {
+        collapseState.collapse();
+        applyCollapseState();
+    }
+
+    private void applyCollapseState() {
+        Coord target = collapseState.size();
+        for(Widget detail : detailWidgets)
+            detail.show(collapseState.detailsVisible());
+        collapseTab.c = Coord.of(target.x - collapseTab.sz.x, (target.y - collapseTab.sz.y) / 2);
+        collapseTab.settip(get(collapseState.expanded()
+                ? "area.btn.collapse_details"
+                : "area.btn.expand_details"));
+        resize(target);
+    }
+
+    private class CollapseTab extends Widget {
+        private CollapseTab() {
+            super(UI.scale(18, 54));
+        }
+
+        @Override
+        public void draw(GOut g) {
+            g.chcolor(COLLAPSE_TAB_BG);
+            g.frect(Coord.z, sz);
+            g.chcolor(COLLAPSE_TAB_BORDER);
+            g.rect(Coord.z, sz.sub(1, 1));
+
+            int direction = collapseState.direction() == AreasWindowCollapseState.Direction.RIGHT ? 1 : -1;
+            int centerX = sz.x / 2;
+            int centerY = sz.y / 2;
+            int halfWidth = UI.scale(4);
+            int halfHeight = UI.scale(7);
+            Coord tip = Coord.of(centerX + direction * halfWidth, centerY);
+            Coord upper = Coord.of(centerX - direction * halfWidth, centerY - halfHeight);
+            Coord lower = Coord.of(centerX - direction * halfWidth, centerY + halfHeight);
+            g.chcolor(COLLAPSE_TAB_ARROW);
+            g.line(upper, tip, UI.scale(2));
+            g.line(tip, lower, UI.scale(2));
+            g.chcolor();
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev) {
+            if(ev.b == 1) {
+                toggleCollapsed();
+                return true;
+            }
+            return super.mousedown(ev);
+        }
     }
 
     public void removeArea(int id)
@@ -245,6 +309,7 @@ public class NAreasWidget extends Window
     @Override
     public void show()
     {
+        collapse();
         // Preserve any active search when the window reappears (e.g. after "Select area
         // space"). updateFilteredList() falls back to showPath(currentPath) when the query
         // is empty, so the no-search case is unchanged.
@@ -1172,8 +1237,6 @@ public class NAreasWidget extends Window
     public boolean show(boolean show) {
         if(show)
         {
-            // Preserve any active search on re-show (see show()).
-            updateFilteredList();
             ((NMapView)NUtils.getGameUI().map).initDummys();
         }
         return super.show(show);

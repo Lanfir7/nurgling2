@@ -27,12 +27,21 @@ public class GobConfigWindow extends Window {
     private final CheckBox tint;
     private final NColorWidget tintColor;
     private final CheckBox marker;
+    private final GobIcon.Settings iconConf;
+    private final GobIcon.Setting iconSetting;
+    private final CheckBox minimapIcon;
     private final CheckBox label;
     private final TextEntry labelText;
 
     public GobConfigWindow(String res) {
+        this(res, null, null);
+    }
+
+    private GobConfigWindow(String res, GobIcon.Settings iconConf, GobIcon.Setting iconSetting) {
         super(UI.scale(new Coord(300, 200)), L10n.get("gobconf.title") + ": " + prettyName(res));
         this.res = res;
+        this.iconConf = iconConf;
+        this.iconSetting = iconSetting;
         GobCustomize.Settings s = GobCustomize.settings(res);
 
         Widget prev = add(new Label(shortenPath(res), pathf), Coord.z);
@@ -90,6 +99,21 @@ public class GobConfigWindow extends Window {
         };
         marker.a = s.marker;
         prev = add(marker, prev.pos("bl").adds(-12, 8));
+
+        /* The same minimap icon visibility preference exposed by Icon Settings. */
+        if (iconConf != null && iconSetting != null) {
+            minimapIcon = new CheckBox(L10n.get("gobconf.minimap_icon")) {
+                @Override
+                public void changed(boolean val) {
+                    applyMinimapIconSetting(GobConfigWindow.this.iconConf,
+                            GobConfigWindow.this.iconSetting, val);
+                }
+            };
+            minimapIcon.a = iconSetting.show;
+            prev = add(minimapIcon, prev.pos("bl").adds(0, 8));
+        } else {
+            minimapIcon = null;
+        }
 
         /* Caption drawn under the object. */
         label = new CheckBox(L10n.get("gobconf.label")) {
@@ -149,8 +173,34 @@ public class GobConfigWindow extends Window {
         marker.a = s.marker;
         tintColor.color = s.tintColor;
         tintColor.cb.colorChooser.setColor(s.tintColor);
+        if (minimapIcon != null)
+            minimapIcon.a = iconSetting.show;
         label.a = s.label;
         labelText.settext(s.labelText);
+    }
+
+    static void applyMinimapIconSetting(GobIcon.Settings settings, GobIcon.Setting setting,
+                                        boolean enabled) {
+        if (settings == null || setting == null)
+            return;
+        setting.show = enabled;
+        settings.dsave();
+    }
+
+    private static GobIcon.Setting minimapIconSetting(Gob gob, GobIcon.Settings settings) {
+        if (gob == null || settings == null)
+            return null;
+        GobIcon icon = gob.getattr(GobIcon.class);
+        if (icon == null)
+            return null;
+        try {
+            GobIcon.Icon instance = icon.icon();
+            if (instance == null)
+                return null;
+            return settings.get(instance);
+        } catch (Loading loading) {
+            return null;
+        }
     }
 
     public String res() {
@@ -201,6 +251,18 @@ public class GobConfigWindow extends Window {
      * different type replaces the window rather than stacking a second one on top.
      */
     public static void open(String res) {
+        open(res, null, null);
+    }
+
+    public static void open(Gob gob) {
+        if (gob == null || gob.ngob == null || gob.ngob.name == null)
+            return;
+        NGameUI gui = NUtils.getGameUI();
+        GobIcon.Settings settings = (gui == null) ? null : gui.iconconf;
+        open(gob.ngob.name, settings, minimapIconSetting(gob, settings));
+    }
+
+    private static void open(String res, GobIcon.Settings iconConf, GobIcon.Setting iconSetting) {
         NGameUI gui = NUtils.getGameUI();
         if (gui == null || res == null)
             return;
@@ -214,7 +276,7 @@ public class GobConfigWindow extends Window {
                 break;
             }
         }
-        GobConfigWindow wnd = new GobConfigWindow(res);
+        GobConfigWindow wnd = new GobConfigWindow(res, iconConf, iconSetting);
         Coord pos = gui.sz.sub(wnd.sz).div(2);
         gui.add(wnd, new Coord(Math.max(0, pos.x), Math.max(0, pos.y)));
         wnd.raise();

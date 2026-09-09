@@ -11,6 +11,7 @@ import nurgling.i18n.L10n;
 import nurgling.navigation.MapMarkerNavigation;
 import nurgling.tools.ExploredArea;
 import nurgling.hotkeys.Hotkeys;
+import nurgling.contextmenu.GobContextRegistry;
 
 import java.net.MalformedURLException;
 
@@ -414,11 +415,8 @@ public class NMiniMapWnd extends Widget{
         }
 
         public boolean clickicon(DisplayIcon icon, Location loc, int button, boolean press) {
-            if(press) {
-                mvclick(map, null, loc, icon.gob, button);
-                return(true);
-            }
-            return(false);
+            return GobContextRegistry.routeMinimapIconClick(icon.gob, button, ui.modflags(), press,
+                    () -> mvclick(map, null, loc, icon.gob, button));
         }
 
         public boolean clickloc(Location loc, int button, boolean press) {

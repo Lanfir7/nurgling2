@@ -34,6 +34,6 @@ public class ConfigureGobAction implements GobContextAction {
 
     @Override
     public void performUi(Gob gob) {
-        GobConfigWindow.open(gob.ngob.name);
+        GobConfigWindow.open(gob);
     }
 }

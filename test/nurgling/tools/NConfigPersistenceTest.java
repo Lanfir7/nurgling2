@@ -66,6 +66,24 @@ class NConfigPersistenceTest {
     }
 
     @Test
+    void mergedWritePreservesHomeTerritoriesFromDifferentWorlds() throws Exception {
+        Path target = tempDir.resolve("nconfig.json");
+        String baseline = "{\"homeTerritories\":{}}";
+        Files.writeString(target, baseline);
+
+        NConfigPersistence.mergeAndWrite(target.toString(), baseline,
+                "{\"homeTerritories\":{\"world-one\":[{\"type\":\"CLAIM\",\"name\":\"Lanfir\"}]}}" );
+        NConfigPersistence.mergeAndWrite(target.toString(), baseline,
+                "{\"homeTerritories\":{\"world-two\":[{\"type\":\"VILLAGE\",\"name\":\"Oakvale\"}]}}" );
+
+        Map<?, ?> homes = (Map<?, ?>) new JSONObject(Files.readString(target)).toMap()
+                .get("homeTerritories");
+        assertEquals(2, homes.size());
+        assertEquals("Lanfir", ((Map<?, ?>) ((java.util.List<?>) homes.get("world-one")).get(0)).get("name"));
+        assertEquals("Oakvale", ((Map<?, ?>) ((java.util.List<?>) homes.get("world-two")).get(0)).get("name"));
+    }
+
+    @Test
     void corruptPrimaryNeverReplacesTheOnlyValidBackup() throws Exception {
         Path target = tempDir.resolve("nconfig.json");
         Path backup = target.resolveSibling(target.getFileName() + ".bak");

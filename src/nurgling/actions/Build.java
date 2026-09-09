@@ -170,6 +170,15 @@ public class Build implements Action
         return SelectAreaWithLiveGhosts.hitBoxForBuilding(buildingName, customHitBox);
     }
 
+    static NHitBox resolveApproachHitBox(BuildGhostPreview preview, NHitBox fallbackHitBox)
+    {
+        if (preview != null && preview.getBuildingHitBox() != null)
+        {
+            return preview.getBuildingHitBox();
+        }
+        return fallbackHitBox;
+    }
+
     enum ApproachAction
     {
         PROCEED,
@@ -407,7 +416,7 @@ public class Build implements Action
                 }
             }
 
-            NHitBox hitBox = hitBoxForPlob(null);
+            NHitBox hitBox = resolveApproachHitBox(ghostPreview, hitBoxForPlob(null));
             if (hitBox == null)
             {
                 SelectAreaWithLiveGhosts.tryActivateBuildMenu(gui, cmd.name);

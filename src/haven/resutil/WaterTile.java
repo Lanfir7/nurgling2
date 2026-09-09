@@ -36,6 +36,7 @@ import haven.MapMesh.Scan;
 import haven.Surface.Vertex;
 import haven.Surface.MeshVertex;
 import haven.render.TextureCube.SamplerCube;
+import nurgling.tools.FlatWorld;
 import static haven.render.sl.Cons.*;
 import static haven.Coord.upcw;
 
@@ -751,7 +752,7 @@ public class WaterTile extends Tiler {
     public Pipe.Op clickstate() {return(clickstate);}
 
     public Pipe.Op drawstate(Glob glob, Coord3f c) {
-	float mz = glob.map.getcz(c.x, c.y);
+	float mz = (float)FlatWorld.visualCz(glob.map.getcz(c.x, c.y));
 	return(new ObFog(mz));
     }
 }

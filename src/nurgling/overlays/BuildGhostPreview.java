@@ -21,6 +21,9 @@ public class BuildGhostPreview extends GAttrib {
     private Glob glob;
     private double rotationAngle = 0.0;  // Rotation angle in radians
     private boolean gridMode = false;  // Grid mode: place objects at tile centers
+    private int placementLimit = Integer.MAX_VALUE;
+    private Coord selectionStart = null;
+    private Coord selectionEnd = null;
 
     public BuildGhostPreview(Gob owner, Pair<Coord2d, Coord2d> area, NHitBox hitBox, Indir<Resource> resource) {
         this(owner, area, hitBox, resource, 0, Message.nil);
@@ -63,6 +66,25 @@ public class BuildGhostPreview extends GAttrib {
         return gridMode;
     }
 
+    public NHitBox getBuildingHitBox() {
+        return buildingHitBox;
+    }
+
+    /** Limit the preview and order its slots from the corner where the drag started. */
+    public void configurePlacement(int limit, Coord start, Coord end) {
+        int normalizedLimit = Math.max(0, limit);
+        if (placementLimit == normalizedLimit && Objects.equals(selectionStart, start)
+                && Objects.equals(selectionEnd, end)) {
+            return;
+        }
+        placementLimit = normalizedLimit;
+        selectionStart = start;
+        selectionEnd = end;
+        if (area != null && buildingHitBox != null && buildingResource != null) {
+            calculateGhostPositions();
+        }
+    }
+
     /**
      * Calculate all valid building positions using the same logic as Finder.getFreePlace()
      */
@@ -80,19 +102,26 @@ public class BuildGhostPreview extends GAttrib {
         // Track placed buildings to avoid showing overlaps
         ArrayList<NHitBoxD> placedBuildings = new ArrayList<>();
 
+        List<Coord2d> positions;
         if (gridMode) {
             // Grid mode: place objects at tile centers
-            calculateGhostPositionsGrid(obstacles, placedBuildings);
+            positions = calculateGhostPositionsGrid(obstacles, placedBuildings);
         } else {
             // Normal mode: pixel-by-pixel search (tight packing)
-            calculateGhostPositionsNormal(obstacles, placedBuildings);
+            positions = calculateGhostPositionsNormal(obstacles, placedBuildings);
+        }
+        for (Coord2d position : PlacementSweep.order(
+                positions, selectionStart, selectionEnd, placementLimit)) {
+            createGhostGob(position);
         }
     }
     
     /**
      * Calculate positions in grid mode (tile centers)
      */
-    private void calculateGhostPositionsGrid(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
+    private List<Coord2d> calculateGhostPositionsGrid(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
+        ArrayList<Coord2d> positions = new ArrayList<>();
+        if (placementLimit == 0) return positions;
         // Get rotated hitbox dimensions
         NHitBoxD tempBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, Coord2d.of(0), rotationAngle);
         Coord2d rotatedUL = tempBox.getCircumscribedUL();
@@ -103,12 +132,17 @@ public class BuildGhostPreview extends GAttrib {
         Coord tileBegin = area.a.floor(MCache.tilesz);
         Coord tileEnd = area.b.sub(1, 1).floor(MCache.tilesz);
         
-        // Iterate through tiles
-        for (int tx = tileBegin.x; tx <= tileEnd.x; tx++) {
-            for (int ty = tileBegin.y; ty <= tileEnd.y; ty++) {
+        int dragStartX = selectionStart != null ? selectionStart.x : tileBegin.x;
+        int dragEndX = selectionEnd != null ? selectionEnd.x : tileEnd.x;
+        int dragStartY = selectionStart != null ? selectionStart.y : tileBegin.y;
+        int dragEndY = selectionEnd != null ? selectionEnd.y : tileEnd.y;
+
+        // Iterate from the corner where the selection drag started.
+        for (int tx : PlacementSweep.axis(tileBegin.x, tileEnd.x, dragStartX, dragEndX)) {
+            for (int ty : PlacementSweep.axis(tileBegin.y, tileEnd.y, dragStartY, dragEndY)) {
                 // Check if hitbox fits in this tile (must be <= 1x1 tile)
                 if (hitboxSize.x > MCache.tilesz.x || hitboxSize.y > MCache.tilesz.y) {
-                    continue; // Hitbox too large for single tile
+                    return positions; // Hitbox too large for single tile
                 }
                 
                 // Calculate tile center position
@@ -146,21 +180,23 @@ public class BuildGhostPreview extends GAttrib {
                 }
                 
                 if (passed) {
-                    // This position is valid - create a ghost Gob
                     Coord2d worldPos = new Coord2d(testBox.rc.x, testBox.rc.y);
-                    createGhostGob(worldPos);
-                    
+                    positions.add(worldPos);
                     // Add this building to placed list so we don't overlap it
                     placedBuildings.add(new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, tileCenter, rotationAngle));
+                    if (positions.size() >= placementLimit) return positions;
                 }
             }
         }
+        return positions;
     }
     
     /**
      * Calculate positions in normal mode (tight packing)
      */
-    private void calculateGhostPositionsNormal(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
+    private List<Coord2d> calculateGhostPositionsNormal(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
+        ArrayList<Coord2d> positions = new ArrayList<>();
+        if (placementLimit == 0) return positions;
         Coord inchMax = area.b.sub(area.a).floor();
         
         // Match Finder.getFreePlace() margin calculation: use rotated circumscribed dimensions.
@@ -169,9 +205,18 @@ public class BuildGhostPreview extends GAttrib {
         Coord2d rotatedBR = tempBox.getCircumscribedBR();
         Coord margin = rotatedBR.sub(rotatedUL).floor(2, 2);
 
-        // Simulate Finder.getFreePlace() behavior: pixel-by-pixel search
-        for (int i = margin.x; i <= inchMax.x - margin.x; i++) {
-            for (int j = margin.y; j <= inchMax.y - margin.y; j++) {
+        int minX = margin.x;
+        int maxX = inchMax.x - margin.x;
+        int minY = margin.y;
+        int maxY = inchMax.y - margin.y;
+        int dragStartX = selectionStart != null ? selectionStart.x : 0;
+        int dragEndX = selectionEnd != null ? selectionEnd.x : 1;
+        int dragStartY = selectionStart != null ? selectionStart.y : 0;
+        int dragEndY = selectionEnd != null ? selectionEnd.y : 1;
+
+        // Simulate Finder.getFreePlace() behavior, sweeping from the selected corner.
+        for (int i : PlacementSweep.axis(minX, maxX, dragStartX, dragEndX)) {
+            for (int j : PlacementSweep.axis(minY, maxY, dragStartY, dragEndY)) {
                 Coord2d testPos = area.a.add(i, j);
                 NHitBoxD testBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, rotationAngle);
 
@@ -195,15 +240,15 @@ public class BuildGhostPreview extends GAttrib {
                 }
 
                 if (passed) {
-                    // This position is valid - create a ghost Gob
                     Coord2d worldPos = new Coord2d(testBox.rc.x, testBox.rc.y);
-                    createGhostGob(worldPos);
-
+                    positions.add(worldPos);
                     // Add this building to placed list so we don't overlap it
                     placedBuildings.add(new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, rotationAngle));
+                    if (positions.size() >= placementLimit) return positions;
                 }
             }
         }
+        return positions;
     }
 
     /**
@@ -426,6 +471,10 @@ public class BuildGhostPreview extends GAttrib {
         }
         System.out.println("[BuildGhostPreview] getGhostPositions() returning " + positions.size() + " positions");
         return positions;
+    }
+
+    public double getRotationAngle() {
+        return rotationAngle;
     }
     
     public void removeGhost(Coord2d pos) {

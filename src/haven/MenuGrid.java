@@ -37,6 +37,7 @@ import haven.Resource.AButton;
 import haven.ItemInfo.AttrCache;
 import haven.res.ui.pag.toggle.Toggle;
 import nurgling.NConfig;
+import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NRecipeTooltip;
 import nurgling.NUtils;
@@ -194,8 +195,12 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
         else
             MenuGrid.lastPagina = null;
 
-	    if(pag.id instanceof Indir)
-		pag.scm.wdgmsg("act", Utils.extend(Utils.extend(new Object[0], act().ad), eact));
+	    if(pag.id instanceof Indir) {
+		String[] actionArgs = act().ad;
+		if((pag.scm.ui != null) && (pag.scm.ui.gui instanceof NGameUI))
+		    ((NGameUI)pag.scm.ui.gui).onGameAction(actionArgs);
+		pag.scm.wdgmsg("act", Utils.extend(Utils.extend(new Object[0], actionArgs), eact));
+	    }
 	    else
 		pag.scm.wdgmsg("use", Utils.extend(new Object[] {pag.id}, eact));
 	    try {

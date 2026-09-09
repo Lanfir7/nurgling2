@@ -37,6 +37,7 @@ import static haven.PType.*;
 import nurgling.*;
 import nurgling.actions.SortInventory;
 import nurgling.hotkeys.Hotkeys;
+import nurgling.contextmenu.GobContextRegistry;
 import nurgling.i18n.L10n;
 import nurgling.widgets.*;
 import nurgling.widgets.craftatlas.CraftAtlasWindow;
@@ -88,7 +89,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public Progress prog = null;
     private boolean afk = false;
     public BeltSlot[] belt = new BeltSlot[144];
-    public final Map<Integer, String> polowners = new HashMap<Integer, String>();
+    public final Map<Integer, String> polowners = new LinkedHashMap<Integer, String>();
     public Bufflist buffs;
 	public NMiniMapWnd mmapw = null;
     public static abstract class BeltSlot {
@@ -1164,11 +1165,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	}
 
 	public boolean clickicon(DisplayIcon icon, Location loc, int button, boolean press) {
-	    if(press) {
-		mvclick(map, null, loc, icon.gob, button);
-		return(true);
-	    }
-	    return(false);
+	    return(GobContextRegistry.routeMinimapIconClick(icon.gob, button, ui.modflags(), press,
+		    () -> mvclick(map, null, loc, icon.gob, button)));
 	}
 
 	public boolean clickloc(Location loc, int button, boolean press) {

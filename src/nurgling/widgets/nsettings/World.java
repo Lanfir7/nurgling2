@@ -69,7 +69,7 @@ public class World extends Panel {
     private Label objectLabelFontSizeLabel;
     private Label objectLabelHeightLabel;
     private Label objectLabelOpacityLabel;
-    
+
     private Widget content;
 
     public World() {
@@ -260,7 +260,7 @@ public class World extends Panel {
                 lineWidthLabel.settext(L10n.get("world.line_width") + " " + val);
             }
         }, prev.pos("bl").adds(0, 5));
-        
+
         content.pack();
         resize(content.sz);
     }

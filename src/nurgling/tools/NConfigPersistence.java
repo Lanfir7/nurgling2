@@ -12,6 +12,8 @@ import java.util.Set;
 
 /** Coordinates read-merge-write persistence for config snapshots shared by several clients. */
 public final class NConfigPersistence {
+    private static final String HOME_TERRITORIES = "homeTerritories";
+
     private NConfigPersistence() {
     }
 
@@ -41,13 +43,50 @@ public final class NConfigPersistence {
             boolean existsLocally = local.containsKey(key);
             if (existed != existsLocally || !Objects.equals(baseline.get(key), local.get(key))) {
                 if (existsLocally) {
-                    latest.put(key, local.get(key));
+                    if (HOME_TERRITORIES.equals(key) && local.get(key) instanceof Map<?, ?>) {
+                        latest.put(key, mergeWorldValues(
+                                baseline.get(key), local.get(key), latest.get(key)));
+                    } else {
+                        latest.put(key, local.get(key));
+                    }
                 } else {
                     latest.remove(key);
                 }
             }
         }
         return new JSONObject(latest).toString();
+    }
+
+    private static Map<String, Object> mergeWorldValues(Object baselineValue,
+                                                         Object localValue,
+                                                         Object latestValue) {
+        Map<String, Object> baseline = stringMap(baselineValue);
+        Map<String, Object> local = stringMap(localValue);
+        Map<String, Object> latest = stringMap(latestValue);
+        Set<String> worlds = new HashSet<>(baseline.keySet());
+        worlds.addAll(local.keySet());
+        for (String world : worlds) {
+            boolean existed = baseline.containsKey(world);
+            boolean existsLocally = local.containsKey(world);
+            if (existed != existsLocally || !Objects.equals(baseline.get(world), local.get(world))) {
+                if (existsLocally)
+                    latest.put(world, local.get(world));
+                else
+                    latest.remove(world);
+            }
+        }
+        return latest;
+    }
+
+    private static Map<String, Object> stringMap(Object value) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (value instanceof Map<?, ?>) {
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                if (entry.getKey() instanceof String)
+                    result.put((String) entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
     }
 
     private static String validObject(byte[] raw) {

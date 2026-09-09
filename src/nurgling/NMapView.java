@@ -13,7 +13,6 @@ import haven.res.ui.gobcp.Gobcopy;
 import haven.BuddyWnd;
 import nurgling.actions.QuickActionBot;
 import nurgling.actions.bots.ScenarioRunner;
-import nurgling.contextmenu.GobContextAction;
 import nurgling.contextmenu.GobContextRegistry;
 import nurgling.contextmenu.NTileContextMenu;
 import nurgling.contextmenu.TileContextAction;
@@ -21,7 +20,6 @@ import nurgling.contextmenu.TileContextRegistry;
 import nurgling.areas.*;
 import nurgling.conf.QuickActionPreset;
 import nurgling.sessions.ThreadLocalUI;
-import nurgling.contextmenu.NGobContextMenu;
 import nurgling.widgets.options.QuickActions;
 import nurgling.overlays.*;
 import nurgling.overlays.map.*;
@@ -224,8 +222,25 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     private boolean gridMode = false;
     public NArea.Space areaSpace = null;
     public Pair<Coord, Coord> currentSelectionCoords = null;  // Current selection coords during dragging
+    public Pair<Coord, Coord> currentSelectionDrag = null;    // Raw start/end, preserving the chosen corner
     public boolean rotationRequested = false;  // Flag to request rotation during area selection
     public Gob selectedGob = null;
+
+    /** Abort an in-progress area selection and release all transient input state. */
+    public void cancelAreaSelection() {
+        synchronized (this) {
+            if (selection != null) {
+                selection.destroy();
+                selection = null;
+            }
+            isAreaSelectionMode.set(false);
+            areaSpace = null;
+            currentSelectionCoords = null;
+            currentSelectionDrag = null;
+            rotationRequested = false;
+            gridModeRequested = false;
+        }
+    }
 
     // Zone measure tool state
     public boolean zoneMeasureMode = false;
@@ -1804,8 +1819,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                         super.hit(pc, mc, inf);
                         return;
                     case GOB: {
-                        java.util.List<GobContextAction> actions = GobContextRegistry.getActionsFor(target);
-                        NUtils.getGameUI().add(new NGobContextMenu(target, actions), new Coord(-1, -1));
+                        GobContextRegistry.openMenu(target);
                         return;
                     }
                     case AREA: {
@@ -2169,6 +2183,16 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         public NSelector(Coord max) {
             super(max);
         }
+
+        @Override
+        public boolean mmousedown(Coord mc, int button) {
+            boolean handled = super.mmousedown(mc, button);
+            if (handled && sc != null) {
+                currentSelectionCoords = new Pair<>(sc, sc.add(1, 1));
+                currentSelectionDrag = new Pair<>(sc, sc);
+            }
+            return handled;
+        }
         
         @Override
         public void mmousemove(Coord mc) {
@@ -2179,6 +2203,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 Coord c1 = new Coord(Math.min(tc.x, sc.x), Math.min(tc.y, sc.y));
                 Coord c2 = new Coord(Math.max(tc.x, sc.x), Math.max(tc.y, sc.y));
                 currentSelectionCoords = new Pair<>(c1, c2.add(1, 1));
+                currentSelectionDrag = new Pair<>(sc, tc);
             }
         }
         
@@ -2188,10 +2213,11 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             {
                 if (sc != null)
                 {
-                    Coord ec = mc.div(MCache.tilesz2);
+                    Coord ec = getec(mc);
                     xl.mv = false;
                     tt = null;
                     areaSpace = new NArea.Space(sc,ec);
+                    currentSelectionDrag = new Pair<>(sc, ec);
                     
                     // Send area to chat ONLY if it was activated via Alt+Ctrl+LMB
                     if(isChatAreaSharingMode.get()) {

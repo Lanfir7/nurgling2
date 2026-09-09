@@ -1,7 +1,10 @@
 package nurgling.actions;
 
+import haven.Coord2d;
+import haven.Gob;
 import nurgling.NHitBox;
 import nurgling.actions.bots.SelectAreaWithLiveGhosts;
+import nurgling.overlays.BuildGhostPreview;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,5 +31,15 @@ class BuildHitBoxTest {
         NHitBox fromPlob = NHitBox.findCustom("gfx/terobjs/cupboard");
         NHitBox custom = NHitBox.findCustom("gfx/terobjs/moundbed");
         assertSame(fromPlob, Build.resolveHitBox(fromPlob, custom, "Cupboard"));
+    }
+
+    @Test
+    void livePreviewHitBoxWinsForApproach() {
+        NHitBox livePreview = NHitBox.findCustom("gfx/terobjs/cupboard");
+        NHitBox catalogFallback = NHitBox.findCustom("gfx/terobjs/moundbed");
+        BuildGhostPreview preview = new BuildGhostPreview(
+                new Gob(null, Coord2d.z), null, livePreview, null);
+
+        assertSame(livePreview, Build.resolveApproachHitBox(preview, catalogFallback));
     }
 }

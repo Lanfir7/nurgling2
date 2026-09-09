@@ -132,6 +132,7 @@ public class NConfig
         fillCompostWithSwill,
         ignoreStrawInFarmers,
         persistentBarrelLabels,
+        homeTerritories,
         objectLabelsEnabled,
         objectLabelIconSigns,
         objectLabelParchments,
@@ -510,6 +511,7 @@ public class NConfig
         conf.put(Key.printpfmap, false);
         conf.put(Key.boxLineWidth, 4);
         conf.put(Key.persistentBarrelLabels, false);
+        conf.put(Key.homeTerritories, new ArrayList<Object>());
         conf.put(Key.objectLabelsEnabled, true);
         conf.put(Key.objectLabelIconSigns, true);
         conf.put(Key.objectLabelParchments, true);
@@ -942,6 +944,38 @@ public class NConfig
                     sc.conf.put(key, val);
                 }
             }
+        }
+    }
+
+    /** Atomically updates a structured setting and publishes the same result to every live session. */
+    public static Object update(Key key, java.util.function.UnaryOperator<Object> updater)
+    {
+        synchronized (NConfig.class)
+        {
+            NConfig cur = getGlobalInstance();
+            Object val;
+            synchronized (cur.conf) {
+                val = updater.apply(cur.conf.get(key));
+                cur.conf.put(key, val);
+                cur.writeState().markDirty();
+            }
+            for (SessionContext ctx : SessionManager.getInstance().getAllSessions())
+            {
+                if (ctx.config != null)
+                {
+                    synchronized (ctx.config.conf) {
+                        ctx.config.conf.put(key, val);
+                    }
+                }
+                NConfig sc = (ctx.ui != null) ? ctx.ui.sessionConfig : null;
+                if (sc != null)
+                {
+                    synchronized (sc.conf) {
+                        sc.conf.put(key, val);
+                    }
+                }
+            }
+            return val;
         }
     }
 

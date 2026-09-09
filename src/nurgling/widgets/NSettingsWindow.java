@@ -118,6 +118,7 @@ public class NSettingsWindow extends Widget {
 
         SettingsCategory gameenvironment = new SettingsCategory(L10n.get("nsettings.cat.game_environment"), new Panel(L10n.get("nsettings.cat.game_environment")), container);
         gameenvironment.addChild(new SettingsItem(L10n.get("nsettings.item.world"), world = new World(), container));
+        gameenvironment.addChild(new SettingsItem(L10n.get("nsettings.item.home_setup"), new HomeSetup(), container));
         gameenvironment.addChild(new SettingsItem("Tree Finder", new TreeFinder(), container));
         gameenvironment.addChild(new SettingsItem(L10n.get("nsettings.item.object_hiding"), new ObjectHiding(), container));
         gameenvironment.addChild(new SettingsItem(L10n.get("nsettings.item.animal_rings"), new NRingSettings(), container));

@@ -15,6 +15,8 @@ import nurgling.overlays.QualityOl;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 import nurgling.tools.NSearchItem;
+import nurgling.tools.CurrentHomeTerritories;
+import nurgling.tools.HearthHomeAutoSaver;
 import nurgling.widgets.*;
 import nurgling.widgets.SwimmingStatusBuff;
 import nurgling.widgets.TrackingStatusBuff;
@@ -45,6 +47,7 @@ import static haven.Inventory.invsq;
 public class NGameUI extends GameUI
 {
     private final SharedMarkerClipboardService sharedMarkerClipboardService;
+    private final HearthHomeAutoSaver hearthHomeAutoSaver = new HearthHomeAutoSaver();
     public boolean nomadMod = false;
     public NBotsMenu botsMenu;
     public NAlarmWdg alarmWdg;
@@ -909,6 +912,13 @@ public class NGameUI extends GameUI
     public void tick(double dt)
     {
         super.tick(dt);
+        Gob player = (map == null) ? null : map.player();
+        String pose = (player == null) ? null : player.pose();
+        if (player == null || (pose != null && pose.contains("gfx/borka/point")))
+            hearthHomeAutoSaver.onTeleportStarted();
+        hearthHomeAutoSaver.tick(dt,
+                () -> hearthHomeAutoSaver.hasReachedDestination(currentPlayerTile()) && currentMapReady(),
+                () -> CurrentHomeTerritories.save(this));
         sharedMarkerClipboardService.tick(dt);
         if(!layoutPickerDone && sz.x > 0)
         {
@@ -943,6 +953,46 @@ public class NGameUI extends GameUI
                 }
             }
         }
+    }
+
+    public void onGameAction(String... args) {
+        hearthHomeAutoSaver.onAction(currentPlayerTile(), args);
+    }
+
+    @Override
+    public void act(String... args) {
+        onGameAction(args);
+        super.act(args);
+    }
+
+    @Override
+    public void uimsg(String msg, Object... args) {
+        super.uimsg(msg, args);
+        if ("polowner".equals(msg) && args.length > 1)
+            hearthHomeAutoSaver.onTerritoryUpdated(args[1] != null);
+    }
+
+    private boolean currentMapReady() {
+        try {
+            if (map == null || map.glob == null || map.glob.map == null)
+                return false;
+            Gob player = map.player();
+            if (player == null || player.rc == null)
+                return false;
+            Coord tc = player.rc.div(MCache.tilesz).floor();
+            MCache.Grid grid = map.glob.map.getgridt(tc);
+            return grid != null;
+        } catch (Loading error) {
+            return false;
+        } catch (RuntimeException error) {
+            return false;
+        }
+    }
+
+    private Coord currentPlayerTile() {
+        Gob player = (map == null) ? null : map.player();
+        return (player == null || player.rc == null)
+                ? null : player.rc.div(MCache.tilesz).floor();
     }
 
     @Override

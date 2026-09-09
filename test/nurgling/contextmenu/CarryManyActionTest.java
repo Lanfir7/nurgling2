@@ -39,6 +39,14 @@ class CarryManyActionTest {
     }
 
     @Test
+    void placementAngleFollowsTheRotationChosenInPreview() throws Exception {
+        assertEquals(0.0, CarryManyAction.placementAngle(0), 0.000001);
+        assertEquals(Math.PI / 2.0, CarryManyAction.placementAngle(1), 0.000001);
+        assertEquals(Math.PI, CarryManyAction.placementAngle(2), 0.000001);
+        assertEquals(Math.PI * 1.5, CarryManyAction.placementAngle(3), 0.000001);
+    }
+
+    @Test
     void isBotNotUiOnlyAndHasNoCarrierDialog() throws Exception {
         String src = read("src/nurgling/contextmenu/CarryManyAction.java");
         assertFalse(src.contains("isUiAction"), "must keep default isUiAction=false (M badge)");
@@ -48,7 +56,11 @@ class CarryManyActionTest {
         assertTrue(src.contains("baubles/inputArea"), src);
         assertTrue(src.contains("baubles/outputArea"), src);
         assertTrue(src.contains("LiftObject"), src);
-        assertTrue(src.contains("FindPlaceAndAction"), src);
+        assertTrue(src.contains("SelectAreaWithLiveGhosts"), src);
+        assertTrue(src.contains("BuildGhostPreview"), src);
+        assertTrue(src.contains("PlaceObject"), src);
+        assertTrue(src.contains("map.cancelAreaSelection()"), src);
+        assertTrue(src.contains("preview.dispose()"), src);
         assertTrue(src.contains("LiftableCatalog.objectFilter"), src);
         assertTrue(src.contains("isExactResource"), src);
         assertTrue(src.contains("context.carry_many"), src);
