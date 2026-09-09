@@ -35,6 +35,7 @@ public abstract class Dropbox<T> extends ListWidget<T> {
             g.chcolor(DropboxVisualStyle.popupBackground());
             g.frect(Coord.z, sz);
             g.chcolor();
+            drawBorder(g, true);
         }
 
         protected void drawsel(GOut g) {
@@ -50,11 +51,6 @@ public abstract class Dropbox<T> extends ListWidget<T> {
                 g.chcolor();
             }
             Dropbox.this.drawitem(g, item, idx);
-        }
-
-        public void draw(GOut g) {
-            super.draw(g);
-            drawBorder(g, true);
         }
 
         public void mousemove(MouseMoveEvent ev) {
@@ -93,10 +89,10 @@ public abstract class Dropbox<T> extends ListWidget<T> {
         g.chcolor(DropboxVisualStyle.arrowBackground());
         g.frect(dropc, new Coord(drop.sz().x, sz.y));
         g.chcolor();
+        drawBorder(g, dl != null);
         if(sel != null)
             drawitem(g.reclip(Coord.z, new Coord(sz.x - drop.sz().x, itemh)), sel, 0);
         g.image(drop, dropc);
-        drawBorder(g, dl != null);
         super.draw(g);
     }
 
