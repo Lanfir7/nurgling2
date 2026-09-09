@@ -160,6 +160,75 @@ public final class HomePortalLearningService {
         return new Pending(sourceGridId, portalCoord, portalResource, sourceInstanceId, sourceLayer, source);
     }
 
+    public HomeInteriorRegistry backfillClaims(ChunkNavGraph graph,
+            Collection<HomeTerritories.Entry> savedHomes,
+            HomeInteriorRegistry registry) {
+        HomeInteriorRegistry current = registry == null ? HomeInteriorRegistry.empty() : registry;
+        if (disabled || graph == null)
+            return current;
+        Collection<HomeTerritories.Entry> homes = savedHomes == null
+                ? Collections.<HomeTerritories.Entry>emptyList() : savedHomes;
+        for (ChunkNavData source : graph.getAllChunks()) {
+            if (source == null
+                    || source.instanceId != ChunkNavManager.SURFACE_INSTANCE
+                    || !"outside".equals(source.layer)
+                    || source.portals == null)
+                continue;
+            for (ChunkPortal portal : source.portals) {
+                current = backfillDoor(graph, homes, current, source, portal);
+            }
+        }
+        return current;
+    }
+
+    private static HomeInteriorRegistry backfillDoor(ChunkNavGraph graph,
+            Collection<HomeTerritories.Entry> homes, HomeInteriorRegistry current,
+            ChunkNavData source, ChunkPortal portal) {
+        if (portal == null || portal.type != ChunkPortal.PortalType.DOOR
+                || portal.connectsToGridId == -1 || portal.localCoord == null
+                || portal.gobName == null)
+            return current;
+        ChunkNavData dest = graph.getChunk(portal.connectsToGridId);
+        if (dest == null || dest.instanceId <= ChunkNavManager.SURFACE_INSTANCE)
+            return current;
+        if (!"inside".equals(dest.layer) && !"cellar".equals(dest.layer))
+            return current;
+        LinkedHashSet<HomeInteriorRegistry.OriginKey> origins =
+                new LinkedHashSet<HomeInteriorRegistry.OriginKey>();
+        for (HomeTerritories.Entry entry : homes) {
+            if (entry == null || entry.type != HomeTerritories.Type.CLAIM || entry.area == null)
+                continue;
+            if (entry.area.contains(source.gridId, portal.localCoord.x, portal.localCoord.y))
+                origins.add(HomeInteriorRegistry.OriginKey.from(entry));
+        }
+        if (origins.isEmpty())
+            return current;
+        HomeInteriorRegistry.PortalIdentity root = new HomeInteriorRegistry.PortalIdentity(
+                source.gridId, portal.localCoord.x, portal.localCoord.y, portal.gobName);
+        if (current.isSuppressed(root))
+            return current;
+        LinkedHashSet<Long> grids = new LinkedHashSet<Long>();
+        for (ChunkNavData chunk : graph.getAllChunks()) {
+            if (chunk != null && chunk.instanceId == dest.instanceId)
+                grids.add(chunk.gridId);
+        }
+        String autoId = "auto:" + root.stableKey();
+        HomeInteriorRegistry.Binding created = HomeInteriorRegistry.Binding.automatic(
+                autoId, dest.instanceId, grids, origins, root, "", 0L);
+        HomeInteriorRegistry.Binding existing = bindingWithId(current, autoId);
+        HomeInteriorRegistry.Binding nextBinding = existing == null ? created : existing.merge(created);
+        HomeInteriorRegistry updated = current.put(nextBinding);
+        return updated.equals(current) ? current : updated;
+    }
+
+    private static HomeInteriorRegistry.Binding bindingWithId(HomeInteriorRegistry registry, String id) {
+        for (HomeInteriorRegistry.Binding binding : registry.bindings()) {
+            if (id.equals(binding.id))
+                return binding;
+        }
+        return null;
+    }
+
     public void confirm(Pending pending, HomePortalInheritance.Traversal traversal) {
         if (disabled || pending == null || traversal == null)
             return;
@@ -169,14 +238,24 @@ public final class HomePortalLearningService {
         if (!HomePortalInheritance.canInherit(traversal.portalType, traversal.fromLayer,
                 traversal.toLayer, traversal.confirmed, traversal.teleport))
             return;
+        HomeInteriorRegistry loaded = store.load(genus.get());
+        if (loaded == null)
+            loaded = HomeInteriorRegistry.empty();
+        if (!HomePortalInheritance.apply(loaded, pending.source, traversal).changed)
+            return;
         store.update(genus.get(), new UnaryOperator<HomeInteriorRegistry>() {
             @Override
-            public HomeInteriorRegistry apply(HomeInteriorRegistry current) {
-                HomeInteriorRegistry next = current == null ? HomeInteriorRegistry.empty() : current;
+            public HomeInteriorRegistry apply(HomeInteriorRegistry existing) {
+                HomeInteriorRegistry next = existing == null ? HomeInteriorRegistry.empty() : existing;
+                HomePortalInheritance.Change change = HomePortalInheritance.apply(
+                        next, pending.source, traversal);
+                if (!change.changed)
+                    return next;
+                HomeInteriorRegistry result = change.registry;
                 if (traversal.confirmed && traversal.rootPortal != null
-                        && next.isSuppressed(traversal.rootPortal))
-                    next = next.clearSuppression(traversal.rootPortal);
-                return HomePortalInheritance.apply(next, pending.source, traversal).registry;
+                        && result.isSuppressed(traversal.rootPortal))
+                    result = result.clearSuppression(traversal.rootPortal);
+                return result;
             }
         });
     }

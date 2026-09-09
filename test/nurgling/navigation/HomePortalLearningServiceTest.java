@@ -7,6 +7,7 @@ import nurgling.tools.HomeTerritories;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -259,6 +260,150 @@ class HomePortalLearningServiceTest {
         assertEquals(0, store.updateCount);
         assertFalse(service.shouldTrack(false));
         assertTrue(service.shouldTrack(true));
+    }
+
+    @Test
+    void confirmDoesNotClearSuppressionOrRewriteWhenApplyProducesNoChange() {
+        HomeInteriorRegistry.PortalIdentity portal = hutPortal();
+        HomeInteriorRegistry.Binding binding = automaticHut(901L, 8001L);
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        store.registry = HomeInteriorRegistry.empty().put(binding).remove(binding.id, true);
+        assertTrue(store.registry.isSuppressed(portal));
+        HomePortalLearningService service = new HomePortalLearningService(
+                "test-world", store,
+                (grid, x, y) -> HomePortalInheritance.SourceContext.notHome(),
+                savedClaim());
+        HomePortalLearningService.Pending pending = service.capture(
+                42L, 7, 9, "gfx/terobjs/arch/thatchedhut", 1L, "outside");
+
+        service.confirm(pending, confirmedInsideTraversal(901L, 8001L));
+
+        assertEquals(0, store.updateCount);
+        assertTrue(store.registry.isSuppressed(portal));
+        assertNull(store.registry.findActive(901L, 8001L, savedClaim()));
+    }
+
+    @Test
+    void backfillCreatesBindingWhenSavedClaimContainsPortalTile() {
+        HomeInteriorRegistry result = backfill(claimedHutGraph(), savedClaim(),
+                HomeInteriorRegistry.empty());
+
+        HomeInteriorRegistry.Binding active = result.findActive(901L, 8001L, savedClaim());
+        assertNotNull(active);
+        assertEquals("auto:" + hutPortal().stableKey(), active.id);
+        assertEquals(8001L, active.instanceId);
+        assertTrue(active.gridIds.contains(901L));
+        assertEquals(savedClaimContext().directOrigins, active.origins);
+        assertEquals(hutPortal(), active.rootPortal);
+    }
+
+    @Test
+    void villageOnlyHomesAreNotBackfilled() {
+        HomeInteriorRegistry result = backfill(claimedHutGraph(),
+                Collections.singletonList(new HomeTerritories.Entry(
+                        HomeTerritories.Type.VILLAGE, "MyVillage")),
+                HomeInteriorRegistry.empty());
+
+        assertTrue(result.bindings().isEmpty());
+    }
+
+    @Test
+    void portalOutsideClaimIsIgnored() {
+        ChunkNavGraph graph = hutGraph(ChunkPortal.PortalType.DOOR, "outside",
+                ChunkNavManager.SURFACE_INSTANCE, "inside", 8001L, new Coord(20, 20), 901L);
+
+        HomeInteriorRegistry result = backfill(graph, savedClaim(), HomeInteriorRegistry.empty());
+
+        assertTrue(result.bindings().isEmpty());
+    }
+
+    @Test
+    void mineCaveConnectionsAreIgnored() {
+        HomeInteriorRegistry mine = backfill(
+                hutGraph(ChunkPortal.PortalType.MINEHOLE, "outside",
+                        ChunkNavManager.SURFACE_INSTANCE, "inside", 8001L, new Coord(7, 9), 901L),
+                savedClaim(), HomeInteriorRegistry.empty());
+        HomeInteriorRegistry cave = backfill(
+                hutGraph(ChunkPortal.PortalType.CAVEIN, "outside",
+                        ChunkNavManager.SURFACE_INSTANCE, "inside", 8001L, new Coord(7, 9), 901L),
+                savedClaim(), HomeInteriorRegistry.empty());
+
+        assertTrue(mine.bindings().isEmpty());
+        assertTrue(cave.bindings().isEmpty());
+    }
+
+    @Test
+    void suppressedRootPortalIsIgnored() {
+        HomeInteriorRegistry.Binding binding = automaticHut(901L, 8001L);
+        HomeInteriorRegistry registry = HomeInteriorRegistry.empty().put(binding).remove(binding.id, true);
+        assertTrue(registry.isSuppressed(hutPortal()));
+
+        HomeInteriorRegistry result = backfill(claimedHutGraph(), savedClaim(), registry);
+
+        assertTrue(result.isSuppressed(hutPortal()));
+        assertNull(result.findActive(901L, 8001L, savedClaim()));
+        assertTrue(result.bindings().isEmpty());
+    }
+
+    @Test
+    void allChunksSharingDestinationInstanceAreAttached() {
+        ChunkNavGraph graph = claimedHutGraph();
+        ChunkNavData extra = new ChunkNavData(902L);
+        extra.instanceId = 8001L;
+        extra.layer = "inside";
+        graph.addChunk(extra);
+
+        HomeInteriorRegistry.Binding active = backfill(graph, savedClaim(),
+                HomeInteriorRegistry.empty()).findActive(901L, 8001L, savedClaim());
+
+        assertNotNull(active);
+        assertTrue(active.gridIds.contains(901L));
+        assertTrue(active.gridIds.contains(902L));
+        assertEquals(active, backfill(graph, savedClaim(),
+                HomeInteriorRegistry.empty()).findActive(902L, 8001L, savedClaim()));
+    }
+
+    @Test
+    void backfillTwiceIsIdempotent() {
+        ChunkNavGraph graph = claimedHutGraph();
+        HomePortalLearningService service = service(new FakeRegistryAccess(), savedClaimContext());
+
+        HomeInteriorRegistry first = service.backfillClaims(graph, savedClaim(),
+                HomeInteriorRegistry.empty());
+        HomeInteriorRegistry second = service.backfillClaims(graph, savedClaim(), first);
+
+        assertEquals(first, second);
+        assertEquals(1, first.bindings().size());
+    }
+
+    private static HomeInteriorRegistry backfill(ChunkNavGraph graph,
+            Collection<HomeTerritories.Entry> savedHomes, HomeInteriorRegistry registry) {
+        return service(new FakeRegistryAccess(), savedClaimContext())
+                .backfillClaims(graph, savedHomes, registry);
+    }
+
+    private static ChunkNavGraph claimedHutGraph() {
+        return hutGraph(ChunkPortal.PortalType.DOOR, "outside", ChunkNavManager.SURFACE_INSTANCE,
+                "inside", 8001L, new Coord(7, 9), 901L);
+    }
+
+    private static ChunkNavGraph hutGraph(ChunkPortal.PortalType type, String sourceLayer,
+            long sourceInstanceId, String destLayer, long destInstanceId, Coord portalCoord,
+            long destGridId) {
+        ChunkNavGraph graph = new ChunkNavGraph();
+        ChunkNavData outside = new ChunkNavData(42L);
+        outside.instanceId = sourceInstanceId;
+        outside.layer = sourceLayer;
+        ChunkPortal portal = new ChunkPortal("hut-door", "gfx/terobjs/arch/thatchedhut",
+                type, portalCoord);
+        portal.connectsToGridId = destGridId;
+        outside.portals.add(portal);
+        ChunkNavData inside = new ChunkNavData(destGridId);
+        inside.instanceId = destInstanceId;
+        inside.layer = destLayer;
+        graph.addChunk(outside);
+        graph.addChunk(inside);
+        return graph;
     }
 
     private static HomePortalLearningService service(FakeRegistryAccess store,

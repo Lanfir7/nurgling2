@@ -7,6 +7,9 @@ import nurgling.NUtils;
 import nurgling.areas.NArea;
 import nurgling.overlays.map.MinimapChunkNavRenderer;
 import nurgling.tools.ClaimLand;
+import nurgling.tools.HomeInteriorRegistry;
+import nurgling.tools.HomeInteriorStore;
+import nurgling.tools.HomeTerritories;
 import nurgling.tools.NFileUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -16,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.UnaryOperator;
 
 import static nurgling.navigation.ChunkNavConfig.*;
 
@@ -147,11 +151,33 @@ public class ChunkNavManager {
 
             // Load saved data (with migration if needed)
             load();
+            backfillClaimedHomeInteriors();
 
             this.initialized = true;
         } finally {
             // Clear guard flag AFTER load completes (even if exception occurs)
             initializationInProgress = false;
+        }
+    }
+
+    private void backfillClaimedHomeInteriors() {
+        if (currentGenus == null || graph == null)
+            return;
+        try {
+            Collection<HomeTerritories.Entry> saved = HomeTerritories.decodeForWorld(
+                    NConfig.get(NConfig.Key.homeTerritories), currentGenus);
+            final HomeInteriorRegistry loaded = HomeInteriorStore.load(currentGenus);
+            final HomeInteriorRegistry backfilled = new HomePortalLearningService(this)
+                    .backfillClaims(graph, saved, loaded);
+            if (backfilled.equals(loaded))
+                return;
+            HomeInteriorStore.update(currentGenus, new UnaryOperator<HomeInteriorRegistry>() {
+                @Override
+                public HomeInteriorRegistry apply(HomeInteriorRegistry current) {
+                    return backfilled;
+                }
+            });
+        } catch (RuntimeException ignored) {
         }
     }
 
