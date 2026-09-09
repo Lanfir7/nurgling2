@@ -87,6 +87,32 @@ class HomeTerritoriesTest {
     }
 
     @Test
+    void matchingHomesSuppliesTheSameVillageAndClaimHitsAsStatus() {
+        ClaimArea homeArea = new ClaimArea(new ClaimArea.Tile(7L, 10, 10), Arrays.asList(
+                new ClaimArea.Tile(7L, 10, 10), new ClaimArea.Tile(7L, 11, 10)));
+        HomeTerritories.Entry savedVillage = new HomeTerritories.Entry(
+                HomeTerritories.Type.VILLAGE, "Moria");
+        HomeTerritories.Entry savedClaim = new HomeTerritories.Entry(
+                HomeTerritories.Type.CLAIM, "", homeArea);
+        List<HomeTerritories.Entry> saved = Arrays.asList(savedVillage, savedClaim);
+        List<HomeTerritories.Entry> current = Arrays.asList(
+                new HomeTerritories.Entry(HomeTerritories.Type.VILLAGE, "Moria"),
+                new HomeTerritories.Entry(HomeTerritories.Type.CLAIM, "", homeArea));
+
+        assertEquals(saved, HomeTerritories.matchingHomes(saved, current, homeArea));
+        assertEquals(Collections.singletonList(savedVillage),
+                HomeTerritories.matchingHomes(saved,
+                        Collections.singletonList(new HomeTerritories.Entry(
+                                HomeTerritories.Type.VILLAGE, "Moria")),
+                        new ClaimArea(new ClaimArea.Tile(8L, 10, 10), Collections.singletonList(
+                                new ClaimArea.Tile(8L, 10, 10)))));
+        assertEquals(Collections.singletonList(savedClaim),
+                HomeTerritories.matchingHomes(saved,
+                        Collections.singletonList(new HomeTerritories.Entry(
+                                HomeTerritories.Type.VILLAGE, "Market Town")), homeArea));
+    }
+
+    @Test
     void addsForeignClaimGeometryWithoutDroppingDetectedVillage() {
         ClaimArea area = new ClaimArea(new ClaimArea.Tile(7L, 10, 10),
                 Collections.singletonList(new ClaimArea.Tile(7L, 10, 10)));

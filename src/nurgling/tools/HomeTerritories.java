@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -88,12 +89,11 @@ public final class HomeTerritories {
         return result;
     }
 
-    public static HomeStatus status(Collection<Entry> saved, Collection<Entry> current,
-                                    ClaimArea currentClaimArea) {
-        boolean village = false;
-        boolean claim = false;
+    public static List<Entry> matchingHomes(Collection<Entry> saved,
+            Collection<Entry> current, ClaimArea currentClaimArea) {
+        LinkedHashSet<Entry> matched = new LinkedHashSet<Entry>();
         if (saved == null)
-            return new HomeStatus(false, false);
+            return new ArrayList<Entry>();
         if (current != null) {
             for (Entry here : current) {
                 if (here == null)
@@ -101,24 +101,39 @@ public final class HomeTerritories {
                 for (Entry home : saved) {
                     if (home == null || home.type != here.type)
                         continue;
-                    if (here.type == Type.VILLAGE && home.name.equals(here.name))
-                        village = true;
+                    if (here.type == Type.VILLAGE && namesMatch(home.name, here.name))
+                        matched.add(home);
                     if (here.type == Type.CLAIM && !home.name.isEmpty()
-                            && home.name.equals(here.name))
-                        claim = true;
+                            && namesMatch(home.name, here.name))
+                        matched.add(home);
                 }
             }
         }
         if (currentClaimArea != null) {
             for (Entry home : saved) {
                 if (home != null && home.type == Type.CLAIM && home.area != null
-                        && home.area.overlaps(currentClaimArea)) {
-                    claim = true;
-                    break;
-                }
+                        && home.area.overlaps(currentClaimArea))
+                    matched.add(home);
             }
         }
+        return new ArrayList<Entry>(matched);
+    }
+
+    public static HomeStatus status(Collection<Entry> saved, Collection<Entry> current,
+                                    ClaimArea currentClaimArea) {
+        boolean village = false;
+        boolean claim = false;
+        for (Entry home : matchingHomes(saved, current, currentClaimArea)) {
+            if (home.type == Type.VILLAGE)
+                village = true;
+            else if (home.type == Type.CLAIM)
+                claim = true;
+        }
         return new HomeStatus(village, claim);
+    }
+
+    private static boolean namesMatch(String saved, String current) {
+        return saved.toLowerCase(Locale.ROOT).equals(current.toLowerCase(Locale.ROOT));
     }
 
     /** Adds the separately captured personal claim to other detected territories. */
