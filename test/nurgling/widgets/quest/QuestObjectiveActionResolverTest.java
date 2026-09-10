@@ -70,6 +70,17 @@ class QuestObjectiveActionResolverTest {
     }
 
     @Test
+    void exactCedarFellObjectiveRemainsAvailableToTheActionButton() {
+        QCond cedar = new QCond(1, false, "Fell a cedar (x6)", "2/6[5/5]");
+
+        QuestObjectiveAction action = QuestObjectiveActions.available(null, cedar);
+
+        assertEquals(QuestObjectiveAction.Kind.TREE_TERRAIN, action.kind);
+        assertTrue(action.targets.contains("Dry Flat"));
+        assertTrue(action.targets.contains("Shady Copse"));
+    }
+
+    @Test
     void alderAndOliveObjectivesResolveToLivingTreeTerrainsWithoutChangingWhitebeam() {
         QuestObjectiveAction alder = resolver.resolve(
                 new QCond(1, false, "Fell an alder (x6) 4/6[4/5]", null));

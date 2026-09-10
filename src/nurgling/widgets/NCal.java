@@ -110,7 +110,7 @@ public class NCal extends Cal {
     @Override
     public boolean checkhit(Coord c) {
         Coord ul = imgCenter(verboseMode()).sub(bg.sz().div(2));
-        return Utils.checkhit(dsky.scaled(), c.sub(ul).sub(dsky.o));
+        return rainIconHit(c) || Utils.checkhit(dsky.scaled(), c.sub(ul).sub(dsky.o));
     }
 
     @Override
@@ -179,6 +179,62 @@ public class NCal extends Cal {
             g.aimage(icon, new Coord(x, y), 0.5, 0.5);
             x += ICON_STEP;
         }
+    }
+
+    @Override
+    public boolean mousedown(MouseDownEvent ev) {
+        if((ev.b == 1) && rainIconHit(ev.c)) {
+            boolean enabled = ui.sess.glob.toggleRain();
+            GameUI gui = getparent(GameUI.class);
+            if(gui != null)
+                gui.msg(L10n.get(enabled ? "calendar.rain_enabled" : "calendar.rain_disabled"));
+            return true;
+        }
+        return super.mousedown(ev);
+    }
+
+    @Override
+    public Object tooltip(Coord c, Widget prev) {
+        if(rainIconHit(c))
+            return L10n.get(RainTooltip.key(ui.sess.glob.rainEnabled()));
+        return super.tooltip(c, prev);
+    }
+
+    private boolean rainIconHit(Coord c) {
+        Coord ic = imgCenter(verboseMode());
+        if(verboseMode()) {
+            int n = 0;
+            for(String key : eventNames) {
+                if(events.get(key) != null)
+                    n++;
+            }
+            int y = ic.y + (bg.sz().y / 2) + ICON_GAP + (ICON_SZ / 2);
+            int x = ic.x - (((n - 1) * ICON_STEP) / 2);
+            for(String key : eventNames) {
+                if(events.get(key) == null)
+                    continue;
+                if(key.equals("rain"))
+                    return iconHit(c, new Coord(x, y));
+                x += ICON_STEP;
+            }
+        } else {
+            int x0 = ic.x + (bg.sz().x / 2) + PAD;
+            int y0 = sz.y / 2 - UI.scale(10);
+            int i = 0;
+            for(String key : eventNames) {
+                if(events.get(key) == null)
+                    continue;
+                Coord center = new Coord(x0 + ((i % ICON_COLS) * ICON_STEP), y0 + ((i / ICON_COLS) * ICON_STEP));
+                if(key.equals("rain"))
+                    return iconHit(c, center);
+                i++;
+            }
+        }
+        return false;
+    }
+
+    private static boolean iconHit(Coord c, Coord center) {
+        return c.isect(center.sub(ICON_SZ / 2, ICON_SZ / 2), new Coord(ICON_SZ, ICON_SZ));
     }
 
     /** World time, right-aligned so it reads as pointing at the calendar beside it. */
@@ -313,5 +369,11 @@ public class NCal extends Cal {
             stat.quit();
         }
         super.dispose();
+    }
+}
+
+final class RainTooltip {
+    static String key(boolean rainEnabled) {
+        return rainEnabled ? "calendar.rain_disable_tip" : "calendar.rain_enable_tip";
     }
 }

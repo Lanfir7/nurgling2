@@ -47,7 +47,7 @@ class QuestTreeIconControllerTest {
     }
 
     @Test
-    void claimUsesTemporaryOverrideAndReplacesLeftoverOverride() {
+    void claimUpdatesVisibleCheckboxAndClearsLeftoverOverride() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
@@ -56,35 +56,33 @@ class QuestTreeIconControllerTest {
         QuestTreeIconController controller = new QuestTreeIconController();
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertFalse(oak.show);
+        assertTrue(oak.show);
         assertTrue(settings.shown(oak));
     }
 
     @Test
-    void questClaimDoesNotPersistMarkerIntoNextSession() {
+    void questClaimPersistsTheVisibleCheckboxState() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
 
         new QuestTreeIconController().reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertFalse(oak.show);
+        assertTrue(oak.show);
         assertTrue(settings.shown(oak));
     }
 
     @Test
-    void releaseClearsOverrideAndRevealsPersistedChoice() {
+    void releaseLeavesTheCurrentCheckboxChoiceAlone() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
-        settings.setShowOverride(oak.id, true);
-
         QuestTreeIconController controller = new QuestTreeIconController();
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
         controller.release(settings);
 
-        assertFalse(oak.show);
-        assertFalse(settings.shown(oak));
+        assertTrue(oak.show);
+        assertTrue(settings.shown(oak));
     }
 
     @Test
@@ -119,12 +117,12 @@ class QuestTreeIconControllerTest {
 
         new QuestTreeIconController().reconcile(Collections.singletonList(q), settings);
 
-        assertFalse(oak.show);
+        assertTrue(oak.show);
         assertTrue(settings.shown(oak));
     }
 
     @Test
-    void userPreferenceChangedDuringQuestIsUsedAfterRelease() {
+    void userCanDisableClaimedIconWithoutItBeingReenabledOnNextReconcile() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], true);
         settings.settings.put(oak.id, oak);
@@ -134,10 +132,62 @@ class QuestTreeIconControllerTest {
         oak.show = false;
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertTrue(settings.shown(oak));
+        assertFalse(settings.shown(oak));
 
         controller.release(settings);
         assertFalse(settings.shown(oak));
+    }
+
+    @Test
+    void exactCedarFellObjectiveEnablesEveryCedarSettingVariant() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting plain = setting("gfx/terobjs/mm/trees/cedar", new Object[0], false);
+        GobIcon.Setting ripe = setting("gfx/terobjs/mm/trees/cedar", new Object[] {"ripe"}, false);
+        settings.settings.put(plain.id, plain);
+        settings.settings.put(ripe.id, ripe);
+
+        QuestModel.TQuest quest = new QuestModel.TQuest(1);
+        quest.conds = Collections.singletonList(new QCond(1, false,
+                "Fell a cedar (x6)", "2/6[5/5]"));
+
+        new QuestTreeIconController().reconcile(Collections.singletonList(quest), settings);
+
+        assertTrue(plain.show);
+        assertTrue(ripe.show);
+        assertTrue(settings.shown(plain));
+        assertTrue(settings.shown(ripe));
+    }
+
+    @Test
+    void pineConeObjectiveEnablesTheSameSettingShownInIconSettings() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting pine = setting("gfx/terobjs/mm/trees/pine", new Object[0], false);
+        settings.settings.put(pine.id, pine);
+
+        QuestModel.TQuest quest = new QuestModel.TQuest(1);
+        quest.conds = Collections.singletonList(new QCond(1, false, "Pick a Pine Cone", null));
+
+        new QuestTreeIconController().reconcile(Collections.singletonList(quest), settings);
+
+        assertTrue(pine.show);
+        assertTrue(settings.shown(pine));
+    }
+
+    @Test
+    void activeQuestEnablesCedarAfterItsIconSettingLoadsLater() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        QuestModel.TQuest quest = new QuestModel.TQuest(1);
+        quest.conds = Collections.singletonList(new QCond(1, false, "Fell a cedar (x6)", null));
+        QuestTreeIconController controller = new QuestTreeIconController();
+
+        controller.reconcile(Collections.singletonList(quest), settings);
+
+        GobIcon.Setting cedar = setting("gfx/terobjs/mm/trees/cedar", new Object[0], false);
+        settings.settings.put(cedar.id, cedar);
+        controller.reconcile(Collections.singletonList(quest), settings);
+
+        assertTrue(cedar.show);
+        assertTrue(settings.shown(cedar));
     }
 
     private static QuestModel.TQuest oakQuest(int id) {

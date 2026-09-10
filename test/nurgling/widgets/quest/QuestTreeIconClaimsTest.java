@@ -16,32 +16,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QuestTreeIconClaimsTest {
     @Test
-    void hiddenIconIsVisibleOnlyWhileClaimed() {
+    void hiddenIconIsEnabledWhenFirstClaimed() {
         VisibilityState<String> visibility = new VisibilityState<>();
         visibility.base.put("oak", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
         claims.reconcile(requirements(1, "oak"), visibility);
         assertTrue(visibility.shown("oak"));
+    }
 
+    @Test
+    void releasePreservesCurrentCheckboxChoice() {
+        VisibilityState<String> visibility = new VisibilityState<>();
+        visibility.base.put("oak", false);
+        QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
+
+        claims.reconcile(requirements(1, "oak"), visibility);
+        visibility.base.put("oak", false);
         claims.reconcile(Collections.emptyMap(), visibility);
+
         assertFalse(visibility.shown("oak"));
     }
 
     @Test
-    void visibleIconRemainsVisibleAfterClaimIsReleased() {
-        VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.base.put("oak", true);
-        QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
-
-        claims.reconcile(requirements(1, "oak"), visibility);
-        claims.reconcile(Collections.emptyMap(), visibility);
-
-        assertTrue(visibility.shown("oak"));
-    }
-
-    @Test
-    void sharedIconStaysVisibleUntilLastQuestIsRemoved() {
+    void sharedIconIsEnabledOnlyOnFirstClaim() {
         VisibilityState<String> visibility = new VisibilityState<>();
         visibility.base.put("oak", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
@@ -49,30 +47,26 @@ class QuestTreeIconClaimsTest {
         both.put(2, Collections.singleton("oak"));
 
         claims.reconcile(both, visibility);
+        int writes = visibility.writes;
         claims.reconcile(requirements(2, "oak"), visibility);
         assertTrue(visibility.shown("oak"));
-
-        claims.reconcile(Collections.emptyMap(), visibility);
-        assertFalse(visibility.shown("oak"));
+        assertEquals(writes, visibility.writes);
     }
 
     @Test
-    void lateLoadedVisibleSettingKeepsItsPersistedStateOnRelease() {
+    void newClaimEnablesAResourceAfterItBecomesAvailable() {
         VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.base.put("oak:ripe", true);
-        visibility.overrides.put("oak:ripe", true);
+        visibility.base.put("oak:ripe", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
 
         claims.reconcile(Collections.emptyMap(), visibility);
         claims.reconcile(requirements(1, "oak:ripe"), visibility);
-        claims.reconcile(Collections.emptyMap(), visibility);
 
         assertTrue(visibility.shown("oak:ripe"));
-        assertFalse(visibility.overrides.containsKey("oak:ripe"));
     }
 
     @Test
-    void settingsWithSameResourceKeepIndependentPersistedStates() {
+    void settingsWithSameResourceAreEnabledIndependently() {
         VisibilityState<String> visibility = new VisibilityState<>();
         visibility.base.put("oak:plain", false);
         visibility.base.put("oak:ripe", true);
@@ -83,14 +77,10 @@ class QuestTreeIconClaimsTest {
         claims.reconcile(required, visibility);
         assertTrue(visibility.shown("oak:plain"));
         assertTrue(visibility.shown("oak:ripe"));
-
-        claims.reconcile(Collections.emptyMap(), visibility);
-        assertFalse(visibility.shown("oak:plain"));
-        assertTrue(visibility.shown("oak:ripe"));
     }
 
     @Test
-    void questOverrideRemainsActiveAcrossReconcile() {
+    void userOptOutSurvivesAnUnchangedReconcile() {
         VisibilityState<String> visibility = new VisibilityState<>();
         visibility.base.put("oak", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
@@ -102,35 +92,22 @@ class QuestTreeIconClaimsTest {
         int writes = visibility.writes;
         claims.reconcile(requirements(1, "oak"), visibility);
 
+        assertFalse(visibility.shown("oak"));
+        assertEquals(writes, visibility.writes);
+    }
+
+    @Test
+    void newClaimEnablesAnIconAgainAfterThePreviousQuestEnds() {
+        VisibilityState<String> visibility = new VisibilityState<>();
+        visibility.base.put("oak", false);
+        QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
+
+        claims.reconcile(requirements(1, "oak"), visibility);
+        visibility.base.put("oak", false);
+        claims.reconcile(Collections.emptyMap(), visibility);
+        claims.reconcile(requirements(2, "oak"), visibility);
+
         assertTrue(visibility.shown("oak"));
-        assertEquals(writes + 1, visibility.writes);
-    }
-
-    @Test
-    void releaseUsesCurrentPersistedChoice() {
-        VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.base.put("oak", true);
-        QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
-
-        claims.reconcile(requirements(1, "oak"), visibility);
-        visibility.base.put("oak", false);
-        claims.reconcile(Collections.emptyMap(), visibility);
-
-        assertFalse(visibility.shown("oak"));
-    }
-
-    @Test
-    void leftoverOverrideIsClearedOnRelease() {
-        VisibilityState<String> visibility = new VisibilityState<>();
-        visibility.base.put("oak", false);
-        visibility.overrides.put("oak", true);
-        QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
-
-        claims.reconcile(requirements(1, "oak"), visibility);
-        claims.reconcile(Collections.emptyMap(), visibility);
-
-        assertFalse(visibility.shown("oak"));
-        assertFalse(visibility.overrides.containsKey("oak"));
     }
 
     private static Map<Integer, Set<String>> requirements(int questId, String resource) {
@@ -141,20 +118,16 @@ class QuestTreeIconClaimsTest {
 
     private static class VisibilityState<K> implements QuestTreeIconClaims.Visibility<K> {
         final Map<K, Boolean> base = new HashMap<>();
-        final Map<K, Boolean> overrides = new HashMap<>();
         int writes;
 
         public boolean shown(K key) {
-            return overrides.getOrDefault(key, Boolean.TRUE.equals(base.get(key)));
+            return Boolean.TRUE.equals(base.get(key));
         }
 
         @Override
-        public void setOverride(K key, Boolean visible) {
+        public void enable(K key) {
             writes++;
-            if(visible == null)
-                overrides.remove(key);
-            else
-                overrides.put(key, visible);
+            base.put(key, true);
         }
     }
 }

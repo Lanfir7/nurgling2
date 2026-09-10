@@ -52,6 +52,7 @@ public class Glob {
     public double skyblend = 0.0;
     private final Map<String, CAttr> cattr = new HashMap<String, CAttr>();
     private Map<Indir<Resource>, Object> wmap = new HashMap<Indir<Resource>, Object>();
+    private boolean rainEnabled = true;
     
     public Glob(Session sess) {
 	this.sess = sess;
@@ -328,6 +329,8 @@ public class Glob {
 	synchronized(this) {
 	    ArrayList<Weather> ret = new ArrayList<>(wmap.size());
 	    for(Map.Entry<Indir<Resource>, Object> cur : wmap.entrySet()) {
+		if(!weatherEnabled(cur.getKey()))
+		    continue;
 		Object val = cur.getValue();
 		if(val instanceof Weather) {
 		    ret.add((Weather)val);
@@ -343,6 +346,34 @@ public class Glob {
 	    }
 	    return(ret);
 	}
+    }
+
+    public synchronized boolean toggleRain() {
+	rainEnabled = !rainEnabled;
+	return(rainEnabled);
+    }
+
+    public synchronized boolean rainEnabled() {
+	return(rainEnabled);
+    }
+
+    private boolean weatherEnabled(Indir<Resource> res) {
+	if(rainEnabled)
+	    return(true);
+	try {
+	    return(weatherEnabled(res.get().name, rainEnabled));
+	} catch(Loading l) {
+	    return(true);
+	}
+    }
+
+    static boolean weatherEnabled(String name, boolean rainEnabled) {
+	return(rainEnabled || !isRainWeatherResource(name));
+    }
+
+    static boolean isRainWeatherResource(String name) {
+	return(name.equals("gfx/fx/rain") || name.equals("gfx/fx/wet") ||
+	       name.equals("sfx/ambient/weather/wsound"));
     }
 
     /* XXX: This is actually quite ugly and there should be a better
