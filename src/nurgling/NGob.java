@@ -883,6 +883,10 @@ public class NGob
                         {
                             NIconSignOverlay.ensureAttached(parent);
                         }
+                        if (NActionStatusOverlay.supports(name))
+                        {
+                            NActionStatusOverlay.ensureAttached(parent);
+                        }
                         else if (name.contains("gfx/terobjs/dframe") || name.contains("gfx/terobjs/cheeserack"))
                         {
                             customMask = true;

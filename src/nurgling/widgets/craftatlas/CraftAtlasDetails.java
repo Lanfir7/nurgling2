@@ -396,7 +396,7 @@ public class CraftAtlasDetails extends Widget {
         g.chcolor(new Color(9, 13, 16, 215)); g.frect(productAt, Coord.of(productBox, productBox)); g.chcolor();
         Tex productIcon = icons.recipe(entry.outputResource, entry.recipeResource, entry.displayName);
         CraftAtlasIconCache.draw(g, productIcon, productAt.add(UI.scale(3), UI.scale(3)), productBox - UI.scale(6));
-        drawCentered(g, entry.displayName, UI.scale(98), UI.scale(14), UI.scale(24), null);
+        drawCentered(g, headerName(entry), UI.scale(98), UI.scale(14), UI.scale(24), null);
         Color availability = entry.availability == CraftAtlasEntry.Availability.OPEN ? new Color(103, 201, 129) :
                 entry.availability == CraftAtlasEntry.Availability.REFERENCE_ONLY ? new Color(210, 171, 91) : new Color(153, 160, 162);
         drawCentered(g, "\u25cf  " + L10n.get(statusKey(entry.availability)), UI.scale(98), UI.scale(40), UI.scale(22), availability);
@@ -438,8 +438,13 @@ public class CraftAtlasDetails extends Widget {
         super.draw(g);
     }
 
+    static String headerName(CraftAtlasEntry entry) {
+        if(entry == null || entry.gilding == null || entry.gilding.slots <= 0) return entry == null ? "" : entry.displayName;
+        return entry.displayName + " (" + entry.gilding.slots + "/" + entry.gilding.slots + ")";
+    }
+
     private static String formatChance(double pmin, double pmax) {
-        return Math.round(pmin * 100) + "%–" + Math.round(pmax * 100) + "%";
+        return CraftAtlasRecipeList.formatGildingChance(pmin, pmax);
     }
 
     private void drawSectionHeader(GOut g, Kind kind, int y, int viewportHeight) {

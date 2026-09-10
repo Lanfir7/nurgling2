@@ -70,6 +70,23 @@ class QuestObjectiveActionResolverTest {
     }
 
     @Test
+    void alderAndOliveObjectivesResolveToLivingTreeTerrainsWithoutChangingWhitebeam() {
+        QuestObjectiveAction alder = resolver.resolve(
+                new QCond(1, false, "Fell an alder (x6) 4/6[4/5]", null));
+        QuestObjectiveAction olive = resolver.resolve(
+                new QCond(1, false, "Eat an olive (x2) 4/6[4/5]", null));
+        QuestObjectiveAction whitebeam = resolver.resolve(
+                new QCond(1, false, "Bring a block of whitebeam to Jenny", null));
+
+        assertEquals(QuestObjectiveAction.Kind.TREE_TERRAIN, alder.kind);
+        assertTrue(alder.targets.contains("Beech Grove"));
+        assertEquals(QuestObjectiveAction.Kind.TREE_TERRAIN, olive.kind);
+        assertTrue(olive.targets.contains("Dry Flat"));
+        assertEquals(QuestObjectiveAction.Kind.TREE_TERRAIN, whitebeam.kind);
+        assertTrue(whitebeam.targets.contains("Black Wood"));
+    }
+
+    @Test
     void pickAlmondsResolvesTreeTerrainsFromProduct() {
         QuestObjectiveAction action = resolver.resolve(
                 new QCond(1, false, "Pick Almonds", null));

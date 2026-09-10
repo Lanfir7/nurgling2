@@ -7,7 +7,10 @@ import haven.res.ui.rbuff.RealmBuff;
 import haven.res.ui.relcnt.RelCont;
 import nurgling.conf.NDiscordNotification;
 import nurgling.conf.NToolBeltProp;
+import nurgling.craftatlas.CraftAtlasPreferences;
 import nurgling.craftatlas.CraftAtlasRecipeProbe;
+import nurgling.craftatlas.CraftAtlasStationQualityUpdate;
+import nurgling.craftatlas.WikiReferenceCatalog;
 import nurgling.i18n.L10n;
 import nurgling.map.SharedMarkerClipboardService;
 import nurgling.notifications.DiscordHookObject;
@@ -103,6 +106,8 @@ public class NGameUI extends GameUI
     private volatile java.util.concurrent.ExecutorService animalMarkerWorker = null;
     private volatile boolean animalMarkerWorkerStopped = false;
     final AnimalMarkerIconLoad.InFlight animalMarkerIconJobs = new AnimalMarkerIconLoad.InFlight();
+    private final CraftAtlasStationQualityUpdate.CachedStationKeys fallbackStationKeys =
+            new CraftAtlasStationQualityUpdate.CachedStationKeys();
 
     public synchronized java.util.concurrent.ExecutorService getAnimalMarkerWorker() {
         if (animalMarkerWorkerStopped) {
@@ -1578,6 +1583,7 @@ public class NGameUI extends GameUI
                         if (map instanceof NMapView) {
                             ((NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, quality);
                         }
+                        maybeUpdateCraftAtlasStationQuality(map.clickedGob.gob, quality);
                     } catch (NumberFormatException ignored) {
                     } finally {
                         map.clickedGob = null;
@@ -1676,6 +1682,37 @@ public class NGameUI extends GameUI
         }
         
         return super.msg(msg);
+    }
+
+    private void maybeUpdateCraftAtlasStationQuality(Gob gob, double quality) {
+        try {
+            if(!CurrentHomeTerritories.status(this).home) return;
+            String gobResource = null;
+            try {
+                if(gob != null && gob.ngob != null) gobResource = gob.ngob.name;
+            } catch(Loading ignored) {
+            }
+            CraftAtlasPreferences prefs;
+            Set<String> keys;
+            if(craftAtlas != null) {
+                prefs = craftAtlas.preferences();
+                keys = craftAtlas.stationKeys();
+            } else {
+                prefs = CraftAtlasPreferences.loadProfile();
+                keys = fallbackStationKeys.get(WikiReferenceCatalog::loadBundled);
+            }
+            CraftAtlasStationQualityUpdate.Result result = CraftAtlasStationQualityUpdate.apply(
+                    gobResource, quality, true, keys, prefs.requirementQualities);
+            if(!result.updated()) return;
+            try {
+                prefs.saveProfile();
+            } catch(Exception failed) {
+                result.rollback();
+                return;
+            }
+            msg("\u0412\u0430\u0448 \u0430\u0442\u043b\u0430\u0441 \u0431\u044b\u043b \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d");
+        } catch(Exception ignored) {
+        }
     }
     
     /**

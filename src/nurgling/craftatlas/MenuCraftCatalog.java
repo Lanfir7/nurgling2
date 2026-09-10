@@ -9,6 +9,7 @@ import haven.res.ui.tt.attrmod.Entry;
 import haven.res.ui.tt.attrmod.Mod;
 import haven.res.ui.tt.attrmod.resattr;
 import haven.res.ui.tt.slot.Slotted;
+import haven.res.ui.tt.slots.ISlots;
 import haven.resutil.FoodInfo;
 import haven.resutil.Curiosity;
 import nurgling.iteminfo.NCuriosity;
@@ -57,6 +58,7 @@ public final class MenuCraftCatalog {
     private final MenuGrid menu;
     private final CraftAtlasObservationStore store;
     private final List<CraftAtlasEntry> references;
+    private final Set<String> stationKeys;
     public MenuCraftCatalog(MenuGrid menu, CraftAtlasObservationStore store) {
         this(menu, store, WikiReferenceCatalog.loadBundled());
     }
@@ -64,7 +66,11 @@ public final class MenuCraftCatalog {
         this.menu = menu;
         this.store = store;
         this.references = references == null ? Collections.<CraftAtlasEntry>emptyList() : references;
+        this.stationKeys = Collections.unmodifiableSet(CraftAtlasStationQualityUpdate.stationKeys(this.references));
     }
+
+    /** Bundled station keys already loaded with this catalog. Does not rebuild or show Atlas. */
+    public Set<String> stationKeys() { return stationKeys; }
 
     public CraftAtlasSnapshot rebuild() {
         List<PageRecord> pages = new ArrayList<>();
@@ -216,10 +222,7 @@ public final class MenuCraftCatalog {
             if(info instanceof Slotted) {
                 categories.add("gildings");
                 Slotted slotted = (Slotted)info;
-                List<CraftAtlasEntry.AttributeRef> attributes = new ArrayList<>();
-                for(Resource resource : slotted.attrs)
-                    attributes.add(CraftAtlasAttributes.ref(resource.name, resourceName(resource)));
-                gilding = new CraftAtlasEntry.Gilding(slotted.pmin, slotted.pmax, attributes);
+                gilding = new CraftAtlasEntry.Gilding(slotted.pmin, slotted.pmax, gildingAttributes(slotted.attrs));
                 for(ItemInfo child : slotted.sub) {
                     if(!(child instanceof AttrMod)) continue;
                     for(Entry entry : ((AttrMod)child).tab) if(entry instanceof Mod) {
@@ -228,6 +231,12 @@ public final class MenuCraftCatalog {
                         bonuses.put(resource, new CraftAtlasEntry.Bonus(resource, mod.attr.name(), mod.mod));
                     }
                 }
+            }
+            if(info instanceof ISlots) {
+                ISlots slots = (ISlots)info;
+                categories.add("equipment");
+                gilding = new CraftAtlasEntry.Gilding(slots.pmin, slots.pmax, gildingAttributes(slots.attrs),
+                        Math.max(0, slots.left + slots.s.size()));
             }
             if("Skills".equals(info.getClass().getSimpleName())) {
                 for(Resource resource : skillResources(info)) {
@@ -267,6 +276,13 @@ public final class MenuCraftCatalog {
         } catch(ReflectiveOperationException ignored) {
             return new Resource[0];
         }
+    }
+
+    private static List<CraftAtlasEntry.AttributeRef> gildingAttributes(Resource[] resources) {
+        List<CraftAtlasEntry.AttributeRef> result = new ArrayList<>();
+        if(resources != null) for(Resource resource : resources) if(resource != null)
+            result.add(CraftAtlasAttributes.ref(resource.name, resourceName(resource)));
+        return result;
     }
 
     private static String resourceName(Resource resource) {

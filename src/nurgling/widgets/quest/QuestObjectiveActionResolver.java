@@ -33,7 +33,7 @@ public final class QuestObjectiveActionResolver {
                     Collections.singletonList(normalize(cond.itemTarget)));
         if(cond.verb == QCond.Verb.FELL)
             return treeTerrainFromName(cond.itemTarget);
-        if(cond.verb != QCond.Verb.PICK && cond.verb != QCond.Verb.BRING)
+        if(cond.verb != QCond.Verb.PICK && cond.verb != QCond.Verb.BRING && cond.verb != QCond.Verb.EAT)
             return null;
 
         Forageables.Entry forage = forageByName.get(normalize(cond.itemTarget));

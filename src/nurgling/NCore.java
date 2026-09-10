@@ -991,7 +991,7 @@ public class NCore extends Widget
 
     public void writeContainerInfo(Gob gob) {
         if (gob != null && databaseManager != null && databaseManager.isReady()
-                && nurgling.tools.ClaimLand.isOnClaimOrVillage(gob)) {
+                && nurgling.db.StorageTrackingPolicy.shouldTrack(NUtils.getGameUI())) {
             ContainerWatcher cw = new ContainerWatcher(gob, databaseManager);
             databaseManager.submitTask(cw);
         }

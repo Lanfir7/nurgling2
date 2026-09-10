@@ -73,6 +73,16 @@ class CraftAtlasQualityFormulaTest {
         assertFalse(CraftAtlasQualityFormula.factors(entry).get(0).affectsResult);
     }
 
+    @Test
+    void workstationGobResourcesKeepGenericStationKeys() {
+        assertEquals("station:pow", CraftAtlasQualityFormula.key(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/pow", null)));
+        assertEquals("station:htable", CraftAtlasQualityFormula.key(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/htable", null)));
+        assertEquals("station:tarkiln", CraftAtlasQualityFormula.key(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/tarkiln", null)));
+    }
+
     private static CraftAtlasEntry recipeWith(CraftAtlasEntry.Requirement... requirements) {
         CraftAtlasEntry.Builder builder = CraftAtlasEntry.builder("paginae/craft/test", "Test");
         for(CraftAtlasEntry.Requirement requirement : requirements) builder.requirement(requirement);

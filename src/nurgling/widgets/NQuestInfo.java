@@ -445,8 +445,22 @@ public class NQuestInfo extends Widget
         "Reward", "char.quest.section.reward", new QCond.Verb[] {QCond.Verb.TELL},
         "Attributes", "char.quest.section.attributes", new QCond.Verb[] {QCond.Verb.GAIN},
         "Craft", "char.quest.section.craft", new QCond.Verb[] {QCond.Verb.CREATE},
-        "Other", "char.quest.section.other", new QCond.Verb[] {QCond.Verb.CAVE, QCond.Verb.LIGHT, QCond.Verb.FELL, QCond.Verb.OTHER},
+        "Other", "char.quest.section.other", new QCond.Verb[] {QCond.Verb.CAVE, QCond.Verb.LIGHT, QCond.Verb.FELL, QCond.Verb.EAT, QCond.Verb.OTHER},
     };
+
+    /** Task-mode category used to decide whether an unfinished objective gets a visible row. */
+    static String taskCategory(QCond.Verb verb)
+    {
+        if(verb == null)
+            return null;
+        for(int i = 0; i < TASK_CATS.length; i += 3) {
+            for(QCond.Verb candidate : (QCond.Verb[])TASK_CATS[i + 2]) {
+                if(candidate == verb)
+                    return (String)TASK_CATS[i];
+            }
+        }
+        return null;
+    }
 
     private List<Group> taskGroups(NQuestTrackerProp p)
     {
@@ -454,7 +468,6 @@ public class NQuestInfo extends Widget
         for(int i = 0; i < TASK_CATS.length; i += 3) {
             String name = (String)TASK_CATS[i];
             String l10nKey = (String)TASK_CATS[i + 1];
-            Set<QCond.Verb> verbs = new HashSet<>(Arrays.asList((QCond.Verb[])TASK_CATS[i + 2]));
             Group g = new Group();
             g.key = "task:" + name;
             g.title = L10n.get(l10nKey);
@@ -464,7 +477,7 @@ public class NQuestInfo extends Widget
                 if(!visible(q, p))
                     continue;
                 for(QCond c : q.conds) {
-                    if(c.ready || !verbs.contains(c.verb))
+                    if(c.ready || !name.equals(taskCategory(c.verb)))
                         continue;
                     if(c.verb == QCond.Verb.TELL && !q.readyToTurnIn())
                         continue;

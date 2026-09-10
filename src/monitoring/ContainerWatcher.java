@@ -1,8 +1,10 @@
 package monitoring;
 
 import haven.Gob;
+import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.db.DatabaseManager;
+import nurgling.db.StorageTrackingPolicy;
 import nurgling.tasks.NTask;
 
 import java.sql.SQLException;
@@ -10,10 +12,12 @@ import java.sql.SQLException;
 public class ContainerWatcher implements Runnable {
     private final Gob parentGob;
     private final DatabaseManager databaseManager;
+    private final NGameUI gui;
 
     public ContainerWatcher(Gob parentGob, DatabaseManager databaseManager) {
         this.parentGob = parentGob;
         this.databaseManager = databaseManager;
+        this.gui = NUtils.getGameUI();
     }
 
     @Override
@@ -36,6 +40,9 @@ public class ContainerWatcher implements Runnable {
             // Check if task timed out (critical exit)
             if (waitTask.criticalExit) {
                 System.err.println("ContainerWatcher: Timeout waiting for hash and gcoord for gob " + parentGob.id);
+                return;
+            }
+            if (!StorageTrackingPolicy.shouldTrack(gui)) {
                 return;
             }
 

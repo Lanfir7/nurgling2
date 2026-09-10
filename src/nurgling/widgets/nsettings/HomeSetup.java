@@ -9,21 +9,29 @@ import haven.SListWidget;
 import haven.UI;
 import haven.Widget;
 import haven.Window;
+import monitoring.NGlobalSearchItems;
 import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
+import nurgling.db.DatabaseManager;
 import nurgling.i18n.L10n;
 import nurgling.tools.CurrentHomeTerritories;
 import nurgling.tools.HomeInteriorRegistry;
 import nurgling.tools.HomeInteriorStore;
 import nurgling.tools.HomeTerritories;
 import nurgling.tools.HomeTerritoryDebug;
+import nurgling.tools.NSearchItem;
+import nurgling.widgets.ChunkNavVisualizerWindow;
 
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /** Configures territories that are treated as home for the current game world. */
 public class HomeSetup extends Panel {
@@ -34,9 +42,39 @@ public class HomeSetup extends Panel {
     private List<HomeInteriorRegistry.Binding> indoorItems = new ArrayList<HomeInteriorRegistry.Binding>();
     private final HomeTerritoryList homeList;
     private final IndoorHomeList indoorList;
+    private final AtomicReference<StorageWipeResult> pendingStorageWipeResult = new AtomicReference<>();
+    private boolean storageWipeInProgress;
+    private NGameUI storageWipeGui;
+    private Future<?> storageWipeTask;
+    private final Supplier<? extends Widget> gameRoot;
+    final Button chunkNav;
+
+    private static final class StorageWipeResult {
+        final String error;
+
+        private StorageWipeResult(String error) {
+            this.error = error;
+        }
+
+        static StorageWipeResult success() {
+            return new StorageWipeResult(null);
+        }
+
+        static StorageWipeResult failed(Throwable error) {
+            String message = error == null ? null : error.getMessage();
+            if (message == null || message.trim().isEmpty())
+                message = error == null ? "Database task rejected" : error.getClass().getSimpleName();
+            return new StorageWipeResult(message);
+        }
+    }
 
     public HomeSetup() {
+        this(NUtils::getGameUI);
+    }
+
+    HomeSetup(Supplier<? extends Widget> gameRoot) {
         super();
+        this.gameRoot = gameRoot;
         Widget previous = add(new Label("● " + L10n.get("world.section.home_territories")),
                 UI.scale(10, 10));
         Button saveCurrent = add(new Button(UI.scale(260), L10n.get("world.home.save_current")) {
@@ -57,6 +95,19 @@ public class HomeSetup extends Panel {
                 homeList.pos("bl").adds(0, 10));
         indoorList = add(new IndoorHomeList(UI.scale(430, 140)),
                 indoorTitle.pos("bl").adds(0, 8));
+        Widget storageWipe = add(new Button(UI.scale(430), L10n.get("world.home.storage_wipe")) {
+            @Override
+            public void click() {
+                confirmStorageWipe();
+            }
+        }, indoorList.pos("bl").adds(0, 14));
+        chunkNav = add(new Button(UI.scale(430), L10n.get("world.home.chunknav_map")) {
+            @Override
+            public void click() {
+                openChunkNavMap();
+            }
+        }, storageWipe.pos("bl").adds(0, 8));
+        resize(new Coord(sz.x, Math.max(sz.y, contentsz().y)));
     }
 
     @Override
@@ -88,6 +139,32 @@ public class HomeSetup extends Panel {
         removedIndoorBindingIds.clear();
         refreshIndoorItems();
         NConfig.needUpdate();
+    }
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        StorageWipeResult result = pendingStorageWipeResult.getAndSet(null);
+        if (result == null && storageWipeTask != null && storageWipeTask.isCancelled())
+            result = StorageWipeResult.failed(new CancellationException("Database task cancelled"));
+        if (result == null)
+            return;
+        storageWipeInProgress = false;
+        storageWipeTask = null;
+        NGameUI gui = storageWipeGui;
+        storageWipeGui = null;
+        if (gui == null || gui.ui != ui)
+            return;
+        if (result.error == null) {
+            NGlobalSearchItems.clearResults();
+            NGlobalSearchItems.clearQueryCache();
+            NSearchItem.notifyContainerDataChanged();
+            if (gui.storageItemsWidget != null)
+                gui.storageItemsWidget.requestRefresh();
+            gui.msg(L10n.get("world.home.storage_wipe.success"), Color.YELLOW);
+        } else {
+            gui.error(L10n.get("world.home.storage_wipe.failed", result.error));
+        }
     }
 
     private void saveCurrentTerritories() {
@@ -152,6 +229,15 @@ public class HomeSetup extends Panel {
         window.raise();
     }
 
+    private void openChunkNavMap() {
+        Widget gui = gameRoot.get();
+        if (gui == null)
+            return;
+        Window window = new ChunkNavVisualizerWindow();
+        gui.add(window, gui.sz.sub(window.sz).div(2).max(Coord.z));
+        window.raise();
+    }
+
     private static String valueLine(String key, String value) {
         return L10n.get(key) + ": " + value;
     }
@@ -193,6 +279,60 @@ public class HomeSetup extends Panel {
         NGameUI gui = NUtils.getGameUI();
         if (gui != null)
             gui.error(L10n.get("world.home.none_detected"));
+    }
+
+    private void confirmStorageWipe() {
+        NGameUI gui = NUtils.getGameUI();
+        if (storageWipeInProgress) {
+            if (gui != null)
+                gui.error(L10n.get("world.home.storage_wipe.busy"));
+            return;
+        }
+        DatabaseManager databaseManager = databaseManager(gui);
+        if (databaseManager == null) {
+            if (gui != null)
+                gui.error(L10n.get("world.home.storage_wipe.db_not_ready"));
+            return;
+        }
+        Window confirm = new Window(UI.scale(new Coord(430, 110)),
+                L10n.get("world.home.storage_wipe.confirm_title"), true) {
+            @Override
+            public void reqclose() {
+                reqdestroy();
+            }
+        };
+        confirm.add(new Label(L10n.get("world.home.storage_wipe.confirm_line1")), UI.scale(10, 5));
+        confirm.add(new Label(L10n.get("world.home.storage_wipe.confirm_line2")), UI.scale(10, 27));
+        confirm.adda(new Button(UI.scale(130), L10n.get("world.home.storage_wipe.confirm_go"), false, () -> {
+            confirm.reqdestroy();
+            wipeStorage(gui, databaseManager);
+        }), UI.scale(new Coord(125, 65)), 0.5, 0.0);
+        confirm.adda(new Button(UI.scale(110), L10n.get("common.cancel"), false, confirm::reqdestroy),
+                UI.scale(new Coord(285, 65)), 0.5, 0.0);
+        gui.add(confirm, gui.sz.sub(confirm.sz).div(2).max(Coord.z));
+        confirm.raise();
+    }
+
+    private static DatabaseManager databaseManager(NGameUI gui) {
+        if (gui == null || gui.ui == null || gui.ui.core == null
+                || gui.ui.core.databaseManager == null || !gui.ui.core.databaseManager.isReady())
+            return null;
+        return gui.ui.core.databaseManager;
+    }
+
+    private void wipeStorage(NGameUI gui, DatabaseManager databaseManager) {
+        storageWipeInProgress = true;
+        storageWipeGui = gui;
+        storageWipeTask = databaseManager.submitTask(() -> {
+            try {
+                databaseManager.getContainerService().deleteAllContainers();
+                pendingStorageWipeResult.set(StorageWipeResult.success());
+            } catch (Exception error) {
+                pendingStorageWipeResult.set(StorageWipeResult.failed(error));
+            }
+        });
+        if (storageWipeTask == null)
+            pendingStorageWipeResult.set(StorageWipeResult.failed(null));
     }
 
     private void refreshIndoorItems() {

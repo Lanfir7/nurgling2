@@ -52,6 +52,14 @@ class QCondTest {
     }
 
     @Test
+    void eatOliveExposesDecoratedItemName() {
+        QCond cond = new QCond(7, false, "Eat an olive (x2) 4/6[4/5]", null);
+
+        assertEquals(QCond.Verb.EAT, cond.verb);
+        assertEquals("olive", cond.itemTarget);
+    }
+
+    @Test
     void unknownLinesStayOtherWithoutTargets() {
         QCond cond = new QCond(7, false, "Admire the sunset", null);
 

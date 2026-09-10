@@ -38,6 +38,18 @@ class NIconSignOverlayTest {
     }
 
     @Test
+    void removesRawPrefixForSecondLayerParchmentTooltip() {
+        assertEquals("Beaver", NIconSignOverlay.displayText("Raw Beaver", "gfx/invobjs/beaver", true));
+    }
+
+    @Test
+    void preservesRawPrefixOutsideSecondLayerParchmentTooltip() {
+        assertEquals("Raw Beaver", NIconSignOverlay.displayText("Raw Beaver", "gfx/invobjs/beaver", false));
+        assertEquals("Fine Raw Beaver", NIconSignOverlay.displayText("Fine Raw Beaver", "gfx/invobjs/beaver", true));
+        assertEquals("raw Beaver", NIconSignOverlay.displayText("raw Beaver", "gfx/invobjs/beaver", true));
+    }
+
+    @Test
     void rendersCaptionOnRoundedDarkPlateWithWarmBorder() {
         BufferedImage image = NIconSignOverlay.renderLabel("Chantrelle");
 
@@ -71,6 +83,54 @@ class NIconSignOverlayTest {
                 new byte[]{0x01, 0x02, 0x03, 0x04, 0x34, (byte) 0x92, 0x00}));
         assertEquals(-1, NIconSignOverlay.parchmentContentResourceId(new byte[]{0x01, 0x02, 0x03, 0x04, 0x34}));
         assertEquals(-1, NIconSignOverlay.parchmentContentResourceId(null));
+    }
+
+    @Test
+    void usesFirstMappedLayerForTwoLayerParchmentItemName() {
+        byte[] data = new byte[]{
+                0x01, 0x02, 0x03, 0x04,
+                0x01, (byte) 0x80, 0x04,
+                0x10, 0x00, 0x11, 0x00,
+                0x02,
+                0x10, 0x00, 0x01, 0x10,
+                0x11, 0x00, 0x02, 0x10
+        };
+
+        assertEquals(0x1001, NIconSignOverlay.parchmentContentResourceId(data));
+        assertTrue(NIconSignOverlay.parchmentContent(data).usesLayeredItemName);
+    }
+
+    @Test
+    void preservesBaseResourceForSingleMalformedOrNonTwoLayerParchmentItems() {
+        assertEquals(1, NIconSignOverlay.parchmentContentResourceId(new byte[]{
+                0x01, 0x02, 0x03, 0x04,
+                0x01, (byte) 0x80, 0x02,
+                0x10, 0x00,
+                0x01,
+                0x10, 0x00, 0x01, 0x10
+        }));
+        assertFalse(NIconSignOverlay.parchmentContent(new byte[]{
+                0x01, 0x02, 0x03, 0x04,
+                0x01, (byte) 0x80, 0x04,
+                0x10, 0x00, 0x11, 0x00
+        }).usesLayeredItemName);
+        assertEquals(1, NIconSignOverlay.parchmentContentResourceId(new byte[]{
+                0x01, 0x02, 0x03, 0x04,
+                0x01, (byte) 0x80, 0x04,
+                0x10, 0x00, 0x11, 0x00
+        }));
+        assertEquals(1, NIconSignOverlay.parchmentContentResourceId(new byte[]{
+                0x01, 0x02, 0x03, 0x04,
+                0x01, (byte) 0x80, 0x04,
+                0x10, 0x00, 0x11, 0x00,
+                0x01,
+                0x11, 0x00, 0x02, 0x10
+        }));
+        assertEquals(1, NIconSignOverlay.parchmentContentResourceId(new byte[]{
+                0x01, 0x02, 0x03, 0x04,
+                0x01, (byte) 0x80, 0x06,
+                0x10, 0x00, 0x11, 0x00, 0x12, 0x00
+        }));
     }
 
     @Test

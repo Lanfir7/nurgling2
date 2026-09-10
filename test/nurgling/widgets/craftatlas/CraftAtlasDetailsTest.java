@@ -233,6 +233,15 @@ class CraftAtlasDetailsTest {
         }
     }
 
+    @Test
+    void gildableEquipmentHeaderShowsAvailableAndTotalGildingSlots() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("coat", "Coat").category("equipment")
+                .gilding(new CraftAtlasEntry.Gilding(0.2, 0.5, Collections.emptyList(), 2))
+                .build();
+
+        assertEquals("Coat (2/2)", CraftAtlasDetails.headerName(entry));
+    }
+
     private CraftAtlasDetails.DetailRow find(List<CraftAtlasDetails.DetailRow> rows, String name) {
         for(CraftAtlasDetails.DetailRow row : rows) if(name.equals(row.name)) return row;
         throw new AssertionError(name);

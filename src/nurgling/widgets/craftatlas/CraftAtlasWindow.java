@@ -168,6 +168,9 @@ public class CraftAtlasWindow extends Window {
     }
 
     public CraftAtlasController controller() { return controller; }
+    public CraftAtlasPreferences preferences() { return preferences; }
+    /** Side-effect-free bundled station keys. Does not show or refresh Atlas. */
+    public Set<String> stationKeys() { return catalog.stationKeys(); }
     public CraftAtlasRecipeProbe recipeProbe() { return recipeProbe; }
     public CraftAtlasRecipeProbe.Claim claimRecipeProbe(String windowName) { return recipeProbe.claim(windowName); }
     public void onCraftWindowOpened() { controller.onCraftWindowOpened(); }

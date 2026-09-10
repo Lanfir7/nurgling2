@@ -42,6 +42,17 @@ class NCompassTargetCollectorTest {
     }
 
     @Test
+    void questPointerUsesRawCoordinatesInsteadOfCachedMapMarkerCoordinates() {
+        Pointer pointer = new Pointer(null);
+        Coord2d rawPointerPosition = new Coord2d(100, 200);
+        pointer.tc = rawPointerPosition;
+        pointer.mc = new Coord2d(-300, -400);
+
+        assertEquals(rawPointerPosition,
+                NCompassTargetCollector.choosePointerPosition(pointer, null));
+    }
+
+    @Test
     void higherPrioritySourceReplacesDuplicateTarget() {
         NCompassTarget peer = target("peer", "player:alice", NCompassTarget.Kind.DATABASE, 10, -1);
         NCompassTarget nearby = target("nearby", "player:alice", NCompassTarget.Kind.PLAYER, 9, 42);

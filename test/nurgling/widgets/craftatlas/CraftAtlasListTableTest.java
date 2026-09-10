@@ -96,6 +96,29 @@ class CraftAtlasListTableTest {
     }
 
     @Test
+    void equipmentColumnsExposeGildingSlotsAttributesAndChance() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("coat", "Coat").category("equipment")
+                .gilding(new CraftAtlasEntry.Gilding(0.2, 0.5, List.of(
+                        new CraftAtlasEntry.AttributeRef("gfx/hud/chr/agi", "Agility"),
+                        new CraftAtlasEntry.AttributeRef("gfx/hud/chr/dex", "Dexterity")), 2))
+                .build();
+
+        List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor("equipment", List.of(entry));
+
+        assertEquals(List.of("gilding:slots", "gilding:attributes", "gilding:chance"),
+                columns.stream().map(column -> column.id).toList());
+        assertEquals(2.0, columns.get(0).value(entry), 0.001);
+        assertEquals(List.of("Agility", "Dexterity"), columns.get(1).attributes(entry).stream()
+                .map(attribute -> attribute.name).toList());
+        assertEquals(0.5, columns.get(2).value(entry), 0.001);
+
+        CraftAtlasEntry plain = CraftAtlasEntry.builder("plain", "Plain Coat").category("equipment").build();
+        assertTrue(Double.isNaN(columns.get(0).value(plain)));
+        assertEquals(List.of("Coat", "Plain Coat"), CraftAtlasListTable.sort(
+                List.of(plain, entry), columns.get(0), true).stream().map(value -> value.displayName).toList());
+    }
+
+    @Test
     void curiosityColumnsUseRealHoursAndMentalWeight() {
         CraftAtlasEntry entry = CraftAtlasEntry.builder("curio", "Curio")
                 .category("curiosities")

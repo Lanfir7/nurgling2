@@ -16,11 +16,14 @@ import java.util.function.ToDoubleFunction;
 
 /** Metric columns and deterministic sorting for the expanded Craft Atlas list. */
 final class CraftAtlasListTable {
+    enum Presentation { NUMBER, ATTRIBUTE_ICONS, CHANCE_RANGE }
+
     static final class Column {
         final String id;
         final String label;
         final String tooltip;
         final String iconResource;
+        final Presentation presentation;
         private final ToDoubleFunction<CraftAtlasEntry> extractor;
 
         Column(String id, String label, String tooltip, ToDoubleFunction<CraftAtlasEntry> extractor) {
@@ -29,14 +32,24 @@ final class CraftAtlasListTable {
 
         Column(String id, String label, String tooltip, String iconResource,
                ToDoubleFunction<CraftAtlasEntry> extractor) {
+            this(id, label, tooltip, iconResource, Presentation.NUMBER, extractor);
+        }
+
+        Column(String id, String label, String tooltip, String iconResource, Presentation presentation,
+               ToDoubleFunction<CraftAtlasEntry> extractor) {
             this.id = id;
             this.label = label;
             this.tooltip = tooltip;
             this.iconResource = iconResource;
+            this.presentation = presentation;
             this.extractor = extractor;
         }
 
         double value(CraftAtlasEntry entry) { return extractor.applyAsDouble(entry); }
+        List<CraftAtlasEntry.AttributeRef> attributes(CraftAtlasEntry entry) {
+            if(entry == null || entry.gilding == null) return Collections.emptyList();
+            return entry.gilding.attributes;
+        }
     }
 
     private static final String[][] FOOD = {
@@ -102,6 +115,18 @@ final class CraftAtlasListTable {
             }
             return Collections.unmodifiableList(result);
         }
+        if(CraftAtlasSections.isEquipment(section)) {
+            return List.of(
+                    new Column("gilding:slots", L10n.get("craft_atlas.table.gilding_slots"),
+                            L10n.get("craft_atlas.table.gilding_slots_tip"),
+                            entry -> gildingSlots(entry)),
+                    new Column("gilding:attributes", L10n.get("craft_atlas.table.gilding_attributes"),
+                            L10n.get("craft_atlas.table.gilding_attributes_tip"), null,
+                            Presentation.ATTRIBUTE_ICONS, entry -> gildingAttributeCount(entry)),
+                    new Column("gilding:chance", L10n.get("craft_atlas.table.gilding_chance"),
+                            L10n.get("craft_atlas.table.gilding_chance_tip"), null,
+                            Presentation.CHANCE_RANGE, entry -> gildingChance(entry)));
+        }
         return Collections.emptyList();
     }
 
@@ -127,6 +152,20 @@ final class CraftAtlasListTable {
             if(normalizedName.equals(name)) return bonus.value;
         }
         return Double.NaN;
+    }
+
+    private static double gildingSlots(CraftAtlasEntry entry) {
+        return entry == null || entry.gilding == null || entry.gilding.slots <= 0 ?
+                Double.NaN : entry.gilding.slots;
+    }
+
+    private static double gildingAttributeCount(CraftAtlasEntry entry) {
+        return entry == null || entry.gilding == null || entry.gilding.attributes.isEmpty() ?
+                Double.NaN : entry.gilding.attributes.size();
+    }
+
+    private static double gildingChance(CraftAtlasEntry entry) {
+        return entry == null || entry.gilding == null ? Double.NaN : entry.gilding.pmax;
     }
 
     private static String bonusIcon(List<CraftAtlasEntry> entries, String normalizedName, String name) {

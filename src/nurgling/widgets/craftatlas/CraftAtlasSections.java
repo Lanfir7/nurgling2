@@ -26,6 +26,7 @@ final class CraftAtlasSections {
     }
 
     static boolean hasMetricTable(String section) {
-        return "foods".equals(section) || "gildings".equals(section) || "curiosities".equals(section);
+        return "foods".equals(section) || "gildings".equals(section) || "curiosities".equals(section) ||
+                isEquipment(section);
     }
 }

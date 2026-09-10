@@ -2594,7 +2594,7 @@ public class NInventory extends Inventory
         ItemWatcher.invalidateContainerCache(containerHash);
         if ((!trustEmptySnapshot && !ContainerInventorySync.shouldWrite(iis.size(), iisPeak))
                 || !(Boolean) NConfig.get(NConfig.Key.ndbenable)
-                || !nurgling.tools.ClaimLand.isOnClaimOrVillage(parentGob)) {
+                || !nurgling.db.StorageTrackingPolicy.shouldTrack(NUtils.getGameUI())) {
             return null;
         }
         return containerHash;

@@ -107,6 +107,12 @@ public class ContainerDao {
         adapter.executeUpdate("DELETE FROM containers WHERE hash = ?", hash);
     }
 
+    /** Delete every tracked storage item and its now-useless container location. */
+    public void deleteAllContainers(DatabaseAdapter adapter) throws SQLException {
+        adapter.executeUpdate("DELETE FROM storageitems");
+        adapter.executeUpdate("DELETE FROM containers");
+    }
+
     /**
      * Check if container exists
      */

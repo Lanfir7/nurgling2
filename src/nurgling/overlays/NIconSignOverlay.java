@@ -24,6 +24,7 @@ public final class NIconSignOverlay extends NObjectTexLabel {
     private String shownText = "";
     private Object trackedData;
     private int trackedResourceId = -1;
+    private boolean trackedRawParchmentPrefix;
     private Indir<Resource> itemResource;
     private Resource loadedItem;
     private int renderedFontSize = -1;
@@ -100,9 +101,44 @@ public final class NIconSignOverlay extends NObjectTexLabel {
     }
 
     static int parchmentContentResourceId(byte[] data) {
+        return parchmentContent(data).resourceId;
+    }
+
+    static ParchmentContent parchmentContent(byte[] data) {
         if (data == null || data.length < 6)
-            return -1;
-        return contentResourceId(new MessageBuf(data, 4, data.length - 4)) & 0x7fff;
+            return new ParchmentContent(-1, false);
+        int base = uint16(data, 4);
+        int fallback = base & 0x7fff;
+        if ((base & 0x8000) == 0 || data.length < 7)
+            return new ParchmentContent(fallback, false);
+
+        int offset = 7;
+        int spriteDataLength = data[6] & 0xff;
+        if (spriteDataLength != 4 || offset + spriteDataLength > data.length)
+            return new ParchmentContent(fallback, false);
+
+        int firstLayer = uint16(data, offset);
+        offset += spriteDataLength;
+        if (offset >= data.length)
+            return new ParchmentContent(fallback, false);
+
+        int mappings = data[offset++] & 0xff;
+        if (mappings > (data.length - offset) / 4)
+            return new ParchmentContent(fallback, false);
+        int mappedFirstLayer = -1;
+        for (int i = 0; i < mappings; i++) {
+            int localId = uint16(data, offset);
+            int resourceId = uint16(data, offset + 2);
+            if (localId == firstLayer)
+                mappedFirstLayer = resourceId;
+            offset += 4;
+        }
+        return new ParchmentContent(mappedFirstLayer >= 0 ? mappedFirstLayer : fallback,
+                mappedFirstLayer >= 0);
+    }
+
+    private static int uint16(byte[] data, int offset) {
+        return (data[offset] & 0xff) | ((data[offset + 1] & 0xff) << 8);
     }
 
     static byte[] parchmentData(Gob.Overlay overlay, String resourceName) {
@@ -125,6 +161,11 @@ public final class NIconSignOverlay extends NObjectTexLabel {
         if (base.isEmpty())
             return "";
         return Character.toUpperCase(base.charAt(0)) + base.substring(1);
+    }
+
+    static String displayText(String tooltip, String resourceName, boolean stripRawParchmentPrefix) {
+        String text = displayText(tooltip, resourceName);
+        return stripRawParchmentPrefix && text.startsWith("Raw ") ? text.substring(4) : text;
     }
 
     static BufferedImage renderLabel(String value) {
@@ -180,15 +221,18 @@ public final class NIconSignOverlay extends NObjectTexLabel {
         if (content == null) {
             trackedData = null;
             trackedResourceId = -1;
+            trackedRawParchmentPrefix = false;
             itemResource = null;
             loadedItem = null;
             setText("", settings);
             return false;
         }
 
-        if (content.data != trackedData || content.resourceId != trackedResourceId) {
+        if (content.data != trackedData || content.resourceId != trackedResourceId ||
+                content.stripRawParchmentPrefix != trackedRawParchmentPrefix) {
             trackedData = content.data;
             trackedResourceId = content.resourceId;
+            trackedRawParchmentPrefix = content.stripRawParchmentPrefix;
             itemResource = null;
             loadedItem = null;
             setText("", settings);
@@ -200,7 +244,8 @@ public final class NIconSignOverlay extends NObjectTexLabel {
             try {
                 loadedItem = itemResource.get();
                 Resource.Tooltip tooltip = loadedItem.layer(Resource.tooltip);
-                setText(displayText(tooltip == null ? null : tooltip.text(), loadedItem.name), settings);
+                setText(displayText(tooltip == null ? null : tooltip.text(), loadedItem.name,
+                        content.stripRawParchmentPrefix), settings);
             } catch (Loading ignored) {
                 // Retry after the displayed item resource finishes loading.
             }
@@ -226,12 +271,14 @@ public final class NIconSignOverlay extends NObjectTexLabel {
         if (settings.iconSigns && drawable instanceof ResDrawable && drawable.getres() != null &&
                 supports(drawable.getres().name)) {
             MessageBuf data = ((ResDrawable) drawable).sdt;
-            return new Content(data, contentResourceId(data));
+            return new Content(data, contentResourceId(data), false);
         }
         if (settings.parchments) {
             byte[] data = parchmentData(parchmentOverlay);
-            if (data != null)
-                return new Content(data, parchmentContentResourceId(data));
+            if (data != null) {
+                ParchmentContent parchment = parchmentContent(data);
+                return new Content(data, parchment.resourceId, parchment.usesLayeredItemName);
+            }
         }
         return null;
     }
@@ -306,10 +353,22 @@ public final class NIconSignOverlay extends NObjectTexLabel {
     private static final class Content {
         final Object data;
         final int resourceId;
+        final boolean stripRawParchmentPrefix;
 
-        Content(Object data, int resourceId) {
+        Content(Object data, int resourceId, boolean stripRawParchmentPrefix) {
             this.data = data;
             this.resourceId = resourceId;
+            this.stripRawParchmentPrefix = stripRawParchmentPrefix;
+        }
+    }
+
+    static final class ParchmentContent {
+        final int resourceId;
+        final boolean usesLayeredItemName;
+
+        ParchmentContent(int resourceId, boolean usesLayeredItemName) {
+            this.resourceId = resourceId;
+            this.usesLayeredItemName = usesLayeredItemName;
         }
     }
 }

@@ -14,7 +14,7 @@ import nurgling.db.StockpileStoragePolicy;
 import nurgling.db.StorageOrphanPolicy;
 import nurgling.db.dao.ContainerDao;
 import nurgling.db.service.ContainerService;
-import nurgling.tools.ClaimLand;
+import nurgling.db.StorageTrackingPolicy;
 import nurgling.tools.NSearchItem;
 
 import java.util.ArrayList;
@@ -56,10 +56,6 @@ public class StorageOrphanCleaner implements OCache.ChangeCallback {
         if (player == null || player.rc == null) {
             return;
         }
-        if (!ClaimLand.isOnClaimOrVillage(player)) {
-            return;
-        }
-
         MCache.Grid grid = playerGrid(gui, player);
         if (grid == null) {
             return;
@@ -74,6 +70,10 @@ public class StorageOrphanCleaner implements OCache.ChangeCallback {
             return;
         }
         lastCheckAtMs = now;
+
+        if (!StorageTrackingPolicy.shouldTrack(gui)) {
+            return;
+        }
 
         long lastActivity = lastGobActivityMs.getOrDefault(grid.id, 0L);
         if (!StorageOrphanPolicy.isGridIdle(now, gridEnteredAtMs, lastActivity)) {

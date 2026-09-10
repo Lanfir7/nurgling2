@@ -98,7 +98,9 @@ public class CraftAtlasRecipeList extends Widget {
     private int headerHeight() { return tableVisible() ? UI.scale(34) : 0; }
     private int viewportHeight() { return Math.max(0, sz.y - headerHeight()); }
     private int nameWidth() { return Math.min(UI.scale(230), Math.max(UI.scale(170), sz.x / 2)); }
-    private int columnWidth() { return UI.scale("curiosities".equals(section) ? 96 : 42); }
+    private int columnWidth() {
+        return UI.scale("curiosities".equals(section) ? 96 : CraftAtlasSections.isEquipment(section) ? 72 : 42);
+    }
     private int navigationWidth() { return UI.scale(22); }
 
     private boolean pagedColumns() {
@@ -240,11 +242,40 @@ public class CraftAtlasRecipeList extends Widget {
             }
             g.chcolor(new Color(71, 80, 83, 115));
             g.frect(Coord.of(x, y), Coord.of(1, rowHeight - 1));
-            double value = column.value(entry);
-            g.chcolor(Double.isFinite(value) ? new Color(132, 220, 159) : new Color(113, 121, 124));
-            g.atext(formatMetric(value), Coord.of(x + columnWidth() / 2, y + rowHeight / 2), 0.5, 0.5);
             g.chcolor();
+            if(column.presentation == CraftAtlasListTable.Presentation.ATTRIBUTE_ICONS) {
+                drawGildingAttributes(g, column.attributes(entry), x, y);
+            } else {
+                double value = column.value(entry);
+                g.chcolor(Double.isFinite(value) ? new Color(132, 220, 159) : new Color(113, 121, 124));
+                String text = column.presentation == CraftAtlasListTable.Presentation.CHANCE_RANGE && entry.gilding != null ?
+                        formatGildingChance(entry.gilding.pmin, entry.gilding.pmax) : formatMetric(value);
+                g.atext(text, Coord.of(x + columnWidth() / 2, y + rowHeight / 2), 0.5, 0.5);
+                g.chcolor();
+            }
         }
+    }
+
+    private void drawGildingAttributes(GOut g, List<CraftAtlasEntry.AttributeRef> attributes, int x, int y) {
+        if(attributes.isEmpty()) {
+            g.chcolor(new Color(113, 121, 124));
+            g.atext("\u2014", Coord.of(x + columnWidth() / 2, y + rowHeight / 2), 0.5, 0.5);
+            g.chcolor();
+            return;
+        }
+        int gap = UI.scale(2);
+        int box = Math.min(UI.scale(18), Math.max(1, (columnWidth() - gap * (attributes.size() - 1)) / attributes.size()));
+        int width = attributes.size() * box + (attributes.size() - 1) * gap;
+        int iconX = x + (columnWidth() - width) / 2;
+        int iconY = y + (rowHeight - box) / 2;
+        for(CraftAtlasEntry.AttributeRef attribute : attributes) {
+            CraftAtlasIconCache.draw(g, icons.icon(attribute.resource, attribute.name), Coord.of(iconX, iconY), box);
+            iconX += box + gap;
+        }
+    }
+
+    static String formatGildingChance(double pmin, double pmax) {
+        return Math.round(pmin * 100) + "%–" + Math.round(pmax * 100) + "%";
     }
 
     private String category(CraftAtlasEntry entry) {

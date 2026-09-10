@@ -14,7 +14,7 @@ public class QCond
 {
     public enum Verb
     {
-        TELL, KILL, PICK, BRING, GREET, LAUGH, RAGE, WAVE, GAIN, CAVE, LIGHT, CREATE, FELL, OTHER
+        TELL, KILL, PICK, BRING, GREET, LAUGH, RAGE, WAVE, GAIN, CAVE, LIGHT, CREATE, FELL, EAT, OTHER
     }
 
     /** Owning quest id. */
@@ -28,7 +28,7 @@ public class QCond
     public final String giver;
     /** Lowercased item name for a {@code Bring} objective, or null. */
     public final String bringItem;
-    /** Lowercased display item for a {@code Pick}, {@code Bring}, or {@code Create} objective. */
+    /** Lowercased display item for a {@code Pick}, {@code Bring}, {@code Create}, {@code Fell}, or {@code Eat} objective. */
     public final String itemTarget;
     /** Gob-name fragment for a {@code Kill}/{@code Pick} objective, or null. */
     public final String gobTarget;
@@ -94,6 +94,8 @@ public class QCond
             return Verb.CREATE;
         if(t.contains("Fell") || t.contains("Chop"))
             return Verb.FELL;
+        if(t.contains("Eat"))
+            return Verb.EAT;
         if(t.contains("Tell"))
             return Verb.TELL;
         if(t.contains("cave"))
@@ -156,7 +158,7 @@ public class QCond
         String target;
         if(verb == Verb.BRING)
             target = bringItem;
-        else if(verb == Verb.PICK || verb == Verb.CREATE || verb == Verb.FELL)
+        else if(verb == Verb.PICK || verb == Verb.CREATE || verb == Verb.FELL || verb == Verb.EAT)
             target = trimToNull(tail(info));
         else
             return null;

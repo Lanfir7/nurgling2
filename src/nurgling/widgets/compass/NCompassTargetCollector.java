@@ -74,7 +74,7 @@ public final class NCompassTargetCollector {
             try {
                 String name = pointer.tip();
                 Gob targetGob = gob(pointer.gobid);
-                Coord2d position = choosePointerPosition(pointer.tc(),
+                Coord2d position = choosePointerPosition(pointer,
                         targetGob == null ? null : targetGob.rc);
                 if (blank(name) || position == null)
                     continue;
@@ -271,6 +271,10 @@ public final class NCompassTargetCollector {
 
     static Coord2d choosePointerPosition(Coord2d pointerPosition, Coord2d gobPosition) {
         return gobPosition == null ? pointerPosition : gobPosition;
+    }
+
+    static Coord2d choosePointerPosition(Pointer pointer, Coord2d gobPosition) {
+        return choosePointerPosition(pointer == null ? null : pointer.tc, gobPosition);
     }
 
     private Gob gob(long id) {

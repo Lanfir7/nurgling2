@@ -11,6 +11,33 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MenuCraftCatalogTest {
     @Test
+    void pageGildingMetadataPreservesEquipmentSlotCapacity() {
+        CraftAtlasEntry.Gilding gilding = new CraftAtlasEntry.Gilding(0.2, 0.5,
+                Collections.singletonList(new CraftAtlasEntry.AttributeRef("gfx/hud/chr/agi", "Agility")), 2);
+        MenuCraftCatalog.PageRecord page = new MenuCraftCatalog.PageRecord("gildable-coat", "Gildable Coat",
+                Collections.singletonList("equipment"), Collections.<CraftAtlasEntry.Bonus>emptyList(), gilding,
+                Collections.<CraftAtlasEntry.AttributeRef>emptyList());
+
+        CraftAtlasEntry entry = MenuCraftCatalog.fromRecords(1, Collections.singletonList(page),
+                Collections.<String, CraftAtlasObservation>emptyMap()).byRecipe("gildable-coat");
+
+        assertEquals(2, entry.gilding.slots);
+        assertEquals("Agility", entry.gilding.attributes.get(0).name);
+    }
+
+    @Test
+    void stationKeysComeFromInjectedBundledReferences() {
+        CraftAtlasEntry.Requirement anvil = new CraftAtlasEntry.Requirement(
+                CraftAtlasEntry.RequirementKind.STATION, "gfx/invobjs/anvil", "Anvil", null);
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("paginae/craft/bar", "Bar")
+                .requirement(anvil)
+                .build();
+        MenuCraftCatalog catalog = new MenuCraftCatalog(null, null, Collections.singletonList(entry));
+
+        assertEquals(Collections.singleton(CraftAtlasQualityFormula.key(anvil)), catalog.stationKeys());
+    }
+
+    @Test
     void observationAddsRequirementAndKeepsRecipeOpen() {
         CraftAtlasObservation observed = new CraftAtlasObservation("testaxe", "Test Axe",
                 Arrays.asList(new CraftAtlasObservation.Item("gfx/invobjs/glue", "Glue", 1, false)),

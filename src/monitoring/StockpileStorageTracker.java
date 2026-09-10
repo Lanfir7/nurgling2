@@ -19,7 +19,7 @@ import nurgling.db.DatabaseManager;
 import nurgling.db.StockpileStoragePolicy;
 import nurgling.db.dao.ContainerDao;
 import nurgling.db.dao.StorageItemDao;
-import nurgling.tools.ClaimLand;
+import nurgling.db.StorageTrackingPolicy;
 import nurgling.tools.NSearchItem;
 
 import java.sql.SQLException;
@@ -47,6 +47,7 @@ public final class StockpileStorageTracker {
 
     private static final Object lock = new Object();
     private static Gob sessionGob;
+    private static NGameUI sessionGui;
     private static List<StockpileStoragePolicy.Item> snapshot;
     private static List<StockpileStoragePolicy.Item> lastSeen;
     private static long lastChangeMs;
@@ -69,6 +70,7 @@ public final class StockpileStorageTracker {
     private static Integer pileCountBefore;
     private static Integer pileCountAfter;
     private static boolean pileCountObserved;
+    private static boolean sessionStartedAtHome;
     private static final Deque<InventoryTransition> passiveTransitions = new ArrayDeque<>();
 
     private static final class InventoryTransition {
@@ -107,14 +109,14 @@ public final class StockpileStorageTracker {
     }
 
     public static void onGob(Gob gob) {
+        NGameUI gui = NUtils.getGameUI();
         if (!enabled() || gob == null || gob.ngob == null
                 || !StockpileStoragePolicy.isStockpileRes(gob.ngob.name)) {
             return;
         }
-        if (!ClaimLand.isOnClaimOrVillage(gob)) {
+        if (!StorageTrackingPolicy.shouldTrack(gui)) {
             return;
         }
-        NGameUI gui = NUtils.getGameUI();
         if (gui != null && gui.ui != null && gui.ui.core != null) {
             gui.ui.core.writeContainerInfo(gob);
         }
@@ -138,12 +140,14 @@ public final class StockpileStorageTracker {
     public static void beginTransfer(Gob gob, String itemName,
                                      StockpileStoragePolicy.TransferDirection direction,
                                      Integer currentPileCount) {
+        NGameUI gui = NUtils.getGameUI();
         if (!enabled() || gob == null || gob.ngob == null || itemName == null || direction == null
                 || !StockpileStoragePolicy.isStockpileRes(gob.ngob.name)
-                || !ClaimLand.isOnClaimOrVillage(gob)) {
+                || !StorageTrackingPolicy.shouldTrack(gui)) {
             return;
         }
         synchronized (lock) {
+            claimSessionForGuiUnlocked(gui);
             long nowMs = System.currentTimeMillis();
             if (!StockpileStoragePolicy.canReplacePlacementSession(placementDeadlineMs, nowMs)) {
                 return;
@@ -162,7 +166,9 @@ public final class StockpileStorageTracker {
             }
             commitUnlocked();
             sessionGob = gob;
-            snapshot = captureInventory();
+            sessionGui = gui;
+            sessionStartedAtHome = true;
+            snapshot = captureInventory(gui);
             lastSeen = snapshot;
             transferDirection = direction;
             expectedItemName = itemName;
@@ -180,12 +186,14 @@ public final class StockpileStorageTracker {
      * first explicit signal for those operations.
      */
     public static void observeOpenPile(Gob gob, String itemName, int currentPileCount) {
+        NGameUI gui = NUtils.getGameUI();
         if (!enabled() || gob == null || gob.ngob == null
                 || !StockpileStoragePolicy.isStockpileRes(gob.ngob.name)
-                || !ClaimLand.isOnClaimOrVillage(gob)) {
+                || !StorageTrackingPolicy.shouldTrack(gui)) {
             return;
         }
         synchronized (lock) {
+            claimSessionForGuiUnlocked(gui);
             long nowMs = System.currentTimeMillis();
             if (!StockpileStoragePolicy.canReplacePlacementSession(placementDeadlineMs, nowMs)) {
                 return;
@@ -208,7 +216,9 @@ public final class StockpileStorageTracker {
                 commitUnlocked();
             }
             sessionGob = gob;
-            snapshot = captureInventory();
+            sessionGui = gui;
+            sessionStartedAtHome = true;
+            snapshot = captureInventory(gui);
             lastSeen = snapshot;
             transferDirection = null;
             expectedItemName = itemName;
@@ -255,7 +265,11 @@ public final class StockpileStorageTracker {
         }
         List<StockpileStoragePolicy.Item> items = new ArrayList<>();
         addCaptured(items, hand);
+        NGameUI gui = NUtils.getGameUI();
         synchronized (lock) {
+            if (ownedByOtherGui(gui)) {
+                return;
+            }
             lastVhand = StockpileStoragePolicy.keepLastHand(lastVhand, items);
         }
     }
@@ -270,7 +284,11 @@ public final class StockpileStorageTracker {
         if (items.isEmpty()) {
             return;
         }
+        NGameUI gui = NUtils.getGameUI();
         synchronized (lock) {
+            if (ownedByOtherGui(gui)) {
+                return;
+            }
             lastVhand = StockpileStoragePolicy.keepLastHand(lastVhand, items);
             armedPlacementHand = new ArrayList<>(lastVhand);
             armedPlacementHandAtMs = System.currentTimeMillis();
@@ -278,16 +296,20 @@ public final class StockpileStorageTracker {
     }
 
     public static void onPlacingStart(String resName) {
-        if (!enabled()) {
+        NGameUI gui = NUtils.getGameUI();
+        if (!enabled() || !StorageTrackingPolicy.shouldTrack(gui)) {
             return;
         }
-        NGameUI gui = NUtils.getGameUI();
+        if (resName != null && !StockpileStoragePolicy.isStockpileRes(resName)) {
+            onPlacingCancel();
+            return;
+        }
         List<StockpileStoragePolicy.Item> currentHand = new ArrayList<>();
         if (gui != null && gui.vhand != null) {
             addCaptured(currentHand, gui.vhand);
-            rememberHand(gui.vhand);
         }
         synchronized (lock) {
+            claimSessionForGuiUnlocked(gui);
             long nowMs = System.currentTimeMillis();
             if (!StockpileStoragePolicy.canReplacePlacementSession(placementDeadlineMs, nowMs)) {
                 return;
@@ -295,6 +317,8 @@ public final class StockpileStorageTracker {
             if (placementDeadlineMs > 0) {
                 clearExpiredPlacementUnlocked();
             }
+            sessionGui = gui;
+            lastVhand = StockpileStoragePolicy.keepLastHand(lastVhand, currentHand);
             placingHeld = StockpileStoragePolicy.placementSeedForResource(
                     resName, currentHand, armedPlacementHand, armedPlacementHandAtMs,
                     nowMs, PLACEMENT_HAND_MAX_AGE_MS);
@@ -307,8 +331,12 @@ public final class StockpileStorageTracker {
     }
 
     public static void onPlacingCancel() {
-        placingHeld = List.of();
+        NGameUI gui = NUtils.getGameUI();
         synchronized (lock) {
+            if (ownedByOtherGui(gui)) {
+                return;
+            }
+            placingHeld = List.of();
             if (pendingPlaceRc == null) {
                 pendingSeed = List.of();
                 frozenHand = List.of();
@@ -318,16 +346,24 @@ public final class StockpileStorageTracker {
                 placementDeadlineMs = 0;
                 armedPlacementHand = List.of();
                 armedPlacementHandAtMs = 0;
+                if (sessionGob == null && snapshot == null)
+                    sessionGui = null;
             }
         }
     }
 
     public static void onPlace(Gob placing) {
+        NGameUI gui = NUtils.getGameUI();
+        boolean atHome = StorageTrackingPolicy.shouldTrack(gui);
         if (!enabled() || placing == null || placing.ngob == null
-                || !StockpileStoragePolicy.isStockpileRes(placing.ngob.name)) {
+                || !StockpileStoragePolicy.isStockpileRes(placing.ngob.name) || !atHome) {
+            if (enabled()) {
+                onPlacingCancel();
+            }
             return;
         }
         synchronized (lock) {
+            claimSessionForGuiUnlocked(gui);
             long nowMs = System.currentTimeMillis();
             if (!StockpileStoragePolicy.canReplacePlacementSession(placementDeadlineMs, nowMs)) {
                 return;
@@ -344,6 +380,8 @@ public final class StockpileStorageTracker {
                 commitUnlocked();
             }
             sessionGob = null;
+            sessionGui = gui;
+            sessionStartedAtHome = true;
             pendingPlaceRc = placing.rc;
             pendingPlaceResName = placing.ngob.name;
             placementDeadlineMs = nowMs + PLACEMENT_TIMEOUT_MS;
@@ -351,7 +389,7 @@ public final class StockpileStorageTracker {
             frozenHand = placeSeed;
             pendingSeed = frozenHand;
             awaitingPlaceInsert = !frozenHand.isEmpty();
-            snapshot = StockpileStoragePolicy.mergeConsumedPlacementSeed(captureInventory(), frozenHand);
+            snapshot = StockpileStoragePolicy.mergeConsumedPlacementSeed(captureInventory(gui), frozenHand);
             lastSeen = snapshot;
             lastChangeMs = System.currentTimeMillis();
         }
@@ -362,11 +400,19 @@ public final class StockpileStorageTracker {
             return;
         }
         NGameUI currentGui = NUtils.getGameUI();
+        synchronized (lock) {
+            if (ownedByOtherGui(currentGui)) {
+                return;
+            }
+        }
         NISBox openPile = currentGui == null ? null : currentGui.getStockpile();
         if (openPile != null && openPile.parentGob != null) {
             observeOpenPile(openPile.parentGob, openPile.stockpileItemName(), openPile.stockpileCount());
         }
         synchronized (lock) {
+            if (ownedByOtherGui(currentGui)) {
+                return;
+            }
             long nowMs = System.currentTimeMillis();
             if (placementDeadlineMs > 0
                     && !StockpileStoragePolicy.placementDeadlineActive(placementDeadlineMs, nowMs)) {
@@ -418,7 +464,7 @@ public final class StockpileStorageTracker {
             if (placementMetadataPending) {
                 return;
             }
-            List<StockpileStoragePolicy.Item> now = captureInventory();
+            List<StockpileStoragePolicy.Item> now = captureInventory(sessionGui);
             nowMs = System.currentTimeMillis();
             if (lastSeen == null || !now.equals(lastSeen)) {
                 if (transferDirection == null && lastSeen != null) {
@@ -459,8 +505,11 @@ public final class StockpileStorageTracker {
     }
 
     public static List<StockpileStoragePolicy.Item> captureInventory() {
+        return captureInventory(NUtils.getGameUI());
+    }
+
+    private static List<StockpileStoragePolicy.Item> captureInventory(NGameUI gui) {
         List<StockpileStoragePolicy.Item> items = new ArrayList<>();
-        NGameUI gui = NUtils.getGameUI();
         if (gui == null) {
             return items;
         }
@@ -597,6 +646,9 @@ public final class StockpileStorageTracker {
         if (sessionGob == null || snapshot == null) {
             return;
         }
+        if (sessionGui == null || NUtils.getGameUI() != sessionGui) {
+            return;
+        }
         if (sessionGob.ngob == null || sessionGob.ngob.hash == null
                 || sessionGob.ngob.gcoord == null) {
             return;
@@ -605,7 +657,7 @@ public final class StockpileStorageTracker {
             clearTransferUnlocked();
             return;
         }
-        List<StockpileStoragePolicy.Item> now = captureInventory();
+        List<StockpileStoragePolicy.Item> now = captureInventory(sessionGui);
         List<StockpileStoragePolicy.Item> rawGone = StockpileStoragePolicy.disappeared(snapshot, now);
         List<StockpileStoragePolicy.Item> rawGained = StockpileStoragePolicy.appeared(snapshot, now);
         if (StockpileStoragePolicy.isStackResolution(rawGone, rawGained)) {
@@ -629,11 +681,17 @@ public final class StockpileStorageTracker {
                 transferDirection == StockpileStoragePolicy.TransferDirection.OUT_OF_PILE
                         ? attributed : List.of();
         Gob gob = sessionGob;
+        NGameUI owner = sessionGui;
+        boolean startedAtHome = sessionStartedAtHome;
         String hash = gob.ngob.hash;
         long gridId = gob.ngob.grid_id;
         Coord gcoord = gob.ngob.gcoord;
         clearTransferUnlocked();
         if (gone.isEmpty() && gained.isEmpty()) {
+            return;
+        }
+        if (!StorageTrackingPolicy.canPersistSession(startedAtHome,
+                StorageTrackingPolicy.shouldTrack(owner))) {
             return;
         }
         DatabaseManager db = nurgling.NCore.databaseManager;
@@ -645,6 +703,8 @@ public final class StockpileStorageTracker {
 
     private static void clearTransferUnlocked() {
         sessionGob = null;
+        sessionGui = null;
+        sessionStartedAtHome = false;
         snapshot = null;
         lastSeen = null;
         transferDirection = null;
@@ -662,6 +722,8 @@ public final class StockpileStorageTracker {
 
     private static void clearExpiredPlacementUnlocked() {
         sessionGob = null;
+        sessionGui = null;
+        sessionStartedAtHome = false;
         snapshot = null;
         lastSeen = null;
         pendingPlaceRc = null;
@@ -715,6 +777,17 @@ public final class StockpileStorageTracker {
         if (earliest != null) {
             snapshot = earliest;
         }
+    }
+
+    /** Must be called while holding {@link #lock}. */
+    private static boolean ownedByOtherGui(NGameUI gui) {
+        return sessionGui != null && sessionGui != gui;
+    }
+
+    /** A real stockpile interaction takes ownership without ever mixing two inventories. */
+    private static void claimSessionForGuiUnlocked(NGameUI gui) {
+        if (ownedByOtherGui(gui))
+            clearExpiredPlacementUnlocked();
     }
 
     private static void applyDelta(DatabaseManager db, String containerHash, long gridId, Coord gcoord,

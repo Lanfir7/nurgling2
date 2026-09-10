@@ -154,11 +154,18 @@ public final class CraftAtlasEntry {
     public static final class Gilding {
         public final double pmin, pmax;
         public final List<AttributeRef> attributes;
+        /** Total number of supported slots on the fresh equipment item; zero means unavailable. */
+        public final int slots;
 
         public Gilding(double pmin, double pmax, List<AttributeRef> attributes) {
+            this(pmin, pmax, attributes, 0);
+        }
+
+        public Gilding(double pmin, double pmax, List<AttributeRef> attributes, int slots) {
             this.pmin = Math.max(0, Math.min(1, pmin));
             this.pmax = Math.max(this.pmin, Math.min(1, pmax));
             this.attributes = immutable(attributes == null ? Collections.<AttributeRef>emptyList() : attributes);
+            this.slots = Math.max(0, slots);
         }
     }
 

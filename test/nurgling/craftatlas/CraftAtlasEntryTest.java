@@ -65,4 +65,13 @@ class CraftAtlasEntryTest {
         assertEquals(Collections.singletonList("11R"), entry.equipmentSlots);
         assertThrows(UnsupportedOperationException.class, () -> entry.equipmentSlots.add("11L"));
     }
+
+    @Test
+    void keepsSupportedGildingSlotCountWithGildingMetadata() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("gildable", "Gildable")
+                .gilding(new CraftAtlasEntry.Gilding(0.2, 0.5, Collections.emptyList(), 3))
+                .build();
+
+        assertEquals(3, entry.gilding.slots);
+    }
 }

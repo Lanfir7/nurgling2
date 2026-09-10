@@ -112,6 +112,14 @@ public class ContainerService {
         });
     }
 
+    /** Delete all tracked storage items and container locations in one transaction. */
+    public void deleteAllContainers() throws SQLException {
+        databaseManager.executeOperation(adapter -> {
+            containerDao.deleteAllContainers(adapter);
+            return null;
+        });
+    }
+
     /**
      * Check if container exists asynchronously
      */
