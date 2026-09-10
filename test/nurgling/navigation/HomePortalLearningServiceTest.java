@@ -16,11 +16,13 @@ import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HomePortalLearningServiceTest {
+    private static final long HUT_INSTANCE = -7856348484756222084L;
     @Test
     void confirmedBuildingTraversalPersistsImmediately() {
         FakeRegistryAccess store = new FakeRegistryAccess();
@@ -312,7 +314,8 @@ class HomePortalLearningServiceTest {
 
         assertEquals(901L, assigned);
         assertEquals(901L, dest.instanceId);
-        assertTrue(assigned > ChunkNavManager.SURFACE_INSTANCE);
+        assertNotEquals(0L, assigned);
+        assertNotEquals(ChunkNavManager.SURFACE_INSTANCE, assigned);
 
         HomePortalLearningService.Pending pending = service.capture(
                 42L, 7, 9, "gfx/terobjs/arch/thatchedhut",
@@ -337,6 +340,79 @@ class HomePortalLearningServiceTest {
 
         assertEquals(8001L, assigned);
         assertEquals(8001L, dest.instanceId);
+    }
+
+    @Test
+    void negativeInteriorInstanceIsPreservedOnReentry() {
+        ChunkNavData dest = new ChunkNavData(901L);
+        dest.instanceId = HUT_INSTANCE;
+        dest.layer = "inside";
+
+        long assigned = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                dest, 901L, "gfx/terobjs/arch/thatchedhut-door");
+        PortalTraversalTracker.stampDestinationInstance(dest, assigned);
+
+        assertEquals(HUT_INSTANCE, assigned);
+        assertEquals(HUT_INSTANCE, dest.instanceId);
+    }
+
+    @Test
+    void sentinelIndoorDestinationAssignsNegativeGridId() {
+        ChunkNavData dest = new ChunkNavData(HUT_INSTANCE);
+        dest.instanceId = ChunkNavManager.SURFACE_INSTANCE;
+        dest.layer = "inside";
+
+        long assigned = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                dest, HUT_INSTANCE, "gfx/terobjs/arch/thatchedhut-door");
+        PortalTraversalTracker.stampDestinationInstance(dest, assigned);
+
+        assertEquals(HUT_INSTANCE, assigned);
+        assertEquals(HUT_INSTANCE, dest.instanceId);
+        assertNotEquals(0L, assigned);
+        assertNotEquals(ChunkNavManager.SURFACE_INSTANCE, assigned);
+    }
+
+    @Test
+    void unknownGridSentinelIsNotAssignedAsInstance() {
+        ChunkNavData dest = new ChunkNavData(-1L);
+        dest.instanceId = 0L;
+        dest.layer = "inside";
+
+        long assigned = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                dest, -1L, "gfx/terobjs/arch/thatchedhut-door");
+        PortalTraversalTracker.stampDestinationInstance(dest, assigned);
+
+        assertNotEquals(-1L, assigned);
+        assertNotEquals(-1L, dest.instanceId);
+    }
+
+    @Test
+    void negativeDestinationInstanceIsLearned() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        HomePortalLearningService service = service(store, savedClaimContext());
+
+        service.confirm(service.capture(
+                42L, 7, 9, "gfx/terobjs/arch/thatchedhut", 1L, "outside"),
+                confirmedInsideTraversal(901L, HUT_INSTANCE));
+
+        HomeInteriorRegistry.Binding learned = store.registry.findActive(
+                901L, HUT_INSTANCE, savedClaim());
+        assertNotNull(learned);
+        assertEquals(HUT_INSTANCE, learned.instanceId);
+        assertNull(store.registry.findActive(42L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
+    }
+
+    @Test
+    void backfillAcceptsNegativeDestinationInstance() {
+        ChunkNavGraph graph = hutGraph(ChunkPortal.PortalType.DOOR, "outside",
+                ChunkNavManager.SURFACE_INSTANCE, "inside", HUT_INSTANCE, new Coord(7, 9), 901L);
+
+        HomeInteriorRegistry.Binding active = backfill(graph, savedClaim(),
+                HomeInteriorRegistry.empty()).findActive(901L, HUT_INSTANCE, savedClaim());
+
+        assertNotNull(active);
+        assertEquals(HUT_INSTANCE, active.instanceId);
+        assertTrue(active.gridIds.contains(901L));
     }
 
     @Test

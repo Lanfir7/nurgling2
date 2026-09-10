@@ -741,9 +741,11 @@ public class PortalTraversalTracker {
         String layer = destChunk != null && destChunk.layer != null && !destChunk.layer.isEmpty()
                 ? destChunk.layer : null;
         if (indoorHomeLayer(layer)) {
-            if (destChunk != null && destChunk.instanceId > ChunkNavManager.SURFACE_INSTANCE)
+            if (destChunk != null && ChunkNavManager.isInteriorInstanceId(destChunk.instanceId))
                 return destChunk.instanceId;
-            return toGridId;
+            if (toGridId != -1L)
+                return toGridId;
+            return destChunk != null ? destChunk.instanceId : 0L;
         }
         if (destChunk != null && destChunk.instanceId != 0)
             return destChunk.instanceId;
@@ -753,9 +755,11 @@ public class PortalTraversalTracker {
     static void stampDestinationInstance(ChunkNavData destChunk, long instanceId) {
         if (destChunk == null)
             return;
+        if (instanceId == -1L)
+            return;
         if (destChunk.instanceId == 0
                 || (indoorHomeLayer(destChunk.layer)
-                        && destChunk.instanceId <= ChunkNavManager.SURFACE_INSTANCE)) {
+                        && !ChunkNavManager.isInteriorInstanceId(destChunk.instanceId))) {
             destChunk.instanceId = instanceId;
         }
     }
@@ -825,9 +829,11 @@ public class PortalTraversalTracker {
             toLayer = toChunk.layer;
         long fromInstance = pendingHomeLearning.sourceInstanceId;
         long toInstance = manager == null ? 0L : manager.getCurrentInstanceId();
-        if (toChunk != null && toChunk.instanceId > ChunkNavManager.SURFACE_INSTANCE)
+        if (toChunk != null && ChunkNavManager.isInteriorInstanceId(toChunk.instanceId))
             toInstance = toChunk.instanceId;
-        else if (indoorHomeLayer(toLayer) && toInstance <= ChunkNavManager.SURFACE_INSTANCE)
+        else if (indoorHomeLayer(toLayer)
+                && !ChunkNavManager.isInteriorInstanceId(toInstance)
+                && toGridId != -1L)
             toInstance = toGridId;
         HomeInteriorRegistry.PortalIdentity root = new HomeInteriorRegistry.PortalIdentity(
                 pendingHomeLearning.sourceGridId,

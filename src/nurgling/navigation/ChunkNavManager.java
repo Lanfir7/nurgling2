@@ -67,6 +67,10 @@ public class ChunkNavManager {
     public static final long SURFACE_INSTANCE = 1;
     private volatile long currentInstanceId = SURFACE_INSTANCE;
 
+    public static boolean isInteriorInstanceId(long instanceId) {
+        return instanceId != 0L && instanceId != SURFACE_INSTANCE;
+    }
+
     // Instance reference - managed by NMapView, not a traditional singleton
     // This static reference exists for backward compatibility with code that
     // cannot easily access gui.map.getChunkNavManager()

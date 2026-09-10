@@ -103,7 +103,8 @@ public final class HomeInteriorRegistry {
                 continue;
             if (byGrid == null && binding.gridIds.contains(gridId))
                 byGrid = binding;
-            if (byInstance == null && instanceId > nurgling.navigation.ChunkNavManager.SURFACE_INSTANCE
+            if (byInstance == null
+                    && nurgling.navigation.ChunkNavManager.isInteriorInstanceId(instanceId)
                     && binding.instanceId == instanceId)
                 byInstance = binding;
         }
@@ -493,7 +494,7 @@ public final class HomeInteriorRegistry {
             LinkedHashSet<OriginKey> mergedOrigins = new LinkedHashSet<OriginKey>(origins);
             mergedOrigins.addAll(incoming.origins);
             String name = incoming.displayName.isEmpty() ? displayName : incoming.displayName;
-            long keptInstance = instanceId > nurgling.navigation.ChunkNavManager.SURFACE_INSTANCE
+            long keptInstance = nurgling.navigation.ChunkNavManager.isInteriorInstanceId(instanceId)
                     ? instanceId : incoming.instanceId;
             return new Binding(id, keptInstance, grids,
                     mergedOrigins, rootPortal != null ? rootPortal : incoming.rootPortal,

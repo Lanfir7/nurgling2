@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HomeLocationResolverTest {
+    private static final long HUT_INSTANCE = -7856348484756222084L;
     @Test
     void exactStoredGridRestoresHomeAfterRestartInside() {
         HomeInteriorRegistry registry = registryWithAutomaticBinding(
@@ -77,6 +78,19 @@ class HomeLocationResolverTest {
         HomeLocationResolver.Status status = HomeLocationResolver.resolve(
                 savedClaim(), Collections.emptyList(), null, false,
                 registry, 999L, 700L, true);
+
+        assertTrue(status.indoorHome);
+        assertTrue(status.home);
+        assertEquals(HomeLocationResolver.Source.INDOOR_AUTO, status.source);
+    }
+
+    @Test
+    void negativeInstanceFallbackRestoresHomeWhenGridIsUnknown() {
+        HomeInteriorRegistry registry = registryWithAutomaticBinding(
+                HUT_INSTANCE, setOf(901L), "claim-anchor:42:7:9");
+        HomeLocationResolver.Status status = HomeLocationResolver.resolve(
+                savedClaim(), Collections.emptyList(), null, false,
+                registry, 999L, HUT_INSTANCE, true);
 
         assertTrue(status.indoorHome);
         assertTrue(status.home);

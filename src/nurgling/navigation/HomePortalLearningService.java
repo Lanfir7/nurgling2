@@ -204,7 +204,7 @@ public final class HomePortalLearningService {
                 || portal.gobName == null)
             return current;
         ChunkNavData dest = graph.getChunk(portal.connectsToGridId);
-        if (dest == null || dest.instanceId <= ChunkNavManager.SURFACE_INSTANCE)
+        if (dest == null || !ChunkNavManager.isInteriorInstanceId(dest.instanceId))
             return current;
         if (!"inside".equals(dest.layer) && !"cellar".equals(dest.layer))
             return current;

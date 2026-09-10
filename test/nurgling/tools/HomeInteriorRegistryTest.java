@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HomeInteriorRegistryTest {
+    private static final long HUT_INSTANCE = -7856348484756222084L;
     @Test
     void originKeysUseVillageNameClaimAnchorAndLegacyOwner() {
         HomeTerritories.Entry village = new HomeTerritories.Entry(HomeTerritories.Type.VILLAGE, " Oak Vale ");
@@ -105,6 +106,32 @@ class HomeInteriorRegistryTest {
 
         assertEquals(indoor, registry.findActive(1001L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
         assertEquals(null, registry.findActive(42L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
+    }
+
+    @Test
+    void negativeStableInstanceMatchesByInstanceFallback() {
+        HomeInteriorRegistry.Binding indoor = automaticBinding(
+                "auto-hut", HUT_INSTANCE, setOf(901L), "claim-anchor:42:7:9");
+        HomeInteriorRegistry registry = HomeInteriorRegistry.empty().put(indoor);
+
+        assertEquals(indoor, registry.findActive(901L, HUT_INSTANCE, savedClaim()));
+        assertEquals(indoor, registry.findActive(999L, HUT_INSTANCE, savedClaim()));
+        assertEquals(indoor, registry.findActive(901L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
+        assertEquals(null, registry.findActive(42L, ChunkNavManager.SURFACE_INSTANCE, savedClaim()));
+    }
+
+    @Test
+    void mergeKeepsNegativeIndoorInstance() {
+        HomeInteriorRegistry.Binding existing = automaticBinding(
+                "auto-hut", HUT_INSTANCE, setOf(901L), "claim-anchor:42:7:9");
+        HomeInteriorRegistry.Binding incoming = automaticBinding(
+                "auto-hut", ChunkNavManager.SURFACE_INSTANCE, setOf(902L),
+                "claim-anchor:42:7:9");
+
+        HomeInteriorRegistry.Binding merged = existing.merge(incoming);
+
+        assertEquals(HUT_INSTANCE, merged.instanceId);
+        assertEquals(setOf(901L, 902L), merged.gridIds);
     }
 
     @Test

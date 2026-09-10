@@ -983,7 +983,7 @@ public class ChunkNavVisualizerWindow extends Window {
 
     private Collection<Long> gridsForInstance(long instanceId) {
         LinkedHashSet<Long> grids = new LinkedHashSet<Long>();
-        if (instanceId <= ChunkNavManager.SURFACE_INSTANCE)
+        if (!ChunkNavManager.isInteriorInstanceId(instanceId))
             return grids;
         for (ChunkNavData chunk : chunks) {
             if (chunk != null && chunk.instanceId == instanceId)

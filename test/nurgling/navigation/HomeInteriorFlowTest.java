@@ -23,6 +23,7 @@ import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,6 +36,7 @@ class HomeInteriorFlowTest {
     private static final long MINE_GRID = 2001L;
     private static final long BUILDING_INSTANCE = 2L;
     private static final long MINE_INSTANCE = 9L;
+    private static final long HUT_INSTANCE = -7856348484756222084L;
     private static final String DOOR_RES = "gfx/terobjs/arch/stonemansion-door";
 
     @Test
@@ -197,7 +199,8 @@ class HomeInteriorFlowTest {
                 dest, BUILDING_GRID, DOOR_RES);
         PortalTraversalTracker.stampDestinationInstance(dest, assigned);
         assertEquals(BUILDING_GRID, assigned);
-        assertTrue(assigned > ChunkNavManager.SURFACE_INSTANCE);
+        assertNotEquals(0L, assigned);
+        assertNotEquals(ChunkNavManager.SURFACE_INSTANCE, assigned);
 
         service.confirm(service.capture(SURFACE_GRID, 7, 9, DOOR_RES,
                 ChunkNavManager.SURFACE_INSTANCE, "outside"),
@@ -223,6 +226,53 @@ class HomeInteriorFlowTest {
         HomeLocationResolver.Status restartOnExactGrid = resolve(saved, Collections.emptyList(), null,
                 store.registry, BUILDING_GRID, ChunkNavManager.SURFACE_INSTANCE);
         assertTrue(restartOnExactGrid.indoorHome);
+    }
+
+    @Test
+    void negativeHutInstanceIsLearnedResolvedAndPreservedAcrossFloors() {
+        FakeRegistryAccess store = new FakeRegistryAccess();
+        List<HomeTerritories.Entry> saved = savedClaimAndVillage();
+        HomePortalLearningService service = new HomePortalLearningService(
+                "test-world", store, fixtureContext(store, saved), saved);
+        ChunkNavData dest = chunk(HUT_INSTANCE, ChunkNavManager.SURFACE_INSTANCE, "inside");
+
+        long assigned = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                dest, HUT_INSTANCE, DOOR_RES);
+        PortalTraversalTracker.stampDestinationInstance(dest, assigned);
+        assertEquals(HUT_INSTANCE, assigned);
+        assertNotEquals(0L, assigned);
+        assertNotEquals(ChunkNavManager.SURFACE_INSTANCE, assigned);
+
+        service.confirm(service.capture(SURFACE_GRID, 7, 9, DOOR_RES,
+                ChunkNavManager.SURFACE_INSTANCE, "outside"),
+                traversal(ChunkPortal.PortalType.DOOR, "outside", "inside",
+                        true, false, HUT_INSTANCE, dest.instanceId));
+
+        HomeInteriorRegistry.Binding learned = onlyBinding(store.registry);
+        assertEquals(HUT_INSTANCE, learned.instanceId);
+        assertTrue(learned.gridIds.contains(HUT_INSTANCE));
+
+        HomeLocationResolver.Status wilderness = resolve(saved, Collections.emptyList(), null,
+                store.registry, 99L, ChunkNavManager.SURFACE_INSTANCE);
+        assertFalse(wilderness.indoorHome);
+
+        HomeLocationResolver.Status inside = resolve(saved, Collections.emptyList(), null,
+                store.registry, 999L, HUT_INSTANCE);
+        assertTrue(inside.indoorHome);
+
+        ChunkNavData cellar = chunk(CELLAR_GRID, HUT_INSTANCE, "cellar");
+        long preserved = PortalTraversalTracker.destinationInstanceAfterTraversal(
+                cellar, CELLAR_GRID, "gfx/terobjs/cellarstairs");
+        PortalTraversalTracker.stampDestinationInstance(cellar, preserved);
+        assertEquals(HUT_INSTANCE, preserved);
+        assertEquals(HUT_INSTANCE, cellar.instanceId);
+
+        service.confirm(service.capture(HUT_INSTANCE, 7, 9, DOOR_RES,
+                HUT_INSTANCE, "inside"),
+                traversal(ChunkPortal.PortalType.CELLAR, "inside", "cellar",
+                        true, false, CELLAR_GRID, ChunkNavManager.SURFACE_INSTANCE));
+        assertEquals(HUT_INSTANCE, onlyBinding(store.registry).instanceId);
+        assertTrue(onlyBinding(store.registry).gridIds.contains(CELLAR_GRID));
     }
 
     @Test

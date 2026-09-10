@@ -112,7 +112,7 @@ public final class HomePortalInheritance {
                     Collections.<HomeInteriorRegistry.OriginKey>emptySet()));
         if (source.directOrigins.isEmpty() || traversal.rootPortal == null)
             return unchanged(current);
-        if (traversal.toInstanceId <= ChunkNavManager.SURFACE_INSTANCE)
+        if (!ChunkNavManager.isInteriorInstanceId(traversal.toInstanceId))
             return unchanged(current);
         String autoId = "auto:" + traversal.rootPortal.stableKey();
         HomeInteriorRegistry.Binding existing = bindingWithId(current, autoId);

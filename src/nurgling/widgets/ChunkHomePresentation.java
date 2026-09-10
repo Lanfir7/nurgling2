@@ -45,7 +45,7 @@ public final class ChunkHomePresentation {
     }
 
     private static boolean manualEligible(ChunkNavData chunk) {
-        if (chunk.instanceId <= ChunkNavManager.SURFACE_INSTANCE)
+        if (!ChunkNavManager.isInteriorInstanceId(chunk.instanceId))
             return false;
         String layer = chunk.layer == null ? "outside" : chunk.layer.toLowerCase(Locale.ROOT).trim();
         return "inside".equals(layer) || "cellar".equals(layer);

@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChunkHomePresentationTest {
+    private static final long HUT_INSTANCE = -7856348484756222084L;
     @ParameterizedTest
     @ValueSource(strings = {"outside", "mine1", "mine2", "cave"})
     void manualMarkIsDisabledOutsideAndInMinesOrCaves(String layer) {
@@ -66,6 +67,49 @@ class ChunkHomePresentationTest {
         assertTrue(cellar.canMarkManual);
         assertFalse(cellar.canUnmarkManual);
         assertFalse(cellar.active);
+    }
+
+    @Test
+    void negativeInsideAndCellarCanBeMarkedWhenNotHome() {
+        ChunkHomePresentation inside = ChunkHomePresentation.forChunk(
+                chunk(901L, HUT_INSTANCE, "inside"), HomeInteriorRegistry.empty(),
+                Collections.emptyList());
+        ChunkHomePresentation cellar = ChunkHomePresentation.forChunk(
+                chunk(902L, HUT_INSTANCE, "cellar"), HomeInteriorRegistry.empty(),
+                Collections.emptyList());
+
+        assertEquals(ChunkHomePresentation.Kind.NONE, inside.kind);
+        assertTrue(inside.canMarkManual);
+        assertEquals(ChunkHomePresentation.Kind.NONE, cellar.kind);
+        assertTrue(cellar.canMarkManual);
+    }
+
+    @Test
+    void negativeOutsideAndMinesStayRestricted() {
+        assertRestricted(ChunkHomePresentation.forChunk(
+                chunk(901L, HUT_INSTANCE, "outside"), HomeInteriorRegistry.empty(),
+                Collections.emptyList()));
+        assertRestricted(ChunkHomePresentation.forChunk(
+                chunk(901L, HUT_INSTANCE, "mine1"), HomeInteriorRegistry.empty(),
+                Collections.emptyList()));
+        assertRestricted(ChunkHomePresentation.forChunk(
+                chunk(901L, HUT_INSTANCE, "cave"), HomeInteriorRegistry.empty(),
+                Collections.emptyList()));
+    }
+
+    @Test
+    void negativeInstanceSharesAutomaticHomeStateAcrossGrids() {
+        HomeInteriorRegistry registry = HomeInteriorRegistry.empty().put(automaticBinding(
+                HUT_INSTANCE, setOf(901L), "Lanfir's Claim -> Hut"));
+        ChunkHomePresentation first = ChunkHomePresentation.forChunk(
+                chunk(901L, HUT_INSTANCE, "inside"), registry, savedClaim());
+        ChunkHomePresentation second = ChunkHomePresentation.forChunk(
+                chunk(902L, HUT_INSTANCE, "inside"), registry, savedClaim());
+
+        assertEquals(ChunkHomePresentation.Kind.AUTO, first.kind);
+        assertEquals(ChunkHomePresentation.Kind.AUTO, second.kind);
+        assertTrue(first.active);
+        assertTrue(second.active);
     }
 
     @Test

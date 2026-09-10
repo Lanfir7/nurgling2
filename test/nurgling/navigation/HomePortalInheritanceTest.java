@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HomePortalInheritanceTest {
+    private static final long HUT_INSTANCE = -7856348484756222084L;
     @ParameterizedTest
     @EnumSource(value = ChunkPortal.PortalType.class,
             names = {"MINE_ENTRANCE", "MINEHOLE", "LADDER", "CAVEIN", "CAVEOUT"})
@@ -83,6 +84,35 @@ class HomePortalInheritanceTest {
                 buildingTraversal());
         assertFalse(change.changed);
         assertTrue(change.registry.bindings().isEmpty());
+    }
+
+    @Test
+    void negativeInstanceCreatesAutomaticBinding() {
+        HomePortalInheritance.Change change = HomePortalInheritance.apply(
+                HomeInteriorRegistry.empty(), surfaceHome(),
+                traversal(ChunkPortal.PortalType.DOOR, "outside", "inside", true, false,
+                        1001L, HUT_INSTANCE));
+        assertTrue(change.changed);
+        HomeInteriorRegistry.Binding binding = onlyBinding(change.registry);
+        assertEquals(HUT_INSTANCE, binding.instanceId);
+        assertEquals(setOf(1001L), binding.gridIds);
+    }
+
+    @Test
+    void negativeIndoorInstanceIsKeptWhenMergingFloor() {
+        HomeInteriorRegistry.Binding indoor = HomeInteriorRegistry.Binding.automatic(
+                "auto:" + doorPortal().stableKey(), HUT_INSTANCE, setOf(1001L),
+                setOf(HomeInteriorRegistry.OriginKey.parse("claim-anchor:42:7:9")),
+                doorPortal(), "", 1000L);
+        HomePortalInheritance.Change change = HomePortalInheritance.apply(
+                HomeInteriorRegistry.empty().put(indoor),
+                new HomePortalInheritance.SourceContext(
+                        Collections.<HomeInteriorRegistry.OriginKey>emptySet(), indoor),
+                traversal(ChunkPortal.PortalType.STAIRS_UP, "inside", "inside", true, false,
+                        1002L, ChunkNavManager.SURFACE_INSTANCE));
+        HomeInteriorRegistry.Binding merged = onlyBinding(change.registry);
+        assertEquals(HUT_INSTANCE, merged.instanceId);
+        assertEquals(setOf(1001L, 1002L), merged.gridIds);
     }
 
     @Test
