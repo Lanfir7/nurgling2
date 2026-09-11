@@ -34,6 +34,52 @@ import java.util.*;
 public class IMeter extends LayerMeter {
 	public String name;
 	Tex text = null;
+		// Live SHP/HHP/max from the "hp" meter's tip uimsg (drawn on the bar, not hover-only).
+		// Meter.a cannot tell soft damage from a reduced hard-HP ceiling.
+		public int curHealth = -1, hardHealth = -1, maxHealth = -1;
+
+		/** Parsed SHP/HHP/max from a Health tip body such as "80/120/150". */
+		public static final class HealthNumbers {
+			public final int soft;
+			public final int hard;
+			public final int max;
+			public final boolean sparring;
+
+			HealthNumbers(int soft, int hard, int max, boolean sparring) {
+				this.soft = soft;
+				this.hard = hard;
+				this.max = max;
+				this.sparring = sparring;
+			}
+
+			public double hardFraction() {
+				return IMeter.hardFraction(hard, max);
+			}
+		}
+
+		/** HHP / max, or -1 if either value is missing. */
+		public static double hardFraction(int hardHealth, int maxHealth) {
+			if(hardHealth < 0 || maxHealth <= 0)
+				return -1;
+			return (double) hardHealth / (double) maxHealth;
+		}
+
+		/** Health tip is "SHP/HHP/Max" or "SHP/HHP/Max/sparring". */
+		public static HealthNumbers parseHealthNumbers(String value) {
+			if(value == null)
+				return null;
+			String[] hps = value.replaceAll("\\(.+\\)", "").split("/");
+			if(hps.length < 3)
+				return null;
+			try {
+				int soft = (int) Math.round(Double.parseDouble(hps[0].trim()));
+				int hard = (int) Math.round(Double.parseDouble(hps[1].trim()));
+				int max = (int) Math.round(Double.parseDouble(hps[hps.length - 1].trim()));
+				return new HealthNumbers(soft, hard, max, hps.length == 4);
+			} catch(NumberFormatException e) {
+				return null;
+			}
+		}
 
 	public static String characterCurrentHealth = "";
 	public static double characterSoftHealthPercent = 0;
@@ -173,18 +219,15 @@ public class IMeter extends LayerMeter {
 	}
 
 	private void parseHealth(String value) {
-		String[] hps = value.replaceAll("\\(.+\\)", "").split("/");
-		if(hps.length < 3)
+		HealthNumbers nums = parseHealthNumbers(value);
+		if(nums == null)
 			return;
-		try {
-			isSparring = (hps.length == 4);
-			double shp = Double.parseDouble(hps[0].trim());
-			double mhp = Double.parseDouble(hps[hps.length - 1].trim());
-			softHealthPercent = (shp > 0 && mhp > 0) ? (shp / (mhp / 100)) : 0;
-			currentHealth = hps[0].trim() + " / " + hps[hps.length - 1].trim();
-		} catch(NumberFormatException e) {
-			softHealthPercent = 0;
-		}
+		isSparring = nums.sparring;
+		curHealth = nums.soft;
+		hardHealth = nums.hard;
+		maxHealth = nums.max;
+		softHealthPercent = (nums.soft > 0 && nums.max > 0) ? (nums.soft / (nums.max / 100.0)) : 0;
+		currentHealth = nums.soft + " / " + nums.max;
 		sparring = isSparring;
 		characterSoftHealthPercent = softHealthPercent;
 		characterCurrentHealth = currentHealth;

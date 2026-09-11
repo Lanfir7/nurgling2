@@ -3,6 +3,7 @@ package nurgling.widgets.options;
 import haven.Label;
 import haven.*;
 import nurgling.NConfig;
+import nurgling.NUtils;
 import nurgling.conf.NAreaRad;
 import nurgling.conf.NAreaRadStyle;
 import nurgling.i18n.L10n;
@@ -20,6 +21,10 @@ public class NRingSettings extends Panel {
     private CheckBox beehiveVis;
     private TextEntry beehiveRadEntry;
     private final ArrayList<ElementSettings> animalRows = new ArrayList<>();
+
+    // Re-pushed through NConfig.set() after every animal-row edit (see persistRadProps) rather than
+    // relying on needUpdate(), since NConfig.get() returns a session-local copy separate from the saved profile config.
+    private final ArrayList<NAreaRad> radProps;
 
     public NRingSettings() {
         super();
@@ -98,17 +103,20 @@ public class NRingSettings extends Panel {
         beehiveEdge.color = NConfig.getColor(NConfig.Key.areaRadBeehiveEdge, NAreaRadStyle.DEF_BEEHIVE_EDGE);
 
         prev = content.add(new Label(L10n.get("rings.settings_title")), prev.pos("bl").adds(0, 14));
-        ArrayList<NAreaRad> radProps = ((ArrayList<NAreaRad>) NConfig.get(NConfig.Key.animalrad));
-        if (radProps != null) {
-            for (NAreaRad prop : radProps) {
-                ElementSettings row = new ElementSettings(prop, UI.scale(520), UI.scale(22));
-                prev = content.add(row, prev.pos("bl").adds(0, 5));
-                animalRows.add(row);
-            }
+        ArrayList<NAreaRad> loaded = ((ArrayList<NAreaRad>) NConfig.get(NConfig.Key.animalrad));
+        radProps = loaded != null ? loaded : new ArrayList<>();
+        for (NAreaRad prop : radProps) {
+            ElementSettings row = new ElementSettings(prop, UI.scale(520), UI.scale(22));
+            prev = content.add(row, prev.pos("bl").adds(0, 5));
+            animalRows.add(row);
         }
 
         content.pack();
         resize(content.sz);
+    }
+
+    private void persistRadProps() {
+        NConfig.set(NConfig.Key.animalrad, radProps);
     }
 
     @Override
@@ -151,6 +159,7 @@ public class NRingSettings extends Panel {
                 row.rad.radius = Integer.parseInt(row.radEntry.text());
             } catch (Exception ignored) {}
         }
+        persistRadProps();
         NConfig.needUpdate();
     }
 
@@ -166,6 +175,7 @@ public class NRingSettings extends Panel {
         final int itemHeight;
 
         CheckBox visBox;
+        CheckBox dangerBox;
         Label nameLabel;
         TextEntry radEntry;
 
@@ -182,22 +192,42 @@ public class NRingSettings extends Panel {
                 public void changed(boolean val) {
                     super.changed(val);
                     rad.vis = val;
-                    NConfig.needUpdate();
+                    persistRadProps();
                 }
             }, new Coord(0, (itemHeight - UI.scale(16)) / 2));
 
-            nameLabel = add(new Label(displayName(rad.name)), new Coord(UI.scale(24), (itemHeight - UI.scale(16)) / 2));
+            // Independent of visBox - whether DangerousAnimalTrigger treats this ring as a threat, not just whether it's drawn.
+            dangerBox = add(new CheckBox("") {
+                {
+                    a = rad.dangerous;
+                }
+                @Override
+                public void changed(boolean val) {
+                    super.changed(val);
+                    rad.dangerous = val;
+                    persistRadProps();
+                }
+            }, new Coord(UI.scale(20), (itemHeight - UI.scale(16)) / 2));
+            dangerBox.settip(L10n.get("rings.settings_dangerous_tip"));
+
+            nameLabel = add(new Label(displayName(rad.name)), new Coord(UI.scale(44), (itemHeight - UI.scale(16)) / 2));
 
             radEntry = add(new TextEntry(UI.scale(80), String.valueOf(rad.radius)) {
                 @Override
                 public void done(ReadLine buf) {
                     super.done(buf);
                     try {
-                        rad.radius = Integer.parseInt(buf.line());
-                        NConfig.needUpdate();
-                    } catch (Exception ignored) { }
+                        int newRadius = Integer.parseInt(buf.line().trim());
+                        rad.radius = newRadius;
+                        persistRadProps();
+                        if (NUtils.getGameUI() != null)
+                            NUtils.getGameUI().msg("Ring settings: " + rad.name + " radius set to " + newRadius);
+                    } catch (Exception e) {
+                        if (NUtils.getGameUI() != null)
+                            NUtils.getGameUI().error("Ring settings: invalid radius \"" + buf.line() + "\"");
+                    }
                 }
-            }, new Coord(UI.scale(170), (itemHeight - UI.scale(16)) / 2));
+            }, new Coord(UI.scale(190), (itemHeight - UI.scale(16)) / 2));
 
             resize(new Coord(width, itemHeight));
         }
@@ -208,10 +238,12 @@ public class NRingSettings extends Panel {
             int cy = (itemHeight - UI.scale(16)) / 2;
             if (visBox != null)
                 visBox.move(new Coord(0, cy));
+            if (dangerBox != null)
+                dangerBox.move(new Coord(UI.scale(20), cy));
             if (nameLabel != null)
-                nameLabel.move(new Coord(UI.scale(24), cy));
+                nameLabel.move(new Coord(UI.scale(44), cy));
             if (radEntry != null)
-                radEntry.move(new Coord(UI.scale(170), cy));
+                radEntry.move(new Coord(UI.scale(190), cy));
         }
     }
 }

@@ -92,6 +92,8 @@ public class GobIcon extends GAttrib {
 
     public static class Image {
 	private static final Map<Resource, Image> cache = new WeakHashMap<>();
+	private static final BufferedImage missingimg = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+	private static final Tex missingtex = new TexI(missingimg);
 	public final BufferedImage img;
 	public final Tex tex;
 	public Coord cc;
@@ -101,6 +103,14 @@ public class GobIcon extends GAttrib {
 
 	public Image(Resource res) {
 	    Resource.Image rimg = res.layer(Resource.imgc);
+	    if(rimg == null) {
+		new Warning("map icon missing image layer: " + res.name).issue();
+		this.img = missingimg;
+		this.tex = missingtex;
+		this.cc = Coord.z;
+		this.z = 0;
+		return;
+	    }
 	    BufferedImage img = rimg.scaled();
 	    Tex tex = rimg.tex();
 	    if(((tex.sz().x > size) || (tex.sz().y > size)) && !Utils.bv(rimg.info.getOrDefault("mm/noscale", 0))) {
@@ -156,7 +166,8 @@ public class GobIcon extends GAttrib {
 	}
 
 	public BufferedImage image() {
-	    return(res.flayer(Resource.imgc).img);
+	    Resource.Image rimg = res.layer(Resource.imgc);
+	    return(rimg == null ? img.img : rimg.img);
 	}
 
 	public void draw(GOut g, Coord cc) {
@@ -180,7 +191,8 @@ public class GobIcon extends GAttrib {
 	}
 
 	private int markdata() {
-	    int data = Utils.iv(res.flayer(Resource.imgc).info.getOrDefault("mm/mark", 0));
+	    Resource.Image rimg = res.layer(Resource.imgc);
+	    int data = (rimg == null) ? 0 : Utils.iv(rimg.info.getOrDefault("mm/mark", 0));
 	    if(data == 0) {
 		// Special case for mm/up and mm/down - they should be markable even without mm/mark data
 		if(res.name.equals("mm/up") || res.name.equals("mm/down"))

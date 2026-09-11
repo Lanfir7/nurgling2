@@ -70,6 +70,7 @@ public class GobContextRegistry {
         register(new ChipStoneAreaAction());
         register(new ShearWoolAreaAction());
         register(new LightAction());
+        register(new RecordMilestoneAction());
         register(new FuelKilnsAction());
         register(new FuelOvensAction());
         register(new FuelSmeltersAction());

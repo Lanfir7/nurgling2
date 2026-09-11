@@ -38,4 +38,18 @@ class MiniMapIconRefreshTest {
         assertFalse(MiniMapIconPolicy.insideViewport(Coord.of(111, 40), viewport, 10));
         assertFalse(MiniMapIconPolicy.insideViewport(Coord.of(50, 91), viewport, 10));
     }
+
+    @Test
+    void takeLoadedSwallowsDeferredLoaderError() throws Exception {
+        Loader loader = new Loader();
+        Loader.Future<GobIcon.Icon> load = loader.defer(() -> {
+            throw new NullPointerException("rimg");
+        });
+        long deadline = System.currentTimeMillis() + 2000;
+        while (!load.done() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10);
+        }
+        assertTrue(load.done());
+        assertEquals(null, MiniMapIconPolicy.takeLoaded(load));
+    }
 }

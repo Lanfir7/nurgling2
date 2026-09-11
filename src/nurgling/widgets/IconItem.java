@@ -6,6 +6,9 @@ import nurgling.areas.*;
 import nurgling.i18n.L10n;
 import org.json.JSONObject;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.*;
 import java.util.*;
 
@@ -18,28 +21,75 @@ public class IconItem extends Widget
     private static final String KEY_MARK_BARREL = "iconitem.mark_barrel";
     private static final String KEY_UNMARK = "iconitem.unmark";
     private static final String KEY_BY_TYPE = "iconitem.by_type";
+    private static final String KEY_EDIT = "iconitem.edit";
+    private static final String KEY_MAINTAIN = "iconitem.maintain";
+    private static final String KEY_PRIORITY = "iconitem.priority";
     public static final TexI frame = new TexI(Resource.loadimg("nurgling/hud/iconframe"));
     public static final TexI framet = new TexI(Resource.loadimg("nurgling/hud/iconframet"));
     public static final TexI bm = new TexI(Resource.loadimg("nurgling/hud/bartermark"));
     public static final TexI barm = new TexI(Resource.loadimg("nurgling/hud/barrelmark"));
+    // Small green flower badge for a flower-menu-action item - drawn procedurally, no existing asset to reuse.
+    public static final TexI flowerMark = createFlowerMark();
+
+    private static TexI createFlowerMark() {
+        int size = 32;
+        BufferedImage img = TexI.mkbuf(new Coord(size, size));
+        Graphics2D g2d = img.createGraphics();
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        int cx = size / 2, cy = size / 2;
+        int petalR = size / 4;
+        double dist = size / 4.0;
+        Color petal = new Color(70, 170, 70);
+        Color petalOutline = new Color(25, 100, 25);
+        for (int i = 0; i < 5; i++) {
+            double angle = Math.toRadians(90 + i * 72);
+            int px = (int) Math.round(cx + dist * Math.cos(angle));
+            int py = (int) Math.round(cy - dist * Math.sin(angle));
+            g2d.setColor(petal);
+            g2d.fillOval(px - petalR, py - petalR, petalR * 2, petalR * 2);
+            g2d.setColor(petalOutline);
+            g2d.drawOval(px - petalR, py - petalR, petalR * 2, petalR * 2);
+        }
+        int centerR = size / 6;
+        g2d.setColor(new Color(230, 200, 60));
+        g2d.fillOval(cx - centerR, cy - centerR, centerR * 2, centerR * 2);
+        g2d.setColor(new Color(150, 120, 30));
+        g2d.drawOval(cx - centerR, cy - centerR, centerR * 2, centerR * 2);
+
+        g2d.dispose();
+        return new TexI(img);
+    }
+
     public JSONObject src;
     TexI tex = null;
 
     TexI tip;
     TexI q;
     boolean noOpts = false;
-    boolean isThreshold = false;
+    // Shared Threshold/Maintain badge flag - the two features never coexist on the same icon
+    // (mutually exclusive by parent container type), so one flag/rendering covers both.
+    boolean hasBadge = false;
 
     Coord basec = null;
     NArea.Ingredient.Type type = NArea.Ingredient.Type.CONTAINER;
 
+    // Whether this entry's action is a flower-menu action - independent of the Type marking above.
+    boolean isFlowerAction = false;
+
     int val;
+
+    // Forager pickup priority (lower = checked first, -1 = unset) - independent of hasBadge/val/q
+    // above since an item can have both a Maintain cap and a priority at once.
+    int priority = -1;
+    TexI priorityTex;
 
     String name;
 
-    // Сохраняем ссылку на IngredientContainer для доступа из обработчика меню
-    private IngredientContainer ingredientContainer = null;
-    
+    void setFlowerAction(boolean isFlowerAction) {
+        this.isFlowerAction = isFlowerAction;
+    }
+
     public IconItem(String name, BufferedImage img, Widget parent)
     {
         this.parent = parent;
@@ -48,21 +98,6 @@ public class IconItem extends Widget
 
         tex = new TexI(img);
         this.sz = UI.scale(new Coord(32, 42));
-        
-        // Сохраняем ссылку на IngredientContainer, если parent является им
-        if(parent instanceof IngredientContainer) {
-            this.ingredientContainer = (IngredientContainer) parent;
-        } else {
-            // Ищем IngredientContainer в иерархии родителей
-            Widget current = parent;
-            while(current != null) {
-                if(current instanceof IngredientContainer) {
-                    this.ingredientContainer = (IngredientContainer) current;
-                    break;
-                }
-                current = current.parent;
-            }
-        }
     }
 
     public IconItem(String name, TexI img)
@@ -91,7 +126,7 @@ public class IconItem extends Widget
     {
         if (tex != null)
         {
-            if(isThreshold)
+            if(hasBadge)
             {
                 g.image(framet, Coord.z, UI.scale(32, 42));
                 g.image(q, new Coord(UI.scale(16)-q.sz().x/2,UI.scale(28)));
@@ -109,22 +144,26 @@ public class IconItem extends Widget
             {
                 g.image(barm, UI.scale(16,16), UI.scale(16, 16));
             }
+            if(isFlowerAction)
+            {
+                g.image(flowerMark, UI.scale(16, 0), UI.scale(16, 16));
+            }
+            if(priority >= 0 && priorityTex != null)
+            {
+                g.image(priorityTex, Coord.z);
+            }
         }
     }
 
     @Override
     public Object tooltip(Coord c, Widget prev)
     {
-        // Если это категория, показываем более информативный tooltip
-        if(parent instanceof IngredientContainer) {
-            IngredientContainer ic = (IngredientContainer) parent;
-            JSONObject itemData = ic.getItemData(name);
-            if(itemData != null && itemData.has("isCategory") && itemData.getBoolean("isCategory")) {
-                if(itemData.has("originalName")) {
+        if (parent instanceof IngredientContainer) {
+            JSONObject itemData = ((IngredientContainer) parent).getItemData(name);
+            if (itemData != null && IngredientContainer.isCategoryEntry(itemData)) {
+                if (itemData.has("originalName"))
                     return new TexI(RichText.render(name + " (was: " + itemData.getString("originalName") + ")").img);
-                } else {
-                    return new TexI(RichText.render(name + " (category)").img);
-                }
+                return new TexI(RichText.render(name + " (category)").img);
             }
         }
         return tip;
@@ -158,45 +197,29 @@ public class IconItem extends Widget
     }
 
     public void opts( Coord c ) {
-        System.out.println("IconItem.opts: Called for name='" + name + "', type=" + type);
         if(menu == null) {
             menuKeyMap.clear();
             ArrayList<String> optList = new ArrayList<>();
-            
-            if(type==NArea.Ingredient.Type.CONTAINER)
-            {
-                if (parent instanceof IngredientContainer || parent instanceof DropContainer)
-                    addMenuOption(optList, KEY_THRESHOLD);
-                addMenuOption(optList, KEY_DELETE);
-                if (parent instanceof IngredientContainer) {
+
+            if (parent instanceof IngredientContainer || parent instanceof DropContainer)
+                addMenuOption(optList, KEY_THRESHOLD);
+            addMenuOption(optList, KEY_DELETE);
+            if (parent instanceof TaggableItemContainer) {
+                addMenuOption(optList, KEY_EDIT);
+                addMenuOption(optList, KEY_MAINTAIN);
+                addMenuOption(optList, KEY_PRIORITY);
+            }
+            if (parent instanceof IngredientContainer) {
+                if (type == NArea.Ingredient.Type.CONTAINER) {
                     addMenuOption(optList, KEY_MARK_BARTER);
                     addMenuOption(optList, KEY_MARK_BARREL);
-                    // Добавляем опцию "By type" для блоков и досок
-                    boolean isBlock = isBlockOrBoard(name);
-                    System.out.println("IconItem.opts: name='" + name + "', isBlockOrBoard=" + isBlock + ", parent=" + (parent != null ? parent.getClass().getName() : "null"));
-                    if (isBlock) {
-                        String localized = addMenuOption(optList, KEY_BY_TYPE);
-                        System.out.println("IconItem.opts: Added KEY_BY_TYPE as '" + localized + "'");
-                    }
-                }
-            }
-            else
-            {
-                if(parent instanceof IngredientContainer || parent instanceof DropContainer) {
-                    addMenuOption(optList, KEY_THRESHOLD);
-                }
-                addMenuOption(optList, KEY_DELETE);
-                if(parent instanceof IngredientContainer) {
+                } else {
                     addMenuOption(optList, KEY_UNMARK);
-                    // Добавляем опцию "By type" для блоков и досок
-                    boolean isBlock = isBlockOrBoard(name);
-                    System.out.println("IconItem.opts: name='" + name + "', isBlockOrBoard=" + isBlock);
-                    if (isBlock) {
-                        addMenuOption(optList, KEY_BY_TYPE);
-                    }
                 }
+                if (isBlockOrBoard(name))
+                    addMenuOption(optList, KEY_BY_TYPE);
             }
-            
+
             String[] opts = optList.toArray(new String[0]);
             menu = new NFlowerMenu(opts) {
 
@@ -214,32 +237,11 @@ public class IconItem extends Widget
                 @Override
                 public void nchoose(NPetal option)
                 {
-                    System.out.println("IconItem.nchoose: Called! option=" + (option != null ? option.name : "null"));
-                    System.out.println("IconItem.nchoose: menuKeyMap contents: " + menuKeyMap);
-                    
-                    // Показываем сообщение в игре для отладки
-                    if(NUtils.getGameUI() != null && option != null) {
-                        NUtils.getGameUI().msg("Menu: " + option.name, java.awt.Color.YELLOW);
-                    }
-                    
                     if(option!=null)
                     {
                         // Get the key from the localized name
                         String key = menuKeyMap.get(option.name);
-                        System.out.println("IconItem.nchoose: Looking for key for option.name='" + option.name + "', found key='" + key + "'");
-                        
-                        if (key == null) {
-                            key = "";
-                            System.err.println("IconItem.nchoose: WARNING - key not found in menuKeyMap!");
-                            System.err.println("IconItem.nchoose: menuKeyMap keys: " + menuKeyMap.keySet());
-                            if(NUtils.getGameUI() != null) {
-                                NUtils.getGameUI().msg("Error: Key not found!", java.awt.Color.RED);
-                            }
-                        }
-                        
-                        if(NUtils.getGameUI() != null) {
-                            NUtils.getGameUI().msg("Key: " + key, java.awt.Color.CYAN);
-                        }
+                        if (key == null) key = "";
                         
                         if (key.equals(KEY_THRESHOLD))
                         {
@@ -250,9 +252,42 @@ public class IconItem extends Widget
                                 pos = pos.add(par.c);
                                 par = par.parent;
                             }
-                            SetThreshold st = new SetThreshold(val);
+                            SetThreshold st = new SetThreshold(val, L10n.get("iconitem.threshold"), newVal -> {
+                                if (IconItem.this.parent instanceof IngredientContainer)
+                                    ((IngredientContainer) IconItem.this.parent).setThreshold(IconItem.this.name, newVal);
+                                else if (IconItem.this.parent instanceof DropContainer)
+                                    ((DropContainer) IconItem.this.parent).setThreshold(IconItem.this.name, newVal);
+                            });
                             ui.root.add(st, pos);
 
+                        }
+                        else if (key.equals(KEY_MAINTAIN))
+                        {
+                            Widget par = IconItem.this.parent;
+                            Coord pos = IconItem.this.c.add(UI.scale(32, 38));
+                            while (par != null && !(par instanceof GameUI))
+                            {
+                                pos = pos.add(par.c);
+                                par = par.parent;
+                            }
+                            TaggableItemContainer tc = (TaggableItemContainer) IconItem.this.parent;
+                            SetThreshold st = new SetThreshold(tc.getMaintainQuantity(IconItem.this.name), L10n.get("iconitem.maintain"),
+                                    newVal -> tc.setMaintainQuantity(IconItem.this.name, newVal));
+                            ui.root.add(st, pos);
+                        }
+                        else if (key.equals(KEY_PRIORITY))
+                        {
+                            Widget par = IconItem.this.parent;
+                            Coord pos = IconItem.this.c.add(UI.scale(32, 38));
+                            while (par != null && !(par instanceof GameUI))
+                            {
+                                pos = pos.add(par.c);
+                                par = par.parent;
+                            }
+                            TaggableItemContainer tc = (TaggableItemContainer) IconItem.this.parent;
+                            SetThreshold st = new SetThreshold(tc.getPriority(IconItem.this.name), L10n.get("iconitem.priority"),
+                                    newVal -> tc.setPriority(IconItem.this.name, newVal), false);
+                            ui.root.add(st, pos);
                         }
                         else if(key.equals(KEY_DELETE))
                         {
@@ -272,32 +307,16 @@ public class IconItem extends Widget
                         }
                         else if(key.equals(KEY_BY_TYPE))
                         {
-                            // Используем сохраненную ссылку на IngredientContainer
-                            if(IconItem.this.ingredientContainer != null) {
-                                IngredientContainer ic = IconItem.this.ingredientContainer;
-                                
-                                // Получаем данные из JSON
+                            if (IconItem.this.parent instanceof IngredientContainer) {
+                                IngredientContainer ic = (IngredientContainer) IconItem.this.parent;
                                 JSONObject itemData = ic.getItemData(IconItem.this.name);
-                                
-                                // Если это уже категория (есть originalName), то ничего не делаем
-                                if(itemData != null && itemData.has("originalName")) {
-                                    if(NUtils.getGameUI() != null) {
-                                        NUtils.getGameUI().msg("Already a category!", java.awt.Color.RED);
-                                    }
-                                    return;
-                                }
-                                
-                                // Используем текущее имя - это конкретный блок/доска
-                                if(NUtils.getGameUI() != null) {
-                                    NUtils.getGameUI().msg("Converting to category...", java.awt.Color.CYAN);
-                                }
-                                ic.setCategory(IconItem.this.name);
-                            } else {
-                                System.err.println("IconItem.KEY_BY_TYPE: ingredientContainer is null!");
-                                if(NUtils.getGameUI() != null) {
-                                    NUtils.getGameUI().msg("Error: Container not found", java.awt.Color.RED);
-                                }
+                                if (itemData == null || !itemData.has("originalName"))
+                                    ic.setCategory(IconItem.this.name);
                             }
+                        }
+                        else if(key.equals(KEY_EDIT))
+                        {
+                            ((TaggableItemContainer)IconItem.this.parent).editItem(IconItem.this.name);
                         }
                     }
                     uimsg("cancel");
@@ -316,25 +335,6 @@ public class IconItem extends Widget
         }
     }
 
-    /**
-     * Проверяет, является ли предмет блоком или доской (но не категорией)
-     */
-    private boolean isBlockOrBoard(String itemName) {
-        if (itemName == null) {
-            System.out.println("isBlockOrBoard: itemName is null");
-            return false;
-        }
-        // Исключаем категории
-        if("Block of Wood".equals(itemName) || "Board".equals(itemName)) {
-            System.out.println("isBlockOrBoard: '" + itemName + "' is a category, returning false");
-            return false;
-        }
-        // Проверяем, начинается ли название с "Block of " или "Board of " (с пробелом в конце)
-        boolean result = itemName.startsWith("Block of ") || itemName.startsWith("Board of ");
-        System.out.println("isBlockOrBoard: '" + itemName + "' -> " + result);
-        return result;
-    }
-
     public JSONObject toJson() {
         return src;
     }
@@ -342,9 +342,17 @@ public class IconItem extends Widget
 
     class SetThreshold extends Window
     {
-        public SetThreshold(int val)
+        // Generic "set a small number for this icon" popup, shared by Threshold/Maintain (the
+        // shared hasBadge/val/q badge) and Priority (its own separate priority/priorityTex
+        // fields, since an item can have both a Maintain cap and a priority at once).
+        public SetThreshold(int val, String title, java.util.function.IntConsumer onSet)
         {
-            super(UI.scale(140,25), L10n.get("iconitem.threshold"));
+            this(val, title, onSet, true);
+        }
+
+        public SetThreshold(int val, String title, java.util.function.IntConsumer onSet, boolean isBadge)
+        {
+            super(UI.scale(140,25), title);
             TextEntry te;
             prev = add(te = new TextEntry(UI.scale(80),String.valueOf(val)));
             add(new Button(UI.scale(50), L10n.get("iconitem.btn_set")){
@@ -354,21 +362,32 @@ public class IconItem extends Widget
                     super.click();
                     try
                     {
-                        IconItem.this.isThreshold = true;
-                        IconItem.this.val = Integer.valueOf(te.text());
-                        IconItem.this.q = new TexI(NStyle.iiqual.render(te.text()).img);
-                        if(IconItem.this.parent instanceof IngredientContainer)
-                            ((IngredientContainer)IconItem.this.parent).setThreshold(IconItem.this.name,IconItem.this.val);
-                        else if(IconItem.this.parent instanceof DropContainer)
-                            ((DropContainer)IconItem.this.parent).setThreshold(IconItem.this.name,IconItem.this.val);
+                        int newVal = Integer.parseInt(te.text());
+                        if (isBadge)
+                        {
+                            IconItem.this.hasBadge = true;
+                            IconItem.this.val = newVal;
+                            IconItem.this.q = new TexI(NStyle.iiqual.render(te.text()).img);
+                        }
+                        else
+                        {
+                            IconItem.this.priority = newVal;
+                            IconItem.this.priorityTex = new TexI(NStyle.iiqual.render(te.text()).img);
+                        }
+                        onSet.accept(newVal);
                     }
                     catch (NumberFormatException e)
                     {
-                        IconItem.this.isThreshold = false;
-                        if(IconItem.this.parent instanceof IngredientContainer)
-                            ((IngredientContainer)IconItem.this.parent).setThreshold(IconItem.this.name,-1);
-                        else if(IconItem.this.parent instanceof DropContainer)
-                            ((DropContainer)IconItem.this.parent).setThreshold(IconItem.this.name,-1);
+                        if (isBadge)
+                        {
+                            IconItem.this.hasBadge = false;
+                        }
+                        else
+                        {
+                            IconItem.this.priority = -1;
+                            IconItem.this.priorityTex = null;
+                        }
+                        onSet.accept(-1);
                     }
                     ui.destroy(SetThreshold.this);
 
@@ -388,5 +407,13 @@ public class IconItem extends Widget
                 super.wdgmsg(msg, args);
             }
         }
+    }
+
+    static boolean isBlockOrBoard(String itemName) {
+        if (itemName == null)
+            return false;
+        if ("Block of Wood".equals(itemName) || "Board".equals(itemName))
+            return false;
+        return itemName.startsWith("Block of ") || itemName.startsWith("Board of ");
     }
 }

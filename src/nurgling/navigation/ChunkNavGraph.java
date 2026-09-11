@@ -296,33 +296,9 @@ public class ChunkNavGraph {
             }
         }
 
-        // Fallback: also check session-based coordinates for chunks without neighbor data
-        // STRICT: Only use worldTileOrigin when BOTH chunks have the SAME known instanceId.
-        // worldTileOrigin from different instances lives in independent coordinate spaces,
-        // so comparing them is meaningless and creates false cross-instance connections.
-        if (chunk.worldTileOrigin != null && chunk.instanceId != 0) {
-            for (ChunkNavData other : chunks.values()) {
-                if (other.gridId == chunk.gridId) continue;
-                if (chunk.connectedChunks.contains(other.gridId)) continue; // Already connected
-                if (!chunk.layer.equals(other.layer)) continue;
-                if (other.instanceId != chunk.instanceId) continue; // Must be same known instance
-                if (other.worldTileOrigin == null) continue;
-
-                int dx = other.worldTileOrigin.x - chunk.worldTileOrigin.x;
-                int dy = other.worldTileOrigin.y - chunk.worldTileOrigin.y;
-
-                boolean isAdjacent = (Math.abs(dx) == CHUNK_SIZE && dy == 0) ||
-                                     (dx == 0 && Math.abs(dy) == CHUNK_SIZE);
-
-                if (isAdjacent) {
-                    EdgeCrossing crossing = findBestCrossing(chunk, other);
-                    if (crossing != null) {
-                        chunk.connectedChunks.add(other.gridId);
-                        other.connectedChunks.add(chunk.gridId);
-                    }
-                }
-            }
-        }
+        // Ordinary-walk topology is populated by ChunkNavRecorder from MapFile.
+        // Session-local world coordinates must not create persistent graph edges:
+        // a portal transition can temporarily load overlapping coordinate spaces.
     }
 
     /**

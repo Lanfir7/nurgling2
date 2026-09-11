@@ -3,6 +3,7 @@ package nurgling.navigation;
 import haven.*;
 import nurgling.NConfig;
 import nurgling.NCore;
+import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.tasks.GateDetector;
 import nurgling.tools.Finder;
@@ -129,6 +130,9 @@ public class PortalTraversalTracker {
         // turning off recording, walking away, then turning recording back on would cause
         // the exit portal to be recorded at the wrong location.
         if (trackingEnabled && !wasTrackingEnabled) {
+            // Grid changes while tracking was disabled are unclassified, so the
+            // old instance context must not authorize the next walk repair.
+            manager.invalidateCurrentInstanceConfirmation();
             reset();
             // Set lastGridId to current grid so we start fresh from current state
             lastGridId = graph.getPlayerChunkId();
@@ -235,6 +239,7 @@ public class PortalTraversalTracker {
         // Check if player landed on their hearthfire - this indicates a teleport, not a portal traversal
         if (isPlayerOnHearthfire(player)) {
             // Player teleported to hearthfire - don't record this as a portal connection
+            manager.invalidateCurrentInstanceConfirmation();
             lastProcessedFromGridId = fromGridId;
             lastProcessedToGridId = toGridId;
             lastProcessedTime = now;
@@ -272,6 +277,7 @@ public class PortalTraversalTracker {
 
         // If we don't know what exit to look for, we didn't click a known portal - don't record anything
         if (expectedExitName == null) {
+            invalidateInstanceContextUnlessOrdinaryWalk(fromGridId, toGridId);
             pendingHomeLearning = null;
             return;
         }
@@ -280,6 +286,7 @@ public class PortalTraversalTracker {
         exitPortal = Finder.findGob(new NAlias(expectedExitName));
 
         if (exitPortal == null || exitPortal.ngob == null) {
+            invalidateInstanceContextUnlessOrdinaryWalk(fromGridId, toGridId);
             pendingHomeLearning = null;
             return;
         }
@@ -731,9 +738,8 @@ public class PortalTraversalTracker {
         manager.setCurrentInstanceId(newInstanceId);
         long previousInstanceId = destChunk != null ? destChunk.instanceId : 0L;
         stampDestinationInstance(destChunk, newInstanceId);
-        if (destChunk != null && previousInstanceId != newInstanceId
-                && newInstanceId == ChunkNavManager.SURFACE_INSTANCE) {
-            removeCrossInstanceConnections(destChunk);
+        if (destChunk != null && previousInstanceId != newInstanceId) {
+            removeCrossInstanceConnections(graph, destChunk);
         }
     }
 
@@ -755,6 +761,10 @@ public class PortalTraversalTracker {
                 return toGridId;
             return destChunk != null ? destChunk.instanceId : 0L;
         }
+        if (destChunk != null && destChunk.instanceId == ChunkNavManager.SURFACE_INSTANCE
+                && exitPortalName != null && toGridId != -1L) {
+            return determineInstanceIdFromExitPortal(toGridId, exitPortalName);
+        }
         if (destChunk != null && destChunk.instanceId != 0)
             return destChunk.instanceId;
         return determineInstanceIdFromExitPortal(toGridId, exitPortalName);
@@ -766,6 +776,8 @@ public class PortalTraversalTracker {
         if (instanceId == -1L)
             return;
         if ((instanceId == ChunkNavManager.SURFACE_INSTANCE && !indoorHomeLayer(destChunk.layer))
+                || (destChunk.instanceId == ChunkNavManager.SURFACE_INSTANCE
+                        && ChunkNavManager.isInteriorInstanceId(instanceId))
                 || destChunk.instanceId == 0
                 || (indoorHomeLayer(destChunk.layer)
                         && !ChunkNavManager.isInteriorInstanceId(destChunk.instanceId))) {
@@ -773,15 +785,54 @@ public class PortalTraversalTracker {
         }
     }
 
-    private void removeCrossInstanceConnections(ChunkNavData chunk) {
-        for (Long connectedGridId : new ArrayList<>(chunk.connectedChunks)) {
-            ChunkNavData connected = graph.getChunk(connectedGridId);
-            if (connected != null && connected.instanceId != 0
-                    && connected.instanceId != chunk.instanceId) {
-                chunk.connectedChunks.remove(connectedGridId);
-                connected.connectedChunks.remove(chunk.gridId);
-            }
+    private void invalidateInstanceContextUnlessOrdinaryWalk(long fromGridId, long toGridId) {
+        if (!isOrdinaryMapNeighborTransition(fromGridId, toGridId)) {
+            manager.invalidateCurrentInstanceConfirmation();
         }
+    }
+
+    private boolean isOrdinaryMapNeighborTransition(long fromGridId, long toGridId) {
+        try {
+            NGameUI gui = NUtils.getGameUI();
+            MapFile file = gui != null && gui.mapfile != null ? gui.mapfile.file : null;
+            if (file == null) return false;
+            file.lock.readLock().lock();
+            try {
+                return ChunkNavWalkTransitionGate.isOrdinaryNeighbor(
+                        ChunkNavRecorder.mapGridRef(file, fromGridId),
+                        ChunkNavRecorder.mapGridRef(file, toGridId));
+            } finally {
+                file.lock.readLock().unlock();
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    static void removeCrossInstanceConnections(ChunkNavGraph graph, ChunkNavData chunk) {
+        if (graph == null || chunk == null || chunk.instanceId == 0) return;
+        boolean chunkChanged = false;
+        for (ChunkNavData other : graph.getAllChunks()) {
+            if (other == null || other.gridId == chunk.gridId || other.instanceId == 0
+                    || other.instanceId == chunk.instanceId) {
+                continue;
+            }
+            boolean otherChanged = other.connectedChunks.remove(chunk.gridId);
+            otherChanged |= clearNeighborReference(other, chunk.gridId);
+            chunkChanged |= chunk.connectedChunks.remove(other.gridId);
+            chunkChanged |= clearNeighborReference(chunk, other.gridId);
+            if (otherChanged) other.markUpdated();
+        }
+        if (chunkChanged) chunk.markUpdated();
+    }
+
+    private static boolean clearNeighborReference(ChunkNavData chunk, long gridId) {
+        boolean changed = false;
+        if (chunk.neighborNorth == gridId) { chunk.neighborNorth = -1; changed = true; }
+        if (chunk.neighborSouth == gridId) { chunk.neighborSouth = -1; changed = true; }
+        if (chunk.neighborEast == gridId) { chunk.neighborEast = -1; changed = true; }
+        if (chunk.neighborWest == gridId) { chunk.neighborWest = -1; changed = true; }
+        return changed;
     }
 
     static boolean isSurfaceExitPortal(String exitPortalName) {

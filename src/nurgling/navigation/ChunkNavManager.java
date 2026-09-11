@@ -65,7 +65,8 @@ public class ChunkNavManager {
     // 1 = surface (default), other values = unique per mine level / building interior / cellar.
     // Updated by PortalTraversalTracker when player traverses a portal.
     public static final long SURFACE_INSTANCE = 1;
-    private volatile long currentInstanceId = SURFACE_INSTANCE;
+    private long currentInstanceId = SURFACE_INSTANCE;
+    private boolean currentInstanceConfirmed = false;
 
     public static boolean isInteriorInstanceId(long instanceId) {
         return instanceId != 0L && instanceId != SURFACE_INSTANCE;
@@ -149,7 +150,10 @@ public class ChunkNavManager {
             this.portalTracker = new PortalTraversalTracker(graph, recorder, this,
                     new HomePortalLearningService(this));
             this.fileStore = new ChunkNavFileStore(genus);
-            this.currentInstanceId = SURFACE_INSTANCE;
+            synchronized (this) {
+                this.currentInstanceId = SURFACE_INSTANCE;
+                this.currentInstanceConfirmed = false;
+            }
 
             // Load saved data (with migration if needed)
             load();
@@ -1001,12 +1005,42 @@ public class ChunkNavManager {
 
     // ============== Instance ID Management ==============
 
-    public long getCurrentInstanceId() {
+    public synchronized long getCurrentInstanceId() {
         return currentInstanceId;
     }
 
-    public void setCurrentInstanceId(long id) {
+    public synchronized void setCurrentInstanceId(long id) {
         this.currentInstanceId = id;
+        this.currentInstanceConfirmed = true;
+    }
+
+    public synchronized void invalidateCurrentInstanceConfirmation() {
+        this.currentInstanceConfirmed = false;
+    }
+
+    public synchronized InstanceContext getInstanceContext() {
+        return new InstanceContext(currentInstanceId, currentInstanceConfirmed);
+    }
+
+    synchronized ChunkNavMapNeighborRepair.RepairResult repairWalkComponent(
+            ChunkNavMapNeighborRepair.GridLookup lookup, long playerGridId) {
+        ChunkNavMapNeighborRepair.RepairResult result = ChunkNavMapNeighborRepair.repair(
+                graph, lookup, currentInstanceId, currentInstanceConfirmed, playerGridId);
+        if (result.trustedInstanceId != 0) {
+            currentInstanceId = result.trustedInstanceId;
+            currentInstanceConfirmed = true;
+        }
+        return result;
+    }
+
+    static final class InstanceContext {
+        final long instanceId;
+        final boolean confirmed;
+
+        InstanceContext(long instanceId, boolean confirmed) {
+            this.instanceId = instanceId;
+            this.confirmed = confirmed;
+        }
     }
 
     /**

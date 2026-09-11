@@ -1,6 +1,7 @@
 package nurgling.actions;
 
 import nurgling.ExtraInvGroupTransfer;
+import nurgling.tools.NAlias;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -288,6 +289,17 @@ class TransferToPilesTest {
         assertTrue(TransferToPiles.shouldCloseStockpileBeforePileMaker(true));
         assertTrue(TransferToPiles.canStartPileMaker(false));
         assertFalse(TransferToPiles.shouldCloseStockpileBeforePileMaker(false));
+    }
+
+    @Test
+    void watermelonSliceUsesItsOwnPileBeforeWholeWatermelon() {
+        TransferToPiles piles = new TransferToPiles(null, new NAlias("Watermelon Slice"));
+        assertEquals("gfx/terobjs/stockpile-watermelonslice",
+                piles.getStockpileName(new NAlias("Watermelon Slice")).getDefault());
+        assertEquals("gfx/terobjs/stockpile-watermelon",
+                piles.getStockpileName(new NAlias("Watermelon")).getDefault());
+        assertEquals("gfx/terobjs/stockpile-radish",
+                piles.getStockpileName(new NAlias("Radish")).getDefault());
     }
 
 }

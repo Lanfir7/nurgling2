@@ -111,3 +111,6 @@ nurgling/widgets/TextInputWindow.java|if (ev.code == KeyEvent.VK_ENTER)|Dialog c
 nurgling/widgets/TextInputWindow.java|if (ev.code == KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
 nurgling/widgets/TrellisDirectionDialog.java|if(ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
 nurgling/widgets/TunnelingDialog.java|if (ev.code == java.awt.event.KeyEvent.VK_ESCAPE)|Dialog confirmation and cancellation
+nurgling/widgets/nsettings/ForagerRouteMap.java|if (shift && (ev.b == 1 || ev.b == 3))|Embedded Forager route editor: Shift+LMB paints exclusion, Shift+RMB erases
+nurgling/widgets/nsettings/ForagerRouteMap.java|if (ev.b == 3 && ui.modctrl)|Embedded Forager route editor: Ctrl+RMB opens waypoint steps
+nurgling/widgets/nsettings/ForagerRouteMap.java|if (!press && button == 1 && !ui.modshift && route != null)|Embedded Forager route editor: unmodified left-click adds a waypoint

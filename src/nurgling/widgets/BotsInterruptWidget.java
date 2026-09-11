@@ -176,7 +176,7 @@ public class BotsInterruptWidget extends Widget {
         {
             for(Gear g: obs)
             {
-                if(g.t.isInterrupted() || !g.t.isAlive())
+                if(!g.t.isAlive())
                 {
                     // Clear kill list highlight when bot stops
                     Entry.killList.clear();

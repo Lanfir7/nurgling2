@@ -228,6 +228,41 @@ public class NUtils
         return stam.a;
     }
 
+    /** Current HARD hitpoints as a fraction of true max (0.0-1.0), or -1 if unavailable. Uses the live Health tip SHP/HHP/Max numbers, not Meter.a. */
+    public static double getHPFraction()
+    {
+        NGameUI gui = getGameUI();
+        if(gui == null)
+            return -1;
+        IMeter hp = gui.getIMeter("hp");
+        if(hp == null)
+            return -1;
+        return IMeter.hardFraction(hp.hardHealth, hp.maxHealth);
+    }
+
+    /** Current SOFT hitpoints as a fraction of the same true max getHPFraction() uses; falls back to getHPFraction() when unwounded (server sends only one segment). Always-live, not tooltip-derived. */
+    public static double getSoftHPFraction()
+    {
+        IMeter.Meter soft = getGameUI().getmeter ( "hp", 1 );
+        if(soft == null)
+            return getHPFraction();
+        return soft.a;
+    }
+
+    /** Current soft hitpoints, or -1 if unavailable - WARNING: tooltip-derived, only updates on hover, not reliably live; prefer getHPFraction() for safety checks. */
+    public static int getCurrentHP()
+    {
+        IMeter hp = getGameUI().getIMeter("hp");
+        return hp == null ? -1 : hp.curHealth;
+    }
+
+    /** Max soft hitpoints, or -1 if unavailable - see getCurrentHP()'s reliability warning. */
+    public static int getMaxHP()
+    {
+        IMeter hp = getGameUI().getIMeter("hp");
+        return hp == null ? -1 : hp.maxHealth;
+    }
+
     public static double getEnergy()
     {
         IMeter.Meter stam = getGameUI().getmeter ( "nrj", 0 );
@@ -293,6 +328,10 @@ public class NUtils
 
     public static void lclick(Coord2d pos) {
         getGameUI().map.wdgmsg("click", Coord.z, pos.floor(posres),1, 0);
+    }
+
+    public static void rclick(Coord2d pos) {
+        getGameUI().map.wdgmsg("click", Coord.z, pos.floor(posres),3, 0);
     }
 
 
@@ -854,23 +893,37 @@ public class NUtils
         if (workstation == null) {
             return false;
         }
+        long attr = (workstation.ngob == null) ? 0 : workstation.ngob.getModelAttribute();
+        return isWorkStationReady(name, attr);
+    }
 
-        // Crucible is ready when it has coal (bit 2 set in modelAttribute)
-        if (name.contains("crucible")) {
-            return (workstation.ngob.getModelAttribute() & 2) == 2;
+    public static boolean isWorkStationReady(String name, long modelAttribute) {
+        // Branch/coal mask is only for the normal crucible. steelcrucible and any other
+        // name that merely contains "crucible" must not be fail-closed as unfuelled.
+        if (usesCrucibleFuelMask(name)) {
+            return crucibleHoldsFuel(modelAttribute);
         }
         // For pow (forges), they're ready when not burning (bit 48)
-        else if (name.startsWith("gfx/terobjs/pow")) {
-            return (workstation.ngob.getModelAttribute() & 48) == 0;
+        else if (name != null && name.startsWith("gfx/terobjs/pow")) {
+            return (modelAttribute & 48) == 0;
         }
         // For cauldrons, they must be burning (bit 2) and have liquid (bit 8)
-        else if (name.startsWith("gfx/terobjs/cauldron")) {
-            return (workstation.ngob.getModelAttribute() & 2) == 2 &&
-                    (workstation.ngob.getModelAttribute() & 8) == 8;
+        else if (name != null && name.startsWith("gfx/terobjs/cauldron")) {
+            return (modelAttribute & 2) == 2 &&
+                    (modelAttribute & 8) == 8;
         }
 
         // For all other workstations, assume they're ready if they exist
         return true;
+    }
+
+    public static boolean usesCrucibleFuelMask(String name) {
+        return "gfx/terobjs/crucible".equals(name);
+    }
+
+    /** Fuel bits 0=empty, 1=branches, 2=coal; flame is bit 4 and is not fuel. */
+    public static boolean crucibleHoldsFuel(long modelAttribute) {
+        return (modelAttribute & 3) != 0;
     }
 
     public static boolean navigateToArea(NArea area) throws InterruptedException

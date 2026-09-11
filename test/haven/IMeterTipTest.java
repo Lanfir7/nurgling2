@@ -53,4 +53,43 @@ class IMeterTipTest {
         assertNull(IMeter.tipValue(null));
         assertFalse(IMeter.meterName(null, "Health", "widget.hp"));
     }
+
+    @Test
+    void healthTipHardHpIsMiddleValueNotSoftOrMeterBar() {
+        IMeter.HealthNumbers woundSoft = IMeter.parseHealthNumbers("80/150/150");
+        assertEquals(80, woundSoft.soft);
+        assertEquals(150, woundSoft.hard);
+        assertEquals(150, woundSoft.max);
+        assertEquals(1.0, woundSoft.hardFraction(), 0.0001);
+
+        IMeter.HealthNumbers wounded = IMeter.parseHealthNumbers("80/80/150");
+        assertEquals(80, wounded.soft);
+        assertEquals(80, wounded.hard);
+        assertEquals(150, wounded.max);
+        assertEquals(80.0 / 150.0, wounded.hardFraction(), 0.0001);
+
+        IMeter.HealthNumbers both = IMeter.parseHealthNumbers("80.0/120.0/150.0");
+        assertEquals(80, both.soft);
+        assertEquals(120, both.hard);
+        assertEquals(150, both.max);
+        assertEquals(120.0 / 150.0, both.hardFraction(), 0.0001);
+        assertFalse(both.sparring);
+    }
+
+    @Test
+    void healthTipSparringKeepsHardAsSecondValue() {
+        IMeter.HealthNumbers spar = IMeter.parseHealthNumbers("90/110/150/150");
+        assertTrue(spar.sparring);
+        assertEquals(90, spar.soft);
+        assertEquals(110, spar.hard);
+        assertEquals(150, spar.max);
+        assertEquals(110.0 / 150.0, spar.hardFraction(), 0.0001);
+    }
+
+    @Test
+    void hardFractionUnavailableWhenUnparsed() {
+        assertEquals(-1, IMeter.hardFraction(-1, 150), 0.0001);
+        assertEquals(-1, IMeter.hardFraction(80, 0), 0.0001);
+        assertNull(IMeter.parseHealthNumbers("80/150"));
+    }
 }

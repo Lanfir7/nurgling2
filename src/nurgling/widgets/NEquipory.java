@@ -627,7 +627,8 @@ public class NEquipory extends Equipory
     public WItem findItem(String name) throws InterruptedException {
         for(int i = 0; i < ecoords.length;i++) {
             if (quickslots[i] != null) {
-                if (((NGItem) quickslots[i].item).name().endsWith(name)) {
+                String itemName = ((NGItem) quickslots[i].item).name();
+                if (itemName != null && itemName.endsWith(name)) {
                     return quickslots[i];
                 }
             }

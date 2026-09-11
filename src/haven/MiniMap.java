@@ -198,6 +198,7 @@ public class MiniMap extends Widget
 	private Loader.Future<GobIcon.Icon> load;
 	private GobIcon.Icon icon;
 	private int lseq, iseq;
+	private boolean failed;
 
 	public MarkerIcon(Markers o, Marker m) {
 	    this.o = o;
@@ -228,11 +229,15 @@ public class MiniMap extends Widget
 	private void ckload() {
 	    /* XXX: Arguably, the loader task should do this part itself. */
 	    if(load.done()) {
-		icon = load.get();
+		icon = MiniMapIconPolicy.takeLoaded(load);
 		iseq = lseq;
 		load = null;
-		info = null;
-		o.seq++;
+		if(icon != null) {
+		    info = null;
+		    o.seq++;
+		} else {
+		    failed = true;
+		}
 	    }
 	}
 
@@ -250,6 +255,7 @@ public class MiniMap extends Widget
 	    if(reload) {
 		if(load != null)
 		    load.cancel();
+		failed = false;
 		load = loader.defer(this::create);
 		lseq = nseq;
 	    }
@@ -257,6 +263,8 @@ public class MiniMap extends Widget
 
 	public GobIcon.Icon icon() {
 	    synchronized(o) {
+		if(failed)
+		    throw(new Loading());
 		if((load == null) && (icon == null)) {
 		    load = loader.defer(this::create);
 		    lseq = o.mseq;

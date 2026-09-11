@@ -8,7 +8,6 @@ import nurgling.actions.bots.registry.BotDescriptor;
 import nurgling.actions.bots.registry.BotRegistry;
 import nurgling.conf.NForagerProp;
 import nurgling.equipment.EquipmentPreset;
-import nurgling.i18n.L10n;
 import nurgling.scenarios.BotStep;
 import nurgling.scenarios.CraftPreset;
 import nurgling.scenarios.CraftPresetManager;
@@ -160,6 +159,42 @@ public class StepSettingsPanel extends Widget {
                 add(presetDropdown, new Coord(UI.scale(8), y));
                 y += UI.scale(40);
             }
+        }
+        if (desc.id.equals("gate")) {
+            hasAnySetting = true;
+            add(new Label("Action:"), new Coord(UI.scale(8), y));
+            y += UI.scale(24);
+
+            List<String> gateModes = Arrays.asList("open", "close");
+
+            String currentMode = (String) step.getSetting("mode");
+            String selectedMode = gateModes.contains(currentMode) ? currentMode : "open";
+
+            NDropbox<String> gateDropdown = new NDropbox<String>(
+                    UI.scale(160),
+                    gateModes.size(),
+                    UI.scale(22)
+            ) {
+                @Override
+                protected String listitem(int i) { return gateModes.get(i); }
+                @Override
+                protected int listitems() { return gateModes.size(); }
+                @Override
+                protected void drawitem(GOut g, String item, int i) {
+                    g.text("close".equals(item) ? "Close" : "Open", Coord.z);
+                }
+                @Override
+                public void change(String item) {
+                    super.change(item);
+                    if (item != null) {
+                        step.setSetting("mode", item);
+                    }
+                }
+            };
+            gateDropdown.change(selectedMode);
+
+            add(gateDropdown, new Coord(UI.scale(8), y));
+            y += UI.scale(40);
         }
         if (desc.id.equals("equipment_bot")) {
             hasAnySetting = true;
@@ -450,16 +485,14 @@ public class StepSettingsPanel extends Widget {
         }
         if (desc.id.equals("studytable")) {
             hasAnySetting = true;
-            add(new Label(L10n.get("study.fill_mode") + ":"), new Coord(UI.scale(8), y));
+            add(new Label("Fill Mode:"), new Coord(UI.scale(8), y));
             y += UI.scale(24);
 
-            String allMode = L10n.get("study.fill_all");
-            String ownedMode = L10n.get("study.fill_owned");
-            List<String> modes = Arrays.asList(allMode, ownedMode);
-            // Unset older steps keep the historical one-character behavior.
+            List<String> modes = Arrays.asList("All", "Just Owned");
+            // Unset (an older saved step) defaults to "All" - its only behavior before this existed.
             Object fillAllSetting = step.getSetting("fillAll");
-            boolean fillAll = fillAllSetting instanceof Boolean && (Boolean) fillAllSetting;
-            String selectedMode = fillAll ? allMode : ownedMode;
+            boolean fillAll = !(fillAllSetting instanceof Boolean) || (Boolean) fillAllSetting;
+            String selectedMode = fillAll ? "All" : "Just Owned";
 
             NDropbox<String> modeDropdown = new NDropbox<String>(
                     UI.scale(160),
@@ -478,7 +511,7 @@ public class StepSettingsPanel extends Widget {
                 public void change(String item) {
                     super.change(item);
                     if (item != null) {
-                        step.setSetting("fillAll", item.equals(allMode));
+                        step.setSetting("fillAll", item.equals("All"));
                     }
                 }
             };
@@ -486,6 +519,41 @@ public class StepSettingsPanel extends Widget {
 
             add(modeDropdown, new Coord(UI.scale(8), y));
             y += UI.scale(40);
+        }
+        if (desc.id.equals("apply_tansy")) {
+            hasAnySetting = true;
+            add(new Label("Target Scent of Tansy stacks:"), new Coord(UI.scale(8), y));
+            y += UI.scale(24);
+
+            Object currentTarget = step.getSetting("targetStacks");
+            int target = 10;
+            if (currentTarget != null) {
+                if (currentTarget instanceof Integer) {
+                    target = (Integer) currentTarget;
+                } else if (currentTarget instanceof Long) {
+                    target = ((Long) currentTarget).intValue();
+                } else if (currentTarget instanceof Number) {
+                    target = ((Number) currentTarget).intValue();
+                }
+            }
+
+            TextEntry targetEntry = new TextEntry(UI.scale(60), String.valueOf(target)) {
+                @Override
+                protected void changed() {
+                    try {
+                        int t = Integer.parseInt(text().trim());
+                        if (t > 0) {
+                            step.setSetting("targetStacks", t);
+                        }
+                    } catch (NumberFormatException e) {
+                        // Ignore invalid input
+                    }
+                }
+            };
+            step.setSetting("targetStacks", target);
+
+            add(targetEntry, new Coord(UI.scale(8), y));
+            y += UI.scale(30);
         }
         if (!hasAnySetting) {
             add(new Label("No settings for this step."), new Coord(UI.scale(8), y));

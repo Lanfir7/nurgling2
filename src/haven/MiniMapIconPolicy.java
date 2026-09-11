@@ -42,6 +42,15 @@ final class MiniMapIconPolicy {
         return new TimedRefresh<>(REFRESH_INTERVAL);
     }
 
+    static GobIcon.Icon takeLoaded(Loader.Future<GobIcon.Icon> load) {
+        try {
+            return load.get();
+        } catch (RuntimeException e) {
+            new Warning(e, "could not load map marker icon").ctrace(false).issue();
+            return null;
+        }
+    }
+
     static boolean insideViewport(Coord point, Coord viewport, int margin) {
         return (point.x >= -margin) && (point.y >= -margin) &&
                 (point.x <= viewport.x + margin) && (point.y <= viewport.y + margin);

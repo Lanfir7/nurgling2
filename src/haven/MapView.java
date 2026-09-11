@@ -2604,6 +2604,13 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    if(inf != null)
 		args = Utils.extend(args, inf.clickargs());
 		
+		if(Hotkeys.isPlainLeftClick(clickb, modflags) && clickedGob != null) {
+			if(MapView.this instanceof nurgling.NMapView) {
+				if(((nurgling.NMapView)MapView.this).spliceMilestoneAt(clickedGob.gob))
+					return;
+			}
+		}
+
 		if(clickedGob != null) {
 			monitoring.StockpileStorageTracker.onGob(clickedGob.gob);
 			if (nurgling.db.StockpileStoragePolicy.isStockpileRes(
