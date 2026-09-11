@@ -18,8 +18,15 @@ public final class HotkeyCatalog {
     private static final EnumSet<InputGesture.Type> KEY = EnumSet.of(InputGesture.Type.KEY);
     private static final Map<KeyBinding, HotkeyBinding> WRAPPERS = new IdentityHashMap<>();
     private static final Map<String, HotkeyBinding> GESTURE_WRAPPERS = new HashMap<>();
+    private static PreferenceStore gesturePreferences = PreferenceStore.SYSTEM;
 
     private HotkeyCatalog() {
+    }
+
+    /** Test-only: keep mouse/wheel bindings out of the process Java preferences. */
+    public static synchronized void useGesturePreferences(PreferenceStore store) {
+        gesturePreferences = store != null ? store : PreferenceStore.SYSTEM;
+        GESTURE_WRAPPERS.clear();
     }
 
     /** Literal IDs owned by the static catalog, excluding runtime registrations. */
@@ -344,7 +351,7 @@ public final class HotkeyCatalog {
         }
         HotkeyBinding binding = GESTURE_WRAPPERS.get(id);
         if(binding == null) {
-            binding = new GestureBinding(id, defaultGesture, PreferenceStore.SYSTEM);
+            binding = new GestureBinding(id, defaultGesture, gesturePreferences);
             GESTURE_WRAPPERS.put(id, binding);
         }
         registry.register(new HotkeyAction(id, labelKey(id), null, category, contexts,

@@ -12,6 +12,25 @@ import java.util.EnumSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class InventoryHotkeysTest {
+    @org.junit.jupiter.api.BeforeEach
+    void isolateGesturePreferences() {
+        HotkeyCatalog.useGesturePreferences(new PreferenceStore() {
+            private final java.util.Map<String, String> values = new java.util.HashMap<>();
+            public String get(String key, String fallback) {
+                return values.containsKey(key) ? values.get(key) : fallback;
+            }
+            public void set(String key, String value) {
+                if(value == null) values.remove(key);
+                else values.put(key, value);
+            }
+        });
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreGesturePreferences() {
+        HotkeyCatalog.useGesturePreferences(null);
+    }
+
     @Test void catalogRegistersInventoryAndHeldItemDefaults() {
         HotkeyRegistry registry = new HotkeyRegistry();
         HotkeyCatalog.registerCore(registry);
@@ -52,10 +71,13 @@ class InventoryHotkeysTest {
         HotkeyCatalog.registerCore(registry);
         HotkeyAction take = registry.find("item.take");
         take.binding().set(InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.C));
-
-        HotkeyResolver resolver = new HotkeyResolver(registry);
-        assertSame(take, resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_GENERIC, 2, KeyMatch.C));
-        assertNull(resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_GENERIC, 1, 0));
+        try {
+            HotkeyResolver resolver = new HotkeyResolver(registry);
+            assertSame(take, resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_GENERIC, 2, KeyMatch.C));
+            assertNull(resolver.firstMouse(HotkeyContext.INVENTORY_ITEM_GENERIC, 1, 0));
+        } finally {
+            take.binding().reset();
+        }
     }
 
     @Test void specializedActionsKeepDirectionAndCountWhenRebound() {

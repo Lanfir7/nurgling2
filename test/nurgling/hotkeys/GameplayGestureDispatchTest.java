@@ -7,6 +7,25 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GameplayGestureDispatchTest {
+    @org.junit.jupiter.api.BeforeEach
+    void isolateGesturePreferences() {
+        HotkeyCatalog.useGesturePreferences(new PreferenceStore() {
+            private final java.util.Map<String, String> values = new java.util.HashMap<>();
+            public String get(String key, String fallback) {
+                return values.containsKey(key) ? values.get(key) : fallback;
+            }
+            public void set(String key, String value) {
+                if(value == null) values.remove(key);
+                else values.put(key, value);
+            }
+        });
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreGesturePreferences() {
+        HotkeyCatalog.useGesturePreferences(null);
+    }
+
     @Test void reboundWorldContextMenuUsesTheNewGestureOnly() {
         HotkeyRegistry registry = new HotkeyRegistry();
         HotkeyCatalog.registerCore(registry);
