@@ -88,6 +88,21 @@ class CraftAtlasControllerTest {
         assertFalse(controller.selectExact(null, "missing"));
     }
 
+    @Test
+    void uniqueExactNameAvailabilityMatchesExactSelectionDispatch() {
+        CraftAtlasEntry axe = CraftAtlasEntry.builder("paginae/craft/axe", "Iron Axe").build();
+        CraftAtlasEntry cupOne = CraftAtlasEntry.builder("wiki:cup-1", "Wooden Cup").build();
+        CraftAtlasEntry cupTwo = CraftAtlasEntry.builder("wiki:cup-2", " wooden cup ").build();
+        CraftAtlasController controller = new CraftAtlasController(
+                CraftAtlasSnapshot.of(1, List.of(axe, cupOne, cupTwo)), null);
+
+        assertTrue(controller.hasUniqueExactName("  IRON AXE "));
+        assertFalse(controller.hasUniqueExactName("Wooden Cup"));
+        assertFalse(controller.hasUniqueExactName("Iron"));
+        assertTrue(controller.selectExact(null, "  IRON AXE "));
+        assertEquals("paginae/craft/axe", controller.state().selected.recipeResource);
+    }
+
     private CraftAtlasEntry recipe(String id, String output, String input) {
         CraftAtlasEntry.Builder b = CraftAtlasEntry.builder(id, id).output(output).availability(CraftAtlasEntry.Availability.OPEN);
         if(input != null) b.input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(

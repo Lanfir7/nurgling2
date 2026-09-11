@@ -157,6 +157,15 @@ public class ChunkNavVisualizerWindow extends Window {
         selectedLabel = add(new Label("None"), new Coord(UI.scale(10), y));
         y += UI.scale(80);
 
+        add(new Button(UI.scale(SETTINGS_WIDTH - 20), "Center on Player") {
+            @Override
+            public void click() {
+                super.click();
+                centerOnPlayer();
+            }
+        }, new Coord(UI.scale(10), y));
+        y += UI.scale(30);
+
         add(new Button(UI.scale(SETTINGS_WIDTH - 20), "Reload") {
             @Override
             public void click() {
@@ -1039,6 +1048,42 @@ public class ChunkNavVisualizerWindow extends Window {
         reloadData();
     }
 
+    private void centerOnPlayer() {
+        Coord2d point = playerTexturePoint();
+        if (point == null) {
+            statusLabel.settext("Player position unavailable");
+            return;
+        }
+        worldCanvas.centerOnTexturePoint(point);
+        statusLabel.settext("Centered on player");
+    }
+
+    private Coord2d playerTexturePoint() {
+        try {
+            Gob player = NUtils.player();
+            NGameUI gui = NUtils.getGameUI();
+            if (player == null || gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null)
+                return null;
+            MCache mcache = gui.map.glob.map;
+            Coord2d playerTile = player.rc.div(MCache.tilesz);
+            Coord tileCoord = playerTile.floor();
+            MCache.Grid grid = mcache.getgridt(tileCoord);
+            if (grid == null)
+                return null;
+            Coord chunkPosition = positions.get(grid.id);
+            int gridWidth = worldBoundsMax.x - worldBoundsMin.x + 1;
+            if (chunkPosition == null || worldTex == null || gridWidth <= 0 || worldTexWidth <= 0)
+                return null;
+            Coord2d localTile = playerTile.sub(grid.ul.x, grid.ul.y);
+            if (localTile.x < 0 || localTile.y < 0 || localTile.x >= CHUNK_SIZE || localTile.y >= CHUNK_SIZE)
+                return null;
+            return ChunkNavMapProjection.texturePoint(worldBoundsMin, chunkPosition, localTile,
+                    Math.max(1, worldTexWidth / gridWidth));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     @Override
     public void wdgmsg(String msg, Object... args) {
         if (msg.equals("close")) {
@@ -1082,6 +1127,19 @@ public class ChunkNavVisualizerWindow extends Window {
                 int drawY = (int) ((sz.y - drawH) / 2 + panY);
 
                 g.image(worldTex, new Coord(drawX, drawY), new Coord(drawW, drawH));
+
+                Coord2d playerPoint = playerTexturePoint();
+                if (playerPoint != null) {
+                    Coord marker = ChunkNavMapProjection.project(sz, new Coord(worldTexWidth, worldTexHeight),
+                            zoom, panX, panY, playerPoint).round();
+                    g.chcolor(Color.BLACK);
+                    g.frect(marker.sub(7, 1), new Coord(15, 3));
+                    g.frect(marker.sub(1, 7), new Coord(3, 15));
+                    g.chcolor(Color.YELLOW);
+                    g.frect(marker.sub(6, 0), new Coord(13, 1));
+                    g.frect(marker.sub(0, 6), new Coord(1, 13));
+                    g.chcolor();
+                }
 
                 // Draw zoom level indicator
                 g.chcolor(Color.WHITE);
@@ -1141,11 +1199,7 @@ public class ChunkNavVisualizerWindow extends Window {
         public boolean mousewheel(MouseWheelEvent ev) {
             // Zoom centered on mouse position
             float oldZoom = zoom;
-            if (ev.a < 0) {
-                zoom = Math.min(10.0f, zoom * 1.2f);
-            } else {
-                zoom = Math.max(0.1f, zoom / 1.2f);
-            }
+            zoom = ChunkNavMapProjection.zoomAfterWheel(zoom, ev.a);
 
             // Adjust pan to zoom toward mouse position
             if (worldTex != null) {
@@ -1157,6 +1211,15 @@ public class ChunkNavVisualizerWindow extends Window {
             }
 
             return true;
+        }
+
+        private void centerOnTexturePoint(Coord2d texturePoint) {
+            if (worldTex == null || worldTexWidth == 0 || worldTexHeight == 0)
+                return;
+            float[] centeredPan = ChunkNavMapProjection.centeredPan(sz,
+                    new Coord(worldTexWidth, worldTexHeight), zoom, texturePoint);
+            panX = centeredPan[0];
+            panY = centeredPan[1];
         }
 
         /**

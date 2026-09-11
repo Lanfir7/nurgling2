@@ -1,6 +1,7 @@
 package nurgling.navigation;
 
 import haven.*;
+import haven.resutil.Ridges;
 import nurgling.NGameUI;
 import nurgling.NHitBox;
 import nurgling.NUtils;
@@ -348,6 +349,8 @@ public class ChunkNavRecorder {
      */
     private boolean isTileBlocked(MCache mcache, Coord tileCoord) {
         try {
+            if (Ridges.brokenp(mcache, tileCoord)) return true;
+
             String tileName = mcache.tilesetname(mcache.gettile(tileCoord));
             if (tileName == null) return true;  // Unknown tile = blocked (safer default)
 

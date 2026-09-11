@@ -239,6 +239,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             currentSelectionDrag = null;
             rotationRequested = false;
             gridModeRequested = false;
+            clearPendingPlantingQuality();
         }
     }
 
@@ -2632,9 +2633,94 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     public void changeAreaName(Integer id, String new_name)
     {
         NArea area = glob.map.areas.get(id);
+        if (area == null || Objects.equals(area.name, new_name))
+            return;
         area.name = new_name;
         area.markDirty(nurgling.areas.AreaFieldGroup.IDENTITY);
         NConfig.needAreasUpdate();
+        NGameUI gui = owningGui();
+        if (gui != null && gui.areas != null)
+            gui.areas.updateAreaName(area.id, new_name);
+        Gob dummy = dummys.get(area.gid);
+        if (dummy != null) {
+            Gob.Overlay overlay = dummy.findol(NAreaLabel.class);
+            if (overlay != null && overlay.spr instanceof NAreaLabel)
+                ((NAreaLabel) overlay.spr).update();
+        }
+    }
+
+    private int pendingPlantingQuality = -1;
+
+    /** Records an item activation until its following planting selection/world action. */
+    public void notePlantingItem(WItem item) {
+        pendingPlantingQuality = PlantQualityArea.plantingQuality(item);
+    }
+
+    private NGameUI owningGui() {
+        return (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : NUtils.getGameUI();
+    }
+
+    private int heldPlantingQuality() {
+        NGameUI gui = owningGui();
+        return gui == null ? -1 : PlantQualityArea.plantingQuality(gui.vhand);
+    }
+
+    private void clearPendingPlantingQuality() {
+        pendingPlantingQuality = -1;
+    }
+
+    @Override
+    public void wdgmsg(String msg, Object... args) {
+        if ("sel".equals(msg) && pendingPlantingQuality >= 0
+                && args.length >= 2 && args[0] instanceof Coord && args[1] instanceof Coord) {
+                Coord first = (Coord) args[0];
+                Coord second = (Coord) args[1];
+                if (glob != null && glob.map != null && glob.map.areas != null) {
+                    List<NArea> affected;
+                    synchronized (glob.map.areas) {
+                        affected = PlantQualityArea.selectedTileAreas(
+                                glob.map.areas.values(), first, second, MCache.tilesz);
+                    }
+                    applyPlantingQuality(affected, pendingPlantingQuality);
+                }
+                clearPendingPlantingQuality();
+        } else if ("itemact".equals(msg) && args.length >= 2 && args[1] instanceof Coord) {
+            int quality = PlantQualityArea.pendingOrHeldQuality(pendingPlantingQuality, heldPlantingQuality());
+            if (quality >= 0) {
+                Coord point = (Coord) args[1];
+                Coord2d world = point.mul(OCache.posres);
+                applyPlantingQuality(world, world, quality);
+            }
+            clearPendingPlantingQuality();
+        } else if ("click".equals(msg) || "drop".equals(msg) || "place".equals(msg)) {
+            clearPendingPlantingQuality();
+        }
+        super.wdgmsg(msg, args);
+    }
+
+    private void applyPlantingQuality(Coord2d first, Coord2d second, int quality) {
+        if (glob == null || glob.map == null || glob.map.areas == null || quality < 0)
+            return;
+        List<NArea> affected;
+        synchronized (glob.map.areas) {
+            affected = PlantQualityArea.intersectedAreas(glob.map.areas.values(), first, second);
+        }
+        applyPlantingQuality(affected, quality);
+    }
+
+    private void applyPlantingQuality(Iterable<NArea> affected, int quality) {
+        for (NArea area : affected) {
+            String updated = PlantQualityArea.withMaximumQuality(area.name, quality);
+            changeAreaName(area.id, updated);
+        }
+    }
+
+    /** Applies an inspect quality only when the inspected gob is a crop, tree, or bush. */
+    public void applyPlantInspectQuality(Gob gob, double quality) {
+        if (gob == null || gob.ngob == null || !PlantQualityArea.isPlantGobResource(gob.ngob.name)
+                || !Double.isFinite(quality) || quality < 0)
+            return;
+        applyPlantingQuality(gob.rc, gob.rc, Math.round((float) quality));
     }
 
     void getGob(Coord c) {
@@ -2859,7 +2945,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     // Override uimsg to use NPlob instead of Plob
     @Override
     public void uimsg(String msg, Object... args) {
+        if(msg.equals("unplace"))
+            clearPendingPlantingQuality();
         if(msg.equals("place")) {
+            clearMilestoneSuggestion();
             Loader.Future<Plob> placing = this.placing;
             if(placing != null) {
                 if(!placing.cancel()) {

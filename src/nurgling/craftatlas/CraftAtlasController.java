@@ -82,23 +82,32 @@ public final class CraftAtlasController {
         visit(entry);
     }
 
+    /** Whether the Atlas has exactly one recipe with this display name. */
+    public boolean hasUniqueExactName(String displayName) {
+        return uniqueExactName(displayName) != null;
+    }
+
     /** Select a recipe opened from another UI, falling back to one unambiguous exact name. */
     public boolean selectExact(String recipeResource, String displayName) {
         CraftAtlasEntry entry = recipeResource == null ? null : snapshot.byRecipe(recipeResource);
-        if(entry == null) {
-            String wanted = CraftAtlasSearch.normalize(displayName);
-            if(wanted.isEmpty()) return false;
-            for(CraftAtlasEntry candidate : snapshot.entries) {
-                if(!wanted.equals(CraftAtlasSearch.normalize(candidate.displayName))) continue;
-                if(entry != null) return false;
-                entry = candidate;
-            }
-        }
+        if(entry == null) entry = uniqueExactName(displayName);
         if(entry == null) return false;
         activePath.clear();
         activePath.add(entry.recipeResource);
         visit(entry);
         return true;
+    }
+
+    private CraftAtlasEntry uniqueExactName(String displayName) {
+        String wanted = CraftAtlasSearch.normalize(displayName);
+        if(wanted.isEmpty()) return null;
+        CraftAtlasEntry match = null;
+        for(CraftAtlasEntry candidate : snapshot.entries) {
+            if(!wanted.equals(CraftAtlasSearch.normalize(candidate.displayName))) continue;
+            if(match != null) return null;
+            match = candidate;
+        }
+        return match;
     }
 
     private void visit(CraftAtlasEntry entry) {

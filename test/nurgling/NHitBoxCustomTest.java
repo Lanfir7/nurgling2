@@ -43,6 +43,16 @@ class NHitBoxCustomTest {
     }
 
     @Test
+    void minePyreUsesCenteredTwoTileHitbox() {
+        NHitBox box = NHitBox.findCustom("gfx/terobjs/minepyre");
+        assertNotNull(box);
+        assertEquals(-11.0, box.begin.x, 0.01);
+        assertEquals(-11.0, box.begin.y, 0.01);
+        assertEquals(11.0, box.end.x, 0.01);
+        assertEquals(11.0, box.end.y, 0.01);
+    }
+
+    @Test
     void timberTunnelHasForceZeroHitbox() {
         assertForceZeroHitbox("gfx/terobjs/timbertunnel");
     }

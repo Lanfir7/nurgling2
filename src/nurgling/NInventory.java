@@ -557,10 +557,16 @@ public class NInventory extends Inventory
 
     public void activateItem(NAlias name) throws InterruptedException {
         WItem it = getItem(name);
+        NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : NUtils.getGameUI();
+        if (gui != null && gui.map instanceof NMapView)
+            ((NMapView) gui.map).notePlantingItem(it);
         it.item.wdgmsg("iact", Coord.z, 1);
     }
 
     public void activateItem(WItem item) throws InterruptedException {
+        NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : NUtils.getGameUI();
+        if (gui != null && gui.map instanceof NMapView)
+            ((NMapView) gui.map).notePlantingItem(item);
         item.item.wdgmsg("iact", Coord.z, 1);
     }
 
@@ -1233,7 +1239,7 @@ public class NInventory extends Inventory
             protected int listitems() { return Grouping.values().length; }
             @Override
             protected void drawitem(GOut g, Grouping item, int idx) {
-                g.text(item.displayName, new Coord(3, 2));
+                g.text(item.displayName, NInventoryDropdownLayout.labelPosition(itemh, Text.std.height()));
             }
             @Override
             public void change(Grouping item) {
@@ -1262,7 +1268,7 @@ public class NInventory extends Inventory
             protected int listitems() { return DisplayType.values().length; }
             @Override
             protected void drawitem(GOut g, DisplayType item, int idx) {
-                g.text(item.name(), new Coord(3, 2));
+                g.text(item.name(), NInventoryDropdownLayout.labelPosition(itemh, Text.std.height()));
             }
             @Override
             public void change(DisplayType item) {
@@ -2636,4 +2642,13 @@ public class NInventory extends Inventory
         return gi.getResult();
     }
 
+}
+
+final class NInventoryDropdownLayout {
+    private NInventoryDropdownLayout() {
+    }
+
+    static Coord labelPosition(int itemHeight, int textHeight) {
+        return new Coord(3, Math.max(0, (itemHeight - textHeight) / 2));
+    }
 }

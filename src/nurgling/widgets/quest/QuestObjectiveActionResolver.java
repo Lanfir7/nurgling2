@@ -78,6 +78,7 @@ public final class QuestObjectiveActionResolver {
     }
 
     static String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+        return value == null ? "" : value.replaceAll("\\p{Cf}", "")
+                .replaceAll("[\\s\\p{Z}]+", " ").trim().toLowerCase(Locale.ROOT);
     }
 }

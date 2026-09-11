@@ -39,6 +39,18 @@ class QuestTreeIconClaimsTest {
     }
 
     @Test
+    void releasePreservesAManuallyEnabledIcon() {
+        VisibilityState<String> visibility = new VisibilityState<>();
+        visibility.base.put("oak", true);
+        QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
+
+        claims.reconcile(requirements(1, "oak"), visibility);
+        claims.reconcile(Collections.emptyMap(), visibility);
+
+        assertTrue(visibility.shown("oak"));
+    }
+
+    @Test
     void sharedIconIsEnabledOnlyOnFirstClaim() {
         VisibilityState<String> visibility = new VisibilityState<>();
         visibility.base.put("oak", false);
@@ -51,6 +63,9 @@ class QuestTreeIconClaimsTest {
         claims.reconcile(requirements(2, "oak"), visibility);
         assertTrue(visibility.shown("oak"));
         assertEquals(writes, visibility.writes);
+
+        claims.reconcile(Collections.emptyMap(), visibility);
+        assertFalse(visibility.shown("oak"));
     }
 
     @Test
@@ -80,7 +95,7 @@ class QuestTreeIconClaimsTest {
     }
 
     @Test
-    void userOptOutSurvivesAnUnchangedReconcile() {
+    void activeClaimRemainsVisibleAcrossAnUnchangedReconcile() {
         VisibilityState<String> visibility = new VisibilityState<>();
         visibility.base.put("oak", false);
         QuestTreeIconClaims<String> claims = new QuestTreeIconClaims<>();
@@ -92,7 +107,7 @@ class QuestTreeIconClaimsTest {
         int writes = visibility.writes;
         claims.reconcile(requirements(1, "oak"), visibility);
 
-        assertFalse(visibility.shown("oak"));
+        assertTrue(visibility.shown("oak"));
         assertEquals(writes, visibility.writes);
     }
 
@@ -118,16 +133,24 @@ class QuestTreeIconClaimsTest {
 
     private static class VisibilityState<K> implements QuestTreeIconClaims.Visibility<K> {
         final Map<K, Boolean> base = new HashMap<>();
+        final Map<K, Boolean> temporary = new HashMap<>();
         int writes;
 
         public boolean shown(K key) {
-            return Boolean.TRUE.equals(base.get(key));
+            Boolean override = temporary.get(key);
+            return override != null ? override : Boolean.TRUE.equals(base.get(key));
         }
 
         @Override
         public void enable(K key) {
             writes++;
-            base.put(key, true);
+            temporary.put(key, true);
+        }
+
+        @Override
+        public void disable(K key) {
+            writes++;
+            temporary.remove(key);
         }
     }
 }

@@ -29,6 +29,7 @@ package haven;
 import nurgling.hotkeys.Hotkeys;
 
 import haven.MCache.OverlayInfo;
+import haven.res.gfx.terobjs.consobj.Consobj;
 import haven.render.*;
 import haven.render.sl.Type;
 import haven.render.sl.Uniform;
@@ -657,6 +658,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
     }
 
     public void dispose() {
+	clearMilestoneSuggestion();
 		if(gobs!=null && gobs.slot!=null)
 			gobs.slot.remove();
 		if(clmaplist!=null)
@@ -2151,6 +2153,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	public void move(Coord2d c, double a) {
 	    super.move(c, a);
 	    updated();
+	    updateMilestoneSuggestion(this);
 	}
 
 	public void move(Coord2d c) {
@@ -2200,6 +2203,126 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
     }
 
+    private static final double milestoneFlatnessTolerance = 0.5;
+
+    private class MilestoneSuggestion {
+	final Plob placing;
+	final Coord2d position;
+	final double angle;
+	final Gob ghost;
+	final RenderTree.Slot slot;
+
+	MilestoneSuggestion(Plob placing, Coord2d position, double angle, ResDrawable drawable) {
+	    this.placing = placing;
+	    this.position = position;
+	    this.angle = angle;
+	    this.ghost = new Gob(glob, position);
+	    ghost.move(position, angle);
+	    ghost.setattr(new GhostAlpha(ghost));
+	    ghost.setattr(new ResDrawable(ghost, drawable.res, new MessageBuf(drawable.sdt)));
+	    this.slot = basic.add(ghost.placed);
+	}
+
+	void remove() {
+	    slot.remove();
+	    ghost.removed();
+	}
+    }
+
+    private MilestoneSuggestion milestoneSuggestion;
+
+    protected void clearMilestoneSuggestion() {
+	if(milestoneSuggestion != null) {
+	    milestoneSuggestion.remove();
+	    milestoneSuggestion = null;
+	}
+    }
+
+    private void updateMilestoneSuggestion(Plob placing) {
+	clearMilestoneSuggestion();
+	try {
+	    ResDrawable drawable = placing.getattr(ResDrawable.class);
+	    if((drawable == null) || !isMilestonePlacement(drawable))
+		return;
+	    nurgling.NHitBox hitBox = placementHitBox(placing, drawable);
+	    if(hitBox == null)
+		return;
+	    Optional<Coord2d> suggestion = MilestonePlacementAdvisor.findNearest(
+		    placing.rc, tilesz.x, placing.a,
+		    (candidate, angle) -> isSuitableMilestonePosition(hitBox, candidate, angle, placing));
+	    if(suggestion.isPresent())
+		milestoneSuggestion = new MilestoneSuggestion(placing, suggestion.get(), placing.a, drawable);
+	} catch(Loading ignored) {
+	    /* The normal placement ghost will request another adjustment when its resource is ready. */
+	} catch(RuntimeException ignored) {
+	    /* This is advisory only; placement remains available if local inspection fails. */
+	}
+    }
+
+    private boolean isMilestonePlacement(ResDrawable drawable) {
+	if(MilestonePlacementAdvisor.isMilestoneResource(drawable.getres().name))
+	    return true;
+	if((drawable.spr instanceof Consobj) && (((Consobj)drawable.spr).built != null))
+	    return MilestonePlacementAdvisor.isMilestoneResource(((Consobj)drawable.spr).built.res.get().name);
+	return false;
+    }
+
+    private nurgling.NHitBox placementHitBox(Plob placing, ResDrawable drawable) {
+	if(placing.ngob.hitBox != null)
+	    return placing.ngob.hitBox;
+	if(drawable.spr instanceof haven.res.ui.gobcp.Gobcopy) {
+	    Gob copied = ((haven.res.ui.gobcp.Gobcopy)drawable.spr).gob;
+	    if((copied != null) && (copied.ngob != null))
+		return copied.ngob.hitBox;
+	}
+	return null;
+    }
+
+    private boolean isSuitableMilestonePosition(nurgling.NHitBox hitBox, Coord2d position, double angle, Plob placing) {
+	return isMilestoneFootprintFlat(hitBox, position, angle) &&
+	       !milestoneCollides(hitBox, position, angle, placing);
+    }
+
+    private boolean isMilestoneFootprintFlat(nurgling.NHitBox hitBox, Coord2d position, double angle) {
+	Coord2d[] corners = {
+	    hitBox.begin,
+	    Coord2d.of(hitBox.begin.x, hitBox.end.y),
+	    Coord2d.of(hitBox.end.x, hitBox.begin.y),
+	    hitBox.end,
+	    Coord2d.of((hitBox.begin.x + hitBox.end.x) / 2.0, (hitBox.begin.y + hitBox.end.y) / 2.0)
+	};
+	double min = Double.POSITIVE_INFINITY;
+	double max = Double.NEGATIVE_INFINITY;
+	double cos = Math.cos(angle), sin = Math.sin(angle);
+	for(Coord2d corner : corners) {
+	    Coord2d sample = position.add((corner.x * cos) - (corner.y * sin),
+					   (corner.x * sin) + (corner.y * cos));
+	    double z = glob.map.getcz(sample);
+	    min = Math.min(min, z);
+	    max = Math.max(max, z);
+	}
+	return (max - min) <= milestoneFlatnessTolerance;
+    }
+
+    private boolean milestoneCollides(nurgling.NHitBox hitBox, Coord2d position, double angle, Plob placing) {
+	nurgling.pf.NHitBoxD candidate = new nurgling.pf.NHitBoxD(hitBox.begin, hitBox.end, position, angle);
+	synchronized(glob.oc) {
+	    for(Gob gob : glob.oc) {
+		if((gob == null) || (gob == placing) || (gob == player()) || (gob instanceof OCache.Virtual) ||
+		   (gob.getattr(GhostAlpha.class) != null) || (gob.getattr(Following.class) != null) ||
+		   (gob.attr == null) || gob.attr.isEmpty())
+		    continue;
+		nurgling.NHitBox obstacle = gob.ngob.hitBox;
+		if((obstacle == null) && (gob.ngob.name != null))
+		    obstacle = nurgling.NHitBox.findCustom(gob.ngob.name);
+		if((obstacle != null) && new nurgling.pf.NHitBoxD(obstacle.begin, obstacle.end, gob.rc, gob.a)
+			.intersects(candidate, false))
+		    return true;
+	    }
+	}
+	return false;
+    }
+
     /**
      * Public factory so subclasses outside the haven package (e.g. NMapView)
      * can construct a Plob for client-local placement scenarios. The Plob's
@@ -2231,6 +2354,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 
     public void uimsg(String msg, Object... args) {
 	if(msg == "place") {
+	    clearMilestoneSuggestion();
 	    Loader.Future<Plob> placing = this.placing;
 	    if(placing != null) {
 		if(!placing.cancel()) {
@@ -2283,6 +2407,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		monitoring.StockpileStorageTracker.onPlacingStart(null);
 	    }
 	} else if(msg == "unplace") {
+	    clearMilestoneSuggestion();
 	    Loader.Future<Plob> placing = this.placing;
 	    if(placing != null) {
 		if(!placing.cancel()) {
@@ -2561,7 +2686,16 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    Plob placing = placing_l.get();
 	    if(placing.lastmc != null) {
 		monitoring.StockpileStorageTracker.onPlace(placing);
-		wdgmsg("place", placing.rc.floor(posres), (int)Math.round(placing.a * 32768 / Math.PI), ev.b, ui.modflags());
+		Coord2d position = placing.rc;
+		double angle = placing.a;
+		MilestoneSuggestion suggestion = milestoneSuggestion;
+		if((suggestion != null) && (suggestion.placing == placing)) {
+		    Coord2d snapped = MilestonePlacementAdvisor.snapIfNear(position, suggestion.position, tilesz.x);
+		    if(snapped.equals(suggestion.position))
+			angle = suggestion.angle;
+		    position = snapped;
+		}
+		wdgmsg("place", position.floor(posres), (int)Math.round(angle * 32768 / Math.PI), ev.b, ui.modflags());
 	    }
 	    return true;
 	}

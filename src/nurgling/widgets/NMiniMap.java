@@ -41,6 +41,11 @@ NMiniMap extends MiniMap {
     public final ExploredArea exploredArea = new ExploredArea(this);
 
     private String currentTerrainName = null;
+    private String currentProvinceName = null;
+    private Coord provinceCacheTile = null;
+    private long provinceCacheSegment = Long.MIN_VALUE;
+    private int provinceCacheMarkerSeq = Integer.MIN_VALUE;
+    private String provinceCacheName = null;
 
     private final MiniMapLabelCache labelCache = new MiniMapLabelCache(512);
     private final MiniMapIconCache iconCache = new MiniMapIconCache(256);
@@ -1877,13 +1882,28 @@ NMiniMap extends MiniMap {
     }
 
     private void drawterrainname(GOut g) {
-        if((Boolean)NConfig.get(NConfig.Key.showTerrainName) && currentTerrainName != null && !currentTerrainName.isEmpty()) {
-            Text terrainText = labelCache.get(terrainFurnace, currentTerrainName);
-            Coord textPos = new Coord((sz.x - terrainText.sz().x) / 2, 5);
+        if(dloc == null || display == null || dgext == null) {
+            currentProvinceName = null;
+            clearProvinceCache();
+        }
+        if((Boolean)NConfig.get(NConfig.Key.showTerrainName)) {
+            Text terrainText = ((currentTerrainName == null) || currentTerrainName.isEmpty()) ? null : labelCache.get(terrainFurnace, currentTerrainName);
+            Text provinceText = ((currentProvinceName == null) || currentProvinceName.isEmpty()) ? null : labelCache.get(terrainFurnace, currentProvinceName);
+            if((terrainText == null) && (provinceText == null))
+                return;
+
+            int width = Math.max((terrainText == null) ? 0 : terrainText.sz().x, (provinceText == null) ? 0 : provinceText.sz().x);
+            int height = ((terrainText == null) ? 0 : terrainText.sz().y) + ((provinceText == null) ? 0 : provinceText.sz().y);
+            Coord textPos = new Coord((sz.x - width) / 2, 5);
             g.chcolor(0, 0, 0, 180);
-            g.frect(textPos.sub(2, 1), terrainText.sz().add(4, 2));
+            g.frect(textPos.sub(2, 1), new Coord(width + 4, height + 2));
             g.chcolor();
-            g.image(terrainText.tex(), textPos);
+            if(terrainText != null) {
+                g.image(terrainText.tex(), new Coord((sz.x - terrainText.sz().x) / 2, textPos.y));
+                textPos = textPos.add(0, terrainText.sz().y);
+            }
+            if(provinceText != null)
+                g.image(provinceText.tex(), new Coord((sz.x - provinceText.sz().x) / 2, textPos.y));
         }
     }
 
@@ -2474,23 +2494,80 @@ NMiniMap extends MiniMap {
     }
     
     private void updateCurrentTerrainName(Coord c) {
-        String terrainName = getTerrainNameAtCoord(c);
+        Location location = dloc;
+        Coord tc = hoveredTile(c, location);
+        String terrainName = getTerrainNameAtTile(tc);
         if(terrainName != null && !terrainName.equals(currentTerrainName)) {
             currentTerrainName = terrainName;
         } else if(terrainName == null) {
             currentTerrainName = null;
         }
+
+        String provinceName = getProvinceNameAtTile(tc, location);
+        if(provinceName != null && !provinceName.equals(currentProvinceName)) {
+            currentProvinceName = provinceName;
+        } else if(provinceName == null) {
+            currentProvinceName = null;
+        }
+    }
+
+    private Coord hoveredTile(Coord c, Location location) {
+        if(c == null || location == null)
+            return null;
+        return c.sub(sz.div(2)).mul(scalef()).add(location.tc);
+    }
+
+    private String getProvinceNameAtTile(Coord tc, Location location) {
+        if(tc == null || location == null || display == null || dgext == null) {
+            clearProvinceCache();
+            return null;
+        }
+
+        if(!file.lock.readLock().tryLock()) {
+            clearProvinceCache();
+            return null;
+        }
+        try {
+            long segment = location.seg.id;
+            int markerSeq = file.markerseq;
+            if(tc.equals(provinceCacheTile) && segment == provinceCacheSegment && markerSeq == provinceCacheMarkerSeq)
+                return provinceCacheName;
+
+            ArrayList<ProvinceNameResolver.Candidate> candidates = new ArrayList<>();
+            for(MapFile.Marker marker : file.markers) {
+                if(!(marker instanceof MapFile.SMarker) || marker.seg != segment || marker.tc == null)
+                    continue;
+                MapFile.SMarker sm = (MapFile.SMarker)marker;
+                if(sm.res != null && "gfx/terobjs/mm/thingwall".equals(sm.res.name))
+                    candidates.add(new ProvinceNameResolver.Candidate(sm.nm, marker.seg, marker.tc.x, marker.tc.y));
+            }
+            provinceCacheTile = tc;
+            provinceCacheSegment = segment;
+            provinceCacheMarkerSeq = file.markerseq;
+            provinceCacheName = ProvinceNameResolver.nearest(segment, tc.x, tc.y, candidates);
+            return provinceCacheName;
+        } finally {
+            file.lock.readLock().unlock();
+        }
+    }
+
+    private void clearProvinceCache() {
+        provinceCacheTile = null;
+        provinceCacheSegment = Long.MIN_VALUE;
+        provinceCacheMarkerSeq = Integer.MIN_VALUE;
+        provinceCacheName = null;
     }
     
     private String getTerrainNameAtCoord(Coord c) {
-        if(dloc == null || display == null || dgext == null) {
+        return getTerrainNameAtTile(hoveredTile(c, dloc));
+    }
+
+    private String getTerrainNameAtTile(Coord tc) {
+        if(tc == null || display == null || dgext == null) {
             return null;
         }
         
         try {
-            // Convert screen coordinates to tile coordinates  
-            Coord tc = c.sub(sz.div(2)).mul(scalef()).add(dloc.tc);
-            
             // Find which DisplayGrid contains this coordinate
             Coord zmaps = cmaps.mul(1 << dlvl);
             Coord gridCoord = tc.div(zmaps);

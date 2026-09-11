@@ -24,6 +24,25 @@ class NActionStatusOverlayTest {
     }
 
     @Test
+    void supportsGenericSheepAndGoatsWhenTheirCompositeModelHasFleece() {
+        String sheep = "gfx/kritter/sheep/sheep";
+        String goat = "gfx/kritter/goat/goat";
+        String fleece = "gfx/kritter/sheep/sheep-fleece";
+
+        assertTrue(NActionStatusOverlay.supports(sheep));
+        assertTrue(NActionStatusOverlay.supports(goat));
+        assertFalse(NActionStatusOverlay.supports("gfx/kritter/cattle/cow"));
+        assertFalse(NActionStatusOverlay.supports("gfx/kritter/horse/mare"));
+        assertFalse(NActionStatusOverlay.supports("gfx/kritter/pig/sow"));
+        assertEquals(NActionStatusOverlay.Status.SHEARS,
+                NActionStatusOverlay.statusFor(sheep, 0, fleece));
+        assertEquals(NActionStatusOverlay.Status.SHEARS,
+                NActionStatusOverlay.statusFor(goat, 0, "gfx/kritter/goat/goat-fleece"));
+        assertEquals(NActionStatusOverlay.Status.NONE,
+                NActionStatusOverlay.statusFor(sheep, 0));
+    }
+
+    @Test
     void decodesStackFurnaceReadyAndColdFlags() {
         assertEquals(NActionStatusOverlay.Status.BAR,
                 NActionStatusOverlay.statusFor(NActionStatusOverlay.STACK_FURNACE, 0x04));

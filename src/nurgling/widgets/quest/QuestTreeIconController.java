@@ -8,7 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-/** Synchronizes quest tree markers with the persisted Icon Settings checkboxes. */
+/** Synchronizes temporary quest tree markers with Icon Settings visibility. */
 public class QuestTreeIconController {
     private final QuestTreeIconClaims<GobIcon.Setting.ID> claims = new QuestTreeIconClaims<>();
     private final QuestObjectiveActionResolver resolver = new QuestObjectiveActionResolver();
@@ -63,19 +63,12 @@ public class QuestTreeIconController {
         return new QuestTreeIconClaims.Visibility<GobIcon.Setting.ID>() {
             @Override
             public void enable(GobIcon.Setting.ID id) {
-                GobIcon.Setting setting;
-                Map<GobIcon.Setting.ID, GobIcon.Setting> loaded = settings.settings;
-                synchronized(loaded) {
-                    setting = loaded.get(id);
-                    if(setting != null)
-                        setting.show = true;
-                }
-                if(setting != null) {
-                    // Remove any pre-existing transient quest override so the map and
-                    // the Icon Settings checkbox always describe the same state.
-                    settings.setShowOverride(id, null);
-                    settings.dsave();
-                }
+                settings.setShowOverride(id, true);
+            }
+
+            @Override
+            public void disable(GobIcon.Setting.ID id) {
+                settings.setShowOverride(id, null);
             }
         };
     }

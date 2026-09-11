@@ -689,7 +689,9 @@ public class NArea
                 end = (end != null) ? new Coord(Math.max(end.x, e.x), Math.max(end.y, e.y)) : e;
             }
             if (begin != null) {
-                if (NUtils.player()!=null && begin.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000 && end.mul(MCache.tilesz).dist(NUtils.player().rc) > 1000) {
+                Gob player = NUtils.player();
+                Coord2d playerRc = player != null ? player.rc : null;
+                if (isOutsidePlayerRange(begin.mul(MCache.tilesz), end.mul(MCache.tilesz), playerRc)) {
                     return null;
                 }
                 return directedBounds(begin.mul(MCache.tilesz),
@@ -697,6 +699,10 @@ public class NArea
             }
         }
         return null;
+    }
+
+    static boolean isOutsidePlayerRange(Coord2d begin, Coord2d end, Coord2d playerRc) {
+        return playerRc != null && begin.dist(playerRc) > 1000 && end.dist(playerRc) > 1000;
     }
     
     /**

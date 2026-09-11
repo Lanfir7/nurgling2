@@ -8,16 +8,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Enables an icon once when an unfinished quest first claims it.
- *
- * The icon setting remains the source of truth: a user may turn it off while the
- * quest is active, and a later reconcile will not turn it back on. Releasing a
- * claim also leaves the current checkbox choice alone. A new claim enables the
- * icon again, so newly accepted quests remain discoverable.
+ * Applies temporary visibility while one or more unfinished quests claim an icon.
  */
 public class QuestTreeIconClaims<K> {
     public interface Visibility<K> {
         void enable(K key);
+        void disable(K key);
     }
 
     private Map<Integer, Set<K>> quests = Collections.emptyMap();
@@ -30,6 +26,10 @@ public class QuestTreeIconClaims<K> {
         for(K key : after) {
             if(!before.contains(key))
                 visibility.enable(key);
+        }
+        for(K key : before) {
+            if(!after.contains(key))
+                visibility.disable(key);
         }
         quests = next;
     }

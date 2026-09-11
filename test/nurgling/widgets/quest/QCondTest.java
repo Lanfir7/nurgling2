@@ -29,6 +29,18 @@ class QCondTest {
     }
 
     @Test
+    void makeAndCraftAreCreateObjectivesWithCleanRecipeNames() {
+        QCond make = new QCond(7, false, "Make armored striders 1/7[1/5]", null);
+        QCond craft = new QCond(7, false, "Craft an Iron Axe (x2) 2/6[3/5]", null);
+
+        assertEquals(QCond.Verb.CREATE, make.verb);
+        assertEquals("armored striders", make.itemTarget);
+        assertEquals(QCond.Verb.CREATE, craft.verb);
+        assertEquals("iron axe", craft.itemTarget);
+        assertEquals("stone axe", new QCond(7, false, "Create a Stone Axe", null).itemTarget);
+    }
+
+    @Test
     void malformedObjectivesHaveNoItemTarget() {
         assertNull(new QCond(7, false, "Create", null).itemTarget);
         assertNull(new QCond(7, false, "Bring to Jenny", null).itemTarget);

@@ -288,6 +288,10 @@ public class MapWnd extends Window implements Console.Directory {
 	}
     }
 
+    static void drawGridOverlay(GOut g, Tex img, Coord ul, Coord size) {
+	g.image(img, ul, size);
+    }
+
     private class View extends NMiniMap {
 	View(MapFile file) {
 	    super(file);
@@ -300,7 +304,7 @@ public class MapWnd extends Window implements Console.Directory {
 		    Tex img = disp.olimg(tag);
 		    if(img != null) {
 			g.chcolor(255, 255, 255, olalpha);
-			g.image(img, ul, img.sz().mul(dmag));
+			drawGridOverlay(g, img, ul, size);
 		    }
 		} catch(Loading l) {
 		}

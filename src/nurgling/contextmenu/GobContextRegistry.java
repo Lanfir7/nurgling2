@@ -71,6 +71,7 @@ public class GobContextRegistry {
         register(new ShearWoolAreaAction());
         register(new LightAction());
         register(new FuelKilnsAction());
+        register(new FuelOvensAction());
         register(new FuelSmeltersAction());
         register(new KilnFuelAction());
         register(new HTableTimesAction());

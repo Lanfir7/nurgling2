@@ -36,14 +36,15 @@ public class QCond
     public QCond(int questId, boolean ready, String desc, String status)
     {
         String d = (desc == null) ? "" : desc;
+        String parsed = normalizeSpacing(d);
         this.questId = questId;
         this.ready = ready;
-        this.verb = verb(d);
-        this.giver = wantsGiver(verb) ? giver(d) : null;
-        this.bringItem = (verb == Verb.BRING) ? bringItem(d) : null;
-        this.itemTarget = itemTarget(verb, d, bringItem);
-        this.gobTarget = (verb == Verb.KILL) ? huntTarget(d)
-                       : (verb == Verb.PICK) ? pickTarget(d) : null;
+        this.verb = verb(parsed);
+        this.giver = wantsGiver(verb) ? giver(parsed) : null;
+        this.bringItem = (verb == Verb.BRING) ? bringItem(parsed) : null;
+        this.itemTarget = itemTarget(verb, parsed, bringItem);
+        this.gobTarget = (verb == Verb.KILL) ? huntTarget(parsed)
+                       : (verb == Verb.PICK) ? pickTarget(parsed) : null;
         this.text = (status == null || status.isEmpty()) ? d : (d + " " + status);
     }
 
@@ -74,6 +75,8 @@ public class QCond
 
     private static Verb verb(String t)
     {
+        if(hasLeadingVerb(t, "Create") || hasLeadingVerb(t, "Make") || hasLeadingVerb(t, "Craft"))
+            return Verb.CREATE;
         if(t.contains("Bring"))
             return Verb.BRING;
         if(t.contains("Pick") || t.contains("Catch"))
@@ -90,8 +93,6 @@ public class QCond
             return Verb.RAGE;
         if(t.contains("Gain"))
             return Verb.GAIN;
-        if(t.contains("Create"))
-            return Verb.CREATE;
         if(t.contains("Fell") || t.contains("Chop"))
             return Verb.FELL;
         if(t.contains("Eat"))
@@ -103,6 +104,11 @@ public class QCond
         if(t.contains("Light"))
             return Verb.LIGHT;
         return Verb.OTHER;
+    }
+
+    private static boolean hasLeadingVerb(String text, String verb)
+    {
+        return text.equals(verb) || text.startsWith(verb + " ");
     }
 
     private static boolean isVisit(String t)
@@ -172,15 +178,15 @@ public class QCond
     {
         if(target == null)
             return null;
-        target = target.replaceAll("\\s*\\(x\\d+\\)", "");
+        target = target.replaceAll("\\s*\\([x×]\\s*\\d+\\)", "");
         target = target.replaceAll("\\s*\\d+\\s*/\\s*\\d+(?:\\s*\\[\\d+\\s*/\\s*\\d+\\])?\\s*$", "");
-        return trimToNull(target.replaceAll("\\s+", " ").trim());
+        return trimToNull(normalizeSpacing(target));
     }
 
     /** Text after the leading article, lowercased - the common prefix of both target parsers. */
     private static String tail(String info)
     {
-        info = info.toLowerCase();
+        info = normalizeSpacing(info).toLowerCase(Locale.ROOT);
         int i = info.indexOf(" a ");
         if(i >= 0)
             return info.substring(i + 3);
@@ -236,6 +242,16 @@ public class QCond
             return null;
         s = s.trim();
         return s.isEmpty() ? null : s;
+    }
+
+    /** Server text may contain non-breaking or formatting spaces that look ordinary in the UI. */
+    private static String normalizeSpacing(String value)
+    {
+        if(value == null)
+            return "";
+        return value.replaceAll("\\p{Cf}", "")
+                .replaceAll("[\\s\\p{Z}]+", " ")
+                .trim();
     }
 
     @Override

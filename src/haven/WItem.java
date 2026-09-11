@@ -199,6 +199,9 @@ public class WItem extends Widget implements DTarget {
 	} else if(nurgling.hotkeys.Hotkeys.ITEM_INTERACT.equals(id) ||
 		nurgling.hotkeys.Hotkeys.ITEM_INTERACT_SHIFT.equals(id) ||
 		nurgling.hotkeys.Hotkeys.ITEM_INTERACT_ALL.equals(id)) {
+	    NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI)ui.gui : NUtils.getGameUI();
+	    if(gui != null && gui.map instanceof NMapView)
+		((NMapView)gui.map).notePlantingItem(this);
 	    item.wdgmsg("iact", ev.c, action.canonicalMods() == null ? 0 : action.canonicalMods());
 	    NUtils.getUI().core.setLastAction(this);
 	} else {

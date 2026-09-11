@@ -729,7 +729,12 @@ public class PortalTraversalTracker {
         ChunkNavData destChunk = graph.getChunk(toGridId);
         long newInstanceId = destinationInstanceAfterTraversal(destChunk, toGridId, exitPortalName);
         manager.setCurrentInstanceId(newInstanceId);
+        long previousInstanceId = destChunk != null ? destChunk.instanceId : 0L;
         stampDestinationInstance(destChunk, newInstanceId);
+        if (destChunk != null && previousInstanceId != newInstanceId
+                && newInstanceId == ChunkNavManager.SURFACE_INSTANCE) {
+            removeCrossInstanceConnections(destChunk);
+        }
     }
 
     static boolean indoorHomeLayer(String layer) {
@@ -738,6 +743,9 @@ public class PortalTraversalTracker {
 
     static long destinationInstanceAfterTraversal(ChunkNavData destChunk, long toGridId,
             String exitPortalName) {
+        if (isSurfaceExitPortal(exitPortalName))
+            return ChunkNavManager.SURFACE_INSTANCE;
+
         String layer = destChunk != null && destChunk.layer != null && !destChunk.layer.isEmpty()
                 ? destChunk.layer : null;
         if (indoorHomeLayer(layer)) {
@@ -757,23 +765,39 @@ public class PortalTraversalTracker {
             return;
         if (instanceId == -1L)
             return;
-        if (destChunk.instanceId == 0
+        if ((instanceId == ChunkNavManager.SURFACE_INSTANCE && !indoorHomeLayer(destChunk.layer))
+                || destChunk.instanceId == 0
                 || (indoorHomeLayer(destChunk.layer)
                         && !ChunkNavManager.isInteriorInstanceId(destChunk.instanceId))) {
             destChunk.instanceId = instanceId;
         }
     }
 
+    private void removeCrossInstanceConnections(ChunkNavData chunk) {
+        for (Long connectedGridId : new ArrayList<>(chunk.connectedChunks)) {
+            ChunkNavData connected = graph.getChunk(connectedGridId);
+            if (connected != null && connected.instanceId != 0
+                    && connected.instanceId != chunk.instanceId) {
+                chunk.connectedChunks.remove(connectedGridId);
+                connected.connectedChunks.remove(chunk.gridId);
+            }
+        }
+    }
+
+    static boolean isSurfaceExitPortal(String exitPortalName) {
+        if (exitPortalName == null)
+            return false;
+        String lower = exitPortalName.toLowerCase();
+        return ChunkPortal.isBuildingExterior(exitPortalName)
+                || lower.contains("minehole")
+                || lower.contains("cavein");
+    }
+
     private static long determineInstanceIdFromExitPortal(long toGridId, String exitPortalName) {
         if (exitPortalName == null) return ChunkNavManager.SURFACE_INSTANCE;
         String lower = exitPortalName.toLowerCase();
 
-        // Exit portal is a building exterior -> we LEFT a building -> now on surface
-        if (ChunkPortal.isBuildingExterior(exitPortalName)) return ChunkNavManager.SURFACE_INSTANCE;
-        // Exit portal is a minehole -> we LEFT a mine -> now on surface
-        if (lower.contains("minehole")) return ChunkNavManager.SURFACE_INSTANCE;
-        // Exit portal is a cave mouth on the surface -> we LEFT the first mine level
-        if (lower.contains("cavein")) return ChunkNavManager.SURFACE_INSTANCE;
+        if (isSurfaceExitPortal(exitPortalName)) return ChunkNavManager.SURFACE_INSTANCE;
         // cellardoor -> we left cellar back into building interior
         if (lower.contains("cellardoor")) return toGridId;
         // All other exits (ladder, -door, cellarstairs, etc.) -> new instance

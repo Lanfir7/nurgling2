@@ -1,6 +1,8 @@
 package nurgling.overlays;
 
 import haven.Coord3f;
+import haven.Composite;
+import haven.Composited;
 import haven.Drawable;
 import haven.Gob;
 import haven.ItemInfo;
@@ -33,6 +35,7 @@ public final class NActionStatusOverlay extends NObjectTexLabel {
 
     private final Gob gob;
     private Status shown = Status.NONE;
+    private static final String[] NO_MODEL_RESOURCES = new String[0];
 
     public NActionStatusOverlay(Gob gob) {
         super(gob);
@@ -42,7 +45,7 @@ public final class NActionStatusOverlay extends NObjectTexLabel {
     }
 
     public static boolean supports(String resourceName) {
-        return isFleeceResource(resourceName) || STACK_FURNACE.equals(resourceName) ||
+        return isShearableBaseResource(resourceName) || STACK_FURNACE.equals(resourceName) ||
                 ORE_SMELTER.equals(resourceName);
     }
 
@@ -63,8 +66,14 @@ public final class NActionStatusOverlay extends NObjectTexLabel {
     }
 
     static Status statusFor(String resourceName, int state) {
+        return statusFor(resourceName, state, NO_MODEL_RESOURCES);
+    }
+
+    static Status statusFor(String resourceName, int state, String... modelResources) {
         if (isFleeceResource(resourceName))
             return Status.SHEARS;
+        if (isShearableBaseResource(resourceName))
+            return hasFleeceModel(modelResources) ? Status.SHEARS : Status.NONE;
         if (STACK_FURNACE.equals(resourceName)) {
             boolean bars = (state & 0x04) != 0;
             boolean cold = (state & 0x01) != 0 && (state & 0x02) != 0 &&
@@ -83,7 +92,29 @@ public final class NActionStatusOverlay extends NObjectTexLabel {
 
     private static boolean isFleeceResource(String resourceName) {
         return resourceName != null && resourceName.contains("-fleece") &&
-                (resourceName.contains("/sheep/") || resourceName.contains("/goat/"));
+                isShearableBaseResource(resourceName);
+    }
+
+    private static boolean isShearableBaseResource(String resourceName) {
+        return resourceName != null && (resourceName.contains("/sheep/") ||
+                resourceName.contains("/goat/"));
+    }
+
+    private static boolean hasFleeceModel(String... modelResources) {
+        for (String modelResource : modelResources) {
+            if (modelResource != null && modelResource.contains("-fleece"))
+                return true;
+        }
+        return false;
+    }
+
+    private static String[] modelResources(Drawable drawable) {
+        if (!(drawable instanceof Composite))
+            return NO_MODEL_RESOURCES;
+        List<String> resources = new ArrayList<>();
+        for (Composited.MD model : ((Composite) drawable).comp.cmod)
+            resources.add(model.mod.get().name);
+        return resources.toArray(new String[0]);
     }
 
     private static int drawableState(Drawable drawable) {
@@ -100,20 +131,34 @@ public final class NActionStatusOverlay extends NObjectTexLabel {
         Drawable drawable = gob.getattr(Drawable.class);
         if (drawable == null)
             return true;
+        String resourceName = null;
         try {
             Resource resource = drawable.getres();
             if (resource == null)
                 return true;
-            Status next = statusFor(resource.name, drawableState(drawable));
-            if (next == Status.NONE)
+            resourceName = resource.name;
+            Status next = statusFor(resourceName, drawableState(drawable), modelResources(drawable));
+            if (next == Status.NONE) {
+                if (isShearableBaseResource(resourceName)) {
+                    if (shown != Status.NONE) {
+                        setStatus(Status.NONE);
+                        shown = Status.NONE;
+                    }
+                    return false;
+                }
                 return true;
+            }
             if (next != shown) {
                 setStatus(next);
                 shown = next;
             }
             return false;
         } catch (Loading ignored) {
-            // Do not tear down an already-valid marker while its resource is being reloaded.
+            if (isShearableBaseResource(resourceName)) {
+                setStatus(Status.NONE);
+                shown = Status.NONE;
+            }
+            // Keep the generic sheep/goat marker alive until its composite model is available.
             return false;
         }
     }

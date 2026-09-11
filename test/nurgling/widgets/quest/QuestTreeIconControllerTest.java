@@ -47,7 +47,7 @@ class QuestTreeIconControllerTest {
     }
 
     @Test
-    void claimUpdatesVisibleCheckboxAndClearsLeftoverOverride() {
+    void claimReplacesAHiddenTemporaryOverrideWithoutChangingTheCheckbox() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
@@ -56,24 +56,25 @@ class QuestTreeIconControllerTest {
         QuestTreeIconController controller = new QuestTreeIconController();
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertTrue(oak.show);
+        assertFalse(oak.show);
         assertTrue(settings.shown(oak));
     }
 
     @Test
-    void questClaimPersistsTheVisibleCheckboxState() {
-        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+    void questClaimUsesTemporaryVisibilityWithoutPersistingCheckboxState() {
+        TrackingSettings settings = new TrackingSettings();
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
 
         new QuestTreeIconController().reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertTrue(oak.show);
+        assertFalse(oak.show);
         assertTrue(settings.shown(oak));
+        assertEquals(0, settings.saves);
     }
 
     @Test
-    void releaseLeavesTheCurrentCheckboxChoiceAlone() {
+    void releaseClearsTemporaryVisibility() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
         settings.settings.put(oak.id, oak);
@@ -81,8 +82,36 @@ class QuestTreeIconControllerTest {
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
         controller.release(settings);
 
+        assertFalse(oak.show);
+        assertFalse(settings.shown(oak));
+    }
+
+    @Test
+    void releasePreservesAManuallyEnabledCheckbox() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], true);
+        settings.settings.put(oak.id, oak);
+        QuestTreeIconController controller = new QuestTreeIconController();
+
+        controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
+        controller.release(settings);
+
         assertTrue(oak.show);
         assertTrue(settings.shown(oak));
+    }
+
+    @Test
+    void emptyReconcileReleasesACompletedOrRemovedQuestClaim() {
+        GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
+        GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], false);
+        settings.settings.put(oak.id, oak);
+        QuestTreeIconController controller = new QuestTreeIconController();
+
+        controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
+        controller.reconcile(Collections.emptyList(), settings);
+
+        assertFalse(oak.show);
+        assertFalse(settings.shown(oak));
     }
 
     @Test
@@ -117,12 +146,12 @@ class QuestTreeIconControllerTest {
 
         new QuestTreeIconController().reconcile(Collections.singletonList(q), settings);
 
-        assertTrue(oak.show);
+        assertFalse(oak.show);
         assertTrue(settings.shown(oak));
     }
 
     @Test
-    void userCanDisableClaimedIconWithoutItBeingReenabledOnNextReconcile() {
+    void activeQuestVisibilityRemainsTemporaryUntilReleased() {
         GobIcon.Settings settings = new GobIcon.Settings(null, "test-icons");
         GobIcon.Setting oak = setting("gfx/terobjs/mm/trees/oak", new Object[0], true);
         settings.settings.put(oak.id, oak);
@@ -132,7 +161,7 @@ class QuestTreeIconControllerTest {
         oak.show = false;
         controller.reconcile(Collections.singletonList(oakQuest(1)), settings);
 
-        assertFalse(settings.shown(oak));
+        assertTrue(settings.shown(oak));
 
         controller.release(settings);
         assertFalse(settings.shown(oak));
@@ -152,8 +181,8 @@ class QuestTreeIconControllerTest {
 
         new QuestTreeIconController().reconcile(Collections.singletonList(quest), settings);
 
-        assertTrue(plain.show);
-        assertTrue(ripe.show);
+        assertFalse(plain.show);
+        assertFalse(ripe.show);
         assertTrue(settings.shown(plain));
         assertTrue(settings.shown(ripe));
     }
@@ -169,7 +198,7 @@ class QuestTreeIconControllerTest {
 
         new QuestTreeIconController().reconcile(Collections.singletonList(quest), settings);
 
-        assertTrue(pine.show);
+        assertFalse(pine.show);
         assertTrue(settings.shown(pine));
     }
 
@@ -186,7 +215,7 @@ class QuestTreeIconControllerTest {
         settings.settings.put(cedar.id, cedar);
         controller.reconcile(Collections.singletonList(quest), settings);
 
-        assertTrue(cedar.show);
+        assertFalse(cedar.show);
         assertTrue(settings.shown(cedar));
     }
 
@@ -214,5 +243,18 @@ class QuestTreeIconControllerTest {
         GobIcon.Setting setting = new GobIcon.Setting(saved, sub, null, from);
         setting.show = show;
         return setting;
+    }
+
+    private static class TrackingSettings extends GobIcon.Settings {
+        int saves;
+
+        TrackingSettings() {
+            super(null, "test-icons");
+        }
+
+        @Override
+        public void dsave() {
+            saves++;
+        }
     }
 }

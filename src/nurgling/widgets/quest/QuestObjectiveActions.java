@@ -1,14 +1,9 @@
 package nurgling.widgets.quest;
 
 import haven.GameUI;
-import haven.Loading;
-import haven.MenuGrid;
-import haven.Resource;
 import haven.Widget;
 import nurgling.widgets.MapToolsWindow;
-
-import java.util.ArrayList;
-import java.util.List;
+import nurgling.widgets.craftatlas.CraftAtlasWindow;
 
 /** Availability checks and UI dispatch for quest-objective action buttons. */
 public final class QuestObjectiveActions {
@@ -21,7 +16,7 @@ public final class QuestObjectiveActions {
         QuestObjectiveAction action = RESOLVER.resolve(cond);
         if(action == null)
             return null;
-        if(action.kind == QuestObjectiveAction.Kind.CRAFT && craftPagina(origin, action.targets.get(0)) == null)
+        if(action.kind == QuestObjectiveAction.Kind.CRAFT && !hasAtlasRecipe(origin, action.targets.get(0)))
             return null;
         return action;
     }
@@ -38,19 +33,8 @@ public final class QuestObjectiveActions {
                 MapToolsWindow.openTerrainResources(action.targets);
                 return true;
             case CRAFT:
-                MenuGrid.Pagina pagina = craftPagina(origin, action.targets.get(0));
-                if(pagina == null)
-                    return false;
-                try {
-                    GameUI gui = gui(origin);
-                    if(gui == null || gui.menu == null)
-                        return false;
-                    gui.menu.use(pagina.button(),
-                            new MenuGrid.Interaction(1, origin.ui.modflags()), false);
-                    return true;
-                } catch(Loading | Resource.BadResourceException e) {
-                    return false;
-                }
+                CraftAtlasWindow atlas = craftAtlas(origin);
+                return atlas != null && atlas.openRecipe(null, action.targets.get(0));
             default:
                 return false;
         }
@@ -61,25 +45,14 @@ public final class QuestObjectiveActions {
                 ? "Open crafting recipe" : "Show gathering terrain";
     }
 
-    private static MenuGrid.Pagina craftPagina(Widget origin, String target) {
-        if(origin == null)
-            return null;
+    private static boolean hasAtlasRecipe(Widget origin, String target) {
+        CraftAtlasWindow atlas = craftAtlas(origin);
+        return atlas != null && atlas.controller().hasUniqueExactName(target);
+    }
+
+    private static CraftAtlasWindow craftAtlas(Widget origin) {
         GameUI gui = gui(origin);
-        if(gui == null || gui.menu == null)
-            return null;
-        List<MenuGrid.Pagina> candidates = new ArrayList<>();
-        List<String> names = new ArrayList<>();
-        synchronized(gui.menu.paginae) {
-            for(MenuGrid.Pagina pagina : gui.menu.paginae) {
-                try {
-                    names.add(pagina.button().name());
-                    candidates.add(pagina);
-                } catch(Loading | Resource.BadResourceException ignored) {
-                }
-            }
-        }
-        int index = QuestCraftRecipeSelector.uniqueExactName(names, target);
-        return index < 0 ? null : candidates.get(index);
+        return gui == null ? null : gui.craftAtlas;
     }
 
     private static GameUI gui(Widget origin) {

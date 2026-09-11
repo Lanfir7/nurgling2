@@ -1574,14 +1574,15 @@ public class NGameUI extends GameUI
         if (message.contains("Quality")) {
             if(map.clickedGob!=null)
             {
-                Matcher m = Pattern.compile("Quality:\\s*(\\d+)").matcher(message);
-                if(m.find()) {  // find() вместо matches() — ищем подстроку, а не полное совпадение
+                Double quality = nurgling.areas.PlantQualityArea.inspectQuality(message);
+                if(quality != null) {
                     try {
-                        int quality = Integer.parseInt(m.group(1));
-                        map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, quality));
+                        int roundedQuality = Math.round(quality.floatValue());
+                        map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, roundedQuality));
                         // Обновить маркер животного на карте (качество приходит сообщением от сервера, не из sdt)
                         if (map instanceof NMapView) {
-                            ((NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, quality);
+                            ((NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, roundedQuality);
+                            ((NMapView) map).applyPlantInspectQuality(map.clickedGob.gob, quality);
                         }
                         maybeUpdateCraftAtlasStationQuality(map.clickedGob.gob, quality);
                     } catch (NumberFormatException ignored) {
