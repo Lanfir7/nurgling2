@@ -75,6 +75,8 @@ def main():
     parser.add_argument("--previous", default="release/release-notes.json")
     parser.add_argument("--output", default="build/release-notes.json")
     parser.add_argument("--snapshot", default="src/nurgling/news/releases.json")
+    parser.add_argument("--next-build", action="store_true",
+                        help="prepare notes for the build number ant release will create")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     notes = load_notes(args.notes)
@@ -86,7 +88,8 @@ def main():
     match = re.search(r"^build.number\s*=\s*(\d+)\s*$", Path("build.num").read_text(), re.M)
     if not match:
         raise ValueError("build.num must contain build.number")
-    version = f"{version_base}.{match[1]}"
+    build_number = int(match[1]) + (1 if args.next_build else 0)
+    version = f"{version_base}.{build_number}"
     history = Path(args.previous) if Path(args.previous).exists() else Path(args.snapshot)
     previous = read_json(history) if history.exists() else {"schema": 1, "releases": []}
     feed = make_feed(notes, previous, version, datetime.datetime.now(datetime.timezone.utc).date().isoformat())
