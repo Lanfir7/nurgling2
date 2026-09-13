@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-fight-move-tabs",
+  "priority": 9,
+  "summary": {
+    "ru": "В окне боя приёмы разложены по вкладкам, школу можно переименовать.",
+    "en": "The fight window splits moves into tabs, and a school can be renamed."
+  },
+  "detail": {
+    "ru": "В окне боя переключайте все / атаки / защиты / манёвры / движения. Неиспользованный слот школы не переименовывается; у рабочей школы есть команда Rename.",
+    "en": "In the fight window switch All, Attacks, Defences, Maneuvers and Moves. An unused school slot cannot be renamed; a used school has Rename."
+  }
+}

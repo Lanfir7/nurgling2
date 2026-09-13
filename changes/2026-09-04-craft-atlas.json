@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-04-craft-atlas",
+  "priority": 9,
+  "summary": {
+    "ru": "Появился «Атлас крафта»: справочник рецептов с поиском, зависимостями и бонусами.",
+    "en": "Craft Atlas is a recipe reference with search, dependencies and bonuses."
+  },
+  "detail": {
+    "ru": "Откройте атлас горячей клавишей или из интерфейса. Ищите рецепты, ингредиенты и бонусы, листайте зависимости и избранное. Кнопка открывает обычное окно крафта и ничего не крафтит сама.",
+    "en": "Open Craft Atlas from the UI or its hotkey. Search recipes, ingredients and bonuses, follow dependencies and favorites. Open craft opens the normal craft window and never starts crafting by itself."
+  }
+}

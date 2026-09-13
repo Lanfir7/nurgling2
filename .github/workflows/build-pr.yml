@@ -32,6 +32,17 @@ jobs:
           restore-keys: |
             extlibs-${{ runner.os }}-
 
+      - name: Set up Python for player release notes
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate player release notes
+        run: |
+          python tools/release_notes.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tools -p test_release_notes.py
+
       - name: Build with Ant
         run: ant jar
 

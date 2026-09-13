@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-10-storage-wipe",
+  "priority": 6,
+  "summary": {
+    "ru": "Складскую базу дома можно целиком очистить и проиндексировать заново.",
+    "en": "The home storage database can be wiped and indexed again from scratch."
+  },
+  "detail": {
+    "ru": "В настройках дома — Wipe All Storage Items. После подтверждения стираются записанные предметы и контейнеры; они появятся снова, когда вы откроете ящики дома.",
+    "en": "Home settings include Wipe All Storage Items. After confirm, stored items and container locations are deleted and fill in again as you use chests at home."
+  }
+}

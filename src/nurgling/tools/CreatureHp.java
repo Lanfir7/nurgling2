@@ -68,6 +68,7 @@ public final class CreatureHp {
         hp("troll", 1000);
         hp("walrus", 900);
         hp("wildbees", 50);
+        hp("horse", 320);
         hp("wildhorse", 320);
         hp("wildgoat", 300);
         hp("wolf", 500);

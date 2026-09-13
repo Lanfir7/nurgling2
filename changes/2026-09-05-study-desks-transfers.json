@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-05-study-desks-transfers",
+  "priority": 5,
+  "summary": {
+    "ru": "Все столы учёбы запускаются своей кнопкой; склады и шёлк стабильнее отдают вещи.",
+    "en": "All study desks have their own button; storage and silk hand-offs are steadier."
+  },
+  "detail": {
+    "ru": "В утилитах ботов появилась отдельная иконка «все столы учёбы». Перекладывание со свалок, плавилен и шёлковых зон меньше зависает, когда инвентарь полон.",
+    "en": "Bot utilities gained a dedicated all-study-desks icon. Stockpile, smelter and silk-area transfers stall less when inventory is full."
+  }
+}

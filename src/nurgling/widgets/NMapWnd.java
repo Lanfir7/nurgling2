@@ -24,7 +24,7 @@ public class NMapWnd extends MapWnd {
     MapToggleButton mapToolsBtn;
     MapToggleButton oreBtn;
     MapToggleButton gemBtn;
-    MapToggleButton stoneBtn;
+    MapToggleButton quarryartzBtn;
     MapToggleButton animalsBtn;  // Кнопка для переключения видимости маркеров животных (ObjectTracker + БД)
     MapToggleButton foragingBtn;
     MapToggleButton vectorClearBtn;
@@ -82,9 +82,9 @@ public class NMapWnd extends MapWnd {
         gemBtn.state(() -> NMiniMap.showProspectKind(ProspectKind.GEM));
         gemBtn.set(val -> NMiniMap.showProspectKind(ProspectKind.GEM, val));
 
-        stoneBtn = add(new MapToggleButton("stone", L10n.get("maptools.stone_icons_tip"), () -> MapToolsWindow.openMineralSearch(ProspectKind.STONE)));
-        stoneBtn.state(() -> NMiniMap.showProspectKind(ProspectKind.STONE));
-        stoneBtn.set(val -> NMiniMap.showProspectKind(ProspectKind.STONE, val));
+        quarryartzBtn = add(new MapToggleButton("stone", "Toggle Quarryartz markers (Right-click: Quarryartz Search)", this::openQuarryartzSearch));
+        quarryartzBtn.a = getQuarryartzIconsState();
+        quarryartzBtn.changed(val -> setQuarryartzIconsState(val));
 
         // Animals button (маркеры животных: ObjectTracker при обнаружении + синхронизация из БД)
         animalsBtn = add(new MapToggleButton("tree", "Toggle Animal markers (from Discord notification list)", null));
@@ -431,6 +431,40 @@ public class NMapWnd extends MapWnd {
         NConfig.needUpdate();
     }
 
+    private boolean getQuarryartzIconsState() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            return ((NMiniMap) gui.mmap).showQuarryartzIcons;
+        return true;
+    }
+
+    private void setQuarryartzIconsState(boolean val) {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null && gui.mmap instanceof NMiniMap)
+            ((NMiniMap) gui.mmap).showQuarryartzIcons = val;
+        if(view instanceof NMiniMap)
+            ((NMiniMap) view).showQuarryartzIcons = val;
+        NConfig.set(NConfig.Key.showQuarryartzIcons, val);
+        NConfig.needUpdate();
+    }
+
+    private void openQuarryartzSearch() {
+        NGameUI gui = (NGameUI) NUtils.getGameUI();
+        if(gui != null) {
+            if(gui.quarryartzSearchWindow != null) {
+                if(gui.quarryartzSearchWindow.visible()) {
+                    gui.quarryartzSearchWindow.hide();
+                } else {
+                    MapSearchFront.showInFront(gui.quarryartzSearchWindow);
+                }
+            } else {
+                gui.quarryartzSearchWindow = new QuarryartzSearchWindow(gui);
+                gui.add(gui.quarryartzSearchWindow, new Coord(100, 100));
+                MapSearchFront.showInFront(gui.quarryartzSearchWindow);
+            }
+        }
+    }
+
     private void openForagingSearch() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null) {
@@ -522,7 +556,7 @@ public class NMapWnd extends MapWnd {
 
     private void layoutMapButtons() {
         Widget[] btns = {
-            mapToolsBtn, fishBtn, treeBtn, oreBtn, gemBtn, stoneBtn,
+            mapToolsBtn, fishBtn, treeBtn, oreBtn, gemBtn, quarryartzBtn,
             animalsBtn, foragingBtn, vectorClearBtn
         };
         int xpad = UI.scale(5);

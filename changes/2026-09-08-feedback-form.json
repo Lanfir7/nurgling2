@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-feedback-form",
+  "priority": 8,
+  "summary": {
+    "ru": "В опциях «Bug / Suggestion»: форма, вырезка экрана и необязательный Discord.",
+    "en": "Options has Bug / Suggestion: a form, screen snip and optional Discord contact."
+  },
+  "detail": {
+    "ru": "В опциях откройте Bug / Suggestion. Опишите ошибку или идею, вырежьте фрагмент экрана, при желании укажите Discord и отправьте. Черновик не теряется, пока вы не закроете окно.",
+    "en": "In options open Bug / Suggestion. Describe a bug or idea, snip the screen, optionally add Discord and send. The draft stays until you close the window."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-12-crop-farmers",
+  "priority": 8,
+  "summary": {
+    "ru": "Боты поля: редис, арбуз и белый лук — обычный посев и качественные делянки.",
+    "en": "Field bots for radish, watermelon and white onion, including quality patches."
+  },
+  "detail": {
+    "ru": "В меню ботов — фермеры редиса, арбуза и белого лука, каждый с вариантом качества. Нужны зоны crop/seed (и cropQ/seedQ), склад урожая и по желанию корыто для месива.",
+    "en": "The bot menu has radish, watermelon and white onion farmers, each with a quality variant. Mark crop/seed (and cropQ/seedQ) zones, a harvest Put area, and optionally a trough for swill."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-13-animals-map-tools",
+  "priority": 6,
+  "summary": {
+    "ru": "Боты животных собраны в свою категорию; у кулинарной книги — перезагрузка.",
+    "en": "Animal bots sit in their own category; the cookbook has a reload button."
+  },
+  "detail": {
+    "ru": "В выборе ботов появился раздел Animals. В кулинарной книге кнопка Reload обновляет данные. Значки руды, камня и самоцветов на карте обновлены.",
+    "en": "The bot picker has an Animals section. Cookbook Reload refreshes its data. Ore, stone and gemstone map icons are updated."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-storage-clear",
+  "priority": 6,
+  "summary": {
+    "ru": "На складе кнопка Clear убирает позиции, которых уже нет в доступе.",
+    "en": "Storage Clear removes entries that are no longer available."
+  },
+  "detail": {
+    "ru": "В окне склада нажмите Clear — исчезнут недоступные предметы, счётчик покажет сколько снято. Боты при переходах через портал дожидаются сетки карты.",
+    "en": "In the storage window press Clear to drop unavailable items; a count is shown. Bots wait for the map grid after portal travel."
+  }
+}

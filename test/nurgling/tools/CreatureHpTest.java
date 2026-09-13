@@ -12,6 +12,8 @@ class CreatureHpTest {
     @CsvSource({
             "gfx/kritter/boar/boar, 450",
             "gfx/invobjs/kritter/wildboar, 450",
+            "gfx/kritter/horse/horse, 320",
+            "gfx/invobjs/kritter/wildhorse, 320",
             "gfx/kritter/bear/bear, 850",
             "gfx/kritter/bear/polarbear, 1250",
             "gfx/kritter/wolf/wolf, 500",

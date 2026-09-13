@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-fight-row-height",
+  "priority": 6,
+  "summary": {
+    "ru": "Строки приёмов в окне боя больше не сжимаются в одну линию.",
+    "en": "Fight-window move rows no longer collapse into a single line."
+  },
+  "detail": {
+    "ru": "Список приёмов в окне боя держит минимальную высоту строки, так что названия и иконки остаются читаемыми.",
+    "en": "The fight-window move list keeps a minimum row height so names and icons stay readable."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-14-forager-route-map",
+  "priority": 7,
+  "summary": {
+    "ru": "Карту маршрута Собирателя можно открыть в отдельном большом изменяемом окне.",
+    "en": "The Forager route map can open in a separate large resizable window."
+  },
+  "detail": {
+    "ru": "В настройках Собирателя нажмите «Открыть карту». Отдельное окно сохраняет текущий масштаб и синхронно показывает правки маршрута и исключённых участков.",
+    "en": "In Forager settings, press Open map. The separate window keeps the current zoom and stays synchronized with route and exclusion-area edits."
+  }
+}

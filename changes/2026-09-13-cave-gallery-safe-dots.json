@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-13-cave-gallery-safe-dots",
+  "priority": 7,
+  "summary": {
+    "ru": "При открытии природной пещеры зелёные точки вокруг неё больше не ставятся — её безопасность неизвестна.",
+    "en": "Opening a natural cave gallery no longer marks nearby walls as safe."
+  },
+  "detail": {
+    "ru": "Зелёные точки в шахте означают, что выкопанный тайл не обсыпался. Если открывается природная пещера, точки вокруг этой полости не появляются: неизвестно, безопасна ли она.",
+    "en": "Green dots in a mine mark a dug tile that did not cave in. If a natural cave gallery opens, dots are not placed around that cavity — its safety is unknown."
+  }
+}

@@ -67,20 +67,20 @@ class MapSearchFrontTest {
         String nmap = read("src/nurgling/widgets/NMapWnd.java");
         String tools = read("src/nurgling/widgets/MapToolsWindow.java");
         String gui = Files.readString(Paths.get("src/nurgling/NGameUI.java"));
-        assertEquals(6, count(nmap, "MapSearchFront.showInFront"),
+        assertEquals(8, count(nmap, "MapSearchFront.showInFront"),
                 "NMapWnd open* show/re-show paths");
         assertEquals(9, count(tools, "MapSearchFront.showInFront"),
                 "MapToolsWindow toggle/open* show paths");
         assertTrue(nmap.contains("openForagingSearch"));
         assertTrue(nmap.contains("openTreeSearch"));
         assertTrue(nmap.contains("openFishSearch"));
-        assertFalse(nmap.contains("openQuarryartzSearch"));
+        assertTrue(nmap.contains("openQuarryartzSearch"));
         assertFalse(nmap.contains("openGemstoneSearch"));
         assertFalse(nmap.contains("openProspectingSearch"));
         assertFalse(nmap.contains("openOresSearch"));
         assertTrue(nmap.contains("openMineralSearch(ProspectKind.ORE)"));
         assertTrue(nmap.contains("openMineralSearch(ProspectKind.GEM)"));
-        assertTrue(nmap.contains("openMineralSearch(ProspectKind.STONE)"));
+        assertFalse(nmap.contains("openMineralSearch(ProspectKind.STONE)"));
         assertTrue(tools.contains("openTerrainSearch"));
         assertTrue(tools.contains("openTerrainResources"));
         assertTrue(tools.contains("openTreeSearch"));
@@ -97,8 +97,8 @@ class MapSearchFrontTest {
         assertTrue(nmap.contains("foragingBtn"));
         assertTrue(nmap.contains("oreBtn"));
         assertTrue(nmap.contains("gemBtn"));
-        assertTrue(nmap.contains("stoneBtn"));
-        assertFalse(nmap.contains("quarryartzBtn"));
+        assertFalse(nmap.contains("stoneBtn"));
+        assertTrue(nmap.contains("quarryartzBtn"));
         assertFalse(nmap.contains("oreSpotsBtn"));
         assertFalse(nmap.contains("MinesweeperOverlay"));
         assertTrue(Files.isRegularFile(Path.of("src/nurgling/widgets/OreSearchWindow.java")));

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-11-map-navigation",
+  "priority": 8,
+  "summary": {
+    "ru": "На карте проще ориентироваться: провинции, чанки и подсказки вех.",
+    "en": "The map is easier to read: provinces, chunks and milestone hints."
+  },
+  "detail": {
+    "ru": "На карте и миникарте появляются названия провинций, навигация по чанкам и подсказки, куда ставить веху. Переходы порталов учитывают текущий экземпляр.",
+    "en": "The map and minimap show province names, chunk navigation and hints for placing milestones. Portal travel respects the current instance."
+  }
+}

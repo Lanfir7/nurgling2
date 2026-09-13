@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-10-calendar-rain",
+  "priority": 8,
+  "summary": {
+    "ru": "В календаре одним щелчком включается и выключается дождь.",
+    "en": "The calendar toggles rain effects with one click."
+  },
+  "detail": {
+    "ru": "Откройте календарь: подсказка показывает, включены ли эффекты дождя. Щелчок выключает или включает их, не заходя в общие настройки графики.",
+    "en": "Open the calendar: the tooltip says whether rain effects are on. Click to disable or enable them without opening graphics settings."
+  }
+}

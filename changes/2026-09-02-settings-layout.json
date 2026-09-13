@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-02-settings-layout",
+  "priority": 6,
+  "summary": {
+    "ru": "Настройки ищутся по словам, а раскладку интерфейса можно взять пресетом.",
+    "en": "Settings are searchable, and HUD layout can start from a preset."
+  },
+  "detail": {
+    "ru": "Поиск стоит в заголовке окна настроек. При входе предлагаются схемы «классика», «боты» и «минимум»; их можно сбросить или обменяться кодом. Шкаф показывает характеристики на кукле; столы учёбы заполняются пачкой.",
+    "en": "Search sits in the settings window title. Login can apply Classic, Bots or Minimal HUD presets; share or reset them. The wardrobe doll shows stats; study desks can be filled as a batch."
+  }
+}

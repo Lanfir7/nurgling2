@@ -41,6 +41,8 @@ import nurgling.contextmenu.GobContextRegistry;
 import nurgling.i18n.L10n;
 import nurgling.widgets.*;
 import nurgling.widgets.craftatlas.CraftAtlasWindow;
+import nurgling.widgets.ReleaseNotesMenuButton;
+import nurgling.widgets.ReleaseNotesWindow;
 
 public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.Handler {
     private static final int blpw = UI.scale(142), brpw = UI.scale(142);
@@ -77,6 +79,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	public NStorageItemsWidget storageItemsWidget;
 	public EncyclopediaWindow encyclopediaWindow;
 	public CraftAtlasWindow craftAtlas;
+	public ReleaseNotesWindow releaseNotes;
 	public BlueprintWidget blueprintWidget;
 	public nurgling.widgets.NBasePlannerWidget basePlanner;
     public HelpWnd help;
@@ -323,6 +326,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	encyclopediaWindow.hide();
 	add(craftAtlas = new CraftAtlasWindow(menu), new Coord(sz.x/2 - UI.scale(580), sz.y/2 - UI.scale(350)));
 	craftAtlas.hide();
+	add(releaseNotes = new ReleaseNotesWindow(), new Coord(sz.x/2 - UI.scale(320), sz.y/2 - UI.scale(215)));
+	releaseNotes.hide();
 	add(blueprintWidget = new BlueprintWidget(), new Coord(sz.x/2 - NGUIInfo.xs/2,sz.y/5 ));
 	blueprintWidget.hide();
 	add(basePlanner = new nurgling.widgets.NBasePlannerWidget(), new Coord(sz.x/2 - NGUIInfo.xs/2, sz.y/5));
@@ -1441,6 +1446,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		prev = add(new MenuCheckBox("rbtn/baseplanner/", kb_baseplanner, "Base planner"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(basePlanner)).click(() -> togglewnd(basePlanner));
 		prev = add(new MenuCheckBox("rbtn/storage/", kb_storage, L10n.get("storage.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(storageItemsWidget)).click(() -> togglewnd(storageItemsWidget));
 		prev = add(new MenuCheckBox("rbtn/encyclopedia/", kb_craftAtlas, L10n.get("craft_atlas.title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(craftAtlas)).click(() -> togglewnd(craftAtlas));
+			add(new ReleaseNotesMenuButton(() -> togglewnd(releaseNotes)), prev.c.x, 0).state(() -> wndstate(releaseNotes));
 		pack();
 	}
 

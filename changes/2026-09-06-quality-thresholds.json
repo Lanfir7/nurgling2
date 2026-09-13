@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-quality-thresholds",
+  "priority": 5,
+  "summary": {
+    "ru": "Список порогов качества больше не обрезает поля и кнопки.",
+    "en": "The quality-thresholds list no longer clips fields and buttons."
+  },
+  "detail": {
+    "ru": "В настройках порогов качества колонка сдвинута так, что поля ввода и кнопки добавить/удалить остаются внутри списка при прокрутке.",
+    "en": "In quality-threshold settings the column is shifted so inputs and add/delete stay inside the list while scrolling."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-14-map-safety-tools",
+  "priority": 6,
+  "summary": {
+    "ru": "Карта удобнее управляет кварцем, а подсказки здоровья и опасных клеток стали точнее.",
+    "en": "The map handles Quarryartz more conveniently, while health and danger hints are more accurate."
+  },
+  "detail": {
+    "ru": "Кнопка кварца на карте включает его метки, а правый клик открывает поиск. Для лошадей показывается корректное здоровье, а помощник шахт не создаёт ложные опасные клетки после постройки галереи.",
+    "en": "The Quarryartz map button toggles its markers and right-click opens search. Horses show the correct health, and the mine helper no longer creates false danger tiles after building a cave gallery."
+  }
+}

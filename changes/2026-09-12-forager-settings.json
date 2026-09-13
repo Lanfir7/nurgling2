@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-12-forager-settings",
+  "priority": 9,
+  "summary": {
+    "ru": "У сборщика свои настройки: что поднимать, профили действий и маршруты на карте.",
+    "en": "Forager has its own settings: pickups, action profiles and map routes."
+  },
+  "detail": {
+    "ru": "Откройте Настройки → Forager. Задайте профиль, что подбирать (перетащите предмет, каталог или имя), нарисуйте маршрут на карте и зоны-исключения. Опасные кольца останавливают сборщика отдельно от видимости на карте.",
+    "en": "Open Settings → Forager. Set a profile, choose pickups (drag an item, catalogue or name), paint the route and exclusion zones. Dangerous rings can stop Forager independently of map visibility."
+  }
+}

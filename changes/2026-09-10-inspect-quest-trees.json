@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-10-inspect-quest-trees",
+  "priority": 6,
+  "summary": {
+    "ru": "Осмотр местности и цели квестов по деревьям стали точнее.",
+    "en": "Local inspect and quest tree targets are more accurate."
+  },
+  "detail": {
+    "ru": "Окно осмотра лучше держит местные сведения. Помощник квестов устойчивее отмечает деревья, которые ещё нужны по целям.",
+    "en": "The inspect window keeps local information more reliably. Quest Helper is steadier about marking trees still required by objectives."
+  }
+}

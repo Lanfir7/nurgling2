@@ -131,6 +131,8 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
     // Built lazily on first load() - constructing ForagerRouteMap here would NPE before gui.mmap exists.
     private ForagerRouteMap routeMap;
+    private Button mapOpenBtn;
+    private ForagerRouteMapWindow routeMapWindow;
     private TextEntry brushSizeEntry;
     private CheckBox avoidCliffsCheck;
     private TextEntry cliffBufferEntry;
@@ -399,7 +401,7 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
                 a = val;
                 if (currentRoute != null) {
                     currentRoute.avoidCliffs = val;
-                    routeMap.markDirty();
+                    markRouteMapsDirty();
                 }
             }
         }, UI.scale(ROW_LABEL_X));
@@ -416,6 +418,14 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
                 "forager.settings.max_branch_distance", "forager.settings.max_branch_distance_tip");
 
         mapAnchor = maxBranchDistanceEntry.parent;
+
+        mapOpenBtn = rsec.add(new Button(UI.scale(90), L10n.get("forager.settings.open_map")) {
+            @Override
+            public void click() {
+                openRouteMapWindow();
+            }
+        }, mapAnchor.pos("bl").add(UI.scale(0, 10)));
+        mapOpenBtn.settip(L10n.get("forager.settings.open_map_tip"));
 
         // ForagerRouteMap itself is built lazily - see ensureRouteMapBuilt(), called from load().
         routesSection.pack();
@@ -758,27 +768,92 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
     }
 
     private void sizeRouteMap() {
-        if (routeMap == null || scroll == null || mapAnchor == null || routesSection == null || !routesSection.isExpanded()) {
+        if (scroll == null || mapAnchor == null || routesSection == null || !routesSection.isExpanded()) {
             return;
         }
-        Coord pos = mapAnchor.parentpos(scroll.cont);
-        int remaining = scroll.sz.y - (pos.y + mapAnchor.sz.y + UI.scale(10)) - UI.scale(8);
+        if (mapOpenBtn != null) {
+            mapOpenBtn.move(mapAnchor.pos("bl").add(UI.scale(0, 10)));
+        }
+        if (routeMap == null) return;
+        Widget above = mapOpenBtn != null ? mapOpenBtn : mapAnchor;
+        int gap = mapOpenBtn != null ? UI.scale(6) : UI.scale(10);
+        Coord pos = above.parentpos(scroll.cont);
+        int remaining = scroll.sz.y - (pos.y + above.sz.y + gap) - UI.scale(8);
         int h = routeMapHeight(remaining, UI.scale(MAP_MIN_H), UI.scale(MAP_MAX_H));
         int w = Math.max(UI.scale(200), sectionWidth - UI.scale(20));
         routeMap.resize(new Coord(w, h));
-        routeMap.move(mapAnchor.pos("bl").add(UI.scale(0, 10)));
+        routeMap.move(above.pos("bl").add(UI.scale(0, gap)));
     }
 
     /** Builds the embedded route-editing map on first open, not in the constructor; idempotent. */
     private void ensureRouteMapBuilt() {
         if (routeMap != null) return;
 
-        routeMap = routesContent.add(new ForagerRouteMap(UI.scale(new Coord(520, 240)), NUtils.getGameUI().mmap.file), mapAnchor.pos("bl").add(UI.scale(0, 10)));
-        routeMap.onResetRequested = this::resetCurrentRoute;
+        Widget above = mapOpenBtn != null ? mapOpenBtn : mapAnchor;
+        int gap = mapOpenBtn != null ? UI.scale(6) : UI.scale(10);
+        routeMap = routesContent.add(new ForagerRouteMap(UI.scale(new Coord(520, 240)), NUtils.getGameUI().mmap.file), above.pos("bl").add(UI.scale(0, gap)));
+        bindRouteMap(routeMap);
         applyBrushSize();
 
         routesSection.pack();
         relayoutSections();
+    }
+
+    private void openRouteMapWindow() {
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.mmap == null || gui.mmap.file == null) return;
+        if (routeMapWindow != null && routeMapWindow.parent != null) {
+            routeMapWindow.raise();
+            routeMapWindow.show();
+            gui.setfocus(routeMapWindow);
+            return;
+        }
+        ForagerRouteMapWindow wnd = new ForagerRouteMapWindow(gui.mmap.file, routeMapWindowTitle());
+        wnd.onClosed = () -> {
+            if (routeMapWindow == wnd)
+                routeMapWindow = null;
+        };
+        routeMapWindow = wnd;
+        bindRouteMap(wnd.map);
+        if (routeMap != null)
+            wnd.map.copyViewFrom(routeMap);
+        applyBrushSize();
+        NUtils.addCentered(gui, wnd);
+    }
+
+    private String routeMapWindowTitle() {
+        if (currentRoute != null && currentRoute.name != null && !currentRoute.name.isEmpty())
+            return L10n.get("forager.settings.route_map_title", currentRoute.name);
+        return L10n.get("forager.settings.open_map");
+    }
+
+    private void bindRouteMap(ForagerRouteMap map) {
+        map.setRoute(currentRoute);
+        map.onResetRequested = this::resetCurrentRoute;
+        map.onChange = this::refreshRouteMapOverlays;
+    }
+
+    private void refreshRouteMapOverlays() {
+        if (routeMap != null)
+            routeMap.refreshOverlays();
+        if (routeMapWindow != null)
+            routeMapWindow.map.refreshOverlays();
+    }
+
+    private void markRouteMapsDirty() {
+        if (routeMap != null)
+            routeMap.markDirty();
+        if (routeMapWindow != null)
+            routeMapWindow.map.markDirty();
+    }
+
+    private void bindCurrentRouteToMaps() {
+        if (routeMap != null)
+            routeMap.setRoute(currentRoute);
+        if (routeMapWindow != null) {
+            routeMapWindow.map.setRoute(currentRoute);
+            routeMapWindow.cap = routeMapWindowTitle();
+        }
     }
 
     // Intercepted here so routeMap gets wheel events for zoom before the outer Scrollport consumes them for page-scrolling.
@@ -895,6 +970,13 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
         if (gui != null) {
             gui.activeRouteEditor = null;
         }
+    }
+
+    @Override
+    public void destroy() {
+        if (routeMapWindow != null && routeMapWindow.parent != null)
+            routeMapWindow.reqdestroy();
+        super.destroy();
     }
 
     @Override
@@ -1063,7 +1145,7 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
         }
         routeLoadFailed = false;
         currentRoute = result.path();
-        routeMap.setRoute(currentRoute);
+        bindCurrentRouteToMaps();
         avoidCliffsCheck.a = currentRoute.avoidCliffs;
         cliffBufferEntry.settext(String.valueOf(currentRoute.cliffBufferTiles));
         maxBranchesEntry.settext(currentRoute.maxBranches < 0 ? "" : String.valueOf(currentRoute.maxBranches));
@@ -1080,9 +1162,7 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
     private void clearRouteUI() {
         routeLoadFailed = false;
         currentRoute = null;
-        if (routeMap != null) {
-            routeMap.setRoute(null);
-        }
+        bindCurrentRouteToMaps();
         avoidCliffsCheck.a = false;
         cliffBufferEntry.settext("1");
         maxBranchesEntry.settext("");
@@ -1103,7 +1183,10 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
         currentRoute.maxBranchDistance = parseIntOrNoCap(maxBranchDistanceEntry.text());
         try {
             ForagerRouteStore.save(currentRoute);
-            routeMap.markClean();
+            if (routeMap != null)
+                routeMap.markClean();
+            if (routeMapWindow != null)
+                routeMapWindow.map.markClean();
         } catch (Exception e) {
             NUtils.getGameUI().error("Failed to save route: " + e.getMessage());
         }
@@ -1131,14 +1214,16 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
     /** Pushes the brush-size field's value into routeMap - a pure editing-tool preference, not persisted route data. */
     private void applyBrushSize() {
-        if (routeMap == null) return;
         int v;
         try {
             v = Integer.parseInt(brushSizeEntry.text().trim());
         } catch (Exception e) {
             v = ForagerRouteMap.DEFAULT_BRUSH_SIZE_TILES;
         }
-        routeMap.setBrushSizeTiles(v);
+        if (routeMap != null)
+            routeMap.setBrushSizeTiles(v);
+        if (routeMapWindow != null)
+            routeMapWindow.map.setBrushSizeTiles(v);
     }
 
     private void addRoute() {

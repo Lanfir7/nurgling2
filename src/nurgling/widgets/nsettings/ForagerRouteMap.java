@@ -54,6 +54,16 @@ public class ForagerRouteMap extends NMiniMap {
         }
     }
 
+    /** Copies pan/zoom so a newly opened editor starts on the same patch as the settings preview. */
+    public void copyViewFrom(ForagerRouteMap other) {
+        if (other == null) return;
+        zoomlevel = other.zoomlevel;
+        maglevel = other.maglevel;
+        follow = other.follow;
+        setloc = other.setloc;
+        dloc = other.dloc;
+    }
+
     /** For edits the panel makes directly to the route model outside this widget (e.g. Avoid cliffs). */
     public void markDirty() {
         dirty = true;
@@ -407,6 +417,11 @@ public class ForagerRouteMap extends NMiniMap {
 
     private void invalidateExclusionCache() {
         exclusionDirty = true;
+    }
+
+    /** Re-reads exclusion tiles from the shared route model after another editor changed it. */
+    public void refreshOverlays() {
+        invalidateExclusionCache();
     }
 
     private void rebuildExclusionRunsIfNeeded() {

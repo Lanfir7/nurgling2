@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-hotkey-presets",
+  "priority": 9,
+  "summary": {
+    "ru": "Наборы горячих клавиш: создать, скопировать кодом и вставить чужой пресет.",
+    "en": "Hotkey presets: create one, copy a code and paste someone else's layout."
+  },
+  "detail": {
+    "ru": "На странице Hotkeys выберите пресет, создайте свой, скопируйте код в буфер или вставьте чужой. Жесты «один предмет» и «загрузить всё топливо» снова работают как раньше.",
+    "en": "On the Hotkeys page pick a preset, create your own, copy a code or paste one. Single-item held use and load-all fuel gestures work as before."
+  }
+}

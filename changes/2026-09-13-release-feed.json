@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-13-release-feed",
+  "priority": 8,
+  "summary": {
+    "ru": "В меню появился раздел «Что нового»: коротко об обновлениях, с подробностями по желанию.",
+    "en": "A new What's new menu entry keeps updates short, with optional details."
+  },
+  "detail": {
+    "ru": "Нажмите «i» справа в верхнем ряду главного меню, над энциклопедией. Подсказка кнопки — «Что нового». Сначала видны главные изменения; подробности и предыдущие выпуски открываются отдельно. Точка отмечает непрочитанную новость. Лента работает без интернета и не открывается сама.",
+    "en": "Click i at the right of the top menu row, above the encyclopedia, for What's new. Read the highlights, expand the details or browse earlier updates. A dot marks unread news. The feed works offline and never opens automatically."
+  }
+}

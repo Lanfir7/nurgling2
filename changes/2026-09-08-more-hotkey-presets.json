@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-more-hotkey-presets",
+  "priority": 8,
+  "summary": {
+    "ru": "Пресеты Hurricane и Ender плюс починенные жесты семян, руки и свалок.",
+    "en": "Hurricane and Ender presets, with seed, held-item and stockpile gestures restored."
+  },
+  "detail": {
+    "ru": "На странице Hotkeys доступны пресеты Hurricane и Ender без внутренних конфликтов. Снова работают взаимодействие с семенами, предмет в руке и перенос со свалок.",
+    "en": "The Hotkeys page includes Hurricane and Ender presets without internal conflicts. Seed interaction, held-item use and stockpile transfers work again."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-floor-overlay",
+  "priority": 6,
+  "summary": {
+    "ru": "Подсветка пола всегда включена полупрозрачной; переключателей на карте больше нет.",
+    "en": "The floor overlay stays on at a translucent alpha; map toggles are gone."
+  },
+  "detail": {
+    "ru": "Заливка пола рисуется всегда, слегка прозрачная. Кнопок включения на карте нет — отдельно её гасить не нужно.",
+    "en": "Floor tint is always drawn, slightly transparent. The map no longer has overlay toggles — you do not switch it off separately."
+  }
+}

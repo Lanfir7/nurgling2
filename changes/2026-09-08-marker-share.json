@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-marker-share",
+  "priority": 7,
+  "summary": {
+    "ru": "Метку карты можно скопировать кодом, вставить из буфера и пойти к ней.",
+    "en": "A map marker can be copied as a code, pasted from the clipboard and travelled to."
+  },
+  "detail": {
+    "ru": "У метки скопируйте код и передайте другому. При вставке клиент предложит добавить точку и построить путь, если сетка уже есть на вашей карте.",
+    "en": "Copy a marker code and share it. On paste the client offers to add the point and route there if that grid is already on your map."
+  }
+}

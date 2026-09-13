@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-02-map-database",
+  "priority": 7,
+  "summary": {
+    "ru": "Карта поселения: метки, позиции соседей, импорт и запись разведанного.",
+    "en": "Village map: markers, neighbor positions, import and explored-area recording."
+  },
+  "detail": {
+    "ru": "В настройках базы — мастер подключения, жители, обмен метками и показ игроков на карте. Карту можно выгрузить и влить. На миникарте — пинг; разведанные клетки пишутся отдельно. Инструменты карты ищут пробы и значки.",
+    "en": "Database settings include a host wizard, villagers, shared markers and live peer positions. Export or import the map. The minimap can ping; explored tiles are recorded separately. Map tools search samples and icons."
+  }
+}

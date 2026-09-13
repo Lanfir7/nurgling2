@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-14-forager-route-start",
+  "priority": 8,
+  "summary": {
+    "ru": "Собиратель начинает маршрут с ближайшей доступной точки, а не возвращается к самому началу.",
+    "en": "Forager starts from the nearest reachable route point instead of returning to the beginning."
+  },
+  "detail": {
+    "ru": "При запуске Собиратель выбирает ближайшую точку текущего участка и продолжает маршрут от неё. Это сокращает пустые переходы при старте посередине длинного пути.",
+    "en": "When started, Forager chooses the nearest point on the current segment and continues from there. This avoids an unnecessary walk back when you begin midway along a long route."
+  }
+}

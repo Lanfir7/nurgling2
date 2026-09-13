@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-02-quest-combat",
+  "priority": 8,
+  "summary": {
+    "ru": "Помощник квестов стал понятнее, а у цели в бою виден запас здоровья.",
+    "en": "Quest Helper is easier to scan, and the fight target shows health."
+  },
+  "detail": {
+    "ru": "В окне квестов цели сгруппированы, есть отслеживание и русские формулировки. Полоска HP над целью помнит урон в бою; ширину и сдвиг задают ползунки. При атаке можно автоматически надеть меч и щит.",
+    "en": "Quest Helper groups objectives, tracks targets and uses Russian wording. A health bar on the fight target persists through combat; sliders set width and offset. Attack can auto-equip sword and shield."
+  }
+}

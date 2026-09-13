@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-atlas-curiosities",
+  "priority": 9,
+  "summary": {
+    "ru": "В атласе таблица любопытностей: LP, время, вес, сортировка и растягивание.",
+    "en": "Craft Atlas lists curiosities with LP, time, weight, sorting and a resizable table."
+  },
+  "detail": {
+    "ru": "Откройте раздел Curiosities в атласе: колонки LP, реальное время, умственный вес и LP/час. Таблицу тянут за край, избранное и недавние фильтруются, есть справка поиска. Учитывается качество станка.",
+    "en": "Open Curiosities in Craft Atlas for LP, real study time, mental weight and LP/hour. Drag the table edge to resize; filter favorites and recent, and read search help. Workstation quality is included."
+  }
+}

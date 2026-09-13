@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-05-mantle-countdown",
+  "priority": 6,
+  "summary": {
+    "ru": "В подробном календаре виден обратный отсчёт до росы на манжетке.",
+    "en": "The detailed calendar counts down to Dewy Lady's Mantle in real time."
+  },
+  "detail": {
+    "ru": "Откройте календарь в подробном виде: для росы на манжетке показано оставшееся реальное время до события.",
+    "en": "Open the calendar in verbose view: Dewy Lady's Mantle shows remaining real-life time until the event."
+  }
+}

@@ -6,6 +6,7 @@ import nurgling.NUI;
 import nurgling.NUtils;
 import nurgling.actions.bots.MinesweeperSolver;
 import nurgling.conf.NMiningOverlayMemory;
+import nurgling.tools.NNoticeLog;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,6 +27,7 @@ public class MinesweeperDangerMarkers {
 
     private static final double UPDATE_INTERVAL = 0.3;
     private static final double DUST_WAIT = 0.8;
+    private static final double GALLERY_SUPPRESS = 2.0;
     private static final int RADIUS = 50;
     private static final int MINE_WATCH_RADIUS = 8;
     private static final int[][] NEIGHBORS = {
@@ -46,6 +48,8 @@ public class MinesweeperDangerMarkers {
     private final Map<Long, Boolean> prevMineable = new HashMap<>();
     private final Map<Long, Double> pendingBlanks = new HashMap<>();
     private final Set<Long> confirmedBlanks = new HashSet<>();
+    private long galleryNoticeMark;
+    private double gallerySuppressLeft;
     private NMiningOverlayMemory memory;
     private String memUser;
     private String memChr;
@@ -161,6 +165,38 @@ public class MinesweeperDangerMarkers {
         return green;
     }
 
+    static boolean discardGalleryBlankTransitions(NNoticeLog notices, long since,
+                                                  Map<Long, Double> pending,
+                                                  Set<Long> confirmed) {
+        if (notices == null || !notices.contains(since, "cave gallery")) {
+            return false;
+        }
+        pending.clear();
+        confirmed.clear();
+        return true;
+    }
+
+    static boolean recordMinedTileTransition(Boolean previousMineable, Boolean mineable,
+                                             boolean suppressFreshBlanks, long tileKey,
+                                             Map<Long, Double> pending,
+                                             Set<Long> confirmed) {
+        if (suppressFreshBlanks || !Boolean.TRUE.equals(previousMineable)
+                || !Boolean.FALSE.equals(mineable)) {
+            return false;
+        }
+        pending.put(tileKey, 0.0);
+        confirmed.remove(tileKey);
+        return true;
+    }
+
+    static double nextGallerySuppress(boolean noticedNow, boolean suppressedBurst,
+                                      double remaining, double dt, double window) {
+        if (noticedNow || suppressedBurst) {
+            return window;
+        }
+        return Math.max(0.0, remaining - dt);
+    }
+
     static Coord snapshotPlayerTile(Supplier<Coord2d> playerPosition) {
         Coord2d position = playerPosition.get();
         return position == null ? null : position.div(tilesz).floor();
@@ -183,6 +219,8 @@ public class MinesweeperDangerMarkers {
             prevMineable.clear();
             pendingBlanks.clear();
             confirmedBlanks.clear();
+            galleryNoticeMark = gui.notices.seq();
+            gallerySuppressLeft = 0;
             numberSnapshots.clear();
             solver = new MinesweeperSolver(gui);
             solverGui = gui;
@@ -195,7 +233,13 @@ public class MinesweeperDangerMarkers {
         if (snapshotUpdate.refreshed) {
             snapshot.applyTo(solver);
         }
-        observeMinedTiles(playerTile, dt);
+        boolean galleryBurst = discardGalleryBlankTransitions(
+                gui.notices, galleryNoticeMark, pendingBlanks, confirmedBlanks);
+        boolean suppressFreshBlanks = galleryBurst || gallerySuppressLeft > 0;
+        boolean suppressedBurst = observeMinedTiles(playerTile, dt, suppressFreshBlanks);
+        gallerySuppressLeft = nextGallerySuppress(
+                galleryBurst, suppressedBurst, gallerySuppressLeft, dt, GALLERY_SUPPRESS);
+        galleryNoticeMark = gui.notices.seq();
 
         if (snapshotUpdate.refreshed) {
             persistLiveNumbers(gui, snapshot);
@@ -255,7 +299,8 @@ public class MinesweeperDangerMarkers {
         persistGreens(gui);
     }
 
-    private void observeMinedTiles(Coord playerTile, double dt) {
+    private boolean observeMinedTiles(Coord playerTile, double dt, boolean suppressFreshBlanks) {
+        boolean suppressedBurst = false;
         for (int x = playerTile.x - MINE_WATCH_RADIUS; x <= playerTile.x + MINE_WATCH_RADIUS; x++) {
             for (int y = playerTile.y - MINE_WATCH_RADIUS; y <= playerTile.y + MINE_WATCH_RADIUS; y++) {
                 Boolean cur = solver.mineableOrUnknown(x, y);
@@ -264,9 +309,12 @@ public class MinesweeperDangerMarkers {
                 }
                 long k = key(x, y);
                 Boolean prev = prevMineable.put(k, cur);
-                if (Boolean.TRUE.equals(prev) && Boolean.FALSE.equals(cur)) {
-                    pendingBlanks.put(k, 0.0);
-                    confirmedBlanks.remove(k);
+                if (recordMinedTileTransition(prev, cur, suppressFreshBlanks, k,
+                        pendingBlanks, confirmedBlanks)) {
+                    continue;
+                }
+                if (suppressFreshBlanks && Boolean.TRUE.equals(prev) && Boolean.FALSE.equals(cur)) {
+                    suppressedBurst = true;
                 }
             }
         }
@@ -295,6 +343,7 @@ public class MinesweeperDangerMarkers {
                 Math.abs(keyX(k) - playerTile.x) > prune || Math.abs(keyY(k) - playerTile.y) > prune);
         prevMineable.entrySet().removeIf(e ->
                 Math.abs(keyX(e.getKey()) - playerTile.x) > prune || Math.abs(keyY(e.getKey()) - playerTile.y) > prune);
+        return suppressedBurst;
     }
 
     private NMiningOverlayMemory resolveMemory(NGameUI gui) {

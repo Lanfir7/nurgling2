@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-quest-tree-biomes",
+  "priority": 6,
+  "summary": {
+    "ru": "Помощник квестов подсвечивает биомы деревьев по текущим целям.",
+    "en": "Quest Helper highlights tree biomes for the current objectives."
+  },
+  "detail": {
+    "ru": "Когда в квесте нужно дерево, Quest Helper отмечает подходящие биомы, чтобы не искать породу наугад по всей карте.",
+    "en": "When a quest wants a tree, Quest Helper marks matching biomes so you are not guessing the species across the whole map."
+  }
+}

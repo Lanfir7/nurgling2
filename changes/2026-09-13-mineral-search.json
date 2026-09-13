@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-13-mineral-search",
+  "priority": 9,
+  "summary": {
+    "ru": "На карте поиск минералов: руда, камни и самоцветы по типу и качеству.",
+    "en": "The map can search minerals: ore, stone and gems by type and quality."
+  },
+  "detail": {
+    "ru": "На панели карты кнопки руды, камня и самоцветов. ПКМ открывает Mineral Search: категория, тип и минимальное качество по уже записанным меткам.",
+    "en": "Map tools have ore, stone and gemstone toggles. Right-click opens Mineral Search: category, type and minimum quality over recorded marks."
+  }
+}

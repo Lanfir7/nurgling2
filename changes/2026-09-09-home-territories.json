@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-09-home-territories",
+  "priority": 8,
+  "summary": {
+    "ru": "В настройках мира можно сохранить текущие домашние территории.",
+    "en": "World settings can save your current home territories."
+  },
+  "detail": {
+    "ru": "Откройте Настройки → обустройство дома. Если клиент видит претензию или деревню, сохраните текущий дом; список зон сворачивается, чтобы не заслонять карту.",
+    "en": "Open Settings → home setup. When a claim or village is detected, save the current home; area lists collapse so they do not cover the map."
+  }
+}

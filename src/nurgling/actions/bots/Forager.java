@@ -194,12 +194,19 @@ public class Forager implements Action {
                     "waypoints have a ChunkNav grid to bridge from)");
         }
 
-        // Get first waypoint to navigate to start
+        // Pick the closest recorded point that resolves on the route's current segment, then
+        // continue only through the route gaps that leave that waypoint. Long gaps are split
+        // into several sections, so section index and waypoint index are not interchangeable.
         MiniMap.Location sessloc = gui.mmap != null ? gui.mmap.sessloc : null;
         if(sessloc == null) {
             return Results.ERROR("Cannot get sessloc");
         }
-        Coord2d startPos = path.waypoints.get(0).toWorldCoord(sessloc);
+        Gob startPlayer = NUtils.player();
+        Coord2d playerStartPos = startPlayer != null ? startPlayer.rc : null;
+        int startWaypointIndex = nearestResolvableWaypointIndex(path, sessloc, playerStartPos);
+        gui.activeBotWaypointIndex = startWaypointIndex;
+        ForagerWaypoint startWaypoint = path.waypoints.get(startWaypointIndex);
+        Coord2d startPos = startWaypoint.toWorldCoord(sessloc);
         if(startPos == null) {
             return Results.ERROR("Cannot get start position - waypoint not in current segment");
         }
@@ -212,7 +219,7 @@ public class Forager implements Action {
         }
 
         // Only run this waypoint's steps if we actually reached it.
-        if (runWaypointSteps(gui, path.waypoints.get(0))) {
+        if (runWaypointSteps(gui, startWaypoint)) {
             return Results.SUCCESS();
         }
 
@@ -223,7 +230,7 @@ public class Forager implements Action {
         }
 
         // Main loop through sections
-        for (int i = 0; i < path.getSectionCount(); i++)
+        for (int i = firstSectionIndexAtOrAfterWaypoint(path, startWaypointIndex); i < path.getSectionCount(); i++)
         {
             ForagerSection section = path.getSection(i);
             if (section == null) continue;
@@ -483,6 +490,48 @@ public class Forager implements Action {
             ForagerSection regenerated = path.getSection(s);
             if (regenerated != null && regenerated.waypointIndex > completedWaypointIndex) {
                 return s;
+            }
+        }
+        return path.getSectionCount();
+    }
+
+    /** Returns the closest waypoint whose world position can be resolved on the current segment. */
+    static int nearestResolvableWaypointIndex(ForagerPath path, MiniMap.Location sessloc, Coord2d playerWorldPos) {
+        if (path == null || path.waypoints == null || path.waypoints.isEmpty()
+                || sessloc == null || playerWorldPos == null) {
+            return 0;
+        }
+
+        int nearestIndex = 0;
+        double nearestDistance = Double.POSITIVE_INFINITY;
+        for (int i = 0; i < path.waypoints.size(); i++) {
+            ForagerWaypoint waypoint = path.waypoints.get(i);
+            if (waypoint == null) {
+                continue;
+            }
+            Coord2d waypointWorldPos = waypoint.toWorldCoord(sessloc);
+            if (waypointWorldPos == null) {
+                continue;
+            }
+            double distance = playerWorldPos.dist(waypointWorldPos);
+            // Strictly closer preserves the earlier route position on ties.
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestIndex = i;
+            }
+        }
+        return nearestIndex;
+    }
+
+    /** Finds the first section that covers the chosen waypoint's outgoing gap. */
+    static int firstSectionIndexAtOrAfterWaypoint(ForagerPath path, int waypointIndex) {
+        if (path == null) {
+            return 0;
+        }
+        for (int sectionIndex = 0; sectionIndex < path.getSectionCount(); sectionIndex++) {
+            ForagerSection section = path.getSection(sectionIndex);
+            if (section != null && section.waypointIndex >= waypointIndex) {
+                return sectionIndex;
             }
         }
         return path.getSectionCount();

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-02-workstation-menus",
+  "priority": 7,
+  "summary": {
+    "ru": "У печей, костров и телег появились быстрые действия: топливо, жаркое, разгрузка.",
+    "en": "Kilns, fires and carts gained quick actions for fuel, roasting and unloading."
+  },
+  "detail": {
+    "ru": "Ctrl+ПКМ по печи или плавильне — заправка, поджиг и таблица топлива. У костра — вертел. У телеги и повозки — выгрузка в ваши зоны. Направление заполнения свалок задаётся у зоны.",
+    "en": "Ctrl+right-click a kiln or smelter to fuel, light and see the fuel table. Bonfires get spit-roast; carts unload into your zones. Pile-fill direction is set on the zone."
+  }
+}

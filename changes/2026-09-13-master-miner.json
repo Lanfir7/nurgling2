@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-13-master-miner",
+  "priority": 8,
+  "summary": {
+    "ru": "Master Miner и настройки добычи: пороги камня и руды, метки на карте.",
+    "en": "Master Miner and mining settings: stone and ore thresholds and map marks."
+  },
+  "detail": {
+    "ru": "Бот Master Miner в категории животных/добычи смотрит, что вы копаете, и бросает камень ниже порога. В Настройках → Mining Mastery задайте пороги и что отмечать на карте.",
+    "en": "Master Miner (mining bots) watches what you mine and drops stone below your threshold. Settings → Mining Mastery sets thresholds and which finds to mark on the map."
+  }
+}

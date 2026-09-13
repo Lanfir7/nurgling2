@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-quest-credo",
+  "priority": 7,
+  "summary": {
+    "ru": "В помощнике квестов у строк TASKS виден прогресс кредо.",
+    "en": "Quest Helper shows credo progress on TASKS rows."
+  },
+  "detail": {
+    "ru": "Откройте Quest Helper: у заданий категории TASKS рядом написан прогресс кредо и уровня, без лишних счётчиков групп.",
+    "en": "Open Quest Helper: TASKS rows show credo and level progress without dummy group counts."
+  }
+}

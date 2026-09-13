@@ -1,0 +1,523 @@
+{
+  "schema": 1,
+  "processed": [
+    "2026-09-02-compass-hud",
+    "2026-09-02-map-database",
+    "2026-09-02-quest-combat",
+    "2026-09-02-settings-layout",
+    "2026-09-02-workstation-menus",
+    "2026-09-04-compass-animals",
+    "2026-09-04-craft-atlas",
+    "2026-09-04-kiln-time-tooltips",
+    "2026-09-05-atlas-collect",
+    "2026-09-05-duck-manager",
+    "2026-09-05-mantle-countdown",
+    "2026-09-05-spec-search",
+    "2026-09-05-study-desks-transfers",
+    "2026-09-06-atlas-curiosities",
+    "2026-09-06-atlas-stock-filters",
+    "2026-09-06-fight-move-tabs",
+    "2026-09-06-floor-overlay",
+    "2026-09-06-quality-thresholds",
+    "2026-09-06-quest-credo",
+    "2026-09-06-sidebar-bags",
+    "2026-09-06-storage-clear",
+    "2026-09-08-dropdown-contrast",
+    "2026-09-08-feedback-form",
+    "2026-09-08-fight-row-height",
+    "2026-09-08-hotkey-presets",
+    "2026-09-08-hotkeys-settings",
+    "2026-09-08-marker-share",
+    "2026-09-08-more-hotkey-presets",
+    "2026-09-08-object-labels",
+    "2026-09-08-quest-tree-biomes",
+    "2026-09-09-gob-minimap-icon",
+    "2026-09-09-home-territories",
+    "2026-09-10-atlas-gilding-columns",
+    "2026-09-10-calendar-rain",
+    "2026-09-10-indoor-homes",
+    "2026-09-10-inspect-quest-trees",
+    "2026-09-10-storage-wipe",
+    "2026-09-11-fuel-ovens",
+    "2026-09-11-map-navigation",
+    "2026-09-12-crop-farmers",
+    "2026-09-12-forager-settings",
+    "2026-09-12-irrlight-tansy",
+    "2026-09-13-animals-map-tools",
+    "2026-09-13-master-miner",
+    "2026-09-13-mineral-search",
+    "2026-09-13-release-feed"
+  ],
+  "releases": [
+    {
+      "id": "2.103.197",
+      "date": "2026-09-13",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В меню появился раздел «Что нового»: коротко об обновлениях, с подробностями по желанию."
+        ],
+        "en": [
+          "A new What's new menu entry keeps updates short, with optional details."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Нажмите «i» справа в верхнем ряду главного меню, над энциклопедией. Подсказка кнопки — «Что нового». Сначала видны главные изменения; подробности и предыдущие выпуски открываются отдельно. Точка отмечает непрочитанную новость. Лента работает без интернета и не открывается сама."
+        ],
+        "en": [
+          "Click i at the right of the top menu row, above the encyclopedia, for What's new. Read the highlights, expand the details or browse earlier updates. A dot marks unread news. The feed works offline and never opens automatically."
+        ]
+      }
+    },
+    {
+      "id": "2.103.195",
+      "date": "2026-09-13",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "На карте поиск минералов: руда, камни и самоцветы по типу и качеству.",
+          "Master Miner и настройки добычи: пороги камня и руды, метки на карте.",
+          "Боты животных собраны в свою категорию; у кулинарной книги — перезагрузка."
+        ],
+        "en": [
+          "The map can search minerals: ore, stone and gems by type and quality.",
+          "Master Miner and mining settings: stone and ore thresholds and map marks.",
+          "Animal bots sit in their own category; the cookbook has a reload button."
+        ]
+      },
+      "details": {
+        "ru": [
+          "На панели карты кнопки руды, камня и самоцветов. ПКМ открывает Mineral Search: категория, тип и минимальное качество по уже записанным меткам.",
+          "Бот Master Miner в категории животных/добычи смотрит, что вы копаете, и бросает камень ниже порога. В Настройках → Mining Mastery задайте пороги и что отмечать на карте.",
+          "В выборе ботов появился раздел Animals. В кулинарной книге кнопка Reload обновляет данные. Значки руды, камня и самоцветов на карте обновлены."
+        ],
+        "en": [
+          "Map tools have ore, stone and gemstone toggles. Right-click opens Mineral Search: category, type and minimum quality over recorded marks.",
+          "Master Miner (mining bots) watches what you mine and drops stone below your threshold. Settings → Mining Mastery sets thresholds and which finds to mark on the map.",
+          "The bot picker has an Animals section. Cookbook Reload refreshes its data. Ore, stone and gemstone map icons are updated."
+        ]
+      }
+    },
+    {
+      "id": "2.103.193",
+      "date": "2026-09-12",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "У сборщика свои настройки: что поднимать, профили действий и маршруты на карте.",
+          "Боты поля: редис, арбуз и белый лук — обычный посев и качественные делянки.",
+          "Бот Irrlight ловит огоньки у тигля; Tansy натирает кожу до 10 стаков."
+        ],
+        "en": [
+          "Forager has its own settings: pickups, action profiles and map routes.",
+          "Field bots for radish, watermelon and white onion, including quality patches.",
+          "Irrlight Farmer farms lights at a crucible; Apply Tansy keeps ten scent stacks."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте Настройки → Forager. Задайте профиль, что подбирать (перетащите предмет, каталог или имя), нарисуйте маршрут на карте и зоны-исключения. Опасные кольца останавливают сборщика отдельно от видимости на карте.",
+          "В меню ботов — фермеры редиса, арбуза и белого лука, каждый с вариантом качества. Нужны зоны crop/seed (и cropQ/seedQ), склад урожая и по желанию корыто для месива.",
+          "Irrlight Farmer в меню ботов: встаньте у горящего тигля с прутком, зона Put для Irrlight и по желанию топливо-ветки. Apply Tansy берёт пижму из Take и поддерживает бафф, а не мажет только при нуле."
+        ],
+        "en": [
+          "Open Settings → Forager. Set a profile, choose pickups (drag an item, catalogue or name), paint the route and exclusion zones. Dangerous rings can stop Forager independently of map visibility.",
+          "The bot menu has radish, watermelon and white onion farmers, each with a quality variant. Mark crop/seed (and cropQ/seedQ) zones, a harvest Put area, and optionally a trough for swill.",
+          "Irrlight Farmer is in the bot menu: stand by a lit crucible with a bar, mark an Irrlight Put zone and optional branch fuel. Apply Tansy takes tansy from Take and tops the buff up rather than only at zero."
+        ]
+      }
+    },
+    {
+      "id": "2.103.192",
+      "date": "2026-09-11",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "На карте проще ориентироваться: провинции, чанки и подсказки вех.",
+          "Печи можно заправить и зажечь из меню объекта."
+        ],
+        "en": [
+          "The map is easier to read: provinces, chunks and milestone hints.",
+          "Ovens can be fueled and lit from the object menu."
+        ]
+      },
+      "details": {
+        "ru": [
+          "На карте и миникарте появляются названия провинций, навигация по чанкам и подсказки, куда ставить веху. Переходы порталов учитывают текущий экземпляр.",
+          "ПКМ по печи — действие «заправить и зажечь». Бот обходит ваши печи, кладёт топливо и поджигает, не открывая каждую вручную."
+        ],
+        "en": [
+          "The map and minimap show province names, chunk navigation and hints for placing milestones. Portal travel respects the current instance.",
+          "Right-click an oven for Fuel and light ovens. The action walks your ovens, adds fuel and lights them without opening each one by hand."
+        ]
+      }
+    },
+    {
+      "id": "2.103.191",
+      "date": "2026-09-10",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В календаре одним щелчком включается и выключается дождь.",
+          "Осмотр местности и цели квестов по деревьям стали точнее."
+        ],
+        "en": [
+          "The calendar toggles rain effects with one click.",
+          "Local inspect and quest tree targets are more accurate."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте календарь: подсказка показывает, включены ли эффекты дождя. Щелчок выключает или включает их, не заходя в общие настройки графики.",
+          "Окно осмотра лучше держит местные сведения. Помощник квестов устойчивее отмечает деревья, которые ещё нужны по целям."
+        ],
+        "en": [
+          "Open the calendar: the tooltip says whether rain effects are on. Click to disable or enable them without opening graphics settings.",
+          "The inspect window keeps local information more reliably. Quest Helper is steadier about marking trees still required by objectives."
+        ]
+      }
+    },
+    {
+      "id": "2.103.190",
+      "date": "2026-09-10",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Домашние зоны внутри помещений запоминаются: авто, вручную или выключено.",
+          "В таблице атласа видны слоты, атрибуты и шанс инкрустации.",
+          "Складскую базу дома можно целиком очистить и проиндексировать заново."
+        ],
+        "en": [
+          "Indoor home zones are remembered: auto, manual or inactive.",
+          "The atlas table shows gilding slots, attributes and insertion chance.",
+          "The home storage database can be wiped and indexed again from scratch."
+        ]
+      },
+      "details": {
+        "ru": [
+          "В настройках дома включите внутренние зоны. Клиент учит дом при проходе портала, показывает экземпляры в навигации чанков и отличает унаследованный статус. Можно пометить или снять дом вручную.",
+          "В таблице атласа откройте колонки слотов, принимаемых атрибутов и диапазона шанса инкрустации — удобно сравнивать гильдии не заходя в карточку.",
+          "В настройках дома — Wipe All Storage Items. После подтверждения стираются записанные предметы и контейнеры; они появятся снова, когда вы откроете ящики дома."
+        ],
+        "en": [
+          "In home settings turn on indoor zones. The client learns a home when you take a portal, shows instances in chunk nav and reports inherited status. You can mark or unmark a home by hand.",
+          "In the atlas table enable columns for gilding slots, accepted attributes and chance range so you can compare insertions without opening each card.",
+          "Home settings include Wipe All Storage Items. After confirm, stored items and container locations are deleted and fill in again as you use chests at home."
+        ]
+      }
+    },
+    {
+      "id": "2.103.189",
+      "date": "2026-09-09",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В настройках мира можно сохранить текущие домашние территории.",
+          "В настройке объекта можно показать его значок на миникарте."
+        ],
+        "en": [
+          "World settings can save your current home territories.",
+          "Object configuration can show that object's icon on the minimap."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте Настройки → обустройство дома. Если клиент видит претензию или деревню, сохраните текущий дом; список зон сворачивается, чтобы не заслонять карту.",
+          "Откройте настройку объекта (контекстное меню) и включите значок на миникарте, если точку нужно видеть сверху."
+        ],
+        "en": [
+          "Open Settings → home setup. When a claim or village is detected, save the current home; area lists collapse so they do not cover the map.",
+          "Open the object configuration from the context menu and enable the minimap icon when you want that point visible from above."
+        ]
+      }
+    },
+    {
+      "id": "2.103.188",
+      "date": "2026-09-08",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Пресеты Hurricane и Ender плюс починенные жесты семян, руки и свалок.",
+          "Строки приёмов в окне боя больше не сжимаются в одну линию.",
+          "Выпадающие списки контрастнее, текст не прячется под рамкой."
+        ],
+        "en": [
+          "Hurricane and Ender presets, with seed, held-item and stockpile gestures restored.",
+          "Fight-window move rows no longer collapse into a single line.",
+          "Dropdowns have stronger contrast, and text no longer hides under the border."
+        ]
+      },
+      "details": {
+        "ru": [
+          "На странице Hotkeys доступны пресеты Hurricane и Ender без внутренних конфликтов. Снова работают взаимодействие с семенами, предмет в руке и перенос со свалок.",
+          "Список приёмов в окне боя держит минимальную высоту строки, так что названия и иконки остаются читаемыми.",
+          "Списки выбора в интерфейсе читаются на тёмном фоне, подписи не обрезаются рамкой пункта."
+        ],
+        "en": [
+          "The Hotkeys page includes Hurricane and Ender presets without internal conflicts. Seed interaction, held-item use and stockpile transfers work again.",
+          "The fight-window move list keeps a minimum row height so names and icons stay readable.",
+          "Dropdown lists read clearly on a dark background, and labels are not clipped by the item border."
+        ]
+      }
+    },
+    {
+      "id": "2.103.187",
+      "date": "2026-09-08",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Наборы горячих клавиш: создать, скопировать кодом и вставить чужой пресет.",
+          "Над табличками-знаками и пергаментами видны подписи содержимого."
+        ],
+        "en": [
+          "Hotkey presets: create one, copy a code and paste someone else's layout.",
+          "Icon signs and parchments can show labels of their contents."
+        ]
+      },
+      "details": {
+        "ru": [
+          "На странице Hotkeys выберите пресет, создайте свой, скопируйте код в буфер или вставьте чужой. Жесты «один предмет» и «загрузить всё топливо» снова работают как раньше.",
+          "В настройках мира включите подписи объектов. Отдельно — знаки-иконки и пергаменты; размер шрифта, высоту и фон регулируют ползунки."
+        ],
+        "en": [
+          "On the Hotkeys page pick a preset, create your own, copy a code or paste one. Single-item held use and load-all fuel gestures work as before.",
+          "In world settings enable object content labels. Icon signs and parchments have their own toggles; sliders set font size, height and background."
+        ]
+      }
+    },
+    {
+      "id": "2.103.186",
+      "date": "2026-09-08",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В настройках страница Hotkeys: категории, поиск и подсветка конфликтов.",
+          "В опциях «Bug / Suggestion»: форма, вырезка экрана и необязательный Discord.",
+          "Метку карты можно скопировать кодом, вставить из буфера и пойти к ней."
+        ],
+        "en": [
+          "Settings gained a Hotkeys page with categories, search and conflict highlighting.",
+          "Options has Bug / Suggestion: a form, screen snip and optional Discord contact.",
+          "A map marker can be copied as a code, pasted from the clipboard and travelled to."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте Настройки → Hotkeys. Клавиши, кнопки мыши и жесты сгруппированы по окнам, миру, инвентарю, карте, крафту и бою. Можно искать, смотреть только конфликты и сбрасывать категорию.",
+          "В опциях откройте Bug / Suggestion. Опишите ошибку или идею, вырежьте фрагмент экрана, при желании укажите Discord и отправьте. Черновик не теряется, пока вы не закроете окно.",
+          "У метки скопируйте код и передайте другому. При вставке клиент предложит добавить точку и построить путь, если сетка уже есть на вашей карте.",
+          "Когда в квесте нужно дерево, Quest Helper отмечает подходящие биомы, чтобы не искать породу наугад по всей карте."
+        ],
+        "en": [
+          "Open Settings → Hotkeys. Keys, mouse buttons and gestures are grouped by windows, world, inventory, map, crafting and combat. Search, filter conflicts only, or reset a category.",
+          "In options open Bug / Suggestion. Describe a bug or idea, snip the screen, optionally add Discord and send. The draft stays until you close the window.",
+          "Copy a marker code and share it. On paste the client offers to add the point and route there if that grid is already on your map.",
+          "When a quest wants a tree, Quest Helper marks matching biomes so you are not guessing the species across the whole map."
+        ]
+      }
+    },
+    {
+      "id": "2.103.185",
+      "date": "2026-09-06",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В окне боя приёмы разложены по вкладкам, школу можно переименовать.",
+          "В атласе фильтры «Craft» и «In stock»; текущий рецепт открывается из окна крафта.",
+          "Подсветка пола всегда включена полупрозрачной; переключателей на карте больше нет."
+        ],
+        "en": [
+          "The fight window splits moves into tabs, and a school can be renamed.",
+          "Craft Atlas filters Craft and In stock; the current recipe opens from the craft window.",
+          "The floor overlay stays on at a translucent alpha; map toggles are gone."
+        ]
+      },
+      "details": {
+        "ru": [
+          "В окне боя переключайте все / атаки / защиты / манёвры / движения. Неиспользованный слот школы не переименовывается; у рабочей школы есть команда Rename.",
+          "В атласе кнопки Craft — известные персонажу рецепты, In stock — то, что есть на складе. Из обычного окна крафта можно открыть этот рецепт в атласе.",
+          "Заливка пола рисуется всегда, слегка прозрачная. Кнопок включения на карте нет — отдельно её гасить не нужно.",
+          "Лишние сумки больше не занимают строки сбоку инвентаря. Макрос света после действия возвращает персонажа туда, откуда вы стартовали."
+        ],
+        "en": [
+          "In the fight window switch All, Attacks, Defences, Maneuvers and Moves. An unused school slot cannot be renamed; a used school has Rename.",
+          "In Craft Atlas, Craft keeps recipes the character knows and In stock keeps products recorded in storage. The normal craft window can open that recipe in the atlas.",
+          "Floor tint is always drawn, slightly transparent. The map no longer has overlay toggles — you do not switch it off separately.",
+          "Seedbag, Creel and purse no longer take sidebar rows. After the light macro you walk back to the starting spot."
+        ]
+      }
+    },
+    {
+      "id": "2.103.184",
+      "date": "2026-09-06",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В атласе таблица любопытностей: LP, время, вес, сортировка и растягивание.",
+          "В помощнике квестов у строк TASKS виден прогресс кредо.",
+          "На складе кнопка Clear убирает позиции, которых уже нет в доступе."
+        ],
+        "en": [
+          "Craft Atlas lists curiosities with LP, time, weight, sorting and a resizable table.",
+          "Quest Helper shows credo progress on TASKS rows.",
+          "Storage Clear removes entries that are no longer available."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте раздел Curiosities в атласе: колонки LP, реальное время, умственный вес и LP/час. Таблицу тянут за край, избранное и недавние фильтруются, есть справка поиска. Учитывается качество станка.",
+          "Откройте Quest Helper: у заданий категории TASKS рядом написан прогресс кредо и уровня, без лишних счётчиков групп.",
+          "В окне склада нажмите Clear — исчезнут недоступные предметы, счётчик покажет сколько снято. Боты при переходах через портал дожидаются сетки карты.",
+          "В настройках порогов качества колонка сдвинута так, что поля ввода и кнопки добавить/удалить остаются внутри списка при прокрутке."
+        ],
+        "en": [
+          "Open Curiosities in Craft Atlas for LP, real study time, mental weight and LP/hour. Drag the table edge to resize; filter favorites and recent, and read search help. Workstation quality is included.",
+          "Open Quest Helper: TASKS rows show credo and level progress without dummy group counts.",
+          "In the storage window press Clear to drop unavailable items; a count is shown. Bots wait for the map grid after portal travel.",
+          "In quality-threshold settings the column is shifted so inputs and add/delete stay inside the list while scrolling."
+        ]
+      }
+    },
+    {
+      "id": "2.103.183",
+      "date": "2026-09-05",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Бот «Утки» ведёт курятники с утками: отбор, инкубация и разделка.",
+          "Атлас крафта сам собирает материалы из инвентаря и склада под выбранный рецепт.",
+          "В окне специализаций зон есть поиск и подсказка, какие боты их используют."
+        ],
+        "en": [
+          "Duck Manager runs duck coops: breeding, incubating and butchering.",
+          "Craft Atlas can gather materials from inventory and storage for a recipe.",
+          "The zone specialisation window can search and shows which bots use each tag."
+        ]
+      },
+      "details": {
+        "ru": [
+          "В меню ботов откройте Duck Manager. Зоны курятников пометьте специализацией Duck, инкубаторы — Duckling Incubator; нужны вода и месиво. В настройках фермы можно не разделывать уток и не ощипывать селезней.",
+          "В атласе задайте число крафтов, выберите материалы и качество (или AUTO) и нажмите сбор. Берутся предметы из инвентаря и зон склада; нехватку атлас показывает до старта.",
+          "Откройте специализации зоны и введите имя в поиск. Подсказка перечисляет ботов, которым нужна эта метка, или сообщает, что её никто не использует.",
+          "Откройте календарь в подробном виде: для росы на манжетке показано оставшееся реальное время до события.",
+          "В утилитах ботов появилась отдельная иконка «все столы учёбы». Перекладывание со свалок, плавилен и шёлковых зон меньше зависает, когда инвентарь полон."
+        ],
+        "en": [
+          "Open Duck Manager from the bot menu. Mark breeding coops Duck and hatcheries Duckling Incubator; you also need water and swill. Farm settings can skip butchering ducks and skip plucking drakes.",
+          "In Craft Atlas set the craft count, pick materials and quality (or AUTO) and collect. Items come from inventory and storage zones; shortages are listed before it starts.",
+          "Open a zone's specialisations and type in the search box. The tooltip lists bots that need that tag, or says none use it.",
+          "Open the calendar in verbose view: Dewy Lady's Mantle shows remaining real-life time until the event.",
+          "Bot utilities gained a dedicated all-study-desks icon. Stockpile, smelter and silk-area transfers stall less when inventory is full."
+        ]
+      }
+    },
+    {
+      "id": "2.103.182",
+      "date": "2026-09-04",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Появился «Атлас крафта»: справочник рецептов с поиском, зависимостями и бонусами.",
+          "На компасе видны ближайшие животные из настроек значков.",
+          "У печи и плавильни в подсказке видно прогресс и сколько ещё ждать."
+        ],
+        "en": [
+          "Craft Atlas is a recipe reference with search, dependencies and bonuses.",
+          "The compass shows nearby animals from your icon settings.",
+          "Kiln and smelter tooltips show progress and remaining time."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте атлас горячей клавишей или из интерфейса. Ищите рецепты, ингредиенты и бонусы, листайте зависимости и избранное. Кнопка открывает обычное окно крафта и ничего не крафтит сама.",
+          "В настройках качества жизни включите животных на компасе. На полоске появляются те звери, которые отмечены в настройках значков, без открытия карты.",
+          "Наведите на предмет в печи или плавильне — там процент и оставшееся время. Макрос разделки выгружает туши, если есть зона Put. Среднее качество ингредиентов видно под слотами крафта."
+        ],
+        "en": [
+          "Open Craft Atlas from the UI or its hotkey. Search recipes, ingredients and bonuses, follow dependencies and favorites. Open craft opens the normal craft window and never starts crafting by itself.",
+          "Enable nearby animals in quality-of-life compass settings. Beasts marked in icon settings appear on the compass bar without opening the map.",
+          "Hover a kiln or smelter item for percent and remaining time. The butcher macro unloads carcasses when a Put zone exists. Average ingredient quality appears under craft slots."
+        ]
+      }
+    },
+    {
+      "id": "2.103.180",
+      "date": "2026-09-02",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "На экране появился компас: квесты, группа и стороны света — без открытия карты.",
+          "Помощник квестов стал понятнее, а у цели в бою виден запас здоровья.",
+          "Карта поселения: метки, позиции соседей, импорт и запись разведанного."
+        ],
+        "en": [
+          "A HUD compass shows quests, party and headings without opening the map.",
+          "Quest Helper is easier to scan, and the fight target shows health.",
+          "Village map: markers, neighbor positions, import and explored-area recording."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Включите компас в настройках качества жизни. На полоске видны стороны света, цели квестов, группа и бой; край тянется с Ctrl. Старые стрелки компаса можно оставить рядом.",
+          "В окне квестов цели сгруппированы, есть отслеживание и русские формулировки. Полоска HP над целью помнит урон в бою; ширину и сдвиг задают ползунки. При атаке можно автоматически надеть меч и щит.",
+          "В настройках базы — мастер подключения, жители, обмен метками и показ игроков на карте. Карту можно выгрузить и влить. На миникарте — пинг; разведанные клетки пишутся отдельно. Инструменты карты ищут пробы и значки.",
+          "Ctrl+ПКМ по печи или плавильне — заправка, поджиг и таблица топлива. У костра — вертел. У телеги и повозки — выгрузка в ваши зоны. Направление заполнения свалок задаётся у зоны.",
+          "Поиск стоит в заголовке окна настроек. При входе предлагаются схемы «классика», «боты» и «минимум»; их можно сбросить или обменяться кодом. Шкаф показывает характеристики на кукле; столы учёбы заполняются пачкой."
+        ],
+        "en": [
+          "Turn the compass on in quality-of-life settings. The bar shows headings, quest targets, party and combat; Ctrl-drag the edge to resize. Legacy compass pointers can stay as well.",
+          "Quest Helper groups objectives, tracks targets and uses Russian wording. A health bar on the fight target persists through combat; sliders set width and offset. Attack can auto-equip sword and shield.",
+          "Database settings include a host wizard, villagers, shared markers and live peer positions. Export or import the map. The minimap can ping; explored tiles are recorded separately. Map tools search samples and icons.",
+          "Ctrl+right-click a kiln or smelter to fuel, light and see the fuel table. Bonfires get spit-roast; carts unload into your zones. Pile-fill direction is set on the zone.",
+          "Search sits in the settings window title. Login can apply Classic, Bots or Minimal HUD presets; share or reset them. The wardrobe doll shows stats; study desks can be filled as a batch."
+        ]
+      }
+    }
+  ]
+}

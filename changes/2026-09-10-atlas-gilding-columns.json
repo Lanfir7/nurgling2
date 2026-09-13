@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-10-atlas-gilding-columns",
+  "priority": 6,
+  "summary": {
+    "ru": "В таблице атласа видны слоты, атрибуты и шанс инкрустации.",
+    "en": "The atlas table shows gilding slots, attributes and insertion chance."
+  },
+  "detail": {
+    "ru": "В таблице атласа откройте колонки слотов, принимаемых атрибутов и диапазона шанса инкрустации — удобно сравнивать гильдии не заходя в карточку.",
+    "en": "In the atlas table enable columns for gilding slots, accepted attributes and chance range so you can compare insertions without opening each card."
+  }
+}

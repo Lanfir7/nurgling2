@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-11-fuel-ovens",
+  "priority": 7,
+  "summary": {
+    "ru": "Печи можно заправить и зажечь из меню объекта.",
+    "en": "Ovens can be fueled and lit from the object menu."
+  },
+  "detail": {
+    "ru": "ПКМ по печи — действие «заправить и зажечь». Бот обходит ваши печи, кладёт топливо и поджигает, не открывая каждую вручную.",
+    "en": "Right-click an oven for Fuel and light ovens. The action walks your ovens, adds fuel and lights them without opening each one by hand."
+  }
+}

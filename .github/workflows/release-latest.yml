@@ -43,6 +43,17 @@ jobs:
           restore-keys: |
             extlibs-${{ runner.os }}-
 
+      - name: Set up Python for player release notes
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate player release notes
+        run: |
+          python tools/release_notes.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tools -p test_release_notes.py
+
       - name: Fetch and increment version
         shell: pwsh
         run: |
@@ -87,10 +98,14 @@ jobs:
             throw "No alarm sounds found in ${{ env.RELEASE_REPO }}@${{ env.RELEASE_BRANCH }}"
           }
           Copy-Item "release-input\AlarmSounds" "AlarmSounds" -Recurse
+          New-Item -ItemType Directory -Force build | Out-Null
+          if (Test-Path "release-input\release-notes.json") {
+            Copy-Item "release-input\release-notes.json" "build\previous-release-notes.json"
+          }
           Remove-Item "release-input" -Recurse -Force
 
       - name: Build with Ant
-        run: ant release
+        run: ant -Drelease.notes.previous=build/previous-release-notes.json release
 
       - name: Add batch files to version manifest
         shell: pwsh

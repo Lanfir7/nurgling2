@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-05-spec-search",
+  "priority": 7,
+  "summary": {
+    "ru": "В окне специализаций зон есть поиск и подсказка, какие боты их используют.",
+    "en": "The zone specialisation window can search and shows which bots use each tag."
+  },
+  "detail": {
+    "ru": "Откройте специализации зоны и введите имя в поиск. Подсказка перечисляет ботов, которым нужна эта метка, или сообщает, что её никто не использует.",
+    "en": "Open a zone's specialisations and type in the search box. The tooltip lists bots that need that tag, or says none use it."
+  }
+}

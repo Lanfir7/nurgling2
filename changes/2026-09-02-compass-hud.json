@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-02-compass-hud",
+  "priority": 9,
+  "summary": {
+    "ru": "На экране появился компас: квесты, группа и стороны света — без открытия карты.",
+    "en": "A HUD compass shows quests, party and headings without opening the map."
+  },
+  "detail": {
+    "ru": "Включите компас в настройках качества жизни. На полоске видны стороны света, цели квестов, группа и бой; край тянется с Ctrl. Старые стрелки компаса можно оставить рядом.",
+    "en": "Turn the compass on in quality-of-life settings. The bar shows headings, quest targets, party and combat; Ctrl-drag the edge to resize. Legacy compass pointers can stay as well."
+  }
+}

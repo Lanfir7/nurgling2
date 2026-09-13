@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-09-gob-minimap-icon",
+  "priority": 5,
+  "summary": {
+    "ru": "В настройке объекта можно показать его значок на миникарте.",
+    "en": "Object configuration can show that object's icon on the minimap."
+  },
+  "detail": {
+    "ru": "Откройте настройку объекта (контекстное меню) и включите значок на миникарте, если точку нужно видеть сверху.",
+    "en": "Open the object configuration from the context menu and enable the minimap icon when you want that point visible from above."
+  }
+}

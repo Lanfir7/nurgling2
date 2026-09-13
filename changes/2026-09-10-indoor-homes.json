@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-10-indoor-homes",
+  "priority": 9,
+  "summary": {
+    "ru": "Домашние зоны внутри помещений запоминаются: авто, вручную или выключено.",
+    "en": "Indoor home zones are remembered: auto, manual or inactive."
+  },
+  "detail": {
+    "ru": "В настройках дома включите внутренние зоны. Клиент учит дом при проходе портала, показывает экземпляры в навигации чанков и отличает унаследованный статус. Можно пометить или снять дом вручную.",
+    "en": "In home settings turn on indoor zones. The client learns a home when you take a portal, shows instances in chunk nav and reports inherited status. You can mark or unmark a home by hand."
+  }
+}

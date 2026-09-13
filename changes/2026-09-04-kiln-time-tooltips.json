@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-04-kiln-time-tooltips",
+  "priority": 7,
+  "summary": {
+    "ru": "У печи и плавильни в подсказке видно прогресс и сколько ещё ждать.",
+    "en": "Kiln and smelter tooltips show progress and remaining time."
+  },
+  "detail": {
+    "ru": "Наведите на предмет в печи или плавильне — там процент и оставшееся время. Макрос разделки выгружает туши, если есть зона Put. Среднее качество ингредиентов видно под слотами крафта.",
+    "en": "Hover a kiln or smelter item for percent and remaining time. The butcher macro unloads carcasses when a Put zone exists. Average ingredient quality appears under craft slots."
+  }
+}

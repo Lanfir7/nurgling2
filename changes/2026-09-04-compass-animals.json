@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-04-compass-animals",
+  "priority": 7,
+  "summary": {
+    "ru": "На компасе видны ближайшие животные из настроек значков.",
+    "en": "The compass shows nearby animals from your icon settings."
+  },
+  "detail": {
+    "ru": "В настройках качества жизни включите животных на компасе. На полоске появляются те звери, которые отмечены в настройках значков, без открытия карты.",
+    "en": "Enable nearby animals in quality-of-life compass settings. Beasts marked in icon settings appear on the compass bar without opening the map."
+  }
+}

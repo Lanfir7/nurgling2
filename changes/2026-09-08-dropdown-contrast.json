@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-dropdown-contrast",
+  "priority": 5,
+  "summary": {
+    "ru": "Выпадающие списки контрастнее, текст не прячется под рамкой.",
+    "en": "Dropdowns have stronger contrast, and text no longer hides under the border."
+  },
+  "detail": {
+    "ru": "Списки выбора в интерфейсе читаются на тёмном фоне, подписи не обрезаются рамкой пункта.",
+    "en": "Dropdown lists read clearly on a dark background, and labels are not clipped by the item border."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-05-atlas-collect",
+  "priority": 8,
+  "summary": {
+    "ru": "Атлас крафта сам собирает материалы из инвентаря и склада под выбранный рецепт.",
+    "en": "Craft Atlas can gather materials from inventory and storage for a recipe."
+  },
+  "detail": {
+    "ru": "В атласе задайте число крафтов, выберите материалы и качество (или AUTO) и нажмите сбор. Берутся предметы из инвентаря и зон склада; нехватку атлас показывает до старта.",
+    "en": "In Craft Atlas set the craft count, pick materials and quality (or AUTO) and collect. Items come from inventory and storage zones; shortages are listed before it starts."
+  }
+}

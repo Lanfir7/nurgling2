@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-05-duck-manager",
+  "priority": 9,
+  "summary": {
+    "ru": "Бот «Утки» ведёт курятники с утками: отбор, инкубация и разделка.",
+    "en": "Duck Manager runs duck coops: breeding, incubating and butchering."
+  },
+  "detail": {
+    "ru": "В меню ботов откройте Duck Manager. Зоны курятников пометьте специализацией Duck, инкубаторы — Duckling Incubator; нужны вода и месиво. В настройках фермы можно не разделывать уток и не ощипывать селезней.",
+    "en": "Open Duck Manager from the bot menu. Mark breeding coops Duck and hatcheries Duckling Incubator; you also need water and swill. Farm settings can skip butchering ducks and skip plucking drakes."
+  }
+}

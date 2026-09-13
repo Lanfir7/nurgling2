@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-hotkeys-settings",
+  "priority": 9,
+  "summary": {
+    "ru": "В настройках страница Hotkeys: категории, поиск и подсветка конфликтов.",
+    "en": "Settings gained a Hotkeys page with categories, search and conflict highlighting."
+  },
+  "detail": {
+    "ru": "Откройте Настройки → Hotkeys. Клавиши, кнопки мыши и жесты сгруппированы по окнам, миру, инвентарю, карте, крафту и бою. Можно искать, смотреть только конфликты и сбрасывать категорию.",
+    "en": "Open Settings → Hotkeys. Keys, mouse buttons and gestures are grouped by windows, world, inventory, map, crafting and combat. Search, filter conflicts only, or reset a category."
+  }
+}

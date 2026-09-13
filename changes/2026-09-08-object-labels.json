@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-08-object-labels",
+  "priority": 8,
+  "summary": {
+    "ru": "Над табличками-знаками и пергаментами видны подписи содержимого.",
+    "en": "Icon signs and parchments can show labels of their contents."
+  },
+  "detail": {
+    "ru": "В настройках мира включите подписи объектов. Отдельно — знаки-иконки и пергаменты; размер шрифта, высоту и фон регулируют ползунки.",
+    "en": "In world settings enable object content labels. Icon signs and parchments have their own toggles; sliders set font size, height and background."
+  }
+}

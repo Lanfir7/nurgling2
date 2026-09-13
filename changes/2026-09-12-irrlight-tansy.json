@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-12-irrlight-tansy",
+  "priority": 6,
+  "summary": {
+    "ru": "Бот Irrlight ловит огоньки у тигля; Tansy натирает кожу до 10 стаков.",
+    "en": "Irrlight Farmer farms lights at a crucible; Apply Tansy keeps ten scent stacks."
+  },
+  "detail": {
+    "ru": "Irrlight Farmer в меню ботов: встаньте у горящего тигля с прутком, зона Put для Irrlight и по желанию топливо-ветки. Apply Tansy берёт пижму из Take и поддерживает бафф, а не мажет только при нуле.",
+    "en": "Irrlight Farmer is in the bot menu: stand by a lit crucible with a bar, mark an Irrlight Put zone and optional branch fuel. Apply Tansy takes tansy from Take and tops the buff up rather than only at zero."
+  }
+}

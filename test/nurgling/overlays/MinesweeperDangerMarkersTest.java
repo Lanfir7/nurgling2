@@ -2,11 +2,14 @@ package nurgling.overlays;
 
 import haven.Coord;
 import haven.Coord2d;
+import nurgling.tools.NNoticeLog;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -38,6 +41,98 @@ class MinesweeperDangerMarkersTest {
         Set<Coord> green = MinesweeperDangerMarkers.greenFromFreshBlanks(
                 Set.of(new Coord(0, 0)), Set.of());
         assertTrue(green.isEmpty());
+    }
+
+    @Test
+    void caveGalleryNoticeDiscardsPendingAndConfirmedBlankTransitions() {
+        NNoticeLog notices = new NNoticeLog();
+        long noticeMark = notices.seq();
+        Map<Long, Double> pending = new HashMap<>();
+        pending.put(10L, 0.4);
+        Set<Long> confirmed = new HashSet<>(Set.of(20L));
+
+        notices.add("You opened a natural cave gallery.");
+
+        assertTrue(MinesweeperDangerMarkers.discardGalleryBlankTransitions(
+                notices, noticeMark, pending, confirmed));
+        assertTrue(pending.isEmpty());
+        assertTrue(confirmed.isEmpty());
+    }
+
+    @Test
+    void unrelatedNoticeKeepsOrdinaryBlankTransitions() {
+        NNoticeLog notices = new NNoticeLog();
+        long noticeMark = notices.seq();
+        Map<Long, Double> pending = new HashMap<>();
+        pending.put(10L, 0.4);
+        Set<Long> confirmed = new HashSet<>(Set.of(20L));
+
+        notices.add("You mine some stone.");
+
+        assertFalse(MinesweeperDangerMarkers.discardGalleryBlankTransitions(
+                notices, noticeMark, pending, confirmed));
+        assertEquals(Map.of(10L, 0.4), pending);
+        assertEquals(Set.of(20L), confirmed);
+    }
+
+    @Test
+    void galleryNoticeSuppressesNewTransitionInSameTick() {
+        Map<Long, Double> pending = new HashMap<>();
+        Set<Long> confirmed = new HashSet<>();
+
+        assertFalse(MinesweeperDangerMarkers.recordMinedTileTransition(
+                true, false, true, 10L, pending, confirmed));
+        assertTrue(pending.isEmpty());
+
+        assertTrue(MinesweeperDangerMarkers.recordMinedTileTransition(
+                true, false, false, 10L, pending, confirmed));
+        assertEquals(Map.of(10L, 0.0), pending);
+    }
+
+    @Test
+    void gallerySuppressStartsOnNoticeAndOutlivesConsumedMark() {
+        assertEquals(2.0, MinesweeperDangerMarkers.nextGallerySuppress(
+                true, false, 0.0, 0.05, 2.0), 1e-9);
+
+        NNoticeLog notices = new NNoticeLog();
+        long mark = notices.seq();
+        Map<Long, Double> pending = new HashMap<>();
+        Set<Long> confirmed = new HashSet<>();
+        notices.add("You opened a natural cave gallery.");
+
+        boolean noticed = MinesweeperDangerMarkers.discardGalleryBlankTransitions(
+                notices, mark, pending, confirmed);
+        double remaining = MinesweeperDangerMarkers.nextGallerySuppress(
+                noticed, false, 0.0, 0.05, 2.0);
+        mark = notices.seq();
+
+        noticed = MinesweeperDangerMarkers.discardGalleryBlankTransitions(
+                notices, mark, pending, confirmed);
+        remaining = MinesweeperDangerMarkers.nextGallerySuppress(
+                noticed, true, remaining, 0.05, 2.0);
+
+        assertFalse(noticed);
+        assertEquals(2.0, remaining, 1e-9);
+        assertFalse(MinesweeperDangerMarkers.recordMinedTileTransition(
+                true, false, remaining > 0, 99L, pending, confirmed));
+        assertTrue(pending.isEmpty());
+    }
+
+    @Test
+    void gallerySuppressCountsDownWhenIdleThenAllowsOrdinaryBlanks() {
+        double remaining = MinesweeperDangerMarkers.nextGallerySuppress(
+                false, false, 2.0, 0.5, 2.0);
+        assertEquals(1.5, remaining, 1e-9);
+
+        remaining = MinesweeperDangerMarkers.nextGallerySuppress(
+                false, false, 0.1, 0.5, 2.0);
+        assertEquals(0.0, remaining, 1e-9);
+
+        Map<Long, Double> pending = new HashMap<>();
+        Set<Long> confirmed = new HashSet<>();
+        assertTrue(MinesweeperDangerMarkers.recordMinedTileTransition(
+                true, false, remaining > 0, 10L, pending, confirmed));
+        assertEquals(Map.of(10L, 0.0), pending);
     }
 
     @Test
@@ -100,5 +195,13 @@ class MinesweeperDangerMarkersTest {
                 "green safe overlay must remain");
         assertTrue(src.contains("public void tick("),
                 "MinesweeperDangerMarkers tick must stay wired");
+        int tickAt = src.indexOf("public void tick(");
+        int restoreAt = src.indexOf("public void restoreNow()");
+        assertTrue(tickAt >= 0 && restoreAt > tickAt, "tick() must remain immediately before restoreNow");
+        String tick = src.substring(tickAt, restoreAt);
+        assertTrue(tick.contains("nextGallerySuppress"),
+                "gallery suppress must outlive the notice tick");
+        assertTrue(tick.contains("gallerySuppressLeft"),
+                "gallery suppress remaining time must be latched");
     }
 }

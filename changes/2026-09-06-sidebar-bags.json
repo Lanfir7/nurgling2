@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-sidebar-bags",
+  "priority": 5,
+  "summary": {
+    "ru": "В боковой панели инвентаря скрыты Seedbag, Creel и кошель; свет возвращает на место.",
+    "en": "Inventory sidebar hides Seedbag, Creel and purse; the light macro walks you back."
+  },
+  "detail": {
+    "ru": "Лишние сумки больше не занимают строки сбоку инвентаря. Макрос света после действия возвращает персонажа туда, откуда вы стартовали.",
+    "en": "Seedbag, Creel and purse no longer take sidebar rows. After the light macro you walk back to the starting spot."
+  }
+}

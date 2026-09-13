@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-06-atlas-stock-filters",
+  "priority": 8,
+  "summary": {
+    "ru": "В атласе фильтры «Craft» и «In stock»; текущий рецепт открывается из окна крафта.",
+    "en": "Craft Atlas filters Craft and In stock; the current recipe opens from the craft window."
+  },
+  "detail": {
+    "ru": "В атласе кнопки Craft — известные персонажу рецепты, In stock — то, что есть на складе. Из обычного окна крафта можно открыть этот рецепт в атласе.",
+    "en": "In Craft Atlas, Craft keeps recipes the character knows and In stock keeps products recorded in storage. The normal craft window can open that recipe in the atlas."
+  }
+}
