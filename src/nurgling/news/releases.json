@@ -44,10 +44,51 @@
     "2026-09-12-forager-settings",
     "2026-09-12-irrlight-tansy",
     "2026-09-13-animals-map-tools",
+    "2026-09-13-cave-gallery-safe-dots",
     "2026-09-13-master-miner",
-    "2026-09-13-mineral-search"
+    "2026-09-13-mineral-search",
+    "2026-09-13-release-feed",
+    "2026-09-14-forager-route-map",
+    "2026-09-14-forager-route-start",
+    "2026-09-14-map-safety-tools"
   ],
   "releases": [
+    {
+      "id": "2.103.197",
+      "date": "2026-09-13",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В меню появился раздел «Что нового»: коротко об обновлениях, с подробностями по желанию.",
+          "Собиратель начинает маршрут с ближайшей доступной точки, а не возвращается к самому началу.",
+          "При открытии природной пещеры зелёные точки вокруг неё больше не ставятся — её безопасность неизвестна."
+        ],
+        "en": [
+          "A new What's new menu entry keeps updates short, with optional details.",
+          "Forager starts from the nearest reachable route point instead of returning to the beginning.",
+          "Opening a natural cave gallery no longer marks nearby walls as safe."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Нажмите «i» справа в верхнем ряду главного меню, над энциклопедией. Подсказка кнопки — «Что нового». Сначала видны главные изменения; подробности и предыдущие выпуски открываются отдельно. Точка отмечает непрочитанную новость. Лента работает без интернета и не открывается сама.",
+          "При запуске Собиратель выбирает ближайшую точку текущего участка и продолжает маршрут от неё. Это сокращает пустые переходы при старте посередине длинного пути.",
+          "Зелёные точки в шахте означают, что выкопанный тайл не обсыпался. Если открывается природная пещера, точки вокруг этой полости не появляются: неизвестно, безопасна ли она.",
+          "В настройках Собирателя нажмите «Открыть карту». Отдельное окно сохраняет текущий масштаб и синхронно показывает правки маршрута и исключённых участков.",
+          "Кнопка кварца на карте включает его метки, а правый клик открывает поиск. Для лошадей показывается корректное здоровье, а помощник шахт не создаёт ложные опасные клетки после постройки галереи."
+        ],
+        "en": [
+          "Click i at the right of the top menu row, above the encyclopedia, for What's new. Read the highlights, expand the details or browse earlier updates. A dot marks unread news. The feed works offline and never opens automatically.",
+          "When started, Forager chooses the nearest point on the current segment and continues from there. This avoids an unnecessary walk back when you begin midway along a long route.",
+          "Green dots in a mine mark a dug tile that did not cave in. If a natural cave gallery opens, dots are not placed around that cavity — its safety is unknown.",
+          "In Forager settings, press Open map. The separate window keeps the current zoom and stays synchronized with route and exclusion-area edits.",
+          "The Quarryartz map button toggles its markers and right-click opens search. Horses show the correct health, and the mine helper no longer creates false danger tiles after building a cave gallery."
+        ]
+      }
+    },
     {
       "id": "2.103.195",
       "date": "2026-09-13",
