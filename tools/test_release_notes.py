@@ -36,19 +36,6 @@ class ReleaseNotesTest(unittest.TestCase):
             history = json.loads(snapshot.read_text(encoding="utf-8"))
             self.assertEqual([r["id"] for r in history["releases"]], ["1.0.2", "1.0.1"])
 
-    def test_next_build_flag_prepares_the_version_ant_release_will_create(self):
-        script = Path(__file__).with_name("release_notes.py").resolve()
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            (root / "changes").mkdir()
-            (root / "changes/first.json").write_text(json.dumps(note("first")), encoding="utf-8")
-            (root / "build.xml").write_text('<project><property name="version.num" value="1.0"/></project>')
-            (root / "build.num").write_text('build.number=7')
-            subprocess.run([sys.executable, str(script), "--next-build"], cwd=root,
-                           check=True, capture_output=True)
-            feed = json.loads((root / "build/release-notes.json").read_text(encoding="utf-8"))
-            self.assertEqual("1.0.8", feed["releases"][0]["id"])
-
     def test_summary_is_bounded_and_details_preserve_every_change(self):
         feed = make_feed([note(str(i)) for i in range(7)], {"schema": 1, "releases": []}, "1.2.3", "2026-09-13")
         self.assertEqual(len(feed["releases"][0]["summary"]["ru"]), 3)

@@ -45,34 +45,9 @@
     "2026-09-12-irrlight-tansy",
     "2026-09-13-animals-map-tools",
     "2026-09-13-master-miner",
-    "2026-09-13-mineral-search",
-    "2026-09-13-release-feed"
+    "2026-09-13-mineral-search"
   ],
   "releases": [
-    {
-      "id": "2.103.197",
-      "date": "2026-09-13",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "В меню появился раздел «Что нового»: коротко об обновлениях, с подробностями по желанию."
-        ],
-        "en": [
-          "A new What's new menu entry keeps updates short, with optional details."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Нажмите «i» справа в верхнем ряду главного меню, над энциклопедией. Подсказка кнопки — «Что нового». Сначала видны главные изменения; подробности и предыдущие выпуски открываются отдельно. Точка отмечает непрочитанную новость. Лента работает без интернета и не открывается сама."
-        ],
-        "en": [
-          "Click i at the right of the top menu row, above the encyclopedia, for What's new. Read the highlights, expand the details or browse earlier updates. A dot marks unread news. The feed works offline and never opens automatically."
-        ]
-      }
-    },
     {
       "id": "2.103.195",
       "date": "2026-09-13",

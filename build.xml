@@ -412,19 +412,7 @@
     <property name="release.notes.prepared" value="true" />
   </target>
 
-  <target name="prepare-release-notes-next" depends="build-env">
-    <property name="release.notes.python" value="python" />
-    <property name="release.notes.previous" value="release/release-notes.json" />
-    <exec executable="${release.notes.python}" failonerror="true">
-      <arg value="tools/release_notes.py" />
-      <arg value="--previous" />
-      <arg value="${release.notes.previous}" />
-      <arg value="--next-build" />
-    </exec>
-    <property name="release.notes.prepared" value="true" />
-  </target>
-
-  <target name="release" depends="prepare-release-notes-next, version">
+  <target name="release" depends="prepare-release-notes, version">
     <copy todir="release/" file="ver" />
   </target>
 </project>
