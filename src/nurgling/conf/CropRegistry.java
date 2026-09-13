@@ -13,16 +13,24 @@ public class CropRegistry {
         public final NAlias result;
         public final StorageBehavior storageBehavior;
         public final boolean isHybridTrellis;
+        // Seeds always can, and so can most vegetables — but not all:
+        // radishes are grown from Radish Seeds only.
+        public final boolean isPlantingMaterial;
 
         public CropStage(int stage, NAlias result, StorageBehavior storageBehavior) {
             this(stage, result, storageBehavior, false);
         }
 
         public CropStage(int stage, NAlias result, StorageBehavior storageBehavior, boolean isHybridTrellis) {
+            this(stage, result, storageBehavior, isHybridTrellis, true);
+        }
+
+        public CropStage(int stage, NAlias result, StorageBehavior storageBehavior, boolean isHybridTrellis, boolean isPlantingMaterial) {
             this.stage = stage;
             this.result = result;
             this.storageBehavior = storageBehavior;
             this.isHybridTrellis = isHybridTrellis;
+            this.isPlantingMaterial = isPlantingMaterial;
         }
     }
 
@@ -34,9 +42,8 @@ public class CropRegistry {
     }
 
     /**
-     * The harvest product for a crop with the given storage behavior, or null if the
-     * crop has no such product. Used to derive planting material per storage location
-     * (BARREL = stacked seeds, STOCKPILE = vegetables).
+     * First harvest product for a crop with the given storage behavior, or null if none.
+     * May return a non-plantable vegetable; use {@link #getPlantingProductByStorage} for sowing.
      */
     public static CropStage getProductByStorage(NAlias crop, StorageBehavior behavior) {
         for (CropStage stage : getStages(crop)) {
@@ -44,6 +51,30 @@ public class CropRegistry {
                 return stage;
         }
         return null;
+    }
+
+    /**
+     * First harvest product for a crop with the given storage that can be planted,
+     * or null if none. A non-plantable vegetable (radish) is never returned.
+     */
+    public static CropStage getPlantingProductByStorage(NAlias crop, StorageBehavior behavior) {
+        for (CropStage stage : getStages(crop)) {
+            if (stage.storageBehavior == behavior && stage.isPlantingMaterial)
+                return stage;
+        }
+        return null;
+    }
+
+    /** Unique harvest stage numbers for a crop (duplicate seed+veg rows at one stage count once). */
+    public static Set<Integer> harvestStageNumbers(NAlias crop) {
+        Set<Integer> stages = new LinkedHashSet<Integer>();
+        for (CropStage stage : getStages(crop))
+            stages.add(stage.stage);
+        return stages;
+    }
+
+    public static boolean isHarvestableStage(NAlias crop, int stage) {
+        return harvestStageNumbers(crop).contains(stage);
     }
 
     static {
@@ -146,12 +177,15 @@ public class CropRegistry {
                 )
         );
 
-        // Radish
+        // Radish — vegetables are not plantable; the field is resown from Radish Seeds only.
+        // Harvested at stages 3 and 4, each of which yields both seeds and radishes.
         HARVESTABLE.put(
                 new NAlias("plants/radish"),
                 Arrays.asList(
-                        new CropStage(2, new NAlias("Radish Seeds"), StorageBehavior.BARREL),
-                        new CropStage(4, new NAlias("Radish"), StorageBehavior.STOCKPILE)
+                        new CropStage(3, new NAlias("Radish Seeds"), StorageBehavior.BARREL),
+                        new CropStage(3, new NAlias("Radish"), StorageBehavior.STOCKPILE, false, false),
+                        new CropStage(4, new NAlias("Radish Seeds"), StorageBehavior.BARREL),
+                        new CropStage(4, new NAlias("Radish"), StorageBehavior.STOCKPILE, false, false)
                 )
         );
 

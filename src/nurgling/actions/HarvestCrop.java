@@ -171,8 +171,8 @@ public class HarvestCrop implements Action {
         }
         Gob plant;
         plant = null;
-        for (CropRegistry.CropStage cropStage : CropRegistry.HARVESTABLE.getOrDefault(crop, Collections.emptyList())) {
-            plant = Finder.findGob(plantGobEndpoint.div(MCache.tilesz).floor(), crop, cropStage.stage);
+        for (int stage : uniqueHarvestStages(crop)) {
+            plant = Finder.findGob(plantGobEndpoint.div(MCache.tilesz).floor(), crop, stage);
             if(plant != null) {
                 break;
             }
@@ -208,10 +208,9 @@ public class HarvestCrop implements Action {
         }
 
         ArrayList<Gob> plants;
-        List<CropRegistry.CropStage> cropStages = CropRegistry.HARVESTABLE.getOrDefault(crop, Collections.emptyList());
-        for (CropRegistry.CropStage cropStage : cropStages) {
+        for (int stage : uniqueHarvestStages(crop)) {
             ArrayList<Gob> plantsToHarvest;
-            while (!(plantsToHarvest = Finder.findGobs(area, crop, cropStage.stage)).isEmpty()) {
+            while (!(plantsToHarvest = Finder.findGobs(area, crop, stage)).isEmpty()) {
                 dropOffSeed(gui, barrelInfo.keySet(), trough, cistern);
                 Gob plantToHarvest = plantsToHarvest.get(0);
                 new PathFinder(plantToHarvest).run(gui);
@@ -259,18 +258,14 @@ public class HarvestCrop implements Action {
             Gob cistern,
             boolean barrelOnlyIfInventoryFull
     ) throws InterruptedException {
-        Map<NAlias, CropRegistry.StorageBehavior> resultStorage = new HashMap<>();
-        for (CropRegistry.CropStage stage : CropRegistry.HARVESTABLE.getOrDefault(crop, Collections.emptyList())) {
-            resultStorage.put(stage.result, stage.storageBehavior);
-        }
+        List<CropRegistry.CropStage> stages = CropRegistry.HARVESTABLE.getOrDefault(crop, Collections.emptyList());
 
         List<WItem> barrelItems = new ArrayList<>();
         List<WItem> stockpileItems = new ArrayList<>();
 
-        String name = "";
         for (WItem item : gui.getInventory().getItems()) {
-            name = ((NGItem) item.item).name();
-            CropRegistry.StorageBehavior behavior = resultStorage.get(new NAlias(name));
+            String name = ((NGItem) item.item).name();
+            CropRegistry.StorageBehavior behavior = storageForExactItemName(stages, name);
             if (behavior == null) continue;
             if (behavior == CropRegistry.StorageBehavior.BARREL) barrelItems.add(item);
             else if (behavior == CropRegistry.StorageBehavior.STOCKPILE) stockpileItems.add(item);
@@ -291,15 +286,19 @@ public class HarvestCrop implements Action {
                     && (!barrelOnlyIfInventoryFull || gui.getInventory().getFreeSpace() < 3);
 
             if (transferBarrel) {
-                NAlias seedAlias = new NAlias(((NGItem) barrelItems.get(0).item).name());
+                String barrelItemExactName = ((NGItem) barrelItems.get(0).item).name();
                 for (Gob barrel : barrels) {
-                    TransferToBarrel tb = new TransferToBarrel(barrel, seedAlias);
+                    TransferToBarrel tb = exactBarrelTransfer(barrel, barrelItemExactName);
                     tb.run(gui);
                     if (!tb.isFull()) break;
                 }
                 // 3. Leftover to trough/cistern
-                if (!gui.getInventory().getItems(seedAlias).isEmpty()) {
-                    new TransferToTrough(trough, seedAlias, cistern).run(gui);
+                List<String> leftoverNames = new ArrayList<>();
+                for (WItem item : gui.getInventory().getItems()) {
+                    leftoverNames.add(((NGItem) item.item).name());
+                }
+                if (hasExactItemName(leftoverNames, barrelItemExactName)) {
+                    new TransferToTrough(trough, new NAlias(barrelItemExactName), cistern).run(gui);
                 }
             }
         } else {
@@ -325,7 +324,7 @@ public class HarvestCrop implements Action {
                 for (WItem item : allItems) {
                     String itemName = ((NGItem) item.item).name();
                     if (processed.add(itemName)) {
-                        new TransferToContainer(container, new NAlias(itemName)).run(gui);
+                        exactContainerTransfer(container, itemName).run(gui);
                     }
                 }
 
@@ -336,13 +335,12 @@ public class HarvestCrop implements Action {
     }
 
     private boolean hasAnyCropStage(NArea field, NAlias crop) throws InterruptedException {
-        List<CropRegistry.CropStage> cropStages = CropRegistry.HARVESTABLE.getOrDefault(crop, Collections.emptyList());
-
-        if (cropStages.isEmpty())
+        Set<Integer> stages = uniqueHarvestStages(crop);
+        if (stages.isEmpty())
             return false;
 
-        for (CropRegistry.CropStage cs : cropStages) {
-            if (!Finder.findGobs(field, crop, cs.stage).isEmpty())
+        for (int stage : stages) {
+            if (!Finder.findGobs(field, crop, stage).isEmpty())
                 return true;
         }
 
@@ -366,11 +364,48 @@ public class HarvestCrop implements Action {
         if(!targetItems.isEmpty()) {
             String targetName = ((NGItem) targetItems.get(0).item).name();
 
-            ArrayList<WItem> items = gui.getInventory().getWItems(new NAlias(targetName));
-
-            for (WItem item : items) {
-                NUtils.drop(item);
+            for (WItem item : gui.getInventory().getItems()) {
+                String name = ((NGItem) item.item).name();
+                if (shouldDropHarvestedItem(targetName, name)) {
+                    NUtils.drop(item);
+                }
             }
         }
+    }
+
+    static Set<Integer> uniqueHarvestStages(NAlias crop) {
+        return CropRegistry.harvestStageNumbers(crop);
+    }
+
+    static CropRegistry.StorageBehavior storageForExactItemName(Iterable<CropRegistry.CropStage> stages, String itemName) {
+        if (stages == null || itemName == null)
+            return null;
+        for (CropRegistry.CropStage stage : stages) {
+            if (stage.result != null && stage.result.matchesExact(itemName))
+                return stage.storageBehavior;
+        }
+        return null;
+    }
+
+    static boolean shouldDropHarvestedItem(String dropTargetName, String itemName) {
+        return dropTargetName != null && itemName != null && dropTargetName.equalsIgnoreCase(itemName);
+    }
+
+    static boolean hasExactItemName(Iterable<String> names, String exactName) {
+        if (names == null || exactName == null)
+            return false;
+        for (String name : names) {
+            if (name != null && name.equalsIgnoreCase(exactName))
+                return true;
+        }
+        return false;
+    }
+
+    static TransferToBarrel exactBarrelTransfer(Gob barrel, String exactName) {
+        return new TransferToBarrel(barrel, exactName);
+    }
+
+    static TransferToContainer exactContainerTransfer(Container container, String exactName) {
+        return new TransferToContainer(container, exactName, Integer.valueOf(-1));
     }
 }

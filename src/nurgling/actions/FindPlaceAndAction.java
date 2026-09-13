@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
+import nurgling.pf.Utils;
 import nurgling.tools.Finder;
 
 import static nurgling.tools.Finder.findLiftedbyPlayer;
@@ -25,13 +26,14 @@ public class FindPlaceAndAction implements Action {
             // getFreePlace only sees loaded gobs, so a partially-visible area
             // could otherwise hand back a cell that is actually occupied by an
             // object that has not loaded yet. Only possible when we know the NArea.
+            // Skip the corner walk when the rectangle is already inside the gob
+            // vision window (~81 tiles) — occupancy is then fully known.
             if (narea != null) {
-                NUtils.navigateToArea(narea, true);
-                // Recompute now that we've navigated there: at construction time the
-                // area's grids may not have been loaded yet (or it was >1000 tiles
-                // away), which makes getRCArea() return null and would otherwise leave
-                // the stale null captured in the constructor.
                 area = narea.getRCArea();
+                if (!Utils.areaFullyInVisibleArea(area)) {
+                    NUtils.navigateToArea(narea, true);
+                    area = narea.getRCArea();
+                }
             }
             if (area == null)
                 return Results.ERROR("Area not available");

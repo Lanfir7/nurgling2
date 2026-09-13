@@ -81,8 +81,15 @@ public class MapToolsWindow extends Window {
                 () -> NMiniMap.showFishIcons(), val -> NMiniMap.showFishIcons(val), MapToolsWindow::openFishSearch);
 
         y += MARGIN;
-        tab.add(new Label(L10n.get("maptools.section_samples")), 0, y);
-        y += UI.scale(17);
+        Label samplesLbl = tab.add(new Label(L10n.get("maptools.section_samples")), 0, y);
+        Button minedSearch = tab.add(new Button(SEARCH_BTN_W, L10n.get("maptools.search_btn")) {
+            @Override
+            public void click() {
+                openMineralSearch(null);
+            }
+        }, OVERLAY_W - SEARCH_BTN_W, y);
+        minedSearch.settip(L10n.get("mineral.search_tip"));
+        y += alignRow(y, samplesLbl, minedSearch) + ROW_GAP;
 
         // Master row: hides the whole layer without losing the per-kind settings.
         CheckBox master = tab.add(new CheckBox(L10n.get("maptools.show_samples")), UI.scale(4), y);
@@ -157,11 +164,8 @@ public class MapToolsWindow extends Window {
         KindRow(Widget tab, ProspectKind kind, int y) {
             this.kind = kind;
             CheckBox box = tab.add(new CheckBox(L10n.get(kind.l10nKey)), UI.scale(14), y);
-            box.state(() -> settings().enabled(kind));
-            box.set(val -> {
-                settings().setEnabled(kind, val);
-                store();
-            });
+            box.state(() -> NMiniMap.showProspectKind(kind));
+            box.set(val -> NMiniMap.showProspectKind(kind, val));
             entry = tab.add(new TextEntry(ENTRY_W, String.valueOf(settings().threshold(kind))) {
                 @Override
                 public void changed() {
@@ -340,6 +344,34 @@ public class MapToolsWindow extends Window {
             gui.add(gui.treeSearchWindow, new Coord(100, 100));
             MapSearchFront.showInFront(gui.treeSearchWindow);
         }
+    }
+
+    public static void openMineralSearch() {
+        openMineralSearch(null);
+    }
+
+    /**
+     * Open the ore/gemstone/stone search, preselecting one category.
+     *
+     * @param preset category to start on, or null for all three
+     */
+    public static void openMineralSearch(ProspectKind preset) {
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null)
+            return;
+        if(gui.mineralSearchWindow != null) {
+            /* Reopen on the asked-for category even when it is already up, so right-clicking
+             * the gem button while an ore search is showing does what it looks like. */
+            if(gui.mineralSearchWindow.visible() && preset == null) {
+                gui.mineralSearchWindow.hide();
+                return;
+            }
+        } else {
+            gui.mineralSearchWindow = new MineralSearchWindow(gui);
+            gui.add(gui.mineralSearchWindow, new Coord(100, 100));
+        }
+        MapSearchFront.showInFront(gui.mineralSearchWindow);
+        gui.mineralSearchWindow.preset(preset);
     }
 
     public static void openFishSearch() {

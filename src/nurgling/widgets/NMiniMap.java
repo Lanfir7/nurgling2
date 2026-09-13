@@ -6,6 +6,7 @@ import haven.*;
 import haven.res.ui.obj.buddy.Buddy;
 import nurgling.*;
 import nurgling.actions.bots.MasterMiner;
+import nurgling.conf.ProspectKind;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
 import nurgling.areas.NArea;
@@ -55,8 +56,6 @@ NMiniMap extends MiniMap {
     // Visibility flags for tree and fish icons live in NConfig (see showTreeIcons/showFishIcons).
     public boolean showProspectingIcons = true;
     public boolean showQuarryartzIcons = true;
-    public boolean showOreSpotIcons = true; // Видимость маркеров спотов руд
-    public boolean showGemstoneIcons = true; // Видимость маркеров драгоценных камней
     public boolean showAnimalIcons = true; // Видимость маркеров животных (ObjectTracker + БД)
     public boolean showForagingIcons = true;
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
@@ -91,6 +90,46 @@ NMiniMap extends MiniMap {
         Object val = NConfig.get(NConfig.Key.prospectMarks);
         if(val instanceof nurgling.conf.ProspectMarkSettings)
             return (nurgling.conf.ProspectMarkSettings) val;
+        return null;
+    }
+
+    /**
+     * Shared ORE/GEM/STONE (and other prospect kinds) visibility for Map Tools and the map toolbar.
+     * ProspectMarkSettings is the source of truth; a legacy false in showOreSpotIcons /
+     * showGemstoneIcons / showStoneIcons also hides that kind.
+     */
+    public static boolean showProspectKind(ProspectKind kind) {
+        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
+        if(settings != null && !settings.enabled(kind))
+            return false;
+        NConfig.Key legacy = legacyProspectKey(kind);
+        if(legacy != null) {
+            Object val = NConfig.get(legacy);
+            if(val instanceof Boolean && !((Boolean) val))
+                return false;
+        }
+        return true;
+    }
+
+    public static void showProspectKind(ProspectKind kind, boolean val) {
+        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
+        if(settings == null) {
+            settings = new nurgling.conf.ProspectMarkSettings();
+        }
+        settings.setEnabled(kind, val);
+        NConfig.set(NConfig.Key.prospectMarks, settings);
+        NConfig.Key legacy = legacyProspectKey(kind);
+        if(legacy != null)
+            NConfig.set(legacy, val);
+    }
+
+    private static NConfig.Key legacyProspectKey(ProspectKind kind) {
+        if(kind == ProspectKind.ORE)
+            return NConfig.Key.showOreSpotIcons;
+        if(kind == ProspectKind.GEM)
+            return NConfig.Key.showGemstoneIcons;
+        if(kind == ProspectKind.STONE)
+            return NConfig.Key.showStoneIcons;
         return null;
     }
 
@@ -144,12 +183,6 @@ NMiniMap extends MiniMap {
         
         Boolean quarryartz = (Boolean) NConfig.get(NConfig.Key.showQuarryartzIcons);
         if (quarryartz != null) showQuarryartzIcons = quarryartz;
-        
-        Boolean oreSpots = (Boolean) NConfig.get(NConfig.Key.showOreSpotIcons);
-        if (oreSpots != null) showOreSpotIcons = oreSpots;
-        
-        Boolean gemstones = (Boolean) NConfig.get(NConfig.Key.showGemstoneIcons);
-        if (gemstones != null) showGemstoneIcons = gemstones;
 
         Boolean animals = (Boolean) NConfig.get(NConfig.Key.showAnimalIcons);
         if (animals != null) showAnimalIcons = animals;
@@ -167,6 +200,52 @@ NMiniMap extends MiniMap {
 
     private static boolean isForageMark(LabeledMinimapMark mark) {
         return mark != null && nurgling.tools.ForageMarkerLogic.isForageId(mark.getLocationId());
+    }
+
+    /**
+     * Ore-spot toggle: recorded ORE marks, plus MasterMiner ores that were stored before kind existed.
+     * Clay/water/stone/gems/quarryartz/animals/forage are not ore spots.
+     */
+    static boolean isOreSpotMark(LabeledMinimapMark mark) {
+        if (mark == null) return false;
+        if (isAnimalMark(mark) || isForageMark(mark)) return false;
+        String resourceType = mark.resourceType;
+        if (resourceType == null || "Quarryartz".equals(resourceType)) return false;
+        return mark.kind == ProspectKind.ORE || MasterMiner.isOre(resourceType);
+    }
+
+    static boolean isStoneMark(LabeledMinimapMark mark) {
+        if (mark == null) return false;
+        if (isAnimalMark(mark) || isForageMark(mark)) return false;
+        String resourceType = mark.resourceType;
+        if (resourceType == null || "Quarryartz".equals(resourceType)) return false;
+        return mark.kind == ProspectKind.STONE || MasterMiner.isStone(resourceType);
+    }
+
+    static boolean isGemstoneMark(String resourceType) {
+        if (resourceType == null) return false;
+        return MasterMiner.isGemstone(resourceType);
+    }
+
+    private boolean skipHiddenLabeledMark(LabeledMinimapMark mark, nurgling.conf.ProspectMarkSettings settings) {
+        if ("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons)
+            return true;
+        if (isOreSpotMark(mark) && !showProspectKind(ProspectKind.ORE))
+            return true;
+        if (isGemstoneMark(mark.resourceType) && !showProspectKind(ProspectKind.GEM))
+            return true;
+        if (isStoneMark(mark) && !showProspectKind(ProspectKind.STONE))
+            return true;
+        if (isAnimalMark(mark) && !showAnimalIcons)
+            return true;
+        if (skipForageMark(mark))
+            return true;
+        /* Category toggles already applied; quality/kind filters cover ORE/GEM/STONE and water/clay. */
+        if (!isAnimalMark(mark) && !isForageMark(mark)
+                && !"Quarryartz".equals(mark.resourceType)
+                && settings != null && !settings.shows(mark.kind, mark.quality))
+            return true;
+        return false;
     }
 
     private boolean skipForageMark(LabeledMinimapMark mark) {
@@ -1868,26 +1947,8 @@ NMiniMap extends MiniMap {
         float scaleMultiplier = scalePercent / 100.0f;
 
         for(LabeledMinimapMark mark : marks) {
-            if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) {
+            if (skipHiddenLabeledMark(mark, settings))
                 continue;
-            }
-            if(isOreSpotMark(mark) && !showOreSpotIcons) {
-                continue;
-            }
-            if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
-                continue;
-            }
-            if(isAnimalMark(mark) && !showAnimalIcons) {
-                continue;
-            }
-            if (skipForageMark(mark)) continue;
-            /* Prospecting samples (water/clay/soil/...) follow Map Tools kind/threshold. */
-            if (!isAnimalMark(mark) && !isForageMark(mark)
-                    && !"Quarryartz".equals(mark.resourceType)
-                    && !isOreSpotMark(mark) && !isGemstoneMark(mark.resourceType)
-                    && settings != null && !settings.shows(mark.kind, mark.quality)) {
-                continue;
-            }
 
             int px = (int)Math.round((mark.tileCoords.x - dloc.tc.x) / (double)scale) + hsz.x;
             int py = (int)Math.round((mark.tileCoords.y - dloc.tc.y) / (double)scale) + hsz.y;
@@ -2453,13 +2514,9 @@ NMiniMap extends MiniMap {
                     java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(sessloc.seg.id);
                     int threshold = UI.scale(10); // Screen pixels
 
+                    nurgling.conf.ProspectMarkSettings settings = prospectSettings();
                     for(LabeledMinimapMark mark : marks) {
-                        // Пропускаем скрытые маркеры
-                        if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) continue;
-                        if(isOreSpotMark(mark) && !showOreSpotIcons) continue;
-                        if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) continue;
-                        if(isAnimalMark(mark) && !showAnimalIcons) continue;
-                        if (skipForageMark(mark)) continue;
+                        if (skipHiddenLabeledMark(mark, settings)) continue;
 
                         // Convert segment-relative coordinates to screen coordinates (same as drawing)
                         Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
@@ -3182,29 +3239,6 @@ NMiniMap extends MiniMap {
      * Find a labeled minimap mark at the given screen coordinate.
      * Used for right-click deletion of water/soil quality marks.
      */
-    /**
-     * Проверяет, является ли маркер маркером спота руды/камня.
-     * Маркеры животных (animal_) не считаются спотами — иначе тогл Ore Spot скрывал бы и их.
-     */
-    private boolean isOreSpotMark(LabeledMinimapMark mark) {
-        if (mark == null) return false;
-        if (isAnimalMark(mark)) return false;
-        if (isForageMark(mark)) return false;
-        String resourceType = mark.resourceType;
-        if (resourceType == null) return false;
-        if ("Quarryartz".equals(resourceType)) return false;
-        if (MasterMiner.isGemstone(resourceType)) return false;
-        return true;
-    }
-    
-    /**
-     * Проверяет, является ли маркер маркером драгоценного камня
-     */
-    private boolean isGemstoneMark(String resourceType) {
-        if (resourceType == null) return false;
-        return MasterMiner.isGemstone(resourceType);
-    }
-    
     private LabeledMinimapMark labeledMarkAt(Coord screenCoord) {
         if(dloc == null || sessloc == null) return null;
 
@@ -3218,27 +3252,10 @@ NMiniMap extends MiniMap {
         nurgling.conf.ProspectMarkSettings settings = prospectSettings();
 
         for(LabeledMinimapMark mark : marks) {
-            if("Quarryartz".equals(mark.resourceType) && !showQuarryartzIcons) {
-                continue;
-            }
-            if(isOreSpotMark(mark) && !showOreSpotIcons) {
-                continue;
-            }
-            if(isGemstoneMark(mark.resourceType) && !showGemstoneIcons) {
-                continue;
-            }
-            if(isAnimalMark(mark) && !showAnimalIcons) {
-                continue;
-            }
-            if (skipForageMark(mark)) continue;
             /* A filtered-out mark is not drawn, so it must not be clickable either -
              * otherwise it keeps an invisible hitbox that swallows right-clicks. */
-            if (!isAnimalMark(mark) && !isForageMark(mark)
-                    && !"Quarryartz".equals(mark.resourceType)
-                    && !isOreSpotMark(mark) && !isGemstoneMark(mark.resourceType)
-                    && settings != null && !settings.shows(mark.kind, mark.quality)) {
+            if (skipHiddenLabeledMark(mark, settings))
                 continue;
-            }
 
             // Calculate screen position for this mark
             Coord markScreenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
@@ -3787,8 +3804,10 @@ NMiniMap extends MiniMap {
                             return true;
                         }
                         return true;
-                    } else if(isOreSpotMark(labeledMark)) {
-                        // Если это метка спота руды - Shift+ПКМ удаляет
+                    } else if(isOreSpotMark(labeledMark) || isStoneMark(labeledMark)
+                            || isGemstoneMark(labeledMark.resourceType)) {
+                        /* Ore/gem/stone: Shift+RMB deletes. Plain RMB used to treat stones as
+                         * ore-spots (old catch-all heuristic) and must not start deleting them. */
                         if(Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
                             gui.labeledMarkService.removeMark(labeledMark);
                             gui.msg("Удалена метка " + labeledMark.resourceType + " " + labeledMark.label, java.awt.Color.YELLOW);

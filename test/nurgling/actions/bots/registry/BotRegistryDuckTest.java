@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BotRegistryDuckTest {
     @Test
-    void duckManagerIsAvailableInTheFarmingMenu() {
+    void duckManagerIsAvailableInTheAnimalsMenu() {
         BotDescriptor bot = BotRegistry.byId("duck");
 
         assertNotNull(bot);
-        assertEquals(BotDescriptor.BotType.FARMING, bot.type);
+        assertEquals(BotDescriptor.BotType.ANIMALS, bot.type);
         assertEquals(DuckMaster.class, bot.clazz);
         assertEquals("duck", bot.iconPath);
         assertEquals("bot.duck.title", bot.titleKey);

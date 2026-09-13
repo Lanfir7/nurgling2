@@ -931,37 +931,23 @@ public class NMakewindow extends Widget implements DTarget {
                 qmx = x;
                 int count = 0;
                 double product = 1.0;
+                CharWnd chr = (ui != null && ui.gui != null) ? ui.gui.chrwdg : null;
+                List<NMakewindowQMod.NamedComp> battrs = qmodBattrs(chr);
+                List<NMakewindowQMod.NamedComp> sattrs = qmodSattrs(chr);
                 for(Indir<Resource> qm : qmod) {
                     try {
                         Tex t = buildQTex(qm);
                         g.image(t, new Coord(x, qmy));
                         x += t.sz().x + UI.scale(1);
 
-                        for(BAttrWnd.Attr attr: ui.gui.chrwdg.battr.attrs)
-                        {
-                            if(attr.attr.nm.equals(qm.get().basename()))
-                            {
-                                count++;
-                                product = product * attr.attr.comp;
-
-                                BufferedImage texVal = fnd2.render(String.valueOf(attr.attr.comp)).img;
-                                g.image(texVal,new Coord(x, qmy + UI.scale(1)));
-                                x += texVal.getWidth() + UI.scale(1);
-                                break;
-                            }
+                        NMakewindowQMod.Match match = NMakewindowQMod.lookup(battrs, sattrs, qm.get().basename());
+                        for(Integer comp : match.comps) {
+                            BufferedImage texVal = fnd2.render(String.valueOf(comp)).img;
+                            g.image(texVal, new Coord(x, qmy + UI.scale(1)));
+                            x += texVal.getWidth() + UI.scale(1);
                         }
-                        for(SAttrWnd.SAttr attr: ui.gui.chrwdg.sattr.attrs)
-                        {
-                            if(attr.attr.nm.equals(qm.get().basename()))
-                            {
-                                count++;
-                                product = product * attr.attr.comp;
-                                BufferedImage texVal = fnd2.render(String.valueOf(attr.attr.comp)).img;
-                                g.image(texVal,new Coord(x, qmy + UI.scale(1)));
-                                x += texVal.getWidth() + UI.scale(1);
-                                break;
-                            }
-                        }
+                        count += match.count;
+                        product *= match.product;
                     } catch(Loading l) {
                     }
                 }
@@ -1274,6 +1260,34 @@ public class NMakewindow extends Widget implements DTarget {
             return softTex.sz().x + softTexLabel.sz().x + UI.scale(9);
         }
         return 0;
+    }
+
+    private static List<NMakewindowQMod.NamedComp> qmodBattrs(CharWnd chr) {
+        if(chr == null || chr.battr == null || chr.battr.attrs == null) {
+            return null;
+        }
+        List<NMakewindowQMod.NamedComp> out = new ArrayList<>();
+        for(BAttrWnd.Attr attr : chr.battr.attrs) {
+            if(attr == null || attr.attr == null) {
+                continue;
+            }
+            out.add(new NMakewindowQMod.NamedComp(attr.attr.nm, attr.attr.comp));
+        }
+        return out;
+    }
+
+    private static List<NMakewindowQMod.NamedComp> qmodSattrs(CharWnd chr) {
+        if(chr == null || chr.sattr == null || chr.sattr.attrs == null) {
+            return null;
+        }
+        List<NMakewindowQMod.NamedComp> out = new ArrayList<>();
+        for(SAttrWnd.SAttr attr : chr.sattr.attrs) {
+            if(attr == null || attr.attr == null) {
+                continue;
+            }
+            out.add(new NMakewindowQMod.NamedComp(attr.attr.nm, attr.attr.comp));
+        }
+        return out;
     }
 
     private Tex buildQTex(Indir<Resource> res) {
@@ -1745,6 +1759,66 @@ public class NMakewindow extends Widget implements DTarget {
                     }
                 }
                 return true;
+            }
+        }
+    }
+}
+
+final class NMakewindowQMod {
+    static final class NamedComp {
+        final String nm;
+        final int comp;
+
+        NamedComp(String nm, int comp) {
+            this.nm = nm;
+            this.comp = comp;
+        }
+    }
+
+    static final class Match {
+        static final Match EMPTY = new Match(Collections.<Integer>emptyList(), 0, 1.0);
+
+        final List<Integer> comps;
+        final int count;
+        final double product;
+
+        Match(List<Integer> comps, int count, double product) {
+            this.comps = comps;
+            this.count = count;
+            this.product = product;
+        }
+    }
+
+    private NMakewindowQMod() {}
+
+    static Match lookup(Iterable<NamedComp> battrs, Iterable<NamedComp> sattrs, String basename) {
+        if(basename == null) {
+            return Match.EMPTY;
+        }
+        List<Integer> comps = new ArrayList<Integer>();
+        collectFirst(battrs, basename, comps);
+        collectFirst(sattrs, basename, comps);
+        if(comps.isEmpty()) {
+            return Match.EMPTY;
+        }
+        double product = 1.0;
+        for(Integer comp : comps) {
+            product *= comp.intValue();
+        }
+        return new Match(Collections.unmodifiableList(comps), comps.size(), product);
+    }
+
+    private static void collectFirst(Iterable<NamedComp> attrs, String basename, List<Integer> out) {
+        if(attrs == null) {
+            return;
+        }
+        for(NamedComp attr : attrs) {
+            if(attr == null || attr.nm == null) {
+                continue;
+            }
+            if(attr.nm.equals(basename)) {
+                out.add(Integer.valueOf(attr.comp));
+                return;
             }
         }
     }

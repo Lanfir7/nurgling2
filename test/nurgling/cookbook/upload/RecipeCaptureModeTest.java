@@ -2,6 +2,7 @@ package nurgling.cookbook.upload;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,6 +36,19 @@ class RecipeCaptureModeTest {
         assertFalse(RecipeCaptureMode.isRemoteReady(true, "  "));
         assertTrue(RecipeCaptureMode.isRemoteReady(true, "w17"));
         assertFalse(RecipeCaptureMode.isRemoteReady(false, ""));
+    }
+
+    @Test
+    void smokedVariantsDoNotShareQuickKey() {
+        String oak = RecipeCaptureMode.recipeKey("Pie", "Pork:50", "Oak100.0");
+        String birch = RecipeCaptureMode.recipeKey("Pie", "Pork:50", "Birch100.0");
+        assertNotEquals(oak, birch);
+        assertTrue(oak.contains("Oak100.0"));
+        assertFalse(RecipeCaptureMode.recipeKey("Pie", "Pork:50", null).contains("Oak"));
+        assertNotEquals(
+                RecipeCaptureMode.cacheKey(oak, true, false),
+                RecipeCaptureMode.cacheKey(oak, false, true));
+        assertEquals("Pie|Pork:50|Oak100.0", oak);
     }
 
     @Test

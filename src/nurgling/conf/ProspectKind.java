@@ -1,9 +1,11 @@
 package nurgling.conf;
 
+import nurgling.actions.bots.MasterMiner;
+
 /**
- * Categories of prospected ground samples placed on the map by the Checker bots
- * (CheckWater, CheckClay). The bots store the raw item name as the mark's resource
- * type, so the mapping is done by name matching.
+ * Categories of resource marks placed on the map: ground samples from the Checker bots
+ * (CheckWater, CheckClay) and mined finds from Master Miner. The bots store the raw item
+ * name as the mark's resource type, so the mapping is done by name matching.
  */
 public enum ProspectKind {
     WATER("maptools.kind.water"),
@@ -11,7 +13,10 @@ public enum ProspectKind {
     CLAY("maptools.kind.clay"),
     SOIL("maptools.kind.soil"),
     SAND("maptools.kind.sand"),
-    OTHER("maptools.kind.other");
+    OTHER("maptools.kind.other"),
+    ORE("maptools.kind.ore"),
+    GEM("maptools.kind.gem"),
+    STONE("maptools.kind.stone");
 
     public final String l10nKey;
 
@@ -21,11 +26,19 @@ public enum ProspectKind {
 
     /**
      * Classify a mark's resource type (the raw item name, e.g. "Saltwater", "Clay", "Moss").
-     * Anything unrecognised lands in OTHER so it always stays controllable from the UI.
+     * Mined names are tested first so Sandstone is STONE rather than SAND. Quarryartz stays
+     * OTHER so the local quarryartz toggle remains valid. Anything unrecognised lands in
+     * OTHER so it always stays controllable from the UI.
      */
     public static ProspectKind of(String resourceType) {
         if(resourceType == null)
             return OTHER;
+        if(MasterMiner.isGemstone(resourceType))
+            return GEM;
+        if(MasterMiner.isOre(resourceType))
+            return ORE;
+        if(MasterMiner.isStone(resourceType))
+            return STONE;
         String s = resourceType.toLowerCase();
         if(s.contains("saltwater") || s.contains("salt water"))
             return SALTWATER;

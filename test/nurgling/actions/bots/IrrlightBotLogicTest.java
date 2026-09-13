@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -124,6 +125,256 @@ class IrrlightBotLogicTest {
         assertEquals(IrrlightBot.DeliverDecision.SKIP, IrrlightBot.decideDelivery(8, 3, 3));
         assertEquals(IrrlightBot.DeliverDecision.NO_ZONE, IrrlightBot.decideDelivery(4, 2, 0));
         assertEquals(IrrlightBot.DeliverDecision.TRANSFER, IrrlightBot.decideDelivery(4, 2, 1));
+    }
+
+    @Test
+    void crucibleIdentityPrefersLiveIdThenHashThenNearbyRefind() {
+        assertTrue(IrrlightBot.crucibleStillValid("gfx/terobjs/crucible"));
+        assertFalse(IrrlightBot.crucibleStillValid("gfx/terobjs/steelcrucible"));
+        assertFalse(IrrlightBot.crucibleStillValid("gfx/terobjs/smelter"));
+        assertFalse(IrrlightBot.crucibleStillValid(null));
+
+        assertFalse(IrrlightBot.allowsNearbyFallback(true));
+        assertTrue(IrrlightBot.allowsNearbyFallback(false));
+
+        // LIVE_ID: validated live gob id wins even if hashHit and nearby exist.
+        assertEquals(IrrlightBot.CrucibleResolve.LIVE_ID,
+                IrrlightBot.resolveAfterReload(11L, true, "22", 33L));
+        assertEquals(11L, IrrlightBot.resolvedCrucibleId(11L, true, "22", 33L));
+        assertEquals(IrrlightBot.CrucibleResolve.LIVE_ID,
+                IrrlightBot.resolveAfterReload(11L, false, "22", 33L));
+        assertEquals(11L, IrrlightBot.resolvedCrucibleId(11L, false, "22", 33L));
+
+        // HASH: live id missing, stored hash currently hits a validated normal crucible; nearby ignored.
+        assertEquals(IrrlightBot.CrucibleResolve.HASH,
+                IrrlightBot.resolveAfterReload(null, true, "22", 33L));
+        assertEquals(22L, IrrlightBot.resolvedCrucibleId(null, true, "22", 33L));
+
+        // Empty hashHitId is not a hash hit.
+        assertEquals(IrrlightBot.CrucibleResolve.WAIT_STORED,
+                IrrlightBot.resolveAfterReload(null, true, "", 33L));
+        assertEquals(IrrlightBot.CrucibleResolve.WAIT_STORED,
+                IrrlightBot.resolveAfterReload(null, true, null, 33L));
+
+        // WAIT_STORED: stable hash was captured; live id + hash hit absent → not nearby 33.
+        assertNull(IrrlightBot.resolvedCrucibleId(null, true, null, 33L));
+        assertNull(IrrlightBot.resolvedCrucibleId(null, true, "", 33L));
+        assertFalse(IrrlightBot.shouldCaptureChosenHash(IrrlightBot.CrucibleResolve.WAIT_STORED));
+        assertEquals("abc", IrrlightBot.nextStableHash("abc", IrrlightBot.CrucibleResolve.WAIT_STORED, "nearby-hash"));
+
+        // NEARBY allowed only when a hash was never captured.
+        assertEquals(IrrlightBot.CrucibleResolve.NEARBY,
+                IrrlightBot.resolveAfterReload(null, false, null, 33L));
+        assertEquals(33L, IrrlightBot.resolvedCrucibleId(null, false, null, 33L));
+        assertEquals(IrrlightBot.CrucibleResolve.NEARBY,
+                IrrlightBot.resolveAfterReload(null, false, "", 33L));
+        assertEquals(33L, IrrlightBot.resolvedCrucibleId(null, false, "", 33L));
+        assertTrue(IrrlightBot.shouldCaptureChosenHash(IrrlightBot.CrucibleResolve.NEARBY));
+        assertEquals("newhash", IrrlightBot.nextStableHash(null, IrrlightBot.CrucibleResolve.NEARBY, "newhash"));
+
+        assertEquals(IrrlightBot.CrucibleResolve.MISSING,
+                IrrlightBot.resolveAfterReload(null, false, null, null));
+        assertNull(IrrlightBot.resolvedCrucibleId(null, false, null, null));
+        assertFalse(IrrlightBot.shouldCaptureChosenHash(IrrlightBot.CrucibleResolve.MISSING));
+
+        // Second arg is hasStoredHash, not a current hash hit.
+        assertFalse(IrrlightBot.shouldRefindWhenMissing(true, false));
+        assertFalse(IrrlightBot.shouldRefindWhenMissing(false, true));
+        assertFalse(IrrlightBot.shouldRefindWhenMissing(true, true));
+        assertTrue(IrrlightBot.shouldRefindWhenMissing(false, false));
+    }
+
+    @Test
+    void knownStoredHashSuppressesArbitraryNearbyFallbackAndCannotBeOverwrittenByTemporaryMiss() {
+        assertTrue(IrrlightBot.hasStableHash("abc"));
+        assertFalse(IrrlightBot.hasStableHash(null));
+        assertFalse(IrrlightBot.hasStableHash(""));
+
+        assertFalse(IrrlightBot.allowsNearbyFallback(true));
+        assertFalse(IrrlightBot.shouldRefindWhenMissing(false, true));
+
+        assertEquals(IrrlightBot.CrucibleResolve.WAIT_STORED,
+                IrrlightBot.resolveAfterReload(null, true, "", 33L));
+        assertEquals(IrrlightBot.CrucibleResolve.WAIT_STORED,
+                IrrlightBot.resolveAfterReload(null, true, null, 33L));
+        assertNull(IrrlightBot.resolvedCrucibleId(null, true, "", 33L));
+        assertNull(IrrlightBot.resolvedCrucibleId(null, true, null, 33L));
+        assertFalse(IrrlightBot.shouldCaptureChosenHash(IrrlightBot.CrucibleResolve.WAIT_STORED));
+
+        assertEquals("abc", IrrlightBot.nextStableHash("abc", IrrlightBot.CrucibleResolve.WAIT_STORED, "other-gob-hash"));
+        assertEquals("abc", IrrlightBot.nextStableHash("abc", IrrlightBot.CrucibleResolve.NEARBY, "other-gob-hash"));
+        assertEquals("abc", IrrlightBot.nextStableHash("abc", IrrlightBot.CrucibleResolve.MISSING, "other-gob-hash"));
+        assertEquals("newhash", IrrlightBot.nextStableHash(null, IrrlightBot.CrucibleResolve.NEARBY, "newhash"));
+        assertEquals("newhash", IrrlightBot.nextStableHash("", IrrlightBot.CrucibleResolve.NEARBY, "newhash"));
+    }
+
+    @Test
+    void crucibleReloadWaitStaysIrrblossAwareAndBounded() {
+        assertEquals(IrrlightBot.WaitPhase.WATCH, IrrlightBot.crucibleReloadWaitPhase());
+        assertTrue(IrrlightBot.observesIrrbloss(IrrlightBot.crucibleReloadWaitPhase()));
+        assertEquals(15_000L, IrrlightBot.CRUCIBLE_RELOAD_TIMEOUT);
+        assertFalse(IrrlightBot.observesIrrbloss(IrrlightBot.WaitPhase.CHASE));
+    }
+
+    @Test
+    void resourceRestoreUsesRestoreResourcesThresholdsWithoutCallingIt() throws Exception {
+        assertFalse(IrrlightBot.needsStaminaRestore(-1));
+        assertTrue(IrrlightBot.needsStaminaRestore(0));
+        assertTrue(IrrlightBot.needsStaminaRestore(0.49));
+        assertFalse(IrrlightBot.needsStaminaRestore(0.5));
+        assertFalse(IrrlightBot.needsStaminaRestore(0.9));
+
+        assertFalse(IrrlightBot.needsEnergyRestore(-1));
+        assertTrue(IrrlightBot.needsEnergyRestore(0));
+        assertTrue(IrrlightBot.needsEnergyRestore(0.34));
+        assertFalse(IrrlightBot.needsEnergyRestore(0.35));
+        assertFalse(IrrlightBot.needsEnergyRestore(0.8));
+
+        assertTrue(IrrlightBot.needsResourceRestore(0.4, 0.8));
+        assertTrue(IrrlightBot.needsResourceRestore(0.9, 0.3));
+        assertTrue(IrrlightBot.needsResourceRestore(0.4, 0.3));
+        assertFalse(IrrlightBot.needsResourceRestore(0.5, 0.35));
+        assertFalse(IrrlightBot.needsResourceRestore(-1, -1));
+        assertFalse(IrrlightBot.needsResourceRestore(0.9, 0.8));
+
+        assertEquals(IrrlightBot.WaitPhase.DRINK, IrrlightBot.resourceRestoreWaitPhase());
+        assertTrue(IrrlightBot.observesIrrbloss(IrrlightBot.resourceRestoreWaitPhase()));
+
+        String src = Files.readString(Path.of("src/nurgling/actions/bots/IrrlightBot.java"), StandardCharsets.UTF_8);
+        assertFalse(src.contains("new RestoreResources()"));
+        assertFalse(src.contains("import nurgling.actions.RestoreResources"));
+        assertFalse(src.contains("new Eater("));
+        int drink = src.indexOf("private Wake drink(");
+        int restore = src.indexOf("private Wake restoreEnergy(");
+        int drinkEnd = src.indexOf("private Wake restoreEnergy(", drink);
+        assertTrue(drink >= 0 && restore > drink);
+        String drinkBody = src.substring(drink, drinkEnd);
+        assertTrue(drinkBody.contains("waitDuring(WaitPhase.DRINK"));
+        String restoreBody = src.substring(restore, src.indexOf("private Wake openRecipe", restore));
+        assertTrue(restoreBody.contains("waitDuring(resourceRestoreWaitPhase()"));
+        assertTrue(restoreBody.contains("Wake.IRRLIGHT"));
+        assertFalse(restoreBody.contains("WaitDuration"));
+    }
+
+    @Test
+    void exactConfiguredFoodUsesStringEqualsNotPrefix() {
+        assertTrue(IrrlightBot.isExactConfiguredFood("Roast Meat", Arrays.asList("Bread", "Roast Meat")));
+        assertFalse(IrrlightBot.isExactConfiguredFood("Roast", Arrays.asList("Roast Meat")));
+        assertFalse(IrrlightBot.isExactConfiguredFood("Roast Meat", Arrays.asList("Roast")));
+        assertFalse(IrrlightBot.isExactConfiguredFood(null, Arrays.asList("Bread")));
+        assertFalse(IrrlightBot.isExactConfiguredFood("Bread", null));
+
+        assertEquals("Bread", IrrlightBot.firstConfiguredFoodName(
+                Arrays.asList("Honey", "Bread"), Arrays.asList("Bread", "Roast Meat")));
+        assertNull(IrrlightBot.firstConfiguredFoodName(
+                Arrays.asList("Honey", "Cheese"), Arrays.asList("Bread")));
+        assertNull(IrrlightBot.firstConfiguredFoodName(
+                Arrays.asList("Roast"), Arrays.asList("Roast Meat")));
+    }
+
+    @Test
+    void energyRestoreAllowsOvershootWhenHungry() {
+        assertTrue(IrrlightBot.needsEnergyRestore(0.34));
+        assertFalse(IrrlightBot.shouldRefuseFoodForOvershoot(0.34, 50.0));
+        assertTrue(0.34 + 50.0 / 100.0 >= 0.81);
+        assertTrue(IrrlightBot.shouldEatConfiguredFood(0.34, 50.0));
+        assertFalse(IrrlightBot.shouldEatConfiguredFood(0.35, 50.0));
+        assertFalse(IrrlightBot.shouldEatConfiguredFood(0.20, null));
+    }
+
+    @Test
+    void decideEnergyRestoreTreatsMissingConfiguredFoodAsFatal() {
+        assertEquals(IrrlightBot.EnergyRestoreDecision.SKIP,
+                IrrlightBot.decideEnergyRestore(0.35, true));
+        assertEquals(IrrlightBot.EnergyRestoreDecision.SKIP,
+                IrrlightBot.decideEnergyRestore(0.80, false));
+        assertEquals(IrrlightBot.EnergyRestoreDecision.NO_CONFIGURED_FOOD,
+                IrrlightBot.decideEnergyRestore(0.34, false));
+        assertEquals(IrrlightBot.EnergyRestoreDecision.EAT,
+                IrrlightBot.decideEnergyRestore(0.34, true));
+        assertEquals(IrrlightBot.EnergyRestoreDecision.EAT,
+                IrrlightBot.decideEnergyRestore(0.0, true));
+    }
+
+    @Test
+    void energyWakeErrorIsFatalAndMessagesAreActionable() {
+        assertTrue(IrrlightBot.energyWakeIsFatal(IrrlightBot.Wake.ERROR));
+        assertFalse(IrrlightBot.energyWakeIsFatal(IrrlightBot.Wake.IRRLIGHT));
+        assertFalse(IrrlightBot.energyWakeIsFatal(IrrlightBot.Wake.DONE));
+        assertFalse(IrrlightBot.energyWakeIsFatal(IrrlightBot.Wake.TIMEOUT));
+
+        String noFood = IrrlightBot.noConfiguredFoodMessage();
+        assertNotNull(noFood);
+        assertFalse(noFood.isEmpty());
+        assertTrue(noFood.toLowerCase().contains("food"));
+
+        String eatFailed = IrrlightBot.eatFailedMessage();
+        assertNotNull(eatFailed);
+        assertFalse(eatFailed.isEmpty());
+        assertTrue(eatFailed.toLowerCase().contains("eat"));
+    }
+
+    @Test
+    void restoreEnergyBiteTimeoutIsFatal() throws Exception {
+        assertTrue(IrrlightBot.energyBiteWakeIsFatal(IrrlightBot.Wake.TIMEOUT));
+        assertTrue(IrrlightBot.energyBiteWakeIsFatal(IrrlightBot.Wake.ERROR));
+        assertFalse(IrrlightBot.energyBiteWakeIsFatal(IrrlightBot.Wake.IRRLIGHT));
+        assertFalse(IrrlightBot.energyBiteWakeIsFatal(IrrlightBot.Wake.DONE));
+
+        String src = Files.readString(Path.of("src/nurgling/actions/bots/IrrlightBot.java"), StandardCharsets.UTF_8);
+        int restore = src.indexOf("private Wake restoreEnergy(");
+        int restoreEnd = src.indexOf("private Wake openRecipe", restore);
+        assertTrue(restore >= 0 && restoreEnd > restore);
+        String restoreBody = src.substring(restore, restoreEnd);
+        String compact = restoreBody.replaceAll("\\s+", " ");
+        assertTrue(restoreBody.contains("IsSuccess"));
+        assertTrue(restoreBody.contains("Wake bite = waitDuring(resourceRestoreWaitPhase()"));
+        assertTrue(compact.contains("if (bite == Wake.IRRLIGHT) return Wake.IRRLIGHT;"));
+        assertTrue(compact.contains("if (bite == Wake.ERROR) { energyError = eatFailedMessage(); return Wake.ERROR; }"));
+        assertTrue(compact.contains("if (energyBiteWakeIsFatal(bite)) { energyError = eatFailedMessage(); return Wake.ERROR; }"));
+        assertFalse(compact.contains("if (bite != Wake.DONE) break;"));
+        assertFalse(compact.contains("if (bite == Wake.TIMEOUT) break;"));
+        assertFalse(compact.contains("if (energyBiteWakeIsFatal(bite)) break"));
+        assertFalse(compact.contains("if (bite != Wake.DONE) return Wake.DONE"));
+    }
+
+    @Test
+    void restoreEnergySourceScanRequiresConfiguredFoodAndEatResult() throws Exception {
+        String src = Files.readString(Path.of("src/nurgling/actions/bots/IrrlightBot.java"), StandardCharsets.UTF_8);
+        int restore = src.indexOf("private Wake restoreEnergy(");
+        int restoreEnd = src.indexOf("private Wake openRecipe", restore);
+        assertTrue(restore >= 0 && restoreEnd > restore);
+        String restoreBody = src.substring(restore, restoreEnd);
+        assertFalse(restoreBody.contains("0.81"));
+        assertTrue(restoreBody.contains("FoodContainer.getFoodNames"));
+        assertTrue(restoreBody.contains("isExactConfiguredFood"));
+        assertTrue(restoreBody.contains("((NGItem)"));
+        assertTrue(restoreBody.contains(".name()"));
+        assertTrue(restoreBody.contains("SelectFlowerAction"));
+        assertTrue(restoreBody.contains("IsSuccess"));
+        assertTrue(restoreBody.contains("noConfiguredFoodMessage"));
+        assertTrue(restoreBody.contains("eatFailedMessage"));
+        assertTrue(restoreBody.contains("Wake.ERROR"));
+        assertFalse(restoreBody.contains("new RestoreResources()"));
+        assertFalse(restoreBody.contains("new Eater("));
+        assertFalse(restoreBody.contains("NAlias"));
+    }
+
+    @Test
+    void restoreEnergyErrorStopsTheMainLoop() throws Exception {
+        String src = Files.readString(Path.of("src/nurgling/actions/bots/IrrlightBot.java"), StandardCharsets.UTF_8);
+        int run = src.indexOf("public Results run(NGameUI gui)");
+        int runEnd = src.indexOf("private Results prepareCrucible", run);
+        assertTrue(run >= 0 && runEnd > run);
+        String body = src.substring(run, runEnd);
+        assertTrue(body.contains("Wake energyWake = restoreEnergy(gui)"));
+        assertTrue(body.contains("energyWake == Wake.IRRLIGHT"));
+        assertTrue(body.contains("energyWakeIsFatal(energyWake)")
+                || body.contains("energyWake == Wake.ERROR"));
+        assertTrue(body.contains("Results.ERROR"));
+        assertTrue(body.contains("noConfiguredFoodMessage()")
+                || body.contains("eatFailedMessage()"));
+        assertTrue(body.contains("return Results.ERROR(\"NO WATER\")"));
     }
 
     @Test

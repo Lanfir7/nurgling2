@@ -472,6 +472,7 @@ public class NFoodInfo extends FoodInfo  implements GItem.OverlayInfo<Tex>, NSea
             delta = expeted_fep - needed;
         }
     }
+
     @Override
     public void layout(Layout l) {
         if (owner instanceof GItem && NUtils.getGameUI() != null) {
@@ -483,15 +484,11 @@ public class NFoodInfo extends FoodInfo  implements GItem.OverlayInfo<Tex>, NSea
             if (ci != null) {
                 isVarity = !ci.varity.contains(name);
             }
-            if (NUtils.getGameUI().chrwdg != null) {
-                for (int type : types) {
-                    if (NUtils.getGameUI().chrwdg.battr.cons.els.size() > type) {
-                        BAttrWnd.Constipations.El c = NUtils.getGameUI().chrwdg.battr.cons.els.get(type);
-                        if (c != null) {
-                            efficiency = c.a * 100;
-                        }
-                    }
-                }
+            CharWnd chrwdg = NUtils.getGameUI().chrwdg;
+            BAttrWnd battr = (chrwdg != null) ? chrwdg.battr : null;
+            OptionalDouble found = NFoodInfoLayout.layoutConsEfficiency(chrwdg, battr, NFoodInfoLayout.consAs(battr), types);
+            if (found.isPresent()) {
+                efficiency = found.getAsDouble();
             }
             calcData();
         }
@@ -809,5 +806,36 @@ public class NFoodInfo extends FoodInfo  implements GItem.OverlayInfo<Tex>, NSea
             }
         }
         return check();
+    }
+}
+
+final class NFoodInfoLayout {
+    private NFoodInfoLayout() {}
+
+    static List<Double> consAs(BAttrWnd battr) {
+        if (battr == null || battr.cons == null) {
+            return null;
+        }
+        List<Double> consAs = new ArrayList<Double>(battr.cons.els.size());
+        for (BAttrWnd.Constipations.El el : battr.cons.els) {
+            consAs.add(el == null ? null : Double.valueOf(el.a));
+        }
+        return consAs;
+    }
+
+    static OptionalDouble layoutConsEfficiency(Object chrwdg, Object battr, List<Double> consAs, int[] types) {
+        if (chrwdg == null || battr == null || consAs == null || types == null) {
+            return OptionalDouble.empty();
+        }
+        OptionalDouble found = OptionalDouble.empty();
+        for (int type : types) {
+            if (consAs.size() > type) {
+                Double a = consAs.get(type);
+                if (a != null) {
+                    found = OptionalDouble.of(a.doubleValue() * 100);
+                }
+            }
+        }
+        return found;
     }
 }

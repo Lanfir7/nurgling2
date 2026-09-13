@@ -222,7 +222,8 @@ public class NGItem extends GItem
                     checkedForFood = true;
                 }
                 if (foodItem) {
-                    String quickKey = name + "|" + buildIngredientSignature();
+                    String quickKey = RecipeCaptureMode.recipeKey(name, buildIngredientSignature(),
+                            nurgling.cookbook.SmokeWood.signature(nurgling.cookbook.SmokeWood.from(info)));
                     boolean saveLocal = false;
                     boolean shareRemote = false;
                     if (needsLocal) {

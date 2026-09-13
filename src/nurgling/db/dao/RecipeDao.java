@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -49,30 +50,16 @@ public class RecipeDao {
                                 rs.getString("resource_name"),
                                 rs.getDouble("hunger"),
                                 rs.getInt("energy"),
-                                new HashMap<>(),
-                                new HashMap<>()
+                                new HashMap<String, Recipe.IngredientInfo>(),
+                                new HashMap<String, Double>(),
+                                new HashMap<String, Recipe.Fep>()
                         );
                     } catch (SQLException e) {
                         throw new RuntimeException(e);
                     }
                 });
 
-                String ingredientName = rs.getString("ingredient_name");
-                if (!rs.wasNull() && ingredientName != null) {
-                    String ingResource = rs.getString("ing_resource");
-                    recipe.getIngredients().put(
-                            ingredientName,
-                            new Recipe.IngredientInfo(rs.getDouble("percentage"), ingResource)
-                    );
-                }
-
-                String fepName = rs.getString("fep_name");
-                if (!rs.wasNull() && fepName != null) {
-                    recipe.getFeps().put(
-                            fepName,
-                            new Recipe.Fep(rs.getDouble("fep_value"), rs.getDouble("fep_weight"))
-                    );
-                }
+                applyJoinRow(recipe, rs);
             }
         }
 
@@ -85,6 +72,44 @@ public class RecipeDao {
         }
 
         return recipes;
+    }
+
+    /**
+     * Load every recipe. Avoids an {@code IN (?)} list so a full catalog cannot hit SQLite
+     * parameter limits.
+     */
+    public List<Recipe> loadAllRecipes(DatabaseAdapter adapter) throws SQLException {
+        LinkedHashMap<String, Recipe> res = new LinkedHashMap<String, Recipe>();
+        String sql = "SELECT r.recipe_hash, r.item_name, r.resource_name, r.hunger, r.energy, " +
+                "i.name AS ingredient_name, i.percentage, i.resource_name AS ing_resource, " +
+                "f.name AS fep_name, f.value AS fep_value, f.weight as fep_weight " +
+                "FROM recipes r " +
+                "LEFT JOIN ingredients i ON r.recipe_hash = i.recipe_hash " +
+                "LEFT JOIN feps f ON r.recipe_hash = f.recipe_hash";
+
+        try (ResultSet rs = adapter.executeQuery(sql)) {
+            while (rs.next()) {
+                String hash = rs.getString("recipe_hash");
+                Recipe recipe = res.get(hash);
+                if (recipe == null) {
+                    recipe = new Recipe(
+                            hash,
+                            rs.getString("item_name"),
+                            rs.getString("resource_name"),
+                            rs.getDouble("hunger"),
+                            rs.getInt("energy"),
+                            new HashMap<String, Recipe.IngredientInfo>(),
+                            new HashMap<String, Double>(),
+                            new HashMap<String, Recipe.Fep>()
+                    );
+                    res.put(hash, recipe);
+                }
+
+                applyJoinRow(recipe, rs);
+            }
+        }
+
+        return new ArrayList<Recipe>(res.values());
     }
 
     /**
@@ -119,11 +144,12 @@ public class RecipeDao {
     }
 
     private void saveIngredients(DatabaseAdapter adapter, Recipe recipe) throws SQLException {
-        if (!recipe.getIngredients().isEmpty()) {
-            // Upsert ingredients (handles concurrent updates)
-            List<Object[]> ingredientParams = new ArrayList<>();
-            List<String> ingredientNames = new ArrayList<>();
-            for (java.util.Map.Entry<String, Recipe.IngredientInfo> entry : recipe.getIngredients().entrySet()) {
+        // Smoking woods share the ingredients table, told apart by Recipe.SMOKE_RESOURCE in resource_name
+        List<Object[]> ingredientParams = new ArrayList<>();
+        List<String> ingredientNames = new ArrayList<>();
+        java.util.Map<String, Recipe.IngredientInfo> ingredients = recipe.getIngredients();
+        if (ingredients != null) {
+            for (java.util.Map.Entry<String, Recipe.IngredientInfo> entry : ingredients.entrySet()) {
                 ingredientParams.add(new Object[]{
                     recipe.getHash(),
                     entry.getKey(),
@@ -132,19 +158,50 @@ public class RecipeDao {
                 });
                 ingredientNames.add(entry.getKey());
             }
+        }
+        java.util.Map<String, Double> woods = recipe.getSmokingWoods();
+        if (woods != null) {
+            for (java.util.Map.Entry<String, Double> entry : woods.entrySet()) {
+                // (recipe_hash, name) is unique, so an ingredient of the same name keeps the row
+                if (ingredients != null && ingredients.containsKey(entry.getKey())) {
+                    continue;
+                }
+                ingredientParams.add(new Object[]{
+                    recipe.getHash(),
+                    entry.getKey(),
+                    entry.getValue(),
+                    Recipe.SMOKE_RESOURCE
+                });
+                ingredientNames.add(entry.getKey());
+            }
+        }
 
+        if (!ingredientParams.isEmpty()) {
             List<String> columns = java.util.Arrays.asList("recipe_hash", "name", "percentage", "resource_name");
             List<String> conflictColumns = java.util.Arrays.asList("recipe_hash", "name");
             List<String> updateColumns = java.util.Arrays.asList("percentage", "resource_name");
-            
+
             String upsertSql = adapter.getBatchUpsertSql("ingredients", columns, conflictColumns, updateColumns);
             adapter.executeBatch(upsertSql, ingredientParams);
 
-            // Delete ingredients no longer in the recipe
             deleteRemovedItems(adapter, "ingredients", recipe.getHash(), ingredientNames);
         } else {
-            // No ingredients, delete all
             adapter.executeUpdate("DELETE FROM ingredients WHERE recipe_hash = ?", recipe.getHash());
+        }
+    }
+
+    private static void applyJoinRow(Recipe recipe, ResultSet rs) throws SQLException {
+        String ingredientName = rs.getString("ingredient_name");
+        if (!rs.wasNull() && ingredientName != null) {
+            recipe.addIngredientRow(ingredientName, rs.getDouble("percentage"), rs.getString("ing_resource"));
+        }
+
+        String fepName = rs.getString("fep_name");
+        if (!rs.wasNull() && fepName != null) {
+            recipe.getFeps().put(
+                    fepName,
+                    new Recipe.Fep(rs.getDouble("fep_value"), rs.getDouble("fep_weight"))
+            );
         }
     }
 

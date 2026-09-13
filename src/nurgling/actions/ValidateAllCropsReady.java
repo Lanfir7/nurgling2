@@ -8,6 +8,7 @@ import nurgling.tools.NAlias;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public class ValidateAllCropsReady implements Action {
 
@@ -32,15 +33,30 @@ public class ValidateAllCropsReady implements Action {
             return Results.SUCCESS();
         }
 
-        int readyCropCount = 0;
-        for (CropRegistry.CropStage stage : cropStages) {
-            readyCropCount += Finder.findGobs(field, crop, stage.stage).size();
+        Set<Integer> uniqueStages = CropRegistry.harvestStageNumbers(crop);
+        int[] perUniqueStageCounts = new int[uniqueStages.size()];
+        int i = 0;
+        for (Integer stage : uniqueStages) {
+            perUniqueStageCounts[i++] = Finder.findGobs(field, crop, stage).size();
         }
 
-        if (readyCropCount < totalCropCount) {
+        if (!allCropsReady(totalCropCount, perUniqueStageCounts)) {
             return Results.FAIL();
         }
 
         return Results.SUCCESS();
+    }
+
+    static int readyCountFromStages(int[] perUniqueStageCounts) {
+        int sum = 0;
+        if (perUniqueStageCounts == null)
+            return 0;
+        for (int count : perUniqueStageCounts)
+            sum += count;
+        return sum;
+    }
+
+    static boolean allCropsReady(int total, int[] perUniqueStageCounts) {
+        return total == 0 || readyCountFromStages(perUniqueStageCounts) >= total;
     }
 }

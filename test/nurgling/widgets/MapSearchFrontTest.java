@@ -1,13 +1,18 @@
 package nurgling.widgets;
 
+import haven.Coord;
 import haven.Widget;
+import nurgling.actions.bots.MasterMiner;
+import nurgling.conf.ProspectKind;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapSearchFrontTest {
@@ -61,26 +66,78 @@ class MapSearchFrontTest {
     void mapToolbarOpenersCallShowInFront() throws Exception {
         String nmap = read("src/nurgling/widgets/NMapWnd.java");
         String tools = read("src/nurgling/widgets/MapToolsWindow.java");
-        assertEquals(12, count(nmap, "MapSearchFront.showInFront"),
+        String gui = Files.readString(Paths.get("src/nurgling/NGameUI.java"));
+        assertEquals(6, count(nmap, "MapSearchFront.showInFront"),
                 "NMapWnd open* show/re-show paths");
-        assertEquals(8, count(tools, "MapSearchFront.showInFront"),
+        assertEquals(9, count(tools, "MapSearchFront.showInFront"),
                 "MapToolsWindow toggle/open* show paths");
         assertTrue(nmap.contains("openForagingSearch"));
-        assertTrue(nmap.contains("openQuarryartzSearch"));
-        assertTrue(nmap.contains("openGemstoneSearch"));
         assertTrue(nmap.contains("openTreeSearch"));
         assertTrue(nmap.contains("openFishSearch"));
-        assertTrue(nmap.contains("openProspectingSearch"));
-        assertTrue(nmap.contains("openOresSearch"));
+        assertFalse(nmap.contains("openQuarryartzSearch"));
+        assertFalse(nmap.contains("openGemstoneSearch"));
+        assertFalse(nmap.contains("openProspectingSearch"));
+        assertFalse(nmap.contains("openOresSearch"));
+        assertTrue(nmap.contains("openMineralSearch(ProspectKind.ORE)"));
+        assertTrue(nmap.contains("openMineralSearch(ProspectKind.GEM)"));
+        assertTrue(nmap.contains("openMineralSearch(ProspectKind.STONE)"));
         assertTrue(tools.contains("openTerrainSearch"));
         assertTrue(tools.contains("openTerrainResources"));
         assertTrue(tools.contains("openTreeSearch"));
         assertTrue(tools.contains("openFishSearch"));
+        assertTrue(tools.contains("openMineralSearch"));
+        assertTrue(tools.contains("public static void openMineralSearch()"));
+        assertTrue(tools.contains("public static void openMineralSearch(ProspectKind"));
         assertTrue(tools.contains("public static void toggle"));
+        assertTrue(gui.contains("mineralSearchWindow"));
+        assertTrue(gui.contains("mineralSearchWindow.destroy()"));
+        assertTrue(gui.contains("oreSearchWindow"));
+        assertTrue(gui.contains("gemstoneSearchWindow"));
+        assertTrue(nmap.contains("animalsBtn"));
+        assertTrue(nmap.contains("foragingBtn"));
+        assertTrue(nmap.contains("oreBtn"));
+        assertTrue(nmap.contains("gemBtn"));
+        assertTrue(nmap.contains("stoneBtn"));
+        assertFalse(nmap.contains("quarryartzBtn"));
+        assertFalse(nmap.contains("oreSpotsBtn"));
+        assertFalse(nmap.contains("MinesweeperOverlay"));
+        assertTrue(Files.isRegularFile(Path.of("src/nurgling/widgets/OreSearchWindow.java")));
+        assertTrue(Files.isRegularFile(Path.of("src/nurgling/widgets/GemstoneSearchWindow.java")));
+    }
+
+    @Test
+    void clayIsNotAnOreSpot() throws Exception {
+        LabeledMinimapMark clay = new LabeledMinimapMark("q30", "Clay", 30.0, 1L, new Coord(1, 1), null);
+        assertEquals(ProspectKind.CLAY, clay.kind);
+        assertFalse(MasterMiner.isOre("Clay"));
+
+        String src = Files.readString(Path.of("src/nurgling/widgets/NMiniMap.java"), StandardCharsets.UTF_8);
+        String ore = method(src, "static boolean isOreSpotMark");
+        assertTrue(ore.contains("mark.kind == ProspectKind.ORE"));
+        assertTrue(ore.contains("MasterMiner.isOre"));
+        assertFalse(ore.contains("Clay"));
+        assertFalse(ore.contains("clay"));
+    }
+
+    private static String method(String src, String sig) {
+        int at = src.indexOf(sig);
+        assertTrue(at >= 0, "missing " + sig);
+        int brace = src.indexOf('{', at);
+        int depth = 0;
+        for (int i = brace; i < src.length(); i++) {
+            char c = src.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0)
+                    return src.substring(at, i + 1);
+            }
+        }
+        throw new AssertionError("unclosed " + sig);
     }
 
     private static String read(String path) throws Exception {
-        return new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
+        return Files.readString(Paths.get(path), StandardCharsets.UTF_8);
     }
 
     private static int count(String src, String needle) {

@@ -3,11 +3,13 @@ package nurgling;
 import haven.*;
 import nurgling.actions.AutoDrink;
 import nurgling.actions.ChopAndRemoveStump;
+import nurgling.actions.ForageChainPickAction;
 import nurgling.actions.RemoveStump;
 import nurgling.actions.bots.*;
 import nurgling.areas.NContext;
 import nurgling.i18n.L10n;
 import nurgling.sessions.BotExecutor;
+import nurgling.tools.ForageChainPick;
 import nurgling.tools.ForageMarkerLogic;
 import nurgling.widgets.NProspecting;
 import nurgling.hotkeys.Hotkeys;
@@ -275,6 +277,7 @@ public class NFlowerMenu extends FlowerMenu
                     ui.core.setLastAction(option.name, actions.gob);
                 }
             }
+            maybeStartForageChain(option.name);
         }
         if(!Hotkeys.action(Hotkeys.FLOWER_FORCE_MANUAL).current().matchesModifiers(ui.modflags()) && !NUtils.getUI().core.isBotmod() && ctrlMode)
         {
@@ -295,6 +298,16 @@ public class NFlowerMenu extends FlowerMenu
         // Inventory.$_.create() needs getLastActions().gob to set parentGob
         // for Storage Items DB tracking. Actions will be naturally overridden
         // by the next user interaction (right-click sets new action).
+    }
+
+    private void maybeStartForageChain(String actionName) {
+        if (forageSourceGob == null || forageSourceGob.ngob == null) return;
+        boolean botRunning = NContext.waitBot.get()
+            || (ui.gui != null && ui.gui.biw != null && ui.gui.biw.waitBot.get());
+        boolean shiftHeld = Hotkeys.action(Hotkeys.FLOWER_FORCE_MANUAL).current().matchesModifiers(ui.modflags());
+        if (!ForageChainPick.shouldStart(shiftHeld, botRunning, actionName, forageSourceGob.ngob.name)) return;
+        BotExecutor.runAsync("ForageChainPick", new ForageChainPickAction(
+            forageSourceGob.ngob.name, actionName, forageSourceGob.id));
     }
 
     public boolean hasOpt(String action) {

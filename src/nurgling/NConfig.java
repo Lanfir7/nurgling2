@@ -302,6 +302,7 @@ public class NConfig
         showAllZonesAlways,
         showGemstoneIcons,
         showOreSpotIcons,
+        showStoneIcons,
         showProspectingIcons,
         showQuarryartzIcons,
         simpleRoutesDiscordNotify,
@@ -577,6 +578,7 @@ public class NConfig
         conf.put(Key.showAllZonesAlways, false);
         conf.put(Key.showGemstoneIcons, true);
         conf.put(Key.showOreSpotIcons, true);
+        conf.put(Key.showStoneIcons, true);
         conf.put(Key.showProspectingIcons, true);
         conf.put(Key.showQuarryartzIcons, true);
         conf.put(Key.simpleRoutesDiscordNotify, false);

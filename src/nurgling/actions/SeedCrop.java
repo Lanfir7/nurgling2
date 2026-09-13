@@ -95,18 +95,21 @@ public class SeedCrop implements Action {
         // the harvest is dropped off.
         stockPiles = (vegArea != null) ? Finder.findGobs(vegArea, new NAlias("stockpile")) : new ArrayList<>();
 
-        // Build planting sources from the crop registry, in priority order:
-        // barrel seeds first, then stockpile vegetables. Each product is matched by
-        // an exact alias so seeds and vegetables can never be conflated even when
-        // both are present in the inventory at once.
+        // Build planting sources from plantable registry products only, in priority
+        // order: barrel seeds first, then stockpile vegetables. Non-plantable harvest
+        // (radish vegetables) is never a sowing source.
         sources.clear();
         sourceIdx = 0;
-        CropRegistry.CropStage barrelStage = CropRegistry.getProductByStorage(crop, CropRegistry.StorageBehavior.BARREL);
-        CropRegistry.CropStage stockStage = CropRegistry.getProductByStorage(crop, CropRegistry.StorageBehavior.STOCKPILE);
-        if (barrelStage != null && !barrels.isEmpty())
-            sources.add(new PlantingSource(SourceType.BARREL, seedItemAlias(barrelStage.result), 5));
-        if (stockStage != null && vegArea != null && !stockPiles.isEmpty())
-            sources.add(new PlantingSource(SourceType.STOCKPILE, vegItemAlias(stockStage.result), 1));
+        boolean barrelsPresent = !barrels.isEmpty();
+        boolean stockPilesPresent = vegArea != null && !stockPiles.isEmpty();
+        CropRegistry.CropStage barrelStage = CropRegistry.getPlantingProductByStorage(crop, CropRegistry.StorageBehavior.BARREL);
+        CropRegistry.CropStage stockStage = CropRegistry.getPlantingProductByStorage(crop, CropRegistry.StorageBehavior.STOCKPILE);
+        for (String kind : plantingSourceKinds(barrelStage != null, stockStage != null, barrelsPresent, stockPilesPresent)) {
+            if ("barrel".equals(kind) && barrelStage != null)
+                sources.add(new PlantingSource(SourceType.BARREL, seedItemAlias(barrelStage.result), 5));
+            else if ("stockpile".equals(kind) && stockStage != null)
+                sources.add(new PlantingSource(SourceType.STOCKPILE, vegItemAlias(stockStage.result), 1));
+        }
 
         if (sources.isEmpty())
             return Results.ERROR("No planting source (barrel/stockpile) available for crop");
@@ -273,15 +276,35 @@ public class SeedCrop implements Action {
         return (sourceIdx < sources.size()) ? sources.get(sourceIdx) : null;
     }
 
+    // Barrel seeds first, then stockpile vegetables — only when that product is
+    // plantable and the matching container is present.
+    static List<String> plantingSourceKinds(boolean hasBarrelStagePlantable, boolean hasStockStagePlantable,
+                                            boolean barrelsPresent, boolean stockPilesPresent) {
+        List<String> kinds = new ArrayList<String>();
+        if (hasBarrelStagePlantable && barrelsPresent)
+            kinds.add("barrel");
+        if (hasStockStagePlantable && stockPilesPresent)
+            kinds.add("stockpile");
+        return kinds;
+    }
+
+    static List<String> plantingSourceKinds(NAlias crop, boolean barrelsPresent, boolean stockPilesPresent) {
+        return plantingSourceKinds(
+                CropRegistry.getPlantingProductByStorage(crop, CropRegistry.StorageBehavior.BARREL) != null,
+                CropRegistry.getPlantingProductByStorage(crop, CropRegistry.StorageBehavior.STOCKPILE) != null,
+                barrelsPresent,
+                stockPilesPresent);
+    }
+
     // The seed product name ("X Seeds") is self-exact under substring matching, so a
     // vegetable name can never match it.
-    private NAlias seedItemAlias(NAlias result) {
+    static NAlias seedItemAlias(NAlias result) {
         return result;
     }
 
     // The vegetable product must exclude its seed sibling: "Carrot" + exception "seed"
     // matches Carrot but never "Carrot Seeds" / "...seed-carrot".
-    private NAlias vegItemAlias(NAlias result) {
+    static NAlias vegItemAlias(NAlias result) {
         return new NAlias(new ArrayList<>(result.keys), new ArrayList<>(Collections.singletonList("seed")));
     }
 

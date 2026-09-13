@@ -16,6 +16,7 @@ import nurgling.i18n.L10n;
 import nurgling.routes.ForagerAction;
 import nurgling.routes.ForagerPath;
 import nurgling.routes.ForagerRouteStore;
+import nurgling.widgets.AdaptiveSettingsPanel;
 import nurgling.widgets.ForagerPickupContainer;
 import nurgling.widgets.TextInputWindow;
 import nurgling.widgets.options.NRingSettings;
@@ -31,19 +32,76 @@ import java.util.Map;
 import java.util.TreeSet;
 
 /** "Forager Settings" panel under Settings &gt; Bots - owns editing of Forager's Actions, Routes, and Guarding Profiles. */
-public class ForagerSettingsPanel extends Panel {
+public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel {
 
-    // Shared row layout for the Routes/Guarding sections' data rows: label at ROW_LABEL_X, values/units after, trailing control at ROW_TOGGLE_X.
+    // Shared row layout for the Routes/Guarding sections' data rows: label at ROW_LABEL_X, values after.
     private static final int ROW_LABEL_X = 0;
-    private static final int ROW_VALUE1_X = 250;
-    private static final int ROW_UNIT1_X = 295;
-    private static final int ROW_VALUE2_X = 350;
-    private static final int ROW_UNIT2_X = 395;
-    private static final int ROW_TOGGLE_X = 420;
     private static final int ROW_W = 530;
     private static final int ROW_H = 24;
     private static final int ENTRY_W = 50;
     private static final int ROUTE_VALUE_X = 350;
+    private static final int MAP_MIN_H = 180;
+    private static final int MAP_MAX_H = 360;
+    private static final int PICKUP_MIN_H = 160;
+    private static final int PICKUP_MAX_H = 320;
+    private static final int GUARD_OUTCOME_W = 130;
+    private static final int CHECK_TOGGLE_X = 0;
+    private static final int CHECK_LABEL_X = 24;
+
+    /** One label+entry pair for a route numeric cap (max branches / max distance / max branch distance). */
+    static final class RouteCapSlot {
+        final int labelX;
+        final int entryX;
+        final int entryW;
+
+        RouteCapSlot(int labelX, int entryX, int entryW) {
+            this.labelX = labelX;
+            this.entryX = entryX;
+            this.entryW = entryW;
+        }
+
+        int entryRight() {
+            return entryX + entryW;
+        }
+
+        int labelBudget() {
+            return entryX - labelX;
+        }
+    }
+
+    static int routeRowWidth() {
+        return ROW_W;
+    }
+
+    static int routeValueX() {
+        return ROUTE_VALUE_X;
+    }
+
+    /** One stacked row each so EN/RU captions fit; values share the brush/cliff column. */
+    static RouteCapSlot[] routeCapSlots() {
+        RouteCapSlot stacked = new RouteCapSlot(ROW_LABEL_X, ROUTE_VALUE_X, ENTRY_W);
+        return new RouteCapSlot[] { stacked, stacked, stacked };
+    }
+
+    static int routeMapHeight(int remaining, int minH, int maxH) {
+        return Math.max(minH, Math.min(maxH, remaining));
+    }
+
+    static int guardOutcomeWidth() {
+        return GUARD_OUTCOME_W;
+    }
+
+    static int guardOutcomeX(int rowW) {
+        return rowW - guardOutcomeWidth();
+    }
+
+    static int guardLabelMaxWidth(int rowW) {
+        return Math.max(1, guardOutcomeX(rowW) - CHECK_LABEL_X - 8);
+    }
+
+    static int guardInputStartX() {
+        return CHECK_LABEL_X;
+    }
 
     // Short, one-line-each instructions for the map editor below, in display order.
     private static final String[] ROUTES_HELP_KEYS = {
@@ -83,8 +141,6 @@ public class ForagerSettingsPanel extends Panel {
     // ---- Guarding ----
     // "break" just stops the bot; whether a check runs at all is a separate per-row enabled CheckBox (see GuardRow/buildGuardRow).
     private static final String[] GUARD_ACTIONS = GuardOutcome.ALL_IDS;
-    private static final int CHECK_TOGGLE_X = 0;
-    private static final int CHECK_LABEL_X = 24;
 
     private GuardingProfile currentGuardingProfile;
     private Dropbox<String> guardingProfileDropbox;
@@ -124,9 +180,11 @@ public class ForagerSettingsPanel extends Panel {
 
     // Actions/Guarding each have two selectors (top section's editor, Presets section's picker); switching the active preset's profile mirrors into the top editor, one-directionally only.
     private Scrollport scroll;
+    private CollapsibleSection actionsSection;
     private CollapsibleSection routesSection;
     private Widget routesContent;
     private Widget mapAnchor;
+    private int sectionWidth = UI.scale(540);
 
     // Every top-level CollapsibleSection, in display order; relayoutSections() repositions them after any toggle/content-height change.
     private final List<CollapsibleSection> sections = new ArrayList<>();
@@ -156,14 +214,14 @@ public class ForagerSettingsPanel extends Panel {
     }
 
     public ForagerSettingsPanel() {
-        super(L10n.get("nsettings.item.forager"));
+        super();
 
-        // Scrollable viewport since this panel's content runs past the panel's own 580x580 budget.
-        scroll = add(new Scrollport(UI.scale(new Coord(560, 530))), UI.scale(10, 40));
+        // Inner scroll owns the page; SettingsPageFrame keeps the outer window from clipping this panel.
+        scroll = add(new Scrollport(UI.scale(new Coord(560, 530))), UI.scale(10, 10));
         Widget cont = scroll.cont;
 
         // Each logically-separate group gets its own collapsible section.
-        CollapsibleSection actionsSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.actions_section"), UI.scale(540), false), Coord.z);
+        actionsSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.actions_section"), sectionWidth, false), Coord.z);
         actionsSection.setOnToggle(this::relayoutSections);
         sections.add(actionsSection);
         Widget sec = actionsSection.content;
@@ -260,7 +318,7 @@ public class ForagerSettingsPanel extends Panel {
         actionsSection.pack();
 
         // ---- Routes ----
-        routesSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.routes_section"), UI.scale(540), false), actionsSection.pos("bl").add(UI.scale(0, 10)));
+        routesSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.routes_section"), sectionWidth, false), actionsSection.pos("bl").add(UI.scale(0, 10)));
         routesSection.setOnToggle(() -> {
             relayoutSections();
             updateActiveRouteEditor();
@@ -268,10 +326,15 @@ public class ForagerSettingsPanel extends Panel {
         sections.add(routesSection);
         Widget rsec = routesContent = routesSection.content;
 
-        Widget rprev = null;
+        StringBuilder helpTip = new StringBuilder();
         for (String key : ROUTES_HELP_KEYS) {
-            rprev = rsec.add(new Label("• " + L10n.get(key), UI.scale(520)), rprev == null ? Coord.z : rprev.pos("bl").add(UI.scale(0, 3)));
+            if (helpTip.length() > 0) {
+                helpTip.append('\n');
+            }
+            helpTip.append("• ").append(L10n.get(key));
         }
+        Widget rprev = rsec.add(new Label(L10n.get("forager.settings.routes_help_short")), Coord.z);
+        rprev.settip(helpTip.toString());
 
         rprev = rsec.add(new Label(L10n.get("forager.settings.route")), rprev.pos("bl").add(UI.scale(0, 12)));
 
@@ -344,25 +407,21 @@ public class ForagerSettingsPanel extends Panel {
         rowItem(cliffRow, new Label(L10n.get("forager.settings.cliff_buffer")), UI.scale(160));
         cliffBufferEntry = rowItem(cliffRow, new TextEntry(UI.scale(ENTRY_W), "1"), UI.scale(ROUTE_VALUE_X));
 
-        // Own offsets, not the brush/cliff rows' shared column - the longest label needs more room than an even 3-way split.
-        Widget capsRow = rsec.add(new Widget(new Coord(UI.scale(560), UI.scale(ROW_H))), cliffRow.pos("bl").add(UI.scale(0, 8)));
-        rowItem(capsRow, new Label(L10n.get("forager.settings.max_branches")), UI.scale(0));
-        maxBranchesEntry = rowItem(capsRow, new TextEntry(UI.scale(ENTRY_W), ""), UI.scale(80));
-        maxBranchesEntry.settip(L10n.get("forager.settings.max_branches_tip"));
-        rowItem(capsRow, new Label(L10n.get("forager.settings.max_distance")), UI.scale(160));
-        maxDistanceEntry = rowItem(capsRow, new TextEntry(UI.scale(ENTRY_W), ""), UI.scale(280));
-        maxDistanceEntry.settip(L10n.get("forager.settings.max_distance_tip"));
-        rowItem(capsRow, new Label(L10n.get("forager.settings.max_branch_distance")), UI.scale(360));
-        maxBranchDistanceEntry = rowItem(capsRow, new TextEntry(UI.scale(ENTRY_W), ""), UI.scale(500));
-        maxBranchDistanceEntry.settip(L10n.get("forager.settings.max_branch_distance_tip"));
+        RouteCapSlot[] caps = routeCapSlots();
+        maxBranchesEntry = addRouteCapRow(rsec, cliffRow, 8, caps[0],
+                "forager.settings.max_branches", "forager.settings.max_branches_tip");
+        maxDistanceEntry = addRouteCapRow(rsec, maxBranchesEntry.parent, 6, caps[1],
+                "forager.settings.max_distance", "forager.settings.max_distance_tip");
+        maxBranchDistanceEntry = addRouteCapRow(rsec, maxDistanceEntry.parent, 6, caps[2],
+                "forager.settings.max_branch_distance", "forager.settings.max_branch_distance_tip");
 
-        mapAnchor = capsRow;
+        mapAnchor = maxBranchDistanceEntry.parent;
 
         // ForagerRouteMap itself is built lazily - see ensureRouteMapBuilt(), called from load().
         routesSection.pack();
 
         // ---- Guarding ----
-        CollapsibleSection guardingSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.guarding_section"), UI.scale(540), false), routesSection.pos("bl").add(UI.scale(0, 10)));
+        CollapsibleSection guardingSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.guarding_section"), sectionWidth, false), routesSection.pos("bl").add(UI.scale(0, 10)));
         guardingSection.setOnToggle(this::relayoutSections);
         sections.add(guardingSection);
         Widget gsec = guardingSection.content;
@@ -419,12 +478,13 @@ public class ForagerSettingsPanel extends Panel {
         Widget toggleRow = gsec.add(new Widget(new Coord(UI.scale(ROW_W), UI.scale(ROW_H))), guardingProfileRow.pos("bl").add(UI.scale(0, 12)));
         waterModeCheck = rowItem(toggleRow, new CheckBox(L10n.get("forager.settings.water_mode")), UI.scale(0));
         waterModeCheck.settip(L10n.get("forager.settings.water_mode_tip"));
-        ignoreBatsCheck = rowItem(toggleRow, new CheckBox(L10n.get("forager.settings.ignore_bats")), UI.scale(160));
+        Widget batsRow = gsec.add(new Widget(new Coord(UI.scale(ROW_W), UI.scale(ROW_H))), toggleRow.pos("bl").add(UI.scale(0, 4)));
+        ignoreBatsCheck = rowItem(batsRow, new CheckBox(L10n.get("forager.settings.ignore_bats")), UI.scale(0));
         ignoreBatsCheck.a = true;
         ignoreBatsCheck.settip(L10n.get("forager.settings.ignore_bats_tip"));
 
         // Every check row is built generically from GuardRegistry (see buildGuardRow); Pre-flight runs once before departing, In-flight continuously.
-        Widget preflightLabel = gsec.add(new Label(L10n.get("forager.settings.preflight_checks")), toggleRow.pos("bl").add(UI.scale(0, 14)));
+        Widget preflightLabel = gsec.add(new Label(L10n.get("forager.settings.preflight_checks")), batsRow.pos("bl").add(UI.scale(0, 14)));
         Widget prevGuardRow = preflightLabel;
         for (String id : GuardRegistry.preflightIds()) {
             prevGuardRow = buildGuardRow(gsec, prevGuardRow, GuardRegistry.get(id), preflightRows);
@@ -439,7 +499,7 @@ public class ForagerSettingsPanel extends Panel {
         guardingSection.pack();
 
         // ---- Presets ----
-        CollapsibleSection presetsSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.presets_section"), UI.scale(540), false), guardingSection.pos("bl").add(UI.scale(0, 10)));
+        CollapsibleSection presetsSection = cont.add(new CollapsibleSection(L10n.get("forager.settings.presets_section"), sectionWidth, false), guardingSection.pos("bl").add(UI.scale(0, 10)));
         presetsSection.setOnToggle(this::relayoutSections);
         sections.add(presetsSection);
         Widget psec = presetsSection.content;
@@ -587,30 +647,43 @@ public class ForagerSettingsPanel extends Panel {
         return db;
     }
 
-    /** Builds one generic guard-check row from a GuardSpec, recording its widgets in rowMap keyed by spec.id. */
+    /** Builds one generic guard-check: label+outcome on the first row, numeric inputs on the next. */
     private Widget buildGuardRow(Widget gsec, Widget prev, GuardSpec spec, Map<String, GuardRow> rowMap) {
         Widget row = gsec.add(new Widget(new Coord(UI.scale(ROW_W), UI.scale(ROW_H))), prev.pos("bl").add(UI.scale(0, 4)));
         CheckBox enabled = rowItem(row, new CheckBox(""), UI.scale(CHECK_TOGGLE_X));
-        rowItem(row, new Label(spec.label), UI.scale(CHECK_LABEL_X));
+        Dropbox<String> outcome = rowItem(row, buildSimpleDropbox(GUARD_ACTIONS, UI.scale(guardOutcomeWidth())), UI.scale(guardOutcomeX(ROW_W)));
+        rowItem(row, new Label(spec.label, UI.scale(guardLabelMaxWidth(ROW_W))), UI.scale(CHECK_LABEL_X));
 
-        int[] valueXs = {ROW_VALUE1_X, ROW_VALUE2_X};
-        int[] unitXs = {ROW_UNIT1_X, ROW_UNIT2_X};
         List<TextEntry> inputEntries = new ArrayList<>();
-        for (int i = 0; i < spec.inputs.size() && i < valueXs.length; i++) {
-            GuardInput input = spec.inputs.get(i);
-            TextEntry entry = rowItem(row, new TextEntry(UI.scale(ENTRY_W), String.valueOf((long) input.defaultValue)), UI.scale(valueXs[i]));
-            rowItem(row, new Label(input.suffixLabel), UI.scale(unitXs[i]));
-            inputEntries.add(entry);
+        Widget last = row;
+        boolean extraRow = !spec.inputs.isEmpty() || "dangerous_animal".equals(spec.id);
+        if (extraRow) {
+            Widget inputRow = gsec.add(new Widget(new Coord(UI.scale(ROW_W), UI.scale(ROW_H))), row.pos("bl").add(UI.scale(0, 2)));
+            int x = UI.scale(guardInputStartX());
+            for (GuardInput input : spec.inputs) {
+                TextEntry entry = rowItem(inputRow, new TextEntry(UI.scale(ENTRY_W), String.valueOf((long) input.defaultValue)), x);
+                inputEntries.add(entry);
+                x += UI.scale(ENTRY_W + 4);
+                Label unit = rowItem(inputRow, new Label(input.suffixLabel), x);
+                x += unit.sz.x + UI.scale(12);
+            }
+            if ("dangerous_animal".equals(spec.id)) {
+                rowItem(inputRow, new Button(UI.scale(150), L10n.get("forager.settings.aggression_radii"), this::openRingSettings), x);
+            }
+            last = inputRow;
         }
-
-        if ("dangerous_animal".equals(spec.id)) {
-            rowItem(row, new Button(UI.scale(150), L10n.get("forager.settings.aggression_radii"), this::openRingSettings), UI.scale(ROW_VALUE1_X));
-        }
-
-        Dropbox<String> outcome = rowItem(row, buildSimpleDropbox(GUARD_ACTIONS, UI.scale(110)), UI.scale(ROW_TOGGLE_X));
 
         rowMap.put(spec.id, new GuardRow(enabled, inputEntries, outcome));
-        return row;
+        return last;
+    }
+
+    /** One stacked route cap: label on the left, numeric entry in the shared value column. */
+    private TextEntry addRouteCapRow(Widget parent, Widget prev, int yGap, RouteCapSlot slot, String labelKey, String tipKey) {
+        Widget row = parent.add(new Widget(new Coord(UI.scale(ROW_W), UI.scale(ROW_H))), prev.pos("bl").add(UI.scale(0, yGap)));
+        rowItem(row, new Label(L10n.get(labelKey)), UI.scale(slot.labelX));
+        TextEntry entry = rowItem(row, new TextEntry(UI.scale(slot.entryW), ""), UI.scale(slot.entryX));
+        entry.settip(L10n.get(tipKey));
+        return entry;
     }
 
     /** Adds child to row, vertically centered against the row's declared height; x is the child's left edge. */
@@ -620,19 +693,87 @@ public class ForagerSettingsPanel extends Panel {
 
     /** Repositions every top-level section below the current bottom edge of the one before it. */
     private void relayoutSections() {
+        packSections();
+        stackSections();
+        sizePickup();
+        sizeRouteMap();
+        packSections();
+        stackSections();
+        if (scroll != null) {
+            scroll.cont.update();
+        }
+    }
+
+    private void packSections() {
+        for (CollapsibleSection s : sections) {
+            s.pack();
+        }
+    }
+
+    private void stackSections() {
         Coord next = Coord.z;
         for (CollapsibleSection s : sections) {
             s.move(next);
             next = s.pos("bl").add(UI.scale(0, 10));
         }
-        scroll.cont.update();
+    }
+
+    @Override
+    public void fitToWidth(int width, int columns) {
+        fitToViewport(new Coord(width, sz.y), columns);
+    }
+
+    @Override
+    public void fitToViewport(Coord viewport, int columns) {
+        resize(viewport);
+        int margin = UI.scale(10);
+        if (scroll != null) {
+            scroll.move(Coord.of(margin, margin));
+            scroll.resize(Coord.of(
+                    Math.max(1, viewport.x - margin * 2),
+                    Math.max(UI.scale(80), viewport.y - margin * 2)));
+            sectionWidth = Math.max(UI.scale(400), scroll.sz.x - UI.scale(8));
+            for (CollapsibleSection s : sections) {
+                s.resize(new Coord(sectionWidth, s.sz.y));
+                s.content.resize(new Coord(sectionWidth, s.content.sz.y));
+            }
+            relayoutSections();
+        }
+    }
+
+    @Override
+    public boolean ownsVerticalScroll() {
+        return true;
+    }
+
+    private void sizePickup() {
+        if (pickupContainer == null || scroll == null || actionsSection == null || !actionsSection.isExpanded()) {
+            return;
+        }
+        Coord pos = pickupContainer.parentpos(scroll.cont);
+        int remaining = scroll.sz.y - pos.y - UI.scale(8);
+        int h = routeMapHeight(remaining, UI.scale(PICKUP_MIN_H), UI.scale(PICKUP_MAX_H));
+        int w = Math.min(UI.scale(400), Math.max(UI.scale(200), sectionWidth - UI.scale(20)));
+        pickupContainer.resize(new Coord(w, h));
+    }
+
+    private void sizeRouteMap() {
+        if (routeMap == null || scroll == null || mapAnchor == null || routesSection == null || !routesSection.isExpanded()) {
+            return;
+        }
+        Coord pos = mapAnchor.parentpos(scroll.cont);
+        int remaining = scroll.sz.y - (pos.y + mapAnchor.sz.y + UI.scale(10)) - UI.scale(8);
+        int h = routeMapHeight(remaining, UI.scale(MAP_MIN_H), UI.scale(MAP_MAX_H));
+        int w = Math.max(UI.scale(200), sectionWidth - UI.scale(20));
+        routeMap.resize(new Coord(w, h));
+        routeMap.move(mapAnchor.pos("bl").add(UI.scale(0, 10)));
     }
 
     /** Builds the embedded route-editing map on first open, not in the constructor; idempotent. */
     private void ensureRouteMapBuilt() {
         if (routeMap != null) return;
 
-        routeMap = routesContent.add(new ForagerRouteMap(UI.scale(new Coord(520, 360)), NUtils.getGameUI().mmap.file), mapAnchor.pos("bl").add(UI.scale(0, 10)));
+        routeMap = routesContent.add(new ForagerRouteMap(UI.scale(new Coord(520, 240)), NUtils.getGameUI().mmap.file), mapAnchor.pos("bl").add(UI.scale(0, 10)));
         routeMap.onResetRequested = this::resetCurrentRoute;
         applyBrushSize();
 

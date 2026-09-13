@@ -56,6 +56,13 @@ public class RecipeService {
     }
 
     /**
+     * Load the full recipe catalog synchronously.
+     */
+    public List<Recipe> loadAllRecipes() throws SQLException {
+        return databaseManager.executeOperation(adapter -> recipeDao.loadAllRecipes(adapter));
+    }
+
+    /**
      * Save recipe asynchronously with queuing to avoid connection pool exhaustion
      */
     public CompletableFuture<Void> saveRecipeAsync(Recipe recipe) {

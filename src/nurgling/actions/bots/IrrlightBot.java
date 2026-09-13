@@ -17,18 +17,22 @@ import nurgling.actions.Action;
 import nurgling.actions.PathFinder;
 import nurgling.actions.LightGob;
 import nurgling.actions.Results;
+import nurgling.actions.SelectFlowerAction;
 import nurgling.actions.TakeItems2;
 import nurgling.actions.TransferItems2;
+import nurgling.iteminfo.NFoodInfo;
 import nurgling.areas.NContext;
 import nurgling.areas.NGlobalCoord;
 import nurgling.tasks.NTask;
 import nurgling.tasks.WaitDuration;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.widgets.FoodContainer;
 import nurgling.widgets.NMakewindow;
 import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -112,6 +116,11 @@ public class IrrlightBot implements Action {
     private static final int MIN_FREE_SLOTS = 5;
     /** Close enough to the starting spot that walking back would be a no-op. */
     private static final double HOME_TOLERANCE = 3;
+    /** How long to let the crucible stream back in after a trip before calling it gone. */
+    static final long CRUCIBLE_RELOAD_TIMEOUT = 15000;
+    /** Same cutoffs {@link nurgling.actions.RestoreResources} uses; drink() itself still tops up to 0.9. */
+    static final double STAMINA_RESTORE_BELOW = 0.5;
+    static final double ENERGY_RESTORE_BELOW = 0.35;
 
     /** Nuggets win so a leftover bar is spent before a fresh nuggify. Null if there is no metal. */
     static String nextCycleRecipe(int bars, int nuggets) {
@@ -132,6 +141,157 @@ public class IrrlightBot implements Action {
 
     static boolean matchesNormalCrucible(String gobName) {
         return gobName != null && CRUCIBLE.matches(gobName);
+    }
+
+    static boolean crucibleStillValid(String gobName) {
+        return matchesNormalCrucible(gobName);
+    }
+
+    /**
+     * Spatial re-find is last resort. {@code hasStoredHash} is whether a stable hash was ever
+     * captured, not whether that hash currently hits a loaded gob.
+     */
+    static boolean shouldRefindWhenMissing(boolean idPresent, boolean hasStoredHash) {
+        return !idPresent && !hasStoredHash;
+    }
+
+    static boolean allowsNearbyFallback(boolean hasStoredHash) {
+        return !hasStoredHash;
+    }
+
+    enum CrucibleResolve { LIVE_ID, HASH, WAIT_STORED, NEARBY, MISSING }
+
+    /**
+     * Live id, then a current hash hit, then wait for the stored identity. Nearby is only legal
+     * when a stable hash was never captured. Empty {@code hashHitId} is not a hash hit.
+     */
+    static CrucibleResolve resolveAfterReload(Long currentIdPresent, boolean hasStoredHash, String hashHitId, Long nearbyNormalId) {
+        if (currentIdPresent != null)
+            return CrucibleResolve.LIVE_ID;
+        if (hashHitId != null && !hashHitId.isEmpty())
+            return CrucibleResolve.HASH;
+        if (hasStoredHash)
+            return CrucibleResolve.WAIT_STORED;
+        if (nearbyNormalId != null)
+            return CrucibleResolve.NEARBY;
+        return CrucibleResolve.MISSING;
+    }
+
+    static Long resolvedCrucibleId(Long currentIdPresent, boolean hasStoredHash, String hashHitId, Long nearbyNormalId) {
+        switch (resolveAfterReload(currentIdPresent, hasStoredHash, hashHitId, nearbyNormalId)) {
+            case LIVE_ID:
+                return currentIdPresent;
+            case HASH:
+                try {
+                    return Long.valueOf(hashHitId);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            case NEARBY:
+                return nearbyNormalId;
+            default:
+                return null;
+        }
+    }
+
+    static boolean hasStableHash(String storedHash) {
+        return storedHash != null && !storedHash.isEmpty();
+    }
+
+    static boolean shouldCaptureChosenHash(CrucibleResolve resolve) {
+        return resolve == CrucibleResolve.LIVE_ID
+                || resolve == CrucibleResolve.HASH
+                || resolve == CrucibleResolve.NEARBY;
+    }
+
+    /**
+     * Nearby may capture a hash only once. A later spatial miss must not replace the identity
+     * that was already locked in.
+     */
+    static String nextStableHash(String storedHash, CrucibleResolve resolve, String chosenHash) {
+        if (hasStableHash(storedHash) && resolve == CrucibleResolve.NEARBY)
+            return storedHash;
+        if (!shouldCaptureChosenHash(resolve) || chosenHash == null)
+            return storedHash;
+        return chosenHash;
+    }
+
+    static boolean needsStaminaRestore(double stamina) {
+        return stamina >= 0 && stamina < STAMINA_RESTORE_BELOW;
+    }
+
+    static boolean needsEnergyRestore(double energy) {
+        return energy >= 0 && energy < ENERGY_RESTORE_BELOW;
+    }
+
+    static boolean needsResourceRestore(double stamina, double energy) {
+        return needsStaminaRestore(stamina) || needsEnergyRestore(energy);
+    }
+
+    static boolean isExactConfiguredFood(String itemName, Collection<String> configuredNames) {
+        if (itemName == null || configuredNames == null)
+            return false;
+        for (String configured : configuredNames) {
+            if (itemName.equals(configured))
+                return true;
+        }
+        return false;
+    }
+
+    static String firstConfiguredFoodName(List<String> inventoryNames, Collection<String> configuredNames) {
+        if (inventoryNames == null)
+            return null;
+        for (String name : inventoryNames) {
+            if (isExactConfiguredFood(name, configuredNames))
+                return name;
+        }
+        return null;
+    }
+
+    static boolean shouldRefuseFoodForOvershoot(double energy, double foodEnergyPercent) {
+        if (needsEnergyRestore(energy))
+            return false;
+        return energy + foodEnergyPercent / 100.0 >= 0.81;
+    }
+
+    static boolean shouldEatConfiguredFood(double energy, Double foodEnergyPercent) {
+        if (foodEnergyPercent == null)
+            return false;
+        return needsEnergyRestore(energy) && !shouldRefuseFoodForOvershoot(energy, foodEnergyPercent);
+    }
+
+    enum EnergyRestoreDecision { SKIP, EAT, NO_CONFIGURED_FOOD }
+
+    static EnergyRestoreDecision decideEnergyRestore(double energy, boolean hasConfiguredFood) {
+        if (!needsEnergyRestore(energy))
+            return EnergyRestoreDecision.SKIP;
+        if (!hasConfiguredFood)
+            return EnergyRestoreDecision.NO_CONFIGURED_FOOD;
+        return EnergyRestoreDecision.EAT;
+    }
+
+    static boolean energyWakeIsFatal(Wake wake) {
+        return wake == Wake.ERROR;
+    }
+
+    static boolean energyBiteWakeIsFatal(Wake bite) {
+        return bite != Wake.DONE && bite != Wake.IRRLIGHT;
+    }
+
+    static String noConfiguredFoodMessage() {
+        return "No configured food in inventory to restore energy";
+    }
+
+    static String eatFailedMessage() {
+        return "Eat action failed for configured food";
+    }
+
+    static WaitPhase resourceRestoreWaitPhase() {
+        return WaitPhase.DRINK;
+    }
+
+    static WaitPhase crucibleReloadWaitPhase() {
+        return WaitPhase.WATCH;
     }
 
     static boolean matchesIrrbloss(String gobName) {
@@ -206,7 +366,14 @@ public class IrrlightBot implements Action {
 
     private NMakewindow mwnd = null;
     private String openError = null;
+    private String energyError = null;
     private Wake lastRecipeWait = Wake.DONE;
+    /**
+     * The crucible's stable handle. A gob id is only valid while the object stays in the object
+     * cache: leave long enough that it unloads and coming back either finds it under a new id or
+     * not yet re-sent at all. The hash survives both.
+     */
+    private String crucibleHash = null;
     /** Irrlights we chased and could not catch; touched from the UI thread too. */
     private final java.util.Set<Long> ignored = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -216,6 +383,7 @@ public class IrrlightBot implements Action {
         if (crucible == null)
             return Results.ERROR("No crucible nearby: stand next to a lit crucible before starting");
         long crucibleId = crucible.id;
+        rememberCrucible(crucible, CrucibleResolve.LIVE_ID);
         NGlobalCoord home = NUtils.bookmarkHere();
 
         NContext context = new NContext(gui);
@@ -253,8 +421,11 @@ public class IrrlightBot implements Action {
                 continue;
             }
 
-            if (Finder.findGob(crucibleId) == null)
+            if (awaitCrucible(crucibleId) == null) {
+                if (catchable() != null)
+                    continue;
                 return Results.ERROR("The crucible is gone");
+            }
             if (!burning(crucibleId)) {
                 if (++preps > MAX_PREP_ATTEMPTS)
                     return Results.ERROR("The crucible will not stay lit after " + MAX_PREP_ATTEMPTS
@@ -291,6 +462,12 @@ public class IrrlightBot implements Action {
                 continue;
             if (drinkWake == Wake.ERROR)
                 return Results.ERROR("NO WATER");
+
+            Wake energyWake = restoreEnergy(gui);
+            if (energyWake == Wake.IRRLIGHT)
+                continue;
+            if (energyWakeIsFatal(energyWake))
+                return Results.ERROR(energyError != null ? energyError : noConfiguredFoodMessage());
 
             Wake used = useCrucible(gui, crucibleId);
             if (used == Wake.IRRLIGHT)
@@ -385,9 +562,9 @@ public class IrrlightBot implements Action {
                     NUtils.dropToInv();
                 return Results.CYCLE();
             }
-            Gob station = Finder.findGob(crucibleId);
+            Gob station = awaitCrucible(crucibleId);
             if (station == null)
-                return Results.ERROR("The crucible is gone");
+                return catchable() != null ? Results.CYCLE() : Results.ERROR("The crucible is gone");
             ArrayList<WItem> branches = gui.getInventory().getItems(new NAlias(BRANCH));
             if (branches.isEmpty())
                 break;
@@ -416,25 +593,108 @@ public class IrrlightBot implements Action {
     }
 
     private Results lightCrucible(NGameUI gui, long crucibleId) throws InterruptedException {
-        Gob station = Finder.findGob(crucibleId);
+        Gob station = awaitCrucible(crucibleId);
         if (station == null)
-            return Results.ERROR("The crucible is gone");
+            return catchable() != null ? Results.CYCLE() : Results.ERROR("The crucible is gone");
         return new LightGob(new ArrayList<>(Collections.singletonList(station.ngob.hash)), FIRE_BIT).run(gui);
     }
 
     /** Holds fuel of any kind - branches or coal - as opposed to standing empty. */
-    private static boolean fuelled(long crucibleId) {
+    private boolean fuelled(long crucibleId) throws InterruptedException {
         return holdsFuel(modelAttr(crucibleId));
     }
 
     /** Actually alight, which is what smelting needs - fuel alone is not enough. */
-    private static boolean burning(long crucibleId) {
+    private boolean burning(long crucibleId) throws InterruptedException {
         return isAlight(modelAttr(crucibleId));
     }
 
-    private static long modelAttr(long crucibleId) {
-        Gob station = Finder.findGob(crucibleId);
+    private long modelAttr(long crucibleId) throws InterruptedException {
+        Gob station = findCrucible(crucibleId);
         return (station == null || station.ngob == null) ? 0 : station.ngob.getModelAttribute();
+    }
+
+    private static String gobName(Gob g) {
+        return (g == null || g.ngob == null) ? null : g.ngob.name;
+    }
+
+    private void rememberCrucible(Gob g, CrucibleResolve resolve) {
+        if (g == null || g.ngob == null || g.ngob.hash == null)
+            return;
+        crucibleHash = nextStableHash(crucibleHash, resolve, g.ngob.hash);
+    }
+
+    private Gob refindNearby() {
+        Gob player = NUtils.player();
+        if (player == null || player.rc == null)
+            return null;
+        try {
+            Gob g = Finder.findGob(player.rc, CRUCIBLE, null, CRUCIBLE_RANGE);
+            if (g != null && crucibleStillValid(gobName(g)))
+                return g;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return null;
+    }
+
+    /**
+     * Live validated id, else stored {@code ngob.hash} if that gob is still a normal crucible,
+     * else wait for the same identity. Spatial nearby is only used when a hash was never captured.
+     */
+    private Gob findCrucible(long crucibleId) {
+        Gob byId = Finder.findGob(crucibleId);
+        Long currentIdPresent = (byId != null && crucibleStillValid(gobName(byId))) ? byId.id : null;
+
+        boolean hasStoredHash = hasStableHash(crucibleHash);
+        Gob byHash = null;
+        String hashHitId = null;
+        if (hasStoredHash) {
+            byHash = Finder.findGob(crucibleHash);
+            if (byHash != null && crucibleStillValid(gobName(byHash)))
+                hashHitId = Long.toString(byHash.id);
+        }
+
+        Gob nearby = null;
+        Long nearbyNormalId = null;
+        if (shouldRefindWhenMissing(currentIdPresent != null, hasStoredHash)) {
+            nearby = refindNearby();
+            if (nearby != null && crucibleStillValid(gobName(nearby)))
+                nearbyNormalId = nearby.id;
+        }
+
+        CrucibleResolve resolve = resolveAfterReload(currentIdPresent, hasStoredHash, hashHitId, nearbyNormalId);
+        Gob chosen;
+        switch (resolve) {
+            case LIVE_ID:
+                chosen = byId;
+                break;
+            case HASH:
+                chosen = byHash;
+                break;
+            case NEARBY:
+                chosen = nearby;
+                break;
+            default:
+                return null;
+        }
+        if (shouldCaptureChosenHash(resolve))
+            rememberCrucible(chosen, resolve);
+        return chosen;
+    }
+
+    /**
+     * The crucible, giving it time to stream back in after a trip. Wait is Irrbloss-aware so a
+     * spawn during reload does not look like "the crucible is gone".
+     */
+    private Gob awaitCrucible(long crucibleId) throws InterruptedException {
+        Gob g = findCrucible(crucibleId);
+        if (g != null)
+            return g;
+        Wake w = waitDuring(crucibleReloadWaitPhase(), () -> findCrucible(crucibleId) != null, CRUCIBLE_RELOAD_TIMEOUT);
+        if (w == Wake.IRRLIGHT)
+            return null;
+        return findCrucible(crucibleId);
     }
 
     /**
@@ -484,9 +744,9 @@ public class IrrlightBot implements Action {
      * is opened, so the server has already ordered the two by the time we press craft.
      */
     private Wake useCrucible(NGameUI gui, long crucibleId) throws InterruptedException {
-        Gob crucible = Finder.findGob(crucibleId);
+        Gob crucible = awaitCrucible(crucibleId);
         if (crucible == null)
-            return Wake.ERROR;
+            return catchable() != null ? Wake.IRRLIGHT : Wake.ERROR;
         if (catchable() != null)
             return Wake.IRRLIGHT;
         NUtils.rclickGob(crucible);
@@ -578,7 +838,7 @@ public class IrrlightBot implements Action {
         }
         if (NUtils.navigateTo(home))
             return catchable() != null ? Wake.IRRLIGHT : Wake.DONE;
-        Gob crucible = Finder.findGob(crucibleId);
+        Gob crucible = findCrucible(crucibleId);
         if (crucible != null)
             new PathFinder(crucible).run(gui);
         return catchable() != null ? Wake.IRRLIGHT : Wake.DONE;
@@ -620,6 +880,85 @@ public class IrrlightBot implements Action {
                 break;
         }
         return Wake.DONE;
+    }
+
+    /**
+     * Inventory-only energy top-up. {@link nurgling.actions.RestoreResources} / {@code Eater} would
+     * leave the crucible on an uninterruptible trip, so Irrbloss is watched here via
+     * {@link #waitDuring} instead. Missing configured food is an error, not a zone walk.
+     */
+    private Wake restoreEnergy(NGameUI gui) throws InterruptedException {
+        energyError = null;
+        double energy = NUtils.getEnergy();
+        if (!needsEnergyRestore(energy))
+            return Wake.DONE;
+        if (catchable() != null)
+            return Wake.IRRLIGHT;
+        Collection<String> configured = FoodContainer.getFoodNames();
+        WItem food = firstConfiguredFoodItem(gui.getInventory().getItems(NFoodInfo.class), configured);
+        if (decideEnergyRestore(energy, food != null) == EnergyRestoreDecision.NO_CONFIGURED_FOOD) {
+            energyError = noConfiguredFoodMessage();
+            return Wake.ERROR;
+        }
+        NUtils.getUI().dropLastError();
+        Gob player = NUtils.player();
+        if (player != null)
+            NUtils.clickGob(player);
+        Wake idle = waitDuring(resourceRestoreWaitPhase(), () -> {
+            Gob p = NUtils.player();
+            if (p == null)
+                return false;
+            String pose = p.pose();
+            return pose != null && pose.contains("gfx/borka/idle");
+        }, USE_TIMEOUT);
+        if (idle == Wake.IRRLIGHT)
+            return Wake.IRRLIGHT;
+        if (idle == Wake.ERROR) {
+            energyError = eatFailedMessage();
+            return Wake.ERROR;
+        }
+        while (needsEnergyRestore(energy = NUtils.getEnergy())) {
+            if (catchable() != null)
+                return Wake.IRRLIGHT;
+            food = firstConfiguredFoodItem(gui.getInventory().getItems(NFoodInfo.class), configured);
+            if (food == null) {
+                energyError = noConfiguredFoodMessage();
+                return Wake.ERROR;
+            }
+            Results eaten = new SelectFlowerAction("Eat", food).run(gui);
+            if (!eaten.IsSuccess()) {
+                energyError = eatFailedMessage();
+                return Wake.ERROR;
+            }
+            final double before = energy;
+            Wake bite = waitDuring(resourceRestoreWaitPhase(), () -> {
+                double e = NUtils.getEnergy();
+                return e < 0 || e > before || !needsEnergyRestore(e);
+            }, DRINK_TIMEOUT);
+            if (bite == Wake.IRRLIGHT)
+                return Wake.IRRLIGHT;
+            if (bite == Wake.ERROR) {
+                energyError = eatFailedMessage();
+                return Wake.ERROR;
+            }
+            if (energyBiteWakeIsFatal(bite)) {
+                energyError = eatFailedMessage();
+                return Wake.ERROR;
+            }
+        }
+        return Wake.DONE;
+    }
+
+    private static WItem firstConfiguredFoodItem(ArrayList<WItem> foods, Collection<String> configuredNames) {
+        if (foods == null)
+            return null;
+        for (WItem item : foods) {
+            if (item == null || !(item.item instanceof NGItem))
+                continue;
+            if (isExactConfiguredFood(((NGItem) item.item).name(), configuredNames))
+                return item;
+        }
+        return null;
     }
 
     /**

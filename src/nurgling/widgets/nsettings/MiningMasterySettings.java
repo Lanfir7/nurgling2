@@ -7,6 +7,7 @@ import nurgling.NUI;
 import nurgling.NUtils;
 import nurgling.actions.bots.MasterMiner;
 import nurgling.conf.NMasterMinerMarkingConfig;
+import nurgling.i18n.L10n;
 import nurgling.widgets.AdaptiveSettingsPanel;
 
 import java.util.ArrayList;
@@ -67,15 +68,15 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
 
         private void editThreshold() {
             if (ui == null) return;
-            Window thresholdWnd = new Window(UI.scale(300, 120), "Edit Threshold") {
+            Window thresholdWnd = new Window(UI.scale(300, 120), L10n.get("nsettings.mining_mastery.edit_threshold")) {
                 private TextEntry thresholdEntry;
 
                 {
-                    add(new Label("Enter quality threshold:"), new Coord(UI.scale(10), UI.scale(30)));
+                    add(new Label(L10n.get("nsettings.mining_mastery.enter_threshold")), new Coord(UI.scale(10), UI.scale(30)));
                     thresholdEntry = add(new TextEntry(UI.scale(100), String.valueOf((int)threshold)), 
                         new Coord(UI.scale(10), UI.scale(50)));
                     
-                    add(new Button(UI.scale(80), "OK") {
+                    add(new Button(UI.scale(80), L10n.get("common.ok")) {
                         @Override
                         public void click() {
                             try {
@@ -92,7 +93,7 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
                         }
                     }, new Coord(UI.scale(10), UI.scale(80)));
                     
-                    add(new Button(UI.scale(80), "Cancel") {
+                    add(new Button(UI.scale(80), L10n.get("common.cancel")) {
                         @Override
                         public void click() {
                             parent.destroy();
@@ -143,7 +144,7 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
         int margin = UI.scale(10);
         int y = UI.scale(36);
 
-        add(new Label("Select which items to mark on map when mining:"), new Coord(margin, y));
+        add(new Label(L10n.get("nsettings.mining_mastery.select")), new Coord(margin, y));
         
         // Вычисляем позицию справа для кнопок - справа от верхнего текста
         int labelWidth = UI.scale(330); // Keeps both action buttons inside the standard page width.
@@ -151,7 +152,7 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
         int buttonY = y; // На той же высоте, что и первый label
         
         // Кнопка "Threshold for all stones" - устанавливает порог для всех камней (кроме руд и драгоценных камней)
-        add(new Button(UI.scale(150), "Threshold for all stones") {
+        add(new Button(UI.scale(150), L10n.get("nsettings.mining_mastery.threshold_stones")) {
             @Override
             public void click() {
                 showThresholdForAllDialog();
@@ -160,7 +161,7 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
         buttonY += UI.scale(30);
         
         // Кнопка "Threshold for all ores" - устанавливает порог для всех руд
-        add(new Button(UI.scale(150), "Threshold for all ores") {
+        add(new Button(UI.scale(150), L10n.get("nsettings.mining_mastery.threshold_ores")) {
             @Override
             public void click() {
                 showThresholdForAllOresDialog();
@@ -168,7 +169,7 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
         }, new Coord(buttonX, buttonY));
         
         y += UI.scale(32);
-        add(new Label("Click on right side of item to edit quality threshold"), new Coord(margin, y));
+        add(new Label(L10n.get("nsettings.mining_mastery.click_right")), new Coord(margin, y));
         y += UI.scale(25);
 
         // Создаем список всех камней, руд и драгоценных камней (статический список для оптимизации)
@@ -361,16 +362,16 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
      */
     private void showThresholdForAllDialog() {
         if (ui == null) return;
-        Window thresholdDialog = new Window(UI.scale(300, 140), "Threshold for all") {
+        Window thresholdDialog = new Window(UI.scale(300, 140), L10n.get("nsettings.mining_mastery.threshold_all")) {
             private TextEntry thresholdEntry;
 
             {
-                add(new Label("Enter quality threshold for all stones"), new Coord(UI.scale(10), UI.scale(30)));
-                add(new Label("(except ores and gemstones):"), new Coord(UI.scale(10), UI.scale(50)));
+                add(new Label(L10n.get("nsettings.mining_mastery.enter_threshold_stones")), new Coord(UI.scale(10), UI.scale(30)));
+                add(new Label(L10n.get("nsettings.mining_mastery.except_ores_gems")), new Coord(UI.scale(10), UI.scale(50)));
                 thresholdEntry = add(new TextEntry(UI.scale(100), "10"), 
                     new Coord(UI.scale(10), UI.scale(70)));
                 
-                add(new Button(UI.scale(80), "OK") {
+                add(new Button(UI.scale(80), L10n.get("common.ok")) {
                     @Override
                     public void click() {
                         try {
@@ -402,7 +403,7 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
                     }
                 }, new Coord(UI.scale(10), UI.scale(100)));
                 
-                add(new Button(UI.scale(80), "Cancel") {
+                add(new Button(UI.scale(80), L10n.get("common.cancel")) {
                     @Override
                     public void click() {
                         parent.destroy();
@@ -418,15 +419,15 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
      */
     private void showThresholdForAllOresDialog() {
         if (ui == null) return;
-        Window thresholdDialog = new Window(UI.scale(300, 140), "Threshold for all ores") {
+        Window thresholdDialog = new Window(UI.scale(300, 140), L10n.get("nsettings.mining_mastery.threshold_ores")) {
             private TextEntry thresholdEntry;
 
             {
-                add(new Label("Enter quality threshold for all ores:"), new Coord(UI.scale(10), UI.scale(30)));
+                add(new Label(L10n.get("nsettings.mining_mastery.enter_threshold_ores")), new Coord(UI.scale(10), UI.scale(30)));
                 thresholdEntry = add(new TextEntry(UI.scale(100), "10"), 
                     new Coord(UI.scale(10), UI.scale(70)));
                 
-                add(new Button(UI.scale(80), "OK") {
+                add(new Button(UI.scale(80), L10n.get("common.ok")) {
                     @Override
                     public void click() {
                         try {
@@ -456,7 +457,7 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
                     }
                 }, new Coord(UI.scale(10), UI.scale(100)));
                 
-                add(new Button(UI.scale(80), "Cancel") {
+                add(new Button(UI.scale(80), L10n.get("common.cancel")) {
                     @Override
                     public void click() {
                         parent.destroy();

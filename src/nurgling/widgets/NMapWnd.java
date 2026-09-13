@@ -7,6 +7,7 @@ import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.tools.MapDbTransfer;
+import nurgling.conf.ProspectKind;
 import nurgling.i18n.L10n;
 
 import java.awt.Color;
@@ -21,11 +22,9 @@ public class NMapWnd extends MapWnd {
     MapToggleButton treeBtn;
     MapToggleButton fishBtn;
     MapToggleButton mapToolsBtn;
-    MapToggleButton oresBtn;
-    MapToggleButton prospectBtn;
-    MapToggleButton quarryartzBtn;
-    MapToggleButton oreSpotsBtn; // Кнопка для переключения видимости маркеров спотов руд
-    MapToggleButton gemstoneBtn; // Кнопка для переключения видимости маркеров драгоценных камней
+    MapToggleButton oreBtn;
+    MapToggleButton gemBtn;
+    MapToggleButton stoneBtn;
     MapToggleButton animalsBtn;  // Кнопка для переключения видимости маркеров животных (ObjectTracker + БД)
     MapToggleButton foragingBtn;
     MapToggleButton vectorClearBtn;
@@ -60,73 +59,48 @@ public class NMapWnd extends MapWnd {
         super(file, mv, sz, title);
         searchRes = Resource.local().loadwait("alttex/selectedtex").layer(Resource.imgc);
         
-        // Position buttons in top-right corner (15px right, 10px down from original position)
-        int btnSpacing = UI.scale(5);
-        Coord btnPos = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
-        
         // Map tools button (rightmost) - opens the Map Tools panel (no icon toggle)
-        mapToolsBtn = add(new MapToggleButton("maptools", L10n.get("maptools.button_tip"), MapToolsWindow::toggle), btnPos);
+        mapToolsBtn = add(new MapToggleButton("maptools", L10n.get("maptools.button_tip"), MapToolsWindow::toggle));
         mapToolsBtn.a = false; // Always show as unpressed (no toggle state)
         mapToolsBtn.click(MapToolsWindow::toggle); // Left click opens the panel
 
-        // Ores button - opens Terrain Search Window (no icon toggle)
-        btnPos = btnPos.sub(mapToolsBtn.sz.x + btnSpacing, 0);
-        oresBtn = add(new MapToggleButton("ores", "Ores Search", this::openOresSearch), btnPos);
-        oresBtn.a = false; // Always show as unpressed (no toggle state)
-        oresBtn.click(this::openOresSearch); // Left click opens window
-        
         // Fish button - shares its state with the Map Tools panel through NConfig
-        btnPos = btnPos.sub(oresBtn.sz.x + btnSpacing, 0);
-        fishBtn = add(new MapToggleButton("fish", "Toggle fish icons (Right-click: Fish Search)", MapToolsWindow::openFishSearch), btnPos);
+        fishBtn = add(new MapToggleButton("fish", "Toggle fish icons (Right-click: Fish Search)", MapToolsWindow::openFishSearch));
         fishBtn.state(() -> NMiniMap.showFishIcons());
         fishBtn.set(val -> NMiniMap.showFishIcons(val));
 
         // Tree button
-        btnPos = btnPos.sub(fishBtn.sz.x + btnSpacing, 0);
-        treeBtn = add(new MapToggleButton("tree", "Toggle tree icons (Right-click: Tree Search)", MapToolsWindow::openTreeSearch), btnPos);
+        treeBtn = add(new MapToggleButton("tree", "Toggle tree icons (Right-click: Tree Search)", MapToolsWindow::openTreeSearch));
         treeBtn.state(() -> NMiniMap.showTreeIcons());
         treeBtn.set(val -> NMiniMap.showTreeIcons(val));
-        
-        // Prospect button
-        btnPos = btnPos.sub(treeBtn.sz.x + btnSpacing, 0);
-        prospectBtn = add(new MapToggleButton("tree", "Toggle prospecting icons (Right-click: Prospecting Search)", this::openProspectingSearch), btnPos);
-        prospectBtn.a = getProspectingIconsState(); // Set initial state
-        prospectBtn.changed(val -> setProspectingIconsState(val));
-        
-        // Quarryartz button
-        btnPos = btnPos.sub(prospectBtn.sz.x + btnSpacing, 0);
-        quarryartzBtn = add(new MapToggleButton("tree", "Toggle Quarryartz markers (Right-click: Quarryartz Search)", this::openQuarryartzSearch), btnPos);
-        quarryartzBtn.a = getQuarryartzIconsState(); // Set initial state
-        quarryartzBtn.changed(val -> setQuarryartzIconsState(val));
-        
-        // Ore Spots button (для маркеров спотов руд)
-        btnPos = btnPos.sub(quarryartzBtn.sz.x + btnSpacing, 0);
-        oreSpotsBtn = add(new MapToggleButton("tree", "Toggle Ore Spot markers", null), btnPos);
-        oreSpotsBtn.a = getOreSpotsIconsState(); // Set initial state
-        oreSpotsBtn.changed(val -> setOreSpotsIconsState(val));
-        
-        // Gemstone button (для маркеров драгоценных камней)
-        btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
-        gemstoneBtn = add(new MapToggleButton("tree", "Toggle Gemstone markers (Right-click: Gemstone Search)", this::openGemstoneSearch), btnPos);
-        gemstoneBtn.a = getGemstoneIconsState(); // Set initial state
-        gemstoneBtn.changed(val -> setGemstoneIconsState(val));
+
+        oreBtn = add(new MapToggleButton("ores", L10n.get("maptools.ore_icons_tip"), () -> MapToolsWindow.openMineralSearch(ProspectKind.ORE)));
+        oreBtn.state(() -> NMiniMap.showProspectKind(ProspectKind.ORE));
+        oreBtn.set(val -> NMiniMap.showProspectKind(ProspectKind.ORE, val));
+
+        gemBtn = add(new MapToggleButton("gems", L10n.get("maptools.gem_icons_tip"), () -> MapToolsWindow.openMineralSearch(ProspectKind.GEM)));
+        gemBtn.state(() -> NMiniMap.showProspectKind(ProspectKind.GEM));
+        gemBtn.set(val -> NMiniMap.showProspectKind(ProspectKind.GEM, val));
+
+        stoneBtn = add(new MapToggleButton("stone", L10n.get("maptools.stone_icons_tip"), () -> MapToolsWindow.openMineralSearch(ProspectKind.STONE)));
+        stoneBtn.state(() -> NMiniMap.showProspectKind(ProspectKind.STONE));
+        stoneBtn.set(val -> NMiniMap.showProspectKind(ProspectKind.STONE, val));
 
         // Animals button (маркеры животных: ObjectTracker при обнаружении + синхронизация из БД)
-        btnPos = btnPos.sub(gemstoneBtn.sz.x + btnSpacing, 0);
-        animalsBtn = add(new MapToggleButton("tree", "Toggle Animal markers (from Discord notification list)", null), btnPos);
+        animalsBtn = add(new MapToggleButton("tree", "Toggle Animal markers (from Discord notification list)", null));
         animalsBtn.a = getAnimalIconsState(); // Set initial state
         animalsBtn.changed(val -> setAnimalIconsState(val));
 
-        btnPos = btnPos.sub(animalsBtn.sz.x + btnSpacing, 0);
-        foragingBtn = add(new MapToggleButton("tree", "Toggle Foraging markers (Right-click: Foraging Search)", this::openForagingSearch), btnPos);
+        foragingBtn = add(new MapToggleButton("tree", "Toggle Foraging markers (Right-click: Foraging Search)", this::openForagingSearch));
         foragingBtn.a = getForagingIconsState();
         foragingBtn.changed(val -> setForagingIconsState(val));
-        
+
         // Vector clear button (leftmost)
-        btnPos = btnPos.sub(foragingBtn.sz.x + btnSpacing, 0);
-        vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null), btnPos);
+        vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null));
         vectorClearBtn.a = false; // Always show as unpressed
         vectorClearBtn.click(this::clearVectors);
+
+        layoutMapButtons();
 
         // Add marker search field at bottom-right (no label, no button)
         add(markerSearchField = new TextEntry(UI.scale(200), "") {
@@ -424,78 +398,6 @@ public class NMapWnd extends MapWnd {
         }
     }
 
-    private boolean getProspectingIconsState() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            return ((NMiniMap) gui.mmap).showProspectingIcons;
-        return true;
-    }
-
-    private void setProspectingIconsState(boolean val) {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            ((NMiniMap) gui.mmap).showProspectingIcons = val;
-        if(view instanceof NMiniMap)
-            ((NMiniMap) view).showProspectingIcons = val;
-        // Save to config for persistence
-        NConfig.set(NConfig.Key.showProspectingIcons, val);
-        NConfig.needUpdate();
-    }
-
-    private boolean getQuarryartzIconsState() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            return ((NMiniMap) gui.mmap).showQuarryartzIcons;
-        return true;
-    }
-
-    private void setQuarryartzIconsState(boolean val) {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            ((NMiniMap) gui.mmap).showQuarryartzIcons = val;
-        if(view instanceof NMiniMap)
-            ((NMiniMap) view).showQuarryartzIcons = val;
-        // Save to config for persistence
-        NConfig.set(NConfig.Key.showQuarryartzIcons, val);
-        NConfig.needUpdate();
-    }
-    
-    private boolean getOreSpotsIconsState() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            return ((NMiniMap) gui.mmap).showOreSpotIcons;
-        return true;
-    }
-    
-    private void setOreSpotsIconsState(boolean val) {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            ((NMiniMap) gui.mmap).showOreSpotIcons = val;
-        if(view instanceof NMiniMap)
-            ((NMiniMap) view).showOreSpotIcons = val;
-        // Save to config for persistence
-        NConfig.set(NConfig.Key.showOreSpotIcons, val);
-        NConfig.needUpdate();
-    }
-    
-    private boolean getGemstoneIconsState() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            return ((NMiniMap) gui.mmap).showGemstoneIcons;
-        return true;
-    }
-    
-    private void setGemstoneIconsState(boolean val) {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null && gui.mmap instanceof NMiniMap)
-            ((NMiniMap) gui.mmap).showGemstoneIcons = val;
-        if(view instanceof NMiniMap)
-            ((NMiniMap) view).showGemstoneIcons = val;
-        // Save to config for persistence
-        NConfig.set(NConfig.Key.showGemstoneIcons, val);
-        NConfig.needUpdate();
-    }
-
     private boolean getAnimalIconsState() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null && gui.mmap instanceof NMiniMap)
@@ -545,23 +447,6 @@ public class NMapWnd extends MapWnd {
             }
         }
     }
-    
-    private void openGemstoneSearch() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null) {
-            if(gui.gemstoneSearchWindow != null) {
-                if(gui.gemstoneSearchWindow.visible()) {
-                    gui.gemstoneSearchWindow.hide();
-                } else {
-                    MapSearchFront.showInFront(gui.gemstoneSearchWindow);
-                }
-            } else {
-                gui.gemstoneSearchWindow = new GemstoneSearchWindow(gui);
-                gui.add(gui.gemstoneSearchWindow, new Coord(100, 100));
-                MapSearchFront.showInFront(gui.gemstoneSearchWindow);
-            }
-        }
-    }
 
     private void openTreeSearch() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
@@ -593,44 +478,6 @@ public class NMapWnd extends MapWnd {
                 gui.fishSearchWindow = new FishSearchWindow(gui);
                 gui.add(gui.fishSearchWindow, new Coord(100, 100));
                 MapSearchFront.showInFront(gui.fishSearchWindow);
-            }
-        }
-    }
-
-    private void openOresSearch() {
-        MapToolsWindow.openTerrainSearch(java.util.Collections.emptyList());
-    }
-
-    private void openProspectingSearch() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null) {
-            if(gui.prospectingSearchWindow != null) {
-                if(gui.prospectingSearchWindow.visible()) {
-                    gui.prospectingSearchWindow.hide();
-                } else {
-                    MapSearchFront.showInFront(gui.prospectingSearchWindow);
-                }
-            } else {
-                gui.prospectingSearchWindow = new ProspectingSearchWindow(gui);
-                gui.add(gui.prospectingSearchWindow, new Coord(100, 100));
-                MapSearchFront.showInFront(gui.prospectingSearchWindow);
-            }
-        }
-    }
-
-    private void openQuarryartzSearch() {
-        NGameUI gui = (NGameUI) NUtils.getGameUI();
-        if(gui != null) {
-            if(gui.quarryartzSearchWindow != null) {
-                if(gui.quarryartzSearchWindow.visible()) {
-                    gui.quarryartzSearchWindow.hide();
-                } else {
-                    MapSearchFront.showInFront(gui.quarryartzSearchWindow);
-                }
-            } else {
-                gui.quarryartzSearchWindow = new QuarryartzSearchWindow(gui);
-                gui.add(gui.quarryartzSearchWindow, new Coord(100, 100));
-                MapSearchFront.showInFront(gui.quarryartzSearchWindow);
             }
         }
     }
@@ -673,37 +520,36 @@ public class NMapWnd extends MapWnd {
         markerSearchPattern = pattern;
     }
 
+    private void layoutMapButtons() {
+        Widget[] btns = {
+            mapToolsBtn, fishBtn, treeBtn, oreBtn, gemBtn, stoneBtn,
+            animalsBtn, foragingBtn, vectorClearBtn
+        };
+        int xpad = UI.scale(5);
+        int ypad = UI.scale(5);
+        Coord origin = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
+        int minx = view.c.x;
+        Coord pos = origin;
+        int rowH = 0;
+        for(Widget btn : btns) {
+            if(btn == null)
+                continue;
+            if(rowH == 0)
+                rowH = btn.sz.y;
+            if(pos.x < minx) {
+                origin = new Coord(origin.x, pos.y + rowH + ypad);
+                pos = origin;
+            }
+            btn.c = pos;
+            pos = pos.sub(btn.sz.x + xpad, 0);
+        }
+    }
+
     @Override
     public void resize(Coord sz) {
         super.resize(sz);
         
-        // Position buttons in top-right corner (15px right, 10px down from original position)
-        if(mapToolsBtn != null && oresBtn != null && fishBtn != null && treeBtn != null && prospectBtn != null && gemstoneBtn != null && animalsBtn != null && foragingBtn != null && vectorClearBtn != null) {
-            int btnSpacing = UI.scale(5);
-            Coord btnPos = view.c.add(view.sz.x - UI.scale(35), UI.scale(15));
-
-            mapToolsBtn.c = btnPos;
-            btnPos = btnPos.sub(mapToolsBtn.sz.x + btnSpacing, 0);
-            oresBtn.c = btnPos;
-            btnPos = btnPos.sub(oresBtn.sz.x + btnSpacing, 0);
-            fishBtn.c = btnPos;
-            btnPos = btnPos.sub(fishBtn.sz.x + btnSpacing, 0);
-            treeBtn.c = btnPos;
-            btnPos = btnPos.sub(treeBtn.sz.x + btnSpacing, 0);
-            prospectBtn.c = btnPos;
-            btnPos = btnPos.sub(prospectBtn.sz.x + btnSpacing, 0);
-            quarryartzBtn.c = btnPos;
-            btnPos = btnPos.sub(quarryartzBtn.sz.x + btnSpacing, 0);
-            oreSpotsBtn.c = btnPos;
-            btnPos = btnPos.sub(oreSpotsBtn.sz.x + btnSpacing, 0);
-            gemstoneBtn.c = btnPos;
-            btnPos = btnPos.sub(gemstoneBtn.sz.x + btnSpacing, 0);
-            animalsBtn.c = btnPos;
-            btnPos = btnPos.sub(animalsBtn.sz.x + btnSpacing, 0);
-            foragingBtn.c = btnPos;
-            btnPos = btnPos.sub(foragingBtn.sz.x + btnSpacing, 0);
-            vectorClearBtn.c = btnPos;
-        }
+        layoutMapButtons();
         
         // Keep marker search field at bottom-right
         if(markerSearchField != null)

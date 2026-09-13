@@ -7,12 +7,11 @@ import java.awt.Color;
 
 /**
  * Tints farm beehives by harvest state: empty / honey / wax / both.
- * Marker bits match {@code HoneyAndWaxCollector}: honey = 32, wax = 4
- * (35 honey, 6 wax, 39 both).
+ * Marker bits match {@code HoneyAndWaxCollector}: honey = 1, wax = 4.
  */
 public class NBeehiveColor extends GAttrib implements Gob.SetupMod {
 
-    static final int HONEY_BIT = 32;
+    static final int HONEY_BIT = 1;
     static final int WAX_BIT = 4;
 
     enum Kind {

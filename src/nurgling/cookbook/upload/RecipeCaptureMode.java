@@ -20,6 +20,14 @@ public final class RecipeCaptureMode {
         return (localCookbook ? "L" : "") + (sharing ? "S" : "") + ":" + recipeKey;
     }
 
+    /** Quick dedup key: name, ingredient signature and smoking-wood signature. */
+    public static String recipeKey(String name, String ingredientSignature, String woodSignature) {
+        String n = name == null ? "" : name;
+        String ings = ingredientSignature == null ? "" : ingredientSignature;
+        String woods = woodSignature == null ? "" : woodSignature;
+        return n + "|" + ings + "|" + woods;
+    }
+
     public static boolean isRemoteKey(String key) {
         if (key == null)
             return false;

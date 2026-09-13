@@ -16,6 +16,7 @@ import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NUtils;
 import nurgling.conf.NMasterMinerProp;
+import nurgling.i18n.L10n;
 import nurgling.widgets.NEquipory;
 
 import java.awt.Color;
@@ -61,7 +62,7 @@ public class MasterMinerWnd extends Window {
     private BestStoneData bestRakuh = null;       // Лучшая ракуха
 
     public MasterMinerWnd() {
-        super(new Coord(UI.scale(550), UI.scale(410)), "Master Miner");
+        super(new Coord(UI.scale(550), UI.scale(410)), L10n.get("bot.masterminer.title"));
 
         // Создаем жирный шрифт для Masonry
         Font boldFont = Text.std.font.deriveFont(Font.BOLD);
@@ -91,11 +92,11 @@ public class MasterMinerWnd extends Window {
         Coord pad = UI.scale(8, 6);
         Coord cur = pad;
 
-        masonryLbl = add(new Label("Masonry: (waiting)", boldFoundry), cur);
+        masonryLbl = add(new Label(masonryWaitingText(), boldFoundry), cur);
         masonryLbl.setcolor(masonryColor);
         cur = masonryLbl.pos("bl").add(0, UI.scale(4));
 
-        lastMinedLbl = add(new Label("Last mined: -"), cur);
+        lastMinedLbl = add(new Label(lastMinedEmptyText()), cur);
         cur = lastMinedLbl.pos("bl").add(0, UI.scale(4));
 
         stoneLbl = add(new Label("Stone: -"), cur);
@@ -110,10 +111,10 @@ public class MasterMinerWnd extends Window {
         rakuhLbl = add(new Label("Shell: -"), cur);
         cur = rakuhLbl.pos("bl").add(0, UI.scale(6));
 
-        counterLbl = add(new Label("Mined: 0"), cur);
+        counterLbl = add(new Label(minedText()), cur);
         cur = counterLbl.pos("bl").add(0, UI.scale(6));
 
-        add(new Label("Drop threshold:"), cur);
+        add(new Label(L10n.get("bot.masterminer.drop_threshold")), cur);
         cur = cur.add(UI.scale(0, UI.scale(18)));
         thresholdEntry = add(new TextEntry(UI.scale(80), savedDropThreshold) {
             @Override
@@ -124,7 +125,7 @@ public class MasterMinerWnd extends Window {
             }
         }, cur);
         Coord setBtn1Pos = thresholdEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
-        add(new Button(UI.scale(40), "Set") {
+        add(new Button(UI.scale(40), L10n.get("bot.masterminer.set")) {
             @Override
             public void click() {
                 super.click();
@@ -134,7 +135,7 @@ public class MasterMinerWnd extends Window {
         cur = thresholdEntry.pos("bl").add(0, UI.scale(6));
         
         // Порог сброса для ракух и кэтголдов
-        add(new Label("Drop threshold (Shell/Cat Gold):"), cur);
+        add(new Label(L10n.get("bot.masterminer.drop_threshold_shell")), cur);
         cur = cur.add(UI.scale(0, UI.scale(18)));
         shellCatGoldThresholdEntry = add(new TextEntry(UI.scale(80), savedShellCatGoldThreshold) {
             @Override
@@ -145,7 +146,7 @@ public class MasterMinerWnd extends Window {
             }
         }, cur);
         Coord setBtn2Pos = shellCatGoldThresholdEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
-        add(new Button(UI.scale(40), "Set") {
+        add(new Button(UI.scale(40), L10n.get("bot.masterminer.set")) {
             @Override
             public void click() {
                 super.click();
@@ -155,7 +156,7 @@ public class MasterMinerWnd extends Window {
         cur = shellCatGoldThresholdEntry.pos("bl").add(0, UI.scale(6));
 
         // Камней держать в инвентаре (для подпорки)
-        add(new Label("Keep stones (for support):"), cur);
+        add(new Label(L10n.get("bot.masterminer.keep_stones")), cur);
         cur = cur.add(UI.scale(0, UI.scale(18)));
         keepStonesEntry = add(new TextEntry(UI.scale(50), savedKeepStones) {
             @Override
@@ -165,7 +166,7 @@ public class MasterMinerWnd extends Window {
             }
         }, cur);
         Coord setBtn3Pos = keepStonesEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
-        add(new Button(UI.scale(40), "Set") {
+        add(new Button(UI.scale(40), L10n.get("bot.masterminer.set")) {
             @Override
             public void click() {
                 super.click();
@@ -175,7 +176,7 @@ public class MasterMinerWnd extends Window {
         cur = keepStonesEntry.pos("bl").add(0, UI.scale(6));
 
         // Кнопка Switch для смены кирки/топора между руками и рюкзаком
-        add(new Button(UI.scale(160), "Switch") {
+        add(new Button(UI.scale(160), L10n.get("bot.masterminer.switch")) {
             @Override
             public void click() {
                 super.click();
@@ -184,12 +185,12 @@ public class MasterMinerWnd extends Window {
         }, cur);
         cur = cur.add(0, UI.scale(26));
 
-        add(new Button(UI.scale(160), "Reset All") {
+        add(new Button(UI.scale(160), L10n.get("bot.masterminer.reset_all")) {
             @Override
             public void click() {
                 super.click();
                 totalStonesMined = 0;
-                counterLbl.settext("Mined: 0");
+                counterLbl.settext(minedText());
                 bestStone = null;
                 bestQuarryartz = null;
                 bestCatGold = null;
@@ -206,6 +207,18 @@ public class MasterMinerWnd extends Window {
 
     public boolean isClosed() {
         return closed;
+    }
+
+    private static String masonryWaitingText() {
+        return L10n.get("bot.masterminer.masonry") + ": " + L10n.get("bot.masterminer.waiting");
+    }
+
+    private static String lastMinedEmptyText() {
+        return L10n.get("bot.masterminer.last_mined") + ": -";
+    }
+
+    private String minedText() {
+        return L10n.get("bot.masterminer.mined") + ": " + totalStonesMined;
     }
 
     /** Saved screen position, or null to center on first open. */
@@ -230,7 +243,7 @@ public class MasterMinerWnd extends Window {
         // Обновляем текст с сохранением жирного шрифта и цвета
         // Добавляем "(Masonry +25%)" в квадратных скобках
         int masonryWithBonus = (int) Math.round(masonry * 1.25);
-        String newText = "Masonry: " + masonry + " [" + masonryWithBonus + "]";
+        String newText = L10n.get("bot.masterminer.masonry") + ": " + masonry + " [" + masonryWithBonus + "]";
         masonryLbl.text.dispose();
         masonryLbl.text = boldFoundry.render(newText, masonryColor);
         masonryLbl.texts = newText;
@@ -418,7 +431,7 @@ public class MasterMinerWnd extends Window {
 
     public void incrementCounter() {
         totalStonesMined++;
-        counterLbl.settext("Mined: " + totalStonesMined);
+        counterLbl.settext(minedText());
     }
 
     /**
@@ -426,12 +439,12 @@ public class MasterMinerWnd extends Window {
      */
     public void setLastMined(String stoneName, double wallQ, int masonry) {
         if (stoneName == null || stoneName.isEmpty()) {
-            lastMinedLbl.settext("Last mined: -");
+            lastMinedLbl.settext(lastMinedEmptyText());
             return;
         }
         
         // Показываем wallQ (качество в стене), как и для топов
-        String text = String.format("Last mined: %s q%.1f", stoneName, wallQ);
+        String text = String.format("%s: %s q%.1f", L10n.get("bot.masterminer.last_mined"), stoneName, wallQ);
         lastMinedLbl.settext(text);
     }
 

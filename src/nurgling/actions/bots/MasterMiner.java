@@ -864,6 +864,16 @@ public class MasterMiner extends ActionWithFinal {
         }
         return false;
     }
+
+    /**
+     * Ordinary mined stone: Chipper/MINED_ITEMS names that are not ore, gemstone, or exact Quarryartz.
+     */
+    public static boolean isStone(String stoneName) {
+        if (stoneName == null) return false;
+        if ("Quarryartz".equals(stoneName.trim())) return false;
+        if (isOre(stoneName) || isGemstone(stoneName)) return false;
+        return NParser.checkName(stoneName, MINED_ITEMS);
+    }
     
     /**
      * Проверяет, является ли камень драгоценным

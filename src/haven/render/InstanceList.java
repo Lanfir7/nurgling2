@@ -695,6 +695,20 @@ public class InstanceList implements RenderList<Rendered>, RenderList.Adapter, D
 	    throw(new AssertionError());
     }
 
+    enum AbsentSlotAction {
+	HANDLE_INVALID,
+	WARN_AND_RETURN
+    }
+
+    /**
+     * Instancable slots missing from uslotmap are either still in {@code invalid}
+     * (normal invalid-path) or orphaned after a failed remove()+add() re-key.
+     * Orphans must warn and return instead of throwing on the UI thread.
+     */
+    static AbsentSlotAction absentInstancableSlot(boolean inInvalid) {
+	return(inInvalid ? AbsentSlotAction.HANDLE_INVALID : AbsentSlotAction.WARN_AND_RETURN);
+    }
+
     @SuppressWarnings("unchecked")
     public void remove(Slot<? extends Rendered> slot) {
 	if(!(slot.obj() instanceof Instancable)) {
@@ -709,8 +723,15 @@ public class InstanceList implements RenderList<Rendered>, RenderList.Adapter, D
 	synchronized(this) {
 	    InstKey key = uslotmap.get(slot);
 	    if(key == null) {
-		if(invalid.remove(slot) != Boolean.TRUE)
-		    throw(new IllegalStateException("removing non-present slot"));
+		boolean inInvalid = (invalid.remove(slot) == Boolean.TRUE);
+		if(absentInstancableSlot(inInvalid) == AbsentSlotAction.WARN_AND_RETURN) {
+		    /* Nurgling: a remove()+add() re-key (Sole/Instance/InstancedSlot.update())
+		     * whose add() threw leaves the slot tracked nowhere, normally in no client
+		     * either, and that throw is often swallowed (Gob.updstate() eats Loading).
+		     * Nothing is left to remove; throwing only kills the UI thread mid TreeSlot.remove(). */
+		    Warning.warn("removing orphaned slot %s", slot.obj());
+		    return;
+		}
 		ninvalid--;
 		clremove(slot);
 		if(new InstKey(slot).valid())
@@ -747,8 +768,11 @@ public class InstanceList implements RenderList<Rendered>, RenderList.Adapter, D
 	synchronized(this) {
 	    InstKey prevkey = uslotmap.get(slot);
 	    if(prevkey == null) {
-		if(invalid.get(slot) != Boolean.TRUE)
-		    throw(new IllegalStateException("updating non-present slot"));
+		if(absentInstancableSlot(invalid.get(slot) == Boolean.TRUE) == AbsentSlotAction.WARN_AND_RETURN) {
+		    /* Nurgling: orphaned by a failed re-key, see remove(). */
+		    Warning.warn("updating orphaned slot %s", slot.obj());
+		    return;
+		}
 		if(key.valid()) {
 		    invalid.remove(slot);
 		    add0(slot, key, true, null);

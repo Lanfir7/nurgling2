@@ -16,6 +16,7 @@ import nurgling.map.SharedMarkerClipboardService;
 import nurgling.notifications.DiscordHookObject;
 import nurgling.overlays.QualityOl;
 import nurgling.tools.NAlias;
+import nurgling.tools.NNoticeLog;
 import nurgling.tools.NParser;
 import nurgling.tools.NSearchItem;
 import nurgling.tools.CurrentHomeTerritories;
@@ -67,6 +68,8 @@ public class NGameUI extends GameUI
     public Specialisation spec;
     public BotsInterruptWidget biw;
     public NEquipProxy nep;
+    /** System notices from the server, so bots can react to text-only events. */
+    public final NNoticeLog notices = new NNoticeLog();
     public NBeltProxy nbp;
     private SwimmingStatusBuff swimmingBuff = null;
     private TrackingStatusBuff trackingBuff = null;
@@ -91,6 +94,7 @@ public class NGameUI extends GameUI
     public nurgling.widgets.QuarryartzSearchWindow quarryartzSearchWindow = null;
     public nurgling.widgets.OreSearchWindow oreSearchWindow = null;
     public nurgling.widgets.GemstoneSearchWindow gemstoneSearchWindow = null;
+    public MineralSearchWindow mineralSearchWindow = null;
     public nurgling.widgets.ForagingSearchWindow foragingSearchWindow = null;
     public LabeledMarkService labeledMarkService;
     public final ForagePickupMarker foragePickupMarker;
@@ -559,6 +563,10 @@ public class NGameUI extends GameUI
         }
         if(labeledMarkService != null)
             labeledMarkService.dispose();
+        if(mineralSearchWindow != null) {
+            mineralSearchWindow.destroy();
+            mineralSearchWindow = null;
+        }
         foragePickupMarker.dispose();
         /* Take this character's published position out on the way down. It would age out on its own
          * within the minute, but that minute is a minute of showing someone who has left, and
@@ -601,12 +609,15 @@ public class NGameUI extends GameUI
     }
 
     public int getMaxBase(){
-        return chrwdg.battr.attrs.stream().max(new Comparator<BAttrWnd.Attr>() {
-                    @Override
-                    public int compare(BAttrWnd.Attr o1, BAttrWnd.Attr o2) {
-                        return Integer.compare(o1.attr.base,o2.attr.base);
-                    }
-                }).get().attr.base;
+        if(chrwdg == null || chrwdg.battr == null || chrwdg.battr.attrs == null)
+            return 0;
+        java.util.ArrayList<Integer> bases = new java.util.ArrayList<Integer>();
+        for(BAttrWnd.Attr attr : chrwdg.battr.attrs) {
+            if(attr == null || attr.attr == null)
+                continue;
+            bases.add(Integer.valueOf(attr.attr.base));
+        }
+        return NGameUIMaxBase.maxOf(bases);
     }
 
     public NCharacterInfo getCharInfo() {
@@ -1018,8 +1029,6 @@ public class NGameUI extends GameUI
             guiinfo.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 5));
         if(areas != null)
             areas.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 5));
-        if(cookBook != null)
-            cookBook.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 5));
         if(storageItemsWidget != null)
             storageItemsWidget.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 5));
         if(nean != null)
@@ -1584,8 +1593,9 @@ public class NGameUI extends GameUI
 
     public boolean msg(UI.Notice msg) {
         String message = msg.message();
-        
-        if (message.contains("Quality")) {
+        NGameUINotices.record(notices, message);
+
+        if (message != null && message.contains("Quality")) {
             if(map.clickedGob!=null)
             {
                 Double quality = nurgling.areas.PlantQualityArea.inspectQuality(message);
@@ -1613,7 +1623,7 @@ public class NGameUI extends GameUI
         }
         // Handle resource refill time messages (e.g., "Will refill in 10 hours" or "Refills in 2 weeks")
         // Use clickedGob or pendingRefillGob: "Will refill in" often arrives via system msg after tooltip, when clickedGob may already be cleared
-        if (localizedResourceTimerService != null) {
+        if (message != null && localizedResourceTimerService != null) {
             MapView.ClickedGob refillGob = map.clickedGob != null ? map.clickedGob : pendingRefillGob;
             if (refillGob != null) {
                 // Match "Will refill in X units", "Refill(s) in X units" (with or without "Will")
@@ -1910,5 +1920,32 @@ public class NGameUI extends GameUI
         } catch (Exception e) {
             System.err.println("[NGameUI] Failed to apply preferred movement speed: " + e.getMessage());
         }
+    }
+}
+
+final class NGameUINotices {
+    private NGameUINotices() {}
+
+    static void record(NNoticeLog log, String text) {
+        if (log == null)
+            return;
+        log.add(text);
+    }
+}
+
+final class NGameUIMaxBase {
+    private NGameUIMaxBase() {}
+
+    static int maxOf(Iterable<Integer> bases) {
+        if(bases == null)
+            return 0;
+        Integer max = null;
+        for(Integer base : bases) {
+            if(base == null)
+                continue;
+            if(max == null || base.intValue() > max.intValue())
+                max = base;
+        }
+        return max == null ? 0 : max.intValue();
     }
 }
