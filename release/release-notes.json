@@ -48,11 +48,46 @@
     "2026-09-13-master-miner",
     "2026-09-13-mineral-search",
     "2026-09-13-release-feed",
+    "2026-09-14-barter-offer-label",
+    "2026-09-14-flat-mini-ridges",
     "2026-09-14-forager-route-map",
     "2026-09-14-forager-route-start",
-    "2026-09-14-map-safety-tools"
+    "2026-09-14-map-safety-tools",
+    "2026-09-14-release-news-button-package"
   ],
   "releases": [
+    {
+      "id": "2.103.198",
+      "date": "2026-09-14",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В плоском режиме перевалы сохраняют естественный склон и текстуру скалы вместо красных полос.",
+          "У предложений в торговой стойке теперь видны название предмета и качество.",
+          "Клиент снова корректно запускается с кнопкой «Что нового»."
+        ],
+        "en": [
+          "Flat terrain mode now shows cliffs with natural slopes and rock textures instead of red strips.",
+          "Barter Stand offers now show the item's name and quality.",
+          "The client starts correctly again with the What's new button."
+        ]
+      },
+      "details": {
+        "ru": [
+          "При включённом плоском режиме перевалы отображаются небольшим естественным перепадом рельефа. Минимальная высота увеличена, чтобы низкие участки были заметнее. Склон плавно соединяется с окружающей плоской землёй.",
+          "В строке предложения торговой стойки справа от значка теперь указаны название и качество товара, а ниже — оставшееся количество. Так проще проверить покупку до обмена.",
+          "Исправлен запуск клиента после обновления: кнопка «Что нового» в верхнем ряду главного меню справа, над энциклопедией, теперь доступна вместе с нужными изображениями."
+        ],
+        "en": [
+          "With flat terrain enabled, cliffs appear as small natural changes in elevation. A higher minimum height makes low sections easier to notice. Slopes blend into the surrounding flat ground.",
+          "Each Barter Stand offer now lists the item's name and quality to the right of its icon, with the remaining amount underneath, making purchases easier to verify before trading.",
+          "Client startup after updating is fixed: the What's new button in the right side of the top main-menu row, above the encyclopedia, is now available with its required artwork."
+        ]
+      }
+    },
     {
       "id": "2.103.197",
       "date": "2026-09-13",
