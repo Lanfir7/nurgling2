@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-14-barter-offer-label",
+  "priority": 4,
+  "summary": {
+    "ru": "У предложений в торговой стойке теперь видны название предмета и качество.",
+    "en": "Barter Stand offers now show the item's name and quality."
+  },
+  "detail": {
+    "ru": "В строке предложения торговой стойки справа от значка теперь указаны название и качество товара, а ниже — оставшееся количество. Так проще проверить покупку до обмена.",
+    "en": "Each Barter Stand offer now lists the item's name and quality to the right of its icon, with the remaining amount underneath, making purchases easier to verify before trading."
+  }
+}

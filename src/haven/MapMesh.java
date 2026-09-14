@@ -348,24 +348,7 @@ public class MapMesh implements RenderTree.Node, Disposable {
 		Coord lc = Coord.of(c);
 		Coord gc = lc.add(ul);
 		long ns = rnd.nextLong();
-		Object mmfs2 = NConfig.get(NConfig.Key.flatsurface);
-		if(mmfs2 instanceof Boolean && (Boolean) mmfs2) {
-			Tiler t = mc.tiler(mc.gettile(gc));
-			if (t instanceof TerrainTile.RidgeTile) {
-				if (m.data(Ridges.id).model(lc)) {
-					Tiler tiler = NStyle.getRidge();
-					tiler.lay(m, rnd, lc, gc);
-				} else {
-					mc.tiler(mc.gettile(gc)).lay(m, rnd, lc, gc);
-				}
-			}
-			else {
-				mc.tiler(mc.gettile(gc)).lay(m, rnd, lc, gc);
-			}
-		}
-		else {
-			mc.tiler(mc.gettile(gc)).lay(m, rnd, lc, gc);
-		}
+		mc.tiler(mc.gettile(gc)).lay(m, rnd, lc, gc);
 		Boolean disableTransitions = (Boolean)NConfig.get(NConfig.Key.disableTileTransitions);
 		if (disableTransitions == null || !disableTransitions) {
 			dotrans(m, rnd, lc, gc);

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-14-release-news-button-package",
+  "priority": 4,
+  "summary": {
+    "ru": "Клиент снова корректно запускается с кнопкой «Что нового».",
+    "en": "The client starts correctly again with the What's new button."
+  },
+  "detail": {
+    "ru": "Исправлен запуск клиента после обновления: кнопка «Что нового» в верхнем ряду главного меню справа, над энциклопедией, теперь доступна вместе с нужными изображениями.",
+    "en": "Client startup after updating is fixed: the What's new button in the right side of the top main-menu row, above the encyclopedia, is now available with its required artwork."
+  }
+}

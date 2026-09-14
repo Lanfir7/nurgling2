@@ -18,6 +18,10 @@ class ResourcePackagingTest {
                     assertTrue(resources.getEntry(entry) != null, "missing " + entry);
                 }
             }
+            for (String state : List.of("u", "d", "h", "dh")) {
+                String entry = "res/nurgling/hud/buttons/rbtn/news/" + state + ".res";
+                assertTrue(resources.getEntry(entry) != null, "missing " + entry);
+            }
         }
     }
 }

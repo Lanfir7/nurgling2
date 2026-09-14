@@ -41,6 +41,9 @@ import nurgling.*;
 
 public class Ridges implements MapMesh.ConsHooks {
     private static final float EPSILON = 0.01f;
+    private static final float FLAT_RIDGE_MIN_HEIGHT = 4.0f;
+    private static final float FLAT_RIDGE_MAX_HEIGHT = 5.0f;
+    private static final float FLAT_RIDGE_HEIGHT_SCALE = 0.08f;
     public static final MapMesh.DataID<Ridges> id = MapMesh.makeid(Ridges.class);
     public static final double segh = 8;
     private static final Coord tilesz = MCache.tilesz2;
@@ -197,6 +200,16 @@ public class Ridges implements MapMesh.ConsHooks {
 	    return(new Coord3f(0, m, 0));
     }
 
+    /* Keep a visible, terrain-like cue for a real elevation break when the ground mesh is flat. */
+    static float flatRidgeHeight(float realHeight) {
+	return(Math.max(FLAT_RIDGE_MIN_HEIGHT, Math.min(FLAT_RIDGE_MAX_HEIGHT, realHeight * FLAT_RIDGE_HEIGHT_SCALE)));
+    }
+
+    private boolean flatworld() {
+	Object flat = NConfig.get(NConfig.Key.flatsurface);
+	return((flat instanceof Boolean) && (Boolean)flat);
+    }
+
     private static final Coord[] tecs = {new Coord(0, -1), new Coord(1, 0), new Coord(0, 1), new Coord(-1, 0)};
     private static final Coord[] tccs = {new Coord(0, 0), new Coord(1, 0), new Coord(1, 1), new Coord(0, 1)};
     private boolean edgelc(Coord tc, int e) {
@@ -214,6 +227,11 @@ public class Ridges implements MapMesh.ConsHooks {
 	    Coord gc = tc.add(m.ul);
 	    float z1 = (float)m.map.getfz(gc.add(tccs[e])), z2 = (float)m.map.getfz(gc.add(tccs[(e + 1) % 4]));
 	    lo = Math.min(z1, z2); hi = Math.max(z1, z2);
+	}
+	if(flatworld()) {
+	    float realHeight = hi - lo;
+	    lo = 0;
+	    hi = flatRidgeHeight(realHeight);
 	}
 	int nseg = Math.max((int)Math.round((hi - lo) / segh), 2) - 1;
 	Vertex[] ret = new Vertex[nseg + 1];
@@ -533,6 +551,20 @@ public class Ridges implements MapMesh.ConsHooks {
     private void modelcomplex(Coord tc, boolean[] breaks) {
 	Coord gc = tc.add(m.ul), pc = tc.mul(tilesz).mul(1, -1);
 	float[] tczs = tczs(tc);
+	if(flatworld()) {
+	    float lo = tczs[0], hi = tczs[0];
+	    for(int i = 1; i < tczs.length; i++) {
+		lo = Math.min(lo, tczs[i]);
+		hi = Math.max(hi, tczs[i]);
+	    }
+	    float height = flatRidgeHeight(hi - lo);
+	    if(hi == lo) {
+		Arrays.fill(tczs, 0);
+	    } else {
+		for(int i = 0; i < tczs.length; i++)
+		    tczs[i] = ((tczs[i] - lo) / (hi - lo)) * height;
+	    }
+	}
 	int s;
 	for(s = 0; !breaks[s] || !breaks[(s + 3) % 4]; s++);
 	Coord3f[] col;
@@ -611,20 +643,7 @@ public class Ridges implements MapMesh.ConsHooks {
 	this.ridge[ms.ts.o(tc)] = new RPart(rdg);
     }
 
-	public boolean model(Coord tc)
-	{
-		Object rfs = NConfig.get(NConfig.Key.flatsurface);
-		if (rfs instanceof Boolean && (Boolean) rfs)
-		{
-			boolean[] b = breaks(tc);
-			if (!b[0] && !b[1] && !b[2] && !b[3])
-				return (false);
-			return true;
-		}
-		else {
-			return (_model(tc));
-		}
-	}
+	public boolean model(Coord tc) {return(_model(tc));}
 
 	public boolean _model(Coord tc) {
 	tc = new Coord(tc);

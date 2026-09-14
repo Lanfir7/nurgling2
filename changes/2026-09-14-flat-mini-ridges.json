@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-14-flat-mini-ridges",
+  "priority": 5,
+  "summary": {
+    "ru": "В плоском режиме перевалы сохраняют естественный склон и текстуру скалы вместо красных полос.",
+    "en": "Flat terrain mode now shows cliffs with natural slopes and rock textures instead of red strips."
+  },
+  "detail": {
+    "ru": "При включённом плоском режиме перевалы отображаются небольшим естественным перепадом рельефа. Минимальная высота увеличена, чтобы низкие участки были заметнее. Склон плавно соединяется с окружающей плоской землёй.",
+    "en": "With flat terrain enabled, cliffs appear as small natural changes in elevation. A higher minimum height makes low sections easier to notice. Slopes blend into the surrounding flat ground."
+  }
+}

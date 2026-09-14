@@ -356,7 +356,7 @@
 
   <target name="pre-release" depends="bin">
     <copy if:set="release.notes.prepared" file="build/release-notes.json" tofile="release/release-notes.json" overwrite="true" />
-    <copy todir="release">
+    <copy todir="release" overwrite="true">
       <fileset dir="bin">
         <include name="*.jar" />
         <include name="*.properties" />

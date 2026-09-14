@@ -7,6 +7,7 @@ import static haven.Inventory.sqsz;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.awt.Color;
+import java.awt.Font;
 
 /* >wdg: haven.res.ui.barterbox.Shopbox */
 @haven.FromResource(name = "ui/barterbox", version = 76)
@@ -35,6 +36,7 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
     private Button spipe, bpipe, bbtn, cbtn;
     private TextEntry pnume, pqe, cnte;
     public final boolean admin;
+    private static final Text.Foundry offerlabel = new Text.Foundry(Text.serif.deriveFont(Font.BOLD, UI.scale(12f))).aa(true);
 
     public static Widget mkwidget(UI ui, Object... args) {
 	boolean adm = (Integer)args[0] != 0;
@@ -44,11 +46,14 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
     public Shopbox(boolean admin) {
 	super(bg.sz());
 	if(this.admin = admin) {
-	    spipe = add(new Button(UI.scale(75), "Connect"), spipec);
+	    spipe = new Button(UI.scale(75), "Connect");
+	    add(spipe, actionc(spipe, spipec));
 	    spipe.tint = new Color(255, 150, 150);
-	    bpipe = add(new Button(UI.scale(75), "Connect"), bpipec);
+	    bpipe = new Button(UI.scale(75), "Connect");
+	    add(bpipe, actionc(bpipe, bpipec));
 	    bpipe.tint = new Color(150, 255, 150);
-	    cbtn = add(new Button(UI.scale(75), "Change"), cbtnc);
+	    cbtn = new Button(UI.scale(75), "Change");
+	    add(cbtn, actionc(cbtn, cbtnc));
 	    pnume = adda(new TextEntry(UI.scale(50), ""), pricec.add(invsq.sz()).add(UI.scale(5, 0)), 0.0, 1.0);
 	    pnume.canactivate = true; pnume.dshow = true;
 	    adda(new Label("Quality:"), qualc.add(0, 0), 0.0, 1.0);
@@ -56,6 +61,7 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
 	    pqe.canactivate = true; pqe.dshow = true;
 	}
 	cnte = adda(new TextEntry(UI.scale(45), Integer.toString(lastqty)), cntc, 0.0, 1.0);
+	positionPurchaseCount((admin ? spipe.sz.y : Button.hs));
 	cnte.canactivate = true; cnte.dshow = true;
 	cnte.tooltip = "Number of purchases";
 	updbtn();
@@ -89,6 +95,16 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
 	}
     };
 
+    public final AttrCache<Text> itemlabel = new AttrCache<Text>() {
+	protected Text find(List<ItemInfo> info) {
+	    ItemInfo.Name name = ItemInfo.find(ItemInfo.Name.class, info);
+	    if((name == null) || (name.str.text == null) || name.str.text.isEmpty())
+		return(null);
+	    haven.res.ui.tt.q.quality.Quality quality = ItemInfo.find(haven.res.ui.tt.q.quality.Quality.class, info);
+	    return(offerlabel.renderstroked(OfferLabel.format(name.str.text, (quality == null) ? null : quality.q), new Color(255, 205, 109), Color.BLACK));
+	}
+    };
+
     public void draw(GOut g) {
 	g.image(bg, Coord.z);
 	sprite: {
@@ -108,8 +124,13 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
 		spr.draw(sg);
 		if(itemnum.get() != null)
 		    sg.aimage(itemnum.get(), sqsz, 1, 1);
+		Coord itemlabelc = OfferLayout.identityOrigin(itemc, invsq.sz(), UI.scale(5));
+		GOut lg = g.reclip(itemlabelc, new Coord(pricec.x - itemlabelc.x - UI.scale(5), UI.scale(60)));
+		Text label = itemlabel.get();
+		if(label != null)
+		    lg.image(label.tex(), Coord.z);
 		if(num != null)
-		    g.aimage(num.tex(), itemc.add(invsq.sz()).add(UI.scale(5, 0)), 0.0, 1.0);
+		    lg.image(num.tex(), new Coord(0, (label == null) ? 0 : label.sz().y));
 	    }
 	}
 
@@ -260,12 +281,22 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
     private void updbtn() {
 	boolean canbuy = (res != null) && (price != null) && (pnum > 0);
 	if(canbuy && (bbtn == null)) {
-	    bbtn = add(new Button(UI.scale(75), "Buy"), buyc);
+	    bbtn = new Button(UI.scale(75), "Buy");
+	    add(bbtn, actionc(bbtn, buyc));
+	    positionPurchaseCount(bbtn.sz.y);
 	} else if(!canbuy && (bbtn != null)) {
 	    bbtn.reqdestroy();
 	    bbtn = null;
 	}
 	cnte.show(canbuy);
+    }
+
+    private Coord actionc(Button button, Coord base) {
+	return(new Coord(base.x, OfferLayout.actionY(sz.y, button.sz.y, UI.scale(5))));
+    }
+
+    private void positionPurchaseCount(int buttonHeight) {
+	cnte.c = new Coord(cntc.x, OfferLayout.purchaseCountTop(OfferLayout.actionY(sz.y, buttonHeight, UI.scale(5)), UI.scale(3), cnte.sz.y));
     }
 
     private static Text rnum(String fmt, int n) {
@@ -351,5 +382,27 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
 	    return(null);
 	String name = nm.str.text;
 	return new ShopItem(spr, name);
+    }
+}
+
+class OfferLabel {
+    static String format(String name, Double quality) {
+	if(quality == null)
+	    return(name);
+	return(String.format(Locale.ROOT, "%s (Q %.1f)", name, quality));
+    }
+}
+
+class OfferLayout {
+    static Coord identityOrigin(Coord itemOrigin, Coord itemSize, int gap) {
+	return(new Coord(itemOrigin.x + itemSize.x + gap, itemOrigin.y));
+    }
+
+    static int actionY(int rowHeight, int buttonHeight, int inset) {
+	return(rowHeight - buttonHeight - inset);
+    }
+
+    static int purchaseCountTop(int actionY, int gap, int countHeight) {
+	return(actionY - gap - countHeight);
     }
 }
