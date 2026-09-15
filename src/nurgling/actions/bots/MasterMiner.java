@@ -4,6 +4,7 @@ import haven.*;
 import haven.MCache;
 import haven.Resource;
 import haven.res.lib.itemtex.ItemTex;
+import haven.res.ui.stackinv.ItemStack;
 import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -23,6 +24,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.WeakHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,7 +65,57 @@ public class MasterMiner extends ActionWithFinal {
 
     private volatile boolean stop = false;
     private MasterMinerWnd wnd = null;
-    private ArrayList<WItem> known = new ArrayList<>();
+    /** An item's origin is fixed when its GItem first appears, never when a WItem widget is rebuilt. */
+    enum Origin { CARRIED, MINED }
+
+    static final class Seen {
+        final Origin origin;
+        boolean counted;
+        boolean recorded;
+        boolean settled;
+
+        Seen(Origin origin) {
+            this.origin = origin;
+        }
+    }
+
+    /** Identity-keyed state; production instantiates it with GItem, tests use ordinary identity tokens. */
+    static final class ItemOrigins<K> {
+        private final Map<K, Seen> items = new WeakHashMap<>();
+
+        void observe(Iterable<K> keys, boolean baselineOrNotMining) {
+            observe(keys, baselineOrNotMining ? Origin.CARRIED : Origin.MINED);
+        }
+
+        void observe(Iterable<K> keys, Origin arrival) {
+            for (K key : keys) if (key != null) items.computeIfAbsent(key, ignored -> new Seen(arrival));
+        }
+
+        Seen get(K key) { return items.get(key); }
+
+        void clear() { items.clear(); }
+
+        boolean claimCount(K key) {
+            Seen seen = items.get(key);
+            if (seen == null || seen.origin != Origin.MINED || seen.counted) return false;
+            seen.counted = true;
+            return true;
+        }
+
+        boolean claimRecord(K key) {
+            Seen seen = items.get(key);
+            if (seen == null || seen.origin != Origin.MINED || seen.recorded) return false;
+            seen.recorded = true;
+            return true;
+        }
+    }
+
+    private final ItemOrigins<GItem> seen = new ItemOrigins<>();
+    private final Map<GItem, GItem> stackHolders = new HashMap<>();
+    /** Holder contents first observed during this run; later leaves are new arrivals themselves. */
+    private final Set<GItem> stackContentsObserved = new HashSet<>();
+    private final Map<GItem, Boolean> stackLeafFromFirstContents = new HashMap<>();
+    private static final int DROP_CONFIRM_TICKS = 30;
     
     private static final AtomicReference<ExecutorService> markerExecutorRef = new AtomicReference<>(createMarkerExecutor());
     private static final AtomicReference<ExecutorService> iconLoaderExecutorRef = new AtomicReference<>(createIconLoaderExecutor());
@@ -95,6 +151,51 @@ public class MasterMiner extends ActionWithFinal {
         if (oldIcon != null) oldIcon.shutdownNow();
         oreIconCache.clear();
     }
+
+    static <T> List<T> withHand(List<T> carried, T hand) {
+        Set<T> unique = new LinkedHashSet<>();
+        if (carried != null) unique.addAll(carried);
+        if (hand != null) unique.add(hand);
+        return new ArrayList<>(unique);
+    }
+
+    static int dropBudget(int totalStones, int keepForSupport) {
+        return Math.max(0, totalStones - Math.max(0, keepForSupport));
+    }
+
+    static boolean shouldRecordMined(Origin origin, boolean singleStone) {
+        return origin == Origin.MINED && singleStone;
+    }
+
+    static Origin stackLeafOrigin(Origin arrival, Origin holderOrigin, boolean firstContentsSnapshot) {
+        return firstContentsSnapshot && holderOrigin != null ? holderOrigin : arrival;
+    }
+
+    static boolean usesSingleDropProtocol(boolean stackLeaf, int stackAmount) {
+        return stackLeaf || stackAmount > 1;
+    }
+
+    static boolean dropConfirmed(boolean departed, int beforeAmount, int afterAmount) {
+        return departed || (beforeAmount > 1 && afterAmount >= 0 && afterAmount < beforeAmount);
+    }
+
+    static boolean isAggregateStackAmount(int amount) {
+        return amount > 1;
+    }
+
+    static boolean isFirstPopulatedContentsSnapshot(boolean alreadyObserved, int orderedMemberCount) {
+        return !alreadyObserved && orderedMemberCount > 0;
+    }
+
+    static <K, V> List<V> orderedStackMembers(Iterable<K> order, Map<K, V> widgets) {
+        ArrayList<V> result = new ArrayList<>();
+        if (order == null || widgets == null) return result;
+        for (K key : order) {
+            V widget = widgets.get(key);
+            if (widget != null && !result.contains(widget)) result.add(widget);
+        }
+        return result;
+    }
     
     // Кэш для иконок руд, чтобы не загружать их каждый раз
     private static final ConcurrentHashMap<String, BufferedImage> oreIconCache = new ConcurrentHashMap<>();
@@ -129,11 +230,92 @@ public class MasterMiner extends ActionWithFinal {
     private static final long BATCH_DELAY_MS = 1000; // Увеличена задержка для сбора большего количества камней (1000мс = 1 секунда)
     private final Object batchLock = new Object();
 
+    /** Returns false only while a requested drop cannot yet be issued, so the GItem stays pending. */
+    private boolean settleDrop(NGameUI gui, WItem item, String stoneName, double quality,
+                               MasterMinerWnd wnd, int[] needToDropRef) throws InterruptedException {
+        String type = classifyStoneType(stoneName);
+        double threshold = "Shell".equals(type) || "Cat Gold".equals(type)
+                ? wnd.getShellCatGoldThreshold() : wnd.getDropThreshold();
+        if (needToDropRef == null || needToDropRef[0] <= 0 || Double.isNaN(threshold) || quality >= threshold)
+            return true;
+        if (!isInMainInventory(gui, item) && item != gui.vhand)
+            return true;
+        String lower = stoneName == null ? "" : stoneName.toLowerCase();
+        if (lower.contains("axe") || lower.contains("pickaxe") || lower.contains("топор") || lower.contains("кирк"))
+            return true;
+        if (!dropStone(gui, item)) return hasLeftInventory(gui, item);
+        needToDropRef[0]--;
+        return true;
+    }
+
+    /** A removed widget must finish a pending quality wait instead of keeping the miner blocked. */
+    private boolean hasLeftInventory(NGameUI gui, WItem item) {
+        return item == null || item.parent == null || (!isInMainInventory(gui, item) && item != gui.vhand);
+    }
+
+    /**
+     * Wait only until this item has usable quality or has left the carried inventory.  In the
+     * latter case it remains unrecorded: a rebuilt widget for the same GItem can retry safely.
+     */
+    private double awaitQuality(NGameUI gui, WItem item) throws InterruptedException {
+        if (item == null || !(item.item instanceof NGItem)) return -1;
+        NGItem stone = (NGItem) item.item;
+        double quality = getItemQuality(stone, item);
+        if (quality >= 0) return quality;
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return hasLeftInventory(gui, item)
+                        || (stone.name() != null && getItemQuality(stone, item) >= 0);
+            }
+        });
+        quality = getItemQuality(stone, item);
+        if (quality < 0 && !hasLeftInventory(gui, item)) NUtils.addTask(new WaitTicks(2));
+        return quality;
+    }
+
+    /**
+     * Sends one controlled drop and waits for the client widget to disappear.  Stack leaves
+     * receive the amount-one protocol so the support reserve cannot lose the whole stack.
+     */
+    private boolean dropStone(NGameUI gui, WItem item) throws InterruptedException {
+        if (item == null || item.item == null || (!isInMainInventory(gui, item) && item != gui.vhand))
+            return false;
+        // The local client has no dropSlotReady hook. A short per-message delay is its throttle.
+        NUtils.addTask(new WaitTicks(3));
+        if (!isInMainInventory(gui, item) && item != gui.vhand) return false;
+        int beforeAmount = itemAmount(item);
+        if (usesSingleDropProtocol(item.parent instanceof ItemStack, beforeAmount)) {
+            item.item.wdgmsg("drop", Coord.z, 1);
+        } else {
+            NUtils.drop(item);
+        }
+        NUtils.addTask(new NTask() {
+            int ticks;
+
+            @Override
+            public boolean check() {
+                return dropConfirmed(hasLeftInventory(gui, item), beforeAmount, itemAmount(item))
+                        || ++ticks >= DROP_CONFIRM_TICKS;
+            }
+        });
+        return dropConfirmed(hasLeftInventory(gui, item), beforeAmount, itemAmount(item));
+    }
+
+    private int itemAmount(WItem item) {
+        if (!(item != null && item.item instanceof NGItem)) return 1;
+        GItem.Amount info = ((NGItem) item.item).getInfo(GItem.Amount.class);
+        return info != null && info.itemnum() > 0 ? info.itemnum() : 1;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         // сброс состояния для повторного запуска
         stop = false;
-        known.clear();
+        seen.clear();
+        stackHolders.clear();
+        stackContentsObserved.clear();
+        stackLeafFromFirstContents.clear();
         MasterMinerWnd created = new MasterMinerWnd();
         Coord savedPos = created.savedWindowPos();
         if (savedPos != null) {
@@ -148,6 +330,9 @@ public class MasterMiner extends ActionWithFinal {
             ((nurgling.NMapView) gui.map).restoreMinesweeperOverlay();
         }
 
+        // Capture all pre-existing inventory/stack/hand items before the cursor can create a drop.
+        observeCarriedItems(collectCarriedItems(gui), Origin.CARRIED);
+
         // Активируем курсор майнинга при запуске
         try {
             Gob player = NUtils.player();
@@ -159,9 +344,6 @@ public class MasterMiner extends ActionWithFinal {
         }
 
         try {
-            ArrayList<WItem> allItems = collectAllWItemsFromWidget(gui.getInventory());
-            known = filterMinedItems(allItems);
-
             while (!stop && wnd != null && !wnd.isClosed()) {
                 int masonry = 0;
                 try {
@@ -173,21 +355,21 @@ public class MasterMiner extends ActionWithFinal {
                 String curs = NUtils.getCursorName();
                 boolean mining = (curs != null) && NParser.checkName(curs, "mine");
 
+                ArrayList<WItem> allItems = collectCarriedItems(gui);
+                observeCarriedItems(allItems, mining ? Origin.MINED : Origin.CARRIED);
+
                 if (!mining) {
                     NUtils.addTask(new WaitTicks(10));
                     continue;
                 }
 
-                // Получаем все предметы из инвентаря рекурсивно (getItems() смотрит только child/next и может не видеть слоты)
-                allItems = collectAllWItemsFromWidget(gui.getInventory());
-                allItems = addItemsFromStacks(gui.getInventory(), allItems);
                 ArrayList<WItem> cur = filterMinedItems(allItems);
-                
-                // Обрабатываем все новые камни, а не только первый
-                ArrayList<WItem> newItems = new ArrayList<>();
+
+                ArrayList<WItem> pending = new ArrayList<>();
                 for (WItem it : cur) {
-                    if (!known.contains(it)) {
-                        newItems.add(it);
+                    Seen itemSeen = seen.get(it.item);
+                    if (itemSeen != null && !itemSeen.settled && !isAggregateStack(it)) {
+                        pending.add(it);
                     }
                 }
                 
@@ -207,48 +389,13 @@ public class MasterMiner extends ActionWithFinal {
 
                 // Сколько камней можно сбросить: всего - сколько оставляем для подпорки (в т.ч. в руках)
                 int totalStones = countTotalStones(cur);
-                WItem vhandItem = gui.vhand;
-                if (vhandItem != null && vhandItem.item instanceof NGItem) {
-                    NGItem vhandNGItem = (NGItem) vhandItem.item;
-                    String vhandName = vhandNGItem.name();
-                    if (vhandName != null && !isGemstone(vhandNGItem) && !isGemstone(vhandName) &&
-                        (NParser.checkName(vhandName, MINED_ITEMS) || NParser.checkName(vhandName, ORE_ITEMS))) {
-                        String vhandStoneType = classifyStoneType(vhandName);
-                        if (!"Shell".equals(vhandStoneType) && !"Cat Gold".equals(vhandStoneType)) {
-                            haven.GItem.Amount vhAm = vhandNGItem.getInfo(haven.GItem.Amount.class);
-                            totalStones += (vhAm != null && vhAm.itemnum() > 0) ? vhAm.itemnum() : 1;
-                        }
-                    }
-                }
                 int keepStones = wnd.getKeepStonesForSupport();
-                int[] needToDropRef = new int[] { Math.max(0, totalStones - keepStones) };
-
-                // Проверяем предмет в руках (vhand) — камень/руда может попасть туда, если инвентарь полон
-                if (vhandItem != null && vhandItem.item instanceof NGItem) {
-                    NGItem vhandNGItem = (NGItem) vhandItem.item;
-                    String vhandName = vhandNGItem.name();
-                    if (vhandName != null) {
-                        boolean isMinedItem = NParser.checkName(vhandName, MINED_ITEMS) || 
-                                             NParser.checkName(vhandName, ORE_ITEMS) ||
-                                             isGemstone(vhandNGItem) || 
-                                             isGemstone(vhandName);
-                        if (isMinedItem && !known.contains(vhandItem)) {
-                            try {
-                                processNewStone(gui, vhandItem, wnd, needToDropRef);
-                                known.add(vhandItem);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                        }
-                    }
-                }
+                int[] needToDropRef = new int[] { dropBudget(totalStones, keepStones) };
                 
-                if (newItems.isEmpty() && stacksToCheck.isEmpty()) {
+                if (pending.isEmpty() && stacksToCheck.isEmpty()) {
                     NUtils.addTask(new WaitTicks(5));
                     continue;
                 }
-                known = cur;
                 
                 // Сначала стаки — иначе лимит сброса забирают одиночные и стаки не трогаем
                 for (WItem stackItem : stacksToCheck) {
@@ -259,15 +406,16 @@ public class MasterMiner extends ActionWithFinal {
                         break;
                     }
                 }
-                // Затем одиночные/новые камни
-                for (WItem newItem : newItems) {
-                    processNewStone(gui, newItem, wnd, needToDropRef);
+                // Затем все pending items. Origin state prevents retries and rebuilt WItems from double-recording.
+                for (WItem item : pending) {
+                    processStone(gui, item, seen.get(item.item), wnd, needToDropRef);
                 }
                 
                 // Небольшой yield после обработки всех камней
                 NUtils.addTask(new WaitTicks(2));
             }
         } finally {
+            processMarkerBatch(gui);
             if (wnd != null) {
                 try { wnd.destroy(); } catch (Exception ignored) {}
             }
@@ -376,12 +524,17 @@ public class MasterMiner extends ActionWithFinal {
         return -1;
     }
     
-    /** Проверяет, что предмет находится в главном инвентаре (в т.ч. внутри стака — parent может быть ItemStack). */
+    /** Checks the complete parent chain, hopping from a stack ContentsWindow back to its holder. */
     private boolean isInMainInventory(NGameUI gui, WItem witem) {
         if (witem == null || gui == null) return false;
         if (witem == gui.vhand) return true;
-        for (Widget w = witem; w != null; w = w.parent) {
+        for (Widget w = witem; w != null; ) {
             if (w == gui.getInventory()) return true;
+            if (w instanceof GItem.ContentsWindow) {
+                w = ((GItem.ContentsWindow) w).cont;
+            } else {
+                w = w.parent;
+            }
         }
         return false;
     }
@@ -396,37 +549,62 @@ public class MasterMiner extends ActionWithFinal {
         return out;
     }
 
+    /** One snapshot across normal inventory, nested stack slots, and the hand. */
+    private ArrayList<WItem> collectCarriedItems(NGameUI gui) {
+        stackHolders.clear();
+        stackLeafFromFirstContents.clear();
+        ArrayList<WItem> inventory = collectAllWItemsFromWidget(gui.getInventory());
+        return new ArrayList<>(withHand(inventory, gui.vhand));
+    }
+
+    private void observeCarriedItems(List<WItem> items, Origin arrival) {
+        if (items == null) return;
+        for (WItem item : items) {
+            if (item == null || item.item == null) continue;
+            GItem holder = stackHolders.get(item.item);
+            Seen holderSeen = holder == null ? null : seen.get(holder);
+            seen.observe(Collections.singletonList(item.item),
+                    stackLeafOrigin(arrival, holderSeen == null ? null : holderSeen.origin,
+                            Boolean.TRUE.equals(stackLeafFromFirstContents.get(item.item))));
+        }
+    }
+
     private void collectAllWItemsRecur(Widget w, ArrayList<WItem> out) {
         if (w == null) return;
         if (w instanceof WItem) {
             WItem wi = (WItem) w;
-            if (wi.item != null && !out.contains(wi)) out.add(wi);
+            if (wi.item != null && !out.contains(wi)) {
+                out.add(wi);
+                collectStackMembers(wi, out);
+            }
         }
         for (Widget ch = w.child; ch != null; ch = ch.next) {
             collectAllWItemsRecur(ch, out);
         }
     }
 
-    /**
-     * Добавляет в список WItem'ы из виджетов ItemStack (стаки типа "Gneiss, stack of 3").
-     */
-    private ArrayList<WItem> addItemsFromStacks(Widget inv, ArrayList<WItem> list) {
-        if (inv == null || list == null) return list;
-        ArrayList<WItem> out = new ArrayList<>(list);
-        collectWItemsFromStacks(inv, out);
-        return out;
+    /** Stack leaves are kept off the inventory widget tree in GItem.contents. */
+    private void collectStackMembers(WItem holder, ArrayList<WItem> out) {
+        if (holder == null || !(holder.item.contents instanceof ItemStack)) return;
+        ItemStack stack = (ItemStack) holder.item.contents;
+        List<WItem> leaves = orderedStackMembers(new ArrayList<>(stack.order), stack.wmap);
+        boolean firstContentsSnapshot = isFirstPopulatedContentsSnapshot(
+                stackContentsObserved.contains(holder.item), leaves.size());
+        if (firstContentsSnapshot) stackContentsObserved.add(holder.item);
+        for (WItem leaf : leaves) {
+            if (leaf != null && leaf.item != null) {
+                stackHolders.put(leaf.item, holder.item);
+                stackLeafFromFirstContents.put(leaf.item, firstContentsSnapshot);
+                if (!out.contains(leaf)) out.add(leaf);
+            }
+        }
     }
 
-    private void collectWItemsFromStacks(Widget w, ArrayList<WItem> out) {
-        if (w == null) return;
-        if (w instanceof haven.res.ui.stackinv.ItemStack) {
-            for (WItem wi : ((haven.res.ui.stackinv.ItemStack) w).wmap.values()) {
-                if (wi != null && wi.item != null && !out.contains(wi)) out.add(wi);
-            }
-            return;
-        }
-        for (Widget ch = w.child; ch != null; ch = ch.next) {
-            collectWItemsFromStacks(ch, out);
+    private boolean isAggregateStack(WItem item) {
+        try {
+            return isAggregateStackAmount(itemAmount(item));
+        } catch (Exception ignored) {
+            return false;
         }
     }
 
@@ -477,11 +655,8 @@ public class MasterMiner extends ActionWithFinal {
             if (needToDropRef[0] <= 0) break;
             if (!isInMainInventory(gui, stackItem) && stackItem != gui.vhand) break;
             if (stackItem.item == null) break;
-            NUtils.addTask(new WaitTicks(3));
-            if (isInMainInventory(gui, stackItem) || stackItem == gui.vhand) {
-                NUtils.dropOne(stackItem);
-                needToDropRef[0]--;
-            }
+            if (!dropStone(gui, stackItem)) break;
+            needToDropRef[0]--;
         }
     }
     
@@ -519,6 +694,7 @@ public class MasterMiner extends ActionWithFinal {
             
             try {
                 NGItem ngItem = (NGItem) item.item;
+                if (ngItem.contents instanceof ItemStack) continue;
                 String itemName = ngItem.name();
                 
                 if (itemName == null) continue;
@@ -546,30 +722,15 @@ public class MasterMiner extends ActionWithFinal {
      * Обрабатывает один новый камень.
      * needToDropRef[0] — сколько ещё камней можно сбросить (с учётом лимита «держать N для подпорки»).
      */
-    private void processNewStone(NGameUI gui, WItem newItem, MasterMinerWnd wnd, int[] needToDropRef) throws InterruptedException {
+    private void processStone(NGameUI gui, WItem newItem, Seen seenItem, MasterMinerWnd wnd, int[] needToDropRef) throws InterruptedException {
+        if (newItem == null || !(newItem.item instanceof NGItem) || seenItem == null) return;
         NGItem dropped = (NGItem) newItem.item;
         
         // Для стаков нужно получить качество через Stack info
-        double f3 = getItemQuality(dropped, newItem);
-        
-        if (f3 < 0) {
-            // Качество еще не готово - ждем
-            WItem finalNewItem = newItem;
-            NUtils.addTask(new NTask() {
-                { this.infinite = true; }
-                @Override
-                public boolean check() {
-                    NGItem gi = (NGItem) finalNewItem.item;
-                    if (gi.name() == null) return false;
-                    double quality = getItemQuality(gi, finalNewItem);
-                    return quality >= 0;
-                }
-            });
-            f3 = getItemQuality(dropped, newItem);
-            if (f3 < 0) {
-                NUtils.addTask(new WaitTicks(2));
-                return;
-            }
+        double f3 = awaitQuality(gui, newItem);
+        if (f3 < 0 || dropped.name() == null) {
+            if (!hasLeftInventory(gui, newItem)) NUtils.addTask(new WaitTicks(2));
+            return;
         }
         String stoneName = dropped.name();
         String stoneType = classifyStoneType(stoneName);
@@ -578,6 +739,16 @@ public class MasterMiner extends ActionWithFinal {
         boolean isGem = isGemstone(dropped);
         if (!isGem) {
             isGem = isGemstone(stoneName);
+        }
+
+        if (isGem && seenItem.origin != Origin.MINED) {
+            seenItem.settled = true;
+            return;
+        }
+
+        if (!isGem && seenItem.origin == Origin.CARRIED) {
+            seenItem.settled = settleDrop(gui, newItem, stoneName, f3, wnd, needToDropRef);
+            return;
         }
         
         // Драгоценные камни НЕ учитываются при подсчете качества и НЕ обновляют UI
@@ -642,6 +813,8 @@ public class MasterMiner extends ActionWithFinal {
                 }
             }
             // Драгоценные камни НЕ сбрасываются и НЕ учитываются в статистике
+            seenItem.recorded = true;
+            seenItem.settled = true;
             return;
         }
 
@@ -651,19 +824,15 @@ public class MasterMiner extends ActionWithFinal {
             return;
         }
 
-        // ждём имя/качество инструмента
-        final WItem ftool = tool;
-        NUtils.addTask(new NTask() {
-            { this.infinite = true; }
-            @Override
-            public boolean check() {
-                NGItem ti = (NGItem) ftool.item;
-                return ti.name() != null && ti.quality != null;
-            }
-        });
-
+        // Keep the item pending while tool metadata resolves; the widget can be rebuilt or disappear.
+        if (!(tool.item instanceof NGItem)) return;
+        WItem ftool = tool;
         String toolName = ((NGItem) ftool.item).name();
         Double f4 = ((NGItem) ftool.item).quality != null ? (double) ((NGItem) ftool.item).quality : null;
+        if (toolName == null || f4 == null) {
+            NUtils.addTask(new WaitTicks(2));
+            return;
+        }
         double f5 = toolCoef(toolName);
         ToolType currentToolType = classifyTool(toolName);
 
@@ -741,7 +910,8 @@ public class MasterMiner extends ActionWithFinal {
             }
 
             // обновляем UI для соответствующего типа камня
-            if (stoneType != null) {
+            if (stoneType != null && shouldRecordMined(seenItem.origin, isSingleStone(dropped))
+                    && seen.claimRecord(newItem.item)) {
                 int masonryForUI = 0;
                 try {
                     masonryForUI = NUtils.getUI().sess.glob.getcattr("masonry").comp;
@@ -749,7 +919,9 @@ public class MasterMiner extends ActionWithFinal {
                 }
                 wnd.setStoneInfo(stoneType, stoneName, f3, wallQ, bestAltQ, masonryForUI, set, currentToolType);
                 wnd.setLastMined(stoneName, wallQ, masonryForUI); // Передаем wallQ вместо f3
-                wnd.incrementCounter();
+                if (seen.claimCount(newItem.item)) {
+                    wnd.incrementCounter();
+                }
                 
                 // Проверяем, нужно ли поставить метку на карте согласно настройкам
                 nurgling.conf.NMasterMinerMarkingConfig markingConfig = nurgling.conf.NMasterMinerMarkingConfig.get();
@@ -795,36 +967,20 @@ public class MasterMiner extends ActionWithFinal {
                 }
             }
 
+            seenItem.recorded = true;
+
             // проверка порога и сброс камня (включая стаки)
             // Сброс происходит по фактическому качеству камня (f3), а не по qWall
             // Для ракух и кэтголдов используется отдельный порог
             // Драгоценные камни НЕ сбрасываются (они уже обработаны выше и вернулись)
-            double threshold;
-            if ("Shell".equals(stoneType) || "Cat Gold".equals(stoneType)) {
-                threshold = wnd.getShellCatGoldThreshold();
-            } else {
-                threshold = wnd.getDropThreshold();
-            }
-            
-            // Сброс только если разрешено лимитом «держать N камней» и качество ниже порога
-            if (needToDropRef != null && needToDropRef[0] > 0 && !Double.isNaN(threshold) && f3 < threshold) {
-                boolean isInInventory = (newItem != null && isInMainInventory(gui, newItem));
-                boolean isInHand = (newItem != null && newItem == gui.vhand);
-                if (isInInventory || isInHand) {
-                    String itemName = stoneName != null ? stoneName.toLowerCase() : "";
-                    boolean isTool = itemName.contains("axe") || itemName.contains("pickaxe") || 
-                                   itemName.contains("топор") || itemName.contains("кирк");
-                    if (!isTool) {
-                        NUtils.addTask(new WaitTicks(3));
-                        if (isInMainInventory(gui, newItem) || newItem == gui.vhand) {
-                            NUtils.drop(newItem);
-                            known.remove(newItem);
-                            needToDropRef[0]--;
-                        }
-                    }
-                }
-            }
+            seenItem.settled = settleDrop(gui, newItem, stoneName, f3, wnd, needToDropRef);
         }
+    }
+
+    /** A stack's aggregate must never be treated as one new stone. */
+    private static boolean isSingleStone(NGItem item) {
+        haven.GItem.Amount amount = item.getInfo(haven.GItem.Amount.class);
+        return amount == null || amount.itemnum() <= 1;
     }
 
     @Override

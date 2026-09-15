@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-master-miner-item-tracking",
+  "priority": 6,
+  "summary": {
+    "ru": "Мастер-майнер точнее учитывает свежую добычу и не смешивает её с камнями в сумке.",
+    "en": "Master Miner now tracks fresh drops without mixing them up with stones already in your pack."
+  },
+  "detail": {
+    "ru": "В Мастер-майнере счётчик, последняя добыча и метки карты относятся только к новому материалу из стены. Уже взятые камни всё ещё сортируются по вашим порогам и резерву для подпорки; предметы в стаках и в руке обрабатываются надёжнее.",
+    "en": "In Master Miner, the counter, last-mined readout and map marks now apply only to material freshly mined from the wall. Stones already carried are still sorted using your thresholds and support reserve, while stack-slot and hand items are handled more reliably."
+  }
+}
