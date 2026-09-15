@@ -60,14 +60,55 @@
     "2026-09-15-chunknav-recording-login-default",
     "2026-09-15-custom-marker-beacon",
     "2026-09-15-flat-survey-stakes",
+    "2026-09-15-forager-auto-drink",
+    "2026-09-15-forager-danger-avoidance",
+    "2026-09-15-forager-route-sweep",
     "2026-09-15-free-inventory-container-selection",
     "2026-09-15-gob-config-notify-sound",
     "2026-09-15-marker-beacon",
     "2026-09-15-marker-beacon-label",
+    "2026-09-15-master-miner-item-tracking",
     "2026-09-15-metal-shovel-dig-reserve",
+    "2026-09-15-scenario-speed",
     "2026-09-15-worm-farm-bot"
   ],
   "releases": [
+    {
+      "id": "2.103.201",
+      "date": "2026-09-15",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Сборщик безопаснее обходит животных, закрывает ворота и завершает маршрут.",
+          "Мастер-майнер точнее учитывает свежую добычу и не смешивает её с камнями в сумке.",
+          "Собиратель проходит маршрут экономнее: подбирает группы находок и не делает лишних крюков."
+        ],
+        "en": [
+          "Forager now avoids dangerous animals, closes gates reliably, and finishes routes more safely.",
+          "Master Miner now tracks fresh drops without mixing them up with stones already in your pack.",
+          "Forager follows routes more efficiently, sweeping nearby finds without unnecessary detours."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Сборщик учитывает опасных животных из настроек колец, обходит их и пропускает недоступную точку маршрута вместо опасного крюка. Павшие и оглушённые животные не считаются угрозой. Шаг ворот надёжнее закрывает их с нужной стороны. В настройках Сборщика для завершения или полного инвентаря можно выбрать «hearth, unload, hearth»: вернуться домой, разгрузиться и снова оказаться у очага.",
+          "В Мастер-майнере счётчик, последняя добыча и метки карты относятся только к новому материалу из стены. Уже взятые камни всё ещё сортируются по вашим порогам и резерву для подпорки; предметы в стаках и в руке обрабатываются надёжнее.",
+          "При запуске Собирателя с маршрутом бот собирает близко расположенные находки одной группой, возвращается к пути более короткими переходами и оставляет находки для ближайшей следующей точки маршрута. Настройки маршрута и ограничения сбора продолжают соблюдаться.",
+          "В редакторе сценария добавьте шаг «Скорость движения» и выберите ползком, шагом, бегом или спринт. Если максимум скорости временно ниже выбранного, сценарий использует доступную скорость.",
+          "Включите «Авто-питьё» в настройках качества жизни и задайте порог: Forager пьёт до него между своими действиями, не прерывая маршрут. При отсутствии воды он продолжит работу и сообщит об этом один раз."
+        ],
+        "en": [
+          "Forager respects dangerous animals from Ring Settings, plans around them, and skips an unreachable route point instead of making an unsafe detour. Downed and knocked-out animals are not treated as threats. Gate steps now close gates from the correct side. In Forager Settings, choose “hearth, unload, hearth” for finish or full-inventory actions to return home, unload, then end at the hearth.",
+          "In Master Miner, the counter, last-mined readout and map marks now apply only to material freshly mined from the wall. Stones already carried are still sorted using your thresholds and support reserve, while stack-slot and hand items are handled more reliably.",
+          "When running Forager with a route, nearby finds are collected as a group, the bot returns by shorter hops, and finds are left for the closest upcoming route stop. Route settings and collection limits remain in effect.",
+          "In the scenario editor, add the Set Movement Speed step and choose Crawl, Walk, Run, or Sprint. If your current speed limit is lower than the choice, the scenario uses the fastest available speed.",
+          "Enable Auto-drink in quality-of-life settings and choose its threshold: Forager drinks back to it between its actions without interrupting the route. If water is unavailable, it keeps working and reports it once."
+        ]
+      }
+    },
     {
       "id": "2.103.200",
       "date": "2026-09-15",
