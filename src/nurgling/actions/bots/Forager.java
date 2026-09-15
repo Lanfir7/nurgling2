@@ -10,7 +10,9 @@ import nurgling.guarding.*;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
 import nurgling.routes.*;
+import nurgling.actions.bots.forager.DetourBranchBudget;
 import nurgling.actions.bots.forager.ForagerDrinkPolicy;
+import nurgling.actions.bots.forager.RouteLookahead;
 import nurgling.i18n.L10n;
 import nurgling.tools.AreaStock;
 import nurgling.tools.Finder;
@@ -299,9 +301,11 @@ public class Forager implements Action {
             // Detour to a known actionable gob first if it's closer than this section's own target.
             Gob playerBeforeWalk = NUtils.player();
             if (playerBeforeWalk != null) {
-                Pair<Gob, ForagerAction> nearest = findNearestActionableGob(gui, playerBeforeWalk.rc, preset.actions, SCAN_RADIUS, playerBeforeWalk.rc, preset.ignoreMaintainLimits, effectiveWaterMode(gui, preset));
+                Pair<Gob, ForagerAction> nearest = findNearestActionableGob(gui, playerBeforeWalk.rc, preset.actions,
+                        playerBeforeWalk.rc, preset.ignoreMaintainLimits, effectiveWaterMode(gui, preset),
+                        lookaheadFrom(gui, path, i, playerBeforeWalk.rc), null);
                 if (nearest != null && playerBeforeWalk.rc.dist(nearest.a.rc) < playerBeforeWalk.rc.dist(sectionEnd)) {
-                    collectNearbyActionableGobs(gui, preset);
+                    collectNearbyActionableGobs(gui, preset, path, i);
                     if (isInventoryFull(gui) && !preset.onFullInventoryAction.equals("nothing")) {
                         performSafetyAction(gui, preset.onFullInventoryAction);
                         return Results.SUCCESS();
@@ -330,7 +334,9 @@ public class Forager implements Action {
             Gob targetGob = findGobNear(sectionEnd, 11.0);
 
             // Cover the ground in rescanning hops first, so a gob revealed mid-section still gets detoured to.
-            boolean reachedApproach = walkInHops(gui, preset, targetGob != null ? targetGob.rc : sectionEnd, null, null, null);
+            Gob walkStart = NUtils.player();
+            RouteLookahead walkLookahead = lookaheadFrom(gui, path, i, walkStart != null ? walkStart.rc : null);
+            boolean reachedApproach = walkInHops(gui, preset, targetGob != null ? targetGob.rc : sectionEnd, null, walkLookahead);
 
             if (isInventoryFull(gui) && !preset.onFullInventoryAction.equals("nothing")) {
                 performSafetyAction(gui, preset.onFullInventoryAction);
@@ -379,7 +385,7 @@ public class Forager implements Action {
             }
 
             // Repeatedly grab the nearest unprocessed actionable gob until nothing more is found nearby.
-            collectNearbyActionableGobs(gui, preset);
+            collectNearbyActionableGobs(gui, preset, path, i + 1);
 
             // One-shot scan-and-notify, handled separately from the per-gob walk-to model.
             processChatNotifyActions(gui, section, preset.actions);
@@ -454,6 +460,9 @@ public class Forager implements Action {
 
     // Scan radius (world units) for finding actionable gobs to detour towards.
     private static final double SCAN_RADIUS = 100000.0;
+
+    // Gobs within this many world units (5 tiles) of the last one a detour paid to reach are swept for free.
+    private static final double CLUSTER_RADIUS = 5 * MCache.tilesz.x;
 
     // How close to stop when approaching a milestone anchor, without pathing onto its own tile.
     private static final double MILESTONE_APPROACH_DIST = 20.0;
@@ -659,9 +668,14 @@ public class Forager implements Action {
     }
 
     /** Nearest unprocessed, constraint-passing gob (exclusion zone/leash/cliff/Maintain) matching any of the preset's actions within radius, preferring lower Priority actions first. */
-    private Pair<Gob, ForagerAction> findNearestActionableGob(NGameUI gui, Coord2d from, java.util.List<ForagerAction> actions, double radius, Coord2d leashAnchor, boolean ignoreMaintainLimits, boolean waterMode) throws InterruptedException {
+    private Pair<Gob, ForagerAction> findNearestActionableGob(NGameUI gui, Coord2d from, java.util.List<ForagerAction> actions,
+                                                               Coord2d leashAnchor, boolean ignoreMaintainLimits, boolean waterMode,
+                                                               RouteLookahead lookahead, Coord2d clusterEntry) throws InterruptedException {
         MiniMap.Location sessloc = (gui.mmap != null) ? gui.mmap.sessloc : null;
         MCache map = (gui.map != null && gui.map.glob != null) ? gui.map.glob.map : null;
+        Coord2d searchCenter = clusterEntry != null ? clusterEntry : from;
+        double searchRadius = clusterEntry != null ? CLUSTER_RADIUS : SCAN_RADIUS;
+        RouteLookahead leaveForLater = clusterEntry != null ? null : lookahead;
 
         List<Pair<Gob, ForagerAction>> candidates = new ArrayList<>();
         Map<Long, Double> distByGobId = new HashMap<>();
@@ -674,7 +688,7 @@ public class Forager implements Action {
                     continue;
                 }
             }
-            for (Gob gob : Finder.findGobs(from, action.toNAlias(), null, radius)) {
+            for (Gob gob : Finder.findGobs(searchCenter, action.toNAlias(), null, searchRadius)) {
                 if (processedGobs.contains(gob.id)) continue;
                 if (routeConstraints.isGobExcluded(sessloc, gob)) continue;
                 if (!routeConstraints.withinLeash(leashAnchor, gob.rc)) continue;
@@ -682,6 +696,7 @@ public class Forager implements Action {
                 // unreachable without dismounting first - skip it rather than waste a detour
                 // attempt PathFinder can never actually complete.
                 if (waterMode && map != null && !isOnOrNearWater(map, gob.rc)) continue;
+                if (leaveForLater != null && leaveForLater.leaveForLaterStop(gob, map, sessloc, waterMode)) continue;
                 candidates.add(new Pair<>(gob, action));
                 distByGobId.put(gob.id, from.dist(gob.rc));
             }
@@ -750,16 +765,31 @@ public class Forager implements Action {
     }
 
     /** Repeatedly walks to the nearest unprocessed actionable gob, recording breadcrumbs for {@link #returnToPathViaBreadcrumbs}, until none remain or inventory fills. */
-    private void collectNearbyActionableGobs(NGameUI gui, NForagerProp.PresetData preset) throws InterruptedException {
-        ArrayList<Coord2d> breadcrumbs = new ArrayList<>();
-        gui.activeBotDetourTrail = breadcrumbs;
+    private static final class Detour {
+        final ArrayList<Coord2d> breadcrumbs = new ArrayList<>();
+        final DetourBranchBudget budget;
+        final Coord2d anchor;
+        final RouteLookahead lookahead;
+        Coord2d clusterEntry;
+
+        Detour(DetourBranchBudget budget, Coord2d anchor, RouteLookahead lookahead) {
+            this.budget = budget;
+            this.anchor = anchor;
+            this.lookahead = lookahead;
+        }
+    }
+
+    /** Repeatedly walks to unprocessed actionable gobs, returning via breadcrumbs after the detour. */
+    private void collectNearbyActionableGobs(NGameUI gui, NForagerProp.PresetData preset, ForagerPath path,
+                                             int firstStopSection) throws InterruptedException {
         Gob player = NUtils.player();
-        Coord2d leashAnchor = player != null ? player.rc : null;
-        nurgling.actions.bots.forager.DetourBranchBudget budget =
-                new nurgling.actions.bots.forager.DetourBranchBudget(routeConstraints.maxBranches(), routeConstraints.maxBranchDistanceTiles());
+        Coord2d anchor = player != null ? player.rc : null;
+        Detour detour = new Detour(new DetourBranchBudget(routeConstraints.maxBranches(),
+                routeConstraints.maxBranchDistanceTiles()), anchor, lookaheadFrom(gui, path, firstStopSection, anchor));
+        gui.activeBotDetourTrail = detour.breadcrumbs;
         boolean interrupted = false;
         try {
-            collectUntilExhausted(gui, preset, breadcrumbs, budget, leashAnchor);
+            collectUntilExhausted(gui, preset, detour);
         } catch (InterruptedException e) {
             interrupted = true;
             throw e;
@@ -768,7 +798,7 @@ public class Forager implements Action {
                 gui.activeBotDetourTrail = null;
                 gui.activeBotDetourTarget = null;
             } else {
-                returnToPathViaBreadcrumbs(gui, breadcrumbs, preset, budget, leashAnchor);
+                returnToPathViaBreadcrumbs(gui, preset, detour);
                 gui.activeBotDetourTrail = null;
                 gui.activeBotDetourTarget = null;
             }
@@ -776,17 +806,18 @@ public class Forager implements Action {
     }
 
     /** Grabs everything actionable in range, rescanning after each pickup, until nothing's found or inventory fills; shared by the outbound pass and the return walk. */
-    private void collectUntilExhausted(NGameUI gui, NForagerProp.PresetData preset, ArrayList<Coord2d> breadcrumbs,
-                                        nurgling.actions.bots.forager.DetourBranchBudget budget, Coord2d leashAnchor) throws InterruptedException {
+    private void collectUntilExhausted(NGameUI gui, NForagerProp.PresetData preset, Detour detour) throws InterruptedException {
         while (true) {
             if (isInventoryFull(gui)) return;
             checkStamina(gui);
-            if (!budget.canBranch()) return;
+            if (sweepCluster(gui, preset, detour)) continue;
+            if (!detour.budget.canBranch()) return;
 
             Gob player = NUtils.player();
             if (player == null) return;
 
-            Pair<Gob, ForagerAction> nearest = findNearestActionableGob(gui, player.rc, preset.actions, SCAN_RADIUS, leashAnchor, preset.ignoreMaintainLimits, effectiveWaterMode(gui, preset));
+            Pair<Gob, ForagerAction> nearest = findNearestActionableGob(gui, player.rc, preset.actions, detour.anchor,
+                    preset.ignoreMaintainLimits, effectiveWaterMode(gui, preset), detour.lookahead, null);
             if (nearest == null) {
                 gui.activeBotDetourTarget = null;
                 return;
@@ -795,21 +826,47 @@ public class Forager implements Action {
 
             if (player.rc.dist(nearest.a.rc) > MAX_HOP_DISTANCE) {
                 // Too far for one PathFinder call - hop toward it; stop the whole pass if a hop fails rather than retrying forever.
-                if (!walkInHops(gui, preset, nearest.a.rc, breadcrumbs, budget, leashAnchor)) return;
+                detour.clusterEntry = null;
+                if (!walkInHops(gui, preset, nearest.a.rc, detour, null)) return;
                 continue;
             }
 
-            budget.spend(player.rc.dist(nearest.a.rc));
-            breadcrumbs.add(player.rc);
-            performGobAction(gui, nearest.b, nearest.a, preset);
+            payAndPick(gui, preset, detour, player.rc, nearest);
         }
     }
 
-    /** Walks toward target in MAX_HOP_DISTANCE hops, detouring to closer gobs along the way; detour-episode mode (breadcrumbs/budget non-null) tracks branch state, main-route mode doesn't. */
-    private boolean walkInHops(NGameUI gui, NForagerProp.PresetData preset, Coord2d target, ArrayList<Coord2d> breadcrumbs,
-                                nurgling.actions.bots.forager.DetourBranchBudget budget, Coord2d leashAnchor) throws InterruptedException {
-        boolean detourEpisode = breadcrumbs != null;
-        if (!detourEpisode) {
+    /** Sweeps remaining actionable gobs near the paid-for cluster entry without consuming another branch. */
+    private boolean sweepCluster(NGameUI gui, NForagerProp.PresetData preset, Detour detour) throws InterruptedException {
+        if (detour.clusterEntry == null) return false;
+        Gob player = NUtils.player();
+        if (player == null) return false;
+        Pair<Gob, ForagerAction> next = findNearestActionableGob(gui, player.rc, preset.actions, detour.anchor,
+                preset.ignoreMaintainLimits, effectiveWaterMode(gui, preset), null, detour.clusterEntry);
+        if (next == null) return false;
+        gui.activeBotDetourTarget = next.a.rc;
+        detour.breadcrumbs.add(player.rc);
+        performGobAction(gui, next.b, next.a, preset);
+        return true;
+    }
+
+    private void payAndPick(NGameUI gui, NForagerProp.PresetData preset, Detour detour, Coord2d from,
+                            Pair<Gob, ForagerAction> target) throws InterruptedException {
+        detour.budget.spend(from.dist(target.a.rc));
+        detour.breadcrumbs.add(from);
+        detour.clusterEntry = target.a.rc;
+        performGobAction(gui, target.b, target.a, preset);
+    }
+
+    /** Walks toward target in hops, collecting closer gobs and keeping a fixed route anchor. */
+    private boolean walkInHops(NGameUI gui, NForagerProp.PresetData preset, Coord2d target, Detour detour,
+                               RouteLookahead routeLookahead) throws InterruptedException {
+        boolean detourEpisode = detour != null;
+        Coord2d leashAnchor;
+        RouteLookahead lookahead;
+        if (detourEpisode) {
+            leashAnchor = detour.anchor;
+            lookahead = detour.lookahead;
+        } else {
             // Anchor held fixed for this whole call, same as the detour-episode case - re-deriving
             // it from the current position every hop let repeated hops drift arbitrarily far from
             // the route, since each hop's leash check only ever bounded the next hop from wherever
@@ -817,11 +874,15 @@ public class Forager implements Action {
             Gob startPlayer = NUtils.player();
             if (startPlayer == null) return false;
             leashAnchor = startPlayer.rc;
+            lookahead = routeLookahead;
         }
         while (true) {
             if (isInventoryFull(gui)) return false;
             checkStamina(gui);
-            if (detourEpisode && !budget.canBranch()) return false;
+            if (detourEpisode) {
+                if (sweepCluster(gui, preset, detour)) continue;
+                if (!detour.budget.canBranch()) return false;
+            }
 
             Gob player = NUtils.player();
             if (player == null) return false;
@@ -829,15 +890,14 @@ public class Forager implements Action {
             double remaining = player.rc.dist(target);
             if (remaining <= MAX_HOP_DISTANCE) return true;
 
-            Pair<Gob, ForagerAction> nearest = findNearestActionableGob(gui, player.rc, preset.actions, SCAN_RADIUS, leashAnchor, preset.ignoreMaintainLimits, effectiveWaterMode(gui, preset));
+            Pair<Gob, ForagerAction> nearest = findNearestActionableGob(gui, player.rc, preset.actions, leashAnchor,
+                    preset.ignoreMaintainLimits, effectiveWaterMode(gui, preset), lookahead, null);
             if (nearest != null && player.rc.dist(nearest.a.rc) < remaining) {
                 gui.activeBotDetourTarget = nearest.a.rc;
                 if (detourEpisode) {
-                    budget.spend(player.rc.dist(nearest.a.rc));
-                    breadcrumbs.add(player.rc);
-                }
-                performGobAction(gui, nearest.b, nearest.a, preset);
-                if (!detourEpisode) {
+                    payAndPick(gui, preset, detour, player.rc, nearest);
+                } else {
+                    performGobAction(gui, nearest.b, nearest.a, preset);
                     gui.activeBotDetourTarget = null;
                 }
                 continue;
@@ -848,8 +908,8 @@ public class Forager implements Action {
 
             Coord2d waypoint = player.rc.add(target.sub(player.rc).norm(MAX_HOP_DISTANCE));
             if (detourEpisode) {
-                budget.spend(player.rc.dist(waypoint));
-                breadcrumbs.add(player.rc);
+                detour.budget.spend(player.rc.dist(waypoint));
+                detour.breadcrumbs.add(player.rc);
             }
             PathFinder hop = new PathFinder(waypoint);
             hop.waterMode = effectiveWaterMode(gui, preset);
@@ -870,23 +930,55 @@ public class Forager implements Action {
     }
 
     /** Retraces the breadcrumb trail home most-recent-first, sweeping via collectUntilExhausted before each hop; keeps going even once inventory is full. */
-    private void returnToPathViaBreadcrumbs(NGameUI gui, ArrayList<Coord2d> breadcrumbs, NForagerProp.PresetData preset,
-                                             nurgling.actions.bots.forager.DetourBranchBudget budget, Coord2d leashAnchor) throws InterruptedException {
+    private void returnToPathViaBreadcrumbs(NGameUI gui, NForagerProp.PresetData preset, Detour detour) throws InterruptedException {
+        ArrayList<Coord2d> breadcrumbs = detour.breadcrumbs;
         while (!breadcrumbs.isEmpty()) {
-            collectUntilExhausted(gui, preset, breadcrumbs, budget, leashAnchor);
+            collectUntilExhausted(gui, preset, detour);
             if (breadcrumbs.isEmpty()) return;
 
             Gob player = NUtils.player();
             if (player == null) return;
 
             checkStamina(gui);
-            Coord2d nextStop = breadcrumbs.get(breadcrumbs.size() - 1);
-            gui.activeBotDetourTarget = nextStop;
-            PathFinder hop = new PathFinder(nextStop);
-            hop.waterMode = effectiveWaterMode(gui, preset);
-            hop.run(gui);
-            breadcrumbs.remove(breadcrumbs.size() - 1);
+            int last = breadcrumbs.size() - 1;
+            int oldestInReach = last;
+            for (int k = 0; k < last; k++) {
+                if (player.rc.dist(breadcrumbs.get(k)) <= MAX_HOP_DISTANCE) {
+                    oldestInReach = k;
+                    break;
+                }
+            }
+            if (oldestInReach < last && hopTo(gui, preset, breadcrumbs.get(oldestInReach))) {
+                breadcrumbs.subList(oldestInReach, breadcrumbs.size()).clear();
+                continue;
+            }
+            hopTo(gui, preset, breadcrumbs.get(last));
+            breadcrumbs.remove(last);
         }
+    }
+
+    private boolean hopTo(NGameUI gui, NForagerProp.PresetData preset, Coord2d pos) throws InterruptedException {
+        gui.activeBotDetourTarget = pos;
+        PathFinder hop = new PathFinder(pos);
+        hop.waterMode = effectiveWaterMode(gui, preset);
+        return hop.run(gui).IsSuccess();
+    }
+
+    /** Gathering stops ahead until the next milestone, which may switch map segments. */
+    private RouteLookahead lookaheadFrom(NGameUI gui, ForagerPath path, int firstSection, Coord2d anchor) {
+        MiniMap.Location sessloc = gui.mmap != null ? gui.mmap.sessloc : null;
+        ArrayList<Coord2d> stops = new ArrayList<>();
+        for (int s = firstSection; s < path.getSectionCount(); s++) {
+            ForagerSection section = path.getSection(s);
+            if (section == null) continue;
+            ForagerWaypoint toWp = path.waypoints.get(section.waypointIndex + 1);
+            if (toWp.milestoneHash != null) break;
+            Coord2d stop = resolveSectionWalkTarget(section, toWp, sessloc);
+            if (stop != null && (stops.isEmpty() || stops.get(stops.size() - 1).dist(stop) > 0.5)) {
+                stops.add(stop);
+            }
+        }
+        return new RouteLookahead(stops, anchor, routeConstraints);
     }
 
     /** Walks to and performs one action on a single gob, marking it processed once done. */

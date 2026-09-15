@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-forager-route-sweep",
+  "priority": 5,
+  "summary": {
+    "ru": "Собиратель проходит маршрут экономнее: подбирает группы находок и не делает лишних крюков.",
+    "en": "Forager follows routes more efficiently, sweeping nearby finds without unnecessary detours."
+  },
+  "detail": {
+    "ru": "При запуске Собирателя с маршрутом бот собирает близко расположенные находки одной группой, возвращается к пути более короткими переходами и оставляет находки для ближайшей следующей точки маршрута. Настройки маршрута и ограничения сбора продолжают соблюдаться.",
+    "en": "When running Forager with a route, nearby finds are collected as a group, the bot returns by shorter hops, and finds are left for the closest upcoming route stop. Route settings and collection limits remain in effect."
+  }
+}
