@@ -3,11 +3,13 @@ package nurgling.widgets;
 import haven.*;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
+import nurgling.actions.bots.SetSpeedBot;
 import nurgling.actions.bots.WaitBot;
 import nurgling.actions.bots.registry.BotDescriptor;
 import nurgling.actions.bots.registry.BotRegistry;
 import nurgling.conf.NForagerProp;
 import nurgling.equipment.EquipmentPreset;
+import nurgling.i18n.L10n;
 import nurgling.scenarios.BotStep;
 import nurgling.scenarios.CraftPreset;
 import nurgling.scenarios.CraftPresetManager;
@@ -194,6 +196,35 @@ public class StepSettingsPanel extends Widget {
             gateDropdown.change(selectedMode);
 
             add(gateDropdown, new Coord(UI.scale(8), y));
+            y += UI.scale(40);
+        }
+        if (desc.id.equals("set_speed")) {
+            hasAnySetting = true;
+            add(new Label(L10n.get("scenario.speed.label")), new Coord(UI.scale(8), y));
+            y += UI.scale(24);
+
+            int selectedSpeed = SetSpeedBot.normalizedSpeed(step.getSetting("speed"));
+            NDropbox<Integer> speedDropdown = new NDropbox<Integer>(
+                    UI.scale(160),
+                    SetSpeedBot.SPEED_KEYS.length,
+                    UI.scale(22)
+            ) {
+                @Override
+                protected Integer listitem(int i) { return i; }
+                @Override
+                protected int listitems() { return SetSpeedBot.SPEED_KEYS.length; }
+                @Override
+                protected void drawitem(GOut g, Integer item, int i) {
+                    g.text(SetSpeedBot.speedName(item), Coord.z);
+                }
+                @Override
+                public void change(Integer item) {
+                    super.change(item);
+                    if (item != null) step.setSetting("speed", item);
+                }
+            };
+            speedDropdown.change(selectedSpeed);
+            add(speedDropdown, new Coord(UI.scale(8), y));
             y += UI.scale(40);
         }
         if (desc.id.equals("equipment_bot")) {

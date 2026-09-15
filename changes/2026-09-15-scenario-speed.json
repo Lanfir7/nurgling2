@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-scenario-speed",
+  "priority": 5,
+  "summary": {
+    "ru": "В сценариях можно переключать скорость движения отдельным шагом.",
+    "en": "Scenarios can now switch your movement speed as a separate step."
+  },
+  "detail": {
+    "ru": "В редакторе сценария добавьте шаг «Скорость движения» и выберите ползком, шагом, бегом или спринт. Если максимум скорости временно ниже выбранного, сценарий использует доступную скорость.",
+    "en": "In the scenario editor, add the Set Movement Speed step and choose Crawl, Walk, Run, or Sprint. If your current speed limit is lower than the choice, the scenario uses the fastest available speed."
+  }
+}
