@@ -1,5 +1,6 @@
 package nurgling.tools;
 
+import haven.res.gfx.terobjs.arch.bounds.Bounds;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,6 +18,24 @@ class FlatWorldTest {
         // Draping by (pointCz - originCz) would bury the ring; flat world must not.
         assertEquals(0f, FlatWorld.overlayRelZ(true, 10.0, 20.0));
         assertEquals(-10f, FlatWorld.overlayRelZ(false, 10.0, 20.0));
+    }
+
+    @Test
+    void gobLocalPoleDropsHiddenHillWhenOriginIsAlreadyFlat() {
+        // Construction/survey poles are gob-local. Under flat world the gob sits at z=0
+        // while getcz is still the real hill; subtracting them hangs the stakes in the air.
+        assertEquals(0f, FlatWorld.overlayRelZ(true, 40.0, 0.0));
+        assertEquals(40f, FlatWorld.overlayRelZ(false, 40.0, 0.0));
+        assertEquals(0f, FlatWorld.overlayRelZ(false, 40.0, 40.0));
+    }
+
+    @Test
+    void surveyPlotPolesDropHiddenHillWhenGobOriginIsAlreadyFlat() {
+        // gfx/terobjs/survobj posts go through Bounds.gnd: getcz - gob.z.
+        // Flat world already puts the gob at z=0, so the real hill must not be added back.
+        assertEquals(0f, Bounds.poleLocalZ(true, 40.0, 0.0));
+        assertEquals(40f, Bounds.poleLocalZ(false, 40.0, 0.0));
+        assertEquals(0f, Bounds.poleLocalZ(false, 40.0, 40.0));
     }
 
     @Test

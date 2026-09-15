@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-flat-survey-stakes",
+  "priority": 5,
+  "summary": {
+    "ru": "В плоском режиме колышки съёмки и стройки стоят на земле рядом с персонажем, а не висят в воздухе.",
+    "en": "In flat terrain mode, survey and construction stakes sit on the ground beside you instead of hanging in the air."
+  },
+  "detail": {
+    "ru": "Включите плоский мир: колышки съёмки земли (рамка вокруг участка) стоят на видимой земле рядом с персонажем. Переключение режима сразу опускает уже стоящие колышки, без перезахода.",
+    "en": "With flat terrain on, land-survey plot stakes sit on the visible ground beside you. Toggling the mode drops already placed stakes immediately, without relogging."
+  }
+}

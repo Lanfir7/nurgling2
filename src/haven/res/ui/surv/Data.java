@@ -11,7 +11,7 @@ import static haven.MCache.tilesz;
 import static haven.render.sl.Cons.*;
 import static haven.render.sl.Type.*;
 
-@haven.FromResource(name = "ui/surv", version = 46)
+@haven.FromResource(name = "ui/surv", version = 46, override = true)
 public class Data {
     public final Area varea;
     public final float gran;

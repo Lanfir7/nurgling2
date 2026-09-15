@@ -7,11 +7,11 @@ import java.util.*;
 import haven.*;
 import haven.render.*;
 import haven.res.lib.obst.*;
-import nurgling.NConfig;
+import nurgling.tools.FlatWorld;
 import static haven.MCache.tilesz;
 
 /* >spr: Consobj */
-@haven.FromResource(name = "gfx/terobjs/consobj", version = 36)
+@haven.FromResource(name = "gfx/terobjs/consobj", version = 36, override = true)
 public class Consobj extends Sprite implements Sprite.CUpd {
     public final static Indir<Resource> signres = Resource.classres(Consobj.class).pool.load("gfx/terobjs/sign", 6);
     public final static Indir<Resource> poleres = Resource.classres(Consobj.class).pool.load("gfx/terobjs/arch/conspole", 2);
@@ -20,22 +20,30 @@ public class Consobj extends Sprite implements Sprite.CUpd {
     public final Gob gob = owner.context(Gob.class);
     public final ResData built;
     public float done;
-    final Coord3f cc;
+    private Coord3f cc;
     final Sprite sign, pole;
     public final Location[] poles;
     final MCache map;
-    final RenderTree.Node bound;
+    private RenderTree.Node bound;
+    private final Obstacle obst;
     private final Collection<RenderTree.Slot> slots = new ArrayList<>(1);
     private boolean hidesign;
+    private boolean lastFlat;
+
+    /**
+     * Gob-local pole Z. Under flat world the gob origin is already at visual z=0
+     * while {@code getcz} still reports the hidden hill; subtracting them hangs
+     * the stakes in the air.
+     */
+    public static float poleLocalZ(boolean flat, double pointCz, double gobCz) {
+	return FlatWorld.overlayRelZ(flat, pointCz, gobCz);
+    }
 
     Coord3f gnd(float rx, float ry) {
 	double a = -gob.a;
 	float s = (float)Math.sin(a), c = (float)Math.cos(a);
 	float gx = rx * c + ry * s, gy = ry * c - rx * s;
-	if(!(Boolean) NConfig.get(NConfig.Key.flatsurface))
-		return(new Coord3f(rx, -ry, map.getcz(gx + cc.x, gy + cc.y) - cc.z));
-	else
-		return(new Coord3f(rx, -ry, 0));
+	return(new Coord3f(rx, -ry, poleLocalZ(FlatWorld.isEnabled(), map.getcz(gx + cc.x, gy + cc.y), cc.z)));
     }
 
     public Consobj(Owner owner, Resource res, Message sdt) {
@@ -43,7 +51,7 @@ public class Consobj extends Sprite implements Sprite.CUpd {
 	this.map = owner.context(Glob.class).map;
 	if(bmat == null)
 	    bmat = Resource.classres(Consobj.class).layer(Material.Res.class).get();
-	Obstacle obst = Obstacle.parse(sdt);
+	this.obst = Obstacle.parse(sdt);
 	done = sdt.uint8() / 255.0f;
 	if(!sdt.eom()) {
 	    int resid = sdt.uint16();
@@ -53,8 +61,13 @@ public class Consobj extends Sprite implements Sprite.CUpd {
 	}
 	sign = Sprite.create(owner, signres.get(), Message.nil);
 	pole = Sprite.create(owner, poleres.get(), Message.nil);
-	this.cc = gob.getrc();
 	poles = new Location[obst.verts().size()];
+	layout();
+    }
+
+    private void layout() {
+	this.cc = gob.getrc();
+	this.lastFlat = FlatWorld.isEnabled();
 	if(obst.p.length > 0) {
 	    double bu = obst.p[0][0].x, bl = obst.p[0][0].y, bb = obst.p[0][0].x, br = obst.p[0][0].y;
 	    int i = 0;
@@ -154,6 +167,17 @@ public class Consobj extends Sprite implements Sprite.CUpd {
 
     public void removed(RenderTree.Slot slot) {
 	slots.remove(slot);
+    }
+
+    public boolean tick(double dt) {
+	boolean flat = FlatWorld.isEnabled();
+	if(flat != lastFlat) {
+	    try {
+		layout();
+		RUtils.readd(slots, this::parts, () -> {});
+	    } catch(Loading l) {}
+	}
+	return(false);
     }
 
     public void hidesign(boolean hide) {

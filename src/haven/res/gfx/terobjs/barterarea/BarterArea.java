@@ -4,38 +4,41 @@ package haven.res.gfx.terobjs.barterarea;
 import haven.*;
 import haven.render.*;
 import static haven.MCache.tilesz;
-import nurgling.*;
+import nurgling.tools.FlatWorld;
+
+import java.util.ArrayList;
+import java.util.Collection;
 
 /* >spr: BarterArea */
-@haven.FromResource(name = "gfx/terobjs/barterarea", version = 2)
+@haven.FromResource(name = "gfx/terobjs/barterarea", version = 2, override = true)
 public class BarterArea extends Sprite {
     public final static Indir<Resource> poleres = Resource.classres(BarterArea.class).pool.load("gfx/terobjs/arch/marketpole", 1);
     public final static Indir<Resource> roperes = Resource.classres(BarterArea.class).pool.load("gfx/terobjs/barterarea-string", 1);
     public final static float bscale = 1f / 11;
     final Gob gob = owner.context(Gob.class);
     final Material extramat;
-    final Coord3f cc;
+    private Coord3f cc;
     final Sprite pole;
     final Location[] poles;
     final MCache map;
-    final RenderTree.Node bound;
+    private RenderTree.Node bound;
+    private final Coord3f[] vert;
+    private final int[] face;
+    private final Material bmat;
+    private final Collection<RenderTree.Slot> slots = new ArrayList<>(1);
+    private boolean lastFlat;
 
     Coord3f gnd(float rx, float ry) {
 	double a = -gob.a;
 	float s = (float)Math.sin(a), c = (float)Math.cos(a);
 	float gx = rx * c + ry * s, gy = ry * c - rx * s;
-	if(!(Boolean) NConfig.get(NConfig.Key.flatsurface))
-		return(new Coord3f(rx, -ry, map.getcz(gx + cc.x, gy + cc.y) - cc.z));
-	else
-		return(new Coord3f(rx, -ry, 0));
-	}
+	return(new Coord3f(rx, -ry, FlatWorld.overlayRelZ(map.getcz(gx + cc.x, gy + cc.y), cc.z)));
+    }
 
     public BarterArea(Owner owner, Resource res, Message sdt) {
 	super(owner, res);
 	this.map = owner.context(Glob.class).map;
-	Material bmat = roperes.get().layer(Material.Res.class).get();
-	Coord3f[] vert;
-	int[] face;
+	this.bmat = roperes.get().layer(Material.Res.class).get();
 	int fl = 0;
 	if(sdt.eom()) {
 	    vert = new Coord3f[] {new Coord3f(-11, -11, 0), new Coord3f( 11, -11, 0),
@@ -51,15 +54,16 @@ public class BarterArea extends Sprite {
 	    face = new int[] {4};
 	}
 	pole = Sprite.create(owner, poleres.get(), Message.nil);
-	this.cc = gob.getrc();
 	poles = new Location[vert.length];
-	float bu = vert[0].x, bl = vert[0].y, bb = vert[0].x, br = vert[0].y;
-	for(int i = 0; i < vert.length; i++) {
-	    poles[i] = Location.xlate(gnd(vert[i].x, vert[i].y));
-	    bu = Math.min(vert[i].y, bu); bl = Math.min(vert[i].x, bl);
-	    bb = Math.max(vert[i].y, bb); br = Math.max(vert[i].x, br);
-	}
 	extramat = Resource.classres(BarterArea.class).layer(Material.Res.class, fl & 3).get();
+	layout();
+    }
+
+    private void layout() {
+	this.cc = gob.getrc();
+	this.lastFlat = FlatWorld.isEnabled();
+	for(int i = 0; i < vert.length; i++)
+	    poles[i] = Location.xlate(gnd(vert[i].x, vert[i].y));
 	bound = bmat.apply(mkbound(face, vert));
     }
 
@@ -128,14 +132,34 @@ public class BarterArea extends Sprite {
 	return(mesh);
     }
 
-    public void added(RenderTree.Slot slot) {
-	if(extramat != null)
-	    slot.ostate(extramat);
-	slot.lockstate();
+    private void parts(RenderTree.Slot slot) {
 	if(bound != null) {
 	    slot.add(bound);
 	    for(Location loc : poles)
 		slot.add(pole, loc);
 	}
+    }
+
+    public void added(RenderTree.Slot slot) {
+	if(extramat != null)
+	    slot.ostate(extramat);
+	slot.lockstate();
+	parts(slot);
+	slots.add(slot);
+    }
+
+    public void removed(RenderTree.Slot slot) {
+	slots.remove(slot);
+    }
+
+    public boolean tick(double dt) {
+	boolean flat = FlatWorld.isEnabled();
+	if(flat != lastFlat) {
+	    try {
+		layout();
+		RUtils.readd(slots, this::parts, () -> {});
+	    } catch(Loading l) {}
+	}
+	return(false);
     }
 }
