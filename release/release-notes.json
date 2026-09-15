@@ -50,12 +50,59 @@
     "2026-09-13-release-feed",
     "2026-09-14-barter-offer-label",
     "2026-09-14-flat-mini-ridges",
+    "2026-09-14-flat-ridge-hitbox-rim",
     "2026-09-14-forager-route-map",
     "2026-09-14-forager-route-start",
     "2026-09-14-map-safety-tools",
-    "2026-09-14-release-news-button-package"
+    "2026-09-14-release-news-button-package",
+    "2026-09-15-build-visible-refill",
+    "2026-09-15-chunknav-initial-connections",
+    "2026-09-15-chunknav-recording-login-default",
+    "2026-09-15-custom-marker-beacon",
+    "2026-09-15-free-inventory-container-selection",
+    "2026-09-15-marker-beacon"
   ],
   "releases": [
+    {
+      "id": "2.103.199",
+      "date": "2026-09-15",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "ChunkNav снова связывает соседние чанки при записи карты.",
+          "Запись ChunkNav теперь выключается при каждом входе в мир.",
+          "В плоском режиме хитбоксы подсвечивают верхнюю кромку перевалов линией."
+        ],
+        "en": [
+          "ChunkNav once again connects neighboring chunks while recording the map.",
+          "ChunkNav recording now turns off whenever you enter a world.",
+          "In flat terrain mode, hitboxes now outline the upper edge of cliffs."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Видимые соседние чанки записываются как единый маршрутный граф, поэтому карта ChunkNav больше не распадается на отдельные точки. Дома, пользовательские маркеры и переходы через двери и пещеры сохранены.",
+          "Вне личной территории или деревни карта ChunkNav не записывается, пока вы снова не включите переключатель на мини-карте. На личной территории и в деревне запись по-прежнему работает автоматически.",
+          "Включите хитбоксы, чтобы видеть линию точно по верхнему краю обрыва. Она использует цвет и толщину линий хитбоксов, повторяет повороты перевала и исчезает при их выключении без перезагрузки карты.",
+          "Нажмите Ctrl+Shift и левую кнопку мыши на видимой отметке ресурса, Quarryartz, животного или другой пользовательской отметке на большой карте либо мини-карте. На 20 секунд появится маяк в её точном месте.",
+          "Нажмите Ctrl+Shift и левую кнопку мыши по метке на большой карте или мини-карте. На её точном месте на 20 секунд появятся световой луч, кольца и частицы, чтобы легче сориентироваться.",
+          "При освобождении инвентаря клиент сначала выбирает сундуки, которые визуально не заполнены. Если все выглядят полными, он по-прежнему проверяет их точную вместимость по очереди.",
+          "Когда зона строительства уже видна после сбора материалов, персонаж сразу продолжает стройку вместо похода к углу зоны. Для удалённых зон навигация сохраняется."
+        ],
+        "en": [
+          "Visible neighboring chunks are recorded as one routing graph, so the ChunkNav map no longer breaks into isolated points. Homes, custom markers, and door and cave transitions are preserved.",
+          "Outside a personal claim or village, the ChunkNav map is not recorded until you enable the minimap toggle again. Recording on personal claims and in villages remains automatic.",
+          "Enable hitboxes to show a line along the actual upper cliff edge. It follows the ridge bends, uses your hitbox line color and width, and disappears when hitboxes are disabled without reloading the map.",
+          "Ctrl+Shift-left-click any visible saved resource, Quarryartz, animal or other custom marker on the main map or minimap. A beacon appears at its exact position for 20 seconds.",
+          "Ctrl+Shift-left-click a marker on either the main map or minimap. A 20-second light beam, rings and particles appear at its exact world position to make it easier to orient yourself.",
+          "When freeing inventory, the client first chooses chests that do not look full. If every chest looks full, it still checks their exact capacity one by one.",
+          "When the construction zone is already visible after collecting materials, your character resumes building instead of walking to a zone corner. Navigation is unchanged for distant zones."
+        ]
+      }
+    },
     {
       "id": "2.103.198",
       "date": "2026-09-14",
