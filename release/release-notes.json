@@ -59,10 +59,51 @@
     "2026-09-15-chunknav-initial-connections",
     "2026-09-15-chunknav-recording-login-default",
     "2026-09-15-custom-marker-beacon",
+    "2026-09-15-flat-survey-stakes",
     "2026-09-15-free-inventory-container-selection",
-    "2026-09-15-marker-beacon"
+    "2026-09-15-gob-config-notify-sound",
+    "2026-09-15-marker-beacon",
+    "2026-09-15-marker-beacon-label",
+    "2026-09-15-metal-shovel-dig-reserve",
+    "2026-09-15-worm-farm-bot"
   ],
   "releases": [
+    {
+      "id": "2.103.200",
+      "date": "2026-09-15",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В меню ботов рядом с замером земли появилась добыча червей: копка, склад червей, закопка по кругу.",
+          "В плоском режиме колышки съёмки и стройки стоят на земле рядом с персонажем, а не висят в воздухе.",
+          "С металлической лопатой копка останавливается, пока свободны две клетки инвентаря."
+        ],
+        "en": [
+          "A Worm Farm bot next to the survey tools digs, stores worms, then fills the same flag in a loop.",
+          "In flat terrain mode, survey and construction stakes sit on the ground beside you instead of hanging in the air.",
+          "With a Metal Shovel, digging stops while two inventory cells are still free."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте меню ботов — иконка червя у Выравнивателя. Поставьте флаг, Ground plane, PUT Earthworm и Odd Tuber, лопату. Бот копает, возвращает Ground plane, пьёт, относит червей, засыпает яму и повторяет. При ошибке сначала возвращает уровень флага. Пока работает, мини-окно: черви всего, среднее за минуту, время и расход стамины.",
+          "Включите плоский мир: колышки съёмки земли (рамка вокруг участка) стоят на видимой земле рядом с персонажем. Переключение режима сразу опускает уже стоящие колышки, без перезахода.",
+          "Выравниватель и добыча червей с Metal Shovel больше не набивают рюкзак в ноль: остаются две клетки, меньше земли падает от лишнего удара. Деревянная лопата по-прежнему копает до заполнения.",
+          "Ctrl+ПКМ по объекту в мире или на мини-карте → Настройка. Под «Показывать иконку на мини-карте» появились «Уведомлять» и тот же список звуков, что в настройках иконок, плюс кнопка воспроизведения. Включение уведомления также показывает иконку на карте — без неё звук не играет.",
+          "По умолчанию после Ctrl+Shift и щелчка левой кнопкой по отметке на карте либо мини-карте у основания 20-секундного маяка виден её текст. Жест можно изменить в настройках горячих клавиш."
+        ],
+        "en": [
+          "Open the bot menu — worm icon beside Leveler. Place a survey flag, set Ground plane, Earthworm and Odd Tuber PUT areas, equip a shovel. The bot digs, restores Ground plane, drinks, stores worms, fills the hole, and repeats. On error it restores the flag first. While it runs, a small window shows total worms, worms per minute, run time, and stamina used per minute.",
+          "With flat terrain on, land-survey plot stakes sit on the visible ground beside you. Toggling the mode drops already placed stakes immediately, without relogging.",
+          "Leveler and Worm Farm with a Metal Shovel leave two inventory cells free so the last swing does not spill soil. A wooden shovel still fills the pack.",
+          "Ctrl+right-click an object in the world or on the minimap and open Configure. Below Show icon on minimap you can enable Notify and pick the same sound as in Icon Settings, with a play button. Turning notify on also shows the map icon, otherwise the sound would not play.",
+          "By default, Ctrl+Shift-left-clicking a map or minimap marker shows its text at the base of the 20-second beacon. The gesture can be changed in the hotkey settings."
+        ]
+      }
+    },
     {
       "id": "2.103.199",
       "date": "2026-09-15",
