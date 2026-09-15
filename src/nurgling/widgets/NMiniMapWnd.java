@@ -393,7 +393,7 @@ public class NMiniMapWnd extends Widget{
 	    public boolean mousedown(MouseDownEvent ev) {
 		if(tryStartCustomMarkerBeacon(ev, map))
 		    return(true);
-		if(MapMarkerBeacon.isTrigger(ev.b, ui.modflags())) {
+		if(Hotkeys.matchesMapMarkerBeacon(ev.b, ui.modflags())) {
 		    Location loc = xlate(ev.c);
 		    DisplayMarker marker = (loc == null) ? null : markerat(loc.tc);
 		    if(marker != null) {

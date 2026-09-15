@@ -9,6 +9,9 @@ import haven.HomoCoord4f;
 import haven.Loading;
 import haven.PView;
 import haven.Sprite;
+import haven.Tex;
+import haven.Text;
+import haven.UI;
 import haven.render.Pipe;
 import haven.render.RenderTree;
 import haven.render.Homo3D;
@@ -21,12 +24,22 @@ public class MarkerBeaconSprite extends Sprite implements PView.Render2D {
     private static final double HEIGHT = 110.0;
     private static final int RING_SEGMENTS = 28;
     private final Runnable finished;
+    private final String labelText;
+    private final Object labelLock = new Object();
     private double age;
     private boolean done;
+    private Text label;
+    private Text.Foundry labelFurnace;
+    private int renderSlots;
 
     public MarkerBeaconSprite(Gob gob, Runnable finished) {
+        this(gob, "", finished);
+    }
+
+    public MarkerBeaconSprite(Gob gob, String labelText, Runnable finished) {
         super(gob, null);
         this.finished = finished;
+        this.labelText = labelText == null ? "" : labelText.trim();
     }
 
     @Override
@@ -34,15 +47,42 @@ public class MarkerBeaconSprite extends Sprite implements PView.Render2D {
         age += Math.max(0, dt);
         if(age < LIFETIME)
             return false;
-        if(!done) {
-            done = true;
-            finished.run();
-        }
+        finish();
         return true;
+    }
+
+    /** Ends the beacon when it is evicted before its normal lifetime. */
+    public void finish() {
+        synchronized(labelLock) {
+            if(done)
+                return;
+            done = true;
+            releaseLabel();
+        }
+        finished.run();
     }
 
     @Override
     public void added(RenderTree.Slot slot) {
+        synchronized(labelLock) {
+            renderSlots++;
+        }
+    }
+
+    @Override
+    public void removed(RenderTree.Slot slot) {
+        synchronized(labelLock) {
+            if(renderSlots > 0)
+                renderSlots--;
+            if(renderSlots == 0)
+                releaseLabel();
+        }
+    }
+
+    @Override
+    public void dispose() {
+        finish();
+        super.dispose();
     }
 
     @Override
@@ -68,7 +108,40 @@ public class MarkerBeaconSprite extends Sprite implements PView.Render2D {
         rings(g, state, area, fade);
         particles(g, state, area, fade);
         halo(g, head, fade);
+        label(g, foot, fade);
         g.chcolor();
+    }
+
+    private void label(GOut g, Coord foot, double fade) {
+        if(labelText.isEmpty())
+            return;
+        synchronized(labelLock) {
+            if(done)
+                return;
+            if(label == null) {
+                if(labelFurnace == null)
+                    labelFurnace = new Text.Foundry(Text.dfont, 11).aa(true);
+                label = labelFurnace.render(labelText, new Color(225, 245, 245));
+            }
+            Tex text = label.tex();
+            Coord panel = text.sz().add(UI.scale(10), UI.scale(4));
+            Coord center = foot.add(0, UI.scale(10));
+            Coord ul = center.sub(panel.div(2));
+            int alpha = (int)(215 * fade);
+            g.chcolor(12, 16, 18, alpha);
+            g.frect(ul, panel);
+            g.chcolor(40, 215, 255, (int)(190 * fade));
+            g.rect(ul, panel);
+            g.chcolor(255, 255, 255, (int)(255 * fade));
+            g.aimage(text, center, 0.5, 0.5);
+        }
+    }
+
+    private void releaseLabel() {
+        if(label != null) {
+            label.dispose();
+            label = null;
+        }
     }
 
     private void beam(GOut g, Coord foot, Coord head, double fade) {

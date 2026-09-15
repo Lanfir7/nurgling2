@@ -14,23 +14,35 @@ import nurgling.widgets.LabeledMinimapMark;
 import haven.render.BufPipe;
 import haven.render.Homo3D;
 import haven.render.Location;
+import nurgling.hotkeys.HotkeyAction;
+import nurgling.hotkeys.Hotkeys;
+import nurgling.hotkeys.InputGesture;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapMarkerBeaconTest {
     @Test
-    void ctrlShiftLeftIsTheExactBeaconGesture() {
-        assertTrue(MapMarkerBeacon.isTrigger(1, KeyMatch.C | KeyMatch.S));
-        assertFalse(MapMarkerBeacon.isTrigger(1, KeyMatch.C));
-        assertFalse(MapMarkerBeacon.isTrigger(1, KeyMatch.S));
-        assertFalse(MapMarkerBeacon.isTrigger(3, KeyMatch.C | KeyMatch.S));
-        assertFalse(MapMarkerBeacon.isTrigger(1, KeyMatch.C | KeyMatch.S | KeyMatch.M));
+    void markerBeaconGestureCanBeReboundAndDisabled() {
+        HotkeyAction action = Hotkeys.registry().find("map.marker.beacon");
+        assertNotNull(action);
+        InputGesture original = action.current();
+        try {
+            action.binding().set(InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.M));
+            assertTrue(Hotkeys.matchesMapMarkerBeacon(2, KeyMatch.M));
+            assertFalse(Hotkeys.matchesMapMarkerBeacon(1, KeyMatch.C | KeyMatch.S));
+
+            action.binding().set(InputGesture.none());
+            assertFalse(Hotkeys.matchesMapMarkerBeacon(2, KeyMatch.M));
+        } finally {
+            action.binding().set(original);
+        }
     }
 
     @Test
@@ -45,7 +57,7 @@ class MapMarkerBeaconTest {
     }
 
     @Test
-    void customMarkerUsesItsPersistedTileCenterAndClaimsOnlyTheBeaconGesture() {
+    void customMarkerUsesItsPersistedTileCenter() {
         MapFile file = new MapFile(new ResCache.TestCache(), "");
         MapFile.Segment segment = file.new Segment(7L);
         MiniMap.Location session = new MiniMap.Location(segment, new Coord(400, 700));
@@ -54,12 +66,9 @@ class MapMarkerBeaconTest {
 
         assertEquals(new Coord2d(137.5, 379.5), MapMarkerBeacon.worldTarget(marker, session));
         assertNull(MapMarkerBeacon.worldTarget(marker, new MiniMap.Location(file.new Segment(8L), session.tc)));
-        assertTrue(MapMarkerBeacon.claimsGesture(1, KeyMatch.C | KeyMatch.S, marker));
         assertEquals(new Coord2d(137.5, 379.5), MapMarkerBeacon.worldTarget(segment.id,
                 new Coord(412, 734), session));
         assertNull(MapMarkerBeacon.worldTarget(8L, new Coord(412, 734), session));
-        assertFalse(MapMarkerBeacon.claimsGesture(1, KeyMatch.C, marker));
-        assertFalse(MapMarkerBeacon.claimsGesture(1, KeyMatch.C | KeyMatch.S, false));
     }
 
     @Test
@@ -72,6 +81,17 @@ class MapMarkerBeaconTest {
         assertTrue(beacon.tick(0.01));
         assertEquals(1, finished.get());
         assertTrue(beacon.tick(1));
+        assertEquals(1, finished.get());
+    }
+
+    @Test
+    void earlyBeaconRemovalNotifiesCleanupOnce() {
+        AtomicInteger finished = new AtomicInteger();
+        MarkerBeaconSprite beacon = new MarkerBeaconSprite(new Gob(null, Coord2d.z), finished::incrementAndGet);
+
+        beacon.finish();
+        beacon.finish();
+
         assertEquals(1, finished.get());
     }
 

@@ -359,7 +359,7 @@ public class MapWnd extends Window implements Console.Directory {
 		public boolean mousedown(MouseDownEvent ev) {
 		    if(tryStartCustomMarkerBeacon(ev, mv))
 			return(true);
-		    if(MapMarkerBeacon.isTrigger(ev.b, ui.modflags())) {
+		    if(Hotkeys.matchesMapMarkerBeacon(ev.b, ui.modflags())) {
 		Location loc = xlate(ev.c);
 		DisplayMarker mark = (loc == null) ? null : markerat(loc.tc);
 		if(mark != null) {

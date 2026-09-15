@@ -202,6 +202,9 @@ public final class HotkeyCatalog {
         gesture(registry, Hotkeys.MAP_MARKER_NAVIGATE,
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.MAP,
                 EnumSet.of(HotkeyContext.MAP_SURFACE), null, order);
+        gesture(registry, Hotkeys.MAP_MARKER_BEACON,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.S), HotkeyCategory.MAP,
+                EnumSet.of(HotkeyContext.MAP_SURFACE), null, order);
         gesture(registry, Hotkeys.MAP_PING,
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S | KeyMatch.M), HotkeyCategory.MAP,
                 EnumSet.of(HotkeyContext.MAP_SURFACE), Integer.valueOf(haven.UI.MOD_META | haven.UI.MOD_SHIFT), order);

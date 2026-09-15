@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-marker-beacon-label",
+  "priority": 3,
+  "summary": {
+    "ru": "Маяк метки теперь показывает её название прямо в игровом мире.",
+    "en": "Marker beacons now show the marker name directly in the game world."
+  },
+  "detail": {
+    "ru": "По умолчанию после Ctrl+Shift и щелчка левой кнопкой по отметке на карте либо мини-карте у основания 20-секундного маяка виден её текст. Жест можно изменить в настройках горячих клавиш.",
+    "en": "By default, Ctrl+Shift-left-clicking a map or minimap marker shows its text at the base of the 20-second beacon. The gesture can be changed in the hotkey settings."
+  }
+}

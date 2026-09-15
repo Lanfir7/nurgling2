@@ -2,7 +2,6 @@ package nurgling.navigation;
 
 import haven.Coord2d;
 import haven.Gob;
-import haven.KeyMatch;
 import haven.MapFile;
 import haven.MapView;
 import haven.MiniMap;
@@ -10,6 +9,7 @@ import nurgling.overlays.MarkerBeaconSprite;
 import nurgling.widgets.LabeledMinimapMark;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.lang.ref.WeakReference;
 import java.util.Iterator;
@@ -24,47 +24,40 @@ public final class MapMarkerBeacon {
     private MapMarkerBeacon() {
     }
 
-    public static boolean isTrigger(int button, int modifiers) {
-        return button == 1 && (modifiers & KeyMatch.MODS) == (KeyMatch.C | KeyMatch.S);
-    }
-
-    /** Whether a visible custom mark owns this press before map navigation handles it. */
-    public static boolean claimsGesture(int button, int modifiers, LabeledMinimapMark marker) {
-        return claimsGesture(button, modifiers, marker != null);
-    }
-
-    public static boolean claimsGesture(int button, int modifiers, boolean markerHit) {
-        return markerHit && isTrigger(button, modifiers);
-    }
-
     public static boolean start(MapView map, MapFile.Marker marker, MiniMap.Location session) {
-        return start(map, worldTarget(marker, session));
+        return start(map, worldTarget(marker, session), marker == null ? null : marker.nm);
     }
 
     /** Start a beacon for a custom minimap mark at its persisted tile coordinate. */
     public static boolean start(MapView map, LabeledMinimapMark marker, MiniMap.Location session) {
-        return start(map, worldTarget(marker, session));
+        return start(map, worldTarget(marker, session), marker == null ? null : marker.label);
     }
 
     /** Start a beacon for another persisted minimap marker type. */
     public static boolean start(MapView map, long segmentId, haven.Coord tile, MiniMap.Location session) {
-        return start(map, worldTarget(segmentId, tile, session));
+        return start(map, segmentId, tile, session, null);
     }
 
-    private static boolean start(MapView map, Coord2d target) {
+    public static boolean start(MapView map, long segmentId, haven.Coord tile, MiniMap.Location session, String label) {
+        return start(map, worldTarget(segmentId, tile, session), label);
+    }
+
+    private static boolean start(MapView map, Coord2d target, String label) {
         if(map == null || map.glob == null || target == null)
             return false;
         try {
             final haven.Glob glob = map.glob;
             Gob beacon = new Gob(glob, target);
             beacon.addol(new Gob.Overlay(beacon,
-                    new MarkerBeaconSprite(beacon, () -> forget(glob, beacon))), false);
+                    new MarkerBeaconSprite(beacon, label, () -> forget(glob, beacon))), false);
             synchronized(active) {
                 Deque<WeakReference<Gob>> world = active.computeIfAbsent(glob, ignored -> new ArrayDeque<>());
                 while(world.size() >= MAX_PER_WORLD) {
                     Gob expired = world.removeFirst().get();
-                    if(expired != null)
+                    if(expired != null) {
+                        finish(expired);
                         glob.oc.remove(expired);
+                    }
                 }
                 world.addLast(new WeakReference<>(beacon));
             }
@@ -87,6 +80,13 @@ public final class MapMarkerBeacon {
             }
             if(world.isEmpty())
                 active.remove(glob);
+        }
+    }
+
+    private static void finish(Gob beacon) {
+        for(Gob.Overlay overlay : new ArrayList<>(beacon.ols)) {
+            if(overlay.spr instanceof MarkerBeaconSprite)
+                ((MarkerBeaconSprite)overlay.spr).finish();
         }
     }
 

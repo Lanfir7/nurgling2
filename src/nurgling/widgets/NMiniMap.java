@@ -1178,21 +1178,23 @@ NMiniMap extends MiniMap {
     private static class BeaconTarget {
         final long segmentId;
         final Coord tile;
+        final String label;
 
-        BeaconTarget(long segmentId, Coord tile) {
+        BeaconTarget(long segmentId, Coord tile, String label) {
             this.segmentId = segmentId;
             this.tile = tile;
+            this.label = label;
         }
     }
 
     /** Claim the beacon gesture on a visible custom mark before other minimap actions. */
     protected final boolean tryStartCustomMarkerBeacon(MouseDownEvent ev, MapView map) {
-        if(!MapMarkerBeacon.isTrigger(ev.b, ui.modflags()))
+        if(!Hotkeys.matchesMapMarkerBeacon(ev.b, ui.modflags()))
             return false;
         BeaconTarget marker = customBeaconTargetAt(ev.c);
-        if(!MapMarkerBeacon.claimsGesture(ev.b, ui.modflags(), marker != null))
+        if(marker == null)
             return false;
-        MapMarkerBeacon.start(map, marker.segmentId, marker.tile, sessloc);
+        MapMarkerBeacon.start(map, marker.segmentId, marker.tile, sessloc, marker.label);
         customBeaconGrab = ui.grabmouse(this);
         return true;
     }
@@ -3305,7 +3307,7 @@ NMiniMap extends MiniMap {
     private BeaconTarget customBeaconTargetAt(Coord screenCoord) {
         LabeledMinimapMark labeled = labeledMarkAt(screenCoord);
         if(labeled != null)
-            return new BeaconTarget(labeled.segmentId, labeled.tileCoords);
+            return new BeaconTarget(labeled.segmentId, labeled.tileCoords, labelOr(labeled.label, labeled.resourceType));
         if(dloc == null || sessloc == null || markersHidden())
             return null;
         NGameUI gui = NUtils.getGameUI();
@@ -3316,19 +3318,19 @@ NMiniMap extends MiniMap {
         if(showFishIcons() && gui.fishLocationService != null) {
             for(nurgling.FishLocation fish : gui.fishLocationService.getFishLocationsForSegment(sessloc.seg.id)) {
                 if(matchesMarkerSearch(fish.getFishName(), search) && markerAtScreen(screenCoord, fish.getTileCoords(), hsz, UI.scale(10)))
-                    return new BeaconTarget(fish.getSegmentId(), fish.getTileCoords());
+                    return new BeaconTarget(fish.getSegmentId(), fish.getTileCoords(), labelOr(fish.getFishName(), fish.getFishResource()));
             }
         }
         if(showTreeIcons() && gui.treeLocationService != null) {
             for(nurgling.TreeLocation tree : gui.treeLocationService.getTreeLocationsForSegment(sessloc.seg.id)) {
                 if(matchesMarkerSearch(tree.getTreeName(), search) && markerAtScreen(screenCoord, tree.getTileCoords(), hsz, UI.scale(10)))
-                    return new BeaconTarget(tree.getSegmentId(), tree.getTileCoords());
+                    return new BeaconTarget(tree.getSegmentId(), tree.getTileCoords(), labelOr(tree.getTreeName(), tree.getTreeResource()));
             }
         }
         if(showProspectingIcons && gui.prospectingLocationService != null) {
             for(nurgling.ProspectingLocation prospect : gui.prospectingLocationService.getProspectingLocationsForSegment(sessloc.seg.id)) {
                 if(matchesMarkerSearch(prospect.getResourceType(), search) && markerAtScreen(screenCoord, prospect.getTileCoords(), hsz, UI.scale(10)))
-                    return new BeaconTarget(prospect.getSegmentId(), prospect.getTileCoords());
+                    return new BeaconTarget(prospect.getSegmentId(), prospect.getTileCoords(), prospect.getResourceType());
             }
         }
         return null;
@@ -3341,6 +3343,10 @@ NMiniMap extends MiniMap {
     private static boolean matchesMarkerSearch(String value, String search) {
         return search == null || search.trim().isEmpty() ||
                 (value != null && value.toLowerCase().contains(search.toLowerCase()));
+    }
+
+    private static String labelOr(String label, String fallback) {
+        return label == null || label.trim().isEmpty() ? fallback : label;
     }
     
     /**

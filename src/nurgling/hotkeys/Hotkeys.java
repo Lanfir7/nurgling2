@@ -60,6 +60,7 @@ public final class Hotkeys {
     public static final String MAP_MARKER_EDIT = "map.marker.edit";
     public static final String MAP_MARKER_WAYPOINT = "map.marker.waypoint";
     public static final String MAP_MARKER_NAVIGATE = "map.marker.navigate";
+    public static final String MAP_MARKER_BEACON = "map.marker.beacon";
     public static final String MAP_PING = "map.ping";
     public static final String FLOWER_FORCE_MANUAL = "flower.force_manual";
     public static final String FLOWER_CONTROL_MODE = "flower.control_mode";
@@ -138,6 +139,11 @@ public final class Hotkeys {
     /** Match the configurable marker-navigation gesture in either map view. */
     public static boolean matchesMapMarkerNavigate(int button, int mods) {
         return action(MAP_MARKER_NAVIGATE).current().matchesMouse(button, mods);
+    }
+
+    /** Match the configurable marker-beacon gesture in either map view. */
+    public static boolean matchesMapMarkerBeacon(int button, int mods) {
+        return action(MAP_MARKER_BEACON).current().matchesMouse(button, mods);
     }
 
     /** Plain LMB path recording must yield to a matching marker-delete action. */
