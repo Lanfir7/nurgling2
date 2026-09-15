@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-worm-farm-bot",
+  "priority": 7,
+  "summary": {
+    "ru": "В меню ботов рядом с замером земли появилась добыча червей: копка, склад червей, закопка по кругу.",
+    "en": "A Worm Farm bot next to the survey tools digs, stores worms, then fills the same flag in a loop."
+  },
+  "detail": {
+    "ru": "Откройте меню ботов — иконка червя у Выравнивателя и Помощника землемера. Поставьте флаг замера, задайте PUT-зоны Earthworm и Odd Tuber, возьмите лопату. Бот опускает флаг, копает до полного инвентаря, относит червей и клубни, поднимает флаг и закапывает оставшейся землёй, затем снова. Прочий мусор бросает под ноги. Еда и вода — как у других ботов.",
+    "en": "Open the bot menu — worm icon beside Leveler and Survey Supporter. Place a survey flag, set Earthworm and Odd Tuber PUT areas, equip a shovel. The bot lowers the flag, digs until the inventory is full, stores worms and tubers, raises the flag, fills with leftover soil, then repeats. Other dug junk is dropped at your feet. Food and water work like the other bots."
+  }
+}

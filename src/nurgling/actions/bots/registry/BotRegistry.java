@@ -255,6 +255,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("destroytrellisplants", BotDescriptor.BotType.UTILS, "Destroy Trellis Plants", "Destroys all trellis plants in selected area.", false, true, DestroyTrellisPlants.class, "trellis_cleaner", false));
         bots.add(new BotDescriptor("flag", BotDescriptor.BotType.UTILS, "Survey Supporter", "Survey Supporter.", false, true, SurveySupport.class, "flag", false));
         bots.add(new BotDescriptor("leveler", BotDescriptor.BotType.UTILS, "bot.leveler.title", "bot.leveler.desc", true, true, Leveler.class, "leveler", false));
+        bots.add(new BotDescriptor("wormfarm", BotDescriptor.BotType.UTILS, "bot.wormfarm.title", "bot.wormfarm.desc", true, true, WormFarmer.class, "wormfarm", false));
 
         bots.add(new BotDescriptor("dream_catcher", BotDescriptor.BotType.UTILS, "Collect dreams", "Collect dreams from all dream catchers in a dream catcher area.", true, true, CollectDreams.class, "dream_catcher", false));
         bots.add(new BotDescriptor("bugs", BotDescriptor.BotType.UTILS, "Catch bugs", "Catch bugs around player.", false, true, CatchBugsAround.class, "bugs", false));
