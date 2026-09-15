@@ -3,16 +3,24 @@ package nurgling.actions.bots.forager;
 import haven.Coord;
 import haven.Coord2d;
 import haven.Gob;
+import haven.Homing;
 import haven.Line2d;
+import haven.LinMove;
 import haven.MCache;
 import haven.MiniMap;
+import haven.Moving;
 import nurgling.NConfig;
+import nurgling.NGameUI;
+import nurgling.actions.PathFinder;
 import nurgling.conf.NAreaRad;
 import nurgling.routes.ForagerPath;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.NParser;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.function.BiConsumer;
 
 /** Per-route geometry limits (Forager Settings > Routes), consulted by Forager's detour/chase logic. */
 public class ForagerRouteConstraints {
@@ -22,6 +30,8 @@ public class ForagerRouteConstraints {
     private final int maxBranchDistanceTiles;
     private final boolean avoidCliffs;
     private final int cliffBufferTiles;
+    private final List<NAreaRad> animalRads;
+    private static final double AVOID_RADIUS_MULT = 2.0, DANGER_LOOKAHEAD_S = 3.0;
 
     // Caps worst-case corridor-check cost for a very distant candidate, matching CliffCorridorChecker's own cap.
     private static final int MAX_EXCLUSION_CORRIDOR_SAMPLE_TILES = 300;
@@ -33,6 +43,46 @@ public class ForagerRouteConstraints {
         this.maxBranchDistanceTiles = path.maxBranchDistance;
         this.avoidCliffs = path.avoidCliffs;
         this.cliffBufferTiles = path.cliffBufferTiles;
+        @SuppressWarnings("unchecked") ArrayList<NAreaRad> rads = (ArrayList<NAreaRad>) NConfig.get(NConfig.Key.animalrad);
+        this.animalRads = rads == null ? new ArrayList<>() : new ArrayList<>(rads);
+    }
+
+    public List<PathFinder.AvoidZone> dangerZones(NGameUI gui, boolean ignoreBats) {
+        List<PathFinder.AvoidZone> zones = new ArrayList<>();
+        forEachThreat(gui, ignoreBats, (gob, rad) -> zones.add(new PathFinder.AvoidZone(gob.rc, headingPoint(gob), rad.radius * AVOID_RADIUS_MULT, label(gob))));
+        return zones;
+    }
+
+    private void forEachThreat(NGameUI gui, boolean ignoreBats, BiConsumer<Gob, NAreaRad> fn) {
+        if(gui == null || gui.ui == null || gui.ui.sess == null) return;
+        List<NAreaRad> threats = new ArrayList<>();
+        List<NAlias> aliases = new ArrayList<>();
+        for (NAreaRad rad : animalRads) {
+            if (rad.name != null && rad.isActiveThreat(ignoreBats)) {
+                threats.add(rad);
+                aliases.add(new NAlias(rad.name));
+            }
+        }
+        if (threats.isEmpty()) return;
+        synchronized(gui.ui.sess.glob.oc) {
+            for(Gob gob : gui.ui.sess.glob.oc) {
+                if(gob.ngob == null || gob.ngob.name == null || NAreaRad.isDownOrDead(gob)) continue;
+                for (int i = 0; i < threats.size(); i++) {
+                    if (NParser.checkName(gob.ngob.name, aliases.get(i))) {
+                        fn.accept(gob, threats.get(i));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private static String label(Gob gob) { String name=gob.ngob.name; return name.substring(name.lastIndexOf('/')+1)+"#"+gob.id; }
+    private static Coord2d headingPoint(Gob gob) {
+        Moving m=gob.getattr(Moving.class);
+        if(m instanceof LinMove) return gob.rc.add(((LinMove)m).v.mul(DANGER_LOOKAHEAD_S));
+        if(m instanceof Homing) { Homing h=(Homing)m; Gob tgt=h.tgt(); Coord2d to=tgt!=null?tgt.rc:h.tc; if(to!=null) { Coord2d d=to.sub(gob.rc); if(d.abs()>.01)return gob.rc.add(d.mul(Math.min(d.abs(),h.v*DANGER_LOOKAHEAD_S)/d.abs())); } }
+        return gob.rc;
     }
 
     /** True if this gob's tile is inside a brush-painted exclusion zone. */
@@ -112,6 +162,7 @@ public class ForagerRouteConstraints {
 
             double triggerDist = rad.triggerDist();
             for (Gob animal : Finder.findGobs(mid, new NAlias(rad.name), null, halfLen + triggerDist)) {
+                if (NAreaRad.isDownOrDead(animal)) continue;
                 if (distToSegment(animal.rc, from, to) <= triggerDist) {
                     return true;
                 }

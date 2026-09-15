@@ -20,9 +20,23 @@ public class GateDetector {
     public static final String[] GATE_NAMES = {
             "gfx/terobjs/arch/polebiggate",
             "gfx/terobjs/arch/drystonewallbiggate",
+            "gfx/terobjs/arch/palisadebiggate",
+            "gfx/terobjs/arch/brickbiggate",
             "gfx/terobjs/arch/polegate",
             "gfx/terobjs/arch/drystonewallgate",
+            "gfx/terobjs/arch/palisadegate",
+            "gfx/terobjs/arch/brickwallgate",
     };
+
+    public static boolean isGateName(String name) {
+        if(name == null) return false;
+        for(String gate : GATE_NAMES) if(gate.equals(name)) return true;
+        return false;
+    }
+
+    public static boolean isGate(Gob gob) {
+        return gob != null && gob.ngob != null && isGateName(gob.ngob.name);
+    }
 
     public boolean isNearGate() {
         try {

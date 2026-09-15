@@ -495,14 +495,8 @@ public class ChunkNavRecorder {
         // Natural cave mouths - the passage itself, not a wall
         if (lower.contains("/cavein") || lower.contains("/caveout")) return true;
 
-        // All types of gates - only passable when OPEN (modelAttribute == 1)
-        // Includes: polegate, polebiggate, palisadegate, palisadebiggate, drystonewallgate, drystonewallbiggate
-        if (lower.contains("/polegate") || lower.contains("/polebiggate") ||
-            lower.contains("/palisadegate") || lower.contains("/palisadebiggate") ||
-            lower.contains("/drystonewallgate") || lower.contains("/drystonewallbiggate")) {
-            // Check if gate is open using GateDetector logic
-            return GateDetector.isDoorOpen(gob);
-        }
+        // Keep navigation's gate recognition in the same registry PathFinder and route bots use.
+        if (GateDetector.isGateName(lower)) return GateDetector.isDoorOpen(gob);
 
         // Mine holes
         return lower.contains("/minehole");

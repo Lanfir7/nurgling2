@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.*;
 import nurgling.actions.*;
 import nurgling.areas.NArea;
+import nurgling.areas.NContext;
 import nurgling.conf.NDiscordNotification;
 import nurgling.conf.NForagerProp;
 import nurgling.guarding.*;
@@ -18,6 +19,7 @@ import nurgling.tools.AreaStock;
 import nurgling.tools.Finder;
 import nurgling.tools.MilestoneRegistry;
 import nurgling.tools.NAlias;
+import nurgling.tasks.GateDetector;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,6 +42,13 @@ public class Forager implements Action {
 
     // Resolved once near the top of run() - see resolveGuardingProfile().
     private GuardingProfile guardingProfile = null;
+    private Guard dangerGuard = null;
+    private java.util.function.Supplier<List<PathFinder.AvoidZone>> avoidZones = null;
+    private boolean routeLegBlocked = false;
+    private final ArrayList<Coord2d> stallSpots = new ArrayList<>();
+    private Thread threatWatcher = null;
+
+    public static final String HEARTH_UNLOAD_HEARTH = "hearth, unload, hearth";
 
     // Set once run() has resolved it, so performGobAction() can persist a confirmed flower-menu action.
     private NForagerProp forageProp = null;
@@ -143,10 +152,14 @@ public class Forager implements Action {
         // Concurrent set: the render thread iterates this via NWaypointOverlay while this bot
         // thread adds to it, with no other synchronization between them.
         gui.activeBotFailedWaypoints = java.util.concurrent.ConcurrentHashMap.newKeySet();
-        Thread threatWatcher = null;
+        threatWatcher = null;
         try {
 
         guardingProfile = resolveGuardingProfile(prop, preset);
+        dangerGuard = resolveDangerGuard(guardingProfile);
+        final boolean avoidIgnoreBats = guardingProfile.ignoreBats;
+        avoidZones = dangerGuard == null ? null : () -> routeConstraints.dangerZones(gui, avoidIgnoreBats);
+        stallSpots.clear();
 
         // Pre-flight guards: checked once before any movement; in-flight guards run continuously below.
         GuardContext preflightCtx = new GuardContext(gui, guardingProfile.ignoreBats);
@@ -219,10 +232,8 @@ public class Forager implements Action {
             return Results.ERROR("Cannot get start position - waypoint not in current segment");
         }
 
-        PathFinder pf = new PathFinder(startPos);
-        pf.waterMode = effectiveWaterMode(gui, preset);
         checkStamina(gui);
-        Results startResult = pf.run(gui);
+        Results startResult = walk(gui, preset, new PathFinder(startPos), true);
         if (!shouldContinueAfterInitialPathFinder(startResult)) {
             return startResult;
         }
@@ -238,11 +249,14 @@ public class Forager implements Action {
             return Results.SUCCESS();
         }
 
+        int zoneBlockedWaypoint = -1;
         // Main loop through sections
         for (int i = firstSectionIndexAtOrAfterWaypoint(path, startWaypointIndex); i < path.getSectionCount(); i++)
         {
             ForagerSection section = path.getSection(i);
             if (section == null) continue;
+            if (section.waypointIndex + 1 == zoneBlockedWaypoint) continue;
+            routeLegBlocked = false;
 
             checkStamina(gui);
 
@@ -258,6 +272,7 @@ public class Forager implements Action {
                 if (!milestoneResult.IsSuccess()) {
                     return milestoneResult;
                 }
+                stallSpots.clear();
                 MiniMap.Location[] readyLoc = new MiniMap.Location[1];
                 Coord2d destWorld = waitForDestinationWorldCoord(
                         toWp,
@@ -319,9 +334,7 @@ public class Forager implements Action {
                 if (milestoneGob != null) {
                     Coord2d approachPoint = resolveMilestoneWalkTarget(
                             milestoneGob, playerBeforeWalk != null ? playerBeforeWalk.rc : null, sectionEnd);
-                    PathFinder pfApproach = new PathFinder(approachPoint);
-                    pfApproach.waterMode = effectiveWaterMode(gui, preset);
-                    boolean arrivedNearMilestone = pfApproach.run(gui).IsSuccess();
+                    boolean arrivedNearMilestone = walk(gui, preset, new PathFinder(approachPoint), true).IsSuccess();
                     if (arrivedNearMilestone && runWaypointSteps(gui, toWp)) {
                         return Results.SUCCESS();
                     }
@@ -355,29 +368,26 @@ public class Forager implements Action {
             } else if (targetGob != null)
             {
                 // walkInHops only guarantees getting within MAX_HOP_DISTANCE, not precise arrival.
-                PathFinder pfGob = new PathFinder(targetGob);
-                pfGob.waterMode = effectiveWaterMode(gui, preset);
-                Results pfGobResult = pfGob.run(gui);
+                Results pfGobResult = walk(gui, preset, new PathFinder(targetGob), true);
                 arrivedAtWaypoint = pfGobResult.IsSuccess();
                 if (!arrivedAtWaypoint) {
                     gui.msg("Forager debug: section " + i + " failed pathing to gob - waterMode="
-                            + pfGob.waterMode + " mounted=" + CoracleBot.isPlayerInCoracle(gui));
+                            + effectiveWaterMode(gui, preset) + " mounted=" + CoracleBot.isPlayerInCoracle(gui));
                     gui.activeBotFailedWaypoints.add(section.waypointIndex + 1);
                 }
             } else
             {
                 // Go to the endpoint if no objects found nearby
-                PathFinder pfEnd = new PathFinder(sectionEnd);
-                pfEnd.waterMode = effectiveWaterMode(gui, preset);
-                Results pfEndResult = pfEnd.run(gui);
+                Results pfEndResult = walk(gui, preset, new PathFinder(sectionEnd), true);
                 arrivedAtWaypoint = pfEndResult.IsSuccess();
                 if (!arrivedAtWaypoint) {
                     gui.msg("Forager debug: section " + i + " failed pathing to sectionEnd=" + sectionEnd
-                            + " - waterMode=" + pfEnd.waterMode + " mounted=" + CoracleBot.isPlayerInCoracle(gui));
+                            + " - waterMode=" + effectiveWaterMode(gui, preset) + " mounted=" + CoracleBot.isPlayerInCoracle(gui));
                     gui.activeBotFailedWaypoints.add(section.waypointIndex + 1);
                 }
             }
 
+            if (routeLegBlocked) zoneBlockedWaypoint = section.waypointIndex + 1;
             // Waypoint steps only run once we've actually reached the real waypoint - not on an
             // intermediate sub-section of a gap that got split across multiple sections.
             if (arrivedAtWaypoint && section.isLastInGap && runWaypointSteps(gui, toWp)) {
@@ -444,9 +454,7 @@ public class Forager implements Action {
                     + ") - bot stopped. Check the java console log for the full stack trace.");
             throw e;
         } finally {
-            if (threatWatcher != null) {
-                threatWatcher.interrupt();
-            }
+            stopGuardWatcher();
             gui.activeBotPath = null;
             gui.activeBotDetourTrail = null;
             gui.activeBotDetourTarget = null;
@@ -676,6 +684,7 @@ public class Forager implements Action {
         Coord2d searchCenter = clusterEntry != null ? clusterEntry : from;
         double searchRadius = clusterEntry != null ? CLUSTER_RADIUS : SCAN_RADIUS;
         RouteLookahead leaveForLater = clusterEntry != null ? null : lookahead;
+        List<PathFinder.AvoidZone> activeZones = avoidZones != null ? avoidZones.get() : null;
 
         List<Pair<Gob, ForagerAction>> candidates = new ArrayList<>();
         Map<Long, Double> distByGobId = new HashMap<>();
@@ -690,6 +699,7 @@ public class Forager implements Action {
             }
             for (Gob gob : Finder.findGobs(searchCenter, action.toNAlias(), null, searchRadius)) {
                 if (processedGobs.contains(gob.id)) continue;
+                if (activeZones != null && PathFinder.AvoidZone.anyContains(activeZones, gob.rc)) continue;
                 if (routeConstraints.isGobExcluded(sessloc, gob)) continue;
                 if (!routeConstraints.withinLeash(leashAnchor, gob.rc)) continue;
                 // While in water mode (mounted in a coracle), a land-bound gob is structurally
@@ -712,7 +722,7 @@ public class Forager implements Action {
             if (map != null && routeConstraints.cliffCorridorBlocked(map, from, candidate.a.rc)) continue;
             if (map != null && routeConstraints.landCorridorBlocked(map, from, candidate.a.rc, waterMode)) continue;
             if (routeConstraints.corridorExcluded(sessloc, from, candidate.a.rc)) continue;
-            if (routeConstraints.dangerousAnimalNearCorridor(from, candidate.a.rc, ignoreBats)) continue;
+            if (activeZones == null && routeConstraints.dangerousAnimalNearCorridor(from, candidate.a.rc, ignoreBats)) continue;
             return candidate;
         }
         return null;
@@ -906,14 +916,12 @@ public class Forager implements Action {
                 gui.activeBotDetourTarget = target;
             }
 
-            Coord2d waypoint = player.rc.add(target.sub(player.rc).norm(MAX_HOP_DISTANCE));
+            Coord2d waypoint = outsideDangerZones(player.rc.add(target.sub(player.rc).norm(MAX_HOP_DISTANCE)));
             if (detourEpisode) {
                 detour.budget.spend(player.rc.dist(waypoint));
                 detour.breadcrumbs.add(player.rc);
             }
-            PathFinder hop = new PathFinder(waypoint);
-            hop.waterMode = effectiveWaterMode(gui, preset);
-            if (!hop.run(gui).IsSuccess()) {
+            if (!walk(gui, preset, new PathFinder(waypoint), !detourEpisode).IsSuccess()) {
                 unstickAtCurrentPosition(gui, preset);
                 return false;
             }
@@ -952,16 +960,65 @@ public class Forager implements Action {
                 breadcrumbs.subList(oldestInReach, breadcrumbs.size()).clear();
                 continue;
             }
-            hopTo(gui, preset, breadcrumbs.get(last));
+            if (!shouldDiscardBreadcrumbAfterFallback(hopTo(gui, preset, breadcrumbs.get(last)))) return;
             breadcrumbs.remove(last);
         }
     }
 
     private boolean hopTo(NGameUI gui, NForagerProp.PresetData preset, Coord2d pos) throws InterruptedException {
         gui.activeBotDetourTarget = pos;
-        PathFinder hop = new PathFinder(pos);
-        hop.waterMode = effectiveWaterMode(gui, preset);
-        return hop.run(gui).IsSuccess();
+        return walk(gui, preset, new PathFinder(pos), false).IsSuccess();
+    }
+
+    static boolean shouldDiscardBreadcrumbAfterFallback(boolean hopSucceeded) {
+        return hopSucceeded;
+    }
+
+    private Results walk(NGameUI gui, NForagerProp.PresetData preset, PathFinder pf, boolean routeLeg) throws InterruptedException {
+        if (avoidZones != null && !stepOutOfDangerZone(gui, preset)) {
+            return Results.ERROR("Forager: couldn't leave a dangerous animal's avoidance zone");
+        }
+        pf.waterMode = effectiveWaterMode(gui, preset);
+        pf.avoidZones = avoidZones;
+        pf.learnedBlocks = stallSpots;
+        Results result = pf.run(gui);
+        if (routeLeg && pf.blockedByAvoidZones) {
+            routeLegBlocked = true;
+            gui.msg("Forager: a dangerous animal blocks the way to the next waypoint - skipping it");
+        }
+        return result;
+    }
+
+    private boolean stepOutOfDangerZone(NGameUI gui, NForagerProp.PresetData preset) throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null || avoidZones == null) return true;
+        for (PathFinder.AvoidZone zone : avoidZones.get()) if (zone.contains(player.rc)) {
+            Coord2d exit = outsideDangerZones(zone.pushOut(player.rc, MCache.tilesz.x));
+            PathFinder back = new PathFinder(exit);
+            back.waterMode = effectiveWaterMode(gui, preset);
+            back.avoidZones = avoidZones;
+            back.learnedBlocks = stallSpots;
+            if (!back.run(gui).IsSuccess()) return false;
+            Gob escaped = NUtils.player();
+            return escaped != null && !PathFinder.AvoidZone.anyContains(avoidZones.get(), escaped.rc);
+        }
+        return true;
+    }
+
+    private Coord2d outsideDangerZones(Coord2d point) {
+        if (avoidZones == null) return point;
+        return outsideDangerZones(point, avoidZones.get());
+    }
+
+    static Coord2d outsideDangerZones(Coord2d point, List<PathFinder.AvoidZone> zones) {
+        if (zones == null) return point;
+        for (int pass = 0; pass < 4; pass++) {
+            PathFinder.AvoidZone hit = null;
+            for (PathFinder.AvoidZone zone : zones) if (zone.contains(point)) { hit = zone; break; }
+            if (hit == null) break;
+            point = hit.pushOut(point, MCache.tilesz.x);
+        }
+        return point;
     }
 
     /** Gathering stops ahead until the next milestone, which may switch map segments. */
@@ -986,21 +1043,17 @@ public class Forager implements Action {
                                    NForagerProp.PresetData preset) throws InterruptedException {
         switch (action.actionType) {
             case PICK: {
-                PathFinder pfPick = new PathFinder(gob);
-                pfPick.waterMode = effectiveWaterMode(gui, preset);
                 // Marks processed either way - an unreachable gob (e.g. on land while mounted in
                 // a coracle) would otherwise keep getting re-picked as "nearest" forever.
                 processedGobs.add(gob.id);
-                if (!pfPick.run(gui).IsSuccess()) break;
+                if (!walk(gui, preset, new PathFinder(gob), false).IsSuccess()) break;
                 new SelectFlowerAction("Pick", gob).run(gui);
                 NUtils.getUI().core.addTask(new nurgling.tasks.WaitGobRemoval(gob.id));
                 break;
             }
             case FLOWER_ACTION: {
-                PathFinder pfFlower = new PathFinder(gob);
-                pfFlower.waterMode = effectiveWaterMode(gui, preset);
                 processedGobs.add(gob.id);
-                if (!pfFlower.run(gui).IsSuccess()) break;
+                if (!walk(gui, preset, new PathFinder(gob), false).IsSuccess()) break;
                 SelectFlowerAction flowerAction = new SelectFlowerAction(action.toActionNameCandidates(), gob);
                 flowerAction.run(gui);
                 confirmActionName(action, flowerAction.getMatchedOpt());
@@ -1011,10 +1064,8 @@ public class Forager implements Action {
                 // For objects with no flower menu - just gives the interaction a brief moment to register before moving on.
                 NUtils.setSpeed(2);
                 try {
-                    PathFinder pfRclick = new PathFinder(gob);
-                    pfRclick.waterMode = effectiveWaterMode(gui, preset);
                     processedGobs.add(gob.id);
-                    if (!pfRclick.run(gui).IsSuccess()) break;
+                    if (!walk(gui, preset, new PathFinder(gob), false).IsSuccess()) break;
                     NUtils.rclickGob(gob);
                     NUtils.getUI().core.addTask(new nurgling.tasks.WaitTicks(30));
                 } finally {
@@ -1131,13 +1182,48 @@ public class Forager implements Action {
         return false;
     }
 
-    /** Dispatches logout / travel-hearth via GuardOutcome. "nothing" and "break" are handled by the caller. */
+    /** Dispatches configured end-of-run safety action after the watcher has stopped. */
     private void performSafetyAction(NGameUI gui, String action) throws InterruptedException {
-        String canonical = ForagerWaypoint.normalizeOnStepsFailAction(action);
+        String canonical = HEARTH_UNLOAD_HEARTH.equals(action) ? action
+                : ForagerWaypoint.normalizeOnStepsFailAction(action);
+        if ("nothing".equals(canonical)) return;
+        stopGuardWatcher();
+        if (HEARTH_UNLOAD_HEARTH.equals(canonical)) {
+            hearthUnloadHearth(gui);
+            return;
+        }
         if (ForagerWaypoint.performsGuardOutcomeOnStepsFail(canonical)) {
             gui.msg("Forager: running safety action \"" + canonical + "\"");
             GuardOutcome.fromId(canonical).perform(gui);
             gui.msg("Forager: safety action \"" + canonical + "\" finished");
+        }
+    }
+
+    /** A first successful hearth makes unload safe to attempt; the second hearth is mandatory even if unloading fails. */
+    private void hearthUnloadHearth(NGameUI gui) throws InterruptedException {
+        if (!GuardOutcome.travelHearth(gui).IsSuccess()) {
+            gui.error("Forager: first hearth-firing failed; inventory was not unloaded");
+            return;
+        }
+        Results unload = new FreeInventory2(new NContext(gui)).run(gui);
+        if (!unload.IsSuccess()) {
+            gui.msg("Forager: inventory unload failed; hearth-firing again");
+        }
+        if (shouldRunSecondHearth(true, unload.IsSuccess())) {
+            GuardOutcome.travelHearth(gui);
+        }
+    }
+
+    static boolean shouldRunSecondHearth(boolean firstHearthSucceeded, boolean unloadSucceeded) {
+        return firstHearthSucceeded;
+    }
+
+    private void stopGuardWatcher() throws InterruptedException {
+        Thread watcher = threatWatcher;
+        threatWatcher = null;
+        if (watcher != null) {
+            watcher.interrupt();
+            watcher.join(1000);
         }
     }
     
@@ -1152,6 +1238,13 @@ public class Forager implements Action {
             return p;
         }
         return prop.guardingProfiles.values().iterator().next();
+    }
+
+    private Guard resolveDangerGuard(GuardingProfile profile) {
+        if (profile == null) return null;
+        for (GuardEntry entry : profile.inflightGuards)
+            if ("dangerous_animal".equals(entry.guardId)) return entry.toGuard();
+        return null;
     }
 
     private List<Guard> buildGuards(List<GuardEntry> entries) {
@@ -1211,7 +1304,8 @@ public class Forager implements Action {
         synchronized (NUtils.getGameUI().ui.sess.glob.oc) {
             for (Gob gob : NUtils.getGameUI().ui.sess.glob.oc) {
                 if (!(gob instanceof OCache.Virtual || gob.attr.isEmpty() || gob.getClass().getName().contains("GlobEffector"))) {
-                    if (gob.id != NUtils.playerID() && gob.rc.dist(pos) <= radius && !(gob instanceof MapView.Plob) && gob.id > 0) {
+                    if (gob.id != NUtils.playerID() && gob.rc.dist(pos) <= radius && !(gob instanceof MapView.Plob)
+                            && gob.id > 0 && !GateDetector.isGate(gob)) {
                         return gob;
                     }
                 }

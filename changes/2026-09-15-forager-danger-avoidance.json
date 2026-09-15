@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-forager-danger-avoidance",
+  "priority": 6,
+  "summary": {
+    "ru": "Сборщик безопаснее обходит животных, закрывает ворота и завершает маршрут.",
+    "en": "Forager now avoids dangerous animals, closes gates reliably, and finishes routes more safely."
+  },
+  "detail": {
+    "ru": "Сборщик учитывает опасных животных из настроек колец, обходит их и пропускает недоступную точку маршрута вместо опасного крюка. Павшие и оглушённые животные не считаются угрозой. Шаг ворот надёжнее закрывает их с нужной стороны. В настройках Сборщика для завершения или полного инвентаря можно выбрать «hearth, unload, hearth»: вернуться домой, разгрузиться и снова оказаться у очага.",
+    "en": "Forager respects dangerous animals from Ring Settings, plans around them, and skips an unreachable route point instead of making an unsafe detour. Downed and knocked-out animals are not treated as threats. Gate steps now close gates from the correct side. In Forager Settings, choose “hearth, unload, hearth” for finish or full-inventory actions to return home, unload, then end at the hearth."
+  }
+}

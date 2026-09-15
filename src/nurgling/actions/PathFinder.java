@@ -12,6 +12,8 @@ import java.util.*;
 import java.util.concurrent.atomic.*;
 import java.util.function.LongFunction;
 import java.util.function.Predicate;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 import static nurgling.pf.Graph.getPath;
 
@@ -39,6 +41,44 @@ public class PathFinder implements Action {
     private boolean startWasBlocked = false;
     double badDir = Double.MAX_VALUE;
     private final ArrayList<Gob> additionalObstacles = new ArrayList<>();
+
+    /** Opt-in live no-walk capsules used by Forager; null preserves ordinary pathfinding. */
+    public Supplier<List<AvoidZone>> avoidZones = null;
+    public boolean blockedByAvoidZones = false;
+    public List<Coord2d> learnedBlocks = null;
+    public int maxStalls = 3;
+    private List<AvoidZone> plannedZones = Collections.emptyList();
+    private boolean ignoreZones = false;
+    private volatile long lastZoneReplanMs = 0;
+    private final ArrayDeque<Long> zoneReplanTimes = new ArrayDeque<>();
+    private int stalls = 0;
+    protected boolean legZoneAborted = false;
+    private static final long ZONE_CHECK_MS = 200, ZONE_REPLAN_MIN_MS = 1000, ZONE_STORM_WINDOW_MS = 15000;
+    private static final int ZONE_STORM_MAX = 8;
+    private static final double ZONE_START_CLEARANCE = MCache.tilesz.x, ZONE_ABORT_SLACK = MCache.tilesz.x;
+    private static final double STALL_BLOCK_AHEAD = 7, STALL_BLOCK_R = MCache.tilesz.x / 2;
+
+    /** A no-walk capsule: every point within r of core segment a-b. */
+    public static final class AvoidZone {
+        public final Coord2d a, b; public final double r; public final String label;
+        public AvoidZone(Coord2d a, Coord2d b, double r, String label) { this.a=a; this.b=b; this.r=r; this.label=label; }
+        public boolean contains(Coord2d p) { return dist(p) < r; }
+        public static boolean anyContains(List<AvoidZone> zones, Coord2d p) { for(AvoidZone z:zones) if(z.contains(p)) return true; return false; }
+        public double dist(Coord2d p) { return p.dist(closest(p,a,b)); }
+        public double dist(Coord2d p, Coord2d q) {
+            if(crosses(p,q,a,b)) return 0;
+            return Math.min(Math.min(dist(p),dist(q)),Math.min(pointSegment(a,p,q),pointSegment(b,p,q)));
+        }
+        public Coord2d pushOut(Coord2d p, double margin) {
+            Coord2d c=closest(p,a,b), away=p.sub(c);
+            if(away.abs()<.01) { Coord2d ab=b.sub(a); away=ab.abs()<.01?Coord2d.of(1,0):Coord2d.of(-ab.y,ab.x); }
+            return c.add(away.norm(r+margin));
+        }
+        private static Coord2d closest(Coord2d p, Coord2d s, Coord2d e) { Coord2d d=e.sub(s); double l=d.x*d.x+d.y*d.y; if(l<1e-9)return s; double t=Math.max(0,Math.min(1,((p.x-s.x)*d.x+(p.y-s.y)*d.y)/l)); return s.add(d.mul(t)); }
+        private static double pointSegment(Coord2d p, Coord2d s, Coord2d e) { return p.dist(closest(p,s,e)); }
+        private static boolean crosses(Coord2d p, Coord2d q, Coord2d s, Coord2d e) { double a=cross(s,e,p),b=cross(s,e,q),c=cross(p,q,s),d=cross(p,q,e); return ((a>0)!=(b>0))&&((c>0)!=(d>0)); }
+        private static double cross(Coord2d o, Coord2d u, Coord2d v) { return (u.x-o.x)*(v.y-o.y)-(u.y-o.y)*(v.x-o.x); }
+    }
 
 
 
@@ -130,6 +170,15 @@ public class PathFinder implements Action {
         return new GoTo(target).run(gui);
     }
 
+    /** Abort-aware walking remains opt-in, leaving subclass walkTo hooks untouched for normal paths. */
+    protected Results walkTo(NGameUI gui, Coord2d target, BooleanSupplier abort) throws InterruptedException {
+        if (abort == null) return walkTo(gui, target);
+        GoTo go = new GoTo(target, abort);
+        Results result = go.run(gui);
+        legZoneAborted = go.aborted();
+        return result;
+    }
+
     /**
      * A leg failed and the path is about to be replanned from {@code at}. Return false to abandon
      * the route instead. The base class always retries, which is what it has always done.
@@ -151,11 +200,17 @@ public class PathFinder implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        blockedByAvoidZones = false;
+        zoneReplanTimes.clear();
+        stalls = 0;
         while (true) {
             LinkedList<Graph.Vertex> path = construct();
 
             if (path != null) {
                 boolean needRestart = false;
+                List<Coord2d> corners = new ArrayList<>();
+                for(Graph.Vertex v : path) corners.add(Utils.pfGridToWorld(v.pos));
+                int step = 0;
 //                NUtils.getGameUI().msg(Utils.pfGridToWorld(path.getLast().pos).toString());
                 //TODO syntetic points
                 for (Graph.Vertex vert : path) {
@@ -174,8 +229,16 @@ public class PathFinder implements Action {
                         }
                     }
 
-                    if (!walkTo(gui, targetCoord).IsSuccess()) {
+                    List<Coord2d> rest = corners.subList(Math.min(step++, corners.size()), corners.size());
+                    BooleanSupplier abort = avoidZones == null ? null : zoneAbort(gui, rest);
+                    legZoneAborted = false;
+                    Results walked = walkTo(gui, targetCoord, abort);
+                    if (!walked.IsSuccess()) {
+                        if (legZoneAborted && zoneReplanStorm())
+                            return zoneBlocked(gui, "Dangerous animals keep crossing the path");
                         Coord2d at = gui.map.player().rc;
+                        if (shouldLearnStall(legZoneAborted, learnedBlocks) && noteStall(gui, targetCoord))
+                            return Results.ERROR("Stuck: gave up after " + stalls + " stalls");
                         if (!onLegFailed(gui, at))
                             return Results.ERROR("Can't walk path");
                         this.begin = at;
@@ -190,6 +253,8 @@ public class PathFinder implements Action {
 //                    if(start_pos == end_poses.get(0) && NUtils.player().rc.dist(Utils.pfGridToWorld(pfmap.cells[start_pos]))
                     return Results.SUCCESS();
                 }
+                if (!plannedZones.isEmpty() && pathExistsWithoutZones())
+                    return zoneBlocked(gui, "No safe path around dangerous animals");
                 if (waterMode && pfmap != null && start_pos != null && end_pos != null) {
                     NPFMap.Cell[][] cells = pfmap.getCells();
                     StringBuilder msg = new StringBuilder("Forager debug: water-mode path failed - size=" + pfmap.size + " lastMul=" + pfmap.lastMul + " ");
@@ -218,6 +283,72 @@ public class PathFinder implements Action {
 
     public LinkedList<Graph.Vertex> construct() throws InterruptedException {
         return construct(false);
+    }
+
+    private BooleanSupplier zoneAbort(NGameUI gui, List<Coord2d> rest) {
+        final long[] next = {0};
+        return () -> {
+            long now=System.currentTimeMillis();
+            if(now<next[0] || now-lastZoneReplanMs<ZONE_REPLAN_MIN_MS) return false;
+            next[0]=now+ZONE_CHECK_MS;
+            Gob player=gui.map.player(); if(player==null) return false;
+            List<AvoidZone> zones=clearOf(avoidZones.get(), player.rc);
+            Coord2d from=player.rc;
+            for(Coord2d to:rest) { for(AvoidZone z:zones) if(z.r-z.dist(from,to)>ZONE_ABORT_SLACK) return true; from=to; }
+            return false;
+        };
+    }
+
+    private boolean zoneReplanStorm() {
+        long now=System.currentTimeMillis(); lastZoneReplanMs=now;
+        return noteZoneReplan(zoneReplanTimes, now);
+    }
+
+    static boolean noteZoneReplan(ArrayDeque<Long> replanTimes, long now) {
+        replanTimes.addLast(now);
+        while(!replanTimes.isEmpty() && now-replanTimes.peekFirst()>ZONE_STORM_WINDOW_MS) replanTimes.removeFirst();
+        return replanTimes.size()>ZONE_STORM_MAX;
+    }
+
+    static boolean shouldLearnStall(boolean legZoneAborted, List<Coord2d> learnedBlocks) {
+        return !legZoneAborted && learnedBlocks != null;
+    }
+
+    private Results zoneBlocked(NGameUI gui, String why) {
+        blockedByAvoidZones=true; stopHere(gui); return Results.ERROR(why);
+    }
+
+    private boolean pathExistsWithoutZones() throws InterruptedException {
+        ignoreZones=true;
+        try { pfmap=null; dn=false; return construct(true)!=null || dn; }
+        finally { ignoreZones=false; }
+    }
+
+    private static List<AvoidZone> clearOf(List<AvoidZone> zones, Coord2d from) {
+        List<AvoidZone> out=new ArrayList<>();
+        for(AvoidZone z:zones) { double d=z.dist(from); if(d>=z.r) out.add(z); else if(d>ZONE_START_CLEARANCE) out.add(new AvoidZone(z.a,z.b,d-ZONE_START_CLEARANCE,z.label)); }
+        return out;
+    }
+
+    private boolean noteStall(NGameUI gui, Coord2d target) {
+        Gob p=gui.map.player(); if(p==null)return false;
+        double left=p.rc.dist(target); Coord2d spot=left>.01?p.rc.add(target.sub(p.rc).norm(Math.min(STALL_BLOCK_AHEAD,left))):p.rc;
+        learnedBlocks.add(spot); return ++stalls>=maxStalls;
+    }
+
+    private static void stopHere(NGameUI gui) { Gob p=gui.map.player(); if(p!=null) gui.map.wdgmsg("click", Coord.z, p.rc.floor(OCache.posres),1,0); }
+
+    private void blockAvoided() {
+        boolean zones=!plannedZones.isEmpty(), learned=learnedBlocks!=null&&!learnedBlocks.isEmpty();
+        if(!zones&&!learned) return;
+        NPFMap.Cell[][] cells=pfmap.getCells();
+        for(int i=0;i<pfmap.size;i++) for(int j=0;j<pfmap.size;j++) {
+            NPFMap.Cell cell=cells[i][j]; if(cell.val!=0) continue;
+            Coord2d p=Utils.pfGridToWorld(cell.pos);
+            boolean blocked=zones&&AvoidZone.anyContains(plannedZones,p);
+            if(!blocked&&learned) for(Coord2d spot:learnedBlocks) if(p.dist(spot)<STALL_BLOCK_R){blocked=true;break;}
+            if(blocked) cell.val=1;
+        }
     }
 
     boolean startWasBlocked() {
@@ -268,6 +399,7 @@ public class PathFinder implements Action {
         LinkedList<Graph.Vertex> path = new LinkedList<>();
         startWasBlocked = false;
         gobInStartPos = null;
+        plannedZones = (avoidZones != null && !ignoreZones) ? clearOf(avoidZones.get(), begin) : Collections.emptyList();
         int mul = 1;
         while (path.isEmpty() && mul < maxMul) {
             if(pfmap!=null && pfmap.lastMul)
@@ -276,7 +408,7 @@ public class PathFinder implements Action {
             pfmap.getBegin();
             pfmap.getEnd();
             if(pfmap.bad) {
-                if (test) {
+                if (test || !plannedZones.isEmpty()) {
                     return null;
                 } else {
                     NUtils.getGameUI().error("Unable to build grid of required size");
@@ -286,6 +418,7 @@ public class PathFinder implements Action {
             pfmap.waterMode = waterMode;
             pfmap.gatesAlwaysClosed = gatesAlwaysClosed;
             pfmap.build();
+            blockAvoided();
             for (Gob obstacle : additionalObstacles) {
                 pfmap.addGob(obstacle);
             }
@@ -295,6 +428,9 @@ public class PathFinder implements Action {
 
             start_pos = Utils.toPfGrid(begin).sub(pfmap.getBegin());
             end_pos = Utils.toPfGrid(end).sub(pfmap.getBegin());
+            if (!plannedZones.isEmpty() && AvoidZone.anyContains(plannedZones, end)) {
+                return null;
+            }
             // Находим свободные начальные и конечные точки
 
             if (!fixStartEnd(test)) {

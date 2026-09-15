@@ -8,15 +8,27 @@ import nurgling.tasks.*;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
+import java.util.function.BooleanSupplier;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GoTo implements Action
 {
     final Coord2d targetCoord;
+    final BooleanSupplier abort;
+    private final AtomicBoolean aborted = new AtomicBoolean(false);
 
     public GoTo(Coord2d targetCoord)
     {
-        this.targetCoord = targetCoord;
+        this(targetCoord, null);
     }
+
+    public GoTo(Coord2d targetCoord, BooleanSupplier abort)
+    {
+        this.targetCoord = targetCoord;
+        this.abort = abort;
+    }
+
+    public boolean aborted() { return aborted.get(); }
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException
@@ -34,37 +46,53 @@ public class GoTo implements Action
             Gob gob = null;
             if((gob = Finder.findGob(fl.tgt))!=null) {
                 if (NParser.isIt(gob, new NAlias("horse"))) {
-                    NUtils.getUI().core.addTask(new IsPoseMov(targetCoord, gob, new NAlias("gfx/kritter/horse/pace", "gfx/kritter/horse/walking", "gfx/kritter/horse/trot", "gfx/kritter/horse/gallop")));
-                    NUtils.getUI().core.addTask(new IsNotPose(gob, new NAlias("gfx/kritter/horse/pace", "gfx/kritter/horse/walking", "gfx/kritter/horse/trot", "gfx/kritter/horse/gallop")));
+                    NUtils.getUI().core.addTask(abortable(new IsPoseMov(targetCoord, gob, new NAlias("gfx/kritter/horse/pace", "gfx/kritter/horse/walking", "gfx/kritter/horse/trot", "gfx/kritter/horse/gallop"))));
+                    NUtils.getUI().core.addTask(abortable(new IsNotPose(gob, new NAlias("gfx/kritter/horse/pace", "gfx/kritter/horse/walking", "gfx/kritter/horse/trot", "gfx/kritter/horse/gallop"))));
                 }
                 else if (NParser.isIt(gob, new NAlias("dugout"))) {
-                    NUtils.getUI().core.addTask(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/dugoutrowan")));
-                    NUtils.getUI().core.addTask(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/dugoutrowan")));
+                    NUtils.getUI().core.addTask(abortable(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/dugoutrowan"))));
+                    NUtils.getUI().core.addTask(abortable(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/dugoutrowan"))));
                 }
                 else if (NParser.isIt(gob, new NAlias("coracle"))) {
-                    NUtils.getUI().core.addTask(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/coraclerowan")));
-                    NUtils.getUI().core.addTask(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/coraclerowan")));
+                    NUtils.getUI().core.addTask(abortable(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/coraclerowan"))));
+                    NUtils.getUI().core.addTask(abortable(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/coraclerowan"))));
                 }
                 else if (NParser.isIt(gob, new NAlias("skis-wilderness"))) {
-                    NUtils.getUI().core.addTask(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/skian-walk", "gfx/borka/skian-run")));
-                    NUtils.getUI().core.addTask(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/skian-walk", "gfx/borka/skian-run")));
+                    NUtils.getUI().core.addTask(abortable(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/skian-walk", "gfx/borka/skian-run"))));
+                    NUtils.getUI().core.addTask(abortable(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/skian-walk", "gfx/borka/skian-run"))));
                 }
                 else if (NParser.isIt(gob, new NAlias("rowboat"))) {
-                    NUtils.getUI().core.addTask(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/rowing")));
-                    NUtils.getUI().core.addTask(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/rowing")));
+                    NUtils.getUI().core.addTask(abortable(new IsPoseMov(targetCoord, NUtils.player(), new NAlias("gfx/borka/rowing"))));
+                    NUtils.getUI().core.addTask(abortable(new IsNotPose(NUtils.player(), new NAlias("gfx/borka/rowing"))));
                 }
                 else if (NParser.isIt(gob, new NAlias("snekkja"))) {
-                    NUtils.getUI().core.addTask(new IsMovingBySpeed(targetCoord, gob));
-                    NUtils.getUI().core.addTask(new MovingCompletedBySpeed(gob));
+                    NUtils.getUI().core.addTask(abortable(new IsMovingBySpeed(targetCoord, gob)));
+                    NUtils.getUI().core.addTask(abortable(new MovingCompletedBySpeed(gob)));
                 }
             }
         }
         else {
-            NUtils.getUI().core.addTask(new IsMoving(targetCoord));
-            NUtils.getUI().core.addTask(new MovingCompleted(targetCoord));
+            NUtils.getUI().core.addTask(abortable(new IsMoving(targetCoord)));
+            NUtils.getUI().core.addTask(abortable(new MovingCompleted(targetCoord)));
         }
+        if(aborted.get()) return Results.FAIL();
         if(NUtils.getGameUI().map.player().rc.dist(targetCoord) > 2*pfmdelta)
             return Results.FAIL();
         return Results.SUCCESS();
+    }
+
+    private NTask abortable(NTask task) {
+        return abortable(task, abort, aborted);
+    }
+
+    /** Shared state makes cancellation sticky across GoTo's paired movement-completion tasks. */
+    static NTask abortable(NTask task, BooleanSupplier abort, AtomicBoolean aborted) {
+        if(abort == null) return task;
+        return new NTask() {
+            public boolean check() {
+                if(aborted.get() || abort.getAsBoolean()) { aborted.set(true); return true; }
+                return task.check();
+            }
+        };
     }
 }

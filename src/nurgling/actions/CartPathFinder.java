@@ -9,6 +9,8 @@ import nurgling.pf.NPFMap;
 import nurgling.tools.Finder;
 import nurgling.tools.VehicleMarker;
 
+import java.util.function.BooleanSupplier;
+
 /**
  * A {@link PathFinder} for a character towing a cart.
  *
@@ -118,11 +120,23 @@ public class CartPathFinder extends PathFinder {
      *
      * <p>Checked between legs rather than during one: a leg is a single waypoint hop, and the cart
      * only unties when it snags, after which the character is free anyway. That keeps {@link GoTo}
-     * — the hottest action in the codebase — completely untouched.
+     * itself custom-free; its optional cancellation seam is shared with the danger-avoidance walker.
      */
     @Override
     protected Results walkTo(NGameUI gui, Coord2d target) throws InterruptedException {
         Results result = new GoTo(target).run(gui);
+        if (!stillTowing())
+            return Results.FAIL();
+        return result;
+    }
+
+    @Override
+    protected Results walkTo(NGameUI gui, Coord2d target, BooleanSupplier abort) throws InterruptedException {
+        if (abort == null)
+            return walkTo(gui, target);
+        GoTo go = new GoTo(target, abort);
+        Results result = go.run(gui);
+        legZoneAborted = go.aborted();
         if (!stillTowing())
             return Results.FAIL();
         return result;
