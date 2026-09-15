@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-gob-config-notify-sound",
+  "priority": 4,
+  "summary": {
+    "ru": "В настройке объекта можно сразу включить звук уведомления и выбрать его, как в настройках иконок.",
+    "en": "Object configure now turns on the same notification sound as Icon Settings."
+  },
+  "detail": {
+    "ru": "Ctrl+ПКМ по объекту в мире или на мини-карте → Настройка. Под «Показывать иконку на мини-карте» появились «Уведомлять» и тот же список звуков, что в настройках иконок, плюс кнопка воспроизведения. Включение уведомления также показывает иконку на карте — без неё звук не играет.",
+    "en": "Ctrl+right-click an object in the world or on the minimap and open Configure. Below Show icon on minimap you can enable Notify and pick the same sound as in Icon Settings, with a play button. Turning notify on also shows the map icon, otherwise the sound would not play."
+  }
+}

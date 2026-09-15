@@ -867,6 +867,84 @@ public class GobIcon extends GAttrib {
 	return(null);
     }
 
+    public static void previewNotification(UI ui, NotificationSetting sel) {
+	if(sel == null) sel = NotificationSetting.nil;
+	if(sel.res != null)
+	    resnotif(sel.res).accept(ui);
+	else if(sel.wav != null)
+	    wavnotif(sel.wav).accept(ui);
+    }
+
+    public static class NotifBox extends SDropBox<NotificationSetting, Widget> {
+	private final List<NotificationSetting> items = new ArrayList<>();
+	private final Consumer<NotificationSetting> apply;
+
+	public NotifBox(int w, Setting setting, Consumer<NotificationSetting> apply) {
+	    super(w, UI.scale(160), UI.scale(20));
+	    this.apply = apply;
+	    items.add(NotificationSetting.nil);
+	    for(NotificationSetting notif : NotificationSetting.builtin)
+		items.add(notif);
+	    Path alarmSoundsPath = getAlarmSoundsPath();
+	    if(alarmSoundsPath != null && Files.exists(alarmSoundsPath) && Files.isDirectory(alarmSoundsPath)) {
+		try {
+		    Files.list(alarmSoundsPath)
+			.filter(p -> Files.isRegularFile(p) && p.getFileName().toString().toLowerCase().endsWith(".wav"))
+			.sorted((a, b) -> a.getFileName().toString().compareToIgnoreCase(b.getFileName().toString()))
+			.forEach(p -> {
+			    String fileName = p.getFileName().toString();
+			    if(setting.filens == null || !setting.filens.equals(p)) {
+				items.add(new NotificationSetting(fileName.substring(0, fileName.length() - 4), p));
+			    }
+			});
+		} catch(IOException e) {
+		}
+	    }
+	    if(setting.filens != null)
+		items.add(new NotificationSetting(setting.filens));
+	    items.add(NotificationSetting.other);
+	    for(NotificationSetting item : items) {
+		if(item.act(setting)) {
+		    change(item);
+		    break;
+		}
+	    }
+	}
+
+	protected List<NotificationSetting> items() {return(items);}
+	protected Widget makeitem(NotificationSetting item, int idx, Coord sz) {return(SListWidget.TextItem.of(sz, Text.std, () -> item.name));}
+
+	private void selectwav(NotificationSetting prev) {
+	    FilePicker dialog = ui.wnd.toolkit().picker().make(FilePicker.Mode.OPEN, ui.wnd);
+	    dialog.filter("PCM wave file", "wav");
+	    dialog.show().map(path -> {
+		Debug.dump(path, prev.name);
+		if(path == null) {
+		    super.change(prev);
+		} else {
+		    for(Iterator<NotificationSetting> i = items.iterator(); i.hasNext();) {
+			NotificationSetting item = i.next();
+			if(item.wav != null)
+			    i.remove();
+		    }
+		    NotificationSetting ws = new NotificationSetting(path);
+		    items.add(items.indexOf(NotificationSetting.other), ws);
+		    change(ws);
+		}
+	    }).report(ui);
+	}
+
+	public void change(NotificationSetting item) {
+	    NotificationSetting prev = sel;
+	    super.change(item);
+	    if(item == NotificationSetting.other) {
+		selectwav(prev);
+	    } else if(apply != null) {
+		apply.accept(item);
+	    }
+	}
+    }
+
     public static class SettingsWindow extends Window {
 	public final Settings conf;
 	private final PackCont.LinPack cont;
@@ -1034,7 +1112,11 @@ public class GobIcon extends GAttrib {
 			public void click() {play();}
 		    };
 		prev = add(new Label(L10n.get("icon.sound_label")), prev.pos("bl").adds(0, 5));
-		nb = new NotifBox(w - pb.sz.x - UI.scale(15));
+		nb = new GobIcon.NotifBox(w - pb.sz.x - UI.scale(15), conf, item -> {
+			conf.resns = item.res;
+			conf.filens = item.wav;
+			SettingsWindow.this.conf.dsave();
+		    });
 		addhl(prev.pos("bl").adds(0, 2), w, prev = Frame.with(nb, false), pb);
 		if(conf.getmarkablep() || conf.res.name.equals("mm/up") || conf.res.name.equals("mm/down")) {
 		    add(new CheckBox(L10n.get("icon.place_marker"))
@@ -1045,86 +1127,8 @@ public class GobIcon extends GAttrib {
 		pack();
 	    }
 
-	    public class NotifBox extends SDropBox<NotificationSetting, Widget> {
-		private final List<NotificationSetting> items = new ArrayList<>();
-
-		public NotifBox(int w) {
-		    super(w, UI.scale(160), UI.scale(20));
-		    items.add(NotificationSetting.nil);
-		    for(NotificationSetting notif : NotificationSetting.builtin)
-			items.add(notif);
-		    // Добавляем звуки из AlarmSounds
-		    Path alarmSoundsPath = getAlarmSoundsPath();
-		    if(alarmSoundsPath != null && Files.exists(alarmSoundsPath) && Files.isDirectory(alarmSoundsPath)) {
-			try {
-			    Files.list(alarmSoundsPath)
-				.filter(p -> Files.isRegularFile(p) && p.getFileName().toString().toLowerCase().endsWith(".wav"))
-				.sorted((a, b) -> a.getFileName().toString().compareToIgnoreCase(b.getFileName().toString()))
-				.forEach(p -> {
-				    String fileName = p.getFileName().toString();
-				    // Пропускаем файлы, которые уже добавлены как текущий выбор
-				    if(conf.filens == null || !conf.filens.equals(p)) {
-					items.add(new NotificationSetting(fileName.substring(0, fileName.length() - 4), p));
-				    }
-				});
-			} catch(IOException e) {
-			    // Игнорируем ошибки чтения папки
-			}
-		    }
-		    if(conf.filens != null)
-			items.add(new NotificationSetting(conf.filens));
-		    items.add(NotificationSetting.other);
-		    for(NotificationSetting item : items) {
-			if(item.act(conf)) {
-			    change(item);
-			    break;
-			}
-		    }
-		}
-
-		protected List<NotificationSetting> items() {return(items);}
-		protected Widget makeitem(NotificationSetting item, int idx, Coord sz) {return(SListWidget.TextItem.of(sz, Text.std, () -> item.name));}
-
-		private void selectwav(NotificationSetting prev) {
-		    FilePicker dialog = ui.wnd.toolkit().picker().make(FilePicker.Mode.OPEN, ui.wnd);
-		    dialog.filter("PCM wave file", "wav");
-		    dialog.show().map(path -> {
-			Debug.dump(path, prev.name);
-			if(path == null) {
-			    super.change(prev);
-			} else {
-			    for(Iterator<NotificationSetting> i = items.iterator(); i.hasNext();) {
-				NotificationSetting item = i.next();
-				if(item.wav != null)
-				    i.remove();
-			    }
-			    NotificationSetting ws = new NotificationSetting(path);
-			    items.add(items.indexOf(NotificationSetting.other), ws);
-			    change(ws);
-			}
-		    }).report(ui);
-		}
-
-		public void change(NotificationSetting item) {
-		    NotificationSetting prev = sel;
-		    super.change(item);
-		    if(item == NotificationSetting.other) {
-			selectwav(prev);
-		    } else {
-			conf.resns = item.res;
-			conf.filens = item.wav;
-			SettingsWindow.this.conf.dsave();
-		    }
-		}
-	    }
-
 	    private void play() {
-		NotificationSetting sel = nb.sel;
-		if(sel == null) sel = NotificationSetting.nil;
-		if(sel.res != null)
-		    resnotif(sel.res).accept(ui);
-		else if(sel.wav != null)
-		    wavnotif(sel.wav).accept(ui);
+		GobIcon.previewNotification(ui, nb.sel);
 	    }
 	}
 

@@ -30,6 +30,8 @@ public class GobConfigWindow extends Window {
     private final GobIcon.Settings iconConf;
     private final GobIcon.Setting iconSetting;
     private final CheckBox minimapIcon;
+    private final CheckBox notifySound;
+    private final GobIcon.NotifBox notifBox;
     private final CheckBox label;
     private final TextEntry labelText;
 
@@ -100,7 +102,7 @@ public class GobConfigWindow extends Window {
         marker.a = s.marker;
         prev = add(marker, prev.pos("bl").adds(-12, 8));
 
-        /* The same minimap icon visibility preference exposed by Icon Settings. */
+        /* The same minimap icon and notification preferences exposed by Icon Settings. */
         if (iconConf != null && iconSetting != null) {
             minimapIcon = new CheckBox(L10n.get("gobconf.minimap_icon")) {
                 @Override
@@ -111,8 +113,39 @@ public class GobConfigWindow extends Window {
             };
             minimapIcon.a = iconSetting.show;
             prev = add(minimapIcon, prev.pos("bl").adds(0, 8));
+
+            notifySound = new CheckBox(L10n.get("icon.notify")) {
+                @Override
+                public void changed(boolean val) {
+                    applyNotifySetting(GobConfigWindow.this.iconConf,
+                            GobConfigWindow.this.iconSetting, val);
+                    minimapIcon.a = GobConfigWindow.this.iconSetting.show;
+                }
+            };
+            notifySound.a = iconSetting.notify;
+            prev = add(notifySound, prev.pos("bl").adds(0, 8));
+
+            Button play = new Button(UI.scale(50), L10n.get("icon.play")) {
+                @Override
+                protected void depress() {}
+
+                @Override
+                protected void unpress() {}
+
+                @Override
+                public void click() {
+                    GobIcon.previewNotification(ui, notifBox.sel);
+                }
+            };
+            prev = add(new Label(L10n.get("icon.sound_label")), prev.pos("bl").adds(0, 5));
+            notifBox = new GobIcon.NotifBox(WIDTH - play.sz.x - UI.scale(15), iconSetting,
+                    item -> applySoundSetting(GobConfigWindow.this.iconConf,
+                            GobConfigWindow.this.iconSetting, item));
+            addhl(prev.pos("bl").adds(0, 2), WIDTH, prev = Frame.with(notifBox, false), play);
         } else {
             minimapIcon = null;
+            notifySound = null;
+            notifBox = null;
         }
 
         /* Caption drawn under the object. */
@@ -175,6 +208,8 @@ public class GobConfigWindow extends Window {
         tintColor.cb.colorChooser.setColor(s.tintColor);
         if (minimapIcon != null)
             minimapIcon.a = iconSetting.show;
+        if (notifySound != null)
+            notifySound.a = iconSetting.notify;
         label.a = s.label;
         labelText.settext(s.labelText);
     }
@@ -184,6 +219,27 @@ public class GobConfigWindow extends Window {
         if (settings == null || setting == null)
             return;
         setting.show = enabled;
+        settings.dsave();
+    }
+
+    static void applyNotifySetting(GobIcon.Settings settings, GobIcon.Setting setting,
+                                   boolean enabled) {
+        if (settings == null || setting == null)
+            return;
+        setting.notify = enabled;
+        if (enabled)
+            setting.show = true;
+        settings.dsave();
+    }
+
+    static void applySoundSetting(GobIcon.Settings settings, GobIcon.Setting setting,
+                                  GobIcon.NotificationSetting sound) {
+        if (settings == null || setting == null || sound == null)
+            return;
+        if (sound == GobIcon.NotificationSetting.other)
+            return;
+        setting.resns = sound.res;
+        setting.filens = sound.wav;
         settings.dsave();
     }
 
