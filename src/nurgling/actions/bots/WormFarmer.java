@@ -3,6 +3,7 @@ package nurgling.actions.bots;
 import haven.Button;
 import haven.ChatUI;
 import haven.Coord;
+import haven.ICheckBox;
 import haven.Coord2d;
 import haven.Gob;
 import haven.Label;
@@ -29,6 +30,7 @@ import nurgling.tasks.WaitFreeHand;
 import nurgling.tasks.WaitWindow;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.widgets.bots.WormFarmWnd;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -43,7 +45,9 @@ public class WormFarmer implements Action {
 
     private Coord flagTile = null;
     private NGlobalCoord flagAt = null;
-    private int[] originalHeights = null;
+    private Integer planeZ = null;
+    private WormFarmStats stats = null;
+    private WormFarmWnd infoWnd = null;
 
     public WormFarmer() {}
 
@@ -62,74 +66,89 @@ public class WormFarmer implements Action {
         }
         flagTile = tileOf(first);
         flagAt = new NGlobalCoord(first.rc);
+        stats = new WormFarmStats();
+        infoWnd = NUtils.addCentered(gui, new WormFarmWnd());
+        refreshStats(gui);
 
+        try {
         while (true) {
-            Results rr = new RestoreResources().run(gui);
-            if (!rr.IsSuccess()) {
-                return Results.ERROR("Worm Farm: failed to restore resources");
-            }
+            Results rr = drinkAndEquip(gui);
+            if (!rr.IsSuccess()) return finishWith(gui, rr);
             LandSurvey survey = openSurvey(gui);
             if (survey == null) {
-                return Results.ERROR("Worm Farm: survey flag gone");
+                return finishWith(gui, Results.ERROR("Worm Farm: survey flag gone"));
             }
-            if (originalHeights == null) {
-                snapshotSurface(survey);
-                originalHeights = WormFarmLogic.copyHeights(survey.data.dz);
-                sendSurvey(survey);
+            if (planeZ == null) {
+                Results remembered = rememberGroundPlane(survey);
+                if (!remembered.IsSuccess()) return finishWith(gui, remembered);
             }
-            unlock(survey);
-            int min = originalHeights[0];
-            for (int z : originalHeights) min = Math.min(min, z);
-            WormFarmLogic.applyUniform(survey.data.wz, survey.data.dz, WormFarmLogic.deepHeight(min));
-            survey.data.seq++;
-            sendSurvey(survey);
-            waitTicks(15);
+            pushPlane(survey, WormFarmLogic.deepHeight(planeZ));
 
             Results dug = digUntilFull(gui, survey, false);
-            if (!dug.IsSuccess()) return dug;
+            if (!dug.IsSuccess()) return finishWith(gui, dug);
             dropJunk(gui);
-            Results dumped = dumpWormsAndTubers(gui);
-            if (!dumped.IsSuccess()) return dumped;
+            Results restored = restorePlaneAtFlag(gui);
+            if (!restored.IsSuccess()) return finishWith(gui, restored);
 
+            Results drank = drinkAndEquip(gui);
+            if (!drank.IsSuccess()) return finishWith(gui, drank);
+            Results dumped = dumpWormsAndTubers(gui);
+            if (!dumped.IsSuccess()) return finishWith(gui, dumped);
+            refreshStats(gui);
             survey = openSurvey(gui);
             if (survey == null) {
-                return Results.ERROR("Worm Farm: survey flag gone");
+                return finishWith(gui, Results.ERROR("Worm Farm: survey flag gone"));
             }
-            unlock(survey);
-            WormFarmLogic.restoreHeights(survey.data.wz, survey.data.dz, originalHeights);
-            survey.data.seq++;
-            sendSurvey(survey);
-            waitTicks(15);
-
-            if (!WormFarmLogic.shouldSkipFill(count(gui, SOIL))) {
+            if (count(gui, SOIL) > 0) {
+                pushPlane(survey, planeZ);
+                waitFillMode(survey);
                 Results filled = digUntilFull(gui, survey, true);
-                if (!filled.IsSuccess()) return filled;
+                if (!filled.IsSuccess()) return finishWith(gui, filled);
             }
             dropJunk(gui);
+        }
+        } finally {
+            try { restorePlaneAtFlag(gui); } catch (Exception ignored) {}
+            if (infoWnd != null) {
+                try { infoWnd.destroy(); } catch (Exception ignored) {}
+                infoWnd = null;
+            }
         }
     }
 
     private Results digUntilFull(NGameUI gui, LandSurvey survey, boolean filling) throws InterruptedException {
         while (true) {
             dropJunk(gui);
+            refreshStats(gui);
             if (WormFarmLogic.shouldRestoreNeeds(NUtils.getStamina(), NUtils.getEnergy())) {
                 stopDig(gui);
-                return Results.SUCCESS();
+                if (!filling) {
+                    Results restored = restorePlaneAtFlag(gui);
+                    if (!restored.IsSuccess()) return restored;
+                }
+                Results drank = drinkAndEquip(gui);
+                if (!drank.IsSuccess()) return drank;
+                survey = openSurvey(gui);
+                if (survey == null) {
+                    return Results.ERROR("Worm Farm: survey flag gone");
+                }
+                if (!filling && planeZ != null) {
+                    pushPlane(survey, WormFarmLogic.deepHeight(planeZ));
+                }
+                continue;
             }
             int soil = count(gui, SOIL);
             int free = gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
-            Label wlbl = findWlbl(survey);
-            int required = 0;
-            if (wlbl != null) {
-                waitForLabel(wlbl);
-                required = parseAfter(wlbl.text(), "Units of soil required:");
-            }
+            int minFree = WormFarmLogic.minFreeSlots(equippedToolName());
+            waitForLabel(survey.wlbl);
+            boolean fillMode = WormFarmLogic.isFillMode(survey.wlbl.text());
+            int required = fillMode ? parseAfter(survey.wlbl.text(), "Units of soil required:") : 0;
             if (filling) {
-                if (WormFarmLogic.shouldStopFill(soil, required)) {
+                if (WormFarmLogic.shouldStopFill(fillMode, soil, required)) {
                     stopDig(gui);
                     return Results.SUCCESS();
                 }
-            } else if (WormFarmLogic.shouldStopDig(free)) {
+            } else if (WormFarmLogic.shouldStopDig(free, minFree)) {
                 stopDig(gui);
                 return Results.SUCCESS();
             }
@@ -144,50 +163,57 @@ public class WormFarmer implements Action {
             final Gob player = NUtils.player();
             if (player == null) return Results.FAIL();
             final boolean fillWait = filling;
+            final int stopFree = minFree;
             NUtils.addTask(new NTask() {
                 int idleCount = 0;
                 @Override
                 public boolean check() {
                     if (player.pose().contains("idle")) idleCount++;
                     else idleCount = 0;
-                    if (idleCount >= 20) return true;
-                    if (WormFarmLogic.shouldRestoreNeeds(NUtils.getStamina(), NUtils.getEnergy())) return true;
-                    if (!fillWait && WormFarmLogic.shouldStopDig(freeSoilSlotsSafe(gui))) return true;
-                    if (fillWait && countSafe(gui, SOIL) == 0) return true;
+                    if (WormFarmLogic.waitDigTickDone(fillWait, idleCount,
+                            WormFarmLogic.shouldRestoreNeeds(NUtils.getStamina(), NUtils.getEnergy()),
+                            gui.getInventory().calcFreeSpace(), stopFree))
+                        return true;
+                    if (stats != null)
+                        stats.noteStamina(NUtils.getStamina());
                     String err = NUtils.getUI().getLastError();
                     return isNeedSoil(err) || syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG);
                 }
             });
             dropJunk(gui);
-            if (filling && (count(gui, SOIL) == 0
+            int soilAfter = count(gui, SOIL);
+            boolean fillModeAfter = WormFarmLogic.isFillMode(survey.wlbl.text());
+            if (filling && (soilAfter == 0
                     || syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG)
-                    || isNeedSoil(NUtils.getUI().getLastError()))) {
+                    || isNeedSoil(NUtils.getUI().getLastError())
+                    || WormFarmLogic.fillDidNotUseSoil(fillModeAfter, soil, soilAfter))) {
                 stopDig(gui);
                 return Results.SUCCESS();
             }
         }
     }
 
-    private static int countSafe(NGameUI gui, NAlias alias) {
-        try {
-            return count(gui, alias);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return 0;
-        }
-    }
-
-    private static int freeSoilSlotsSafe(NGameUI gui) {
-        try {
-            return gui.getInventory().getNumberFreeCoord(SOIL_SIZE);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return 0;
-        }
-    }
-
     private static boolean isNeedSoil(String err) {
         return err != null && err.toLowerCase().contains(NEED_SOIL_MSG);
+    }
+
+    private Results finishWith(NGameUI gui, Results r) {
+        try {
+            restorePlaneAtFlag(gui);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return r;
+    }
+
+    private Results restorePlaneAtFlag(NGameUI gui) throws InterruptedException {
+        if (planeZ == null) return Results.SUCCESS();
+        LandSurvey survey = openSurvey(gui);
+        if (survey == null) {
+            return Results.ERROR("Worm Farm: survey flag gone");
+        }
+        pushPlane(survey, planeZ);
+        return Results.SUCCESS();
     }
 
     private Results dumpWormsAndTubers(NGameUI gui) throws InterruptedException {
@@ -207,6 +233,21 @@ public class WormFarmer implements Action {
         if (rc == null) return;
         clearCursor(gui);
         new TransferToPiles(rc, itemName, 1).run(gui);
+    }
+
+    private static String equippedToolName() throws InterruptedException {
+        nurgling.widgets.NEquipory eq = NUtils.getEquipment();
+        if (eq == null) return null;
+        String left = itemName(eq.findItem(nurgling.widgets.NEquipory.Slots.HAND_LEFT.idx));
+        String right = itemName(eq.findItem(nurgling.widgets.NEquipory.Slots.HAND_RIGHT.idx));
+        if (WormFarmLogic.isMetalShovel(left)) return left;
+        if (WormFarmLogic.isMetalShovel(right)) return right;
+        return left != null ? left : right;
+    }
+
+    private static String itemName(WItem w) {
+        if (w == null || !(w.item instanceof NGItem)) return null;
+        return ((NGItem) w.item).name();
     }
 
     private static void dropJunk(NGameUI gui) throws InterruptedException {
@@ -288,22 +329,106 @@ public class WormFarmer implements Action {
         return g.rc.floor(MCache.tilesz);
     }
 
-    private static void snapshotSurface(LandSurvey survey) {
-        MCache map = NUtils.getGameUI().map.glob.map;
-        for (Coord vc : survey.data.varea) {
-            int i = survey.data.varea.ridx(vc);
-            int z = (int) Math.round(map.getfz(vc) * survey.data.gran);
-            survey.data.wz[i] = survey.data.dz[i] = z;
+    private Results drinkAndEquip(NGameUI gui) throws InterruptedException {
+        Results rr = new RestoreResources().run(gui);
+        if (!rr.IsSuccess()) {
+            return Results.ERROR("Worm Farm: failed to restore resources");
         }
-        survey.data.seq++;
+        if (!new Equip(new NAlias("Shovel")).run(gui).IsSuccess()) {
+            return Results.ERROR("Worm Farm: no shovel");
+        }
+        refreshStats(gui);
+        return Results.SUCCESS();
     }
 
-    private static void unlock(LandSurvey survey) {
-        survey.wdgmsg("lock", 1);
+    private void refreshStats(NGameUI gui) throws InterruptedException {
+        if (stats == null)
+            return;
+        stats.noteWorms(count(gui, EARTHWORM));
+        stats.noteStamina(NUtils.getStamina());
+        if (infoWnd == null || infoWnd.isClosed())
+            return;
+        long now = System.currentTimeMillis();
+        infoWnd.update(
+                stats.harvested(),
+                LevelerStats.formatRate(stats.wormsPerMinute(now)),
+                LevelerStats.formatDuration(stats.elapsedMs(now)),
+                WormFarmStats.formatStaminaRate(stats.staminaBarPerMinute(now)));
+    }
+
+    private Results rememberGroundPlane(LandSurvey survey) throws InterruptedException {
+        unlock(survey);
+        waitForLabel(survey.tllbl);
+        String label = survey.tllbl.text();
+        int z = WormFarmLogic.parseTargetLevel(label);
+        if (!WormFarmLogic.canReadTarget(label) || WormFarmLogic.isRangeTarget(label)
+                || !WormFarmLogic.isUsablePlaneTarget(z)) {
+            Button plane = findButton(survey, "Ground plane");
+            if (plane != null)
+                plane.click();
+            waitTicks(10);
+            sendSurvey(survey);
+            waitTicks(15);
+            waitForLabel(survey.tllbl);
+            label = survey.tllbl.text();
+            z = WormFarmLogic.parseTargetLevel(label);
+        }
+        if (!WormFarmLogic.canReadTarget(label) || !WormFarmLogic.isUsablePlaneTarget(z))
+            return Results.ERROR("Worm Farm: cannot read Ground plane target");
+        planeZ = z;
+        return Results.SUCCESS();
+    }
+
+    private void pushPlane(LandSurvey survey, int height) throws InterruptedException {
+        NUtils.addTask(new NTask() {
+            int phase = 0;
+            @Override
+            public boolean check() {
+                if (phase == 0) {
+                    phase = 1;
+                    return false;
+                }
+                if (phase == 1) {
+                    survey.applyAndSend(height);
+                    phase = 2;
+                    return false;
+                }
+                return ++phase > 25;
+            }
+        });
+    }
+
+    private static void waitFillMode(LandSurvey survey) throws InterruptedException {
+        NUtils.addTask(new NTask() {
+            int ticks = 0;
+            @Override
+            public boolean check() {
+                try {
+                    if (++ticks > 40) return true;
+                    if (survey == null || survey.wlbl == null) return true;
+                    return WormFarmLogic.isFillMode(survey.wlbl.text());
+                } catch (Exception e) {
+                    return true;
+                }
+            }
+        });
     }
 
     private static void sendSurvey(LandSurvey survey) {
-        survey.wdgmsg("data", survey.data.encode());
+        Object[] enc = survey.data.encode();
+        survey.wdgmsg("data", enc[0], enc[1]);
+    }
+
+    private static void unlock(LandSurvey survey) {
+        for (Widget child : survey.children()) {
+            if (child instanceof ICheckBox) {
+                ICheckBox lock = (ICheckBox) child;
+                if (lock.a)
+                    lock.click();
+                return;
+            }
+        }
+        survey.wdgmsg("lock", 1);
     }
 
     private static void waitTicks(int n) throws InterruptedException {
@@ -348,18 +473,6 @@ public class WormFarmer implements Action {
         return gui.getInventory().getItems(alias).size();
     }
 
-    private static Label findWlbl(LandSurvey survey) {
-        for (Widget child : survey.children()) {
-            if (child instanceof Label) {
-                String t = ((Label) child).text();
-                if (t.contains("Units of soil left") || t.contains("Units of soil req")) {
-                    return (Label) child;
-                }
-            }
-        }
-        return null;
-    }
-
     private static Button findButton(LandSurvey survey, String label) {
         for (Widget child : survey.children()) {
             if (child instanceof Button) {
@@ -372,9 +485,10 @@ public class WormFarmer implements Action {
 
     private static void waitForLabel(Label label) throws InterruptedException {
         NUtils.addTask(new NTask() {
+            int ticks = 0;
             @Override
             public boolean check() {
-                return !label.text().equals("...");
+                return !label.text().equals("...") || ++ticks > 80;
             }
         });
     }

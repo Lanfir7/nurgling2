@@ -13,6 +13,7 @@ import haven.Widget;
 import haven.Window;
 import haven.res.ui.stackinv.ItemStack;
 import haven.res.ui.surv.LandSurvey;
+import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.Action;
@@ -32,6 +33,7 @@ import nurgling.tasks.WindowIsClosed;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.StackSupporter;
+import nurgling.widgets.NEquipory;
 import nurgling.widgets.Specialisation;
 import nurgling.widgets.bots.LevelerWnd;
 
@@ -277,6 +279,7 @@ public class Leveler implements Action
             }
             prevLabel = curLabel;
             final boolean filling = parseAfter(curLabel, "Units of soil required:") > 0;
+            final int minFree = currentMinFree();
             int soilBefore = soilCount(gui);
 
             NUtils.getUI().dropLastError();
@@ -305,7 +308,7 @@ public class Leveler implements Action
                      * deliberately packed with the soil to spend, so any free-space test here
                      * fires on the very first tick and kills the fill before it places a
                      * single unit. A fill that jams instead falls out through the idle count. */
-                    if (shouldDumpForFreeSpace(filling, gui.getInventory().calcFreeSpace())) return true;
+                    if (shouldDumpForFreeSpace(filling, gui.getInventory().calcFreeSpace(), minFree)) return true;
                     if (syslogContainsSince(gui, sysBefore, CANNOT_LEVEL_MSG)) return true;
                     if (syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG)) return true;
                     String err = NUtils.getUI().getLastError();
@@ -345,7 +348,7 @@ public class Leveler implements Action
             if (filling && soilNow < soilBefore) {
                 continue;
             }
-            if (shouldDumpForFreeSpace(filling, free)) {
+            if (shouldDumpForFreeSpace(filling, free, minFree)) {
                 closeWindow(survey);
                 Results dr = disposeIfNeeded(gui, false);
                 if (!dr.IsSuccess()) {
@@ -440,6 +443,25 @@ public class Leveler implements Action
 
     static boolean shouldDumpForFreeSpace(boolean filling, int freeSlots, int minFree) {
         return !filling && freeSlots >= 0 && freeSlots < minFree;
+    }
+
+    private static int currentMinFree() throws InterruptedException {
+        return WormFarmLogic.minFreeSlots(equippedToolName());
+    }
+
+    private static String equippedToolName() throws InterruptedException {
+        NEquipory eq = NUtils.getEquipment();
+        if (eq == null) return null;
+        String left = itemName(eq.findItem(NEquipory.Slots.HAND_LEFT.idx));
+        String right = itemName(eq.findItem(NEquipory.Slots.HAND_RIGHT.idx));
+        if (WormFarmLogic.isMetalShovel(left)) return left;
+        if (WormFarmLogic.isMetalShovel(right)) return right;
+        return left != null ? left : right;
+    }
+
+    private static String itemName(WItem w) {
+        if (w == null || !(w.item instanceof NGItem)) return null;
+        return ((NGItem) w.item).name();
     }
 
     static String[] excavationDumpOrder() {

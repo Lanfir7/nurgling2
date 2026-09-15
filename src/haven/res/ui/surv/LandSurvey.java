@@ -140,6 +140,19 @@ public class LandSurvey extends Window {
 	wdgmsg("data", data.encode());
     }
 
+    public void applyAndSend(int height) {
+	if (btnLock != null && btnLock.a)
+	    btnLock.click();
+	for (int i = 0; i < data.dz.length; i++) {
+	    data.dz[i] = height;
+	    if (i < data.wz.length)
+		data.wz[i] = height;
+	}
+	data.seq++;
+	upd = true;
+	send();
+    }
+
     private EventHandler<MouseEvent> mode = null;
     public void mode(EventHandler<MouseEvent> nmode) {
 	if(mode != null)

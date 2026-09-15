@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-metal-shovel-dig-reserve",
+  "priority": 5,
+  "summary": {
+    "ru": "С металлической лопатой копка останавливается, пока свободны две клетки инвентаря.",
+    "en": "With a Metal Shovel, digging stops while two inventory cells are still free."
+  },
+  "detail": {
+    "ru": "Выравниватель и добыча червей с Metal Shovel больше не набивают рюкзак в ноль: остаются две клетки, меньше земли падает от лишнего удара. Деревянная лопата по-прежнему копает до заполнения.",
+    "en": "Leveler and Worm Farm with a Metal Shovel leave two inventory cells free so the last swing does not spill soil. A wooden shovel still fills the pack."
+  }
+}

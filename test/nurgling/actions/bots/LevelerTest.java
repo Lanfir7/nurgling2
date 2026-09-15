@@ -59,6 +59,8 @@ class LevelerTest {
         assertFalse(Leveler.shouldDumpForFreeSpace(false, 5));
         assertFalse(Leveler.shouldDumpForFreeSpace(false, 10));
         assertFalse(Leveler.shouldDumpForFreeSpace(false, -1));
+        assertTrue(Leveler.shouldDumpForFreeSpace(false, 2, 3));
+        assertFalse(Leveler.shouldDumpForFreeSpace(false, 3, 3));
     }
 
     @Test

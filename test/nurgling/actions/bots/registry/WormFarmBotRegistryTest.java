@@ -40,5 +40,10 @@ class WormFarmBotRegistryTest {
             assertTrue(Files.isRegularFile(icons.resolve(st + ".res/image/image_0.data")), st + " data");
             assertTrue(Files.isRegularFile(icons.resolve(st + ".res/meta")), st + " meta");
         }
+        String title = Files.readString(icons.resolve("u.res/tooltip/tooltip_0.data"));
+        String desc = Files.readString(icons.resolve("u.res/tooltip/tooltip_1.data"));
+        assertTrue(title.contains("@bot.wormfarm.title"), title);
+        assertTrue(desc.contains("@bot.wormfarm.desc"), desc);
+        assertTrue(!title.contains("leveler") && !desc.contains("leveler"));
     }
 }

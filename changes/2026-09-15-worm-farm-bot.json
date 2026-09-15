@@ -6,7 +6,7 @@
     "en": "A Worm Farm bot next to the survey tools digs, stores worms, then fills the same flag in a loop."
   },
   "detail": {
-    "ru": "Откройте меню ботов — иконка червя у Выравнивателя и Помощника землемера. Поставьте флаг замера, задайте PUT-зоны Earthworm и Odd Tuber, возьмите лопату. Бот опускает флаг, копает до полного инвентаря, относит червей и клубни, поднимает флаг и закапывает оставшейся землёй, затем снова. Прочий мусор бросает под ноги. Еда и вода — как у других ботов.",
-    "en": "Open the bot menu — worm icon beside Leveler and Survey Supporter. Place a survey flag, set Earthworm and Odd Tuber PUT areas, equip a shovel. The bot lowers the flag, digs until the inventory is full, stores worms and tubers, raises the flag, fills with leftover soil, then repeats. Other dug junk is dropped at your feet. Food and water work like the other bots."
+    "ru": "Откройте меню ботов — иконка червя у Выравнивателя. Поставьте флаг, Ground plane, PUT Earthworm и Odd Tuber, лопату. Бот копает, возвращает Ground plane, пьёт, относит червей, засыпает яму и повторяет. При ошибке сначала возвращает уровень флага. Пока работает, мини-окно: черви всего, среднее за минуту, время и расход стамины.",
+    "en": "Open the bot menu — worm icon beside Leveler. Place a survey flag, set Ground plane, Earthworm and Odd Tuber PUT areas, equip a shovel. The bot digs, restores Ground plane, drinks, stores worms, fills the hole, and repeats. On error it restores the flag first. While it runs, a small window shows total worms, worms per minute, run time, and stamina used per minute."
   }
 }
