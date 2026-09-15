@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-forager-auto-drink",
+  "priority": 4,
+  "summary": {
+    "ru": "Forager теперь восстанавливает выносливость между перемещениями и сбором.",
+    "en": "Forager now restores stamina safely between movement and gathering actions."
+  },
+  "detail": {
+    "ru": "Включите «Авто-питьё» в настройках качества жизни и задайте порог: Forager пьёт до него между своими действиями, не прерывая маршрут. При отсутствии воды он продолжит работу и сообщит об этом один раз.",
+    "en": "Enable Auto-drink in quality-of-life settings and choose its threshold: Forager drinks back to it between its actions without interrupting the route. If water is unavailable, it keeps working and reports it once."
+  }
+}

@@ -10,6 +10,8 @@ import nurgling.guarding.*;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
 import nurgling.routes.*;
+import nurgling.actions.bots.forager.ForagerDrinkPolicy;
+import nurgling.i18n.L10n;
 import nurgling.tools.AreaStock;
 import nurgling.tools.Finder;
 import nurgling.tools.MilestoneRegistry;
@@ -46,6 +48,9 @@ public class Forager implements Action {
     // Route-geometry limits configured per-route in Forager Settings - see ForagerRouteConstraints.
     private nurgling.actions.bots.forager.ForagerRouteConstraints routeConstraints;
 
+    // Replaced for every invocation because the Recent Actions panel can re-run this instance.
+    private ForagerDrinkPolicy.RunState drinkState = new ForagerDrinkPolicy.RunState();
+
     public Forager() {
         // Default constructor - will show UI
     }
@@ -59,6 +64,7 @@ public class Forager implements Action {
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        drinkState = new ForagerDrinkPolicy.RunState();
         NForagerProp prop = null;
         NForagerProp.PresetData preset = null;
 
@@ -213,6 +219,7 @@ public class Forager implements Action {
 
         PathFinder pf = new PathFinder(startPos);
         pf.waterMode = effectiveWaterMode(gui, preset);
+        checkStamina(gui);
         Results startResult = pf.run(gui);
         if (!shouldContinueAfterInitialPathFinder(startResult)) {
             return startResult;
@@ -234,6 +241,8 @@ public class Forager implements Action {
         {
             ForagerSection section = path.getSection(i);
             if (section == null) continue;
+
+            checkStamina(gui);
 
             // A waypoint gap longer than ForagerPath.SECTION_LENGTH gets split across multiple
             // sections (see generateSections()), so the section-loop counter i is NOT the same
@@ -771,6 +780,7 @@ public class Forager implements Action {
                                         nurgling.actions.bots.forager.DetourBranchBudget budget, Coord2d leashAnchor) throws InterruptedException {
         while (true) {
             if (isInventoryFull(gui)) return;
+            checkStamina(gui);
             if (!budget.canBranch()) return;
 
             Gob player = NUtils.player();
@@ -810,6 +820,7 @@ public class Forager implements Action {
         }
         while (true) {
             if (isInventoryFull(gui)) return false;
+            checkStamina(gui);
             if (detourEpisode && !budget.canBranch()) return false;
 
             Gob player = NUtils.player();
@@ -868,6 +879,7 @@ public class Forager implements Action {
             Gob player = NUtils.player();
             if (player == null) return;
 
+            checkStamina(gui);
             Coord2d nextStop = breadcrumbs.get(breadcrumbs.size() - 1);
             gui.activeBotDetourTarget = nextStop;
             PathFinder hop = new PathFinder(nextStop);
@@ -968,6 +980,28 @@ public class Forager implements Action {
 
             // Signal to stop the bot after pause
             throw new InterruptedException("CHAT_NOTIFY action triggered - stopping bot");
+        }
+    }
+
+    /**
+     * Performs one synchronous drink only between Forager's movement and collection actions.
+     * AutoDrink's background loop stays paused by the bot's existing waitBot gate.
+     */
+    private void checkStamina(NGameUI gui) throws InterruptedException {
+        ForagerDrinkPolicy.Settings settings = ForagerDrinkPolicy.settings(
+                NConfig.get(NConfig.Key.autoDrinkThreshold),
+                NConfig.get(NConfig.Key.autoDrinkTimeout));
+        Number totalDrinkable = gui.drinkMeter == null ? null : gui.drinkMeter.getTotalDrinkable();
+        boolean hasDrink = ForagerDrinkPolicy.mayHaveDrink(totalDrinkable);
+        ForagerDrinkPolicy.Action action = drinkState.atCheckpoint(
+                Boolean.TRUE.equals(NConfig.get(NConfig.Key.autoDrink)),
+                NUtils.getStamina(), hasDrink, System.currentTimeMillis(), settings);
+        if (action == ForagerDrinkPolicy.Action.NOTIFY_NO_DRINK) {
+            gui.msg(L10n.get("forager.auto_drink.no_water"));
+        } else if (action == ForagerDrinkPolicy.Action.DRINK) {
+            Results result = new Drink(settings.target(), false).run(gui);
+            drinkState.recordDrinkAttempt(result.IsSuccess(), NUtils.getStamina(),
+                    System.currentTimeMillis(), settings);
         }
     }
 

@@ -286,6 +286,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
 
         rightPrev = rightColumn.add(new Label("● " + L10n.get("qol.section.qol")), rightPrev.pos("bl").adds(0, 15));
         rightPrev = autoDrink = rightColumn.add(new CheckBox(L10n.get("qol.auto_drink")), rightPrev.pos("bl").adds(0, 5));
+        autoDrink.settip(L10n.get("qol.auto_drink_tip"));
         rightPrev = rightColumn.add(new Label(L10n.get("qol.auto_drink_threshold")), rightPrev.pos("bl").adds(10, 3));
         {
             autoDrinkThresholdLabel = new Label("51%");
