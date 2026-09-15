@@ -65,8 +65,7 @@ public class ChunkNavManager {
     // 1 = surface (default), other values = unique per mine level / building interior / cellar.
     // Updated by PortalTraversalTracker when player traverses a portal.
     public static final long SURFACE_INSTANCE = 1;
-    private long currentInstanceId = SURFACE_INSTANCE;
-    private boolean currentInstanceConfirmed = false;
+    private volatile long currentInstanceId = SURFACE_INSTANCE;
 
     public static boolean isInteriorInstanceId(long instanceId) {
         return instanceId != 0L && instanceId != SURFACE_INSTANCE;
@@ -125,6 +124,10 @@ public class ChunkNavManager {
             return;
         }
 
+        // Recording is opt-in for each player-world login. Claims and villages
+        // remain eligible through isRecordingAllowed() even while this is off.
+        NConfig.set(NConfig.Key.chunkNavOverlay, false);
+
         // Check if already initialized for this world
         if (initialized && genus.equals(currentGenus)) {
             return;
@@ -134,9 +137,19 @@ public class ChunkNavManager {
         initializationInProgress = true;
 
         try {
-            // Save previous world data if switching
+            // Drain queued recording for the previous world, then persist that exact
+            // graph/store pair before replacing the mutable manager fields.
             if (initialized && currentGenus != null) {
-                save();
+                final ChunkNavGraph previousGraph = graph;
+                final ChunkNavFileStore previousFileStore = fileStore;
+                try {
+                    recordingExecutor.submit(() -> saveSnapshot(previousGraph, previousFileStore)).get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (ExecutionException e) {
+                    System.err.println("ChunkNav: Failed to finish previous world save: " + e.getCause());
+                }
             }
 
             // Clear renderer cache to avoid stale textures from previous genus
@@ -150,10 +163,7 @@ public class ChunkNavManager {
             this.portalTracker = new PortalTraversalTracker(graph, recorder, this,
                     new HomePortalLearningService(this));
             this.fileStore = new ChunkNavFileStore(genus);
-            synchronized (this) {
-                this.currentInstanceId = SURFACE_INSTANCE;
-                this.currentInstanceConfirmed = false;
-            }
+            this.currentInstanceId = SURFACE_INSTANCE;
 
             // Load saved data (with migration if needed)
             load();
@@ -210,6 +220,9 @@ public class ChunkNavManager {
      * Runs in a background thread to avoid FPS drops.
      */
     private void recordVisibleGrids() {
+        if (initializationInProgress) {
+            return;
+        }
         // The map toggle controls wilderness recording; claimed land is always recorded.
         if (!isRecordingAllowed()) {
             return;
@@ -231,6 +244,7 @@ public class ChunkNavManager {
             // Capture the glob reference for background thread - this ensures
             // the recorder uses the correct session's gob data
             final Glob capturedGlob = gui.map.glob;
+            final ChunkNavRecorder capturedRecorder = recorder;
 
             // Capture list of grids to record (quick operation on main thread)
             List<MCache.Grid> gridsToRecord = new ArrayList<>();
@@ -249,7 +263,7 @@ public class ChunkNavManager {
             recordingExecutor.submit(() -> {
                 try {
                     for (MCache.Grid grid : gridsToRecord) {
-                        recorder.recordGrid(grid, capturedGlob);
+                        capturedRecorder.recordGrid(grid, capturedGlob);
                     }
                     saveThrottled();
                 } catch (Exception e) {
@@ -728,9 +742,15 @@ public class ChunkNavManager {
         if (initializationInProgress) return;
         if (!initialized || currentGenus == null || fileStore == null) return;
 
+        saveSnapshot(graph, fileStore);
+    }
+
+    private void saveSnapshot(ChunkNavGraph graphSnapshot, ChunkNavFileStore fileStoreSnapshot) {
+        if (graphSnapshot == null || fileStoreSnapshot == null) return;
+
         try {
             // Get chunks updated in the last save window
-            List<ChunkNavData> recentChunks = graph.getRecentlyUpdatedChunks(SAVE_THROTTLE_MS);
+            List<ChunkNavData> recentChunks = graphSnapshot.getRecentlyUpdatedChunks(SAVE_THROTTLE_MS);
 
             if (recentChunks.isEmpty()) {
                 return; // Nothing to save
@@ -739,7 +759,7 @@ public class ChunkNavManager {
             // Save each recently updated chunk
             for (ChunkNavData chunk : recentChunks) {
                 try {
-                    fileStore.saveChunk(chunk);
+                    fileStoreSnapshot.saveChunk(chunk);
                 } catch (IOException e) {
                     System.err.println("ChunkNav: Failed to save chunk " + chunk.gridId + ": " + e.getMessage());
                 }
@@ -1011,36 +1031,6 @@ public class ChunkNavManager {
 
     public synchronized void setCurrentInstanceId(long id) {
         this.currentInstanceId = id;
-        this.currentInstanceConfirmed = true;
-    }
-
-    public synchronized void invalidateCurrentInstanceConfirmation() {
-        this.currentInstanceConfirmed = false;
-    }
-
-    public synchronized InstanceContext getInstanceContext() {
-        return new InstanceContext(currentInstanceId, currentInstanceConfirmed);
-    }
-
-    synchronized ChunkNavMapNeighborRepair.RepairResult repairWalkComponent(
-            ChunkNavMapNeighborRepair.GridLookup lookup, long playerGridId) {
-        ChunkNavMapNeighborRepair.RepairResult result = ChunkNavMapNeighborRepair.repair(
-                graph, lookup, currentInstanceId, currentInstanceConfirmed, playerGridId);
-        if (result.trustedInstanceId != 0) {
-            currentInstanceId = result.trustedInstanceId;
-            currentInstanceConfirmed = true;
-        }
-        return result;
-    }
-
-    static final class InstanceContext {
-        final long instanceId;
-        final boolean confirmed;
-
-        InstanceContext(long instanceId, boolean confirmed) {
-            this.instanceId = instanceId;
-            this.confirmed = confirmed;
-        }
     }
 
     /**

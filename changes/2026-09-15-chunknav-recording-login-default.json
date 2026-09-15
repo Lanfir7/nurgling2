@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-chunknav-recording-login-default",
+  "priority": 5,
+  "summary": {
+    "ru": "Запись ChunkNav теперь выключается при каждом входе в мир.",
+    "en": "ChunkNav recording now turns off whenever you enter a world."
+  },
+  "detail": {
+    "ru": "Вне личной территории или деревни карта ChunkNav не записывается, пока вы снова не включите переключатель на мини-карте. На личной территории и в деревне запись по-прежнему работает автоматически.",
+    "en": "Outside a personal claim or village, the ChunkNav map is not recorded until you enable the minimap toggle again. Recording on personal claims and in villages remains automatic."
+  }
+}

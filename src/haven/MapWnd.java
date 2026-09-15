@@ -45,6 +45,7 @@ import nurgling.NGameUI;
 import nurgling.i18n.L10n;
 import nurgling.map.SharedMarkerCode;
 import nurgling.map.SharedMarkerLocator;
+import nurgling.navigation.MapMarkerBeacon;
 import nurgling.navigation.MapMarkerNavigation;
 import nurgling.widgets.NMiniMap;
 import nurgling.hotkeys.Hotkeys;
@@ -292,7 +293,11 @@ public class MapWnd extends Window implements Console.Directory {
 	g.image(img, ul, size);
     }
 
+
     private class View extends NMiniMap {
+        private Marker beaconMarker;
+	private UI.Grab beaconGrab;
+
 	View(MapFile file) {
 	    super(file);
 	}
@@ -351,9 +356,33 @@ public class MapWnd extends Window implements Console.Directory {
 	    return(false);
 	}
 
-	public boolean mousedown(MouseDownEvent ev) {
+		public boolean mousedown(MouseDownEvent ev) {
+		    if(tryStartCustomMarkerBeacon(ev, mv))
+			return(true);
+		    if(MapMarkerBeacon.isTrigger(ev.b, ui.modflags())) {
+		Location loc = xlate(ev.c);
+		DisplayMarker mark = (loc == null) ? null : markerat(loc.tc);
+		if(mark != null) {
+		    beaconMarker = mark.m;
+		    MapMarkerBeacon.start(mv, beaconMarker, sessloc);
+		    beaconGrab = ui.grabmouse(this);
+		    return(true);
+		}
+	    }
 	    super.mousedown(ev);
 	    return(true);
+	}
+
+		public boolean mouseup(MouseUpEvent ev) {
+		    if(releaseCustomMarkerBeacon())
+			return(true);
+		    if(beaconGrab != null) {
+		beaconGrab.remove();
+		beaconGrab = null;
+		beaconMarker = null;
+		return(true);
+	    }
+	    return(super.mouseup(ev));
 	}
 
 	public void draw(GOut g) {

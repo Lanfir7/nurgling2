@@ -1,5 +1,6 @@
 package nurgling.actions;
 
+import haven.Gob;
 import haven.WItem;
 import haven.error.FileLogger;
 import nurgling.NGItem;
@@ -13,6 +14,8 @@ import nurgling.tools.VSpec;
 
 import java.util.*;
 import java.util.function.BiPredicate;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class TransferItems2 implements Action
 {
@@ -21,6 +24,23 @@ public class TransferItems2 implements Action
 
     static boolean matchesQuality(double quality, double minInclusive, Double maxExclusive) {
         return quality >= minInclusive && (maxExclusive == null || quality < maxExclusive);
+    }
+
+    static <T> List<T> selectContainerOutputs(List<T> outputs, Predicate<T> isContainer,
+                                               Predicate<T> isVisuallyFull) {
+        boolean hasVisuallyAvailableContainer = outputs.stream()
+                .anyMatch(output -> isContainer.test(output) && !isVisuallyFull.test(output));
+        if (!hasVisuallyAvailableContainer)
+            return outputs;
+
+        return outputs.stream()
+                .filter(output -> !isContainer.test(output) || !isVisuallyFull.test(output))
+                .collect(Collectors.toList());
+    }
+
+    private static boolean isContainerVisuallyFull(Container container) {
+        Gob gob = Finder.findGob(container.gobid);
+        return gob != null && gob.ngob != null && gob.ngob.isContainerFull();
     }
 
     static HashSet<String> orderList = new HashSet<>();
@@ -284,6 +304,9 @@ public class TransferItems2 implements Action
     private Results processAreaTransfers(String areaId, List<ItemTransfer> itemsForArea, NGameUI gui) throws InterruptedException {
         for (ItemTransfer itemTransfer : itemsForArea) {
             ArrayList<NContext.ObjectStorage> storages = cnt.getOutStorages(itemTransfer.itemName, itemTransfer.quality);
+            storages = new ArrayList<>(selectContainerOutputs(storages,
+                    output -> output instanceof Container,
+                    output -> isContainerVisuallyFull((Container) output)));
             for (NContext.ObjectStorage output : storages) {
                 if (output instanceof NContext.FloorDump) {
                     Results result = new DropItemsOnFloor(cnt.getRCArea(areaId), itemTransfer.itemName,

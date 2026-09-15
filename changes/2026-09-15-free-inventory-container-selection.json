@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-free-inventory-container-selection",
+  "priority": 3,
+  "summary": {
+    "ru": "Свободный инвентарь быстрее выбирает сундуки с местом.",
+    "en": "Free Inventory now finds chests with room faster."
+  },
+  "detail": {
+    "ru": "При освобождении инвентаря клиент сначала выбирает сундуки, которые визуально не заполнены. Если все выглядят полными, он по-прежнему проверяет их точную вместимость по очереди.",
+    "en": "When freeing inventory, the client first chooses chests that do not look full. If every chest looks full, it still checks their exact capacity one by one."
+  }
+}

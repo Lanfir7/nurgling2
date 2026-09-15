@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-custom-marker-beacon",
+  "priority": 4,
+  "summary": {
+    "ru": "Маяк теперь помогает находить и пользовательские отметки ресурсов и животных.",
+    "en": "The beacon now also highlights saved resource and animal markers."
+  },
+  "detail": {
+    "ru": "Нажмите Ctrl+Shift и левую кнопку мыши на видимой отметке ресурса, Quarryartz, животного или другой пользовательской отметке на большой карте либо мини-карте. На 20 секунд появится маяк в её точном месте.",
+    "en": "Ctrl+Shift-left-click any visible saved resource, Quarryartz, animal or other custom marker on the main map or minimap. A beacon appears at its exact position for 20 seconds."
+  }
+}

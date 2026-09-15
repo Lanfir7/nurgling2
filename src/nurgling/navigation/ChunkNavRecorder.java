@@ -18,7 +18,6 @@ import static nurgling.navigation.ChunkNavData.Direction;
  */
 public class ChunkNavRecorder {
     private final ChunkNavGraph graph;
-    private final ChunkNavWalkTransitionGate walkTransition = new ChunkNavWalkTransitionGate();
     private ChunkNavManager manager; // Set after construction to avoid circular dependency
 
     // Thread-local glob reference for background recording threads.
@@ -129,20 +128,21 @@ public class ChunkNavRecorder {
                 sampleWalkability(grid, chunk);
             }
 
-            // Preserve an existing ID; a new ID is assigned only after the
-            // transition has been classified as a portal traversal or real walk.
+            // Assign instanceId from current world context
             if (manager != null) {
-                ChunkNavManager.InstanceContext context = manager.getInstanceContext();
-                chunk.instanceId = instanceForRecording(chunk.instanceId, context);
+                long currentInstance = manager.getCurrentInstanceId();
+                if (chunk.instanceId == 0 && currentInstance != 0) {
+                    chunk.instanceId = currentInstance;
+                }
             }
 
             // Portals are recorded only when traversed (via PortalTraversalTracker)
             // This eliminates phantom portal bugs from proximity-based detection
             detectLayer(chunk);
             updateEdgeWalkability(chunk);
+            discoverNeighbors(grid, chunk);
             chunk.markUpdated();
             graph.addChunk(chunk);
-            discoverNeighbors(grid, chunk);
             graph.updateConnections(chunk);
 
         } catch (Exception e) {
@@ -221,49 +221,42 @@ public class ChunkNavRecorder {
     }
 
     /**
-     * Discover ordinary-walk neighbors from Haven's persistent MapFile coordinates.
-     * MCache grid coordinates are session-local and can overlap during portal transitions.
+     * Discover and record neighbor relationships by examining all currently loaded grids.
+     * When multiple grids are loaded, we can see their spatial relationship through gc coordinates.
+     * These relationships are persistent because grid IDs never change.
      */
     private void discoverNeighbors(MCache.Grid grid, ChunkNavData chunk) {
         try {
-            MapFile file = getMapFile();
-            if (file == null) return;
-
-            // MapFile's grid cache and segment map both require this lock. Checking
-            // Segment.map confirms that the GridInfo has not been superseded.
-            file.lock.readLock().lock();
-            try {
-                long playerGridId = graph.getPlayerChunkId();
-                if (playerGridId != grid.id) return;
-                ChunkNavMapNeighborRepair.GridRef playerRef = mapGridRef(file, playerGridId);
-                if (!walkTransition.observe(playerGridId, playerRef, chunk.layer)) return;
-                if (manager != null) {
-                    manager.repairWalkComponent(gridId -> mapGridRef(file, gridId), playerGridId);
-                } else {
-                    ChunkNavMapNeighborRepair.repair(graph, gridId -> mapGridRef(file, gridId),
-                            chunk.instanceId, false, playerGridId);
-                }
-            } finally {
-                file.lock.readLock().unlock();
+            MCache mcache = getMCache();
+            if (mcache == null) return;
+            synchronized (mcache.grids) {
+                discoverLoadedNeighbors(graph, grid, chunk, mcache.grids.values());
             }
         } catch (Exception e) {
             // Ignore errors during neighbor discovery
         }
     }
 
-    static ChunkNavMapNeighborRepair.GridRef mapGridRef(MapFile file, long gridId) {
-        MapFile.GridInfo info = file.gridinfo.get(gridId);
-        if (info == null || info.sc == null) return null;
-        MapFile.Segment segment = file.segments.get(info.seg);
-        if (segment == null || !Long.valueOf(gridId).equals(segment.map.get(info.sc))) return null;
-        return new ChunkNavMapNeighborRepair.GridRef(gridId, info.seg, info.sc);
-    }
+    static void discoverLoadedNeighbors(ChunkNavGraph graph, MCache.Grid grid,
+                                        ChunkNavData chunk, Collection<MCache.Grid> loadedGrids) {
+        Coord myGc = grid.gc;
+        for (MCache.Grid other : loadedGrids) {
+            if (other == null || other.id == grid.id) continue;
+            ChunkNavData otherChunk = graph.getChunk(other.id);
+            if (chunk.instanceId != 0) {
+                if (otherChunk == null || otherChunk.instanceId != chunk.instanceId) continue;
+            } else if (otherChunk != null && otherChunk.instanceId != 0) {
+                continue;
+            }
 
-    static long instanceForRecording(long existingInstanceId, ChunkNavManager.InstanceContext context) {
-        // A generic grid observation cannot distinguish walking from a portal or
-        // teleport. Instance assignment is done only after either transition is
-        // classified by the MapFile walk repair or PortalTraversalTracker.
-        return existingInstanceId;
+            Coord otherGc = other.gc;
+            int dx = otherGc.x - myGc.x;
+            int dy = otherGc.y - myGc.y;
+            if (dx == 0 && dy == -1) chunk.neighborNorth = other.id;
+            else if (dx == 0 && dy == 1) chunk.neighborSouth = other.id;
+            else if (dx == 1 && dy == 0) chunk.neighborEast = other.id;
+            else if (dx == -1 && dy == 0) chunk.neighborWest = other.id;
+        }
     }
 
     /**
@@ -682,15 +675,6 @@ public class ChunkNavRecorder {
         if (dy == -1) return Direction.NORTH;
 
         return null;
-    }
-
-    private MapFile getMapFile() {
-        try {
-            NGameUI gui = NUtils.getGameUI();
-            return gui != null && gui.mapfile != null ? gui.mapfile.file : null;
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     /**

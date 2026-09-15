@@ -3,7 +3,6 @@ package nurgling.navigation;
 import haven.*;
 import nurgling.NConfig;
 import nurgling.NCore;
-import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.tasks.GateDetector;
 import nurgling.tools.Finder;
@@ -130,9 +129,6 @@ public class PortalTraversalTracker {
         // turning off recording, walking away, then turning recording back on would cause
         // the exit portal to be recorded at the wrong location.
         if (trackingEnabled && !wasTrackingEnabled) {
-            // Grid changes while tracking was disabled are unclassified, so the
-            // old instance context must not authorize the next walk repair.
-            manager.invalidateCurrentInstanceConfirmation();
             reset();
             // Set lastGridId to current grid so we start fresh from current state
             lastGridId = graph.getPlayerChunkId();
@@ -239,7 +235,6 @@ public class PortalTraversalTracker {
         // Check if player landed on their hearthfire - this indicates a teleport, not a portal traversal
         if (isPlayerOnHearthfire(player)) {
             // Player teleported to hearthfire - don't record this as a portal connection
-            manager.invalidateCurrentInstanceConfirmation();
             lastProcessedFromGridId = fromGridId;
             lastProcessedToGridId = toGridId;
             lastProcessedTime = now;
@@ -277,7 +272,6 @@ public class PortalTraversalTracker {
 
         // If we don't know what exit to look for, we didn't click a known portal - don't record anything
         if (expectedExitName == null) {
-            invalidateInstanceContextUnlessOrdinaryWalk(fromGridId, toGridId);
             pendingHomeLearning = null;
             return;
         }
@@ -286,7 +280,6 @@ public class PortalTraversalTracker {
         exitPortal = Finder.findGob(new NAlias(expectedExitName));
 
         if (exitPortal == null || exitPortal.ngob == null) {
-            invalidateInstanceContextUnlessOrdinaryWalk(fromGridId, toGridId);
             pendingHomeLearning = null;
             return;
         }
@@ -782,30 +775,6 @@ public class PortalTraversalTracker {
                 || (indoorHomeLayer(destChunk.layer)
                         && !ChunkNavManager.isInteriorInstanceId(destChunk.instanceId))) {
             destChunk.instanceId = instanceId;
-        }
-    }
-
-    private void invalidateInstanceContextUnlessOrdinaryWalk(long fromGridId, long toGridId) {
-        if (!isOrdinaryMapNeighborTransition(fromGridId, toGridId)) {
-            manager.invalidateCurrentInstanceConfirmation();
-        }
-    }
-
-    private boolean isOrdinaryMapNeighborTransition(long fromGridId, long toGridId) {
-        try {
-            NGameUI gui = NUtils.getGameUI();
-            MapFile file = gui != null && gui.mapfile != null ? gui.mapfile.file : null;
-            if (file == null) return false;
-            file.lock.readLock().lock();
-            try {
-                return ChunkNavWalkTransitionGate.isOrdinaryNeighbor(
-                        ChunkNavRecorder.mapGridRef(file, fromGridId),
-                        ChunkNavRecorder.mapGridRef(file, toGridId));
-            } finally {
-                file.lock.readLock().unlock();
-            }
-        } catch (Exception e) {
-            return false;
         }
     }
 

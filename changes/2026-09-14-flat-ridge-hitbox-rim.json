@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-14-flat-ridge-hitbox-rim",
+  "priority": 4,
+  "summary": {
+    "ru": "В плоском режиме хитбоксы подсвечивают верхнюю кромку перевалов линией.",
+    "en": "In flat terrain mode, hitboxes now outline the upper edge of cliffs."
+  },
+  "detail": {
+    "ru": "Включите хитбоксы, чтобы видеть линию точно по верхнему краю обрыва. Она использует цвет и толщину линий хитбоксов, повторяет повороты перевала и исчезает при их выключении без перезагрузки карты.",
+    "en": "Enable hitboxes to show a line along the actual upper cliff edge. It follows the ridge bends, uses your hitbox line color and width, and disappears when hitboxes are disabled without reloading the map."
+  }
+}

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,6 +22,33 @@ class TransferItems2Test {
         assertTrue(TransferItems2.matchesQuality(19.99, 1.0, 20.0));
         assertFalse(TransferItems2.matchesQuality(20.0, 1.0, 20.0));
         assertTrue(TransferItems2.matchesQuality(20.0, 20.0, null));
+    }
+
+    @Test
+    void skipsVisuallyFullContainersWhenAnotherContainerIsVisuallyAvailable() {
+        List<String> outputs = List.of("full-first", "available", "full-last");
+
+        assertEquals(List.of("available"), TransferItems2.selectContainerOutputs(
+                outputs, value -> true, value -> value.startsWith("full")));
+    }
+
+    @Test
+    void retainsAllContainersWhenEveryContainerIsVisuallyFull() {
+        List<String> outputs = List.of("full-first", "full-last");
+
+        assertEquals(outputs, TransferItems2.selectContainerOutputs(
+                outputs, value -> true, value -> true));
+    }
+
+    @Test
+    void preservesNonContainersWhileFilteringVisuallyFullContainers() {
+        List<String> outputs = List.of("full-first", "stockpile", "available", "barrel", "full-last");
+        Predicate<String> isContainer = value -> value.equals("full-first")
+                || value.equals("available") || value.equals("full-last");
+
+        assertEquals(List.of("stockpile", "available", "barrel"),
+                TransferItems2.selectContainerOutputs(
+                        outputs, isContainer, value -> value.startsWith("full")));
     }
 
     @Test

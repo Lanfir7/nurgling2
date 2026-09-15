@@ -9,6 +9,7 @@ import nurgling.actions.bots.MasterMiner;
 import nurgling.conf.ProspectKind;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
+import nurgling.navigation.MapMarkerBeacon;
 import nurgling.areas.NArea;
 import nurgling.overlays.map.MinimapChunkNavRenderer;
 import nurgling.overlays.map.MinimapClaimRenderer;
@@ -1172,6 +1173,38 @@ NMiniMap extends MiniMap {
     private long wpDragId = -1;
     private long wpHoverId = -1;
     private Location wpDragOrigin = null;
+    private UI.Grab customBeaconGrab = null;
+
+    private static class BeaconTarget {
+        final long segmentId;
+        final Coord tile;
+
+        BeaconTarget(long segmentId, Coord tile) {
+            this.segmentId = segmentId;
+            this.tile = tile;
+        }
+    }
+
+    /** Claim the beacon gesture on a visible custom mark before other minimap actions. */
+    protected final boolean tryStartCustomMarkerBeacon(MouseDownEvent ev, MapView map) {
+        if(!MapMarkerBeacon.isTrigger(ev.b, ui.modflags()))
+            return false;
+        BeaconTarget marker = customBeaconTargetAt(ev.c);
+        if(!MapMarkerBeacon.claimsGesture(ev.b, ui.modflags(), marker != null))
+            return false;
+        MapMarkerBeacon.start(map, marker.segmentId, marker.tile, sessloc);
+        customBeaconGrab = ui.grabmouse(this);
+        return true;
+    }
+
+    /** Consume the matching release even when it occurs outside the minimap. */
+    protected final boolean releaseCustomMarkerBeacon() {
+        if(customBeaconGrab == null)
+            return false;
+        customBeaconGrab.remove();
+        customBeaconGrab = null;
+        return true;
+    }
 
     /** True while the user is dragging a queued waypoint on this minimap. */
     public boolean isDraggingWaypoint() {
@@ -1288,6 +1321,7 @@ NMiniMap extends MiniMap {
         // Never leave the movement queue paused because the map went away mid-steer.
         if(holdGrab != null)
             endHoldSteer();
+        releaseCustomMarkerBeacon();
         super.destroy();
     }
 
@@ -3267,6 +3301,47 @@ NMiniMap extends MiniMap {
         }
         return null;
     }
+
+    private BeaconTarget customBeaconTargetAt(Coord screenCoord) {
+        LabeledMinimapMark labeled = labeledMarkAt(screenCoord);
+        if(labeled != null)
+            return new BeaconTarget(labeled.segmentId, labeled.tileCoords);
+        if(dloc == null || sessloc == null || markersHidden())
+            return null;
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null)
+            return null;
+        String search = markerSearchPattern();
+        Coord hsz = sz.div(2);
+        if(showFishIcons() && gui.fishLocationService != null) {
+            for(nurgling.FishLocation fish : gui.fishLocationService.getFishLocationsForSegment(sessloc.seg.id)) {
+                if(matchesMarkerSearch(fish.getFishName(), search) && markerAtScreen(screenCoord, fish.getTileCoords(), hsz, UI.scale(10)))
+                    return new BeaconTarget(fish.getSegmentId(), fish.getTileCoords());
+            }
+        }
+        if(showTreeIcons() && gui.treeLocationService != null) {
+            for(nurgling.TreeLocation tree : gui.treeLocationService.getTreeLocationsForSegment(sessloc.seg.id)) {
+                if(matchesMarkerSearch(tree.getTreeName(), search) && markerAtScreen(screenCoord, tree.getTileCoords(), hsz, UI.scale(10)))
+                    return new BeaconTarget(tree.getSegmentId(), tree.getTileCoords());
+            }
+        }
+        if(showProspectingIcons && gui.prospectingLocationService != null) {
+            for(nurgling.ProspectingLocation prospect : gui.prospectingLocationService.getProspectingLocationsForSegment(sessloc.seg.id)) {
+                if(matchesMarkerSearch(prospect.getResourceType(), search) && markerAtScreen(screenCoord, prospect.getTileCoords(), hsz, UI.scale(10)))
+                    return new BeaconTarget(prospect.getSegmentId(), prospect.getTileCoords());
+            }
+        }
+        return null;
+    }
+
+    private boolean markerAtScreen(Coord screenCoord, Coord tile, Coord hsz, int threshold) {
+        return tile != null && screenCoord.dist(tile.sub(dloc.tc).div(scalef()).add(hsz)) < threshold;
+    }
+
+    private static boolean matchesMarkerSearch(String value, String search) {
+        return search == null || search.trim().isEmpty() ||
+                (value != null && value.toLowerCase().contains(search.toLowerCase()));
+    }
     
     /**
      * Создает временную NArea из координат маркера для навигации через ChunkNav
@@ -3692,6 +3767,8 @@ NMiniMap extends MiniMap {
 
     @Override
     public boolean mouseup(MouseUpEvent ev) {
+        if(releaseCustomMarkerBeacon())
+            return true;
         if((holdGrab != null) && (ev.b == 1))
             endHoldSteer();
         if(wpGrab != null) {

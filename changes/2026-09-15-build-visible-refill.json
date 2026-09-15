@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-build-visible-refill",
+  "priority": 2,
+  "summary": {
+    "ru": "Строительство не делает лишний путь после пополнения материалов рядом.",
+    "en": "Construction avoids an unnecessary walk after refilling nearby materials."
+  },
+  "detail": {
+    "ru": "Когда зона строительства уже видна после сбора материалов, персонаж сразу продолжает стройку вместо похода к углу зоны. Для удалённых зон навигация сохраняется.",
+    "en": "When the construction zone is already visible after collecting materials, your character resumes building instead of walking to a zone corner. Navigation is unchanged for distant zones."
+  }
+}

@@ -87,6 +87,12 @@ public class MapMesh implements RenderTree.Node, Disposable {
 	return(ret);
     }
 
+    public void addextra(RenderTree.Node extra) {
+	extras.add(extra);
+	if(extra instanceof Disposable)
+	    dparts.add((Disposable)extra);
+    }
+
     public static class Scan {
         public final Coord ul, sz, br;
         public final int l;

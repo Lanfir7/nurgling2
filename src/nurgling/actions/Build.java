@@ -12,6 +12,7 @@ import nurgling.actions.bots.SelectAreaWithLiveGhosts;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.overlays.BuildGhostPreview;
+import nurgling.pf.Utils;
 import nurgling.tasks.*;
 import nurgling.tools.*;
 
@@ -193,6 +194,20 @@ public class Build implements Action
             return ApproachAction.PROCEED;
         }
         return hasGhostPositions ? ApproachAction.SKIP_GHOST : ApproachAction.ABORT;
+    }
+
+    /**
+     * Match the cart-unload placement policy: a fully visible construction zone
+     * needs no corner walk after collecting materials.
+     */
+    static boolean requiresBuildAreaNavigation(Pair<Coord2d, Coord2d> area)
+    {
+        return !Utils.areaFullyInVisibleArea(area);
+    }
+
+    static boolean requiresBuildAreaNavigation(Pair<Coord2d, Coord2d> area, Coord2d playerRc)
+    {
+        return !Utils.areaFullyInVisibleArea(area, playerRc);
     }
 
     /**
@@ -450,10 +465,6 @@ public class Build implements Action
             {
                 if (!refillIng(gui, curings, context))
                     return Results.ERROR("NO ITEMS");
-                if (buildArea != null)
-                {
-                    NUtils.navigateToArea(buildArea, true);
-                }
             }
 
             Gob dummy = NGob.getDummy(pos, rotationAngle, hitBox);
@@ -739,8 +750,9 @@ public class Build implements Action
             }
         }
         
-        // Navigate back to build area
-        if (buildArea != null) {
+        // Match cart-unload placement: only leave a visible construction area alone.
+        // Distant areas still use the existing global navigation path.
+        if (buildArea != null && requiresBuildAreaNavigation(buildArea.getRCArea())) {
             NUtils.navigateToArea(buildArea);
         }
         

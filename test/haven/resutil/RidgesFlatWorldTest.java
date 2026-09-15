@@ -3,6 +3,8 @@ package haven.resutil;
 import haven.Coord;
 import haven.MCache;
 import haven.MapMesh;
+import haven.render.RenderTree;
+import haven.render.TickList;
 import haven.Surface.Vertex;
 import haven.Tiler;
 import nurgling.NConfig;
@@ -70,6 +72,52 @@ class RidgesFlatWorldTest {
     }
 
     @Test
+    void flatRidgeRimsFollowOnlyTheUpperEdgeForCapsCornersAndComplexTiles() {
+        assertUpperRim(partFor((x, y) -> {
+            if((x == 1) && (y == 0)) return 25;
+            if((x == 1) && (y == 1)) return 10;
+            if((x == 0) && (y == 1)) return 10;
+            return 0;
+        }, Coord.z));
+        assertUpperRim(partFor((x, y) -> {
+            if((x == 1) && (y == 0)) return 25;
+            if((x == 0) && (y == 1)) return 10;
+            return 0;
+        }, Coord.z));
+        assertUpperRim(partFor((x, y) -> {
+            if((x == 1) && (y == 0)) return 100;
+            if((x == 1) && (y == 1)) return 200;
+            if((x == 0) && (y == 1)) return 300;
+            return 0;
+        }, Coord.z));
+    }
+
+    @Test
+    void flatRidgeRimsUpdateExistingRenderTreeSlotsForTheHitboxToggle() {
+        NConfig previous = NConfig.current;
+        try {
+            NConfig.current = new NConfig();
+            NConfig.set(NConfig.Key.showBB, false);
+            Ridges.RimLines rim = new Ridges.RimLines(new float[] {0, 0, 4, 11, 0, 4});
+            RenderTree tree = new RenderTree();
+            TickList ticks = new TickList();
+            tree.add(ticks, TickList.TickNode.class);
+            tree.add(rim);
+            ticks.tick(0);
+            assertEquals(2, slotCount(tree), "Disabled rim must leave the existing slot empty");
+            NConfig.set(NConfig.Key.showBB, true);
+            ticks.tick(0);
+            assertEquals(3, slotCount(tree), "Enabled rim must add its line to the existing slot");
+            NConfig.set(NConfig.Key.showBB, false);
+            ticks.tick(0);
+            assertEquals(2, slotCount(tree), "Disabled rim must remove the line without rebuilding the map");
+            rim.dispose();
+        } finally {
+            NConfig.current = previous;
+        }
+    }
+
+    @Test
     void flatRidgeKeepsTheNaturalGroundCapAndOriginalWallSheet() {
         NConfig previous = NConfig.current;
         try {
@@ -117,6 +165,34 @@ class RidgesFlatWorldTest {
             highest = Math.max(highest, vertex.z);
         }
         assertTrue(highest >= 4f);
+    }
+
+    private static void assertUpperRim(Ridges.RPart part) {
+        float[] rim = Ridges.upperRimVertices(part);
+        int segments = 0;
+        for(int[] edge : part.uedge)
+            segments += Math.max(edge.length - 1, 0);
+        assertTrue(segments > 0);
+        assertEquals(segments * 6, rim.length);
+        int offset = 0;
+        for(int[] edge : part.uedge) {
+            for(int i = 1; i < edge.length; i++) {
+                Vertex a = part.v[edge[i - 1]], b = part.v[edge[i]];
+                assertEquals(a.x, rim[offset++], 0.0001f);
+                assertEquals(a.y, rim[offset++], 0.0001f);
+                assertEquals(a.z + 0.01f, rim[offset++], 0.0001f);
+                assertEquals(b.x, rim[offset++], 0.0001f);
+                assertEquals(b.y, rim[offset++], 0.0001f);
+                assertEquals(b.z + 0.01f, rim[offset++], 0.0001f);
+            }
+        }
+    }
+
+    private static int slotCount(RenderTree tree) {
+        int count = 0;
+        for(RenderTree.Slot ignored : tree.slots())
+            count++;
+        return count;
     }
 
     private static List<String> verticalProfile(Ridges.RPart part, float x) {

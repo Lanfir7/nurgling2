@@ -38,12 +38,14 @@ import haven.Tiler.VertFactory;
 import haven.Surface.MeshVertex;
 import static haven.Utils.clip;
 import nurgling.*;
+import nurgling.overlays.NModelBox;
 
 public class Ridges implements MapMesh.ConsHooks {
     private static final float EPSILON = 0.01f;
     private static final float FLAT_RIDGE_MIN_HEIGHT = 4.0f;
     private static final float FLAT_RIDGE_MAX_HEIGHT = 5.0f;
     private static final float FLAT_RIDGE_HEIGHT_SCALE = 0.08f;
+    private static final float RIM_Z_OFFSET = 0.01f;
     public static final MapMesh.DataID<Ridges> id = MapMesh.makeid(Ridges.class);
     public static final double segh = 8;
     private static final Coord tilesz = MCache.tilesz2;
@@ -743,6 +745,111 @@ public class Ridges implements MapMesh.ConsHooks {
 	    return(false);
 	cons.faces(m, ridge);
 	return(true);
+    }
+
+    static boolean rimVisible() {
+	return(Boolean.TRUE.equals(NConfig.get(NConfig.Key.showBB)));
+    }
+
+    static float[] upperRimVertices(RPart part) {
+	int count = 0;
+	for(int[] edge : part.uedge)
+	    count += Math.max(edge.length - 1, 0);
+	float[] ret = new float[count * 6];
+	int o = 0;
+	for(int[] edge : part.uedge) {
+	    for(int i = 1; i < edge.length; i++) {
+		Vertex a = part.v[edge[i - 1]], b = part.v[edge[i]];
+		ret[o++] = a.x; ret[o++] = a.y; ret[o++] = a.z + RIM_Z_OFFSET;
+		ret[o++] = b.x; ret[o++] = b.y; ret[o++] = b.z + RIM_Z_OFFSET;
+	    }
+	}
+	return(ret);
+    }
+
+    private float[] upperRimVertices() {
+	int length = 0;
+	for(MPart part : ridge)
+	    if(part != null)
+		length += upperRimVertices((RPart)part).length;
+	float[] ret = new float[length];
+	int o = 0;
+	for(MPart part : ridge) {
+	    if(part == null)
+		continue;
+	    float[] segment = upperRimVertices((RPart)part);
+	    System.arraycopy(segment, 0, ret, o, segment.length);
+	    o += segment.length;
+	}
+	return(ret);
+    }
+
+    static class RimLines implements RenderTree.Node, TickList.Ticking, TickList.TickNode, Disposable {
+	private static final VertexArray.Layout fmt = new VertexArray.Layout(
+	    new VertexArray.Layout.Input(Homo3D.vertex, new VectorFormat(3, NumberFormat.FLOAT32), 0, 0, 12));
+	private final haven.render.Model model;
+	private final Collection<RenderTree.Slot> slots = Collections.newSetFromMap(new IdentityHashMap<RenderTree.Slot, Boolean>());
+	private boolean visible;
+	private NModelBox.BoxStyle style;
+
+	RimLines(float[] vertices) {
+	    VertexArray.Buffer buffer = new VertexArray.Buffer(vertices.length * 4, DataBuffer.Usage.STATIC,
+		DataBuffer.Filler.of(vertices));
+	    model = new haven.render.Model(haven.render.Model.Mode.LINES, new VertexArray(fmt, buffer), null);
+	}
+
+	private Pipe.Op material() {
+	    return(Pipe.Op.compose(new Rendered.Order.Default(6000),
+		    new States.LineWidth(style.lineWidth), new BaseColor(style.edge), Clickable.No));
+	}
+
+	private void refresh(RenderTree.Slot slot) {
+	    slot.clear();
+	    if(visible)
+		slot.add(model, material());
+	}
+
+	public void added(RenderTree.Slot slot) {
+	    slots.add(slot);
+	    refresh(slot);
+	}
+
+	public void removed(RenderTree.Slot slot) {
+	    slots.remove(slot);
+	}
+
+	public TickList.Ticking ticker() {
+	    return(this);
+	}
+
+	public void autotick(double dt) {
+	    boolean nextvisible = rimVisible();
+	    NModelBox.BoxStyle nextstyle = NModelBox.boundaryStyle();
+	    if((nextvisible == visible) && (nextstyle == style))
+		return;
+	    visible = nextvisible;
+	    style = nextstyle;
+	    for(RenderTree.Slot slot : new ArrayList<RenderTree.Slot>(slots)) {
+		try {
+		    refresh(slot);
+		} catch(RenderTree.SlotRemoved e) {
+		    slots.remove(slot);
+		}
+	    }
+	}
+
+	public void dispose() {
+	    model.dispose();
+	}
+    }
+
+    public void postcalcnrm(Random rnd) {
+	if(!flatworld())
+	    return;
+	float[] vertices = upperRimVertices();
+	if(vertices.length == 0)
+	    return;
+	m.addextra(new RimLines(vertices));
     }
 
     public RPart getrdesc(Coord tc) {

@@ -373,9 +373,9 @@ public class UnifiedTilePathfinder {
         // Must be same layer
         if (!fromChunk.layer.equals(neighborChunk.layer)) return null;
 
-        // Known instances must match. Unknown instances are allowed only through
-        // reciprocal topology rebuilt from the live MapFile segment.
-        if (!canWalkDirectlyBetween(fromChunk, neighborChunk)) return null;
+        // Must be same known instance (prevents cross-instance walking)
+        if (fromChunk.instanceId == 0 || neighborChunk.instanceId == 0) return null;
+        if (fromChunk.instanceId != neighborChunk.instanceId) return null;
 
         // Check if target tile is walkable (any of 2x2 cells)
         if (isTileWalkable(neighborChunk, newX, newY)) {
@@ -383,23 +383,6 @@ public class UnifiedTilePathfinder {
         }
 
         return null;
-    }
-
-    static boolean canWalkDirectlyBetween(ChunkNavData fromChunk, ChunkNavData toChunk) {
-        if (fromChunk.instanceId != 0 && toChunk.instanceId != 0) {
-            return fromChunk.instanceId == toChunk.instanceId;
-        }
-        if (fromChunk.instanceId != 0 || toChunk.instanceId != 0) {
-            return false;
-        }
-        if (!fromChunk.connectedChunks.contains(toChunk.gridId)
-                || !toChunk.connectedChunks.contains(fromChunk.gridId)) {
-            return false;
-        }
-        return (fromChunk.neighborNorth == toChunk.gridId && toChunk.neighborSouth == fromChunk.gridId)
-                || (fromChunk.neighborSouth == toChunk.gridId && toChunk.neighborNorth == fromChunk.gridId)
-                || (fromChunk.neighborEast == toChunk.gridId && toChunk.neighborWest == fromChunk.gridId)
-                || (fromChunk.neighborWest == toChunk.gridId && toChunk.neighborEast == fromChunk.gridId);
     }
 
     /**

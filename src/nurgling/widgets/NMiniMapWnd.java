@@ -8,6 +8,7 @@ import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.areas.AreaLabelSync;
 import nurgling.i18n.L10n;
+import nurgling.navigation.MapMarkerBeacon;
 import nurgling.navigation.MapMarkerNavigation;
 import nurgling.tools.ExploredArea;
 import nurgling.hotkeys.Hotkeys;
@@ -250,11 +251,11 @@ public class NMiniMapWnd extends Widget{
 
         // ChunkNav exploration overlay toggle
         ACheckBox chunkNav = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/gridnav", kb_grid, L10n.get("minimap.chunknav"));
-        chunkNav.changed(a -> {
+        chunkNav.state(() -> Boolean.TRUE.equals(NConfig.get(NConfig.Key.chunkNavOverlay)));
+        chunkNav.set(a -> {
             NConfig.set(NConfig.Key.chunkNavOverlay, a);
             NConfig.needUpdate();
         });
-        chunkNav.a = (Boolean) NConfig.get(NConfig.Key.chunkNavOverlay);
         buttons.add(chunkNav);
 
         // Animals layer (маркеры животных: ObjectTracker + БД)
@@ -376,6 +377,8 @@ public class NMiniMapWnd extends Widget{
 
     public static class Map extends NCornerMiniMap {
         NMapView map;
+        private MapFile.Marker beaconMarker;
+	    private UI.Grab beaconGrab;
         public Map(Coord sz, MapFile file,NMapView map) {
             super(sz, file);
             follow(new MapLocator(map));
@@ -383,12 +386,40 @@ public class NMiniMapWnd extends Widget{
             this.map = map;
         }
 
-        public boolean dragp(int button) {
-            return(false);
-        }
+	    public boolean dragp(int button) {
+		return(false);
+	    }
 
-        public boolean clickmarker(DisplayMarker mark, Location loc, int button, boolean press) {
-            if(Hotkeys.matchesMapMarkerNavigate(button, ui.modflags())) {
+	    public boolean mousedown(MouseDownEvent ev) {
+		if(tryStartCustomMarkerBeacon(ev, map))
+		    return(true);
+		if(MapMarkerBeacon.isTrigger(ev.b, ui.modflags())) {
+		    Location loc = xlate(ev.c);
+		    DisplayMarker marker = (loc == null) ? null : markerat(loc.tc);
+		    if(marker != null) {
+			beaconMarker = marker.m;
+			MapMarkerBeacon.start(map, beaconMarker, sessloc);
+			beaconGrab = ui.grabmouse(this);
+			return(true);
+		    }
+		}
+		return(super.mousedown(ev));
+	    }
+
+	    public boolean mouseup(MouseUpEvent ev) {
+		if(releaseCustomMarkerBeacon())
+		    return(true);
+		if(beaconGrab != null) {
+		    beaconGrab.remove();
+		    beaconGrab = null;
+		    beaconMarker = null;
+		    return(true);
+		}
+		return(super.mouseup(ev));
+	    }
+
+	    public boolean clickmarker(DisplayMarker mark, Location loc, int button, boolean press) {
+	    if(Hotkeys.matchesMapMarkerNavigate(button, ui.modflags())) {
                 if(!press)
                     MapMarkerNavigation.start(file, mark.m, loc, sessloc);
                 return true;

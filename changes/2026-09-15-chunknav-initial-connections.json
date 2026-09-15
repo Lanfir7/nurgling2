@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-chunknav-initial-connections",
+  "priority": 7,
+  "summary": {
+    "ru": "ChunkNav снова связывает соседние чанки при записи карты.",
+    "en": "ChunkNav once again connects neighboring chunks while recording the map."
+  },
+  "detail": {
+    "ru": "Видимые соседние чанки записываются как единый маршрутный граф, поэтому карта ChunkNav больше не распадается на отдельные точки. Дома, пользовательские маркеры и переходы через двери и пещеры сохранены.",
+    "en": "Visible neighboring chunks are recorded as one routing graph, so the ChunkNav map no longer breaks into isolated points. Homes, custom markers, and door and cave transitions are preserved."
+  }
+}
