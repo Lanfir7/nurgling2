@@ -19,5 +19,6 @@ preparing a manual release. Do not publish or push without user authorization.
 ## Project release workflow
 
 When Denis asks to release, publish, ship, or commit all current work and send
-it, use `.agents/skills/nurgling-project-release/SKILL.md`. Invoking that
+it, use the locally installed `nurgling-project-release` skill. This personal
+skill is kept outside the repository. Invoking that
 workflow authorizes its two commits, `ant release`, and final push.

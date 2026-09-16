@@ -87,3 +87,4 @@ AlarmSounds/settings/defaultAlarms
 /.worktrees/
 /local-feedback.properties
 /bin/feedback.properties
+/.agents/skills/nurgling-project-release/
