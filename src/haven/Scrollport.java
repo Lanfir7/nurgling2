@@ -132,7 +132,12 @@ public class Scrollport extends Widget {
 
     static int scrollRange(int contentHeight, int viewportHeight, int padding,
 			   boolean barVisible) {
-	return(barVisible ? Math.max(0, contentHeight + padding - viewportHeight) : 0);
+	if(!barVisible)
+	    return(0);
+	int overflow = contentHeight - viewportHeight;
+	if(overflow <= 0)
+	    return(0);
+	return(overflow + Math.max(0, padding));
     }
 
     static boolean acceptsWheel(boolean barVisible, int range) {

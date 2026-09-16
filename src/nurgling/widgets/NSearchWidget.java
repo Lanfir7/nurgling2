@@ -42,7 +42,6 @@ public class NSearchWidget extends Widget {
     int tpos_y;
 
     // Embedded history list (replaces old floating popup)
-    private Scrollport historyScroll;
     private boolean listShown = false;
     private static final int LIST_HEIGHT = UI.scale(120);
 
@@ -152,12 +151,9 @@ public class NSearchWidget extends Widget {
             initHelp();
             helpwnd.hide();
 
-            // Embedded history list below search bar
             int listY = searchF.sz.y + UI.scale(8);
-            int listW = sz.x;
-            historyScroll = add(new Scrollport(new Coord(listW, LIST_HEIGHT)), new Coord(0, listY));
-            cmdList = historyScroll.cont.add(new CmdList(new Coord(listW, LIST_HEIGHT)), Coord.z);
-            historyScroll.visible = false;
+            cmdList = add(new CmdList(new Coord(sz.x, LIST_HEIGHT)), new Coord(0, listY));
+            cmdList.visible = false;
 
             read();
         } else {
@@ -168,8 +164,8 @@ public class NSearchWidget extends Widget {
 
     private void setListShown(boolean show) {
         listShown = show;
-        if (historyScroll != null) {
-            historyScroll.visible = show;
+        if (cmdList != null) {
+            cmdList.visible = show;
         }
         updateHeight();
         // Repack the parent window so it grows/shrinks
@@ -179,7 +175,7 @@ public class NSearchWidget extends Widget {
     }
 
     private void updateHeight() {
-        if (listShown && historyScroll != null) {
+        if (listShown && cmdList != null) {
             this.sz = new Coord(this.sz.x, searchF.sz.y + UI.scale(8) + LIST_HEIGHT);
         } else {
             this.sz = new Coord(this.sz.x, searchF.sz.y);
@@ -192,11 +188,9 @@ public class NSearchWidget extends Widget {
         this.sz.x = sz.x;
         save.move(new Coord(sz.x - save.sz.x, tpos_y));
         list.move(new Coord(sz.x - save.sz.x - UI.scale(5) - list.sz.x, tpos_y));
-        if (historyScroll != null) {
-            historyScroll.resize(new Coord(sz.x, LIST_HEIGHT));
-        }
         if (cmdList != null) {
-            cmdList.resize(new Coord(0, LIST_HEIGHT));
+            cmdList.move(new Coord(0, searchF.sz.y + UI.scale(8)));
+            cmdList.resize(new Coord(sz.x, LIST_HEIGHT));
         }
         updateHeight();
     }

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-nested-scrollbars",
+  "priority": 5,
+  "summary": {
+    "ru": "В окнах вроде инвентаря больше нет второго лишнего ползунка: список по-прежнему прокручивается, если не всё влезает.",
+    "en": "Windows such as inventory no longer show a second spare scrollbar; lists still scroll when they overflow."
+  },
+  "detail": {
+    "ru": "Лишний внутренний ползунок появлялся, когда содержимое уже помещалось или у списка была своя прокрутка — например у избранных поисковых запросов в инвентаре. Остался один ползунок там, где без него не добраться до строк ниже.",
+    "en": "A spare inner scrollbar appeared when the contents already fitted, or when a list had its own scrolling — for example saved inventory searches. One bar remains where you still need it to reach the rows below."
+  }
+}

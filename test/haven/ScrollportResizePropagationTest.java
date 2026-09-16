@@ -34,6 +34,18 @@ class ScrollportResizePropagationTest {
         assertTrue(Scrollport.acceptsWheel(true, 10));
     }
 
+    @Test
+    void exactFitDoesNotCreatePhantomScrollbar() {
+        assertEquals(0, Scrollport.scrollRange(100, 100, 10, true));
+        assertEquals(0, Scrollport.scrollRange(90, 100, 10, true));
+    }
+
+    @Test
+    void overflowKeepsPaddingSoLastPixelsStayReachable() {
+        assertEquals(20, Scrollport.scrollRange(110, 100, 10, true));
+        assertEquals(11, Scrollport.scrollRange(101, 100, 10, true));
+    }
+
     private static class TrackingParent extends Widget {
         int reflows;
 
