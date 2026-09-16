@@ -12,8 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class NSteamBootTest {
     @Test
     void steamBootPullsFromSourceRepoRelease() {
-        assertTrue(NSteamBoot.FEED.startsWith("https://raw.githubusercontent.com/Lanfir7/nurgling2/"));
-        assertTrue(NSteamBoot.FEED.contains("/release"));
+        assertEquals("https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/", NSteamBoot.FEED);
+        assertEquals("3051280", NSteamBoot.APP_ID);
+        assertEquals(Path.of(System.getProperty("user.home"), "NurglingEvolution"), NSteamBoot.cacheDir());
     }
 
     @Test

@@ -22,3 +22,17 @@ When Denis asks to release, publish, ship, or commit all current work and send
 it, use the locally installed `nurgling-project-release` skill. This personal
 skill is kept outside the repository. Invoking that
 workflow authorizes its two commits, `ant release`, and final push.
+
+## Main branch and compatible update feeds
+
+Development and releases use `master`. Do not start new work on `next`.
+`next` is retained as a fast-forward compatibility mirror for existing launchers;
+never delete it or force-push it. The `release/ver` push workflow publishes the
+same prepared artifacts to the legacy `latest` and `stable` channels without
+rebuilding or incrementing their version. Wait for both publication and the
+master-to-next mirror to succeed before reporting a release as delivered.
+
+Before publishing, run `python tools/verify_release.py release` in addition to
+the release-note and client tests. Never put `nurgling_launcher.jar` into the
+update manifest: the legacy updater cannot safely overwrite its own running JAR.
+See `docs/release-publishing.md` for retries and recovery.

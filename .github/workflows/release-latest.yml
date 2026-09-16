@@ -1,183 +1,146 @@
-name: Build and Release to Latest
+name: Publish Existing Release to Latest
 
 on:
   push:
     branches: [master]
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
-
+    paths:
+      - 'release/ver'
   workflow_dispatch:
     inputs:
-      release_message:
-        description: 'Release message (optional)'
-        required: false
-        default: ''
+      release_sha:
+        description: 'Full 40-character commit SHA containing the prepared release/'
+        required: true
+        type: string
+      release_version:
+        description: 'Exact version from release/ver (for example 2.103.206)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release-latest
+  cancel-in-progress: false
 
 env:
-  JAVA_VERSION: '17'
   RELEASE_REPO: Lanfir7/nurgling-release
   RELEASE_BRANCH: latest
 
 jobs:
-  build-and-release:
+  publish:
+    if: github.ref == 'refs/heads/master'
     runs-on: windows-latest
+    env:
+      INPUT_RELEASE_SHA: ${{ inputs.release_sha }}
+      INPUT_RELEASE_VERSION: ${{ inputs.release_version }}
+      EVENT_NAME: ${{ github.event_name }}
+      EVENT_SHA: ${{ github.sha }}
 
     steps:
-      - name: Checkout nurgling2
+      - name: Checkout master history
         uses: actions/checkout@v4
         with:
+          ref: master
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
+      - name: Validate requested release commit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $requestedSha = if ($env:EVENT_NAME -eq 'push') { $env:EVENT_SHA } else { $env:INPUT_RELEASE_SHA }
+          if ($requestedSha -notmatch '^[0-9a-fA-F]{40}$') {
+            throw 'release_sha must be a full 40-character commit SHA.'
+          }
+          $commit = (git rev-parse --verify "$requestedSha^{commit}").Trim()
+          if (!$commit.Equals($requestedSha, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'release_sha did not resolve to the requested immutable commit.'
+          }
+          git merge-base --is-ancestor $commit origin/master
+          if ($LASTEXITCODE -ne 0) {
+            throw 'release_sha must be an ancestor of master.'
+          }
+          git checkout --detach $commit
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to check out requested release_sha.' }
+          $version = if ($env:EVENT_NAME -eq 'push') {
+            (Get-Content -LiteralPath 'release\ver' -TotalCount 1).Trim()
+          } else {
+            $env:INPUT_RELEASE_VERSION
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw 'release_version must be numeric major.minor.build.'
+          }
+          "RELEASE_SHA=$commit" >> $env:GITHUB_ENV
+          "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
 
-      - name: Cache external libraries
-        uses: actions/cache@v4
-        with:
-          path: lib/ext
-          key: extlibs-${{ runner.os }}-${{ hashFiles('build.xml') }}
-          restore-keys: |
-            extlibs-${{ runner.os }}-
-
-      - name: Set up Python for player release notes
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Validate player release notes
-        run: |
-          python tools/release_notes.py --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m unittest discover -s tools -p test_release_notes.py
-
-      - name: Fetch and increment version
+      - name: Verify committed release artifacts
         shell: pwsh
-        run: |
-          # Get version.num from build.xml
-          $buildXml = Get-Content "build.xml" -Raw
-          if ($buildXml -match 'version\.num"\s+value="([^"]+)"') {
-            $versionNum = $matches[1]
-          } else {
-            $versionNum = "2.103"
-          }
-          Write-Host "version.num from build.xml: $versionNum"
+        run: python tools/verify_release.py release --expected-version "$env:RELEASE_VERSION"
 
-          $verUrl = "https://raw.githubusercontent.com/${{ env.RELEASE_REPO }}/${{ env.RELEASE_BRANCH }}/ver"
-          try {
-            $currentVer = (Invoke-WebRequest -Uri $verUrl -UseBasicParsing).Content.Split("`n")[0].Trim()
-            Write-Host "Current version in release repo: $currentVer"
-            $parts = $currentVer.Split(".")
-            $currentMajorMinor = "$($parts[0]).$($parts[1])"
-
-            if ($currentMajorMinor -eq $versionNum) {
-              $buildNum = [int]$parts[-1] + 1
-              Write-Host "Same major.minor version, incrementing build number to: $buildNum"
-            } else {
-              $buildNum = 0
-              Write-Host "Major.minor version changed ($currentMajorMinor -> $versionNum), starting at build number: $buildNum"
-            }
-          } catch {
-            Write-Host "Could not fetch version from release repo, starting at build 0"
-            $buildNum = 0
-          }
-          "#Build Number for ANT. Do not edit!`nbuild.number=$buildNum" | Out-File -FilePath "build.num" -Encoding ASCII -NoNewline
-          Write-Host "Created build.num with build.number=$buildNum"
-
-      - name: Fetch release-only alarm sounds
+      - name: Check release repository deploy key
         shell: pwsh
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          RELEASE_REPO_SSH_KEY: ${{ secrets.RELEASE_REPO_SSH_KEY }}
         run: |
-          git clone --depth 1 --branch ${{ env.RELEASE_BRANCH }} `
-            "https://x-access-token:$env:RELEASE_TOKEN@github.com/${{ env.RELEASE_REPO }}.git" release-input
-          if (!(Test-Path "release-input\AlarmSounds\*.wav")) {
-            throw "No alarm sounds found in ${{ env.RELEASE_REPO }}@${{ env.RELEASE_BRANCH }}"
-          }
-          Copy-Item "release-input\AlarmSounds" "AlarmSounds" -Recurse
-          New-Item -ItemType Directory -Force build | Out-Null
-          if (Test-Path "release-input\release-notes.json") {
-            Copy-Item "release-input\release-notes.json" "build\previous-release-notes.json"
-          }
-          Remove-Item "release-input" -Recurse -Force
-
-      - name: Build with Ant
-        run: ant -Drelease.notes.previous=build/previous-release-notes.json release
-
-      - name: Add batch files to version manifest
-        shell: pwsh
-        run: |
-          $files = @("run_updater.bat", "run_updater_latest.bat", "run_updater_stable.bat", "nurgling_launcher.jar")
-          foreach ($file in $files) {
-            $path = "release\$file"
-            if (Test-Path $path) {
-              $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLower()
-              Add-Content -Path "release\ver" -Value "$file=$hash"
-              Write-Host "Added $file=$hash"
-            } else {
-              Write-Host "Warning: $file not found in release folder"
-            }
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_REPO_SSH_KEY)) {
+            throw 'RELEASE_REPO_SSH_KEY is not configured; publishing was not attempted.'
           }
 
-      - name: Verify build artifacts
-        shell: pwsh
-        run: |
-          $requiredFiles = @("hafen.jar", "ver", "nurgling_launcher.jar", "nurgling-res.jar")
-          foreach ($file in $requiredFiles) {
-            if (!(Test-Path "release\$file")) {
-              Write-Error "Missing required file: release\$file"
-              exit 1
-            }
-          }
-
-          $version = (Get-Content "release\ver" -First 1).Trim()
-          Write-Host "Build successful - Version: $version"
-          echo "VERSION=$version" >> $env:GITHUB_ENV
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+      - name: Checkout latest channel
+        uses: actions/checkout@v4
         with:
-          name: nurgling-release-${{ env.VERSION }}
-          path: release/
-          retention-days: 30
+          repository: ${{ env.RELEASE_REPO }}
+          ref: ${{ env.RELEASE_BRANCH }}
+          ssh-key: ${{ secrets.RELEASE_REPO_SSH_KEY }}
+          path: release-repo
+          fetch-depth: 0
 
-      - name: Push to release repository
+      - name: Read published version
         shell: pwsh
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-          git clone "https://x-access-token:$env:RELEASE_TOKEN@github.com/${{ env.RELEASE_REPO }}.git" release-repo
-          cd release-repo
-
-          git checkout ${{ env.RELEASE_BRANCH }}
-          if ($LASTEXITCODE -ne 0) {
-            git checkout -b ${{ env.RELEASE_BRANCH }}
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content -LiteralPath 'release-repo\ver' -TotalCount 1).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw 'The latest channel has no valid release version; publishing was not attempted.'
           }
+          "PUBLISHED_VERSION=$version" >> $env:GITHUB_ENV
 
-          Get-ChildItem -Exclude ".git" | Remove-Item -Recurse -Force
-
-          Copy-Item "..\release\*" . -Recurse
-
+      - name: Publish verified artifacts verbatim
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem -Force -LiteralPath 'release' | Copy-Item -Destination 'release-repo' -Recurse -Force
+          python tools/verify_release.py release-repo --expected-version "$env:RELEASE_VERSION" --minimum-version "$env:PUBLISHED_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'Copied release artifacts did not pass verification.' }
+          Push-Location release-repo
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) '.gitattributes'), "* -text`n", [System.Text.Encoding]::ASCII)
+          git config user.name 'GitHub Actions'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the release commit author.' }
+          git config user.email 'actions@github.com'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the release commit email.' }
           git add -A
-
-          $message = "Release ${{ env.VERSION }}"
-          if ("${{ github.event.inputs.release_message }}" -ne "") {
-            $message = "$message - ${{ github.event.inputs.release_message }}"
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to stage release artifacts.' }
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host 'Latest already contains these verified artifacts.'
+          } elseif ($LASTEXITCODE -eq 1) {
+            git commit -m "Publish release $env:RELEASE_VERSION from $env:RELEASE_SHA"
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to commit release artifacts.' }
+            git push origin "HEAD:refs/heads/$env:RELEASE_BRANCH"
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to push the latest release channel.' }
           } else {
-            $triggerMsg = "${{ github.event.head_commit.message }}" -replace "`n.*", ""
-            if ($triggerMsg.Length -gt 50) {
-              $triggerMsg = $triggerMsg.Substring(0, 50) + "..."
-            }
-            $message = "$message - $triggerMsg"
+            throw 'Unable to compare staged release artifacts.'
           }
-
-          git commit -m $message
-          git push origin ${{ env.RELEASE_BRANCH }}
-
-          Write-Host "Successfully pushed to ${{ env.RELEASE_REPO }}@${{ env.RELEASE_BRANCH }}"
+          git fetch origin refs/heads/stable:refs/remotes/origin/stable
+          if ($LASTEXITCODE -ne 0) { throw 'Stable channel is missing or could not be inspected.' }
+          git merge-base --is-ancestor origin/stable HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Stable diverged from latest; refusing a non-fast-forward update.' }
+          git push origin "HEAD:refs/heads/stable"
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to fast-forward the stable release channel.' }
+          Pop-Location

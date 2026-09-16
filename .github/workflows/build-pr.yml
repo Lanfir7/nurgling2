@@ -8,7 +8,7 @@ on:
       - 'docs/**'
 
 env:
-  JAVA_VERSION: '17'
+  JAVA_VERSION: '21'
 
 jobs:
   build:
@@ -42,6 +42,15 @@ jobs:
           python tools/release_notes.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest discover -s tools -p test_release_notes.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tools -p test_verify_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tools -p test_finalize_release_manifest.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tools -p test_legacy_update.py
+
+      - name: Test with Ant
+        run: ant test
 
       - name: Build with Ant
         run: ant jar

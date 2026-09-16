@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NUpdateFeedTest {
     @Test
-    void defaultUrlIsLanfirNextReleaseVer() {
+    void defaultUrlIsLanfirMasterReleaseVer() {
         assertEquals(NUpdateFeed.SOURCE_RELEASE_DIR + "ver", NUpdateFeed.DEFAULT_BASEURL);
-        assertTrue(NUpdateFeed.DEFAULT_BASEURL.contains("/next/release/"));
+        assertEquals("https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ver", NUpdateFeed.DEFAULT_BASEURL);
         assertFalse(NUpdateFeed.DEFAULT_BASEURL.toLowerCase().contains("katodiy"));
         assertFalse(NUpdateFeed.DEFAULT_BASEURL.toLowerCase().contains("aleksandrsvoboda"));
     }
@@ -30,16 +30,24 @@ class NUpdateFeedTest {
     }
 
     @Test
-    void keepsAlreadyNextReleaseUrl() {
+    void keepsAlreadyMasterReleaseUrl() {
         assertEquals(NUpdateFeed.DEFAULT_BASEURL, NUpdateFeed.migrateBaseUrl(NUpdateFeed.DEFAULT_BASEURL));
     }
 
-    @Test
-    void migratesMasterAndReleaseRepoToNext() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "https://raw.githubusercontent.com/Lanfir7/nurgling2/next/release/ver",
+            "https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ver",
+            "https://raw.githubusercontent.com/Lanfir7/nurgling-release/latest/ver",
+            "https://raw.githubusercontent.com/Lanfir7/nurgling-release/stable/ver",
+            " https://raw.githubusercontent.com/Lanfir7/nurgling2/next/release/ver ",
+            "http://raw.githubusercontent.com/Lanfir7/nurgling2/next/ver",
+            "   "
+    })
+    void migratesKnownLegacyFeedsToMaster(String current) {
+        assertEquals(NUpdateFeed.DEFAULT_BASEURL, NUpdateFeed.migrateBaseUrl(current));
         assertEquals(NUpdateFeed.DEFAULT_BASEURL,
-                NUpdateFeed.migrateBaseUrl("https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ver"));
-        assertEquals(NUpdateFeed.DEFAULT_BASEURL,
-                NUpdateFeed.migrateBaseUrl("https://raw.githubusercontent.com/Lanfir7/nurgling-release/latest/ver"));
+                NUpdateFeed.migrateBaseUrl(NUpdateFeed.migrateBaseUrl(current)));
     }
 
     @Test
@@ -49,9 +57,18 @@ class NUpdateFeedTest {
         assertFalse(NUpdateFeed.needsUpdate(null, "2.103.145"));
     }
 
-    @Test
-    void keepsUnrelatedCustomUrl() {
-        String custom = "https://example.com/my-ver";
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "https://example.com/my-ver",
+            "https://example.com/Lanfir7/nurgling2/next/release/ver",
+            "https://example.com/katodiy/ver",
+            "https://raw.githubusercontent.com/Lanfir7/nurgling2/experiment/release/ver",
+            "https://raw.githubusercontent.com/Lanfir7/nurgling2/next/release/ver?custom=true",
+            "https://raw.githubusercontent.com.evil.test/Lanfir7/nurgling2/next/release/ver",
+            "https://raw.githubusercontent.com/Lanfir7/nurgling2/next/release/other",
+            "not a valid URI"
+    })
+    void keepsUnrelatedCustomUrl(String custom) {
         assertEquals(custom, NUpdateFeed.migrateBaseUrl(custom));
     }
 }

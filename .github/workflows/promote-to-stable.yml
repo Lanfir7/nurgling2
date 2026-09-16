@@ -1,48 +1,99 @@
-name: Promote Latest to Stable
+name: Promote Verified Latest to Stable
 
 on:
   workflow_dispatch:
+    inputs:
+      latest_commit:
+        description: 'Full 40-character commit SHA currently at nurgling-release/latest'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-release-stable
+  cancel-in-progress: false
 
 env:
   RELEASE_REPO: Lanfir7/nurgling-release
 
 jobs:
   promote:
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    env:
+      INPUT_LATEST_COMMIT: ${{ inputs.latest_commit }}
 
     steps:
-      - name: Promote latest to stable
+      - name: Checkout workflow source
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          persist-credentials: false
+
+      - name: Check release repository deploy key
+        shell: bash
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          RELEASE_REPO_SSH_KEY: ${{ secrets.RELEASE_REPO_SSH_KEY }}
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          set -euo pipefail
+          if [[ -z "$RELEASE_REPO_SSH_KEY" ]]; then
+            echo 'RELEASE_REPO_SSH_KEY is not configured; promotion was not attempted.' >&2
+            exit 1
+          fi
 
-          echo "Cloning release repository..."
-          git clone "https://x-access-token:$RELEASE_TOKEN@github.com/${{ env.RELEASE_REPO }}.git" release-repo
-          cd release-repo
+      - name: Checkout latest channel
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.RELEASE_REPO }}
+          ref: latest
+          ssh-key: ${{ secrets.RELEASE_REPO_SSH_KEY }}
+          path: release-repo
+          fetch-depth: 0
 
-          echo "Fetching all branches..."
-          git fetch origin latest:latest
-          git fetch origin stable:stable || git checkout -b stable latest
+      - name: Verify latest release artifacts
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-          echo "Checking out stable branch..."
-          git checkout stable
+      - name: Select the explicit latest commit
+        shell: bash
+        working-directory: release-repo
+        run: |
+          set -euo pipefail
+          if [[ ! "$INPUT_LATEST_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo 'latest_commit must be a full 40-character commit SHA.' >&2
+            exit 1
+          fi
+          git fetch origin latest stable
+          latest=$(git rev-parse origin/latest)
+          if [[ "${latest,,}" != "${INPUT_LATEST_COMMIT,,}" ]]; then
+            echo 'latest_commit does not match the current latest channel.' >&2
+            exit 1
+          fi
+          git checkout --detach "$latest"
 
-          echo "Current stable version:"
-          head -1 ver || echo "(no ver file)"
+      - name: Verify the selected latest manifest
+        shell: bash
+        working-directory: release-repo
+        run: python ../tools/verify_release.py .
 
-          echo ""
-          echo "Merging latest into stable..."
-          git merge latest -m "Promote latest to stable"
-
-          echo ""
-          echo "New stable version:"
-          head -1 ver
-
-          echo ""
-          echo "Pushing to stable branch..."
+      - name: Fast-forward stable to the explicit latest commit
+        shell: bash
+        working-directory: release-repo
+        run: |
+          set -euo pipefail
+          git show-ref --verify --quiet refs/remotes/origin/stable || {
+            echo 'Stable branch is missing; refusing to create it during promotion.' >&2
+            exit 1
+          }
+          git merge-base --is-ancestor origin/stable HEAD || {
+            echo 'Stable diverged from latest; refusing a non-fast-forward promotion.' >&2
+            exit 1
+          }
+          git checkout -B stable origin/stable
+          git config user.name 'GitHub Actions'
+          git config user.email 'actions@github.com'
+          git merge --ff-only "$latest"
           git push origin stable
-
-          echo ""
-          echo "Successfully promoted latest to stable!"

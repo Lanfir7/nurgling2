@@ -1,0 +1,36 @@
+name: Mirror Master to Next
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-master-to-next
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master history
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Fast-forward next from master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          if git ls-remote --exit-code --heads origin next >/dev/null; then
+            git fetch origin next
+            git merge-base --is-ancestor origin/next origin/master || {
+              echo 'next diverged from master; refusing to force the compatibility mirror.' >&2
+              exit 1
+            }
+          fi
+          git push origin origin/master:refs/heads/next

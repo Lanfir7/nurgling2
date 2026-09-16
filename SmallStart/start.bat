@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "URL=https://raw.githubusercontent.com/Lanfir7/nurgling2/next/release"
+set "URL=https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release"
 set "LAUNCHER=nurgling_launcher.jar"
 
 where java >nul 2>&1

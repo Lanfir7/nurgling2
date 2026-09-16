@@ -364,10 +364,10 @@
     </copy>
     <copy todir="release/" file="etc/run.bat" failonerror="false" quiet="true" />
     <copy todir="release/" file="etc/run8.bat" failonerror="false" quiet="true" />
-    <copy todir="release/" file="etc/run_updater.bat" failonerror="false" quiet="true" />
-    <copy todir="release/" file="etc/run_updater8.bat" failonerror="false" quiet="true" />
-    <copy todir="release/" file="etc/run_updater_stable.bat" failonerror="false" quiet="true" />
-    <copy todir="release/" file="etc/run_updater_latest.bat" failonerror="false" quiet="true" />
+    <copy todir="release/" file="etc/run_updater.bat" overwrite="true" />
+    <copy todir="release/" file="etc/run_updater8.bat" overwrite="true" />
+    <copy todir="release/" file="etc/run_updater_stable.bat" overwrite="true" />
+    <copy todir="release/" file="etc/run_updater_latest.bat" overwrite="true" />
     <copy todir="release/" file="etc/nurgling_launcher.jar" failonerror="false" quiet="true" />
     <copy file="etc/ansgar-config.properties" tofile="release/haven-config.properties" failonerror="false" quiet="true" />
     <fail message="AlarmSounds/*.wav required for release">
@@ -394,10 +394,16 @@
   </target>
 
   <property name="version.num" value="2.103"/>
+  <property name="release.notes.python" value="python" />
   <target name="version" depends="pre-release">
     <buildnumber file="build.num"/>
-    <exec executable="java" failifexecutionfails="false">
+    <exec executable="java" failonerror="true">
       <arg line="-jar etc/nurgling_launcher.jar hash release ${version.num}.${build.number}" />
+    </exec>
+    <exec executable="${release.notes.python}" failonerror="true">
+      <arg value="tools/finalize_release_manifest.py" />
+      <arg value="--release-dir" /><arg value="release" />
+      <arg value="--manifest" /><arg value="ver" />
     </exec>
   </target>
 
