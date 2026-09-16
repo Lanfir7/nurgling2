@@ -58,17 +58,16 @@ public class DbStatsOverlay extends Widget {
             addLine("=== DEBUG OVERLAY ===", HEADER_COLOR);
             addLine(String.format("FPS: %d", fps), fps < 30 ? WARN_COLOR : TEXT_COLOR);
             
-            // === ACTIVE BOTS (from wheel) ===
+            // === ACTIVE BOTS ===
             if (NUtils.getGameUI() != null && NUtils.getGameUI().biw != null) {
                 BotsInterruptWidget biw = NUtils.getGameUI().biw;
-                int botCount = biw.obs.size();
+                List<BotsInterruptWidget.RunningBot> bots = biw.getRunningBots();
+                int botCount = bots.size();
                 addLine(String.format("--- BOTS: %d ---", botCount), HEADER_COLOR);
-                
-                synchronized (biw.obs) {
-                    for (BotsInterruptWidget.Gear gear : biw.obs) {
-                        String actionInfo = getBotActionInfo(gear.t);
-                        addLine("  " + actionInfo, TASK_COLOR);
-                    }
+
+                for (BotsInterruptWidget.RunningBot bot : bots) {
+                    String actionInfo = getBotActionInfo(bot.getThread());
+                    addLine("  " + actionInfo, TASK_COLOR);
                 }
             }
             

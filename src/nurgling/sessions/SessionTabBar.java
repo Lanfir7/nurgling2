@@ -9,6 +9,12 @@ import nurgling.NStyle;
 import nurgling.NUI;
 import nurgling.NUtils;
 import nurgling.conf.FontSettings;
+import nurgling.i18n.L10n;
+import nurgling.hotkeys.Hotkeys;
+import nurgling.hotkeys.InputGesture;
+import nurgling.actions.bots.registry.BotDescriptor;
+import nurgling.actions.bots.registry.BotRegistry;
+import nurgling.widgets.BotsInterruptWidget;
 import nurgling.widgets.QuestHeadingFont;
 import nurgling.conf.NDragProp;
 
@@ -42,6 +48,11 @@ public class SessionTabBar extends Widget {
     /** Character portrait */
     public static final int AVA_SIZE = UI.scale(32);
     public static final int AVA_MARGIN = UI.scale(4);
+    private static final int MACRO_BADGE_WIDTH = UI.scale(156);
+    private static final int MACRO_BADGE_HEIGHT = UI.scale(28);
+    private static final int MACRO_BADGE_GAP = UI.scale(3);
+    private static final int MACRO_LANE_GAP = UI.scale(7);
+    private static final int MACRO_STOP_ALL_SIZE = UI.scale(28);
     /** Horizontal inset of the tabs when the drag frame is shown */
     private static final Coord DRAG_INSET = UI.scale(15, 34);
     public static final int STATUS_ICON_MARGIN = UI.scale(3);
@@ -51,8 +62,6 @@ public class SessionTabBar extends Widget {
     /** Colors for different states */
     private static final Color ACTIVE_BORDER = new Color(0x99, 0xFF, 0x84);    // #99FF84
     private static final Color ACTIVE_TEXT = new Color(255, 255, 255);         // White
-    private static final Color BOT_BORDER = new Color(0xE9, 0x9C, 0x54);       // #E99C54
-    private static final Color BOT_TEXT = new Color(0xE9, 0x9C, 0x54);         // #E99C54
     private static final Color IDLE_BORDER = new Color(0x91, 0x60, 0x2E);      // #91602E
     private static final Color IDLE_TEXT = new Color(190, 178, 156);
     private static final Color COMBAT_BORDER = new Color(0xFF, 0x64, 0x64);    // #FF6464
@@ -69,9 +78,10 @@ public class SessionTabBar extends Widget {
     private static final Color PLUS_BTN_BG = new Color(0x25, 0x2B, 0x29, 0xE5);
     private static final Color PLUS_BTN_HOVER = new Color(0x35, 0x3B, 0x39, 0xE5);
     private static final Color PLUS_BTN_BORDER = new Color(0x91, 0x60, 0x2E);  // #91602E
+    private static final Color MACRO_BORDER = new Color(0x9D, 0x79, 0x42, 220);
+    private static final Color MACRO_TEXT = new Color(0xF1, 0xE5, 0xC8);
 
     /** Icon resources */
-    private static Tex gearIcon;
     private static Tex warningIcon;
     private static Tex closeNormal, closeHover, closePush;
     private static Tex addNormal, addHover, addPush;
@@ -81,11 +91,14 @@ public class SessionTabBar extends Widget {
     /** Fonts (static so shared across instances) */
     private static Text.Forge nameFurnace;
     private static Text.Foundry subFoundry;
+    private static Text.Foundry macroFoundry;
     private static Tex plusLabel;
 
     /** Rendered text cache, keyed by string */
     private static final Map<String, Tex> nameCache = new HashMap<>();
     private static final Map<String, Tex> subCache = new HashMap<>();
+    private static final Map<String, Tex> macroPanelCache = new HashMap<>();
+    private static final Map<String, String> macroNameCache = new HashMap<>();
     private static final Map<String, String> fitCache = new HashMap<>();
 
     /** Portraits, keyed by session id */
@@ -95,6 +108,11 @@ public class SessionTabBar extends Widget {
     private int hoveredButton = -1;
     /** Currently hovered close button index (-1 = none) */
     private int hoveredCloseButton = -1;
+    private Thread hoveredMacroThread;
+    private int hoveredStopAllButton = -1;
+    /** Vertical scroll used only when the session/macro list exceeds the screen. */
+    private int scrollY;
+    private int contentHeight;
 
     /** Drag state */
     private UI.Grab dm = null;
@@ -187,7 +205,6 @@ public class SessionTabBar extends Widget {
 
         try {
             // Load icon textures
-            gearIcon = Resource.loadtex("nurgling/hud/sessions/icons/gear");
             warningIcon = Resource.loadtex("nurgling/hud/sessions/icons/warning");
             closeNormal = Resource.loadtex("nurgling/hud/sessions/close/10x10");
             closeHover = Resource.loadtex("nurgling/hud/sessions/close/10x10_hover");
@@ -214,6 +231,7 @@ public class SessionTabBar extends Widget {
                 new PUtils.TexFurn(titleFoundry, Window.ctex),
                 UI.scale(1), UI.scale(1), Color.BLACK);
             subFoundry = new Text.Foundry(bodyFont, 9, Color.WHITE).aa(true);
+            macroFoundry = new Text.Foundry(bodyFont, UI.scale(12), Color.WHITE).aa(true);
             plusLabel = subFoundry.render("New session").tex();
 
             tabPanel = mkpanel(BUTTON_WIDTH, BUTTON_HEIGHT,
@@ -338,11 +356,24 @@ public class SessionTabBar extends Widget {
         int sessionCount = sm.getSessionCount();
 
         int width = BUTTON_WIDTH;
-        int height = sessionCount * (BUTTON_HEIGHT + BUTTON_PADDING) + PLUS_BAR_HEIGHT;
+        int height = PLUS_BAR_HEIGHT;
+        for (SessionContext ctx : sm.getAllSessions()) {
+            if (!runningBots(ctx).isEmpty()) {
+                width = BUTTON_WIDTH + MACRO_LANE_GAP + MACRO_STOP_ALL_SIZE + MACRO_BADGE_GAP + MACRO_BADGE_WIDTH;
+            }
+            height += rowHeight(ctx) + BUTTON_PADDING;
+        }
 
         if (dragMode) {
             width += DRAG_INSET.x * 2 + UI.scale(24);
             height += DRAG_INSET.y + UI.scale(12);
+        }
+        contentHeight = height;
+        if (!dragMode && parent != null && parent.sz.y > 0) {
+            height = Math.min(height, parent.sz.y);
+            scrollY = Math.min(scrollY, Math.max(0, contentHeight - height));
+        } else {
+            scrollY = 0;
         }
         this.sz = new Coord(width, height);
 
@@ -367,18 +398,23 @@ public class SessionTabBar extends Widget {
         return (dragMode ? DRAG_INSET : Coord.z);
     }
 
+    private Coord contentOffset() {
+        return tabOffset().sub(0, scrollY);
+    }
+
     /**
      * Create, position and retire the portrait widgets so there is exactly one per session.
      */
     private void syncAvatars() {
         boolean dragMode = ui != null && ui.core != null && ui.core.mode == NCore.Mode.DRAG;
         boolean show = btnVis.a || dragMode;
-        Coord off = tabOffset();
+        Coord off = contentOffset();
 
         SessionManager sm = SessionManager.getInstance();
         List<SessionContext> sessions = new ArrayList<>(sm.getAllSessions());
         Set<String> alive = new HashSet<>();
 
+        int y = off.y;
         for (int i = 0; i < sessions.size(); i++) {
             SessionContext ctx = sessions.get(i);
             alive.add(ctx.sessionId);
@@ -388,11 +424,12 @@ public class SessionTabBar extends Widget {
                 avatars.put(ctx.sessionId, ava);
             }
             ava.move(new Coord(off.x + AVA_MARGIN,
-                               off.y + i * (BUTTON_HEIGHT + BUTTON_PADDING) + (BUTTON_HEIGHT - AVA_SIZE) / 2));
+                               y + (BUTTON_HEIGHT - AVA_SIZE) / 2));
             if (show)
                 ava.show();
             else
                 ava.hide();
+            y += rowHeight(ctx) + BUTTON_PADDING;
         }
 
         for (Iterator<Map.Entry<String, SessionAvatar>> it = avatars.entrySet().iterator(); it.hasNext(); ) {
@@ -433,7 +470,7 @@ public class SessionTabBar extends Widget {
             return;
         }
 
-        Coord off = tabOffset();
+        Coord off = contentOffset();
         SessionContext active = sm.getActiveSession();
         boolean canClose = sessions.size() > 1;
 
@@ -441,7 +478,7 @@ public class SessionTabBar extends Widget {
         int y = off.y;
         for (int i = 0; i < sessions.size(); i++) {
             drawTabPlate(g, off.x, y, sessions.get(i), i == hoveredButton, sessions.get(i) == active);
-            y += BUTTON_HEIGHT + BUTTON_PADDING;
+            y += rowHeight(sessions.get(i)) + BUTTON_PADDING;
         }
 
         // Pass 2: child widgets (portraits, drag handles)
@@ -453,7 +490,7 @@ public class SessionTabBar extends Widget {
             SessionContext ctx = sessions.get(i);
             drawTabContent(g, off.x, y, ctx, i == hoveredButton, ctx == active,
                            canClose && (i == hoveredCloseButton), canClose);
-            y += BUTTON_HEIGHT + BUTTON_PADDING;
+            y += rowHeight(ctx) + BUTTON_PADDING;
         }
 
         drawPlusButton(g, off.x, y, hoveredButton == -2);
@@ -494,7 +531,6 @@ public class SessionTabBar extends Widget {
             return pulseHigh ? ALARM_BORDER : ALARM_BORDER_ALT;
         }
         if (ctx.isInCombat()) return (COMBAT_BORDER);
-        if (ctx.isRunningBot()) return (BOT_BORDER);
         if (isActive) return (ACTIVE_BORDER);
         return (IDLE_BORDER);
     }
@@ -502,7 +538,6 @@ public class SessionTabBar extends Widget {
     private static Color textOf(SessionContext ctx, boolean isActive) {
         if (ctx.hasAlarm()) return (ALARM_TEXT);
         if (ctx.isInCombat()) return (COMBAT_TEXT);
-        if (ctx.isRunningBot()) return (BOT_TEXT);
         if (isActive) return (ACTIVE_TEXT);
         return (IDLE_TEXT);
     }
@@ -512,10 +547,6 @@ public class SessionTabBar extends Widget {
             return ("Alarm");
         if (ctx.isInCombat())
             return ("In combat");
-        if (ctx.isRunningBot()) {
-            String bot = ctx.getCurrentBotName();
-            return ((bot == null || bot.isEmpty()) ? "Bot running" : bot);
-        }
         if (isActive)
             return ("Active");
         return (ctx.isHeadless() ? "Background" : "Idle");
@@ -595,6 +626,140 @@ public class SessionTabBar extends Widget {
         if (hovered || closeHovered || canClose)
             drawCloseButton(g, x + BUTTON_WIDTH - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN,
                             y + CLOSE_BTN_MARGIN, closeHovered, !canClose);
+
+        drawMacroControls(g, x, y, ctx);
+    }
+
+    private List<BotsInterruptWidget.RunningBot> runningBots(SessionContext ctx) {
+        NGameUI gui = ctx.getGameUI();
+        return (gui == null || gui.biw == null) ? Collections.emptyList() : gui.biw.getRunningBots();
+    }
+
+    private int rowHeight(SessionContext ctx) {
+        int botRows = runningBots(ctx).size();
+        return botRows == 0 ? BUTTON_HEIGHT : Math.max(BUTTON_HEIGHT,
+                UI.scale(4) + botRows * (MACRO_BADGE_HEIGHT + MACRO_BADGE_GAP) + UI.scale(4));
+    }
+
+    private void drawMacroControls(GOut g, int x, int y, SessionContext ctx) {
+        List<BotsInterruptWidget.RunningBot> bots = runningBots(ctx);
+        if (bots.isEmpty()) {
+            return;
+        }
+        int stopX = x + BUTTON_WIDTH + MACRO_LANE_GAP;
+        boolean stopHovered = isStopAllHovered(ctx);
+        drawMacroBadge(g, new Coord(stopX, y + UI.scale(4)), MACRO_STOP_ALL_SIZE,
+                "■", stopHovered, true);
+
+        int badgeX = stopX + MACRO_STOP_ALL_SIZE + MACRO_BADGE_GAP;
+        int badgeY = y + UI.scale(4);
+        for (BotsInterruptWidget.RunningBot bot : bots) {
+            String name = bot.getName();
+            if (name == null || name.trim().isEmpty()) {
+                name = L10n.get("sessionbar.macro_unnamed");
+            } else {
+                name = displayBotName(name);
+            }
+            drawMacroBadge(g, new Coord(badgeX, badgeY), MACRO_BADGE_WIDTH,
+                    name,
+                    bot.getThread() == hoveredMacroThread, false);
+            badgeY += MACRO_BADGE_HEIGHT + MACRO_BADGE_GAP;
+        }
+    }
+
+    /** Compact raised charcoal/bronze control; hover switches to a warm stop cue. */
+    private void drawMacroBadge(GOut g, Coord ul, int width, String label, boolean hovered, boolean stopAll) {
+        g.chcolor(0, 0, 0, 130);
+        g.frect(ul.add(UI.scale(1), UI.scale(1)), new Coord(width, MACRO_BADGE_HEIGHT));
+        g.chcolor();
+        String panelKey = width + ":" + hovered + ":" + stopAll;
+        g.image(cached(macroPanelCache, panelKey,
+                ignored -> makeMacroPanel(width, hovered, stopAll)), ul);
+        if (stopAll) {
+            int side = UI.scale(8);
+            g.chcolor(hovered ? new Color(255, 226, 203) : new Color(192, 145, 119));
+            g.frect(ul.add((width - side) / 2, (MACRO_BADGE_HEIGHT - side) / 2), new Coord(side, side));
+        } else {
+            final String fitted = fitMacro(label, width - UI.scale(34));
+            Tex text = cached(subCache, "macro:" + fitted, ignored -> macroFoundry.render(fitted).tex());
+            g.chcolor(hovered ? new Color(255, 241, 222) : MACRO_TEXT);
+            g.aimage(text, ul.add(UI.scale(10), MACRO_BADGE_HEIGHT / 2), 0, 0.5);
+
+            // The entire plate is one hit target; the fixed cross is only a visual affordance.
+            Coord center = ul.add(width - UI.scale(12), MACRO_BADGE_HEIGHT / 2);
+            int arm = UI.scale(3);
+            g.chcolor(hovered ? new Color(255, 208, 179) : new Color(160, 140, 111));
+            g.line(center.add(-arm, -arm), center.add(arm, arm), UI.scale(1));
+            g.line(center.add(-arm, arm), center.add(arm, -arm), UI.scale(1));
+        }
+        g.chcolor();
+    }
+
+    private static Tex makeMacroPanel(int width, boolean hovered, boolean stopAll) {
+        int h = MACRO_BADGE_HEIGHT;
+        int cut = UI.scale(3);
+        BufferedImage image = TexI.mkbuf(new Coord(width, h));
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        java.awt.Polygon outline = new java.awt.Polygon(
+                new int[]{cut, width - cut - 1, width - 1, width - 1, width - cut - 1, cut, 0, 0},
+                new int[]{0, 0, cut, h - cut - 1, h - 1, h - 1, h - cut - 1, cut}, 8);
+        Color top = hovered ? new Color(89, 49, 39) : (stopAll ? new Color(52, 43, 36) : new Color(49, 49, 42));
+        Color bottom = hovered ? new Color(48, 29, 25) : new Color(24, 27, 24);
+        g.setPaint(new GradientPaint(0, 0, top, 0, h, bottom));
+        g.fillPolygon(outline);
+        g.setColor(hovered ? new Color(196, 121, 79) : MACRO_BORDER);
+        g.drawPolygon(outline);
+        g.setColor(new Color(244, 218, 159, hovered ? 65 : 32));
+        g.drawLine(cut + 1, 1, width - cut - 2, 1);
+        g.setColor(new Color(0, 0, 0, 110));
+        g.drawLine(cut + 1, h - 2, width - cut - 2, h - 2);
+        g.dispose();
+        return new TexI(image);
+    }
+
+    private String fitMacro(String text, int width) {
+        if (macroFoundry.strsize(text).x <= width) {
+            return text;
+        }
+        for (int length = text.length() - 1; length > 0; length--) {
+            String candidate = text.substring(0, length) + "…";
+            if (macroFoundry.strsize(candidate).x <= width) {
+                return candidate;
+            }
+        }
+        return text;
+    }
+
+    private String displayBotName(String name) {
+        String key = L10n.getLanguage() + ":" + name;
+        String cached = macroNameCache.get(key);
+        if (cached != null)
+            return cached;
+        String source = name.endsWith("-RecentAction")
+                ? name.substring(0, name.length() - "-RecentAction".length()) : name;
+        String display = source;
+        for (BotDescriptor descriptor : BotRegistry.all()) {
+            if (source.equalsIgnoreCase(descriptor.id) || source.equalsIgnoreCase(descriptor.iconPath)
+                    || source.equalsIgnoreCase(descriptor.titleKey)
+                    || (descriptor.clazz != null && source.equalsIgnoreCase(descriptor.clazz.getSimpleName()))) {
+                String titleKey = "bot." + descriptor.id + ".title";
+                display = L10n.hasKey(titleKey) ? L10n.get(titleKey) : descriptor.getDisplayName();
+                break;
+            }
+        }
+        if (macroNameCache.size() > 64)
+            macroNameCache.clear();
+        macroNameCache.put(key, display);
+        return display;
+    }
+
+    private boolean isStopAllHovered(SessionContext ctx) {
+        if (hoveredStopAllButton < 0) {
+            return false;
+        }
+        List<SessionContext> sessions = new ArrayList<>(SessionManager.getInstance().getAllSessions());
+        return hoveredStopAllButton < sessions.size() && sessions.get(hoveredStopAllButton) == ctx;
     }
 
     /** Truncate to fit the given pixel width, appending an ellipsis. */
@@ -631,8 +796,6 @@ public class SessionTabBar extends Widget {
         Tex icon = null;
         if (ctx.isInCombat()) {
             icon = warningIcon;
-        } else if (ctx.isRunningBot()) {
-            icon = gearIcon;
         }
         if (icon != null)
             g.image(icon, new Coord(x, y), new Coord(STATUS_ICON_SIZE, STATUS_ICON_SIZE));
@@ -691,6 +854,7 @@ public class SessionTabBar extends Widget {
 
         // Normal mode - handle session button clicks
         if (ev.b != 1) return super.mousedown(ev);
+        if (!btnVis.a) return super.mousedown(ev);
 
         SessionManager sm = SessionManager.getInstance();
         List<SessionContext> sessions = new ArrayList<>(sm.getAllSessions());
@@ -699,6 +863,19 @@ public class SessionTabBar extends Widget {
         if (isPlusButtonHit(ev.c)) {
             if (onAddAccount != null) {
                 onAddAccount.run();
+            }
+            return true;
+        }
+
+        MacroHit macroHit = getMacroHit(ev.c, sessions);
+        if (macroHit != null) {
+            NGameUI gui = macroHit.context.getGameUI();
+            if (gui != null && gui.biw != null) {
+                if (macroHit.stopAll) {
+                    gui.biw.interruptAll();
+                } else {
+                    gui.biw.removeObserve(macroHit.bot.getThread());
+                }
             }
             return true;
         }
@@ -783,6 +960,14 @@ public class SessionTabBar extends Widget {
             }
         } else {
             // Normal mode
+            if (!btnVis.a) {
+                hoveredButton = -1;
+                hoveredCloseButton = -1;
+                hoveredMacroThread = null;
+                hoveredStopAllButton = -1;
+                super.mousemove(ev);
+                return;
+            }
             if (dm != null) {
                 // Handle dragging
                 this.c = this.c.add(ev.c.sub(doff));
@@ -806,9 +991,22 @@ public class SessionTabBar extends Widget {
             if (isPlusButtonHit(ev.c)) {
                 hoveredButton = -2;
                 hoveredCloseButton = -1;
+                hoveredMacroThread = null;
+                hoveredStopAllButton = -1;
             } else {
+                MacroHit macroHit = getMacroHit(ev.c, new ArrayList<>(SessionManager.getInstance().getAllSessions()));
+                if (macroHit != null) {
+                    hoveredButton = -1;
+                    hoveredCloseButton = -1;
+                    hoveredStopAllButton = macroHit.stopAll ? macroHit.sessionIndex : -1;
+                    hoveredMacroThread = macroHit.stopAll ? null : macroHit.bot.getThread();
+                    super.mousemove(ev);
+                    return;
+                }
                 int buttonIndex = getButtonAt(ev.c);
                 hoveredButton = buttonIndex;
+                hoveredMacroThread = null;
+                hoveredStopAllButton = -1;
 
                 if (buttonIndex >= 0 && isCloseButtonHit(ev.c, buttonIndex)) {
                     hoveredCloseButton = buttonIndex;
@@ -846,28 +1044,59 @@ public class SessionTabBar extends Widget {
         if (!hovering) {
             hoveredButton = -1;
             hoveredCloseButton = -1;
+            hoveredMacroThread = null;
+            hoveredStopAllButton = -1;
         }
         return false;
+    }
+
+    @Override
+    public boolean mousewheel(MouseWheelEvent ev) {
+        boolean dragMode = ui != null && ui.core != null && ui.core.mode == NCore.Mode.DRAG;
+        if (!dragMode && btnVis.a && contentHeight > sz.y) {
+            int maxScroll = contentHeight - sz.y;
+            scrollY = Math.max(0, Math.min(maxScroll, scrollY + ev.a * UI.scale(24)));
+            return true;
+        }
+        return super.mousewheel(ev);
+    }
+
+    @Override
+    public Object tooltip(Coord c, Widget prev) {
+        if (btnVis.a) {
+            MacroHit macroHit = getMacroHit(c, new ArrayList<>(SessionManager.getInstance().getAllSessions()));
+            if (macroHit != null) {
+                if (!macroHit.stopAll)
+                    return L10n.get("sessionbar.macro_stop") + ": " + displayBotName(macroHit.bot.getName());
+                String tip = L10n.get("sessionbar.macros_stop_all") + " — " + macroHit.context.getDisplayName();
+                if (macroHit.context == SessionManager.getInstance().getActiveSession()) {
+                    InputGesture key = Hotkeys.action(Hotkeys.SESSION_STOP_MACROS).current();
+                    if (key.type() != InputGesture.Type.NONE)
+                        tip += " (" + key.displayName() + ")";
+                }
+                return tip;
+            }
+        }
+        return super.tooltip(c, prev);
     }
 
     /**
      * Get the button index at the given coordinate.
      */
     private int getButtonAt(Coord c) {
-        Coord off = tabOffset();
+        Coord off = contentOffset();
 
         if (c.x < off.x || c.x > off.x + BUTTON_WIDTH) {
             return -1;
         }
 
-        SessionManager sm = SessionManager.getInstance();
-        int sessionCount = sm.getSessionCount();
-
-        for (int i = 0; i < sessionCount; i++) {
-            int y = off.y + i * (BUTTON_HEIGHT + BUTTON_PADDING);
+        List<SessionContext> sessions = new ArrayList<>(SessionManager.getInstance().getAllSessions());
+        int y = off.y;
+        for (int i = 0; i < sessions.size(); i++) {
             if (c.y >= y && c.y < y + BUTTON_HEIGHT) {
                 return i;
             }
+            y += rowHeight(sessions.get(i)) + BUTTON_PADDING;
         }
 
         return -1;
@@ -878,9 +1107,17 @@ public class SessionTabBar extends Widget {
      * Close button sits in the top right corner of the tab.
      */
     private boolean isCloseButtonHit(Coord c, int buttonIndex) {
-        Coord off = tabOffset();
+        Coord off = contentOffset();
 
-        int y = off.y + buttonIndex * (BUTTON_HEIGHT + BUTTON_PADDING) + CLOSE_BTN_MARGIN;
+        List<SessionContext> sessions = new ArrayList<>(SessionManager.getInstance().getAllSessions());
+        if (buttonIndex < 0 || buttonIndex >= sessions.size()) {
+            return false;
+        }
+        int y = off.y;
+        for (int i = 0; i < buttonIndex; i++) {
+            y += rowHeight(sessions.get(i)) + BUTTON_PADDING;
+        }
+        y += CLOSE_BTN_MARGIN;
         int closeX = off.x + BUTTON_WIDTH - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN;
 
         return c.x >= closeX && c.x < closeX + CLOSE_BTN_SIZE &&
@@ -891,15 +1128,56 @@ public class SessionTabBar extends Widget {
      * Check if coordinate is over the "new session" bar below the tabs.
      */
     private boolean isPlusButtonHit(Coord c) {
-        Coord off = tabOffset();
+        Coord off = contentOffset();
 
-        SessionManager sm = SessionManager.getInstance();
-        int sessionCount = sm.getSessionCount();
-
-        int y = off.y + sessionCount * (BUTTON_HEIGHT + BUTTON_PADDING);
+        int y = off.y;
+        for (SessionContext ctx : SessionManager.getInstance().getAllSessions()) {
+            y += rowHeight(ctx) + BUTTON_PADDING;
+        }
 
         return c.x >= off.x && c.x < off.x + BUTTON_WIDTH &&
                c.y >= y && c.y < y + PLUS_BAR_HEIGHT;
+    }
+
+    private static final class MacroHit {
+        private final SessionContext context;
+        private final BotsInterruptWidget.RunningBot bot;
+        private final int sessionIndex;
+        private final boolean stopAll;
+
+        private MacroHit(SessionContext context, BotsInterruptWidget.RunningBot bot, int sessionIndex, boolean stopAll) {
+            this.context = context;
+            this.bot = bot;
+            this.sessionIndex = sessionIndex;
+            this.stopAll = stopAll;
+        }
+    }
+
+    private MacroHit getMacroHit(Coord c, List<SessionContext> sessions) {
+        Coord off = contentOffset();
+        int y = off.y;
+        for (int index = 0; index < sessions.size(); index++) {
+            SessionContext ctx = sessions.get(index);
+            List<BotsInterruptWidget.RunningBot> bots = runningBots(ctx);
+            if (!bots.isEmpty()) {
+                int stopX = off.x + BUTTON_WIDTH + MACRO_LANE_GAP;
+                if (c.x >= stopX && c.x < stopX + MACRO_STOP_ALL_SIZE &&
+                        c.y >= y + UI.scale(4) && c.y < y + UI.scale(4) + MACRO_BADGE_HEIGHT) {
+                    return new MacroHit(ctx, null, index, true);
+                }
+                int badgeX = stopX + MACRO_STOP_ALL_SIZE + MACRO_BADGE_GAP;
+                int badgeY = y + UI.scale(4);
+                for (BotsInterruptWidget.RunningBot bot : bots) {
+                    if (c.x >= badgeX && c.x < badgeX + MACRO_BADGE_WIDTH &&
+                            c.y >= badgeY && c.y < badgeY + MACRO_BADGE_HEIGHT) {
+                        return new MacroHit(ctx, bot, index, false);
+                    }
+                    badgeY += MACRO_BADGE_HEIGHT + MACRO_BADGE_GAP;
+                }
+            }
+            y += rowHeight(ctx) + BUTTON_PADDING;
+        }
+        return null;
     }
 
     /**

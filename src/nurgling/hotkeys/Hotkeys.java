@@ -91,6 +91,7 @@ public final class Hotkeys {
     public static final String WINDOW_RESOURCE_TIMERS_REFRESH = "window.resource_timers.refresh";
     public static final String WINDOW_MAP_ICONS_TOGGLE_SELECTED = "window.map_icons.toggle_selected";
     public static final String SYSTEM_RENDERING_TOGGLE = "system.rendering.toggle";
+    public static final String SESSION_STOP_MACROS = "session-stop-macros";
 
     private static final HotkeyRegistry REGISTRY = new HotkeyRegistry();
     private static boolean initialized;

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-session-macro-controls",
+  "priority": 7,
+  "summary": {
+    "ru": "Запущенные макросы теперь рядом с портретом персонажа: нажмите на плашку, чтобы остановить макрос.",
+    "en": "Running macros now appear beside each character portrait: click a badge to stop that macro."
+  },
+  "detail": {
+    "ru": "Шестерёнки в центре экрана заменены подписанными плашками в панели сессий. Вся плашка останавливает свой макрос, квадратная кнопка рядом — все макросы этого персонажа, даже в фоновом окне. Ctrl+Shift+X останавливает макросы текущей сессии; сочетание меняется в настройках горячих клавиш, в категории «Сессии».",
+    "en": "Central spinning gears are replaced by named badges in the session panel. Click anywhere on a badge to stop its macro, or use the square button to stop all macros for that character, including background sessions. Ctrl+Shift+X stops macros in the current session; rebind it in Hotkeys settings under Sessions."
+  }
+}

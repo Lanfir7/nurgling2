@@ -120,6 +120,7 @@ public final class HotkeyCatalog {
             core(registry, binding("session-" + i, KeyMatch.forcode(i == 10 ? KeyEvent.VK_0 : KeyEvent.VK_0 + i, KeyMatch.M)), HotkeyCategory.SESSIONS, HotkeyContext.SESSION_SWITCHER, order);
         core(registry, binding("session-next", KeyMatch.forcode(KeyEvent.VK_CLOSE_BRACKET, KeyMatch.M)), HotkeyCategory.SESSIONS, HotkeyContext.SESSION_SWITCHER, order);
         core(registry, binding("session-prev", KeyMatch.forcode(KeyEvent.VK_OPEN_BRACKET, KeyMatch.M)), HotkeyCategory.SESSIONS, HotkeyContext.SESSION_SWITCHER, order);
+        core(registry, binding(Hotkeys.SESSION_STOP_MACROS, KeyMatch.forcode(KeyEvent.VK_X, KeyMatch.C | KeyMatch.S)), HotkeyCategory.SESSIONS, HotkeyContext.GLOBAL, order);
 
         registerItemActions(registry, order);
         registerGameplayGestures(registry, order);

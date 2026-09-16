@@ -372,8 +372,8 @@ public class NGameUI extends GameUI
         // Position NImportStrategyDialog relative to areas widget center
         add(importDialog = new NImportStrategyDialog(), new Coord(sz.x/2 - importDialog.sz.x/2, sz.y/2 - importDialog.sz.y/2));
         importDialog.hide();
-        // Position BotsInterruptWidget (observer with gears) in center of screen
-        add(biw = new BotsInterruptWidget(), new Coord(sz.x/2 - biw.sz.x/2, sz.y/2 - biw.sz.y/2));
+        // Session-owned macro registry; controls are drawn beside the session portrait.
+        add(biw = new BotsInterruptWidget(), Coord.z);
         waypointMovementService = new WaypointMovementService(this);
         pingService = new PingService(this);
         fishLocationService = new FishLocationService(this, genus);
@@ -1036,8 +1036,6 @@ public class NGameUI extends GameUI
             nean.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 7));
         if(spec != null)
             spec.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 7));
-        if(biw != null)
-            biw.move(new Coord(sz.x / 2 - biw.sz.x / 2, sz.y / 2 - biw.sz.y / 2));
         if(blueprintWidget != null)
             blueprintWidget.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 5));
     }
@@ -1853,6 +1851,11 @@ public class NGameUI extends GameUI
 
     @Override
     public boolean globtype(GlobKeyEvent ev) {
+        if (Hotkeys.matchesKey(Hotkeys.SESSION_STOP_MACROS, ev.awt)) {
+            if (biw != null)
+                biw.interruptAll();
+            return true;
+        }
         nurgling.sessions.SessionManager sm = nurgling.sessions.SessionManager.getInstance();
 
         // Check session switching keybindings
