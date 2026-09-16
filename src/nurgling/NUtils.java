@@ -76,6 +76,33 @@ public class NUtils
                 Math.max(0, (parentSz.y - childSz.y) / 2));
     }
 
+    /** Preference key for a bot/macro window, or null if the class should stay centered. */
+    public static String rememberedWindowKey(String className) {
+        if (className == null || className.isEmpty() || className.indexOf('$') >= 0)
+            return null;
+        if ("nurgling.widgets.bots.MasterMinerWnd".equals(className))
+            return null;
+        if (!className.startsWith("nurgling.widgets.bots."))
+            return null;
+        return "botwnd-" + className;
+    }
+
+    public static String rememberedWindowKey(Widget wdg) {
+        if (!(wdg instanceof Window))
+            return null;
+        String name = wdg.getClass().getName();
+        String key = rememberedWindowKey(name);
+        if (key != null)
+            return key;
+        if (wdg instanceof nurgling.widgets.bots.Checkable && name.indexOf('$') < 0)
+            return "botwnd-" + name;
+        return null;
+    }
+
+    public static Coord windowPlacementPos(Coord parentSz, Coord childSz, Coord savedPos) {
+        return savedPos != null ? savedPos : centeredPos(parentSz, childSz);
+    }
+
     public static <T extends Widget> T addCentered(T wdg) {
         return addCentered(getGameUI(), wdg);
     }
@@ -83,7 +110,16 @@ public class NUtils
     public static <T extends Widget> T addCentered(Widget parent, T wdg) {
         if (parent == null || wdg == null)
             return wdg;
-        parent.add(wdg, centeredPos(parent.sz, wdg.sz));
+        Coord pos = centeredPos(parent.sz, wdg.sz);
+        if (wdg instanceof Window) {
+            String key = rememberedWindowKey(wdg);
+            if (key != null) {
+                Window wnd = (Window) wdg;
+                wnd.posmem(key);
+                pos = windowPlacementPos(parent.sz, wdg.sz, wnd.restorepos(null));
+            }
+        }
+        parent.add(wdg, pos);
         if (parent instanceof GameUI)
             ((GameUI) parent).fitwdg(wdg);
         return wdg;

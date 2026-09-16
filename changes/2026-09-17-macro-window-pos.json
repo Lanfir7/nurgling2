@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-macro-window-pos",
+  "priority": 6,
+  "summary": {
+    "ru": "Окна макросов запоминают место, куда вы их передвинули, и открываются там снова.",
+    "en": "Macro windows remember where you moved them and open in the same place next time."
+  },
+  "detail": {
+    "ru": "Переместите окно макроса — при следующем запуске оно откроется там же. У каждого макроса своё место, как у окна Master Miner.",
+    "en": "Move a macro window and the next launch opens it there. Each macro keeps its own place, like the Master Miner window."
+  }
+}

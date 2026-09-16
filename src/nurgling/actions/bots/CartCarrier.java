@@ -67,7 +67,7 @@ public class CartCarrier implements Action {
         nurgling.widgets.bots.Carrier w = null;
         try {
             NUtils.getUI().core.addTask(new WaitCheckable(
-                    gui.add((w = new nurgling.widgets.bots.Carrier()), UI.scale(200, 200))));
+                    NUtils.addCentered(gui, w = new nurgling.widgets.bots.Carrier())));
             prop = w.prop;
         } finally {
             if (w != null)
