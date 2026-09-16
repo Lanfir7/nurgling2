@@ -29,6 +29,186 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HotkeySettingsLifecycleTest {
+    @Test void savingMapShortcutUpdatesTheExistingMapButton() throws Exception {
+        HotkeyRegistry catalog = new HotkeyRegistry();
+        nurgling.hotkeys.HotkeyCatalog.registerCore(catalog);
+        HotkeyAction map = catalog.find("map");
+        Object before = map.binding().checkpoint();
+        String visibilityBefore = haven.Utils.getpref("wndvis-map", null);
+        try {
+            map.binding().reset();
+            HotkeyRegistry registry = new HotkeyRegistry();
+            registry.register(map);
+            HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+            final int[] calls = {0};
+            nurgling.widgets.NMiniMapWnd.NMenuCheckBox button =
+                    new nurgling.widgets.NMiniMapWnd.NMenuCheckBox(
+                            "nurgling/hud/buttons/toggle_panel/map", haven.GameUI.kb_map, "Map");
+            button.click(() -> calls[0]++);
+            page.model().assign("map", nurgling.hotkeys.InputGesture.key(
+                    haven.KeyMatch.forcode(java.awt.event.KeyEvent.VK_M, 0)));
+            page.save();
+            assertFalse(page.model().hasUnsavedChanges());
+            java.awt.Canvas source = new java.awt.Canvas();
+            assertTrue(button.globtype(new Widget.GlobKeyEvent(new java.awt.event.KeyEvent(source,
+                    java.awt.event.KeyEvent.KEY_PRESSED, 0, 0, java.awt.event.KeyEvent.VK_M, 'm'))));
+            assertEquals(1, calls[0]);
+            assertFalse(button.globtype(new Widget.GlobKeyEvent(new java.awt.event.KeyEvent(source,
+                    java.awt.event.KeyEvent.KEY_PRESSED, 0, java.awt.event.KeyEvent.CTRL_DOWN_MASK,
+                    java.awt.event.KeyEvent.VK_A, 'a'))));
+            assertEquals(1, calls[0]);
+            MapGameUI gui = (MapGameUI)unsafe().allocateInstance(MapGameUI.class);
+            gui.mapfile = (nurgling.widgets.NMapWnd)unsafe().allocateInstance(
+                    nurgling.widgets.NMapWnd.class);
+            assertTrue(gui.globtype(new Widget.GlobKeyEvent(new java.awt.event.KeyEvent(source,
+                    java.awt.event.KeyEvent.KEY_PRESSED, 0, 0, java.awt.event.KeyEvent.VK_M, 'm'))),
+                    "the parent GameUI must consume map input before recipe widgets");
+            assertEquals(1, gui.mapToggles);
+            assertFalse(gui.globtype(new Widget.GlobKeyEvent(new java.awt.event.KeyEvent(source,
+                    java.awt.event.KeyEvent.KEY_PRESSED, 0, java.awt.event.KeyEvent.CTRL_DOWN_MASK,
+                    java.awt.event.KeyEvent.VK_A, 'a'))));
+            assertEquals(1, gui.mapToggles);
+            assertTrue(haven.KeyMatch.restore(haven.Utils.getpref("keybind/map", "")).match(
+                    new java.awt.event.KeyEvent(source, java.awt.event.KeyEvent.KEY_PRESSED,
+                            0, 0, java.awt.event.KeyEvent.VK_M, 'm')));
+        } finally {
+            map.binding().restore(before);
+            haven.Utils.setpref("wndvis-map", visibilityBefore);
+        }
+    }
+
+    @Test void vanillaMenuRecipesDoNotEnterTheHotkeyCatalog() throws Exception {
+        HotkeyRegistry registry = nurgling.hotkeys.Hotkeys.registry();
+        int before = registry.snapshot().size();
+        RecipeButton button = (RecipeButton)unsafe().allocateInstance(RecipeButton.class);
+        Resource resource = (Resource)unsafe().allocateInstance(Resource.class);
+        setObject(resource, "name", "test/hotkeys/lamb-sausages");
+        setObject(button, "res", resource);
+        haven.KeyBinding binding = button.binding();
+        assertEquals("scm/test/hotkeys/lamb-sausages", binding.id);
+        assertEquals(before, registry.snapshot().size());
+        assertNull(registry.find(binding.id));
+    }
+
+    private static class RecipeButton extends haven.MenuGrid.PagButton {
+        RecipeButton() { super(null); }
+        public haven.KeyMatch hotkey() { return haven.KeyMatch.forchar('M', 0); }
+        public String name() { return "Lamb Sausages"; }
+    }
+
+    private static class MapGameUI extends haven.GameUI {
+        int mapToggles;
+        MapGameUI() { super("test", 0, "test", null); }
+        public void togglewnd(haven.Window window) { mapToggles++; }
+    }
+
+    @Test void ignoringConflictSavesBothBindings() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        nurgling.hotkeys.InputGesture occupied = nurgling.hotkeys.InputGesture.mouse(2, 7, 0);
+        registry.register(action("first", "First", new CountingBinding("first", occupied)));
+        registry.register(action("second", "Second", new CountingBinding("second", occupied)));
+        HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+        page.save();
+        ((Button)findField(HotkeySettings.class, "conflictIgnore").get(page)).click();
+        assertNull(findField(HotkeySettings.class, "conflictBox").get(page));
+        assertFalse(page.model().hasUnsavedChanges());
+        assertEquals(occupied, registry.find("first").current());
+        assertEquals(occupied, registry.find("second").current());
+        page.save();
+        assertNull(findField(HotkeySettings.class, "conflictBox").get(page));
+    }
+
+    @Test void changingPresetDiscardsTheOldConflictPromptAndItsCallbacks() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        nurgling.hotkeys.InputGesture occupied = nurgling.hotkeys.InputGesture.mouse(2, 7, 0);
+        registry.register(action("target", "Target", new CountingBinding("target",
+                nurgling.hotkeys.InputGesture.none())));
+        registry.register(action("occupied", "Occupied", new CountingBinding("occupied", occupied)));
+        HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+        page.model().createPreset("Copy test");
+        java.lang.reflect.Method capture = HotkeySettings.class.getDeclaredMethod("handleCapture",
+                HotkeyAction.class, HotkeyCapturePolicy.Decision.class);
+        capture.setAccessible(true);
+        capture.invoke(page, registry.find("target"),
+                HotkeyCapturePolicy.mouse(2, 0, registry.find("target")));
+        assertNotNull(findField(HotkeySettings.class, "conflictBox").get(page));
+
+        HotkeyPresetControls.Actions actions = (HotkeyPresetControls.Actions)
+                findField(HotkeyPresetControls.class, "actions").get(page.controls());
+        actions.copyCode();
+        assertNotNull(findField(HotkeySettings.class, "conflictBox").get(page),
+                "copying a preset must not cancel a pending assignment");
+        actions.select("builtin.default");
+
+        assertNull(findField(HotkeySettings.class, "conflictBox").get(page));
+        assertEquals("builtin.default", page.model().presets().selected().id());
+        assertEquals(nurgling.hotkeys.InputGesture.none(), page.model().draft().effective("target"));
+        assertEquals(occupied, page.model().draft().effective("occupied"));
+    }
+
+    @Test void editingAnotherActionCancelsThePreviousConflictingAssignment() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        nurgling.hotkeys.InputGesture occupied = nurgling.hotkeys.InputGesture.mouse(2, 7, 0);
+        registry.register(action("target", "Target", new CountingBinding("target",
+                nurgling.hotkeys.InputGesture.none())));
+        registry.register(action("occupied", "Occupied", new CountingBinding("occupied", occupied)));
+        HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+        java.lang.reflect.Method capture = HotkeySettings.class.getDeclaredMethod("handleCapture",
+                HotkeyAction.class, HotkeyCapturePolicy.Decision.class);
+        capture.setAccessible(true);
+        capture.invoke(page, registry.find("target"),
+                HotkeyCapturePolicy.mouse(2, 0, registry.find("target")));
+        capture.invoke(page, registry.find("occupied"),
+                HotkeyCapturePolicy.mouse(3, 0, registry.find("occupied")));
+
+        assertNull(findField(HotkeySettings.class, "conflictBox").get(page));
+        assertEquals(nurgling.hotkeys.InputGesture.none(), page.model().draft().effective("target"));
+        assertEquals(nurgling.hotkeys.InputGesture.mouse(3, 7, 0),
+                page.model().draft().effective("occupied"));
+    }
+
+    @Test void replacingMultipleCaptureConflictsCanCancelTheWholeAssignment() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        nurgling.hotkeys.InputGesture occupied = nurgling.hotkeys.InputGesture.mouse(2, 7, 0);
+        registry.register(action("target", "Target", new CountingBinding("target",
+                nurgling.hotkeys.InputGesture.none())));
+        registry.register(action("first", "First", new CountingBinding("first", occupied)));
+        registry.register(action("second", "Second", new CountingBinding("second", occupied)));
+        HotkeySettingsModel model = new HotkeySettingsModel(registry);
+        String presetBefore = model.presets().selected().id();
+        HotkeySettings page = new HotkeySettings(model);
+        java.lang.reflect.Method capture = HotkeySettings.class.getDeclaredMethod("handleCapture",
+                HotkeyAction.class, HotkeyCapturePolicy.Decision.class);
+        capture.setAccessible(true);
+        capture.invoke(page, registry.find("target"),
+                HotkeyCapturePolicy.mouse(2, 0, registry.find("target")));
+
+        ((Button)findField(HotkeySettings.class, "conflictReplace").get(page)).click();
+        assertNotNull(findField(HotkeySettings.class, "conflictBox").get(page),
+                "the next conflicting action must be shown immediately");
+        ((Button)findField(HotkeySettings.class, "conflictCancel").get(page)).click();
+        assertEquals(nurgling.hotkeys.InputGesture.none(), model.draft().effective("target"));
+        assertEquals(occupied, model.draft().effective("first"));
+        assertEquals(occupied, model.draft().effective("second"));
+        assertEquals(presetBefore, model.presets().selected().id());
+        assertFalse(model.hasUnsavedChanges());
+    }
+
+    @Test void saveContinuesAfterTheLastConflictIsReplaced() throws Exception {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        nurgling.hotkeys.InputGesture occupied = nurgling.hotkeys.InputGesture.mouse(2, 7, 0);
+        registry.register(action("first", "First", new CountingBinding("first", occupied)));
+        registry.register(action("second", "Second", new CountingBinding("second", occupied)));
+        HotkeySettings page = new HotkeySettings(new HotkeySettingsModel(registry));
+        page.save();
+        ((Button)findField(HotkeySettings.class, "conflictReplace").get(page)).click();
+        assertNull(findField(HotkeySettings.class, "conflictBox").get(page));
+        assertTrue(page.model().draft().conflicts().isEmpty());
+        assertFalse(page.model().hasUnsavedChanges(), "Save must finish without another click");
+        assertTrue(registry.find("first").current().equals(nurgling.hotkeys.InputGesture.none()) ||
+                registry.find("second").current().equals(nurgling.hotkeys.InputGesture.none()));
+    }
+
     @Test void mouseClickArmsCaptureAndAllowsRepeatedReassignment() throws Exception {
         UI ui = (UI)unsafe().allocateInstance(UI.class);
         List<UI.Grab> grabs = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -55,6 +235,35 @@ class HotkeySettingsLifecycleTest {
                     decisions.get(decisions.size() - 1).gesture());
         }
         assertEquals(2, decisions.size());
+    }
+
+    @Test void mouseClickStartsKeyboardCaptureWithModifiers() throws Exception {
+        UI ui = (UI)unsafe().allocateInstance(UI.class);
+        List<UI.Grab> grabs = new java.util.concurrent.CopyOnWriteArrayList<>();
+        setObject(ui, "grabs", grabs);
+        ui.modctrl = true;
+        CountingBinding binding = new CountingBinding("keyboard", nurgling.hotkeys.InputGesture.none());
+        HotkeyAction action = new HotkeyAction("keyboard", null, "Keyboard",
+                nurgling.hotkeys.HotkeyCategory.WORLD,
+                java.util.EnumSet.of(nurgling.hotkeys.HotkeyContext.GLOBAL),
+                java.util.EnumSet.of(nurgling.hotkeys.InputGesture.Type.KEY), binding, null, 0, false);
+        List<HotkeyCapturePolicy.Decision> decisions = new ArrayList<>();
+        nurgling.widgets.NHotkeyCapture capture = new nurgling.widgets.NHotkeyCapture(
+                120, action, decisions::add) {
+            protected void depress() { }
+            protected void unpress() { }
+        };
+        capture.ui = ui;
+        capture.mousedown(new Widget.MouseDownEvent(Coord.of(2, 2), 1));
+        capture.mouseup((Widget.MouseUpEvent)new Widget.MouseUpEvent(Coord.of(2, 2), 1).grabbed(true));
+        java.awt.event.KeyEvent key = new java.awt.event.KeyEvent(new java.awt.Canvas(),
+                java.awt.event.KeyEvent.KEY_PRESSED, 0, java.awt.event.KeyEvent.CTRL_DOWN_MASK,
+                java.awt.event.KeyEvent.VK_K, 'k');
+        assertTrue(capture.keydown((Widget.KeyDownEvent)new Widget.KeyDownEvent(key).grabbed(true)));
+        assertEquals(nurgling.hotkeys.InputGesture.key(haven.KeyMatch.forcode(
+                java.awt.event.KeyEvent.VK_K, haven.KeyMatch.C)), decisions.get(0).gesture());
+        assertFalse(capture.armed());
+        assertTrue(grabs.isEmpty());
     }
 
     private nurgling.NUI previousUi;

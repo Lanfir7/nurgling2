@@ -22,19 +22,19 @@ class HotkeyCatalogTest {
 
     @Test void dynamicRegistrationIsVisibleAndIdempotent() {
         HotkeyRegistry registry = new HotkeyRegistry();
-        KeyBinding binding = KeyBinding.get("scm/test/action", KeyMatch.nil);
-        HotkeyCatalog.registerMenuAction(registry, binding, "Test action");
-        HotkeyCatalog.registerMenuAction(registry, binding, "Test action");
+        KeyBinding binding = KeyBinding.get("wgk/test/action", KeyMatch.nil);
+        HotkeyCatalog.registerWidgetAction(registry, binding, "Test action");
+        HotkeyCatalog.registerWidgetAction(registry, binding, "Test action");
         assertEquals(1, registry.snapshot().size());
     }
 
     @Test void sameIdWithDifferentBindingInstanceIsRejected() {
-        KeyBinding original = KeyBinding.get("scm/test/distinct", KeyMatch.nil);
+        KeyBinding original = KeyBinding.get("wgk/test/distinct", KeyMatch.nil);
         KeyBinding distinct = new KeyBinding(original);
         HotkeyRegistry registry = new HotkeyRegistry();
-        HotkeyCatalog.registerMenuAction(registry, original, "Test action");
+        HotkeyCatalog.registerWidgetAction(registry, original, "Test action");
         assertThrows(IllegalStateException.class,
-                () -> HotkeyCatalog.registerMenuAction(registry, distinct, "Test action"));
+                () -> HotkeyCatalog.registerWidgetAction(registry, distinct, "Test action"));
     }
 
     @Test void beltRegistrationKeepsBeltMetadata() {

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-hotkey-menu-conflicts",
+  "priority": 6,
+  "summary": {
+    "ru": "Крафты убраны из списка хоткеев; конфликты можно игнорировать, а клавиша карты больше не перехватывается меню.",
+    "en": "Recipes no longer clutter Hotkeys; conflicts can be ignored, and the map shortcut takes priority over the action menu."
+  },
+  "detail": {
+    "ru": "В настройках горячих клавиш больше нет отдельных рецептов ванильного меню. Кнопка «Игнорировать» позволяет сохранить обе конфликтующие привязки. После назначения и сохранения новой клавиши карты она открывает карту даже при открытом меню крафта; прежняя клавиша карту больше не открывает.",
+    "en": "Hotkeys settings no longer lists individual vanilla menu recipes. Ignore conflict lets you save both overlapping bindings. After assigning and saving a new map shortcut, it opens the map even with the crafting menu open; the previous shortcut no longer opens it."
+  }
+}

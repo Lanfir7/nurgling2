@@ -96,7 +96,7 @@ class HotkeyPresetDraftModelTest {
         assertFalse(presets.isDirty());
     }
 
-    @Test void missingCurrentActionsUseDefaultsWithoutRemovingUnknownIds() {
+    @Test void missingCurrentActionsUseDefaultsWhileRetainingUnknownIdsForLaterRegistration() {
         InputGesture original = InputGesture.mouse(1, KeyMatch.MODS, 0);
         HotkeyRegistry registry = registry(original, original);
         Map<String, InputGesture> imported = new LinkedHashMap<>();
@@ -107,7 +107,21 @@ class HotkeyPresetDraftModelTest {
 
         assertEquals(original, effective.get("item.take"));
         assertEquals(InputGesture.none(), preset.gesture("future.action"));
-        assertFalse(effective.containsKey("future.action"));
+        assertEquals(InputGesture.none(), effective.get("future.action"));
+    }
+
+    @Test void incompatibleSelectionLeavesThePreviousPresetSelected() {
+        InputGesture original = InputGesture.mouse(1, KeyMatch.MODS, 0);
+        HotkeyRegistry registry = registry(original, original);
+        HotkeyPreset incompatible = new HotkeyPreset("user-1", "Wrong family", false,
+                snapshot("item.take", InputGesture.wheel(1, KeyMatch.MODS, 0)));
+        HotkeyPresetDraftModel presets = HotkeyPresetDraftModel.open(registry,
+                HotkeyPresetCatalog.builtIns(registry), HotkeyPresetStore.LoadResult.loaded(
+                        new HotkeyPresetLibrary(HotkeyPresetCatalog.DEFAULT_ID,
+                                Collections.singletonList(incompatible))));
+
+        assertThrows(IllegalArgumentException.class, () -> presets.select("user-1"));
+        assertEquals(HotkeyPresetCatalog.DEFAULT_ID, presets.selected().id());
     }
 
     private static HotkeyPresetStore.LoadResult loadedDefault() {

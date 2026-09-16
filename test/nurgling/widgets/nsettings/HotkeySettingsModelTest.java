@@ -2,6 +2,7 @@ package nurgling.widgets.nsettings;
 
 import haven.KeyMatch;
 import nurgling.hotkeys.HotkeyAction;
+import nurgling.hotkeys.HotkeyConflict;
 import nurgling.hotkeys.HotkeyCategory;
 import nurgling.hotkeys.HotkeyContext;
 import nurgling.hotkeys.HotkeyDraftModel;
@@ -23,6 +24,7 @@ import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HotkeySettingsModelTest {
     @Test void assigningGestureForksBuiltInAndSaveUpdatesSameUserPreset() {
@@ -97,6 +99,16 @@ class HotkeySettingsModelTest {
         model.draft().assign("second", model.draft().effective("first"));
         model.setConflictsOnly(true);
         assertEquals(new HashSet<>(Arrays.asList("first", "second")), idSet(model.visibleActions()));
+    }
+
+    @Test void ignoringConflictSynchronizesTheSelectedPreset() {
+        HotkeySettingsModel model = modelWith("Inventory", "First", "Inventory", "Second");
+        List<HotkeyConflict> conflicts = model.assign("second", model.draft().effective("first"));
+
+        model.ignore(conflicts.get(0));
+
+        assertTrue(model.draft().conflicts().isEmpty());
+        assertFalse(model.presets().selected().builtIn());
     }
 
     private static HotkeySettingsModel modelWith(String firstCategory, String firstLabel,

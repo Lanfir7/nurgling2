@@ -23,11 +23,37 @@ public class NMiniMapWnd extends Widget{
     public static final KeyBinding kb_night = KeyBinding.get("mwnd_night", KeyMatch.nil);
     public static final KeyBinding kb_fog = KeyBinding.get("mwnd_fog", KeyMatch.nil);
     public static final KeyBinding kb_resourcetimers = KeyBinding.get("mwnd_resourcetimers", KeyMatch.nil);
+
     public static class NMenuCheckBox extends ICheckBox {
+        private final Tex upHi, downHi, hoverupHi, hoverdownHi;
+
         public NMenuCheckBox(String base, KeyBinding gkey, String tooltip) {
-            super(base, "/u", "/d", "/h", "/dh");
+            this(base, gkey, tooltip, true);
+        }
+
+        public NMenuCheckBox(String base, KeyBinding gkey, String tooltip, boolean colorWhenOn) {
+            this(base, gkey, tooltip, NIconDock.overlayArt("/", colorWhenOn));
+        }
+
+        private NMenuCheckBox(String base, KeyBinding gkey, String tooltip, String[] art) {
+            super(base, art[0], art[1], art[2], art[3]);
             setgkey(gkey);
             settip(tooltip);
+            if(nurgling.headless.Headless.isHeadless()) {
+                upHi = up;
+                downHi = down;
+                hoverupHi = hoverup;
+                hoverdownHi = hoverdown;
+            } else {
+                upHi = NIconDock.hiTex(Resource.loadrimg(base + art[0]));
+                downHi = NIconDock.hiTex(Resource.loadrimg(base + art[1]));
+                hoverupHi = NIconDock.hiTex(Resource.loadrimg(base + art[2]));
+                hoverdownHi = NIconDock.hiTex(Resource.loadrimg(base + art[3]));
+            }
+        }
+
+        Tex paintTex() {
+            return(state() ? (h ? hoverdownHi : downHi) : (h ? hoverupHi : upHi));
         }
     }
     
@@ -396,6 +422,10 @@ public class NMiniMapWnd extends Widget{
         Tex tex = btn.state() ? (btn.h ? btn.hoverdown : btn.down) : (btn.h ? btn.hoverup : btn.up);
         if(tex == null)
             return;
+        if(btn instanceof NMenuCheckBox)
+            tex = ((NMenuCheckBox)btn).paintTex();
+        else
+            tex = dock.paint(tex);
         Coord mid = dockmid(wdg);
         double scale = dock.scale(mid);
         Coord isz = new Coord((int)Math.round(wdg.sz.x * scale), (int)Math.round(wdg.sz.y * scale));

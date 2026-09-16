@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-map-toggle-color-on",
+  "priority": 5,
+  "summary": {
+    "ru": "Цветная иконка слоя на карте значит «включено», серая — «выключено».",
+    "en": "A coloured map-layer icon means on, a grey one means off."
+  },
+  "detail": {
+    "ru": "На миникарте и в окне большой карты кнопки слоёв больше не перепутаны: яркая цветная картинка — слой включён, серая — выключен. Кнопка большой карты в углу миникарты следует тому же правилу.",
+    "en": "On the minimap and in the big map window the layer buttons are no longer reversed: a bright coloured picture means the layer is on, grey means off. The Map button in the minimap corner follows the same rule."
+  }
+}

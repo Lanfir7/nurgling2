@@ -93,8 +93,9 @@ public final class HotkeyPresetDraftModel {
         HotkeyPreset preset = find(builtIns, id);
         if(preset == null) preset = find(users, id);
         if(preset == null) throw new IllegalArgumentException("unknown preset: " + id);
+        Map<String, InputGesture> values = valuesFor(registry, preset);
         selectedId = preset.id();
-        return valuesFor(registry, preset);
+        return values;
     }
 
     public HotkeyPreset create(String requestedName, Map<String, InputGesture> bindings) {
@@ -174,7 +175,7 @@ public final class HotkeyPresetDraftModel {
 
     public static Map<String, InputGesture> valuesFor(HotkeyRegistry registry, HotkeyPreset preset) {
         if(registry == null || preset == null) throw new NullPointerException();
-        Map<String, InputGesture> result = new TreeMap<>();
+        Map<String, InputGesture> result = new TreeMap<>(preset.gestures());
         for(HotkeyAction action : registry.snapshot()) {
             InputGesture gesture = preset.gesture(action.id());
             if(gesture == null) gesture = action.defaultGesture();

@@ -51,6 +51,67 @@ class HotkeyDraftModelTest {
         assertEquals(KeyEvent.VK_Q, next.current().key().code);
     }
 
+    @Test void ignoredConflictCanSaveAndStaysAcceptedForLaterSaves() {
+        HotkeyRegistryTest.MemoryBinding first = binding("first", InputGesture.mouse(1, KeyMatch.MODS, 0));
+        HotkeyRegistryTest.MemoryBinding second = binding("second", InputGesture.mouse(3, KeyMatch.MODS, 0));
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("first", first));
+        registry.register(action("second", second));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+
+        HotkeyConflict conflict = draft.assign("second", first.current()).get(0);
+        draft.ignore(conflict);
+        assertTrue(draft.conflicts().isEmpty());
+
+        draft.save();
+        assertEquals(first.current(), second.current());
+        assertTrue(draft.conflicts().isEmpty());
+        assertFalse(draft.isDirty());
+        assertDoesNotThrow(draft::save);
+    }
+
+    @Test void editingOrCancellingRestoresActionableConflictAndCheckpointRestoresIgnore() {
+        HotkeyRegistryTest.MemoryBinding first = binding("first", InputGesture.mouse(1, KeyMatch.MODS, 0));
+        HotkeyRegistryTest.MemoryBinding second = binding("second", InputGesture.mouse(1, KeyMatch.MODS, 0));
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("first", first));
+        registry.register(action("second", second));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+
+        HotkeyConflict conflict = draft.conflicts().get(0);
+        draft.ignore(conflict);
+        HotkeyDraftModel.Checkpoint ignored = draft.checkpoint();
+        draft.assign("first", first.current());
+        assertTrue(draft.conflicts().isEmpty());
+        draft.assign("first", InputGesture.mouse(3, KeyMatch.MODS, 0));
+        draft.assign("first", first.current());
+        assertFalse(draft.conflicts().isEmpty());
+        draft.restore(ignored);
+        assertTrue(draft.conflicts().isEmpty());
+
+        draft.cancel();
+        assertFalse(draft.conflicts().isEmpty());
+    }
+
+    @Test void replacingAnotherConflictKeepsAnUnchangedIgnoredPair() {
+        InputGesture shared = InputGesture.mouse(1, KeyMatch.MODS, 0);
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("a", binding("a", shared)));
+        registry.register(action("b", binding("b", InputGesture.mouse(3, KeyMatch.MODS, 0))));
+        registry.register(action("c", binding("c", shared)));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+        draft.ignore(draft.conflicts("a").get(0));
+        draft.assign("b", shared);
+        HotkeyConflict againstB = null;
+        for(HotkeyConflict conflict : draft.conflicts("c"))
+            if(conflict.conflictingAction().id().equals("b")) againstB = conflict;
+
+        assertNotNull(againstB);
+        draft.replace(againstB);
+
+        assertTrue(draft.conflicts().isEmpty());
+    }
+
     @Test void cancelAndCategoryResetDoNotWriteBindings() {
         HotkeyRegistryTest.MemoryBinding binding = binding("map", InputGesture.mouse(1, KeyMatch.MODS, 0));
         HotkeyRegistry registry = new HotkeyRegistry();
@@ -95,6 +156,40 @@ class HotkeyDraftModelTest {
         values.put("mouse", InputGesture.wheel(1, KeyMatch.MODS, 0));
         assertThrows(IllegalArgumentException.class, () -> draft.stageSnapshot(values));
         assertEquals(beforeFailure, draft.effectiveSnapshot());
+    }
+
+    @Test void stagedSnapshotAppliesLateActionsAndCancelDropsTheirFallbacks() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("known", binding("known", InputGesture.mouse(1, KeyMatch.MODS, 0))));
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+        Map<String, InputGesture> values = new HashMap<>();
+        values.put("late", InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S));
+        draft.stageSnapshot(values);
+        HotkeyRegistryTest.MemoryBinding late = binding("late", InputGesture.mouse(1, KeyMatch.MODS, 0));
+        registry.register(action("late", late));
+
+        assertEquals(values.get("late"), draft.effective("late"));
+        assertTrue(draft.isDirty());
+        draft.save();
+        assertEquals(values.get("late"), late.current());
+
+        draft.stageSnapshot(values);
+        draft.cancel();
+        assertEquals(late.current(), draft.effective("late"));
+    }
+
+    @Test void lateActionIgnoresAnIncompatibleStagedGestureWithoutWriting() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        HotkeyDraftModel draft = new HotkeyDraftModel(registry);
+        Map<String, InputGesture> values = new HashMap<>();
+        values.put("late", InputGesture.wheel(1, KeyMatch.MODS, 0));
+        draft.stageSnapshot(values);
+        HotkeyRegistryTest.MemoryBinding late = binding("late", InputGesture.mouse(1, KeyMatch.MODS, 0));
+        registry.register(action("late", late));
+
+        assertEquals(late.current(), draft.effective("late"));
+        assertDoesNotThrow(draft::save);
+        assertEquals(late.defaultGesture(), late.current());
     }
 
     private static HotkeyRegistryTest.MemoryBinding binding(String id, InputGesture gesture) {

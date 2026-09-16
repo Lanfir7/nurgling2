@@ -41,8 +41,6 @@ import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NRecipeTooltip;
 import nurgling.NUtils;
-import nurgling.hotkeys.HotkeyCatalog;
-import nurgling.hotkeys.Hotkeys;
 
 public class MenuGrid extends Widget implements KeyBinding.Bindable {
     public static Pagina lastPagina = null;
@@ -179,7 +177,6 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
 	}
 	public KeyBinding binding() {
 	    KeyBinding key = KeyBinding.get("scm/" + res.name, hotkey());
-	    HotkeyCatalog.registerMenuAction(Hotkeys.registry(), key, name());
 	    return(key);
 	}
 	public void use(Interaction iact) {

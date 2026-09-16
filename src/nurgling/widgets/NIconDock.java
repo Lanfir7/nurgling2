@@ -1,6 +1,12 @@
 package nurgling.widgets;
 
 import haven.*;
+import haven.render.ColorTex;
+import haven.render.Texture;
+
+import java.awt.image.BufferedImage;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 /**
  * Proximity reveal for a row of small HUD icons. The icons are invisible while the cursor
@@ -69,13 +75,78 @@ public class NIconDock {
     }
 
     /**
-     * Top-left of a grown icon. Overlay buttons along the bottom grow up from their
-     * base so the row does not drift; the map button in the top-right grows down and
-     * left so the extra size stays inside the frame.
+     * Top-left of a grown icon. Overlay buttons along the bottom grow up and right
+     * from their left edge so they stay inside the frame; the map button in the
+     * top-right grows down and left.
      */
     static Coord grownUl(Coord mid, Coord orig, Coord grown, boolean growLeft, boolean growDown) {
-        int x = growLeft ? mid.x + (orig.x / 2) - grown.x : mid.x - (grown.x / 2);
+        int x = growLeft ? mid.x + (orig.x / 2) - grown.x : mid.x - (orig.x / 2);
         int y = growDown ? mid.y - (orig.y / 2) : mid.y + (orig.y / 2) - grown.y;
         return(new Coord(x, y));
+    }
+
+    /** up, down, hoverup, hoverdown. Bright/color art is ON when `colorWhenOn`. */
+    static String[] overlayArt(String p, boolean colorWhenOn) {
+        return colorWhenOn
+            ? new String[] {p + "d", p + "u", p + "dh", p + "h"}
+            : new String[] {p + "u", p + "d", p + "h", p + "dh"};
+    }
+
+    /** How many times larger the paint texture is than the button's layout size. */
+    static final int HIRES = 4;
+
+    /**
+     * Lanczos 4× of `src` for hover. `logical` is the on-screen button size; if the
+     * file is already at least that large, it is kept so a 2× asset is not downscaled
+     * before being grown.
+     */
+    static BufferedImage hiRes(BufferedImage src, Coord logical) {
+        if((src == null) || (logical == null) || (logical.x <= 0) || (logical.y <= 0))
+            return(src);
+        Coord want = logical.mul(HIRES);
+        Coord have = PUtils.imgsz(src);
+        if((have.x >= want.x) && (have.y >= want.y))
+            return(src);
+        return(PUtils.uiscale(PUtils.coercergba(src), want));
+    }
+
+    static Tex hiTex(Resource.Image img) {
+        if(img == null)
+            return(null);
+        return(hiTex(img.img, img.ssz));
+    }
+
+    static Tex hiTex(BufferedImage src, Coord logical) {
+        BufferedImage hi = hiRes(src, logical);
+        if(hi == null)
+            return(null);
+        /* LINEAR is applied on first draw, so construction does not need a GL context. */
+        return(new TexI(hi) {
+            @Override
+            public ColorTex st() {
+                ColorTex st = super.st();
+                st.data.magfilter(Texture.Filter.LINEAR).minfilter(Texture.Filter.LINEAR);
+                return(st);
+            }
+        });
+    }
+
+    private final Map<Tex, Tex> hiPaint = new IdentityHashMap<>();
+
+    /** Cached 4× paint texture for a dock icon that only has the layout-sized Tex. */
+    Tex paint(Tex src) {
+        if(src == null)
+            return(null);
+        Tex hi = hiPaint.get(src);
+        if(hi != null)
+            return(hi);
+        if(src instanceof TexI) {
+            TexI t = (TexI)src;
+            hi = hiTex(t.back, t.sz());
+        } else {
+            hi = src;
+        }
+        hiPaint.put(src, hi);
+        return(hi);
     }
 }

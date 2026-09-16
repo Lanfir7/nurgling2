@@ -103,6 +103,36 @@ class HotkeyPresetSaveCoordinatorTest {
         assertEquals(original, binding.current());
     }
 
+    @Test void savingSelectionDefaultsActionsRegisteredAfterThePresetWasSelected() {
+        HotkeyRegistry registry = new HotkeyRegistry();
+        registry.register(action("known", InputGesture.mouse(1, KeyMatch.MODS, 0)));
+        Map<String, InputGesture> selectedValues = new LinkedHashMap<>();
+        selectedValues.put("known", InputGesture.none());
+        selectedValues.put("late-preset", InputGesture.none());
+        HotkeyPreset selected = new HotkeyPreset("user-1", "Mine", false, selectedValues);
+        HotkeyPresetLibrary library = new HotkeyPresetLibrary("user-1",
+                Collections.singletonList(selected));
+        HotkeyPresetDraftModel presets = HotkeyPresetDraftModel.open(registry,
+                HotkeyPresetCatalog.builtIns(registry), HotkeyPresetStore.LoadResult.loaded(library));
+        HotkeyDraftModel hotkeys = new HotkeyDraftModel(registry);
+        hotkeys.stageSnapshot(presets.select("user-1"));
+
+        HotkeyAction latePreset = action("late-preset", InputGesture.mouse(2, KeyMatch.MODS, 0));
+        latePreset.binding().set(InputGesture.mouse(3, KeyMatch.MODS, 0));
+        registry.register(latePreset);
+        HotkeyAction lateDefault = action("late-default", InputGesture.mouse(2, KeyMatch.MODS, 0));
+        lateDefault.binding().set(InputGesture.mouse(3, KeyMatch.MODS, 0));
+        registry.register(lateDefault);
+        FakeRepository repository = new FakeRepository(library);
+
+        new HotkeyPresetSaveCoordinator(registry, hotkeys, presets, repository).save();
+
+        assertEquals(InputGesture.none(), registry.find("known").current());
+        assertEquals(InputGesture.none(), latePreset.current());
+        assertEquals(lateDefault.defaultGesture(), lateDefault.current());
+        assertNull(repository.current.userPresets().get(0).gesture("late-default"));
+    }
+
     private static Fixture fixture(boolean withOther) {
         HotkeyRegistry registry = new HotkeyRegistry();
         registry.register(action("item.take", InputGesture.mouse(1, KeyMatch.MODS, 0)));

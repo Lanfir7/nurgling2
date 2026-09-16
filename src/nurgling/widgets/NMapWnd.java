@@ -39,7 +39,15 @@ public class NMapWnd extends MapWnd {
         private final Runnable rightClickAction;
         
         public MapToggleButton(String base, String tooltip, Runnable rightClickAction) {
-            super("nurgling/hud/buttons/" + base + "/", "u", "d", "h", "dh");
+            this(base, tooltip, rightClickAction, true);
+        }
+
+        public MapToggleButton(String base, String tooltip, Runnable rightClickAction, boolean colorWhenOn) {
+            this("nurgling/hud/buttons/" + base + "/", NIconDock.overlayArt("", colorWhenOn), tooltip, rightClickAction);
+        }
+
+        private MapToggleButton(String path, String[] art, String tooltip, Runnable rightClickAction) {
+            super(path, art[0], art[1], art[2], art[3]);
             this.rightClickAction = rightClickAction;
             settip(tooltip);
         }
@@ -60,7 +68,7 @@ public class NMapWnd extends MapWnd {
         searchRes = Resource.local().loadwait("alttex/selectedtex").layer(Resource.imgc);
         
         // Map tools button (rightmost) - opens the Map Tools panel (no icon toggle)
-        mapToolsBtn = add(new MapToggleButton("maptools", L10n.get("maptools.button_tip"), MapToolsWindow::toggle));
+        mapToolsBtn = add(new MapToggleButton("maptools", L10n.get("maptools.button_tip"), MapToolsWindow::toggle, false));
         mapToolsBtn.a = false; // Always show as unpressed (no toggle state)
         mapToolsBtn.click(MapToolsWindow::toggle); // Left click opens the panel
 
@@ -96,7 +104,7 @@ public class NMapWnd extends MapWnd {
         foragingBtn.changed(val -> setForagingIconsState(val));
 
         // Vector clear button (leftmost)
-        vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null));
+        vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null, false));
         vectorClearBtn.a = false; // Always show as unpressed
         vectorClearBtn.click(this::clearVectors);
 

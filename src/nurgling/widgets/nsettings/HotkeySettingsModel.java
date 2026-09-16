@@ -87,6 +87,11 @@ public final class HotkeySettingsModel {
         bindingsEdited();
     }
 
+    public void ignore(HotkeyConflict conflict) {
+        draft.ignore(conflict);
+        bindingsEdited();
+    }
+
     public void resetCategory(HotkeyCategory category) {
         draft.resetCategory(category);
         bindingsEdited();

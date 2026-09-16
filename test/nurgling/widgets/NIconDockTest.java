@@ -1,10 +1,17 @@
 package nurgling.widgets;
 
 import haven.Coord;
+import haven.PUtils;
 import org.junit.jupiter.api.Test;
+
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBuffer;
+import java.awt.image.Raster;
+import java.awt.image.WritableRaster;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NIconDockTest {
@@ -64,13 +71,15 @@ class NIconDockTest {
     }
 
     @Test
-    void overlayIconsGrowUpFromTheirBase() {
+    void overlayIconsGrowUpAndRightFromTheirLeftEdge() {
         Coord mid = new Coord(50, 100);
         Coord orig = new Coord(20, 20);
         Coord grown = new Coord(38, 38);
         Coord ul = NIconDock.grownUl(mid, orig, grown, false, false);
-        assertEquals(mid.x - (grown.x / 2), ul.x);
+        int origLeft = mid.x - (orig.x / 2);
+        assertEquals(origLeft, ul.x);
         assertEquals(mid.y + (orig.y / 2) - grown.y, ul.y);
+        assertTrue(ul.x + grown.x > origLeft + orig.x, "extra width must go right, not left");
     }
 
     @Test
@@ -88,5 +97,33 @@ class NIconDockTest {
         assertTrue(ul.y >= 0, "grown map icon must stay inside the top edge");
         assertTrue(ul.x + grown.x <= panel.x, "grown map icon must stay inside the right edge");
         assertTrue(ul.y + grown.y <= panel.y, "grown map icon must stay inside the bottom edge");
+    }
+
+    @Test
+    void smallIconUpscalesFourTimesForHover() {
+        BufferedImage src = rgba(16, 16);
+        BufferedImage hi = NIconDock.hiRes(src, new Coord(16, 16));
+        assertEquals(64, hi.getWidth());
+        assertEquals(64, hi.getHeight());
+        assertEquals(16, src.getWidth(), "the layout copy must stay small");
+    }
+
+    @Test
+    void alreadyLargeSourceIsKept() {
+        BufferedImage src = rgba(64, 64);
+        assertSame(src, NIconDock.hiRes(src, new Coord(16, 16)));
+    }
+
+    @Test
+    void twoTimesSourceStillGrowsToFourTimesLogical() {
+        BufferedImage src = rgba(32, 32);
+        BufferedImage hi = NIconDock.hiRes(src, new Coord(16, 16));
+        assertEquals(64, hi.getWidth());
+        assertEquals(64, hi.getHeight());
+    }
+
+    private static BufferedImage rgba(int w, int h) {
+        WritableRaster buf = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, w, h, 4, null);
+        return new BufferedImage(PUtils.cm_rgba, buf, false, null);
     }
 }

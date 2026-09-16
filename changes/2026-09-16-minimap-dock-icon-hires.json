@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-minimap-dock-icon-hires",
+  "priority": 5,
+  "summary": {
+    "ru": "Иконки слоёв на миникарте при наведении остаются чёткими, включая кнопку большой карты.",
+    "en": "Minimap overlay icons stay sharp on hover, including the Map button."
+  },
+  "detail": {
+    "ru": "Подведите курсор к кнопкам слоёв под миникартой или к значку карты в правом верхнем углу: увеличенные иконки больше не размываются. Это те же картинки, только отрисованные из крупной копии.",
+    "en": "Hover the overlay buttons under the minimap or the Map icon in its top-right corner: the enlarged icons no longer go blurry. They are the same pictures, drawn from a larger copy."
+  }
+}

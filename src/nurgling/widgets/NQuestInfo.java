@@ -105,7 +105,7 @@ public class NQuestInfo extends Widget
         super(DEF_SZ);
         fonts();
         modebtn = add(new NMiniMapWnd.NMenuCheckBox(
-            "nurgling/hud/buttons/questmode", null, L10n.get("char.quest.switch_mode")));
+            "nurgling/hud/buttons/questmode", null, L10n.get("char.quest.switch_mode"), false));
         modebtn.changed(a -> {
             prop().mode = a ? NQuestTrackerProp.Mode.TASKS : NQuestTrackerProp.Mode.GIVERS;
             prop().save();
@@ -117,7 +117,7 @@ public class NQuestInfo extends Widget
             add(new KindChip(QuestKind.WORLD, "W", NStyle.questWorld, "World quests")),
         };
         searchbtn = add(new NMiniMapWnd.NMenuCheckBox(
-            "nurgling/hud/buttons/lsearch", null, "Search quests"));
+            "nurgling/hud/buttons/lsearch", null, "Search quests", false));
         searchbtn.changed(a -> {
             search = "";
             if(searchbox != null)
@@ -126,7 +126,7 @@ public class NQuestInfo extends Widget
             needRebuild = true;
         });
         gearbtn = add(new NMiniMapWnd.NMenuCheckBox(
-            "nurgling/hud/buttons/settings", null, "Tracker options"));
+            "nurgling/hud/buttons/settings", null, "Tracker options", false));
         gearbtn.changed(a -> {
             gearbtn.a = false;
             openGearMenu();

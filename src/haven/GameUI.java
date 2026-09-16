@@ -1507,7 +1507,11 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     public static final KeyBinding kb_instantLogout = KeyBinding.get("instantLogoutKB", KeyMatch.forchar('L', KeyMatch.C));
     public static final KeyBinding kb_sort = KeyBinding.get("sort-inv", KeyMatch.nil);
     public boolean globtype(GlobKeyEvent ev) {
-	if(ev.c == ':') {
+	if(kb_map.key().match(ev) && mapfile != null) {
+	    togglewnd(mapfile);
+	    Utils.setprefb("wndvis-map", mapfile.visible());
+	    return(true);
+	} else if(ev.c == ':') {
 	    entercmd();
 	    return(true);
 	} else if(kb_shoot.key().match(ev) && (Screenshooter.screenurl.get() != null)) {

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-hotkey-assignment-presets",
+  "priority": 6,
+  "summary": {
+    "ru": "В настройках горячих клавиш исправлены назначение, замена конфликтующих сочетаний и применение пресетов.",
+    "en": "Hotkey settings now correctly capture bindings, resolve conflicting shortcuts, and apply presets."
+  },
+  "detail": {
+    "ru": "В разделе «Горячие клавиши» клик по сочетанию запускает ввод нового хоткея. Замена последовательно показывает все конфликты и завершает сохранение после подтверждений. Старое подтверждение больше не меняет другой пресет. Выбранный пресет учитывает действия, появившиеся до его сохранения. Ошибка выбора несовместимого пресета не меняет текущие назначения.",
+    "en": "In Hotkeys settings, clicking a binding starts input capture. Replacement walks through all conflicts and completes saving after confirmation. An old confirmation can no longer modify a different preset. The selected preset covers actions that become available before it is saved. Selecting an incompatible preset leaves the current bindings intact."
+  }
+}

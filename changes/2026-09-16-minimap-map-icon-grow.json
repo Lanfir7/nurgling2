@@ -2,11 +2,11 @@
   "id": "2026-09-16-minimap-map-icon-grow",
   "priority": 4,
   "summary": {
-    "ru": "Кнопка карты на миникарте при наведении увеличивается внутрь рамки, а не обрезается.",
-    "en": "The minimap Map button grows inside the frame on hover, instead of being clipped."
+    "ru": "Иконки миникарты при наведении увеличиваются внутрь рамки и не вылезают за край.",
+    "en": "Minimap icons grow inside the frame on hover and no longer spill over the edge."
   },
   "detail": {
-    "ru": "Наведите курсор на значок карты в правом верхнем углу миникарты: увеличенная иконка теперь раскрывается вниз и влево по самой карте, а не за верхний и правый край рамки.",
-    "en": "Hover the Map button in the minimap's top-right corner: the enlarged icon now grows down and left over the map, instead of past the top and right of the frame."
+    "ru": "Кнопки слоёв снизу раскрываются вверх и вправо по карте, значок большой карты в правом верхнем углу — вниз и влево. Увеличенная иконка остаётся внутри рамки.",
+    "en": "Overlay buttons along the bottom grow up and right over the map; the Map button in the top-right grows down and left. The enlarged icon stays inside the frame."
   }
 }

@@ -376,10 +376,6 @@ public final class HotkeyCatalog {
                 EnumSet.of(type), binding, canonicalMods, order[0]++, false));
     }
 
-    public static void registerMenuAction(HotkeyRegistry registry, KeyBinding binding, String label) {
-        registerDynamic(registry, binding, label, HotkeyCategory.ACTION_MENU, HotkeyContext.ACTION_MENU);
-    }
-
     public static void registerWidgetAction(HotkeyRegistry registry, KeyBinding binding, String label) {
         registerDynamic(registry, binding, label, HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL);
     }

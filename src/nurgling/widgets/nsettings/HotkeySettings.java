@@ -17,6 +17,7 @@ import nurgling.hotkeys.HotkeyDraftModel;
 import nurgling.hotkeys.HotkeyRegistry;
 import nurgling.hotkeys.InputGesture;
 import nurgling.hotkeys.presets.HotkeyPreset;
+import nurgling.hotkeys.presets.HotkeyPresetDraftModel;
 import nurgling.hotkeys.presets.HotkeyPresetStore;
 import nurgling.i18n.L10n;
 import nurgling.widgets.AdaptiveSettingsPanel;
@@ -48,9 +49,12 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     private String conflictText;
     private Button conflictReplace;
     private Button conflictCancel;
+    private Button conflictIgnore;
     private int conflictReplaceWidth;
     private int conflictCancelWidth;
+    private int conflictIgnoreWidth;
     private int contentWidth;
+    private Runnable conflictCancelAction;
 
     public HotkeySettings() {
         this(HotkeySettingsModel.open(nurgling.hotkeys.Hotkeys.registry(),
@@ -68,15 +72,16 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
             public String selectedPresetId() { return model.presets().selected().id(); }
             public void validateImportCode(String code) { model.validateImportCode(code); }
             public void select(String presetId) {
+                cancelPendingConflict();
                 model.selectPreset(presetId);
                 rebuildRows();
                 rowsScroll.bar.ch(-rowsScroll.bar.val);
             }
-            public void discardChanges() { model.cancel(); }
-            public void create(String name) { model.createPreset(name); rebuildRows(); }
+            public void discardChanges() { cancelPendingConflict(); model.cancel(); }
+            public void create(String name) { cancelPendingConflict(); model.createPreset(name); rebuildRows(); }
             public String copyCode() { return model.copyPresetCode(); }
-            public void importCode(String code) { model.importPreset(code); rebuildRows(); }
-            public void deleteSelected() { model.deleteSelectedPreset(); rebuildRows(); }
+            public void importCode(String code) { cancelPendingConflict(); model.importPreset(code); rebuildRows(); }
+            public void deleteSelected() { cancelPendingConflict(); model.deleteSelectedPreset(); rebuildRows(); }
             public boolean hasUnsavedChanges() { return model.hasUnsavedChanges(); }
         }), Coord.z);
         search = add(new TextEntry(UI.scale(210), "") {
@@ -126,11 +131,13 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
         resetCategory = add(new HotkeyTextButton(UI.scale(110), L10n.get("hotkeys.reset_category"))
                 .action(() -> {
+                    cancelPendingConflict();
                     model.resetCategory(model.selectedCategory());
                     rebuildRows();
                 }), Coord.of(0, UI.scale(60)));
         resetAll = add(new HotkeyTextButton(UI.scale(90), L10n.get("hotkeys.reset_all"))
                 .action(() -> {
+                    cancelPendingConflict();
                     model.resetAll();
                     rebuildRows();
                 }), Coord.of(resetCategory.sz.x + UI.scale(5), UI.scale(60)));
@@ -167,11 +174,13 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     @Override
     public void save() {
+        closeConflict();
         List<HotkeyConflict> conflicts = model.draft().conflicts();
         if(!conflicts.isEmpty()) {
             HotkeyConflict conflict = conflicts.get(0);
             showConflict(conflict.action(), conflict,
-                    () -> { model.replace(conflict); rebuildRows(); }, this::rebuildRows);
+                    () -> { model.replace(conflict); save(); },
+                    () -> { model.ignore(conflict); save(); }, this::rebuildRows);
             return;
         }
         try {
@@ -211,6 +220,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     }
 
     public void cancelTransientActions() {
+        cancelPendingConflict();
         cancelCaptures();
         if(controls != null)
             controls.cancelTransientActions();
@@ -218,6 +228,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
 
     /** Idempotent lifecycle cleanup used when an owning settings window is destroyed. */
     public void disposeLifecycle() {
+        cancelPendingConflict();
         cancelCaptures();
         if(controls != null)
             controls.disposeLifecycle();
@@ -341,6 +352,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
                         model.draft().effective(action.id()),
                         decision -> handleCapture(action, decision),
                         () -> {
+                            cancelPendingConflict();
                             model.reset(action.id());
                             rebuildRows();
                         });
@@ -354,6 +366,7 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
     }
 
     private void handleCapture(HotkeyAction action, HotkeyCapturePolicy.Decision decision) {
+        cancelPendingConflict();
         switch(decision.kind()) {
         case RESET:
             model.reset(action.id());
@@ -365,27 +378,42 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
             return;
         case ASSIGN:
             HotkeyDraftModel.Checkpoint beforeConflict = model.draft().checkpoint();
+            HotkeyPresetDraftModel.Checkpoint presetsBefore = model.presets().checkpoint();
             List<HotkeyConflict> conflicts = model.assign(action.id(), decision.gesture());
             if(conflicts.isEmpty())
                 rebuildRows();
             else
-                showConflict(action, conflicts.get(0),
-                        () -> {
-                            model.replace(conflicts.get(0));
-                            rebuildRows();
-                        }, () -> {
-                            model.draft().restore(beforeConflict);
-                            rebuildRows();
-                        });
+                resolveCaptureConflicts(action, () -> {
+                    model.draft().restore(beforeConflict);
+                    model.presets().restore(presetsBefore);
+                    rebuildRows();
+                });
             return;
         default:
             return;
         }
     }
 
+    private void resolveCaptureConflicts(HotkeyAction action, Runnable cancel) {
+        List<HotkeyConflict> remaining = model.draft().conflicts(action.id());
+        if(remaining.isEmpty()) {
+            rebuildRows();
+            return;
+        }
+        HotkeyConflict conflict = remaining.get(0);
+        showConflict(action, conflict, () -> {
+            model.replace(conflict);
+            resolveCaptureConflicts(action, cancel);
+        }, () -> {
+            model.ignore(conflict);
+            resolveCaptureConflicts(action, cancel);
+        }, cancel);
+    }
+
     private void showConflict(HotkeyAction action, HotkeyConflict conflict,
-                              Runnable replace, Runnable cancel) {
+                              Runnable replace, Runnable ignore, Runnable cancel) {
         closeConflict();
+        conflictCancelAction = cancel;
         resetCategory.hide();
         resetAll.hide();
         conflictBox = add(new Widget(Coord.z), Coord.of(0, resetCategory.c.y));
@@ -393,16 +421,22 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         conflictLabel = conflictBox.add(new Label(conflictText), Coord.z);
         conflictReplace = conflictBox.add(new HotkeyTextButton(UI.scale(120),
                 L10n.get("hotkeys.replace")).action(() -> {
-                    replace.run();
                     closeConflict();
+                    replace.run();
                 }), Coord.z);
         conflictCancel = conflictBox.add(new HotkeyTextButton(UI.scale(80),
                 L10n.get("hotkeys.cancel")).action(() -> {
-                    cancel.run();
                     closeConflict();
+                    cancel.run();
+                }), Coord.z);
+        conflictIgnore = conflictBox.add(new HotkeyTextButton(UI.scale(90),
+                L10n.get("hotkeys.ignore")).action(() -> {
+                    closeConflict();
+                    ignore.run();
                 }), Coord.z);
         conflictReplaceWidth = conflictReplace.sz.x;
         conflictCancelWidth = conflictCancel.sz.x;
+        conflictIgnoreWidth = conflictIgnore.sz.x;
         layoutConflict();
     }
 
@@ -416,18 +450,23 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         int buttonGap = gap;
         int replaceWidth = conflictReplaceWidth;
         int cancelWidth = conflictCancelWidth;
-        if(replaceWidth + buttonGap + cancelWidth > conflictBox.sz.x) {
-            buttonGap = Math.min(buttonGap, Math.max(0, conflictBox.sz.x - 2));
-            int available = Math.max(2, conflictBox.sz.x - buttonGap);
-            replaceWidth = Math.max(1, (available * 3) / 5);
-            cancelWidth = Math.max(1, available - replaceWidth);
+        int ignoreWidth = conflictIgnoreWidth;
+        if(replaceWidth + ignoreWidth + 2 * buttonGap + cancelWidth > conflictBox.sz.x) {
+            buttonGap = Math.min(buttonGap, Math.max(0, (conflictBox.sz.x - 3) / 2));
+            int available = Math.max(3, conflictBox.sz.x - 2 * buttonGap);
+            replaceWidth = Math.max(1, available / 3);
+            ignoreWidth = Math.max(1, available / 3);
+            cancelWidth = Math.max(1, available - replaceWidth - ignoreWidth);
         }
         resizeConflictButton(conflictReplace, replaceWidth);
         resizeConflictButton(conflictCancel, cancelWidth);
+        resizeConflictButton(conflictIgnore, ignoreWidth);
         int cancelX = Math.max(0, conflictBox.sz.x - cancelWidth);
-        int replaceX = Math.max(0, cancelX - buttonGap - replaceWidth);
+        int ignoreX = Math.max(0, cancelX - buttonGap - ignoreWidth);
+        int replaceX = Math.max(0, ignoreX - buttonGap - replaceWidth);
         conflictCancel.move(Coord.of(cancelX, (height - conflictCancel.sz.y) / 2));
         conflictReplace.move(Coord.of(replaceX, (height - conflictReplace.sz.y) / 2));
+        conflictIgnore.move(Coord.of(ignoreX, (height - conflictIgnore.sz.y) / 2));
         int labelWidth = Math.max(1, replaceX - gap);
         if(labelWidth < conflictLabel.f.strsize("\u2026").x) {
             conflictLabel.hide();
@@ -450,7 +489,14 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         button.redraw();
     }
 
+    private void cancelPendingConflict() {
+        Runnable cancel = conflictCancelAction;
+        closeConflict();
+        if(cancel != null) cancel.run();
+    }
+
     private void closeConflict() {
+        conflictCancelAction = null;
         if(conflictBox != null)
             conflictBox.destroy();
         conflictBox = null;
@@ -458,8 +504,10 @@ public class HotkeySettings extends Panel implements AdaptiveSettingsPanel {
         conflictText = null;
         conflictReplace = null;
         conflictCancel = null;
+        conflictIgnore = null;
         conflictReplaceWidth = 0;
         conflictCancelWidth = 0;
+        conflictIgnoreWidth = 0;
         if(resetCategory != null) resetCategory.show();
         if(resetAll != null) resetAll.show();
     }
