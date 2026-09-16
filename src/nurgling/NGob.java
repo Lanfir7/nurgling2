@@ -150,6 +150,7 @@ public class NGob
     // Flag to track if garden pot marker was already added
     private boolean gardenPotMarkerAdded = false;
     private boolean forageCritterSeen = false;
+    private boolean hitBoxOverlayQueued = false;
 
     public void changedPose(String currentPose)
     {
@@ -220,6 +221,22 @@ public class NGob
             this.condition = condition;
             this.action = action;
         }
+    }
+
+    static boolean shouldAttachHitBoxOverlay(NHitBox hitBox, boolean overlayPresent) {
+        return hitBox != null && !overlayPresent;
+    }
+
+    public static boolean overlaySprMatches(Sprite spr, Class<? extends Sprite> type) {
+        return spr != null && type != null && spr.getClass() == type;
+    }
+
+    static boolean isDynamicResource(String name) {
+        if (name == null || NHitBox.isStaticLeftover(name))
+            return false;
+        return NParser.checkName(name, KRITTER_ALIAS)
+                || NParser.checkName(name, BORKA_ALIAS_SETDYNAMIC)
+                || NParser.checkName(name, VEHICLE_ALIAS);
     }
 
     public NGob(Gob parent)
@@ -679,6 +696,16 @@ public class NGob
         if (drawable.getres() != null)
         {
             name = drawable.getres().name;
+            if (name != null)
+            {
+                NHitBox customHitBox = NHitBox.findCustom(name);
+                if (customHitBox != null)
+                {
+                    hitBox = customHitBox;
+                    explicitCustomHitBox = true;
+                    attachHitBoxOverlay();
+                }
+            }
 
             if (name != null)
             {
@@ -729,7 +756,7 @@ public class NGob
 
             if (drawable.getres().getLayers() != null)
             {
-                if (drawable instanceof ResDrawable && ((ResDrawable) drawable).spr instanceof Consobj)
+                if (!explicitCustomHitBox && drawable instanceof ResDrawable && ((ResDrawable) drawable).spr instanceof Consobj)
                 {
                     Consobj consobj = (Consobj) ((ResDrawable) drawable).spr;
                     if (consobj.built != null && (((Session.CachedRes.Ref) consobj.built.res).res) != null)
@@ -795,7 +822,7 @@ public class NGob
                             }
                         }
                     }
-                } else
+                } else if (!explicitCustomHitBox)
                 {
                     for (Resource.Layer lay : drawable.getres().getLayers())
                     {
@@ -936,11 +963,14 @@ public class NGob
                             ));
                         }
 
-                        NHitBox custom = NHitBox.findCustom(name);
-                        if (custom != null)
+                        if (!explicitCustomHitBox)
                         {
-                            hitBox = custom;
-                            explicitCustomHitBox = true;
+                            NHitBox custom = NHitBox.findCustom(name);
+                            if (custom != null)
+                            {
+                                hitBox = custom;
+                                explicitCustomHitBox = true;
+                            }
                         }
                     }
                 if (hitBox != null)
@@ -950,13 +980,7 @@ public class NGob
                         hitBox = null;
                     } else
                     {
-                        if (ca == null)
-                        {
-                            setDynamic();
-                            parent.addcustomol(new NModelBox(parent));
-                            if (!isDynamic)
-                                ca = new CellsArray(parent);
-                        }
+                        attachHitBoxOverlay();
                     }
                 }
                 if (parent.getattr(TreeScale.class) != null)
@@ -1032,11 +1056,25 @@ public class NGob
         }
     }
 
+    private void attachHitBoxOverlay()
+    {
+        if (hitBox == null || hitBoxOverlayQueued)
+            return;
+        if (parent.findol(NModelBox.class) != null)
+        {
+            hitBoxOverlayQueued = true;
+            return;
+        }
+        setDynamic();
+        parent.addcustomol(new NModelBox(parent));
+        hitBoxOverlayQueued = true;
+        if (!isDynamic)
+            ca = new CellsArray(parent);
+    }
+
     private void setDynamic()
     {
-        isDynamic = (NParser.checkName(name, KRITTER_ALIAS) || 
-                     NParser.checkName(name, BORKA_ALIAS_SETDYNAMIC) || 
-                     NParser.checkName(name, VEHICLE_ALIAS));
+        isDynamic = isDynamicResource(name);
         isGate = (NParser.checkName(name, GATE_ALIAS));
     }
 

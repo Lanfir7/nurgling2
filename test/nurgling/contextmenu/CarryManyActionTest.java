@@ -23,6 +23,8 @@ class CarryManyActionTest {
         assertTrue(action.appliesTo(gob("gfx/terobjs/barrel")));
         assertTrue(action.appliesTo(gob("gfx/terobjs/trees/oaklog")));
         assertTrue(action.appliesTo(gob("gfx/terobjs/bushes/arrowwood")));
+        assertTrue(action.appliesTo(gob("gfx/kritter/mammothskull")));
+        assertFalse(action.appliesTo(gob("gfx/kritter/mammoth/mammoth")));
         assertFalse(action.appliesTo(gob("gfx/terobjs/kiln")));
         assertFalse(action.appliesTo(gob("gfx/terobjs/trees/oakstump")));
         assertFalse(action.appliesTo(gob("gfx/terobjs/bumlings/granite")));

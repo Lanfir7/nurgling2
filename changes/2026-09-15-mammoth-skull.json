@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-15-mammoth-skull",
+  "priority": 5,
+  "summary": {
+    "ru": "Черепа мамонтов без меток животных, с хитбоксом и массовым переносом.",
+    "en": "Mammoth skulls skip animal markers, have a collision box, and can be mass-carried."
+  },
+  "detail": {
+    "ru": "Макрос меток животных пропускает черепа и другие остатки, даже если в списке есть «mammoth». У черепа мамонта есть хитбокс: путь его обходит. Черепа можно массово переносить через «Перенести много» и бот переноса поднимаемых.",
+    "en": "Animal markers skip skulls and other leftovers even if the list includes mammoth. Mammoth skulls have a hitbox, so pathfinding goes around them. Mass-carry them with Carry many or the Transfer Liftable bot."
+  }
+}

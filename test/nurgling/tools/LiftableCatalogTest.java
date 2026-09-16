@@ -15,6 +15,13 @@ class LiftableCatalogTest {
     }
 
     @Test
+    void mammothSkullIsLiftableForMassCarry() {
+        assertTrue(LiftableCatalog.isLiftable("gfx/kritter/mammothskull"));
+        assertTrue(LiftableCatalog.isLiftable("gfx/kritter/mammothskull/mammothskull"));
+        assertFalse(LiftableCatalog.isLiftable("gfx/kritter/mammoth/mammoth"));
+    }
+
+    @Test
     void commonStructuresAreLiftableWhenMapped() {
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/barrel"));
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/crate"));

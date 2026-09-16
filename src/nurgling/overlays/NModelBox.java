@@ -268,7 +268,7 @@ public class NModelBox extends Sprite implements RenderTree.Node {
         }
     }
 
-    private final NBoundingBox bb;
+    private NBoundingBox bb;
 
     boolean isShow = false;
 
@@ -289,14 +289,21 @@ public class NModelBox extends Sprite implements RenderTree.Node {
     public void added(RenderTree.Slot slot)
     {
         this.slot = slot;
-        if (nodes.isEmpty())
-        {
-            for (NBoundingBox.Polygon pol : bb.polygons)
-            {
-                nodes.add(new HidePol(pol));
-            }
-        }
+        ensureNodes();
+    }
 
+    private void ensureNodes()
+    {
+        if (!nodes.isEmpty())
+            return;
+        if (bb == null && gob.ngob != null)
+            bb = NBoundingBox.getBoundingBox(gob.ngob.hitBox);
+        if (bb == null)
+            return;
+        for (NBoundingBox.Polygon pol : bb.polygons)
+        {
+            nodes.add(new HidePol(pol));
+        }
     }
 
     /**
@@ -335,6 +342,7 @@ public class NModelBox extends Sprite implements RenderTree.Node {
     private void refreshDisplay() {
         if (!isVisible || slot == null) return;
 
+        ensureNodes();
         slot.clear();
 
         BoxStyle style = styleFor(gob);
@@ -362,6 +370,10 @@ public class NModelBox extends Sprite implements RenderTree.Node {
         }
     }
 
+    static boolean needsFirstDraw(boolean show, boolean visible, boolean slotReady) {
+        return show && slotReady && !visible;
+    }
+
     @Override
     public boolean tick(double dt) {
         boolean newShowState = ((Boolean) NConfig.get(NConfig.Key.showBB)
@@ -386,9 +398,10 @@ public class NModelBox extends Sprite implements RenderTree.Node {
             refreshDisplay();
         }
 
+        boolean slotReady = slot != null && slot.parent() != null;
         if (newShowState != isShow) {
             isShow = newShowState;
-            if (isShow && slot != null && slot.parent() != null) {
+            if (isShow && slotReady) {
                 if (!isVisible) {
                     isVisible = true;
                     refreshDisplay();
@@ -397,6 +410,9 @@ public class NModelBox extends Sprite implements RenderTree.Node {
                 isVisible = false;
                 if (slot != null) slot.clear();
             }
+        } else if (needsFirstDraw(isShow, isVisible, slotReady)) {
+            isVisible = true;
+            refreshDisplay();
         }
         return super.tick(dt);
     }

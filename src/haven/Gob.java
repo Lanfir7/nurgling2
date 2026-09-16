@@ -591,7 +591,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 
 	public Overlay findol(Class<? extends Sprite> spr ) {
 		for (Overlay ol : ols) {
-			if (ol.spr.getClass() == spr)
+			if (nurgling.NGob.overlaySprMatches(ol.spr, spr))
 				return (ol);
 		}
 		return(null);

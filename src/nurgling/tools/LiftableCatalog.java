@@ -20,6 +20,7 @@ import java.util.Set;
  */
 public final class LiftableCatalog {
     private static final Set<String> STRUCTURES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "gfx/kritter/mammothskull",
             "gfx/terobjs/anvil",
             "gfx/terobjs/barrel",
             "gfx/terobjs/beehive",
@@ -89,6 +90,8 @@ public final class LiftableCatalog {
         if (gobResName.startsWith("gfx/terobjs/bushes/"))
             return true;
         if (gobResName.startsWith("gfx/terobjs/furn/table"))
+            return true;
+        if (gobResName.contains("mammothskull"))
             return true;
         return STRUCTURES.contains(gobResName);
     }

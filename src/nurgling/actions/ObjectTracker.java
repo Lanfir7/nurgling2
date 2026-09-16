@@ -8,8 +8,6 @@ import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.conf.NDiscordNotification;
 import nurgling.tools.ClaimLand;
-import nurgling.tools.NAlias;
-import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
 import nurgling.NMapView;
 import nurgling.NCore;
@@ -25,6 +23,7 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -106,6 +105,53 @@ public class ObjectTracker {
         } catch (Exception ignored) {}
         return false;
     }
+
+    /** Leftover world objects that live under gfx/kritter but are not animals. */
+    static boolean isLeftoverKritter(String gobName) {
+        if (gobName == null) return false;
+        String n = gobName.toLowerCase(Locale.ROOT);
+        return n.contains("skull") || n.contains("beef");
+    }
+
+    /** True for living kritters that Animal Markers may tag. */
+    static boolean isAnimalMarkerGob(String gobName) {
+        return gobName != null && gobName.contains("gfx/kritter/") && !isLeftoverKritter(gobName);
+    }
+
+    static boolean matchesTrackedPattern(String gobName, String pattern) {
+        if (gobName == null || pattern == null || pattern.isEmpty()) return false;
+        if (isRegexPattern(pattern)) {
+            try {
+                return Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(gobName).find();
+            } catch (Exception e) {
+                return boundedContains(gobName, pattern);
+            }
+        }
+        return boundedContains(gobName, pattern);
+    }
+
+    private static boolean isRegexPattern(String pattern) {
+        return pattern.contains(".*") || pattern.contains("^") || pattern.contains("$")
+                || pattern.contains("[") || pattern.contains("(") || pattern.contains("+")
+                || pattern.contains("?") || pattern.contains("|");
+    }
+
+    /** Substring match that does not treat mammoth as mammothskull. */
+    static boolean boundedContains(String gobName, String pattern) {
+        String name = gobName.toLowerCase(Locale.ROOT);
+        String key = pattern.toLowerCase(Locale.ROOT);
+        int from = 0;
+        while (from <= name.length() - key.length()) {
+            int at = name.indexOf(key, from);
+            if (at < 0) return false;
+            int after = at + key.length();
+            boolean beforeOk = at == 0 || !Character.isLetterOrDigit(name.charAt(at - 1));
+            boolean afterOk = after == name.length() || !Character.isLetterOrDigit(name.charAt(after));
+            if (beforeOk && afterOk) return true;
+            from = at + 1;
+        }
+        return false;
+    }
     
     /**
      * Помечает все объекты, которые уже видны при старте бота
@@ -130,22 +176,7 @@ public class ObjectTracker {
                 
                 // Проверяем каждый паттерн
                 for (String pattern : trackedPatterns) {
-                    boolean matches = false;
-                    
-                    if (pattern.contains(".*") || pattern.contains("^") || pattern.contains("$") || 
-                        pattern.contains("[") || pattern.contains("(") || pattern.contains("+") || 
-                        pattern.contains("?") || pattern.contains("|")) {
-                        try {
-                            Pattern regexPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE);
-                            matches = regexPattern.matcher(gobName).find();
-                        } catch (Exception e) {
-                            matches = NParser.checkName(gobName, new NAlias(pattern));
-                        }
-                    } else {
-                        matches = NParser.checkName(gobName, new NAlias(pattern));
-                    }
-                    
-                    if (matches) {
+                    if (matchesTrackedPattern(gobName, pattern)) {
                         // Помечаем этот объект как уже виденный при старте
                         synchronized (initiallyVisibleGobs) {
                             initiallyVisibleGobs.add(gob.id);
@@ -188,12 +219,11 @@ public class ObjectTracker {
 
                 String gobName = gob.ngob.name;
                 
-                // Фильтр: только kritter (животные) — только для Animal Markers
+                // Фильтр: только живые kritter — только для Animal Markers
                 if (filterKritterOnly) {
-                    if (!gobName.contains("gfx/kritter/")) {
+                    if (!isAnimalMarkerGob(gobName)) {
                         continue;
                     }
-                    // Фильтр: пропускаем трупы (поза knock)
                     if (isKnocked(gob)) {
                         continue;
                     }
@@ -201,27 +231,7 @@ public class ObjectTracker {
 
                 // Проверяем каждый паттерн из списка отслеживания
                 for (String pattern : trackedPatterns) {
-                    boolean matches = false;
-                    
-                    // Проверяем, является ли паттерн регулярным выражением (содержит .* или другие regex символы)
-                    if (pattern.contains(".*") || pattern.contains("^") || pattern.contains("$") || 
-                        pattern.contains("[") || pattern.contains("(") || pattern.contains("+") || 
-                        pattern.contains("?") || pattern.contains("|")) {
-                        // Используем регулярное выражение
-                        try {
-                            Pattern regexPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE);
-                            // Используем find() для частичного совпадения, а не matches() для полного
-                            matches = regexPattern.matcher(gobName).find();
-                        } catch (Exception e) {
-                            // Если паттерн некорректный, пробуем через NAlias
-                            matches = NParser.checkName(gobName, new NAlias(pattern));
-                        }
-                    } else {
-                        // Используем NAlias для простых паттернов
-                        matches = NParser.checkName(gobName, new NAlias(pattern));
-                    }
-                    
-                    if (matches) {
+                    if (matchesTrackedPattern(gobName, pattern)) {
                         // Используем gob.id для отслеживания уникальных объектов
                         String uniqueKey = pattern + ":" + gob.id;
                         

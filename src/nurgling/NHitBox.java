@@ -137,6 +137,7 @@ public class NHitBox
             put("gfx/kritter/pig/sow", new NHitBox(new Coord(-6,-4),new Coord(6,4)));
             put("gfx/kritter/pig/hog", new NHitBox(new Coord(-6,-4),new Coord(6,4)));
             put("gfx/kritter/orca/orcabeef", new NHitBox(new Coord2d(-1,-4),new Coord2d(1,4)));
+            put("gfx/kritter/mammothskull", new NHitBox(new Coord(-10, -6), new Coord(10, 6)));
             put("gfx/kritter/sheep/lamb", new NHitBox(new Coord(-4,-2),new Coord(5,2)));
             put("gfx/kritter/sheep/sheep", new NHitBox(new Coord(-4,-2),new Coord(5,2)));
             put("gfx/kritter/goat/billy", new NHitBox(new Coord(-4,-2),new Coord(4,2)));
@@ -183,11 +184,23 @@ public class NHitBox
         return null;
     }
 
+    public static boolean isStaticLeftover(String name)
+    {
+        if(name == null)
+            return false;
+        String n = name.toLowerCase(java.util.Locale.ROOT);
+        return n.contains("skull") || n.contains("beef");
+    }
+
     public static NHitBox findCustom(String name)
     {
+        if(name == null)
+            return null;
         NHitBox res = custom.get(name);
         if(res!=null)
             return res;
+        if(name.contains("mammothskull"))
+            return custom.get("gfx/kritter/mammothskull");
         if(name.endsWith("log") && name.startsWith("gfx/terobjs/trees"))
             return custom.get("log");
         if(name.startsWith("gfx/terobjs/bumlings"))
