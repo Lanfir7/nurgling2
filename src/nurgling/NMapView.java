@@ -2993,8 +2993,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             return;
         }
 
-        nurgling.tools.DirectionalVector vector = new nurgling.tools.DirectionalVector(
-            originTileCoords, targetTileCoords, targetName, targetGobId, true
+        nurgling.tools.DirectionalVector vector = nurgling.tools.DirectionalVector.forPointer(
+            originTileCoords, targetTileCoords, targetName, targetGobId
         );
         directionalVectors.add(vector);
     }

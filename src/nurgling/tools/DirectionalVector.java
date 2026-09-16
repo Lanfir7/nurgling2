@@ -28,6 +28,12 @@ public class DirectionalVector {
     /** If true, map draws a finite line to targetTileCoords plus an X; otherwise an infinite ray */
     public final boolean showEndpoint;
 
+    /**
+     * Server pointer coordinates stay trustworthy only up to this many tiles.
+     * Beyond that the map draws an infinite ray instead of a false cross and distance.
+     */
+    public static final double MAX_ENDPOINT_TILES = 950;
+
     /** Colors to cycle through for different vector pairs */
     private static final Color[] COLORS = {
         new Color(100, 150, 255, 200),  // Blue
@@ -75,6 +81,19 @@ public class DirectionalVector {
 
     public DirectionalVector(Coord originTileCoords, Coord targetTileCoords, String targetName, long targetGobId, boolean showEndpoint) {
         this(originTileCoords, targetTileCoords, targetName, targetGobId, COLORS[0], showEndpoint);
+    }
+
+    /** Cross and finite line only while the reported tile distance is at most {@link #MAX_ENDPOINT_TILES}. */
+    public static boolean showEndpoint(Coord originTileCoords, Coord targetTileCoords) {
+        if(originTileCoords == null || targetTileCoords == null)
+            return false;
+        return originTileCoords.dist(targetTileCoords) <= MAX_ENDPOINT_TILES;
+    }
+
+    /** Pointer/compass RMB: nearby marks get a cross, farther ones become an infinite ray. */
+    public static DirectionalVector forPointer(Coord originTileCoords, Coord targetTileCoords, String targetName, long targetGobId) {
+        return new DirectionalVector(originTileCoords, targetTileCoords, targetName, targetGobId,
+                showEndpoint(originTileCoords, targetTileCoords));
     }
 
     /**

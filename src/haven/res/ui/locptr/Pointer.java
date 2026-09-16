@@ -269,7 +269,7 @@ public class Pointer extends Widget {
 			Gob player = gui.map.player();
 			if(player != null) {
 				double d = player.rc.dist(tc) / 11.0;
-				if(d > 990) {
+				if(d > nurgling.tools.DirectionalVector.MAX_ENDPOINT_TILES) {
 					mc = gui.mapfile.findMarkerPosition(tip);
 					triangulating = mc == null;
 					if(mc != null) {

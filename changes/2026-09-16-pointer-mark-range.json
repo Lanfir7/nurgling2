@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-pointer-mark-range",
+  "priority": 4,
+  "summary": {
+    "ru": "Метка по ПКМ на значке цели ставит крестик только рядом, а дальше рисует бесконечную линию.",
+    "en": "Right-clicking a target icon now places a cross only when nearby, and an infinite line when farther away."
+  },
+  "detail": {
+    "ru": "ПКМ по значку дерева или другой цели на компасе либо стрелке указателя: если цель не дальше 950 м, на карте появляются линия и крестик в её точке. Если дальше — только бесконечная линия направления, без ложного расстояния.",
+    "en": "Right-click a tree or other target on the compass or pointer arrow. Within 950 m the map shows a line and a cross at the spot. Farther away it draws only an infinite direction line, so a truncated distance is not shown as exact."
+  }
+}
