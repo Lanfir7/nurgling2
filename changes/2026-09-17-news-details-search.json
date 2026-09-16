@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-news-details-search",
+  "priority": 6,
+  "summary": {
+    "ru": "В «Что нового» можно найти выпуск по тексту подробностей.",
+    "en": "What's new can find a past update by its expanded details text."
+  },
+  "detail": {
+    "ru": "Откройте «Что нового» (кнопка «i» справа в верхнем ряду меню). Над списком версий есть поиск: введите фразу из подробностей — останутся подходящие выпуски, сразу с раскрытым текстом.",
+    "en": "Open What's new (the i button at the right of the top menu row). Type a phrase from the expanded details above the version list to keep matching updates, already expanded."
+  }
+}
