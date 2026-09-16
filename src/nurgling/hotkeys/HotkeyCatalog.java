@@ -263,6 +263,21 @@ public final class HotkeyCatalog {
         gesture(registry, Hotkeys.LAYOUT_COMPASS_RESIZE,
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WINDOWS,
                 EnumSet.of(HotkeyContext.COMPASS_WIDGET), null, order);
+        /* The only left-button chord nothing else claims. Every shorter one already means
+         * something over a HUD panel - dropping or transferring a held item, queueing a
+         * waypoint on the minimap - and rearranging the HUD must not be one slip away. */
+        gesture(registry, Hotkeys.LAYOUT_ADJUST,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C | KeyMatch.S | KeyMatch.M),
+                HotkeyCategory.WINDOWS, EnumSet.of(HotkeyContext.GLOBAL),
+                Integer.valueOf(haven.UI.MOD_CTRL | haven.UI.MOD_SHIFT | haven.UI.MOD_META), order);
+        /* Alt alone: the wheel is even more crowded than the buttons - every chord with
+         * Shift or Ctrl already rotates a building being placed, whatever else is held. */
+        gesture(registry, Hotkeys.LAYOUT_SCALE_UP,
+                InputGesture.wheel(-1, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.GLOBAL), Integer.valueOf(haven.UI.MOD_META), order);
+        gesture(registry, Hotkeys.LAYOUT_SCALE_DOWN,
+                InputGesture.wheel(1, KeyMatch.MODS, KeyMatch.M), HotkeyCategory.WINDOWS,
+                EnumSet.of(HotkeyContext.GLOBAL), Integer.valueOf(haven.UI.MOD_META), order);
         gesture(registry, Hotkeys.WORLD_SURVEY_NEW_SELECTION,
                 InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.S), HotkeyCategory.WORLD,
                 EnumSet.of(HotkeyContext.LAND_SURVEY), null, order);

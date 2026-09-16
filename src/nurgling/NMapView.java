@@ -1567,6 +1567,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if(ui.core.mode == NCore.Mode.DRAG) {
             return true;
         }
+        /* Any click in the world counts as having read the layout card. */
+        nurgling.widgets.NLayoutHint.dismiss(ui);
         if(hasModalMouseGrab()) return super.mousedown(ev);
 
         nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
@@ -2993,8 +2995,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             return;
         }
 
-        nurgling.tools.DirectionalVector vector = nurgling.tools.DirectionalVector.forPointer(
-            originTileCoords, targetTileCoords, targetName, targetGobId
+        nurgling.tools.DirectionalVector vector = new nurgling.tools.DirectionalVector(
+            originTileCoords, targetTileCoords, targetName, targetGobId, true
         );
         directionalVectors.add(vector);
     }

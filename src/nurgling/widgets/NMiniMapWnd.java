@@ -19,7 +19,7 @@ import java.net.MalformedURLException;
 public class NMiniMapWnd extends Widget{
     NMapView map;
     public Map miniMap;
-    public IButton geoloc;
+    public ICheckBox geoloc;
     public static final KeyBinding kb_night = KeyBinding.get("mwnd_night", KeyMatch.nil);
     public static final KeyBinding kb_fog = KeyBinding.get("mwnd_fog", KeyMatch.nil);
     public static final KeyBinding kb_resourcetimers = KeyBinding.get("mwnd_resourcetimers", KeyMatch.nil);
@@ -180,12 +180,13 @@ public class NMiniMapWnd extends Widget{
         minesup.a = (Boolean) NConfig.get(NConfig.Key.miningol);
         buttons.add(minesup);
 
-        geoloc = new IButton(Resource.loadsimg("nurgling/hud/buttons/toggle_panel/geoloc/d"), Resource.loadsimg("nurgling/hud/buttons/toggle_panel/geoloc/u"), Resource.loadsimg("nurgling/hud/buttons/toggle_panel/geoloc/h"), new Runnable() {
-            @Override
-            public void run() {
-                NUtils.getUI().core.mappingClient.OpenMap();
-            }
-        });
+        /* A checkbox that never latches, rather than a plain button, so the proximity
+         * dock can draw it scaled the same way as every other overlay toggle. */
+        geoloc = new ICheckBox(Resource.loadtex("nurgling/hud/buttons/toggle_panel/geoloc/d"),
+                               Resource.loadtex("nurgling/hud/buttons/toggle_panel/geoloc/u"),
+                               Resource.loadtex("nurgling/hud/buttons/toggle_panel/geoloc/h"));
+        geoloc.state(() -> false);
+        geoloc.click(() -> NUtils.getUI().core.mappingClient.OpenMap());
         buttons.add(geoloc);
 
         natura = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/natura", NMapView.kb_togglenature, L10n.get("minimap.natural_objects"));
@@ -355,13 +356,55 @@ public class NMiniMapWnd extends Widget{
         }
     }
 
+    /* The overlay toggles are revealed by the cursor coming near the minimap, so an idle
+     * map is just map. */
+    private final NIconDock dock = new NIconDock();
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        Coord mc = ((ui == null) || (ui.mc == null) || (sz == Coord.z)) ? null : ui.mc.sub(rootpos());
+        dock.track(mc, sz, dt);
+    }
+
     public void draw(GOut g, boolean strict)
     {
         drawWidget(g,strict,miniMap);
         pbox.draw(g, miniMap.c.sub(marg), miniMap.sz.add(marg.mul(2)));
-        drawWidget(g,strict,toggle_panel);
-        drawWidget(g,strict,map_box);
+        if(!dock.hidden()) {
+            /* Smallest first, so whichever icon the cursor has grown sits in front of
+             * both of its neighbours instead of the one to its right covering it. */
+            java.util.List<Widget> icons = new java.util.ArrayList<>(toggle_panel.children());
+            icons.add(map_box);
+            icons.sort(java.util.Comparator.comparingDouble(w -> dock.scale(dockmid(w))));
+            for(Widget btn : icons)
+                drawDockIcon(g, btn);
+        }
         drawWidget(g,strict,swdg);
+    }
+
+    /** Centre of an icon in this window's coordinates, wherever it is docked. */
+    private Coord dockmid(Widget wdg) {
+        Coord pos = (wdg.parent == toggle_panel) ? toggle_panel.c.add(wdg.c) : wdg.c;
+        return(pos.add(wdg.sz.x / 2, wdg.sz.y / 2));
+    }
+
+    private void drawDockIcon(GOut g, Widget wdg) {
+        if(!wdg.visible() || !(wdg instanceof ICheckBox))
+            return;
+        ICheckBox btn = (ICheckBox)wdg;
+        Tex tex = btn.state() ? (btn.h ? btn.hoverdown : btn.down) : (btn.h ? btn.hoverup : btn.up);
+        if(tex == null)
+            return;
+        Coord mid = dockmid(wdg);
+        double scale = dock.scale(mid);
+        Coord isz = new Coord((int)Math.round(wdg.sz.x * scale), (int)Math.round(wdg.sz.y * scale));
+        /* Anchored on the icon's own bottom edge: the icons grow up and out over the map
+         * without the row drifting, so the one being aimed at stays under the cursor. */
+        Coord ul = new Coord(mid.x - (isz.x / 2), mid.y + (wdg.sz.y / 2) - isz.y);
+        g.chcolor(255, 255, 255, dock.alpha(scale));
+        g.image(tex, ul, isz);
+        g.chcolor();
     }
 
     void drawWidget(GOut g, boolean strict, Widget wdg)
@@ -523,7 +566,7 @@ public class NMiniMapWnd extends Widget{
     @Override
     public void resize(Coord sz) {
         super.resize(sz);
-        miniMap.resize(sz.x - UI.scale(15), sz.y );
+        miniMap.resize(sz.x, sz.y);
         
         // Re-layout buttons when resizing
         if(toggle_panel != null) {

@@ -145,7 +145,7 @@ class GameplayHotkeyAuditTest {
     }
     private static final Pattern DIRECT_CONDITION = Pattern.compile(
             "ui\\.mod(?:shift|ctrl|meta|flags\\s*\\()|\\b(?:ev|event)\\.(?:mods|code)\\b|KeyEvent\\.VK_|\\b(?:mods|modflags)\\s*(?:[&|]|[!=]=(?!\\s*null))|\\bUI\\.MOD_");
-    private static final Pattern UNVERIFIED_MATCHER = Pattern.compile("\\.matches(?:Mouse|Wheel|Modifiers)\\s*\\(");
+    private static final Pattern UNVERIFIED_MATCHER = Pattern.compile("\\.(?:matches(?:Mouse|Wheel|Modifiers)|modifiersHeld)\\s*\\(");
     private static final Pattern KEY_ID = Pattern.compile(
             "KeyBinding\\.get\\(\\s*\"([^\"]+)\"");
     @Test
@@ -310,7 +310,7 @@ class GameplayHotkeyAuditTest {
         while(calls.find()) {
             int start = calls.start();
             int end = balancedEnd(remaining, remaining.indexOf('(', start));
-            Matcher tail = Pattern.compile("\\s*\\.current\\(\\)\\s*\\.matches(?:Mouse|Wheel|Modifiers)?\\s*\\(").matcher(remaining);
+            Matcher tail = Pattern.compile("\\s*\\.current\\(\\)\\s*\\.(?:matches(?:Mouse|Wheel|Modifiers)?|modifiersHeld)\\s*\\(").matcher(remaining);
             tail.region(end, remaining.length());
             if(!tail.lookingAt()) continue;
             end = balancedEnd(remaining, remaining.indexOf('(', tail.end() - 1));
@@ -320,7 +320,7 @@ class GameplayHotkeyAuditTest {
         }
         String verified = "(?:Hotkeys|InputNavigation)\\.(?!action\\b)\\w+";
         for(String alias : registryAliases)
-            verified += "|\\b" + Pattern.quote(alias) + "\\.current\\(\\)\\.matches(?:Mouse|Wheel|Modifiers)?";
+            verified += "|\\b" + Pattern.quote(alias) + "\\.current\\(\\)\\.(?:matches(?:Mouse|Wheel|Modifiers)?|modifiersHeld)";
         Pattern helpers = Pattern.compile("(?:" + verified + ")\\s*\\(");
         calls = helpers.matcher(remaining);
         while(calls.find()) {

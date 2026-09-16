@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-hud-adjust",
+  "priority": 7,
+  "summary": {
+    "ru": "Панели интерфейса двигаются, тянутся и масштабируются прямо в игре, с показом процента.",
+    "en": "HUD panels move, stretch and scale without leaving the game, and show their percentage."
+  },
+  "detail": {
+    "ru": "Держите Ctrl+Shift+Alt и тяните панель левой кнопкой: под курсором она обводится, за край или угол меняет размер, противоположный край остаётся на месте. Пока держите сочетание, в левом верхнем углу панели всплывает ползунок с процентом: он сам не двигается и не растёт, так что размер удобно подбирать на ходу. Масштаб работает и на панелях с неизменной вёрсткой — пояс, снаряжение, будильники — их наконец можно уменьшить. Alt+колесо меняет размер шагами по 5%.",
+    "en": "Hold Ctrl+Shift+Alt and drag a panel with the left button: it outlines itself, any edge or corner resizes it, and the opposite edge stays put. While the combination is held, a slider with the percentage pops up in the panel's top-left corner; it neither moves nor grows, so the size is easy to dial in as you go. Scaling now also works on panels with a fixed layout - the belt, equipment, alarms - which can finally be made smaller. Alt+wheel resizes in steps of 5%."
+  }
+}

@@ -11,7 +11,7 @@ import java.awt.*;
 
 import static nurgling.widgets.NCatSelection.fnd;
 
-public class NDraggableWidget extends Widget
+public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handler
 {
     protected final String name;
     private UI.Grab dm;
@@ -47,6 +47,14 @@ public class NDraggableWidget extends Widget
 
     public final static Coord off = new Coord(UI.scale(10,10));
     public final static Coord delta = new Coord(UI.scale(35,20));
+
+    /** Natural size of this panel, i.e. the size it has at 100%. */
+    protected Coord basesz;
+    private double uiscale = 1.0;
+
+    protected static final double scalemin = 0.5;
+    /** The one scale control on screen, if any; only the panel under the cursor gets one. */
+    private static ScaleSlider current;
     public Widget content = null;
     TexI label = null;
     public static Text.Furnace fnd = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(java.awt.Font.BOLD), 14, Color.YELLOW).aa(true), UI.scale(1), UI.scale(2), Color.BLACK);
@@ -55,14 +63,49 @@ public class NDraggableWidget extends Widget
         this(name,sz);
         this.content = add(content);
         this.content.visible = btnVis.a;
-        content.resize(this.sz.sub(delta));
-        content.move(off);
+        content.resize(this.sz.sub(contentDelta()));
+        content.move(contentOff());
+        if(!stretchcontent() && (uiscale != 1.0))
+            applyscale();
+    }
+
+    /**
+     * Whether the content follows the frame size. Panels built around a layout that
+     * can reflow say yes and are simply given a new size; the rest keep their natural
+     * size and are drawn magnified instead, which is the only way to make a panel of
+     * fixed artwork - the belt, the equipment proxy, the alarms - any smaller.
+     */
+    protected boolean stretchcontent()
+    {
+        return(false);
+    }
+
+    /**
+     * Frame space taken away from the content, i.e. how much smaller the content
+     * is than the widget. The default leaves a strip on the right for the
+     * lock/visibility controls; a subclass may reclaim it, in which case those
+     * controls are drawn over the content while in DRAG mode.
+     */
+    /**
+     * Where the content starts inside the frame. Normally inset so the frame's own
+     * border and controls have room; a frame that reclaims that strip puts the content
+     * flush against its corner instead.
+     */
+    protected Coord contentOff()
+    {
+        return(off);
+    }
+
+    protected Coord contentDelta()
+    {
+        return(delta);
     }
 
     public NDraggableWidget(String name, Coord sz)
     {
         label = new TexI(fnd.render(NDefaultLayout.title(name)).img);
         this.sz = sz;
+        this.basesz = new Coord(sz);
         this.name = name;
         add(btnLock = new ICheckBox(NStyle.locki[0], NStyle.locki[1], NStyle.locki[2], NStyle.locki[3])
         {
@@ -113,6 +156,8 @@ public class NDraggableWidget extends Widget
             this.btnLock.a = prop.locked;
             this.btnVis.a = prop.vis;
             this.btnFlip.a = prop.flip;
+            if(!stretchcontent())
+                this.uiscale = Utils.clip(prop.scale, scalemin, scalemax());
         }
         else
         {
@@ -230,7 +275,61 @@ public class NDraggableWidget extends Widget
             return;
         NDragProp prop = new NDragProp(new Coord(target_c), btnLock.a, btnVis.a, name);
         prop.flip = btnFlip.a;
+        prop.scale = uiscale;
         NDragProp.set(name, prop);
+    }
+
+    /**
+     * True while the layout-adjust modifier is held. Panels offer their handles then,
+     * so the HUD can be rearranged mid-game without entering the editing mode - and
+     * stays untouchable during ordinary play, since a bare click never reaches this.
+     */
+    protected boolean adjustmod()
+    {
+        return(Hotkeys.action(Hotkeys.LAYOUT_ADJUST).current().modifiersHeld(ui.modflags()));
+    }
+
+    /** True when this click is the gesture that grabs a panel to move or stretch it. */
+    protected boolean adjustclick(MouseDownEvent ev)
+    {
+        return(Hotkeys.action(Hotkeys.LAYOUT_ADJUST).current().matchesMouse(ev.b, ui.modflags()));
+    }
+
+    /** True while this widget may be moved or stretched at all. */
+    protected boolean editing()
+    {
+        return((ui.core.mode == NCore.Mode.DRAG) || adjustmod());
+    }
+
+    /** True while the cursor is over this widget, wherever the last mouse event went. */
+    protected boolean hovered()
+    {
+        return((ui != null) && (ui.mc != null) && (sz != Coord.z) && ui.mc.sub(rootpos()).isect(Coord.z, sz));
+    }
+
+    private void startmove(MouseDownEvent ev)
+    {
+        pushUndo();
+        dm = ui.grabmouse(this);
+        doff = ev.c;
+        parent.setfocus(this);
+    }
+
+    /**
+     * Move this widget while a drag is in progress. The position is not written to
+     * the config yet; call {@link #savePlacement()} when the drag ends.
+     */
+    protected void placeAt(Coord nc)
+    {
+        target_c.x = nc.x;
+        target_c.y = nc.y;
+        c = new Coord(nc);
+    }
+
+    /** Write the current placement to the config, ending a drag. */
+    protected void savePlacement()
+    {
+        persist();
     }
 
     /**
@@ -280,6 +379,11 @@ public class NDraggableWidget extends Widget
         btnVis.a = prop.vis;
         if(content != null)
             content.visible = prop.vis;
+        if(!stretchcontent())
+        {
+            uiscale = Utils.clip(prop.scale, scalemin, scalemax());
+            applyscale();
+        }
         if(isFlipped && (btnFlip.a != prop.flip))
         {
             btnFlip.a = prop.flip;
@@ -295,25 +399,138 @@ public class NDraggableWidget extends Widget
         btnVis.a = NDefaultLayout.defaultVis(name);
         if(content != null)
             content.visible = btnVis.a;
+        if(!stretchcontent() && (uiscale != 1.0))
+        {
+            uiscale = 1.0;
+            applyscale();
+        }
     }
 
     @Override
     public void resize(Coord sz)
     {
-        super.resize(sz);
-        btnLock.move(new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y / 2));
-        btnVis.move(new Coord(sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y + off.y));
-        if(isFlipped)
-            btnFlip.move(new Coord(NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y/2));
+        if(!stretchcontent())
+        {
+            /* Whoever resizes such a panel is telling us its natural size - it is the
+             * content announcing a new layout - so the player's scale is re-applied on
+             * top of it rather than being overwritten by it. */
+            basesz = new Coord(sz);
+            if(content != null)
+            {
+                content.resize(sz.sub(contentDelta()));
+                content.move(contentOff());
+            }
+            applyscale();
+            return;
+        }
+        frame(sz);
         if(content!=null)
         {
-            content.resize(sz.sub(delta));
-            content.move(off);
+            content.resize(sz.sub(contentDelta()));
+            content.move(contentOff());
         }
+    }
+
+    /** Set the frame size and keep the frame's own controls in their corners. */
+    private void frame(Coord fsz)
+    {
+        super.resize(fsz);
+        btnLock.move(new Coord(fsz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y / 2));
+        btnVis.move(new Coord(fsz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y + off.y));
+        if(isFlipped)
+            btnFlip.move(new Coord(NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y/2));
+    }
+
+    private void applyscale()
+    {
+        frame(new Coord(Math.max(1, (int)Math.round(basesz.x * uiscale)),
+                        Math.max(1, (int)Math.round(basesz.y * uiscale))));
+    }
+
+    /** How large this panel may be made, as a fraction of its natural size. */
+    protected double scalemax()
+    {
+        return(2.0);
+    }
+
+    /** Current size as a fraction of the natural one. */
+    public double scale()
+    {
+        return(uiscale);
+    }
+
+    /** Resize to a fraction of the natural size, keeping the top-left corner in place. */
+    public void scale(double s)
+    {
+        s = Utils.clip(s, scalemin, scalemax());
+        if(Math.abs(s - uiscale) < 0.001)
+            return;
+        uiscale = s;
+        applyscale();
+        persist();
+    }
+
+    /** True while the content is drawn magnified rather than laid out at the frame size. */
+    protected boolean scaled()
+    {
+        return(!stretchcontent() && (content != null) && (Math.abs(uiscale - 1.0) > 0.001));
+    }
+
+    /**
+     * Convert a point in this frame into the content's own coordinates. The content
+     * believes it is still at its natural size, so everything it is told - clicks,
+     * hovers, tooltips - has to be divided back down by the scale it is drawn at.
+     */
+    private Coord tocontent(Coord c)
+    {
+        return(new Coord((int)Math.round(c.x / uiscale), (int)Math.round(c.y / uiscale)).sub(content.c));
+    }
+
+    @Override
+    public Coord xlate(Coord c, boolean in)
+    {
+        if(!scaled())
+            return(c);
+        return(in ? new Coord((int)Math.round(c.x * uiscale), (int)Math.round(c.y * uiscale))
+                  : new Coord((int)Math.round(c.x / uiscale), (int)Math.round(c.y / uiscale)));
     }
 
     public static final Tex bg = Resource.loadtex("nurgling/hud/wnd/bg");
     private static final Tex ctl = Resource.loadtex("nurgling/hud/box/tl");
+
+    /**
+     * Draw the children, putting the content through a magnifying projection when the
+     * panel is scaled. The content keeps drawing at its natural size and coordinates;
+     * only the transform that turns those into screen pixels is different, so artwork
+     * and text scale together without the content knowing about it.
+     */
+    @Override
+    public void draw(GOut g, boolean strict)
+    {
+        if(!scaled())
+        {
+            super.draw(g, strict);
+            return;
+        }
+        for(Widget wdg = child; wdg != null; wdg = wdg.next)
+        {
+            if(!wdg.visible)
+                continue;
+            if(wdg == content)
+            {
+                haven.render.Pipe def = g.basicstate();
+                new MiniMap.Scale2D(g.tx, (float)uiscale).apply(def);
+                /* A loose clip in unscaled space: the content's own rectangle is larger
+                 * than the frame when shrunk, and the projection is what brings it back
+                 * inside, so clipping to the frame here would cut the drawing short. */
+                wdg.draw(new GOut(g.out, def, g.root().sz()).reclipl(g.tx.add(wdg.c), wdg.sz));
+            }
+            else
+            {
+                wdg.draw(strict ? g.reclip(wdg.c, wdg.sz) : g.reclipl(wdg.c, wdg.sz));
+            }
+        }
+    }
 
     @Override
     public void draw(GOut g)
@@ -334,7 +551,215 @@ public class NDraggableWidget extends Widget
         }
         super.draw(g);
         if (ui.core.mode == NCore.Mode.DRAG) {
+            /* The content is added last and so draws over the controls; on a frame
+             * that reclaims the right-hand strip they would otherwise be buried. */
+            for(ICheckBox btn : new ICheckBox[]{btnLock, btnVis, btnFlip}) {
+                if(btn.visible())
+                    btn.draw(g.reclipl(btn.c, btn.sz));
+            }
             g.aimage(label, sz.div(2), 0.5, 0.5);
+        } else if ((dm != null) || (adjustmod() && hovered())) {
+            /* Holding the modifier turns the panel under the cursor into a handle and
+             * says so: an outline plus its name, without covering the game with it. */
+            g.chcolor(btnLock.a ? new Color(150, 150, 150, 120) : new Color(255, 216, 96, 190));
+            g.rect(Coord.z, sz);
+            g.rect(new Coord(1, 1), sz.sub(2, 2));
+            g.chcolor();
+            g.chcolor(255, 255, 255, 190);
+            g.aimage(label, sz.div(2), 0.5, 0.5);
+            g.chcolor();
+        }
+    }
+
+    /** True while this panel offers its scale control. */
+    private boolean wantslider()
+    {
+        return(!btnLock.a && (parent != null) && (ui != null) && (ui.core.mode != NCore.Mode.DRAG)
+               && visible() && adjustmod() && hovered());
+    }
+
+    /**
+     * The scale control, a popup that behaves like a tooltip: it appears next to the
+     * cursor, at a spot decided once, and stays there. Living outside the panel is the
+     * whole point - a panel anchored to a screen edge walks away from its own corner as
+     * it is resized, which would drag the knob out from under the cursor.
+     */
+    public static class ScaleSlider extends Widget
+    {
+        private static final Coord ssz = new Coord(UI.scale(238), UI.scale(64));
+        private static final int pad = UI.scale(14);
+        private static final int knobw = UI.scale(9);
+        private static final Color fillcol = new Color(0, 138, 146);
+        private static final Color fillhi = new Color(96, 226, 230);
+        private static final Color knobcol = new Color(214, 248, 250);
+        private static final Color tickcol = new Color(132, 150, 152);
+        private static final Text.Foundry pctfnd =
+            new Text.Foundry(Text.sans.deriveFont(java.awt.Font.BOLD), 15, new Color(255, 226, 138)).aa(true);
+        private static final Text.Foundry hintfnd = new Text.Foundry(Text.sans, 9, new Color(168, 182, 184)).aa(true);
+
+        private final NDraggableWidget tgt;
+        private final Text minlbl, maxlbl;
+        private UI.Grab grab;
+        private Text pcttext = null;
+        private int pctshown = -1;
+
+        private ScaleSlider(NDraggableWidget tgt)
+        {
+            super(ssz);
+            this.tgt = tgt;
+            this.minlbl = hintfnd.render((int)Math.round(scalemin * 100) + "%");
+            this.maxlbl = hintfnd.render((int)Math.round(tgt.scalemax() * 100) + "%");
+        }
+
+        private static Color alpha(Color col, int a)
+        {
+            return(new Color(col.getRed(), col.getGreen(), col.getBlue(), a));
+        }
+
+        private int trackx()
+        {
+            return(pad);
+        }
+
+        private int trackw()
+        {
+            return(ssz.x - (2 * pad));
+        }
+
+        private int tracky()
+        {
+            /* Far enough off the bottom that the range labels below it clear the frame. */
+            return(ssz.y - UI.scale(24));
+        }
+
+        private void slideto(int x)
+        {
+            double frac = Utils.clip((double)(x - trackx()) / trackw(), 0.0, 1.0);
+            tgt.scale(scalemin + (frac * (tgt.scalemax() - scalemin)));
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev)
+        {
+            if((ev.b == 1) && (grab == null) && (ev.c.y >= (tracky() - UI.scale(12))))
+            {
+                grab = ui.grabmouse(this);
+                slideto(ev.c.x);
+                return(true);
+            }
+            /* Consumed either way: the control sits over the panel it belongs to, and a
+             * stray click must not fall through into it. */
+            return(true);
+        }
+
+        @Override
+        public void mousemove(MouseMoveEvent ev)
+        {
+            if(grab != null)
+                slideto(ev.c.x);
+        }
+
+        @Override
+        public boolean mouseup(MouseUpEvent ev)
+        {
+            if(grab != null)
+            {
+                grab.remove();
+                grab = null;
+                return(true);
+            }
+            return(true);
+        }
+
+        @Override
+        public void tick(double dt)
+        {
+            super.tick(dt);
+            /* Held open while the knob is being dragged or the cursor is on it, so a
+             * panel that shrinks away from under the cursor does not take the control
+             * with it mid-drag. */
+            boolean keep = (grab != null) || tgt.wantslider()
+                || ((tgt.parent != null) && tgt.adjustmod() && (ui.mc != null) && ui.mc.sub(rootpos()).isect(Coord.z, sz));
+            if(!keep)
+            {
+                if(current == this)
+                    current = null;
+                destroy();
+            }
+        }
+
+        @Override
+        public void draw(GOut g)
+        {
+            double frac = Utils.clip((tgt.scale() - scalemin) / (tgt.scalemax() - scalemin), 0.0, 1.0);
+            int x = trackx(), w = trackw(), cy = tracky();
+            int fill = (int)Math.round(w * frac), kx = x + fill;
+            /* The client's own window palette - dark body, amber border, darker title
+             * strip - so the control looks like the inventory panels rather than an
+             * overlay of its own invention. */
+            int hdr = UI.scale(27), bw = Math.max(1, UI.scale(1));
+            /* Slightly see-through, since it floats over whatever is being resized and
+             * should not hide the result. */
+            g.chcolor(alpha(NStyle.windowBg, 200));
+            g.frect(Coord.z, sz);
+            g.chcolor(alpha(NStyle.titleBg, 210));
+            g.frect(Coord.z, new Coord(sz.x, hdr));
+            g.chcolor(NStyle.separator);
+            g.frect(new Coord(0, hdr), new Coord(sz.x, bw));
+            g.chcolor(alpha(NStyle.border, 225));
+            g.rect(Coord.z, sz);
+            g.chcolor();
+
+            g.aimage(tgt.label, new Coord(pad, UI.scale(14)), 0, 0.5);
+            int pct = (int)Math.round(tgt.scale() * 100);
+            if((pcttext == null) || (pct != pctshown))
+            {
+                pctshown = pct;
+                pcttext = pctfnd.render(pct + "%");
+            }
+            g.aimage(pcttext.tex(), new Coord(sz.x - pad, UI.scale(14)), 1, 0.5);
+
+            /* Scale marks, with the neutral 100% picked out: a size is much easier to
+             * judge against the default than against the ends of the range. */
+            for(int p = 50; p <= (int)Math.round(tgt.scalemax() * 100); p += 25)
+            {
+                boolean unit = (p == 100);
+                int tx = x + (int)Math.round(w * ((p / 100.0) - scalemin) / (tgt.scalemax() - scalemin));
+                g.chcolor(unit ? new Color(255, 226, 138, 200) : new Color(tickcol.getRed(), tickcol.getGreen(), tickcol.getBlue(), 130));
+                g.frect(new Coord(tx, cy - UI.scale(unit ? 9 : 7)), new Coord(1, UI.scale(unit ? 5 : 3)));
+            }
+
+            /* Groove: a dark channel with a lit lower lip, which is what makes it look
+             * cut into the frame rather than painted on it. */
+            g.chcolor(0, 0, 0, 220);
+            g.frect(new Coord(x - UI.scale(1), cy - UI.scale(4)), new Coord(w + UI.scale(2), UI.scale(8)));
+            g.chcolor(26, 34, 36, 255);
+            g.frect(new Coord(x, cy - UI.scale(3)), new Coord(w, UI.scale(6)));
+            g.chcolor(255, 255, 255, 26);
+            g.frect(new Coord(x, cy + UI.scale(3)), new Coord(w, 1));
+
+            if(fill > 0)
+            {
+                g.chcolor(fillcol);
+                g.frect(new Coord(x, cy - UI.scale(3)), new Coord(fill, UI.scale(6)));
+                g.chcolor(fillhi.getRed(), fillhi.getGreen(), fillhi.getBlue(), 120);
+                g.frect(new Coord(x, cy - UI.scale(3)), new Coord(fill, UI.scale(2)));
+            }
+
+            /* Knob: a capsule with clipped ends and a glow, lit brighter while held. */
+            int kh = UI.scale(8), ka = (grab != null) ? 90 : 45;
+            g.chcolor(fillhi.getRed(), fillhi.getGreen(), fillhi.getBlue(), ka);
+            g.frect(new Coord(kx - knobw, cy - kh - UI.scale(2)), new Coord(knobw * 2, (kh + UI.scale(2)) * 2));
+            g.chcolor(0, 0, 0, 200);
+            g.frect(new Coord(kx - (knobw / 2) - 1, cy - kh - 1), new Coord(knobw + 2, (kh * 2) + 2));
+            g.chcolor(knobcol);
+            g.frect(new Coord(kx - (knobw / 2), cy - kh), new Coord(knobw, kh * 2));
+            g.chcolor(fillcol);
+            g.frect(new Coord(kx - (knobw / 2), cy - UI.scale(1)), new Coord(knobw, UI.scale(2)));
+            g.chcolor();
+
+            g.aimage(minlbl.tex(), new Coord(x, cy + UI.scale(12)), 0, 0.5);
+            g.aimage(maxlbl.tex(), new Coord(x + w, cy + UI.scale(12)), 1, 0.5);
         }
     }
 
@@ -417,10 +842,7 @@ public class NDraggableWidget extends Widget
                 // Start dragging only when this widget is unlocked, nothing else
                 // is currently grabbed and it is the left mouse button.
                 if (ev.b == 1 && !btnLock.a && ui.grabs.isEmpty()) {
-                    pushUndo();
-                    dm = ui.grabmouse(this);
-                    doff = ev.c;
-                    parent.setfocus(this);
+                    startmove(ev);
                 }
                 // Consume the event so it does not fall through to widgets
                 // stacked underneath this one. Without this, overlapping
@@ -429,14 +851,76 @@ public class NDraggableWidget extends Widget
                 // the pointer should react.
                 return true;
             }
+        } else if (adjustclick(ev) && ev.c.isect(Coord.z, sz) && !btnLock.a && ui.grabs.isEmpty()) {
+            /* Mid-game grab. Consumed, so the modifier also shields the content from the
+             * click that starts the move. */
+            startmove(ev);
+            return true;
+        }
+        if (scaled()) {
+            ev.stop();
+            Coord cc = tocontent(ev.c);
+            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
         }
         return super.mousedown(ev);
     }
 
+    @Override
+    public boolean mousewheel(MouseWheelEvent ev) {
+        if(!btnLock.a && ev.c.isect(Coord.z, sz)) {
+            /* A bare wheel still reaches the content underneath; only the layout chord
+             * resizes the panel. */
+            if(Hotkeys.action(Hotkeys.LAYOUT_SCALE_UP).current().matchesWheel(ev.a, ui.modflags())) {
+                scale(scale() + 0.05);
+                return(true);
+            }
+            if(Hotkeys.action(Hotkeys.LAYOUT_SCALE_DOWN).current().matchesWheel(ev.a, ui.modflags())) {
+                scale(scale() - 0.05);
+                return(true);
+            }
+        }
+        if(scaled()) {
+            ev.stop();
+            Coord cc = tocontent(ev.c);
+            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
+        }
+        return(super.mousewheel(ev));
+    }
+
+    @Override
+    public boolean mousehover(MouseHoverEvent ev, boolean hovering) {
+        if(scaled()) {
+            ev.stop();
+            Coord cc = tocontent(ev.c);
+            if(!content.visible() || !cc.isect(Coord.z, content.sz))
+                return(false);
+            return(ev.derive(cc).hovering(hovering).dispatch(content));
+        }
+        return(super.mousehover(ev, hovering));
+    }
+
+    @Override
+    public boolean getcurs(CursorQuery ev) {
+        if(!scaled())
+            return(false);
+        ev.stop();
+        Coord cc = tocontent(ev.c);
+        return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
+    }
+
+    @Override
+    public boolean tooltip(TooltipQuery ev) {
+        if(scaled()) {
+            ev.stop();
+            Coord cc = tocontent(ev.c);
+            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
+        }
+        return(super.tooltip(ev));
+    }
 
     @Override
     public boolean mouseup(MouseUpEvent ev) {
-        if (dm != null && ui.core.mode == NCore.Mode.DRAG)
+        if (dm != null)
         {
             target_c.x = this.c.x;
             target_c.y = this.c.y;
@@ -444,6 +928,12 @@ public class NDraggableWidget extends Widget
             dm.remove();
             dm = null;
             return true;
+        }
+        else if (scaled())
+        {
+            ev.stop();
+            Coord cc = tocontent(ev.c);
+            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
         }
         else
         {
@@ -454,7 +944,7 @@ public class NDraggableWidget extends Widget
 
     @Override
     public void mousemove(MouseMoveEvent ev) {
-        if (ui.core.mode == NCore.Mode.DRAG)
+        if (dm != null || ui.core.mode == NCore.Mode.DRAG)
         {
 
             if (dm != null)
@@ -499,6 +989,13 @@ public class NDraggableWidget extends Widget
                 }
             }
         }
+        else if (scaled())
+        {
+            ev.stop();
+            Coord cc = tocontent(ev.c);
+            if(content.visible())
+                ev.derive(cc).dispatch(content);
+        }
         else
         {
             super.mousemove(ev);
@@ -510,6 +1007,19 @@ public class NDraggableWidget extends Widget
     public void tick(double dt)
     {
         super.tick(dt);
+        if((current == null) && wantslider())
+        {
+            /* Beside the cursor, like a tooltip, and kept on screen. */
+            ScaleSlider s = new ScaleSlider(this);
+            Coord pos = parent.rootxlate(ui.mc).add(UI.scale(16), UI.scale(16));
+            if(parent.sz != Coord.z)
+            {
+                pos.x = Math.max(0, Math.min(pos.x, parent.sz.x - s.sz.x));
+                pos.y = Math.max(0, Math.min(pos.y, parent.sz.y - s.sz.y));
+            }
+            current = s;
+            parent.add(s, pos).z(1000);
+        }
         if (ui.core.mode == NCore.Mode.DRAG)
         {
             btnLock.show();
@@ -576,7 +1086,7 @@ public class NDraggableWidget extends Widget
     public void flipContent()
     {
         content.flip(btnFlip.a);
-        resize(content.sz.add(delta));
+        resize(content.sz.add(contentDelta()));
     }
 
     public void setFlipped(boolean val)

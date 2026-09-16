@@ -763,7 +763,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		     * existing mapfile with a new one is better. */
 		    throw(new RuntimeException("failed to load mapfile", e));
 		}
-		add(new NResizableWidget((mmapw = new NMiniMapWnd("MiniMap", (NMapView) map, file)), "minimap", new Coord(250, 250)));
+		add(new NResizableWidget.Flush((mmapw = new NMiniMapWnd("MiniMap", (NMapView) map, file)), "minimap", new Coord(250, 250)));
 		mmap = mmapw.miniMap;
 		mmap.lower();
 		mapfile = new NMapWnd(file, map, Utils.getprefc("wndsz-map", UI.scale(new Coord(700, 500))), "Map");
@@ -1244,6 +1244,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
     private double lastwndsave = 0;
     public void tick(double dt) {
 	super.tick(dt);
+	nurgling.widgets.NLayoutHint.maybeshow(this);
 	double now = Utils.rtime();
 	if(now - lastwndsave > 60) {
 	    savewndpos();

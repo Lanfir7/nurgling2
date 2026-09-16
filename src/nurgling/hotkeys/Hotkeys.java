@@ -82,6 +82,9 @@ public final class Hotkeys {
     public static final String WOUND_FIND_TREATMENT_STORAGE = "wound.find_treatment_storage";
     public static final String LAYOUT_UNDO = "layout.undo";
     public static final String LAYOUT_COMPASS_RESIZE = "layout.compass_resize";
+    public static final String LAYOUT_ADJUST = "layout.adjust";
+    public static final String LAYOUT_SCALE_UP = "layout.scale_up";
+    public static final String LAYOUT_SCALE_DOWN = "layout.scale_down";
     public static final String WORLD_SURVEY_NEW_SELECTION = "world.survey.new_selection";
     public static final String WINDOW_DB_STATS_TOGGLE = "window.db_stats.toggle";
     public static final String WINDOW_AGENT_TOGGLE = "window.agent.toggle";

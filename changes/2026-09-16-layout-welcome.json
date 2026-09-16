@@ -1,0 +1,13 @@
+{
+  "id": "2026-09-16-layout-welcome",
+  "priority": 5,
+  "summary": {
+    "ru": "При входе сверху экрана появляется короткая справка о настройке панелей.",
+    "en": "A short card about arranging panels appears at the top of the screen on login."
+  },
+  "detail": {
+    "ru": "Карточка перечисляет сочетания для переноса, растягивания и масштаба панелей — ровно те, что назначены у вас сейчас, так что после переназначения справка не соврёт. Уходит сама через 30 секунд, по клику по игровому миру или навсегда кнопкой «Больше не показывать» внизу карточки. Полоска по нижней кромке показывает, сколько времени осталось."
+  ,
+    "en": "The card lists the combinations for moving, stretching and scaling panels exactly as they are bound for you, so it keeps telling the truth after a rebind. It leaves on its own after 30 seconds, on a click in the world, or for good via the \"Do not show again\" button at its bottom. A line along the bottom edge shows how much time is left."
+  }
+}

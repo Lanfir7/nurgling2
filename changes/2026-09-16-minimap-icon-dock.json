@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-minimap-icon-dock",
+  "priority": 6,
+  "summary": {
+    "ru": "Миникарта заняла всю рамку, а её иконки слоёв всплывают под курсором.",
+    "en": "The minimap fills its frame, and its overlay icons rise under the cursor."
+  },
+  "detail": {
+    "ru": "Пустые поля вокруг миникарты убраны: карта дотянута до всех краёв рамки, включая верхний, а замок и глазик показываются поверх карты и только при настройке интерфейса. Кнопки слоёв невидимы, пока курсор далеко: они проявляются при подведении мыши к миникарте и подрастают тем сильнее, чем ближе к курсору, поэтому мелкую иконку легче нажать, а спокойная миникарта остаётся просто картой.",
+    "en": "The empty margins around the minimap are gone: the map reaches every edge of its frame, the top one included, and the lock and visibility controls are drawn over it only while the HUD is being arranged. The overlay buttons stay invisible until the cursor approaches the minimap, then fade in and grow the closer they are to the pointer, so a small icon is easier to hit and an idle minimap is just map."
+  }
+}

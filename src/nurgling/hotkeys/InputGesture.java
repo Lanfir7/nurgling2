@@ -151,6 +151,25 @@ public final class InputGesture {
         return type == Type.MODIFIER && code == (mods & KeyMatch.MODS);
     }
 
+    /**
+     * True when the modifiers this gesture asks for are held, whatever button or key
+     * completes it. Lets a widget offer a handle - a highlight, a grip - the moment the
+     * player holds the modifier, before they commit to the click.
+     */
+    public boolean modifiersHeld(int mods) {
+        switch(type) {
+        case MODIFIER:
+            return matchesModifiers(mods);
+        case MOUSE_BUTTON:
+        case MOUSE_WHEEL:
+            /* An unbound or key gesture has no modifier state to offer, and a maskless
+             * one would answer "held" for every keystroke. */
+            return modmask != 0 && mods(mods);
+        default:
+            return false;
+        }
+    }
+
     public String encode() {
         switch(type) {
         case NONE:

@@ -1681,7 +1681,7 @@ public class NInventory extends Inventory
         // Create widgets for expanded mode (original list layout)
         int y = 0;
         int contentWidth = itemListContainer.cont.sz.x;
-        int itemHeight = UI.scale(20);
+        int itemHeight = UI.scale(23);
         
         for (int idx = 0; idx < itemGroups.size(); idx++) {
             ItemGroup group = itemGroups.get(idx);
@@ -1728,7 +1728,7 @@ public class NInventory extends Inventory
 
         int y = 0;
         int contentWidth = itemListContainer.cont.sz.x;
-        int itemHeight = UI.scale(18);
+        int itemHeight = UI.scale(21);
 
         for (int idx = 0; idx < itemGroups.size(); idx++) {
             ItemGroup group = itemGroups.get(idx);
@@ -1740,15 +1740,15 @@ public class NInventory extends Inventory
                     g.frect(Coord.z, sz);
                     g.chcolor();
                     int iconSize = UI.scale(16);
-                    int margin = UI.scale(1);
+                    int margin = UI.scale(2);
                     NGItem rep = group.getRepresentativeItem();
                     if (rep != null) {
                         try {
                             Resource.Image img = rep.getres().layer(Resource.imgc);
-                            if (img != null) g.image(img.tex(), new Coord(margin, margin), new Coord(iconSize, iconSize));
+                            if (img != null) g.image(img.tex(), new Coord(margin, (sz.y - iconSize) / 2), new Coord(iconSize, iconSize));
                         } catch (Exception e) { /* ignore */ }
                     }
-                    g.text("x" + group.totalQuantity, new Coord(margin + iconSize + UI.scale(4), UI.scale(2)));
+                    g.atext("x" + group.totalQuantity, new Coord(margin + iconSize + UI.scale(4), sz.y / 2), 0, 0.5);
                 }
 
                 @Override
@@ -1801,8 +1801,10 @@ public class NInventory extends Inventory
 
     // Progress bar color for curio items
     private static final Color CURIO_PROGRESS_COLOR = new Color(31, 209, 185, 128);
-    private static final Color ROW_EVEN = new Color(255, 255, 255, 13);  // #FFFFFF0D
-    private static final Color ROW_ODD  = new Color(0x1C, 0x25, 0x26);  // #1C2526
+    /* The shared list palette, so this list reads like the rest of the interface instead
+     * of washing every other row out to near-white over whatever is behind it. */
+    private static final Color ROW_EVEN = NStyle.rowEven;
+    private static final Color ROW_ODD  = NStyle.rowOdd;
     
     private Widget createItemWidget(ItemGroup group, Coord sz, int rowIdx) {
         NInventory thisInv = this;
@@ -1814,9 +1816,8 @@ public class NInventory extends Inventory
                 g.frect(Coord.z, sz);
                 g.chcolor();
 
-                int iconSize = UI.scale(19);
-                int margin = UI.scale(1);
-                int textY = UI.scale(2);
+                int iconSize = UI.scale(18);
+                int margin = UI.scale(2);
 
                 // Draw curio study progress bar in background
                 if (group.curioMeter != null && group.curioMeter > 0) {
@@ -1829,7 +1830,7 @@ public class NInventory extends Inventory
                 // Draw item icon
                 NGItem representativeItem = group.getRepresentativeItem();
                 if (representativeItem != null) {
-                    Coord iconPos = new Coord(margin, margin);
+                    Coord iconPos = new Coord(margin, (sz.y - iconSize) / 2);
                     
                     try {
                         Resource.Image img = representativeItem.getres().layer(Resource.imgc);
@@ -1881,7 +1882,9 @@ public class NInventory extends Inventory
                         break;
                 }
                 
-                g.text(displayText, new Coord(textStartX, textY));
+                /* Centred on the row rather than offset from its top, so descenders and
+                 * brackets are never cut off by the row below. */
+                g.atext(displayText, new Coord(textStartX, sz.y / 2), 0, 0.5);
             }
             
             @Override

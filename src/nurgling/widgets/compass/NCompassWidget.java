@@ -100,7 +100,7 @@ public class NCompassWidget extends NDraggableWidget {
         super.draw(g);
         Coord mouse = ui.mc.sub(rootpos());
         NCompassResize.Edge edge = edgeAt(mouse);
-        if (resizeGrab != null || (Hotkeys.action(Hotkeys.LAYOUT_COMPASS_RESIZE).current().matchesModifiers(ui.modflags()) && edge != null)) {
+        if (resizeGrab != null || (Hotkeys.action(Hotkeys.LAYOUT_COMPASS_RESIZE).current().modifiersHeld(ui.modflags()) && edge != null)) {
             NCompassResize.Edge active = resizeGrab != null ? resizeEdge : edge;
             int x = active == NCompassResize.Edge.LEFT ? off.x : off.x + content.sz.x - 1;
             g.chcolor(255, 221, 120, 230);

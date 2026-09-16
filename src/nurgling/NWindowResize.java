@@ -41,16 +41,32 @@ public final class NWindowResize {
         return Edge.NONE;
     }
 
+    public static boolean left(Edge edge) {
+        return edge == Edge.LEFT || edge == Edge.TOP_LEFT || edge == Edge.BOTTOM_LEFT;
+    }
+
+    public static boolean right(Edge edge) {
+        return edge == Edge.RIGHT || edge == Edge.TOP_RIGHT || edge == Edge.BOTTOM_RIGHT;
+    }
+
+    public static boolean top(Edge edge) {
+        return edge == Edge.TOP || edge == Edge.TOP_LEFT || edge == Edge.TOP_RIGHT;
+    }
+
+    public static boolean bottom(Edge edge) {
+        return edge == Edge.BOTTOM || edge == Edge.BOTTOM_LEFT || edge == Edge.BOTTOM_RIGHT;
+    }
+
     public static Result drag(Edge edge, Coord startPosition, Coord startSize,
                               Coord delta, Coord minimumSize) {
         if(edge == null || edge == Edge.NONE)
             return new Result(startPosition, startSize);
         int minWidth = Math.max(1, minimumSize.x);
         int minHeight = Math.max(1, minimumSize.y);
-        boolean left = edge == Edge.LEFT || edge == Edge.TOP_LEFT || edge == Edge.BOTTOM_LEFT;
-        boolean right = edge == Edge.RIGHT || edge == Edge.TOP_RIGHT || edge == Edge.BOTTOM_RIGHT;
-        boolean top = edge == Edge.TOP || edge == Edge.TOP_LEFT || edge == Edge.TOP_RIGHT;
-        boolean bottom = edge == Edge.BOTTOM || edge == Edge.BOTTOM_LEFT || edge == Edge.BOTTOM_RIGHT;
+        boolean left = left(edge);
+        boolean right = right(edge);
+        boolean top = top(edge);
+        boolean bottom = bottom(edge);
 
         int width = Math.max(minWidth, startSize.x + (right ? delta.x : left ? -delta.x : 0));
         int height = Math.max(minHeight, startSize.y + (bottom ? delta.y : top ? -delta.y : 0));

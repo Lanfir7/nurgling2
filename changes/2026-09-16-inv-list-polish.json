@@ -1,0 +1,13 @@
+{
+  "id": "2026-09-16-inv-list-polish",
+  "priority": 4,
+  "summary": {
+    "ru": "Список содержимого в панели инвентаря стал читаемее и в цветах остального интерфейса.",
+    "en": "The contents list in the inventory panel reads better and uses the interface's own colours."
+  },
+  "detail": {
+    "ru": "Строки списка стали выше, а название и качество выровнены по центру строки — цифры и скобки больше не подрезаются сверху и снизу. Иконка предмета тоже выровнена по центру. Полосы строк перекрашены в ту же палитру, что и остальные списки клиента: раньше каждая вторая строка почти белела на фоне и список выбивался из общего вида."
+  ,
+    "en": "List rows are taller and the name and quality are centred in the row, so figures and brackets are no longer clipped at the top and bottom. The item icon is centred too. Row stripes now use the same palette as the client's other lists: previously every other row washed out to near-white and the list stood apart from everything else."
+  }
+}
