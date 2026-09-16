@@ -129,7 +129,9 @@ public class NHotkeyCapture extends Button {
 
     @Override
     public boolean mouseup(MouseUpEvent ev) {
-        return armed() && ev.grabbed;
+        if(armed() && ev.grabbed)
+            return true;
+        return super.mouseup(ev);
     }
 
     @Override

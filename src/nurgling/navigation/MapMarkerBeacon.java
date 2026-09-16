@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.lang.ref.WeakReference;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -50,16 +51,22 @@ public final class MapMarkerBeacon {
             Gob beacon = new Gob(glob, target);
             beacon.addol(new Gob.Overlay(beacon,
                     new MarkerBeaconSprite(beacon, label, () -> forget(glob, beacon))), false);
+            List<Gob> evicted = new ArrayList<>();
             synchronized(active) {
                 Deque<WeakReference<Gob>> world = active.computeIfAbsent(glob, ignored -> new ArrayDeque<>());
                 while(world.size() >= MAX_PER_WORLD) {
                     Gob expired = world.removeFirst().get();
-                    if(expired != null) {
-                        finish(expired);
-                        glob.oc.remove(expired);
-                    }
+                    if(expired != null)
+                        evicted.add(expired);
                 }
                 world.addLast(new WeakReference<>(beacon));
+            }
+            /* A beacon's finish callback takes active while OCache.remove() can take the
+             * virtual Gob lock. Neither operation may run while active is held: ctick()
+             * holds that Gob lock before finishing the same beacon. */
+            for(Gob expired : evicted) {
+                finish(expired);
+                glob.oc.remove(expired);
             }
             glob.oc.add(beacon);
             return true;

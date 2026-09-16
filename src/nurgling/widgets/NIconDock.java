@@ -67,4 +67,15 @@ public class NIconDock {
         int dy = Math.max(0, Math.max(-c.y, c.y - sz.y));
         return(Math.sqrt((dx * dx) + (dy * dy)));
     }
+
+    /**
+     * Top-left of a grown icon. Overlay buttons along the bottom grow up from their
+     * base so the row does not drift; the map button in the top-right grows down and
+     * left so the extra size stays inside the frame.
+     */
+    static Coord grownUl(Coord mid, Coord orig, Coord grown, boolean growLeft, boolean growDown) {
+        int x = growLeft ? mid.x + (orig.x / 2) - grown.x : mid.x - (grown.x / 2);
+        int y = growDown ? mid.y - (orig.y / 2) : mid.y + (orig.y / 2) - grown.y;
+        return(new Coord(x, y));
+    }
 }

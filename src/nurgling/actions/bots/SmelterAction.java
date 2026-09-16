@@ -75,9 +75,6 @@ public class SmelterAction implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
 
-        NArea.Specialisation ofuelc = new NArea.Specialisation(Specialisation.SpecName.fuel.toString(), "coal");
-
-        NArea.Specialisation ofuelb = new NArea.Specialisation(Specialisation.SpecName.fuel.toString(), "branch");
         NArea.Specialisation rsmelter = new NArea.Specialisation(Specialisation.SpecName.smelter.toString());
         NArea.Specialisation rore = new NArea.Specialisation(Specialisation.SpecName.ore.toString());
         NArea.Specialisation omercury = new NArea.Specialisation(Specialisation.SpecName.barrel.toString(),"Quicksilver");
@@ -86,11 +83,14 @@ public class SmelterAction implements Action {
         req.add(rsmelter);
         req.add(rore);
         ArrayList<NArea.Specialisation> opt = new ArrayList<>();
-        opt.add(ofuelb);
-        opt.add(ofuelc);
         opt.add(omercury);
 
-        if(new Validator(req, opt).run(gui).IsSuccess()) {
+        /* A smelter area can contain either ore smelters or stack furnaces. Keep fuel
+         * optional at validation time, but describe station-specific-or-shared fallback. */
+        if(new Validator(req, opt)
+                .optionalFuel(Specialisation.SpecName.fuelSmelter, "coal")
+                .optionalFuel(Specialisation.SpecName.fuelSmelter, "branch")
+                .run(gui).IsSuccess()) {
             boolean oldStackingValue = ((NInventory) NUtils.getGameUI().maininv).bundle.a;
             NUtils.stackSwitch(true);
             try {
@@ -117,6 +117,7 @@ public class SmelterAction implements Action {
                 cand.getattr(Container.FuelLvl.class).setMaxlvl(12);
                 cand.getattr(Container.FuelLvl.class).setCredolvl(9);
                 cand.getattr(Container.FuelLvl.class).setFueltype("coal");
+                cand.getattr(Container.FuelLvl.class).setFuelZone(Specialisation.SpecName.fuelSmelter);
 
                 cand.initattr(Container.TargetItems.class);
                 cand.getattr(Container.TargetItems.class).addTarget("Slag");
@@ -142,6 +143,7 @@ public class SmelterAction implements Action {
                 cand.getattr(Container.FuelLvl.class).setMaxlvl(12);
                 cand.getattr(Container.FuelLvl.class).setCredolvl(9);
                 cand.getattr(Container.FuelLvl.class).setFueltype("branch");
+                cand.getattr(Container.FuelLvl.class).setFuelZone(Specialisation.SpecName.fuelSmelter);
 
                 cand.initattr(Container.TargetItems.class);
                 cand.getattr(Container.TargetItems.class).addTarget("Slag");

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-floor-overlay-marker-beacon",
+  "priority": 4,
+  "summary": {
+    "ru": "Маяк маркера теперь работает и для видимых меток на наложенном этаже карты.",
+    "en": "Marker beacons now work for visible markers on an overlaid map floor."
+  },
+  "detail": {
+    "ru": "На мини-карте нажмите настроенный жест маяка на видимой метке наложенного этажа: луч появится в соответствующей точке текущего этажа и сохранит название метки.",
+    "en": "On the minimap, use the configured beacon gesture on a visible overlaid-floor marker: the beam appears at the matching point on your current floor and keeps the marker name."
+  }
+}

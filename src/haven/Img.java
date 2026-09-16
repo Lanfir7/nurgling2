@@ -61,11 +61,13 @@ public class Img extends Widget {
     
     /** Get background texture based on selected world */
     public static Tex getCharselBg() {
-	// Check selected world from NConfig
-	String selectedWorld = (String) nurgling.NConfig.get(nurgling.NConfig.Key.selectedWorld);
+	return(getCharselBg((String) nurgling.NConfig.get(nurgling.NConfig.Key.selectedWorld)));
+    }
+
+    public static Tex getCharselBg(String world) {
 	// The current newest world (internally "16.2") is reported by the server
 	// with the disc label "World 16.1"; accept either label for its background.
-	if(selectedWorld != null && (selectedWorld.contains("16.1") || selectedWorld.contains("16.2"))) {
+	if(world != null && (world.contains("16.1") || world.contains("16.2"))) {
 	    return getCharselBgWorld162();
 	}
 	// Use world16 for everything else (All, null, World 16, etc.)

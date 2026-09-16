@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-login-character-select",
+  "priority": 8,
+  "summary": {
+    "ru": "Экраны входа и выбора персонажа стали удобнее, сохранив аккаунты, метки, подписку и верификацию.",
+    "en": "Login and character selection are easier to use while keeping accounts, tags, subscription and verification."
+  },
+  "detail": {
+    "ru": "На входе появился компактный список аккаунтов, а персонажей теперь можно фильтровать по миру, сортировать и выбирать с клавиатуры. Сохранённые пароли и токены продолжают работать; значки подписки и верификации, метки и заметки отображаются на новом экране.",
+    "en": "Login now has a compact account list, while characters can be filtered by world, sorted and selected with the keyboard. Existing passwords and tokens keep working; subscription and verification badges, tags and notes appear on the redesigned screen."
+  }
+}

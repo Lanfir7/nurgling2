@@ -495,6 +495,8 @@ public class NContext {
      * Find an area by specialisation + subtype (local first, then global) with caching. Does NOT navigate.
      */
     public NArea findArea(Specialisation.SpecName name, String sub) {
+        if (FuelZones.of(name) != null)
+            return findFuelArea(name, sub);
         String key = name.toString() + (sub != null ? "_" + sub : "");
         if(!areas.containsKey(key)) {
             NArea area = findSpec(name.toString(), sub);
@@ -516,6 +518,8 @@ public class NContext {
      * Use when the bot needs to be AT the area immediately after the call.
      */
     public NArea goToArea(Specialisation.SpecName name) throws InterruptedException {
+        if (FuelZones.of(name) != null)
+            return goToFuelArea(name, null);
         NArea area = findArea(name);
         if (area == null) return null;
         navigateToAreaIfNeeded(name.toString());
@@ -526,10 +530,37 @@ public class NContext {
      * Find and navigate to an area with subtype (local first, then global) with caching.
      */
     public NArea goToArea(Specialisation.SpecName name, String sub) throws InterruptedException {
+        if (FuelZones.of(name) != null)
+            return goToFuelArea(name, sub);
         NArea area = findArea(name, sub);
         if (area == null) return null;
         String key = name.toString() + (sub != null ? "_" + sub : "");
         navigateToAreaIfNeeded(key);
+        return area;
+    }
+
+    private static String fuelKey(Specialisation.SpecName zone, String material) {
+        return "fuel:" + zone + ((material != null && !material.isEmpty()) ? "_" + material : "");
+    }
+
+    /** Finds station fuel without navigation; station-specific local/global precedes shared Fuel. */
+    public NArea findFuelArea(Specialisation.SpecName zone, String material) {
+        String key = fuelKey(zone, material);
+        if (!areas.containsKey(key)) {
+            NArea area = FuelZones.find(zone, material);
+            if (area == null)
+                return null;
+            areas.put(key, area);
+        }
+        return areas.get(key);
+    }
+
+    /** Finds and navigates to station fuel, preserving global-area navigation. */
+    public NArea goToFuelArea(Specialisation.SpecName zone, String material) throws InterruptedException {
+        NArea area = findFuelArea(zone, material);
+        if (area == null)
+            return null;
+        navigateToAreaIfNeeded(fuelKey(zone, material));
         return area;
     }
 

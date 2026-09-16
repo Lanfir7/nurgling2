@@ -399,9 +399,8 @@ public class NMiniMapWnd extends Widget{
         Coord mid = dockmid(wdg);
         double scale = dock.scale(mid);
         Coord isz = new Coord((int)Math.round(wdg.sz.x * scale), (int)Math.round(wdg.sz.y * scale));
-        /* Anchored on the icon's own bottom edge: the icons grow up and out over the map
-         * without the row drifting, so the one being aimed at stays under the cursor. */
-        Coord ul = new Coord(mid.x - (isz.x / 2), mid.y + (wdg.sz.y / 2) - isz.y);
+        boolean mapBtn = (wdg == map_box);
+        Coord ul = NIconDock.grownUl(mid, wdg.sz, isz, mapBtn, mapBtn);
         g.chcolor(255, 255, 255, dock.alpha(scale));
         g.image(tex, ul, isz);
         g.chcolor();

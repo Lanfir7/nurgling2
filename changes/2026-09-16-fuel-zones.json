@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-fuel-zones",
+  "priority": 6,
+  "summary": {
+    "ru": "Для печей и горнов можно назначить отдельные зоны топлива.",
+    "en": "Fuel areas can now be assigned separately for each furnace and hearth."
+  },
+  "detail": {
+    "ru": "В окне зон добавьте «Fuel: …» для нужной станции и выберите тип топлива, включая доски. Боты сначала используют эту зону, а прежняя общая зона Fuel остаётся запасным вариантом.",
+    "en": "In the Areas window, add the matching Fuel: … specialization and choose its fuel type, including boards. Bots use it first and still fall back to the existing shared Fuel area."
+  }
+}

@@ -34,8 +34,11 @@ public class TarkilnAction implements Action {
             pile_area = onsaArea.getRCArea();
         }
 
-        String insaId = context.createArea("Please select area for fuel", Resource.loadsimg("baubles/fuel"));
-        NArea insaArea = context.goToAreaById(insaId);
+        NArea insaArea = context.findFuelArea(Specialisation.SpecName.fuelTarkiln, null);
+        if(insaArea == null) {
+            String insaId = context.createArea("Please select area for fuel", Resource.loadsimg("baubles/fuel"));
+            insaArea = context.goToAreaById(insaId);
+        }
 
         if(new Validator(req, opt).run(gui).IsSuccess())
         {
@@ -68,7 +71,7 @@ public class TarkilnAction implements Action {
             new FreeInventory2(context).run(gui);
             NUtils.navigateToArea(area);
 
-            if(!new FillFuelTarkilns(tarkilns,insaArea.getRCArea()).run(gui).IsSuccess())
+            if(!new FillFuelTarkilns(tarkilns, insaArea, area).run(gui).IsSuccess())
                 return Results.FAIL();
             ArrayList<String> flighted = new ArrayList<>();
             for (Gob cont : tarkilns) {

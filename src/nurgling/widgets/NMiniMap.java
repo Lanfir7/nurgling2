@@ -3344,7 +3344,16 @@ NMiniMap extends MiniMap {
                     return new BeaconTarget(prospect.getSegmentId(), prospect.getTileCoords(), prospect.getResourceType());
             }
         }
+        MinimapFloorOverlayRenderer.BeaconTarget overlay = floorOverlayRenderer.beaconTarget(this, screenCoord);
+        if(overlay != null && !visibleCurrentMapMarkerAt(screenCoord))
+            return new BeaconTarget(overlay.segmentId, overlay.tile, overlay.label);
         return null;
+    }
+
+    /** Keep an ordinary marker above the floor overlay in both rendering and beacon hit priority. */
+    private boolean visibleCurrentMapMarkerAt(Coord screenCoord) {
+        Location loc = xlate(screenCoord);
+        return loc != null && markerat(loc.tc) != null;
     }
 
     private boolean markerAtScreen(Coord screenCoord, Coord tile, Coord hsz, int threshold) {

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-marker-beacon-transition",
+  "priority": 5,
+  "summary": {
+    "ru": "Активные лучи маркеров больше не блокируют переходы в шахты и пещеры.",
+    "en": "Active marker beams no longer block transitions into mines and caves."
+  },
+  "detail": {
+    "ru": "Можно переходить между поверхностью, шахтами и пещерами, пока на карте активен луч маркера: переход продолжается без зависания, а луч корректно исчезает по окончании.",
+    "en": "You can move between the surface, mines, and caves while a map marker beam is active: the transition continues without freezing, and the beam still disappears correctly when it ends."
+  }
+}

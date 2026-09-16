@@ -44,34 +44,47 @@ public class LoginScreen extends Widget {
     public final String confname;
     private Text error, progress;
     protected Button optbtn;
+    protected Button steambtn;
     private OptWnd opts;
-    private Img bgimg;
+    private Widget bgimg;
     private boolean isLoading = false;
 
     private String getpref(String name, String def) {
 	return(Utils.getpref(name + "@" + confname, def));
     }
 
+    protected Widget mkbg() {
+	return(new Img(bg));
+    }
+
+    protected Widget mkcredbox() {
+	return(new Credbox());
+    }
+
+    protected void submitCredentials(AuthClient.Credentials creds, boolean savepw) {
+	wdgmsg("login", creds, savepw);
+    }
+
     public LoginScreen(String confname) {
 	super(bg.sz());
 	this.confname = confname;
 	setfocustab(true);
-	bgimg = add(new Img(bg), Coord.z);
+	bgimg = add(mkbg(), Coord.z);
 	optbtn = add(new Button(UI.scale(100), L10n.get("login.options")), UI.scale(10), sz.y - UI.scale(10) - UI.scale(30));
 	optbtn.setgkey(GameUI.kb_opt);
 //	if(HttpStatus.mond.get() != null)
 //	    adda(new StatusLabel(HttpStatus.mond.get(), 1.0), sz.x - UI.scale(10), UI.scale(10), 1.0, 0.0);
 	
 	// Always show normal login form
-	login = new Credbox();
+	login = mkcredbox();
 	adda(login, bgc.adds(0, 10), 0.5, 0.0).hide();
 	
 	// Add Steam login button if Steam is available
 	if("steam".equals(authmech.get())) {
-	    Button steambtn = adda(new Button(UI.scale(150), L10n.get("login.steam")), bgc.adds(0, -50), 0.5, 0.0);
+	    steambtn = adda(new Button(UI.scale(150), L10n.get("login.steam")), bgc.adds(0, -50), 0.5, 0.0);
 	    steambtn.action(() -> {
 		try {
-		    wdgmsg("login", new SteamCreds(), false);
+		    submitCredentials(new SteamCreds(), false);
 		} catch(java.io.IOException e) {
 		    error(e.getMessage());
 		}
@@ -194,7 +207,6 @@ public class LoginScreen extends Widget {
 	}
 
 	private void forget() {
-		((NLoginScreen)parent).removeToken();
 	    String nm = user.text();
 	    Bootstrap.settoken(nm, confname, null);
 	    savetoken.set(false);
@@ -207,7 +219,7 @@ public class LoginScreen extends Widget {
 	    } else if(pwbox.visible && pass.text().equals("")) {
 		setfocus(pass);
 	    } else {
-		LoginScreen.this.wdgmsg("login", creds(), pwbox.visible && savetoken.state());
+		LoginScreen.this.submitCredentials(creds(), pwbox.visible && savetoken.state());
 	    }
 	}
 
@@ -273,7 +285,7 @@ public class LoginScreen extends Widget {
 
 	private void enter() {
 	    try {
-		LoginScreen.this.wdgmsg("login", creds(), false);
+		LoginScreen.this.submitCredentials(creds(), false);
 	    } catch(java.io.IOException e) {
 		error(e.getMessage());
 	    }
@@ -403,8 +415,8 @@ public class LoginScreen extends Widget {
     private void setLoadingScreen(boolean loading) {
 	if(isLoading != loading) {
 	    isLoading = loading;
-	    if(bgimg != null) {
-		bgimg.img = loading ? loadingbg : bg;
+	    if(bgimg instanceof Img) {
+		((Img) bgimg).img = loading ? loadingbg : bg;
 	    }
 	}
     }

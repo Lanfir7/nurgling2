@@ -7,11 +7,11 @@ import haven.Window;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.areas.NArea;
-import nurgling.areas.NContext;
 import nurgling.tasks.WaitFreeHand;
 import nurgling.tasks.WindowIsClosed;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
+import nurgling.tools.FuelZones;
 import nurgling.tools.NAlias;
 import nurgling.tools.StackSupporter;
 import nurgling.widgets.Specialisation;
@@ -33,9 +33,10 @@ public class FuelToContainers implements Action
         for (Container cont : conts) {
             Container.FuelLvl fuelLvl = cont.getattr(Container.FuelLvl.class);
             String ftype = (String) fuelLvl.getRes().get(Container.FuelLvl.FUELTYPE);
+            Specialisation.SpecName zone = fuelLvl.getFuelZone();
             while (fuelLvl.neededFuel() > 0) {
                 if (gui.getInventory().getItems(ftype).isEmpty()) {
-                    Results res = refill(gui, ftype);
+                    Results res = refill(gui, cont, zone, ftype);
                     if (!res.IsSuccess())
                         return res;
                     /* Nothing came back from the piles. Feeding the container is pointless
@@ -44,7 +45,12 @@ public class FuelToContainers implements Action
                         return Results.ERROR("Can't get any " + ftype + " for fuel");
                 }
 
-                PathFinder pf = new PathFinder(Finder.findGob(cont.gobHash));
+                if (cont.parent != null && !NUtils.navigateToArea(cont.parent))
+                    return Results.ERROR("Can't reach " + cont.cap + " while fuelling it");
+                Gob contGob = Finder.findGob(cont.gobHash);
+                if (contGob == null)
+                    return Results.ERROR("Lost track of " + cont.cap + " while fuelling it");
+                PathFinder pf = new PathFinder(contGob);
                 pf.isHardMode = true;
                 pf.run(gui);
                 new OpenTargetContainer(cont).run(gui);
@@ -84,19 +90,27 @@ public class FuelToContainers implements Action
      * Loads the player inventory with fuel of the given type, enough for everything in this
      * batch that still burns it.
      */
-    private Results refill(NGameUI gui, String ftype) throws InterruptedException {
+    private Results refill(NGameUI gui, Container cont, Specialisation.SpecName zone, String ftype) throws InterruptedException {
         int target_size = 0;
         for (Container tcont : conts) {
             Container.FuelLvl tfuelLvl = tcont.getattr(Container.FuelLvl.class);
             if (!ftype.equals(tfuelLvl.getRes().get(Container.FuelLvl.FUELTYPE)))
                 continue;
+            if (tfuelLvl.getFuelZone() != zone)
+                continue;
             target_size += Math.max(0, tfuelLvl.neededFuel());
         }
 
+        NArea explicit = cont.getattr(Container.FuelLvl.class).getFuelArea();
+
         while (target_size > 0 && gui.getInventory().getNumberFreeCoord(targetCoord) != 0) {
-            NArea fuel = NContext.findSpec(Specialisation.SpecName.fuel.toString(), ftype);
+            NArea fuel = explicit;
             if (fuel == null)
-                return Results.ERROR("No specialisation \"FUEL\" set.");
+                fuel = FuelZones.find(zone, ftype);
+            if (fuel == null)
+                return Results.ERROR("No area set for " + FuelZones.describe(zone, ftype));
+            if (!NUtils.navigateToArea(fuel))
+                return Results.ERROR("Can't reach " + FuelZones.describe(zone, ftype));
             ArrayList<Gob> piles = Finder.findGobs(fuel, new NAlias("stockpile"));
             if (piles.isEmpty()) {
                 if (gui.getInventory().getItems(ftype).isEmpty())

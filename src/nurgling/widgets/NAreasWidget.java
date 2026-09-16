@@ -167,7 +167,7 @@ public class NAreasWidget extends Window
         prev = add(al = new AreaList(UI.scale(new Coord(400,289))), searchField.pos("bl").adds(0, 25));
         Widget lab = add(new Label(get("area.label.specialisation"),NStyle.areastitle), prev.pos("bl").add(UI.scale(0,5)));
 
-        add(csl = new CurrentSpecialisationList(UI.scale(164,71)),lab.pos("bl").add(UI.scale(0,5)));
+        add(csl = new CurrentSpecialisationList(UI.scale(230,71)),lab.pos("bl").add(UI.scale(0,5)));
         add(new IButton(NStyle.add[0].back,NStyle.add[1].back,NStyle.add[2].back){
             @Override
             public void click()
@@ -219,7 +219,7 @@ public class NAreasWidget extends Window
         pack();
 
         int tabWidth = UI.scale(18);
-        int compactWidth = al.c.x + al.sz.x + tabWidth;
+        int compactWidth = Math.max(al.c.x + al.sz.x, csl.c.x + csl.sz.x) + tabWidth;
         collapseState = new AreasWindowCollapseState(csz(), compactWidth);
         searchField.resize(Coord.of(collapseState.searchWidth(), searchField.sz.y));
         collapseTab = add(new CollapseTab(), Coord.z);
@@ -1060,7 +1060,7 @@ public class NAreasWidget extends Window
                 icon = new TexI(specialisationItem.image);
             }
             
-            int btnX = 135;
+            int btnX = 195;
             
             if(SpecialisationData.data.get(item.name)!=null)
             {

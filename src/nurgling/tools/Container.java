@@ -215,6 +215,7 @@ public class Container implements NContext.ObjectStorage {
         public static final String ABSMAXLVL = "absmaxlvl";
         public static final String FUELMOD = "flmod";
         public static final String FUELAREA = "fuelarea";
+        public static final String FUELZONE = "fuelzone";
 
         public FuelLvl(){
             res.put(FUELMOD, (int) 1);
@@ -262,6 +263,15 @@ public class Container implements NContext.ObjectStorage {
         
         public nurgling.areas.NArea getFuelArea() {
             return (nurgling.areas.NArea) res.get(FUELAREA);
+        }
+
+        /** Explicit fuel area wins; otherwise this station zone falls back to shared Fuel. */
+        public void setFuelZone(nurgling.widgets.Specialisation.SpecName zone) {
+            res.put(FUELZONE, zone);
+        }
+
+        public nurgling.widgets.Specialisation.SpecName getFuelZone() {
+            return (nurgling.widgets.Specialisation.SpecName) res.get(FUELZONE);
         }
 
         public int neededFuel() {

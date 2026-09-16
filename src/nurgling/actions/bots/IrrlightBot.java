@@ -539,11 +539,12 @@ public class IrrlightBot implements Action {
         if (gui.getInventory().getItems(new NAlias(BRANCH)).isEmpty()) {
             if (catchable() != null)
                 return Results.CYCLE();
-            new TakeItems2(context, BRANCH, FUEL_BATCH, Specialisation.SpecName.fuel, BRANCH).run(gui);
+            new TakeItems2(context, BRANCH, FUEL_BATCH, Specialisation.SpecName.fuelCrucible, BRANCH).run(gui);
             if (goHome(gui, home, crucibleId) == Wake.IRRLIGHT)
                 return Results.CYCLE();
             if (gui.getInventory().getItems(new NAlias(BRANCH)).isEmpty())
-                return Results.ERROR("No branches to refuel the crucible: they come from a Fuel zone"
+                return Results.ERROR("No branches to refuel the crucible: they come from a"
+                        + " \"Fuel: Crucible\" zone, or a plain Fuel zone,"
                         + " with the \"" + BRANCH + "\" subtype");
         }
 

@@ -32,6 +32,7 @@ import com.codedisaster.steamworks.*;
 public class SteamCreds extends AuthClient.Credentials {
     private final Steam api;
     private final String name;
+    private String account;
 
     public SteamCreds() throws IOException {
 	if((api = Steam.get()) == null)
@@ -39,15 +40,15 @@ public class SteamCreds extends AuthClient.Credentials {
 	name = api.displayname();
     }
 
-    public String authname() {return(null);}
+    public String authname() {return(account);}
 
     public Session.User tryauth(AuthClient cl) throws IOException {
 	try(Steam.WebTicket tkt = api.webticket()) {
 	    Message rpl = cl.cmd("steam", "ticket", Utils.hex.enc(tkt.data));
 	    String stat = rpl.string();
 	    if(stat.equals("ok")) {
-		String acct = rpl.string();
-		return(new Session.User(acct).readname(name));
+		account = rpl.string();
+		return(new Session.User(account).readname(name));
 	    } else if(stat.equals("no")) {
 		throw(new AuthException(rpl.string()));
 	    } else {

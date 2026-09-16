@@ -3,6 +3,7 @@ package nurgling.tools;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StackSupporterNewItemsTest {
@@ -23,5 +24,29 @@ class StackSupporterNewItemsTest {
         assertTrue(VSpec.getCategory("Mouflon Horn").contains("Finebone"));
         assertTrue(VSpec.getCategory("Mouflon Horn").contains("Bone Material"));
         assertEquals(1, StackSupporter.getFullStackSize("Mouflon Horn"));
+    }
+
+    @Test
+    void jotunClamMeatUsesItsServerStackSize() {
+        assertEquals(5, StackSupporter.getFullStackSize("Jotun Clam Meat"));
+    }
+
+    @Test
+    void curiousNeedleIsAStackableCuriosityWithServerStackSize() {
+        assertTrue(VSpec.getCategory("Curious Needle").contains("Stackable Curiosities"));
+        assertFalse(VSpec.getCategory("Curious Needle").contains("NonStackable"));
+        assertEquals(5, StackSupporter.getFullStackSize("Curious Needle"));
+    }
+
+    @Test
+    void peculiarFlotsamIsAStackableCuriosity() {
+        assertTrue(VSpec.getCategory("Peculiar Flotsam").contains("Stackable Curiosities"));
+        assertEquals(4, StackSupporter.getFullStackSize("Peculiar Flotsam"));
+    }
+
+    @Test
+    void existingLocalCustomStackRulesRemainUnchanged() {
+        assertEquals(5, StackSupporter.getFullStackSize("Branch"));
+        assertEquals(4, StackSupporter.getFullStackSize("Standing Grass"));
     }
 }

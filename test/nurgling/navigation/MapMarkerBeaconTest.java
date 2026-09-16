@@ -9,8 +9,12 @@ import haven.ResCache;
 import haven.Gob;
 import haven.Coord3f;
 import haven.HomoCoord4f;
+import haven.Glob;
+import haven.MapView;
+import haven.OCache;
 import nurgling.overlays.MarkerBeaconSprite;
 import nurgling.widgets.LabeledMinimapMark;
+import nurgling.NConfig;
 import haven.render.BufPipe;
 import haven.render.Homo3D;
 import haven.render.Location;
@@ -19,6 +23,7 @@ import nurgling.hotkeys.Hotkeys;
 import nurgling.hotkeys.InputGesture;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -93,6 +98,59 @@ class MapMarkerBeaconTest {
         beacon.finish();
 
         assertEquals(1, finished.get());
+    }
+
+    @Test
+    void evictingABeaconDoesNotRemoveItsVirtualGobWhileHoldingTheRegistryLock() throws Exception {
+        NConfig previous = NConfig.current;
+        try {
+            NConfig.current = new NConfig();
+            Glob glob = new Glob(null);
+            MapView map = new MapView(Coord.of(1), glob, Coord2d.z, -1);
+            MapFile file = new MapFile(new ResCache.TestCache(), "");
+            MapFile.Segment segment = file.new Segment(7L);
+            MiniMap.Location session = new MiniMap.Location(segment, Coord.z);
+            Object registry = registryLock();
+            OCache.ChangeCallback observer = new OCache.ChangeCallback() {
+                @Override
+                public void added(Gob gob) {
+                }
+
+                @Override
+                public void removed(Gob gob) {
+                    if(gob.virtual)
+                        assertFalse(Thread.holdsLock(registry),
+                                "Removing a virtual beacon while holding its registry lock can deadlock with its tick cleanup");
+                }
+            };
+            glob.oc.callback(observer);
+            try {
+                for(int i = 0; i < 5; i++)
+                    assertTrue(MapMarkerBeacon.start(map, segment.id, Coord.of(i, 0), session));
+                assertEquals(4, virtualGobCount(glob));
+            } finally {
+                glob.oc.uncallback(observer);
+            }
+        } finally {
+            NConfig.current = previous;
+        }
+    }
+
+    private static Object registryLock() throws ReflectiveOperationException {
+        Field field = MapMarkerBeacon.class.getDeclaredField("active");
+        field.setAccessible(true);
+        return field.get(null);
+    }
+
+    private static int virtualGobCount(Glob glob) {
+        int count = 0;
+        synchronized(glob.oc) {
+            for(Gob gob : glob.oc) {
+                if(gob.virtual)
+                    count++;
+            }
+        }
+        return count;
     }
 
     @Test

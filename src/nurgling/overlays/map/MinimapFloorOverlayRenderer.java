@@ -45,6 +45,19 @@ public class MinimapFloorOverlayRenderer {
     private List<DrawItem> lastItems = Collections.emptyList();
     private FloorOverlayAligner.FloorLink lastLink = null;
 
+    /** A visible overlay marker remapped onto the segment occupied by the character. */
+    public static final class BeaconTarget {
+        public final long segmentId;
+        public final Coord tile;
+        public final String label;
+
+        private BeaconTarget(long segmentId, Coord tile, String label) {
+            this.segmentId = segmentId;
+            this.tile = tile;
+            this.label = label;
+        }
+    }
+
     public void render(NMiniMap mm, GOut g) {
         if (!enabled() || mm.dloc == null || mm.file == null) {
             lastItems = Collections.emptyList();
@@ -201,6 +214,48 @@ public class MinimapFloorOverlayRenderer {
                         }
                     } catch (Loading ignored) {
                     }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the topmost saved marker that was rendered on the selected floor overlay and maps it
+     * back into the character's current segment.  This intentionally uses the last rendered grid
+     * list, so an off-screen, filtered, or not-yet-rendered marker never gains a click target.
+     */
+    public BeaconTarget beaconTarget(NMiniMap mm, Coord c) {
+        if (mm == null || c == null || mm.dloc == null || mm.dloc.seg == null || mm.sessloc == null
+                || mm.sessloc.seg == null || lastLink == null || lastItems.isEmpty()
+                || lastLink != mm.selectedFloorLink || !enabled()
+                || !FloorOverlayMarkerLogic.overlayActive(true, lastLink.toSegId, mm.dloc.seg.id)
+                || lastLink.fromSegId != mm.sessloc.seg.id || mm.markersHidden()) {
+            return null;
+        }
+        Coord hsz = mm.sz.div(2);
+        float uiScale = UI.scale(1f);
+        String pattern = mm.markerSearchPattern();
+
+        for (int itemIndex = lastItems.size() - 1; itemIndex >= 0; itemIndex--) {
+            List<MiniMap.DisplayMarker> marks = new ArrayList<>(lastItems.get(itemIndex).disp.markers(false));
+            for (int markIndex = marks.size() - 1; markIndex >= 0; markIndex--) {
+                MiniMap.DisplayMarker mark = marks.get(markIndex);
+                if (mm.filter(mark) || !FloorOverlayMarkerLogic.matchesSearch(mark.m.nm, pattern)) {
+                    continue;
+                }
+                Coord screen = FloorOverlayMarkerLogic.destToScreen(
+                        mark.m.tc, lastLink.tileOffset, mm.dloc.tc, mm.scalef(),
+                        mm.getCurrentScale(), hsz, uiScale);
+                if (!FloorOverlayMarkerLogic.onScreen(screen, mm.sz)) {
+                    continue;
+                }
+                try {
+                    GobIcon.Icon icon = mark.icon();
+                    if (icon != null && icon.checkhit(c.sub(screen))) {
+                        return new BeaconTarget(mm.sessloc.seg.id, lastLink.destTileToSrc(mark.m.tc), mark.m.nm);
+                    }
+                } catch (Loading ignored) {
                 }
             }
         }

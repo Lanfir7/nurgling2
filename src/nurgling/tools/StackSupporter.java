@@ -46,6 +46,8 @@ public class StackSupporter {
         customStackSizes.put("Petrified Seashell", 3);
         customStackSizes.put("Dead Wood Scorpion", 4);
         customStackSizes.put("Odd Honeycomb", 3);
+        customStackSizes.put("Jotun Clam Meat", 5);
+        customStackSizes.put("Curious Needle", 5);
         // gfx/invobjs/branch. Sits in "Wicker" for what it crafts into, but the server
         // stacks it 5 deep, not 3 like the rest of that category.
         customStackSizes.put("Branch", 5);

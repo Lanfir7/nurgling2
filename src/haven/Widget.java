@@ -78,6 +78,8 @@ public class Widget {
 	
 	public Widget create(UI ui, Object[] args) {
 	    Coord sz = (Coord)args[0];
+	    if(nurgling.widgets.charsel.NCharselScreen.isCharsel(sz))
+		return(new nurgling.widgets.charsel.NCharselScreen());
 	    final boolean isCharsel = sz.equals(CHARSEL_ORIG_SIZE);
 	    // Override character selection screen size (apply UI.scale)
 	    if(isCharsel) {

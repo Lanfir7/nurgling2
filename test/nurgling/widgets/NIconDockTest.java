@@ -62,4 +62,31 @@ class NIconDockTest {
         assertEquals(10.0, NIconDock.rectdist(new Coord(210, 50), sz));
         assertEquals(10.0, NIconDock.rectdist(new Coord(50, -10), sz));
     }
+
+    @Test
+    void overlayIconsGrowUpFromTheirBase() {
+        Coord mid = new Coord(50, 100);
+        Coord orig = new Coord(20, 20);
+        Coord grown = new Coord(38, 38);
+        Coord ul = NIconDock.grownUl(mid, orig, grown, false, false);
+        assertEquals(mid.x - (grown.x / 2), ul.x);
+        assertEquals(mid.y + (orig.y / 2) - grown.y, ul.y);
+    }
+
+    @Test
+    void mapIconGrowsDownAndLeftInsideTheFrame() {
+        Coord orig = new Coord(20, 20);
+        Coord panel = new Coord(200, 200);
+        Coord mid = new Coord(panel.x - (orig.x / 2), orig.y / 2);
+        Coord grown = new Coord(38, 38);
+        Coord ul = NIconDock.grownUl(mid, orig, grown, true, true);
+        int origRight = mid.x + (orig.x / 2);
+        int origTop = mid.y - (orig.y / 2);
+        assertEquals(origRight - grown.x, ul.x);
+        assertEquals(origTop, ul.y);
+        assertTrue(ul.x >= 0, "grown map icon must stay inside the left edge");
+        assertTrue(ul.y >= 0, "grown map icon must stay inside the top edge");
+        assertTrue(ul.x + grown.x <= panel.x, "grown map icon must stay inside the right edge");
+        assertTrue(ul.y + grown.y <= panel.y, "grown map icon must stay inside the bottom edge");
+    }
 }

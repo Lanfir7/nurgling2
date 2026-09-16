@@ -70,7 +70,10 @@ public class FireStarterAction implements Action {
             ArrayList<Gob> gobs = new ArrayList<>();
             gobs.add(target);
             gui.msg("Adding fuel to " + config.displayName + "...");
-            Results fuelResult = new FillFuelPowOrCauldron(context, gobs, 1).run(gui);
+            nurgling.widgets.Specialisation.SpecName zone = isPow
+                    ? nurgling.widgets.Specialisation.SpecName.fuelFireplace
+                    : nurgling.widgets.Specialisation.SpecName.fuelCauldron;
+            Results fuelResult = new FillFuelPowOrCauldron(context, gobs, 1, zone).run(gui);
             if (!fuelResult.IsSuccess()) {
                 return Results.ERROR("NO FUEL");
             }

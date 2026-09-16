@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-stack-fixes",
+  "priority": 4,
+  "summary": {
+    "ru": "Стаки мяса гигантского моллюска и редких диковинок теперь распознаются с правильным размером.",
+    "en": "Jotun clam meat and rare curiosities are now recognized with their correct stack sizes."
+  },
+  "detail": {
+    "ru": "Автосортировка и перенос предметов правильно учитывают стаки Jotun Clam Meat, Curious Needle и Peculiar Flotsam, не меняя правила для остальных предметов.",
+    "en": "Automatic sorting and item transfers now handle Jotun Clam Meat, Curious Needle, and Peculiar Flotsam correctly without changing the rules for other items."
+  }
+}

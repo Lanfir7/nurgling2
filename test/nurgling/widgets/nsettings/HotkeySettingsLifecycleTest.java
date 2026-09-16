@@ -29,6 +29,34 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HotkeySettingsLifecycleTest {
+    @Test void mouseClickArmsCaptureAndAllowsRepeatedReassignment() throws Exception {
+        UI ui = (UI)unsafe().allocateInstance(UI.class);
+        List<UI.Grab> grabs = new java.util.concurrent.CopyOnWriteArrayList<>();
+        setObject(ui, "grabs", grabs);
+        CountingBinding binding = new CountingBinding("capture", nurgling.hotkeys.InputGesture.none());
+        List<HotkeyCapturePolicy.Decision> decisions = new ArrayList<>();
+        nurgling.widgets.NHotkeyCapture capture = new nurgling.widgets.NHotkeyCapture(
+                120, action("capture", "Capture", binding), decisions::add) {
+            protected void depress() { }
+            protected void unpress() { }
+        };
+        capture.ui = ui;
+        for(int button : new int[] {2, 3}) {
+            assertTrue(capture.mousedown(new Widget.MouseDownEvent(Coord.of(2, 2), 1)));
+            assertTrue(capture.mouseup((Widget.MouseUpEvent)new Widget.MouseUpEvent(
+                    Coord.of(2, 2), 1).grabbed(true)));
+            assertTrue(capture.armed(), "a normal mouse click must enter capture mode");
+            assertEquals(2, grabs.size(), "the button's initial mouse grab must be released");
+            assertTrue(capture.mousedown((Widget.MouseDownEvent)new Widget.MouseDownEvent(
+                    Coord.of(2, 2), button).grabbed(true)));
+            assertFalse(capture.armed());
+            assertTrue(grabs.isEmpty());
+            assertEquals(nurgling.hotkeys.InputGesture.mouse(button, haven.KeyMatch.MODS, 0),
+                    decisions.get(decisions.size() - 1).gesture());
+        }
+        assertEquals(2, decisions.size());
+    }
+
     private nurgling.NUI previousUi;
 
     @BeforeEach void installTestUi() throws Exception {
