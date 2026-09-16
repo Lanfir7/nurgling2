@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-minimap-dock-click",
+  "priority": 5,
+  "summary": {
+    "ru": "Увеличенную иконку на миникарте можно нажать по всей её большой области.",
+    "en": "A grown minimap icon can be clicked across its full enlarged area."
+  },
+  "detail": {
+    "ru": "Кнопки слоёв под миникартой и значок большой карты в правом верхнем углу принимают клик по тому размеру, которым сейчас нарисована активная иконка, а не по маленькому исходному квадрату. Наведите курсор, чтобы иконка подросла, и нажмите в любом месте увеличенного значка.",
+    "en": "The overlay buttons under the minimap and the Map button in the top-right register a click on the icon’s current enlarged drawing, not the original tiny square. Hover until it grows, then click anywhere on the large icon."
+  }
+}

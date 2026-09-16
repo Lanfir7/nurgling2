@@ -85,6 +85,58 @@ public class NIconDock {
         return(new Coord(x, y));
     }
 
+    /** Size of an icon whose layout size is `orig` when drawn at `scale`. */
+    static Coord grownSz(Coord orig, double scale) {
+        return(new Coord((int)Math.round(orig.x * scale), (int)Math.round(orig.y * scale)));
+    }
+
+    /** Fully grown size multiplier for the icon nearest the cursor. */
+    static double maxScale() {
+        return(1.0 + GROW);
+    }
+
+    /** True when `c` lies inside the icon grown to `scale` around `mid`. */
+    static boolean hitGrown(Coord c, Coord mid, Coord orig, double scale, boolean growLeft, boolean growDown) {
+        if((c == null) || (mid == null) || (orig == null))
+            return(false);
+        Coord grown = grownSz(orig, scale);
+        if((grown.x <= 0) || (grown.y <= 0))
+            return(false);
+        return(c.isect(grownUl(mid, orig, grown, growLeft, growDown), grown));
+    }
+
+    /**
+     * Index of the icon that should receive a click at `c`. The nearest icon
+     * (highest `scales[i]`) uses its maximum grown rectangle once it has started
+     * growing; otherwise the largest current visual rect that contains `c` wins,
+     * matching draw order. `inward[i]` is the map button (grows down and left).
+     */
+    static int hitActive(Coord c, Coord[] mids, Coord[] origs, double[] scales, boolean[] inward) {
+        int n = mids.length;
+        int active = -1;
+        double best = 0;
+        for(int i = 0; i < n; i++) {
+            if(scales[i] >= best) {
+                best = scales[i];
+                active = i;
+            }
+        }
+        if((active >= 0) && (best > 1.0) &&
+           hitGrown(c, mids[active], origs[active], maxScale(), inward[active], inward[active]))
+            return(active);
+        int found = -1;
+        double foundScale = -1;
+        for(int i = 0; i < n; i++) {
+            if(scales[i] < foundScale)
+                continue;
+            if(hitGrown(c, mids[i], origs[i], scales[i], inward[i], inward[i])) {
+                found = i;
+                foundScale = scales[i];
+            }
+        }
+        return(found);
+    }
+
     /** up, down, hoverup, hoverdown. Bright/color art is ON when `colorWhenOn`. */
     static String[] overlayArt(String p, boolean colorWhenOn) {
         return colorWhenOn

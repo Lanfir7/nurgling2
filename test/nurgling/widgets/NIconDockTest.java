@@ -83,6 +83,56 @@ class NIconDockTest {
     }
 
     @Test
+    void grownClickHitsPixelsOutsideTheLayoutRect() {
+        Coord mid = new Coord(50, 100);
+        Coord orig = new Coord(20, 20);
+        Coord above = new Coord(50, 80);
+        assertFalse(NIconDock.hitGrown(above, mid, orig, 1.0, false, false),
+            "the layout rect must not cover the grown pixels");
+        assertTrue(NIconDock.hitGrown(above, mid, orig, NIconDock.maxScale(), false, false),
+            "a click on the grown overlay icon must count");
+        assertFalse(NIconDock.hitGrown(new Coord(50, 60), mid, orig, NIconDock.maxScale(), false, false),
+            "pixels past the maximum grown rect must miss");
+    }
+
+    @Test
+    void mapClickHitsPixelsOutsideTheLayoutRect() {
+        Coord orig = new Coord(20, 20);
+        Coord mid = new Coord(190, 10);
+        Coord downLeft = new Coord(170, 25);
+        assertFalse(NIconDock.hitGrown(downLeft, mid, orig, 1.0, true, true));
+        assertTrue(NIconDock.hitGrown(downLeft, mid, orig, NIconDock.maxScale(), true, true),
+            "a click on the grown map icon must count");
+    }
+
+    @Test
+    void activeGrownIconTakesTheClickAtMaxSize() {
+        Coord orig = new Coord(20, 20);
+        Coord[] mids = {new Coord(50, 100), new Coord(73, 100)};
+        Coord[] origs = {orig, orig};
+        double[] scales = {NIconDock.maxScale(), 1.2};
+        boolean[] inward = {false, false};
+        Coord onGrown = new Coord(70, 80);
+        assertEquals(0, NIconDock.hitActive(onGrown, mids, origs, scales, inward),
+            "the large nearest icon must receive the click, not its neighbour");
+        assertEquals(-1, NIconDock.hitActive(new Coord(10, 10), mids, origs, scales, inward),
+            "a click far from every icon must fall through to the map");
+    }
+
+    @Test
+    void ungrownIconKeepsItsLayoutHitbox() {
+        Coord orig = new Coord(20, 20);
+        Coord mid = new Coord(50, 100);
+        Coord[] mids = {mid};
+        Coord[] origs = {orig};
+        double[] scales = {1.0};
+        boolean[] inward = {false};
+        assertEquals(0, NIconDock.hitActive(new Coord(50, 100), mids, origs, scales, inward));
+        assertEquals(-1, NIconDock.hitActive(new Coord(50, 80), mids, origs, scales, inward),
+            "max-size click must not steal map clicks from a still-small icon");
+    }
+
+    @Test
     void mapIconGrowsDownAndLeftInsideTheFrame() {
         Coord orig = new Coord(20, 20);
         Coord panel = new Coord(200, 200);

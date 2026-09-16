@@ -400,8 +400,7 @@ public class NMiniMapWnd extends Widget{
         if(!dock.hidden()) {
             /* Smallest first, so whichever icon the cursor has grown sits in front of
              * both of its neighbours instead of the one to its right covering it. */
-            java.util.List<Widget> icons = new java.util.ArrayList<>(toggle_panel.children());
-            icons.add(map_box);
+            java.util.List<Widget> icons = dockIcons();
             icons.sort(java.util.Comparator.comparingDouble(w -> dock.scale(dockmid(w))));
             for(Widget btn : icons)
                 drawDockIcon(g, btn);
@@ -413,6 +412,45 @@ public class NMiniMapWnd extends Widget{
     private Coord dockmid(Widget wdg) {
         Coord pos = (wdg.parent == toggle_panel) ? toggle_panel.c.add(wdg.c) : wdg.c;
         return(pos.add(wdg.sz.x / 2, wdg.sz.y / 2));
+    }
+
+    private java.util.List<Widget> dockIcons() {
+        java.util.List<Widget> icons = (toggle_panel == null)
+            ? new java.util.ArrayList<>()
+            : new java.util.ArrayList<>(toggle_panel.children());
+        if(map_box != null)
+            icons.add(map_box);
+        return(icons);
+    }
+
+    /**
+     * The drawn (grown) icon under `c`, or null. Click, hover and tooltip use
+     * this instead of the layout-sized widget so the large visual is what fires.
+     */
+    private Widget dockHit(Coord c) {
+        if((c == null) || dock.hidden())
+            return(null);
+        java.util.List<Widget> icons = new java.util.ArrayList<>();
+        for(Widget wdg : dockIcons()) {
+            if(wdg.visible() && (wdg instanceof ICheckBox))
+                icons.add(wdg);
+        }
+        int n = icons.size();
+        if(n == 0)
+            return(null);
+        Coord[] mids = new Coord[n];
+        Coord[] origs = new Coord[n];
+        double[] scales = new double[n];
+        boolean[] inward = new boolean[n];
+        for(int i = 0; i < n; i++) {
+            Widget wdg = icons.get(i);
+            mids[i] = dockmid(wdg);
+            origs[i] = wdg.sz;
+            scales[i] = dock.scale(mids[i]);
+            inward[i] = (wdg == map_box);
+        }
+        int hit = NIconDock.hitActive(c, mids, origs, scales, inward);
+        return((hit < 0) ? null : icons.get(hit));
     }
 
     private void drawDockIcon(GOut g, Widget wdg) {
@@ -428,12 +466,43 @@ public class NMiniMapWnd extends Widget{
             tex = dock.paint(tex);
         Coord mid = dockmid(wdg);
         double scale = dock.scale(mid);
-        Coord isz = new Coord((int)Math.round(wdg.sz.x * scale), (int)Math.round(wdg.sz.y * scale));
+        Coord isz = NIconDock.grownSz(wdg.sz, scale);
         boolean mapBtn = (wdg == map_box);
         Coord ul = NIconDock.grownUl(mid, wdg.sz, isz, mapBtn, mapBtn);
         g.chcolor(255, 255, 255, dock.alpha(scale));
         g.image(tex, ul, isz);
         g.chcolor();
+    }
+
+    @Override
+    public boolean mousedown(MouseDownEvent ev) {
+        Widget hit = dockHit(ev.c);
+        if(hit != null)
+            return(hit.mousedown(ev.derive(hit.sz.div(2))));
+        return(super.mousedown(ev));
+    }
+
+    @Override
+    public void mousemove(MouseMoveEvent ev) {
+        super.mousemove(ev);
+        Widget hit = dockHit(ev.c);
+        if(hit == null)
+            return;
+        for(Widget wdg : dockIcons()) {
+            if(wdg instanceof ICheckBox)
+                ((ICheckBox)wdg).h = (wdg == hit);
+        }
+    }
+
+    @Override
+    public boolean tooltip(TooltipQuery ev) {
+        Widget hit = dockHit(ev.c);
+        if(hit != null) {
+            Object tip = hit.tooltip(hit.sz.div(2), ev.last);
+            if(tip != null)
+                return(ev.set(tip, hit));
+        }
+        return(super.tooltip(ev));
     }
 
     void drawWidget(GOut g, boolean strict, Widget wdg)
