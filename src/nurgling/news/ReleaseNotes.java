@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /** Local, packaged release notes. The resource is read once, only when the UI asks for it. */
 public final class ReleaseNotes {
@@ -175,6 +176,17 @@ public final class ReleaseNotes {
 
         public List<String> details(String language) {
             return details.forLanguage(language, Integer.MAX_VALUE);
+        }
+
+        public boolean matchesDetails(String query, String language) {
+            if (query == null || query.trim().isEmpty())
+                return true;
+            String needle = query.trim().toLowerCase(Locale.ROOT);
+            for (String line : details(language)) {
+                if (line.toLowerCase(Locale.ROOT).contains(needle))
+                    return true;
+            }
+            return false;
         }
     }
 

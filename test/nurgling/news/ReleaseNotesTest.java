@@ -65,6 +65,65 @@ class ReleaseNotesTest {
         assertFalse(ReleaseNotes.isUnread(""));
     }
 
+    @Test
+    void matchesDetailsIgnoresCaseAndFindsSubstring() {
+        ReleaseNotes.Entry entry = parseOne("{"
+                + "\"id\":\"2.1.0\",\"date\":\"2026-09-13\","
+                + "\"title\":{\"en\":\"Title\"},"
+                + "\"summary\":{\"en\":[\"Summary\"]},"
+                + "\"details\":{\"en\":[\"Cart carrier waits at the dock\"]}}");
+        assertTrue(entry.matchesDetails("CART", "en"));
+        assertTrue(entry.matchesDetails("carrier waits", "en"));
+        assertFalse(entry.matchesDetails("missing", "en"));
+    }
+
+    @Test
+    void blankDetailsQueryMatchesEveryEntry() {
+        ReleaseNotes.Entry entry = parseOne("{"
+                + "\"id\":\"2.1.0\",\"date\":\"2026-09-13\","
+                + "\"title\":{\"en\":\"Title\"},"
+                + "\"summary\":{\"en\":[\"Summary\"]},"
+                + "\"details\":{\"en\":[\"Cart\"]}}");
+        assertTrue(entry.matchesDetails("", "en"));
+        assertTrue(entry.matchesDetails("   ", "en"));
+        assertTrue(entry.matchesDetails(null, "en"));
+    }
+
+    @Test
+    void matchesDetailsIgnoresSummaryTitleIdAndDate() {
+        ReleaseNotes.Entry entry = parseOne("{"
+                + "\"id\":\"needle-id\",\"date\":\"needle-date\","
+                + "\"title\":{\"en\":\"needle-title\"},"
+                + "\"summary\":{\"en\":[\"needle-summary\"]},"
+                + "\"details\":{\"en\":[\"unrelated\"]}}");
+        assertFalse(entry.matchesDetails("needle", "en"));
+    }
+
+    @Test
+    void matchesDetailsUsesLanguageFallback() {
+        ReleaseNotes.Entry both = parseOne("{"
+                + "\"id\":\"1\",\"date\":\"2026-09-13\","
+                + "\"title\":{\"ru\":\"Заголовок\",\"en\":\"Title\"},"
+                + "\"summary\":{},"
+                + "\"details\":{\"ru\":[\"телега\"],\"en\":[\"cart\"]}}");
+        assertTrue(both.matchesDetails("телега", "ru"));
+        assertFalse(both.matchesDetails("cart", "ru"));
+        assertTrue(both.matchesDetails("cart", "en"));
+
+        ReleaseNotes.Entry enOnly = parseOne("{"
+                + "\"id\":\"2\",\"date\":\"2026-09-13\","
+                + "\"title\":{\"en\":\"Title\"},"
+                + "\"summary\":{},"
+                + "\"details\":{\"ru\":[],\"en\":[\"cart\"]}}");
+        assertTrue(enOnly.matchesDetails("cart", "ru"));
+    }
+
+    private static ReleaseNotes.Entry parseOne(String jsonObject) {
+        List<ReleaseNotes.Entry> entries = ReleaseNotes.parse("{\"schema\":1,\"releases\":[" + jsonObject + "]}");
+        assertEquals(1, entries.size());
+        return entries.get(0);
+    }
+
     private static final class MemoryPreferences implements ReleaseNotes.PreferenceStore {
         private String value;
 
