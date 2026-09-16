@@ -22,6 +22,7 @@ import nurgling.tools.ExploredArea;
 import nurgling.tools.ExploredAreaPolicy;
 import nurgling.tools.MiniMapDisplayExtent;
 import nurgling.tools.NParser;
+import nurgling.tools.StraightPathObstacle;
 import nurgling.tools.VSpec;
 
 import java.awt.*;
@@ -954,6 +955,10 @@ NMiniMap extends MiniMap {
                         : milestoneLeg ? FORAGER_MILESTONE_LEG_COLOR
                         : (i == activeIdx) ? nurgling.overlays.NWaypointOverlay.activeColor()
                         : nurgling.overlays.NWaypointOverlay.queuedColor();
+                Coord2d prevW = StraightPathObstacle.sessionWorld(sessloc, prevWp.tc, prevWp.seg);
+                Coord2d curW = StraightPathObstacle.sessionWorld(sessloc, wp.tc, wp.seg);
+                if(StraightPathObstacle.blockedLeg(gui, prevW, curW))
+                    lc = nurgling.overlays.NWaypointOverlay.failedColor();
                 g.chcolor(lc.getRed(), lc.getGreen(), lc.getBlue(), 200);
                 dashLine(g, prevC, c, phase, 2);
             }
@@ -1012,9 +1017,10 @@ NMiniMap extends MiniMap {
 
         // Get player's current position on the map for drawing the line
         Coord playerScreenPos = null;
+        Coord2d playerWorld = null;
         try {
             if(ui != null && ui.gui != null && ui.gui.map != null) {
-                Coord2d playerWorld = new Coord2d(ui.gui.map.getcc());
+                playerWorld = new Coord2d(ui.gui.map.getcc());
                 playerScreenPos = p2c(playerWorld);
             }
         } catch(Loading l) {
@@ -1025,19 +1031,24 @@ NMiniMap extends MiniMap {
         // Legs, as dashes crawling toward the next waypoint so direction is readable
         double phase = Utils.rtime() * UI.scale(16);
         Coord prevC = playerScreenPos;
+        Coord2d prevW = playerWorld;
         for(int i = 0; i < allWaypoints.size(); i++) {
             nurgling.WaypointMovementService.Waypoint waypoint = allWaypoints.get(i);
             if(waypoint.loc.seg.id != sessloc.seg.id)
                 continue;
 
             Coord waypointC = xlate(waypoint.loc);
+            Coord2d waypointW = StraightPathObstacle.sessionWorld(sessloc, waypoint.loc.tc, waypoint.loc.seg.id);
             if(prevC != null && waypointC != null) {
                 Color lc = (i == 0) ? nurgling.overlays.NWaypointOverlay.activeColor()
                                     : nurgling.overlays.NWaypointOverlay.queuedColor();
+                if(StraightPathObstacle.blockedLeg(gui, prevW, waypointW))
+                    lc = nurgling.overlays.NWaypointOverlay.failedColor();
                 g.chcolor(lc.getRed(), lc.getGreen(), lc.getBlue(), 200);
                 dashLine(g, prevC, waypointC, phase, 2);
             }
             prevC = waypointC;
+            prevW = waypointW;
         }
 
         // Nodes. The active one is bigger and pulses; the one being dragged or hovered

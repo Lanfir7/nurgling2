@@ -81,6 +81,7 @@ public class NGameUI extends GameUI
     private LocalizedResourceTimerDialog localizedResourceTimerDialog = null;
     public LocalizedResourceTimerService localizedResourceTimerService;
     public WaypointMovementService waypointMovementService;
+    public final nurgling.tools.StraightPathObstacle.Cache pathObstacles = new nurgling.tools.StraightPathObstacle.Cache();
     public PingService pingService;
     public FishLocationService fishLocationService;
     public PeerPositionService peerPositionService;

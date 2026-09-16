@@ -7,6 +7,7 @@ import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NUtils;
 import nurgling.WaypointMovementService;
+import nurgling.tools.StraightPathObstacle;
 import nurgling.widgets.NMiniMap;
 
 import java.awt.Color;
@@ -135,6 +136,10 @@ public class NWaypointOverlay extends NGroundPathOverlay implements PView.Render
         if(failedIdx.contains(idx))
             return FAILED_ALPHA_MULT;
         return (idx < activeIdx) ? STALE_ALPHA_MULT : 1.0;
+    }
+
+    private boolean legBlocked(Coord2d from, Coord2d to) {
+        return StraightPathObstacle.blockedLeg(NUtils.getGameUI(), from, to);
     }
 
     /* ------------------------------------------------------------------ *
@@ -285,6 +290,20 @@ public class NWaypointOverlay extends NGroundPathOverlay implements PView.Render
         h = h * 31 + failedIdx.size();
         // Toggling flat world changes every vertex, so it has to force a rebuild.
         h = h * 31 + (flat ? 1 : 0);
+        Coord2d prev = null;
+        Coord2d pl = playerPos();
+        for(WNode n : nodes) {
+            if(n.kind != Kind.ROUTE) {
+                prev = null;
+                continue;
+            }
+            if(prev != null)
+                h = h * 31 + (legBlocked(prev, n.wc) ? 1 : 0);
+            int idx = n.num - 1;
+            if(idx == activeIdx && pl != null)
+                h = h * 31 + (legBlocked(pl, n.wc) ? 1 : 0);
+            prev = n.wc;
+        }
         return(h);
     }
 
@@ -368,11 +387,14 @@ public class NWaypointOverlay extends NGroundPathOverlay implements PView.Render
             if(prev != null) {
                 // Always the route's own colour (dimmed when stale, red if failed) - never active/blue, even for the leg into the active node; that's the separate player leg below.
                 Color legc = failedIdx.contains(idx) ? failedColor() : queuedColor();
+                if(legBlocked(prev, n.wc))
+                    legc = failedColor();
                 ribbon(buf, prev, n.wc, rgba(legc, 0.95 * mult), baseZ);
             }
             if(idx == activeIdx && pl != null && !detouring) {
                 // Second, live leg tracking the player's actual position - coexists with the route-chain leg above rather than replacing it.
-                ribbon(buf, pl, n.wc, rgba(activeColor(), 0.95), baseZ);
+                Color pcol = legBlocked(pl, n.wc) ? failedColor() : activeColor();
+                ribbon(buf, pl, n.wc, rgba(pcol, 0.95), baseZ);
             }
             ring(buf, n.wc, rgba(col, 0.95 * mult), rgba(col, 0.18 * mult), baseZ);
             prev = n.wc;

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-16-blocked-waypoint-legs",
+  "priority": 5,
+  "summary": {
+    "ru": "Линия маршрута красная, если прямая между точками режет перевал или стенку шахты.",
+    "en": "A route line turns red when the straight path between points crosses a cliff or mine wall."
+  },
+  "detail": {
+    "ru": "На земле и на карте соединение точек очереди (альт-клик) и маршрутов ботов становится красным, если прямая проходит через перевал или стенку шахты. Персонаж по-прежнему идёт по прямой — это только предупреждение.",
+    "en": "On the ground and on the map, a queued alt-click or bot-route connection turns red if the straight line crosses a cliff or mine wall. Walking still follows that line; the colour is a warning only."
+  }
+}

@@ -9,6 +9,7 @@ import nurgling.overlays.NWaypointOverlay;
 import nurgling.routes.ForagerPath;
 import nurgling.routes.ForagerWaypoint;
 import nurgling.tools.MilestoneRegistry;
+import nurgling.tools.StraightPathObstacle;
 import nurgling.widgets.MilestoneDestinationChooser;
 import nurgling.widgets.NMiniMap;
 import nurgling.widgets.WaypointStepsWindow;
@@ -174,6 +175,11 @@ public class ForagerRouteMap extends NMiniMap {
                 boolean milestoneLeg = wp.milestoneHash != null && wp.milestoneHash.equals(prevWp.milestoneHash);
                 Color lc = milestoneLeg ? MILESTONE_ACTIVE_LINK_COLOR
                         : (i == 1) ? NWaypointOverlay.activeColor() : NWaypointOverlay.queuedColor();
+                NGameUI gui = NUtils.getGameUI();
+                Coord2d prevW = StraightPathObstacle.sessionWorld(sessloc, prevWp.tc, prevWp.seg);
+                Coord2d curW = StraightPathObstacle.sessionWorld(sessloc, wp.tc, wp.seg);
+                if(StraightPathObstacle.blockedLeg(gui, prevW, curW))
+                    lc = NWaypointOverlay.failedColor();
                 g.chcolor(lc.getRed(), lc.getGreen(), lc.getBlue(), 200);
                 dashLine(g, prevC, c, phase, 2);
             }
