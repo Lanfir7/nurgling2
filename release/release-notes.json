@@ -88,9 +88,39 @@
     "2026-09-16-minimap-map-icon-grow",
     "2026-09-16-nested-scrollbars",
     "2026-09-16-pointer-mark-range",
-    "2026-09-16-stack-fixes"
+    "2026-09-16-stack-fixes",
+    "2026-09-17-atlas-animal-meat",
+    "2026-09-17-session-macro-controls"
   ],
   "releases": [
+    {
+      "id": "2.103.204",
+      "date": "2026-09-16",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Запущенные макросы теперь рядом с портретом персонажа: нажмите на плашку, чтобы остановить макрос.",
+          "Крафтатлас снова видит конкретное мясо животных в инвентаре, даже если у куска две иконки."
+        ],
+        "en": [
+          "Running macros now appear beside each character portrait: click a badge to stop that macro.",
+          "Craft Atlas again finds a specific animal's meat in your inventory, including dual-icon cuts."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Шестерёнки в центре экрана заменены подписанными плашками в панели сессий. Вся плашка останавливает свой макрос, квадратная кнопка рядом — все макросы этого персонажа, даже в фоновом окне. Ctrl+Shift+X останавливает макросы текущей сессии; сочетание меняется в настройках горячих клавиш, в категории «Сессии».",
+          "В энциклопедии рецепты вроде Badger Botillo больше не показывают «нет мяса», если нужный кусок лежит в инвентаре. Откройте Крафтатлас, выберите рецепт и слот ингредиента — подходящее мясо появится в списке."
+        ],
+        "en": [
+          "Central spinning gears are replaced by named badges in the session panel. Click anywhere on a badge to stop its macro, or use the square button to stop all macros for that character, including background sessions. Ctrl+Shift+X stops macros in the current session; rebind it in Hotkeys settings under Sessions.",
+          "In the encyclopedia, recipes such as Badger Botillo no longer say meat is missing when the right cut is in your inventory. Open Craft Atlas, pick the recipe, and the ingredient slot lists that meat."
+        ]
+      }
+    },
     {
       "id": "2.103.203",
       "date": "2026-09-16",
