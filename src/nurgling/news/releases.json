@@ -65,14 +65,61 @@
     "2026-09-15-forager-route-sweep",
     "2026-09-15-free-inventory-container-selection",
     "2026-09-15-gob-config-notify-sound",
+    "2026-09-15-mammoth-skull",
     "2026-09-15-marker-beacon",
     "2026-09-15-marker-beacon-label",
     "2026-09-15-master-miner-item-tracking",
     "2026-09-15-metal-shovel-dig-reserve",
     "2026-09-15-scenario-speed",
-    "2026-09-15-worm-farm-bot"
+    "2026-09-15-worm-farm-bot",
+    "2026-09-16-blocked-waypoint-legs",
+    "2026-09-16-hud-adjust",
+    "2026-09-16-inv-list-polish",
+    "2026-09-16-layout-welcome",
+    "2026-09-16-minimap-icon-dock",
+    "2026-09-16-pointer-mark-range"
   ],
   "releases": [
+    {
+      "id": "2.103.202",
+      "date": "2026-09-16",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Панели интерфейса двигаются, тянутся и масштабируются прямо в игре, с показом процента.",
+          "Миникарта заняла всю рамку, а её иконки слоёв всплывают под курсором.",
+          "Черепа мамонтов без меток животных, с хитбоксом и массовым переносом."
+        ],
+        "en": [
+          "HUD panels move, stretch and scale without leaving the game, and show their percentage.",
+          "The minimap fills its frame, and its overlay icons rise under the cursor.",
+          "Mammoth skulls skip animal markers, have a collision box, and can be mass-carried."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Держите Ctrl+Shift+Alt и тяните панель левой кнопкой: под курсором она обводится, за край или угол меняет размер, противоположный край остаётся на месте. Пока держите сочетание, в левом верхнем углу панели всплывает ползунок с процентом: он сам не двигается и не растёт, так что размер удобно подбирать на ходу. Масштаб работает и на панелях с неизменной вёрсткой — пояс, снаряжение, будильники — их наконец можно уменьшить. Alt+колесо меняет размер шагами по 5%.",
+          "Пустые поля вокруг миникарты убраны: карта дотянута до всех краёв рамки, включая верхний, а замок и глазик показываются поверх карты и только при настройке интерфейса. Кнопки слоёв невидимы, пока курсор далеко: они проявляются при подведении мыши к миникарте и подрастают тем сильнее, чем ближе к курсору, поэтому мелкую иконку легче нажать, а спокойная миникарта остаётся просто картой.",
+          "Макрос меток животных пропускает черепа и другие остатки, даже если в списке есть «mammoth». У черепа мамонта есть хитбокс: путь его обходит. Черепа можно массово переносить через «Перенести много» и бот переноса поднимаемых.",
+          "На земле и на карте соединение точек очереди (альт-клик) и маршрутов ботов становится красным, если прямая проходит через перевал или стенку шахты. Персонаж по-прежнему идёт по прямой — это только предупреждение.",
+          "Карточка перечисляет сочетания для переноса, растягивания и масштаба панелей — ровно те, что назначены у вас сейчас, так что после переназначения справка не соврёт. Уходит сама через 30 секунд, по клику по игровому миру или навсегда кнопкой «Больше не показывать» внизу карточки. Полоска по нижней кромке показывает, сколько времени осталось.",
+          "Строки списка стали выше, а название и качество выровнены по центру строки — цифры и скобки больше не подрезаются сверху и снизу. Иконка предмета тоже выровнена по центру. Полосы строк перекрашены в ту же палитру, что и остальные списки клиента: раньше каждая вторая строка почти белела на фоне и список выбивался из общего вида.",
+          "ПКМ по значку дерева или другой цели на компасе либо стрелке указателя: если цель не дальше 950 м, на карте появляются линия и крестик в её точке. Если дальше — только бесконечная линия направления, без ложного расстояния."
+        ],
+        "en": [
+          "Hold Ctrl+Shift+Alt and drag a panel with the left button: it outlines itself, any edge or corner resizes it, and the opposite edge stays put. While the combination is held, a slider with the percentage pops up in the panel's top-left corner; it neither moves nor grows, so the size is easy to dial in as you go. Scaling now also works on panels with a fixed layout - the belt, equipment, alarms - which can finally be made smaller. Alt+wheel resizes in steps of 5%.",
+          "The empty margins around the minimap are gone: the map reaches every edge of its frame, the top one included, and the lock and visibility controls are drawn over it only while the HUD is being arranged. The overlay buttons stay invisible until the cursor approaches the minimap, then fade in and grow the closer they are to the pointer, so a small icon is easier to hit and an idle minimap is just map.",
+          "Animal markers skip skulls and other leftovers even if the list includes mammoth. Mammoth skulls have a hitbox, so pathfinding goes around them. Mass-carry them with Carry many or the Transfer Liftable bot.",
+          "On the ground and on the map, a queued alt-click or bot-route connection turns red if the straight line crosses a cliff or mine wall. Walking still follows that line; the colour is a warning only.",
+          "The card lists the combinations for moving, stretching and scaling panels exactly as they are bound for you, so it keeps telling the truth after a rebind. It leaves on its own after 30 seconds, on a click in the world, or for good via the \"Do not show again\" button at its bottom. A line along the bottom edge shows how much time is left.",
+          "List rows are taller and the name and quality are centred in the row, so figures and brackets are no longer clipped at the top and bottom. The item icon is centred too. Row stripes now use the same palette as the client's other lists: previously every other row washed out to near-white and the list stood apart from everything else.",
+          "Right-click a tree or other target on the compass or pointer arrow. Within 950 m the map shows a line and a cross at the spot. Farther away it draws only an infinite direction line, so a truncated distance is not shown as exact."
+        ]
+      }
+    },
     {
       "id": "2.103.201",
       "date": "2026-09-15",
