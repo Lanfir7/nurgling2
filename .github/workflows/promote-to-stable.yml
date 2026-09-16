@@ -73,6 +73,7 @@ jobs:
             exit 1
           fi
           git checkout --detach "$latest"
+          echo "SELECTED_LATEST_SHA=$latest" >> "$GITHUB_ENV"
 
       - name: Verify the selected latest manifest
         shell: bash
@@ -95,5 +96,5 @@ jobs:
           git checkout -B stable origin/stable
           git config user.name 'GitHub Actions'
           git config user.email 'actions@github.com'
-          git merge --ff-only "$latest"
+          git merge --ff-only "$SELECTED_LATEST_SHA"
           git push origin stable
