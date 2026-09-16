@@ -90,9 +90,44 @@
     "2026-09-16-pointer-mark-range",
     "2026-09-16-stack-fixes",
     "2026-09-17-atlas-animal-meat",
+    "2026-09-17-macro-window-pos",
+    "2026-09-17-minimap-dock-click",
+    "2026-09-17-news-details-search",
     "2026-09-17-session-macro-controls"
   ],
   "releases": [
+    {
+      "id": "2.103.205",
+      "date": "2026-09-16",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Окна макросов запоминают место, куда вы их передвинули, и открываются там снова.",
+          "В «Что нового» можно найти выпуск по тексту подробностей.",
+          "Увеличенную иконку на миникарте можно нажать по всей её большой области."
+        ],
+        "en": [
+          "Macro windows remember where you moved them and open in the same place next time.",
+          "What's new can find a past update by its expanded details text.",
+          "A grown minimap icon can be clicked across its full enlarged area."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Переместите окно макроса — при следующем запуске оно откроется там же. У каждого макроса своё место, как у окна Master Miner.",
+          "Откройте «Что нового» (кнопка «i» справа в верхнем ряду меню). Над списком версий есть поиск: введите фразу из подробностей — останутся подходящие выпуски, сразу с раскрытым текстом.",
+          "Кнопки слоёв под миникартой и значок большой карты в правом верхнем углу принимают клик по тому размеру, которым сейчас нарисована активная иконка, а не по маленькому исходному квадрату. Наведите курсор, чтобы иконка подросла, и нажмите в любом месте увеличенного значка."
+        ],
+        "en": [
+          "Move a macro window and the next launch opens it there. Each macro keeps its own place, like the Master Miner window.",
+          "Open What's new (the i button at the right of the top menu row). Type a phrase from the expanded details above the version list to keep matching updates, already expanded.",
+          "The overlay buttons under the minimap and the Map button in the top-right register a click on the icon’s current enlarged drawing, not the original tiny square. Hover until it grows, then click anywhere on the large icon."
+        ]
+      }
+    },
     {
       "id": "2.103.204",
       "date": "2026-09-16",
