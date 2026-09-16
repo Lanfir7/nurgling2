@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-atlas-animal-meat",
+  "priority": 6,
+  "summary": {
+    "ru": "Крафтатлас снова видит конкретное мясо животных в инвентаре, даже если у куска две иконки.",
+    "en": "Craft Atlas again finds a specific animal's meat in your inventory, including dual-icon cuts."
+  },
+  "detail": {
+    "ru": "В энциклопедии рецепты вроде Badger Botillo больше не показывают «нет мяса», если нужный кусок лежит в инвентаре. Откройте Крафтатлас, выберите рецепт и слот ингредиента — подходящее мясо появится в списке.",
+    "en": "In the encyclopedia, recipes such as Badger Botillo no longer say meat is missing when the right cut is in your inventory. Open Craft Atlas, pick the recipe, and the ingredient slot lists that meat."
+  }
+}

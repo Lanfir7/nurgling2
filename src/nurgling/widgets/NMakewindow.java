@@ -16,6 +16,7 @@ import nurgling.actions.bots.*;
 import nurgling.areas.*;
 import nurgling.conf.FontSettings;
 import nurgling.conf.ItemQualityOverlaySettings;
+import nurgling.craftatlas.CraftAtlasLayeredNames;
 import nurgling.craftatlas.CraftAtlasObservation;
 import nurgling.craftatlas.CraftAtlasObservationStore;
 import nurgling.craftatlas.CraftAtlasRecipeProbe;
@@ -377,8 +378,22 @@ public class NMakewindow extends Widget implements DTarget {
     private CraftAtlasObservation.Item observedItem(Spec spec) {
         Resource resource = spec.res.get();
         String name = spec.name != null ? spec.name : resourceName(resource);
-        boolean optional = spec.opt();
-        return new CraftAtlasObservation.Item(resource.name, name, spec.count, optional);
+        CraftAtlasLayeredNames.Identity identity = CraftAtlasLayeredNames.resolve(
+                resource.name, name, spriteLayers(spec));
+        return new CraftAtlasObservation.Item(identity.resource, identity.name, spec.count, spec.opt());
+    }
+
+    private static List<String> spriteLayers(Spec spec) {
+        JSONObject saved = ItemTex.save(spec.sprite());
+        if(saved == null) return Collections.emptyList();
+        if(saved.has("layer")) {
+            JSONArray layers = saved.getJSONArray("layer");
+            List<String> paths = new ArrayList<>();
+            for(int i = 0; i < layers.length(); i++) paths.add(layers.getString(i));
+            return paths;
+        }
+        if(saved.has("static")) return Collections.singletonList(saved.getString("static"));
+        return Collections.emptyList();
     }
 
     private String resourceName(Resource resource) {

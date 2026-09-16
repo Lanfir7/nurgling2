@@ -1,6 +1,7 @@
 package nurgling.tools;
 
 import nurgling.NStyle;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -3409,6 +3410,56 @@ public class VSpec {
     // Looks up the icon resource path already recorded for an exact item name in the stacking
     // category data (e.g. "Cassiterite" -> "gfx/invobjs/cassiterite"). Returns null if the name
     // isn't in any category. General-purpose - not just for stacking despite where the data lives.
+    /** Display name for a dual-icon item such as animal meat. Order of layers does not matter. */
+    public static String nameForLayers(Collection<String> layers) {
+        Set<String> wanted = toLookupSet(layers);
+        if(wanted.size() < 2) return null;
+        for(ArrayList<JSONObject> entries : categories.values()) {
+            if(entries == null) continue;
+            for(JSONObject entry : entries) {
+                if(entry == null) continue;
+                JSONArray layer = entry.optJSONArray("layer");
+                if(layer == null || layer.length() != wanted.size()) continue;
+                Set<String> have = new HashSet<>();
+                for(int i = 0; i < layer.length(); i++) {
+                    String path = layer.optString(i, null);
+                    if(path != null && !path.isEmpty()) have.add(path);
+                }
+                if(have.equals(wanted)) return entry.optString("name", null);
+            }
+        }
+        return null;
+    }
+
+    /** True when this resource is only an overlay/layer of a composite item, not a standalone item. */
+    public static boolean isLayerResource(String resource) {
+        if(resource == null || resource.isEmpty() || resource.contains("+")) return false;
+        boolean seenAsLayer = false;
+        for(ArrayList<JSONObject> entries : categories.values()) {
+            if(entries == null) continue;
+            for(JSONObject entry : entries) {
+                if(entry == null) continue;
+                if(resource.equals(entry.optString("static", null))) return false;
+                JSONArray layer = entry.optJSONArray("layer");
+                if(layer == null) continue;
+                for(int i = 0; i < layer.length(); i++)
+                    if(resource.equals(layer.optString(i, null))) seenAsLayer = true;
+            }
+        }
+        return seenAsLayer;
+    }
+
+    public static boolean isKnownItemName(String name) {
+        if(name == null || name.isEmpty()) return false;
+        if(categories.containsKey(name)) return true;
+        for(ArrayList<JSONObject> entries : categories.values()) {
+            if(entries == null) continue;
+            for(JSONObject entry : entries)
+                if(entry != null && name.equals(entry.optString("name", null))) return true;
+        }
+        return false;
+    }
+
     public static String getIconPath(String name) {
         if (name == null) return null;
         if (iconPathByName == null) {

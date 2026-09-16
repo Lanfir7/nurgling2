@@ -177,6 +177,34 @@ class MenuCraftCatalogTest {
     }
 
     @Test
+    void genericMeatObservationYieldsToWikiAnimalMeat() {
+        CraftAtlasObservation observed = new CraftAtlasObservation("badgerbotillo", "Badger Botillo",
+                Arrays.asList(
+                        new CraftAtlasObservation.Item("gfx/invobjs/meat-raw", "Meat", 2, false),
+                        new CraftAtlasObservation.Item("gfx/invobjs/intestines", "Intestines", 1, false)),
+                Arrays.asList(new CraftAtlasObservation.Item("gfx/invobjs/sausage-badger", "Badger Botillo", 1, false)),
+                Collections.<CraftAtlasObservation.RequirementResource>emptyList(),
+                Collections.<CraftAtlasObservation.BonusResource>emptyList());
+        CraftAtlasEntry wiki = CraftAtlasEntry.builder("wiki:badger-botillo", "Badger Botillo")
+                .availability(CraftAtlasEntry.Availability.REFERENCE_ONLY)
+                .input(new CraftAtlasEntry.InputSlot(2, false, Collections.singletonList(
+                        new CraftAtlasEntry.IngredientOption("wiki-item:raw-badger", "Raw Badger"))))
+                .input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(
+                        new CraftAtlasEntry.IngredientOption("wiki-item:intestines", "Intestines"))))
+                .build();
+
+        CraftAtlasEntry entry = MenuCraftCatalog.fromRecords(1,
+                Collections.singletonList(new MenuCraftCatalog.PageRecord("badgerbotillo", "Badger Botillo")),
+                Collections.singletonMap("badgerbotillo", observed), Collections.singletonList(wiki))
+                .byRecipe("badgerbotillo");
+
+        assertEquals("Raw Badger", entry.inputs.get(0).options.get(0).name);
+        assertEquals(2, entry.inputs.get(0).quantity);
+        assertEquals("Intestines", entry.inputs.get(1).options.get(0).name);
+        assertTrue(entry.inputsObserved);
+    }
+
+    @Test
     void currentPageFoodBonusReplacesAnOlderObservedCopy() {
         MenuCraftCatalog.PageRecord page = new MenuCraftCatalog.PageRecord("liveronions", "Liver & Onions",
                 Collections.singletonList("foods"), Collections.singletonList(

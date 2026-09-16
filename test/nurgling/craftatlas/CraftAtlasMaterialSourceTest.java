@@ -42,6 +42,32 @@ class CraftAtlasMaterialSourceTest {
     }
 
     @Test
+    void layeredMeatResourceFindsTheAnimalCut() {
+        CraftAtlasEntry.InputSlot slot = new CraftAtlasEntry.InputSlot(2, false, List.of(
+                new CraftAtlasEntry.IngredientOption(
+                        "gfx/invobjs/meat-raw+gfx/invobjs/meat-badger", "Meat")));
+
+        assertEquals(List.of("Raw Badger"), CraftAtlasMaterialSource.allowedNames(slot));
+    }
+
+    @Test
+    void inventoryRawBadgerMatchesLayeredMeatSlot() {
+        CraftAtlasEntry observed = CraftAtlasEntry.builder("paginae/craft/badgerbotillo", "Badger Botillo")
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(2, false, List.of(
+                        new CraftAtlasEntry.IngredientOption(
+                                "gfx/invobjs/meat-raw+gfx/invobjs/meat-badger", "Meat"))))
+                .build();
+
+        CraftAtlasMaterialSource.Snapshot snapshot = new CraftAtlasMaterialSource().loadInventoryOnly(
+                observed, List.of(new CraftAtlasMaterialSource.InventorySample("Raw Badger", 10, 4)));
+
+        assertEquals(1, snapshot.candidatesBySlot.get(0).size());
+        assertEquals("Raw Badger", snapshot.candidatesBySlot.get(0).get(0).material);
+        assertEquals(4, snapshot.candidatesBySlot.get(0).get(0).count);
+    }
+
+    @Test
     void mergeMarksInventoryAndKeepsStorageRowsSeparate() {
         GroupedItem warehouse = storage("Linen Cloth", 90, 4);
         CraftAtlasMaterialSource.MergedRows rows = CraftAtlasMaterialSource.merge(0,

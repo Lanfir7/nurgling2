@@ -13,6 +13,7 @@ import haven.res.ui.tt.slots.ISlots;
 import haven.resutil.FoodInfo;
 import haven.resutil.Curiosity;
 import nurgling.iteminfo.NCuriosity;
+import nurgling.tools.VSpec;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -132,7 +133,7 @@ public final class MenuCraftCatalog {
         builder.curiosity(live.curiosity == null ? reference.curiosity : live.curiosity);
         List<String> equipmentSlots = live.equipmentSlots.isEmpty() ? reference.equipmentSlots : live.equipmentSlots;
         for(String slot : equipmentSlots) builder.equipmentSlot(slot);
-        List<CraftAtlasEntry.InputSlot> inputs = live.inputs.isEmpty() ? reference.inputs : live.inputs;
+        List<CraftAtlasEntry.InputSlot> inputs = chooseInputs(live.inputs, reference.inputs);
         for(CraftAtlasEntry.InputSlot input : inputs) builder.input(input);
 
         Set<String> requirementKeys = new LinkedHashSet<>();
@@ -200,6 +201,36 @@ public final class MenuCraftCatalog {
         for(CraftAtlasEntry.AttributeRef attribute : page.qualityModifiers)
             if(qualityKeys.add(attributeKey(attribute))) builder.qualityModifier(attribute);
         return builder.build();
+    }
+
+    static List<CraftAtlasEntry.InputSlot> chooseInputs(List<CraftAtlasEntry.InputSlot> live,
+                                                        List<CraftAtlasEntry.InputSlot> wiki) {
+        if(live == null || live.isEmpty()) return wiki;
+        if(wiki == null || wiki.isEmpty() || live.size() != wiki.size()) return live;
+        List<CraftAtlasEntry.InputSlot> result = new ArrayList<>();
+        for(int i = 0; i < live.size(); i++) result.add(chooseSlot(live.get(i), wiki.get(i)));
+        return result;
+    }
+
+    private static CraftAtlasEntry.InputSlot chooseSlot(CraftAtlasEntry.InputSlot live,
+                                                        CraftAtlasEntry.InputSlot wiki) {
+        String liveName = optionName(live);
+        String liveResource = optionResource(live);
+        String wikiName = optionName(wiki);
+        if(VSpec.isLayerResource(liveResource) && !VSpec.isKnownItemName(liveName)
+                && VSpec.isKnownItemName(wikiName))
+            return new CraftAtlasEntry.InputSlot(live.quantity, live.optional, wiki.options);
+        return live;
+    }
+
+    private static String optionName(CraftAtlasEntry.InputSlot slot) {
+        return slot == null || slot.options.isEmpty() || slot.options.get(0) == null ? null
+                : slot.options.get(0).name;
+    }
+
+    private static String optionResource(CraftAtlasEntry.InputSlot slot) {
+        return slot == null || slot.options.isEmpty() || slot.options.get(0) == null ? null
+                : slot.options.get(0).resource;
     }
 
     private static String attributeKey(CraftAtlasEntry.AttributeRef attribute) {

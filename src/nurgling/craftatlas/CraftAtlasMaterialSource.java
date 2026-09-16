@@ -146,6 +146,11 @@ public final class CraftAtlasMaterialSource {
         LinkedHashSet<String> names = new LinkedHashSet<>();
         for(CraftAtlasEntry.IngredientOption option : slot.options) {
             if(option == null || option.name == null) continue;
+            String layered = CraftAtlasLayeredNames.nameForResource(option.resource);
+            if(layered != null) {
+                names.addAll(CraftIngredientStock.namesFor(layered, false, null));
+                continue;
+            }
             boolean category = VSpec.categories.containsKey(option.name);
             names.addAll(CraftIngredientStock.namesFor(option.name, category, null));
         }
