@@ -3,9 +3,11 @@ package nurgling.widgets;
 import haven.Button;
 import haven.Coord;
 import haven.GOut;
+import haven.Label;
 import haven.RichText;
 import haven.RichTextBox;
 import haven.SListBox;
+import haven.TextEntry;
 import haven.UI;
 import haven.Widget;
 import haven.Window;
@@ -14,6 +16,7 @@ import nurgling.news.ReleaseNotes;
 
 import java.awt.Color;
 import java.awt.font.TextAttribute;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -22,25 +25,38 @@ public class ReleaseNotesWindow extends Window {
     private static final Coord SIZE = UI.scale(640, 430);
     private static final int PAD = UI.scale(10);
     private static final int LIST_WIDTH = UI.scale(180);
+    private static final int LIST_HEIGHT = UI.scale(350);
     private static final Coord CONTENT_SIZE = UI.scale(420, 350);
     private static final int BUTTON_WIDTH = UI.scale(145);
     private static final RichText.Foundry CONTENT_FONT = new RichText.Foundry(
             TextAttribute.FAMILY, "SansSerif", TextAttribute.SIZE, UI.scale(14f),
             TextAttribute.FOREGROUND, Color.WHITE).aa(true);
 
+    private final TextEntry search;
     private final ReleaseList releaseList;
     private final RichTextBox content;
     private final Button detailsButton;
     private final Button previousButton;
     private final Button nextButton;
     private List<ReleaseNotes.Entry> releases = Collections.emptyList();
+    private List<ReleaseNotes.Entry> filtered = Collections.emptyList();
     private ReleaseNotes.Entry selected;
     private boolean showingDetails;
 
     public ReleaseNotesWindow() {
         super(SIZE, L10n.get("news.window_title"));
-        releaseList = add(new ReleaseList(Coord.of(LIST_WIDTH, UI.scale(350))), Coord.of(PAD, PAD));
-        int contentX = releaseList.pos("ur").x + PAD;
+        Label searchLabel = add(new Label(L10n.get("news.search_hint"), LIST_WIDTH), Coord.of(PAD, PAD));
+        search = add(new TextEntry(LIST_WIDTH, "") {
+            @Override
+            protected void changed() {
+                super.changed();
+                applyFilter();
+            }
+        }, searchLabel.pos("bl").add(0, UI.scale(4)));
+        int listY = search.pos("bl").y + PAD;
+        int listH = Math.max(UI.scale(42), PAD + LIST_HEIGHT - listY);
+        releaseList = add(new ReleaseList(Coord.of(LIST_WIDTH, listH)), Coord.of(PAD, listY));
+        int contentX = PAD + LIST_WIDTH + PAD;
         content = add(new RichTextBox(CONTENT_SIZE, "", CONTENT_FONT), Coord.of(contentX, PAD));
         detailsButton = add(new Button(BUTTON_WIDTH, L10n.get("news.show_details"), this::toggleDetails),
                 content.pos("bl").add(0, PAD));
@@ -64,23 +80,42 @@ public class ReleaseNotesWindow extends Window {
 
     private void refresh() {
         releases = ReleaseNotes.load();
+        search.settext("");
+        applyFilter();
+        ReleaseNotes.markLatestSeen();
+    }
+
+    private void applyFilter() {
+        if (search == null)
+            return;
+        String query = search.text();
+        String language = L10n.getLanguage();
+        List<ReleaseNotes.Entry> next = new ArrayList<ReleaseNotes.Entry>();
+        for (ReleaseNotes.Entry entry : releases) {
+            if (entry.matchesDetails(query, language))
+                next.add(entry);
+        }
+        filtered = next;
         releaseList.reset();
-        if (releases.isEmpty()) {
+        if (filtered.isEmpty()) {
             selected = null;
-            content.settext(RichText.Parser.quote(L10n.get("news.empty")));
+            String emptyKey = releases.isEmpty() ? "news.empty" : "news.search_empty";
+            content.settext(RichText.Parser.quote(L10n.get(emptyKey)));
             detailsButton.hide();
             previousButton.hide();
             nextButton.hide();
             return;
         }
-        showingDetails = false;
-        select(releases.get(0));
-        ReleaseNotes.markLatestSeen();
+        select(filtered.get(0));
+    }
+
+    private boolean hasQuery() {
+        return search != null && !search.text().trim().isEmpty();
     }
 
     private void select(ReleaseNotes.Entry release) {
         selected = release;
-        showingDetails = false;
+        showingDetails = hasQuery();
         releaseList.change(release);
         renderSelected();
     }
@@ -91,10 +126,10 @@ public class ReleaseNotesWindow extends Window {
     }
 
     private void move(int delta) {
-        int current = releases.indexOf(selected);
+        int current = filtered.indexOf(selected);
         int target = current + delta;
-        if (target >= 0 && target < releases.size())
-            select(releases.get(target));
+        if (target >= 0 && target < filtered.size())
+            select(filtered.get(target));
     }
 
     private void renderSelected() {
@@ -110,9 +145,9 @@ public class ReleaseNotesWindow extends Window {
         detailsButton.show(hasDetails);
         if (hasDetails)
             detailsButton.change(L10n.get(showingDetails ? "news.hide_details" : "news.show_details"));
-        int current = releases.indexOf(selected);
+        int current = filtered.indexOf(selected);
         previousButton.show(current > 0);
-        nextButton.show(current >= 0 && current < releases.size() - 1);
+        nextButton.show(current >= 0 && current < filtered.size() - 1);
     }
 
     private static void appendBullets(StringBuilder text, List<String> lines) {
@@ -135,7 +170,7 @@ public class ReleaseNotesWindow extends Window {
 
         @Override
         protected List<ReleaseNotes.Entry> items() {
-            return releases;
+            return filtered;
         }
 
         @Override
@@ -153,9 +188,9 @@ public class ReleaseNotesWindow extends Window {
 
         @Override
         protected boolean slotclick(Coord c, int slot, int button) {
-            if (button != 1 || slot < 0 || slot >= releases.size())
+            if (button != 1 || slot < 0 || slot >= filtered.size())
                 return false;
-            select(releases.get(slot));
+            select(filtered.get(slot));
             return true;
         }
     }
