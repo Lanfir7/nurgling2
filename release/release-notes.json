@@ -73,13 +73,72 @@
     "2026-09-15-scenario-speed",
     "2026-09-15-worm-farm-bot",
     "2026-09-16-blocked-waypoint-legs",
+    "2026-09-16-floor-overlay-marker-beacon",
+    "2026-09-16-fuel-zones",
+    "2026-09-16-hotkey-assignment-presets",
+    "2026-09-16-hotkey-menu-conflicts",
     "2026-09-16-hud-adjust",
     "2026-09-16-inv-list-polish",
     "2026-09-16-layout-welcome",
+    "2026-09-16-login-character-select",
+    "2026-09-16-map-toggle-color-on",
+    "2026-09-16-marker-beacon-transition",
+    "2026-09-16-minimap-dock-icon-hires",
     "2026-09-16-minimap-icon-dock",
-    "2026-09-16-pointer-mark-range"
+    "2026-09-16-minimap-map-icon-grow",
+    "2026-09-16-nested-scrollbars",
+    "2026-09-16-pointer-mark-range",
+    "2026-09-16-stack-fixes"
   ],
   "releases": [
+    {
+      "id": "2.103.203",
+      "date": "2026-09-16",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Экраны входа и выбора персонажа стали удобнее, сохранив аккаунты, метки, подписку и верификацию.",
+          "Для печей и горнов можно назначить отдельные зоны топлива.",
+          "В настройках горячих клавиш исправлены назначение, замена конфликтующих сочетаний и применение пресетов."
+        ],
+        "en": [
+          "Login and character selection are easier to use while keeping accounts, tags, subscription and verification.",
+          "Fuel areas can now be assigned separately for each furnace and hearth.",
+          "Hotkey settings now correctly capture bindings, resolve conflicting shortcuts, and apply presets."
+        ]
+      },
+      "details": {
+        "ru": [
+          "На входе появился компактный список аккаунтов, а персонажей теперь можно фильтровать по миру, сортировать и выбирать с клавиатуры. Сохранённые пароли и токены продолжают работать; значки подписки и верификации, метки и заметки отображаются на новом экране.",
+          "В окне зон добавьте «Fuel: …» для нужной станции и выберите тип топлива, включая доски. Боты сначала используют эту зону, а прежняя общая зона Fuel остаётся запасным вариантом.",
+          "В разделе «Горячие клавиши» клик по сочетанию запускает ввод нового хоткея. Замена последовательно показывает все конфликты и завершает сохранение после подтверждений. Старое подтверждение больше не меняет другой пресет. Выбранный пресет учитывает действия, появившиеся до его сохранения. Ошибка выбора несовместимого пресета не меняет текущие назначения.",
+          "В настройках горячих клавиш больше нет отдельных рецептов ванильного меню. Кнопка «Игнорировать» позволяет сохранить обе конфликтующие привязки. После назначения и сохранения новой клавиши карты она открывает карту даже при открытом меню крафта; прежняя клавиша карту больше не открывает.",
+          "На миникарте и в окне большой карты кнопки слоёв больше не перепутаны: яркая цветная картинка — слой включён, серая — выключен. Кнопка большой карты в углу миникарты следует тому же правилу.",
+          "Можно переходить между поверхностью, шахтами и пещерами, пока на карте активен луч маркера: переход продолжается без зависания, а луч корректно исчезает по окончании.",
+          "Подведите курсор к кнопкам слоёв под миникартой или к значку карты в правом верхнем углу: увеличенные иконки больше не размываются. Это те же картинки, только отрисованные из крупной копии.",
+          "Лишний внутренний ползунок появлялся, когда содержимое уже помещалось или у списка была своя прокрутка — например у избранных поисковых запросов в инвентаре. Остался один ползунок там, где без него не добраться до строк ниже.",
+          "На мини-карте нажмите настроенный жест маяка на видимой метке наложенного этажа: луч появится в соответствующей точке текущего этажа и сохранит название метки.",
+          "Кнопки слоёв снизу раскрываются вверх и вправо по карте, значок большой карты в правом верхнем углу — вниз и влево. Увеличенная иконка остаётся внутри рамки.",
+          "Автосортировка и перенос предметов правильно учитывают стаки Jotun Clam Meat, Curious Needle и Peculiar Flotsam, не меняя правила для остальных предметов."
+        ],
+        "en": [
+          "Login now has a compact account list, while characters can be filtered by world, sorted and selected with the keyboard. Existing passwords and tokens keep working; subscription and verification badges, tags and notes appear on the redesigned screen.",
+          "In the Areas window, add the matching Fuel: … specialization and choose its fuel type, including boards. Bots use it first and still fall back to the existing shared Fuel area.",
+          "In Hotkeys settings, clicking a binding starts input capture. Replacement walks through all conflicts and completes saving after confirmation. An old confirmation can no longer modify a different preset. The selected preset covers actions that become available before it is saved. Selecting an incompatible preset leaves the current bindings intact.",
+          "Hotkeys settings no longer lists individual vanilla menu recipes. Ignore conflict lets you save both overlapping bindings. After assigning and saving a new map shortcut, it opens the map even with the crafting menu open; the previous shortcut no longer opens it.",
+          "On the minimap and in the big map window the layer buttons are no longer reversed: a bright coloured picture means the layer is on, grey means off. The Map button in the minimap corner follows the same rule.",
+          "You can move between the surface, mines, and caves while a map marker beam is active: the transition continues without freezing, and the beam still disappears correctly when it ends.",
+          "Hover the overlay buttons under the minimap or the Map icon in its top-right corner: the enlarged icons no longer go blurry. They are the same pictures, drawn from a larger copy.",
+          "A spare inner scrollbar appeared when the contents already fitted, or when a list had its own scrolling — for example saved inventory searches. One bar remains where you still need it to reach the rows below.",
+          "On the minimap, use the configured beacon gesture on a visible overlaid-floor marker: the beam appears at the matching point on your current floor and keeps the marker name.",
+          "Overlay buttons along the bottom grow up and right over the map; the Map button in the top-right grows down and left. The enlarged icon stays inside the frame.",
+          "Automatic sorting and item transfers now handle Jotun Clam Meat, Curious Needle, and Peculiar Flotsam correctly without changing the rules for other items."
+        ]
+      }
+    },
     {
       "id": "2.103.202",
       "date": "2026-09-16",
