@@ -29,10 +29,9 @@ public class NResizableWidget extends NDraggableWidget
     }
 
     /**
-     * A frame whose content runs all the way to its right and bottom edges. Used
-     * by the minimap, where the strip normally reserved for the lock and
-     * visibility controls was simply an empty gap next to the map; the controls
-     * are drawn over the map instead, and only while the HUD is being edited.
+     * A frame whose content runs all the way to its edges. Same as the default
+     * {@link NDraggableWidget} chrome: lock and visibility overlay the panel.
+     * Kept as a named type so the minimap construction stays explicit.
      */
     public static class Flush extends NResizableWidget
     {

@@ -188,7 +188,7 @@ public class NBotsMenu extends Widget
             }
         }
         if(parent!=null)
-            parent.resize(new Coord((w + 1) * UI.scale(34), layouts.size() * UI.scale(34)).add(NDraggableWidget.delta));
+            parent.resize(new Coord((w + 1) * UI.scale(34), layouts.size() * UI.scale(34)));
     }
 
     public void hideLayouts(){
@@ -421,7 +421,7 @@ public class NBotsMenu extends Widget
                 }
                 element.btn.show();
             }
-            parent.resize(new Coord((w + 1) * UI.scale(34), (w > 0 ? 9 : h + 1) * UI.scale(34)).add(NDraggableWidget.delta));
+            parent.resize(new Coord((w + 1) * UI.scale(34), (w > 0 ? 9 : h + 1) * UI.scale(34)));
         }
     };
 }

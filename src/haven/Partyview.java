@@ -133,7 +133,7 @@ public class Partyview extends Widget {
 	for(Map.Entry<Member, MemberView> e : avs.entrySet())
 	    e.getValue().color = e.getKey().col;
 	if(parent instanceof NDraggableWidget)
-		parent.resize(sz.add(NDraggableWidget.delta));
+		parent.resize(sz);
     }
 
     public void tick(double dt) {

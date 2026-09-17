@@ -48,4 +48,13 @@ class NCompassResizeTest {
         assertEquals(240, left.left);
         assertEquals(395, left.width);
     }
+
+    @Test
+    void framedResizeWithNoChromeIsTheContentItself() {
+        NCompassResize.Result right = NCompassResize.dragFrame(
+                NCompassResize.Edge.RIGHT, 100, 0, 500, 750, 300, 900, 0);
+
+        assertEquals(100, right.left);
+        assertEquals(650, right.width);
+    }
 }

@@ -291,7 +291,7 @@ public class NGameUI extends GameUI
 
         // Initialize local allowed zones manager (for local hide control)
         nurgling.areas.AllowedZonesManager.getInstance().initialize(genus);
-        add(new NDraggableWidget(botsMenu = new NBotsMenu(), "botsmenu", botsMenu.sz.add(NDraggableWidget.delta)));
+        add(new NDraggableWidget(botsMenu = new NBotsMenu(), "botsmenu", botsMenu.sz));
 
         // Initialize world speed
         initWorldSpeedMap();
@@ -306,7 +306,7 @@ public class NGameUI extends GameUI
     private void initCriticalWidgets() {
         // questinfo нужен сразу, так как сервер отправляет квесты при подключении
         NResizableWidget questwdg = new NResizableWidget(
-            questinfo = new NQuestInfo(), "quests", questinfo.sz.add(NDraggableWidget.delta));
+            questinfo = new NQuestInfo(), "quests", questinfo.sz);
         questwdg.minSize = new Coord(200, 110);
         add(questwdg);
         add(compassWidget = new NCompassWidget(this));
@@ -344,13 +344,13 @@ public class NGameUI extends GameUI
             calendar = new NCal();
             add(new NDraggableWidget(calendar, "Calendar", NCal.COMPACT_SZ), calPos);
         }
-        add(new NDraggableWidget(alarmWdg = new NAlarmWdg(),"alarm",NStyle.alarm[0].sz().add(NDraggableWidget.delta)));
+        add(new NDraggableWidget(alarmWdg = new NAlarmWdg(),"alarm",NStyle.alarm[0].sz()));
         // Starvation alert widget - monitors energy and shows warnings
         add(starvationAlertWidget = new StarvationAlertWidget());
         // Auto-logout widget - logs out when energy is critically low
         add(autoLogoutWidget = new AutoLogoutWidget());
         nep = new NEquipProxy(getEquipProxySlotsFromConfig());
-        add(new NDraggableWidget(nep, "EquipProxy", nep.sz.add(NDraggableWidget.delta)));
+        add(new NDraggableWidget(nep, "EquipProxy", nep.sz));
         add(new NDraggableWidget(nbp = new NBeltProxy(), "BeltProxy", UI.scale(825, 55)));
         for(int i = 0; i<(Integer)NConfig.get(NConfig.Key.numbelts); i++)
         {
@@ -359,7 +359,7 @@ public class NGameUI extends GameUI
             belt.setFlipped(true);
         }
 
-        add(new NDraggableWidget(recentActionsPanel = new NRecentActionsPanel(), "recentactions", recentActionsPanel.sz.add(NDraggableWidget.delta)));
+        add(new NDraggableWidget(recentActionsPanel = new NRecentActionsPanel(), "recentactions", recentActionsPanel.sz));
         // Add drink meter widget to show water/tea capacity (uses IMeter.fsz to match other meters)
         drinkMeter = new DrinkMeter();
         add(new NDraggableWidget(drinkMeter, "drinkmeter", IMeter.fsz));

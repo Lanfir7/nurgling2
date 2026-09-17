@@ -302,7 +302,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	rbtnimg.hide();
 	MainMenu mainMenu = new MainMenu();
 	add(new NDraggableWidget(mainMenu, "mainmenu",
-		MainMenuLayout.frameSize(mainMenu.sz, NDraggableWidget.delta)));
+		MainMenuLayout.frameSize(mainMenu.sz, NDraggableLayout.chrome())));
 	menubuttons(rbtnimg);
 	portrait = add(new NDraggableWidget(Frame.with(new Avaview(Avaview.dasz, plid, "avacam"), false),"portrait", UI.scale(120, 108)));
 	add(new NDraggableWidget(buffs = new Bufflist(),"bufflist",Coord.z));
@@ -779,7 +779,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		menu = mwdg.setMenuGrid((MenuGrid)child);
 		if(craftAtlas != null)
 		    craftAtlas.setMenu(menu);
-		add(new NDraggableWidget(mwdg,"menugrid",new Coord(mwdg.sz).add(NDraggableWidget.delta)));
+		add(new NDraggableWidget(mwdg,"menugrid",new Coord(mwdg.sz)));
 	    MenuSearch.Main srch = new MenuSearch.Main(menu);
 	    srch.posmem("srch");
 	    fitwdg(srchwnd = GameUI.this.add(srch, srch.restorepos(UI.scale(200, 200))));
@@ -799,8 +799,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	        fightActionsWdg.destroy();
 	        fightActionsWdg = null;
 	    }
-	    fightBuffsInfoWdg = add(new NDraggableWidget(fsess.buffsAndInfo, "FightBuffsInfo", fsess.buffsAndInfo.sz.add(NDraggableWidget.delta)));
-	    fightActionsWdg = add(new NDraggableWidget(fsess.actionsWidget, "FightActions", fsess.actionsWidget.sz.add(NDraggableWidget.delta)));
+	    fightBuffsInfoWdg = add(new NDraggableWidget(fsess.buffsAndInfo, "FightBuffsInfo", fsess.buffsAndInfo.sz));
+	    fightActionsWdg = add(new NDraggableWidget(fsess.actionsWidget, "FightActions", fsess.actionsWidget.sz));
 	} else if(place == "inv") {
 	    invwnd = new Hidewnd(Coord.z, L10n.get("inventory.window_title")) {
 		    public void cresize(Widget ch) {
@@ -880,7 +880,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	} else if(place == "chat") {
 	    chat.addchild(child);
 	} else if(place == "party") {
-	    add(new NDraggableWidget(child,"party",child.sz.add(NDraggableWidget.delta)), portrait.pos("bl").adds(0, 10));
+	    add(new NDraggableWidget(child,"party",child.sz), portrait.pos("bl").adds(0, 10));
 	} else if(place == "meter") {
 		if(child instanceof IMeter)
 	    	add(new NDraggableWidget(child, "meter" + ((IMeter)child).name,IMeter.fsz));

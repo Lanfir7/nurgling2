@@ -27,10 +27,8 @@ public class NEquipProxy extends Widget implements DTarget {
             sz = invsz(new Coord(slots.length, 1));
         }
 
-        // Notify parent NDraggableWidget to resize if needed
-        if (parent instanceof NDraggableWidget) {
-            ((NDraggableWidget) parent).resize(sz.add(NDraggableWidget.delta));
-        }
+        if (parent instanceof NDraggableWidget)
+            ((NDraggableWidget) parent).resize(sz);
     }
 
     private NEquipory.Slots slot(Coord c) {

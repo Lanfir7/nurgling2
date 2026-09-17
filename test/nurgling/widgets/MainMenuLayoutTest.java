@@ -11,4 +11,10 @@ class MainMenuLayoutTest {
         assertEquals(Coord.of(340, 105),
                 MainMenuLayout.frameSize(Coord.of(305, 85), Coord.of(35, 20)));
     }
+
+    @Test
+    void flushChromeLeavesTheMenuAtItsOwnSize() {
+        assertEquals(Coord.of(305, 85),
+                MainMenuLayout.frameSize(Coord.of(305, 85), NDraggableLayout.chrome()));
+    }
 }
