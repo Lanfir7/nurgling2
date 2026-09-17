@@ -2,11 +2,11 @@
   "id": "2026-09-17-hud-scale-text",
   "priority": 7,
   "summary": {
-    "ru": "Цифры на полосках здоровья, энергии и выносливости остаются чёткими, когда панель интерфейса увеличена или уменьшена.",
-    "en": "Numbers on health, energy and stamina bars stay sharp when a HUD panel is scaled up or down."
+    "ru": "Цифры на предметах и на полосках здоровья остаются чёткими, когда панель интерфейса увеличена или уменьшена.",
+    "en": "Numbers on items and on health, energy and stamina bars stay sharp when a HUD panel is scaled up or down."
   },
   "detail": {
-    "ru": "Если панель растянуть не на 100% (Ctrl+Shift+Alt и ползунок или Alt+колесо), подписи вроде «394 / 394 / 394» и «94.02%» больше не размываются и не ломаются: буквы рисуются заново под выбранный размер и садятся на пиксели.",
-    "en": "When a panel is not at 100% (Ctrl+Shift+Alt with the slider, or Alt+wheel), labels such as “394 / 394 / 394” and “94.02%” no longer blur or break: the glyphs are redrawn at the chosen size and snap to pixels."
+    "ru": "Если пояс, экипировку или другую панель растянуть не на 100% (Ctrl+Shift+Alt и ползунок или Alt+колесо), подписи вроде качества «25.5», количества и «394 / 394 / 394» больше не размываются: буквы рисуются заново под выбранный размер и садятся на пиксели.",
+    "en": "When the belt, equipment or another panel is not at 100% (Ctrl+Shift+Alt with the slider, or Alt+wheel), labels such as item quality “25.5”, stack counts and “394 / 394 / 394” no longer blur or break: the glyphs are redrawn at the chosen size and snap to pixels."
   }
 }

@@ -1,12 +1,11 @@
 package haven.res.ui.tt.drying;/* Preprocessed source code */
 import haven.*;
 import nurgling.NConfig;
-import nurgling.conf.FontSettings;
 import nurgling.conf.ItemQualityOverlaySettings;
+import nurgling.iteminfo.ItemOverlayRaster;
 import nurgling.tools.TanningRemaining;
 
 import java.awt.*;
-import java.awt.image.BufferedImage;
 
 /* >tt: haven.res.ui.tt.drying.Drying */
 @haven.FromResource(name = "ui/tt/drying", version = 3)
@@ -77,19 +76,7 @@ public class Drying extends ItemInfo implements GItem.MeterInfo, GItem.OverlayIn
         if (cachedOverlay != null && lastSettingsVersion == currentVersion && text.equals(lastText)) {
             return cachedOverlay;
         }
-        BufferedImage rendered = renderPercentText(text, settings);
-        
-        if (settings.showBackground) {
-            BufferedImage bi = new BufferedImage(rendered.getWidth(), rendered.getHeight(), BufferedImage.TYPE_INT_ARGB);
-            Graphics2D graphics = bi.createGraphics();
-            graphics.setColor(settings.backgroundColor);
-            graphics.fillRect(0, 0, bi.getWidth(), bi.getHeight());
-            graphics.drawImage(rendered, 0, 0, null);
-            graphics.dispose();
-            cachedOverlay = new TexI(bi);
-        } else {
-            cachedOverlay = new TexI(rendered);
-        }
+        cachedOverlay = ItemOverlayRaster.tex(text, settings.defaultColor, settings, Font.PLAIN);
         
         lastSettingsVersion = currentVersion;
         lastText = text;
@@ -106,63 +93,6 @@ public class Drying extends ItemInfo implements GItem.MeterInfo, GItem.OverlayIn
         }
         haven.Window wnd = wi.getparent(haven.Window.class);
         return wnd != null ? wnd.cap : null;
-    }
-    
-    private BufferedImage renderPercentText(String text, ItemQualityOverlaySettings settings) {
-        FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
-        Font font;
-        if (fontSettings != null) {
-            font = fontSettings.getFont(settings.fontFamily);
-            if (font == null) {
-                font = new Font("SansSerif", Font.PLAIN, UI.scale(settings.fontSize));
-            } else {
-                font = font.deriveFont(Font.PLAIN, UI.scale((float) settings.fontSize));
-            }
-        } else {
-            font = new Font("SansSerif", Font.PLAIN, UI.scale(settings.fontSize));
-        }
-        
-        Text.Foundry fnd = new Text.Foundry(font, settings.defaultColor).aa(true);
-        BufferedImage textImg = fnd.render(text, settings.defaultColor).img;
-        
-        if (settings.showOutline) {
-            return outlineWithWidth(textImg, settings.outlineColor, settings.outlineWidth);
-        } else {
-            return textImg;
-        }
-    }
-    
-    private BufferedImage outlineWithWidth(BufferedImage img, Color outlineColor, int width) {
-        if (width <= 0) return img;
-        
-        int w = img.getWidth();
-        int h = img.getHeight();
-        int padding = width;
-        
-        BufferedImage result = new BufferedImage(w + padding * 2, h + padding * 2, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = result.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        
-        BufferedImage coloredImg = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D cg = coloredImg.createGraphics();
-        cg.drawImage(img, 0, 0, null);
-        cg.setComposite(AlphaComposite.SrcIn);
-        cg.setColor(outlineColor);
-        cg.fillRect(0, 0, w, h);
-        cg.dispose();
-        
-        for (int dx = -width; dx <= width; dx++) {
-            for (int dy = -width; dy <= width; dy++) {
-                if (dx != 0 || dy != 0) {
-                    g.drawImage(coloredImg, padding + dx, padding + dy, null);
-                }
-            }
-        }
-        
-        g.drawImage(img, padding, padding, null);
-        g.dispose();
-        
-        return result;
     }
 
     public void drawoverlay(GOut g, Tex ol) {

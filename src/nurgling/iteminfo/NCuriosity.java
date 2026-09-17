@@ -337,19 +337,7 @@ public class NCuriosity extends Curiosity implements GItem.OverlayInfo<Tex>{
                     return cachedOverlay;
                 }
 
-                BufferedImage text = renderTimeText(currentRemaining, settings);
-
-                if (settings.showBackground) {
-                    BufferedImage bi = new BufferedImage(text.getWidth(), text.getHeight(), BufferedImage.TYPE_INT_ARGB);
-                    Graphics2D graphics = bi.createGraphics();
-                    graphics.setColor(settings.backgroundColor);
-                    graphics.fillRect(0, 0, bi.getWidth(), bi.getHeight());
-                    graphics.drawImage(text, 0, 0, null);
-                    graphics.dispose();
-                    cachedOverlay = new TexI(bi);
-                } else {
-                    cachedOverlay = new TexI(text);
-                }
+                cachedOverlay = ItemOverlayRaster.tex(shorttime(currentRemaining, settings.timeFormat), settings.defaultColor, settings, Font.PLAIN);
 
                 lastSettingsVersion = currentVersion;
                 lastRemaining = currentRemaining;
@@ -357,63 +345,6 @@ public class NCuriosity extends Curiosity implements GItem.OverlayInfo<Tex>{
             }
         }
         return null;
-    }
-
-    private BufferedImage renderTimeText(int seconds, ItemQualityOverlaySettings settings) {
-        FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
-        Font font;
-        if (fontSettings != null) {
-            font = fontSettings.getFont(settings.fontFamily);
-            if (font == null) {
-                font = new Font("SansSerif", Font.PLAIN, UI.scale(settings.fontSize));
-            } else {
-                font = font.deriveFont(Font.PLAIN, UI.scale((float) settings.fontSize));
-            }
-        } else {
-            font = new Font("SansSerif", Font.PLAIN, UI.scale(settings.fontSize));
-        }
-
-        String timeText = shorttime(seconds, settings.timeFormat);
-        Text.Foundry fnd = new Text.Foundry(font, settings.defaultColor).aa(true);
-        BufferedImage textImg = fnd.render(timeText, settings.defaultColor).img;
-
-        if (settings.showOutline) {
-            return outlineWithWidth(textImg, settings.outlineColor, settings.outlineWidth);
-        } else {
-            return textImg;
-        }
-    }
-
-    private BufferedImage outlineWithWidth(BufferedImage img, Color outlineColor, int width) {
-        if (width <= 0) return img;
-
-        int w = img.getWidth();
-        int h = img.getHeight();
-
-        BufferedImage result = new BufferedImage(w + width * 2, h + width * 2, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = result.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        BufferedImage coloredImg = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D cg = coloredImg.createGraphics();
-        cg.drawImage(img, 0, 0, null);
-        cg.setComposite(AlphaComposite.SrcIn);
-        cg.setColor(outlineColor);
-        cg.fillRect(0, 0, w, h);
-        cg.dispose();
-
-        for (int dx = -width; dx <= width; dx++) {
-            for (int dy = -width; dy <= width; dy++) {
-                if (dx != 0 || dy != 0) {
-                    g.drawImage(coloredImg, width + dx, width + dy, null);
-                }
-            }
-        }
-
-        g.drawImage(img, width, width, null);
-        g.dispose();
-
-        return result;
     }
 
     @Override

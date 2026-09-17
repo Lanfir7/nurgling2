@@ -1,12 +1,10 @@
 package haven.res.ui.tt.expire;/* Preprocessed source code */
 import haven.*;
-import haven.res.ui.tt.drying.Drying;
 import nurgling.NConfig;
-import nurgling.conf.FontSettings;
 import nurgling.conf.ItemQualityOverlaySettings;
+import nurgling.iteminfo.ItemOverlayRaster;
 
 import java.awt.*;
-import java.awt.image.BufferedImage;
 
 /* >tt: haven.res.ui.tt.expire.Expiring */
 @haven.FromResource(name = "ui/tt/expire", version = 6)
@@ -55,78 +53,7 @@ public class Expiring extends ItemInfo implements GItem.MeterInfo, GItem.Overlay
         }
         
         int currentPercent = (int)(meter() * 100);
-        
-        BufferedImage text = renderPercentText(currentPercent, settings);
-        
-        if (settings.showBackground) {
-            BufferedImage bi = new BufferedImage(text.getWidth(), text.getHeight(), BufferedImage.TYPE_INT_ARGB);
-            Graphics2D graphics = bi.createGraphics();
-            graphics.setColor(settings.backgroundColor);
-            graphics.fillRect(0, 0, bi.getWidth(), bi.getHeight());
-            graphics.drawImage(text, 0, 0, null);
-            graphics.dispose();
-            return new TexI(bi);
-        } else {
-            return new TexI(text);
-        }
-    }
-    
-    private BufferedImage renderPercentText(int percent, ItemQualityOverlaySettings settings) {
-        FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
-        Font font;
-        if (fontSettings != null) {
-            font = fontSettings.getFont(settings.fontFamily);
-            if (font == null) {
-                font = new Font("SansSerif", Font.PLAIN, UI.scale(settings.fontSize));
-            } else {
-                font = font.deriveFont(Font.PLAIN, UI.scale((float) settings.fontSize));
-            }
-        } else {
-            font = new Font("SansSerif", Font.PLAIN, UI.scale(settings.fontSize));
-        }
-        
-        String text = percent + "%";
-        Text.Foundry fnd = new Text.Foundry(font, settings.defaultColor).aa(true);
-        BufferedImage textImg = fnd.render(text, settings.defaultColor).img;
-        
-        if (settings.showOutline) {
-            return outlineWithWidth(textImg, settings.outlineColor, settings.outlineWidth);
-        } else {
-            return textImg;
-        }
-    }
-    
-    private BufferedImage outlineWithWidth(BufferedImage img, Color outlineColor, int width) {
-        if (width <= 0) return img;
-        
-        int w = img.getWidth();
-        int h = img.getHeight();
-        int padding = width;
-        
-        BufferedImage result = new BufferedImage(w + padding * 2, h + padding * 2, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = result.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        
-        BufferedImage coloredImg = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D cg = coloredImg.createGraphics();
-        cg.drawImage(img, 0, 0, null);
-        cg.setComposite(AlphaComposite.SrcIn);
-        cg.setColor(outlineColor);
-        cg.fillRect(0, 0, w, h);
-        cg.dispose();
-        
-        for (int dx = -width; dx <= width; dx++) {
-            for (int dy = -width; dy <= width; dy++) {
-                if (dx != 0 || dy != 0) {
-                    g.drawImage(coloredImg, padding + dx, padding + dy, null);
-                }
-            }
-        }
-        
-        g.drawImage(img, padding, padding, null);
-        g.dispose();
-        
-        return result;
+        return ItemOverlayRaster.tex(currentPercent + "%", settings.defaultColor, settings, Font.PLAIN);
     }
 
     public void drawoverlay(GOut g, Tex ol) {

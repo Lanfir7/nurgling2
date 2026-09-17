@@ -478,6 +478,25 @@ public class Text implements Disposable {
 	return(tex);
     }
 
+    /**
+     * A bitmap that can be re-rasterized at a widget scale instead of
+     * stretching a frozen image through Scale2D.
+     */
+    @FunctionalInterface
+    public interface ScaleRaster {
+	BufferedImage render(double scale);
+    }
+
+    /** Live texture: layout size stays at scale 1, glyphs redraw at {@code g.tfscale}. */
+    public static Tex live(ScaleRaster raster) {
+	BufferedImage img = raster.render(1.0);
+	return(new ScaleRasterTex(Utils.imgsz(img), img, raster));
+    }
+
+    public static Tex live(Coord layout, BufferedImage base, ScaleRaster raster) {
+	return(new ScaleRasterTex(layout, base, raster));
+    }
+
     public void dispose() {
 	if(tex != null)
 	    tex.dispose();
@@ -489,23 +508,27 @@ public class Text implements Disposable {
      * matches the screen pixels. Dest size stays the unscaled layout size
      * so Scale2D maps it 1:1 onto those pixels instead of stretching glyphs.
      */
-    public static class ScaledTex implements Tex {
-	private final Text src;
+    public static class ScaleRasterTex implements Tex {
+	private final Coord layout;
+	private final ScaleRaster raster;
+	private BufferedImage baseImg;
 	private TexI base;
 	private TexI hi;
 	private int hikey = 100;
 
-	ScaledTex(Text src) {
-	    this.src = src;
+	ScaleRasterTex(Coord layout, BufferedImage baseImg, ScaleRaster raster) {
+	    this.layout = layout;
+	    this.baseImg = baseImg;
+	    this.raster = raster;
 	}
 
 	public Coord sz() {
-	    return(src.sz());
+	    return(layout);
 	}
 
 	private TexI base() {
 	    if(base == null)
-		base = new TexI(src.img);
+		base = new TexI(baseImg != null ? baseImg : raster.render(1.0));
 	    return(base);
 	}
 
@@ -519,8 +542,7 @@ public class Text implements Disposable {
 		hi.dispose();
 		hi = null;
 	    }
-	    Text t = src.rescaled(key / 100.0);
-	    hi = new TexI(t.img);
+	    hi = new TexI(raster.render(key / 100.0));
 	    hikey = key;
 	    return(hi);
 	}
@@ -544,7 +566,7 @@ public class Text implements Disposable {
 		g.chcolor();
 	    Coord sul = g.tfpixel(c);
 	    Coord ssz = t.sz();
-	    if(!dsz.equals(src.sz()) && (src.sz().x > 0) && (src.sz().y > 0)) {
+	    if(!dsz.equals(layout) && (layout.x > 0) && (layout.y > 0)) {
 		ssz = new Coord(Math.max(1, Math.round(dsz.x * (key / 100.0f))),
 				Math.max(1, Math.round(dsz.y * (key / 100.0f))));
 	    }
@@ -554,7 +576,7 @@ public class Text implements Disposable {
 
 	public void render(GOut g, float[] gc, float[] tc) {
 	    TexI t = at(g);
-	    Coord osz = src.sz();
+	    Coord osz = layout;
 	    if((t == base()) || (osz.x < 1) || (osz.y < 1) || t.sz().equals(osz)) {
 		t.render(g, gc, tc);
 		return;
@@ -577,6 +599,13 @@ public class Text implements Disposable {
 		hi.dispose();
 		hi = null;
 	    }
+	}
+    }
+
+    /** HUD labels that already go through {@link Text#tex()}. */
+    public static class ScaledTex extends ScaleRasterTex {
+	ScaledTex(Text src) {
+	    super(src.sz(), src.img, s -> src.rescaled(s).img);
 	}
     }
     

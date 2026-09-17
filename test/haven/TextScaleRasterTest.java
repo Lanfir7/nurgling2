@@ -67,6 +67,25 @@ class TextScaleRasterTest {
     }
 
     @Test
+    void liveTexKeepsLayoutSizeAndIsScaleAware() {
+        Text.Foundry f = new Text.Foundry(new Font("SansSerif", Font.PLAIN, 12), Color.WHITE).aa(true);
+        Tex tex = Text.live(s -> f.scaled(s).render("25.5").img);
+        assertEquals(f.render("25.5").sz(), tex.sz());
+        assertTrue(tex instanceof Text.ScaleRasterTex);
+        assertTrue(f.scaled(1.5).render("25.5").sz().x > f.render("25.5").sz().x);
+    }
+
+    @Test
+    void numberInfoOverlayIsScaleAware() {
+        GItem.NumberInfo info = new GItem.NumberInfo() {
+            public int itemnum() { return 4; }
+        };
+        Tex tex = info.overlay();
+        assertTrue(tex instanceof Text.ScaleRasterTex);
+        assertTrue(tex.sz().x > 0);
+    }
+
+    @Test
     void tfpixelSnapsThroughWidgetScale() {
         GOut g = new GOut(null, new BufPipe(), Coord.of(200, 200));
         g.tfscale = 1.5f;

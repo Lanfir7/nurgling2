@@ -32,8 +32,6 @@ import java.util.*;
 import java.util.function.*;
 import haven.render.*;
 import java.awt.Color;
-import java.awt.Font;
-import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 
 public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSprite.Owner, RandomSource {
@@ -131,7 +129,10 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 	}
 
 	public default Tex overlay() {
-	    return(new TexI(GItem.NumberInfo.numrender(itemnum(), numcolor())));
+	    Color col = numcolor();
+	    Color stroke = Utils.contrast(col);
+	    String t = Integer.toString(itemnum());
+	    return(Text.live(s -> Utils.outline2(Text.render(t, col).rescaled(s).img, stroke)));
 	}
 
 	public default void drawoverlay(GOut g, Tex tex) {
@@ -233,80 +234,11 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 			}
 		}
 		
-		BufferedImage text = renderAmountText(num, textColor, settings);
-		
-		if (settings.showBackground) {
-			BufferedImage bi = new BufferedImage(text.getWidth(), text.getHeight(), BufferedImage.TYPE_INT_ARGB);
-			java.awt.Graphics2D graphics = bi.createGraphics();
-			graphics.setColor(settings.backgroundColor);
-			graphics.fillRect(0, 0, bi.getWidth(), bi.getHeight());
-			graphics.drawImage(text, 0, 0, null);
-			graphics.dispose();
-			cachedOverlay = new TexI(bi);
-		} else {
-			cachedOverlay = new TexI(text);
-		}
+		String text = settings.showAmountPrefix ? ("×" + num) : Integer.toString(num);
+		cachedOverlay = nurgling.iteminfo.ItemOverlayRaster.tex(text, textColor, settings);
 		
 		lastSettingsVersion = settingsVersion;
 		return cachedOverlay;
-	}
-	
-	private BufferedImage renderAmountText(int amount, Color color, nurgling.conf.ItemQualityOverlaySettings settings) {
-		nurgling.conf.FontSettings fontSettings = (nurgling.conf.FontSettings) nurgling.NConfig.get(nurgling.NConfig.Key.fonts);
-		Font font;
-		if (fontSettings != null) {
-			font = fontSettings.getFont(settings.fontFamily);
-			if (font == null) {
-				font = new Font("SansSerif", Font.BOLD, UI.scale(settings.fontSize));
-			} else {
-				font = font.deriveFont(Font.BOLD, UI.scale((float) settings.fontSize));
-			}
-		} else {
-			font = new Font("SansSerif", Font.BOLD, UI.scale(settings.fontSize));
-		}
-		
-		String text = settings.showAmountPrefix ? ("×" + amount) : Integer.toString(amount);
-		Text.Foundry fnd = new Text.Foundry(font, color).aa(true);
-		BufferedImage textImg = fnd.render(text, color).img;
-		
-		if (settings.showOutline) {
-			return outlineWithWidth(textImg, settings.outlineColor, settings.outlineWidth);
-		} else {
-			return textImg;
-		}
-	}
-	
-	private BufferedImage outlineWithWidth(BufferedImage img, Color outlineColor, int width) {
-		if (width <= 0) return img;
-		
-		int w = img.getWidth();
-		int h = img.getHeight();
-		int padding = width;
-		
-		BufferedImage result = new BufferedImage(w + padding * 2, h + padding * 2, BufferedImage.TYPE_INT_ARGB);
-		java.awt.Graphics2D g = result.createGraphics();
-		g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-		
-		BufferedImage coloredImg = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-		java.awt.Graphics2D cg = coloredImg.createGraphics();
-		cg.drawImage(img, 0, 0, null);
-		cg.setComposite(java.awt.AlphaComposite.SrcIn);
-		cg.setColor(outlineColor);
-		cg.fillRect(0, 0, w, h);
-		cg.dispose();
-		
-		for (int dx = -width; dx <= width; dx++) {
-			for (int dy = -width; dy <= width; dy++) {
-				if (dx != 0 || dy != 0) {
-					g.drawImage(coloredImg, padding + dx, padding + dy, null);
-				}
-			}
-		}
-		
-		g.drawImage(img, padding, padding, null);
-		g.dispose();
-		
-		return result;
 	}
 	
 	public void drawoverlay(GOut g, Tex tex) {

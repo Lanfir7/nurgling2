@@ -2,12 +2,8 @@ package haven.res.ui.tt.stackn;/* Preprocessed source code */
 import haven.*;
 import nurgling.NConfig;
 import nurgling.NGItem;
-import nurgling.conf.FontSettings;
 import nurgling.conf.ItemQualityOverlaySettings;
-import nurgling.conf.ItemQualityOverlaySettings.Corner;
-
-import java.awt.*;
-import java.awt.image.BufferedImage;
+import nurgling.iteminfo.ItemOverlayRaster;
 
 /* >tt: Stack */
 @FromResource(name = "ui/tt/stackn", version = 3)
@@ -41,7 +37,7 @@ public class Stack extends ItemInfo.Name implements GItem.OverlayInfo<Tex> {
 			ItemQualityOverlaySettings newSettings = (ItemQualityOverlaySettings) NConfig.get(NConfig.Key.stackQualityOverlay);
 			if (newSettings == null) {
 				newSettings = new ItemQualityOverlaySettings();
-				newSettings.corner = Corner.TOP_LEFT;
+				newSettings.corner = ItemQualityOverlaySettings.Corner.TOP_LEFT;
 			}
 			if (cachedSettings != newSettings || forceRefresh) {
 				cachedSettings = newSettings;
@@ -78,95 +74,13 @@ public class Stack extends ItemInfo.Name implements GItem.OverlayInfo<Tex> {
 			}
 			
 			ItemQualityOverlaySettings settings = getSettings();
-			BufferedImage text = renderQualityText(q, settings);
-			
-			if (settings.showBackground) {
-				BufferedImage bi = new BufferedImage(text.getWidth(), text.getHeight(), BufferedImage.TYPE_INT_ARGB);
-				Graphics2D graphics = bi.createGraphics();
-				graphics.setColor(settings.backgroundColor);
-				graphics.fillRect(0, 0, bi.getWidth(), bi.getHeight());
-				graphics.drawImage(text, 0, 0, null);
-				graphics.dispose();
-				cachedOverlay = new TexI(bi);
-			} else {
-				cachedOverlay = new TexI(text);
-			}
+			cachedOverlay = ItemOverlayRaster.tex(ItemOverlayRaster.qualityText(q, settings), settings.getColorForQuality(q), settings);
 			
 			lastQuality = q;
 			lastSettingsVersion = currentVersion;
 			return cachedOverlay;
 		}
 		return null;
-	}
-	
-	private BufferedImage renderQualityText(double quality, ItemQualityOverlaySettings settings) {
-		FontSettings fontSettings = (FontSettings) NConfig.get(NConfig.Key.fonts);
-		Font font;
-		if (fontSettings != null) {
-			font = fontSettings.getFont(settings.fontFamily);
-			if (font == null) {
-				font = new Font("SansSerif", Font.BOLD, UI.scale(settings.fontSize));
-			} else {
-				font = font.deriveFont(Font.BOLD, UI.scale((float) settings.fontSize));
-			}
-		} else {
-			font = new Font("SansSerif", Font.BOLD, UI.scale(settings.fontSize));
-		}
-		
-		String qualityText;
-		if (settings.showDecimal) {
-			qualityText = String.format("%.1f", quality);
-		} else {
-			qualityText = Integer.toString((int) Math.round(quality));
-		}
-		
-		Color textColor = settings.getColorForQuality(quality);
-		Text.Foundry fnd = new Text.Foundry(font, textColor).aa(true);
-		BufferedImage textImg = fnd.render(qualityText, textColor).img;
-		
-		if (settings.showOutline) {
-			return outlineWithWidth(textImg, settings.outlineColor, settings.outlineWidth);
-		} else {
-			return textImg;
-		}
-	}
-	
-	private BufferedImage outlineWithWidth(BufferedImage img, Color outlineColor, int width) {
-		if (width <= 0) {
-			return img;
-		}
-		
-		int w = img.getWidth();
-		int h = img.getHeight();
-		int padding = width;
-		
-		BufferedImage result = new BufferedImage(w + padding * 2, h + padding * 2, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = result.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		
-		// Create a colored version of the image for outline
-		BufferedImage coloredImg = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D cg = coloredImg.createGraphics();
-		cg.drawImage(img, 0, 0, null);
-		cg.setComposite(AlphaComposite.SrcIn);
-		cg.setColor(outlineColor);
-		cg.fillRect(0, 0, w, h);
-		cg.dispose();
-		
-		// Draw outline in all directions
-		for (int dx = -width; dx <= width; dx++) {
-			for (int dy = -width; dy <= width; dy++) {
-				if (dx != 0 || dy != 0) {
-					g.drawImage(coloredImg, padding + dx, padding + dy, null);
-				}
-			}
-		}
-		
-		// Draw original image on top
-		g.drawImage(img, padding, padding, null);
-		g.dispose();
-		
-		return result;
 	}
 
 	public void drawoverlay(GOut g, Tex ol) {
