@@ -1,2 +1,3 @@
-java -jar nurgling_launcher.jar update https://raw.githubusercontent.com/Lanfir7/nurgling-release/stable/ -jar ./hafen.jar
-pause
+@echo off
+rem Compatibility entry point: the current client requires Java 21 or newer.
+call "%~dp0run_updater.bat"

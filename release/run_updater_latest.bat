@@ -1,2 +1,3 @@
-java -jar nurgling_launcher.jar update https://raw.githubusercontent.com/Lanfir7/nurgling-release/latest/ -Dsun.java2d.uiScale.enabled=false -Dsun.java2d.win.uiScaleX=1.0 -Dsun.java2d.win.uiScaleY=1.0 --add-exports=java.desktop/sun.awt=ALL-UNNAMED -Xss8m -Xms1024m -Xmx4096m -jar ./hafen.jar
-pause
+@echo off
+rem Legacy entry point: all current releases use the master update feed.
+call "%~dp0run_updater.bat"

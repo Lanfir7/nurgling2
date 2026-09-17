@@ -1,5 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+cd /d "%~dp0"
 
 where java >nul 2>&1
 if errorlevel 1 (
@@ -25,7 +26,7 @@ if !JAVA_MAJOR! LSS 21 (
   exit /b 1
 )
 
-java -jar nurgling_launcher.jar update https://raw.githubusercontent.com/Lanfir7/nurgling-release/stable/ ^
+java -jar nurgling_launcher.jar update https://raw.githubusercontent.com/Lanfir7/nurgling2/master/release/ ^
   -Dsun.java2d.uiScale.enabled=false ^
   -Xms512m -Xmx4g -Xss2m ^
   -XX:+UseZGC -XX:+IgnoreUnrecognizedVMOptions -XX:+ZGenerational ^

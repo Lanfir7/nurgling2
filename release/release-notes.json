@@ -93,9 +93,34 @@
     "2026-09-17-macro-window-pos",
     "2026-09-17-minimap-dock-click",
     "2026-09-17-news-details-search",
-    "2026-09-17-session-macro-controls"
+    "2026-09-17-session-macro-controls",
+    "2026-09-17-unified-client-updates"
   ],
   "releases": [
+    {
+      "id": "2.103.206",
+      "date": "2026-09-16",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Обычный клиент и Steam переходят на общий источник обновлений с сохранением настроек."
+        ],
+        "en": [
+          "The standalone and Steam clients move to a shared update source while keeping your settings."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Продолжайте запускать клиент привычным способом. При обновлении стандартный адрес переключается автоматически, а старые ссылки продолжают работать. В Steam остаётся прежняя подписка на Nurgling Evolution; профили, карты и настройки переносить не нужно."
+        ],
+        "en": [
+          "Keep launching the client as usual. The default update address switches automatically, and old links keep working. Steam keeps the existing Nurgling Evolution subscription; no need to move profiles, maps or settings."
+        ]
+      }
+    },
     {
       "id": "2.103.205",
       "date": "2026-09-16",
