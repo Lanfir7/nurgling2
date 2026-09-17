@@ -49,6 +49,10 @@ public class Text implements Disposable {
     public static final Foundry std;
     public final BufferedImage img;
     public final String text;
+    /** Furnace that produced this bitmap; used to re-rasterize at a widget scale. */
+    public Furnace fnd;
+    /** Fill colour when the furnace is a Foundry; null means the furnace's default. */
+    public Color col;
     private Tex tex;
     public static final Color black = Color.BLACK;
     public static final Color white = Color.WHITE;
@@ -124,12 +128,31 @@ public class Text implements Disposable {
 	public Text renderf(String fmt, Object... args) {
 	    return(render(String.format(fmt, args)));
 	}
+
+	/** Quantize a widget scale so rasterized glyphs stay stable while the slider moves. */
+	public static int scalekey(double s) {
+	    return(Math.max(1, (int)Math.round(s * 100.0)));
+	}
+
+	/**
+	 * A furnace that draws the same glyphs at {@code s} times this one's
+	 * pixel size. The default keeps the bitmap and lets the caller stretch
+	 * it; foundries that know their font override this and re-rasterize.
+	 */
+	public Furnace scaled(double s) {
+	    return(this);
+	}
     }
 
     public static abstract class Forge extends Furnace {
 	public abstract Slug render(String text);
 	public abstract int height();
 	public abstract Coord strsize(String text);
+
+	@Override
+	public Forge scaled(double s) {
+	    return(this);
+	}
     }
 
     public static class Foundry extends Forge {
@@ -163,6 +186,24 @@ public class Text implements Disposable {
 	public Foundry aa(boolean aa) {
 	    this.aa = aa;
 	    return(this);
+	}
+
+	private Foundry scaledcache;
+	private int scaledkey = 100;
+
+	@Override
+	public Foundry scaled(double s) {
+	    int key = scalekey(s);
+	    if(key == 100)
+		return(this);
+	    if((scaledcache != null) && (scaledkey == key))
+		return(scaledcache);
+	    float psz = Math.max(1f, Math.round(font.getSize2D() * (key / 100f)));
+	    Foundry f = new Foundry(font.deriveFont(psz), defcol);
+	    f.aa = aa;
+	    scaledcache = f;
+	    scaledkey = key;
+	    return(f);
 	}
 
 	public int height() {
@@ -209,7 +250,10 @@ public class Text implements Disposable {
 	    /* See height() comment. */
 	    g.drawString(text, 0, m.getLeading() + m.getAscent());
 	    g.dispose();
-	    return(new Line(text, img, m));
+	    Line ln = new Line(text, img, m);
+	    ln.fnd = this;
+	    ln.col = c;
+	    return(ln);
 	}
 		
 	public Line render(String text) {
@@ -240,7 +284,10 @@ public class Text implements Disposable {
 	    g.setColor(c);
 	    g.drawString(text, 1, base);
 	    g.dispose();
-	    return(new Line(text, img, m));
+	    Line ln = new Line(text, img, m);
+	    ln.fnd = this;
+	    ln.col = c;
+	    return(ln);
 	}
 
 	public Line renderstroked(String text, Color c) {
@@ -306,7 +353,10 @@ public class Text implements Disposable {
 
 	public Slug render(String text) {
 	    Slug bk = back.render(text);
-	    return(new OSlug(bk, proc(bk)));
+	    OSlug ret = new OSlug(bk, proc(bk));
+	    ret.fnd = this;
+	    ret.col = bk.col;
+	    return(ret);
 	}
 
 	public int height() {
@@ -407,15 +457,127 @@ public class Text implements Disposable {
 	return(render(text, Color.WHITE));
     }
 	
+    /**
+     * Re-rasterize these glyphs at {@code scale} instead of stretching the
+     * existing bitmap. Layout still uses {@link #sz()} of the original.
+     */
+    public Text rescaled(double scale) {
+	if((fnd == null) || (text == null))
+	    return(this);
+	Furnace sf = fnd.scaled(scale);
+	if(sf == fnd)
+	    return(this);
+	if((col != null) && (sf instanceof Foundry))
+	    return(((Foundry)sf).render(text, col));
+	return(sf.render(text));
+    }
+
     public Tex tex() {
 	if(tex == null)
-	    tex = new TexI(img);
+	    tex = (fnd != null) ? new ScaledTex(this) : new TexI(img);
 	return(tex);
     }
 
     public void dispose() {
 	if(tex != null)
 	    tex.dispose();
+    }
+
+    /**
+     * A text texture that keeps its layout size but, when drawn under a
+     * widget scale, samples a freshly rasterized bitmap whose font size
+     * matches the screen pixels. Dest size stays the unscaled layout size
+     * so Scale2D maps it 1:1 onto those pixels instead of stretching glyphs.
+     */
+    public static class ScaledTex implements Tex {
+	private final Text src;
+	private TexI base;
+	private TexI hi;
+	private int hikey = 100;
+
+	ScaledTex(Text src) {
+	    this.src = src;
+	}
+
+	public Coord sz() {
+	    return(src.sz());
+	}
+
+	private TexI base() {
+	    if(base == null)
+		base = new TexI(src.img);
+	    return(base);
+	}
+
+	private TexI at(GOut g) {
+	    int key = Furnace.scalekey(g.tfscale);
+	    if(key == 100)
+		return(base());
+	    if((hi != null) && (hikey == key))
+		return(hi);
+	    if(hi != null) {
+		hi.dispose();
+		hi = null;
+	    }
+	    Text t = src.rescaled(key / 100.0);
+	    hi = new TexI(t.img);
+	    hikey = key;
+	    return(hi);
+	}
+
+	public void crender(GOut g, Coord c, Coord dsz, Coord cul, Coord cbr) {
+	    int key = Furnace.scalekey(g.tfscale);
+	    if((key == 100) || (g.tfbase == null)) {
+		TexI t = at(g);
+		if(key != 100)
+		    t.filter(haven.render.Texture.Filter.LINEAR);
+		t.crender(g, c, dsz, cul, cbr);
+		return;
+	    }
+	    TexI t = at(g);
+	    haven.render.Pipe saved = g.state().copy();
+	    haven.render.BaseColor colst = g.curstate(haven.render.BaseColor.slot);
+	    g.state().copy(g.tfbase);
+	    if(colst != null)
+		g.usestate(colst);
+	    else
+		g.chcolor();
+	    Coord sul = g.tfpixel(c);
+	    Coord ssz = t.sz();
+	    if(!dsz.equals(src.sz()) && (src.sz().x > 0) && (src.sz().y > 0)) {
+		ssz = new Coord(Math.max(1, Math.round(dsz.x * (key / 100.0f))),
+				Math.max(1, Math.round(dsz.y * (key / 100.0f))));
+	    }
+	    t.crender(g, sul, ssz, g.tfpixel(cul), g.tfpixel(cbr));
+	    g.state().copy(saved);
+	}
+
+	public void render(GOut g, float[] gc, float[] tc) {
+	    TexI t = at(g);
+	    Coord osz = src.sz();
+	    if((t == base()) || (osz.x < 1) || (osz.y < 1) || t.sz().equals(osz)) {
+		t.render(g, gc, tc);
+		return;
+	    }
+	    float sx = (float)t.sz().x / osz.x, sy = (float)t.sz().y / osz.y;
+	    float[] ntc = new float[tc.length];
+	    for(int i = 0; i < tc.length; i += 2) {
+		ntc[i] = tc[i] * sx;
+		ntc[i + 1] = tc[i + 1] * sy;
+	    }
+	    t.render(g, gc, ntc);
+	}
+
+	public void dispose() {
+	    if(base != null) {
+		base.dispose();
+		base = null;
+	    }
+	    if(hi != null) {
+		hi.dispose();
+		hi = null;
+	    }
+	}
     }
     
     public static void main(String[] args) throws Exception {

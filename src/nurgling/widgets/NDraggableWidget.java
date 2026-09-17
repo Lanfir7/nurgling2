@@ -502,7 +502,8 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
      * Draw the children, putting the content through a magnifying projection when the
      * panel is scaled. The content keeps drawing at its natural size and coordinates;
      * only the transform that turns those into screen pixels is different, so artwork
-     * and text scale together without the content knowing about it.
+     * scales without the content knowing about it. Text reads {@link GOut#tfscale} and
+     * re-rasterizes glyphs at the screen size so labels stay sharp.
      */
     @Override
     public void draw(GOut g, boolean strict)
@@ -519,11 +520,18 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
             if(wdg == content)
             {
                 haven.render.Pipe def = g.basicstate();
-                new MiniMap.Scale2D(g.tx, (float)uiscale).apply(def);
+                float f = Text.Furnace.scalekey(uiscale) / 100f;
+                new MiniMap.Scale2D(g.tx, f).apply(def);
                 /* A loose clip in unscaled space: the content's own rectangle is larger
                  * than the frame when shrunk, and the projection is what brings it back
-                 * inside, so clipping to the frame here would cut the drawing short. */
-                wdg.draw(new GOut(g.out, def, g.root().sz()).reclipl(g.tx.add(wdg.c), wdg.sz));
+                 * inside, so clipping to the frame here would cut the drawing short.
+                 * tfscale lets text re-rasterize at the screen size instead of stretching
+                 * a bitmap through this projection. */
+                GOut cg = new GOut(g.out, def, g.root().sz());
+                cg.tfscale = f;
+                cg.tfbase = g.basicstate();
+                cg.tforigin = g.tx;
+                wdg.draw(cg.reclipl(g.tx.add(wdg.c), wdg.sz));
             }
             else
             {

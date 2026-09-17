@@ -41,6 +41,15 @@ public class GOut {
 									   new VertexArray.Layout.Input(ColorTex.texc, new VectorFormat(2, NumberFormat.FLOAT32), 0, 8, 16));
     public final Render out;
     public Coord ul, br, tx;
+    /**
+     * Uniform 2D scale applied by a parent while children still draw in their
+     * natural coordinates. Text uses this to re-rasterize glyphs instead of
+     * stretching a bitmap. 1 means unscaled.
+     */
+    public float tfscale = 1f;
+    /** Unscaled 2D pipe and origin of {@link #tfscale}, used to draw text on integer pixels. */
+    public haven.render.Pipe tfbase = null;
+    public Coord tforigin = Coord.z;
     private final GOut root;
     private final Pipe def2d, cur2d;
 
@@ -49,6 +58,9 @@ public class GOut {
 	this.ul = o.ul;
 	this.br = o.br;
 	this.tx = o.tx;
+	this.tfscale = o.tfscale;
+	this.tfbase = o.tfbase;
+	this.tforigin = o.tforigin;
 	this.root = o.root;
 	this.def2d = o.def2d;
 	this.cur2d = def2d.copy();
@@ -61,6 +73,13 @@ public class GOut {
 	this.root = this;
 	this.def2d = def2d;
 	this.cur2d = def2d.copy();
+    }
+
+    public Coord tfpixel(Coord p) {
+	if(Math.abs(tfscale - 1f) < 0.001f)
+	    return(p);
+	return(new Coord(Math.round(tforigin.x + ((p.x - tforigin.x) * tfscale)),
+			 Math.round(tforigin.y + ((p.y - tforigin.y) * tfscale))));
     }
 
     public GOut root() {

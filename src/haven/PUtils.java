@@ -386,6 +386,24 @@ public class PUtils {
 
 	public Coord tloff() {return(Coord.of(grad + brad));}
 	public Coord broff() {return(Coord.of(grad + brad));}
+
+	private BlurFurn scaledcache;
+	private int scaledkey = 100;
+
+	@Override
+	public BlurFurn scaled(double s) {
+	    int key = Text.Furnace.scalekey(s);
+	    if(key == 100)
+		return(this);
+	    if((scaledcache != null) && (scaledkey == key))
+		return(scaledcache);
+	    Text.Forge sb = back.scaled(s);
+	    int g = Math.max(1, (int)Math.round(grad * (key / 100.0)));
+	    int b = Math.max(1, (int)Math.round(brad * (key / 100.0)));
+	    scaledcache = new BlurFurn(sb, g, b, col);
+	    scaledkey = key;
+	    return(scaledcache);
+	}
     }
 
     public static class TexFurn extends Text.OffsetForge {
@@ -408,6 +426,21 @@ public class PUtils {
 
 	public Coord tloff() {return(Coord.z);}
 	public Coord broff() {return(Coord.z);}
+
+	private TexFurn scaledcache;
+	private int scaledkey = 100;
+
+	@Override
+	public TexFurn scaled(double s) {
+	    int key = Text.Furnace.scalekey(s);
+	    if(key == 100)
+		return(this);
+	    if((scaledcache != null) && (scaledkey == key))
+		return(scaledcache);
+	    scaledcache = new TexFurn(back.scaled(s), tex);
+	    scaledkey = key;
+	    return(scaledcache);
+	}
     }
 
     /* One-shot version of what BlurFurn does per-Forge: lay a tight dark halo behind an
