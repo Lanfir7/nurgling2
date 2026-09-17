@@ -83,6 +83,13 @@ public class Frame extends Widget {
 	return(sz.sub(box.bisz()));
     }
 
+    public void resize(Coord nsz) {
+	super.resize(nsz);
+	Coord inner = inner();
+	for(Widget w = child; w != null; w = w.next)
+	    w.resize(inner);
+    }
+
     public Coord xlate(Coord c, boolean in) {
 	if(in)
 	    return(c.add(box.btloff()));

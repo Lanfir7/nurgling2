@@ -505,10 +505,12 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
     /**
      * Drops do not go through {@link #mousedown}; without this they would use
      * the content's unscaled rectangle and miss the magnified panel.
+     * Inventory take/drop uses {@link DTarget.ItemEvent}, not
+     * {@link DropTarget.DropEvent}.
      */
     @Override
     public boolean handle(Event ev) {
-        if(scaled() && (ev instanceof DropTarget.DropEvent))
+        if(scaled() && NDraggableLayout.remapPointerToContent(ev))
             return(dispatchcontent((PointerEvent)ev));
         return(super.handle(ev));
     }

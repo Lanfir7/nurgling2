@@ -20,14 +20,14 @@ public class NRelation extends Sprite implements RenderTree.Node, PView.Render2D
 	static final TexI g1 = new TexI(Resource.loadsimg("marks/agifactor/g1"));
 	static final TexI g2 = new TexI(Resource.loadsimg("marks/agifactor/g2"));
 	static final TexI g3 = new TexI(Resource.loadsimg("marks/agifactor/g3"));
-	TexI mip = null;
-	TexI eip = null;
+	Tex mip = null;
+	Tex eip = null;
 	Coord3f pos = new Coord3f(0, 0, 25);
 	TexI stance = null;
 
 	double duration_left = 0;
 	double sub_duration_left = 0;
-	TexI duration_lefttex = null;
+	Tex duration_lefttex = null;
 	TexI agidelta = uk;
 	double bar_delta = 0;
 	double bar_sub_delta = 0;
@@ -35,9 +35,9 @@ public class NRelation extends Sprite implements RenderTree.Node, PView.Render2D
 	public static class RelBuff
 	{
 		public TexI bg;
-		public TexI text;
+		public Tex text;
 
-		public RelBuff( TexI text,TexI bg)
+		public RelBuff(Tex text, TexI bg)
 		{
 			this.bg = bg;
 			this.text = text;
@@ -106,8 +106,8 @@ public class NRelation extends Sprite implements RenderTree.Node, PView.Render2D
 			if(NUtils.getGameUI().fv.lsrel.get(i)!=null && NUtils.getGameUI().fv.lsrel.get(i).gobid == gob.id)
 			{
 				Fightview.Relation rel = NUtils.getGameUI().fv.lsrel.get(i);
-				mip = (TexI)NStyle.mip.render(String.valueOf(rel.ip)).tex();
-				eip = (TexI)NStyle.eip.render(String.valueOf(rel.oip)).tex();
+				mip = NStyle.mip.render(String.valueOf(rel.ip)).tex();
+				eip = NStyle.eip.render(String.valueOf(rel.oip)).tex();
 				for(Widget buff: rel.buffs.children())
 				{
 					if(buff instanceof Buff)
@@ -123,19 +123,19 @@ public class NRelation extends Sprite implements RenderTree.Node, PView.Render2D
 									int val = (int) Math.min(10, b.ameter() / 10);
 									if (resnm.equals("paginae/atk/cornered"))
 									{
-										buffs.add(new RelBuff((TexI) NStyle.openings.render(String.valueOf(b.ameter())).tex(), corn.get(val)));
+										buffs.add(new RelBuff(NStyle.openings.render(String.valueOf(b.ameter())).tex(), corn.get(val)));
 									}
 									else if (resnm.equals("paginae/atk/dizzy"))
 									{
-										buffs.add(new RelBuff((TexI) NStyle.openings.render(String.valueOf(b.ameter())).tex(), dizz.get(val)));
+										buffs.add(new RelBuff(NStyle.openings.render(String.valueOf(b.ameter())).tex(), dizz.get(val)));
 									}
 									else if (resnm.equals("paginae/atk/reeling"))
 									{
-										buffs.add(new RelBuff((TexI) NStyle.openings.render(String.valueOf(b.ameter())).tex(), reel.get(val)));
+										buffs.add(new RelBuff(NStyle.openings.render(String.valueOf(b.ameter())).tex(), reel.get(val)));
 									}
 									else if (resnm.equals("paginae/atk/offbalance"))
 									{
-										buffs.add(new RelBuff((TexI) NStyle.openings.render(String.valueOf(b.ameter())).tex(), gren.get(val)));
+										buffs.add(new RelBuff(NStyle.openings.render(String.valueOf(b.ameter())).tex(), gren.get(val)));
 									}
 									else
 									{
@@ -150,7 +150,7 @@ public class NRelation extends Sprite implements RenderTree.Node, PView.Render2D
 				{
 					duration_left = rel.actend - Utils.rtime();
 					bar_delta = duration_left/rel.duration;
-					duration_lefttex = (TexI) NStyle.openings.render(String.format("%.2f", duration_left)).tex();
+					duration_lefttex = NStyle.openings.render(String.format("%.2f", duration_left)).tex();
 				}
 				else
 				{
@@ -159,7 +159,7 @@ public class NRelation extends Sprite implements RenderTree.Node, PView.Render2D
 					{
 						duration_left = rel.pairend.a - Utils.rtime();
 						bar_delta = duration_left/rel.pairdur.a;
-						duration_lefttex = (TexI) NStyle.openings.render(String.format("%.2f", duration_left)).tex();
+						duration_lefttex = NStyle.openings.render(String.format("%.2f", duration_left)).tex();
 						if(duration_left<0)
 						{
 							sub_duration_left = rel.pairend.b - Utils.rtime();

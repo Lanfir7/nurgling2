@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-combat-overlay-crash",
+  "priority": 9,
+  "summary": {
+    "ru": "Клиент больше не вылетает в момент начала боя.",
+    "en": "The client no longer crashes when a fight starts."
+  },
+  "detail": {
+    "ru": "При входе в бой окно игры больше не закрывается само. Над противником по-прежнему видны очки инициативы, открытия и таймер приёма.",
+    "en": "Entering combat no longer closes the client. Initiative, openings and the move timer still appear above the opponent."
+  }
+}

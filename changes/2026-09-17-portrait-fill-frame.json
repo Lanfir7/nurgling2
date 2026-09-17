@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-portrait-fill-frame",
+  "priority": 6,
+  "summary": {
+    "ru": "Портрет персонажа снова заполняет рамку целиком.",
+    "en": "The character portrait fills its frame again."
+  },
+  "detail": {
+    "ru": "В углу экрана портрет больше не оставляет чёрную кайму внутри золотой рамки: кукла занимает всё окно, как раньше.",
+    "en": "The corner portrait no longer leaves a black margin inside the gold frame: the doll fills the window again."
+  }
+}

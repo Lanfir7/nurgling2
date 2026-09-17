@@ -88,6 +88,12 @@ public class Avaview extends PView {
 	basic(Projection.class, Projection.frustum(-field, field, -aspect * field, aspect * field, 1, 5000));
     }
 
+    public void resize(Coord nsz) {
+	super.resize(nsz);
+	if((sz.x > 0) && (sz.y > 0))
+	    makeproj();
+    }
+
     public void uimsg(String msg, Object... args) {
 	if(msg == "upd") {
 	    if(args[0] == null)

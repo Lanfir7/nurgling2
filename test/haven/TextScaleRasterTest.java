@@ -10,6 +10,7 @@ import java.awt.Color;
 import java.awt.Font;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,6 +65,7 @@ class TextScaleRasterTest {
         assertTrue(scaled.sz().y > base.sz().y);
         assertEquals(base.sz(), base.tex().sz());
         assertTrue(base.tex() instanceof Text.ScaledTex);
+        assertFalse(base.tex() instanceof TexI);
     }
 
     @Test

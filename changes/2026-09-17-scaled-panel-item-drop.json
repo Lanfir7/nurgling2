@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-scaled-panel-item-drop",
+  "priority": 8,
+  "summary": {
+    "ru": "На увеличенном поясе и панели снаряжения вещи снимаются и вешаются по всей видимой клетке.",
+    "en": "On a scaled belt or equipment bar, items pick up and drop across the whole visible slot."
+  },
+  "detail": {
+    "ru": "Если пояс или быструю экипировку растянуть не на 100% (Ctrl+Shift+Alt и ползунок или Alt+колесо), снимать и вешать шмотку можно по всей увеличенной клетке. Раньше картинка росла, а попадать нужно было в старый маленький квадрат.",
+    "en": "When the belt or equipment proxy is not at 100% (Ctrl+Shift+Alt with the slider, or Alt+wheel), taking and hanging items uses the whole enlarged slot. The picture used to grow while you still had to hit the old small square."
+  }
+}

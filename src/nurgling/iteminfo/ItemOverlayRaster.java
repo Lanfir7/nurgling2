@@ -24,7 +24,7 @@ public final class ItemOverlayRaster {
 
     public static String qualityText(double quality, ItemQualityOverlaySettings settings) {
         if(settings.showDecimal)
-            return(String.format("%.1f", quality));
+            return(String.format(java.util.Locale.US, "%.1f", quality));
         return(Integer.toString((int)Math.round(quality)));
     }
 

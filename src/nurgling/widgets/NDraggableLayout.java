@@ -1,6 +1,9 @@
 package nurgling.widgets;
 
 import haven.Coord;
+import haven.DTarget;
+import haven.DropTarget;
+import haven.Widget;
 
 /**
  * Geometry for a draggable HUD frame. Lock and visibility controls sit on the
@@ -58,5 +61,14 @@ public final class NDraggableLayout {
             return false;
         Coord content = contentSize == null ? Coord.z : contentSize;
         return toContent(inFrame, scale, contentOrigin).isect(Coord.z, content);
+    }
+
+    /**
+     * Item take/drop does not go through {@code mousedown}. Those events walk
+     * children by their unscaled rectangles unless rewritten into content space.
+     */
+    public static boolean remapPointerToContent(Widget.Event ev) {
+        return ev instanceof DropTarget.DropEvent
+            || ev instanceof DTarget.ItemEvent;
     }
 }
