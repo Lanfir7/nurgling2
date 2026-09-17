@@ -1,2 +1,2 @@
 # Published files must match the SHA256 bytes in release/ver on every checkout.
-release/** -text
+release/** -text whitespace=cr-at-eol
