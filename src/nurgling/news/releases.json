@@ -90,13 +90,54 @@
     "2026-09-16-pointer-mark-range",
     "2026-09-16-stack-fixes",
     "2026-09-17-atlas-animal-meat",
+    "2026-09-17-combat-overlay-crash",
+    "2026-09-17-drag-flush-hit",
+    "2026-09-17-hud-scale-text",
     "2026-09-17-macro-window-pos",
     "2026-09-17-minimap-dock-click",
     "2026-09-17-news-details-search",
+    "2026-09-17-portrait-fill-frame",
+    "2026-09-17-scaled-panel-item-drop",
     "2026-09-17-session-macro-controls",
     "2026-09-17-unified-client-updates"
   ],
   "releases": [
+    {
+      "id": "2.103.207",
+      "date": "2026-09-17",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Клиент больше не вылетает в момент начала боя.",
+          "На увеличенном поясе и панели снаряжения вещи снимаются и вешаются по всей видимой клетке.",
+          "В режиме расстановки окна больше не оставляют пустую полосу справа, а увеличенная панель ловит клики по всему видимому размеру."
+        ],
+        "en": [
+          "The client no longer crashes when a fight starts.",
+          "On a scaled belt or equipment bar, items pick up and drop across the whole visible slot.",
+          "In drag mode windows no longer keep an empty strip on the right, and a scaled panel takes clicks across its whole visible size."
+        ]
+      },
+      "details": {
+        "ru": [
+          "При входе в бой окно игры больше не закрывается само. Над противником по-прежнему видны очки инициативы, открытия и таймер приёма.",
+          "Если пояс или быструю экипировку растянуть не на 100% (Ctrl+Shift+Alt и ползунок или Alt+колесо), снимать и вешать шмотку можно по всей увеличенной клетке. Раньше картинка росла, а попадать нужно было в старый маленький квадрат.",
+          "Откройте режим расстановки интерфейса: замок и глаз теперь лежат на самой панели, как на карте, красная рамка совпадает с окном, и панели можно ставить вплотную. Если панель растянуть не на 100% (Ctrl+Shift+Alt и ползунок или Alt+колесо), клики попадают туда, где её видно, а не в старый размер.",
+          "Если пояс, экипировку или другую панель растянуть не на 100% (Ctrl+Shift+Alt и ползунок или Alt+колесо), подписи вроде качества «25.5», количества и «394 / 394 / 394» больше не размываются: буквы рисуются заново под выбранный размер и садятся на пиксели.",
+          "В углу экрана портрет больше не оставляет чёрную кайму внутри золотой рамки: кукла занимает всё окно, как раньше."
+        ],
+        "en": [
+          "Entering combat no longer closes the client. Initiative, openings and the move timer still appear above the opponent.",
+          "When the belt or equipment proxy is not at 100% (Ctrl+Shift+Alt with the slider, or Alt+wheel), taking and hanging items uses the whole enlarged slot. The picture used to grow while you still had to hit the old small square.",
+          "Open HUD drag mode: lock and visibility sit on the panel itself, as they already do on the map, the red outline matches the window, and panels can sit flush. When a panel is not at 100% (Ctrl+Shift+Alt with the slider, or Alt+wheel), clicks land where the panel is drawn, not on its old unscaled rectangle.",
+          "When the belt, equipment or another panel is not at 100% (Ctrl+Shift+Alt with the slider, or Alt+wheel), labels such as item quality “25.5”, stack counts and “394 / 394 / 394” no longer blur or break: the glyphs are redrawn at the chosen size and snap to pixels.",
+          "The corner portrait no longer leaves a black margin inside the gold frame: the doll fills the window again."
+        ]
+      }
+    },
     {
       "id": "2.103.206",
       "date": "2026-09-16",
