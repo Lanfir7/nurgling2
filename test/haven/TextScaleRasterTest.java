@@ -2,6 +2,7 @@ package haven;
 
 import haven.render.BufPipe;
 import nurgling.NConfig;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -13,10 +14,18 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TextScaleRasterTest {
+    private static NConfig previousConfig;
+
     @BeforeAll
     static void fonts() {
+        previousConfig = NConfig.current;
         if(NConfig.current == null)
             NConfig.current = new NConfig();
+    }
+
+    @AfterAll
+    static void restoreConfig() {
+        NConfig.current = previousConfig;
     }
 
     @Test

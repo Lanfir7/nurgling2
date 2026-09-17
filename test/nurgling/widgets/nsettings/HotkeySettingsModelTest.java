@@ -90,8 +90,16 @@ class HotkeySettingsModelTest {
         model.setQuery("");
         assertEquals(HotkeyCategory.INVENTORY, model.selectedCategory());
         assertEquals(Arrays.asList("transfer-item"), ids(model.visibleActions()));
-        model.setQuery("Инвентарь");
-        assertEquals(Arrays.asList("transfer-item"), ids(model.visibleActions()));
+        java.util.Locale previous = nurgling.i18n.L10n.getLocale();
+        try {
+            /* Category labels come from the active locale; without pinning this
+             * assertion follows whichever language a previous test left behind. */
+            nurgling.i18n.L10n.setLocale(java.util.Locale.forLanguageTag("ru"));
+            model.setQuery("Инвентарь");
+            assertEquals(Arrays.asList("transfer-item"), ids(model.visibleActions()));
+        } finally {
+            nurgling.i18n.L10n.setLocale(previous);
+        }
     }
 
     @Test void conflictsOnlyUsesDraftValues() {
