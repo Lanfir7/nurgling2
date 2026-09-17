@@ -70,7 +70,7 @@ public class Bufflist extends Widget
 	    if(c.y + wdg.sz.y > br.y) br.y = c.y + wdg.sz.y;
 	}
 	if(parent instanceof NDraggableWidget)
-		parent.resize(br.add(NDraggableWidget.delta));
+		parent.resize(br);
 	else
 		resize(br);
 	double off = 1.0 / mv.size(), coff = 0.0;

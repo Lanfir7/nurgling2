@@ -45,8 +45,10 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
     private static final java.util.ArrayDeque<Object[]> undo = new java.util.ArrayDeque<>();
     private static final int UNDO_MAX = 32;
 
+    /** Gap between the lock and visibility buttons; they overlay the panel, they do not reserve a strip. */
     public final static Coord off = new Coord(UI.scale(10,10));
-    public final static Coord delta = new Coord(UI.scale(35,20));
+    /** @deprecated chrome is {@link NDraggableLayout#chrome()} (empty); kept so older callers stay harmless. */
+    public final static Coord delta = NDraggableLayout.chrome();
 
     /** Natural size of this panel, i.e. the size it has at 100%. */
     protected Coord basesz;
@@ -81,24 +83,21 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
     }
 
     /**
-     * Frame space taken away from the content, i.e. how much smaller the content
-     * is than the widget. The default leaves a strip on the right for the
-     * lock/visibility controls; a subclass may reclaim it, in which case those
-     * controls are drawn over the content while in DRAG mode.
-     */
-    /**
-     * Where the content starts inside the frame. Normally inset so the frame's own
-     * border and controls have room; a frame that reclaims that strip puts the content
-     * flush against its corner instead.
+     * Where the content starts inside the frame. Lock/visibility/flip overlay the
+     * panel (as on the minimap); there is no reserved gutter.
      */
     protected Coord contentOff()
     {
-        return(off);
+        return(NDraggableLayout.contentOrigin());
     }
 
+    /**
+     * Frame space taken away from the content. Empty so the red drag-mode
+     * outline is the panel itself and windows can sit flush against each other.
+     */
     protected Coord contentDelta()
     {
-        return(delta);
+        return(NDraggableLayout.chrome());
     }
 
     public NDraggableWidget(String name, Coord sz)
@@ -443,8 +442,7 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
 
     private void applyscale()
     {
-        frame(new Coord(Math.max(1, (int)Math.round(basesz.x * uiscale)),
-                        Math.max(1, (int)Math.round(basesz.y * uiscale))));
+        frame(NDraggableLayout.scaledSize(basesz, uiscale));
     }
 
     /** How large this panel may be made, as a fraction of its natural size. */
@@ -480,19 +478,39 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
      * Convert a point in this frame into the content's own coordinates. The content
      * believes it is still at its natural size, so everything it is told - clicks,
      * hovers, tooltips - has to be divided back down by the scale it is drawn at.
+     * Children are placed in frame pixels; {@link Widget#xlate} stays the identity
+     * so the hit rect is this widget's scaled {@link #sz}, matching the drawing.
      */
     private Coord tocontent(Coord c)
     {
-        return(new Coord((int)Math.round(c.x / uiscale), (int)Math.round(c.y / uiscale)).sub(content.c));
+        return(NDraggableLayout.toContent(c, uiscale, content == null ? contentOff() : content.c));
     }
 
-    @Override
-    public Coord xlate(Coord c, boolean in)
+    /** True when a pointer in frame coordinates lands on the scaled content. */
+    private boolean hitcontent(Coord c)
     {
-        if(!scaled())
-            return(c);
-        return(in ? new Coord((int)Math.round(c.x * uiscale), (int)Math.round(c.y * uiscale))
-                  : new Coord((int)Math.round(c.x / uiscale), (int)Math.round(c.y / uiscale)));
+        return(content != null && content.visible()
+               && NDraggableLayout.hitsScaledContent(c, sz, uiscale, content.c, content.sz));
+    }
+
+    /** Forward a pointer event into the content's natural coordinate space. */
+    private boolean dispatchcontent(PointerEvent ev)
+    {
+        ev.stop();
+        if(!hitcontent(ev.c))
+            return(false);
+        return(ev.derive(tocontent(ev.c)).dispatch(content));
+    }
+
+    /**
+     * Drops do not go through {@link #mousedown}; without this they would use
+     * the content's unscaled rectangle and miss the magnified panel.
+     */
+    @Override
+    public boolean handle(Event ev) {
+        if(scaled() && (ev instanceof DropTarget.DropEvent))
+            return(dispatchcontent((PointerEvent)ev));
+        return(super.handle(ev));
     }
 
     public static final Tex bg = Resource.loadtex("nurgling/hud/wnd/bg");
@@ -559,8 +577,8 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
         }
         super.draw(g);
         if (ui.core.mode == NCore.Mode.DRAG) {
-            /* The content is added last and so draws over the controls; on a frame
-             * that reclaims the right-hand strip they would otherwise be buried. */
+            /* The content is added last and so draws over the controls; they sit on
+             * the panel itself and would otherwise be buried. */
             for(ICheckBox btn : new ICheckBox[]{btnLock, btnVis, btnFlip}) {
                 if(btn.visible())
                     btn.draw(g.reclipl(btn.c, btn.sz));
@@ -865,11 +883,8 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
             startmove(ev);
             return true;
         }
-        if (scaled()) {
-            ev.stop();
-            Coord cc = tocontent(ev.c);
-            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
-        }
+        if (scaled())
+            return(dispatchcontent(ev));
         return super.mousedown(ev);
     }
 
@@ -887,11 +902,8 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
                 return(true);
             }
         }
-        if(scaled()) {
-            ev.stop();
-            Coord cc = tocontent(ev.c);
-            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
-        }
+        if(scaled())
+            return(dispatchcontent(ev));
         return(super.mousewheel(ev));
     }
 
@@ -899,10 +911,9 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
     public boolean mousehover(MouseHoverEvent ev, boolean hovering) {
         if(scaled()) {
             ev.stop();
-            Coord cc = tocontent(ev.c);
-            if(!content.visible() || !cc.isect(Coord.z, content.sz))
+            if(!hitcontent(ev.c))
                 return(false);
-            return(ev.derive(cc).hovering(hovering).dispatch(content));
+            return(ev.derive(tocontent(ev.c)).hovering(hovering).dispatch(content));
         }
         return(super.mousehover(ev, hovering));
     }
@@ -911,18 +922,13 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
     public boolean getcurs(CursorQuery ev) {
         if(!scaled())
             return(false);
-        ev.stop();
-        Coord cc = tocontent(ev.c);
-        return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
+        return(dispatchcontent(ev));
     }
 
     @Override
     public boolean tooltip(TooltipQuery ev) {
-        if(scaled()) {
-            ev.stop();
-            Coord cc = tocontent(ev.c);
-            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
-        }
+        if(scaled())
+            return(dispatchcontent(ev));
         return(super.tooltip(ev));
     }
 
@@ -939,9 +945,7 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
         }
         else if (scaled())
         {
-            ev.stop();
-            Coord cc = tocontent(ev.c);
-            return(content.visible() && cc.isect(Coord.z, content.sz) && ev.derive(cc).dispatch(content));
+            return(dispatchcontent(ev));
         }
         else
         {
@@ -1000,9 +1004,8 @@ public class NDraggableWidget extends Widget implements Widget.CursorQuery.Handl
         else if (scaled())
         {
             ev.stop();
-            Coord cc = tocontent(ev.c);
-            if(content.visible())
-                ev.derive(cc).dispatch(content);
+            if(content != null && content.visible())
+                ev.derive(tocontent(ev.c)).dispatch(content);
         }
         else
         {

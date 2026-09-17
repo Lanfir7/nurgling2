@@ -627,7 +627,7 @@ public class NFightsess extends Fightsess {
                  * carries its own size and would clip the extra columns. */
                 Coord nsz = sizefor(singlerow);
                 if(parent instanceof NDraggableWidget)
-                    parent.resize(nsz.add(NDraggableWidget.delta));
+                    parent.resize(nsz);
                 else
                     resize(nsz);
             }

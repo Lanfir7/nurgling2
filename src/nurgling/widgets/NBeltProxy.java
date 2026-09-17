@@ -18,11 +18,8 @@ public class NBeltProxy extends Widget implements DTarget {
     
     public void setBeltInventory(Inventory inv) {
         this.beltInventory = inv;
-        if (inv != null) {
-            // Resize based on actual belt size
-            int totalSlots = inv.isz.x * inv.isz.y;
-            resize(invsz(new Coord(totalSlots, 1)));
-        }
+        if (inv != null)
+            fitBelt(inv.isz.x * inv.isz.y);
     }
     
     public Inventory getBeltInventory() {
@@ -30,10 +27,7 @@ public class NBeltProxy extends Widget implements DTarget {
         if (beltInventory == null || beltInventory.parent == null) {
             beltInventory = findBeltInventory();
             if(beltInventory!=null)
-            {
-                int totalSlots = beltInventory.isz.x * beltInventory.isz.y;
-                resize(invsz(new Coord(totalSlots, 1)));
-            }
+                fitBelt(beltInventory.isz.x * beltInventory.isz.y);
         }
         return beltInventory;
     }
@@ -59,14 +53,11 @@ public class NBeltProxy extends Widget implements DTarget {
         return null;
     }
 
-    @Override
-    public void resize(Coord sz)
-    {
-        NDraggableWidget drg = (NDraggableWidget)parent;
-        drg.sz = sz.add(NDraggableWidget.delta);
-        drg.btnLock.move(new Coord(drg.sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y / 2));
-        drg.btnVis.move(new Coord(drg.sz.x - NStyle.locki[0].sz().x - NStyle.locki[0].sz().x / 2, NStyle.locki[0].sz().y + NDraggableWidget.off.y));
-        super.resize(sz);
+    private void fitBelt(int totalSlots) {
+        Coord nsz = invsz(new Coord(totalSlots, 1));
+        resize(nsz);
+        if(parent instanceof NDraggableWidget)
+            parent.resize(nsz);
     }
 
     private Coord slotCoord(int slotIndex) {

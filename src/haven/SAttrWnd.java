@@ -258,7 +258,7 @@ public class SAttrWnd extends Widget {
 		nurgling.NGameUI ngui = (nurgling.NGameUI)ui.gui;
 		if(ngui.studyReportWidget == null) {
 		    nurgling.widgets.NStudyReport report = new nurgling.widgets.NStudyReport(child);
-		    Coord widgetSize = report.sz.add(nurgling.widgets.NDraggableWidget.delta);
+		    Coord widgetSize = report.sz;
 		    ngui.studyReportWidget = ngui.add(new nurgling.widgets.NDraggableWidget(report, "StudyReport", widgetSize));
 		    
 		    nurgling.conf.NDragProp prop = nurgling.conf.NDragProp.get("StudyReport");

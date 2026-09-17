@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-drag-flush-hit",
+  "priority": 7,
+  "summary": {
+    "ru": "В режиме расстановки окна больше не оставляют пустую полосу справа, а увеличенная панель ловит клики по всему видимому размеру.",
+    "en": "In drag mode windows no longer keep an empty strip on the right, and a scaled panel takes clicks across its whole visible size."
+  },
+  "detail": {
+    "ru": "Откройте режим расстановки интерфейса: замок и глаз теперь лежат на самой панели, как на карте, красная рамка совпадает с окном, и панели можно ставить вплотную. Если панель растянуть не на 100% (Ctrl+Shift+Alt и ползунок или Alt+колесо), клики попадают туда, где её видно, а не в старый размер.",
+    "en": "Open HUD drag mode: lock and visibility sit on the panel itself, as they already do on the map, the red outline matches the window, and panels can sit flush. When a panel is not at 100% (Ctrl+Shift+Alt with the slider, or Alt+wheel), clicks land where the panel is drawn, not on its old unscaled rectangle."
+  }
+}
