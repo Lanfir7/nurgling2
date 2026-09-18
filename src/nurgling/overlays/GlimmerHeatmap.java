@@ -15,6 +15,8 @@ import java.util.function.Function;
 public class GlimmerHeatmap {
     public static final int RADIUS = 3;
     public static final double GLIMMER_WAIT = 0.8;
+    /** Glimmer often arrives while the wall is still rock; keep it until that tile falls. */
+    public static final double UNMATCHED_HOLD = 20.0;
 
     private static final class Pending {
         final Coord tile;
@@ -37,6 +39,8 @@ public class GlimmerHeatmap {
 
     private final ArrayDeque<Pending> pending = new ArrayDeque<Pending>();
     private final List<Sample> samples = new ArrayList<Sample>();
+    private int unmatched;
+    private double unmatchedAge;
 
     public static boolean inRange(Coord center, Coord tile) {
         if (center == null || tile == null) {
@@ -51,18 +55,32 @@ public class GlimmerHeatmap {
         if (tile == null) {
             return;
         }
+        if (unmatched > 0) {
+            unmatched--;
+            samples.add(new Sample(tile, true));
+            return;
+        }
         pending.addLast(new Pending(tile));
     }
 
     public void onGlimmer() {
         Pending p = pending.pollFirst();
-        if (p == null) {
+        if (p != null) {
+            samples.add(new Sample(p.tile, true));
             return;
         }
-        samples.add(new Sample(p.tile, true));
+        unmatched++;
+        unmatchedAge = 0;
     }
 
     public void tick(double dt) {
+        if (unmatched > 0) {
+            unmatchedAge += dt;
+            if (unmatchedAge >= UNMATCHED_HOLD) {
+                unmatched = 0;
+                unmatchedAge = 0;
+            }
+        }
         if (pending.isEmpty()) {
             return;
         }
@@ -82,6 +100,8 @@ public class GlimmerHeatmap {
     public void clear() {
         pending.clear();
         samples.clear();
+        unmatched = 0;
+        unmatchedAge = 0;
     }
 
     public Map<Coord, Integer> visibleHeat(Coord playerTile, int drawRadius,

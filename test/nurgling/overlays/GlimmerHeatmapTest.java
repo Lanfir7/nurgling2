@@ -108,6 +108,30 @@ class GlimmerHeatmapTest {
     }
 
     @Test
+    void glimmerBeforeTileCompletesStillPaints() {
+        GlimmerHeatmap map = new GlimmerHeatmap();
+        Coord dug = Coord.of(10, 10);
+        map.onGlimmer();
+        map.tick(5.0);
+        map.onTileCompleted(dug);
+        Map<Coord, Integer> heat = map.visibleHeat(dug, 20, rockExcept(dug));
+        assertEquals(Integer.valueOf(1), heat.get(Coord.of(13, 13)));
+        assertEquals(48, heat.size());
+    }
+
+    @Test
+    void unmatchedGlimmerExpiresThenCompletionIsSilent() {
+        GlimmerHeatmap map = new GlimmerHeatmap();
+        Coord dug = Coord.of(10, 10);
+        map.onGlimmer();
+        map.tick(GlimmerHeatmap.UNMATCHED_HOLD);
+        map.onTileCompleted(dug);
+        map.tick(GlimmerHeatmap.GLIMMER_WAIT);
+        Map<Coord, Integer> heat = map.visibleHeat(dug, 20, rockExcept(dug));
+        assertTrue(heat.isEmpty());
+    }
+
+    @Test
     void unloadedTilesAreSkippedNotCrashed() {
         GlimmerHeatmap map = new GlimmerHeatmap();
         Coord dug = Coord.of(0, 0);
