@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-areas-compact-layout",
+  "priority": 5,
+  "summary": {
+    "ru": "В свёрнутом окне зон поиск и специализации снова по ширине списка, без пустого поля справа.",
+    "en": "In the compact area window, search and specializations match the zone list width again."
+  },
+  "detail": {
+    "ru": "Откройте настройки областей в компактном виде: поле поиска и список специализаций больше не шире списка зон, а само окно не растягивается вправо за пределы списка.",
+    "en": "Open area settings in compact mode: the search field and specialization list no longer extend past the zone list, and the window no longer stretches to the right of that list."
+  }
+}

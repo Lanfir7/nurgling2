@@ -7,11 +7,21 @@ final class AreasWindowCollapseState {
 
     private final Coord expandedSize;
     private final Coord compactSize;
+    private final int searchWidth;
     private boolean expanded;
 
-    AreasWindowCollapseState(Coord expandedSize, int compactWidth) {
+    static int compactWidth(int listRight, int tabWidth) {
+        return listRight + tabWidth;
+    }
+
+    static int alignedPanelWidth(int listWidth) {
+        return listWidth;
+    }
+
+    AreasWindowCollapseState(Coord expandedSize, int compactWidth, int searchWidth) {
         this.expandedSize = new Coord(expandedSize);
         this.compactSize = Coord.of(compactWidth, expandedSize.y);
+        this.searchWidth = searchWidth;
     }
 
     boolean expanded() {
@@ -23,7 +33,7 @@ final class AreasWindowCollapseState {
     }
 
     int searchWidth() {
-        return compactSize.x;
+        return searchWidth;
     }
 
     Coord size() {

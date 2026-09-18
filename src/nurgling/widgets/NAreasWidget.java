@@ -166,8 +166,9 @@ public class NAreasWidget extends Window
 
         prev = add(al = new AreaList(UI.scale(new Coord(400,289))), searchField.pos("bl").adds(0, 25));
         Widget lab = add(new Label(get("area.label.specialisation"),NStyle.areastitle), prev.pos("bl").add(UI.scale(0,5)));
+        int listWidth = AreasWindowCollapseState.alignedPanelWidth(al.sz.x);
 
-        add(csl = new CurrentSpecialisationList(UI.scale(230,71)),lab.pos("bl").add(UI.scale(0,5)));
+        add(csl = new CurrentSpecialisationList(new Coord(listWidth, UI.scale(71))),lab.pos("bl").add(UI.scale(0,5)));
         add(new IButton(NStyle.add[0].back,NStyle.add[1].back,NStyle.add[2].back){
             @Override
             public void click()
@@ -216,12 +217,12 @@ public class NAreasWidget extends Window
         detailWidgets.add(prev);
         detailWidgets.add(add(new Label(get("area.label.put"),NStyle.areastitle),prev.pos("ul").sub(UI.scale(-5,20))));
         detailWidgets.add(add(new IngredientContainer.RuleButton(out_items ),prev.pos("ur").sub(UI.scale(30,20))));
+        searchField.resize(Coord.of(listWidth, searchField.sz.y));
         pack();
 
         int tabWidth = UI.scale(18);
-        int compactWidth = Math.max(al.c.x + al.sz.x, csl.c.x + csl.sz.x) + tabWidth;
-        collapseState = new AreasWindowCollapseState(csz(), compactWidth);
-        searchField.resize(Coord.of(collapseState.searchWidth(), searchField.sz.y));
+        int compactWidth = AreasWindowCollapseState.compactWidth(al.c.x + al.sz.x, tabWidth);
+        collapseState = new AreasWindowCollapseState(csz(), compactWidth, listWidth);
         collapseTab = add(new CollapseTab(), Coord.z);
         applyCollapseState();
     }
