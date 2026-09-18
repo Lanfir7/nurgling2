@@ -25,6 +25,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
     private CheckBox showCritterCircles;
     private CheckBox showCSprite;
     private CheckBox miningOL;
+    private CheckBox glimmerHeat;
     private CheckBox tracking;
     private CheckBox crime;
     private CheckBox swimming;
@@ -242,6 +243,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
 
         leftPrev = leftColumn.add(new Label("● " + L10n.get("qol.section.map_overlays")), leftPrev.pos("bl").adds(0, 15));
         leftPrev = miningOL = leftColumn.add(new CheckBox(L10n.get("qol.mining_overlay")), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = glimmerHeat = leftColumn.add(new CheckBox(L10n.get("qol.glimmer_heatmap")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = showPersonalClaims = leftColumn.add(new CheckBox(L10n.get("qol.personal_claims")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = showVillageClaims = leftColumn.add(new CheckBox(L10n.get("qol.village_claims")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = showRealmOverlays = leftColumn.add(new CheckBox(L10n.get("qol.realm_overlays")), leftPrev.pos("bl").adds(0, 5));
@@ -431,6 +433,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         showCSprite.a = getBool(NConfig.Key.nextshowCSprite);
 
         miningOL.a = getBool(NConfig.Key.miningol);
+        glimmerHeat.a = getBool(NConfig.Key.glimmerHeatmap);
         tracking.a = getBool(NConfig.Key.tracking);
         crime.a = getBool(NConfig.Key.crime);
         swimming.a = getBool(NConfig.Key.swimming);
@@ -562,6 +565,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         // Save mining overlay and sync with minimap button
         boolean oldMiningOL = getBool(NConfig.Key.miningol);
         NConfig.set(NConfig.Key.miningol, miningOL.a);
+        NConfig.set(NConfig.Key.glimmerHeatmap, glimmerHeat.a);
         if(oldMiningOL != miningOL.a) {
             // Sync with minimap button
             if(NUtils.getGameUI() != null && NUtils.getGameUI().mmapw != null && NUtils.getGameUI().mmapw.minesup != null) {
