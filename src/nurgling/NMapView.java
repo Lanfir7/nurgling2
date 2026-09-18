@@ -260,6 +260,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     public HashMap<Long, Gob> routeDummys = new HashMap<>();
     public HashMap<Long, Gob> portalDummys = new HashMap<>();
     private MinesweeperDangerMarkers minesweeperDangerMarkers;
+    private GlimmerHeatMarkers glimmerHeatMarkers;
 
     public void restoreMinesweeperOverlay() {
         if (minesweeperDangerMarkers == null) {
@@ -1403,6 +1404,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             minesweeperDangerMarkers = new MinesweeperDangerMarkers();
         }
         minesweeperDangerMarkers.tick(dt);
+        if (glimmerHeatMarkers == null) {
+            glimmerHeatMarkers = new GlimmerHeatMarkers();
+        }
+        glimmerHeatMarkers.tick(dt);
         super.tick(dt);
 
         if(NConfig.botmod != null && !botsInit) {

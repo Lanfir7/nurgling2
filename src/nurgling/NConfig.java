@@ -95,6 +95,7 @@ public class NConfig
         debug,
         claydiggerprop,
         miningol,
+        glimmerHeatmap,
         q_pattern,
         q_range,
         q_visitor,
@@ -426,6 +427,7 @@ public class NConfig
         conf.put(Key.disableMenugridKeys, false);
         conf.put(Key.baseurl, NUpdateFeed.DEFAULT_BASEURL);
         conf.put(Key.miningol, true);
+        conf.put(Key.glimmerHeatmap, true);
         conf.put(Key.crime, false);
         conf.put(Key.tracking, false);
         conf.put(Key.swimming, false);
