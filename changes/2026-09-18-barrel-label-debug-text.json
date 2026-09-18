@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-18-barrel-label-debug-text",
+  "priority": 6,
+  "summary": {
+    "ru": "Над бочками больше не всплывает технический текст вроде путей ресурсов и адресов объектов.",
+    "en": "Barrels no longer show technical overlay text such as resource paths and object addresses."
+  },
+  "detail": {
+    "ru": "Подпись над бочкой снова показывает только содержимое. Шесты, метки и прочие наложения на той же бочке больше не подменяют её имя длинной отладочной строкой.",
+    "en": "The caption above a barrel again shows only its contents. Poles, tags and other attachments on the same barrel no longer replace that name with a long debug string."
+  }
+}
