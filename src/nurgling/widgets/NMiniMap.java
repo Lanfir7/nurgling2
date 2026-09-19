@@ -280,6 +280,16 @@ NMiniMap extends MiniMap {
         return isInVisibleArea(cm.gc);
     }
     
+    private Gob sessionPlayer() {
+        return (ui != null && ui.gui != null && ui.gui.map != null) ? ui.gui.map.player() : null;
+    }
+
+    private Gob sessionGob(long id) {
+        if (id < 0 || ui == null || ui.sess == null || ui.sess.glob == null)
+            return null;
+        return ui.sess.glob.oc.getgob(id);
+    }
+
     /**
      * Check if a tile coordinate (in global grid coords with session offset) is inside 
      * the player's 81-tile visible area.
@@ -292,7 +302,7 @@ NMiniMap extends MiniMap {
             return false;
         }
         
-        Gob player = NUtils.player();
+        Gob player = sessionPlayer();
         if(player == null) {
             return false;
         }
@@ -321,7 +331,7 @@ NMiniMap extends MiniMap {
             return false;
         }
         
-        Gob player = NUtils.player();
+        Gob player = sessionPlayer();
         if(player == null) {
             return false;
         }
@@ -404,7 +414,7 @@ NMiniMap extends MiniMap {
 
     @Override
     public void drawparts(GOut g) {
-        if(NUtils.getGameUI()==null)
+        if(ui == null || ui.gui == null)
             return;
         drawmap(g);
         
@@ -1922,8 +1932,8 @@ NMiniMap extends MiniMap {
 
     private void drawtempmarks(GOut g) {
         if((Boolean)NConfig.get(NConfig.Key.tempmark)) {
-            Gob player = NUtils.player();
-            if (player != null && sessloc != null && dloc != null) {
+            Gob player = sessionPlayer();
+            if (player != null && sessloc != null && dloc != null && ui.gui.map instanceof NMapView) {
                 // Calculate visible area boundaries (same as explored area calculation)
                 Coord ul = player.rc.floor(sgridsz).sub(4, 4).mul(sgridsz).floor(tilesz).add(sessloc.tc);
                 Coord unscaledViewSize = _sgridsz.mul(9).div(tilesz.floor());
@@ -1932,7 +1942,7 @@ NMiniMap extends MiniMap {
                 synchronized (((NMapView)ui.gui.map).tempMarkList)
                 {
                 for (TempMark cm : ((NMapView)ui.gui.map).tempMarkList) {
-                    if (cm.loc!=null && ui.gui.mmap.curloc.seg.id == cm.loc.seg.id) {
+                    if (cm.loc!=null && ui.gui.mmap.curloc != null && ui.gui.mmap.curloc.seg.id == cm.loc.seg.id) {
                         if (cm.icon != null && !cm.gc.equals(Coord.z)) {
                             // Check if mark is outside the 81-tile visible area
                             boolean isOutsideVisibleArea = 
@@ -1943,7 +1953,7 @@ NMiniMap extends MiniMap {
                             // 1. Mark is outside visible area, OR
                             // 2. Object no longer exists in game (disappeared)
                             // This ensures we show the mark for objects that left the zone
-                            Gob gob = nurgling.tools.Finder.findGob(cm.id);
+                            Gob gob = sessionGob(cm.id);
                             boolean objectDisappeared = (gob == null);
                             
                             if (isOutsideVisibleArea || objectDisappeared) {

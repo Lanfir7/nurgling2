@@ -2,7 +2,6 @@ package nurgling.overlays.map;
 
 import haven.*;
 import nurgling.NConfig;
-import nurgling.NUtils;
 import nurgling.tools.ExploredArea;
 import nurgling.tools.ExploredAreaPolicy;
 import nurgling.widgets.NCornerMiniMap;
@@ -55,8 +54,8 @@ public class MinimapExploredAreaRenderer {
 
         try {
             ExploredArea exploredArea = null;
-            if (NUtils.getGameUI() != null && NUtils.getGameUI().mmap instanceof NCornerMiniMap) {
-                exploredArea = ((NCornerMiniMap) NUtils.getGameUI().mmap).exploredArea;
+            if (map.ui.gui.mmap instanceof NCornerMiniMap) {
+                exploredArea = ((NCornerMiniMap) map.ui.gui.mmap).exploredArea;
             }
             if (exploredArea == null) {
                 exploredArea = nmap.exploredArea;

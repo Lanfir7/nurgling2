@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-19-temp-marks-window-switch",
+  "priority": 8,
+  "summary": {
+    "ru": "При переключении окон временные значки карты больше не переезжают с другого персонажа — деревья с поверхности не появляются в шахте.",
+    "en": "Temporary map icons no longer leak from the other window when you switch characters — surface trees will not show up in a mine."
+  },
+  "detail": {
+    "ru": "Если один персонаж на поверхности, а другой в шахте, после переключения окон на карте шахты больше не остаются деревья и прочие временные значки второго окна. Каждый персонаж держит свои временные метки.",
+    "en": "With one character on the surface and another in a mine, switching windows no longer leaves the other character's trees and temporary icons on the mine map. Each character keeps their own temporary marks."
+  }
+}

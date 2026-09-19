@@ -2775,12 +2775,13 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     void checkTempMarks() {
         if ((Boolean) NConfig.get(NConfig.Key.tempmark)) {
             final Coord2d cmap = new Coord2d(cmaps);
-            if (NUtils.player() != null && ui.gui.mmap != null && ui.gui.mmap.sessloc != null) {
-                Coord2d pl = NUtils.player().rc;
+            Gob player = (ui != null && ui.gui != null && ui.gui.map != null) ? ui.gui.map.player() : null;
+            if (player != null && ui.gui.mmap != null && ui.gui.mmap.sessloc != null) {
+                Coord2d pl = player.rc;
                 final List<NMiniMap.TempMark> marks = new ArrayList<>(tempMarkList);
                 long currenttime = System.currentTimeMillis();
                 for (NMiniMap.TempMark cm : marks) {
-                    Gob g = Finder.findGob(cm.id);
+                    Gob g = (ui.sess != null && ui.sess.glob != null) ? ui.sess.glob.oc.getgob(cm.id) : null;
                     
                     // Check if mark position is inside player's visible area
                     boolean markIsInPlayerVisibleArea = ((NMiniMap) ui.gui.mmap).checktemp(cm, pl);

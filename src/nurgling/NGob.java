@@ -202,6 +202,16 @@ public class NGob
         return (ctx == null) ? null : ctx.getGameUI();
     }
 
+    /**
+     * Session that should store a gob's temporary map mark.
+     * The focused window is ignored: otherwise a background character's trees
+     * land on the cave map of the character you just switched to.
+     */
+    static String tempMarkSession(String ownerSession, String focusedSession) {
+        // focusedSession is accepted only so tests can prove the focused window is ignored
+        return ownerSession;
+    }
+
     private void observeForageCritter()
     {
         if (forageCritterSeen || !NCritterCircle.isCritter(name))
@@ -307,14 +317,15 @@ public class NGob
         }
     }
 
-    static BufferedImage setTex(GobIcon icon)
+    static BufferedImage setTex(GobIcon icon, Gob gob)
     {
-        if (icon != null && NUtils.getGameUI() != null && NUtils.getGameUI().mmap.iconconf != null && icon.res.isReady() && icon.icon() != null)
+        NGameUI gui = ownerGui(gob);
+        if (icon != null && gui != null && gui.mmap != null && gui.mmap.iconconf != null && icon.res.isReady() && icon.icon() != null)
         {
             if (icon.icon().image() != null)
             {
-                GobIcon.Setting conf = NUtils.getGameUI().mmap.iconconf.get(icon.icon());
-                if (conf != null && NUtils.getGameUI().mmap.iconconf.shown(conf))
+                GobIcon.Setting conf = gui.mmap.iconconf.get(icon.icon());
+                if (conf != null && gui.mmap.iconconf.shown(conf))
                 {
                     return icon.icon().image();
                 }
@@ -331,10 +342,11 @@ public class NGob
     private void tryCreateTempMark(GobIcon icon, Gob gob)
     {
         try {
-            if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null || NUtils.getGameUI().mmap == null) {
+            NGameUI gui = ownerGui(gob);
+            if (gui == null || !(gui.map instanceof NMapView) || gui.mmap == null) {
                 return;
             }
-            if (NUtils.getGameUI().mmap.sessloc == null || NUtils.getGameUI().mmap.iconconf == null) {
+            if (gui.mmap.sessloc == null || gui.mmap.iconconf == null) {
                 return;
             }
             if (!icon.res.isReady() || icon.icon() == null) {
@@ -348,7 +360,7 @@ public class NGob
                 }
             }
             
-            BufferedImage iconres = setTex(icon);
+            BufferedImage iconres = setTex(icon, gob);
             if (iconres == null) {
                 return;
             }
@@ -360,14 +372,15 @@ public class NGob
                 buddyColor = BuddyWnd.gc[buddy.buddy().group];
             }
             
-            synchronized (((NMapView) NUtils.getGameUI().map).tempMarkList)
+            NMapView map = (NMapView) gui.map;
+            synchronized (map.tempMarkList)
             {
                 // Check if mark already exists
-                if (((NMapView) NUtils.getGameUI().map).tempMarkList.stream().noneMatch(m -> m.id == gob.id))
+                if (map.tempMarkList.stream().noneMatch(m -> m.id == gob.id))
                 {
-                    ((NMapView) NUtils.getGameUI().map).tempMarkList.add(
-                        new NMiniMap.TempMark(name, NUtils.getGameUI().mmap.sessloc, gob.id, 
-                            gob.rc, gob.rc.floor(tilesz).add(NUtils.getGameUI().mmap.sessloc.tc), 
+                    map.tempMarkList.add(
+                        new NMiniMap.TempMark(name, gui.mmap.sessloc, gob.id,
+                            gob.rc, gob.rc.floor(tilesz).add(gui.mmap.sessloc.tc),
                             iconres, buddyColor));
                 }
             }
@@ -384,16 +397,18 @@ public class NGob
     private void tryCreateTempMarkOnRemoval()
     {
         try {
-            if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null || NUtils.getGameUI().mmap == null) {
+            NGameUI gui = ownerGui(parent);
+            if (gui == null || !(gui.map instanceof NMapView) || gui.mmap == null) {
                 return;
             }
-            if (NUtils.getGameUI().mmap.sessloc == null || NUtils.getGameUI().mmap.iconconf == null) {
+            if (gui.mmap.sessloc == null || gui.mmap.iconconf == null) {
                 return;
             }
             
+            NMapView map = (NMapView) gui.map;
             // Check if mark already exists
-            synchronized (((NMapView) NUtils.getGameUI().map).tempMarkList) {
-                if (((NMapView) NUtils.getGameUI().map).tempMarkList.stream().anyMatch(m -> m.id == parent.id)) {
+            synchronized (map.tempMarkList) {
+                if (map.tempMarkList.stream().anyMatch(m -> m.id == parent.id)) {
                     return; // Mark already exists
                 }
             }
@@ -409,16 +424,16 @@ public class NGob
                 return;
             }
             
-            BufferedImage iconres = setTex(icon);
+            BufferedImage iconres = setTex(icon, parent);
             if (iconres == null) {
                 return; // Icon not enabled in settings
             }
             
             // Calculate object position in global tile coords
-            Coord gc = parent.rc.floor(tilesz).add(NUtils.getGameUI().mmap.sessloc.tc);
+            Coord gc = parent.rc.floor(tilesz).add(gui.mmap.sessloc.tc);
             
             // Check if object is in inner zone (71 tiles) - if yes, it was collected, no mark needed
-            if (((NMiniMap) NUtils.getGameUI().mmap).isInInnerZone(gc)) {
+            if (((NMiniMap) gui.mmap).isInInnerZone(gc)) {
                 return; // Object is close to player - was collected/killed
             }
             
@@ -430,19 +445,19 @@ public class NGob
                 buddyColor = BuddyWnd.gc[buddy.buddy().group];
             }
             
-            synchronized (((NMapView) NUtils.getGameUI().map).tempMarkList) {
+            synchronized (map.tempMarkList) {
                 // Double-check mark doesn't exist
-                if (((NMapView) NUtils.getGameUI().map).tempMarkList.stream().noneMatch(m -> m.id == parent.id)) {
-                    NMiniMap.TempMark mark = new NMiniMap.TempMark(name, NUtils.getGameUI().mmap.sessloc, parent.id,
+                if (map.tempMarkList.stream().noneMatch(m -> m.id == parent.id)) {
+                    NMiniMap.TempMark mark = new NMiniMap.TempMark(name, gui.mmap.sessloc, parent.id,
                             parent.rc, gc, iconres, buddyColor);
                     mark.objectExists = false; // Object is already gone
                     mark.disappearedAt = System.currentTimeMillis();
                     // Check if player is currently near the mark
-                    Gob player = NUtils.player();
+                    Gob player = gui.map.player();
                     if(player!=null)
                     {
-                        mark.wasInsideVisibleArea = ((NMiniMap) NUtils.getGameUI().mmap).checktemp(mark, player.rc);
-                        ((NMapView) NUtils.getGameUI().map).tempMarkList.add(mark);
+                        mark.wasInsideVisibleArea = ((NMiniMap) gui.mmap).checktemp(mark, player.rc);
+                        map.tempMarkList.add(mark);
                     }
                 }
             }
@@ -533,7 +548,8 @@ public class NGob
             delayedOverlayTasks.add(new DelayedOverlayTask(
                     gob ->
                     {
-                        return NUtils.getGameUI() != null && NUtils.getGameUI().mmap != null && NUtils.getGameUI().mmap.iconconf != null && ((GobIcon) a).res.isReady() && ((GobIcon) a).icon != null && (!(((GobIcon) a).icon instanceof Player) || (gob.getattr(Buddy.class) == null || gob.getattr(Buddy.class).buddy() != null));
+                        NGameUI gui = ownerGui(gob);
+                        return gui != null && gui.mmap != null && gui.mmap.iconconf != null && ((GobIcon) a).res.isReady() && ((GobIcon) a).icon != null && (!(((GobIcon) a).icon instanceof Player) || (gob.getattr(Buddy.class) == null || gob.getattr(Buddy.class).buddy() != null));
                     },
                     gob ->
                     {
