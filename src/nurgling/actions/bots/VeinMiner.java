@@ -13,6 +13,10 @@ import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
 
 import static haven.MCache.tilesz;
 import static haven.OCache.posres;
@@ -39,11 +43,7 @@ public class VeinMiner implements Action {
             NUtils.addTask(new NTask() {
                 @Override
                 public boolean check() {
-                    if (cap.peek() != null) {
-                        return true;
-                    }
-                    String curs = NUtils.getCursorName();
-                    return curs != null && NParser.checkName(curs, "arw");
+                    return seedWaitComplete(cap, NUtils.getCursorName());
                 }
             });
 
@@ -65,25 +65,44 @@ public class VeinMiner implements Action {
             });
 
             VeinWorklist list = new VeinWorklist(type, seed);
+            List<Coord> minedTiles = new ArrayList<>();
+            minedTiles.add(seed);
             while (true) {
                 if (inFight(gui)) {
                     return Results.FAIL();
                 }
                 list.scanVisible(c -> tileName(gui, c), c -> isSafe(gui, c));
-                Coord playerTile = NUtils.player() == null ? null : NUtils.player().rc.div(tilesz).floor();
+                Gob player = NUtils.player();
+                if (player == null) {
+                    return Results.ERROR("Lost player");
+                }
+                Coord playerTile = player.rc.div(tilesz).floor();
                 Coord next = list.takeNearest(playerTile);
                 if (next == null) {
+                    if (neighborsStillLoading(minedTiles, c -> tileName(gui, c))) {
+                        NUtils.addTask(new NTask() {
+                            @Override
+                            public boolean check() {
+                                return !neighborsStillLoading(minedTiles, c -> tileName(gui, c));
+                            }
+                        });
+                        continue;
+                    }
                     gui.msg("Vein Miner: vein finished.");
                     return Results.SUCCESS();
                 }
                 if (!type.equals(tileName(gui, next)) || !isSafe(gui, next)) {
                     continue;
                 }
-                Results mined = mineTile(gui, next);
+                Results mined = mineTile(gui, next, type);
+                if (mined.isCycle) {
+                    continue;
+                }
                 if (!mined.IsSuccess()) {
                     return mined;
                 }
                 list.markMined(next);
+                minedTiles.add(next);
                 Results bum = handleBumlings(gui);
                 if (!bum.IsSuccess()) {
                     return bum;
@@ -145,6 +164,42 @@ public class VeinMiner implements Action {
         return !original.equals(now);
     }
 
+    static boolean seedWaitComplete(VeinSeedCapture cap, String cursorName) {
+        if (cap != null && cap.peek() != null) {
+            return true;
+        }
+        if (cursorName == null) {
+            return false;
+        }
+        return !NParser.checkName(cursorName, "mine");
+    }
+
+    static boolean neighborsStillLoading(Iterable<Coord> mined, Function<Coord, String> tileName) {
+        if (mined == null || tileName == null) {
+            return false;
+        }
+        Set<Long> minedKeys = new HashSet<>();
+        for (Coord m : mined) {
+            minedKeys.add(tileKey(m));
+        }
+        for (Coord m : mined) {
+            for (int[] d : VeinWorklist.NEIGHBORS) {
+                Coord n = new Coord(m.x + d[0], m.y + d[1]);
+                if (minedKeys.contains(tileKey(n))) {
+                    continue;
+                }
+                if (tileName.apply(n) == null) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static long tileKey(Coord c) {
+        return ((long) c.x << 32) | (c.y & 0xffffffffL);
+    }
+
     static String tileName(NGameUI gui, Coord tile) {
         if (gui == null || gui.ui == null || gui.ui.sess == null || tile == null) {
             return null;
@@ -159,12 +214,16 @@ public class VeinMiner implements Action {
         }
     }
 
-    private Results mineTile(NGameUI gui, Coord tilePos) throws InterruptedException {
+    private Results mineTile(NGameUI gui, Coord tilePos, String type) throws InterruptedException {
         if (inFight(gui)) {
             return Results.FAIL();
         }
+        Gob player = NUtils.player();
+        if (player == null) {
+            return Results.ERROR("Lost player");
+        }
         Gob looserock = Finder.findGob(new NAlias("looserock"));
-        if (looserock != null && looserock.rc.dist(NUtils.player().rc) < 93.5) {
+        if (looserock != null && looserock.rc.dist(player.rc) < 93.5) {
             return Results.ERROR("Loose rock detected — unsafe to continue");
         }
         if (!checkSupportHealth(tilePos)) {
@@ -176,7 +235,13 @@ public class VeinMiner implements Action {
         PathFinder pf = new PathFinder(NGob.getDummy(worldPos, 0,
                 new NHitBox(new Coord2d(-5.5, -5.5), new Coord2d(5.5, 5.5))), true);
         pf.isHardMode = true;
-        pf.run(gui);
+        Results pfResult = pf.run(gui);
+        if (!pfResult.IsSuccess()) {
+            return pfResult;
+        }
+        if (!type.equals(tileName(gui, tilePos)) || !isSafe(gui, tilePos)) {
+            return Results.CYCLE();
+        }
         if (!new RestoreResources().run(gui).IsSuccess()) {
             return Results.ERROR("Cannot restore resources");
         }
@@ -186,8 +251,12 @@ public class VeinMiner implements Action {
             if (inFight(gui)) {
                 return Results.FAIL();
             }
+            player = NUtils.player();
+            if (player == null) {
+                return Results.ERROR("Lost player");
+            }
             Gob looserockLoop = Finder.findGob(new NAlias("looserock"));
-            if (looserockLoop != null && looserockLoop.rc.dist(NUtils.player().rc) < 93.5) {
+            if (looserockLoop != null && looserockLoop.rc.dist(player.rc) < 93.5) {
                 return Results.ERROR("Loose rock detected — unsafe to continue");
             }
             if (!checkSupportHealth(tilePos)) {
@@ -211,7 +280,7 @@ public class VeinMiner implements Action {
                     }
                 });
             }
-            gui.map.wdgmsg("click", Coord.z, NUtils.player().rc.floor(posres), 3, 0);
+            gui.map.wdgmsg("click", Coord.z, player.rc.floor(posres), 3, 0);
             NUtils.getUI().core.addTask(new GetCurs("arw"));
             resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
             if (!new RestoreResources().run(gui).IsSuccess()) {
@@ -245,11 +314,18 @@ public class VeinMiner implements Action {
     }
 
     private Results handleBumlings(NGameUI gui) throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null) {
+            return Results.ERROR("Lost player");
+        }
         Gob bumling = Finder.findGob(new NAlias("bumlings"));
-        if (bumling == null || bumling.rc.dist(NUtils.player().rc) > 20) {
+        if (bumling == null || bumling.rc.dist(player.rc) > 20) {
             return Results.SUCCESS();
         }
-        new PathFinder(bumling).run(gui);
+        Results pfResult = new PathFinder(bumling).run(gui);
+        if (!pfResult.IsSuccess()) {
+            return pfResult;
+        }
         int attempts = 0;
         while (bumling != null && Finder.findGob(bumling.id) != null && attempts < 10) {
             attempts++;
@@ -271,7 +347,7 @@ public class VeinMiner implements Action {
                     break;
                 case DANGER:
                     gui.msg("Warning: Low energy while chipping stones");
-                    return Results.SUCCESS();
+                    return Results.ERROR("Low energy while chipping stones");
                 default:
                     bumling = Finder.findGob(bumling.id);
                     break;
