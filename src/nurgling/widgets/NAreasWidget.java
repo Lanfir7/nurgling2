@@ -749,6 +749,7 @@ public class NAreasWidget extends Window
                                 int duplicatedId = ((NMapView) NUtils.getGameUI().map).duplicateArea(area.id);
                                 if (duplicatedId != -1) {
                                     NAreasWidget.this.showPath(currentPath, duplicatedId);
+                                    ((NMapView) NUtils.getGameUI().map).changeArea(duplicatedId);
                                 }
                             }
                             else if (option.name.equals(get("area.menu.fill_direction")))

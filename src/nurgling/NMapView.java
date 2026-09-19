@@ -1313,16 +1313,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             newArea.path = NUtils.getGameUI().areas.currentPath;
             AreaCreation.initializeNew(newArea);
             
-            // Apply random color if setting is enabled
-            Object randomColorSetting = NConfig.get(NConfig.Key.randomAreaColor);
-            if(randomColorSetting instanceof Boolean && (Boolean)randomColorSetting) {
-                java.util.Random rand = new java.util.Random();
-                int r = rand.nextInt(256);
-                int g = rand.nextInt(256);
-                int b = rand.nextInt(256);
-                int a = 80 + rand.nextInt(176); // Alpha from 80 to 255
-                newArea.color = new java.awt.Color(r, g, b, a);
-            }
+            applyConfiguredRandomAreaColor(newArea);
             
             glob.map.areas.put(id, newArea);
 
@@ -1340,23 +1331,25 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
             int newId = AreaCreation.nextAvailableAreaId(
                     glob.map.areas.values(), maxKnownDbAreaId());
-            HashSet<String> names = new HashSet<String>();
-            for (NArea area : glob.map.areas.values()) {
-                names.add(area.name);
-            }
-
-            String baseName = source.name + " (copy)";
-            String newName = baseName;
-            int suffix = 1;
-            while (names.contains(newName)) {
-                newName = baseName + " " + suffix++;
-            }
-            NArea copy = AreaCreation.duplicate(source, newId, newName);
+            NArea copy = AreaCreation.duplicate(source, newId, source.name);
+            applyConfiguredRandomAreaColor(copy);
 
             glob.map.areas.put(newId, copy);
             createAreaLabel(newId);
             NConfig.needAreasUpdate();
             return newId;
+        }
+    }
+
+    private void applyConfiguredRandomAreaColor(NArea area) {
+        Object randomColorSetting = NConfig.get(NConfig.Key.randomAreaColor);
+        if(randomColorSetting instanceof Boolean && (Boolean)randomColorSetting) {
+            java.util.Random rand = new java.util.Random();
+            int r = rand.nextInt(256);
+            int g = rand.nextInt(256);
+            int b = rand.nextInt(256);
+            int a = 80 + rand.nextInt(176);
+            area.color = new java.awt.Color(r, g, b, a);
         }
     }
 

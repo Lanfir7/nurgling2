@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-duplicate-area",
+  "priority": 5,
+  "summary": {
+    "ru": "Дублирование зоны сразу просит новое место и даёт свой цвет, без приставки «копия».",
+    "en": "Duplicating a zone now asks for a new place, uses its own colour, and keeps the original name."
+  },
+  "detail": {
+    "ru": "В списке зон: правый клик → Дублировать. Копия появляется с тем же именем и случайным цветом, как при создании, и сразу открывается выбор области на карте — как «Задать место».",
+    "en": "In the zone list, right-click → Duplicate. The copy keeps the same name, gets a random colour like a new zone, and immediately asks you to place it on the map — same as Set area."
+  }
+}

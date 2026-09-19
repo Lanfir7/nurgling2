@@ -2,6 +2,7 @@ package nurgling.areas;
 
 import org.junit.jupiter.api.Test;
 
+import java.awt.Color;
 import java.util.EnumSet;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,14 +35,16 @@ class AreaCreationTest {
         source.uuid = "source-uuid";
         source.version = 7;
         source.pileFillDirection = PileFillDirection.RIGHT_TO_LEFT;
+        source.color = new Color(0, 0, 0, 56);
 
-        NArea copy = AreaCreation.duplicate(source, 4, "source (copy)");
+        NArea copy = AreaCreation.duplicate(source, 4, "source");
 
         assertEquals(4, copy.id);
-        assertEquals("source (copy)", copy.name);
+        assertEquals("source", copy.name);
         assertEquals(PileFillDirection.RIGHT_TO_LEFT, copy.pileFillDirection);
         assertNotEquals(source.uuid, copy.uuid);
         assertEquals(0, copy.version);
         assertEquals(EnumSet.allOf(AreaFieldGroup.class), copy.dirtyGroups);
+        assertNotEquals(source.color, copy.color);
     }
 }

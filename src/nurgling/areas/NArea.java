@@ -343,6 +343,11 @@ public class NArea
         this.color = generateRandomColor();
     }
     
+    public void randomizeColor()
+    {
+        this.color = generateRandomColor();
+    }
+
     private static Color generateRandomColor()
     {
         Random random = new Random();

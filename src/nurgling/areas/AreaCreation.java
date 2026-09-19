@@ -43,6 +43,7 @@ public class AreaCreation {
         copy.id = id;
         copy.name = name;
         copy.gid = Long.MIN_VALUE;
+        copy.randomizeColor();
         initializeNew(copy);
         return copy;
     }
