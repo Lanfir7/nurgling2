@@ -102,6 +102,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("prospect_mine", BotDescriptor.BotType.RESOURCES, "bot.prospect_mine.title", "bot.prospect_mine.desc", false, true, ProspectMine.class, "prospect_mine", false));
         bots.add(new BotDescriptor("chipper", BotDescriptor.BotType.RESOURCES, "bot.chipper.title", "bot.chipper.desc", false, true, Chipper.class, "chipper", false));
         bots.add(new BotDescriptor("masterminer", BotDescriptor.BotType.RESOURCES, "bot.masterminer.title", "bot.masterminer.desc", false, true, MasterMiner.class, "masterminer", false));
+        bots.add(new BotDescriptor("veinminer", BotDescriptor.BotType.RESOURCES, "bot.veinminer.title", "bot.veinminer.desc", false, true, VeinMiner.class, "veinminer", false));
         bots.add(new BotDescriptor("pblocks", BotDescriptor.BotType.RESOURCES, "bot.pblocks.title", "bot.pblocks.desc", false, true, PrepareBlocks.class, "pblocks", false));
         bots.add(new BotDescriptor("pboards", BotDescriptor.BotType.RESOURCES, "bot.pboards.title", "bot.pboards.desc", false, true, PrepareBoards.class, "pboards", false));
         bots.add(new BotDescriptor("clay", BotDescriptor.BotType.RESOURCES, "bot.clay.title", "bot.clay.desc", false, true, ClayDigger.class, "clay", true));
