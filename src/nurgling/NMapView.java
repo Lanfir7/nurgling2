@@ -13,6 +13,7 @@ import haven.res.ui.gobcp.Gobcopy;
 import haven.BuddyWnd;
 import nurgling.actions.QuickActionBot;
 import nurgling.actions.bots.ScenarioRunner;
+import nurgling.actions.bots.VeinSeedCapture;
 import nurgling.contextmenu.GobContextRegistry;
 import nurgling.contextmenu.NTileContextMenu;
 import nurgling.contextmenu.TileContextAction;
@@ -2637,6 +2638,11 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     }
 
     private int pendingPlantingQuality = -1;
+    private final VeinSeedCapture veinSeedCapture = new VeinSeedCapture();
+
+    public VeinSeedCapture veinSeedCapture() {
+        return veinSeedCapture;
+    }
 
     /** Records an item activation until its following planting selection/world action. */
     public void notePlantingItem(WItem item) {
@@ -2658,6 +2664,9 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     @Override
     public void wdgmsg(String msg, Object... args) {
+        if ("sel".equals(msg) && args.length >= 2 && args[0] instanceof Coord && args[1] instanceof Coord) {
+            veinSeedCapture.offer((Coord) args[0], (Coord) args[1]);
+        }
         if ("sel".equals(msg) && pendingPlantingQuality >= 0
                 && args.length >= 2 && args[0] instanceof Coord && args[1] instanceof Coord) {
                 Coord first = (Coord) args[0];
