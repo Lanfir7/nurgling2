@@ -21,4 +21,12 @@ class VeinMinerSafetyTest {
         assertFalse(VeinMiner.supportCovers(null, begin, data));
         assertFalse(VeinMiner.supportCovers(new Coord(10, 20), begin, null));
     }
+
+    @Test
+    void seedFinishedRequiresDifferentNonNullName() {
+        assertFalse(VeinMiner.seedFinished(null, "gfx/tiles/rock"));
+        assertFalse(VeinMiner.seedFinished("gfx/tiles/rock", null));
+        assertFalse(VeinMiner.seedFinished("gfx/tiles/rock", "gfx/tiles/rock"));
+        assertTrue(VeinMiner.seedFinished("gfx/tiles/rock", "gfx/tiles/cave"));
+    }
 }

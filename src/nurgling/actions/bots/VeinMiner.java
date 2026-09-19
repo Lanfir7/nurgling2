@@ -60,8 +60,7 @@ public class VeinMiner implements Action {
             NUtils.addTask(new NTask() {
                 @Override
                 public boolean check() {
-                    String now = tileName(gui, seed);
-                    return now == null || !type.equals(now);
+                    return seedFinished(type, tileName(gui, seed));
                 }
             });
 
@@ -85,7 +84,10 @@ public class VeinMiner implements Action {
                     return mined;
                 }
                 list.markMined(next);
-                handleBumlings(gui);
+                Results bum = handleBumlings(gui);
+                if (!bum.IsSuccess()) {
+                    return bum;
+                }
             }
         } finally {
             cap.disarm();
@@ -136,6 +138,13 @@ public class VeinMiner implements Action {
         return false;
     }
 
+    static boolean seedFinished(String original, String now) {
+        if (original == null || now == null) {
+            return false;
+        }
+        return !original.equals(now);
+    }
+
     static String tileName(NGameUI gui, Coord tile) {
         if (gui == null || gui.ui == null || gui.ui.sess == null || tile == null) {
             return null;
@@ -177,7 +186,17 @@ public class VeinMiner implements Action {
             if (inFight(gui)) {
                 return Results.FAIL();
             }
-            handleBumlings(gui);
+            Gob looserockLoop = Finder.findGob(new NAlias("looserock"));
+            if (looserockLoop != null && looserockLoop.rc.dist(NUtils.player().rc) < 93.5) {
+                return Results.ERROR("Loose rock detected — unsafe to continue");
+            }
+            if (!checkSupportHealth(tilePos)) {
+                return Results.ERROR("Nearby support damaged — unsafe to continue");
+            }
+            Results bum = handleBumlings(gui);
+            if (!bum.IsSuccess()) {
+                return bum;
+            }
             NUtils.mine(worldPos);
             gui.map.wdgmsg("sel", tilePos, tilePos, 0);
             if (NUtils.getStamina() > 0.4) {
@@ -225,10 +244,10 @@ public class VeinMiner implements Action {
         return new Coord2d(tile.x * tilesz.x + tilesz.x / 2, tile.y * tilesz.y + tilesz.y / 2);
     }
 
-    private void handleBumlings(NGameUI gui) throws InterruptedException {
+    private Results handleBumlings(NGameUI gui) throws InterruptedException {
         Gob bumling = Finder.findGob(new NAlias("bumlings"));
         if (bumling == null || bumling.rc.dist(NUtils.player().rc) > 20) {
-            return;
+            return Results.SUCCESS();
         }
         new PathFinder(bumling).run(gui);
         int attempts = 0;
@@ -245,16 +264,19 @@ public class VeinMiner implements Action {
                     bumling = null;
                     break;
                 case BUMLINGFORDRINK:
-                    new RestoreResources().run(gui);
+                    if (!new RestoreResources().run(gui).IsSuccess()) {
+                        return Results.ERROR("Cannot restore resources");
+                    }
                     bumling = Finder.findGob(bumling.id);
                     break;
                 case DANGER:
                     gui.msg("Warning: Low energy while chipping stones");
-                    return;
+                    return Results.SUCCESS();
                 default:
                     bumling = Finder.findGob(bumling.id);
                     break;
             }
         }
+        return Results.SUCCESS();
     }
 }
