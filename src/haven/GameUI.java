@@ -1008,6 +1008,8 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	    }
 	} else if(w == chrwdg) {
 	    chrwdg = null;
+	} else if(w == fsess) {
+	    fsess = null;
 	}
 	meters.remove(w);
     }

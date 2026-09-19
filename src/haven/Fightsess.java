@@ -392,6 +392,21 @@ public class Fightsess extends Widget {
 	KeyBinding.get("fgt/8", KeyMatch.forcode(KeyEvent.VK_4, KeyMatch.S)),
 	KeyBinding.get("fgt/9", KeyMatch.forcode(KeyEvent.VK_5, KeyMatch.S)),
     };
+
+    public static boolean isCombatActionKey(Widget.KbdEvent ev) {
+	if(ev == null)
+	    return(false);
+	for(int i = 0; i < kb_acts.length; i++) {
+	    if(kb_acts[i].key().match(ev))
+		return(true);
+	}
+	return(false);
+    }
+
+    public static boolean capturesBeltKey(Fightsess sess, Widget.KbdEvent ev) {
+	return((sess != null) && (sess.parent != null) && isCombatActionKey(ev));
+    }
+
     public static final KeyBinding kb_relcycle =  KeyBinding.get("fgt-cycle", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C));
     public static final KeyBinding kb_relcycle_prev =  KeyBinding.get("fgt-cycle-prev", KeyMatch.forcode(KeyEvent.VK_TAB, KeyMatch.C | KeyMatch.S));
 

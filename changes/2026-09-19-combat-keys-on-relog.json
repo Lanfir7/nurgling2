@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-19-combat-keys-on-relog",
+  "priority": 8,
+  "summary": {
+    "ru": "При входе в уже идущий бой снова срабатывают боевые клавиши, а не слоты пояса.",
+    "en": "Logging into an ongoing fight uses combat keys again, not belt slots."
+  },
+  "detail": {
+    "ru": "Если персонаж уже в бою и вы заходите за него, клавиши приёмов снова вызывают удары, а не предметы и действия с пояса. Обычный бой по ходу игры не меняется.",
+    "en": "If the character is already fighting when you log in, move keys trigger attacks again instead of belt items and actions. Fights that start during the session still work as before."
+  }
+}

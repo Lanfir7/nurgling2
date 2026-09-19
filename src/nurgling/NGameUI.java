@@ -417,6 +417,12 @@ public class NGameUI extends GameUI
 
         // Load external plugins and let them attach to this session's UI.
         nurgling.plugins.NPluginManager.onGameUIReady(this);
+
+        /* Belts and other HUD widgets are added after the server may already have
+         * sent fsess (login into an ongoing fight). globtype walks last-child first,
+         * so raise the combat session back above the delayed widgets. */
+        if(fsess != null)
+            fsess.raise();
     }
 
     @Override
@@ -1462,6 +1468,9 @@ public class NGameUI extends GameUI
         @Override
         public boolean globtype(GlobKeyEvent ev) {
             if (!visible) {
+                return false;
+            }
+            if (Fightsess.capturesBeltKey(NGameUI.this.fsess, ev)) {
                 return false;
             }
             for (int i = 0; i < beltkeys.size(); i++) {
