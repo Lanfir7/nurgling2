@@ -13,6 +13,7 @@ import java.awt.*;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -100,6 +101,13 @@ public class NCritterCircle extends Sprite {
     );
 
     private static final Set<String> CRITTER_SET = Set.copyOf(CRITTER_PATHS);
+
+    public static final String STOAT_PATH = "gfx/kritter/stoat/stoat";
+
+    /** Small animals that need a click disc but are not forage pickups. */
+    public static final List<String> HITBOX_PATHS = List.of(STOAT_PATH);
+
+    private static final Set<String> HITBOX_SET = Set.copyOf(HITBOX_PATHS);
 
     private final VertexBuf.VertexData posa;
     private final VertexBuf vbuf;
@@ -215,7 +223,7 @@ public class NCritterCircle extends Sprite {
     @Override
     public boolean tick(double dt) {
         String pose = ((Gob) owner).pose();
-        if (pose != null && NParser.checkName(pose, DEAD_KNOCKED))
+        if (pose != null && NParser.checkName(pose, DEAD_KNOCKED) && !keepWhenDead(critterPath))
             return true;
         // Toggle rendering live as the per-critter checkbox / master toggle changes.
         boolean enabled = isEnabled(critterPath);
@@ -232,6 +240,47 @@ public class NCritterCircle extends Sprite {
         if (resName == null) return false;
         if (CRITTER_SET.contains(resName)) return true;
         return resName.matches(".*/(rabbit|bunny)$");
+    }
+
+    public static boolean hasCircle(String resName) {
+        if (resName == null) return false;
+        return isCritter(resName) || HITBOX_SET.contains(resName);
+    }
+
+    public static boolean keepWhenDead(String resName) {
+        return resName != null && HITBOX_SET.contains(resName);
+    }
+
+    public static List<String> circlePaths() {
+        ArrayList<String> paths = new ArrayList<String>(CRITTER_PATHS.size() + HITBOX_PATHS.size());
+        paths.addAll(CRITTER_PATHS);
+        paths.addAll(HITBOX_PATHS);
+        return paths;
+    }
+
+    public static boolean canAttachCircle(String pose, String resName) {
+        if (!hasCircle(resName))
+            return false;
+        if (pose == null || keepWhenDead(resName))
+            return true;
+        return !NParser.checkName(pose, "dead", "knock");
+    }
+
+    public static void appendMissingConfigs(List<? super NCritterCircleConf> settings, List<String> paths) {
+        if (settings == null || paths == null)
+            return;
+        HashSet<String> have = new HashSet<String>();
+        for (Object item : settings) {
+            if (item instanceof NCritterCircleConf)
+                have.add(((NCritterCircleConf) item).path);
+        }
+        for (String path : paths) {
+            if (path != null && !have.contains(path)) {
+                Color color = isRabbit(path) ? RABBIT_COLOR : DEFAULT_COLOR;
+                settings.add(new NCritterCircleConf(path, true, color, DEFAULT_RADIUS));
+                have.add(path);
+            }
+        }
     }
 
     public static boolean isRabbit(String resName) {
@@ -277,10 +326,7 @@ public class NCritterCircle extends Sprite {
      */
     public static ArrayList<NCritterCircleConf> buildDefaultConfigs() {
         ArrayList<NCritterCircleConf> list = new ArrayList<>();
-        for (String path : CRITTER_PATHS) {
-            Color color = isRabbit(path) ? RABBIT_COLOR : DEFAULT_COLOR;
-            list.add(new NCritterCircleConf(path, true, color, DEFAULT_RADIUS));
-        }
+        appendMissingConfigs(list, circlePaths());
         return list;
     }
 }

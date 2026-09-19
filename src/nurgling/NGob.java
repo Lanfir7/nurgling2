@@ -1028,17 +1028,14 @@ public class NGob
             }
 
             // Add clickable circle under small critters for easier targeting
-            if (NCritterCircle.isCritter(name))
+            if (NCritterCircle.hasCircle(name))
             {
                 delayedOverlayTasks.add(new DelayedOverlayTask(
                         gob ->
                         {
                             if (gob.findol(NCritterCircle.class) != null)
                                 return false;
-                            String pose = gob.pose();
-                            // For composite critters, wait for pose and check alive
-                            // For non-composite (insects), pose is null — show immediately
-                            return pose == null || !NParser.checkName(pose, "dead", "knock");
+                            return NCritterCircle.canAttachCircle(gob.pose(), name);
                         },
                         gob -> gob.addcustomol(new NCritterCircle(gob, NCritterCircle.getColorForCritter(name), NCritterCircle.getRadiusForCritter(name), name))
                 ));

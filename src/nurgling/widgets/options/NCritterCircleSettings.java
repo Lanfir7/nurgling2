@@ -80,7 +80,10 @@ public class NCritterCircleSettings extends Panel {
         Map<String, NCritterCircleConf> confMap = new LinkedHashMap<>();
         Object obj = NConfig.getGlobal(NConfig.Key.critterCircleSettings);
         if (obj instanceof ArrayList) {
-            for (Object item : (ArrayList<?>) obj) {
+            @SuppressWarnings("unchecked")
+            ArrayList<Object> saved = (ArrayList<Object>) obj;
+            NCritterCircle.appendMissingConfigs(saved, NCritterCircle.circlePaths());
+            for (Object item : saved) {
                 if (item instanceof NCritterCircleConf) {
                     NCritterCircleConf c = (NCritterCircleConf) item;
                     confMap.put(c.path, c);
@@ -89,7 +92,7 @@ public class NCritterCircleSettings extends Panel {
         }
 
         // Create a row for each critter
-        for (String path : NCritterCircle.CRITTER_PATHS) {
+        for (String path : NCritterCircle.circlePaths()) {
             NCritterCircleConf conf = confMap.get(path);
             if (conf == null) {
                 // Not in saved config yet — create default

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-19-stoat-click-circle",
+  "priority": 5,
+  "summary": {
+    "ru": "У горностая появился кликабельный круг на земле — проще попасть и подобрать тушку.",
+    "en": "Stoats now have a ground click circle, so they are easier to hit and to pick up when dead."
+  },
+  "detail": {
+    "ru": "Как у белок: круг под живым и мёртвым stoat. Клик по кругу — обычный клик по зверю, без автоатаки. Цвет, размер и галочку можно сменить в настройках окружения, Critter Circles, строка Stoat.",
+    "en": "Same disc as squirrels, on living and dead stoats. Clicking the circle is a normal click on the animal, not an auto-attack. Colour, size and the checkbox are in Game environment → Critter Circles → Stoat."
+  }
+}
