@@ -956,11 +956,15 @@ public class NContext {
     }
 
     public void navigateToAreaIfNeeded(String areaId) throws InterruptedException {
+        navigateToAreaIfNeeded(areaId, false);
+    }
+
+    public void navigateToAreaIfNeeded(String areaId, boolean ensurePresence) throws InterruptedException {
         NArea area = areas.get(areaId);
         if(area == null) {
             return;
         }
-        NUtils.navigateToArea(area);
+        NUtils.navigateToArea(area, ensurePresence);
     }
 
     public String createArea(String msg, BufferedImage bauble) throws InterruptedException {

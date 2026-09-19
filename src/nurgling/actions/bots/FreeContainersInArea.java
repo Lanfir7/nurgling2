@@ -18,6 +18,7 @@ import nurgling.actions.Results;
 import nurgling.actions.TakeItemsFromPile;
 import nurgling.areas.NContext;
 import nurgling.pf.NHitBoxD;
+import nurgling.pf.Utils;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
@@ -51,8 +52,15 @@ public class FreeContainersInArea implements Action {
         }
 
         ArrayList<Gob> piles;
-        while (!(piles = Finder.findGobs(area, new NAlias("stockpile"))).isEmpty()) {
+        while (true) {
+            ensureSourceGobsLoaded(gui, context, workAreaId, area);
+            piles = Finder.findGobs(area, new NAlias("stockpile"));
             Gob player = NUtils.player();
+            boolean sourceVisible = player != null && Utils.areaFullyInVisibleArea(area, player.rc);
+            if (treatSourceAsCleared(!piles.isEmpty(), sourceVisible))
+                break;
+            if (piles.isEmpty())
+                break;
             if (player == null)
                 break;
             orderPilesNearestFirst(piles, player.rc);
@@ -62,7 +70,7 @@ public class FreeContainersInArea implements Action {
                 if (!openPile(gui, pile))
                     continue;
                 openedPile = true;
-                if (!drainPile(gui, context, workAreaId, pile)) {
+                if (!drainPile(gui, context, workAreaId, area, pile)) {
                     return Results.FAIL();
                 }
                 break;
@@ -73,7 +81,8 @@ public class FreeContainersInArea implements Action {
         return new FreeInventory2(context).run(gui);
     }
 
-    private static boolean drainPile(NGameUI gui, NContext context, String workAreaId, Gob pile)
+    private static boolean drainPile(NGameUI gui, NContext context, String workAreaId,
+                                     Pair<Coord2d, Coord2d> area, Gob pile)
             throws InterruptedException {
         Coord size = StockpileUtils.itemMaxSize.get(pile.ngob.name);
         Coord itemSize = size != null ? size : new Coord(1, 1);
@@ -86,7 +95,7 @@ public class FreeContainersInArea implements Action {
                 if (!canResumePickup(freed, freeAfter)) {
                     return false;
                 }
-                context.navigateToAreaIfNeeded(workAreaId);
+                ensureSourceGobsLoaded(gui, context, workAreaId, area);
                 if (Finder.findGob(pile.id) == null || !openPile(gui, pile))
                     break;
                 continue;
@@ -108,6 +117,56 @@ public class FreeContainersInArea implements Action {
     static boolean canResumePickup(Results freeInventoryResult, int freeSlotsAfter) {
         return freeInventoryResult != null && freeInventoryResult.IsSuccess()
                 && freeSlotsAfter > 0;
+    }
+
+    static boolean treatSourceAsCleared(boolean foundGobs, boolean sourceFullyVisible) {
+        return !foundGobs && sourceFullyVisible;
+    }
+
+    static boolean shouldReloadSourceGobs(Pair<Coord2d, Coord2d> area, Coord2d playerRc) {
+        return Utils.walkTargetToSeeWholeArea(area, playerRc) != null;
+    }
+
+    private static void ensureSourceGobsLoaded(NGameUI gui, NContext context, String workAreaId,
+                                               Pair<Coord2d, Coord2d> area)
+            throws InterruptedException {
+        boolean neededReload = false;
+        Gob player = NUtils.player();
+        if (player != null && player.rc != null) {
+            neededReload = shouldReloadSourceGobs(area, player.rc);
+        }
+        context.navigateToAreaIfNeeded(workAreaId, true);
+        player = NUtils.player();
+        if (player != null && player.rc != null && shouldReloadSourceGobs(area, player.rc)) {
+            Coord2d target = Utils.walkTargetToSeeWholeArea(area, player.rc);
+            if (target != null) {
+                new PathFinder(target).run(gui);
+                neededReload = true;
+            }
+        }
+        if (neededReload) {
+            waitForSourcePiles(area);
+        }
+    }
+
+    private static void waitForSourcePiles(Pair<Coord2d, Coord2d> area) throws InterruptedException {
+        NUtils.addTask(new nurgling.tasks.NTask() {
+            {
+                infinite = false;
+                maxCounter = 80;
+                criticalOnTimeout = false;
+            }
+
+            @Override
+            public boolean check() {
+                try {
+                    return !Finder.findGobs(area, new NAlias("stockpile")).isEmpty();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return true;
+                }
+            }
+        });
     }
 
     static void orderPilesNearestFirst(ArrayList<Gob> piles, Coord2d player) {

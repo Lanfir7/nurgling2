@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-19-unbox-return",
+  "priority": 7,
+  "summary": {
+    "ru": "Распаковка из только что выделенной зоны снова возвращается за следующей партией, даже если зона уже вне экрана.",
+    "en": "Unpacking from a just-selected zone walks back for the next load even after the source leaves the screen."
+  },
+  "detail": {
+    "ru": "Бот «Освободить контейнеры» после раскладки полного инвентаря снова идёт к выбранной зоне и забирает оставшиеся стаки. Раньше, если зона оказывалась вне видимости, бот решал, что там уже пусто, и останавливался.",
+    "en": "Free Containers walks back to the zone you just selected after dumping a full inventory and keeps emptying remaining piles. It no longer stops just because that zone has left the visible area."
+  }
+}

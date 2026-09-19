@@ -94,7 +94,7 @@ public class FreeContainers implements Action
         {
             if(container.parent!=null)
             {
-                NUtils.navigateToArea(container.parent);
+                NUtils.navigateToArea(container.parent, true);
                 gob = Finder.findGob(container.gobHash);
                 if(gob!= null && PathFinder.isAvailable(gob)) {
                     pf = new PathFinder(gob);
