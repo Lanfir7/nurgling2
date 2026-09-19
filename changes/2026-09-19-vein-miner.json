@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-19-vein-miner",
+  "priority": 7,
+  "summary": {
+    "ru": "Новый макрос «Жильный шахтёр»: кликни клетку — бот докопает жилу в безопасной зоне.",
+    "en": "New Vein Miner macro: click one tile and the bot finishes that vein in the safe zone."
+  },
+  "detail": {
+    "ru": "В ботах добычи, рядом с Мастер-шахтёром. Запуск включает курсор Mine. Выкопайте первую клетку сами — бот запомнит породу и выкопает все открывающиеся соседние клетки того же типа под подпорками или на зелёных точках, затем остановится.",
+    "en": "In the mining bots, next to Master Miner. Start it to arm Mine, dig the first tile yourself, and the bot finishes every newly opened neighbour of that rock inside supports or green safe dots, then stops."
+  }
+}
