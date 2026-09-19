@@ -5,8 +5,8 @@
     "ru": "При копке соседняя скала подсвечивается золотом, если жила блеснула — так проще найти руду.",
     "en": "While mining, nearby rock lights up gold when the vein glimmers, so ore is easier to find."
   },
-  "detail": {
-    "ru": "После выкопанной клетки, если в системном чате есть «Something glimmers in the vein.», оставшаяся скала в квадрате 7×7 красится золотом с цифрой. Несколько копок сужают зону. Тихая копка без сообщения снимает клетки. Выключается в настройках рядом с оверлеем добычи.",
-    "en": "After you finish a tile, if System chat says “Something glimmers in the vein.”, remaining rock in a 7×7 square is painted gold with a number. Later digs shrink the zone. A silent tile without that line clears its square. Toggle it next to the mining overlay setting."
-  }
+    "detail": {
+      "ru": "После выкопанной клетки, если в системном чате есть «Something glimmers in the vein.», оставшаяся скала в квадрате 7×7 красится золотом с цифрой. Несколько копок сужают зону. Тихая копка без сообщения снимает клетки, но выкопанная руда зону не трогает. Если пол прогрузился с задержкой, зона не сбивается. Выключается в настройках рядом с оверлеем добычи.",
+      "en": "After you finish a tile, if System chat says “Something glimmers in the vein.”, remaining rock in a 7×7 square is painted gold with a number. Later digs shrink the zone. A silent tile without that line clears its square; digging the ore itself does not. A late floor update does not scramble the zone. Toggle it next to the mining overlay setting."
+    }
 }

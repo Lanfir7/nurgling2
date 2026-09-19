@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,10 +38,52 @@ public class GlimmerHeatmap {
         }
     }
 
+    private static final Set<String> ORE_BASE = oreBase();
+
+    private static Set<String> oreBase() {
+        Set<String> ores = new HashSet<String>();
+        String[] names = {
+                "argentite", "blackcoal", "blackore", "bloodstone", "cassiterite",
+                "chalcopyrite", "cinnabar", "cuprite", "direvein", "galena",
+                "heavyearth", "hematite", "hornsilver", "ilmenite", "ironochre",
+                "leadglance", "leafore", "limonite", "magnetite", "malachite",
+                "meteorite", "nagyagite", "peacockore", "petzite", "schrifterz",
+                "silvershine", "sylvanite", "wineglance"
+        };
+        for (int i = 0; i < names.length; i++) {
+            ores.add(names[i]);
+        }
+        return ores;
+    }
+
+    private static final class Unmatched {
+        final Set<Coord> walls;
+        double age;
+
+        Unmatched(Set<Coord> walls) {
+            this.walls = walls == null || walls.isEmpty()
+                    ? Collections.<Coord>emptySet()
+                    : new HashSet<Coord>(walls);
+        }
+
+        boolean matches(Coord tile) {
+            return walls.isEmpty() || walls.contains(tile);
+        }
+    }
+
     private final ArrayDeque<Pending> pending = new ArrayDeque<Pending>();
     private final List<Sample> samples = new ArrayList<Sample>();
-    private int unmatched;
-    private double unmatchedAge;
+    private final ArrayDeque<Unmatched> unmatched = new ArrayDeque<Unmatched>();
+
+    public static boolean isOreRock(String resourceName) {
+        if (resourceName == null || resourceName.isEmpty()) {
+            return false;
+        }
+        int slash = resourceName.lastIndexOf('/');
+        String base = slash >= 0 ? resourceName.substring(slash + 1) : resourceName;
+        String n = base.toLowerCase().replace("-", "").replace("_", "").replace(" ", "");
+        return ORE_BASE.contains(n);
+    }
 
     public static boolean inRange(Coord center, Coord tile) {
         if (center == null || tile == null) {
@@ -55,31 +98,67 @@ public class GlimmerHeatmap {
         if (tile == null) {
             return;
         }
-        if (unmatched > 0) {
-            unmatched--;
+        Unmatched hit = takeUnmatched(tile);
+        if (hit != null) {
             samples.add(new Sample(tile, true));
             return;
         }
         pending.addLast(new Pending(tile));
     }
 
+    public void ignoreTile(Coord tile) {
+        if (tile == null) {
+            return;
+        }
+        Iterator<Pending> pit = pending.iterator();
+        while (pit.hasNext()) {
+            if (tile.equals(pit.next().tile)) {
+                pit.remove();
+            }
+        }
+        Iterator<Sample> sit = samples.iterator();
+        while (sit.hasNext()) {
+            if (tile.equals(sit.next().center)) {
+                sit.remove();
+            }
+        }
+    }
+
     public void onGlimmer() {
+        onGlimmer(null);
+    }
+
+    public void onGlimmer(Set<Coord> expectedWalls) {
         Pending p = pending.pollFirst();
         if (p != null) {
             samples.add(new Sample(p.tile, true));
             return;
         }
-        unmatched++;
-        unmatchedAge = 0;
+        unmatched.addLast(new Unmatched(expectedWalls));
+    }
+
+    private Unmatched takeUnmatched(Coord tile) {
+        Iterator<Unmatched> it = unmatched.iterator();
+        while (it.hasNext()) {
+            Unmatched u = it.next();
+            if (u.matches(tile)) {
+                it.remove();
+                return u;
+            }
+        }
+        return null;
     }
 
     public void tick(double dt) {
-        if (unmatched > 0) {
-            unmatchedAge += dt;
-            if (unmatchedAge >= UNMATCHED_HOLD) {
-                unmatched = 0;
-                unmatchedAge = 0;
+        if (!unmatched.isEmpty()) {
+            ArrayList<Unmatched> expired = new ArrayList<Unmatched>();
+            for (Unmatched u : unmatched) {
+                u.age += dt;
+                if (u.age >= UNMATCHED_HOLD) {
+                    expired.add(u);
+                }
             }
+            unmatched.removeAll(expired);
         }
         if (pending.isEmpty()) {
             return;
@@ -100,8 +179,7 @@ public class GlimmerHeatmap {
     public void clear() {
         pending.clear();
         samples.clear();
-        unmatched = 0;
-        unmatchedAge = 0;
+        unmatched.clear();
     }
 
     public Map<Coord, Integer> visibleHeat(Coord playerTile, int drawRadius,

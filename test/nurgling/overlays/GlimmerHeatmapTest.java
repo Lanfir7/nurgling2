@@ -120,6 +120,63 @@ class GlimmerHeatmapTest {
     }
 
     @Test
+    void oreRockNamesAreDetected() {
+        assertTrue(GlimmerHeatmap.isOreRock("gfx/tiles/rocks/cassiterite"));
+        assertTrue(GlimmerHeatmap.isOreRock("gfx/terobjs/bumlings/hematite"));
+        assertTrue(GlimmerHeatmap.isOreRock("gfx/tiles/rocks/blackcoal"));
+        assertFalse(GlimmerHeatmap.isOreRock("gfx/tiles/cave"));
+        assertFalse(GlimmerHeatmap.isOreRock("gfx/tiles/rocks/granite"));
+        assertFalse(GlimmerHeatmap.isOreRock(null));
+    }
+
+    @Test
+    void ignoredOreCompletionDoesNotClearExistingHeat() {
+        GlimmerHeatmap map = new GlimmerHeatmap();
+        Coord glimmered = Coord.of(10, 10);
+        Coord ore = Coord.of(12, 10);
+        map.onTileCompleted(glimmered);
+        map.onGlimmer();
+        map.ignoreTile(ore);
+        map.tick(GlimmerHeatmap.GLIMMER_WAIT);
+        Map<Coord, Integer> heat = map.visibleHeat(ore, 20, rockExcept(glimmered, ore));
+        assertEquals(Integer.valueOf(1), heat.get(Coord.of(11, 10)));
+        assertEquals(Integer.valueOf(1), heat.get(Coord.of(13, 13)));
+    }
+
+    @Test
+    void ignoreTileUndoesSilentExclude() {
+        GlimmerHeatmap map = new GlimmerHeatmap();
+        Coord glimmered = Coord.of(10, 10);
+        Coord ore = Coord.of(12, 10);
+        map.onTileCompleted(glimmered);
+        map.onGlimmer();
+        map.onTileCompleted(ore);
+        map.tick(GlimmerHeatmap.GLIMMER_WAIT);
+        Map<Coord, Integer> wiped = map.visibleHeat(ore, 20, rockExcept(glimmered, ore));
+        assertFalse(wiped.containsKey(Coord.of(11, 10)));
+        map.ignoreTile(ore);
+        Map<Coord, Integer> heat = map.visibleHeat(ore, 20, rockExcept(glimmered, ore));
+        assertEquals(Integer.valueOf(1), heat.get(Coord.of(11, 10)));
+    }
+
+    @Test
+    void delayedFloorDoesNotStealEarlierGlimmer() {
+        GlimmerHeatmap map = new GlimmerHeatmap();
+        Coord a = Coord.of(10, 10);
+        Coord c = Coord.of(12, 10);
+        java.util.HashSet<Coord> wallsA = new java.util.HashSet<Coord>();
+        wallsA.add(a);
+        map.onGlimmer(wallsA);
+        map.onTileCompleted(c);
+        map.onTileCompleted(a);
+        map.tick(GlimmerHeatmap.GLIMMER_WAIT);
+        Map<Coord, Integer> heat = map.visibleHeat(a, 20, rockExcept(a, c));
+        assertEquals(Integer.valueOf(1), heat.get(Coord.of(7, 10)));
+        assertFalse(heat.containsKey(Coord.of(12, 13)));
+        assertFalse(heat.containsKey(Coord.of(15, 10)));
+    }
+
+    @Test
     void unmatchedGlimmerExpiresThenCompletionIsSilent() {
         GlimmerHeatmap map = new GlimmerHeatmap();
         Coord dug = Coord.of(10, 10);
