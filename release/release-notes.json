@@ -89,6 +89,7 @@
     "2026-09-16-nested-scrollbars",
     "2026-09-16-pointer-mark-range",
     "2026-09-16-stack-fixes",
+    "2026-09-17-areas-compact-layout",
     "2026-09-17-atlas-animal-meat",
     "2026-09-17-combat-overlay-crash",
     "2026-09-17-drag-flush-hit",
@@ -99,9 +100,67 @@
     "2026-09-17-portrait-fill-frame",
     "2026-09-17-scaled-panel-item-drop",
     "2026-09-17-session-macro-controls",
-    "2026-09-17-unified-client-updates"
+    "2026-09-17-stockpile-vision",
+    "2026-09-17-unified-client-updates",
+    "2026-09-18-barrel-label-debug-text",
+    "2026-09-18-ore-glimmer-heatmap",
+    "2026-09-19-collect-same-ground-resources",
+    "2026-09-19-combat-keys-on-relog",
+    "2026-09-19-stoat-click-circle",
+    "2026-09-19-temp-marks-window-switch",
+    "2026-09-19-unbox-return",
+    "2026-09-19-vein-miner",
+    "2026-09-20-duplicate-area"
   ],
   "releases": [
+    {
+      "id": "2.103.208",
+      "date": "2026-09-19",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "При входе в уже идущий бой снова срабатывают боевые клавиши, а не слоты пояса.",
+          "При переключении окон временные значки карты больше не переезжают с другого персонажа — деревья с поверхности не появляются в шахте.",
+          "При копке соседняя скала подсвечивается золотом, если жила блеснула — так проще найти руду."
+        ],
+        "en": [
+          "Logging into an ongoing fight uses combat keys again, not belt slots.",
+          "Temporary map icons no longer leak from the other window when you switch characters — surface trees will not show up in a mine.",
+          "While mining, nearby rock lights up gold when the vein glimmers, so ore is easier to find."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Если персонаж уже в бою и вы заходите за него, клавиши приёмов снова вызывают удары, а не предметы и действия с пояса. Обычный бой по ходу игры не меняется.",
+          "Если один персонаж на поверхности, а другой в шахте, после переключения окон на карте шахты больше не остаются деревья и прочие временные значки второго окна. Каждый персонаж держит свои временные метки.",
+          "После выкопанной клетки, если в системном чате есть «Something glimmers in the vein.», оставшаяся скала в квадрате 7×7 красится золотом с цифрой. Несколько копок сужают зону. Тихая копка без сообщения снимает клетки, но выкопанная руда зону не трогает. Если пол прогрузился с задержкой, зона не сбивается. Выключается в настройках рядом с оверлеем добычи.",
+          "Бот «Освободить контейнеры» после раскладки полного инвентаря снова идёт к выбранной зоне и забирает оставшиеся стаки. Раньше, если зона оказывалась вне видимости, бот решал, что там уже пусто, и останавливался.",
+          "В ботах добычи, рядом с Мастер-шахтёром. Запуск включает курсор Mine. Выкопайте первую клетку сами — бот запомнит породу и выкопает все открывающиеся соседние клетки того же типа под подпорками или на зелёных точках, затем остановится.",
+          "При создании стокпайлов персонаж сначала заходит так, чтобы все углы зоны были в видимости. Если зона на краю обзора, существующие стаки успевают прогрузиться, и бот не ставит новый поверх уже стоящего.",
+          "Подпись над бочкой снова показывает только содержимое. Шесты, метки и прочие наложения на той же бочке больше не подменяют её имя длинной отладочной строкой.",
+          "Бот «Собрать в стопку» теперь продолжает собирать выбранный ресурс во всей зоне. Это исправляет сбор камышей и других одинаковых предметов, когда первый предмет добавляется в существующий стек.",
+          "Откройте настройки областей в компактном виде: поле поиска и список специализаций больше не шире списка зон, а само окно не растягивается вправо за пределы списка.",
+          "Как у белок: круг под живым и мёртвым stoat. Клик по кругу — обычный клик по зверю, без автоатаки. Цвет, размер и галочку можно сменить в настройках окружения, Critter Circles, строка Stoat.",
+          "В списке зон: правый клик → Дублировать. Копия появляется с тем же именем и случайным цветом, как при создании, и сразу открывается выбор области на карте — как «Задать место»."
+        ],
+        "en": [
+          "If the character is already fighting when you log in, move keys trigger attacks again instead of belt items and actions. Fights that start during the session still work as before.",
+          "With one character on the surface and another in a mine, switching windows no longer leaves the other character's trees and temporary icons on the mine map. Each character keeps their own temporary marks.",
+          "After you finish a tile, if System chat says “Something glimmers in the vein.”, remaining rock in a 7×7 square is painted gold with a number. Later digs shrink the zone. A silent tile without that line clears its square; digging the ore itself does not. A late floor update does not scramble the zone. Toggle it next to the mining overlay setting.",
+          "Free Containers walks back to the zone you just selected after dumping a full inventory and keeps emptying remaining piles. It no longer stops just because that zone has left the visible area.",
+          "In the mining bots, next to Master Miner. Start it to arm Mine, dig the first tile yourself, and the bot finishes every newly opened neighbour of that rock inside supports or green safe dots, then stops.",
+          "When creating stockpiles, your character first walks so every corner of the zone is in view. Piles on the edge of vision load first, so a new pile is not placed on top of one that was already there.",
+          "The caption above a barrel again shows only its contents. Poles, tags and other attachments on the same barrel no longer replace that name with a long debug string.",
+          "The Collect To Pile bot now continues through the selected area for the chosen resource. This fixes reeds and other identical ground items when the first pickup joins an existing stack.",
+          "Open area settings in compact mode: the search field and specialization list no longer extend past the zone list, and the window no longer stretches to the right of that list.",
+          "Same disc as squirrels, on living and dead stoats. Clicking the circle is a normal click on the animal, not an auto-attack. Colour, size and the checkbox are in Game environment → Critter Circles → Stoat.",
+          "In the zone list, right-click → Duplicate. The copy keeps the same name, gets a random colour like a new zone, and immediately asks you to place it on the map — same as Set area."
+        ]
+      }
+    },
     {
       "id": "2.103.207",
       "date": "2026-09-17",
