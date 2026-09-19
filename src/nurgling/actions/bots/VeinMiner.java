@@ -14,9 +14,7 @@ import nurgling.tools.NParser;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.function.Function;
 
 import static haven.MCache.tilesz;
 import static haven.OCache.posres;
@@ -65,8 +63,7 @@ public class VeinMiner implements Action {
             });
 
             VeinWorklist list = new VeinWorklist(type, seed);
-            List<Coord> minedTiles = new ArrayList<>();
-            minedTiles.add(seed);
+            Set<Long> pathRetries = new HashSet<>();
             while (true) {
                 if (inFight(gui)) {
                     return Results.FAIL();
@@ -79,30 +76,24 @@ public class VeinMiner implements Action {
                 Coord playerTile = player.rc.div(tilesz).floor();
                 Coord next = list.takeNearest(playerTile);
                 if (next == null) {
-                    if (neighborsStillLoading(minedTiles, c -> tileName(gui, c))) {
-                        NUtils.addTask(new NTask() {
-                            @Override
-                            public boolean check() {
-                                return !neighborsStillLoading(minedTiles, c -> tileName(gui, c));
-                            }
-                        });
-                        continue;
-                    }
                     gui.msg("Vein Miner: vein finished.");
                     return Results.SUCCESS();
                 }
-                if (!type.equals(tileName(gui, next)) || !isSafe(gui, next)) {
+                if (!isTargetTile(type, tileName(gui, next)) || !isSafe(gui, next)) {
                     continue;
                 }
                 Results mined = mineTile(gui, next, type);
                 if (mined.isCycle) {
+                    if (pathRetries.add(tileKey(next))) {
+                        list.offer(next, type, true);
+                    }
                     continue;
                 }
                 if (!mined.IsSuccess()) {
                     return mined;
                 }
+                pathRetries.remove(tileKey(next));
                 list.markMined(next);
-                minedTiles.add(next);
                 Results bum = handleBumlings(gui);
                 if (!bum.IsSuccess()) {
                     return bum;
@@ -124,37 +115,70 @@ public class VeinMiner implements Action {
     }
 
     static boolean isSafe(NGameUI gui, Coord tile) {
-        if (tile == null || gui == null) {
+        if (tile == null || gui == null || gui.ui == null || gui.ui.sess == null) {
             return false;
-        }
-        ArrayList<Gob> supports = Finder.findGobs(ALL_SUPPORTS);
-        for (Gob g : supports) {
-            Gob.Overlay ol = g.findol(NMiningSupport.class);
-            if (ol == null || !(ol.spr instanceof NMiningSupport)) {
-                continue;
-            }
-            NMiningSupport nms = (NMiningSupport) ol.spr;
-            if (supportCovers(tile, nms.begin, nms.getData())) {
-                return true;
-            }
         }
         Coord2d world = tileCenter(tile);
-        if (gui.ui == null || gui.ui.sess == null) {
-            return false;
-        }
         synchronized (gui.ui.sess.glob.oc) {
             for (Gob gob : gui.ui.sess.glob.oc) {
-                if (gob.rc.dist(world) >= tilesz.x) {
-                    continue;
-                }
-                for (Gob.Overlay ol : gob.ols) {
-                    if (ol.spr instanceof NMiningSafeOverlay) {
+                Gob.Overlay supportOl = gob.findol(NMiningSupport.class);
+                if (supportOl != null && supportOl.spr instanceof NMiningSupport) {
+                    NMiningSupport nms = (NMiningSupport) supportOl.spr;
+                    if (supportCovers(tile, nms.begin, nms.getData())) {
                         return true;
+                    }
+                }
+                int radius = supportRadiusFor(gob.ngob != null ? gob.ngob.name : null);
+                if (radius > 0 && inSupportRadius(tile, gob.rc, radius)) {
+                    return true;
+                }
+                if (gob.ngob != null && gob.ngob.name != null) {
+                    NMiningSupport.Spec spec = NMiningSupport.specFor(gob.ngob.name);
+                    if (spec != null && !spec.isRect() && spec.circleRadius != null
+                            && inSupportRadius(tile, gob.rc, spec.circleRadius)) {
+                        return true;
+                    }
+                }
+                if (gob.rc.dist(world) < tilesz.x) {
+                    for (Gob.Overlay ol : gob.ols) {
+                        if (ol.spr instanceof NMiningSafeOverlay) {
+                            return true;
+                        }
                     }
                 }
             }
         }
         return false;
+    }
+
+    public static boolean inSupportRadius(Coord tile, Coord2d gobRc, int radius) {
+        if (tile == null || gobRc == null || radius <= 0) {
+            return false;
+        }
+        return gobRc.dist(tileCenter(tile)) < radius;
+    }
+
+    static int supportRadiusFor(String name) {
+        if (name == null) {
+            return -1;
+        }
+        String n = name.toLowerCase();
+        if (n.contains("monumentalcolumn")) {
+            return 330;
+        }
+        if (n.contains("minebeam")) {
+            return 150;
+        }
+        if (n.contains("column")) {
+            return 125;
+        }
+        if (n.contains("naturalminesupport")) {
+            return 92;
+        }
+        if (n.contains("ladder") || n.contains("minesupport") || n.contains("towercap")) {
+            return 100;
+        }
+        return -1;
     }
 
     static boolean seedFinished(String original, String now) {
@@ -174,30 +198,12 @@ public class VeinMiner implements Action {
         return !NParser.checkName(cursorName, "mine");
     }
 
-    static boolean neighborsStillLoading(Iterable<Coord> mined, Function<Coord, String> tileName) {
-        if (mined == null || tileName == null) {
-            return false;
-        }
-        Set<Long> minedKeys = new HashSet<>();
-        for (Coord m : mined) {
-            minedKeys.add(tileKey(m));
-        }
-        for (Coord m : mined) {
-            for (int[] d : VeinWorklist.NEIGHBORS) {
-                Coord n = new Coord(m.x + d[0], m.y + d[1]);
-                if (minedKeys.contains(tileKey(n))) {
-                    continue;
-                }
-                if (tileName.apply(n) == null) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    static long tileKey(Coord c) {
+        return ((long) c.x << 32) | (c.y & 0xffffffffL);
     }
 
-    private static long tileKey(Coord c) {
-        return ((long) c.x << 32) | (c.y & 0xffffffffL);
+    static boolean isTargetTile(String type, String currentType) {
+        return type != null && type.equals(currentType);
     }
 
     static String tileName(NGameUI gui, Coord tile) {
@@ -239,15 +245,15 @@ public class VeinMiner implements Action {
         if (!pfResult.IsSuccess()) {
             return pfResult;
         }
-        if (!type.equals(tileName(gui, tilePos)) || !isSafe(gui, tilePos)) {
+        if (!isTargetTile(type, tileName(gui, tilePos)) || !isSafe(gui, tilePos)) {
             return Results.CYCLE();
         }
         if (!new RestoreResources().run(gui).IsSuccess()) {
             return Results.ERROR("Cannot restore resources");
         }
 
-        Resource resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
-        while (resBefore != null && resBefore == gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos))) {
+        while (isTargetTile(type, tileName(gui, tilePos))) {
+            Resource resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
             if (inFight(gui)) {
                 return Results.FAIL();
             }
@@ -282,8 +288,8 @@ public class VeinMiner implements Action {
             }
             gui.map.wdgmsg("click", Coord.z, player.rc.floor(posres), 3, 0);
             NUtils.getUI().core.addTask(new GetCurs("arw"));
-            resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
-            if (!new RestoreResources().run(gui).IsSuccess()) {
+            if (isTargetTile(type, tileName(gui, tilePos))
+                    && !new RestoreResources().run(gui).IsSuccess()) {
                 return Results.ERROR("Cannot restore resources");
             }
         }

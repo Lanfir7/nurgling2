@@ -267,6 +267,7 @@ public class TransferToPiles implements Action{
         ArrayList<WItem> witems;
         NAlias pileName;
         if (!(witems = getMatchingItems(gui)).isEmpty() ) {
+                PileMaker.ensurePlacementAreaVisible(gui, out);
                 Gob target = null;
                 boolean existingPileAccessFailed = false;
                 for (Gob gob : Finder.findGobs(out, pileName = getStockpileName(items))) {

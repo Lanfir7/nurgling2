@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-19-collect-same-ground-resources",
+  "priority": 6,
+  "summary": {
+    "ru": "Сбор одинаковых предметов с земли снова работает, даже если они складываются в уже занятый слот.",
+    "en": "Collecting identical ground items works again, including when they stack into an occupied slot."
+  },
+  "detail": {
+    "ru": "Бот «Собрать в стопку» теперь продолжает собирать выбранный ресурс во всей зоне. Это исправляет сбор камышей и других одинаковых предметов, когда первый предмет добавляется в существующий стек.",
+    "en": "The Collect To Pile bot now continues through the selected area for the chosen resource. This fixes reeds and other identical ground items when the first pickup joins an existing stack."
+  }
+}

@@ -8,7 +8,11 @@ import nurgling.areas.PileFillDirection;
 import nurgling.tools.NAlias;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,5 +119,33 @@ class PileMakerTest {
                 PileFillDirection.RIGHT_TO_LEFT,
                 PileFillDirection.TOP_TO_BOTTOM,
                 PileFillDirection.BOTTOM_TO_TOP), directedCalls);
+    }
+
+    @Test
+    void visionWalkRequiredWhenZoneSitsOnVisionEdge() {
+        Pair<Coord2d, Coord2d> edge = Pair.of(Coord2d.of(5400, 5400), Coord2d.of(5600, 5600));
+        Pair<Coord2d, Coord2d> inside = Pair.of(Coord2d.of(5050, 5050), Coord2d.of(5300, 5300));
+        Coord2d player = Coord2d.of(5000, 5000);
+        assertTrue(PileMaker.requiresVisionWalk(edge, player));
+        assertFalse(PileMaker.requiresVisionWalk(inside, player));
+    }
+
+    @Test
+    void placementIgnoresFreeCellsOutsideVision() {
+        Coord2d player = Coord2d.of(5000, 5000);
+        Coord2d hidden = Coord2d.of(5600, 5600);
+        Coord2d visible = Coord2d.of(5100, 5100);
+        assertEquals(visible, PileMaker.firstVisibleCandidate(
+                List.of(hidden, visible), player));
+        assertEquals(null, PileMaker.firstVisibleCandidate(
+                Collections.singletonList(hidden), player));
+    }
+
+    @Test
+    void creationWalksUntilZoneCornersAreInVision() throws Exception {
+        String src = new String(Files.readAllBytes(Paths.get("src/nurgling/actions/PileMaker.java")),
+                StandardCharsets.UTF_8);
+        assertTrue(src.contains("ensurePlacementAreaVisible"), src);
+        assertTrue(src.contains("firstVisibleCandidate"), src);
     }
 }

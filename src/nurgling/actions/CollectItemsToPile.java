@@ -16,11 +16,24 @@ public class CollectItemsToPile implements Action{
     Pair<Coord2d,Coord2d> in;
 
     NAlias items;
+    NAlias groundItems;
     public CollectItemsToPile(Pair<Coord2d, Coord2d> input, Pair<Coord2d, Coord2d> output, NAlias items)
+    {
+        this(input, output, items, items);
+    }
+
+    /**
+     * Uses one alias for inventory transfers and a separate, exact alias for ground gobs.
+     * Resource display names (for example "Reeds") and gob resource paths are different
+     * namespaces, so combining them into one alias can overmatch neighbouring resources.
+     */
+    public CollectItemsToPile(Pair<Coord2d, Coord2d> input, Pair<Coord2d, Coord2d> output,
+                              NAlias items, NAlias groundItems)
     {
         this.out = output;
         this.in = input;
         this.items = items;
+        this.groundItems = groundItems;
     }
 
     CollectItemsToPile(NArea input, NArea output, NAlias items)
@@ -42,7 +55,7 @@ public class CollectItemsToPile implements Action{
         // so exclude the plant path outright: on a partially planted field takeFromEarth
         // would otherwise wait forever for a gob that never goes away.
         exceptions.add("plants/");
-        NAlias collected_items = new NAlias(items.keys, exceptions);
+        NAlias collected_items = new NAlias(groundItems.keys, exceptions);
 
         while ( !Finder.findGobs (in,collected_items ).isEmpty () ){
             ArrayList<WItem> testItems = null;

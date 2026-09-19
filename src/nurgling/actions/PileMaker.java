@@ -15,6 +15,7 @@ import nurgling.NGItem;
 import nurgling.areas.NArea;
 import nurgling.areas.PileFillDirection;
 import nurgling.db.StockpileStoragePolicy;
+import nurgling.pf.Utils;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import haven.WItem;
@@ -105,6 +106,7 @@ public class PileMaker implements Action{
         if (alexandrCreationFlow) {
             return runAlexandrCreationFlow(gui);
         }
+        ensurePlacementAreaVisible(gui, out);
         if (shouldCloseStockpileBeforeTakeToHand(gui.getStockpile() != null)) {
             new CloseTargetContainer("Stockpile").run(gui);
         }
@@ -127,10 +129,10 @@ public class PileMaker implements Action{
         List<Coord2d> candidates = exactPos != null
                 ? Collections.singletonList(exactPos)
                 : Finder.getFreePlaces(out, hitbox, 0, direction);
-        if (candidates.isEmpty()) {
+        pos = firstVisibleCandidate(candidates, playerRc());
+        if (pos == null) {
             return Results.ERROR("No free space");
         }
-        pos = candidates.get(0);
 
         new PathFinder(NGob.getDummy(pos, 0, hitbox), true).run(gui);
         NUtils.addTask(new WaitStockpile(false, WAIT_PILE_TICKS, false));
@@ -151,6 +153,7 @@ public class PileMaker implements Action{
     }
 
     private Results runAlexandrCreationFlow(NGameUI gui) throws InterruptedException {
+        ensurePlacementAreaVisible(gui, out);
         if (gui.hand.isEmpty()) {
             ArrayList<WItem> witems = getMatchingItems(gui);
             if (witems.isEmpty() || NUtils.takeItemToHand(witems.get(0)) == null) {
@@ -161,13 +164,13 @@ public class PileMaker implements Action{
         NUtils.activateItem(out.a);
         NUtils.getUI().core.addTask(new WaitPlob());
         NHitBox hitbox = NUtils.getGameUI().map.placing.get().ngob.hitBox;
+        final Coord2d playerRc = playerRc();
         Coord2d pos = transferPilePosition(
                 out,
-                () -> Finder.getFreePlace(out, hitbox),
-                direction -> {
-                    List<Coord2d> candidates = Finder.getFreePlaces(out, hitbox, 0, direction);
-                    return candidates.isEmpty() ? null : candidates.get(0);
-                });
+                () -> firstVisibleCandidate(
+                        Collections.singletonList(Finder.getFreePlace(out, hitbox)), playerRc),
+                direction -> firstVisibleCandidate(
+                        Finder.getFreePlaces(out, hitbox, 0, direction), playerRc));
         if (pos == null) {
             return Results.ERROR("No free space");
         }
@@ -205,6 +208,70 @@ public class PileMaker implements Action{
         return direction == PileFillDirection.LEFT_TO_RIGHT
                 ? alexandrPosition.get()
                 : directedPosition.apply(direction);
+    }
+
+    static boolean requiresVisionWalk(Pair<Coord2d, Coord2d> area, Coord2d playerRc) {
+        return !Utils.areaFullyInVisibleArea(area, playerRc);
+    }
+
+    static Coord2d firstVisibleCandidate(List<Coord2d> candidates, Coord2d playerRc) {
+        if (candidates == null) {
+            return null;
+        }
+        for (Coord2d candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+            if (playerRc == null || Utils.inVisibleArea(candidate, playerRc)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    static void ensurePlacementAreaVisible(NGameUI gui, Pair<Coord2d, Coord2d> area)
+            throws InterruptedException {
+        if (area == null) {
+            return;
+        }
+        Gob player = NUtils.player();
+        if (player == null || player.rc == null) {
+            return;
+        }
+        Pair<Coord2d, Coord2d> live = area;
+        if (!requiresVisionWalk(live, player.rc)) {
+            return;
+        }
+        NArea owner = areaOwner(area);
+        if (owner != null) {
+            NUtils.navigateToArea(owner, true);
+            Pair<Coord2d, Coord2d> refreshed = owner.getRCArea();
+            if (refreshed != null) {
+                live = refreshed;
+            }
+            player = NUtils.player();
+            if (player == null || player.rc == null) {
+                return;
+            }
+            if (!requiresVisionWalk(live, player.rc)) {
+                return;
+            }
+        }
+        Coord2d target = Utils.walkTargetToSeeWholeArea(live, player.rc);
+        if (target != null) {
+            new PathFinder(target).run(gui);
+        }
+    }
+
+    static NArea areaOwner(Pair<Coord2d, Coord2d> bounds) {
+        return bounds instanceof NArea.DirectedAreaBounds
+                ? ((NArea.DirectedAreaBounds) bounds).owner()
+                : null;
+    }
+
+    private static Coord2d playerRc() {
+        Gob player = NUtils.player();
+        return player != null ? player.rc : null;
     }
 
     static NHitBox plobHitbox(NGameUI gui) {

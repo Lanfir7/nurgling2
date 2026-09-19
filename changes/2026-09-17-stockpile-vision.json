@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-17-stockpile-vision",
+  "priority": 6,
+  "summary": {
+    "ru": "Новые стокпайлы ставятся только когда вся зона уже в видимости — без наложения на непрогруженные стаки.",
+    "en": "New stockpiles wait until the whole zone is in view, so they are not placed on piles that have not loaded yet."
+  },
+  "detail": {
+    "ru": "При создании стокпайлов персонаж сначала заходит так, чтобы все углы зоны были в видимости. Если зона на краю обзора, существующие стаки успевают прогрузиться, и бот не ставит новый поверх уже стоящего.",
+    "en": "When creating stockpiles, your character first walks so every corner of the zone is in view. Piles on the edge of vision load first, so a new pile is not placed on top of one that was already there."
+  }
+}

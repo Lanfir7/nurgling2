@@ -528,6 +528,10 @@ public class NArea
             this.owner = owner;
         }
 
+        public NArea owner() {
+            return owner;
+        }
+
         public PileFillDirection direction() {
             return owner == null || owner.pileFillDirection == null
                     ? PileFillDirection.LEFT_TO_RIGHT : owner.pileFillDirection;
