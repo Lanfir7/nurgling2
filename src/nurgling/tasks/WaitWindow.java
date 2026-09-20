@@ -23,6 +23,14 @@ public class WaitWindow extends NTask
 
     }
 
+    public static WaitWindow withSoftTimeout(String name, int ticks) {
+        WaitWindow wait = new WaitWindow(name);
+        wait.infinite = false;
+        wait.maxCounter = ticks;
+        wait.criticalOnTimeout = false;
+        return wait;
+    }
+
     @Override
     public boolean check()
     {

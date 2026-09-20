@@ -1,12 +1,18 @@
 package nurgling.widgets.bots;
 
 import haven.Button;
+import haven.CharWnd;
 import haven.Coord;
 import haven.Gob;
 import haven.Label;
+import haven.Loading;
 import haven.OCache;
+import haven.Resource;
+import haven.RichText;
+import haven.PUtils;
 import haven.Text;
 import haven.TextEntry;
+import haven.Tex;
 import haven.UI;
 import haven.Window;
 import haven.Widget;
@@ -24,6 +30,7 @@ import nurgling.widgets.NEquipory;
 
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -167,8 +174,42 @@ public class MasterMinerWnd extends Window {
                 saveSettings();
             }
         }, keepStonesEntry.pos("ur").add(UI.scale(6), -UI.scale(4)));
-        int collectW = contentW - (pad * 2) - entryW - setW - UI.scale(12);
-        add(new Button(collectW, L10n.get("bot.masterminer.collect_support")) {
+        add(new Button(UI.scale(32), emptyIcon()) {
+            private Tex supportTip;
+            private String supportTipText;
+
+            @Override
+            public void tick(double dt) {
+                super.tick(dt);
+                BufferedImage icon = stoneColumnIcon();
+                if (icon != null && cont != icon) {
+                    cont = icon;
+                    redraw();
+                }
+            }
+
+            @Override
+            public Object tooltip(Coord c, Widget prev) {
+                String tipText = L10n.get("bot.masterminer.collect_support_tip");
+                if (supportTip == null || !tipText.equals(supportTipText)) {
+                    if (supportTip != null) {
+                        supportTip.dispose();
+                    }
+                    supportTip = RichText.render(tipText, UI.scale(260)).tex();
+                    supportTipText = tipText;
+                }
+                return supportTip;
+            }
+
+            @Override
+            public void dispose() {
+                if (supportTip != null) {
+                    supportTip.dispose();
+                    supportTip = null;
+                }
+                super.dispose();
+            }
+
             @Override
             public void click() {
                 super.click();
@@ -252,6 +293,42 @@ public class MasterMinerWnd extends Window {
         if (running != null && running.isAlive()) return;
         pickupThread = BotExecutor.runAsync("MasterMinerCollectSupport",
                 new MasterMiner.CollectSupportStones(MasterMinerGroundStacks.CLICK_PICKUP_LIMIT));
+    }
+
+    private static BufferedImage emptyIcon() {
+        return new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+    }
+
+    private static BufferedImage stoneColumnIconCache;
+
+    private static BufferedImage stoneColumnIcon() {
+        if (stoneColumnIconCache != null) {
+            return stoneColumnIconCache;
+        }
+        try {
+            Resource resource = Resource.remote().load("paginae/bld/column").get();
+            Resource.Image image = resource.layer(Resource.imgc);
+            if (image == null) {
+                return null;
+            }
+            stoneColumnIconCache = scaleStoneColumnIcon(image.img);
+            return stoneColumnIconCache;
+        } catch (Loading ignored) {
+            return null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static BufferedImage scaleStoneColumnIcon(BufferedImage icon) {
+        int max = UI.scale(24);
+        if (icon.getWidth() <= max && icon.getHeight() <= max) {
+            return icon;
+        }
+        double scale = Math.min((double) max / icon.getWidth(), (double) max / icon.getHeight());
+        Coord size = new Coord(Math.max(1, (int) Math.round(icon.getWidth() * scale)),
+                Math.max(1, (int) Math.round(icon.getHeight() * scale)));
+        return PUtils.convolvedown(icon, size, CharWnd.iconfilter);
     }
 
     private void refreshGroundIcons() {

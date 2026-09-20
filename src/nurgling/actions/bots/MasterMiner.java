@@ -11,8 +11,13 @@ import nurgling.NUtils;
 import nurgling.actions.ActionWithFinal;
 import nurgling.actions.PathFinder;
 import nurgling.actions.Results;
+import nurgling.i18n.L10n;
+import nurgling.tasks.GetCurs;
 import nurgling.tasks.NTask;
+import nurgling.tasks.WaitConstructionObject;
+import nurgling.tasks.WaitPlob;
 import nurgling.tasks.WaitTicks;
+import nurgling.tasks.WaitWindow;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
@@ -700,8 +705,10 @@ public class MasterMiner extends ActionWithFinal {
     /**
      * Collects loose stones accepted by the support reserve, then returns to the point where
      * the action started. The action deliberately shares the normal PathFinder/take protocol.
-     */
+    */
     public static final class CollectSupportStones implements nurgling.actions.Action {
+        private static final String STONE_COLUMN_NAME = "Stone Column";
+        private static final String STONE_COLUMN_PAGINA = "paginae/bld/column";
         private final int requested;
 
         public CollectSupportStones(int requested) {
@@ -712,23 +719,29 @@ public class MasterMiner extends ActionWithFinal {
         public Results run(NGameUI gui) throws InterruptedException {
             Gob player = NUtils.player();
             if (gui == null || player == null || requested == 0) return Results.SUCCESS();
+            clearMiningCursor(gui, player);
+            player = NUtils.player();
+            if (player == null) return Results.SUCCESS();
             Coord2d origin = Coord2d.of(player.rc.x, player.rc.y);
+            Results collection = Results.SUCCESS();
             try {
                 int taken = 0;
                 while (taken < requested) {
                     player = NUtils.player();
                     if (player == null || gui.getInventory() == null || gui.getInventory().getFreeSpace() <= 0)
-                        return Results.SUCCESS();
+                        break;
                     Gob item = nearestSupportStone(player, origin);
-                    if (item == null) return Results.SUCCESS();
+                    if (item == null) break;
                     if (item.rc.dist(player.rc) > MCache.tilesz.x) {
                         Results walked = new PathFinder(item).run(gui);
-                        if (!walked.IsSuccess()) return walked;
+                        if (!walked.IsSuccess()) {
+                            collection = walked;
+                            break;
+                        }
                     }
                     NUtils.takeFromEarth(item);
                     taken++;
                 }
-                return Results.SUCCESS();
             } finally {
                 /* Best effort also covers a full inventory, path failure, and interruption. */
                 try {
@@ -741,6 +754,85 @@ public class MasterMiner extends ActionWithFinal {
                     // Returning must not hide the original collection result.
                 }
             }
+            return collection.IsSuccess()
+                    ? placeStoneColumn(gui, origin)
+                    : collection;
+        }
+
+        private void clearMiningCursor(NGameUI gui, Gob player) throws InterruptedException {
+            /* Force the click even for an existing arrow cursor: it also drops tile selection. */
+            gui.map.wdgmsg("click", Coord.z, player.rc.floor(OCache.posres), 3, 0);
+            NUtils.addTask(new GetCurs("arw"));
+        }
+
+        private Results placeStoneColumn(NGameUI gui, Coord2d origin) throws InterruptedException {
+            Coord originTile = origin.div(MCache.tilesz).floor();
+            Coord targetTile = MasterMinerSupportPlacement.chooseAdjacent(originTile,
+                    tile -> isOpenCaveTile(gui, tile),
+                    tile -> nurgling.tools.Finder.findGob(tileCenter(tile)) == null);
+            if (targetTile == null) {
+                return supportError("bot.masterminer.support_no_tile");
+            }
+            Coord2d target = tileCenter(targetTile);
+            if (nurgling.tools.Finder.findGob(target) != null) {
+                return supportError("bot.masterminer.support_no_tile");
+            }
+            MenuGrid.Pagina stoneColumnPagina = stoneColumnPagina(gui);
+            if (stoneColumnPagina == null) {
+                return supportError("bot.masterminer.support_no_pagina");
+            }
+            try {
+                stoneColumnPagina.button().use(new MenuGrid.Interaction(1, 0));
+            } catch (Loading ignored) {
+                return supportError("bot.masterminer.support_no_pagina");
+            }
+            NUtils.addTask(WaitPlob.withSoftTimeout(true, 200, gui));
+            if (gui.map.placing == null || !gui.map.placing.ready()) {
+                return supportError("bot.masterminer.support_place_failed");
+            }
+            gui.map.wdgmsg("place", target.floor(OCache.posres), 0, 1, 0);
+            NUtils.addTask(WaitConstructionObject.withSoftTimeout(target, 200));
+            if (nurgling.tools.Finder.findGob(target) == null) {
+                return supportError("bot.masterminer.support_place_failed");
+            }
+            NUtils.addTask(WaitWindow.withSoftTimeout(STONE_COLUMN_NAME, 200));
+            if (gui.getWindow(STONE_COLUMN_NAME) == null) {
+                return supportError("bot.masterminer.support_place_failed");
+            }
+            return Results.SUCCESS();
+        }
+
+        private MenuGrid.Pagina stoneColumnPagina(NGameUI gui) {
+            if (gui.menu == null) return null;
+            for (MenuGrid.Pagina pagina : gui.menu.paginae) {
+                try {
+                    if (pagina != null && STONE_COLUMN_PAGINA.equals(pagina.res().name)) {
+                        return pagina;
+                    }
+                } catch (Loading ignored) {
+                    // The page has not finished loading; leave stones untouched and try again later.
+                }
+            }
+            return null;
+        }
+
+        private boolean isOpenCaveTile(NGameUI gui, Coord tile) {
+            if (gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) return false;
+            try {
+                Resource resource = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tile));
+                return resource != null && MasterMinerSupportPlacement.isOpenCaveTileName(resource.name);
+            } catch (Loading ignored) {
+                return false;
+            }
+        }
+
+        private Coord2d tileCenter(Coord tile) {
+            return new Coord2d(tile.x * MCache.tilesz.x + MCache.tilesz.x / 2,
+                    tile.y * MCache.tilesz.y + MCache.tilesz.y / 2);
+        }
+
+        private Results supportError(String key) {
+            return Results.ERROR(L10n.get(key));
         }
 
         private Gob nearestSupportStone(Gob player, Coord2d origin) {

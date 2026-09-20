@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-master-miner-mine-support",
+  "priority": 6,
+  "summary": {
+    "ru": "Мастер-шахтёр теперь ставит заготовку каменной колонны рядом с тоннелем.",
+    "en": "Master Miner can now place a Stone Column construction beside your tunnel."
+  },
+  "detail": {
+    "ru": "В окне «Мастер-шахтёр» кнопка с иконкой каменной колонны собирает до 30 камней, возвращает персонажа к началу и ставит заготовку каменной колонны сбоку от тоннеля. Окно строительства остаётся открытым: материалы не добавляются и постройка не начинается автоматически.",
+    "en": "In the Master Miner window, the Stone Column icon gathers up to 30 stones, returns your character to the starting spot, and places a Stone Column construction beside the tunnel. The construction window stays open: no materials are added and building never starts automatically."
+  }
+}
