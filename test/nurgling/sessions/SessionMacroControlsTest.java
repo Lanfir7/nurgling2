@@ -49,18 +49,18 @@ class SessionMacroControlsTest {
     }
 
     @Test void entirePlateTargetsTheSameMacroAndGapsPassThrough() throws Exception {
-        Object left = hit(badgeX + 1, UI.scale(4) + 1);
-        Object right = hit(badgeX + badgeWidth - 1, UI.scale(4) + badgeHeight - 1);
+        Object left = hit(badgeX + 1, 1);
+        Object right = hit(badgeX + badgeWidth - 1, badgeHeight - 1);
         assertSame(value(left, "bot"), value(right, "bot"));
         assertSame(sessions.get(0), value(left, "context"));
         assertNull(hit(badgeX - 1, UI.scale(8)), "gap before the badge");
-        assertNull(hit(badgeX + 1, UI.scale(4) + badgeHeight), "gap between macros");
+        assertNull(hit(badgeX + 1, badgeHeight), "gap between macros");
         assertNull(hit(badgeX + badgeWidth, UI.scale(8)), "right edge is outside");
     }
 
     @Test void backgroundRowAndStopAllKeepTheirSessionIdentity() throws Exception {
         int row = (Integer) method("rowHeight", SessionContext.class).invoke(bar, sessions.get(0));
-        int secondY = row + SessionTabBar.BUTTON_PADDING + UI.scale(4);
+        int secondY = row + SessionTabBar.BUTTON_PADDING;
         Object macro = hit(badgeX + 2, secondY + 2);
         Object stop = hit(stopX + 2, secondY + 2);
         assertSame(sessions.get(1), value(macro, "context"));
@@ -96,6 +96,7 @@ class SessionMacroControlsTest {
     @Test void botIconSpansBothTextLinesWithoutTouchingThePlateBorder() throws Exception {
         int iconSize = constant("MACRO_ICON_SIZE");
 
+        assertEquals(SessionTabBar.BUTTON_HEIGHT, constant("MACRO_BADGE_HEIGHT"));
         assertTrue(iconSize >= UI.scale(28));
         assertTrue(iconSize <= constant("MACRO_BADGE_HEIGHT") - UI.scale(8));
     }

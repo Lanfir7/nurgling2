@@ -49,7 +49,7 @@ public class SessionTabBar extends Widget {
     public static final int AVA_SIZE = UI.scale(32);
     public static final int AVA_MARGIN = UI.scale(4);
     private static final int MACRO_BADGE_WIDTH = UI.scale(156);
-    private static final int MACRO_BADGE_HEIGHT = UI.scale(42);
+    private static final int MACRO_BADGE_HEIGHT = BUTTON_HEIGHT;
     private static final int MACRO_ICON_SIZE = UI.scale(30);
     private static final int MACRO_BADGE_GAP = UI.scale(3);
     private static final int MACRO_LANE_GAP = UI.scale(7);
@@ -641,7 +641,7 @@ public class SessionTabBar extends Widget {
     private int rowHeight(SessionContext ctx) {
         int botRows = runningBots(ctx).size();
         return botRows == 0 ? BUTTON_HEIGHT : Math.max(BUTTON_HEIGHT,
-                UI.scale(4) + botRows * (MACRO_BADGE_HEIGHT + MACRO_BADGE_GAP) + UI.scale(4));
+                botRows * MACRO_BADGE_HEIGHT + Math.max(0, botRows - 1) * MACRO_BADGE_GAP);
     }
 
     private void drawMacroControls(GOut g, int x, int y, SessionContext ctx) {
@@ -651,11 +651,11 @@ public class SessionTabBar extends Widget {
         }
         int stopX = x + BUTTON_WIDTH + MACRO_LANE_GAP;
         boolean stopHovered = isStopAllHovered(ctx);
-        drawMacroBadge(g, new Coord(stopX, y + UI.scale(4)), MACRO_STOP_ALL_SIZE,
+        drawMacroBadge(g, new Coord(stopX, y), MACRO_STOP_ALL_SIZE,
                 "■", stopHovered, true);
 
         int badgeX = stopX + MACRO_STOP_ALL_SIZE + MACRO_BADGE_GAP;
-        int badgeY = y + UI.scale(4);
+        int badgeY = y;
         for (BotsInterruptWidget.RunningBot bot : bots) {
             String name = bot.getName();
             if (name == null || name.trim().isEmpty()) {
@@ -1233,11 +1233,11 @@ public class SessionTabBar extends Widget {
             if (!bots.isEmpty()) {
                 int stopX = off.x + BUTTON_WIDTH + MACRO_LANE_GAP;
                 if (c.x >= stopX && c.x < stopX + MACRO_STOP_ALL_SIZE &&
-                        c.y >= y + UI.scale(4) && c.y < y + UI.scale(4) + MACRO_BADGE_HEIGHT) {
+                        c.y >= y && c.y < y + MACRO_BADGE_HEIGHT) {
                     return new MacroHit(ctx, null, index, true);
                 }
                 int badgeX = stopX + MACRO_STOP_ALL_SIZE + MACRO_BADGE_GAP;
-                int badgeY = y + UI.scale(4);
+                int badgeY = y;
                 for (BotsInterruptWidget.RunningBot bot : bots) {
                     if (c.x >= badgeX && c.x < badgeX + MACRO_BADGE_WIDTH &&
                             c.y >= badgeY && c.y < badgeY + MACRO_BADGE_HEIGHT) {
