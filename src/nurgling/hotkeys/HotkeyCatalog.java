@@ -190,9 +190,6 @@ public final class HotkeyCatalog {
         gesture(registry, Hotkeys.WORLD_PLACEMENT_ROTATE_RIGHT,
                 InputGesture.key(KeyMatch.forcode(KeyEvent.VK_RIGHT, 0)), HotkeyCategory.WORLD,
                 EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
-        gesture(registry, Hotkeys.WORLD_PLACEMENT_FULL_STOCKPILES,
-                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_SHIFT, KeyMatch.C, KeyMatch.C)), HotkeyCategory.WORLD,
-                EnumSet.of(HotkeyContext.WORLD_PLACEMENT), Integer.valueOf(haven.UI.MOD_CTRL | haven.UI.MOD_SHIFT), order);
         gesture(registry, Hotkeys.WORLD_SELECTION_ROTATE,
                 InputGesture.key(KeyMatch.forchar('R', 0)), HotkeyCategory.WORLD,
                 EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);

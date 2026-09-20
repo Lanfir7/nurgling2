@@ -55,6 +55,13 @@ public class ItemDrag extends NWItem
     public boolean mousedown(MouseDownEvent ev) {
 	if(!ev.grabbed)
 	    return(false);
+	GameUI gui = getparent(GameUI.class);
+	if(gui != null && gui.map instanceof nurgling.NMapView) {
+	    nurgling.NMapView map = (nurgling.NMapView) gui.map;
+	    if(nurgling.hotkeys.FullStockpilePlacementHotkey.passThroughHeldMouse(
+		    map.isAreaSelectionMode.get(), map.pendingHeldFullStockpile))
+		return(false);
+	}
 	 nurgling.hotkeys.HotkeyResolver resolver = new nurgling.hotkeys.HotkeyResolver(nurgling.hotkeys.Hotkeys.registry());
 	 nurgling.hotkeys.HotkeyAction action = resolver.firstMouse(nurgling.hotkeys.HotkeyContext.HELD_ITEM, ev.b, ui.modflags());
 	if(action != null && (Hotkeys.HELD_DROP_ON_TARGET.equals(action.id()) || Hotkeys.HELD_DROP_ON_GROUND.equals(action.id())) &&
@@ -62,7 +69,6 @@ public class ItemDrag extends NWItem
 		return(true);
 	if(action != null && (Hotkeys.HELD_OPEN_WITHOUT_USING.equals(action.id()) || Hotkeys.HELD_OPEN_WITH_CONTROL.equals(action.id()))) {
 		monitoring.StockpileStorageTracker.rememberHand(this);
-	    GameUI gui = getparent(GameUI.class);
 	    if((gui != null) && (gui.map != null)) {
 		return gui.map.heldItemRmb(gui.map.rootxlate(ev.c.add(rootpos())),
 			action.canonicalMods() == null ? 0 : action.canonicalMods());

@@ -228,6 +228,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     private static Text.Foundry inspectLabelFoundry = null;
     private static Text.Foundry inspectValueFoundry = null;
     public AtomicBoolean isAreaSelectionMode = new AtomicBoolean(false);
+    public volatile boolean pendingHeldFullStockpile = false;
     public AtomicBoolean isGobSelectionMode = new AtomicBoolean(false);
     public AtomicBoolean isChatAreaSharingMode = new AtomicBoolean(false); // For Alt+Ctrl+LMB chat sharing
     public boolean gridModeRequested = false;
@@ -246,6 +247,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 selection = null;
             }
             isAreaSelectionMode.set(false);
+            pendingHeldFullStockpile = false;
             areaSpace = null;
             currentSelectionCoords = null;
             currentSelectionDrag = null;
@@ -1572,6 +1574,22 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         }
         /* Any click in the world counts as having read the layout card. */
         nurgling.widgets.NLayoutHint.dismiss(ui);
+
+        // Mining owns a modal tile selector, so this must run before that selector
+        // gets first refusal. Ctrl+LMB replaces its ordinary one-tile dig with Vein Miner.
+        if (Hotkeys.action(Hotkeys.WORLD_VEIN_MINER).current().matchesMouse(ev.b, ui.modflags())
+                && VeinMiner.isMineCursor()) {
+            new Maptest(ev.c) {
+                @Override
+                public void hit(Coord pc, Coord2d mc) {
+                    Coord tile = mc.div(MCache.tilesz).floor();
+                    if (VeinMiner.isVeinRock(VeinMiner.tileName(NUtils.getGameUI(), tile))) {
+                        BotExecutor.runAsync("VeinMiner", new VeinMiner(tile));
+                    }
+                }
+            }.run();
+            return true;
+        }
         if(hasModalMouseGrab()) return super.mousedown(ev);
 
         nurgling.hotkeys.HotkeyAction worldAction = Hotkeys.worldClickAction(ev.b, ui.modflags());
@@ -1726,21 +1744,6 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                         if (clickedGob != null) {
                             toggleRingForGob(clickedGob);
                         }
-                    }
-                }
-            }.run();
-            return true;
-        }
-
-        // Ctrl+LMB with the mine cursor on rock/ore starts Vein Miner on that tile.
-        if (Hotkeys.action(Hotkeys.WORLD_VEIN_MINER).current().matchesMouse(ev.b, ui.modflags())
-                && VeinMiner.isMineCursor()) {
-            new Maptest(ev.c) {
-                @Override
-                public void hit(Coord pc, Coord2d mc) {
-                    Coord tile = mc.div(MCache.tilesz).floor();
-                    if (VeinMiner.isVeinRock(VeinMiner.tileName(NUtils.getGameUI(), tile))) {
-                        BotExecutor.runAsync("VeinMiner", new VeinMiner(tile));
                     }
                 }
             }.run();
@@ -1931,25 +1934,6 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     public boolean keydown(KeyDownEvent ev) {
         if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
             shiftPressed = true;
-        }
-
-        Loader.Future<Plob> placingGhost = this.placing;
-        if(placingGhost != null && placingGhost.done()) {
-            try {
-                Plob plob = placingGhost.get();
-                String res = (plob != null && plob.ngob != null) ? plob.ngob.name : null;
-                if(Hotkeys.matchesFullStockpilePlacement(ev.code, ev.mods, res)) {
-                    NGameUI gui = NUtils.getGameUI();
-                    String held = null;
-                    if(gui != null && gui.vhand != null && gui.vhand.item instanceof NGItem)
-                        held = ((NGItem)gui.vhand.item).name();
-                    String hint = FullStockpilePlacementHotkey.resolveItemName(
-                            monitoring.StockpileStorageTracker.placingItemName(), held, null);
-                    BotExecutor.runAsync("CreateFullStockpiles", new CreateFullStockpilesFromFirstSlot(hint));
-                    return true;
-                }
-            } catch(RuntimeException ignored) {
-            }
         }
 
         // Check preset keybindings first
@@ -2763,6 +2747,46 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 }
             }
         }.run();
+    }
+
+    @Override
+    public boolean iteminteract(Coord cc, Coord ul, final int mods) {
+        NGameUI gui = NUtils.getGameUI();
+        if (gui != null && gui.vhand != null) {
+            monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
+        }
+        if (gui != null && gui.vhand != null && FullStockpilePlacementHotkey.matches(
+                Hotkeys.action(Hotkeys.HELD_INTERACT_ONE_WITH_TARGET).current(), 3, mods))
+            pendingHeldFullStockpile = true;
+        new Hittest(cc) {
+            public void hit(Coord pc, Coord2d mc, ClickData inf) {
+                if (gui != null && gui.vhand != null) {
+                    monitoring.StockpileStorageTracker.armPlacementHand(gui.vhand);
+                }
+                boolean holding = gui != null && gui.vhand != null;
+                if (Hotkeys.matchesFullStockpileHeldGround(
+                        holding, FullStockpilePlacementHotkey.isGroundTarget(inf), 3, mods)) {
+                    pendingHeldFullStockpile = false;
+                    String held = null;
+                    if (gui.vhand.item instanceof NGItem)
+                        held = ((NGItem) gui.vhand.item).name();
+                    isAreaSelectionMode.set(true);
+                    BotExecutor.runAsync("CreateFullStockpiles", new CreateFullStockpilesFromFirstSlot(held));
+                    return;
+                }
+                pendingHeldFullStockpile = false;
+                monitoring.StockpileStorageTracker.onClickData(inf);
+                Object[] args = {pc, mc.floor(OCache.posres), mods};
+                if (inf != null)
+                    args = Utils.extend(args, inf.clickargs());
+                wdgmsg("itemact", args);
+            }
+
+            protected void nohit(Coord pc) {
+                pendingHeldFullStockpile = false;
+            }
+        }.run();
+        return true;
     }
 //
 //    @Override

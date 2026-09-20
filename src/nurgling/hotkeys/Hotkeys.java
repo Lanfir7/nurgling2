@@ -56,7 +56,6 @@ public final class Hotkeys {
     public static final String WORLD_REMOVE_STUMP = "world.remove_stump";
     public static final String WORLD_PLACEMENT_ROTATE_LEFT = "world.placement.rotate_left";
     public static final String WORLD_PLACEMENT_ROTATE_RIGHT = "world.placement.rotate_right";
-    public static final String WORLD_PLACEMENT_FULL_STOCKPILES = "world.placement.full_stockpiles";
     public static final String WORLD_SELECTION_ROTATE = "world.selection.rotate";
     public static final String WORLD_SELECTION_TOGGLE_GRID = "world.selection.toggle_grid";
     public static final String MAP_MARKER_DELETE = "map.marker.delete";
@@ -214,10 +213,10 @@ public final class Hotkeys {
         return button == 3 && (mods & KeyMatch.MODS) == 0;
     }
 
-    /** Ctrl+Shift (any order) while a stockpile hologram is up; rebound keys match the catalog. */
-    public static boolean matchesFullStockpilePlacement(int keyCode, int mods, String placingRes) {
-        return FullStockpilePlacementHotkey.shouldLaunch(placingRes, keyCode, mods,
-                action(WORLD_PLACEMENT_FULL_STOCKPILES).current());
+    /** Held-item Shift+RMB on empty ground; follows held.interact_one_with_target if rebound. */
+    public static boolean matchesFullStockpileHeldGround(boolean holdingItem, boolean groundTarget, int button, int mods) {
+        return FullStockpilePlacementHotkey.shouldLaunch(holdingItem, groundTarget, button, mods,
+                action(HELD_INTERACT_ONE_WITH_TARGET).current());
     }
 
 }

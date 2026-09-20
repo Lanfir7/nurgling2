@@ -37,22 +37,18 @@ public class SelectArea implements Action {
         }
         NMapView map = (NMapView) gui.map;
 
+        Gob player = NUtils.player();
         if (!map.isAreaSelectionMode.get()) {
-            Gob player = NUtils.player();
             map.isAreaSelectionMode.set(true);
-            if(image!=null && player!=null)
-            {
-                player.addcustomol(new NCustomBauble(player,image, spr, map.isAreaSelectionMode));
-            }
-            nurgling.tasks.SelectArea sa;
-            gui.ui.core.addTask(sa = new nurgling.tasks.SelectArea(gui));
-            if (sa.getResult() != null) {
-                result = sa.getResult();
-            }
         }
-        else
+        if(image!=null && player!=null)
         {
-            return Results.FAIL();
+            player.addcustomol(new NCustomBauble(player,image, spr, map.isAreaSelectionMode));
+        }
+        nurgling.tasks.SelectArea sa;
+        gui.ui.core.addTask(sa = new nurgling.tasks.SelectArea(gui));
+        if (sa.getResult() != null) {
+            result = sa.getResult();
         }
         return Results.SUCCESS();
     }

@@ -4,43 +4,46 @@ import haven.KeyMatch;
 import haven.UI;
 import org.junit.jupiter.api.Test;
 
-import java.awt.event.KeyEvent;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 class FullStockpilePlacementHotkeyTest {
-    private static final InputGesture DEFAULT = InputGesture.key(
-            KeyMatch.forcode(KeyEvent.VK_SHIFT, KeyMatch.C, KeyMatch.C));
+    private static final InputGesture SHIFT_RMB = InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.S);
 
-    @Test void ctrlThenShiftOnStockpileGhostLaunches() {
-        assertTrue(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/stockpile-ore", KeyEvent.VK_SHIFT, UI.MOD_CTRL, DEFAULT));
-        assertTrue(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/stockpile-board", KeyEvent.VK_SHIFT, UI.MOD_CTRL | UI.MOD_SHIFT, DEFAULT));
+    @Test void heldShiftRmbOnGroundLaunches() {
+        assertTrue(FullStockpilePlacementHotkey.shouldLaunch(true, true, 3, UI.MOD_SHIFT, SHIFT_RMB));
     }
 
-    @Test void shiftThenCtrlOnStockpileGhostLaunches() {
-        assertTrue(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/stockpile-ore", KeyEvent.VK_CONTROL, UI.MOD_SHIFT, DEFAULT));
+    @Test void plainRmbOnGroundKeepsStockpileGhost() {
+        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(true, true, 3, 0, SHIFT_RMB));
     }
 
-    @Test void shiftAloneOrHouseGhostDoesNotLaunch() {
-        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/stockpile-ore", KeyEvent.VK_SHIFT, 0, DEFAULT));
-        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/cupboard", KeyEvent.VK_SHIFT, UI.MOD_CTRL, DEFAULT));
-        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(
-                null, KeyEvent.VK_SHIFT, UI.MOD_CTRL, DEFAULT));
-        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/stockpile-ore", KeyEvent.VK_SHIFT, UI.MOD_CTRL | UI.MOD_META, DEFAULT));
+    @Test void shiftRmbOnGobKeepsInteractOne() {
+        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(true, false, 3, UI.MOD_SHIFT, SHIFT_RMB));
     }
 
-    @Test void reboundKeyUsesTheNewBindingInsteadOfCtrlShift() {
-        InputGesture rebound = InputGesture.key(KeyMatch.forcode(KeyEvent.VK_Q, 0));
-        assertTrue(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/stockpile-ore", KeyEvent.VK_Q, 0, rebound));
+    @Test void emptyHandsDoNotLaunch() {
+        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(false, true, 3, UI.MOD_SHIFT, SHIFT_RMB));
+    }
+
+    @Test void ctrlShiftRmbDoesNotLaunch() {
         assertFalse(FullStockpilePlacementHotkey.shouldLaunch(
-                "gfx/terobjs/stockpile-ore", KeyEvent.VK_SHIFT, UI.MOD_CTRL, rebound));
+                true, true, 3, UI.MOD_CTRL | UI.MOD_SHIFT, SHIFT_RMB));
+    }
+
+    @Test void reboundHeldClickUsesTheNewBinding() {
+        InputGesture rebound = InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.M);
+        assertTrue(FullStockpilePlacementHotkey.shouldLaunch(true, true, 3, UI.MOD_META, rebound));
+        assertFalse(FullStockpilePlacementHotkey.shouldLaunch(true, true, 3, UI.MOD_SHIFT, rebound));
+    }
+
+    @Test void nullClickDataIsGround() {
+        assertTrue(FullStockpilePlacementHotkey.isGroundTarget(null));
+    }
+
+    @Test void heldMousePassesThroughDuringAreaSelect() {
+        assertTrue(FullStockpilePlacementHotkey.passThroughHeldMouse(true, false));
+        assertTrue(FullStockpilePlacementHotkey.passThroughHeldMouse(false, true));
+        assertFalse(FullStockpilePlacementHotkey.passThroughHeldMouse(false, false));
     }
 
     @Test void itemHintBeatsHeldAndFirstSlot() {

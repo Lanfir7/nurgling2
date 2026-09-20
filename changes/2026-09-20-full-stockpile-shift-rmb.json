@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-full-stockpile-shift-rmb",
+  "priority": 6,
+  "summary": {
+    "ru": "Предмет в руках: Shift+ПКМ по земле открывает зону и складывает туда полные стокпайлы.",
+    "en": "With an item in hand, Shift+right-click the ground to mark an area and fill it with full stockpiles."
+  },
+  "detail": {
+    "ru": "Возьмите предмет в руки и нажмите Shift+ПКМ по пустой земле, не по объекту. Появится рамка выделения; отметьте площадку — макрос «Создатель полных стокпайлов» заполнит её стокпайлами этого предмета. Обычный ПКМ по земле по-прежнему ставит гост стокпайла. Shift+ПКМ по объекту не меняется.",
+    "en": "Pick up an item and Shift+right-click empty ground, not an object. Draw the area when asked, and Full Stockpile Maker fills it with piles of that item. Plain right-click on the ground still starts the stockpile ghost. Shift+right-click on an object is unchanged."
+  }
+}
