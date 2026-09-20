@@ -1,6 +1,7 @@
 package nurgling.widgets;
 
 import nurgling.hotkeys.Hotkeys;
+import nurgling.i18n.L10n;
 
 import haven.*;
 import haven.res.ui.obj.buddy.Buddy;
@@ -35,6 +36,7 @@ import static haven.MCache.tilesz;
 
 public class
 NMiniMap extends MiniMap {
+    private static final String MINERAL_MARKER_ACTION_COLOR = "168,168,168";
     public static final Coord _sgridsz = new Coord(100, 100);
     public static final Coord VIEW_SZ = UI.scale(_sgridsz.mul(9).div(tilesz.floor()));
     public static final Color VIEW_EXPLORED_COLOR = new Color(255, 255, 0, 144); // Yellow semi-transparent for explored area (120 + 20% of 120 = 144)
@@ -227,6 +229,33 @@ NMiniMap extends MiniMap {
     static boolean isGemstoneMark(String resourceType) {
         if (resourceType == null) return false;
         return MasterMiner.isGemstone(resourceType);
+    }
+
+    private static boolean isMineralLabeledMark(LabeledMinimapMark mark) {
+        return mark != null && ("Quarryartz".equals(mark.resourceType) || isOreSpotMark(mark)
+                || isStoneMark(mark) || isGemstoneMark(mark.resourceType));
+    }
+
+    static String labeledMarkerTooltipText(LabeledMinimapMark mark) {
+        String resource = mark.resourceType != null ? mark.resourceType : "Unknown";
+        if (mark.label != null && !mark.label.isEmpty()) resource += " " + mark.label;
+        String navigate = Hotkeys.action(Hotkeys.MAP_MARKER_EDIT).current().displayName();
+        String beacon = Hotkeys.action(Hotkeys.MAP_MARKER_BEACON).current().displayName();
+        String delete = Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().displayName();
+        String key = "Quarryartz".equals(mark.resourceType)
+                ? "map.labeled_marker.tooltip.quarryartz" : "map.labeled_marker.tooltip";
+        return L10n.get(key, resource, navigate, beacon, delete);
+    }
+
+    private static Tex mineralMarkerTooltip(LabeledMinimapMark mark) {
+        String text = labeledMarkerTooltipText(mark);
+        int firstLineEnd = text.indexOf('\n');
+        if (firstLineEnd < 0)
+            return new TexI(Text.render(text).img);
+        String title = text.substring(0, firstLineEnd);
+        String actions = text.substring(firstLineEnd + 1);
+        return new TexI(RichText.render(RichText.Parser.quote(title) + "\n$col["
+                + MINERAL_MARKER_ACTION_COLOR + "]{" + RichText.Parser.quote(actions) + "}", 0).img);
     }
 
     private boolean skipHiddenLabeledMark(LabeledMinimapMark mark, nurgling.conf.ProspectMarkSettings settings) {
@@ -2612,6 +2641,9 @@ NMiniMap extends MiniMap {
                             if (isForageMark(mark)) {
                                 String lab = mark.label != null ? mark.label : "";
                                 return Text.render(resourceType + (lab.isEmpty() ? "" : " " + lab));
+                            }
+                            if (isMineralLabeledMark(mark)) {
+                                return mineralMarkerTooltip(mark);
                             }
                             return Text.render(resourceType);
                         }

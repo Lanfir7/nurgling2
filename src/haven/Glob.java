@@ -215,6 +215,11 @@ public class Glob {
 	return(gtime);
     }
 
+    /** Current game-seconds advanced per real second. */
+    public double globtimefac() {
+	return(ctimefac);
+    }
+
     public void blob(Message msg) {
 	boolean inc = msg.uint8() != 0;
 	while(!msg.eom()) {

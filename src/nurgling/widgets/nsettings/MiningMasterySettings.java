@@ -283,41 +283,26 @@ public class MiningMasterySettings extends Panel implements AdaptiveSettingsPane
             String itemName = entry.getKey();
             ItemCheckbox checkbox = entry.getValue();
             
-            // По умолчанию: все руды включены с порогом 10, Quarryartz тоже включен
-            boolean isOre = MasterMiner.isOre(itemName) || 
-                           itemName.equals("Black Coal") || 
-                           itemName.equals("Quartz") || 
-                           itemName.equals("Flint");
-            boolean isQuarryartz = itemName.equals("Quarryartz");
-            // Проверяем, является ли это драгоценным камнем
-            boolean isGemstone = MasterMiner.isGemstone(itemName);
             
             Boolean enabledObj = config.isEnabled(itemName);
-            boolean enabled;
-            if (enabledObj == null) {
-                // По умолчанию руды, Quarryartz и драгоценные камни включены
-                enabled = isOre || isQuarryartz || isGemstone;
-                // Логируем для драгоценных камней
-                if (isGemstone) {
-                    System.out.println("Loading gemstone config: " + itemName + " -> default enabled: " + enabled);
-                }
-            } else {
-                enabled = enabledObj;
-                // Логируем для драгоценных камней
-                if (isGemstone) {
-                    System.out.println("Loading gemstone config: " + itemName + " -> loaded enabled: " + enabled);
-                }
-            }
+            boolean enabled = enabledObj != null ? enabledObj : defaultMarkerEnabled(itemName);
             
             Double threshold = config.getThreshold(itemName);
             if (threshold == null) {
-                // По умолчанию руды, Quarryartz и драгоценные камни с порогом 10
-                threshold = (isOre || isQuarryartz || isGemstone) ? 10.0 : Double.NaN;
+                threshold = defaultMarkerThreshold(itemName);
             }
             
             checkbox.setEnabled(enabled);
             checkbox.setThreshold(threshold.isNaN() ? 10.0 : threshold);
         }
+    }
+
+    static boolean defaultMarkerEnabled(String itemName) {
+        return MasterMiner.defaultMarkerEnabled(itemName);
+    }
+
+    static double defaultMarkerThreshold(String itemName) {
+        return defaultMarkerEnabled(itemName) ? 10.0 : Double.NaN;
     }
 
     @Override

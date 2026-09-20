@@ -9,6 +9,7 @@ import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
 import nurgling.actions.ActionWithFinal;
+import nurgling.actions.PathFinder;
 import nurgling.actions.Results;
 import nurgling.tasks.NTask;
 import nurgling.tasks.WaitTicks;
@@ -17,6 +18,7 @@ import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
 import nurgling.NInventory;
 import nurgling.widgets.NEquipory;
+import nurgling.widgets.bots.MasterMinerGroundStacks;
 import nurgling.widgets.bots.MasterMinerWnd;
 
 import java.awt.image.BufferedImage;
@@ -208,14 +210,19 @@ public class MasterMiner extends ActionWithFinal {
         final Coord tileCoords;
         final long segmentId;
         final String markerType; // "ore", "gem", "quarryartz"
+        final int masonry;
+        final String stoneType;
         
-        MarkerBatch(String oreName, NGItem item, double wallQ, Coord tileCoords, long segmentId, String markerType) {
+        MarkerBatch(String oreName, NGItem item, double wallQ, Coord tileCoords, long segmentId, String markerType,
+                    int masonry, String stoneType) {
             this.oreName = oreName;
             this.item = item;
             this.wallQ = wallQ;
             this.tileCoords = tileCoords;
             this.segmentId = segmentId;
             this.markerType = markerType;
+            this.masonry = masonry;
+            this.stoneType = stoneType;
         }
         
         // Ключ для группировки: тип + координаты
@@ -665,21 +672,99 @@ public class MasterMiner extends ActionWithFinal {
      * Используется для ограничения «держать N камней для подпорки».
      */
     private int countTotalStones(ArrayList<WItem> items) {
+        return supportStoneCount(items);
+    }
+
+    /** The same stone set used by the support reserve and its automatic drop budget. */
+    public static boolean isSupportStone(String name) {
+        if (name == null || isGemstone(name)) return false;
+        if (!NParser.checkName(name, MINED_ITEMS) && !NParser.checkName(name, ORE_ITEMS)) return false;
+        String stoneType = classifyStoneType(name);
+        return !"Shell".equals(stoneType) && !"Cat Gold".equals(stoneType);
+    }
+
+    /** Counts individual support stones, including members of item stacks. */
+    public static int supportStoneCount(List<WItem> items) {
         if (items == null) return 0;
         int total = 0;
         for (WItem w : items) {
-            if (w == null || w.item == null || !(w.item instanceof NGItem)) continue;
+            if (w == null || !(w.item instanceof NGItem)) continue;
             NGItem ng = (NGItem) w.item;
-            String name = ng.name();
-            if (name == null) continue;
-            if (isGemstone(ng) || isGemstone(name)) continue;
-            if (!NParser.checkName(name, MINED_ITEMS) && !NParser.checkName(name, ORE_ITEMS)) continue;
-            String stoneType = classifyStoneType(name);
-            if ("Shell".equals(stoneType) || "Cat Gold".equals(stoneType)) continue;
+            if (!isSupportStone(ng.name())) continue;
             haven.GItem.Amount amount = ng.getInfo(haven.GItem.Amount.class);
             total += (amount != null && amount.itemnum() > 0) ? amount.itemnum() : 1;
         }
         return total;
+    }
+
+    /**
+     * Collects loose stones accepted by the support reserve, then returns to the point where
+     * the action started. The action deliberately shares the normal PathFinder/take protocol.
+     */
+    public static final class CollectSupportStones implements nurgling.actions.Action {
+        private final int requested;
+
+        public CollectSupportStones(int requested) {
+            this.requested = Math.max(0, Math.min(MasterMinerGroundStacks.CLICK_PICKUP_LIMIT, requested));
+        }
+
+        @Override
+        public Results run(NGameUI gui) throws InterruptedException {
+            Gob player = NUtils.player();
+            if (gui == null || player == null || requested == 0) return Results.SUCCESS();
+            Coord2d origin = Coord2d.of(player.rc.x, player.rc.y);
+            try {
+                int taken = 0;
+                while (taken < requested) {
+                    player = NUtils.player();
+                    if (player == null || gui.getInventory() == null || gui.getInventory().getFreeSpace() <= 0)
+                        return Results.SUCCESS();
+                    Gob item = nearestSupportStone(player, origin);
+                    if (item == null) return Results.SUCCESS();
+                    if (item.rc.dist(player.rc) > MCache.tilesz.x) {
+                        Results walked = new PathFinder(item).run(gui);
+                        if (!walked.IsSuccess()) return walked;
+                    }
+                    NUtils.takeFromEarth(item);
+                    taken++;
+                }
+                return Results.SUCCESS();
+            } finally {
+                /* Best effort also covers a full inventory, path failure, and interruption. */
+                try {
+                    Gob current = NUtils.player();
+                    if (current != null && current.rc.dist(origin) > MCache.tilesz.x)
+                        new PathFinder(origin).run(gui);
+                } catch (InterruptedException ignored) {
+                    // An explicit cancellation may prevent the return path from being planned.
+                } catch (Exception ignored) {
+                    // Returning must not hide the original collection result.
+                }
+            }
+        }
+
+        private Gob nearestSupportStone(Gob player, Coord2d origin) {
+            Gob best = null;
+            double bestDist = MasterMinerGroundStacks.PICKUP_RADIUS;
+            OCache oc = player.glob.oc;
+            synchronized (oc) {
+                for (Gob gob : oc) {
+                    if (gob == null || gob == player || gob instanceof OCache.Virtual || gob.ngob == null)
+                        continue;
+                    String path = gob.ngob.name;
+                    if (!MasterMinerGroundStacks.isGroundItem(path)
+                            || !isSupportStone(MasterMinerGroundStacks.minedItemName(path)))
+                        continue;
+                    double fromOrigin = gob.rc.dist(origin);
+                    double fromPlayer = gob.rc.dist(player.rc);
+                    if (fromOrigin < MasterMinerGroundStacks.PICKUP_RADIUS && fromPlayer < bestDist) {
+                        bestDist = fromPlayer;
+                        best = gob;
+                    }
+                }
+            }
+            return best;
+        }
     }
 
     /**
@@ -755,7 +840,8 @@ public class MasterMiner extends ActionWithFinal {
         // Но маркеры для них ставятся
         if (isGem) {
             // Для драгоценных камней качество в руках и в стене совпадает
-            wnd.setLastMined(stoneName, f3, f3);
+            int masonryForLastMined = masonrySkill();
+            wnd.setLastMined(stoneName, f3, f3, masonryForLastMined, stoneType);
             
             // Только ставим маркер для драгоценного камня, если он включен в настройках
             nurgling.conf.NMasterMinerMarkingConfig markingConfig = nurgling.conf.NMasterMinerMarkingConfig.get();
@@ -782,11 +868,10 @@ public class MasterMiner extends ActionWithFinal {
                 
                 Double threshold = markingConfig.getThreshold(configKey);
                 
-                // Если enabled == null, используем значение по умолчанию (драгоценные камни включены)
+                // When no explicit value is saved, use the same defaults as the settings UI.
                 boolean shouldMark = false;
                 if (enabled == null) {
-                    // По умолчанию драгоценные камни включены
-                    shouldMark = true;
+                    shouldMark = defaultMarkerEnabled(configKey);
                 } else {
                     // Используем явное значение из настроек
                     shouldMark = enabled;
@@ -799,7 +884,7 @@ public class MasterMiner extends ActionWithFinal {
                         // Используем базовое название для resourceType (например, "Moonstone" вместо "Small Smooth Moonstone")
                         String baseGemName = extractGemstoneBaseName(stoneName);
                         try {
-                            addGemstoneMarker(gui, dropped, baseGemName, f3);
+                            addGemstoneMarker(gui, dropped, baseGemName, f3, masonryForLastMined, stoneType);
                         } catch (Exception e) {
                             // Игнорируем ошибки
                         }
@@ -906,13 +991,9 @@ public class MasterMiner extends ActionWithFinal {
             // обновляем UI для соответствующего типа камня
             if (stoneType != null && shouldRecordMined(seenItem.origin, isSingleStone(dropped))
                     && seen.claimRecord(newItem.item)) {
-                int masonryForUI = 0;
-                try {
-                    masonryForUI = NUtils.getUI().sess.glob.getcattr("masonry").comp;
-                } catch (Exception ignored) {
-                }
+                int masonryForUI = masonrySkill();
                 wnd.setStoneInfo(stoneType, stoneName, f3, wallQ, bestAltQ, masonryForUI, set, currentToolType);
-                wnd.setLastMined(stoneName, f3, wallQ);
+                wnd.setLastMined(stoneName, f3, wallQ, masonryForUI, stoneType);
                 if (seen.claimCount(newItem.item)) {
                     wnd.incrementCounter();
                 }
@@ -926,19 +1007,10 @@ public class MasterMiner extends ActionWithFinal {
                     Boolean enabled = markingConfig.isEnabled(configKey);
                     Double threshold = markingConfig.getThreshold(configKey);
                     
-                    // Определяем, является ли это рудой, Quarryartz или драгоценным камнем для значений по умолчанию
-                    boolean isOre = isOre(stoneName) || 
-                                   stoneName.equals("Black Coal") || 
-                                   stoneName.equals("Quartz") || 
-                                   stoneName.equals("Flint");
-                    boolean isQuarryartz = "Quarryartz".equals(stoneType);
-                    // isGem уже определена выше в методе
-                    
-                    // Если enabled == null, используем значения по умолчанию (руды, Quarryartz и драгоценные камни включены)
+                    // When no explicit value is saved, use the same defaults as the settings UI.
                     boolean shouldMark = false;
                     if (enabled == null) {
-                        // По умолчанию руды, Quarryartz и драгоценные камни включены
-                        shouldMark = isOre || isQuarryartz || isGem;
+                        shouldMark = defaultMarkerEnabled(configKey);
                     } else {
                         // Используем явное значение из настроек
                         shouldMark = enabled;
@@ -951,10 +1023,10 @@ public class MasterMiner extends ActionWithFinal {
                         if (wallQ >= itemThreshold) {
                             if ("Quarryartz".equals(stoneType)) {
                                 // Квариарц ставится четко в месте выкопан
-                                addQuarryartzMarker(gui, stoneName, wallQ);
+                                addQuarryartzMarker(gui, stoneName, wallQ, masonryForUI, stoneType);
                             } else {
                                 // Остальные камни и руды - система спотов (обновление в радиусе 30 клеток)
-                                addOreSpotMarker(gui, dropped, stoneName, wallQ);
+                                addOreSpotMarker(gui, dropped, stoneName, wallQ, masonryForUI, stoneType);
                             }
                         }
                     }
@@ -995,6 +1067,14 @@ public class MasterMiner extends ActionWithFinal {
         return ((f3 - f4) * 2.0 + (f4 - 10.0) / f5) + 10.0;
     }
 
+    private static int masonrySkill() {
+        try {
+            return NUtils.getUI().sess.glob.getcattr("masonry").comp;
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
 
     /**
      * Проверяет, является ли камень рудой для системы спотов
@@ -1015,6 +1095,18 @@ public class MasterMiner extends ActionWithFinal {
         return false;
     }
 
+    /** Default marker selection shared by the runtime and Mining Mastery settings. */
+    public static boolean defaultMarkerEnabled(String stoneName) {
+        return isOre(stoneName)
+                || isGemstone(stoneName)
+                || "Feldspar".equals(stoneName)
+                || "Flint".equals(stoneName)
+                || "Quartz".equals(stoneName)
+                || "Quarryartz".equals(stoneName)
+                || "Rock Salt".equals(stoneName)
+                || "Black Coal".equals(stoneName);
+    }
+
     /**
      * Ordinary mined stone: Chipper/MINED_ITEMS names that are not ore, gemstone, or exact Quarryartz.
      */
@@ -1023,6 +1115,17 @@ public class MasterMiner extends ActionWithFinal {
         if ("Quarryartz".equals(stoneName.trim())) return false;
         if (isOre(stoneName) || isGemstone(stoneName)) return false;
         return NParser.checkName(stoneName, MINED_ITEMS);
+    }
+
+    /** The numeric quality remains on the mark; the suffix is display-only. */
+    static String markerLabel(double quality, int masonry, String stoneType) {
+        return String.format("q%.0f%s", quality,
+                MasterMinerWnd.isMasonryCapped(quality, masonry, stoneType) ? "*" : "");
+    }
+
+    static boolean shouldUpdateMarker(double newQuality, String newLabel, double existingQuality, String existingLabel) {
+        return newQuality > existingQuality || (Double.compare(newQuality, existingQuality) == 0
+                && newLabel.endsWith("*") && (existingLabel == null || !existingLabel.endsWith("*")));
     }
     
     /**
@@ -1365,7 +1468,7 @@ public class MasterMiner extends ActionWithFinal {
     /**
      * Добавляет квариарц в батч для обработки маркера (батчинг для устранения лагов)
      */
-    private void addQuarryartzMarker(NGameUI gui, String stoneName, double wallQ) {
+    private void addQuarryartzMarker(NGameUI gui, String stoneName, double wallQ, int masonry, String stoneType) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null) {
                 return;
@@ -1392,7 +1495,8 @@ public class MasterMiner extends ActionWithFinal {
             
             // Добавляем в батч
             synchronized (batchLock) {
-                markerBatchQueue.add(new MarkerBatch(stoneName, null, wallQ, tileCoords, segmentId, "quarryartz"));
+                markerBatchQueue.add(new MarkerBatch(stoneName, null, wallQ, tileCoords, segmentId, "quarryartz",
+                        masonry, stoneType));
                 scheduleBatchProcessing(gui);
             }
         } catch (Exception e) {
@@ -1485,7 +1589,7 @@ public class MasterMiner extends ActionWithFinal {
     /**
      * Добавляет камень в батч для обработки маркера (батчинг для устранения лагов)
      */
-    private void addOreSpotMarker(NGameUI gui, NGItem oreItem, String oreName, double wallQ) {
+    private void addOreSpotMarker(NGameUI gui, NGItem oreItem, String oreName, double wallQ, int masonry, String stoneType) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null) {
                 return;
@@ -1512,7 +1616,8 @@ public class MasterMiner extends ActionWithFinal {
             
             // Добавляем в батч
             synchronized (batchLock) {
-                markerBatchQueue.add(new MarkerBatch(oreName, oreItem, wallQ, tileCoords, segmentId, "ore"));
+                markerBatchQueue.add(new MarkerBatch(oreName, oreItem, wallQ, tileCoords, segmentId, "ore",
+                        masonry, stoneType));
                 scheduleBatchProcessing(gui);
             }
         } catch (Exception e) {
@@ -1573,7 +1678,7 @@ public class MasterMiner extends ActionWithFinal {
         // Обрабатываем все маркеры
         for (MarkerBatch best : bestMarkers.values()) {
             try {
-                String label = String.format("q%.0f", best.wallQ);
+                String label = markerLabel(best.wallQ, best.masonry, best.stoneType);
                 
                 // Определяем радиус и логику на основе типа
                 final String finalLabel = label;
@@ -1604,6 +1709,7 @@ public class MasterMiner extends ActionWithFinal {
                             
                             String existingLocationId = null;
                             double existingQ = 0;
+                            String existingLabel = null;
                             int checkedCount = 0;
                             int maxChecks = 50;
                             
@@ -1612,25 +1718,19 @@ public class MasterMiner extends ActionWithFinal {
                                 if (mark.segmentId == finalSegmentId && 
                                     mark.isNear(finalSegmentId, finalTileCoords, radiusTiles) && 
                                     finalOreName.equals(mark.resourceType)) {
-                                    // Парсим качество из метки
-                                    double markQ = 0;
-                                    if (mark.label != null && mark.label.startsWith("q")) {
-                                        try {
-                                            markQ = Double.parseDouble(mark.label.substring(1).trim());
-                                        } catch (NumberFormatException e) {
-                                            // Игнорируем
-                                        }
-                                    }
+                                    // Numeric quality is persisted separately from the display label.
+                                    double markQ = mark.quality;
                                     if (markQ > existingQ) {
                                         existingQ = markQ;
                                         existingLocationId = mark.getLocationId();
+                                        existingLabel = mark.label;
                                     }
                                 }
                             }
                             
                             if (existingLocationId != null) {
                                 // Маркер найден - обновляем ТОЛЬКО если качество выше
-                                if (finalWallQ > existingQ) {
+                                if (shouldUpdateMarker(finalWallQ, finalLabel, existingQ, existingLabel)) {
                                     gui.labeledMarkService.updateMarkPosition(existingLocationId, finalLabel, finalTileCoords);
                                 }
                                 // Если качество не выше - ничего не делаем
@@ -1760,11 +1860,8 @@ public class MasterMiner extends ActionWithFinal {
                 // Маркер найден рядом - проверяем качество
                 // Обновляем ТОЛЬКО если выкопал выше
                 try {
-                    // Парсим качество из метки (формат "q130")
-                    double existingQ = 0;
-                    if (nearbyMark.label != null && nearbyMark.label.startsWith("q")) {
-                        existingQ = Double.parseDouble(nearbyMark.label.substring(1).trim());
-                    }
+                    // Quality is persisted separately from the optional display suffix.
+                    double existingQ = nearbyMark.quality;
                     
                     // Если новое качество выше - обновляем маркер
                     if (wallQ > existingQ) {
@@ -1983,7 +2080,8 @@ public class MasterMiner extends ActionWithFinal {
     /**
      * Добавляет драгоценный камень в батч для обработки маркера (батчинг для устранения лагов)
      */
-    private void addGemstoneMarker(NGameUI gui, NGItem gemItem, String gemName, double quality) {
+    private void addGemstoneMarker(NGameUI gui, NGItem gemItem, String gemName, double quality, int masonry,
+                                   String stoneType) {
         try {
             if (gui.mmap == null || gui.mmap.sessloc == null) {
                 return;
@@ -2010,7 +2108,8 @@ public class MasterMiner extends ActionWithFinal {
             
             // Добавляем в батч
             synchronized (batchLock) {
-                markerBatchQueue.add(new MarkerBatch(gemName, gemItem, quality, tileCoords, segmentId, "gem"));
+                markerBatchQueue.add(new MarkerBatch(gemName, gemItem, quality, tileCoords, segmentId, "gem",
+                        masonry, stoneType));
                 scheduleBatchProcessing(gui);
             }
         } catch (Exception e) {

@@ -26,7 +26,6 @@
 
 package haven;
 
-import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import haven.ItemInfo.AttrCache;
@@ -120,6 +119,54 @@ public class Buff extends Widget implements ItemInfo.ResOwner, Bufflist.Managed 
     public final AttrCache<Double> ameteri = new AttrCache<>(this::info, AttrCache.map1(AMeterInfo.class, minf -> minf::ameter));
     private final AttrCache<Tex> nmeteri = new AttrCache<>(this::info, AttrCache.map1s(GItem.NumberInfo.class, ninf -> ninf.overlay()));
     private final AttrCache<Double> cmeteri = new AttrCache<>(this::info, AttrCache.map1(GItem.MeterInfo.class, minf -> minf::meter));
+    private Tex timert;
+    private String timertext;
+    private long timertick = Long.MIN_VALUE;
+    private int timerwidth = -1;
+
+    private static Tex rendertimer(String text, int iconWidth) {
+	return(new TexI(BuffTimeLeft.renderPlate(text, iconWidth)));
+    }
+
+    private void updatetimer(int iconWidth) {
+	long now = (long)Math.floor(Utils.rtime());
+	if((now == timertick) && (iconWidth == timerwidth))
+	    return;
+	timertick = now;
+	String text = null;
+	for(ItemInfo inf : info()) {
+	    if(inf instanceof haven.res.ui.tt.expire.Expiring) {
+		haven.res.ui.tt.expire.Expiring exp = (haven.res.ui.tt.expire.Expiring)inf;
+		double fac = exp.glob.globtimefac();
+		text = BuffTimeLeft.formatForGameTime(exp.etime, exp.glob.globtime(), fac);
+		break;
+	    }
+	}
+	if(!Objects.equals(timertext, text) || (timerwidth != iconWidth)) {
+	    if(timert != null)
+		timert.dispose();
+	    timert = (text == null) ? null : rendertimer(text, iconWidth);
+	    timertext = text;
+	}
+	timerwidth = iconWidth;
+    }
+
+    private void drawtimer(GOut g, Coord iconsz) {
+	try {
+	    updatetimer(iconsz.x);
+	    if(timert != null)
+		g.image(timert, imgoff.add((iconsz.x - timert.sz().x) / 2, iconsz.y - timert.sz().y));
+	} catch(Loading e) {}
+    }
+
+    private void disposetimer() {
+	if(timert != null)
+	    timert.dispose();
+	timert = null;
+	timertext = null;
+	timertick = Long.MIN_VALUE;
+	timerwidth = -1;
+    }
 
     public void draw(GOut g) {
 	g.chcolor(255, 255, 255, a);
@@ -145,6 +192,7 @@ public class Buff extends Widget implements ItemInfo.ResOwner, Bufflist.Managed 
 		g.prect(imgoff.add(ccc), ccc.inv(), img.sz().sub(ccc), Math.PI * 2 * m);
 		g.chcolor(255, 255, 255, a);
 	    }
+	    drawtimer(g, img.sz());
 	} catch(Loading e) {}
     }
 
@@ -200,6 +248,11 @@ public class Buff extends Widget implements ItemInfo.ResOwner, Bufflist.Managed 
 	};
     }
 
+    public void destroy() {
+	disposetimer();
+	super.destroy();
+    }
+
     public void move(Coord c, double off) {
 	if(dest)
 	    return;
@@ -226,6 +279,7 @@ public class Buff extends Widget implements ItemInfo.ResOwner, Bufflist.Managed 
 	    info = null;
 	    rawinfo = new ItemInfo.Raw(args);
 	    shorttip = longtip = null;
+	    disposetimer();
 	} else {
 	    super.uimsg(msg, args);
 	}

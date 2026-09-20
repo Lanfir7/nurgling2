@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-master-miner-support",
+  "priority": 6,
+  "summary": {
+    "ru": "Мастер-шахтёр собирает камни для подпорки, отмечает достигнутый кап и подсказывает действия с метками.",
+    "en": "Master Miner collects support stones, marks capped results, and shows map-marker actions."
+  },
+  "detail": {
+    "ru": "В окне «Мастер-шахтёр» рядом с запасом для подпорки появилась кнопка сбора до 30 ближайших подходящих камней с возвратом к месту начала. Последняя добыча и метки на карте получают звёздочку при достижении капа кладки. Наведите курсор на отметки руды, камня, самоцвета или Quarryartz на карте, чтобы увидеть действия; у Quarryartz также показан поиск по ПКМ.",
+    "en": "The Master Miner window now has a button beside the support reserve to gather up to 30 nearby suitable stones and return to where you started. Last-mined results and map marks show a star when they reach the masonry cap. Hover ore, stone, gemstone, or Quarryartz map marks to see their actions; Quarryartz also shows its right-click search."
+  }
+}

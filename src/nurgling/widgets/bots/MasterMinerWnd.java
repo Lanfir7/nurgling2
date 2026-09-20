@@ -158,7 +158,24 @@ public class MasterMinerWnd extends Window {
                 saveSettings();
             }
         };
-        cur = addSettingRow(cur, L10n.get("bot.masterminer.keep_stones"), keepStonesEntry, setW, gap);
+        Label keepStonesLabel = add(new Label(L10n.get("bot.masterminer.keep_stones")), cur);
+        add(keepStonesEntry, keepStonesLabel.pos("bl").add(0, UI.scale(2)));
+        add(new Button(setW, L10n.get("bot.masterminer.set")) {
+            @Override
+            public void click() {
+                super.click();
+                saveSettings();
+            }
+        }, keepStonesEntry.pos("ur").add(UI.scale(6), -UI.scale(4)));
+        int collectW = contentW - (pad * 2) - entryW - setW - UI.scale(12);
+        add(new Button(collectW, L10n.get("bot.masterminer.collect_support")) {
+            @Override
+            public void click() {
+                super.click();
+                collectSupportStones();
+            }
+        }, keepStonesEntry.pos("ur").add(setW + UI.scale(12), -UI.scale(4)));
+        cur = keepStonesEntry.pos("bl").add(0, gap);
         cur = cur.add(0, UI.scale(4));
 
         int btnW = contentW - pad * 2;
@@ -229,6 +246,14 @@ public class MasterMinerWnd extends Window {
                 new PickupGroundItems(resPath, MasterMinerGroundStacks.pickupCap(takeAll)));
     }
 
+    /** Fill the same support reserve used by auto-drop, without blocking the window. */
+    void collectSupportStones() {
+        Thread running = pickupThread;
+        if (running != null && running.isAlive()) return;
+        pickupThread = BotExecutor.runAsync("MasterMinerCollectSupport",
+                new MasterMiner.CollectSupportStones(MasterMinerGroundStacks.CLICK_PICKUP_LIMIT));
+    }
+
     private void refreshGroundIcons() {
         List<MasterMinerGroundStacks.Stack> stacks = scanGroundStacks();
         int gap = UI.scale(4);
@@ -296,10 +321,15 @@ public class MasterMinerWnd extends Window {
     }
 
     static String lastMinedValueText(String stoneName, double handQ, double wallQ) {
+        return lastMinedValueText(stoneName, handQ, wallQ, false);
+    }
+
+    static String lastMinedValueText(String stoneName, double handQ, double wallQ, boolean masonryCapped) {
         if (stoneName == null || stoneName.isEmpty()) {
             return "-";
         }
-        return String.format(Locale.US, "%s %.2f [%.2f]", stoneName, handQ, wallQ);
+        return String.format(Locale.US, "%s %.2f%s [%.2f]", stoneName, handQ,
+                masonryCapped ? " *" : "", wallQ);
     }
 
     static String qualityLineText(String displayName, double handQ, double wallQ, Double bestAltQ) {
@@ -489,6 +519,13 @@ public class MasterMinerWnd extends Window {
         }
     }
     
+    public static boolean isMasonryCapped(double wallQ, int masonry, String stoneType) {
+        if (masonry <= 0) return false;
+        int comparisonValue = "Quarryartz".equals(stoneType)
+                ? (int) Math.round(masonry * 1.25) : masonry;
+        return wallQ >= comparisonValue - 1.0 && wallQ <= comparisonValue + 1.0;
+    }
+
     private Color getWallQColor(double wallQ, int masonry, String stoneType) {
         // Для квариарца используем (masonry + 25%), для остальных - обычный masonry
         int comparisonValue = masonry;
@@ -497,7 +534,7 @@ public class MasterMinerWnd extends Window {
         }
         
         // Красный когда примерно равно comparisonValue (±1)
-        if (wallQ >= comparisonValue - 1.0 && wallQ <= comparisonValue + 1.0) {
+        if (isMasonryCapped(wallQ, masonry, stoneType)) {
             return Color.RED;
         }
         // Оранжевый (желтый) когда на ~10 меньше comparisonValue (диапазон от comparisonValue-11 до comparisonValue-9)
@@ -526,6 +563,11 @@ public class MasterMinerWnd extends Window {
      */
     public void setLastMined(String stoneName, double handQ, double wallQ) {
         lastMinedLbl.settext(lastMinedValueText(stoneName, handQ, wallQ));
+    }
+
+    public void setLastMined(String stoneName, double handQ, double wallQ, int masonry, String stoneType) {
+        lastMinedLbl.settext(lastMinedValueText(stoneName, handQ, wallQ,
+                isMasonryCapped(wallQ, masonry, stoneType)));
     }
 
     public double getDropThreshold() {

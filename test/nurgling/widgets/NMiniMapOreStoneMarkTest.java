@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.MessageFormat;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,6 +52,38 @@ class NMiniMapOreStoneMarkTest {
     }
 
     @Test
+    void starredQualityLabelKeepsItsNumericQualityForFilteringAndDeduplication() {
+        LabeledMinimapMark mark = new LabeledMinimapMark("q60*", "Granite", 1L, new Coord(1, 1), null);
+        assertEquals(60.0, mark.quality);
+    }
+
+    @Test
+    void mineralMarkerTooltipPutsConfiguredKeysBeforeActionsOnSeparateLines() throws Exception {
+        Properties messages = new Properties();
+        try (java.io.Reader reader = Files.newBufferedReader(
+                Path.of("src/lang/messages_ru.properties"), StandardCharsets.UTF_8)) {
+            messages.load(reader);
+        }
+
+        String tooltip = MessageFormat.format(messages.getProperty("map.labeled_marker.tooltip"),
+                "Granite q40", "Alt+LMB", "Ctrl+LMB", "Shift+RMB");
+        String[] lines = tooltip.split("\\n");
+        assertEquals("Granite q40", lines[0]);
+        assertTrue(lines[1].startsWith("Alt+LMB - "));
+        assertTrue(lines[2].startsWith("Ctrl+LMB - "));
+        assertTrue(lines[3].startsWith("Shift+RMB - "));
+
+        String quarryartz = MessageFormat.format(messages.getProperty("map.labeled_marker.tooltip.quarryartz"),
+                "Quarryartz q275", "Alt+LMB", "Ctrl+LMB", "Shift+RMB");
+        String[] quarryartzLines = quarryartz.split("\\n");
+        assertEquals("Quarryartz q275", quarryartzLines[0]);
+        assertTrue(quarryartzLines[1].startsWith("Alt+LMB - "));
+        assertTrue(quarryartzLines[2].startsWith("Ctrl+LMB - "));
+        assertTrue(quarryartzLines[3].startsWith("Shift+RMB - "));
+        assertTrue(quarryartzLines[4].startsWith("ПКМ - "));
+    }
+
+    @Test
     void skipLoopsApplyProspectSettingsToMinerals() throws Exception {
         String src = Files.readString(Path.of("src/nurgling/widgets/NMiniMap.java"), StandardCharsets.UTF_8);
         String cfg = Files.readString(Path.of("src/nurgling/NConfig.java"), StandardCharsets.UTF_8);
@@ -70,6 +104,13 @@ class NMiniMapOreStoneMarkTest {
         assertFalse(src.contains("public boolean showGemstoneIcons"));
         assertFalse(src.contains("public boolean showStoneIcons"));
         assertTrue(src.contains("isOreSpotMark(labeledMark) || isStoneMark(labeledMark)"));
+        assertTrue(src.contains("isMineralLabeledMark(mark)"));
+        assertTrue(src.contains("Hotkeys.MAP_MARKER_EDIT"));
+        assertTrue(src.contains("Hotkeys.MAP_MARKER_BEACON"));
+        assertTrue(src.contains("Hotkeys.MAP_MARKER_DELETE"));
+        assertTrue(src.contains("MINERAL_MARKER_ACTION_COLOR = \"168,168,168\""));
+        assertTrue(src.contains("RichText.render"));
+        assertTrue(src.contains("mineralMarkerTooltip(mark)"));
         assertFalse(src.contains("&& !isOreSpotMark(mark) && !isGemstoneMark(mark.resourceType)"));
         assertTrue(cfg.contains("showStoneIcons,"));
         assertTrue(cfg.contains("conf.put(Key.showStoneIcons, true)"));

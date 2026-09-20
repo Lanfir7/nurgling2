@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-buff-expiration-timer",
+  "priority": 6,
+  "summary": {
+    "ru": "У временных эффектов появился читаемый таймер до окончания.",
+    "en": "Temporary effects now show a readable time remaining label."
+  },
+  "detail": {
+    "ru": "В панели эффектов внизу значка временного эффекта теперь показано оставшееся реальное время крупной единицей, чтобы проще следить за окончанием действия.",
+    "en": "At the bottom of a temporary effect's icon in the effects bar, the remaining real time is now shown in a compact largest-unit label so expiry is easier to track."
+  }
+}

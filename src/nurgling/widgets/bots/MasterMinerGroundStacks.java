@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import nurgling.tools.VSpec;
+
 /**
  * Nearby loose items on the ground that PathFinder can reach in the loaded
  * view (about 41 tiles) without recorded ChunkNav data.
@@ -59,6 +61,9 @@ public final class MasterMinerGroundStacks {
 
     public static String displayName(String resPath) {
         String slug = lastSegment(resPath).replace('-', ' ').replace('_', ' ');
+        if ("quarryquartz".equalsIgnoreCase(slug)) {
+            return "Quarryartz";
+        }
         if (slug.isEmpty()) {
             return "?";
         }
@@ -81,6 +86,17 @@ public final class MasterMinerGroundStacks {
 
     public static String iconInvPath(String resPath) {
         return "gfx/invobjs/" + lastSegment(resPath);
+    }
+
+    /** Resolve loose-item resource names back to the player-facing Chipper item names. */
+    public static String minedItemName(String resPath) {
+        String slug = lastSegment(resPath);
+        for (Map.Entry<String, ArrayList<String>> entry : VSpec.object.entrySet()) {
+            if (slug.equalsIgnoreCase(lastSegment(entry.getKey())) && !entry.getValue().isEmpty()) {
+                return entry.getValue().get(0);
+            }
+        }
+        return displayName(resPath);
     }
 
     public static List<Stack> group(List<Drop> drops, double px, double py, double radius) {

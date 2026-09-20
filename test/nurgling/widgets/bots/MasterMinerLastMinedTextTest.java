@@ -33,6 +33,23 @@ class MasterMinerLastMinedTextTest {
     }
 
     @Test
+    void cappedLastMinedResultHasStarAndOnlyWhenActuallyCapped() {
+        assertEquals("Granite 60.00 * [60.00]",
+                MasterMinerWnd.lastMinedValueText("Granite", 60.0, 60.0, true));
+        assertEquals("Granite 60.00 [60.00]",
+                MasterMinerWnd.lastMinedValueText("Granite", 60.0, 60.0, false));
+    }
+
+    @Test
+    void masonryCapUsesTheSameRulesForNormalStoneCatGoldAndQuarryartz() {
+        assertTrue(MasterMinerWnd.isMasonryCapped(60.9, 60, "Stone"));
+        assertTrue(MasterMinerWnd.isMasonryCapped(59.0, 60, "Cat Gold"));
+        assertTrue(MasterMinerWnd.isMasonryCapped(75.0, 60, "Quarryartz"));
+        assertFalse(MasterMinerWnd.isMasonryCapped(62.0, 60, "Stone"));
+        assertFalse(MasterMinerWnd.isMasonryCapped(0.0, 0, "Stone"));
+    }
+
+    @Test
     void qualityLineKeepsHandsWallAndAltTool() {
         assertEquals("Microlite: 60.00 [59.10] (61.25)",
                 MasterMinerWnd.qualityLineText("Microlite", 60.0, 59.1, 61.25));

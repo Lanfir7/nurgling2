@@ -50,6 +50,8 @@ class MasterMinerGroundStacksTest {
         assertEquals("gfx/invobjs/dolomite", MasterMinerGroundStacks.iconInvPath("gfx/terobjs/items/dolomite"));
         assertEquals("Gemstone", MasterMinerGroundStacks.displayName("gfx/terobjs/items/gems/gemstone"));
         assertEquals("gfx/invobjs/gemstone", MasterMinerGroundStacks.iconInvPath("gfx/terobjs/items/gems/gemstone"));
+        assertEquals("Quarryartz", MasterMinerGroundStacks.displayName("gfx/terobjs/items/quarryquartz"));
+        assertEquals("Black Coal", MasterMinerGroundStacks.minedItemName("gfx/terobjs/items/blackcoal"));
     }
 
     @Test
