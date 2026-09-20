@@ -110,9 +110,89 @@
     "2026-09-19-temp-marks-window-switch",
     "2026-09-19-unbox-return",
     "2026-09-19-vein-miner",
-    "2026-09-20-duplicate-area"
+    "2026-09-20-duplicate-area",
+    "2026-09-20-feast-tableware-safety",
+    "2026-09-20-forager-presets-and-strawberries",
+    "2026-09-20-full-stockpile-shift-rmb",
+    "2026-09-20-login-layout-and-account-tags",
+    "2026-09-20-map-grid-refresh",
+    "2026-09-20-master-miner-ground-pickup",
+    "2026-09-20-master-miner-last-mined",
+    "2026-09-20-mining-pickup-and-vein",
+    "2026-09-20-release-notes-all-summaries",
+    "2026-09-20-route-walker",
+    "2026-09-20-running-bot-status",
+    "2026-09-20-vein-miner-ctrl-click"
   ],
   "releases": [
+    {
+      "id": "2.103.209",
+      "date": "2026-09-20",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Предмет в руках: Shift+ПКМ по земле открывает зону и складывает туда полные стокпайлы.",
+          "В мастере-шахтёре клик по иконке собирает до 30 штук, Shift — всё. Курсором кирки Ctrl+клик по породе запускает Жильного шахтёра.",
+          "Еда за пировым столом не ломает посуду при неопределённом или опасном износе.",
+          "Экран входа лучше помещается в небольших окнах, а сохранённые аккаунты получили личные метки и заметки.",
+          "В мастере-шахтёре сверху появляются иконки камней с пола: число рядом и сбор по нажатию.",
+          "В «Что нового» теперь видна краткая строка для каждого изменения выпуска.",
+          "Сохранённые маршруты собирателя теперь можно безопасно пройти без запуска сбора.",
+          "Карта надёжнее обновляет недавно выкопанные и добытые участки земли.",
+          "Мастер-шахтёр показывает качество последней добычи и в руках, и в стене, а подпись больше не обрезается.",
+          "В списке персонажей теперь видно, какой бот запущен и чем он занят.",
+          "Ctrl+клик курсором кирки по породе теперь запускает Жильного шахтёра.",
+          "Настройки собирателя надёжнее сохраняются, а клубника корректно находится в списках предметов."
+        ],
+        "en": [
+          "With an item in hand, Shift+right-click the ground to mark an area and fill it with full stockpiles.",
+          "In Master Miner, clicking a ground icon picks up up to 30 items; Shift-click takes all. With the mine cursor, Ctrl-click a rock wall to start Vein Miner.",
+          "Eating at a feast table now avoids breaking tableware when its wear is unsafe or still unknown.",
+          "The login screen fits smaller windows better, and saved accounts now have their own tags and notes.",
+          "Master Miner now shows icons for stones on the ground nearby, with counts, and picks them up on click.",
+          "What's New now shows a short line for every change in a release.",
+          "Saved Forager routes can now be followed safely without starting a foraging run.",
+          "The map now reliably refreshes terrain that was recently dug or mined.",
+          "Master Miner now shows last-mined quality both in your hands and in the wall, without clipping the line.",
+          "The character list now shows each running bot and its current activity.",
+          "Ctrl+clicking rock with the mining cursor now starts Vein Miner.",
+          "Forager settings now save more reliably, and strawberries are correctly found in item lists."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Возьмите предмет в руки и нажмите Shift+ПКМ по пустой земле, не по объекту. Появится рамка выделения; отметьте площадку — макрос «Создатель полных стокпайлов» заполнит её стокпайлами этого предмета. Обычный ПКМ по земле по-прежнему ставит гост стокпайла. Shift+ПКМ по объекту не меняется.",
+          "Откройте «Мастер-шахтёр»: обычный клик по иконке с пола берёт не больше 30 штук этого типа, Shift+клик — все в зоне видимости. Если курсор кирки, Ctrl+клик по стене породы или руды сразу запускает «Жильного шахтёра» на эту клетку.",
+          "При выборе «Eat» за пировым столом клиент ждёт безопасного состояния посуды и подтверждения предыдущего укуса. При полной сумке автосохранение посуды оставляет её на столе, а не выбрасывает на землю.",
+          "На низких окнах список сохранённых аккаунтов автоматически занимает доступное место, не закрывая форму и статус. Щёлкните правой кнопкой по сохранённому аккаунту или значку заметки в его строке, чтобы добавить независимые от персонажей метки и заметку. При удалении аккаунта его заметка и метки тоже удаляются.",
+          "Откройте бота «Мастер-шахтёр». Над каменной кладкой появляются иконки предметов в зоне видимости (туда PathFinder ходит без записи ChunkNav). На иконке — сколько штук рядом; нажмите, чтобы персонаж собрал этот тип с пола.",
+          "Откройте «Что нового» в главном меню: краткий список больше не скрывает изменения после первых трёх, а кнопка подробностей по-прежнему показывает полное описание каждого из них.",
+          "Откройте «Проход по маршруту» кнопкой под мини-картой, выберите сохранённый маршрут и нажмите «Идти». Маршрут показывается на карте, его можно поставить на паузу или остановить. Проход начинается с ближайшей определяемой точки, идёт вперёд один раз и не выполняет действия, записанные в точках.",
+          "После копки или добычи изменённый рельеф на карте обновляется сам, без следующего изменения клетки или повторного входа в игру.",
+          "В окне бота «Мастер-шахтёр» последняя добыча идёт с новой строки после двоеточия и пишет оба качества: в руках и в стене. Список лучших камней поясняет формат чисел, пороги и кнопки выровнены удобнее.",
+          "Рядом с портретами персонажей активные боты показывают свою иконку, название и текущую задачу. Если задача ещё не определилась, отображается статус «Работает».",
+          "В шахте удерживайте Ctrl и кликните клетку породы курсором кирки: Жильный шахтёр сразу начнёт работу с выбранной жилой. Обычный клик киркой по-прежнему копает одну клетку.",
+          "Настройки собирателя остаются привязанными к персонажу независимо от регистра имени, а закрытие списков пресетов и путей не сбрасывает выбор. В списках предметов «Berry» и «Fruit or Berry» обычная клубника теперь отображается как Strawberries."
+        ],
+        "en": [
+          "Pick up an item and Shift+right-click empty ground, not an object. Draw the area when asked, and Full Stockpile Maker fills it with piles of that item. Plain right-click on the ground still starts the stockpile ghost. Shift+right-click on an object is unchanged.",
+          "In Master Miner, a click on a ground icon takes at most 30 of that type; Shift-click takes every matching pile in view. With the mine cursor active, Ctrl-click a rock or ore wall to start Vein Miner on that tile.",
+          "When choosing Eat at a feast table, the client waits for safe tableware and confirmation of the previous bite. If your bag is full, automatic tableware saving leaves the item on the table instead of dropping it on the ground.",
+          "On short windows, the saved-account list now uses the available space without covering the form or status. Right-click a saved account or use its note icon to add tags and a note that are independent from character tags. Forgetting an account also removes its account note and tags.",
+          "Open the Master Miner bot. Above Masonry, icons list loose items in view (the range PathFinder covers without recorded ChunkNav). Each icon shows how many are nearby; click it to pick that type up from the ground.",
+          "Open What's New from the main menu: the compact list no longer hides changes after the first three, while the details button still shows every full description.",
+          "Open Route Walker from the button below the minimap, select a saved route, and press Follow. The route is previewed on the map and can be paused or stopped. Walking joins at the nearest resolvable waypoint, proceeds forward once, and does not run recorded waypoint actions.",
+          "After digging or mining, changed terrain on the map refreshes on its own without another tile change or logging back in.",
+          "In the Master Miner bot window, last mined starts on the next line after the colon and shows both hand and wall quality. The best-stone list explains the number format, and the thresholds and buttons are laid out more clearly.",
+          "Beside character portraits, active bots now show their icon, name, and current task. If a task has not been identified yet, the status reads Running.",
+          "In a mine, hold Ctrl and click a rock tile with the mining cursor to start Vein Miner on that vein. A normal mining click still digs one tile.",
+          "Forager settings remain linked to your character regardless of name capitalization, and closing preset or path lists no longer clears the selection. In the Berry and Fruit or Berry item lists, ordinary strawberries now appear as Strawberries."
+        ]
+      }
+    },
     {
       "id": "2.103.208",
       "date": "2026-09-19",
