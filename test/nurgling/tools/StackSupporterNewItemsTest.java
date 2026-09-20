@@ -27,6 +27,19 @@ class StackSupporterNewItemsTest {
     }
 
     @Test
+    void iceBearToothIsGroupedWithFineboneAndBoneMaterial() {
+        assertTrue(VSpec.getCategory("Ice Bear Tooth").contains("Finebone"));
+        assertTrue(VSpec.getCategory("Ice Bear Tooth").contains("Bone Material"));
+    }
+
+    @Test
+    void lynxClawsUseTheirServerStackSize() {
+        assertTrue(VSpec.getCategory("Lynx Claws").contains("Stackable Curiosities"));
+        assertEquals(4, StackSupporter.getFullStackSize("Lynx Claws"));
+        assertFalse(StackSupporter.isKnownUnstackableName("Lynx Claws"));
+    }
+
+    @Test
     void jotunClamMeatUsesItsServerStackSize() {
         assertEquals(5, StackSupporter.getFullStackSize("Jotun Clam Meat"));
     }

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-catalog-materials",
+  "priority": 5,
+  "summary": {
+    "ru": "Каталог материалов теперь правильно распознаёт Quarryartz, шкуры и зубы ледяного медведя; когти рыси складываются по 4.",
+    "en": "The material catalog now correctly recognizes Quarryartz plus ice bear hides and teeth, and lynx claws stack in fours."
+  },
+  "detail": {
+    "ru": "Quarryartz, свежие и подготовленные шкуры, а также зуб ледяного медведя доступны в подходящих категориях материалов для рецептов и сортировки. Когти рыси теперь учитываются как стопки по 4 при работе с инвентарём.",
+    "en": "Quarryartz, fresh and prepared ice bear hides, and ice bear teeth are available in the appropriate material categories for recipes and sorting. Lynx claws now count as stacks of four when working with inventory."
+  }
+}

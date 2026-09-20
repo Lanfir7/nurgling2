@@ -1995,6 +1995,7 @@ public class VSpec {
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/boartusk\",\"name\":\"Boar Tusk\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/bogturtleshell\",\"name\":\"Bog Turtle Shell\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/borewormbeak\",\"name\":\"Boreworm Beak\"}"));
+        finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/icebeartooth\",\"name\":\"Ice Bear Tooth\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/spermwhaletooth\",\"name\":\"Cachalot Tooth\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/flipperbone\",\"name\":\"Flipper Bones\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/lynxclaws\",\"name\":\"Lynx Claws\"}"));
@@ -2484,6 +2485,7 @@ public class VSpec {
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/badgerhide-blood\",\"name\":\"Fresh Badger Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/bathide-blood\",\"name\":\"Fresh Bat Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/bearhide-blood\",\"name\":\"Fresh Bear Hide\"}"));
+        hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/polarbearhide-blood\",\"name\":\"Fresh Ice Bear Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/beaverhide-blood\",\"name\":\"Fresh Beaver Hide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/boarhide-blood\",\"name\":\"Fresh Boarhide\"}"));
         hidesFresh.add(new JSONObject("{\"static\":\"gfx/invobjs/borewormhide-blood\",\"name\":\"Fresh Boreworm Hide\"}"));
@@ -2527,6 +2529,7 @@ public class VSpec {
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/badgerhide\",\"name\":\"Badger Hide\"}"));
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/bathide\",\"name\":\"Bat Hide\"}"));
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/bearhide\",\"name\":\"Bear Hide\"}"));
+        preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/polarbearhide\",\"name\":\"Ice Bear Hide\"}"));
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/beaverhide\",\"name\":\"Beaver Hide\"}"));
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/boarhide\",\"name\":\"Boarhide\"}"));
         preparedAnimalHides.add(new JSONObject("{\"static\":\"gfx/invobjs/borewormhide\",\"name\":\"Boreworm Hide\"}"));
@@ -2818,7 +2821,7 @@ public class VSpec {
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/pegmatite\",\"name\":\"Pegmatite\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/porphyry\",\"name\":\"Porphyry\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/pumice\",\"name\":\"Pumice\"}"));
-        stones.add(new JSONObject("{\"static\":\"gfx/invobjs/quarryquartz\",\"name\":\"Quarry Quartz\"}"));
+        stones.add(new JSONObject("{\"static\":\"gfx/invobjs/quarryquartz\",\"name\":\"Quarryartz\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/quartz\",\"name\":\"Quartz\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/rhyolite\",\"name\":\"Rhyolite\"}"));
         stones.add(new JSONObject("{\"static\":\"gfx/invobjs/rockcrystal\",\"name\":\"Rock Crystal\"}"));
@@ -3194,6 +3197,7 @@ public class VSpec {
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/petrifiedshell\",\"name\":\"Petrified Seashell\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/flotsam\",\"name\":\"Peculiar Flotsam\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/curiousneedle\",\"name\":\"Curious Needle\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/lynxclaws\",\"name\":\"Lynx Claws\"}"));
         categories.put("Stackable Curiosities", StackableCurios);
 
         ArrayList<JSONObject> NoneStackableCurio = new ArrayList<>();

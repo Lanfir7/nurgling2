@@ -107,7 +107,6 @@ public class StackSupporter {
         catExceptions.add("Reindeer Antlers");
         catExceptions.add("Roe Deer Antlers");
         catExceptions.add("Wolf's Claw");
-        catExceptions.add("Lynx Claws");
         catExceptions.add("Silkworm");
         catExceptions.add("Female Silkmoth");
         catExceptions.add("Male Silkmoth");
@@ -146,7 +145,11 @@ public class StackSupporter {
         if (win != null && NParser.checkName(win.cap, unstackableContainers)) {
             return true;
         }
-        return NParser.checkName(name, new NAlias("Lynx Claws"))
+        return isKnownUnstackableName(name);
+    }
+
+    static boolean isKnownUnstackableName(String name) {
+        return name == null
                 || name.equals("Silkworm")
                 || name.equals("Tick")
                 || name.contains("Dried Filet")
