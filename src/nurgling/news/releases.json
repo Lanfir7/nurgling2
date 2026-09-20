@@ -110,8 +110,10 @@
     "2026-09-19-temp-marks-window-switch",
     "2026-09-19-unbox-return",
     "2026-09-19-vein-miner",
+    "2026-09-20-area-specialization-settings",
     "2026-09-20-buff-expiration-timer",
     "2026-09-20-catalog-materials",
+    "2026-09-20-craft-atlas-workstation-quality",
     "2026-09-20-duplicate-area",
     "2026-09-20-feast-tableware-safety",
     "2026-09-20-forager-presets-and-strawberries",
@@ -120,14 +122,57 @@
     "2026-09-20-map-grid-refresh",
     "2026-09-20-master-miner-ground-pickup",
     "2026-09-20-master-miner-last-mined",
+    "2026-09-20-master-miner-mine-support",
     "2026-09-20-master-miner-support",
     "2026-09-20-mining-pickup-and-vein",
+    "2026-09-20-quality-workshop",
+    "2026-09-20-quality-workshop-hidden-cards",
     "2026-09-20-release-notes-all-summaries",
     "2026-09-20-route-walker",
     "2026-09-20-running-bot-status",
     "2026-09-20-vein-miner-ctrl-click"
   ],
   "releases": [
+    {
+      "id": "2.103.211",
+      "date": "2026-09-20",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Крафт-атлас точнее учитывает качество станков и воды; для котла можно выбрать глиняный вариант.",
+          "Мастер-шахтёр теперь ставит заготовку каменной колонны рядом с тоннелем.",
+          "В крафт-атласе появился калькулятор качества для сравнения глиняных цепочек и гончарного круга.",
+          "В списке специализаций зоны снова видна шестерёнка выбора подспециализации.",
+          "В калькуляторе качества можно скрывать промежуточные результаты и ингредиенты в сворачиваемые списки."
+        ],
+        "en": [
+          "Craft Atlas now accounts for more workstation qualities and lets you select a clay cauldron for water calculations.",
+          "Master Miner can now place a Stone Column construction beside your tunnel.",
+          "The Craft Atlas now has a quality workshop for comparing clay chains and a potter's wheel.",
+          "The sub-specialization settings gear is visible again in the area's specialization list.",
+          "The quality workshop can now hide intermediate results and inputs in collapsible lists."
+        ]
+      },
+      "details": {
+        "ru": [
+          "В автоматическом расчёте качества в крафт-атласе учитываются ткацкий станок, прялка, маслобойка, мясорубка, гончарный круг и пресс. Для рецептов с котлом выбирайте его тип и указывайте качество воды: у глиняного котла оно влияет иначе. Формулы наковальни с молотом и ограничения навыками проверены отдельно.",
+          "В окне «Мастер-шахтёр» кнопка с иконкой каменной колонны собирает до 30 камней, возвращает персонажа к началу и ставит заготовку каменной колонны сбоку от тоннеля. Окно строительства остаётся открытым: материалы не добавляются и постройка не начинается автоматически.",
+          "Откройте «Калькулятор качества» в крафт-атласе. Добавляйте нужные результаты, раскрывайте ингредиенты в расчёт и сравнивайте повторные крафты глины через обжиг кирпича. Общие качества вводятся один раз; подсказки склада, станков и персонажа применяются по нажатию. Расчёт сохраняется в профиле.",
+          "В окне зон нажмите шестерёнку справа от специализации, чтобы выбрать её подтип — например, Beetroot для Crop. Кнопка теперь остаётся внутри строки и доступна для нажатия.",
+          "В крафт-атласе откройте калькулятор качества и нажмите «Скрыть» на карточке. Она останется в расчёте и переместится в раздел внизу своей колонки. Раскройте его, чтобы изменить данные или вернуть карточку в основной список. Скрытие запоминается. Кнопка подсказки теперь рядом с полем качества; строка об источнике формулы убрана."
+        ],
+        "en": [
+          "Automatic quality estimates in Craft Atlas include the loom, spinning wheel, churn, meatgrinder, potter's wheel and extraction press. For cauldron recipes, select the type and enter the water quality: clay cauldrons affect it differently. Anvil and hammer weights and character softcaps were checked separately.",
+          "In the Master Miner window, the Stone Column icon gathers up to 30 stones, returns your character to the starting spot, and places a Stone Column construction beside the tunnel. The construction window stays open: no materials are added and building never starts automatically.",
+          "Open Quality workshop in the Craft Atlas. Watch selected results, expand ingredients into calculations, and compare repeated clay crafts using fired bricks. Shared qualities are entered once; storage, workstation and character suggestions are applied on click. Your scenario is saved in your profile.",
+          "In the areas window, click the gear to the right of a specialization to choose its subtype, such as Beetroot for Crop. The button now stays inside the row and remains clickable.",
+          "In Craft Atlas, open the quality workshop and click Hide on a card. It remains part of the calculation and moves to a section at the bottom of its column. Expand that section to edit it or return it to the main list. Visibility is remembered. Suggestions now sit beside quality inputs, and the formula attribution row has been removed."
+        ]
+      }
+    },
     {
       "id": "2.103.210",
       "date": "2026-09-20",
