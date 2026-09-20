@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-running-bot-status",
+  "priority": 4,
+  "summary": {
+    "ru": "В списке персонажей теперь видно, какой бот запущен и чем он занят.",
+    "en": "The character list now shows each running bot and its current activity."
+  },
+  "detail": {
+    "ru": "Рядом с портретами персонажей активные боты показывают свою иконку, название и текущую задачу. Если задача ещё не определилась, отображается статус «Работает».",
+    "en": "Beside character portraits, active bots now show their icon, name, and current task. If a task has not been identified yet, the status reads Running."
+  }
+}

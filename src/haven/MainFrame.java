@@ -217,6 +217,9 @@ public class MainFrame {
 	    }
 	});
 
+	/* Plugins participate in character selection, so discover them before the UI thread starts. */
+	nurgling.plugins.NPluginManager.loadAll();
+
 	Thread main = new HackThread(g, () -> main2(args), "Haven main thread");
 	main.start();
     }

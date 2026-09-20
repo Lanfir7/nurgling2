@@ -23,6 +23,7 @@ public class NMiniMapWnd extends Widget{
     public static final KeyBinding kb_night = KeyBinding.get("mwnd_night", KeyMatch.nil);
     public static final KeyBinding kb_fog = KeyBinding.get("mwnd_fog", KeyMatch.nil);
     public static final KeyBinding kb_resourcetimers = KeyBinding.get("mwnd_resourcetimers", KeyMatch.nil);
+    public static final KeyBinding kb_routewalker = KeyBinding.get("mwnd_routewalker", KeyMatch.nil);
 
     public static class NMenuCheckBox extends ICheckBox {
         private final Tex upHi, downHi, hoverupHi, hoverdownHi;
@@ -311,6 +312,12 @@ public class NMiniMapWnd extends Widget{
             NConfig.needUpdate();
         });
         buttons.add(floorOl);
+
+        ACheckBox routeWalker = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/path", kb_routewalker,
+                L10n.get("minimap.route_walker"));
+        routeWalker.state(() -> { NGameUI gui=NUtils.getGameUI(); return gui!=null&&gui.routeWalkerWindow!=null&&gui.routeWalkerWindow.visible(); });
+        routeWalker.click(RouteWalkerWindow::toggle);
+        buttons.add(routeWalker);
 
         // Layout buttons with wrapping
         layoutButtons(buttons);

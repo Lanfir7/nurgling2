@@ -1,5 +1,7 @@
 package nurgling.conf;
 
+import nurgling.NConfig;
+import nurgling.NUI;
 import nurgling.guarding.GuardEntry;
 import nurgling.guarding.GuardingProfile;
 import nurgling.routes.ForagerAction;
@@ -7,9 +9,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.lang.reflect.Modifier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NForagerPropMigrationTest {
@@ -93,6 +97,57 @@ class NForagerPropMigrationTest {
         GuardingProfile seeded = prop.guardingProfiles.get(prop.currentGuardingProfile);
         assertTrue(seeded.ignoreBats);
         assertFalse(seeded.waterMode);
+    }
+
+    @Test
+    void savingCaseVariantsCollapsesEveryOlderEntry() {
+        NConfig previous = NConfig.current;
+        try {
+            NConfig.current = new NConfig();
+            ArrayList<NForagerProp> saved = new ArrayList<>();
+            saved.add(new NForagerProp("Alice", "Character-1"));
+            saved.add(new NForagerProp("ALICE", "CHARACTER-1"));
+            NForagerProp unrelated = new NForagerProp("Bob", "Character-1");
+            saved.add(unrelated);
+            NConfig.set(NConfig.Key.foragerprop, saved);
+
+            NForagerProp latest = new NForagerProp("alice", "character-1");
+            NForagerProp.set(latest);
+
+            @SuppressWarnings("unchecked")
+            ArrayList<NForagerProp> stored = (ArrayList<NForagerProp>) NConfig.get(NConfig.Key.foragerprop);
+            assertEquals(2, stored.size());
+            assertSame(unrelated, stored.get(0));
+            assertSame(latest, stored.get(1));
+        } finally {
+            NConfig.current = previous;
+        }
+    }
+
+    @Test
+    void savingNullIdentityDoesNotThrow() {
+        NConfig previous = NConfig.current;
+        try {
+            NConfig.current = new NConfig();
+            NForagerProp.set(new NForagerProp(null, null));
+            NForagerProp.set(new NForagerProp(null, null));
+
+            @SuppressWarnings("unchecked")
+            ArrayList<NForagerProp> stored = (ArrayList<NForagerProp>) NConfig.get(NConfig.Key.foragerprop);
+            assertEquals(2, stored.size());
+        } finally {
+            NConfig.current = previous;
+        }
+    }
+
+    @Test
+    void loadingIsSerializedWithSaving() throws NoSuchMethodException {
+        int modifiers = NForagerProp.class
+                .getDeclaredMethod("get", NUI.NSessInfo.class)
+                .getModifiers();
+
+        assertTrue(Modifier.isStatic(modifiers));
+        assertTrue(Modifier.isSynchronized(modifiers));
     }
 
     private static void assertOutcome(GuardingProfile gp, String guardId, String outcomeId, boolean enabled) {

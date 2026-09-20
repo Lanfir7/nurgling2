@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-map-grid-refresh",
+  "priority": 4,
+  "summary": {
+    "ru": "Карта надёжнее обновляет недавно выкопанные и добытые участки земли.",
+    "en": "The map now reliably refreshes terrain that was recently dug or mined."
+  },
+  "detail": {
+    "ru": "После копки или добычи изменённый рельеф на карте обновляется сам, без следующего изменения клетки или повторного входа в игру.",
+    "en": "After digging or mining, changed terrain on the map refreshes on its own without another tile change or logging back in."
+  }
+}

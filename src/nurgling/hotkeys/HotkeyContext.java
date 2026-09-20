@@ -26,6 +26,7 @@ public enum HotkeyContext {
     ROSTER_BUTTON_MODE("hotkey.context.roster_button_mode"),
     BUDDY_WINDOW("hotkey.context.buddy_window"),
     WOUND_WINDOW("hotkey.context.wound_window"),
+    MASTER_MINER_WINDOW("hotkey.context.master_miner_window"),
     LAYOUT_EDIT("hotkey.context.layout_edit"),
     COMPASS_WIDGET("hotkey.context.compass_widget"),
     LAND_SURVEY("hotkey.context.land_survey"),

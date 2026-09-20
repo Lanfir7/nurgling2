@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-master-miner-ground-pickup",
+  "priority": 5,
+  "summary": {
+    "ru": "В мастере-шахтёре сверху появляются иконки камней с пола: число рядом и сбор по нажатию.",
+    "en": "Master Miner now shows icons for stones on the ground nearby, with counts, and picks them up on click."
+  },
+  "detail": {
+    "ru": "Откройте бота «Мастер-шахтёр». Над каменной кладкой появляются иконки предметов в зоне видимости (туда PathFinder ходит без записи ChunkNav). На иконке — сколько штук рядом; нажмите, чтобы персонаж собрал этот тип с пола.",
+    "en": "Open the Master Miner bot. Above Masonry, icons list loose items in view (the range PathFinder covers without recorded ChunkNav). Each icon shows how many are nearby; click it to pick that type up from the ground."
+  }
+}

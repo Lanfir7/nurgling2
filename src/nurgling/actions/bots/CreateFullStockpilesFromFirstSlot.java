@@ -7,14 +7,13 @@ import nurgling.NUtils;
 import nurgling.actions.*;
 import nurgling.tasks.NTask;
 import nurgling.tasks.WaitTargetSize;
+import nurgling.hotkeys.FullStockpilePlacementHotkey;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import static haven.Inventory.sqsz;
 
@@ -25,6 +24,16 @@ import static haven.Inventory.sqsz;
  */
 public class CreateFullStockpilesFromFirstSlot implements Action {
 
+    private final String itemHint;
+
+    public CreateFullStockpilesFromFirstSlot() {
+        this(null);
+    }
+
+    public CreateFullStockpilesFromFirstSlot(String itemHint) {
+        this.itemHint = itemHint;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         NUtils.getGameUI().msg("Please, select output area");
@@ -32,28 +41,14 @@ public class CreateFullStockpilesFromFirstSlot implements Action {
         outsa.run(gui);
         Pair<Coord2d, Coord2d> out = outsa.getRCArea();
 
-        // Determine item type from first inventory slot
         ArrayList<WItem> allItems = gui.getInventory().getItems();
-        if (allItems.isEmpty()) {
+        String held = null;
+        if (gui.vhand != null && gui.vhand.item instanceof NGItem)
+            held = ((NGItem) gui.vhand.item).name();
+        String itemName = FullStockpilePlacementHotkey.resolveItemName(itemHint, held, firstSlotItemName(allItems));
+        if (itemName == null) {
             return Results.ERROR("Inventory is empty.");
         }
-
-        Coord firstSlot = allItems.stream()
-                .map(w -> w.c.sub(1, 1).div(sqsz))
-                .min(Comparator.comparingInt((Coord c) -> c.y).thenComparingInt(c -> c.x))
-                .orElse(null);
-        if (firstSlot == null) {
-            return Results.ERROR("No items in inventory.");
-        }
-
-        List<WItem> firstSlotItems = allItems.stream()
-                .filter(w -> w.c.sub(1, 1).div(sqsz).equals(firstSlot))
-                .collect(Collectors.toList());
-        if (firstSlotItems.isEmpty()) {
-            return Results.ERROR("No item in first slot.");
-        }
-
-        String itemName = ((NGItem) firstSlotItems.get(0).item).name();
         NAlias pileName = getStockpileName(new NAlias(itemName));
 
         // Phase 1: Fill existing non-full stockpiles in the zone
@@ -97,6 +92,22 @@ public class CreateFullStockpilesFromFirstSlot implements Action {
         }
 
         return Results.SUCCESS();
+    }
+
+    private static String firstSlotItemName(ArrayList<WItem> allItems) {
+        if (allItems == null || allItems.isEmpty())
+            return null;
+        Coord firstSlot = allItems.stream()
+                .map(w -> w.c.sub(1, 1).div(sqsz))
+                .min(Comparator.comparingInt((Coord c) -> c.y).thenComparingInt(c -> c.x))
+                .orElse(null);
+        if (firstSlot == null)
+            return null;
+        for (WItem w : allItems) {
+            if (w.c.sub(1, 1).div(sqsz).equals(firstSlot) && w.item instanceof NGItem)
+                return ((NGItem) w.item).name();
+        }
+        return null;
     }
 
     /**

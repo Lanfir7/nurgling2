@@ -36,4 +36,20 @@ class VeinMinerHelpersTest {
         assertFalse(VeinMiner.isTargetTile(ore, "gfx/tiles/cave"));
         assertFalse(VeinMiner.isTargetTile(ore, null));
     }
+
+    @Test
+    void veinRocksAreMineableWallTiles() {
+        assertTrue(VeinMiner.isVeinRock("gfx/tiles/rocks/cassiterite"));
+        assertTrue(VeinMiner.isVeinRock("gfx/tiles/rocks/granite"));
+        assertFalse(VeinMiner.isVeinRock("gfx/tiles/cave"));
+        assertFalse(VeinMiner.isVeinRock(null));
+    }
+
+    @Test
+    void mineCursorIsThePickaxeCursor() {
+        assertTrue(VeinMiner.isMineCursor("gfx/hud/curs/mine"));
+        assertTrue(VeinMiner.isMineCursor("mine"));
+        assertFalse(VeinMiner.isMineCursor("gfx/hud/curs/arw"));
+        assertFalse(VeinMiner.isMineCursor(null));
+    }
 }

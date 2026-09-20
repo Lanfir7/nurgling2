@@ -49,7 +49,8 @@ public class SessionTabBar extends Widget {
     public static final int AVA_SIZE = UI.scale(32);
     public static final int AVA_MARGIN = UI.scale(4);
     private static final int MACRO_BADGE_WIDTH = UI.scale(156);
-    private static final int MACRO_BADGE_HEIGHT = UI.scale(28);
+    private static final int MACRO_BADGE_HEIGHT = UI.scale(42);
+    private static final int MACRO_ICON_SIZE = UI.scale(30);
     private static final int MACRO_BADGE_GAP = UI.scale(3);
     private static final int MACRO_LANE_GAP = UI.scale(7);
     private static final int MACRO_STOP_ALL_SIZE = UI.scale(28);
@@ -98,6 +99,8 @@ public class SessionTabBar extends Widget {
     private static final Map<String, Tex> nameCache = new HashMap<>();
     private static final Map<String, Tex> subCache = new HashMap<>();
     private static final Map<String, Tex> macroPanelCache = new HashMap<>();
+    private static final Map<String, Tex> macroIconCache = new HashMap<>();
+    private static final Set<String> missingMacroIcons = new HashSet<>();
     private static final Map<String, String> macroNameCache = new HashMap<>();
     private static final Map<String, String> fitCache = new HashMap<>();
 
@@ -660,9 +663,9 @@ public class SessionTabBar extends Widget {
             } else {
                 name = displayBotName(name);
             }
-            drawMacroBadge(g, new Coord(badgeX, badgeY), MACRO_BADGE_WIDTH,
-                    name,
-                    bot.getThread() == hoveredMacroThread, false);
+            drawMacroPlate(g, new Coord(badgeX, badgeY), MACRO_BADGE_WIDTH, name,
+                    bot.getStatus() == null ? L10n.get("sessionbar.macro_running") : bot.getStatus(),
+                    descriptorFor(bot.getName()), bot.getThread() == hoveredMacroThread);
             badgeY += MACRO_BADGE_HEIGHT + MACRO_BADGE_GAP;
         }
     }
@@ -693,6 +696,58 @@ public class SessionTabBar extends Widget {
             g.line(center.add(-arm, arm), center.add(arm, -arm), UI.scale(1));
         }
         g.chcolor();
+    }
+
+    private void drawMacroPlate(GOut g, Coord ul, int width, String name, String status,
+                                BotDescriptor descriptor, boolean hovered) {
+        g.chcolor(0, 0, 0, 130);
+        g.frect(ul.add(UI.scale(1), UI.scale(1)), new Coord(width, MACRO_BADGE_HEIGHT));
+        g.chcolor();
+        String panelKey = width + ":" + hovered + ":false";
+        g.image(cached(macroPanelCache, panelKey,
+                ignored -> makeMacroPanel(width, hovered, false)), ul);
+
+        int textX = UI.scale(8);
+        Tex icon = macroIcon(descriptor);
+        if (icon != null) {
+            g.image(icon, ul.add(textX, (MACRO_BADGE_HEIGHT - MACRO_ICON_SIZE) / 2),
+                    new Coord(MACRO_ICON_SIZE, MACRO_ICON_SIZE));
+            textX += MACRO_ICON_SIZE + UI.scale(5);
+        }
+        int textWidth = width - textX - UI.scale(22);
+        String fittedName = fitMacro(name, textWidth);
+        String fittedStatus = fitMacro(status, textWidth);
+        Tex nameTex = cached(subCache, "macro-name:" + fittedName, ignored -> macroFoundry.render(fittedName).tex());
+        Tex statusTex = cached(subCache, "macro-status:" + fittedStatus, ignored -> subFoundry.render(fittedStatus).tex());
+        g.chcolor(hovered ? new Color(255, 241, 222) : MACRO_TEXT);
+        g.aimage(nameTex, ul.add(textX, UI.scale(12)), 0, 0.5);
+        g.chcolor(hovered ? new Color(238, 206, 175) : new Color(177, 156, 133));
+        g.aimage(statusTex, ul.add(textX, UI.scale(29)), 0, 0.5);
+
+        Coord center = ul.add(width - UI.scale(12), MACRO_BADGE_HEIGHT / 2);
+        int arm = UI.scale(3);
+        g.chcolor(hovered ? new Color(255, 208, 179) : new Color(160, 140, 111));
+        g.line(center.add(-arm, -arm), center.add(arm, arm), UI.scale(1));
+        g.line(center.add(-arm, arm), center.add(arm, -arm), UI.scale(1));
+        g.chcolor();
+    }
+
+    private Tex macroIcon(BotDescriptor descriptor) {
+        if (descriptor == null || missingMacroIcons.contains(descriptor.id))
+            return null;
+        Tex icon = macroIconCache.get(descriptor.id);
+        if (icon != null)
+            return icon;
+        try {
+            icon = new TexI(Resource.loadsimg(descriptor.getUpIconPath()));
+            if (macroIconCache.size() > 64)
+                macroIconCache.clear();
+            macroIconCache.put(descriptor.id, icon);
+            return icon;
+        } catch (RuntimeException e) {
+            missingMacroIcons.add(descriptor.id);
+            return null;
+        }
     }
 
     private static Tex makeMacroPanel(int width, boolean hovered, boolean stopAll) {
@@ -736,22 +791,38 @@ public class SessionTabBar extends Widget {
         String cached = macroNameCache.get(key);
         if (cached != null)
             return cached;
-        String source = name.endsWith("-RecentAction")
-                ? name.substring(0, name.length() - "-RecentAction".length()) : name;
+        String source = normalizedBotName(name);
         String display = source;
-        for (BotDescriptor descriptor : BotRegistry.all()) {
-            if (source.equalsIgnoreCase(descriptor.id) || source.equalsIgnoreCase(descriptor.iconPath)
-                    || source.equalsIgnoreCase(descriptor.titleKey)
-                    || (descriptor.clazz != null && source.equalsIgnoreCase(descriptor.clazz.getSimpleName()))) {
-                String titleKey = "bot." + descriptor.id + ".title";
-                display = L10n.hasKey(titleKey) ? L10n.get(titleKey) : descriptor.getDisplayName();
-                break;
-            }
+        BotDescriptor descriptor = descriptorFor(source);
+        if (descriptor != null) {
+            String titleKey = "bot." + descriptor.id + ".title";
+            display = L10n.hasKey(titleKey) ? L10n.get(titleKey) : descriptor.getDisplayName();
         }
         if (macroNameCache.size() > 64)
             macroNameCache.clear();
         macroNameCache.put(key, display);
         return display;
+    }
+
+    private BotDescriptor descriptorFor(String name) {
+        if (name == null)
+            return null;
+        String source = normalizedBotName(name);
+        for (BotDescriptor descriptor : BotRegistry.all()) {
+            if (source.equalsIgnoreCase(descriptor.id) || source.equalsIgnoreCase(descriptor.iconPath)
+                    || source.equalsIgnoreCase(descriptor.titleKey)
+                    || (descriptor.clazz != null && source.equalsIgnoreCase(descriptor.clazz.getSimpleName())))
+                return descriptor;
+        }
+        return null;
+    }
+
+    private String normalizedBotName(String name) {
+        if (name.endsWith("-RecentAction"))
+            return name.substring(0, name.length() - "-RecentAction".length());
+        if (name.endsWith("-ToggleThread"))
+            return name.substring(0, name.length() - "-ToggleThread".length());
+        return name;
     }
 
     private boolean isStopAllHovered(SessionContext ctx) {

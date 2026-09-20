@@ -754,14 +754,8 @@ public class MasterMiner extends ActionWithFinal {
         // Драгоценные камни НЕ учитываются при подсчете качества и НЕ обновляют UI
         // Но маркеры для них ставятся
         if (isGem) {
-            // Обновляем UI с последним выкопанным драгоценным камнем
-            // Для драгоценных камней wallQ = f3 (без формулы)
-            int masonryForUI = 0;
-            try {
-                masonryForUI = NUtils.getUI().sess.glob.getcattr("masonry").comp;
-            } catch (Exception ignored) {
-            }
-            wnd.setLastMined(stoneName, f3, masonryForUI); // Для драгоценных камней f3 = wallQ
+            // Для драгоценных камней качество в руках и в стене совпадает
+            wnd.setLastMined(stoneName, f3, f3);
             
             // Только ставим маркер для драгоценного камня, если он включен в настройках
             nurgling.conf.NMasterMinerMarkingConfig markingConfig = nurgling.conf.NMasterMinerMarkingConfig.get();
@@ -918,7 +912,7 @@ public class MasterMiner extends ActionWithFinal {
                 } catch (Exception ignored) {
                 }
                 wnd.setStoneInfo(stoneType, stoneName, f3, wallQ, bestAltQ, masonryForUI, set, currentToolType);
-                wnd.setLastMined(stoneName, wallQ, masonryForUI); // Передаем wallQ вместо f3
+                wnd.setLastMined(stoneName, f3, wallQ);
                 if (seen.claimCount(newItem.item)) {
                     wnd.incrementCounter();
                 }

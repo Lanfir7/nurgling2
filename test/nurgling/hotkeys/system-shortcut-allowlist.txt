@@ -64,6 +64,8 @@ nurgling/hotkeys/Hotkeys.java|return button == 1 && (mods & KeyMatch.MODS) == 0 
 nurgling/hotkeys/Hotkeys.java|return (button == 1 || button == 3) && (mods & KeyMatch.MODS) == 0;|Basic pointer routing and recording selection; yields to configured marker deletion
 nurgling/hotkeys/Hotkeys.java|return button == 1 && (mods & KeyMatch.MODS) == 0;|Basic pointer routing and recording selection; yields to configured marker deletion
 nurgling/hotkeys/Hotkeys.java|return button == 3 && (mods & KeyMatch.MODS) == 0;|Basic pointer routing and recording selection; yields to configured marker deletion
+nurgling/hotkeys/FullStockpilePlacementHotkey.java|return keyCode == key.code && ((mods & key.modmask) == (key.modmatch & key.modmask));|Configured full-stockpile placement matcher for rebound keys
+nurgling/hotkeys/FullStockpilePlacementHotkey.java|return key.code == KeyEvent.VK_SHIFT && (key.modmask & KeyMatch.C) != 0 && (key.modmatch & KeyMatch.C) != 0;|Configured Ctrl+Shift stockpile-hologram shortcut, either modifier order
 nurgling/hotkeys/InputGesture.java|return type == Type.MODIFIER && code == (mods & KeyMatch.MODS);|Configured modifier-family matcher
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_ESCAPE;|Fixed widget navigation and tooltip presentation
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_ENTER;|Fixed widget navigation and tooltip presentation

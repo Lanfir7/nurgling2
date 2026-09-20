@@ -12,7 +12,6 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -241,13 +240,8 @@ public class NForagerProp implements JConf {
             @SuppressWarnings("unchecked")
             ArrayList<NForagerProp> foragerProps = ((ArrayList<NForagerProp>) NConfig.get(NConfig.Key.foragerprop));
             if (foragerProps != null) {
-                for (Iterator<NForagerProp> i = foragerProps.iterator(); i.hasNext(); ) {
-                    NForagerProp oldprop = i.next();
-                    if (oldprop.username.equals(prop.username) && oldprop.chrid.equals(prop.chrid)) {
-                        i.remove();
-                        break;
-                    }
-                }
+                // Collapse every casing variant, leaving only the newest saved entry.
+                foragerProps.removeIf(oldprop -> oldprop != null && oldprop.isFor(prop.username, prop.chrid));
             } else {
                 foragerProps = new ArrayList<>();
             }
@@ -317,7 +311,7 @@ public class NForagerProp implements JConf {
         return jforager;
     }
 
-    public static NForagerProp get(NUI.NSessInfo sessInfo) {
+    public static synchronized NForagerProp get(NUI.NSessInfo sessInfo) {
         if (sessInfo == null || NUtils.getGameUI() == null || NUtils.getGameUI().getCharInfo() == null)
             return null;
         String chrid = NUtils.getGameUI().getCharInfo().chrid;
@@ -325,12 +319,19 @@ public class NForagerProp implements JConf {
         ArrayList<NForagerProp> foragerProps = ((ArrayList<NForagerProp>) NConfig.get(NConfig.Key.foragerprop));
         if (foragerProps == null)
             foragerProps = new ArrayList<>();
+        // set() appends, so the last matching entry is the most recently saved variant.
+        NForagerProp found = null;
         for (NForagerProp prop : foragerProps) {
-            if (prop.username.equals(sessInfo.username) && prop.chrid.equals(chrid)) {
-                return prop;
-            }
+            if (prop != null && prop.isFor(sessInfo.username, chrid))
+                found = prop;
         }
-        return new NForagerProp(sessInfo.username, chrid);
+        return found != null ? found : new NForagerProp(sessInfo.username, chrid);
+    }
+
+    /** Server and launcher casing can differ for the same account and character. */
+    private boolean isFor(String username, String chrid) {
+        return this.username != null && this.username.equalsIgnoreCase(username)
+                && this.chrid != null && this.chrid.equalsIgnoreCase(chrid);
     }
 
     /** Writes one Actions Profile's own JSON file - the format {@link #importActionsProfile} reads back. */

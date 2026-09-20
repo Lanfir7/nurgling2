@@ -5,7 +5,9 @@ import haven.render.Location;
 import haven.render.Projection;
 import nurgling.NCharlist;
 import nurgling.NConfig;
+import nurgling.conf.FontSettings;
 import nurgling.conf.NCharTags;
+import nurgling.plugins.NPluginManager;
 import nurgling.widgets.login.NBackdrop;
 import nurgling.widgets.login.NLoginTheme;
 
@@ -23,6 +25,9 @@ public class NCharselScreen extends Widget {
     private IButton newchar;
     private final List<Img> badges = new ArrayList<>();
     private final Map<Widget, Coord> loose = new HashMap<>();
+    private final List<ActionLink> actions = new ArrayList<>();
+    private Widget panel;
+    private boolean pluginsNotified = false;
     private Avaview avaview;
     private UI.Grab rotgrab = null;
     private double rot = 0, rotstart = 0;
@@ -70,6 +75,10 @@ public class NCharselScreen extends Widget {
             newchar = (IButton) child; newchar.hide();
         } else loose.put(child, child.c);
         wire(); layout();
+        if ((list != null) && !pluginsNotified) {
+            pluginsNotified = true;
+            NPluginManager.onCharsel(this);
+        }
     }
 
     public void cdestroy(Widget ch) {
@@ -77,11 +86,80 @@ public class NCharselScreen extends Widget {
         if (ch == list) list = null;
         if (ch == avatar) { avatar = null; avaview = null; }
         if (ch == newchar) newchar = null;
+        if (ch == panel) {
+            panel = null;
+            setListShown(true);
+            layout();
+        }
+        actions.remove(ch);
         badges.remove(ch); loose.remove(ch); wire();
     }
     private void wire() { if (list != null) { list.badgeSources(badges); list.newCharSource(newchar); } }
+
+    /** Adds a plugin action under the character list footer. */
+    public void addAction(String label, Runnable action) {
+        if (label == null)
+            throw new IllegalArgumentException("Action label must not be null");
+        if (action == null)
+            throw new IllegalArgumentException("Action must not be null");
+        ActionLink link = add(new ActionLink(label, action), Coord.z);
+        loose.remove(link);
+        actions.add(link);
+        if (panel != null)
+            link.hide();
+        layout();
+    }
+
+    /** The available area for a plugin panel, matching the character-list column. */
+    public Coord panelSize() { return (Coord.of(NCharlist.W, NCharlist.H)); }
+
+    /** Shows a plugin panel in place of the character list. */
+    public <T extends Widget> T showPanel(T widget) {
+        if (widget == null)
+            throw new IllegalArgumentException("Panel must not be null");
+        closePanel();
+        T added = add(widget, Coord.z);
+        loose.remove(added);
+        panel = added;
+        setListShown(false);
+        layout();
+        return (added);
+    }
+
+    /** Removes the plugin panel and restores the character list and actions. */
+    public void closePanel() {
+        if (panel != null) {
+            Widget previous = panel;
+            panel = null;
+            previous.reqdestroy();
+        }
+        setListShown(true);
+        layout();
+    }
+
+    /** The visible plugin panel, or null when the character list is shown. */
+    public Widget panel() { return (panel); }
+
+    /** The server-provided New Character button, or null until it arrives. */
+    public IButton newCharButton() { return (newchar); }
+
+    private void setListShown(boolean shown) {
+        if (list != null) {
+            if (shown) list.show(); else list.hide();
+        }
+        for (ActionLink link : actions) {
+            if (shown) link.show(); else link.hide();
+        }
+    }
     private void layout() {
-        if (list != null) list.move(Coord.of(UI.scale(56), (sz.y - list.sz.y) / 2));
+        int lx = UI.scale(56), ly = (sz.y - NCharlist.H) / 2;
+        if (list != null) list.move(Coord.of(lx, (sz.y - list.sz.y) / 2));
+        if (panel != null) panel.move(Coord.of(lx, ly));
+        int ax = lx;
+        for (ActionLink link : actions) {
+            link.move(Coord.of(ax, ly + NCharlist.H + UI.scale(8)));
+            ax += link.sz.x + UI.scale(16);
+        }
         int cx = (backdrop.scrimw() + sz.x) / 2, gap = UI.scale(10);
         int h = ((avatar != null) ? avatar.sz.y + gap : 0) + plate.sz.y, y = (sz.y - h) / 2;
         if (avatar != null) { avatar.move(Coord.of(cx - (avatar.sz.x / 2), y)); y += avatar.sz.y + gap; }
@@ -103,6 +181,54 @@ public class NCharselScreen extends Widget {
         return (super.mouseup(ev));
     }
     public void tick(double dt) { super.tick(dt); if (avatar instanceof ProxyFrame) ((ProxyFrame<?>) avatar).color = null; }
+
+    /** Accent-coloured link contributed by a plugin. */
+    private static class ActionLink extends Widget {
+        private static final Text.Foundry fnd = new Text.Foundry(FontSettings.getOpenSansSemibold(), 12, NLoginTheme.accent).aa(true);
+        private final Text text;
+        private final Runnable action;
+        private boolean hover = false;
+
+        ActionLink(String label, Runnable action) {
+            super(Coord.z);
+            this.text = fnd.render(label);
+            this.action = action;
+            resize(text.sz().add(0, UI.scale(2)));
+        }
+
+        public void draw(GOut g) {
+            g.image(text.tex(), Coord.z);
+            if (hover) {
+                g.chcolor(NLoginTheme.accent);
+                g.frect(Coord.of(0, text.sz().y), Coord.of(text.sz().x, UI.scale(1)));
+                g.chcolor();
+            }
+        }
+
+        public void mousemove(MouseMoveEvent ev) { hover = ev.c.isect(Coord.z, sz); }
+
+        public boolean mousedown(MouseDownEvent ev) {
+            if (ev.b == 1) {
+                try {
+                    action.run();
+                } catch (RuntimeException e) {
+                    System.err.println("[Plugins] Character-selection action error: " + e);
+                } catch (Error error) {
+                    rethrowFatal(error);
+                    System.err.println("[Plugins] Character-selection action error: " + error);
+                }
+                return (true);
+            }
+            return (super.mousedown(ev));
+        }
+
+        private static void rethrowFatal(Error error) {
+            if (error instanceof VirtualMachineError)
+                throw (VirtualMachineError) error;
+            if (error instanceof ThreadDeath)
+                throw (ThreadDeath) error;
+        }
+    }
 
     private class NamePlate extends Widget {
         private Charlist.Char shown = null;

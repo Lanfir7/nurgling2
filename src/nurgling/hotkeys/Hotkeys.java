@@ -48,12 +48,15 @@ public final class Hotkeys {
     public static final String WORLD_SHARE_CHAT_AREA = "world.share_chat_area";
     public static final String MAP_QUICK_MARKER = "map.quick_marker";
     public static final String WORLD_TOGGLE_OBJECT_RING = "world.toggle_object_ring";
+    public static final String WORLD_VEIN_MINER = "world.vein_miner";
+    public static final String MASTERMINER_PICKUP_ALL = "masterminer.pickup_all";
     public static final String WORLD_CONTEXT_MENU = "world.context_menu";
     public static final String WORLD_QUEUE_WAYPOINT = "world.queue_waypoint";
     public static final String WORLD_PING = "world.ping";
     public static final String WORLD_REMOVE_STUMP = "world.remove_stump";
     public static final String WORLD_PLACEMENT_ROTATE_LEFT = "world.placement.rotate_left";
     public static final String WORLD_PLACEMENT_ROTATE_RIGHT = "world.placement.rotate_right";
+    public static final String WORLD_PLACEMENT_FULL_STOCKPILES = "world.placement.full_stockpiles";
     public static final String WORLD_SELECTION_ROTATE = "world.selection.rotate";
     public static final String WORLD_SELECTION_TOGGLE_GRID = "world.selection.toggle_grid";
     public static final String MAP_MARKER_DELETE = "map.marker.delete";
@@ -209,6 +212,12 @@ public final class Hotkeys {
 
     public static boolean isPlainRightClick(int button, int mods) {
         return button == 3 && (mods & KeyMatch.MODS) == 0;
+    }
+
+    /** Ctrl+Shift (any order) while a stockpile hologram is up; rebound keys match the catalog. */
+    public static boolean matchesFullStockpilePlacement(int keyCode, int mods, String placingRes) {
+        return FullStockpilePlacementHotkey.shouldLaunch(placingRes, keyCode, mods,
+                action(WORLD_PLACEMENT_FULL_STOCKPILES).current());
     }
 
 }

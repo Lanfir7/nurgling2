@@ -207,7 +207,7 @@ public class NCharlist extends Charlist {
             if (s) { g.chcolor(NLoginTheme.sel); g.frect(Coord.z, sz); g.chcolor(NLoginTheme.accent); g.frect(Coord.z, Coord.of(UI.scale(3), sz.y)); }
             else if (hover) { g.chcolor(NLoginTheme.hover); g.frect(Coord.z, sz); }
             g.chcolor(NLoginTheme.rowline); g.frect(Coord.of(0, sz.y - 1), Coord.of(sz.x, 1));
-            g.chcolor(NLoginTheme.outline); g.rect(ava.c.sub(1, 1), ava.sz.add(2, 2)); g.chcolor();
+            g.chcolor(NLoginTheme.outline); NLoginTheme.outline(g, ava.c.sub(1, 1), ava.sz.add(2, 2)); g.chcolor();
             String acc = NCharTags.account(ui); int x = ava.c.x + ava.sz.x + UI.scale(12);
             g.image(nm.tex(), Coord.of(x, UI.scale(9)));
             String m = metaline(acc, chr, multiworld); if (!m.equals(metas)) { metas = m; meta = NLoginTheme.meta.render(m); }

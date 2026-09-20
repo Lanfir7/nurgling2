@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-full-stockpile-ctrl-shift",
+  "priority": 6,
+  "summary": {
+    "ru": "Пока ставите стокпайл, Ctrl+Shift открывает зону и складывает в неё полные стокпайлы.",
+    "en": "While placing a stockpile, Ctrl+Shift asks for an area and fills it with full stockpiles."
+  },
+  "detail": {
+    "ru": "Возьмите предмет в постановку стокпайла и нажмите Ctrl+Shift — без клика. Появится рамка выделения; отметьте площадку, и макрос «Создатель полных стокпайлов» заполнит её стокпайлами того же предмета. Горячую клавишу можно сменить в настройках.",
+    "en": "Start placing a stockpile, then press Ctrl+Shift — no click needed. Draw the area when asked, and Full Stockpile Maker fills it with piles of that same item. The shortcut can be changed in settings."
+  }
+}

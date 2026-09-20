@@ -30,6 +30,7 @@ public class NLoginScreen extends LoginScreen {
     private AuthClient.Credentials pendingCredentials = null;
     private boolean authenticating = false;
     private int formtop = -1;
+    private int formmin = 0, formmax = 0;
 
     static boolean isRemoteVersionNewer(String remoteVersion, String localVersion) {
         if ((remoteVersion == null) || (localVersion == null)) return (false);
@@ -62,17 +63,29 @@ public class NLoginScreen extends LoginScreen {
     @Override protected void submitCredentials(AuthClient.Credentials creds, boolean savepw) { submit(creds, savepw); }
     private NLoginPanel panel() { return ((NLoginPanel) login); }
 
+    @Override public void presize() {
+        super.presize();
+        if (statusbar != null)
+            layout();
+    }
+
     private void layout() {
-        optbtn.move(Coord.of(sz.x - optbtn.sz.x - UI.scale(20), UI.scale(20)));
+        int vtop = 0, vbot = sz.y;
+        if (parent != null) {
+            vtop = Math.max(0, -c.y);
+            vbot = Math.min(sz.y, parent.sz.y - c.y);
+        }
+        optbtn.move(Coord.of(sz.x - optbtn.sz.x - UI.scale(20), vtop + UI.scale(20)));
         discordBtn.move(Coord.of(optbtn.c.x - UI.scale(12) - discordBtn.sz.x, optbtn.c.y + ((optbtn.sz.y - discordBtn.sz.y) / 2)));
-        statusbar.move(Coord.of(MARGIN, sz.y - statusbar.sz.y - UI.scale(10)));
+        statusbar.move(Coord.of(MARGIN, vbot - statusbar.sz.y - UI.scale(10)));
+        formmin = vtop + UI.scale(40);
+        formmax = statusbar.c.y - UI.scale(12);
+        panel().budget(formmax - formmin);
         formtop = -1; placeform();
     }
     private void placeform() {
-        if (formtop < 0) {
-            int top = UI.scale(40), bottom = statusbar.c.y - UI.scale(12);
-            formtop = Math.max(top, top + (((bottom - top) - login.sz.y) / 2));
-        }
+        if (formtop < 0)
+            formtop = formmin + Math.max(0, ((formmax - formmin) - panel().stableh()) / 2);
         login.move(Coord.of(MARGIN, formtop));
     }
     @Override public void cresize(Widget ch) { if ((ch == login) && (statusbar != null)) placeform(); }

@@ -2,8 +2,10 @@ package nurgling.plugins;
 
 import nurgling.NConfig;
 import nurgling.NGameUI;
+import nurgling.widgets.charsel.NCharselScreen;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -35,7 +37,7 @@ public class NPluginManager {
     private static boolean loaded = false;
     private static X509Certificate trusted = null;
 
-    /** Discover and load all plugin jars. Idempotent. */
+    /** Discover and load all plugin jars. Idempotent; later calls are fallbacks. */
     public static synchronized void loadAll() {
         if (loaded) return;
         loaded = true;
@@ -51,28 +53,84 @@ public class NPluginManager {
         if (jars == null) return;
 
         for (File jar : jars) {
+            loadJar(jar, allowUnsigned, NPluginManager::loadPlugin);
+        }
+    }
+
+    @FunctionalInterface
+    interface PluginLoader {
+        NPlugin load(File jar, boolean allowUnsigned) throws Exception;
+    }
+
+    /** Loads one candidate so a broken plugin jar cannot prevent the rest from loading. */
+    static boolean loadJar(File jar, boolean allowUnsigned, PluginLoader loader) {
+        try {
+            NPlugin p = loader.load(jar, allowUnsigned);
+            if (p != null) {
+                String name = pluginName(p);
+                plugins.add(p);
+                System.out.println("[Plugins] Loaded: " + name + " (" + jar.getName() + ")");
+            }
+            return true;
+        } catch (Exception e) {
+            System.out.println("[Plugins] Failed to load " + jar.getName() + ": " + e);
+            return false;
+        } catch (Error e) {
+            rethrowFatal(e);
+            System.out.println("[Plugins] Failed to load " + jar.getName() + ": " + e);
+            return false;
+        }
+    }
+
+    /** Called when a session shows character selection; notifies every loaded plugin. */
+    public static void onCharsel(NCharselScreen screen) {
+        for (NPlugin p : snapshot()) {
             try {
-                NPlugin p = loadPlugin(jar, allowUnsigned);
-                if (p != null) {
-                    plugins.add(p);
-                    System.out.println("[Plugins] Loaded: " + p.name() + " (" + jar.getName() + ")");
-                }
-            } catch (Exception e) {
-                System.out.println("[Plugins] Failed to load " + jar.getName() + ": " + e);
+                p.onCharsel(screen);
+            } catch (RuntimeException e) {
+                System.out.println("[Plugins] onCharsel error in " + pluginName(p) + ": " + e);
+            } catch (Error error) {
+                rethrowFatal(error);
+                System.out.println("[Plugins] onCharsel error in " + pluginName(p) + ": " + error);
             }
         }
     }
 
     /** Called when a session's NGameUI is ready; notifies every loaded plugin. */
-    public static synchronized void onGameUIReady(NGameUI gui) {
-        loadAll();
-        for (NPlugin p : plugins) {
+    public static void onGameUIReady(NGameUI gui) {
+        for (NPlugin p : snapshot()) {
             try {
                 p.onLoad(gui);
             } catch (RuntimeException e) {
-                System.out.println("[Plugins] onLoad error in " + p.name() + ": " + e);
+                System.out.println("[Plugins] onLoad error in " + pluginName(p) + ": " + e);
+            } catch (Error error) {
+                rethrowFatal(error);
+                System.out.println("[Plugins] onLoad error in " + pluginName(p) + ": " + error);
             }
         }
+    }
+
+    private static synchronized List<NPlugin> snapshot() {
+        loadAll();
+        return (new ArrayList<>(plugins));
+    }
+
+    private static String pluginName(NPlugin plugin) {
+        try {
+            return (plugin.name());
+        } catch (RuntimeException ignored) {
+            return (plugin.getClass().getName());
+        } catch (Error error) {
+            rethrowFatal(error);
+            return (plugin.getClass().getName());
+        }
+    }
+
+    private static void rethrowFatal(Error error) {
+        if (error instanceof VirtualMachineError)
+            throw (VirtualMachineError) error;
+        if (error instanceof ThreadDeath)
+            throw (ThreadDeath) error;
     }
 
     private static NPlugin loadPlugin(File jar, boolean allowUnsigned) throws Exception {
@@ -99,14 +157,25 @@ public class NPluginManager {
         URLClassLoader cl = new URLClassLoader(
                 new URL[]{jar.toURI().toURL()},
                 NPluginManager.class.getClassLoader());
-        Class<?> cls = Class.forName(entry, true, cl);
-        Object o = cls.getDeclaredConstructor().newInstance();
-        if (!(o instanceof NPlugin)) {
-            System.out.println("[Plugins] Entry class is not an NPlugin: " + entry);
-            cl.close();
-            return null;
+        boolean keepClassLoader = false;
+        try {
+            Class<?> cls = Class.forName(entry, true, cl);
+            Object o = cls.getDeclaredConstructor().newInstance();
+            if (!(o instanceof NPlugin)) {
+                System.out.println("[Plugins] Entry class is not an NPlugin: " + entry);
+                return null;
+            }
+            keepClassLoader = true;
+            return (NPlugin) o;
+        } finally {
+            if (!keepClassLoader) {
+                try {
+                    cl.close();
+                } catch (IOException e) {
+                    System.out.println("[Plugins] Failed to close rejected plugin " + jar.getName() + ": " + e);
+                }
+            }
         }
-        return (NPlugin) o;
     }
 
     private static String readEntryClass(File jar) throws Exception {

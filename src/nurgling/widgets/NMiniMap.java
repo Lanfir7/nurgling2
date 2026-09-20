@@ -920,10 +920,20 @@ NMiniMap extends MiniMap {
 
         // Find a PathRecordable window (Forager or TrufflePigHunter)
         nurgling.widgets.bots.PathRecordable pathWnd = null;
-        for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-            if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
-                pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
-                break;
+        // Route Walker owns the preview while open, and keeps owning the live path if its window
+        // is hidden mid-walk. Otherwise retain the existing first-recordable-window behavior.
+        if(gui.routeWalkerWindow != null
+                && gui.routeWalkerWindow.getCurrentLoadedPath() != null
+                && (gui.routeWalkerWindow.visible()
+                || gui.routeWalkerWindow.getCurrentLoadedPath() == gui.activeBotPath)) {
+            pathWnd = gui.routeWalkerWindow;
+        } else {
+            for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
+                if(wdg instanceof nurgling.widgets.bots.PathRecordable
+                        && !(wdg instanceof RouteWalkerWindow)) {
+                    pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
+                    break;
+                }
             }
         }
 
@@ -932,6 +942,7 @@ NMiniMap extends MiniMap {
         boolean liveBot = false;
         if(pathWnd != null) {
             recordingPath = pathWnd.getCurrentLoadedPath();
+            liveBot = recordingPath != null && recordingPath == gui.activeBotPath;
         } else if((Boolean) nurgling.NConfig.get(nurgling.NConfig.Key.showBotPathOnMinimap) && gui.activeBotPath != null) {
             recordingPath = gui.activeBotPath;
             liveBot = true;
@@ -3691,17 +3702,11 @@ NMiniMap extends MiniMap {
         if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags()) && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
-                // Find a PathRecordable window (Forager or TrufflePigHunter)
-                nurgling.widgets.bots.PathRecordable pathWnd = null;
-                for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-                    if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
-                        pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
-                        break;
-                    }
-                }
+                // Find the actual recorder, not merely the topmost preview-only window.
+                nurgling.widgets.bots.PathRecordable pathWnd = activePathRecorder(gui);
 
                 // If recording, consume the event to prevent player movement
-                if(pathWnd != null && pathWnd.isRecording()) {
+                if(pathWnd != null) {
                     return true; // Consume mousedown to prevent movement
                 }
             }
@@ -3819,16 +3824,9 @@ NMiniMap extends MiniMap {
         if(Hotkeys.allowsForagerPathRecording(ev.b, ui.modflags()) && dloc != null && sessloc != null) {
             NGameUI gui = NUtils.getGameUI();
             if(gui != null) {
-                // Find a PathRecordable window (Forager or TrufflePigHunter)
-                nurgling.widgets.bots.PathRecordable pathWnd = null;
-                for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-                    if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
-                        pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
-                        break;
-                    }
-                }
+                nurgling.widgets.bots.PathRecordable pathWnd = activePathRecorder(gui);
 
-                if(pathWnd != null && pathWnd.isRecording()) {
+                if(pathWnd != null) {
                     try {
                         // Get the MiniMap.Location at clicked position
                         MiniMap.Location clickLoc = xlate(ev.c);
@@ -4040,6 +4038,18 @@ NMiniMap extends MiniMap {
         }
 
         return super.mouseup(ev);
+    }
+
+    private nurgling.widgets.bots.PathRecordable activePathRecorder(NGameUI gui) {
+        if(gui == null) return null;
+        for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
+            if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
+                nurgling.widgets.bots.PathRecordable candidate =
+                        (nurgling.widgets.bots.PathRecordable) wdg;
+                if(candidate.isRecording()) return candidate;
+            }
+        }
+        return null;
     }
 
     // Accessors for MinimapClaimRenderer to access protected MiniMap fields

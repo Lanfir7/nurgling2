@@ -168,11 +168,21 @@ public class NWaypointOverlay extends NGroundPathOverlay implements PView.Render
 
     /** The path loaded/being recorded in an open bot window (e.g. TrufflePigHunter). */
     private nurgling.routes.ForagerPath resolveBotOrRecordingPath(NGameUI gui) {
+        nurgling.routes.ForagerPath routeWalkerPreview = null;
+        nurgling.routes.ForagerPath otherPreview = null;
         for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
-            if(wdg instanceof nurgling.widgets.bots.PathRecordable)
-                return ((nurgling.widgets.bots.PathRecordable) wdg).getCurrentLoadedPath();
+            if(!(wdg instanceof nurgling.widgets.bots.PathRecordable)) continue;
+            nurgling.widgets.bots.PathRecordable candidate =
+                    (nurgling.widgets.bots.PathRecordable) wdg;
+            nurgling.routes.ForagerPath candidatePath = candidate.getCurrentLoadedPath();
+            if(candidate.isRecording()) return candidatePath;
+            if(wdg instanceof nurgling.widgets.RouteWalkerWindow) {
+                if(wdg.visible()) routeWalkerPreview = candidatePath;
+            } else if(otherPreview == null) {
+                otherPreview = candidatePath;
+            }
         }
-        return null;
+        return routeWalkerPreview != null ? routeWalkerPreview : otherPreview;
     }
 
     /** Forager's off-path detour trail (gui.activeBotDetourTrail) as DETOUR nodes, plus gui.activeBotDetourTarget as a final DETOUR_TARGET node; ids negative to avoid colliding with ROUTE node ids. */

@@ -26,6 +26,13 @@ class BotsInterruptWidgetRegistryTest {
         assertEquals(1, registry.getRunningBots().size(), "NEW is not a finished bot");
     }
 
+    @Test void formatsTheInnermostActionFrameAsACompactStatus() {
+        StackTraceElement outer = new StackTraceElement("nurgling.actions.Action", "run", "Action.java", 12);
+        StackTraceElement inner = new StackTraceElement("nurgling.actions.bots.Forager$1", "collect", "Forager.java", 42);
+
+        assertEquals("Forager", BotsInterruptWidget.formatActionStatus(new StackTraceElement[]{inner, outer}));
+    }
+
     @Test void removesTerminatedThreadDuringLifecycleTick() throws InterruptedException {
         BotsInterruptWidget registry = new BotsInterruptWidget();
         Thread thread = new Thread(() -> { }, "finished-registry-test");

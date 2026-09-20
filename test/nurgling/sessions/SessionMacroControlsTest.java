@@ -6,6 +6,7 @@ import haven.UI;
 import haven.Widget;
 import nurgling.NConfig;
 import nurgling.NGameUI;
+import nurgling.i18n.L10n;
 import nurgling.widgets.BotsInterruptWidget;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,6 +85,19 @@ class SessionMacroControlsTest {
         assertEquals(100, field(SessionTabBar.class, "scrollY").getInt(bar));
         assertTrue(bar.mousewheel(new Widget.MouseWheelEvent(new Coord(badgeX + 2, UI.scale(6)), -100, -100)));
         assertEquals(0, field(SessionTabBar.class, "scrollY").getInt(bar));
+    }
+
+    @Test void toggleThreadNameResolvesTheRegisteredBotDisplayName() throws Exception {
+        String display = (String) method("displayBotName", String.class).invoke(bar, "forager-ToggleThread");
+
+        assertEquals(L10n.get("bot.forager.title"), display);
+    }
+
+    @Test void botIconSpansBothTextLinesWithoutTouchingThePlateBorder() throws Exception {
+        int iconSize = constant("MACRO_ICON_SIZE");
+
+        assertTrue(iconSize >= UI.scale(28));
+        assertTrue(iconSize <= constant("MACRO_BADGE_HEIGHT") - UI.scale(8));
     }
 
     private SessionContext session(String... names) throws Exception {

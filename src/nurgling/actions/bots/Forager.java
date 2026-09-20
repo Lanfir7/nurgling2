@@ -146,12 +146,16 @@ public class Forager implements Action {
 
         routeConstraints = new nurgling.actions.bots.forager.ForagerRouteConstraints(path);
 
-        gui.activeBotPath = path;
-        // Index of the waypoint Forager is currently heading toward - lets NWaypointOverlay color it as active.
-        gui.activeBotWaypointIndex = 0;
-        // Concurrent set: the render thread iterates this via NWaypointOverlay while this bot
-        // thread adds to it, with no other synchronization between them.
-        gui.activeBotFailedWaypoints = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        synchronized (gui) {
+            if (gui.activeBotPath != null)
+                return Results.ERROR(L10n.get("routewalker.busy"));
+            gui.activeBotPath = path;
+            // Index of the waypoint Forager is currently heading toward - lets NWaypointOverlay color it as active.
+            gui.activeBotWaypointIndex = 0;
+            // Concurrent set: the render thread iterates this via NWaypointOverlay while this bot
+            // thread adds to it, with no other synchronization between them.
+            gui.activeBotFailedWaypoints = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        }
         threatWatcher = null;
         try {
 
@@ -455,11 +459,15 @@ public class Forager implements Action {
             throw e;
         } finally {
             stopGuardWatcher();
-            gui.activeBotPath = null;
-            gui.activeBotDetourTrail = null;
-            gui.activeBotDetourTarget = null;
-            gui.activeBotWaypointIndex = -1;
-            gui.activeBotFailedWaypoints = null;
+            synchronized (gui) {
+                if (gui.activeBotPath == path) {
+                    gui.activeBotPath = null;
+                    gui.activeBotDetourTrail = null;
+                    gui.activeBotDetourTarget = null;
+                    gui.activeBotWaypointIndex = -1;
+                    gui.activeBotFailedWaypoints = null;
+                }
+            }
         }
     }
 

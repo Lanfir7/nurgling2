@@ -3,6 +3,7 @@ package nurgling;
 import haven.*;
 import nurgling.actions.AutoDrink;
 import nurgling.actions.ChopAndRemoveStump;
+import nurgling.actions.FeastEatGuard;
 import nurgling.actions.ForageChainPickAction;
 import nurgling.actions.RemoveStump;
 import nurgling.actions.bots.*;
@@ -262,6 +263,17 @@ public class NFlowerMenu extends FlowerMenu
                 return;
             }
 
+            if ("Eat".equals(option.name)) {
+                NCore.LastActions last = ui.core.getLastActions();
+                WItem selected = last == null ? null : last.item;
+                FeastEatGuard.Decision decision = FeastEatGuard.forUi(ui,
+                        Boolean.TRUE.equals(NConfig.get(NConfig.Key.autoSaveTableware)))
+                    .beforeEat(FeastEatGuard.inspect(selected));
+                if (decision != FeastEatGuard.Decision.ALLOW) {
+                    ui.error(L10n.get("tableware.eat_blocked"));
+                    return;
+                }
+            }
             wdgmsg("cl", option.num, ui.modflags());
             nurgling.sessions.SleepLogout.markIfSleep(ui, option.name);
             NCore.LastActions actions = ui.core.getLastActions();

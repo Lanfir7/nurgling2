@@ -68,6 +68,7 @@ public class NGameUI extends GameUI
     public Specialisation spec;
     public BotsInterruptWidget biw;
     public NEquipProxy nep;
+    public RouteWalkerWindow routeWalkerWindow;
     /** System notices from the server, so bots can react to text-only events. */
     public final NNoticeLog notices = new NNoticeLog();
     public NBeltProxy nbp;

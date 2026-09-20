@@ -41,6 +41,10 @@ public class PathFinder implements Action {
     private boolean startWasBlocked = false;
     double badDir = Double.MAX_VALUE;
     private final ArrayList<Gob> additionalObstacles = new ArrayList<>();
+    /** Optional caller-owned abort; null preserves ordinary pathfinding. */
+    private BooleanSupplier callerAbort = null;
+    /** Sticky per-run state, so a quick resume cannot turn a pause into a path failure. */
+    private boolean abortedByCaller = false;
 
     /** Opt-in live no-walk capsules used by Forager; null preserves ordinary pathfinding. */
     public Supplier<List<AvoidZone>> avoidZones = null;
@@ -134,6 +138,16 @@ public class PathFinder implements Action {
         return this;
     }
 
+    /** Adds an opt-in caller cancellation hook without changing ordinary pathfinding. */
+    PathFinder withAbort(BooleanSupplier abort) {
+        this.callerAbort = abort;
+        return this;
+    }
+
+    boolean abortedByCaller() {
+        return abortedByCaller;
+    }
+
     static Gob resolveObstacle(long id, Gob targetDummy, List<Gob> extraObstacles,
                                LongFunction<Gob> liveLookup) {
         if (targetDummy != null && targetDummy.id == id) {
@@ -201,9 +215,11 @@ public class PathFinder implements Action {
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         blockedByAvoidZones = false;
+        abortedByCaller = false;
         zoneReplanTimes.clear();
         stalls = 0;
         while (true) {
+            if (callerAbortRequested()) return abortWalk(gui);
             LinkedList<Graph.Vertex> path = construct();
 
             if (path != null) {
@@ -230,10 +246,18 @@ public class PathFinder implements Action {
                     }
 
                     List<Coord2d> rest = corners.subList(Math.min(step++, corners.size()), corners.size());
-                    BooleanSupplier abort = avoidZones == null ? null : zoneAbort(gui, rest);
+                    AtomicBoolean callerAbortSeen = new AtomicBoolean(false);
+                    BooleanSupplier callerLegAbort = callerAbort == null ? null : () -> {
+                        if (!callerAbort.getAsBoolean()) return false;
+                        callerAbortSeen.set(true);
+                        return true;
+                    };
+                    BooleanSupplier abort = combineAbort(callerLegAbort,
+                            avoidZones == null ? null : zoneAbort(gui, rest));
                     legZoneAborted = false;
                     Results walked = walkTo(gui, targetCoord, abort);
                     if (!walked.IsSuccess()) {
+                        if (callerAbortSeen.get() || callerAbortRequested()) return abortWalk(gui);
                         if (legZoneAborted && zoneReplanStorm())
                             return zoneBlocked(gui, "Dangerous animals keep crossing the path");
                         Coord2d at = gui.map.player().rc;
@@ -336,7 +360,18 @@ public class PathFinder implements Action {
         learnedBlocks.add(spot); return ++stalls>=maxStalls;
     }
 
-    private static void stopHere(NGameUI gui) { Gob p=gui.map.player(); if(p!=null) gui.map.wdgmsg("click", Coord.z, p.rc.floor(OCache.posres),1,0); }
+    private Results abortWalk(NGameUI gui) { abortedByCaller=true; stopHere(gui); return Results.FAIL(); }
+    private boolean callerAbortRequested() { return callerAbort != null && callerAbort.getAsBoolean(); }
+    static BooleanSupplier combineAbort(BooleanSupplier a, BooleanSupplier b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return () -> a.getAsBoolean() || b.getAsBoolean();
+    }
+    static void stopHere(NGameUI gui) {
+        if (gui == null || gui.map == null) return;
+        Gob player = gui.map.player();
+        if (player != null) gui.map.wdgmsg("click", Coord.z, player.rc.floor(OCache.posres), 1, 0);
+    }
 
     private void blockAvoided() {
         boolean zones=!plannedZones.isEmpty(), learned=learnedBlocks!=null&&!learnedBlocks.isEmpty();

@@ -242,8 +242,9 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
             @Override
             public void change(String item) {
+                if (item == null) return;
                 super.change(item);
-                if (item != null && prop != null) {
+                if (prop != null) {
                     prop.currentActionsProfile = item;
                     // Self-heals a stale reference by creating the missing entry rather than handing pickupContainer.load() a null list.
                     pickupContainer.load(prop.actionsProfiles.computeIfAbsent(item, k -> new ArrayList<>()));
@@ -350,14 +351,13 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
             @Override
             public void change(String item) {
+                if (item == null) return;
                 super.change(item);
-                if (item != null) {
-                    // Switching routes must not silently drop in-progress edits to the one being switched away from.
-                    if (!suppressRouteAutoSave && currentRoute != null && !currentRoute.name.equals(item)) {
-                        saveCurrentRoute();
-                    }
-                    loadRoute(item);
+                // Switching routes must not silently drop in-progress edits to the one being switched away from.
+                if (!suppressRouteAutoSave && currentRoute != null && !currentRoute.name.equals(item)) {
+                    saveCurrentRoute();
                 }
+                loadRoute(item);
             }
         }, new Coord(0, 0));
 
@@ -449,9 +449,10 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
             @Override
             public void change(String item) {
+                if (item == null) return;
                 String previous = sel;
                 super.change(item);
-                if (item != null && prop != null) {
+                if (prop != null) {
                     // Switching profiles must not silently drop in-progress edits to the one being switched away from.
                     if (!suppressGuardingAutoSave && previous != null && !previous.equals(item) && currentGuardingProfile != null) {
                         writeBackCurrentGuardingProfile();
@@ -527,9 +528,10 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
             @Override
             public void change(String item) {
+                if (item == null) return;
                 String previous = sel;
                 super.change(item);
-                if (item != null && prop != null) {
+                if (prop != null) {
                     if (!suppressPresetAutoSave && previous != null && !previous.equals(item) && currentPresetData != null) {
                         writeBackCurrentPreset();
                     }
@@ -570,8 +572,9 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
             @Override
             public void change(String item) {
+                if (item == null) return;
                 super.change(item);
-                if (item != null && prop != null) {
+                if (prop != null) {
                     if (currentPresetData != null) {
                         currentPresetData.actionsProfileName = item;
                     }
@@ -590,14 +593,13 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
             @Override
             public void change(String item) {
+                if (item == null) return;
                 super.change(item);
-                if (item != null) {
-                    // Mirror into the Routes section's own selector, same one-directional pattern
-                    // as actionsProfileDropbox/guardingProfileDropbox above - so picking a
-                    // different route for this preset also loads it into the map editor below,
-                    // instead of leaving whatever route was last open there.
-                    routeDropbox.change(item);
-                }
+                // Mirror into the Routes section's own selector, same one-directional pattern
+                // as actionsProfileDropbox/guardingProfileDropbox above - so picking a
+                // different route for this preset also loads it into the map editor below,
+                // instead of leaving whatever route was last open there.
+                routeDropbox.change(item);
             }
         }, prevField.pos("bl").add(UI.scale(0, 5)));
 
@@ -610,8 +612,9 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
             @Override
             public void change(String item) {
+                if (item == null) return;
                 super.change(item);
-                if (item != null && prop != null) {
+                if (prop != null) {
                     if (currentPresetData != null) {
                         currentPresetData.guardingProfileName = item;
                     }
@@ -652,6 +655,12 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
             @Override
             protected void drawitem(GOut g, String item, int i) {
                 g.text(item, Coord.z);
+            }
+
+            @Override
+            public void change(String item) {
+                if (item == null) return;
+                super.change(item);
             }
         };
         db.change(items[0]);

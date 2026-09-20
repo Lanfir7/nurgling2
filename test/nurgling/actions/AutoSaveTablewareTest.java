@@ -31,9 +31,9 @@ class AutoSaveTablewareTest {
     }
 
     @Test
-    void takesOffToInventoryWhenThereIsSpace() {
+    void keepsTablewareOnTableWhenBagHasNoSpace() {
         assertEquals(AutoSaveTableware.TakeOff.TO_INVENTORY, AutoSaveTableware.takeOffMode(1));
-        assertEquals(AutoSaveTableware.TakeOff.DROP, AutoSaveTableware.takeOffMode(0));
+        assertEquals(AutoSaveTableware.TakeOff.KEEP, AutoSaveTableware.takeOffMode(0));
     }
 
     @Test

@@ -35,6 +35,8 @@ class MasterMinerL10nTest {
             "bot.masterminer.desc",
             "bot.masterminer.masonry",
             "bot.masterminer.last_mined",
+            "bot.masterminer.q_legend",
+            "bot.masterminer.ground_pickup",
             "bot.masterminer.drop_threshold",
             "bot.masterminer.keep_stones",
             "bot.masterminer.switch",

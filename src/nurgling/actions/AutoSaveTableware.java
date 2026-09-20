@@ -15,7 +15,7 @@ public class AutoSaveTableware implements Action
     NInventory tableInv = null;
     NInventory scInv = null;
 
-    enum TakeOff { TO_INVENTORY, DROP }
+    enum TakeOff { TO_INVENTORY, KEEP }
 
     public AutoSaveTableware()
     {
@@ -42,7 +42,7 @@ public class AutoSaveTableware implements Action
 
     /** Shift-click `transfer` can land in the table's full food grid; invxf targets the bag. */
     static TakeOff takeOffMode(int freeSlots) {
-        return freeSlots > 0 ? TakeOff.TO_INVENTORY : TakeOff.DROP;
+        return freeSlots > 0 ? TakeOff.TO_INVENTORY : TakeOff.KEEP;
     }
 
     static boolean canWatch(boolean feast, boolean hasTable) {
@@ -95,13 +95,10 @@ public class AutoSaveTableware implements Action
     {
         int id = witem.item.wdgid();
         TakeOff mode = takeOffMode(freeSlots(gui, witem));
+        if (mode == TakeOff.KEEP)
+            return;
         sendTakeOff(gui, witem, mode);
         waitGone(id);
-        if (stillHere(id) && mode == TakeOff.TO_INVENTORY)
-        {
-            sendTakeOff(gui, witem, TakeOff.DROP);
-            waitGone(id);
-        }
     }
 
     private static int freeSlots(NGameUI gui, WItem witem) throws InterruptedException
@@ -115,8 +112,6 @@ public class AutoSaveTableware implements Action
     {
         if (mode == TakeOff.TO_INVENTORY && gui != null && gui.getInventory() != null)
             witem.item.wdgmsg("invxf", gui.getInventory().wdgid(), 1);
-        else
-            witem.item.wdgmsg("drop", Coord.z);
     }
 
     private void waitGone(int id) throws InterruptedException

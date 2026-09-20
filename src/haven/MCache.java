@@ -225,6 +225,7 @@ public class MCache implements MapSource {
     private static class Request {
 	private long lastreq = 0;
 	private int reqs = 0;
+	private boolean refresh = false;
     }
 
     public static interface ZSurface {
@@ -1125,9 +1126,14 @@ public class MCache implements MapSource {
     }
 
     public void invalidate(Coord cc) {
-	synchronized(req) {
-	    if(req.get(cc) == null)
-		req.put(cc, new Request());
+	synchronized(grids) {
+	    synchronized(req) {
+		Request r = req.get(cc);
+		if(r == null)
+		    req.put(cc, r = new Request());
+		if(grids.containsKey(cc))
+		    r.refresh = true;
+	    }
 	}
     }
 
@@ -1579,7 +1585,7 @@ public class MCache implements MapSource {
 		Request r = e.getValue();
 		if(now - r.lastreq > 1000) {
 		    r.lastreq = now;
-		    if(++r.reqs >= 5) {
+		    if((++r.reqs >= 5) && !r.refresh) {
 			i.remove();
 			updated = true;
 		    } else {

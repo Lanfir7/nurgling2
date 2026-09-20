@@ -4,6 +4,7 @@ import haven.*;
 import haven.res.ui.tt.leashed.Leashed;
 import nurgling.*;
 import nurgling.actions.*;
+import nurgling.i18n.L10n;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.conf.NTrufflePigProp;
@@ -98,7 +99,11 @@ public class TrufflePigHunter implements Action {
             return Results.ERROR("Path has no sections");
         }
 
-        gui.activeBotPath = path;
+        synchronized (gui) {
+            if (gui.activeBotPath != null)
+                return Results.ERROR(L10n.get("routewalker.busy"));
+            gui.activeBotPath = path;
+        }
         try {
 
         // Step 1: Find truffle pig area and navigate to it
@@ -249,7 +254,9 @@ public class TrufflePigHunter implements Action {
         gui.msg("Truffle hunting complete!");
         return Results.SUCCESS();
         } finally {
-            gui.activeBotPath = null;
+            synchronized (gui) {
+                if (gui.activeBotPath == path) gui.activeBotPath = null;
+            }
         }
     }
 

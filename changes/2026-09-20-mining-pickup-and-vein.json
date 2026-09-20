@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-mining-pickup-and-vein",
+  "priority": 6,
+  "summary": {
+    "ru": "В мастере-шахтёре клик по иконке собирает до 30 штук, Shift — всё. Курсором кирки Ctrl+клик по породе запускает Жильного шахтёра.",
+    "en": "In Master Miner, clicking a ground icon picks up up to 30 items; Shift-click takes all. With the mine cursor, Ctrl-click a rock wall to start Vein Miner."
+  },
+  "detail": {
+    "ru": "Откройте «Мастер-шахтёр»: обычный клик по иконке с пола берёт не больше 30 штук этого типа, Shift+клик — все в зоне видимости. Если курсор кирки, Ctrl+клик по стене породы или руды сразу запускает «Жильного шахтёра» на эту клетку.",
+    "en": "In Master Miner, a click on a ground icon takes at most 30 of that type; Shift-click takes every matching pile in view. With the mine cursor active, Ctrl-click a rock or ore wall to start Vein Miner on that tile."
+  }
+}

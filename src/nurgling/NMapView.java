@@ -1,5 +1,6 @@
 package nurgling;
 
+import nurgling.hotkeys.FullStockpilePlacementHotkey;
 import nurgling.hotkeys.Hotkeys;
 
 import haven.*;
@@ -12,8 +13,11 @@ import haven.Composite;
 import haven.res.ui.gobcp.Gobcopy;
 import haven.BuddyWnd;
 import nurgling.actions.QuickActionBot;
+import nurgling.actions.bots.CreateFullStockpilesFromFirstSlot;
 import nurgling.actions.bots.ScenarioRunner;
+import nurgling.actions.bots.VeinMiner;
 import nurgling.actions.bots.VeinSeedCapture;
+import nurgling.sessions.BotExecutor;
 import nurgling.contextmenu.GobContextRegistry;
 import nurgling.contextmenu.NTileContextMenu;
 import nurgling.contextmenu.TileContextAction;
@@ -1728,6 +1732,21 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             return true;
         }
 
+        // Ctrl+LMB with the mine cursor on rock/ore starts Vein Miner on that tile.
+        if (Hotkeys.action(Hotkeys.WORLD_VEIN_MINER).current().matchesMouse(ev.b, ui.modflags())
+                && VeinMiner.isMineCursor()) {
+            new Maptest(ev.c) {
+                @Override
+                public void hit(Coord pc, Coord2d mc) {
+                    Coord tile = mc.div(MCache.tilesz).floor();
+                    if (VeinMiner.isVeinRock(VeinMiner.tileName(NUtils.getGameUI(), tile))) {
+                        BotExecutor.runAsync("VeinMiner", new VeinMiner(tile));
+                    }
+                }
+            }.run();
+            return true;
+        }
+
         // Plain LMB/RMB on a gem's floating icon: redirect the click to the gem gob
         // so the small ground item is easy to hit. Only fires without modifiers; all
         // modifier combos keep their existing behavior.
@@ -1912,6 +1931,25 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     public boolean keydown(KeyDownEvent ev) {
         if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
             shiftPressed = true;
+        }
+
+        Loader.Future<Plob> placingGhost = this.placing;
+        if(placingGhost != null && placingGhost.done()) {
+            try {
+                Plob plob = placingGhost.get();
+                String res = (plob != null && plob.ngob != null) ? plob.ngob.name : null;
+                if(Hotkeys.matchesFullStockpilePlacement(ev.code, ev.mods, res)) {
+                    NGameUI gui = NUtils.getGameUI();
+                    String held = null;
+                    if(gui != null && gui.vhand != null && gui.vhand.item instanceof NGItem)
+                        held = ((NGItem)gui.vhand.item).name();
+                    String hint = FullStockpilePlacementHotkey.resolveItemName(
+                            monitoring.StockpileStorageTracker.placingItemName(), held, null);
+                    BotExecutor.runAsync("CreateFullStockpiles", new CreateFullStockpilesFromFirstSlot(hint));
+                    return true;
+                }
+            } catch(RuntimeException ignored) {
+            }
         }
 
         // Check preset keybindings first

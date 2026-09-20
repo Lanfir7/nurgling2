@@ -4,6 +4,7 @@ import haven.Button;
 import haven.Coord;
 import haven.Gob;
 import haven.Label;
+import haven.OCache;
 import haven.Text;
 import haven.TextEntry;
 import haven.UI;
@@ -11,17 +12,23 @@ import haven.Window;
 import haven.Widget;
 import haven.WItem;
 import nurgling.actions.bots.MasterMiner;
+import nurgling.actions.bots.PickupGroundItems;
 import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NUtils;
 import nurgling.conf.NMasterMinerProp;
 import nurgling.i18n.L10n;
+import nurgling.sessions.BotExecutor;
 import nurgling.widgets.NEquipory;
 
 import java.awt.Color;
 import java.awt.Font;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Информативное окно для МастерМайнер.
@@ -47,6 +54,10 @@ public class MasterMinerWnd extends Window {
     private final Color masonryColor = new Color(255, 215, 0); // золотой цвет
     private Coord savedWindowPos = null;
     private Coord lastPersistedPos = null;
+    private final Widget groundRow;
+    private final Map<String, MasterMinerGroundIcon> groundIcons = new LinkedHashMap<>();
+    private double groundScanAcc = 0;
+    private volatile Thread pickupThread;
     
     // Структура для хранения лучших значений по каждому типу камня
     private static class BestStoneData {
@@ -62,13 +73,11 @@ public class MasterMinerWnd extends Window {
     private BestStoneData bestRakuh = null;       // Лучшая ракуха
 
     public MasterMinerWnd() {
-        super(new Coord(UI.scale(550), UI.scale(410)), L10n.get("bot.masterminer.title"));
+        super(new Coord(UI.scale(280), UI.scale(1)), L10n.get("bot.masterminer.title"));
 
-        // Создаем жирный шрифт для Masonry
         Font boldFont = Text.std.font.deriveFont(Font.BOLD);
         boldFoundry = new Text.Foundry(boldFont, masonryColor);
 
-        // Загружаем сохраненные настройки
         NMasterMinerProp prop = loadSettings();
         String savedDropThreshold = "";
         String savedShellCatGoldThreshold = "";
@@ -89,103 +98,80 @@ public class MasterMinerWnd extends Window {
             }
         }
 
-        Coord pad = UI.scale(8, 6);
-        Coord cur = pad;
+        final int pad = UI.scale(10);
+        final int gap = UI.scale(8);
+        final int entryW = UI.scale(72);
+        final int setW = UI.scale(56);
+        final int contentW = UI.scale(300);
+        Coord cur = new Coord(pad, UI.scale(8));
+
+        groundRow = add(new Widget(new Coord(contentW - pad * 2, UI.scale(42))), cur);
+        cur = groundRow.pos("bl").add(0, gap);
 
         masonryLbl = add(new Label(masonryWaitingText(), boldFoundry), cur);
         masonryLbl.setcolor(masonryColor);
-        cur = masonryLbl.pos("bl").add(0, UI.scale(4));
+        cur = masonryLbl.pos("bl").add(0, gap);
 
-        lastMinedLbl = add(new Label(lastMinedEmptyText()), cur);
-        cur = lastMinedLbl.pos("bl").add(0, UI.scale(4));
+        Label lastMinedCap = add(new Label(lastMinedCaptionText()), cur);
+        cur = lastMinedCap.pos("bl").add(0, UI.scale(2));
+        lastMinedLbl = add(new Label(lastMinedValueText(null, 0, 0)), cur.add(UI.scale(6), 0));
+        cur = lastMinedLbl.pos("bl").add(-UI.scale(6), gap);
 
         stoneLbl = add(new Label("Stone: -"), cur);
-        cur = stoneLbl.pos("bl").add(0, UI.scale(4));
-
+        cur = stoneLbl.pos("bl").add(0, UI.scale(3));
         quarryartzLbl = add(new Label("Quarryartz: -"), cur);
-        cur = quarryartzLbl.pos("bl").add(0, UI.scale(4));
-
+        cur = quarryartzLbl.pos("bl").add(0, UI.scale(3));
         catGoldLbl = add(new Label("Cat Gold: -"), cur);
-        cur = catGoldLbl.pos("bl").add(0, UI.scale(4));
-
+        cur = catGoldLbl.pos("bl").add(0, UI.scale(3));
         rakuhLbl = add(new Label("Shell: -"), cur);
-        cur = rakuhLbl.pos("bl").add(0, UI.scale(6));
+        cur = rakuhLbl.pos("bl").add(0, UI.scale(2));
+
+        Label legend = add(new Label(L10n.get("bot.masterminer.q_legend")), cur);
+        legend.setcolor(new Color(170, 170, 170));
+        cur = legend.pos("bl").add(0, gap);
 
         counterLbl = add(new Label(minedText()), cur);
-        cur = counterLbl.pos("bl").add(0, UI.scale(6));
+        cur = counterLbl.pos("bl").add(0, UI.scale(10));
 
-        add(new Label(L10n.get("bot.masterminer.drop_threshold")), cur);
-        cur = cur.add(UI.scale(0, UI.scale(18)));
-        thresholdEntry = add(new TextEntry(UI.scale(80), savedDropThreshold) {
-            @Override
-            public void changed() {
-                super.changed();
-                // Сохраняем при изменении текста
-                saveSettings();
-            }
-        }, cur);
-        Coord setBtn1Pos = thresholdEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
-        add(new Button(UI.scale(40), L10n.get("bot.masterminer.set")) {
-            @Override
-            public void click() {
-                super.click();
-                saveSettings();
-            }
-        }, setBtn1Pos);
-        cur = thresholdEntry.pos("bl").add(0, UI.scale(6));
-        
-        // Порог сброса для ракух и кэтголдов
-        add(new Label(L10n.get("bot.masterminer.drop_threshold_shell")), cur);
-        cur = cur.add(UI.scale(0, UI.scale(18)));
-        shellCatGoldThresholdEntry = add(new TextEntry(UI.scale(80), savedShellCatGoldThreshold) {
-            @Override
-            public void changed() {
-                super.changed();
-                // Сохраняем при изменении текста
-                saveSettings();
-            }
-        }, cur);
-        Coord setBtn2Pos = shellCatGoldThresholdEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
-        add(new Button(UI.scale(40), L10n.get("bot.masterminer.set")) {
-            @Override
-            public void click() {
-                super.click();
-                saveSettings();
-            }
-        }, setBtn2Pos);
-        cur = shellCatGoldThresholdEntry.pos("bl").add(0, UI.scale(6));
-
-        // Камней держать в инвентаре (для подпорки)
-        add(new Label(L10n.get("bot.masterminer.keep_stones")), cur);
-        cur = cur.add(UI.scale(0, UI.scale(18)));
-        keepStonesEntry = add(new TextEntry(UI.scale(50), savedKeepStones) {
+        thresholdEntry = new TextEntry(entryW, savedDropThreshold) {
             @Override
             public void changed() {
                 super.changed();
                 saveSettings();
             }
-        }, cur);
-        Coord setBtn3Pos = keepStonesEntry.pos("ur").add(UI.scale(5), -UI.scale(4));
-        add(new Button(UI.scale(40), L10n.get("bot.masterminer.set")) {
+        };
+        cur = addSettingRow(cur, L10n.get("bot.masterminer.drop_threshold"), thresholdEntry, setW, gap);
+
+        shellCatGoldThresholdEntry = new TextEntry(entryW, savedShellCatGoldThreshold) {
             @Override
-            public void click() {
-                super.click();
+            public void changed() {
+                super.changed();
                 saveSettings();
             }
-        }, setBtn3Pos);
-        cur = keepStonesEntry.pos("bl").add(0, UI.scale(6));
+        };
+        cur = addSettingRow(cur, L10n.get("bot.masterminer.drop_threshold_shell"), shellCatGoldThresholdEntry, setW, gap);
 
-        // Кнопка Switch для смены кирки/топора между руками и рюкзаком
-        add(new Button(UI.scale(160), L10n.get("bot.masterminer.switch")) {
+        keepStonesEntry = new TextEntry(entryW, savedKeepStones) {
+            @Override
+            public void changed() {
+                super.changed();
+                saveSettings();
+            }
+        };
+        cur = addSettingRow(cur, L10n.get("bot.masterminer.keep_stones"), keepStonesEntry, setW, gap);
+        cur = cur.add(0, UI.scale(4));
+
+        int btnW = contentW - pad * 2;
+        add(new Button(btnW, L10n.get("bot.masterminer.switch")) {
             @Override
             public void click() {
                 super.click();
                 switchMiningTool();
             }
         }, cur);
-        cur = cur.add(0, UI.scale(26));
+        cur = cur.add(0, UI.scale(28));
 
-        add(new Button(UI.scale(160), L10n.get("bot.masterminer.reset_all")) {
+        add(new Button(btnW, L10n.get("bot.masterminer.reset_all")) {
             @Override
             public void click() {
                 super.click();
@@ -195,6 +181,7 @@ public class MasterMinerWnd extends Window {
                 bestQuarryartz = null;
                 bestCatGold = null;
                 bestRakuh = null;
+                lastMinedLbl.settext(lastMinedValueText(null, 0, 0));
                 stoneLbl.settext("Stone: -");
                 quarryartzLbl.settext("Quarryartz: -");
                 catGoldLbl.settext("Cat Gold: -");
@@ -202,7 +189,98 @@ public class MasterMinerWnd extends Window {
             }
         }, cur);
 
+        add(new Widget(Coord.of(1, 1)), new Coord(contentW - 1, pad));
         pack();
+    }
+
+    private Coord addSettingRow(Coord cur, String caption, TextEntry entry, int setW, int gap) {
+        Label label = add(new Label(caption), cur);
+        add(entry, label.pos("bl").add(0, UI.scale(2)));
+        add(new Button(setW, L10n.get("bot.masterminer.set")) {
+            @Override
+            public void click() {
+                super.click();
+                saveSettings();
+            }
+        }, entry.pos("ur").add(UI.scale(6), -UI.scale(4)));
+        return entry.pos("bl").add(0, gap);
+    }
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        groundScanAcc += dt;
+        if (groundScanAcc < 0.4) {
+            return;
+        }
+        groundScanAcc = 0;
+        refreshGroundIcons();
+    }
+
+    void pickupGround(String resPath, boolean takeAll) {
+        if (resPath == null || resPath.isEmpty()) {
+            return;
+        }
+        Thread running = pickupThread;
+        if (running != null && running.isAlive()) {
+            return;
+        }
+        pickupThread = BotExecutor.runAsync("MasterMinerPickup",
+                new PickupGroundItems(resPath, MasterMinerGroundStacks.pickupCap(takeAll)));
+    }
+
+    private void refreshGroundIcons() {
+        List<MasterMinerGroundStacks.Stack> stacks = scanGroundStacks();
+        int gap = UI.scale(4);
+        int iconW = UI.scale(32);
+        int max = Math.max(1, (groundRow.sz.x + gap) / (iconW + gap));
+        if (stacks.size() > max) {
+            stacks = new ArrayList<>(stacks.subList(0, max));
+        }
+        java.util.Set<String> keep = new java.util.HashSet<>();
+        int x = 0;
+        for (MasterMinerGroundStacks.Stack stack : stacks) {
+            keep.add(stack.resPath);
+            MasterMinerGroundIcon icon = groundIcons.get(stack.resPath);
+            if (icon == null) {
+                icon = groundRow.add(new MasterMinerGroundIcon(this, stack), new Coord(x, 0));
+                groundIcons.put(stack.resPath, icon);
+            } else {
+                icon.setCount(stack.count);
+                icon.move(new Coord(x, 0));
+            }
+            x += iconW + gap;
+        }
+        java.util.Iterator<Map.Entry<String, MasterMinerGroundIcon>> it = groundIcons.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, MasterMinerGroundIcon> e = it.next();
+            if (!keep.contains(e.getKey())) {
+                e.getValue().reqdestroy();
+                it.remove();
+            }
+        }
+    }
+
+    private List<MasterMinerGroundStacks.Stack> scanGroundStacks() {
+        NGameUI gui = NUtils.getGameUI();
+        Gob player = NUtils.player();
+        if (gui == null || gui.ui == null || gui.ui.sess == null || player == null) {
+            return java.util.Collections.emptyList();
+        }
+        List<MasterMinerGroundStacks.Drop> drops = new ArrayList<>();
+        OCache oc = gui.ui.sess.glob.oc;
+        synchronized (oc) {
+            for (Gob gob : oc) {
+                if (gob == null || gob == player || gob instanceof OCache.Virtual) {
+                    continue;
+                }
+                if (gob.ngob == null || gob.ngob.name == null) {
+                    continue;
+                }
+                drops.add(new MasterMinerGroundStacks.Drop(gob.ngob.name, gob.rc.x, gob.rc.y));
+            }
+        }
+        return MasterMinerGroundStacks.group(drops, player.rc.x, player.rc.y, MasterMinerGroundStacks.PICKUP_RADIUS);
     }
 
     public boolean isClosed() {
@@ -213,8 +291,22 @@ public class MasterMinerWnd extends Window {
         return L10n.get("bot.masterminer.masonry") + ": " + L10n.get("bot.masterminer.waiting");
     }
 
-    private static String lastMinedEmptyText() {
-        return L10n.get("bot.masterminer.last_mined") + ": -";
+    static String lastMinedCaptionText() {
+        return L10n.get("bot.masterminer.last_mined") + ":";
+    }
+
+    static String lastMinedValueText(String stoneName, double handQ, double wallQ) {
+        if (stoneName == null || stoneName.isEmpty()) {
+            return "-";
+        }
+        return String.format(Locale.US, "%s %.2f [%.2f]", stoneName, handQ, wallQ);
+    }
+
+    static String qualityLineText(String displayName, double handQ, double wallQ, Double bestAltQ) {
+        if (bestAltQ != null && !bestAltQ.isNaN() && !bestAltQ.isInfinite()) {
+            return String.format(Locale.US, "%s: %.2f [%.2f] (%.2f)", displayName, handQ, wallQ, bestAltQ);
+        }
+        return String.format(Locale.US, "%s: %.2f [%.2f]", displayName, handQ, wallQ);
     }
 
     private String minedText() {
@@ -368,12 +460,7 @@ public class MasterMinerWnd extends Window {
             displayName = currentBest.stoneName;
         }
         
-        String text;
-        if (currentBest.bestAltQ != null && !currentBest.bestAltQ.isNaN() && !currentBest.bestAltQ.isInfinite()) {
-            text = String.format("%s: %.2f [%.2f] (%.2f)", displayName, currentBest.f3, currentBest.wallQ, currentBest.bestAltQ);
-        } else {
-            text = String.format("%s: %.2f [%.2f]", displayName, currentBest.f3, currentBest.wallQ);
-        }
+        String text = qualityLineText(displayName, currentBest.f3, currentBest.wallQ, currentBest.bestAltQ);
 
         Label targetLabel = null;
         switch (stoneType) {
@@ -435,17 +522,10 @@ public class MasterMinerWnd extends Window {
     }
 
     /**
-     * Обновляет строку с последним выкопанным камнем
+     * Last mined stone: quality in hands, then quality in the wall.
      */
-    public void setLastMined(String stoneName, double wallQ, int masonry) {
-        if (stoneName == null || stoneName.isEmpty()) {
-            lastMinedLbl.settext(lastMinedEmptyText());
-            return;
-        }
-        
-        // Показываем wallQ (качество в стене), как и для топов
-        String text = String.format("%s: %s q%.1f", L10n.get("bot.masterminer.last_mined"), stoneName, wallQ);
-        lastMinedLbl.settext(text);
+    public void setLastMined(String stoneName, double handQ, double wallQ) {
+        lastMinedLbl.settext(lastMinedValueText(stoneName, handQ, wallQ));
     }
 
     public double getDropThreshold() {

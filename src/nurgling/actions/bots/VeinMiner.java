@@ -25,6 +25,16 @@ public class VeinMiner implements Action {
             "minebeam", "column", "towercap", "ladder", "minesupport", "naturalminesupport"
     );
 
+    private final Coord presetSeed;
+
+    public VeinMiner() {
+        this(null);
+    }
+
+    public VeinMiner(Coord seed) {
+        this.presetSeed = seed;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         if (gui == null || !(gui.map instanceof NMapView)) {
@@ -32,37 +42,42 @@ public class VeinMiner implements Action {
         }
         NMapView map = (NMapView) gui.map;
         VeinSeedCapture cap = map.veinSeedCapture();
-        cap.arm();
+        Coord seed = presetSeed;
         try {
             gui.ui.rcvr.rcvmsg(NUtils.getUI().getMenuGridId(), "act", "mine");
             NUtils.addTask(new GetCurs("mine"));
-            gui.msg("Vein Miner: click a rock tile");
-
-            NUtils.addTask(new NTask() {
-                @Override
-                public boolean check() {
-                    return seedWaitComplete(cap, NUtils.getCursorName());
-                }
-            });
-
-            Coord seed = cap.peek();
             if (seed == null) {
-                return Results.SUCCESS();
+                cap.arm();
+                gui.msg("Vein Miner: click a rock tile");
+                NUtils.addTask(new NTask() {
+                    @Override
+                    public boolean check() {
+                        return seedWaitComplete(cap, NUtils.getCursorName());
+                    }
+                });
+                seed = cap.peek();
+                if (seed == null) {
+                    return Results.SUCCESS();
+                }
             }
 
-            String type = tileName(gui, seed);
+            final Coord veinSeed = seed;
+            String type = tileName(gui, veinSeed);
             if (type == null) {
                 return Results.ERROR("Unknown tile");
             }
+            if (presetSeed == null) {
+                NUtils.addTask(new NTask() {
+                    @Override
+                    public boolean check() {
+                        return seedFinished(type, tileName(gui, veinSeed));
+                    }
+                });
+            } else if (!isVeinRock(type)) {
+                return Results.ERROR("Not a rock");
+            }
 
-            NUtils.addTask(new NTask() {
-                @Override
-                public boolean check() {
-                    return seedFinished(type, tileName(gui, seed));
-                }
-            });
-
-            VeinWorklist list = new VeinWorklist(type, seed);
+            VeinWorklist list = new VeinWorklist(type, veinSeed);
             Set<Long> pathRetries = new HashSet<>();
             while (true) {
                 if (inFight(gui)) {
@@ -206,7 +221,23 @@ public class VeinMiner implements Action {
         return type != null && type.equals(currentType);
     }
 
-    static String tileName(NGameUI gui, Coord tile) {
+    public static boolean isVeinRock(String tileName) {
+        return tileName != null && tileName.startsWith("gfx/tiles/rocks/");
+    }
+
+    public static boolean isMineCursor() {
+        try {
+            return isMineCursor(NUtils.getCursorName());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static boolean isMineCursor(String cursorName) {
+        return cursorName != null && NParser.checkName(cursorName, "mine");
+    }
+
+    public static String tileName(NGameUI gui, Coord tile) {
         if (gui == null || gui.ui == null || gui.ui.sess == null || tile == null) {
             return null;
         }

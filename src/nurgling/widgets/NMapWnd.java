@@ -673,16 +673,20 @@ public class NMapWnd extends MapWnd {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui == null) return false;
 
-        // Find a PathRecordable window (Forager or TrufflePigHunter)
+        // Route Walker is preview-only; scan for the window that is actually recording.
         nurgling.widgets.bots.PathRecordable pathWnd = null;
         for(Widget wdg = gui.lchild; wdg != null; wdg = wdg.prev) {
             if(wdg instanceof nurgling.widgets.bots.PathRecordable) {
-                pathWnd = (nurgling.widgets.bots.PathRecordable) wdg;
-                break;
+                nurgling.widgets.bots.PathRecordable candidate =
+                        (nurgling.widgets.bots.PathRecordable) wdg;
+                if(candidate.isRecording()) {
+                    pathWnd = candidate;
+                    break;
+                }
             }
         }
 
-        if(pathWnd == null || !pathWnd.isRecording()) {
+        if(pathWnd == null) {
             return false; // Not recording, don't consume the event
         }
 

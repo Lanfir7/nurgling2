@@ -295,6 +295,17 @@ public final class StockpileStorageTracker {
         }
     }
 
+    /** Item that started the current stockpile hologram, if known. */
+    public static String placingItemName() {
+        synchronized (lock) {
+            if (placingHeld != null && !placingHeld.isEmpty() && placingHeld.get(0).name != null)
+                return placingHeld.get(0).name;
+            if (frozenHand != null && !frozenHand.isEmpty() && frozenHand.get(0).name != null)
+                return frozenHand.get(0).name;
+            return null;
+        }
+    }
+
     public static void onPlacingStart(String resName) {
         NGameUI gui = NUtils.getGameUI();
         if (!enabled() || !StorageTrackingPolicy.shouldTrack(gui)) {

@@ -38,10 +38,12 @@ public class BotsInterruptWidget extends Widget {
     public static final class RunningBot {
         private final Thread thread;
         private final String name;
+        private final String status;
 
-        private RunningBot(Thread thread, String name) {
+        private RunningBot(Thread thread, String name, String status) {
             this.thread = thread;
             this.name = name;
+            this.status = status;
         }
 
         public Thread getThread() {
@@ -50,6 +52,11 @@ public class BotsInterruptWidget extends Widget {
 
         public String getName() {
             return name;
+        }
+
+        /** Null means no action could be sampled yet. */
+        public String getStatus() {
+            return status;
         }
     }
 
@@ -65,6 +72,8 @@ public class BotsInterruptWidget extends Widget {
     private static String autorunnerStackTraceFile;
     private static long lastStackTraceWrite;
     private static final long STACK_TRACE_WRITE_INTERVAL = 2000;
+    private static final long STATUS_UPDATE_INTERVAL = 250;
+    private long lastStatusUpdate;
 
     public BotsInterruptWidget() {
         super(Coord.z);
@@ -106,7 +115,7 @@ public class BotsInterruptWidget extends Widget {
             } else if (disableStacks && restoreStackState) {
                 stackBots.add(thread);
             }
-            runningBots.put(thread, new RunningBot(thread, thread.getName()));
+            runningBots.put(thread, new RunningBot(thread, thread.getName(), null));
             waitBot.set(true);
         }
     }
@@ -158,6 +167,11 @@ public class BotsInterruptWidget extends Widget {
     @Override
     public void tick(double dt) {
         super.tick(dt);
+        long now = System.currentTimeMillis();
+        if (now - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
+            refreshStatuses();
+            lastStatusUpdate = now;
+        }
         if (autorunnerStackTraceFile != null &&
                 System.currentTimeMillis() - lastStackTraceWrite > STACK_TRACE_WRITE_INTERVAL) {
             writeCurrentStackTrace();
@@ -175,6 +189,19 @@ public class BotsInterruptWidget extends Widget {
         }
         for (Thread thread : terminated) {
             unregister(thread);
+        }
+    }
+
+    /** Sample action names off the render path so tab drawing stays cheap. */
+    private void refreshStatuses() {
+        synchronized (botsLock) {
+            for (Map.Entry<Thread, RunningBot> entry : runningBots.entrySet()) {
+                RunningBot bot = entry.getValue();
+                String status = formatActionStatus(entry.getKey().getStackTrace());
+                if (!java.util.Objects.equals(status, bot.getStatus())) {
+                    entry.setValue(new RunningBot(entry.getKey(), bot.getName(), status));
+                }
+            }
         }
     }
 
@@ -233,7 +260,7 @@ public class BotsInterruptWidget extends Widget {
             List<RunningBot> bots = getRunningBots();
             RunningBot first = bots.isEmpty() ? null : bots.get(0);
             String botName = first == null ? "Unknown" : first.getName();
-            String currentAction = first == null ? null : currentAction(first.getThread());
+            String currentAction = first == null ? null : formatActionStatus(first.getThread().getStackTrace());
 
             StringBuilder json = new StringBuilder();
             json.append("{\n");
@@ -253,10 +280,17 @@ public class BotsInterruptWidget extends Widget {
         }
     }
 
-    private static String currentAction(Thread thread) {
-        for (StackTraceElement element : thread.getStackTrace()) {
-            if (element.toString().contains("actions.")) {
-                return element.toString();
+    static String formatActionStatus(StackTraceElement[] stack) {
+        if (stack == null) {
+            return null;
+        }
+        for (StackTraceElement element : stack) {
+            String className = element.getClassName();
+            if (className.startsWith("nurgling.actions.")) {
+                int dot = className.lastIndexOf('.');
+                String simpleName = className.substring(dot + 1);
+                int anonymous = simpleName.indexOf('$');
+                return anonymous >= 0 ? simpleName.substring(0, anonymous) : simpleName;
             }
         }
         return null;

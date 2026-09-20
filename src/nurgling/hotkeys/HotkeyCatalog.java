@@ -88,7 +88,7 @@ public final class HotkeyCatalog {
         core(registry, binding("mapwnd/hmark", KeyMatch.forchar('M', KeyMatch.C)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("mapwnd/compact", KeyMatch.forchar('A', KeyMatch.M)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("mapwnd/prov", KeyMatch.nil), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
-        String[] minimap = {"mwnd_night", "mwnd_fog", "mwnd_resourcetimers", "ol-eye", "ol-mgrid", "ol-mpath", "ol-treeharv", "ol-hidenature", "ol-minesup", "ol-showzones", "ol-animals", "ol-flooroverlay"};
+        String[] minimap = {"mwnd_night", "mwnd_fog", "mwnd_resourcetimers", "mwnd_routewalker", "ol-eye", "ol-mgrid", "ol-mpath", "ol-treeharv", "ol-hidenature", "ol-minesup", "ol-showzones", "ol-animals", "ol-flooroverlay"};
         for(String id : minimap)
             core(registry, binding(id, KeyMatch.nil), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
         core(registry, binding("quickaction", KeyMatch.forcode(KeyEvent.VK_Q, 0)), HotkeyCategory.MAP, HotkeyContext.GLOBAL, order);
@@ -169,6 +169,12 @@ public final class HotkeyCatalog {
         gesture(registry, Hotkeys.WORLD_TOGGLE_OBJECT_RING,
                 InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WORLD,
                 EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_VEIN_MINER,
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_SURFACE), Integer.valueOf(haven.UI.MOD_CTRL), order);
+        gesture(registry, Hotkeys.MASTERMINER_PICKUP_ALL, InputGesture.modifier(KeyMatch.S),
+                HotkeyCategory.AUTOMATION, EnumSet.of(HotkeyContext.MASTER_MINER_WINDOW),
+                Integer.valueOf(haven.UI.MOD_SHIFT), order);
         gesture(registry, Hotkeys.WORLD_CONTEXT_MENU,
                 InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C), HotkeyCategory.WORLD,
                 EnumSet.of(HotkeyContext.WORLD_SURFACE), Integer.valueOf(haven.UI.MOD_CTRL), order);
@@ -184,6 +190,9 @@ public final class HotkeyCatalog {
         gesture(registry, Hotkeys.WORLD_PLACEMENT_ROTATE_RIGHT,
                 InputGesture.key(KeyMatch.forcode(KeyEvent.VK_RIGHT, 0)), HotkeyCategory.WORLD,
                 EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);
+        gesture(registry, Hotkeys.WORLD_PLACEMENT_FULL_STOCKPILES,
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_SHIFT, KeyMatch.C, KeyMatch.C)), HotkeyCategory.WORLD,
+                EnumSet.of(HotkeyContext.WORLD_PLACEMENT), Integer.valueOf(haven.UI.MOD_CTRL | haven.UI.MOD_SHIFT), order);
         gesture(registry, Hotkeys.WORLD_SELECTION_ROTATE,
                 InputGesture.key(KeyMatch.forchar('R', 0)), HotkeyCategory.WORLD,
                 EnumSet.of(HotkeyContext.WORLD_SURFACE), null, order);

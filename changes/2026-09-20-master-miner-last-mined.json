@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-master-miner-last-mined",
+  "priority": 4,
+  "summary": {
+    "ru": "Мастер-шахтёр показывает качество последней добычи и в руках, и в стене, а подпись больше не обрезается.",
+    "en": "Master Miner now shows last-mined quality both in your hands and in the wall, without clipping the line."
+  },
+  "detail": {
+    "ru": "В окне бота «Мастер-шахтёр» последняя добыча идёт с новой строки после двоеточия и пишет оба качества: в руках и в стене. Список лучших камней поясняет формат чисел, пороги и кнопки выровнены удобнее.",
+    "en": "In the Master Miner bot window, last mined starts on the next line after the colon and shows both hand and wall quality. The best-stone list explains the number format, and the thresholds and buttons are laid out more clearly."
+  }
+}

@@ -7,6 +7,7 @@ import nurgling.conf.NSavedAccounts;
 import nurgling.conf.NSavedAccounts.Account;
 import nurgling.i18n.L10n;
 import nurgling.sessions.SessionManager;
+import nurgling.widgets.NCharTagsWnd;
 import nurgling.widgets.cookbook.HintTextEntry;
 
 import java.awt.Color;
@@ -23,6 +24,7 @@ public class NLoginPanel extends Widget {
 
     public static final int W = UI.scale(300);
     private static final int GAP = UI.scale(12), TIGHT = UI.scale(3);
+    private static final int MINROWS = 3;
     private final String confname;
     private final Submitter submit;
     private Banner err, info;
@@ -41,6 +43,8 @@ public class NLoginPanel extends Widget {
     private double capscheck = 0;
     private String pendingName = null, pendingPassword = null, pendingTokenAccount = null;
     private byte[] pendingToken = null;
+    /** Height offered by the screen and current tallest stable form height. */
+    private int budget = -1, stableh = 0;
 
     public NLoginPanel(String confname, Submitter submit) {
         super(Coord.of(W, 0)); this.confname = confname; this.submit = submit; setfocustab(true);
@@ -158,7 +162,13 @@ public class NLoginPanel extends Widget {
         }
         return (new AuthClient.NativeCred(nm, pw));
     }
-    private void forgetcur() { if (cur != null) { NSavedAccounts.remove(confname, cur.name); reload(); } }
+    private void forgetcur() {
+        if (cur != null) {
+            NCharTagsWnd.close();
+            NSavedAccounts.remove(confname, cur.name);
+            reload();
+        }
+    }
     private void reload() { accounts.set(NSavedAccounts.list(confname)); userchanged(); }
     private void userchanged() { cur = accounts.find(user.text()); accounts.show(cur); sync(); }
 
@@ -171,10 +181,43 @@ public class NLoginPanel extends Widget {
     }
     private static void vis(Widget w, boolean v) { if (w.visible != v) { if (v) w.show(); else w.hide(); } }
     private static int stack(Widget w, int y, int gap) { if (!w.visible) return (y); w.move(Coord.of(0, y)); return (y + w.sz.y + gap); }
+
+    /** Lets the screen constrain the account list without changing the form's visual hierarchy. */
+    public void budget(int height) {
+        if (height == budget)
+            return;
+        budget = height;
+        relayout();
+    }
+
+    /** Tallest current form arrangement; used to keep its vertical anchor stable. */
+    public int stableh() {
+        return (stableh);
+    }
+
+    static int accountRowsForBudget(int budget, int reservedHeight, int rowHeight, int defaultRows) {
+        if (budget <= 0)
+            return (defaultRows);
+        return (Math.max(MINROWS, (budget - reservedHeight) / rowHeight));
+    }
+
     private void relayout() {
+        boolean haslist = accounts.visible;
+        int below = (userlbl.sz.y + TIGHT) + (user.sz.y + UI.scale(8))
+                + (passlbl.sz.y + TIGHT) + (pass.sz.y + UI.scale(6)) + (caps.sz.y + UI.scale(4))
+                + (remember.sz.y + TIGHT) + (remhint.sz.y + GAP) + (obf.sz.y + GAP)
+                + loginbtn.sz.y + (haslist ? (UI.scale(6) + keyhint.sz.y) : 0);
+        int above = (err.visible ? (err.sz.y + GAP) : 0) + (info.visible ? (info.sz.y + GAP) : 0)
+                + heading.sz.y + GAP + UI.scale(6);
+        int listgap = GAP + UI.scale(4);
+        if (haslist) {
+            above += section.sz.y + UI.scale(4);
+            accounts.maxrows(accountRowsForBudget(budget, above + listgap + below, NAccountList.ROWH, NAccountList.DEFROWS));
+        }
+        stableh = above + (haslist ? (accounts.sz.y + listgap) : 0) + below;
         int y = 0;
         y = stack(err, y, GAP); y = stack(info, y, GAP); y = stack(heading, y, GAP + UI.scale(6)); y = stack(section, y, UI.scale(4));
-        if (accounts.visible) y = stack(accounts, y, GAP + UI.scale(4));
+        if (haslist) y = stack(accounts, y, listgap);
         y = stack(userlbl, y, TIGHT); y = stack(user, y, UI.scale(8));
         if (pass.visible) { y = stack(passlbl, y, TIGHT); eye.move(Coord.of(W - eye.sz.x - UI.scale(4), y + ((pass.sz.y - eye.sz.y) / 2))); y = stack(pass, y, UI.scale(6)); y = stack(caps, y, UI.scale(4)); }
         y = stack(tokline, y, UI.scale(10)); y = stack(remember, y, TIGHT); y = stack(remhint, y, GAP); y = stack(obf, y, GAP);
@@ -182,7 +225,7 @@ public class NLoginPanel extends Widget {
         if (prog.visible) prog.move(Coord.of(0, y + ((barh - prog.sz.y) / 2)));
         else { loginbtn.move(Coord.of(W - loginbtn.sz.x, y)); if (forget.visible) forget.move(Coord.of(loginbtn.c.x - UI.scale(8) - forget.sz.x, y)); }
         y += barh;
-        if (accounts.saved() > 0) { y += UI.scale(6); keyhint.move(Coord.of(0, y)); y += keyhint.sz.y; }
+        if (haslist) { y += UI.scale(6); keyhint.move(Coord.of(0, y)); y += keyhint.sz.y; }
         resize(Coord.of(W, y));
     }
 

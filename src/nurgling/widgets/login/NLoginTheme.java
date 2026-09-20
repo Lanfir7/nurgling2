@@ -6,6 +6,8 @@ import nurgling.conf.FontSettings;
 import nurgling.i18n.L10n;
 
 import java.awt.Color;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class NLoginTheme {
     private NLoginTheme() {}
@@ -41,6 +43,26 @@ public final class NLoginTheme {
     public static final Text.Foundry chip = new Text.Foundry(FontSettings.getOpenSansSemibold(), 10, new Color(18, 20, 16)).aa(true);
     public static final Text.Foundry tip = new Text.Foundry(Text.sans, 12).aa(true);
 
+    private static final Map<String, Text> chiptexts = new HashMap<>();
+    private static final Map<String, Text> tiptexts = new HashMap<>();
+
+    public static Text chiptext(String tag) {
+        Text t = chiptexts.get(tag);
+        if (t == null)
+            chiptexts.put(tag, t = chip.render(tag));
+        return (t);
+    }
+
+    public static Text tiptext(String text) {
+        Text t = tiptexts.get(text);
+        if (t == null) {
+            if (tiptexts.size() > 64)
+                tiptexts.clear();
+            tiptexts.put(text, t = tip.renderwrap(text, UI.scale(260)));
+        }
+        return (t);
+    }
+
     private static Text.Furnace shadow(Text.Foundry f) {
         return (new PUtils.BlurFurn(f, UI.scale(2), UI.scale(1), Color.BLACK));
     }
@@ -48,11 +70,19 @@ public final class NLoginTheme {
     public static int badgeh() { return (badge.height() + UI.scale(3)); }
     public static int chiph() { return (chip.height() + UI.scale(3)); }
 
+    /** Filled one-pixel edges clip correctly inside scrolling lists. */
+    public static void outline(GOut g, Coord c, Coord sz) {
+        g.frect(c, Coord.of(sz.x, 1));
+        g.frect(c.add(0, sz.y - 1), Coord.of(sz.x, 1));
+        g.frect(c, Coord.of(1, sz.y));
+        g.frect(c.add(sz.x - 1, 0), Coord.of(1, sz.y));
+    }
+
     public static int drawBadge(GOut g, Coord c, Text t, Color col) {
         int w = t.sz().x + UI.scale(10), h = badgeh();
         g.chcolor(col.getRed(), col.getGreen(), col.getBlue(), 38);
         g.frect(c, Coord.of(w, h));
-        g.chcolor(col); g.rect(c, Coord.of(w, h)); g.chcolor();
+        g.chcolor(col); outline(g, c, Coord.of(w, h)); g.chcolor();
         g.image(t.tex(), c.add(UI.scale(5), (h - t.sz().y) / 2));
         return (w);
     }
@@ -60,14 +90,14 @@ public final class NLoginTheme {
     public static int drawChip(GOut g, Coord c, Text t, Color col) {
         int w = t.sz().x + UI.scale(8), h = chiph();
         g.chcolor(col); g.frect(c, Coord.of(w, h));
-        g.chcolor(Color.BLACK); g.rect(c, Coord.of(w, h)); g.chcolor();
+        g.chcolor(Color.BLACK); outline(g, c, Coord.of(w, h)); g.chcolor();
         g.image(t.tex(), c.add(UI.scale(4), (h - t.sz().y) / 2));
         return (w);
     }
 
     public static void drawNote(GOut g, Coord c, Color col) {
         Coord psz = UI.scale(new Coord(8, 11));
-        g.chcolor(col); g.frect(c, psz); g.chcolor(Color.BLACK); g.rect(c, psz);
+        g.chcolor(col); g.frect(c, psz); g.chcolor(Color.BLACK); outline(g, c, psz);
         for (int i = 0; i < 3; i++)
             g.frect(c.add(UI.scale(2), UI.scale(2 + (i * 3))), UI.scale(new Coord(4, 1)));
         g.chcolor();

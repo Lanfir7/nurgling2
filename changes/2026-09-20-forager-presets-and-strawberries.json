@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-forager-presets-and-strawberries",
+  "priority": 3,
+  "summary": {
+    "ru": "Настройки собирателя надёжнее сохраняются, а клубника корректно находится в списках предметов.",
+    "en": "Forager settings now save more reliably, and strawberries are correctly found in item lists."
+  },
+  "detail": {
+    "ru": "Настройки собирателя остаются привязанными к персонажу независимо от регистра имени, а закрытие списков пресетов и путей не сбрасывает выбор. В списках предметов «Berry» и «Fruit or Berry» обычная клубника теперь отображается как Strawberries.",
+    "en": "Forager settings remain linked to your character regardless of name capitalization, and closing preset or path lists no longer clears the selection. In the Berry and Fruit or Berry item lists, ordinary strawberries now appear as Strawberries."
+  }
+}

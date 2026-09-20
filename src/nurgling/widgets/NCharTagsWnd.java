@@ -3,6 +3,7 @@ package nurgling.widgets;
 import haven.*;
 import nurgling.conf.NCharTags;
 import nurgling.i18n.L10n;
+import nurgling.widgets.login.NLoginTheme;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -24,7 +25,8 @@ public class NCharTagsWnd extends Window {
 
     private static NCharTagsWnd instance = null;
 
-    private final String acc, chr;
+    private final Store store;
+    private final String title;
     private final List<String> cur;
     private final NTextArea note;
     private final Swatches swatch;
@@ -32,8 +34,17 @@ public class NCharTagsWnd extends Window {
     private double dirty = 0;
 
     public static void open(UI ui, String acc, String chr) {
+        open(ui, new CharacterStore(acc, chr), L10n.get("chartag.title", chr));
+    }
+
+    /** Opens the same editor for annotations attached to a saved login account. */
+    public static void openacc(UI ui, String login) {
+        open(ui, new AccountStore(login), L10n.get("acctag.title", login));
+    }
+
+    private static void open(UI ui, Store store, String title) {
         close();
-        NCharTagsWnd w = new NCharTagsWnd(acc, chr);
+        NCharTagsWnd w = new NCharTagsWnd(store, title);
         instance = w;
         ui.root.add(w, ui.root.sz.div(2).sub(w.sz.div(2)));
         w.raise();
@@ -47,20 +58,20 @@ public class NCharTagsWnd extends Window {
         }
     }
 
-    private NCharTagsWnd(String acc, String chr) {
-        super(Coord.of(WIDTH, UI.scale(40)), L10n.get("chartag.title", chr));
-        this.acc = acc;
-        this.chr = chr;
-        this.cur = new ArrayList<>(NCharTags.tags(acc, chr));
+    private NCharTagsWnd(Store store, String title) {
+        super(Coord.of(WIDTH, UI.scale(40)), title);
+        this.store = store;
+        this.title = title;
+        this.cur = new ArrayList<>(store.tags());
 
         Widget prev = add(new Label(L10n.get("chartag.note")), Coord.z);
-        note = add(new NTextArea(Coord.of(WIDTH, UI.scale(80)), NCharTags.note(acc, chr)),
+        note = add(new NTextArea(Coord.of(WIDTH, UI.scale(80)), store.note()),
                    prev.pos("bl").adds(0, 2));
         note.onchange = () -> dirty = Utils.rtime();
         note.oncommit = this::flush;
 
         prev = add(new Label(L10n.get("chartag.tags")), note.pos("bl").adds(0, 8));
-        List<String> all = NCharTags.alltags();
+        List<String> all = store.alltags();
         if (all.isEmpty()) {
             prev = add(new Label(L10n.get("chartag.notags")), prev.pos("bl").adds(0, 2));
         } else {
@@ -94,20 +105,20 @@ public class NCharTagsWnd extends Window {
         if (t.isEmpty())
             return;
         flush();
-        NCharTags.addtag(t, swatch.sel);
+        store.addtag(t, swatch.sel);
         if (!cur.contains(t)) {
             cur.add(t);
-            NCharTags.set(acc, chr, cur, note.text());
+            store.set(cur, note.text());
         }
         /* The row list is built in the constructor, so the cheapest correct way to show a new
          * tag is to rebuild the window. */
         UI ui = this.ui;
-        open(ui, acc, chr);
+        open(ui, store, title);
     }
 
     private void flush() {
         dirty = 0;
-        NCharTags.set(acc, chr, cur, note.text());
+        store.set(cur, note.text());
     }
 
     public void tick(double dt) {
@@ -129,6 +140,52 @@ public class NCharTagsWnd extends Window {
             close();
         else
             super.wdgmsg(msg, args);
+    }
+
+    private interface Store {
+        List<String> tags();
+        String note();
+        List<String> alltags();
+        Color color(String tag);
+        void set(List<String> tags, String note);
+        void addtag(String tag, int color);
+        void deltag(String tag);
+        String deltip();
+    }
+
+    private static class CharacterStore implements Store {
+        private final String acc, chr;
+
+        CharacterStore(String acc, String chr) {
+            this.acc = acc;
+            this.chr = chr;
+        }
+
+        public List<String> tags() { return (NCharTags.tags(acc, chr)); }
+        public String note() { return (NCharTags.note(acc, chr)); }
+        public List<String> alltags() { return (NCharTags.alltags()); }
+        public Color color(String tag) { return (NCharTags.color(tag)); }
+        public void set(List<String> tags, String note) { NCharTags.set(acc, chr, tags, note); }
+        public void addtag(String tag, int color) { NCharTags.addtag(tag, color); }
+        public void deltag(String tag) { NCharTags.deltag(tag); }
+        public String deltip() { return (L10n.get("chartag.deltip")); }
+    }
+
+    private static class AccountStore implements Store {
+        private final String login;
+
+        AccountStore(String login) {
+            this.login = login;
+        }
+
+        public List<String> tags() { return (NCharTags.accTags(login)); }
+        public String note() { return (NCharTags.accNote(login)); }
+        public List<String> alltags() { return (NCharTags.allAccTags()); }
+        public Color color(String tag) { return (NCharTags.accColor(tag)); }
+        public void set(List<String> tags, String note) { NCharTags.setAcc(login, tags, note); }
+        public void addtag(String tag, int color) { NCharTags.addAccTag(tag, color); }
+        public void deltag(String tag) { NCharTags.delAccTag(tag); }
+        public String deltip() { return (L10n.get("acctag.deltip")); }
     }
 
     /* -------------------------------------------------------------- tag rows */
@@ -156,10 +213,10 @@ public class NCharTagsWnd extends Window {
             int cw = label.sz().x + UI.scale(8);
             int ch = label.sz().y + UI.scale(2);
             int cy = (sz.y - ch) / 2;
-            g.chcolor(NCharTags.color(tag));
+            g.chcolor(store.color(tag));
             g.frect(Coord.of(cx, cy), Coord.of(cw, ch));
             g.chcolor(Color.BLACK);
-            g.rect(Coord.of(cx, cy), Coord.of(cw, ch));
+            NLoginTheme.outline(g, Coord.of(cx, cy), Coord.of(cw, ch));
             g.chcolor();
             g.image(label.tex(), Coord.of(cx + UI.scale(4), cy + UI.scale(1)));
             g.chcolor(new Color(190, 120, 120));
@@ -168,7 +225,7 @@ public class NCharTagsWnd extends Window {
         }
 
         public Object tooltip(Coord c, Widget prev) {
-            return ((c.x >= delx()) ? L10n.get("chartag.deltip") : null);
+            return ((c.x >= delx()) ? store.deltip() : null);
         }
 
         public void dispose() {
@@ -181,9 +238,9 @@ public class NCharTagsWnd extends Window {
                 return (false);
             if (ev.c.x >= delx()) {
                 flush();
-                NCharTags.deltag(tag);
+                store.deltag(tag);
                 cur.remove(tag);
-                open(ui, acc, chr);
+                open(ui, store, title);
                 return (true);
             }
             if (cur.contains(tag))

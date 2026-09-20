@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-login-layout-and-account-tags",
+  "priority": 5,
+  "summary": {
+    "ru": "Экран входа лучше помещается в небольших окнах, а сохранённые аккаунты получили личные метки и заметки.",
+    "en": "The login screen fits smaller windows better, and saved accounts now have their own tags and notes."
+  },
+  "detail": {
+    "ru": "На низких окнах список сохранённых аккаунтов автоматически занимает доступное место, не закрывая форму и статус. Щёлкните правой кнопкой по сохранённому аккаунту или значку заметки в его строке, чтобы добавить независимые от персонажей метки и заметку. При удалении аккаунта его заметка и метки тоже удаляются.",
+    "en": "On short windows, the saved-account list now uses the available space without covering the form or status. Right-click a saved account or use its note icon to add tags and a note that are independent from character tags. Forgetting an account also removes its account note and tags."
+  }
+}

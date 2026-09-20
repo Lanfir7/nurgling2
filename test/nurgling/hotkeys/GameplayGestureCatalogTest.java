@@ -69,6 +69,11 @@ class GameplayGestureCatalogTest {
                 InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.M), HotkeyContext.WORLD_SURFACE, null);
         assertGesture(registry, "world.toggle_object_ring",
                 InputGesture.mouse(2, KeyMatch.MODS, KeyMatch.C), HotkeyContext.WORLD_SURFACE, null);
+        assertGesture(registry, "world.vein_miner",
+                InputGesture.mouse(1, KeyMatch.MODS, KeyMatch.C), HotkeyContext.WORLD_SURFACE,
+                Integer.valueOf(UI.MOD_CTRL));
+        assertGesture(registry, "masterminer.pickup_all", InputGesture.modifier(KeyMatch.S),
+                HotkeyContext.MASTER_MINER_WINDOW, Integer.valueOf(UI.MOD_SHIFT));
         assertGesture(registry, "world.context_menu",
                 InputGesture.mouse(3, KeyMatch.MODS, KeyMatch.C), HotkeyContext.WORLD_SURFACE, Integer.valueOf(UI.MOD_CTRL));
         assertGesture(registry, "world.queue_waypoint",
@@ -80,6 +85,9 @@ class GameplayGestureCatalogTest {
                 InputGesture.key(KeyMatch.forcode(KeyEvent.VK_LEFT, 0)), HotkeyContext.WORLD_PLACEMENT, Integer.valueOf(UI.MOD_CTRL));
         assertGesture(registry, "world.placement.rotate_right",
                 InputGesture.key(KeyMatch.forcode(KeyEvent.VK_RIGHT, 0)), HotkeyContext.WORLD_PLACEMENT, Integer.valueOf(UI.MOD_CTRL));
+        assertGesture(registry, "world.placement.full_stockpiles",
+                InputGesture.key(KeyMatch.forcode(KeyEvent.VK_SHIFT, KeyMatch.C, KeyMatch.C)), HotkeyContext.WORLD_PLACEMENT,
+                Integer.valueOf(UI.MOD_CTRL | UI.MOD_SHIFT));
         assertGesture(registry, "world.selection.rotate",
                 InputGesture.key(KeyMatch.forchar('R', 0)), HotkeyContext.WORLD_SURFACE, null);
         assertGesture(registry, "world.selection.toggle_grid",

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-route-walker",
+  "priority": 5,
+  "summary": {
+    "ru": "Сохранённые маршруты собирателя теперь можно безопасно пройти без запуска сбора.",
+    "en": "Saved Forager routes can now be followed safely without starting a foraging run."
+  },
+  "detail": {
+    "ru": "Откройте «Проход по маршруту» кнопкой под мини-картой, выберите сохранённый маршрут и нажмите «Идти». Маршрут показывается на карте, его можно поставить на паузу или остановить. Проход начинается с ближайшей определяемой точки, идёт вперёд один раз и не выполняет действия, записанные в точках.",
+    "en": "Open Route Walker from the button below the minimap, select a saved route, and press Follow. The route is previewed on the map and can be paused or stopped. Walking joins at the nearest resolvable waypoint, proceeds forward once, and does not run recorded waypoint actions."
+  }
+}
