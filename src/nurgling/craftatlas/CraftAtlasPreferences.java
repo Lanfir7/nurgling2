@@ -81,9 +81,18 @@ public final class CraftAtlasPreferences {
             JSONObject columns = root.optJSONObject("columns");
             if(columns != null) for(String key : columns.keySet()) prefs.columnWidths.put(key, columns.optInt(key));
             JSONObject qualities = root.optJSONObject("requirementQualities");
-            if(qualities != null) for(String key : qualities.keySet()) {
-                double quality = qualities.optDouble(key, Double.NaN);
-                if(Double.isFinite(quality) && quality >= 1) prefs.requirementQualities.put(key, quality);
+            if(qualities != null) {
+                for(String key : qualities.keySet()) {
+                    if(!key.equals(CraftAtlasQualityFormula.canonicalStoredKey(key))) continue;
+                    double quality = qualities.optDouble(key, Double.NaN);
+                    if(Double.isFinite(quality) && quality >= 1) prefs.requirementQualities.put(key, quality);
+                }
+                for(String key : qualities.keySet()) {
+                    double quality = qualities.optDouble(key, Double.NaN);
+                    String canonical = CraftAtlasQualityFormula.canonicalStoredKey(key);
+                    if(Double.isFinite(quality) && quality >= 1)
+                        prefs.requirementQualities.putIfAbsent(canonical, quality);
+                }
             }
         } catch(Exception ignored) {
             return new CraftAtlasPreferences();

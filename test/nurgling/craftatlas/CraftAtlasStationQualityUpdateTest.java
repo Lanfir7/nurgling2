@@ -53,6 +53,49 @@ class CraftAtlasStationQualityUpdateTest {
     }
 
     @Test
+    void inspectedProcessingGobUpdatesCanonicalToolBackedStation() {
+        Set<String> keys = stationKeysFor(CraftAtlasEntry.builder("mince", "Mince")
+                .requirement(requirement(CraftAtlasEntry.RequirementKind.TOOL,
+                        "wiki-item:meatgrinder", "Meatgrinder")).build());
+        Map<String, Double> stored = new LinkedHashMap<>();
+
+        CraftAtlasStationQualityUpdate.Result result = CraftAtlasStationQualityUpdate.apply(
+                "gfx/terobjs/meatgrinder", 87, true, keys, stored);
+
+        assertEquals(CraftAtlasStationQualityUpdate.Decision.UPDATED, result.decision);
+        assertEquals(87.0, stored.get("station:meatgrinder"));
+    }
+
+    @Test
+    void inspectedGenericCauldronKeepsMetalAndClayQualitySeparate() {
+        CraftAtlasEntry generic = CraftAtlasEntry.builder("boil", "Boil")
+                .requirement(requirement(CraftAtlasEntry.RequirementKind.STATION,
+                        "wiki-item:cauldron", "Cauldron")).build();
+        Set<String> keys = stationKeysFor(generic);
+        Map<String, Double> stored = new LinkedHashMap<>();
+
+        CraftAtlasStationQualityUpdate.apply("gfx/terobjs/cauldron", 70, true, keys, stored);
+        CraftAtlasStationQualityUpdate.apply("gfx/terobjs/claycauldron", 90, true, keys, stored);
+
+        assertEquals(70.0, stored.get("station:cauldron"));
+        assertEquals(90.0, stored.get("station:clay-cauldron"));
+    }
+
+    @Test
+    void inspectedActualSpinningWheelResourceUpdatesItsQuality() {
+        Set<String> keys = stationKeysFor(CraftAtlasEntry.builder("yarn", "Yarn")
+                .requirement(requirement(CraftAtlasEntry.RequirementKind.STATION,
+                        "wiki-item:spinning-wheel", "Spinning Wheel")).build());
+        Map<String, Double> stored = new LinkedHashMap<>();
+
+        assertTrue(CraftAtlasStationQualityUpdate.apply(
+                "gfx/terobjs/swheel", 87, true, keys, stored).updated());
+        assertEquals(87.0, stored.get("station:spinning-wheel"));
+        assertEquals("station:spinning-wheel", CraftAtlasQualityFormula.key(requirement(
+                CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/swheel", null)));
+    }
+
+    @Test
     void equalQualityLeavesStoredAnvilUnchanged() {
         assertUnchangedAnvil(87, 87);
     }

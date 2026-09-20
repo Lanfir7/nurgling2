@@ -62,8 +62,12 @@ public final class CraftAtlasStationQualityUpdate {
         for(CraftAtlasEntry entry : entries) {
             if(entry == null) continue;
             for(CraftAtlasEntry.Requirement requirement : entry.requirements) {
-                if(requirement == null || requirement.kind != CraftAtlasEntry.RequirementKind.STATION) continue;
+                if(requirement == null || (requirement.kind != CraftAtlasEntry.RequirementKind.STATION &&
+                        requirement.kind != CraftAtlasEntry.RequirementKind.TOOL)) continue;
                 addStationKey(keys, CraftAtlasQualityFormula.key(requirement));
+                if(CraftAtlasQualityFormula.hasGenericCauldron(
+                        CraftAtlasEntry.builder("station", "station").requirement(requirement).build()))
+                    keys.add("station:clay-cauldron");
             }
         }
         return keys;
@@ -109,6 +113,10 @@ public final class CraftAtlasStationQualityUpdate {
         if("htable".equals(base)) return "herbalist-table";
         if("tarkiln".equals(base)) return "tar-kiln";
         if("gridiron".equals(base)) return "grid-iron";
+        if("swheel".equals(base) || "sswheel".equals(base) || "spinningwheel".equals(base)) return "spinning-wheel";
+        if("potterswheel".equals(base)) return "potters-wheel";
+        if("winepress".equals(base) || "extractionpress".equals(base)) return "extraction-press";
+        if("claycauldron".equals(base)) return "clay-cauldron";
         return base;
     }
 

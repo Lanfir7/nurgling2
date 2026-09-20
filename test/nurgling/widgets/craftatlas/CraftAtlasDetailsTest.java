@@ -1,5 +1,7 @@
 package nurgling.widgets.craftatlas;
 
+import nurgling.craftatlas.CraftAtlasQualityFormula;
+
 import haven.Coord;
 import haven.Widget;
 import nurgling.craftatlas.CraftAtlasEntry;
@@ -126,6 +128,42 @@ class CraftAtlasDetailsTest {
 
         assertTrue(rows.stream().anyMatch(row -> row.kind == CraftAtlasDetails.Kind.REQUIREMENT &&
                 "context:cauldron-water".equals(row.resource)));
+    }
+
+    @Test
+    void cauldronRequirementWaterUsesTheSingleFormulaQualityControl() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("boneglue", "Bone Glue")
+                .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.STATION,
+                        "wiki-item:cauldron", "Cauldron", null))
+                .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.TOOL,
+                        "gfx/invobjs/water", "Water", null))
+                .build();
+
+        List<CraftAtlasDetails.DetailRow> rows = CraftAtlasDetails.buildRows(entry,
+                resource -> CraftRecipeGraph.LinkState.NONE);
+
+        assertEquals(1, rows.stream().filter(row -> "Water".equals(row.name)).count());
+        assertFalse(rows.stream().anyMatch(row -> L10n.get("craft_atlas.cauldron_water").equals(row.name)));
+        assertTrue(rows.stream().anyMatch(row -> "context:cauldron-clay".equals(row.resource)));
+    }
+
+    @Test
+    void cauldronWaterFactorAffectsResultWhileWaterIngredientStaysSeparate() {
+        CraftAtlasEntry entry = CraftAtlasEntry.builder("soup", "Soup")
+                .input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/water", "Water"))))
+                .requirement(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.STATION,
+                        "wiki-item:cauldron", "Cauldron", null))
+                .build();
+
+        List<CraftAtlasDetails.DetailRow> rows = CraftAtlasDetails.buildRows(entry,
+                resource -> CraftRecipeGraph.LinkState.NONE);
+
+        assertEquals(1, rows.stream().filter(row -> row.kind == CraftAtlasDetails.Kind.INPUT &&
+                "Water".equals(row.name)).count());
+        assertTrue(CraftAtlasQualityFormula.factors(entry).stream().anyMatch(factor ->
+                CraftAtlasQualityFormula.CAULDRON_WATER.equals(factor.key) && factor.affectsResult));
+        assertTrue(rows.stream().anyMatch(row -> L10n.get("craft_atlas.cauldron_water").equals(row.name)));
     }
 
     @Test

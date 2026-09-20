@@ -83,6 +83,119 @@ class CraftAtlasQualityFormulaTest {
                 requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/tarkiln", null)));
     }
 
+    @Test
+    void cauldronAndAnvilApplyTheirFactorsBeforeTheCharacterSoftcap() {
+        CraftAtlasEntry cauldron = recipeWith(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/cauldron", "Metal Cauldron"));
+        CraftAtlasEntry anvil = recipeWith(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/anvil", "Anvil"));
+        Map<String, Double> cauldronQualities = new LinkedHashMap<>();
+        cauldronQualities.put("station:cauldron", 200.0);
+        cauldronQualities.put(CraftAtlasQualityFormula.CAULDRON_WATER, 40.0);
+        Map<String, Double> anvilQualities = new LinkedHashMap<>();
+        anvilQualities.put("station:anvil", 200.0);
+        anvilQualities.put("tool:smithy-hammer", 50.0);
+
+        assertEquals(105.0, CraftAtlasQualityFormula.result(cauldron, 100.0, cauldronQualities), 0.0001);
+        assertEquals(92.5, CraftAtlasQualityFormula.softcap(105.0, 80.0), 0.0001);
+        assertEquals(115.625, CraftAtlasQualityFormula.result(anvil, 100.0, anvilQualities), 0.0001);
+        assertEquals(97.8125, CraftAtlasQualityFormula.softcap(115.625, 80.0), 0.0001);
+    }
+
+    @Test
+    void clayAndGenericCauldronsUseSeparateStationQualityValues() {
+        CraftAtlasEntry clay = recipeWith(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/claycauldron", "Clay Cauldron"));
+        CraftAtlasEntry generic = recipeWith(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "wiki-item:cauldron", "Cauldron"));
+        Map<String, Double> qualities = new LinkedHashMap<>();
+        qualities.put("station:cauldron", 200.0);
+        qualities.put("station:clay-cauldron", 160.0);
+        qualities.put(CraftAtlasQualityFormula.CAULDRON_WATER, 40.0);
+
+        assertEquals(97.5, CraftAtlasQualityFormula.result(clay, 100.0, qualities), 0.0001);
+        assertEquals(105.0, CraftAtlasQualityFormula.result(generic, 100.0, qualities), 0.0001);
+        qualities.put(CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE, 1.0);
+        assertEquals(97.5, CraftAtlasQualityFormula.result(generic, 100.0, qualities), 0.0001);
+        qualities.put(CraftAtlasQualityFormula.CAULDRON_WATER, 1.0);
+        assertEquals(95.125, CraftAtlasQualityFormula.result(clay, 100.0, qualities), 0.0001);
+    }
+
+    @Test
+    void explicitlyNamedMetalCauldronIgnoresTheGenericClaySelector() {
+        CraftAtlasEntry metal = recipeWith(
+                requirement(CraftAtlasEntry.RequirementKind.STATION, "gfx/terobjs/cauldron", "Metal Cauldron"));
+        Map<String, Double> qualities = new LinkedHashMap<>();
+        qualities.put("station:cauldron", 200.0);
+        qualities.put("station:clay-cauldron", 20.0);
+        qualities.put(CraftAtlasQualityFormula.CAULDRON_WATER, 40.0);
+        qualities.put(CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE, 1.0);
+
+        assertFalse(CraftAtlasQualityFormula.hasGenericCauldron(metal));
+        assertEquals(105.0, CraftAtlasQualityFormula.result(metal, 100.0, qualities), 0.0001);
+    }
+
+    @Test
+    void knownProcessingStationsUseCanonicalAliasesRegardlessOfRequirementKind() {
+        String[][] aliases = {
+                { "wiki-item:loom", "Loom", "station:loom" },
+                { "gfx/terobjs/sswheel", "Spinning Wheel", "station:spinning-wheel" },
+                { "wiki-item:churn", "Churn", "station:churn" },
+                { "wiki-item:meatgrinder", "Meatgrinder", "station:meatgrinder" },
+                { "gfx/terobjs/potterswheel", "Potter's Wheel", "station:potters-wheel" },
+                { "wiki-item:winepress", "Extraction Press", "station:extraction-press" }
+        };
+        for(String[] alias : aliases) {
+            CraftAtlasEntry.Requirement requirement = requirement(CraftAtlasEntry.RequirementKind.TOOL, alias[0], alias[1]);
+            CraftAtlasEntry entry = recipeWith(requirement);
+            assertEquals(alias[2], CraftAtlasQualityFormula.key(requirement));
+            assertEquals(125.0, CraftAtlasQualityFormula.result(entry, 100.0,
+                    java.util.Collections.singletonMap(alias[2], 200.0)), 0.0001);
+        }
+    }
+
+    @Test
+    void legacyStationAndToolQualityKeysMigrateToCanonicalStations() {
+        assertEquals("station:meatgrinder",
+                CraftAtlasQualityFormula.canonicalStoredKey("tool:wiki-item-meatgrinder"));
+        assertEquals("station:loom",
+                CraftAtlasQualityFormula.canonicalStoredKey("station:wiki-item-loom"));
+        assertEquals("station:anvil", CraftAtlasQualityFormula.canonicalStoredKey("station:anvil"));
+    }
+
+    @Test
+    void bundledCauldronsWithWaterVolumesStillUseTheCauldronFormula() {
+        int checked = 0;
+        Map<String, Double> qualities = new LinkedHashMap<>();
+        qualities.put("station:cauldron", 200.0);
+        qualities.put(CraftAtlasQualityFormula.CAULDRON_WATER, 40.0);
+        for(CraftAtlasEntry entry : WikiReferenceCatalog.loadBundled()) {
+            for(CraftAtlasEntry.Requirement requirement : entry.requirements) {
+                if(requirement.resource == null || !requirement.resource.startsWith("wiki-item:cauldron-")) continue;
+                assertEquals("station:cauldron", CraftAtlasQualityFormula.key(requirement), requirement.resource);
+                assertTrue(CraftAtlasQualityFormula.hasGenericCauldron(entry), requirement.resource);
+                assertEquals(105.0, CraftAtlasQualityFormula.result(entry, 100.0, qualities), 0.0001,
+                        requirement.resource);
+                assertTrue(CraftAtlasQualityFormula.factors(entry).stream().anyMatch(factor ->
+                        CraftAtlasQualityFormula.CAULDRON_WATER.equals(factor.key)));
+                checked++;
+            }
+        }
+        assertTrue(checked >= 10, "Expected the bundled cauldron recipes with water-volume qualifiers");
+    }
+
+    @Test
+    void gobAndWikiStationAliasesMigrateUsingTheSameIdentityAsRecipes() {
+        for(String prefix : new String[] { "tool:", "station:" }) {
+            for(String alias : new String[] { "swheel", "sswheel", "spinningwheel", "wiki-item-swheel", "wiki-item-spinning-wheel" })
+                assertEquals("station:spinning-wheel", CraftAtlasQualityFormula.canonicalStoredKey(prefix + alias));
+            for(String alias : new String[] { "winepress", "extractionpress", "wiki-item-winepress", "wiki-item-extraction-press" })
+                assertEquals("station:extraction-press", CraftAtlasQualityFormula.canonicalStoredKey(prefix + alias));
+            for(String alias : new String[] { "potterswheel", "potter-s-wheel", "wiki-item-potter-s-wheel" })
+                assertEquals("station:potters-wheel", CraftAtlasQualityFormula.canonicalStoredKey(prefix + alias));
+        }
+    }
+
     private static CraftAtlasEntry recipeWith(CraftAtlasEntry.Requirement... requirements) {
         CraftAtlasEntry.Builder builder = CraftAtlasEntry.builder("paginae/craft/test", "Test");
         for(CraftAtlasEntry.Requirement requirement : requirements) builder.requirement(requirement);

@@ -114,6 +114,7 @@ public class CraftAtlasDetails extends Widget {
     private final CraftAtlasPreferences preferences;
     private final Runnable preferencesChanged;
     private final Map<String, TextEntry> requirementQualityEntries = new HashMap<>();
+    private CheckBox genericCauldronClayBox;
     private final CraftAtlasMaterialSource materialSource = new CraftAtlasMaterialSource();
     private CraftAtlasMaterialSource.Snapshot materials;
     private CraftAtlasMaterialPlanner.Plan materialPlan;
@@ -345,7 +346,7 @@ public class CraftAtlasDetails extends Widget {
         for(CraftAtlasEntry.Requirement requirement : entry.requirements)
             if(requirement.kind == CraftAtlasEntry.RequirementKind.STATION ||
                     requirement.kind == CraftAtlasEntry.RequirementKind.TOOL)
-                listedQualityFactors.add(CraftAtlasQualityFormula.key(requirement));
+                listedQualityFactors.add(CraftAtlasQualityFormula.factorKey(entry, requirement));
         for(CraftAtlasQualityFormula.Factor factor : CraftAtlasQualityFormula.factors(entry)) {
             if(listedQualityFactors.contains(factor.key)) continue;
             boolean water = CraftAtlasQualityFormula.CAULDRON_WATER.equals(factor.key);
@@ -354,6 +355,9 @@ public class CraftAtlasDetails extends Widget {
                     water ? factor.key : factor.resource, water ? "CONTEXT" : factor.requirement.kind.name(),
                     0, Target.NONE, factor.requirement, null));
         }
+        if(CraftAtlasQualityFormula.hasGenericCauldron(entry))
+            rows.add(new DetailRow(Kind.REQUIREMENT, L10n.get("craft_atlas.cauldron_type"),
+                    CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE, "CONTEXT", 0, Target.NONE, null, null));
         return Collections.unmodifiableList(rows);
     }
 
@@ -576,7 +580,8 @@ public class CraftAtlasDetails extends Widget {
 
     @Override public boolean mousedown(MouseDownEvent ev) {
         if(hitsVisibleControl(ev.c, selectors.values()) ||
-                hitsVisibleControl(ev.c, requirementQualityEntries.values())) return false;
+                hitsVisibleControl(ev.c, requirementQualityEntries.values()) ||
+                hitsVisibleControl(ev.c, Collections.singleton(genericCauldronClayBox))) return false;
         if(ev.b != 1 || entry == null || ev.c.y < headerHeight) return false;
         DetailRow row = rowAt(ev.c.y - headerHeight + scroll);
         if(row == null) return false;
@@ -864,6 +869,8 @@ public class CraftAtlasDetails extends Widget {
     private void rebuildRequirementQualityEntries() {
         for(TextEntry field : requirementQualityEntries.values()) field.reqdestroy();
         requirementQualityEntries.clear();
+        if(genericCauldronClayBox != null) genericCauldronClayBox.reqdestroy();
+        genericCauldronClayBox = null;
         if(entry == null) return;
         for(CraftAtlasQualityFormula.Factor factor : CraftAtlasQualityFormula.factors(entry)) {
             double saved = preferences.requirementQualities.getOrDefault(factor.key, 10.0);
@@ -881,11 +888,23 @@ public class CraftAtlasDetails extends Widget {
                     L10n.get("craft_atlas.requirement_quality_ignored");
             requirementQualityEntries.put(factor.key, field);
         }
+        if(CraftAtlasQualityFormula.hasGenericCauldron(entry)) {
+            genericCauldronClayBox = add(new CheckBox(L10n.get("craft_atlas.cauldron_clay")));
+            genericCauldronClayBox.a = preferences.requirementQualities.containsKey(
+                    CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE);
+            genericCauldronClayBox.changed(value -> {
+                if(value) preferences.requirementQualities.put(CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE, 1.0);
+                else preferences.requirementQualities.remove(CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE);
+                if(preferencesChanged != null) preferencesChanged.run();
+                if(autoQuality) replan();
+            });
+        }
         positionRequirementQualityEntries();
     }
 
     private void positionRequirementQualityEntries() {
         Set<String> shown = new HashSet<>();
+        boolean genericCauldronShown = false;
         int y = headerHeight - scroll;
         Kind previous = null;
         for(DetailRow row : rows) {
@@ -899,16 +918,22 @@ public class CraftAtlasDetails extends Widget {
                         y + (height - field.sz.y) / 2));
                 if(y >= headerHeight && y + height <= sz.y) shown.add(key);
             }
+            if(CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE.equals(row.resource) && genericCauldronClayBox != null) {
+                genericCauldronClayBox.move(Coord.of(UI.scale(120), y + (height - genericCauldronClayBox.sz.y) / 2));
+                genericCauldronShown = y >= headerHeight && y + height <= sz.y;
+            }
             y += height;
         }
         for(Map.Entry<String, TextEntry> field : requirementQualityEntries.entrySet())
             setControlVisible(field.getValue(), shown.contains(field.getKey()));
+        if(genericCauldronClayBox != null) setControlVisible(genericCauldronClayBox, genericCauldronShown);
     }
 
-    private static String qualityKey(DetailRow row) {
+    private String qualityKey(DetailRow row) {
         if(row == null || row.kind != Kind.REQUIREMENT) return null;
+        if(CraftAtlasQualityFormula.GENERIC_CAULDRON_TYPE.equals(row.resource)) return row.resource;
         if(CraftAtlasQualityFormula.CAULDRON_WATER.equals(row.resource)) return row.resource;
-        return row.requirement == null ? null : CraftAtlasQualityFormula.key(row.requirement);
+        return row.requirement == null ? null : CraftAtlasQualityFormula.factorKey(entry, row.requirement);
     }
 
     private static Double parseQuality(String value) {

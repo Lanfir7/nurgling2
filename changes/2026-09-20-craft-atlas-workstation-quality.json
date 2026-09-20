@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-craft-atlas-workstation-quality",
+  "priority": 6,
+  "summary": {
+    "ru": "Крафт-атлас точнее учитывает качество станков и воды; для котла можно выбрать глиняный вариант.",
+    "en": "Craft Atlas now accounts for more workstation qualities and lets you select a clay cauldron for water calculations."
+  },
+  "detail": {
+    "ru": "В автоматическом расчёте качества в крафт-атласе учитываются ткацкий станок, прялка, маслобойка, мясорубка, гончарный круг и пресс. Для рецептов с котлом выбирайте его тип и указывайте качество воды: у глиняного котла оно влияет иначе. Формулы наковальни с молотом и ограничения навыками проверены отдельно.",
+    "en": "Automatic quality estimates in Craft Atlas include the loom, spinning wheel, churn, meatgrinder, potter's wheel and extraction press. For cauldron recipes, select the type and enter the water quality: clay cauldrons affect it differently. Anvil and hammer weights and character softcaps were checked separately."
+  }
+}

@@ -54,4 +54,28 @@ class CraftAtlasPreferencesTest {
         assertTrue(loaded.favorites.isEmpty());
         assertEquals("{broken", new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
     }
+
+    @Test
+    void migratesLegacyWorkstationKeysWithoutReplacingCanonicalOrClayValues() throws Exception {
+        Path file = temp.resolve("migrated.json");
+        Files.write(file, ("{\"requirementQualities\":{"
+                + "\"station:spinning-wheel\":80,\"tool:sswheel\":90,"
+                + "\"tool:potterswheel\":70,\"station:winepress\":60,"
+                + "\"tool:wiki-item-meatgrinder\":50,\"station:cauldron\":55,"
+                + "\"station:clay-cauldron\":44,\"context:cauldron-clay\":1}}")
+                .getBytes(StandardCharsets.UTF_8));
+
+        CraftAtlasPreferences loaded = CraftAtlasPreferences.load(file);
+        assertEquals(80.0, loaded.requirementQualities.get("station:spinning-wheel"));
+        assertEquals(70.0, loaded.requirementQualities.get("station:potters-wheel"));
+        assertEquals(60.0, loaded.requirementQualities.get("station:extraction-press"));
+        assertEquals(50.0, loaded.requirementQualities.get("station:meatgrinder"));
+        assertEquals(55.0, loaded.requirementQualities.get("station:cauldron"));
+        assertEquals(44.0, loaded.requirementQualities.get("station:clay-cauldron"));
+        assertEquals(1.0, loaded.requirementQualities.get("context:cauldron-clay"));
+
+        loaded.save(file);
+        CraftAtlasPreferences reloaded = CraftAtlasPreferences.load(file);
+        assertEquals(loaded.requirementQualities, reloaded.requirementQualities);
+    }
 }
