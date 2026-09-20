@@ -63,6 +63,8 @@ public class CraftAtlasWindow extends Window {
     private final Button help, favoriteFilterButton, recentFilterButton, craftFilterButton, storageFilterButton;
     private final FavoriteStar favorite;
     private final Button collectResources, openCraft;
+    private final Button qualityWorkshopButton;
+    private QualityWorkshopWindow qualityWorkshop;
     private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
     private final Button[] equipmentButtons = new Button[CraftAtlasSections.EQUIPMENT.size() + 1];
     private String section;
@@ -129,6 +131,9 @@ public class CraftAtlasWindow extends Window {
         storageFilterButton = add(new Button(UI.scale(120), "").action(this::toggleStorageFilter));
         updateFilterButtons();
 
+        qualityWorkshopButton = add(new Button(UI.scale(170), L10n.get("quality_workshop.open"))
+                .action(this::openQualityWorkshop));
+
         for(int i = 0; i < CraftAtlasSections.MAIN.size(); i++) {
             final String value = CraftAtlasSections.MAIN.get(i);
             sectionButtons[i] = add(new Button(UI.scale(170), L10n.get("craft_atlas.section." + value))
@@ -169,6 +174,13 @@ public class CraftAtlasWindow extends Window {
 
     public CraftAtlasController controller() { return controller; }
     public CraftAtlasPreferences preferences() { return preferences; }
+    private void openQualityWorkshop() {
+        if(parent == null) return;
+        if(qualityWorkshop == null || qualityWorkshop.parent == null)
+            qualityWorkshop = parent.add(new QualityWorkshopWindow(preferences), c.add(UI.scale(30, 30)));
+        qualityWorkshop.show();
+        qualityWorkshop.raise();
+    }
     /** Side-effect-free bundled station keys. Does not show or refresh Atlas. */
     public Set<String> stationKeys() { return catalog.stationKeys(); }
     public CraftAtlasRecipeProbe recipeProbe() { return recipeProbe; }
@@ -200,6 +212,7 @@ public class CraftAtlasWindow extends Window {
     @Override public void destroy() {
         if(subscribed) { controller.removeListener(listener); subscribed = false; }
         if(searchHelp != null) { searchHelp.reqdestroy(); searchHelp = null; }
+        if(qualityWorkshop != null && qualityWorkshop.parent != null) qualityWorkshop.destroy();
         savePreferences();
         super.destroy();
     }
@@ -644,6 +657,10 @@ public class CraftAtlasWindow extends Window {
             equipmentButtons[i].resize(Coord.of(Math.max(UI.scale(100), layout.sidebar.w - UI.scale(14)), equipmentButtons[i].sz.y));
             equipmentButtons[i].visible = equipmentMenu;
         }
+        qualityWorkshopButton.move(Coord.of(layout.sidebar.x + UI.scale(7),
+                sideY + sectionButtons.length * UI.scale(38) + UI.scale(12)));
+        qualityWorkshopButton.resize(Coord.of(Math.max(UI.scale(100), layout.sidebar.w - UI.scale(14)), qualityWorkshopButton.sz.y));
+        qualityWorkshopButton.visible = !equipmentMenu && !(layout.detailsAsPage && narrowDetails);
         recipeList.move(Coord.of(layout.list.x, layout.list.y)); recipeList.resize(Coord.of(layout.list.w, layout.list.h));
         details.move(Coord.of(layout.details.x, layout.details.y)); details.resize(Coord.of(layout.details.w, layout.details.h));
         int dividerX = layout.list.x + layout.list.w;

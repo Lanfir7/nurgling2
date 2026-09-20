@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-quality-workshop",
+  "priority": 6,
+  "summary": {
+    "ru": "В крафт-атласе появился калькулятор качества для сравнения глиняных цепочек и гончарного круга.",
+    "en": "The Craft Atlas now has a quality workshop for comparing clay chains and a potter's wheel."
+  },
+  "detail": {
+    "ru": "Откройте «Калькулятор качества» в крафт-атласе. Добавляйте нужные результаты, раскрывайте ингредиенты в расчёт и сравнивайте повторные крафты глины через обжиг кирпича. Общие качества вводятся один раз; подсказки склада, станков и персонажа применяются по нажатию. Расчёт сохраняется в профиле.",
+    "en": "Open Quality workshop in the Craft Atlas. Watch selected results, expand ingredients into calculations, and compare repeated clay crafts using fired bricks. Shared qualities are entered once; storage, workstation and character suggestions are applied on click. Your scenario is saved in your profile."
+  }
+}

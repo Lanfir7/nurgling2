@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-quality-workshop-hidden-cards",
+  "priority": 3,
+  "summary": {
+    "ru": "В калькуляторе качества можно скрывать промежуточные результаты и ингредиенты в сворачиваемые списки.",
+    "en": "The quality workshop can now hide intermediate results and inputs in collapsible lists."
+  },
+  "detail": {
+    "ru": "В крафт-атласе откройте калькулятор качества и нажмите «Скрыть» на карточке. Она останется в расчёте и переместится в раздел внизу своей колонки. Раскройте его, чтобы изменить данные или вернуть карточку в основной список. Скрытие запоминается. Кнопка подсказки теперь рядом с полем качества; строка об источнике формулы убрана.",
+    "en": "In Craft Atlas, open the quality workshop and click Hide on a card. It remains part of the calculation and moves to a section at the bottom of its column. Expand that section to edit it or return it to the main list. Visibility is remembered. Suggestions now sit beside quality inputs, and the formula attribution row has been removed."
+  }
+}
