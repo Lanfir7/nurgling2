@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-area-specialization-settings",
+  "priority": 4,
+  "summary": {
+    "ru": "В списке специализаций зоны снова видна шестерёнка выбора подспециализации.",
+    "en": "The sub-specialization settings gear is visible again in the area's specialization list."
+  },
+  "detail": {
+    "ru": "В окне зон нажмите шестерёнку справа от специализации, чтобы выбрать её подтип — например, Beetroot для Crop. Кнопка теперь остаётся внутри строки и доступна для нажатия.",
+    "en": "In the areas window, click the gear to the right of a specialization to choose its subtype, such as Beetroot for Crop. The button now stays inside the row and remains clickable."
+  }
+}

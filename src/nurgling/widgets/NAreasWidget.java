@@ -975,6 +975,7 @@ public class NAreasWidget extends Window
             return(new ItemWidget<SpecialisationItem>(this, sz, item) {
                 {
                     add(item);
+                    item.positionSettingsButtons(sz.x);
                 }
 
                 @Override
@@ -1012,6 +1013,7 @@ public class NAreasWidget extends Window
         NArea.Specialisation item;
         IButton spec = null;
         IButton rankPresetBtn = null;
+        final ArrayList<IButton> settingsButtons = new ArrayList<>();
         NFlowerMenu menu;
         NFlowerMenu rankMenu;
         TexI icon;
@@ -1061,8 +1063,6 @@ public class NAreasWidget extends Window
             if(specialisationItem != null) {
                 icon = new TexI(specialisationItem.image);
             }
-            
-            int btnX = 195;
             
             if(SpecialisationData.data.get(item.name)!=null)
             {
@@ -1132,8 +1132,8 @@ public class NAreasWidget extends Window
                         }
                         ui.root.add(menu, pos);
                     }
-                },UI.scale(new Coord(btnX,4)));
-                btnX += 18;
+                },UI.scale(new Coord(0,4)));
+                settingsButtons.add(spec);
             }
             
             // Add rank preset selection button for animal specialisations
@@ -1203,10 +1203,22 @@ public class NAreasWidget extends Window
                         }
                         return get("area.tooltip.select_preset");
                     }
-                },UI.scale(new Coord(btnX, 4)));
+                },UI.scale(new Coord(0, 4)));
+                settingsButtons.add(rankPresetBtn);
             }
             pack();
             sz.y = UI.scale(24);
+        }
+
+        private void positionSettingsButtons(int rowWidth) {
+            int[] widths = new int[settingsButtons.size()];
+            for (int i = 0; i < settingsButtons.size(); i++)
+                widths[i] = settingsButtons.get(i).sz.x;
+            int[] positions = SpecialisationButtonLayout.rightAlignedPositions(rowWidth,
+                    UI.scale(4), UI.scale(1), widths);
+            for (int i = 0; i < settingsButtons.size(); i++)
+                settingsButtons.get(i).c = Coord.of(positions[i], UI.scale(4));
+            resize(Coord.of(rowWidth, UI.scale(24)));
         }
 
         @Override
