@@ -33,12 +33,15 @@ class ReleaseNotesTest {
     }
 
     @Test
-    void limitsSummaryToThreeBullets() {
+    void keepsEverySummaryBulletAndFullDetails() {
         List<ReleaseNotes.Entry> entries = ReleaseNotes.parse("{\"schema\":1,\"releases\":[{"
                 + "\"id\":\"2\",\"date\":\"2026-09-13\",\"title\":{\"en\":\"Title\"},"
-                + "\"summary\":{\"en\":[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]},\"details\":{}}]}");
+                + "\"summary\":{\"en\":[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]},"
+                + "\"details\":{\"en\":[\"detail 1\",\"detail 2\",\"detail 3\",\"detail 4\"]}}]}");
 
-        assertEquals(3, entries.get(0).summary("en").size());
+        ReleaseNotes.Entry entry = entries.get(0);
+        assertEquals(Arrays.asList("1", "2", "3", "4", "5", "6"), entry.summary("en"));
+        assertEquals(Arrays.asList("detail 1", "detail 2", "detail 3", "detail 4"), entry.details("en"));
     }
 
     @Test

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-release-notes-all-summaries",
+  "priority": 5,
+  "summary": {
+    "ru": "В «Что нового» теперь видна краткая строка для каждого изменения выпуска.",
+    "en": "What's New now shows a short line for every change in a release."
+  },
+  "detail": {
+    "ru": "Откройте «Что нового» в главном меню: краткий список больше не скрывает изменения после первых трёх, а кнопка подробностей по-прежнему показывает полное описание каждого из них.",
+    "en": "Open What's New from the main menu: the compact list no longer hides changes after the first three, while the details button still shows every full description."
+  }
+}

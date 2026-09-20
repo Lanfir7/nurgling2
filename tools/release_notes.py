@@ -62,7 +62,7 @@ def make_feed(notes, previous, version, date):
             raise ValueError("Version already published; increment it before adding notes")
         entry = {"id": version, "date": date,
                  "title": {"ru": "Новое в клиенте", "en": "Client updates"},
-                 "summary": {lang: [n["summary"][lang] for n in pending[:3]] for lang in LANGUAGES},
+                 "summary": {lang: [n["summary"][lang] for n in pending] for lang in LANGUAGES},
                  "details": {lang: [n["detail"][lang] for n in pending] for lang in LANGUAGES}}
         releases = [entry] + releases
     return {"schema": 1, "processed": sorted(set(processed) | {n["id"] for n in pending}),

@@ -22,10 +22,22 @@ public class VeinWorklist {
     private final List<Coord> minedTiles = new ArrayList<Coord>();
 
     public VeinWorklist(String type, Coord seed) {
+        this(type, seed, true);
+    }
+
+    private VeinWorklist(String type, Coord seed, boolean seedAlreadyMined) {
         this.type = type;
-        if (seed != null) {
+        if (seedAlreadyMined && seed != null) {
             markMined(seed);
+        } else if (seed != null) {
+            queued.add(key(seed));
+            queue.add(seed);
         }
+    }
+
+    /** Starts a vein by mining the selected rock before looking for newly opened neighbours. */
+    public static VeinWorklist withInitialTarget(String type, Coord seed) {
+        return new VeinWorklist(type, seed, false);
     }
 
     public void offer(Coord tile, String visibleType, boolean safe) {
@@ -37,6 +49,15 @@ public class VeinWorklist {
             return;
         }
         queued.add(k);
+        queue.add(tile);
+    }
+
+    /** Requeues a target that was selected but could not be mined yet. */
+    public void requeue(Coord tile) {
+        if (tile == null || mined.contains(key(tile)) || queued.contains(key(tile))) {
+            return;
+        }
+        queued.add(key(tile));
         queue.add(tile);
     }
 

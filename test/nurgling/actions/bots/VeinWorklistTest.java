@@ -59,6 +59,25 @@ class VeinWorklistTest {
     }
 
     @Test
+    void initialTargetIsMinedBeforeItsVeinIsScanned() {
+        VeinWorklist list = VeinWorklist.withInitialTarget(ORE, SEED);
+
+        assertEquals(SEED, list.takeNearest(SEED));
+        list.markMined(SEED);
+        list.offer(new Coord(5, 4), ORE, true);
+        assertEquals(new Coord(5, 4), list.takeNearest(SEED));
+    }
+
+    @Test
+    void initialTargetCanBeRequeuedAfterARetryableFailure() {
+        VeinWorklist list = VeinWorklist.withInitialTarget(ORE, SEED);
+
+        assertEquals(SEED, list.takeNearest(SEED));
+        list.requeue(SEED);
+        assertEquals(SEED, list.takeNearest(SEED));
+    }
+
+    @Test
     void unsafeAndOtherTypeAreRejected() {
         VeinWorklist list = new VeinWorklist(ORE, SEED);
         list.offer(new Coord(5, 4), ORE, false);

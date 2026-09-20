@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-vein-miner-ctrl-click",
+  "priority": 4,
+  "summary": {
+    "ru": "Ctrl+клик курсором кирки по породе теперь запускает Жильного шахтёра.",
+    "en": "Ctrl+clicking rock with the mining cursor now starts Vein Miner."
+  },
+  "detail": {
+    "ru": "В шахте удерживайте Ctrl и кликните клетку породы курсором кирки: Жильный шахтёр сразу начнёт работу с выбранной жилой. Обычный клик киркой по-прежнему копает одну клетку.",
+    "en": "In a mine, hold Ctrl and click a rock tile with the mining cursor to start Vein Miner on that vein. A normal mining click still digs one tile."
+  }
+}

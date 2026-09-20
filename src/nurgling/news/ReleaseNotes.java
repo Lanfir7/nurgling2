@@ -17,7 +17,6 @@ import java.util.Locale;
 public final class ReleaseNotes {
     public static final String RESOURCE = "/nurgling/news/releases.json";
     public static final String SEEN_PREF = "nurgling/news/seen-release-id";
-    public static final int SUMMARY_LIMIT = 3;
 
     private static volatile List<Entry> cached;
     private static volatile String seenId;
@@ -171,7 +170,7 @@ public final class ReleaseNotes {
         }
 
         public List<String> summary(String language) {
-            return summary.forLanguage(language, SUMMARY_LIMIT);
+            return summary.forLanguage(language, Integer.MAX_VALUE);
         }
 
         public List<String> details(String language) {

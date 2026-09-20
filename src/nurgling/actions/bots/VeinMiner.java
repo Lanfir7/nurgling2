@@ -77,7 +77,9 @@ public class VeinMiner implements Action {
                 return Results.ERROR("Not a rock");
             }
 
-            VeinWorklist list = new VeinWorklist(type, veinSeed);
+            VeinWorklist list = (presetSeed == null)
+                    ? new VeinWorklist(type, veinSeed)
+                    : VeinWorklist.withInitialTarget(type, veinSeed);
             Set<Long> pathRetries = new HashSet<>();
             while (true) {
                 if (inFight(gui)) {
@@ -100,7 +102,7 @@ public class VeinMiner implements Action {
                 Results mined = mineTile(gui, next, type);
                 if (mined.isCycle) {
                     if (pathRetries.add(tileKey(next))) {
-                        list.offer(next, type, true);
+                        list.requeue(next);
                     }
                     continue;
                 }
