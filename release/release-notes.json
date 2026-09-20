@@ -110,6 +110,8 @@
     "2026-09-19-temp-marks-window-switch",
     "2026-09-19-unbox-return",
     "2026-09-19-vein-miner",
+    "2026-09-20-buff-expiration-timer",
+    "2026-09-20-catalog-materials",
     "2026-09-20-duplicate-area",
     "2026-09-20-feast-tableware-safety",
     "2026-09-20-forager-presets-and-strawberries",
@@ -118,6 +120,7 @@
     "2026-09-20-map-grid-refresh",
     "2026-09-20-master-miner-ground-pickup",
     "2026-09-20-master-miner-last-mined",
+    "2026-09-20-master-miner-support",
     "2026-09-20-mining-pickup-and-vein",
     "2026-09-20-release-notes-all-summaries",
     "2026-09-20-route-walker",
@@ -125,6 +128,38 @@
     "2026-09-20-vein-miner-ctrl-click"
   ],
   "releases": [
+    {
+      "id": "2.103.210",
+      "date": "2026-09-20",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "У временных эффектов появился читаемый таймер до окончания.",
+          "Мастер-шахтёр собирает камни для подпорки, отмечает достигнутый кап и подсказывает действия с метками.",
+          "Каталог материалов теперь правильно распознаёт Quarryartz, шкуры и зубы ледяного медведя; когти рыси складываются по 4."
+        ],
+        "en": [
+          "Temporary effects now show a readable time remaining label.",
+          "Master Miner collects support stones, marks capped results, and shows map-marker actions.",
+          "The material catalog now correctly recognizes Quarryartz plus ice bear hides and teeth, and lynx claws stack in fours."
+        ]
+      },
+      "details": {
+        "ru": [
+          "В панели эффектов внизу значка временного эффекта теперь показано оставшееся реальное время крупной единицей, чтобы проще следить за окончанием действия.",
+          "В окне «Мастер-шахтёр» рядом с запасом для подпорки появилась кнопка сбора до 30 ближайших подходящих камней с возвратом к месту начала. Последняя добыча и метки на карте получают звёздочку при достижении капа кладки. Наведите курсор на отметки руды, камня, самоцвета или Quarryartz на карте, чтобы увидеть действия; у Quarryartz также показан поиск по ПКМ.",
+          "Quarryartz, свежие и подготовленные шкуры, а также зуб ледяного медведя доступны в подходящих категориях материалов для рецептов и сортировки. Когти рыси теперь учитываются как стопки по 4 при работе с инвентарём."
+        ],
+        "en": [
+          "At the bottom of a temporary effect's icon in the effects bar, the remaining real time is now shown in a compact largest-unit label so expiry is easier to track.",
+          "The Master Miner window now has a button beside the support reserve to gather up to 30 nearby suitable stones and return to where you started. Last-mined results and map marks show a star when they reach the masonry cap. Hover ore, stone, gemstone, or Quarryartz map marks to see their actions; Quarryartz also shows its right-click search.",
+          "Quarryartz, fresh and prepared ice bear hides, and ice bear teeth are available in the appropriate material categories for recipes and sorting. Lynx claws now count as stacks of four when working with inventory."
+        ]
+      }
+    },
     {
       "id": "2.103.209",
       "date": "2026-09-20",
