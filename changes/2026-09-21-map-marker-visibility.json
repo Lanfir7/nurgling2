@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-21-map-marker-visibility",
+  "priority": 6,
+  "summary": {
+    "ru": "На большой карте можно скрывать выбранные типы значков, а посещённые thingwall легче заметить.",
+    "en": "The world map can hide selected icon types, and visited Thingwalls are easier to spot."
+  },
+  "detail": {
+    "ru": "Откройте «Инструменты карты» на большой карте и нажмите «Значки карты», чтобы скрывать системные маркеры карты, а также отдельные значки квестов, открытий и таймеров без собственного переключателя. Настройка запоминается; посещённые вами thingwall отмечены зелёным ореолом.",
+    "en": "Open Map Tools on the world map and click Marker icons to hide individual system map markers, quest, discovery and timer icons that have no separate toggle. The choice is remembered, and Thingwalls you have visited receive a green halo."
+  }
+}

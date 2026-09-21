@@ -62,6 +62,10 @@ public class MapWnd extends Window implements Console.Directory {
     public final Toolbox tool;
     public final Collection<String> overlays = new java.util.concurrent.CopyOnWriteArraySet<>();
     public MarkerConfig markcfg = MarkerConfig.showall, cmarkers = null;
+    private static final String markerVisibilityEnabledPref = "mapwnd/marker-visibility-enabled";
+    private static final String markerVisibilityHiddenPref = "mapwnd/marker-visibility-hidden";
+    private boolean markerVisibilityEnabled = Utils.getprefb(markerVisibilityEnabledPref, false);
+    private Set<String> hiddenMarkerTypes = MapMarkerVisibility.decode(Utils.getpref(markerVisibilityHiddenPref, ""));
     private final Locator player;
     private final Widget toolbar;
     private final Frame viewf;
@@ -318,7 +322,11 @@ public class MapWnd extends Window implements Console.Directory {
 	}
 
 	public boolean filter(DisplayMarker mark) {
-	    return(markcfg.filter(mark.m));
+	    return(markcfg.filter(mark.m) || !isMapIconVisible(MapMarkerVisibility.identity(mark.m)));
+	}
+
+	public boolean filter(DisplayIcon icon) {
+	    return(super.filter(icon) || !isMapIconVisible(MapMarkerVisibility.liveIconIdentity(icon)));
 	}
 
 	public boolean clickmarker(DisplayMarker mark, Location loc, int button, boolean press) {
@@ -762,6 +770,110 @@ public class MapWnd extends Window implements Console.Directory {
 	}
 	public boolean equals(Object that) {
 	    return((that instanceof MarkerConfig) && equals((MarkerConfig)that));
+	}
+    }
+
+    public void setMapIconVisibilityEnabled(boolean enabled) {
+	markerVisibilityEnabled = enabled;
+	Utils.setprefb(markerVisibilityEnabledPref, enabled);
+    }
+
+    public boolean mapIconVisibilityEnabled() {
+	return(markerVisibilityEnabled);
+    }
+
+    public boolean isMapIconVisible(String identity) {
+	return(MapMarkerVisibility.visible(markerVisibilityEnabled, hiddenMarkerTypes, identity));
+    }
+
+    public void setMapIconHidden(String identity, boolean hidden) {
+	Set<String> next = new HashSet<>(hiddenMarkerTypes);
+	if(hidden)
+	    next.add(identity);
+	else
+	    next.remove(identity);
+	hiddenMarkerTypes = next;
+	Utils.setpref(markerVisibilityHiddenPref, MapMarkerVisibility.encode(next));
+    }
+
+    public static class MapIconType {
+	public final String identity;
+	public final MarkerType type;
+	public final String label;
+	private final Supplier<Tex> icon;
+	private Tex resolvedIcon;
+
+	public MapIconType(String identity, MarkerType type, String label) {
+	    this.identity = identity;
+	    this.type = type;
+	    this.label = label;
+	    this.icon = null;
+	}
+
+	public MapIconType(String identity, String label, Supplier<Tex> icon) {
+	    this.identity = identity;
+	    this.type = null;
+	    this.label = label;
+	    this.icon = icon;
+	}
+
+	public Tex icon() {
+	    if(type != null)
+		return(type.icon());
+	    if((resolvedIcon == null) && (icon != null))
+		resolvedIcon = icon.get();
+	    return(resolvedIcon);
+	}
+    }
+
+    private String markerVisibilityLabel(Marker marker) {
+	if(marker instanceof SMarker) {
+	    SMarker sm = (SMarker)marker;
+	    if((sm.res != null) && (sm.res.name != null)) {
+		try {
+		    Resource.Tooltip tip = sm.res.get().layer(Resource.tooltip);
+		    if((tip != null) && !tip.text().isEmpty())
+			return(tip.text());
+		} catch(Loading l) {
+		}
+		int slash = sm.res.name.lastIndexOf('/');
+		return(MarkerNameFormatter.prettify(sm.res.name.substring(slash + 1)));
+	    }
+	}
+	if(marker instanceof PMarker)
+	    return(L10n.get("map.marker_visibility.placed") + " #" + Integer.toUnsignedString(((PMarker)marker).color.getRGB(), 16));
+	return((marker.nm == null || marker.nm.isEmpty()) ? L10n.get("map.marker_visibility.unknown") : marker.nm);
+    }
+
+    public List<MapIconType> markerVisibilityTypes() {
+	if(!file.lock.readLock().tryLock())
+	    return(null);
+	try {
+	    Map<String, MapIconType> types = new HashMap<>();
+	    for(Marker marker : file.markers) {
+		if(!MapMarkerVisibility.isSystemMarker(marker))
+		    continue;
+		String identity = MapMarkerVisibility.identity(marker);
+		if(!types.containsKey(identity))
+		    types.put(identity, new MapIconType(identity,
+			markerVisibilityType(marker),
+			markerVisibilityLabel(marker)));
+	    }
+	    List<MapIconType> result = new ArrayList<>(types.values());
+	    result.sort(Comparator.comparing(type -> type.label, String.CASE_INSENSITIVE_ORDER));
+	    return(result);
+	} finally {
+	    file.lock.readLock().unlock();
+	}
+    }
+
+    private MarkerType markerVisibilityType(Marker marker) {
+	if((marker instanceof SMarker) && (((SMarker)marker).res == null))
+	    return(null);
+	try {
+	    return(MarkerType.of(marker));
+	} catch(Loading l) {
+	    return(null);
 	}
     }
 

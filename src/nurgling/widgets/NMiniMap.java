@@ -43,7 +43,9 @@ NMiniMap extends MiniMap {
     public static final Color VIEW_SESSION_COLOR = new Color(0, 255, 0, 160); // Green semi-transparent for session explored area
     public static final Color VIEW_BG_COLOR = new Color(255, 255, 255, 60);
     public static final Color VIEW_BORDER_COLOR = new Color(0, 0, 0, 128);
+    private static final String VISITED_THINGWALLS_PREF = "map/visited-thingwalls";
     public final ExploredArea exploredArea = new ExploredArea(this);
+    private final java.util.Set<String> visitedThingwalls = MapMarkerVisibility.decode(Utils.getpref(VISITED_THINGWALLS_PREF, ""));
 
     private String currentTerrainName = null;
     private String currentProvinceName = null;
@@ -56,6 +58,62 @@ NMiniMap extends MiniMap {
     private final MiniMapIconCache iconCache = new MiniMapIconCache(256);
     private final MiniMapIconCache scaledIconCache = new MiniMapIconCache(128, Resource::remote, true);
     private final Text.Foundry terrainFurnace = new Text.Foundry(Text.dfont, 10);
+
+    /** Dynamic types without another visibility toggle, for the world-map icon filter. */
+    public java.util.List<MapWnd.MapIconType> mapIconTypes() {
+        java.util.Map<String, MapWnd.MapIconType> types = new java.util.LinkedHashMap<>();
+        for(DisplayIcon icon : icons) {
+            String id = MapMarkerVisibility.liveIconIdentity(icon);
+            String label = (icon.icon == null || icon.icon.name() == null) ? resourceLabel(id) : icon.icon.name();
+            types.put(id, new MapWnd.MapIconType(id, label,
+                    () -> icon.icon == null ? null : new TexI(icon.icon.image())));
+        }
+        for(String resource : MinimapDiscoveryRenderer.resources(this)) {
+            String id = MapMarkerVisibility.resourceIdentity("discovery", resource);
+            types.put(id, new MapWnd.MapIconType(id, resourceLabel(resource), () -> null));
+        }
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null)
+            return(new java.util.ArrayList<>(types.values()));
+        if(gui.localizedResourceTimerService != null) {
+            for(LocalizedResourceTimer timer : gui.localizedResourceTimerService.getAllTimers()) {
+                String resource = timer.getIconRes();
+                String id = MapMarkerVisibility.resourceIdentity("timer", resource);
+                types.put(id, new MapWnd.MapIconType(id, resourceLabel(resource), () -> timerIcon(resource)));
+            }
+        }
+        return(new java.util.ArrayList<>(types.values()));
+    }
+
+    private static String iconLabelOr(String preferred, String fallback) {
+        return((preferred == null || preferred.isEmpty()) ? resourceLabel(fallback) : preferred);
+    }
+
+    private static String resourceLabel(String resource) {
+        if(resource == null || resource.isEmpty())
+            return("Unknown icon");
+        int slash = resource.lastIndexOf('/');
+        String base = resource.substring(slash + 1).replace('_', ' ').replace('-', ' ');
+        return(base.isEmpty() ? resource : Character.toUpperCase(base.charAt(0)) + base.substring(1));
+    }
+
+    private static String treeMapResource(String resource) {
+        return(resource == null ? "" : resource.replace("gfx/terobjs/trees/", "gfx/terobjs/mm/trees/")
+            .replace("gfx/terobjs/bushes/", "gfx/terobjs/mm/bushes/"));
+    }
+
+    private MapWnd worldMapWindow() {
+        for(Widget widget = this; widget != null; widget = widget.parent) {
+            if(widget instanceof MapWnd)
+                return((MapWnd)widget);
+        }
+        return(null);
+    }
+
+    private boolean mapIconVisible(String category, String resource) {
+        MapWnd map = worldMapWindow();
+        return(map == null || map.isMapIconVisible(MapMarkerVisibility.resourceIdentity(category, resource)));
+    }
 
     // Visibility flags for tree and fish icons live in NConfig (see showTreeIcons/showFishIcons).
     public boolean showProspectingIcons = true;
@@ -460,7 +518,8 @@ NMiniMap extends MiniMap {
         MinimapChunkNavRenderer.renderChunkNav(this, g);
 
         // Render undiscovered-LP gob markers (shares NConfig.Key.lpassistent toggle with NLPassistant)
-        MinimapDiscoveryRenderer.renderDiscoveryMarkers(this, g);
+        MinimapDiscoveryRenderer.renderDiscoveryMarkers(this, g,
+                gob -> mapIconVisible("discovery", MinimapDiscoveryRenderer.resourceName(gob)));
 
         boolean playerSegment = (sessloc != null) && ((curloc == null) || (sessloc.seg.id == curloc.seg.id));
         // Show grid when zoomed in enough (scale >= 0.25, i.e. not too far out)
@@ -2044,7 +2103,7 @@ NMiniMap extends MiniMap {
         float scaleMultiplier = scalePercent / 100.0f;
 
         for(LabeledMinimapMark mark : marks) {
-            if (skipHiddenLabeledMark(mark, settings))
+            if (skipHiddenLabeledMark(mark, settings) || !mapIconVisible("local", mark.resourceType))
                 continue;
 
             int px = (int)Math.round((mark.tileCoords.x - dloc.tc.x) / (double)scale) + hsz.x;
@@ -2355,6 +2414,7 @@ NMiniMap extends MiniMap {
     public void drawmarkers(GOut g) {
         if(!MiniMapDisplayExtent.canIterate(dgext, display))
             return;
+        rememberVisibleThingwalls();
         Coord hsz = sz.div(2);
 
         // Get marker search pattern from NMapWnd if we're inside one
@@ -2437,6 +2497,7 @@ NMiniMap extends MiniMap {
                 // markers whose sc is null). Keep sc in sync with where we actually draw
                 // so marker hover -- e.g. thingwall province lines -- works.
                 mark.sc = markPos;
+                drawVisitedThingwallHalo(g, mark, markPos);
                 mark.draw(g, markPos);
 
                 // Draw name for quest giver markers (bush/bumling)
@@ -2456,6 +2517,44 @@ NMiniMap extends MiniMap {
                 }
             }
         }
+    }
+
+    /* A Thingwall is considered visited only after this client has seen its live gob and it has
+     * been associated with the local map marker. Imported markers never enter this set. */
+    private void rememberVisibleThingwalls() {
+        boolean changed = false;
+        for(DisplayIcon icon : icons) {
+            MarkerID markerId = icon.gob.getattr(MarkerID.class);
+            if(markerId == null)
+                continue;
+            String key = MapMarkerVisibility.thingwallKey(markerId.mark);
+            if((key != null) && visitedThingwalls.add(key))
+                changed = true;
+        }
+        if(changed)
+            saveVisitedThingwalls();
+    }
+
+    private void saveVisitedThingwalls() {
+        java.util.Set<String> saved = MapMarkerVisibility.decode(Utils.getpref(VISITED_THINGWALLS_PREF, ""));
+        java.util.Set<String> merged = MapMarkerVisibility.merge(saved, visitedThingwalls);
+        visitedThingwalls.addAll(merged);
+        Utils.setpref(VISITED_THINGWALLS_PREF, MapMarkerVisibility.encode(merged));
+    }
+
+    private void drawVisitedThingwallHalo(GOut g, DisplayMarker marker, Coord pos) {
+        if(!MapMarkerVisibility.hasVisitedThingwallHalo(visitedThingwalls, marker.m))
+            return;
+        int scalePercent = 100;
+        Object scale = NConfig.get(NConfig.Key.permIconScale);
+        if(scale instanceof Number)
+            scalePercent = ((Number)scale).intValue();
+        int radius = Math.max(UI.scale(9), Math.round(UI.scale(12) * (scalePercent / 100.0f)));
+        g.chcolor(20, 255, 85, 68);
+        g.fellipse(pos, Coord.of(radius + UI.scale(3)));
+        g.chcolor(30, 230, 75, 135);
+        g.fellipse(pos, Coord.of(radius));
+        g.chcolor();
     }
 
     @Override
@@ -2493,6 +2592,8 @@ NMiniMap extends MiniMap {
                     int threshold = UI.scale(10); // Screen pixels
 
                     for(nurgling.TreeLocation loc : treeLocations) {
+                        if(!mapIconVisible("tree", loc.getTreeResource()))
+                            continue;
                         // Apply marker search pattern filter
                         if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
                             String treeName = loc.getTreeName();
@@ -2532,6 +2633,8 @@ NMiniMap extends MiniMap {
                     int threshold = UI.scale(10); // Screen pixels
 
                     for(nurgling.FishLocation loc : locations) {
+                        if(!mapIconVisible("fish", loc.getFishResource()))
+                            continue;
                         // Apply marker search pattern filter
                         if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
                             String fishName = loc.getFishName();
@@ -2577,6 +2680,8 @@ NMiniMap extends MiniMap {
                     int threshold = UI.scale(10); // Screen pixels
 
                     for(nurgling.ProspectingLocation loc : locations) {
+                        if(!mapIconVisible("prospecting", loc.getResourceType()))
+                            continue;
                         // Apply marker search pattern filter
                         if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
                             String resourceType = loc.getResourceType();
@@ -2613,7 +2718,7 @@ NMiniMap extends MiniMap {
 
                     nurgling.conf.ProspectMarkSettings settings = prospectSettings();
                     for(LabeledMinimapMark mark : marks) {
-                        if (skipHiddenLabeledMark(mark, settings)) continue;
+                        if (skipHiddenLabeledMark(mark, settings) || !mapIconVisible("local", mark.resourceType)) continue;
 
                         // Convert segment-relative coordinates to screen coordinates (same as drawing)
                         Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
@@ -2874,6 +2979,8 @@ NMiniMap extends MiniMap {
         for(LocalizedResourceTimer timer : timers) {
             if (timer.shouldAutoRemove())
                 continue;
+            if (!mapIconVisible("timer", timer.getIconRes()))
+                continue;
 
             Coord screenPos = timer.getTileCoords().sub(dloc.tc).div(scalef()).add(hsz);
 
@@ -2939,6 +3046,8 @@ NMiniMap extends MiniMap {
         Coord hsz = sz.div(2);
 
         for(nurgling.FishLocation fishLoc : fishLocations) {
+            if(!mapIconVisible("fish", fishLoc.getFishResource()))
+                continue;
             // Apply marker search pattern filter to fish names
             if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
                 String fishName = fishLoc.getFishName();
@@ -3010,6 +3119,8 @@ NMiniMap extends MiniMap {
         Coord hsz = sz.div(2);
 
         for(nurgling.TreeLocation treeLoc : treeLocations) {
+            if(!mapIconVisible("tree", treeLoc.getTreeResource()))
+                continue;
             // Apply marker search pattern filter to tree names
             if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
                 String treeName = treeLoc.getTreeName();
@@ -3035,9 +3146,7 @@ NMiniMap extends MiniMap {
                     // Convert tree/bush resource path to minimap icon path
                     // "gfx/terobjs/trees/oak" -> "gfx/terobjs/mm/trees/oak"
                     // "gfx/terobjs/bushes/arrowwood" -> "gfx/terobjs/mm/bushes/arrowwood"
-                    String mmResource = treeResource
-                        .replace("gfx/terobjs/trees/", "gfx/terobjs/mm/trees/")
-                        .replace("gfx/terobjs/bushes/", "gfx/terobjs/mm/bushes/");
+                    String mmResource = treeMapResource(treeResource);
 
                     TexI tex = iconCache.get(mmResource);
 
@@ -3301,6 +3410,8 @@ NMiniMap extends MiniMap {
         Coord hsz = sz.div(2);
 
         for(nurgling.ProspectingLocation prospectingLoc : prospectingLocations) {
+            if(!mapIconVisible("prospecting", prospectingLoc.getResourceType()))
+                continue;
             if(markerSearchPattern != null && !markerSearchPattern.trim().isEmpty()) {
                 String resourceType = prospectingLoc.getResourceType();
                 if(resourceType == null) {
@@ -3328,6 +3439,8 @@ NMiniMap extends MiniMap {
         int threshold = UI.scale(10); // Click radius
 
         for(nurgling.FishLocation loc : locations) {
+            if(!mapIconVisible("fish", loc.getFishResource()))
+                continue;
             if(loc.getTileCoords().dist(tc) < threshold) {
                 return loc;
             }
@@ -3354,7 +3467,7 @@ NMiniMap extends MiniMap {
         for(LabeledMinimapMark mark : marks) {
             /* A filtered-out mark is not drawn, so it must not be clickable either -
              * otherwise it keeps an invisible hitbox that swallows right-clicks. */
-            if (skipHiddenLabeledMark(mark, settings))
+            if (skipHiddenLabeledMark(mark, settings) || !mapIconVisible("local", mark.resourceType))
                 continue;
 
             // Calculate screen position for this mark
@@ -3381,19 +3494,19 @@ NMiniMap extends MiniMap {
         Coord hsz = sz.div(2);
         if(showFishIcons() && gui.fishLocationService != null) {
             for(nurgling.FishLocation fish : gui.fishLocationService.getFishLocationsForSegment(sessloc.seg.id)) {
-                if(matchesMarkerSearch(fish.getFishName(), search) && markerAtScreen(screenCoord, fish.getTileCoords(), hsz, UI.scale(10)))
+                if(mapIconVisible("fish", fish.getFishResource()) && matchesMarkerSearch(fish.getFishName(), search) && markerAtScreen(screenCoord, fish.getTileCoords(), hsz, UI.scale(10)))
                     return new BeaconTarget(fish.getSegmentId(), fish.getTileCoords(), labelOr(fish.getFishName(), fish.getFishResource()));
             }
         }
         if(showTreeIcons() && gui.treeLocationService != null) {
             for(nurgling.TreeLocation tree : gui.treeLocationService.getTreeLocationsForSegment(sessloc.seg.id)) {
-                if(matchesMarkerSearch(tree.getTreeName(), search) && markerAtScreen(screenCoord, tree.getTileCoords(), hsz, UI.scale(10)))
+                if(mapIconVisible("tree", tree.getTreeResource()) && matchesMarkerSearch(tree.getTreeName(), search) && markerAtScreen(screenCoord, tree.getTileCoords(), hsz, UI.scale(10)))
                     return new BeaconTarget(tree.getSegmentId(), tree.getTileCoords(), labelOr(tree.getTreeName(), tree.getTreeResource()));
             }
         }
         if(showProspectingIcons && gui.prospectingLocationService != null) {
             for(nurgling.ProspectingLocation prospect : gui.prospectingLocationService.getProspectingLocationsForSegment(sessloc.seg.id)) {
-                if(matchesMarkerSearch(prospect.getResourceType(), search) && markerAtScreen(screenCoord, prospect.getTileCoords(), hsz, UI.scale(10)))
+                if(mapIconVisible("prospecting", prospect.getResourceType()) && matchesMarkerSearch(prospect.getResourceType(), search) && markerAtScreen(screenCoord, prospect.getTileCoords(), hsz, UI.scale(10)))
                     return new BeaconTarget(prospect.getSegmentId(), prospect.getTileCoords(), prospect.getResourceType());
             }
         }
@@ -3825,7 +3938,8 @@ NMiniMap extends MiniMap {
         // walking the player to the coarse clicked tile before our (correct, gob-precise)
         // mouseup handler ever runs. Consume here; actual handling happens in mouseup.
         if(ev.b == 3 && dloc != null && sessloc != null) {
-            if(MinimapDiscoveryRenderer.gobAt(this, ev.c) != null) {
+            if(MinimapDiscoveryRenderer.gobAt(this, ev.c,
+                    gob -> mapIconVisible("discovery", MinimapDiscoveryRenderer.resourceName(gob))) != null) {
                 return true;
             }
         }
@@ -4047,7 +4161,8 @@ NMiniMap extends MiniMap {
         // findClickThroughIconGob() handling): send the gob's own exact position as the click
         // destination instead of the imprecise clicked location.
         if(ev.b == 3 && dloc != null && sessloc != null) {
-            Gob gob = MinimapDiscoveryRenderer.gobAt(this, ev.c);
+            Gob gob = MinimapDiscoveryRenderer.gobAt(this, ev.c,
+                    candidate -> mapIconVisible("discovery", MinimapDiscoveryRenderer.resourceName(candidate)));
             if(gob != null) {
                 NGameUI gui = NUtils.getGameUI();
                 if(gui != null && gui.map != null) {

@@ -11,6 +11,7 @@ import nurgling.i18n.L10n;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +39,7 @@ public class MapToolsWindow extends Window {
     private final Tabs tabs;
     private final Tabs.Tab searchTab;
     private final TerrainSearchPanel terrainSearchPanel;
+    private MarkerIconsWindow markerIconsWindow;
     private TextEntry masterEntry;
     private double countTimer = COUNT_INTERVAL;
 
@@ -47,7 +49,7 @@ public class MapToolsWindow extends Window {
         tabs = new Tabs(Coord.z, Coord.z, this) {
             @Override
             public void changed(Tab from, Tab to) {
-                /* The two tabs are very different sizes; follow the visible one. */
+                /* The tabs are different sizes; follow the visible one. */
                 MapToolsWindow.this.pack();
             }
         };
@@ -59,6 +61,12 @@ public class MapToolsWindow extends Window {
 
         Widget tabBtn = add(tabs.new TabButton(TAB_BTN_W, L10n.get("maptools.tab_overlays"), overlays), 0, 0);
         add(tabs.new TabButton(TAB_BTN_W, L10n.get("maptools.tab_search"), searchTab), TAB_BTN_W + MARGIN, 0);
+        add(new Button(TAB_BTN_W, L10n.get("maptools.tab_marker_icons")) {
+            @Override
+            public void click() {
+                openMarkerIcons();
+            }
+        }, (TAB_BTN_W + MARGIN) * 2, 0);
 
         /* Place the tab bodies under the buttons, whatever height the buttons turned out to be. */
         tabs.c = new Coord(0, tabBtn.sz.y + MARGIN);
@@ -67,6 +75,154 @@ public class MapToolsWindow extends Window {
 
         tabs.showtab(overlays);
         pack();
+    }
+
+    /** Opens the marker filter separately so the long dynamic list cannot resize the map tools window. */
+    private void openMarkerIcons() {
+        if(markerIconsWindow != null && markerIconsWindow.parent != null) {
+            MapSearchFront.showInFront(markerIconsWindow);
+            return;
+        }
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null)
+            return;
+        MarkerIconsWindow window = new MarkerIconsWindow();
+        markerIconsWindow = window;
+        window.onClosed = () -> {
+            if(markerIconsWindow == window)
+                markerIconsWindow = null;
+        };
+        gui.add(window, Coord.of(120, 120));
+        MapSearchFront.showInFront(window);
+    }
+
+    /** The world-map marker filter. It owns a fixed viewport over the dynamic marker list. */
+    private class MarkerIconsWindow extends Window {
+        private final Scrollport list;
+        /* Scrollport measures direct children, so this spacer must carry the full list height. */
+        private final Widget listContent;
+        private int mapSequence = Integer.MIN_VALUE;
+        private double refresh;
+        private String typeSignature = "";
+        private MapWnd listedMap;
+        private Runnable onClosed;
+
+        MarkerIconsWindow() {
+            super(new Coord(OVERLAY_W, UI.scale(430)), L10n.get("map.marker_visibility.title"), true);
+            CheckBox enabled = add(new CheckBox(L10n.get("map.marker_visibility.hide_unchecked")), UI.scale(4), 0);
+            enabled.state(() -> activeMap() != null && activeMap().mapIconVisibilityEnabled());
+            enabled.set(value -> {
+                MapWnd map = activeMap();
+                if(map != null)
+                    map.setMapIconVisibilityEnabled(value);
+            });
+            add(new Label(L10n.get("map.marker_visibility.help")), UI.scale(4, 24));
+            list = add(new Scrollport(new Coord(OVERLAY_W - UI.scale(8), UI.scale(380))), UI.scale(4, 45));
+            list.showbar(true);
+            listContent = list.cont.add(new Widget(Coord.of(list.cont.sz.x, list.sz.y)));
+            rebuild();
+        }
+
+        private MapWnd activeMap() {
+            NGameUI gui = NUtils.getGameUI();
+            return(gui == null ? null : gui.mapfile);
+        }
+
+        private void rebuild() {
+            MapWnd map = activeMap();
+            if(map == null)
+                return;
+            List<MapWnd.MapIconType> types = map.markerVisibilityTypes();
+            if(types == null)
+                return;
+            if(map.view instanceof NMiniMap)
+                types.addAll(((NMiniMap)map.view).mapIconTypes());
+            Map<String, MapWnd.MapIconType> unique = new HashMap<>();
+            for(MapWnd.MapIconType type : types)
+                unique.put(type.identity, type);
+            types = new ArrayList<>(unique.values());
+            types.sort(java.util.Comparator.comparing(type -> type.label, String.CASE_INSENSITIVE_ORDER));
+            String signature = types.stream().map(type -> type.identity + '\u0000' + type.label)
+                    .collect(java.util.stream.Collectors.joining("\u0001"));
+            if(signature.equals(typeSignature) && map == listedMap) {
+                mapSequence = map.file.markerseq;
+                return;
+            }
+            int scroll = list.bar.val;
+            for(Widget child = listContent.child, next; child != null; child = next) {
+                next = child.next;
+                child.destroy();
+            }
+            int y = 0;
+            for(MapWnd.MapIconType type : types) {
+                MarkerIconRow row = listContent.add(new MarkerIconRow(map, type));
+                row.c = Coord.of(0, y);
+                y += row.sz.y + ROW_GAP;
+            }
+            listContent.resize(Coord.of(list.cont.sz.x, Math.max(list.sz.y, y)));
+            list.cont.update();
+            list.bar.val = Math.min(scroll, list.bar.max);
+            list.cont.sy = list.bar.val;
+            typeSignature = signature;
+            mapSequence = map.file.markerseq;
+            listedMap = map;
+        }
+
+        public void tick(double dt) {
+            super.tick(dt);
+            refresh += dt;
+            MapWnd map = activeMap();
+            if(map != null && (mapSequence != map.file.markerseq || refresh >= COUNT_INTERVAL)) {
+                refresh = 0;
+                rebuild();
+            }
+        }
+
+        private class MarkerIconRow extends Widget {
+            private final MapWnd map;
+            private final MapWnd.MapIconType type;
+
+            MarkerIconRow(MapWnd map, MapWnd.MapIconType type) {
+                super(Coord.of(listContent.sz.x, UI.scale(24)));
+                this.map = map;
+                this.type = type;
+                add(new CheckBox("").state(() -> map.isMapIconVisible(type.identity))
+                    .set(visible -> map.setMapIconHidden(type.identity, !visible)), Coord.of(0, (sz.y - CheckBox.sbox.sz().y) / 2));
+                add(new Label(type.label), UI.scale(32, 3));
+            }
+
+            public void draw(GOut g) {
+                try {
+                    Tex icon = type.icon();
+                    if(icon != null)
+                        g.aimage(icon, Coord.of(UI.scale(25), sz.y / 2), 0.5, 0.5);
+                    else {
+                        g.chcolor(160, 160, 160, 180);
+                        g.fellipse(Coord.of(UI.scale(25), sz.y / 2), Coord.of(UI.scale(5)));
+                        g.chcolor();
+                    }
+                } catch(Loading loading) {
+                    g.chcolor(160, 160, 160, 180);
+                    g.fellipse(Coord.of(UI.scale(25), sz.y / 2), Coord.of(UI.scale(5)));
+                    g.chcolor();
+                }
+                super.draw(g);
+            }
+        }
+
+        @Override
+        public void reqclose() {
+            reqdestroy();
+        }
+
+        @Override
+        public void destroy() {
+            Runnable callback = onClosed;
+            onClosed = null;
+            if(callback != null)
+                callback.run();
+            super.destroy();
+        }
     }
 
     private void buildOverlays(Widget tab) {

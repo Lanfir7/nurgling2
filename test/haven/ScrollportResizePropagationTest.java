@@ -46,6 +46,24 @@ class ScrollportResizePropagationTest {
         assertEquals(11, Scrollport.scrollRange(101, 100, 10, true));
     }
 
+    @Test
+    void tallInnerContentCreatesRangeScrollsAndReachesLastRow() {
+        Scrollport port = new Scrollport(Coord.of(100, 100));
+        Widget content = port.cont.add(new Widget(Coord.of(port.cont.sz.x, 600)));
+        Widget last = content.add(new Widget(Coord.of(content.sz.x, 24)), Coord.of(0, 576));
+        port.cont.update();
+
+        assertTrue(port.cont.contentsz().y > port.sz.y);
+        assertTrue(port.bar.max > 0);
+        assertTrue(port.mousewheel(new Widget.MouseWheelEvent(Coord.z, 1, 1)));
+        assertTrue(port.bar.val > 0);
+        assertEquals(port.bar.val, port.cont.sy);
+
+        port.bar.ch(10_000);
+        assertTrue(last.c.y - port.cont.sy >= 0);
+        assertTrue(last.c.y - port.cont.sy + last.sz.y <= port.cont.sz.y);
+    }
+
     private static class TrackingParent extends Widget {
         int reflows;
 

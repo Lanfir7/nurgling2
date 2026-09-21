@@ -8,6 +8,7 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Draws the undiscovered products' own icons (green-tinted) on the minimap over any currently
@@ -35,8 +36,15 @@ public class MinimapDiscoveryRenderer {
     }
 
     public static void renderDiscoveryMarkers(MiniMap map, GOut g) {
+        renderDiscoveryMarkers(map, g, gob -> true);
+    }
+
+    /** Draw only discovery markers that the world-map icon filter leaves visible. */
+    public static void renderDiscoveryMarkers(MiniMap map, GOut g, Predicate<Gob> visible) {
         Coord fallbackHalf = new Coord(UI.scale(FALLBACK_RADIUS_PX), UI.scale(FALLBACK_RADIUS_PX));
         for (Marker marker : discoverable(map)) {
+            if (!visible.test(marker.gob))
+                continue;
             // Non-blocking: an icon that hasn't loaded yet is simply left out of the composition
             // (and the whole marker falls back to a dot if none of them have), rather than parking
             // the render thread on a resource fetch.
@@ -61,7 +69,14 @@ public class MinimapDiscoveryRenderer {
 
     /** Finds the discoverable gob (if any) whose marker is under the given minimap screen coordinate. */
     public static Gob gobAt(MiniMap map, Coord screenCoord) {
+        return gobAt(map, screenCoord, gob -> true);
+    }
+
+    /** Finds a visible discovery marker, matching the rendering filter for click handling. */
+    public static Gob gobAt(MiniMap map, Coord screenCoord, Predicate<Gob> visible) {
         for (Marker marker : discoverable(map)) {
+            if (!visible.test(marker.gob))
+                continue;
             TexI icon = LpExplorer.getMarkerIcon(marker.gob, marker.products, false, false);
             int threshold = icon != null
                 ? Math.max(icon.sz().x, icon.sz().y) / 2 + UI.scale(3)
@@ -70,6 +85,28 @@ public class MinimapDiscoveryRenderer {
                 return marker.gob;
         }
         return null;
+    }
+
+    /** Stable resource identity shared by the dynamic marker list and the draw/click filter. */
+    public static String resourceName(Gob gob) {
+        try {
+            Drawable drawable = gob.getattr(Drawable.class);
+            Resource resource = (drawable == null) ? null : drawable.getres();
+            return (resource == null || resource.name == null) ? "unknown" : resource.name;
+        } catch (Loading loading) {
+            return "unknown";
+        }
+    }
+
+    /** Resources currently represented by discovery markers on this map. */
+    public static List<String> resources(MiniMap map) {
+        List<String> resources = new ArrayList<>();
+        for (Marker marker : discoverable(map)) {
+            String resource = resourceName(marker.gob);
+            if (!resources.contains(resource))
+                resources.add(resource);
+        }
+        return resources;
     }
 
     /** Every loaded gob that still has an undiscovered LP product, with its products resolved. */
