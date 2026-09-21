@@ -30,6 +30,22 @@ class StackSupporterNewItemsTest {
     void iceBearToothIsGroupedWithFineboneAndBoneMaterial() {
         assertTrue(VSpec.getCategory("Ice Bear Tooth").contains("Finebone"));
         assertTrue(VSpec.getCategory("Ice Bear Tooth").contains("Bone Material"));
+        assertEquals(4, StackSupporter.getFullStackSize("Ice Bear Tooth"));
+    }
+
+    @Test
+    void iceBearAndNarwhalMeatUseTheRawMeatStack() {
+        assertTrue(VSpec.getCategory("Raw Ice Bear").contains("Raw Meat"));
+        assertTrue(VSpec.getCategory("Raw Narwhal").contains("Raw Meat"));
+        assertEquals(5, StackSupporter.getFullStackSize("Raw Ice Bear"));
+        assertEquals(5, StackSupporter.getFullStackSize("Raw Narwhal"));
+    }
+
+    @Test
+    void narwhalTuskIsBoneMaterial() {
+        assertTrue(VSpec.getCategory("Narwhal Tusk").contains("Finebone"));
+        assertTrue(VSpec.getCategory("Narwhal Tusk").contains("Bone Material"));
+        assertEquals(4, StackSupporter.getFullStackSize("Narwhal Tusk"));
     }
 
     @Test

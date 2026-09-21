@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-21-ice-bear-narwhal-parts",
+  "priority": 3,
+  "summary": {
+    "ru": "Сырое мясо ледяного медведя и нарвала складывается в стаки, как другое сырое мясо; клык нарвала считается костью.",
+    "en": "Raw ice bear and narwhal meat now stack like other raw meat, and the narwhal tusk counts as bone."
+  },
+  "detail": {
+    "ru": "Мясо ледяного медведя и нарвала попадает в сырое мясо и складывается по 5. Клык нарвала и зуб ледяного медведя учитываются среди костей. Шкуры обоих животных по-прежнему в свежих и высушенных шкурах.",
+    "en": "Ice bear and narwhal meat are raw meat and stack to 5. The narwhal tusk and ice bear tooth count as bone. Hides of both animals stay with fresh and prepared hides."
+  }
+}

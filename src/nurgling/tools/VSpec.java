@@ -1995,7 +1995,8 @@ public class VSpec {
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/boartusk\",\"name\":\"Boar Tusk\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/bogturtleshell\",\"name\":\"Bog Turtle Shell\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/borewormbeak\",\"name\":\"Boreworm Beak\"}"));
-        finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/icebeartooth\",\"name\":\"Ice Bear Tooth\"}"));
+        finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/polarbeartooth\",\"name\":\"Ice Bear Tooth\"}"));
+        finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/narwhaltusk\",\"name\":\"Narwhal Tusk\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/spermwhaletooth\",\"name\":\"Cachalot Tooth\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/flipperbone\",\"name\":\"Flipper Bones\"}"));
         finebones.add(new JSONObject("{\"static\":\"gfx/invobjs/lynxclaws\",\"name\":\"Lynx Claws\"}"));
@@ -2206,6 +2207,7 @@ public class VSpec {
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-badger\"], \"name\": \"Raw Badger\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-bat\"], \"name\": \"Raw Bat\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-bear\"], \"name\": \"Raw Bear\"}"));
+        raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-polarbear\"], \"name\": \"Raw Ice Bear\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-beaver\"], \"name\": \"Raw Beaver\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-bogturtle\"], \"name\": \"Raw Bog Turtle\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-spermwhale\"], \"name\": \"Raw Cachalot\"}"));
@@ -2216,6 +2218,7 @@ public class VSpec {
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-lynx\"], \"name\": \"Raw Lynx\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-mole\"], \"name\": \"Raw Mole\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-moose\"], \"name\": \"Raw Moose\"}"));
+        raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-narwhal\"], \"name\": \"Raw Narwhal\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-orca\"], \"name\": \"Raw Orca\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-otter\"], \"name\": \"Raw Otter\"}"));
         raw.add(new JSONObject("{\"layer\": [\"gfx/invobjs/meat-raw\", \"gfx/invobjs/meat-rabbit\"], \"name\": \"Raw Rabbit\"}"));

@@ -15,6 +15,10 @@ class VSpecLayeredItemTest {
                 "gfx/invobjs/meat-raw", "gfx/invobjs/meat-badger")));
         assertEquals("Raw Badger", VSpec.nameForLayers(List.of(
                 "gfx/invobjs/meat-badger", "gfx/invobjs/meat-raw")));
+        assertEquals("Raw Ice Bear", VSpec.nameForLayers(List.of(
+                "gfx/invobjs/meat-raw", "gfx/invobjs/meat-polarbear")));
+        assertEquals("Raw Narwhal", VSpec.nameForLayers(List.of(
+                "gfx/invobjs/meat-raw", "gfx/invobjs/meat-narwhal")));
     }
 
     @Test
