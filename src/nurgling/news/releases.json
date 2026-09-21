@@ -113,6 +113,7 @@
     "2026-09-20-area-specialization-settings",
     "2026-09-20-buff-expiration-timer",
     "2026-09-20-catalog-materials",
+    "2026-09-20-client-id-nurgling-evolution",
     "2026-09-20-craft-atlas-workstation-quality",
     "2026-09-20-duplicate-area",
     "2026-09-20-feast-tableware-safety",
@@ -126,13 +127,82 @@
     "2026-09-20-master-miner-support",
     "2026-09-20-mining-pickup-and-vein",
     "2026-09-20-quality-workshop",
+    "2026-09-20-quality-workshop-casting-quantities",
+    "2026-09-20-quality-workshop-compact-materials",
     "2026-09-20-quality-workshop-hidden-cards",
+    "2026-09-20-quality-workshop-mining-smelting",
     "2026-09-20-release-notes-all-summaries",
     "2026-09-20-route-walker",
     "2026-09-20-running-bot-status",
-    "2026-09-20-vein-miner-ctrl-click"
+    "2026-09-20-vein-miner-ctrl-click",
+    "2026-09-21-build-zone-fit-count",
+    "2026-09-21-hide-login-discord",
+    "2026-09-21-ice-bear-narwhal-parts",
+    "2026-09-21-map-marker-visibility",
+    "2026-09-21-quality-workshop-icons",
+    "2026-09-21-thingwall-route-travel"
   ],
   "releases": [
+    {
+      "id": "2.103.212",
+      "date": "2026-09-21",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "У Стены Вещей появился список изученных достижимых деревьев и переход по цепочке одним нажатием.",
+          "На большой карте можно скрывать выбранные типы значков, а посещённые thingwall легче заметить.",
+          "В калькуляторе атласа появились отливка наковальни и подсчёт материалов по желаемому количеству результата.",
+          "Калькулятор качества теперь считает печи, плавку металла и цепочку «топор → камень из стены → новый топор».",
+          "Подключения клиента теперь используют актуальное имя Nurgling Evolution.",
+          "При выделении зоны строительным ботом под размером видно, сколько объектов поместится.",
+          "Сырое мясо ледяного медведя и нарвала складывается в стаки, как другое сырое мясо; клык нарвала считается костью.",
+          "Список материалов в калькуляторе качества стал компактнее, а пояснения перенесены в подсказки.",
+          "С экрана входа убрана иконка Discord.",
+          "В калькуляторе качества появились иконки глин, сырого стекла и других частых ресурсов; удаление рецепта стало понятнее."
+        ],
+        "en": [
+          "Thingwalls now list learned reachable trees and can follow a link chain with one click.",
+          "The world map can hide selected icon types, and visited Thingwalls are easier to spot.",
+          "The Atlas calculator now includes anvil casting and material planning from desired output quantities.",
+          "The quality workshop now calculates furnaces, smelted metal, and a stone-axe-to-mined-stone improvement chain.",
+          "Client connections now use the current Nurgling Evolution name.",
+          "While dragging a construction-bot zone, the size label also shows how many objects fit.",
+          "Raw ice bear and narwhal meat now stack like other raw meat, and the narwhal tusk counts as bone.",
+          "The quality calculator's material list is more compact, with explanations moved into tooltips.",
+          "The Discord icon is gone from the login screen.",
+          "The quality calculator now shows icons for clays, raw glass and other common resources, with clearer recipe removal."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте Стену Вещей: справа показаны изученные доступные деревья с расстоянием по карте. Отметьте нужные звёздочкой, чтобы они всегда были сверху общего для всех персонажей списка, или нажмите строку дерева для перехода по кратчайшей цепочке.",
+          "Откройте «Инструменты карты» на большой карте и нажмите «Значки карты», чтобы скрывать системные маркеры карты, а также отдельные значки квестов, открытий и таймеров без собственного переключателя. Настройка запоминается; посещённые вами thingwall отмечены зелёным ореолом.",
+          "Добавьте наковальню в калькуляторе крафт-атласа, выберите материал формы и задайте количество. Поле «Нужно получить» доступно у всех результатов: общие материалы суммируются, станки используются повторно, скрытые цепочки учитываются. Для гончарной глины укажите выход за крафт из игрового рецепта. Неучтённое топливо и неопределённый выход плавки отмечены в списке материалов. Настройки сохраняются.",
+          "В калькуляторе крафт-атласа появились килн, смелтеры, плавка и добыча. Можно рассчитать постройку печи, каменный топор, камень и руду из заданной стены по формуле Mining Master и до восьми повторов улучшения топора. Качество обследованных дома печей доступно как подсказка. Для килна можно скопировать текущий результат глины без зацикливания расчёта. Новые рецепты поддерживают скрытие и сохранение.",
+          "При входе в игру сервер получает актуальное имя клиента, поэтому подключение распознаётся как Nurgling Evolution вместо прежнего Nurgling2.",
+          "Во время выделения зоны для строительного бота под размером в тайлах появляется число вроде 14pcs. Оно меняется вместе с зоной, поворотом и режимом сетки и считает только те места, куда объект реально встанет.",
+          "Мясо ледяного медведя и нарвала попадает в сырое мясо и складывается по 5. Клык нарвала и зуб ледяного медведя учитываются среди костей. Шкуры обоих животных по-прежнему в свежих и высушенных шкурах.",
+          "Откройте «Калькулятор качества» в крафт-атласе и задайте нужное количество результата. Над списками материалов и оборудования больше нет крупного поясняющего блока: точные оговорки о расчёте доступны при наведении на заголовки, оставляя больше места самим ресурсам.",
+          "На экране входа больше нет кнопки Discord рядом с настройками. Остальные кнопки входа на своих местах.",
+          "В окне калькулятора ресурсы и станки используют игровые иконки, включая глины, сырое стекло, солёную воду, полевой шпат, каменный топор и гончарный круг. Кнопка «Убрать рецепт» переносит рассчитанный результат в ручной ввод; рецепт можно вернуть через «Добавить результат»."
+        ],
+        "en": [
+          "Open a Thingwall to see learned reachable trees with their map distance. Star useful trees to keep them at the top of the shared list for every character, or click a tree row to travel along the shortest available link chain.",
+          "Open Map Tools on the world map and click Marker icons to hide individual system map markers, quest, discovery and timer icons that have no separate toggle. The choice is remembered, and Thingwalls you have visited receive a green halo.",
+          "Add an anvil in the Craft Atlas calculator, choose its mold material and enter an amount. Every result has a desired output field: shared materials are summed, equipment is reused, and hidden chains still count. For Potter's Clay, enter the output per craft shown in the game recipe. Excluded fuel and uncertain smelting yields are marked in the material list. Settings are saved.",
+          "The Craft Atlas quality workshop now includes Kiln, smelters, smelting and mining. Calculate furnace construction, a stone axe, stone and ore from a wall using Mining Master's formula, and up to eight axe improvement steps. Furnaces inspected at home provide suggestions. Copy the current clay result into a new kiln without a calculation cycle. New recipes support hiding and saved scenarios.",
+          "When you log in, the server receives the current client name, so the connection is identified as Nurgling Evolution instead of the former Nurgling2.",
+          "While selecting a zone for a construction bot, a count such as 14pcs appears under the tile size. It updates with the zone, rotation, and grid mode, and only counts spots the object can actually occupy.",
+          "Ice bear and narwhal meat are raw meat and stack to 5. The narwhal tusk and ice bear tooth count as bone. Hides of both animals stay with fresh and prepared hides.",
+          "Open Quality workshop in Craft Atlas and enter a desired output amount. The materials and equipment lists no longer have a large explanatory block; precise calculation notes are available from the heading tooltips, leaving more room for the resources themselves.",
+          "The login screen no longer shows a Discord button next to the options. The other login controls stay where they were.",
+          "Resources and stations in the calculator now use game icons, including clays, raw glass, salt water, feldspar, the stone axe and potter's wheel. Remove recipe turns the calculated result into a manual input; add it back through Add result."
+        ]
+      }
+    },
     {
       "id": "2.103.211",
       "date": "2026-09-20",
