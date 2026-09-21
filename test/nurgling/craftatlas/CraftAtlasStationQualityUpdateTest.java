@@ -19,6 +19,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CraftAtlasStationQualityUpdateTest {
     @Test
+    void processingStationsAreObservedWithoutCraftMenuRecipes() {
+        Set<String> keys = CraftAtlasStationQualityUpdate.stationKeys(Collections.emptyList());
+        Map<String, Double> stored = new LinkedHashMap<>();
+        assertTrue(CraftAtlasStationQualityUpdate.apply("gfx/terobjs/smelter", 100, true, keys, stored).updated());
+        assertTrue(CraftAtlasStationQualityUpdate.apply("gfx/terobjs/primsmelter", 200, true, keys, stored).updated());
+        assertTrue(CraftAtlasStationQualityUpdate.apply("gfx/terobjs/kiln", 300, true, keys, stored).updated());
+        assertEquals(100.0, stored.get("station:smelter"));
+        assertEquals(200.0, stored.get("station:stack-furnace"));
+        assertEquals(300.0, stored.get("station:kiln"));
+        assertFalse(CraftAtlasStationQualityUpdate.apply("gfx/terobjs/smelter", 999, false, keys, stored).updated());
+        assertEquals("station:stack-furnace", CraftAtlasQualityFormula.canonicalStoredKey("station:primsmelter"));
+        assertEquals("station:smelter", CraftAtlasQualityFormula.canonicalStoredKey("station:wiki-item-ore-smelter"));
+    }
+    @Test
     void stationKeysIncludeOnlyStationRequirementsViaQualityFormula() {
         CraftAtlasEntry.Requirement anvil = requirement(CraftAtlasEntry.RequirementKind.STATION,
                 "gfx/invobjs/anvil", "Anvil");
@@ -34,7 +48,7 @@ class CraftAtlasStationQualityUpdateTest {
 
         Set<String> keys = CraftAtlasStationQualityUpdate.stationKeys(Collections.singletonList(mixed));
 
-        assertEquals(Collections.singleton(CraftAtlasQualityFormula.key(anvil)), keys);
+        assertEquals(new LinkedHashSet<>(Arrays.asList("station:smelter", "station:stack-furnace", "station:kiln", CraftAtlasQualityFormula.key(anvil))), keys);
         assertFalse(keys.contains("tool:smithy-hammer"));
     }
 

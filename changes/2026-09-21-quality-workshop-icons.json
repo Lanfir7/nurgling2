@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-21-quality-workshop-icons",
+  "priority": 2,
+  "summary": {
+    "ru": "В калькуляторе качества появились иконки глин, сырого стекла и других частых ресурсов; удаление рецепта стало понятнее.",
+    "en": "The quality calculator now shows icons for clays, raw glass and other common resources, with clearer recipe removal."
+  },
+  "detail": {
+    "ru": "В окне калькулятора ресурсы и станки используют игровые иконки, включая глины, сырое стекло, солёную воду, полевой шпат, каменный топор и гончарный круг. Кнопка «Убрать рецепт» переносит рассчитанный результат в ручной ввод; рецепт можно вернуть через «Добавить результат».",
+    "en": "Resources and stations in the calculator now use game icons, including clays, raw glass, salt water, feldspar, the stone axe and potter's wheel. Remove recipe turns the calculated result into a manual input; add it back through Add result."
+  }
+}

@@ -98,6 +98,8 @@ public final class CraftAtlasQualityFormula {
         if(matches(resource, name, "cauldron", "metal-cauldron", "metalcauldron")) return "station:cauldron";
         if(matches(resource, name, "crucible")) return "station:crucible";
         if(matches(resource, name, "anvil")) return "station:anvil";
+        if(matches(resource, name, "smelter", "ore-smelter")) return "station:smelter";
+        if(matches(resource, name, "stack-furnace", "stackfurnace", "primsmelter")) return "station:stack-furnace";
         if(matches(resource, name, "spinning-wheel", "swheel", "sswheel", "spinningwheel"))
             return "station:spinning-wheel";
         if(matches(resource, name, "potters-wheel", "potter-s-wheel", "potterswheel"))
@@ -172,7 +174,7 @@ public final class CraftAtlasQualityFormula {
         if(!value.startsWith("tool:") && !value.startsWith("station:")) return key;
         String canonical = key(new CraftAtlasEntry.Requirement(CraftAtlasEntry.RequirementKind.STATION,
                 value.substring(value.indexOf(':') + 1), null, null));
-        for(String name : new String[] { "loom", "spinning-wheel", "churn", "meatgrinder", "potters-wheel", "extraction-press" })
+        for(String name : new String[] { "loom", "spinning-wheel", "churn", "meatgrinder", "potters-wheel", "extraction-press", "smelter", "stack-furnace" })
             if(canonical.equals("station:" + name)) return canonical;
         return key;
     }

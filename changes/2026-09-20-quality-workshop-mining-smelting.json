@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-quality-workshop-mining-smelting",
+  "priority": 5,
+  "summary": {
+    "ru": "Калькулятор качества теперь считает печи, плавку металла и цепочку «топор → камень из стены → новый топор».",
+    "en": "The quality workshop now calculates furnaces, smelted metal, and a stone-axe-to-mined-stone improvement chain."
+  },
+  "detail": {
+    "ru": "В калькуляторе крафт-атласа появились килн, смелтеры, плавка и добыча. Можно рассчитать постройку печи, каменный топор, камень и руду из заданной стены по формуле Mining Master и до восьми повторов улучшения топора. Качество обследованных дома печей доступно как подсказка. Для килна можно скопировать текущий результат глины без зацикливания расчёта. Новые рецепты поддерживают скрытие и сохранение.",
+    "en": "The Craft Atlas quality workshop now includes Kiln, smelters, smelting and mining. Calculate furnace construction, a stone axe, stone and ore from a wall using Mining Master's formula, and up to eight axe improvement steps. Furnaces inspected at home provide suggestions. Copy the current clay result into a new kiln without a calculation cycle. New recipes support hiding and saved scenarios."
+  }
+}

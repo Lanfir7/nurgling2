@@ -222,6 +222,167 @@ class QualityWorkshopModelTest {
         assertTrue(restored.hiddenResultsExpanded());
     }
 
+    @Test
+    void calculatesConstructionSmeltingAxeAndMiningWithoutQuantityWeighting() {
+        QualityWorkshopModel construction = new QualityWorkshopModel();
+        construction.watch(QualityWorkshopModel.Key.ORE_SMELTER);
+        set(construction, QualityWorkshopModel.Key.BRICK, 219, QualityWorkshopModel.Key.STONE, 420,
+                QualityWorkshopModel.Key.HARD_METAL, 300);
+        assertEquals(313, construction.baseValue(QualityWorkshopModel.Key.ORE_SMELTER), EPSILON);
+
+        construction.watch(QualityWorkshopModel.Key.STACK_FURNACE);
+        set(construction, QualityWorkshopModel.Key.BALL_CLAY, 100, QualityWorkshopModel.Key.STONE, 200,
+                QualityWorkshopModel.Key.BOARD, 300, QualityWorkshopModel.Key.BLOCK, 400,
+                QualityWorkshopModel.Key.LEATHER, 500);
+        assertEquals(300, construction.baseValue(QualityWorkshopModel.Key.STACK_FURNACE), EPSILON);
+
+        QualityWorkshopModel pitStack = new QualityWorkshopModel();
+        pitStack.watch(QualityWorkshopModel.Key.STACK_FURNACE);
+        pitStack.setStackClaySource(QualityWorkshopModel.Key.PIT_CLAY);
+        set(pitStack, QualityWorkshopModel.Key.PIT_CLAY, 100, QualityWorkshopModel.Key.STONE, 200,
+                QualityWorkshopModel.Key.BOARD, 300, QualityWorkshopModel.Key.BLOCK, 400,
+                QualityWorkshopModel.Key.LEATHER, 500);
+        assertEquals(300, pitStack.baseValue(QualityWorkshopModel.Key.STACK_FURNACE), EPSILON);
+        QualityWorkshopModel restoredStack = QualityWorkshopModel.fromJson(pitStack.toJson());
+        assertEquals(QualityWorkshopModel.Key.PIT_CLAY, restoredStack.stackClaySource());
+        assertEquals(300, restoredStack.baseValue(QualityWorkshopModel.Key.STACK_FURNACE), EPSILON);
+
+        QualityWorkshopModel smelting = new QualityWorkshopModel();
+        smelting.watch(QualityWorkshopModel.Key.SMELTED_METAL);
+        set(smelting, QualityWorkshopModel.Key.ORE, 100, QualityWorkshopModel.Key.ORE_SMELTER, 80,
+                QualityWorkshopModel.Key.COAL, 60, QualityWorkshopModel.Key.STACK_FURNACE, 50,
+                QualityWorkshopModel.Key.FUEL, 70);
+        assertEquals(85, smelting.baseValue(QualityWorkshopModel.Key.SMELTED_METAL), EPSILON);
+        smelting.setSmeltingFurnace(QualityWorkshopModel.Key.STACK_FURNACE);
+        assertFalse(smelting.watched().contains(QualityWorkshopModel.Key.STACK_FURNACE));
+        assertEquals(80, smelting.baseValue(QualityWorkshopModel.Key.SMELTED_METAL), EPSILON);
+
+        QualityWorkshopModel mining = new QualityWorkshopModel();
+        mining.watch(QualityWorkshopModel.Key.STONE_AXE);
+        mining.watch(QualityWorkshopModel.Key.MINED_STONE);
+        set(mining, QualityWorkshopModel.Key.STONE, 100, QualityWorkshopModel.Key.BRANCH, 80,
+                QualityWorkshopModel.Key.INTELLIGENCE, 25, QualityWorkshopModel.Key.SURVIVAL, 100,
+                QualityWorkshopModel.Key.STONE_WALL, 100, QualityWorkshopModel.Key.MASONRY, 60);
+        assertEquals(70, mining.baseValue(QualityWorkshopModel.Key.STONE_AXE), EPSILON);
+        assertEquals(60, mining.baseValue(QualityWorkshopModel.Key.MINED_STONE), EPSILON);
+
+        QualityWorkshopModel masonryFirst = new QualityWorkshopModel();
+        masonryFirst.watch(QualityWorkshopModel.Key.MINED_STONE);
+        set(masonryFirst, QualityWorkshopModel.Key.STONE_AXE, 10, QualityWorkshopModel.Key.STONE_WALL, 100,
+                QualityWorkshopModel.Key.MASONRY, 60);
+        assertEquals(35, masonryFirst.baseValue(QualityWorkshopModel.Key.MINED_STONE), EPSILON);
+    }
+
+    @Test
+    void miningRepeatsWithNewAxesAndKeepsInitialAxeIndependent() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        model.watch(QualityWorkshopModel.Key.MINED_STONE);
+        set(model, QualityWorkshopModel.Key.STONE, 10, QualityWorkshopModel.Key.STONE_AXE, 10,
+                QualityWorkshopModel.Key.BRANCH, 100, QualityWorkshopModel.Key.INTELLIGENCE, 100,
+                QualityWorkshopModel.Key.SURVIVAL, 100, QualityWorkshopModel.Key.STONE_WALL, 100,
+                QualityWorkshopModel.Key.MASONRY, 100);
+        model.setMiningGenerations(3);
+
+        List<QualityWorkshopModel.MiningIteration> rows = model.miningIterations();
+        assertEquals(3, rows.size());
+        assertEquals(10, rows.get(0).inputStoneQuality, EPSILON);
+        assertEquals(10, rows.get(0).axeQuality, EPSILON);
+        assertEquals(55, rows.get(0).stoneQuality, EPSILON);
+        assertEquals(55, rows.get(1).inputStoneQuality, EPSILON);
+        assertEquals(77.5, rows.get(1).axeQuality, EPSILON);
+        assertEquals(80.3125, rows.get(1).stoneQuality, EPSILON);
+        assertEquals(rows.get(2).stoneQuality, model.value(QualityWorkshopModel.Key.MINED_STONE), EPSILON);
+        assertEquals(55, model.baseValue(QualityWorkshopModel.Key.MINED_STONE), EPSILON);
+        assertTrue(model.inputs().containsKey(QualityWorkshopModel.Key.BRANCH));
+        assertTrue(model.inputs().containsKey(QualityWorkshopModel.Key.INTELLIGENCE));
+        assertTrue(model.inputs().containsKey(QualityWorkshopModel.Key.SURVIVAL));
+    }
+
+    @Test
+    void selectorChoicesPersistWithoutWatchingRecipesDuringRestore() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        model.setSmeltingFurnace(QualityWorkshopModel.Key.STACK_FURNACE);
+        model.setSmeltingOreSource(QualityWorkshopModel.Key.MINED_ORE);
+        model.setStackClaySource(QualityWorkshopModel.Key.POTTER_CLAY);
+        model.setMiningGenerations(4);
+        model.unwatch(QualityWorkshopModel.Key.MINED_ORE);
+        model.unwatch(QualityWorkshopModel.Key.POTTER_CLAY);
+
+        QualityWorkshopModel restored = QualityWorkshopModel.fromJson(model.toJson());
+        assertEquals(QualityWorkshopModel.Key.STACK_FURNACE, restored.smeltingFurnace());
+        assertEquals(QualityWorkshopModel.Key.MINED_ORE, restored.smeltingOreSource());
+        assertEquals(QualityWorkshopModel.Key.POTTER_CLAY, restored.stackClaySource());
+        assertEquals(4, restored.miningGenerations());
+        assertFalse(restored.watched().contains(QualityWorkshopModel.Key.MINED_ORE));
+        assertFalse(restored.watched().contains(QualityWorkshopModel.Key.POTTER_CLAY));
+    }
+
+    @Test
+    void kilnUsesFrozenClayInputAndExpandsInsteadOfAppearingAsAManualRepeatInput() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        model.watch(QualityWorkshopModel.Key.KILN);
+        model.watch(QualityWorkshopModel.Key.BRICK);
+        set(model, QualityWorkshopModel.Key.KILN_CLAY, 40, QualityWorkshopModel.Key.BALL_CLAY, 20,
+                QualityWorkshopModel.Key.FUEL, 12, QualityWorkshopModel.Key.DEXTERITY, 100,
+                QualityWorkshopModel.Key.MASONRY, 100);
+        assertEquals(40, model.baseValue(QualityWorkshopModel.Key.KILN), EPSILON);
+        assertEquals(23, model.baseValue(QualityWorkshopModel.Key.BRICK), EPSILON);
+
+        model.setGenerations(2);
+        assertEquals(19.21875, model.iterations().get(1).brickQuality, EPSILON);
+        assertFalse(model.inputs().containsKey(QualityWorkshopModel.Key.KILN));
+        assertTrue(model.inputs().containsKey(QualityWorkshopModel.Key.KILN_CLAY));
+    }
+
+    @Test
+    void anvilUsesMetalAndCastingMaterialWithoutFurnaceQualityAndRestoresFrozenSources() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        model.watch(QualityWorkshopModel.Key.ANVIL);
+        set(model, QualityWorkshopModel.Key.HARD_METAL, 100, QualityWorkshopModel.Key.CASTING_MATERIAL, 40);
+        assertEquals(85, model.value(QualityWorkshopModel.Key.ANVIL), EPSILON);
+        model.setAnvilFurnace(QualityWorkshopModel.Key.STACK_FURNACE);
+        model.setManual(QualityWorkshopModel.Key.STACK_FURNACE, 999);
+        assertEquals(85, model.value(QualityWorkshopModel.Key.ANVIL), EPSILON);
+        assertFalse(model.dependencies(QualityWorkshopModel.Key.ANVIL).contains(QualityWorkshopModel.Key.STACK_FURNACE));
+        model.setAnvilCastingSource(QualityWorkshopModel.Key.BONE_CLAY);
+        assertTrue(model.watched().contains(QualityWorkshopModel.Key.BONE_CLAY));
+        model.unwatch(QualityWorkshopModel.Key.BONE_CLAY);
+        model.setManual(QualityWorkshopModel.Key.BONE_CLAY, 80);
+        assertEquals(95, model.value(QualityWorkshopModel.Key.ANVIL), EPSILON);
+        assertTrue(model.setDesiredAmount(QualityWorkshopModel.Key.ANVIL, 3));
+        assertTrue(model.setPotterOutputPerCraft(4));
+        QualityWorkshopModel restored = QualityWorkshopModel.fromJson(model.toJson());
+        assertEquals(3, restored.desiredAmount(QualityWorkshopModel.Key.ANVIL));
+        assertEquals(4, restored.potterOutputPerCraft());
+        assertEquals(QualityWorkshopModel.Key.BONE_CLAY, restored.anvilCastingSource());
+        assertEquals(QualityWorkshopModel.Key.STACK_FURNACE, restored.anvilFurnace());
+        assertFalse(restored.watched().contains(QualityWorkshopModel.Key.BONE_CLAY));
+        assertEquals(95, restored.value(QualityWorkshopModel.Key.ANVIL), EPSILON);
+    }
+
+    @Test
+    void validatesDesiredCountsAndSafelyLoadsOldOrMalformedScenarios() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        assertEquals(0, model.desiredAmount(QualityWorkshopModel.Key.ANVIL));
+        assertTrue(model.setDesiredAmount(QualityWorkshopModel.Key.ANVIL, 2));
+        for(double n : new double[]{-1, 0.5, Double.NaN, Double.POSITIVE_INFINITY, 1000001})
+            assertFalse(model.setDesiredAmount(QualityWorkshopModel.Key.ANVIL, n));
+        assertEquals(2, model.desiredAmount(QualityWorkshopModel.Key.ANVIL));
+        assertTrue(model.setDesiredAmount(QualityWorkshopModel.Key.LYE, 0.5));
+        assertTrue(model.setDesiredAmount(QualityWorkshopModel.Key.ASH, 0.2));
+        assertFalse(model.setDesiredAmount(QualityWorkshopModel.Key.BONES, 2));
+        assertFalse(model.setDesiredAmount(null, 2));
+        assertFalse(model.setPotterOutputPerCraft(-1));
+        assertFalse(model.setPotterOutputPerCraft(1001));
+        QualityWorkshopModel old = QualityWorkshopModel.fromJson(new JSONObject());
+        assertEquals(0, old.desiredAmount(QualityWorkshopModel.Key.POTTER_CLAY));
+        assertEquals(0, old.potterOutputPerCraft());
+        JSONObject bad = new JSONObject().put("desiredAmounts", new JSONObject().put("ANVIL", -3).put("LYE", "broken").put("UNKNOWN", 10));
+        QualityWorkshopModel restored = QualityWorkshopModel.fromJson(bad);
+        assertEquals(0, restored.desiredAmount(QualityWorkshopModel.Key.ANVIL));
+        assertEquals(0, restored.desiredAmount(QualityWorkshopModel.Key.LYE));
+    }
+
     private static void set(QualityWorkshopModel model, Object... values) {
         for(int index = 0; index < values.length; index += 2)
             assertTrue(model.setManual((QualityWorkshopModel.Key) values[index], ((Number) values[index + 1]).doubleValue()));

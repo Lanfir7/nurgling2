@@ -57,8 +57,12 @@ public final class CraftAtlasStationQualityUpdate {
     }
 
     public static Set<String> stationKeys(Iterable<CraftAtlasEntry> entries) {
-        if(entries == null) return Collections.emptySet();
         Set<String> keys = new LinkedHashSet<String>();
+        // Passive processing stations have no crafting-menu recipe requirements.
+        keys.add("station:smelter");
+        keys.add("station:stack-furnace");
+        keys.add("station:kiln");
+        if(entries == null) return keys;
         for(CraftAtlasEntry entry : entries) {
             if(entry == null) continue;
             for(CraftAtlasEntry.Requirement requirement : entry.requirements) {
@@ -117,6 +121,8 @@ public final class CraftAtlasStationQualityUpdate {
         if("potterswheel".equals(base)) return "potters-wheel";
         if("winepress".equals(base) || "extractionpress".equals(base)) return "extraction-press";
         if("claycauldron".equals(base)) return "clay-cauldron";
+        if("primsmelter".equals(base) || "stackfurnace".equals(base)) return "stack-furnace";
+        if("ore-smelter".equals(base)) return "smelter";
         return base;
     }
 

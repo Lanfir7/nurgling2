@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-client-id-nurgling-evolution",
+  "priority": 4,
+  "summary": {
+    "ru": "Подключения клиента теперь используют актуальное имя Nurgling Evolution.",
+    "en": "Client connections now use the current Nurgling Evolution name."
+  },
+  "detail": {
+    "ru": "При входе в игру сервер получает актуальное имя клиента, поэтому подключение распознаётся как Nurgling Evolution вместо прежнего Nurgling2.",
+    "en": "When you log in, the server receives the current client name, so the connection is identified as Nurgling Evolution instead of the former Nurgling2."
+  }
+}

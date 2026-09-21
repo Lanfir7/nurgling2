@@ -1150,13 +1150,7 @@ public class MasterMiner extends ActionWithFinal {
     }
 
     private static double calcWallQ(double f3, double f4, double f5) {
-        // Если порода ВЫШЕ качества инструмента - используем формулу
-        // Если ниже - остается как есть (wallQ = f3)
-        if (f3 < f4) {
-            return f3;
-        }
-        if (f5 <= 0) f5 = 1.0;
-        return ((f3 - f4) * 2.0 + (f4 - 10.0) / f5) + 10.0;
+        return nurgling.tools.MiningQuality.wallFromDrop(f3, f4, f5);
     }
 
     private static int masonrySkill() {
@@ -1473,13 +1467,7 @@ public class MasterMiner extends ActionWithFinal {
     }
     
     public static double invDropQ(double wallQ, double f4, double f5) {
-        // Если wallQ < f4, значит порода ниже качества инструмента, F3 = wallQ
-        if (wallQ < f4) {
-            return wallQ;
-        }
-        if (f5 <= 0) f5 = 1.0;
-        // F3 = F4 + 0.5 * ((W-10) - (F4-10)/F5)
-        return f4 + 0.5 * ((wallQ - 10.0) - (f4 - 10.0) / f5);
+        return nurgling.tools.MiningQuality.fromWall(wallQ, f4, f5);
     }
 
     /**

@@ -36,6 +36,68 @@ class QualityWorkshopWindowTest {
             assertTrue(descendants(window, Scrollport.class).size() >= 2);
         } finally { window.destroy(); }
     }
+    @Test void desiredCountsRecalculateWithoutDestroyingFocusedFieldAndPersistWithHiddenResults() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        for(Key key : new ArrayList<>(model.watched())) model.unwatch(key);
+        model.watch(Key.ANVIL);
+        Path saved = directory.resolve("amounts.json");
+        QualityWorkshopWindow window = new QualityWorkshopWindow(new CraftAtlasPreferences(), saved, model);
+        try {
+            window.tick(0);
+            Widget output = descendants(window, Scrollport.class).get(1).cont;
+            TextEntry field = descendants(output, TextEntry.class).get(0);
+            field.settext("3"); window.tick(0);
+            assertEquals(3, model.desiredAmount(Key.ANVIL));
+            assertTrue(descendants(output, TextEntry.class).contains(field), "count edit must retain focus");
+            Widget input = descendants(window, Scrollport.class).get(0).cont;
+            assertTrue(descendants(input, Label.class).stream().anyMatch(l -> l.text().contains("30")));
+            assertTrue(descendants(input, Label.class).stream().anyMatch(l -> l.text().contains("15")));
+            field.settext("3.5"); window.tick(0);
+            assertEquals(3, model.desiredAmount(Key.ANVIL));
+            window.resize(UI.scale(800, 500)); window.tick(0);
+            assertEquals("3.5", descendants(output, TextEntry.class).get(0).text());
+            button(output, "hide").click(); window.tick(0);
+            assertEquals(3, model.desiredAmount(Key.ANVIL));
+            assertTrue(descendants(input, Label.class).stream().anyMatch(l -> l.text().contains("30")));
+            toggle(output, "hidden_results").click(); window.tick(0);
+            TextEntry hidden = descendants(output, TextEntry.class).get(0);
+            assertEquals("3.5", hidden.text());
+            hidden.settext("2"); window.tick(0);
+            assertEquals(2, model.desiredAmount(Key.ANVIL));
+        } finally { window.destroy(); }
+        QualityWorkshopModel restored = nurgling.craftatlas.quality.QualityWorkshopStore.load(saved);
+        assertEquals(2, restored.desiredAmount(Key.ANVIL));
+        assertTrue(restored.resultHidden(Key.ANVIL));
+    }
+
+    @Test void quantityFieldsAcceptPowderMassButRequireWholePieces() {
+        assertEquals(0, QualityWorkshopWindow.parseAmount(Key.ANVIL, "0"));
+        assertEquals(1000000, QualityWorkshopWindow.parseAmount(Key.ANVIL, "1000000"));
+        assertEquals(0.5, QualityWorkshopWindow.parseAmount(Key.LYE, "0,5"));
+        assertEquals(0.2, QualityWorkshopWindow.parseAmount(Key.ASH, "0,2"));
+        for(String value : new String[]{"", "1.5", "-1", "NaN", "Infinity", "1000001"})
+            assertNull(QualityWorkshopWindow.parseAmount(Key.ANVIL, value));
+    }
+
+    @Test void potterYieldCanBeEnteredWithoutLosingFocusOrItsInvalidDraft() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        for(Key key : new ArrayList<>(model.watched())) model.unwatch(key);
+        model.watch(Key.POTTER_CLAY);
+        model.setDesiredAmount(Key.POTTER_CLAY, 10);
+        QualityWorkshopWindow window = new QualityWorkshopWindow(new CraftAtlasPreferences(), directory.resolve("yield.json"), model);
+        try {
+            window.tick(0);
+            Widget output = descendants(window, Scrollport.class).get(1).cont;
+            TextEntry yield = descendants(output, TextEntry.class).get(1);
+            yield.settext("4"); window.tick(0);
+            assertEquals(4, model.potterOutputPerCraft());
+            assertTrue(descendants(output, TextEntry.class).contains(yield));
+            yield.settext("4.5"); window.resize(UI.scale(800, 500)); window.tick(0);
+            assertEquals(4, model.potterOutputPerCraft());
+            assertEquals("4.5", descendants(output, TextEntry.class).get(1).text());
+        } finally { window.destroy(); }
+    }
+
     private static <T> List<T> descendants(Widget root, Class<T> type) {
         List<T> result = new ArrayList<>();
         for(Widget child : root.children()) {
@@ -106,6 +168,61 @@ class QualityWorkshopWindowTest {
 
     private static Button button(Widget parent, String key) {
         return descendants(parent, Button.class).stream().filter(b -> b.text.text.equals(L10n.get("quality_workshop." + key))).findFirst().get();
+    }
+    @Test void miningAndSmeltingControlsRebuildInputsAndRespectHiddenSections() {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        for(Key key : new ArrayList<>(model.watched())) model.unwatch(key);
+        model.watch(Key.MINED_STONE);
+        model.watch(Key.SMELTED_METAL);
+        model.watch(Key.KILN);
+        model.setResultHidden(Key.MINED_STONE, true);
+        QualityWorkshopWindow window = new QualityWorkshopWindow(new CraftAtlasPreferences(), directory.resolve("mining.json"), model);
+        try {
+            window.tick(0);
+            assertFalse(descendants(window, Button.class).stream().anyMatch(b -> b.text.text.equals(L10n.get("quality_workshop.mining_repeat"))));
+            toggle(window, "hidden_results").click(); window.tick(0);
+            button(window, "mining_repeat").click(); window.tick(0);
+            assertEquals(2, model.miningGenerations());
+            assertTrue(model.inputs().containsKey(Key.BRANCH));
+            assertTrue(model.inputs().containsKey(Key.SURVIVAL));
+            assertTrue(model.inputs().containsKey(Key.KILN_CLAY));
+            assertFalse(model.inputs().containsKey(Key.KILN));
+            button(window, "mining_remove_step").click(); window.tick(0);
+            assertEquals(1, model.miningGenerations());
+            toggle(window, "furnace").click(); window.tick(0);
+            assertEquals(Key.STACK_FURNACE, model.smeltingFurnace());
+            assertTrue(model.inputs().containsKey(Key.FUEL));
+            assertFalse(model.inputs().containsKey(Key.COAL));
+            toggle(window, "ore_source").click(); window.tick(0);
+            assertTrue(model.watched().contains(Key.MINED_ORE));
+            assertTrue(model.inputs().containsKey(Key.ORE_WALL));
+        } finally { window.destroy(); }
+    }
+    @Test void kilnCopiesClayOnceAndReplacesAnyOldInputDraft() throws Exception {
+        QualityWorkshopModel model = new QualityWorkshopModel();
+        model.watch(Key.KILN);
+        QualityWorkshopWindow window = new QualityWorkshopWindow(new CraftAtlasPreferences(), directory.resolve("kiln.json"), model);
+        try {
+            window.tick(0);
+            Widget input = descendants(window, Label.class).stream()
+                    .filter(l -> l.text().equals(QualityWorkshopCatalog.label(Key.KILN_CLAY))).findFirst().get().parent;
+            descendants(input, TextEntry.class).get(0).settext("80"); window.tick(0);
+            double copied = model.value(Key.SOAP_CLAY);
+            button(window, "kiln_copy_clay").click();
+            java.lang.reflect.Field pickerField = QualityWorkshopWindow.class.getDeclaredField("picker");
+            pickerField.setAccessible(true);
+            Window picker = (Window) pickerField.get(window);
+            descendants(picker, Button.class).stream()
+                    .filter(b -> b.text.text.startsWith(QualityWorkshopCatalog.label(Key.SOAP_CLAY) + " ·"))
+                    .findFirst().get().click(); window.tick(0);
+            assertEquals(copied, model.value(Key.KILN));
+            input = descendants(window, Label.class).stream()
+                    .filter(l -> l.text().equals(QualityWorkshopCatalog.label(Key.KILN_CLAY))).findFirst().get().parent;
+            assertEquals(Double.toString(copied), descendants(input, TextEntry.class).get(0).text());
+            model.setManual(Key.CAULDRON, 1000);
+            assertNotEquals(copied, model.value(Key.SOAP_CLAY));
+            assertEquals(copied, model.value(Key.KILN), "new clay must not silently rebuild the kiln");
+        } finally { window.destroy(); }
     }
     private static Button toggle(Widget parent, String key) {
         return descendants(parent, Button.class).stream().filter(b -> b.text.text.contains(L10n.get("quality_workshop." + key))).findFirst().get();

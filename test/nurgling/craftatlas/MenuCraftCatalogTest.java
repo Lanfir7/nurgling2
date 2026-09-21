@@ -34,7 +34,7 @@ class MenuCraftCatalogTest {
                 .build();
         MenuCraftCatalog catalog = new MenuCraftCatalog(null, null, Collections.singletonList(entry));
 
-        assertEquals(Collections.singleton(CraftAtlasQualityFormula.key(anvil)), catalog.stationKeys());
+        assertEquals(new java.util.LinkedHashSet<>(java.util.Arrays.asList("station:smelter", "station:stack-furnace", "station:kiln", CraftAtlasQualityFormula.key(anvil))), catalog.stationKeys());
     }
 
     @Test

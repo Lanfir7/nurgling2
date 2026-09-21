@@ -69,7 +69,7 @@ class MapSearchFrontTest {
         String gui = Files.readString(Paths.get("src/nurgling/NGameUI.java"));
         assertEquals(8, count(nmap, "MapSearchFront.showInFront"),
                 "NMapWnd open* show/re-show paths");
-        assertEquals(9, count(tools, "MapSearchFront.showInFront"),
+        assertEquals(11, count(tools, "MapSearchFront.showInFront"),
                 "MapToolsWindow toggle/open* show paths");
         assertTrue(nmap.contains("openForagingSearch"));
         assertTrue(nmap.contains("openTreeSearch"));

@@ -36,7 +36,7 @@ import java.io.PrintStream;
 
 public class Config {
     public static final Properties jarprops = getjarprops();
-    public static final String confid = jarprops.getProperty("config.client-id", "Nurgling2");
+    public static final String confid = jarprops.getProperty("config.client-id", "Nurgling Evolution");
     public static final Variable<Boolean> par = Variable.def(() -> true);
     public static final Variable<Boolean> exp = Variable.propb("haven.experimental", false);
     public static final boolean windows = System.getProperty("os.name", "").startsWith("Windows");

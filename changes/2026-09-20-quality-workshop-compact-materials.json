@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-quality-workshop-compact-materials",
+  "priority": 2,
+  "summary": {
+    "ru": "Список материалов в калькуляторе качества стал компактнее, а пояснения перенесены в подсказки.",
+    "en": "The quality calculator's material list is more compact, with explanations moved into tooltips."
+  },
+  "detail": {
+    "ru": "Откройте «Калькулятор качества» в крафт-атласе и задайте нужное количество результата. Над списками материалов и оборудования больше нет крупного поясняющего блока: точные оговорки о расчёте доступны при наведении на заголовки, оставляя больше места самим ресурсам.",
+    "en": "Open Quality workshop in Craft Atlas and enter a desired output amount. The materials and equipment lists no longer have a large explanatory block; precise calculation notes are available from the heading tooltips, leaving more room for the resources themselves."
+  }
+}

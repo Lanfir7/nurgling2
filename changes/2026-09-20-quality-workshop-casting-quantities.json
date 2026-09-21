@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-20-quality-workshop-casting-quantities",
+  "priority": 5,
+  "summary": {
+    "ru": "В калькуляторе атласа появились отливка наковальни и подсчёт материалов по желаемому количеству результата.",
+    "en": "The Atlas calculator now includes anvil casting and material planning from desired output quantities."
+  },
+  "detail": {
+    "ru": "Добавьте наковальню в калькуляторе крафт-атласа, выберите материал формы и задайте количество. Поле «Нужно получить» доступно у всех результатов: общие материалы суммируются, станки используются повторно, скрытые цепочки учитываются. Для гончарной глины укажите выход за крафт из игрового рецепта. Неучтённое топливо и неопределённый выход плавки отмечены в списке материалов. Настройки сохраняются.",
+    "en": "Add an anvil in the Craft Atlas calculator, choose its mold material and enter an amount. Every result has a desired output field: shared materials are summed, equipment is reused, and hidden chains still count. For Potter's Clay, enter the output per craft shown in the game recipe. Excluded fuel and uncertain smelting yields are marked in the material list. Settings are saved."
+  }
+}
