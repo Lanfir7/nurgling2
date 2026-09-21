@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-21-hide-login-discord",
+  "priority": 2,
+  "summary": {
+    "ru": "С экрана входа убрана иконка Discord.",
+    "en": "The Discord icon is gone from the login screen."
+  },
+  "detail": {
+    "ru": "На экране входа больше нет кнопки Discord рядом с настройками. Остальные кнопки входа на своих местах.",
+    "en": "The login screen no longer shows a Discord button next to the options. The other login controls stay where they were."
+  }
+}

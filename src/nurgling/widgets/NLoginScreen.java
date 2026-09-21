@@ -21,7 +21,6 @@ public class NLoginScreen extends LoginScreen {
     private static final int MAX_RETRY_ATTEMPTS = 5;
     private static final long BASE_RETRY_DELAY_MS = 1000, MAX_RETRY_DELAY_MS = 30000;
     private static final int VERSION_CHECK_TIMEOUT_MS = 2000, MARGIN = UI.scale(64);
-    private IButton discordBtn;
     private NLoginStatusBar statusbar;
     private boolean autoPending = false;
     private int retryAttempt = 0;
@@ -48,12 +47,6 @@ public class NLoginScreen extends LoginScreen {
 
     public NLoginScreen(String hostname) {
         super(hostname);
-        discordBtn = add(new IButton("nurgling/hud/buttons/discord/", "u", "d", "h") {
-            public void click() {
-                try { ui.wnd.toolkit().browse(java.net.URI.create("https://discord.com/invite/3YF5yaKKPn")); }
-                catch (Exception e) { System.err.println("[NLoginScreen] Failed to open Discord link: " + e.getMessage()); }
-            }
-        });
         statusbar = add(new NLoginStatusBar(HttpStatus.mond.get(), sz.x - (2 * MARGIN)));
         layout(); startVersionCheck();
     }
@@ -76,7 +69,6 @@ public class NLoginScreen extends LoginScreen {
             vbot = Math.min(sz.y, parent.sz.y - c.y);
         }
         optbtn.move(Coord.of(sz.x - optbtn.sz.x - UI.scale(20), vtop + UI.scale(20)));
-        discordBtn.move(Coord.of(optbtn.c.x - UI.scale(12) - discordBtn.sz.x, optbtn.c.y + ((optbtn.sz.y - discordBtn.sz.y) / 2)));
         statusbar.move(Coord.of(MARGIN, vbot - statusbar.sz.y - UI.scale(10)));
         formmin = vtop + UI.scale(40);
         formmax = statusbar.c.y - UI.scale(12);
