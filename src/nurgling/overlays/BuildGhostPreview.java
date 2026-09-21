@@ -24,6 +24,7 @@ public class BuildGhostPreview extends GAttrib {
     private int placementLimit = Integer.MAX_VALUE;
     private Coord selectionStart = null;
     private Coord selectionEnd = null;
+    private volatile int placedCount;
 
     public BuildGhostPreview(Gob owner, Pair<Coord2d, Coord2d> area, NHitBox hitBox, Indir<Resource> resource) {
         this(owner, area, hitBox, resource, 0, Message.nil);
@@ -88,9 +89,14 @@ public class BuildGhostPreview extends GAttrib {
     /**
      * Calculate all valid building positions using the same logic as Finder.getFreePlace()
      */
+    public int placedCount() {
+        return placedCount;
+    }
+
     private void calculateGhostPositions() {
         // Clean up existing ghosts
         removeGhosts();
+        placedCount = 0;
 
         if (buildingHitBox == null || area == null || buildingResource == null) {
             return;
@@ -113,6 +119,9 @@ public class BuildGhostPreview extends GAttrib {
         for (Coord2d position : PlacementSweep.order(
                 positions, selectionStart, selectionEnd, placementLimit)) {
             createGhostGob(position);
+        }
+        synchronized (ghostGobs) {
+            placedCount = ghostGobs.size();
         }
     }
     

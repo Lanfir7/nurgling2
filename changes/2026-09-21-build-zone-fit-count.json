@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-21-build-zone-fit-count",
+  "priority": 3,
+  "summary": {
+    "ru": "При выделении зоны строительным ботом под размером видно, сколько объектов поместится.",
+    "en": "While dragging a construction-bot zone, the size label also shows how many objects fit."
+  },
+  "detail": {
+    "ru": "Во время выделения зоны для строительного бота под размером в тайлах появляется число вроде 14pcs. Оно меняется вместе с зоной, поворотом и режимом сетки и считает только те места, куда объект реально встанет.",
+    "en": "While selecting a zone for a construction bot, a count such as 14pcs appears under the tile size. It updates with the zone, rotation, and grid mode, and only counts spots the object can actually occupy."
+  }
+}

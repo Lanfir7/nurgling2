@@ -236,8 +236,19 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     public NArea.Space areaSpace = null;
     public Pair<Coord, Coord> currentSelectionCoords = null;  // Current selection coords during dragging
     public Pair<Coord, Coord> currentSelectionDrag = null;    // Raw start/end, preserving the chosen corner
+    /** Objects that fit the zone being dragged by a construction bot; null outside that selection. */
+    private volatile Integer liveFitCount;
     public boolean rotationRequested = false;  // Flag to request rotation during area selection
     public Gob selectedGob = null;
+
+    /** How many objects currently fit the zone a construction bot is dragging. */
+    public void publishLiveFitCount(int count) {
+        synchronized (this) {
+            liveFitCount = count;
+            if (selection instanceof NSelector)
+                ((NSelector) selection).refreshFitLabel();
+        }
+    }
 
     /** Abort an in-progress area selection and release all transient input state. */
     public void cancelAreaSelection() {
@@ -253,6 +264,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             currentSelectionDrag = null;
             rotationRequested = false;
             gridModeRequested = false;
+            liveFitCount = null;
             clearPendingPlantingQuality();
         }
     }
@@ -2170,6 +2182,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         public boolean mmousedown(Coord mc, int button) {
             boolean handled = super.mmousedown(mc, button);
             if (handled && sc != null) {
+                liveFitCount = null;
                 currentSelectionCoords = new Pair<>(sc, sc.add(1, 1));
                 currentSelectionDrag = new Pair<>(sc, sc);
             }
@@ -2186,6 +2199,24 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 Coord c2 = new Coord(Math.max(tc.x, sc.x), Math.max(tc.y, sc.y));
                 currentSelectionCoords = new Pair<>(c1, c2.add(1, 1));
                 currentSelectionDrag = new Pair<>(sc, tc);
+                refreshFitLabel();
+            }
+        }
+
+        private void refreshFitLabel() {
+            synchronized (NMapView.this) {
+                Integer count = liveFitCount;
+                if (tt == null || count == null || currentSelectionCoords == null)
+                    return;
+                int width = currentSelectionCoords.b.x - currentSelectionCoords.a.x;
+                int height = currentSelectionCoords.b.y - currentSelectionCoords.a.y;
+                if (width < 1 || height < 1)
+                    return;
+                String size = width + "\u00d7" + height;
+                String combined = nurgling.overlays.SelectionFitLabel.text(size, count);
+                if (combined.equals(tt.text))
+                    return;
+                tt = nurgling.overlays.SelectionFitLabel.of(size, count);
             }
         }
         
@@ -2208,6 +2239,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                     }
                     
                     currentSelectionCoords = null;
+                    liveFitCount = null;
                     glob.map.remove(ol);
                     mgrab.remove();
                     sc = null;

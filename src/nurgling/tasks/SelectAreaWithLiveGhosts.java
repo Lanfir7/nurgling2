@@ -178,7 +178,15 @@ public class SelectAreaWithLiveGhosts extends NTask {
     private void configurePreview() {
         if (ghostPreview != null) {
             ghostPreview.configurePlacement(placementLimit, selectionStart, selectionEnd);
+            publishFitCount();
         }
+    }
+
+    private void publishFitCount() {
+        NGameUI gui = gui();
+        if (gui == null || !(gui.map instanceof NMapView) || ghostPreview == null)
+            return;
+        ((NMapView) gui.map).publishLiveFitCount(ghostPreview.placedCount());
     }
     
     private boolean checkRotationKey() {
