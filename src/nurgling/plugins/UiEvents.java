@@ -34,6 +34,8 @@ public class UiEvents {
     }
 
     private static final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
+    /* Client-owned synchronous observers. They must not enable plugin outgoing observation. */
+    private static final CopyOnWriteArrayList<Listener> systemListeners = new CopyOnWriteArrayList<>();
     private static final int OUTGOING_QUEUE_CAPACITY = 256;
     private static final BlockingQueue<OutgoingEvent> outgoing =
             new ArrayBlockingQueue<>(OUTGOING_QUEUE_CAPACITY);
@@ -88,13 +90,34 @@ public class UiEvents {
             listeners.remove(listener);
     }
 
+    /** Registers a client-owned synchronous listener without affecting plugin observation state. */
+    public static void addSystemListener(Listener listener) {
+        if(listener != null)
+            systemListeners.addIfAbsent(listener);
+    }
+
+    public static void removeSystemListener(Listener listener) {
+        if(listener != null)
+            systemListeners.remove(listener);
+    }
+
     /** Lets core skip event dispatch when nobody listens. */
     public static boolean active() {
         return (!listeners.isEmpty());
     }
 
+    /** Lets core dispatch synchronous widget events to either plugin or client observers. */
+    public static boolean observing() {
+        return(!listeners.isEmpty() || !systemListeners.isEmpty());
+    }
+
     private static void fire(Object[] args, Event event) {
-        fire(listeners.toArray(new Listener[0]), args, event);
+        Listener[] external = listeners.toArray(new Listener[0]);
+        Listener[] internal = systemListeners.toArray(new Listener[0]);
+        Listener[] targets = new Listener[external.length + internal.length];
+        System.arraycopy(external, 0, targets, 0, external.length);
+        System.arraycopy(internal, 0, targets, external.length, internal.length);
+        fire(targets, args, event);
     }
 
     private static void fire(Listener[] targets, Object[] args, Event event) {

@@ -18,17 +18,50 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UiEventsTest {
     private final List<UiEvents.Listener> listeners = new ArrayList<>();
+    private final List<UiEvents.Listener> systemListeners = new ArrayList<>();
 
     @AfterEach
     void removeListeners() {
         for (UiEvents.Listener listener : listeners)
             UiEvents.removeListener(listener);
         listeners.clear();
+        for(UiEvents.Listener listener : systemListeners)
+            UiEvents.removeSystemListener(listener);
+        systemListeners.clear();
     }
 
     private void add(UiEvents.Listener listener) {
         listeners.add(listener);
         UiEvents.addListener(listener);
+    }
+
+    private void addSystem(UiEvents.Listener listener) {
+        systemListeners.add(listener);
+        UiEvents.addSystemListener(listener);
+    }
+
+    @Test
+    void systemListenersReceiveSyncEventsWithoutEnablingPluginActivity() {
+        AtomicInteger calls = new AtomicInteger();
+        boolean observingBefore = UiEvents.observing();
+        UiEvents.Listener listener = new UiEvents.Listener() {
+            public void onUiMsg(haven.UI ui, int id, haven.Widget widget, String msg, Object[] args) {
+                calls.incrementAndGet();
+            }
+        };
+        addSystem(listener);
+        UiEvents.addSystemListener(listener);
+
+        assertFalse(UiEvents.active());
+        assertTrue(UiEvents.observing());
+        UiEvents.fireUiMsg(null, 1, null, "sync", new Object[0]);
+        assertEquals(1, calls.get());
+
+        UiEvents.removeSystemListener(listener);
+        assertFalse(UiEvents.active());
+        assertEquals(observingBefore, UiEvents.observing());
+        UiEvents.fireUiMsg(null, 2, null, "removed", new Object[0]);
+        assertEquals(1, calls.get());
     }
 
     @Test

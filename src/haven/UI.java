@@ -506,7 +506,7 @@ public class UI {
 			UI.this.gui = (NGameUI) wdg;
 		bind(wdg, id);
 	    }
-	    if(nurgling.plugins.UiEvents.active())
+	    if(nurgling.plugins.UiEvents.observing())
 		nurgling.plugins.UiEvents.fireNewWidget(UI.this, id, (typenm != null) ? typenm : String.valueOf(type), wdg, cargs);
 	}
 
@@ -547,7 +547,7 @@ public class UI {
 		    throw(new UIException(String.format("Null parent widget %d for %d (%s)", parent, id, wdg), null, pargs));
 		pwdg.addchild(wdg, pargs);
 	    }
-	    if(nurgling.plugins.UiEvents.active())
+	    if(nurgling.plugins.UiEvents.observing())
 		nurgling.plugins.UiEvents.fireAddWidget(UI.this, id, wdg, parent, pwdg, pargs);
 	}
 
@@ -711,7 +711,7 @@ public class UI {
 		if(wdg != null)
 		    destroy(wdg);
 	    }
-	    if((wdg != null) && nurgling.plugins.UiEvents.active())
+	    if((wdg != null) && nurgling.plugins.UiEvents.observing())
 		nurgling.plugins.UiEvents.fireDestroyWidget(UI.this, id, wdg);
 	}
 
@@ -772,7 +772,7 @@ public class UI {
 	    if(wdg == null) {
 		throw(new UIException("Uimsg to non-existent widget " + id, msg, args));
 	    }
-	    if(nurgling.plugins.UiEvents.active())
+	    if(nurgling.plugins.UiEvents.observing())
 		nurgling.plugins.UiEvents.fireUiMsg(UI.this, id, wdg, msg, args);
 	}
 

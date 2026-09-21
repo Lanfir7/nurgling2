@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-21-thingwall-route-travel",
+  "priority": 7,
+  "summary": {
+    "ru": "У Стены Вещей появился список изученных достижимых деревьев и переход по цепочке одним нажатием.",
+    "en": "Thingwalls now list learned reachable trees and can follow a link chain with one click."
+  },
+  "detail": {
+    "ru": "Откройте Стену Вещей: справа показаны изученные доступные деревья с расстоянием по карте. Отметьте нужные звёздочкой, чтобы они всегда были сверху общего для всех персонажей списка, или нажмите строку дерева для перехода по кратчайшей цепочке.",
+    "en": "Open a Thingwall to see learned reachable trees with their map distance. Star useful trees to keep them at the top of the shared list for every character, or click a tree row to travel along the shortest available link chain."
+  }
+}

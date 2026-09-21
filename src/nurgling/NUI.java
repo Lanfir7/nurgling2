@@ -102,6 +102,7 @@ public class NUI extends UI
     public NUI(Windeye wnd, Audio.Root audio, Coord sz, Runner fun)
     {
         super(wnd, audio, sz, fun);
+        ThingwallTravelFeature.install();
         if (fun != null)
         {
             root.add(core = new NCore());
