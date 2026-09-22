@@ -474,6 +474,9 @@ public class Forager implements Action {
     // Max world-unit distance for a single PathFinder hop - PathFinder's search grid fails to path once the span exceeds this.
     private static final double MAX_HOP_DISTANCE = 250.0;
 
+    // A failed server-side pick must not keep the forager waiting until the stuck guard fires.
+    private static final int PICK_REMOVAL_WAIT_TICKS = 200;
+
     // Scan radius (world units) for finding actionable gobs to detour towards.
     private static final double SCAN_RADIUS = 100000.0;
 
@@ -1055,8 +1058,15 @@ public class Forager implements Action {
                 // a coracle) would otherwise keep getting re-picked as "nearest" forever.
                 processedGobs.add(gob.id);
                 if (!walk(gui, preset, new PathFinder(gob), false).IsSuccess()) break;
-                new SelectFlowerAction("Pick", gob).run(gui);
-                NUtils.getUI().core.addTask(new nurgling.tasks.WaitGobRemoval(gob.id));
+                if (!new SelectFlowerAction("Pick", gob).run(gui).IsSuccess()) break;
+                NUtils.getUI().core.addTask(new nurgling.tasks.NTask() {
+                    int count = 0;
+
+                    @Override
+                    public boolean check() {
+                        return Finder.findGob(gob.id) == null || ++count > PICK_REMOVAL_WAIT_TICKS;
+                    }
+                });
                 break;
             }
             case FLOWER_ACTION: {

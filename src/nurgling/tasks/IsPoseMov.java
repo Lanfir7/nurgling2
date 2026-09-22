@@ -16,6 +16,8 @@ public class IsPoseMov extends NTask
     Coord2d coord;
     Gob gob;
     NAlias poses;
+    int count = 0;
+    int th = 200;
 
 
     public IsPoseMov(Coord2d coord, Gob gob, NAlias poses) {
@@ -27,6 +29,9 @@ public class IsPoseMov extends NTask
     @Override
     public boolean check()
     {
+        count++;
+        if (count > th)
+            return true;
         if (NUtils.getGameUI() != null && NUtils.getGameUI().map != null && gob != null)
         {
             if (gob.rc.dist(coord) <= pfmdelta)
@@ -35,14 +40,13 @@ public class IsPoseMov extends NTask
             if (drawable != null)
             {
                 String pose;
-                // Экстренный выход если движение так и началось ( 200 попыток )
-                return  drawable instanceof Composite && (pose = ((Composite) drawable).current_pose) != null && NParser.checkName(pose, poses);
+                return drawable instanceof Composite && (pose = ((Composite) drawable).current_pose) != null && NParser.checkName(pose, poses);
             }
         }
         return false;
     }
     public boolean getResult()
     {
-        return true;
+        return count <= th;
     }
 }

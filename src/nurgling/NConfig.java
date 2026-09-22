@@ -131,6 +131,7 @@ public class NConfig
         shortWalls,
         hideStockpileScale,
         decalsOnTop,
+        lockDecals,
         fillCompostWithSwill,
         ignoreStrawInFarmers,
         persistentBarrelLabels,
@@ -511,6 +512,7 @@ public class NConfig
         conf.put(Key.shortWalls, false);
         conf.put(Key.hideStockpileScale, 50);  // Hide stockpile display size percentage (25-100)
         conf.put(Key.decalsOnTop, false);
+        conf.put(Key.lockDecals, false);
         conf.put(Key.fillCompostWithSwill, false);
         conf.put(Key.ignoreStrawInFarmers, false);
         conf.put(Key.skipButcherInKFC, false);

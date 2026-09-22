@@ -1,0 +1,28 @@
+{
+  "minUpdater": "1.0.0",
+  "launch": {
+    "mainJar": "hafen.jar",
+    "minJava": 17,
+    "jvm": ["-Xss8m", "-Dsun.java2d.uiScale.enabled=false", "--add-exports=java.desktop/sun.awt=ALL-UNNAMED"],
+    "os": {
+      "windows": ["-Dsun.java2d.win.uiScaleX=1.0", "-Dsun.java2d.win.uiScaleY=1.0"],
+      "macos": ["-Xdock:name=Nurgling", "-Dapple.awt.application.name=Nurgling"],
+      "linux": []
+    },
+    "heap": {"min": "1024m", "max": "4096m"}
+  },
+  "obsolete": [],
+  "apps": {
+    "scheduler": {
+      "name": "HnH Scheduler",
+      "repo": "aleksandrsvoboda/hnh-scheduler",
+      "version": "latest",
+      "assets": {
+        "windows-x64": {"kind": "nsis", "pattern": "*Setup.exe"},
+        "macos-x64": {"kind": "dmg", "pattern": "*.dmg"},
+        "macos-arm64": {"kind": "dmg", "pattern": "*.dmg"},
+        "linux-x64": {"kind": "appimage", "pattern": "*.AppImage"}
+      }
+    }
+  }
+}

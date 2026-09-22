@@ -419,6 +419,8 @@ public abstract class CattleRoster <T extends Entry> extends Widget {
 	    addentry(parse(args));
 	} else if(msg == "upd") {
 	    T entry = parse(args);
+	    T old = entries.get(entry.id);
+	    entry.areaId = preserveAreaId(old != null ? old.areaId : -1, entry.areaId);
 	    delentry(entry.id);
 	    addentry(entry);
 	} else if(msg == "rm") {
@@ -431,6 +433,10 @@ public abstract class CattleRoster <T extends Entry> extends Widget {
 	} else {
 	    super.uimsg(msg, args);
 	}
+    }
+
+    static int preserveAreaId(int previousAreaId, int parsedAreaId) {
+	return(previousAreaId >= 0 ? previousAreaId : parsedAreaId);
     }
 
     public abstract TypeButton button();

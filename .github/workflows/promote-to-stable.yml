@@ -57,6 +57,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up Java for signed-manifest verification
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Select the explicit latest commit
         shell: bash
         working-directory: release-repo
@@ -78,7 +84,12 @@ jobs:
       - name: Verify the selected latest manifest
         shell: bash
         working-directory: release-repo
-        run: python ../tools/verify_release.py .
+        run: |
+          set -euo pipefail
+          python ../tools/verify_release.py .
+          if [[ -f manifest.json ]]; then
+            java -jar updater/core.jar verify "$PWD/manifest.json"
+          fi
 
       - name: Fast-forward stable to the explicit latest commit
         shell: bash

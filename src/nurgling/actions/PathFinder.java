@@ -670,13 +670,18 @@ public class PathFinder implements Action {
                     // real hitbox, so with none it always comes back empty even though free tiles
                     // exist nearby (just outside whatever else - the tree - is actually blocking
                     // this cell). Fall back to scanning directly around the target's own position.
-                    res = findFreeNearByPos(pos);
+                    res = findFreeNearByPos(pos, true);
                 }
                 return res;
             }
         } else {
             if (pfmap.cells[pos.x][pos.y].val!=0 && pfmap.cells[pos.x][pos.y].val!=7) {
                 ArrayList<Coord> targets = null;
+                // Terrain can block the start cell without adding a gob to content (for example,
+                // a coracle against the shore in water mode). Start from the nearest free cell.
+                if (pfmap.cells[pos.x][pos.y].content.isEmpty()) {
+                    return findFreeNearByPos(pos, false);
+                }
                 if(pfmap.cells[pos.x][pos.y].content.contains((long)-1)) {
                     Gob obstacle = resolveObstacle(-1);
                     if (obstacle == null) {
@@ -913,9 +918,9 @@ public class PathFinder implements Action {
         return res;
     }
 
-    /** Expanding-ring scan for the nearest free pfmap cell around pos, used as a fallback when the
-     *  target has no collision box of its own for findFreeNearByHB to search around. */
-    private ArrayList<Coord> findFreeNearByPos(Coord pos) {
+    /** Expanding-ring scan for the nearest free pfmap cell around pos. Target candidates are marked
+     *  as end cells; start candidates remain free for path construction. */
+    private ArrayList<Coord> findFreeNearByPos(Coord pos, boolean markAsEnd) {
         ArrayList<Coord> res = new ArrayList<>();
         for (int radius = 1; radius <= 20 && res.isEmpty(); radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
@@ -924,7 +929,9 @@ public class PathFinder implements Action {
                     Coord test = pos.add(dx, dy);
                     if (test.x >= 0 && test.x < pfmap.size && test.y >= 0 && test.y < pfmap.size) {
                         if (pfmap.cells[test.x][test.y].val == 0) {
-                            pfmap.getCells()[test.x][test.y].val = 7;
+                            if (markAsEnd) {
+                                pfmap.getCells()[test.x][test.y].val = 7;
+                            }
                             res.add(test);
                         }
                     }

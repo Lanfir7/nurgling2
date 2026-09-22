@@ -26,6 +26,7 @@ concurrency:
 env:
   RELEASE_REPO: Lanfir7/nurgling-release
   RELEASE_BRANCH: latest
+  UPDATER_RELEASE_REPO: aleksandrsvoboda/nurgling-release
 
 jobs:
   publish:
@@ -83,6 +84,101 @@ jobs:
         shell: pwsh
         run: python tools/verify_release.py release --expected-version "$env:RELEASE_VERSION"
 
+      # Keep legacy publishing unchanged until this repository has its own
+      # manifest-signing key. Once configured, the same prepared release also
+      # gains the signed cross-platform updater payload.
+      - name: Detect cross-platform updater signing
+        shell: pwsh
+        env:
+          MANIFEST_SIGNING_KEY: ${{ secrets.MANIFEST_SIGNING_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MANIFEST_SIGNING_KEY)) {
+            'MODERN_UPDATER_ENABLED=false' >> $env:GITHUB_ENV
+            Write-Host 'MANIFEST_SIGNING_KEY is not configured; publishing the verified legacy payload only.'
+          } else {
+            'MODERN_UPDATER_ENABLED=true' >> $env:GITHUB_ENV
+          }
+
+      - name: Set up Java for the cross-platform updater
+        if: env.MODERN_UPDATER_ENABLED == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download and verify the cross-platform updater
+        if: env.MODERN_UPDATER_ENABLED == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release download --repo $env:UPDATER_RELEASE_REPO --dir updater-assets `
+            --pattern 'nurgling-updater.jar' --pattern 'core.jar' --pattern '*.bat' `
+            --pattern '*.sh' --pattern '*.command' --pattern 'runtime.json' --pattern 'SHA256SUMS'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download the updater release.' }
+          foreach ($line in Get-Content -LiteralPath 'updater-assets\SHA256SUMS') {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            $sum, $name = $line -split '\s+\*?', 2
+            $path = Join-Path 'updater-assets' $name
+            if (!(Test-Path -LiteralPath $path)) { continue }
+            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $sum.ToLowerInvariant()) { throw "Checksum mismatch for $name" }
+          }
+
+      - name: Add the signed cross-platform manifest
+        if: env.MODERN_UPDATER_ENABLED == 'true'
+        shell: pwsh
+        env:
+          MANIFEST_SIGNING_KEY: ${{ secrets.MANIFEST_SIGNING_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force modern-release | Out-Null
+          Get-ChildItem -Force -LiteralPath release |
+            Where-Object Name -ne 'nurgling_launcher.jar' |
+            Copy-Item -Destination modern-release -Recurse -Force
+
+          New-Item -ItemType Directory -Force 'modern-release\updater' | Out-Null
+          Copy-Item -LiteralPath 'updater-assets\core.jar' -Destination 'modern-release\updater\core.jar'
+          foreach ($pattern in @('nurgling-updater.jar', '*.bat', '*.sh', '*.command')) {
+            Get-ChildItem -LiteralPath updater-assets -Filter $pattern -File |
+              Copy-Item -Destination modern-release -Force
+          }
+
+          java -jar updater-assets/core.jar resolve-apps etc/release.json apps.json
+          try {
+            Invoke-WebRequest -UseBasicParsing -OutFile previous-manifest.json `
+              -Uri "https://raw.githubusercontent.com/$env:RELEASE_REPO/$env:RELEASE_BRANCH/manifest.json"
+          } catch {
+            Write-Host 'No previous signed manifest; preparing the first cross-platform release.'
+          }
+          $previous = @()
+          if (Test-Path -LiteralPath previous-manifest.json) {
+            $previous = @('--previous', 'previous-manifest.json')
+          }
+          $note = (git log -1 --pretty=%s $env:RELEASE_SHA).Trim()
+          java -jar updater-assets/core.jar publish modern-release `
+            --version $env:RELEASE_VERSION --git-rev $env:RELEASE_SHA --note $note `
+            --config etc/release.json --runtime updater-assets/runtime.json --apps apps.json `
+            --sign-with-env MANIFEST_SIGNING_KEY @previous
+          if ($LASTEXITCODE -ne 0) { throw 'Cross-platform manifest publishing failed.' }
+
+          Get-ChildItem -Force -LiteralPath modern-release |
+            Copy-Item -Destination release -Recurse -Force
+          if (Select-String -LiteralPath 'release\ver' -SimpleMatch 'nurgling_launcher.jar=') {
+            throw 'The legacy launcher must not be present in the update manifest.'
+          }
+          $manifest = Get-Content -Raw -LiteralPath 'release\manifest.json' | ConvertFrom-Json
+          if ($manifest.files.path -contains 'nurgling_launcher.jar') {
+            throw 'The legacy launcher must not be present in the signed manifest.'
+          }
+          python tools/verify_release.py release --expected-version "$env:RELEASE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'The augmented legacy payload failed verification.' }
+          $manifestPath = (Resolve-Path -LiteralPath 'release\manifest.json').Path
+          java -jar release/updater/core.jar verify $manifestPath
+          if ($LASTEXITCODE -ne 0) { throw 'The signed manifest failed verification.' }
+
       - name: Check release repository deploy key
         shell: pwsh
         env:
@@ -115,6 +211,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          if ($env:MODERN_UPDATER_ENABLED -ne 'true' -and
+              (Test-Path -LiteralPath 'release-repo\manifest.json')) {
+            throw 'A signed updater channel already exists; MANIFEST_SIGNING_KEY is required for every later release.'
+          }
           Get-ChildItem -Force -LiteralPath 'release' | Copy-Item -Destination 'release-repo' -Recurse -Force
           python tools/verify_release.py release-repo --expected-version "$env:RELEASE_VERSION" --minimum-version "$env:PUBLISHED_VERSION"
           if ($LASTEXITCODE -ne 0) { throw 'Copied release artifacts did not pass verification.' }
@@ -126,6 +226,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the release commit email.' }
           git add -A
           if ($LASTEXITCODE -ne 0) { throw 'Unable to stage release artifacts.' }
+          if ((Test-Path -LiteralPath 'nurgling.sh') -and (Test-Path -LiteralPath 'Nurgling.command')) {
+            git update-index --chmod=+x nurgling.sh Nurgling.command
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to mark Unix launchers executable.' }
+          }
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
             Write-Host 'Latest already contains these verified artifacts.'

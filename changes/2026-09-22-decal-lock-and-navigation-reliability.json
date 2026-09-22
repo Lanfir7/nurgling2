@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-22-decal-lock-and-navigation-reliability",
+  "priority": 7,
+  "summary": {
+    "ru": "Можно закрепить наклейки шкафов; боты и обновление списков животных стали надёжнее.",
+    "en": "You can lock cupboard decals, while bots and animal roster updates are more reliable."
+  },
+  "detail": {
+    "ru": "В Настройки → QoL включите «Закрепить наклейки», чтобы клики по наклейке попадали в контейнер. Для снятия используйте Ctrl+ПКМ по контейнеру и «Снять наклейку». Боты корректнее выходят из застреваний у берега и не ждут бесконечно после неудачного сбора, а привязка животных к области сохраняется при обновлении списка.",
+    "en": "In Settings → QoL, enable Lock decals to send decal clicks to the container. To remove one, Ctrl+right-click its container and choose Take decal. Bots recover more reliably near shorelines and stop waiting indefinitely after an unsuccessful pick, while animal area assignments survive roster updates."
+  }
+}

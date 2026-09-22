@@ -162,6 +162,9 @@ public class MainFrame {
     }
 
     public static void main(final String[] args) {
+	/* Held before headless dispatch so scheduled clients are protected too. */
+	nurgling.UpdaterLock.hold();
+
 	// Check for headless mode FIRST, before any other initialization
 	if(Headless.hasHeadlessFlag(args)) {
 	    // Set headless mode before any AWT classes load

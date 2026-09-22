@@ -76,6 +76,7 @@ public class GobContextRegistry {
         register(new FuelSmeltersAction());
         register(new KilnFuelAction());
         register(new HTableTimesAction());
+        register(new TakeDecalAction());
         register(new BoughBeeAction());
         register(new BoughPyreTimerAction());
         register(new FeedCloverAction());
