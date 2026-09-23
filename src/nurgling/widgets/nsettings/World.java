@@ -25,6 +25,7 @@ public class World extends Panel {
         boolean showGridWalls;
         boolean persistentBarrelLabels;
         boolean objectLabelsEnabled = true;
+        boolean barterOfferIcons = true;
         boolean objectLabelIconSigns = true;
         boolean objectLabelParchments = true;
         int objectLabelFontSize = 12;
@@ -52,6 +53,7 @@ public class World extends Panel {
     private CheckBox gridWalls;
     private CheckBox persistentBarrels;
     private CheckBox objectLabelsEnabled;
+    private CheckBox barterOfferIcons;
     private CheckBox objectLabelIconSigns;
     private CheckBox objectLabelParchments;
     private CheckBox disableTileSmoothing;
@@ -191,6 +193,14 @@ public class World extends Panel {
             }
         }, prev.pos("bl").adds(-20, 5));
 
+        prev = barterOfferIcons = content.add(new CheckBox(L10n.get("world.barter_icons")) {
+            public void set(boolean val) {
+                tempSettings.barterOfferIcons = val;
+                a = val;
+            }
+        }, prev.pos("bl").adds(0, 5));
+        barterOfferIcons.tooltip = L10n.get("world.barter_icons_tip");
+
         prev = objectLabelsEnabled = content.add(new CheckBox(L10n.get("world.object_labels.enabled")) {
             public void set(boolean val) {
                 tempSettings.objectLabelsEnabled = val;
@@ -292,6 +302,7 @@ public class World extends Panel {
         tempSettings.persistentBarrelLabels = (Boolean) NConfig.get(NConfig.Key.persistentBarrelLabels);
         NObjectLabelSettings objectLabels = NObjectLabelSettings.current();
         tempSettings.objectLabelsEnabled = objectLabels.enabled;
+        tempSettings.barterOfferIcons = !Boolean.FALSE.equals(NConfig.get(NConfig.Key.barterOfferIcons));
         tempSettings.objectLabelIconSigns = objectLabels.iconSigns;
         tempSettings.objectLabelParchments = objectLabels.parchments;
         tempSettings.objectLabelFontSize = objectLabels.fontSize;
@@ -324,6 +335,7 @@ public class World extends Panel {
         gridWalls.a = tempSettings.showGridWalls;
         persistentBarrels.a = tempSettings.persistentBarrelLabels;
         objectLabelsEnabled.a = tempSettings.objectLabelsEnabled;
+        barterOfferIcons.a = tempSettings.barterOfferIcons;
         objectLabelIconSigns.a = tempSettings.objectLabelIconSigns;
         objectLabelParchments.a = tempSettings.objectLabelParchments;
         objectLabelFontSizeSlider.val = tempSettings.objectLabelFontSize;
@@ -359,6 +371,7 @@ public class World extends Panel {
 
         NConfig.set(NConfig.Key.persistentBarrelLabels, tempSettings.persistentBarrelLabels);
         NConfig.set(NConfig.Key.objectLabelsEnabled, tempSettings.objectLabelsEnabled);
+        NConfig.set(NConfig.Key.barterOfferIcons, tempSettings.barterOfferIcons);
         NConfig.set(NConfig.Key.objectLabelIconSigns, tempSettings.objectLabelIconSigns);
         NConfig.set(NConfig.Key.objectLabelParchments, tempSettings.objectLabelParchments);
         NConfig.set(NConfig.Key.objectLabelFontSize, tempSettings.objectLabelFontSize);

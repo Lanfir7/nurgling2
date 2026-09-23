@@ -2760,6 +2760,13 @@ NMiniMap extends MiniMap {
             DisplayMarker mark = markerat(tc);
             if(mark != null) {
                 try {
+                    if(mark.m instanceof MapFile.PMarker) {
+                        String hints = L10n.get("map.personal_marker.actions",
+                                Hotkeys.action(Hotkeys.MAP_MARKER_NAVIGATE).current().displayName(),
+                                Hotkeys.action(Hotkeys.MAP_MARKER_BEACON).current().displayName());
+                        return new TexI(ItemInfo.catimgs(4, mark.tooltip(),
+                                RichText.render(RichText.Parser.quote(hints), UI.scale(300)).img));
+                    }
                     return(new TexI(mark.tooltip()));
                 } catch(Loading l) {}
             }

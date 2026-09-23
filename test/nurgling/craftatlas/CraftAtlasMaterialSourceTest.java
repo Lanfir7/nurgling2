@@ -156,6 +156,18 @@ class CraftAtlasMaterialSourceTest {
         assertEquals("Flax Fibres", snapshot.candidatesBySlot.get(1).get(0).material);
     }
 
+    @Test
+    void failedWarehouseLookupIsNotAnEmptyStock() {
+        CraftAtlasEntry observed = CraftAtlasEntry.builder("paginae/craft/cloth", "Cloth")
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(2, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/linencloth", "Linen Cloth"))))
+                .build();
+        CraftAtlasMaterialSource source = new CraftAtlasMaterialSource(names -> null);
+
+        assertThrows(IllegalStateException.class, () -> source.load(observed, List.of()));
+    }
+
     private static ArrayList<JSONObject> jsonNames(String... names) {
         ArrayList<JSONObject> values = new ArrayList<>();
         for(String name : names) values.add(new JSONObject().put("name", name));

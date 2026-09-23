@@ -14,24 +14,16 @@ class MasterMinerSupportPlacementTest {
     private static final Coord ORIGIN = new Coord(10, 10);
 
     @Test
-    void choosesTheShortSideNicheWithoutUsingPlayerHeading() {
+    void choosesAnAdjacentMinedTileInAConnectedCorridor() {
         Set<Coord> open = new HashSet<>();
         open.add(new Coord(10, 9));
         open.add(new Coord(10, 8));
-        open.add(new Coord(10, 7)); // long northbound tunnel
-        open.add(new Coord(9, 10)); // short west niche
-        assertEquals(new Coord(9, 10), MasterMinerSupportPlacement.chooseAdjacent(ORIGIN, open::contains));
-
-        open.clear();
-        open.add(new Coord(10, 9));
-        open.add(new Coord(10, 8));
-        open.add(new Coord(10, 7)); // long northbound tunnel
-        open.add(new Coord(11, 10)); // mirrored east niche
-        assertEquals(new Coord(11, 10), MasterMinerSupportPlacement.chooseAdjacent(ORIGIN, open::contains));
+        open.add(new Coord(9, 9)); // connected corridor branch
+        assertEquals(new Coord(10, 9), MasterMinerSupportPlacement.chooseAdjacent(ORIGIN, open::contains));
     }
 
     @Test
-    void usesStableCardinalOrderForEquallyShortNiches() {
+    void usesStableCardinalOrderForOpenTiles() {
         Set<Coord> open = new HashSet<>();
         open.add(new Coord(10, 9));
         open.add(new Coord(9, 10));
@@ -44,13 +36,13 @@ class MasterMinerSupportPlacementTest {
     }
 
     @Test
-    void occupiedCorridorTileDoesNotTurnTheCorridorIntoANiche() {
+    void skipsOccupiedAndUnminedAdjacentTiles() {
         Set<Coord> open = new HashSet<>();
-        open.add(new Coord(9, 10));
-        open.add(new Coord(8, 10));
+        open.add(new Coord(10, 9));
         open.add(new Coord(11, 10));
+        // The west tile is deliberately absent: it remains unmined.
         Set<Coord> occupied = new HashSet<>();
-        occupied.add(new Coord(8, 10));
+        occupied.add(new Coord(10, 9));
         assertEquals(new Coord(11, 10), MasterMinerSupportPlacement.chooseAdjacent(ORIGIN,
                 open::contains, tile -> !occupied.contains(tile)));
 
@@ -60,26 +52,19 @@ class MasterMinerSupportPlacementTest {
     }
 
     @Test
-    void rejectsTurningTunnelBranchInFavorOfAnIsolatedNiche() {
+    void choosesBesideTheMinerAfterReturningNearTheStoredOrigin() {
+        Coord storedOriginTile = new Coord(10, 10);
+        Coord returnedMinerTile = new Coord(11, 10);
         Set<Coord> open = new HashSet<>();
-        open.add(new Coord(9, 10));
-        open.add(new Coord(9, 9));
-        open.add(new Coord(9, 8)); // west branch turns north into a tunnel
-        open.add(new Coord(11, 10)); // isolated east niche
-        assertEquals(new Coord(11, 10), MasterMinerSupportPlacement.chooseAdjacent(ORIGIN, open::contains));
-    }
+        open.add(new Coord(11, 9));
 
-    @Test
-    void returnsNullWhenOnlyATurningCorridorIsOpen() {
-        Set<Coord> open = new HashSet<>();
-        open.add(new Coord(9, 10));
-        open.add(new Coord(9, 9));
-        open.add(new Coord(9, 8));
-        assertNull(MasterMinerSupportPlacement.chooseAdjacent(ORIGIN, open::contains));
+        assertEquals(new Coord(11, 9), MasterMinerSupportPlacement.chooseAdjacent(
+                storedOriginTile, returnedMinerTile, open::contains));
     }
 
     @Test
     void onlyMinedUndergroundFloorAcceptsConstruction() {
+        assertTrue(MasterMinerSupportPlacement.isOpenCaveTileName("gfx/tiles/mine"));
         assertTrue(MasterMinerSupportPlacement.isOpenCaveTileName("gfx/tiles/deepcave"));
         assertTrue(MasterMinerSupportPlacement.isOpenCaveTileName("gfx/tiles/deeptangle/grass"));
         assertTrue(MasterMinerSupportPlacement.isOpenCaveTileName("gfx/tiles/cavein"));
@@ -88,4 +73,5 @@ class MasterMinerSupportPlacementTest {
         assertTrue(!MasterMinerSupportPlacement.isOpenCaveTileName("gfx/tiles/rocks/granite"));
         assertTrue(!MasterMinerSupportPlacement.isOpenCaveTileName(null));
     }
+
 }

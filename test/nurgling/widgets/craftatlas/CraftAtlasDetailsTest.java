@@ -17,6 +17,37 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CraftAtlasDetailsTest {
     @Test
+    void rebuiltCatalogEntryWithTheSameSlotsDoesNotCountAsNewMaterials() {
+        CraftAtlasEntry first = metalSaw();
+        CraftAtlasEntry rebuilt = metalSaw();
+
+        assertTrue(CraftAtlasDetails.sameMaterialInputs(first, rebuilt));
+        assertFalse(CraftAtlasDetails.sameMaterialInputs(first, null));
+    }
+
+    @Test
+    void observedInputsDifferWhenASlotChanges() {
+        CraftAtlasEntry before = metalSaw();
+        CraftAtlasEntry after = CraftAtlasEntry.builder("paginae/craft/metalsaw", "Metal Saw")
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(1, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/castiron", "Bar of Cast Iron"))))
+                .build();
+
+        assertFalse(CraftAtlasDetails.sameMaterialInputs(before, after));
+    }
+
+    private static CraftAtlasEntry metalSaw() {
+        return CraftAtlasEntry.builder("paginae/craft/metalsaw", "Metal Saw")
+                .inputsObserved(true)
+                .input(new CraftAtlasEntry.InputSlot(1, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/castiron", "Bar of Cast Iron"))))
+                .input(new CraftAtlasEntry.InputSlot(1, false, List.of(
+                        new CraftAtlasEntry.IngredientOption("gfx/invobjs/branch", "Sweetgum Bough"))))
+                .build();
+    }
+
+    @Test
     void keepingAControlVisibleDoesNotResetItsFocusState() {
         TrackingWidget control = new TrackingWidget();
 

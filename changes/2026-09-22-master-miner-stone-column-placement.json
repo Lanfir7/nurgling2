@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-22-master-miner-stone-column-placement",
+  "priority": 5,
+  "summary": {
+    "ru": "Мастер добычи снова ставит каменную колонну после сбора 30 камней.",
+    "en": "Master Miner can again place a Stone Column after collecting 30 stones."
+  },
+  "detail": {
+    "ru": "В Мастере добычи после сбора 30 камней каменная колонна ставится на свободный уже пройденный тайл рядом с персонажем, в том числе в обычном тоннеле.",
+    "en": "In Master Miner, after collecting 30 stones, the Stone Column is placed on a free already-mined tile next to your character, including in a regular tunnel."
+  }
+}

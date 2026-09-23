@@ -278,7 +278,17 @@ public class RichText extends Text {
 	}
 	
 	public TextPart(String str, Map<? extends Attribute, ?> attrs) {
-	    this((str.length() == 0)?(new AttributedString(str)):(new AttributedString(str, attrs)), 0, str.length());
+	    this(pinSymbols(str, attrs), 0, str.length());
+	}
+
+	private static AttributedString pinSymbols(String str, Map<? extends Attribute, ?> attrs) {
+	    if(str.length() == 0)
+		return(new AttributedString(str));
+	    AttributedString text = new AttributedString(str, attrs);
+	    Object font = attrs.get(TextAttribute.FONT);
+	    if(font instanceof Font)
+		Text.pinSymbols(text, str, (Font)font);
+	    return(text);
 	}
 	
 	public TextPart(String str) {

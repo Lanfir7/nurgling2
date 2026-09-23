@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-23-barter-loading",
+  "priority": 4,
+  "summary": {
+    "ru": "Покупка на бартерном стенде больше не остаётся заблокированной после загрузки товара.",
+    "en": "Barter purchases no longer stay disabled after the item finishes loading."
+  },
+  "detail": {
+    "ru": "Кнопки покупки и итог обновляются, даже если иконка или название товара загрузились во время отрисовки окна. Это устраняет зависшую надпись Item loading при уже видимом товаре.",
+    "en": "Purchase buttons and totals now update even when the item icon or name finishes loading while the window is being drawn. This fixes a stuck Item loading message for an already visible item."
+  }
+}

@@ -681,14 +681,16 @@ public class NArea
      */
     public Pair<Coord2d,Coord2d> getLoadedRCArea(boolean respectHide)
     {
-        if(isVisible())
+        NGameUI gui = NUtils.getGameUI();
+        if(isVisible(gui))
         {
             Coord begin = null;
             Coord end = null;
+            MCache map = gui.map.glob.map;
 
             for (Long id : space.space.keySet())
             {
-                MCache.Grid grid = NUtils.getGameUI().map.glob.map.findGrid(id);
+                MCache.Grid grid = map.findGrid(id);
                 if(grid==null || (respectHide && hide))
                     return null;
                 Area area = space.space.get(id).area;
@@ -818,9 +820,18 @@ public class NArea
     }
 
     public boolean isVisible() {
+        return isVisible(NUtils.getGameUI());
+    }
+
+    private boolean isVisible(NGameUI gui) {
+        if (gui == null || gui.map == null || gui.map.glob == null || gui.map.glob.map == null)
+            return false;
+        if (space == null || space.space == null)
+            return false;
+        MCache map = gui.map.glob.map;
         for (Long id : space.space.keySet()) {
-            synchronized (NUtils.getGameUI().map.glob.map.grids) {
-                for (MCache.Grid g : NUtils.getGameUI().map.glob.map.grids.values()) {
+            synchronized (map.grids) {
+                for (MCache.Grid g : map.grids.values()) {
                     if (g.id == id)
                         return true;
                 }

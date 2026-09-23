@@ -138,6 +138,7 @@ public class NConfig
         homeTerritories,
         homeInteriors,
         objectLabelsEnabled,
+        barterOfferIcons,
         objectLabelIconSigns,
         objectLabelParchments,
         objectLabelFontSize,
@@ -525,6 +526,7 @@ public class NConfig
         conf.put(Key.homeTerritories, new ArrayList<Object>());
         conf.put(Key.homeInteriors, new LinkedHashMap<String, Object>());
         conf.put(Key.objectLabelsEnabled, true);
+        conf.put(Key.barterOfferIcons, true);
         conf.put(Key.objectLabelIconSigns, true);
         conf.put(Key.objectLabelParchments, true);
         conf.put(Key.objectLabelFontSize, 12);

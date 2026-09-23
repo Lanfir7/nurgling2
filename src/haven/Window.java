@@ -32,7 +32,10 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import static haven.PUtils.*;
 import nurgling.*;
+import nurgling.widgets.BarterWindowLayout;
 import nurgling.widgets.NProspecting;
+import haven.res.ui.barterbox.Shopbox;
+import java.util.*;
 
 public class Window extends Widget implements WindowLayering.Target {
     public static final Pipe.Op bgblend = FragColor.blend.nil;
@@ -61,6 +64,20 @@ public class Window extends Widget implements WindowLayering.Target {
     public static final BufferedImage ctex = Resource.loadimg("nurgling/hud/fonttex");
     public static final Text.Furnace cf = DefaultDeco.cf;
     public static final Text.Furnace ncf = DefaultDeco.ncf;
+
+    /*
+     * The barter protocol places the offer widgets directly in this window.
+     * Keep that ownership intact: a number of client tools find Shopboxes by
+     * walking Window.child. This layout only moves those same widgets.
+     */
+    private final Map<Widget, Coord> barterOrigins = new IdentityHashMap<>();
+    private final List<Shopbox> barterRows = new ArrayList<>();
+    private Scrollbar barterScroll;
+    private boolean barterLayouting, barterActive, barterDirty = true;
+    private int barterScrollY, barterContentHeight;
+    private int barterAvailableHeight = -1;
+    private Coord barterViewport = Coord.z, barterViewportSize = Coord.z, barterWindowContent = Coord.z;
+    private static final int barterGap = UI.scale(6);
     public static final IBox wbox = new IBox.Scaled("nurgling/hud/box", "tl", "tr", "bl", "br", "extvl", "extvr", "extht", "exthb") {
 	    final Coord co = UI.scale(3, 3), bo = UI.scale(2, 2);
 
@@ -153,12 +170,157 @@ public class Window extends Widget implements WindowLayering.Target {
 	this.cap = cap;
 	if(nurgling.widgets.WardrobeDollOverlay.isWardrobeCap(this.cap))
 	    nurgling.widgets.WardrobeDollOverlay.installFrom(this);
+	barterDirty = true;
     }
 
     public void addchild(Widget child, Object... args) {
 	super.addchild(child, args);
 	if(nurgling.widgets.WardrobeDollOverlay.isWardrobeCap(this.cap))
 	    nurgling.widgets.WardrobeDollOverlay.installFrom(this);
+	barterDirty = true;
+    }
+
+    private boolean isbarter() {
+	return("Barter Stand".equals(cap) && (child != null));
+    }
+
+    private List<Shopbox> barterrows() {
+	if(!isbarter())
+	    return(Collections.emptyList());
+	if(!barterDirty)
+	    return(barterRows);
+	barterRows.clear();
+	for(Widget w = child; w != null; w = w.next) {
+	    if(w instanceof Shopbox)
+		barterRows.add((Shopbox)w);
+	}
+	if(barterRows.isEmpty())
+	    return(Collections.emptyList());
+	for(Shopbox row : barterRows) {
+	    if(!barterOrigins.containsKey(row))
+		barterOrigins.put(row, new Coord(row.c));
+	}
+	barterRows.sort((a, b) -> {
+	    Coord ac = barterOrigins.get(a), bc = barterOrigins.get(b);
+	    return(BarterWindowLayout.compareOrigins(ac.y, ac.x, bc.y, bc.x));
+	});
+	return(barterRows);
+    }
+
+    private Coord barterorigin(Widget w) {
+	Coord ret = barterOrigins.get(w);
+	if(ret == null) {
+	    ret = new Coord(w.c);
+	    barterOrigins.put(w, ret);
+	}
+	return(ret);
+    }
+
+    private int barteravailableheight() {
+	if((ui == null) || (ui.root == null))
+	    return(Integer.MAX_VALUE);
+	int chrome = Math.max(0, sz.y - ca().sz().y);
+	return(Math.max(1, ui.root.sz.y - c.y - UI.scale(12) - chrome));
+    }
+
+    private void layoutbarter() {
+	if(barterLayouting)
+	    return;
+	int available = barteravailableheight();
+	if(!barterDirty && barterActive && (barterAvailableHeight == available))
+	    return;
+	List<Shopbox> rows = barterrows();
+	if(rows.isEmpty()) {
+	    barterActive = false;
+	    if(barterScroll != null)
+		barterScroll.hide();
+	    barterDirty = false;
+	    barterAvailableHeight = available;
+	    return;
+	}
+	barterLayouting = true;
+	try {
+	    barterActive = true;
+	    int top = Integer.MAX_VALUE, rowx = Integer.MAX_VALUE, width = 0, y = 0;
+	    for(Shopbox row : rows) {
+		Coord origin = barterorigin(row);
+		top = Math.min(top, origin.y);
+		rowx = Math.min(rowx, origin.x);
+		width = Math.max(width, row.sz.x);
+		if(y > 0)
+		    y += barterGap;
+		y += row.sz.y;
+	    }
+	    if(top == Integer.MAX_VALUE)
+		top = 0;
+	    if(rowx == Integer.MAX_VALUE)
+		rowx = 0;
+	    barterContentHeight = y;
+
+	    int originalLastTop = Integer.MIN_VALUE;
+	    for(Shopbox row : rows)
+		originalLastTop = Math.max(originalLastTop, barterorigin(row).y);
+	    List<Widget> footer = new ArrayList<>();
+	    int footerTop = Integer.MAX_VALUE, footerBottom = 0, footerWidth = width;
+	    for(Widget w = child; w != null; w = w.next) {
+		if((w == deco) || (w == dwdg) || (w == barterScroll) || (w instanceof Shopbox))
+		    continue;
+		Coord origin = barterorigin(w);
+		if(origin.y >= originalLastTop) {
+		    footer.add(w);
+		    footerTop = Math.min(footerTop, origin.y);
+		    footerBottom = Math.max(footerBottom, origin.y + w.sz.y);
+		    footerWidth = Math.max(footerWidth, origin.x + w.sz.x);
+		}
+	    }
+	    int footerHeight = (footerTop == Integer.MAX_VALUE) ? 0 : footerBottom - footerTop;
+	    int footerSpace = (footerHeight == 0) ? 0 : barterGap + footerHeight;
+	    int viewportHeight = BarterWindowLayout.viewportHeight(barterContentHeight,
+		Math.max(1, available - top - footerSpace));
+	    boolean scrollable = barterContentHeight > viewportHeight;
+	if(barterScroll == null) {
+		barterScroll = add(new Scrollbar(1, 0, 0) {
+		    public void changed() {
+			barterScrollY = val;
+			placebarterrows(barterRows);
+		    }
+		});
+	    }
+	    int scrollWidth = scrollable ? barterGap + barterScroll.sz.x : 0;
+	    barterScrollY = BarterWindowLayout.scrollOffset(barterScrollY, barterContentHeight, viewportHeight);
+	    barterScroll.min = 0;
+	    barterScroll.max = Math.max(0, barterContentHeight - viewportHeight);
+	    barterScroll.val = barterScrollY;
+	    barterScroll.visible = scrollable;
+	    barterScroll.resize(viewportHeight);
+	    barterScroll.c = Coord.of(rowx + width + barterGap, top);
+	    barterViewport = Coord.of(rowx, top);
+	    barterViewportSize = Coord.of(width, viewportHeight);
+	    placebarterrows(rows);
+	    if(footerHeight > 0) {
+		int footery = top + viewportHeight + barterGap;
+		for(Widget w : footer) {
+		    Coord origin = barterorigin(w);
+		    w.c = Coord.of(origin.x, footery + origin.y - footerTop);
+		}
+	    }
+	    barterWindowContent = Coord.of(Math.max(width + scrollWidth, footerWidth),
+		top + viewportHeight + footerSpace);
+	    resize2(barterWindowContent);
+	    barterDirty = false;
+	    barterAvailableHeight = available;
+	} finally {
+	    barterLayouting = false;
+	}
+    }
+
+    private void placebarterrows(List<Shopbox> rows) {
+	int y = 0;
+	for(Shopbox row : rows) {
+	    row.c = Coord.of(barterViewport.x,
+		BarterWindowLayout.rowY(barterViewport.y, y, barterScrollY));
+	    y += row.sz.y + barterGap;
+	}
     }
 
     public void chdeco(Deco deco) {
@@ -472,7 +634,23 @@ public class Window extends Widget implements WindowLayering.Target {
     }
 
     public void drawContent(GOut g) {
-	super.draw(g);
+	layoutbarter();
+	if(!barterActive) {
+	    super.draw(g);
+	    return;
+	}
+	Widget next;
+	Coord viewport = xlate(barterViewport, true);
+	for(Widget w = child; w != null; w = next) {
+	    next = w.next;
+	    if(!w.visible)
+		continue;
+	    Coord cc = xlate(w.c, true);
+	    GOut cg = g.reclip(cc, w.sz);
+	    if(w instanceof Shopbox)
+		cg = g.reclip(viewport, barterViewportSize).reclip(cc.sub(viewport), w.sz);
+	    w.draw(cg);
+	}
     }
 
     public void drawForeground(GOut g) {
@@ -500,6 +678,9 @@ public class Window extends Widget implements WindowLayering.Target {
     }
 
     public Coord contentsz() {
+	layoutbarter();
+	if(barterActive)
+	    return(barterWindowContent);
 	Coord max = new Coord(0, 0);
 	for(Widget wdg = child; wdg != null; wdg = wdg.next) {
 	    if(wdg == deco)
@@ -543,6 +724,35 @@ public class Window extends Widget implements WindowLayering.Target {
 
     public void resize(Coord sz) {
 	resize2(sz);
+	if(!barterLayouting) {
+	    barterDirty = true;
+	    layoutbarter();
+	}
+    }
+
+    public void pack() {
+	if(!barterrows().isEmpty()) {
+	    layoutbarter();
+	    return;
+	}
+	super.pack();
+    }
+
+    public void cresize(Widget ch) {
+	if(!barterLayouting) {
+	    barterDirty = true;
+	    layoutbarter();
+	}
+    }
+
+    public void cdestroy(Widget ch) {
+	barterOrigins.remove(ch);
+	barterRows.remove(ch);
+	super.cdestroy(ch);
+	if(!barterLayouting) {
+	    barterDirty = true;
+	    layoutbarter();
+	}
     }
 
     public void uimsg(String msg, Object... args) {
@@ -643,20 +853,57 @@ public class Window extends Widget implements WindowLayering.Target {
     }
     }
 
-    public boolean handle(Event ev) {
-    if(!ev.grabbed && (ev instanceof PointerEvent)) {
-        if(deco != null) {
-        if(checkhit(((PointerEvent)ev).c)) {
-            super.handle(ev);
-            ev.propagate(this);
-            return(true);
-        }
-        } else {
-        super.handle(ev);
-        return(ev.propagate(this));
-        }
+    public boolean mousewheel(MouseWheelEvent ev) {
+	layoutbarter();
+	if(barterActive && barterScroll.visible &&
+	   ev.c.isect(xlate(barterViewport, true), barterViewportSize)) {
+	    barterScroll.ch(ev.s * UI.scale(24));
+	    return(true);
+	}
+	return(super.mousewheel(ev));
     }
-    return(super.handle(ev));
+
+    private List<Shopbox> maskbarterrows(PointerEvent ev) {
+	if(!barterActive || ev.grabbed)
+	    return(Collections.emptyList());
+	Coord viewport = xlate(barterViewport, true);
+	boolean inview = ev.c.isect(viewport, barterViewportSize);
+	List<Shopbox> masked = new ArrayList<>();
+	for(Shopbox row : barterrows()) {
+	    Coord cc = xlate(row.c, true);
+	    if(row.visible && (!inview || !ev.c.isect(cc, row.sz))) {
+		row.visible = false;
+		masked.add(row);
+	    }
+	}
+	return(masked);
+    }
+
+    private void unmaskbarterrows(List<Shopbox> rows) {
+	for(Shopbox row : rows)
+	    row.visible = true;
+    }
+
+    public boolean handle(Event ev) {
+	layoutbarter();
+	List<Shopbox> masked = (ev instanceof PointerEvent) ? maskbarterrows((PointerEvent)ev) : Collections.emptyList();
+	try {
+	    if(!ev.grabbed && (ev instanceof PointerEvent)) {
+		if(deco != null) {
+		    if(checkhit(((PointerEvent)ev).c)) {
+			super.handle(ev);
+			ev.propagate(this);
+			return(true);
+		    }
+		} else {
+		    super.handle(ev);
+		    return(ev.propagate(this));
+		}
+	    }
+	    return(super.handle(ev));
+	} finally {
+	    unmaskbarterrows(masked);
+	}
     }
 
     public boolean keydown(KeyDownEvent ev) {

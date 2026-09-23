@@ -356,7 +356,7 @@ public class TunnelingBot implements Action {
         return 100; // Default for minesupport, ladder, towercap
     }
 
-    private Results placeSupport(NGameUI gui, Coord2d pos, SupportType supportType)
+    static Results placeSupport(NGameUI gui, Coord2d pos, SupportType supportType)
             throws InterruptedException {
         // Check if there's already a support at this location
         Gob existingSupport = Finder.findGob(pos);

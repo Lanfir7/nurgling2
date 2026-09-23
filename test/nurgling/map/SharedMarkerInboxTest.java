@@ -10,6 +10,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class SharedMarkerInboxTest {
     @Test
+    void renamedLocallyCopiedMarkerIsOfferedWithTheEditedName() {
+        SharedMarkerInbox inbox = new SharedMarkerInbox();
+        String original = SharedMarkerCode.encode("Barter Stand", "world-16", 42L,
+                new Coord(1, 2), Color.YELLOW);
+        inbox.ignore(original);
+        String renamed = "Мой бартер стенд такой то" + original.substring(original.indexOf("-NGM1-"));
+        org.junit.jupiter.api.Assertions.assertEquals("Мой бартер стенд такой то",
+                inbox.offer(renamed, "world-16").name);
+    }
+
+    @Test
     void offersEachClipboardCodeOnlyOnceUntilClipboardChanges() {
         SharedMarkerInbox inbox = new SharedMarkerInbox();
         String first = SharedMarkerCode.encode(

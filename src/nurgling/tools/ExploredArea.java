@@ -78,6 +78,15 @@ public class ExploredArea {
     
     // Session layer storage: grid-based masks (temporary, not saved)
     private final ConcurrentHashMap<GridKey, boolean[]> sessionGridMasks = new ConcurrentHashMap<>();
+
+    /** Per-grid revision. A global seq would force every map window to rebuild every texture. */
+    private final ConcurrentHashMap<GridKey, GridGen> gridGen = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<GridKey, GridGen> sessionGen = new ConcurrentHashMap<>();
+
+    private static final class GridGen {
+        volatile long seq;
+        volatile boolean hasAny;
+    }
     
     // Flag indicating if session layer is active
     private volatile boolean sessionActive = false;
@@ -153,6 +162,8 @@ public class ExploredArea {
                     int localBRY = Math.min(GRID_SIZE, tileBR.y - gridTileStart.y);
 
                     // Mark tiles as explored
+                    boolean gridChanged = false;
+                    boolean sessionGridChanged = false;
                     for (int y = localULY; y < localBRY; y++) {
                         for (int x = localULX; x < localBRX; x++) {
                             int idx = x + y * GRID_SIZE;
@@ -160,14 +171,20 @@ public class ExploredArea {
                             if (!mask[idx]) {
                                 mask[idx] = true;
                                 changed = true;
+                                gridChanged = true;
                             }
                             // Update session layer if active
                             if (sessionMask != null && !sessionMask[idx]) {
                                 sessionMask[idx] = true;
                                 sessionChanged = true;
+                                sessionGridChanged = true;
                             }
                         }
                     }
+                    if (gridChanged)
+                        markGenerated(gridGen, key);
+                    if (sessionGridChanged)
+                        markGenerated(sessionGen, key);
                 }
             }
         }
@@ -189,19 +206,13 @@ public class ExploredArea {
     
     public static class GridMask {
         public final boolean[] mask;
-        public volatile long seq;
-        public volatile boolean hasAny;
+        public final long seq;
+        public final boolean hasAny;
 
-        public GridMask(boolean[] existingMask) {
+        public GridMask(boolean[] existingMask, long seq, boolean hasAny) {
             this.mask = existingMask;
-            this.seq = ExploredArea.seq;
-            boolean any = false;
-            if (existingMask != null) {
-                for (boolean b : existingMask) {
-                    if (b) { any = true; break; }
-                }
-            }
-            this.hasAny = any;
+            this.seq = seq;
+            this.hasAny = hasAny;
         }
     }
 
@@ -216,9 +227,18 @@ public class ExploredArea {
      * @return boolean[] mask or null if no data
      */
     public GridMask getExploredMaskForGrid(Coord gridCoord, long segmentId, int dataLevel) {
-        GridKey key = new GridKey(segmentId, gridCoord);
-        boolean[] mask = gridMasks.get(key);
-        return mask == null ? null : new GridMask(mask);
+        return maskOf(gridMasks, gridGen, new GridKey(segmentId, gridCoord));
+    }
+
+    /**
+     * Revision of one base grid. Zero means that grid has no explored tiles.
+     * Other grids keep their revision when this one changes.
+     */
+    public long gridGeneration(int gx, int gy, long segmentId, boolean session) {
+        if (session && !sessionActive)
+            return 0;
+        GridGen gen = (session ? sessionGen : gridGen).get(new GridKey(segmentId, new Coord(gx, gy)));
+        return (gen == null || !gen.hasAny) ? 0 : gen.seq;
     }
     
     /**
@@ -230,6 +250,7 @@ public class ExploredArea {
             hadData = !gridMasks.isEmpty();
             if (hadData) {
                 gridMasks.clear();
+                gridGen.clear();
                 lastTileUL = null;
                 lastTileBR = null;
                 lastSegmentId = -1;
@@ -256,6 +277,7 @@ public class ExploredArea {
     public void startSession() {
         synchronized (masksLock) {
             sessionGridMasks.clear();
+            sessionGen.clear();
             sessionActive = true;
             // Reset last position to force immediate coloring of current view
             lastTileUL = null;
@@ -273,6 +295,7 @@ public class ExploredArea {
     public void endSession() {
         synchronized (masksLock) {
             sessionGridMasks.clear();
+            sessionGen.clear();
             sessionActive = false;
         }
         sessionSeq++;
@@ -291,9 +314,7 @@ public class ExploredArea {
         if (!sessionActive) {
             return null;
         }
-        GridKey key = new GridKey(segmentId, gridCoord);
-        boolean[] mask = sessionGridMasks.get(key);
-        return mask == null ? null : new GridMask(mask);
+        return maskOf(sessionGridMasks, sessionGen, new GridKey(segmentId, gridCoord));
     }
     
     /**
@@ -473,8 +494,10 @@ public class ExploredArea {
             merged = ExploredAreaMerge.merge(merged, live, MASK_SIZE);
             gridMasks.clear();
             gridMasks.putAll(merged);
+            rebuildGen(gridMasks, gridGen);
         }
         sessionGridMasks.clear();
+        sessionGen.clear();
         loadSessionFromFile();
         seq++;
     }
@@ -552,6 +575,7 @@ public class ExploredArea {
             }
             
             sessionSeq++;
+            rebuildGen(sessionGridMasks, sessionGen);
         } catch (Exception e) {
             // Ignore load errors
         }
@@ -572,6 +596,49 @@ public class ExploredArea {
         }
     }
     
+    private static void markGenerated(ConcurrentHashMap<GridKey, GridGen> gens, GridKey key) {
+        GridGen gen = gens.get(key);
+        if (gen == null) {
+            gen = new GridGen();
+            GridGen prev = gens.putIfAbsent(key, gen);
+            if (prev != null)
+                gen = prev;
+        }
+        gen.hasAny = true;
+        gen.seq++;
+    }
+
+    private void rebuildGen(Map<GridKey, boolean[]> masks, ConcurrentHashMap<GridKey, GridGen> gens) {
+        gens.clear();
+        for (Map.Entry<GridKey, boolean[]> entry : masks.entrySet()) {
+            boolean[] mask = entry.getValue();
+            if (mask != null && hasAnyExploredTiles(mask)) {
+                GridGen gen = new GridGen();
+                gen.hasAny = true;
+                gen.seq = 1;
+                gens.put(entry.getKey(), gen);
+            }
+        }
+    }
+
+    private GridMask maskOf(ConcurrentHashMap<GridKey, boolean[]> masks, ConcurrentHashMap<GridKey, GridGen> gens, GridKey key) {
+        boolean[] mask = masks.get(key);
+        if (mask == null)
+            return null;
+        GridGen gen = gens.get(key);
+        if (gen == null) {
+            boolean any = hasAnyExploredTiles(mask);
+            GridGen created = new GridGen();
+            created.hasAny = any;
+            created.seq = any ? 1 : 0;
+            GridGen raced = gens.putIfAbsent(key, created);
+            gen = raced == null ? created : raced;
+        }
+        if (!gen.hasAny)
+            return null;
+        return new GridMask(mask, gen.seq, true);
+    }
+
     /**
      * Check if mask has any explored tiles.
      */
@@ -665,21 +732,34 @@ public class ExploredArea {
     }
 
     private void publishMerged(Map<GridKey, boolean[]> mergedData) {
+        boolean anyGrew = false;
         synchronized (masksLock) {
             for (Map.Entry<GridKey, boolean[]> entry : mergedData.entrySet()) {
                 GridKey key = entry.getKey();
                 boolean[] mergedMask = entry.getValue();
                 boolean[] currentMask = gridMasks.get(key);
+                boolean grew = false;
                 if (currentMask == null) {
-                    gridMasks.put(key, Arrays.copyOf(mergedMask, MASK_SIZE));
+                    boolean[] copy = Arrays.copyOf(mergedMask, MASK_SIZE);
+                    gridMasks.put(key, copy);
+                    grew = hasAnyExploredTiles(copy);
                 } else {
                     int n = Math.min(MASK_SIZE, mergedMask.length);
                     for (int i = 0; i < n; i++) {
-                        currentMask[i] |= mergedMask[i];
+                        if (!currentMask[i] && mergedMask[i]) {
+                            currentMask[i] = true;
+                            grew = true;
+                        }
                     }
+                }
+                if (grew) {
+                    markGenerated(gridGen, key);
+                    anyGrew = true;
                 }
             }
         }
+        if (anyGrew)
+            seq++;
     }
 
     private boolean isValidStoredData(byte[] content) {

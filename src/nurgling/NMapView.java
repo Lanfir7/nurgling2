@@ -985,6 +985,9 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     }
 
     public Object tooltip(Coord c, Widget prev) {
+        String barterItem = NBarterOfferOverlay.tooltip(glob, c);
+        if(barterItem != null)
+            return barterItem;
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastTooltipUpdate < tooltipThrottleTime) {
             if(oldttip!=null)

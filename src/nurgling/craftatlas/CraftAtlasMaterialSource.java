@@ -107,9 +107,14 @@ public final class CraftAtlasMaterialSource {
             namesBySlot.add(names);
             allNames.addAll(names);
         }
-        List<GroupedItem> warehouse = includeStorage && !allNames.isEmpty()
-                ? storageSearch.apply(allNames) : Collections.emptyList();
-        if(warehouse == null) warehouse = Collections.emptyList();
+        List<GroupedItem> warehouse = Collections.emptyList();
+        if(includeStorage && !allNames.isEmpty()) {
+            warehouse = storageSearch.apply(allNames);
+            /* null means the lookup failed. An empty list is a real miss and must not be substituted,
+             * or the ingredient dropdowns flash "no matching resources" until the next refresh. */
+            if(warehouse == null)
+                throw new IllegalStateException("storage lookup failed");
+        }
         for(int i = 0; i < entry.inputs.size(); i++) {
             CraftAtlasEntry.InputSlot input = entry.inputs.get(i);
             List<String> names = namesBySlot.get(i);

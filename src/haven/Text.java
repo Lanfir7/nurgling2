@@ -37,6 +37,7 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.text.AttributedString;
 import java.util.*;
 import java.util.function.*;
 
@@ -62,6 +63,77 @@ public class Text implements Disposable {
 	fraktur = ((FontSettings)NConfig.get(NConfig.Key.fonts)).getFoundary(Fonts.FontType.UI).font;
     }
 	
+    /** Decorative interface glyphs. Drawn from a face that contains them, not the text font. */
+    static boolean isSymbol(int cp) {
+	switch(cp) {
+	    case 0x2605: /* ★ */
+	    case 0x2606: /* ☆ */
+	    case 0x272A: /* ✪ */
+	    case 0x2713: /* ✓ */
+	    case 0x2715: /* ✕ */
+	    case 0x2717: /* ✗ */
+	    case 0x25CF: /* ● */
+	    case 0x2022: /* • */
+	    case 0x25A0: /* ■ */
+	    case 0x25CB: /* ○ */
+	    case 0x25C6: /* ◆ */
+	    case 0x25B2: /* ▲ */
+	    case 0x25B6: /* ▶ */
+	    case 0x25BA: /* ► */
+	    case 0x25BC: /* ▼ */
+	    case 0x203A: /* › */
+	    case 0x2190: /* ← */
+	    case 0x2191: /* ↑ */
+	    case 0x2192: /* → */
+	    case 0x2193: /* ↓ */
+	    case 0x21E7: /* ⇧ */
+	    case 0x221E: /* ∞ */
+		return(true);
+	    default:
+		return(false);
+	}
+    }
+
+    static boolean containsSymbol(String text) {
+	for(int i = 0; i < text.length(); ) {
+	    int cp = text.codePointAt(i);
+	    if(isSymbol(cp))
+		return(true);
+	    i += Character.charCount(cp);
+	}
+	return(false);
+    }
+
+    private static Font symbolFace;
+
+    static Font symbolFace() {
+	Font face = symbolFace;
+	if(face != null)
+	    return(face);
+	Font symbol = new Font("Segoe UI Symbol", Font.PLAIN, 12);
+	if(symbol.canDisplay(0x2605) && symbol.canDisplay(0x2713)
+		&& "Segoe UI Symbol".equals(symbol.getFamily()))
+	    face = symbol;
+	else
+	    face = new Font("SansSerif", Font.PLAIN, 12);
+	symbolFace = face;
+	return(face);
+    }
+
+    static void pinSymbols(AttributedString text, String raw, Font body) {
+	if((raw == null) || (body == null) || !containsSymbol(raw))
+	    return;
+	Font symbols = symbolFace().deriveFont(body.getStyle(), body.getSize2D());
+	int i = 0;
+	while(i < raw.length()) {
+	    int cp = raw.codePointAt(i);
+	    int n = Character.charCount(cp);
+	    if(isSymbol(cp))
+		text.addAttribute(TextAttribute.FONT, symbols, i, i + n);
+	    i += n;
+	}
+    }
+
     public static abstract class Slug extends Text {
 	public Slug(String text, BufferedImage img) {
 	    super(text, img);
@@ -159,8 +231,9 @@ public class Text implements Disposable {
 	public FontMetrics m;
 	public final Font font;
 	public final Color defcol;
-	public boolean aa = true;
-	private RichText.Foundry wfnd = null;
+		public boolean aa = true;
+		private RichText.Foundry wfnd = null;
+		private FontMetrics starMetrics;
 		
 	public Foundry(Font f, Color defcol) {
 	    font = f;
@@ -219,7 +292,103 @@ public class Text implements Disposable {
 	}
 
 	public Coord strsize(String text) {
+	    if(containsSymbol(text))
+		return(new Coord(pinnedWidth(text), height()));
 	    return(new Coord(m.stringWidth(text), height()));
+	}
+
+	private static Font starFace() {
+	    return(symbolFace());
+	}
+
+	private FontMetrics starMetrics() {
+	    if(starMetrics != null)
+		return(starMetrics);
+	    Font stars = starFace().deriveFont(font.getStyle(), font.getSize2D());
+	    BufferedImage junk = TexI.mkbuf(new Coord(10, 10));
+	    Graphics measure = junk.getGraphics();
+	    measure.setFont(stars);
+	    starMetrics = measure.getFontMetrics();
+	    measure.dispose();
+	    return(starMetrics);
+	}
+
+	private int[] starAdvances(String text) {
+	    FontMetrics sm = starMetrics();
+	    int[] adv = new int[text.length() + 1];
+	    int x = 0;
+	    int i = 0;
+	    while(i < text.length()) {
+		int cp = text.codePointAt(i);
+		int n = Character.charCount(cp);
+		x += (isSymbol(cp) ? sm : m).stringWidth(text.substring(i, i + n));
+		for(int k = 1; k <= n; k++)
+		    adv[i + k] = x;
+		i += n;
+	    }
+	    return(adv);
+	}
+
+	private int pinnedWidth(String text) {
+	    int[] adv = starAdvances(text);
+	    int width = adv[adv.length - 1];
+	    return((width < 1) ? 1 : width);
+	}
+
+	private static final class StarLine extends Line {
+	    private final int[] advanceAt;
+
+	    private StarLine(String text, BufferedImage img, FontMetrics metrics, int[] advanceAt) {
+		super(text, img, metrics);
+		this.advanceAt = advanceAt;
+	    }
+
+	    public int advance(int pos) {
+		if(pos <= 0)
+		    return(0);
+		if(pos >= advanceAt.length)
+		    return(advanceAt[advanceAt.length - 1]);
+		return(advanceAt[pos]);
+	    }
+	}
+
+	private Line renderWithStarFont(String text, Color c) {
+	    int[] adv = starAdvances(text);
+	    int width = adv[text.length()];
+	    if(width < 1)
+		width = 1;
+	    BufferedImage img = TexI.mkbuf(new Coord(width, height()));
+	    Graphics g = img.createGraphics();
+	    if(aa)
+		Utils.AA(g);
+	    g.setColor(c);
+	    g.setFont(font);
+	    FontMetrics body = g.getFontMetrics();
+	    int base = body.getLeading() + body.getAscent();
+	    Font stars = starMetrics().getFont();
+	    int x = 0;
+	    int i = 0;
+	    while(i < text.length()) {
+		int cp = text.codePointAt(i);
+		boolean star = isSymbol(cp);
+		int j = i + Character.charCount(cp);
+		while(j < text.length()) {
+		    int next = text.codePointAt(j);
+		    if(isSymbol(next) != star)
+			break;
+		    j += Character.charCount(next);
+		}
+		g.setFont(star ? stars : font);
+		String run = text.substring(i, j);
+		g.drawString(run, x, base);
+		x += g.getFontMetrics().stringWidth(run);
+		i = j;
+	    }
+	    g.dispose();
+	    Line ln = new StarLine(text, img, m, adv);
+	    ln.fnd = this;
+	    ln.col = c;
+	    return(ln);
 	}
                 
 	public Text renderwrap(String text, Color c, int width) {
@@ -237,6 +406,8 @@ public class Text implements Disposable {
 	}
                 
 	public Line render(String text, Color c) {
+	    if(containsSymbol(text))
+		return(renderWithStarFont(text, c));
 	    Coord sz = strsize(text);
 	    if(sz.x < 1)
 		sz = sz.add(1, 0);

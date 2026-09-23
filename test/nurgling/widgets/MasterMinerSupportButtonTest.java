@@ -23,18 +23,4 @@ class MasterMinerSupportButtonTest {
         assertTrue(source.contains("Math.min((double) max / icon.getWidth(), (double) max / icon.getHeight())"));
     }
 
-    @Test
-    void supportMacroClearsMiningSelectionAndStopsAtTheConstructionWindow() throws Exception {
-        String source = Files.readString(Path.of("src/nurgling/actions/bots/MasterMiner.java"), StandardCharsets.UTF_8);
-        String collector = source.substring(source.indexOf("class CollectSupportStones"));
-        assertTrue(collector.contains("private static final String STONE_COLUMN_NAME = \"Stone Column\";"));
-        assertTrue(collector.contains("private static final String STONE_COLUMN_PAGINA = \"paginae/bld/column\";"));
-        assertTrue(collector.contains("wdgmsg(\"click\", Coord.z, player.rc.floor(OCache.posres), 3, 0)"));
-        assertTrue(collector.contains("WaitPlob.withSoftTimeout"));
-        assertTrue(collector.contains("WaitConstructionObject.withSoftTimeout"));
-        assertTrue(collector.contains("STONE_COLUMN_PAGINA.equals(pagina.res().name)"));
-        assertTrue(collector.contains("WaitWindow.withSoftTimeout(STONE_COLUMN_NAME, 200)"));
-        assertTrue(collector.contains("gui.getWindow(STONE_COLUMN_NAME) == null"));
-        assertTrue(!collector.contains("startBuild("));
-    }
 }

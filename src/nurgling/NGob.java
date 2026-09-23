@@ -926,6 +926,8 @@ public class NGob
                         {
                             NIconSignOverlay.ensureAttached(parent);
                         }
+                        if (NBarterOfferOverlay.supports(name))
+                            NBarterOfferOverlay.ensureAttached(parent);
                         if (NActionStatusOverlay.supports(name))
                         {
                             NActionStatusOverlay.ensureAttached(parent);

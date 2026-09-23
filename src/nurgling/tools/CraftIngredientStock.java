@@ -94,7 +94,7 @@ public final class CraftIngredientStock {
             return groupByQuality(raw, containers);
         } catch (Exception e) {
             e.printStackTrace();
-            return List.of();
+            return null;
         }
     }
 
@@ -168,13 +168,19 @@ public final class CraftIngredientStock {
         if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
             return names;
         }
-        synchronized (gui.ui.sess.glob.oc) {
-            for (Gob gob : gui.ui.sess.glob.oc) {
-                if (gob.ngob == null || gob.ngob.hash == null || gob.ngob.name == null) {
-                    continue;
+        try {
+            synchronized (gui.ui.sess.glob.oc) {
+                for (Gob gob : gui.ui.sess.glob.oc) {
+                    try {
+                        if (gob.ngob == null || gob.ngob.hash == null || gob.ngob.name == null) {
+                            continue;
+                        }
+                        names.put(gob.ngob.hash, StorageTableInfo.containerTitle(gob.ngob.name));
+                    } catch (Exception ignored) {
+                    }
                 }
-                names.put(gob.ngob.hash, StorageTableInfo.containerTitle(gob.ngob.name));
             }
+        } catch (Exception ignored) {
         }
         return names;
     }
@@ -219,7 +225,7 @@ public final class CraftIngredientStock {
             Coord2d containerRc = Coord2d.of(containerGrid.ul).mul(MCache.tilesz)
                     .add(Coord2d.of(stored).mul(OCache.posres));
             return (int) Math.round(player.rc.dist(containerRc) / MCache.tilesz.x);
-        } catch (Loading e) {
+        } catch (Exception e) {
             return StorageTableInfo.UNKNOWN_DIST;
         }
     }

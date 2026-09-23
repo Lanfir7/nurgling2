@@ -740,6 +740,9 @@ public class NMakewindow extends Widget implements DTarget {
                     String picked = (s.ing != null && !s.ing.isIgnored) ? s.ing.name : null;
                     List<String> names = CraftIngredientStock.namesFor(s.name, category, picked);
                     List<NStorageItemsWidget.GroupedItem> found = CraftIngredientStock.search(names);
+                    if (found == null) {
+                        found = List.of();
+                    }
                     byInput.put(i, found);
                     totals.put(i, CraftIngredientStock.totals(found));
                     Set<String> nset = new HashSet<>();

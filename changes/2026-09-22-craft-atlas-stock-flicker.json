@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-22-craft-atlas-stock-flicker",
+  "priority": 5,
+  "summary": {
+    "ru": "В атласе крафта ресурсы со склада больше не пропадают на пару секунд.",
+    "en": "Craft Atlas no longer drops warehouse resources for a few seconds."
+  },
+  "detail": {
+    "ru": "Откройте рецепт в атласе крафта. Списки ингредиентов со склада остаются на месте, пока обновляется меню или склад. «Нет подходящих ресурсов» появляется, только если подходящих предметов действительно нет.",
+    "en": "Open a recipe in Craft Atlas. Warehouse ingredient lists stay put while the menu or storage refreshes. No matching resources appears only when nothing suitable is actually stored."
+  }
+}

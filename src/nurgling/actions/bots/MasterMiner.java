@@ -14,15 +14,13 @@ import nurgling.actions.Results;
 import nurgling.i18n.L10n;
 import nurgling.tasks.GetCurs;
 import nurgling.tasks.NTask;
-import nurgling.tasks.WaitConstructionObject;
-import nurgling.tasks.WaitPlob;
 import nurgling.tasks.WaitTicks;
-import nurgling.tasks.WaitWindow;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
 import nurgling.NInventory;
 import nurgling.widgets.NEquipory;
+import nurgling.widgets.TunnelingDialog;
 import nurgling.widgets.bots.MasterMinerGroundStacks;
 import nurgling.widgets.bots.MasterMinerWnd;
 
@@ -707,8 +705,6 @@ public class MasterMiner extends ActionWithFinal {
      * the action started. The action deliberately shares the normal PathFinder/take protocol.
     */
     public static final class CollectSupportStones implements nurgling.actions.Action {
-        private static final String STONE_COLUMN_NAME = "Stone Column";
-        private static final String STONE_COLUMN_PAGINA = "paginae/bld/column";
         private final int requested;
 
         public CollectSupportStones(int requested) {
@@ -767,53 +763,15 @@ public class MasterMiner extends ActionWithFinal {
 
         private Results placeStoneColumn(NGameUI gui, Coord2d origin) throws InterruptedException {
             Coord originTile = origin.div(MCache.tilesz).floor();
-            Coord targetTile = MasterMinerSupportPlacement.chooseAdjacent(originTile,
-                    tile -> isOpenCaveTile(gui, tile),
-                    tile -> nurgling.tools.Finder.findGob(tileCenter(tile)) == null);
+            Gob returnedMiner = NUtils.player();
+            Coord returnedMinerTile = returnedMiner == null ? null : returnedMiner.rc.div(MCache.tilesz).floor();
+            Coord targetTile = MasterMinerSupportPlacement.chooseAdjacent(originTile, returnedMinerTile,
+                    tile -> isOpenCaveTile(gui, tile));
             if (targetTile == null) {
                 return supportError("bot.masterminer.support_no_tile");
             }
             Coord2d target = tileCenter(targetTile);
-            if (nurgling.tools.Finder.findGob(target) != null) {
-                return supportError("bot.masterminer.support_no_tile");
-            }
-            MenuGrid.Pagina stoneColumnPagina = stoneColumnPagina(gui);
-            if (stoneColumnPagina == null) {
-                return supportError("bot.masterminer.support_no_pagina");
-            }
-            try {
-                stoneColumnPagina.button().use(new MenuGrid.Interaction(1, 0));
-            } catch (Loading ignored) {
-                return supportError("bot.masterminer.support_no_pagina");
-            }
-            NUtils.addTask(WaitPlob.withSoftTimeout(true, 200, gui));
-            if (gui.map.placing == null || !gui.map.placing.ready()) {
-                return supportError("bot.masterminer.support_place_failed");
-            }
-            gui.map.wdgmsg("place", target.floor(OCache.posres), 0, 1, 0);
-            NUtils.addTask(WaitConstructionObject.withSoftTimeout(target, 200));
-            if (nurgling.tools.Finder.findGob(target) == null) {
-                return supportError("bot.masterminer.support_place_failed");
-            }
-            NUtils.addTask(WaitWindow.withSoftTimeout(STONE_COLUMN_NAME, 200));
-            if (gui.getWindow(STONE_COLUMN_NAME) == null) {
-                return supportError("bot.masterminer.support_place_failed");
-            }
-            return Results.SUCCESS();
-        }
-
-        private MenuGrid.Pagina stoneColumnPagina(NGameUI gui) {
-            if (gui.menu == null) return null;
-            for (MenuGrid.Pagina pagina : gui.menu.paginae) {
-                try {
-                    if (pagina != null && STONE_COLUMN_PAGINA.equals(pagina.res().name)) {
-                        return pagina;
-                    }
-                } catch (Loading ignored) {
-                    // The page has not finished loading; leave stones untouched and try again later.
-                }
-            }
-            return null;
+            return TunnelingBot.placeSupport(gui, target, TunnelingDialog.SupportType.STONE_COLUMN);
         }
 
         private boolean isOpenCaveTile(NGameUI gui, Coord tile) {

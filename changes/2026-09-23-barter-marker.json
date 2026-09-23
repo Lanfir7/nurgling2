@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-23-barter-marker",
+  "priority": 5,
+  "summary": {
+    "ru": "Флажок в заголовке бартерного стенда сохраняет и копирует маркер.",
+    "en": "The flag in the Barter Stand title saves and copies a marker."
+  },
+  "detail": {
+    "ru": "Нажмите флажок рядом с названием окна: маркер появится в текущей позиции персонажа, а его код сразу скопируется в буфер обмена. К точке можно вернуться через обычное действие перехода к маркеру на карте. Повторное нажатие в том же месте не создаёт дубликат.",
+    "en": "Click the flag beside the window title to save a marker at your character’s current position and copy its sharing code. Return using the usual map marker navigation action. Repeated clicks at the same position do not create duplicates."
+  }
+}

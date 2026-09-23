@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-22-favorite-stars",
+  "priority": 4,
+  "summary": {
+    "ru": "Значки интерфейса остаются на месте, даже если для текста выбран другой шрифт.",
+    "en": "Interface icons stay visible when another font is chosen for text."
+  },
+  "detail": {
+    "ru": "Звёзды избранного в Стенах Вещей и в атласе крафта, галочки фильтров, стрелки и точки в заголовках рисуются своим шрифтом. Названия и прочий текст по-прежнему берутся из настроек шрифта.",
+    "en": "Favourite stars in Thingwalls and Craft Atlas, filter checks, arrows and section marks use their own font. Names and other text still follow the font settings."
+  }
+}

@@ -51,6 +51,18 @@ class WikiReferenceCatalogTest {
     }
 
     @Test
+    void equipmentMeleeBonusUsesTheCharacterSkillIcon() throws Exception {
+        String json = "{\"entries\":[{\"id\":\"wiki:boreworm-mask\",\"name\":\"Boreworm Mask\"," +
+                "\"categories\":[\"equipment\"]," +
+                "\"bonuses\":[{\"resource\":\"equipment:melee\",\"name\":\"Melee\",\"value\":5}]}]}";
+
+        CraftAtlasEntry entry = WikiReferenceCatalog.parse(new ByteArrayInputStream(
+                json.getBytes(StandardCharsets.UTF_8))).get(0);
+
+        assertEquals("gfx/hud/chr/melee", entry.bonuses.get(0).attributeResource);
+    }
+
+    @Test
     void parsesGildableEquipmentCategoryAndSlots() throws Exception {
         String json = "{\"entries\":[{\"id\":\"wiki:bunny-slippers\",\"name\":\"Bunny Slippers\"," +
                 "\"categories\":[\"equipment\",\"equipment-shoes\"],\"equipmentSlots\":[\"11R\"]," +

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-22-explored-fog-map",
+  "priority": 5,
+  "summary": {
+    "ru": "Туман разведки на карте не рвётся кусками и меньше тормозит, когда открыто несколько окон карты.",
+    "en": "Exploration fog stays continuous and lighter when more than one map window is open."
+  },
+  "detail": {
+    "ru": "Жёлтый туман и временный зелёный слой ложатся на те же клетки, что и сама карта, в том числе на большой карте рядом с миникартой. Показ больше не перерисовывает всю дымку заново на каждом шаге.",
+    "en": "The yellow fog and the temporary green layer follow the same cells as the map, including the large map beside the minimap. Showing them no longer redraws the whole haze on every step."
+  }
+}

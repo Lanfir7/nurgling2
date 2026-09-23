@@ -19,6 +19,7 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
     private int titleWidgetPreferredWidth;
     private int titleWidgetMinWidth;
     private boolean titleWidgetEnabled;
+    private boolean barterMarkerInstalled;
     private static Text.Foundry ftitlef, nftitlef;
 
     public NWindowDeco(boolean lg) {
@@ -82,6 +83,17 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
         if(titleWidget.visible) {
             titleWidget.resize(Coord.of(layout.width, titleWidget.sz.y));
             titleWidget.move(layout.position);
+            if(titleWidget instanceof nurgling.widgets.BarterMarkerButton)
+                titleWidget.move(Coord.of(titleWidth + UI.scale(8), layout.position.y));
+        }
+    }
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        if(!barterMarkerInstalled && parent instanceof Window && "Barter Stand".equals(((Window)parent).cap)) {
+            barterMarkerInstalled = true;
+            setTitleWidget(new nurgling.widgets.BarterMarkerButton(), UI.scale(18), UI.scale(18));
         }
     }
 

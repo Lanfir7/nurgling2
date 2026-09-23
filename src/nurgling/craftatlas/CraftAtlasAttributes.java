@@ -33,6 +33,7 @@ public final class CraftAtlasAttributes {
         add(values, "Unarmed", "unarmed");
         add(values, "Unarmed Combat", "unarmed");
         add(values, "Melee Combat", "melee");
+        add(values, "Melee", "melee");
         add(values, "Marksmanship", "ranged");
         add(values, "Inventory", "invmore");
         RESOURCES = Collections.unmodifiableMap(values);

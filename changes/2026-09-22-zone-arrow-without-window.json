@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-22-zone-arrow-without-window",
+  "priority": 6,
+  "summary": {
+    "ru": "Стрелка зоны больше не роняет клиент, когда окно игры на миг пропадает.",
+    "en": "The zone arrow no longer crashes the client when the game window disappears for a moment."
+  },
+  "detail": {
+    "ru": "При смене персонажа или нескольких окнах стрелка направления зоны просто не рисуется, пока карта снова не на месте.",
+    "en": "While changing characters or using several windows, the zone direction arrow stays hidden until the map is back."
+  }
+}

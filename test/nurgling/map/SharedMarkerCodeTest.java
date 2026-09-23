@@ -12,6 +12,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SharedMarkerCodeTest {
     @Test
+    void playerCanRenameSharedBarterMarkerWithoutChangingPayload() {
+        String payload = "-NGM1-TX3PR-IWGXW-CFT3S-W6BN3-52K25-QAAEA-AX777-4QABA-ZV2KI";
+        SharedMarkerCode.Marker original = SharedMarkerCode.decode("Barter Stand" + payload);
+        SharedMarkerCode.Marker renamed = SharedMarkerCode.decode("Мой бартер стенд такой то" + payload);
+        assertEquals("Barter Stand", original.name);
+        assertEquals("Мой бартер стенд такой то", renamed.name);
+        assertEquals(original.gridId, renamed.gridId);
+        assertEquals(original.local, renamed.local);
+        assertEquals(original.color, renamed.color);
+    }
+
+    @Test
     void roundTripPreservesVisibleNameAndMapLocation() {
         String encoded = SharedMarkerCode.encode(
             "Market Ланфира", "world-16", 8_765_432_109L,

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-22-craft-atlas-melee-icon",
+  "priority": 4,
+  "summary": {
+    "ru": "В атласе крафта у бонуса Melee снова есть иконка.",
+    "en": "Craft Atlas shows an icon for the Melee bonus."
+  },
+  "detail": {
+    "ru": "Откройте экипировку в атласе крафта. Бонус Melee рисуется той же иконкой, что и навык в окне персонажа.",
+    "en": "Open equipment in Craft Atlas. The Melee bonus uses the same icon as the skill in the character window."
+  }
+}

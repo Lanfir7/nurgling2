@@ -179,8 +179,9 @@ public class CraftAtlasDetails extends Widget {
         if(previous != null && !previous.equals(next)) savedScroll.put(previous, scroll);
         entry = value;
         boolean changed = previous == null ? next != null : !previous.equals(next);
-        boolean materialsChanged = changed || (oldEntry != value && value != null &&
-                (oldEntry == null || oldEntry.inputs != value.inputs || oldEntry.inputsObserved != value.inputsObserved));
+        /* Catalog rebuilds copy the same slots into a new list. Reference inequality
+         * used to reload stock and show "no matching resources" until the database returned. */
+        boolean materialsChanged = changed || (value != null && !sameMaterialInputs(oldEntry, value));
         if(materialsChanged) loadMaterials();
         rebuildRows();
         rebuildRequirementQualityEntries();
@@ -191,6 +192,25 @@ public class CraftAtlasDetails extends Widget {
         qualityEntry.visible = qualityVisible;
         autoQualityBox.visible = qualityVisible && qualityControlsFit();
         if(previous == null || !previous.equals(next)) scroll = next == null ? 0 : savedScroll.getOrDefault(next, 0);
+    }
+
+    static boolean sameMaterialInputs(CraftAtlasEntry left, CraftAtlasEntry right) {
+        if(left == right) return true;
+        if(left == null || right == null || left.inputsObserved != right.inputsObserved) return false;
+        if(left.inputs.size() != right.inputs.size()) return false;
+        for(int i = 0; i < left.inputs.size(); i++) {
+            CraftAtlasEntry.InputSlot a = left.inputs.get(i);
+            CraftAtlasEntry.InputSlot b = right.inputs.get(i);
+            if(a.quantity != b.quantity || a.optional != b.optional || a.options.size() != b.options.size())
+                return false;
+            for(int j = 0; j < a.options.size(); j++) {
+                CraftAtlasEntry.IngredientOption ao = a.options.get(j);
+                CraftAtlasEntry.IngredientOption bo = b.options.get(j);
+                if(ao.resource == null ? bo.resource != null : !ao.resource.equals(bo.resource)) return false;
+                if(ao.name == null ? bo.name != null : !ao.name.equals(bo.name)) return false;
+            }
+        }
+        return true;
     }
 
     public void setCraftCount(int value) {
