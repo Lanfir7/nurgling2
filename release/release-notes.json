@@ -140,9 +140,84 @@
     "2026-09-21-ice-bear-narwhal-parts",
     "2026-09-21-map-marker-visibility",
     "2026-09-21-quality-workshop-icons",
-    "2026-09-21-thingwall-route-travel"
+    "2026-09-21-thingwall-route-travel",
+    "2026-09-22-craft-atlas-melee-icon",
+    "2026-09-22-craft-atlas-stock-flicker",
+    "2026-09-22-decal-lock-and-navigation-reliability",
+    "2026-09-22-explored-fog-map",
+    "2026-09-22-favorite-stars",
+    "2026-09-22-master-miner-stone-column-placement",
+    "2026-09-22-zone-arrow-without-window",
+    "2026-09-23-barter-loading",
+    "2026-09-23-barter-marker",
+    "2026-09-23-barter-showcase",
+    "2026-09-23-personal-marker-hints"
   ],
   "releases": [
+    {
+      "id": "2.103.213",
+      "date": "2026-09-23",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Бартерные стенды получили понятную витрину, быстрые покупки и значки товаров над стендом.",
+          "Можно закрепить наклейки шкафов; боты и обновление списков животных стали надёжнее.",
+          "Стрелка зоны больше не роняет клиент, когда окно игры на миг пропадает.",
+          "В атласе крафта ресурсы со склада больше не пропадают на пару секунд.",
+          "Туман разведки на карте не рвётся кусками и меньше тормозит, когда открыто несколько окон карты.",
+          "Мастер добычи снова ставит каменную колонну после сбора 30 камней.",
+          "Флажок в заголовке бартерного стенда сохраняет и копирует маркер.",
+          "В атласе крафта у бонуса Melee снова есть иконка.",
+          "Значки интерфейса остаются на месте, даже если для текста выбран другой шрифт.",
+          "Покупка на бартерном стенде больше не остаётся заблокированной после загрузки товара.",
+          "Личные маркеры карты получили подсказки действий."
+        ],
+        "en": [
+          "Barter stands now have clearer offer cards, quick purchases and item icons above the stand.",
+          "You can lock cupboard decals, while bots and animal roster updates are more reliable.",
+          "The zone arrow no longer crashes the client when the game window disappears for a moment.",
+          "Craft Atlas no longer drops warehouse resources for a few seconds.",
+          "Exploration fog stays continuous and lighter when more than one map window is open.",
+          "Master Miner can again place a Stone Column after collecting 30 stones.",
+          "The flag in the Barter Stand title saves and copies a marker.",
+          "Craft Atlas shows an icon for the Melee bonus.",
+          "Interface icons stay visible when another font is chosen for text.",
+          "Barter purchases no longer stay disabled after the item finishes loading.",
+          "Personal map markers now show action hints."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Карточки показывают товар, оплату, качество и остаток. Название и качество расположены друг под другом рядом с иконкой у покупателя и владельца. Покупайте введённое количество или кнопками 5 и 20: итог учитывает остаток, неверный ввод блокируется. Подключения находятся возле иконок, цена и минимальное качество — справа. Значки товаров видны над стендом без открытия торговли; выключатель — в настройках мира.",
+          "В Настройки → QoL включите «Закрепить наклейки», чтобы клики по наклейке попадали в контейнер. Для снятия используйте Ctrl+ПКМ по контейнеру и «Снять наклейку». Боты корректнее выходят из застреваний у берега и не ждут бесконечно после неудачного сбора, а привязка животных к области сохраняется при обновлении списка.",
+          "При смене персонажа или нескольких окнах стрелка направления зоны просто не рисуется, пока карта снова не на месте.",
+          "Откройте рецепт в атласе крафта. Списки ингредиентов со склада остаются на месте, пока обновляется меню или склад. «Нет подходящих ресурсов» появляется, только если подходящих предметов действительно нет.",
+          "Жёлтый туман и временный зелёный слой ложатся на те же клетки, что и сама карта, в том числе на большой карте рядом с миникартой. Показ больше не перерисовывает всю дымку заново на каждом шаге.",
+          "В Мастере добычи после сбора 30 камней каменная колонна ставится на свободный уже пройденный тайл рядом с персонажем, в том числе в обычном тоннеле.",
+          "Нажмите флажок рядом с названием окна: маркер появится в текущей позиции персонажа, а его код сразу скопируется в буфер обмена. К точке можно вернуться через обычное действие перехода к маркеру на карте. Повторное нажатие в том же месте не создаёт дубликат.",
+          "Откройте экипировку в атласе крафта. Бонус Melee рисуется той же иконкой, что и навык в окне персонажа.",
+          "Звёзды избранного в Стенах Вещей и в атласе крафта, галочки фильтров, стрелки и точки в заголовках рисуются своим шрифтом. Названия и прочий текст по-прежнему берутся из настроек шрифта.",
+          "Кнопки покупки и итог обновляются, даже если иконка или название товара загрузились во время отрисовки окна. Это устраняет зависшую надпись Item loading при уже видимом товаре.",
+          "Наведите на личный или полученный маркер, включая маркер бартерного стенда: под названием показаны актуальные сочетания для перехода к точке и удержания маяка, а также подсказка по изменению и передаче маркера на большой карте."
+        ],
+        "en": [
+          "Cards show items, payment, quality and stock. Name and quality sit together beside the icon for buyers and owners. Buy a custom quantity or use 5 and 20: totals account for stock and invalid input is blocked. Connections sit beside icons, with price and minimum quality on the right. Item icons appear above stands without opening trade; toggle them in World settings.",
+          "In Settings → QoL, enable Lock decals to send decal clicks to the container. To remove one, Ctrl+right-click its container and choose Take decal. Bots recover more reliably near shorelines and stop waiting indefinitely after an unsuccessful pick, while animal area assignments survive roster updates.",
+          "While changing characters or using several windows, the zone direction arrow stays hidden until the map is back.",
+          "Open a recipe in Craft Atlas. Warehouse ingredient lists stay put while the menu or storage refreshes. No matching resources appears only when nothing suitable is actually stored.",
+          "The yellow fog and the temporary green layer follow the same cells as the map, including the large map beside the minimap. Showing them no longer redraws the whole haze on every step.",
+          "In Master Miner, after collecting 30 stones, the Stone Column is placed on a free already-mined tile next to your character, including in a regular tunnel.",
+          "Click the flag beside the window title to save a marker at your character’s current position and copy its sharing code. Return using the usual map marker navigation action. Repeated clicks at the same position do not create duplicates.",
+          "Open equipment in Craft Atlas. The Melee bonus uses the same icon as the skill in the character window.",
+          "Favourite stars in Thingwalls and Craft Atlas, filter checks, arrows and section marks use their own font. Names and other text still follow the font settings.",
+          "Purchase buttons and totals now update even when the item icon or name finishes loading while the window is being drawn. This fixes a stuck Item loading message for an already visible item.",
+          "Hover over a personal or shared marker, including barter stands, to see the current navigation and beacon bindings below its name, plus guidance on editing and sharing it on the world map."
+        ]
+      }
+    },
     {
       "id": "2.103.212",
       "date": "2026-09-21",
@@ -1186,42 +1261,6 @@
           "Open Craft Atlas from the UI or its hotkey. Search recipes, ingredients and bonuses, follow dependencies and favorites. Open craft opens the normal craft window and never starts crafting by itself.",
           "Enable nearby animals in quality-of-life compass settings. Beasts marked in icon settings appear on the compass bar without opening the map.",
           "Hover a kiln or smelter item for percent and remaining time. The butcher macro unloads carcasses when a Put zone exists. Average ingredient quality appears under craft slots."
-        ]
-      }
-    },
-    {
-      "id": "2.103.180",
-      "date": "2026-09-02",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "На экране появился компас: квесты, группа и стороны света — без открытия карты.",
-          "Помощник квестов стал понятнее, а у цели в бою виден запас здоровья.",
-          "Карта поселения: метки, позиции соседей, импорт и запись разведанного."
-        ],
-        "en": [
-          "A HUD compass shows quests, party and headings without opening the map.",
-          "Quest Helper is easier to scan, and the fight target shows health.",
-          "Village map: markers, neighbor positions, import and explored-area recording."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Включите компас в настройках качества жизни. На полоске видны стороны света, цели квестов, группа и бой; край тянется с Ctrl. Старые стрелки компаса можно оставить рядом.",
-          "В окне квестов цели сгруппированы, есть отслеживание и русские формулировки. Полоска HP над целью помнит урон в бою; ширину и сдвиг задают ползунки. При атаке можно автоматически надеть меч и щит.",
-          "В настройках базы — мастер подключения, жители, обмен метками и показ игроков на карте. Карту можно выгрузить и влить. На миникарте — пинг; разведанные клетки пишутся отдельно. Инструменты карты ищут пробы и значки.",
-          "Ctrl+ПКМ по печи или плавильне — заправка, поджиг и таблица топлива. У костра — вертел. У телеги и повозки — выгрузка в ваши зоны. Направление заполнения свалок задаётся у зоны.",
-          "Поиск стоит в заголовке окна настроек. При входе предлагаются схемы «классика», «боты» и «минимум»; их можно сбросить или обменяться кодом. Шкаф показывает характеристики на кукле; столы учёбы заполняются пачкой."
-        ],
-        "en": [
-          "Turn the compass on in quality-of-life settings. The bar shows headings, quest targets, party and combat; Ctrl-drag the edge to resize. Legacy compass pointers can stay as well.",
-          "Quest Helper groups objectives, tracks targets and uses Russian wording. A health bar on the fight target persists through combat; sliders set width and offset. Attack can auto-equip sword and shield.",
-          "Database settings include a host wizard, villagers, shared markers and live peer positions. Export or import the map. The minimap can ping; explored tiles are recorded separately. Map tools search samples and icons.",
-          "Ctrl+right-click a kiln or smelter to fuel, light and see the fuel table. Bonfires get spit-roast; carts unload into your zones. Pile-fill direction is set on the zone.",
-          "Search sits in the settings window title. Login can apply Classic, Bots or Minimal HUD presets; share or reset them. The wardrobe doll shows stats; study desks can be filled as a batch."
         ]
       }
     }
