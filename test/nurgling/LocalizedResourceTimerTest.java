@@ -95,6 +95,54 @@ class LocalizedResourceTimerTest {
     }
 
     @Test
+    void sameGridIsOneTimerNoMatterWhoseSegment() {
+        LocalizedResourceTimer alice = new LocalizedResourceTimer(
+                111L, new Coord(1000, 2000), "Tar Pit", "gfx/terobjs/map/tarpit",
+                READY_MS, "Tar Pit", 0L, null, 42L, new Coord(3, 4));
+        LocalizedResourceTimer bob = new LocalizedResourceTimer(
+                222L, new Coord(8, 9), "Tar Pit", "gfx/terobjs/map/tarpit",
+                READY_MS, "Tar Pit", 0L, null, 42L, new Coord(3, 4));
+
+        assertEquals(alice.getResourceId(), bob.getResourceId());
+        assertEquals(LocalizedResourceTimer.sharedResourceId(42L, new Coord(3, 4), "gfx/terobjs/map/tarpit"),
+                alice.getResourceId());
+        assertFalse(alice.getResourceId().contains("111"));
+        assertFalse(bob.getResourceId().contains("222"));
+    }
+
+    @Test
+    void sharedTimerDoesNotKeepTheOtherPlayersSegment() {
+        LocalizedResourceTimer remote = LocalizedResourceTimer.unplaced(
+                42L, new Coord(3, 4), "Tar Pit", "gfx/terobjs/map/tarpit",
+                1_700_000_000_000L, READY_MS, "Tar Pit");
+
+        assertFalse(remote.hasLocalPlacement());
+        assertEquals(0L, remote.getSegmentId());
+
+        LocalizedResourceTimer local = remote.withLocalPlace(4L, new Coord(80, 90));
+        assertTrue(local.hasLocalPlacement());
+        assertEquals(4L, local.getSegmentId());
+        assertEquals(new Coord(80, 90), local.getTileCoords());
+        assertEquals(remote.getResourceId(), local.getResourceId());
+        assertEquals(remote.getStartTime(), local.getStartTime());
+    }
+
+    @Test
+    void gridAnchorSurvivesJsonAndSegmentMerge() {
+        LocalizedResourceTimer timer = new LocalizedResourceTimer(
+                5L, new Coord(10, 20), "Tar Pit", "gfx/terobjs/map/tarpit",
+                READY_MS, "Tar Pit", 0L, null, 42L, new Coord(3, 4));
+        LocalizedResourceTimer loaded = new LocalizedResourceTimer(timer.toJson());
+        LocalizedResourceTimer moved = loaded.relocated(99L, new Coord(haven.MCache.cmaps.x, 0));
+
+        assertEquals(42L, loaded.getGridId());
+        assertEquals(new Coord(3, 4), loaded.getGridOffset());
+        assertEquals(timer.getResourceId(), moved.getResourceId());
+        assertEquals(99L, moved.getSegmentId());
+        assertTrue(moved.hasLocalPlacement());
+    }
+
+    @Test
     void relocatesWithSegmentMergeLikeMapFileMarkers() {
         long start = System.currentTimeMillis();
         LocalizedResourceTimer timer = pyre(start);

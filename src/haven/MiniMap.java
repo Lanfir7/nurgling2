@@ -873,16 +873,26 @@ public class MiniMap extends Widget
 		pmap.put(disp.attr, disp);
 	}
 	List<DisplayIcon> ret = new ArrayList<>();
+	Map<Long, Party.Member> party = ui.sess.glob.party.memb;
+	boolean partyKnown = (party != null) && !party.isEmpty();
+	long playerGobId = -1;
+	if((ui.gui != null) && (ui.gui.map != null))
+	    playerGobId = ui.gui.map.plgob;
 	OCache oc = ui.sess.glob.oc;
 	synchronized(oc) {
 	    for(Gob gob : oc) {
 		try {
+		    if(MiniMapIconPolicy.skipPartyGob(gob.id, playerGobId, partyKnown && party.containsKey(gob.id)))
+			continue;
 		    if((sessloc != null) && (dloc != null) && (dloc.seg.id == sessloc.seg.id) &&
 		       !MiniMapIconPolicy.insideViewport(p2c(gob.rc), sz, ICON_VIEW_MARGIN))
 			continue;
 		    GobIcon icon = gob.getattr(GobIcon.class);
 		    if(icon != null) {
-                GobIcon.Setting conf = iconconf.get(icon.icon());
+			GobIcon.Icon gicon = icon.icon();
+			if(MiniMapIconPolicy.skipUnsyncedPlayerIcon(partyKnown, (gicon.res == null) ? null : gicon.res.name))
+			    continue;
+                GobIcon.Setting conf = iconconf.get(gicon);
 			if((conf != null) && iconconf.shown(conf)) {
 			    DisplayIcon disp = pmap.remove(icon);
 			    boolean isNew = (disp == null);

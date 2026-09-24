@@ -1,6 +1,7 @@
 package nurgling.actions;
 
 import haven.WItem;
+import nurgling.FreeInventoryItems;
 import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -27,6 +28,16 @@ public class FreeInventory2 implements Action
     @Override
     public Results run(NGameUI gui) throws InterruptedException
     {
+        FreeInventoryItems.includeBeltPouches(true);
+        try {
+            return free(gui);
+        } finally {
+            FreeInventoryItems.includeBeltPouches(false);
+        }
+    }
+
+    private Results free(NGameUI gui) throws InterruptedException
+    {
         System.out.println("=== FreeInventory2: Starting ===");
         HashMap<String,Integer> props = DropContainer.getDropProps();
         WItem fordrop = null;
@@ -50,10 +61,13 @@ public class FreeInventory2 implements Action
                     @Override
                     public boolean check() {
                         GetItems gi = new GetItems(gui.getInventory());
-                        gi.check();
-                        if(gi.check())
-                            return !gi.getResult().contains(finalFordrop);
-                        return false;
+                        if (!gi.check()) {
+                            return false;
+                        }
+                        if (gi.getResult().contains(finalFordrop)) {
+                            return false;
+                        }
+                        return !gui.getInventory().beltPouchContents().contains(finalFordrop);
                     }
                 });
             }

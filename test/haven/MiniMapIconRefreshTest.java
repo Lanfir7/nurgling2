@@ -29,6 +29,17 @@ class MiniMapIconRefreshTest {
     }
 
     @Test
+    void ownCharacterAndPartyMembersAreNotIconAlarms() {
+        assertTrue(MiniMapIconPolicy.skipPartyGob(7, 7, false));
+        assertTrue(MiniMapIconPolicy.skipPartyGob(7, -1, true));
+        assertFalse(MiniMapIconPolicy.skipPartyGob(8, 7, false));
+        assertTrue(MiniMapIconPolicy.isPlayerMapIcon("gfx/hud/mmap/plo"));
+        assertTrue(MiniMapIconPolicy.skipUnsyncedPlayerIcon(false, "gfx/hud/mmap/plo"));
+        assertFalse(MiniMapIconPolicy.skipUnsyncedPlayerIcon(true, "gfx/hud/mmap/plo"));
+        assertFalse(MiniMapIconPolicy.skipUnsyncedPlayerIcon(false, "gfx/invobjs/kritter/bear"));
+    }
+
+    @Test
     void gobIconsOutsideViewportMarginAreRejected() {
         Coord viewport = Coord.of(100, 80);
 

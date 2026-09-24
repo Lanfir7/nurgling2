@@ -46,4 +46,11 @@ class BuildApproachPolicyTest {
 
         assertTrue(Build.requiresBuildAreaNavigation(area, Coord2d.of(5000, 5000)));
     }
+
+    @Test
+    void refillReturnsToBasementEvenWhenCoordinatesOverlapVisibleSurface() {
+        Pair<Coord2d, Coord2d> area = Pair.of(Coord2d.of(5050, 5050), Coord2d.of(5300, 5300));
+
+        assertTrue(Build.requiresBuildAreaNavigation(area, false));
+    }
 }

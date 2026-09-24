@@ -124,6 +124,9 @@ public class LocalTimerSyncService {
             }
 
             timerService.reloadFromDisk();
+            timerService.dropUnmappedLegacyTimers();
+            for (String retired : timerService.bindGridAnchors())
+                localTimerService.deleteByResourceId(profile, retired);
             
             // Step 1: Upload local timers to DB
             uploadLocalTimers(profile, timerService);
@@ -153,21 +156,29 @@ public class LocalTimerSyncService {
         int uploaded = 0;
         
         for (LocalizedResourceTimer timer : localTimers) {
-            if (timer.isEphemeral() || timer.isExpired()) {
+            if (timer.isEphemeral() || timer.isExpired() || !timer.hasGrid()) {
                 continue;
             }
             
+            Long gridId = timer.hasGrid() ? timer.getGridId() : null;
+            Integer offsetX = timer.hasGrid() ? timer.getGridOffset().x : null;
+            Integer offsetY = timer.hasGrid() ? timer.getGridOffset().y : null;
+            int tileX = timer.hasLocalPlacement() ? timer.getTileCoords().x : 0;
+            int tileY = timer.hasLocalPlacement() ? timer.getTileCoords().y : 0;
             localTimerService.upsert(
                 profile,
                 timer.getResourceId(),
                 timer.getSegmentId(),
-                timer.getTileCoords().x,
-                timer.getTileCoords().y,
+                tileX,
+                tileY,
                 timer.getResourceName(),
                 timer.getResourceType(),
                 timer.getStartTime(),
                 timer.getDuration(),
-                timer.getDescription()
+                timer.getDescription(),
+                gridId,
+                offsetX,
+                offsetY
             );
             uploaded++;
         }
@@ -188,28 +199,41 @@ public class LocalTimerSyncService {
         
         int merged = 0;
         for (LocalTimerDao.LocalTimerData dbTimer : dbTimers) {
-            // Check if we already have this timer locally with same or newer start time
-            LocalizedResourceTimer existing = timerService.getTimer(dbTimer.getResourceId());
-            
-            if (existing != null && existing.isEphemeral()) {
+            if (dbTimer.hasGrid()) {
+                haven.Coord offset = new haven.Coord(dbTimer.getOffsetX(), dbTimer.getOffsetY());
+                String sharedId = LocalizedResourceTimer.sharedResourceId(
+                        dbTimer.getGridId(), offset, dbTimer.getResourceType());
+                LocalizedResourceTimer existing = timerService.getTimer(sharedId);
+                if (existing != null && existing.isEphemeral())
+                    continue;
+                if (existing == null) {
+                    timerService.addUnplacedFromDb(
+                        dbTimer.getGridId(),
+                        offset,
+                        dbTimer.getResourceName(),
+                        dbTimer.getResourceType(),
+                        dbTimer.getStartTimeUtc(),
+                        dbTimer.getDurationMs(),
+                        dbTimer.getDescription()
+                    );
+                    merged++;
+                } else if (dbTimer.getStartTimeUtc() > existing.getStartTime()) {
+                    timerService.updateTimerFromDb(
+                        sharedId,
+                        dbTimer.getStartTimeUtc(),
+                        dbTimer.getDurationMs(),
+                        dbTimer.getDescription()
+                    );
+                    merged++;
+                }
                 continue;
             }
 
-            if (existing == null) {
-                // Timer doesn't exist locally - add it
-                timerService.addTimerFromDb(
-                    dbTimer.getResourceId(),
-                    dbTimer.getSegmentId(),
-                    new haven.Coord(dbTimer.getTileX(), dbTimer.getTileY()),
-                    dbTimer.getResourceName(),
-                    dbTimer.getResourceType(),
-                    dbTimer.getStartTimeUtc(),
-                    dbTimer.getDurationMs(),
-                    dbTimer.getDescription()
-                );
-                merged++;
-            } else if (dbTimer.getStartTimeUtc() > existing.getStartTime()) {
-                // DB has newer timer - update local
+            // Rows from older clients have only a foreign segment. Never place those coordinates.
+            LocalizedResourceTimer existing = timerService.getTimer(dbTimer.getResourceId());
+            if (existing == null || existing.isEphemeral())
+                continue;
+            if (dbTimer.getStartTimeUtc() > existing.getStartTime()) {
                 timerService.updateTimerFromDb(
                     dbTimer.getResourceId(),
                     dbTimer.getStartTimeUtc(),
@@ -219,6 +243,7 @@ public class LocalTimerSyncService {
                 merged++;
             }
         }
+        timerService.resolveUnplaced();
         
         if (merged > 0) {
             System.out.println("LocalTimerSyncService: Merged " + merged + " timers from DB");

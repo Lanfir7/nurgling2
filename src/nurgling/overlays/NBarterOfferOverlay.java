@@ -60,6 +60,8 @@ public final class NBarterOfferOverlay extends NObjectTexLabel {
                 // An unrecognised/loading source does not retain obsolete offer icons.
             } catch(Resource.LoadFailedException ignored) {}
         }
+        for(int i = 0; i < entries.length; i++)
+            if(entries[i] != null && entries[i] != next[i]) entries[i].dispose();
         System.arraycopy(next, 0, entries, 0, entries.length);
         for(Entry entry : entries) if(entry != null) entry.resolve();
         return false;
@@ -72,27 +74,79 @@ public final class NBarterOfferOverlay extends NObjectTexLabel {
         Tex icon;
         String name;
         boolean unavailable;
+        boolean ownedIcon;
+        String categoryName;
         Entry(int resourceId, byte[] data) {this.resourceId = resourceId; this.data = data;}
         void resolve() {
             if(icon != null || unavailable) return;
             try {
                 if(iconResource == null) {
                     Resource world = gob.context(Resource.Resolver.class).getres(resourceId).get();
+                    if("gfx/terobjs/items/seeds".equals(world.name))
+                        categoryName = nurgling.i18n.L10n.get("barter.overlay.seeds");
+                    else if("gfx/terobjs/items/filet-r".equals(world.name))
+                        categoryName = nurgling.i18n.L10n.get("barter.overlay.fillet");
+                    else if("gfx/terobjs/items/cheese".equals(world.name))
+                        categoryName = nurgling.i18n.L10n.get("barter.overlay.cheese");
+                    else if("gfx/terobjs/items/egg".equals(world.name))
+                        categoryName = nurgling.i18n.L10n.get("barter.overlay.egg");
+                    else if("gfx/terobjs/items/testis".equals(world.name))
+                        categoryName = nurgling.i18n.L10n.get("barter.overlay.testis");
+                    else if(world.name.startsWith("gfx/terobjs/items/coins-"))
+                        categoryName = nurgling.i18n.L10n.get("barter.overlay.coins");
+                    if("lib/frozen".equals(world.name)) {
+                        resolveFrozenGem();
+                        return;
+                    }
                     String path = BarterOfferData.inventoryResource(world.name);
                     if(path == null) {unavailable = true; return;}
-                    // Verified inventory counterparts for live stand resources. Missing counterparts
-                    // are omitted, never replaced with a guessed name or an unrelated generic icon.
-                    iconResource = Resource.remote().load(path);
+                    // Generic world models use explicitly labelled category icons.
+                    iconResource = (path.startsWith("nurgling/") ? Resource.local() : Resource.remote()).load(path);
                 }
                 Resource resource = iconResource.get();
                 Resource.Image image = resource.layer(Resource.imgc);
                 Resource.Tooltip tooltip = resource.layer(Resource.tooltip);
-                if(image == null || tooltip == null) {unavailable = true; return;}
+                if(image == null || (tooltip == null && categoryName == null)) {unavailable = true; return;}
                 icon = image.tex(); // Resource-owned texture, shared and not disposed here.
-                name = tooltip.text();
+                name = categoryName == null ? tooltip.text() : categoryName;
             } catch(Loading ignored) {
             } catch(Resource.LoadFailedException ignored) {unavailable = true;}
         }
+        void resolveFrozenGem() {
+            if(data.length < 7 || (data[2] & 2) == 0) {unavailable = true; return;}
+            Resource.Resolver rr = gob.context(Resource.Resolver.class);
+            MessageBuf frozen = new MessageBuf(Arrays.copyOfRange(data, 7, data.length));
+            Resource base = rr.getres(frozen.uint16()).get();
+            byte[] sub = frozen.bytes(frozen.uint8());
+            Resource.Resolver mapped = new Resource.Resolver.ResourceMap(rr, frozen);
+            if(!"gfx/terobjs/items/gems/gemstone".equals(base.name) || sub.length != 4) {
+                unavailable = true; return;
+            }
+            Resource inventory = Resource.remote().load("gfx/invobjs/gems/gemstone").get();
+            Resource.Resolver gemResources = id -> {
+                Resource original = mapped.getres(id).get();
+                String path = BarterOfferData.inventoryResource(original.name);
+                return path == null ? original.indir() : Resource.remote().load(path);
+            };
+            GSprite.Owner owner = new GSprite.Owner() {
+                public Resource getres() {return inventory;}
+                public Random mkrandoom() {return new Random(0);}
+                public <C> C context(Class<C> cl) {
+                    return cl == Resource.Resolver.class ? cl.cast(gemResources) : gob.context(cl);
+                }
+            };
+            MessageBuf ids = new MessageBuf(sub);
+            gemResources.getres(ids.uint16()).get();
+            int material = ids.uint16();
+            if(material != 65535) gemResources.getres(material).get();
+            // Both resource factories use the same two uint16 values: cut and material.
+            GSprite sprite = GSprite.create(owner, inventory, new MessageBuf(sub));
+            java.awt.image.BufferedImage img = ((GSprite.ImageSprite)sprite).image();
+            icon = new TexI(img);
+            ownedIcon = true;
+            name = sprite instanceof ItemInfo.Name.Dynamic ? ((ItemInfo.Name.Dynamic)sprite).name() : "Gemstone";
+        }
+        void dispose() {if(ownedIcon && icon != null) icon.dispose();}
     }
 
     @Override public synchronized void draw(GOut g, Pipe state) {
@@ -154,6 +208,7 @@ public final class NBarterOfferOverlay extends NObjectTexLabel {
     }
     @Override public synchronized void dispose() {
         screen = null;
+        for(Entry entry : entries) if(entry != null) entry.dispose();
         Arrays.fill(entries, null);
         synchronized(active) {active.remove(this);}
         super.dispose();

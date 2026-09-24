@@ -2,6 +2,7 @@ package nurgling;
 
 import haven.*;
 import haven.Locked;
+import nurgling.i18n.L10n;
 import nurgling.profiles.ConfigFactory;
 import nurgling.profiles.ProfileAwareService;
 import nurgling.widgets.LocalizedResourceTimerDialog;
@@ -21,6 +22,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class LocalizedResourceTimerService implements ProfileAwareService {
     private final Map<String, LocalizedResourceTimer> timers = new ConcurrentHashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private static final long RESOLVE_RETRY_MS = 60_000L;
+    private final java.util.Set<String> resolving = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Map<String, Long> lastResolveAttempt = new java.util.concurrent.ConcurrentHashMap<>();
     private String dataFile;
     private final NGameUI gui;
     private String genus;
@@ -120,10 +124,22 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
     public void createTimer(long segmentId, haven.Coord tileCoords, String resourceName,
                            String resourceType, long duration, String description,
                            long autoRemoveAfterMs, String iconRes) {
+        long gridId = LocalizedResourceTimer.NO_GRID;
+        haven.Coord gridOffset = null;
+        if (autoRemoveAfterMs <= 0) {
+            GridAnchor anchor = anchorFor(segmentId, tileCoords);
+            if (anchor != null) {
+                gridId = anchor.gridId;
+                gridOffset = anchor.offset;
+            }
+        }
         lock.writeLock().lock();
         try {
             LocalizedResourceTimer timer = new LocalizedResourceTimer(segmentId, tileCoords, resourceName,
-                                                   resourceType, duration, description, autoRemoveAfterMs, iconRes);
+                                                   resourceType, duration, description, autoRemoveAfterMs, iconRes,
+                                                   gridId, gridOffset);
+            if (timer.hasGrid())
+                timers.remove(LocalizedResourceTimer.legacyResourceId(segmentId, tileCoords, resourceType));
             timers.put(timer.getResourceId(), timer);
             dirty = true;
             saveTimers();
@@ -155,8 +171,14 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
      * Get existing timer for a resource location
      */
     public LocalizedResourceTimer getExistingTimer(long segmentId, haven.Coord tileCoords, String resourceType) {
-        String resourceId = generateResourceId(segmentId, tileCoords, resourceType);
-        return getTimer(resourceId);
+        GridAnchor anchor = anchorFor(segmentId, tileCoords);
+        if (anchor != null) {
+            LocalizedResourceTimer byGrid = getTimer(LocalizedResourceTimer.sharedResourceId(
+                    anchor.gridId, anchor.offset, resourceType));
+            if (byGrid != null)
+                return byGrid;
+        }
+        return getTimer(LocalizedResourceTimer.legacyResourceId(segmentId, tileCoords, resourceType));
     }
     
     /**
@@ -187,14 +209,25 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
      * Get timers for a specific segment (for map display)
      */
     public java.util.List<LocalizedResourceTimer> getTimersForSegment(long segmentId) {
+        java.util.List<LocalizedResourceTimer> pending = new ArrayList<>();
+        java.util.List<LocalizedResourceTimer> placed = new ArrayList<>();
         lock.readLock().lock();
         try {
-            return timers.values().stream()
-                    .filter(timer -> timer.getSegmentId() == segmentId)
-                    .collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
+            for (LocalizedResourceTimer timer : timers.values()) {
+                if (!timer.hasLocalPlacement()) {
+                    if (timer.hasGrid())
+                        pending.add(timer);
+                    continue;
+                }
+                if (timer.getSegmentId() == segmentId)
+                    placed.add(timer);
+            }
         } finally {
             lock.readLock().unlock();
         }
+        for (LocalizedResourceTimer timer : pending)
+            scheduleResolve(timer);
+        return placed;
     }
 
     /**
@@ -212,11 +245,13 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
                     timers.entrySet().iterator();
             while (it.hasNext()) {
                 LocalizedResourceTimer t = it.next().getValue();
-                if (t.getSegmentId() != srcSeg)
+                if (!t.hasLocalPlacement() || t.getSegmentId() != srcSeg)
                     continue;
-                oldIds.add(t.getResourceId());
+                LocalizedResourceTimer next = t.relocated(dstSeg, tileShift);
+                if (!t.getResourceId().equals(next.getResourceId()))
+                    oldIds.add(t.getResourceId());
                 it.remove();
-                moved.add(t.relocated(dstSeg, tileShift));
+                moved.add(next);
             }
             for (LocalizedResourceTimer t : moved)
                 timers.put(t.getResourceId(), t);
@@ -231,16 +266,19 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
         }
     }
     
-    private static String generateResourceId(long segmentId, haven.Coord tileCoords, String resourceType) {
-        return String.format("res_%d_%d_%d_%s", segmentId, tileCoords.x, tileCoords.y, 
-                           resourceType.replaceAll("[^a-zA-Z0-9]", "_"));
-    }
-    
     /**
      * Navigate to a resource timer location
      */
     public void openMapAtLocalizedResourceLocation(LocalizedResourceTimer timer) {
         try {
+            if (timer != null && !timer.hasLocalPlacement()) {
+                resolvePlacement(timer);
+                timer = getTimer(timer.getResourceId());
+            }
+            if (timer == null || !timer.hasLocalPlacement()) {
+                showMessage(L10n.get("timer.not_on_map"));
+                return;
+            }
             openMapWindowIfNeeded();
             
             if (gui.mmap != null) {
@@ -249,6 +287,8 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
                     if (segment != null) {
                         MiniMap.Location targetLoc = new MiniMap.Location(segment, timer.getTileCoords());
                         centerBigMapOnly(targetLoc);
+                    } else {
+                        showMessage(L10n.get("timer.not_on_map"));
                     }
                 }
             }
@@ -436,19 +476,19 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
      * Add a timer loaded from database (called by LocalTimerSyncService).
      * Does not trigger save to file or DB (to avoid infinite loops).
      */
-    public void addTimerFromDb(String resourceId, long segmentId, haven.Coord tileCoords,
-                               String resourceName, String resourceType,
-                               long startTimeUtc, long durationMs, String description) {
+    /**
+     * Shared row from another client. Coordinates stay unresolved until this map file
+     * knows the server grid; the sender's segment must not be used.
+     */
+    public void addUnplacedFromDb(long gridId, haven.Coord gridOffset,
+                                  String resourceName, String resourceType,
+                                  long startTimeUtc, long durationMs, String description) {
         lock.writeLock().lock();
         try {
-            LocalizedResourceTimer timer = new LocalizedResourceTimer(
-                resourceId, segmentId, tileCoords, resourceName, resourceType,
-                startTimeUtc, durationMs, description);
-            
-            // Only add if not expired
-            if (!timer.isExpired()) {
-                timers.put(resourceId, timer);
-            }
+            LocalizedResourceTimer timer = LocalizedResourceTimer.unplaced(
+                    gridId, gridOffset, resourceName, resourceType, startTimeUtc, durationMs, description);
+            if (!timer.isExpired())
+                timers.put(timer.getResourceId(), timer);
         } finally {
             lock.writeLock().unlock();
         }
@@ -466,17 +506,7 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
                 if (existing.isEphemeral()) {
                     return;
                 }
-                // Create new timer with updated values
-                LocalizedResourceTimer updated = new LocalizedResourceTimer(
-                    resourceId,
-                    existing.getSegmentId(),
-                    existing.getTileCoords(),
-                    existing.getResourceName(),
-                    existing.getResourceType(),
-                    startTimeUtc,
-                    durationMs,
-                    description
-                );
+                LocalizedResourceTimer updated = existing.withSchedule(startTimeUtc, durationMs, description);
                 
                 // Only update if not expired
                 if (!updated.isExpired()) {
@@ -489,11 +519,213 @@ public class LocalizedResourceTimerService implements ProfileAwareService {
             lock.writeLock().unlock();
         }
     }
+
+    /**
+     * Give local timers a server-grid identity before upload.
+     * @return previous resource ids that the database should drop
+     */
+    /** Legacy rows stored another client's segment id. Drop them when this map has no such segment. */
+    public void dropUnmappedLegacyTimers() {
+        java.util.List<LocalizedResourceTimer> snapshot;
+        lock.readLock().lock();
+        try {
+            snapshot = new ArrayList<>(timers.values());
+        } finally {
+            lock.readLock().unlock();
+        }
+        java.util.List<String> drop = new ArrayList<>();
+        for (LocalizedResourceTimer timer : snapshot) {
+            if (timer.hasGrid() || timer.isEphemeral() || !timer.hasLocalPlacement())
+                continue;
+            if (!segmentExists(timer.getSegmentId()))
+                drop.add(timer.getResourceId());
+        }
+        if (drop.isEmpty())
+            return;
+        lock.writeLock().lock();
+        try {
+            boolean removed = false;
+            for (String id : drop) {
+                LocalizedResourceTimer timer = timers.get(id);
+                if (timer != null && !timer.hasGrid()) {
+                    timers.remove(id);
+                    removed = true;
+                }
+            }
+            if (removed) {
+                dirty = true;
+                saveTimers();
+                refreshTimerWindow();
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public java.util.List<String> bindGridAnchors() {
+        java.util.List<LocalizedResourceTimer> snapshot;
+        lock.readLock().lock();
+        try {
+            snapshot = new ArrayList<>(timers.values());
+        } finally {
+            lock.readLock().unlock();
+        }
+        java.util.List<String> retired = new ArrayList<>();
+        for (LocalizedResourceTimer timer : snapshot) {
+            if (timer.isEphemeral() || timer.hasGrid() || !timer.hasLocalPlacement())
+                continue;
+            GridAnchor anchor = anchorFor(timer.getSegmentId(), timer.getTileCoords());
+            if (anchor == null)
+                continue;
+            lock.writeLock().lock();
+            try {
+                LocalizedResourceTimer current = timers.get(timer.getResourceId());
+                if (current == null || current.hasGrid() || current.isEphemeral())
+                    continue;
+                LocalizedResourceTimer bound = current.withGrid(anchor.gridId, anchor.offset);
+                if (bound.getResourceId().equals(current.getResourceId()))
+                    continue;
+                timers.remove(current.getResourceId());
+                LocalizedResourceTimer other = timers.get(bound.getResourceId());
+                if (other == null || current.getStartTime() >= other.getStartTime())
+                    timers.put(bound.getResourceId(), bound);
+                retired.add(current.getResourceId());
+                dirty = true;
+                saveTimers();
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+        return retired;
+    }
+
+    public void resolveUnplaced() {
+        java.util.List<LocalizedResourceTimer> pending = new ArrayList<>();
+        lock.readLock().lock();
+        try {
+            for (LocalizedResourceTimer timer : timers.values()) {
+                if (!timer.hasLocalPlacement() && timer.hasGrid())
+                    pending.add(timer);
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+        boolean any = false;
+        for (LocalizedResourceTimer timer : pending) {
+            if (resolvePlacement(timer))
+                any = true;
+        }
+        if (any)
+            refreshTimerWindow();
+    }
     
     /**
      * Refresh timer window from sync (called on UI thread).
      */
     public void refreshTimerWindowFromSync() {
         refreshTimerWindow();
+    }
+
+    private void scheduleResolve(LocalizedResourceTimer timer) {
+        if (timer == null || timer.hasLocalPlacement() || !timer.hasGrid())
+            return;
+        long now = System.currentTimeMillis();
+        Long last = lastResolveAttempt.get(timer.getResourceId());
+        if (last != null && now - last < RESOLVE_RETRY_MS)
+            return;
+        if (!resolving.add(timer.getResourceId()))
+            return;
+        if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null
+                || gui.mmap == null || gui.mmap.file == null) {
+            resolving.remove(timer.getResourceId());
+            return;
+        }
+        lastResolveAttempt.put(timer.getResourceId(), now);
+        final String resourceId = timer.getResourceId();
+        gui.ui.sess.glob.loader.defer(() -> {
+            try {
+                resolvePlacement(getTimer(resourceId));
+            } finally {
+                resolving.remove(resourceId);
+            }
+        }, null);
+    }
+
+    private boolean resolvePlacement(LocalizedResourceTimer timer) {
+        if (timer == null || timer.hasLocalPlacement() || !timer.hasGrid())
+            return timer != null && timer.hasLocalPlacement();
+        if (gui == null || gui.mmap == null || gui.mmap.file == null)
+            return false;
+        MapFile file = gui.mmap.file;
+        long segmentId;
+        haven.Coord tileCoords;
+        file.lock.readLock().lock();
+        try {
+            MapFile.GridInfo info = file.gridinfo.get(timer.getGridId());
+            if (info == null)
+                return false;
+            segmentId = info.seg;
+            tileCoords = info.sc.mul(MCache.cmaps).add(timer.getGridOffset());
+        } catch (RuntimeException e) {
+            return false;
+        } finally {
+            file.lock.readLock().unlock();
+        }
+        lock.writeLock().lock();
+        try {
+            LocalizedResourceTimer current = timers.get(timer.getResourceId());
+            if (current == null || current.hasLocalPlacement() || !current.hasGrid())
+                return current != null && current.hasLocalPlacement();
+            timers.put(current.getResourceId(), current.withLocalPlace(segmentId, tileCoords));
+            dirty = true;
+            saveTimers();
+            return true;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private boolean segmentExists(long segmentId) {
+        if (gui == null || gui.mmap == null || gui.mmap.file == null)
+            return true;
+        MapFile file = gui.mmap.file;
+        file.lock.readLock().lock();
+        try {
+            return file.segments.get(segmentId) != null;
+        } catch (RuntimeException e) {
+            return true;
+        } finally {
+            file.lock.readLock().unlock();
+        }
+    }
+
+    private GridAnchor anchorFor(long segmentId, haven.Coord tileCoords) {
+        if (tileCoords == null || gui == null || gui.mmap == null || gui.mmap.file == null)
+            return null;
+        MapFile file = gui.mmap.file;
+        file.lock.readLock().lock();
+        try {
+            MapFile.Segment segment = file.segments.get(segmentId);
+            if (segment == null)
+                return null;
+            Long gridId = segment.map.get(tileCoords.div(MCache.cmaps));
+            if (gridId == null)
+                return null;
+            return new GridAnchor(gridId, tileCoords.mod(MCache.cmaps));
+        } catch (RuntimeException e) {
+            return null;
+        } finally {
+            file.lock.readLock().unlock();
+        }
+    }
+
+    private static final class GridAnchor {
+        final long gridId;
+        final haven.Coord offset;
+
+        GridAnchor(long gridId, haven.Coord offset) {
+            this.gridId = gridId;
+            this.offset = offset;
+        }
     }
 }

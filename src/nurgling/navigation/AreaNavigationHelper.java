@@ -1,7 +1,10 @@
 package nurgling.navigation;
 
 import haven.Coord2d;
+import haven.Gob;
+import haven.MCache;
 import haven.Pair;
+import nurgling.NGameUI;
 import nurgling.NMapView;
 import nurgling.NUI;
 import nurgling.NUtils;
@@ -14,6 +17,39 @@ import nurgling.sessions.ThreadLocalUI;
  * Provides methods for checking area reachability and finding optimal paths to area corners.
  */
 public class AreaNavigationHelper {
+
+    /** Cached grids from another floor cannot be used for local pathfinding. */
+    public static boolean isAreaOnCurrentInstance(NArea area, ChunkNavManager manager) {
+        if (area == null || area.space == null || area.space.space == null || manager == null
+                || manager.getGraph() == null) {
+            return true;
+        }
+        long currentInstance = manager.getCurrentInstanceId();
+        // Portal tracking may still hold the previous floor immediately after a transition.
+        // The grid under the player reflects the map they are actually standing on.
+        try {
+            NGameUI gui = NUtils.getGameUI();
+            Gob player = NUtils.player();
+            if (gui != null && gui.map != null && player != null) {
+                MCache.Grid playerGrid = gui.map.glob.map.getgridt(player.rc.floor(MCache.tilesz));
+                ChunkNavData currentChunk = playerGrid == null ? null : manager.getGraph().getChunk(playerGrid.id);
+                if (currentChunk != null && currentChunk.instanceId != 0) {
+                    currentInstance = currentChunk.instanceId;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (currentInstance == 0) return true;
+        boolean hasKnownTarget = false;
+        for (Long gridId : area.space.space.keySet()) {
+            ChunkNavData chunk = manager.getGraph().getChunk(gridId);
+            if (chunk != null && chunk.instanceId != 0) {
+                hasKnownTarget = true;
+                if (chunk.instanceId == currentInstance) return true;
+            }
+        }
+        return !hasKnownTarget;
+    }
     
     /**
      * Get the 4 corners of an area as Coord2d array.
@@ -189,6 +225,9 @@ public class AreaNavigationHelper {
      */
     public static boolean isAreaReachableByLocalPF(NArea area) throws InterruptedException {
         if (area == null || NUtils.player() == null) return false;
+
+        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        if (!isAreaOnCurrentInstance(area, mapView.getChunkNavManager())) return false;
         
         // STAGE 1: Check if grid is loaded in MCache
         // If not loaded → local PF is impossible, must use ChunkNav
@@ -262,6 +301,9 @@ public class AreaNavigationHelper {
      */
     public static Coord2d findNearestReachableCorner(NArea area) throws InterruptedException {
         if (area == null || NUtils.player() == null) return null;
+
+        NMapView mapView = (NMapView) NUtils.getGameUI().map;
+        if (!isAreaOnCurrentInstance(area, mapView.getChunkNavManager())) return null;
 
         if (!area.isVisible()) {
             return null;

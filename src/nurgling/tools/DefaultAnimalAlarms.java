@@ -114,14 +114,14 @@ public final class DefaultAnimalAlarms {
         return(p.contains("knock") || p.contains("dead"));
     }
 
-    /** Skip alarms on known corpses; play immediately when pose is unknown. */
+    /** Skip known corpses. Wait while an animal pose is still loading. */
     public static Play playForPose(String pose, String iconResName) {
         if(isCorpsePose(pose))
             return(Play.NEVER);
         if(!hasSound(iconResName))
             return(Play.NOW);
         if(pose == null || pose.isEmpty())
-            return(Play.NOW);
+            return(Play.LATER);
         return(Play.NOW);
     }
 }

@@ -49,16 +49,35 @@ class MiniMapIconNotifyClaimMuteTest {
     }
 
     @Test
-    void unknownPoseInWildernessPlaysImmediately() {
+    void unknownPoseInWildernessWaitsUntilPoseIsKnown() {
         AtomicInteger played = new AtomicInteger();
         DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
 
         MiniMapIconPolicy.fireIconNotify(state, false, null, BEAR);
-        MiniMapIconPolicy.fireIconNotify(state, true, "idle", BEAR);
+        MiniMapIconPolicy.fireIconNotify(state, false, "", BEAR);
+
+        assertEquals(0, played.get());
+        assertTrue(state.isPending());
+        assertTrue(state.isVisualActive());
+
+        MiniMapIconPolicy.fireIconNotify(state, false, "idle", BEAR);
+        MiniMapIconPolicy.fireIconNotify(state, false, "idle", BEAR);
 
         assertEquals(1, played.get());
         assertFalse(state.isPending());
-        assertTrue(state.isVisualActive());
+    }
+
+    @Test
+    void unknownPoseThenCorpseNeverPlays() {
+        AtomicInteger played = new AtomicInteger();
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
+
+        MiniMapIconPolicy.fireIconNotify(state, false, null, BEAR);
+        MiniMapIconPolicy.fireIconNotify(state, false, "knock", BEAR);
+
+        assertEquals(0, played.get());
+        assertFalse(state.isPending());
+        assertFalse(state.isVisualActive());
     }
 
     @Test

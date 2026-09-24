@@ -559,7 +559,8 @@ public class DatabaseManager {
         if (adapter == null) return false;
         try (ResultSet ignored = adapter.executeQuery(
                 "SELECT id, profile, resource_id, segment_id, tile_x, tile_y, resource_name, " +
-                "resource_type, start_time_utc, duration_ms, description, created_at, updated_at " +
+                "resource_type, start_time_utc, duration_ms, description, grid_id, offset_x, offset_y, " +
+                "created_at, updated_at " +
                 "FROM local_timers WHERE 1 = 0")) {
             return true;
         } catch (SQLException e) {

@@ -12,6 +12,7 @@ import nurgling.actions.bots.SelectAreaWithLiveGhosts;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.overlays.BuildGhostPreview;
+import nurgling.navigation.AreaNavigationHelper;
 import nurgling.pf.Utils;
 import nurgling.tasks.*;
 import nurgling.tools.*;
@@ -27,6 +28,7 @@ public class Build implements Action
     int rotationCount = 0;  // Rotation count: 0, 1, 2, 3 for 0°, 90°, 180°, 270°
     ArrayList<Coord2d> ghostPositions = null;  // Optional ghost positions from preview
     BuildGhostPreview ghostPreview = null;  // Optional reference to ghost preview for removal
+    private String refillFailure = "NO ITEMS";
 
     NContext context;
     public static class Command
@@ -205,6 +207,11 @@ public class Build implements Action
         return !Utils.areaFullyInVisibleArea(area);
     }
 
+    static boolean requiresBuildAreaNavigation(Pair<Coord2d, Coord2d> area, boolean loadedOnCurrentMap)
+    {
+        return !loadedOnCurrentMap || requiresBuildAreaNavigation(area);
+    }
+
     static boolean requiresBuildAreaNavigation(Pair<Coord2d, Coord2d> area, Coord2d playerRc)
     {
         return !Utils.areaFullyInVisibleArea(area, playerRc);
@@ -287,7 +294,9 @@ public class Build implements Action
         Pair<Coord2d,Coord2d> area = null;
         // Navigate to build area if using NArea and resolve the RC area
         if (buildArea != null) {
-            NUtils.navigateToArea(buildArea, true);
+            if (!NUtils.navigateToArea(buildArea, true) || !areaLoadedOnCurrentInstance(buildArea, gui)) {
+                return Results.ERROR("Cannot reach build area");
+            }
             area = buildArea.getRCArea();
             if (area == null) {
                 return Results.ERROR("Cannot get build area coordinates");
@@ -464,7 +473,7 @@ public class Build implements Action
             if (!isExist)
             {
                 if (!refillIng(gui, curings, context))
-                    return Results.ERROR("NO ITEMS");
+                    return Results.ERROR(refillFailure);
             }
 
             Gob dummy = NGob.getDummy(pos, rotationAngle, hitBox);
@@ -514,7 +523,7 @@ public class Build implements Action
                 if (needRefill(curings))
                 {
                     if (!refillIng(gui, curings, context))
-                        return Results.ERROR("NO ITEMS");
+                        return Results.ERROR(refillFailure);
 
                     // Return to construction site
                     gob = Finder.findGob(pos);
@@ -644,6 +653,7 @@ public class Build implements Action
 
     private boolean refillIng(NGameUI gui, ArrayList<Ingredient> curings, NContext context) throws InterruptedException
     {
+        refillFailure = "NO ITEMS";
         for (Ingredient ingredient : curings)
         {
             if (ingredient.specialWay != null)
@@ -697,7 +707,32 @@ public class Build implements Action
                 }
                 
                 // Navigate to ingredient area
-                NUtils.navigateToArea(ingredient.nArea);
+                boolean navigated = NUtils.navigateToArea(ingredient.nArea, true);
+                NMapView mapView = (NMapView) gui.map;
+                boolean materialVisibleHere = ingredient.nArea.isVisible()
+                        && AreaNavigationHelper.isAreaOnCurrentInstance(
+                                ingredient.nArea, mapView.getChunkNavManager());
+                // The corner planner can fail on a later trip even when the ordinary
+                // area planner still has a route. Try that route before giving up.
+                if (!materialVisibleHere && mapView.getChunkNavManager() != null) {
+                    boolean directNavigated = mapView.getChunkNavManager()
+                            .navigateToArea(ingredient.nArea, gui).IsSuccess();
+                    navigated = navigated || directNavigated;
+                    materialVisibleHere = directNavigated && ingredient.nArea.isVisible();
+                }
+                if (!materialVisibleHere) {
+                    System.out.println("[BuildRefill] Material navigation failed: "
+                            + ingredient.name.getKeys().get(0)
+                            + " route=" + navigated
+                            + " visible=" + ingredient.nArea.isVisible()
+                            + " instance=" + (mapView.getChunkNavManager() == null
+                                    ? "none" : mapView.getChunkNavManager().getCurrentInstanceId())
+                            + " player=" + (NUtils.player() == null ? "none" : NUtils.player().rc)
+                            + " areaGrids=" + (ingredient.nArea.space == null
+                                    ? "none" : ingredient.nArea.space.space.keySet()));
+                    refillFailure = "Cannot reach construction materials area for " + ingredient.name.getKeys().get(0);
+                    return false;
+                }
                 Pair<Coord2d, Coord2d> ingredientArea = ingredient.nArea.getRCArea();
                 if (ingredientArea == null) {
                     NUtils.getGameUI().msg("Cannot access ingredient area for " + ingredient.name.getKeys().get(0));
@@ -752,11 +787,21 @@ public class Build implements Action
         
         // Match cart-unload placement: only leave a visible construction area alone.
         // Distant areas still use the existing global navigation path.
-        if (buildArea != null && requiresBuildAreaNavigation(buildArea.getRCArea())) {
-            NUtils.navigateToArea(buildArea);
+        if (buildArea != null && requiresBuildAreaNavigation(
+                buildArea.getRCArea(), areaLoadedOnCurrentInstance(buildArea, gui))) {
+            if (!NUtils.navigateToArea(buildArea, true) || !areaLoadedOnCurrentInstance(buildArea, gui)) {
+                refillFailure = "Cannot return to build area";
+                return false;
+            }
         }
         
         return !needRefill(curings);
+    }
+
+    private static boolean areaLoadedOnCurrentInstance(NArea area, NGameUI gui) {
+        return area.getLoadedRCArea(true) != null
+                && AreaNavigationHelper.isAreaOnCurrentInstance(
+                        area, ((NMapView) gui.map).getChunkNavManager());
     }
 
     boolean needRefill(ArrayList<Ingredient> curings) throws InterruptedException
@@ -890,7 +935,7 @@ public class Build implements Action
             {
                 if (!refillIng(gui, remainingIngredients, context))
                 {
-                    return Results.ERROR("Cannot refill ingredients for construction");
+                    return Results.ERROR(refillFailure);
                 }
 
                 // Return to construction sign with HardMode

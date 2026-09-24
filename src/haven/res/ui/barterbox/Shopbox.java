@@ -265,17 +265,22 @@ public class Shopbox extends Widget implements ItemInfo.SpriteOwner, GSprite.Own
         public List<ItemInfo> info() {return(Shopbox.this.info());} public Tex get() {return(tex);}
     }
     private Object longtip; private Tex pricetip;
+    private static BufferedImage withResourcePath(BufferedImage tip, Resource resource) {
+        BufferedImage path = RichText.render("$col[128,128,128]{$size[9]{" +
+                RichText.Parser.quote(resource.name) + "}}", 0).img;
+        return ItemInfo.catimgs(UI.scale(3), tip, path);
+    }
     public Object tooltip(Coord c, Widget prev) {
         if(c.isect(itemc, sqsz) && (res != null)) try {
             if(longtip == null) {
                 BufferedImage ti = ItemInfo.longtip(info()); Resource.Pagina pg = res.res.get().layer(Resource.pagina);
                 if(pg != null) ti = ItemInfo.catimgs(0, ti, RichText.render("\n" + pg.text, UI.scale(200)).img);
-                longtip = new IconTip(ti);
+                longtip = new IconTip(withResourcePath(ti, res.res.get()));
             }
             return(longtip);
         } catch(Loading l) {return("...");}
         if(c.isect(pricec, sqsz) && (price != null)) try {
-            if(pricetip == null) pricetip = new TexI(ItemInfo.longtip(price.info()));
+            if(pricetip == null) pricetip = new TexI(withResourcePath(ItemInfo.longtip(price.info()), price.resource()));
             return(pricetip);
         } catch(Loading l) {return("...");}
         if(c.isect(new Coord(UI.scale(50), nameBlockY(offerText)), new Coord(UI.scale(admin ? 174 : 300), detailY(offerText) - nameBlockY(offerText))) && !offerName.isEmpty()) return(offerName);

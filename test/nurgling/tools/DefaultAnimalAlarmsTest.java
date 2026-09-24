@@ -67,9 +67,9 @@ class DefaultAnimalAlarmsTest {
     }
 
     @Test
-    void unknownAnimalPosePlaysImmediately() {
-        assertEquals(Play.NOW, DefaultAnimalAlarms.playForPose(null, "gfx/kritter/bear/bear"));
-        assertEquals(Play.NOW, DefaultAnimalAlarms.playForPose("", "gfx/kritter/bear/bear"));
+    void unknownAnimalPoseWaits() {
+        assertEquals(Play.LATER, DefaultAnimalAlarms.playForPose(null, "gfx/kritter/bear/bear"));
+        assertEquals(Play.LATER, DefaultAnimalAlarms.playForPose("", "gfx/kritter/bear/bear"));
     }
 
     @Test
@@ -78,16 +78,31 @@ class DefaultAnimalAlarmsTest {
     }
 
     @Test
-    void pendingAnimalAlarmPlaysOnUnknownPose() {
+    void pendingAnimalAlarmWaitsForPoseThenPlaysOnceIfAlive() {
         AtomicInteger played = new AtomicInteger();
         DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
 
-        state.poll(null, "gfx/invobjs/kritter/bear");
-        state.poll("", "gfx/invobjs/kritter/bear");
+        assertEquals(Play.LATER, state.poll(null, "gfx/invobjs/kritter/bear"));
+        assertEquals(Play.LATER, state.poll("", "gfx/invobjs/kritter/bear"));
+        assertEquals(Play.NOW, state.poll("idle", "gfx/invobjs/kritter/bear"));
+        state.poll("idle", "gfx/invobjs/kritter/bear");
 
         assertEquals(1, played.get());
         assertFalse(state.isPending());
         assertTrue(state.isVisualActive());
+    }
+
+    @Test
+    void pendingAnimalAlarmDropsWhenPoseArrivesDead() {
+        AtomicInteger played = new AtomicInteger();
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
+
+        assertEquals(Play.LATER, state.poll(null, "gfx/invobjs/kritter/bear"));
+        assertEquals(Play.NEVER, state.poll("gfx/kritter/bear/knocked", "gfx/invobjs/kritter/bear"));
+
+        assertEquals(0, played.get());
+        assertFalse(state.isPending());
+        assertFalse(state.isVisualActive());
     }
 
     @Test

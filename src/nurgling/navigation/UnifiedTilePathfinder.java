@@ -15,6 +15,7 @@ import static nurgling.navigation.ChunkNavConfig.*;
  * This allows pathfinding through chunks that aren't currently visible, using only stored data.
  */
 public class UnifiedTilePathfinder {
+    private static final int MAX_BLOCKED_START_BRIDGE_TILES = 6;
 
     private final ChunkNavGraph graph;
 
@@ -194,6 +195,31 @@ public class UnifiedTilePathfinder {
 
         openSet.add(startNode);
         allNodes.put(startTile, startNode);
+
+        // A newly built object can cover the player's recorded tile even though the
+        // client can still walk out of it. Let the live PathFinder validate the short
+        // approach to nearby recorded floor when executing the route.
+        if (!isTileWalkable(startChunk, startLocal.x, startLocal.y)) {
+            for (int dx = -MAX_BLOCKED_START_BRIDGE_TILES; dx <= MAX_BLOCKED_START_BRIDGE_TILES; dx++) {
+                for (int dy = -MAX_BLOCKED_START_BRIDGE_TILES; dy <= MAX_BLOCKED_START_BRIDGE_TILES; dy++) {
+                    int x = startLocal.x + dx;
+                    int y = startLocal.y + dy;
+                    if (dx * dx + dy * dy > MAX_BLOCKED_START_BRIDGE_TILES * MAX_BLOCKED_START_BRIDGE_TILES ||
+                            x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE ||
+                            !isTileWalkable(startChunk, x, y)) {
+                        continue;
+                    }
+                    TileNode tile = new TileNode(startChunkId, new Coord(x, y));
+                    AStarNode node = new AStarNode(tile);
+                    node.parent = startNode;
+                    node.g = startLocal.dist(tile.localCoord);
+                    node.h = heuristic(tile, targetTile);
+                    node.f = node.g + node.h;
+                    openSet.add(node);
+                    allNodes.put(tile, node);
+                }
+            }
+        }
 
         int iterations = 0;
         int maxIterations = 500000; // Safety limit - increased for large maps

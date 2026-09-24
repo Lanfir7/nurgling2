@@ -32,12 +32,16 @@ public class LocalTimerDao {
         private final long startTimeUtc;    // Unix timestamp in milliseconds (UTC)
         private final long durationMs;       // Duration in milliseconds
         private final String description;
+        private final Long gridId;
+        private final Integer offsetX;
+        private final Integer offsetY;
         private final Timestamp createdAt;
         private final Timestamp updatedAt;
 
         public LocalTimerData(int id, String profile, String resourceId, long segmentId, int tileX, int tileY,
                              String resourceName, String resourceType, long startTimeUtc, long durationMs,
-                             String description, Timestamp createdAt, Timestamp updatedAt) {
+                             String description, Long gridId, Integer offsetX, Integer offsetY,
+                             Timestamp createdAt, Timestamp updatedAt) {
             this.id = id;
             this.profile = profile;
             this.resourceId = resourceId;
@@ -49,6 +53,9 @@ public class LocalTimerDao {
             this.startTimeUtc = startTimeUtc;
             this.durationMs = durationMs;
             this.description = description;
+            this.gridId = gridId;
+            this.offsetX = offsetX;
+            this.offsetY = offsetY;
             this.createdAt = createdAt;
             this.updatedAt = updatedAt;
         }
@@ -66,6 +73,10 @@ public class LocalTimerDao {
         /** Duration in milliseconds */
         public long getDurationMs() { return durationMs; }
         public String getDescription() { return description; }
+        public boolean hasGrid() { return gridId != null && offsetX != null && offsetY != null; }
+        public long getGridId() { return gridId == null ? 0L : gridId; }
+        public int getOffsetX() { return offsetX == null ? 0 : offsetX; }
+        public int getOffsetY() { return offsetY == null ? 0 : offsetY; }
         public Timestamp getCreatedAt() { return createdAt; }
         public Timestamp getUpdatedAt() { return updatedAt; }
 
@@ -92,13 +103,15 @@ public class LocalTimerDao {
      */
     public void upsert(DatabaseAdapter adapter, String profile, String resourceId, long segmentId,
                        int tileX, int tileY, String resourceName, String resourceType,
-                       long startTimeUtc, long durationMs, String description) throws SQLException {
+                       long startTimeUtc, long durationMs, String description,
+                       Long gridId, Integer offsetX, Integer offsetY) throws SQLException {
         if (!(adapter instanceof nurgling.db.PostgresAdapter)) {
             return;
         }
         String sql = "INSERT INTO local_timers (profile, resource_id, segment_id, tile_x, tile_y, " +
-            "resource_name, resource_type, start_time_utc, duration_ms, description) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+            "resource_name, resource_type, start_time_utc, duration_ms, description, " +
+            "grid_id, offset_x, offset_y) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
             "ON CONFLICT (profile, resource_id) DO UPDATE SET " +
             "segment_id = EXCLUDED.segment_id, " +
             "tile_x = EXCLUDED.tile_x, " +
@@ -108,12 +121,17 @@ public class LocalTimerDao {
             "start_time_utc = EXCLUDED.start_time_utc, " +
             "duration_ms = EXCLUDED.duration_ms, " +
             "description = EXCLUDED.description, " +
-            "updated_at = CURRENT_TIMESTAMP";
+            "grid_id = EXCLUDED.grid_id, " +
+            "offset_x = EXCLUDED.offset_x, " +
+            "offset_y = EXCLUDED.offset_y, " +
+            "updated_at = CURRENT_TIMESTAMP " +
+            "WHERE EXCLUDED.start_time_utc >= local_timers.start_time_utc";
         adapter.executeUpdate(sql, profile, resourceId, segmentId, tileX, tileY,
             resourceName != null ? resourceName : "",
             resourceType != null ? resourceType : "",
             startTimeUtc, durationMs,
-            description != null ? description : "");
+            description != null ? description : "",
+            gridId, offsetX, offsetY);
     }
 
     /**
@@ -156,27 +174,13 @@ public class LocalTimerDao {
         // Only select non-expired timers
         String sql = "SELECT id, profile, resource_id, segment_id, tile_x, tile_y, " +
             "resource_name, resource_type, start_time_utc, duration_ms, description, " +
-            "created_at, updated_at " +
+            "grid_id, offset_x, offset_y, created_at, updated_at " +
             "FROM local_timers WHERE profile = ? AND (start_time_utc + duration_ms) > ? " +
             "ORDER BY (start_time_utc + duration_ms) ASC";  // Order by expiration time
         
         try (ResultSet rs = adapter.executeQuery(sql, profile, nowUtc)) {
             while (rs.next()) {
-                list.add(new LocalTimerData(
-                    rs.getInt("id"),
-                    rs.getString("profile"),
-                    rs.getString("resource_id"),
-                    rs.getLong("segment_id"),
-                    rs.getInt("tile_x"),
-                    rs.getInt("tile_y"),
-                    rs.getString("resource_name"),
-                    rs.getString("resource_type"),
-                    rs.getLong("start_time_utc"),
-                    rs.getLong("duration_ms"),
-                    rs.getString("description"),
-                    rs.getTimestamp("created_at", UTC_CALENDAR),
-                    rs.getTimestamp("updated_at", UTC_CALENDAR)
-                ));
+                list.add(readRow(rs));
             }
         }
         return list;
@@ -195,28 +199,39 @@ public class LocalTimerDao {
         
         String sql = "SELECT id, profile, resource_id, segment_id, tile_x, tile_y, " +
             "resource_name, resource_type, start_time_utc, duration_ms, description, " +
-            "created_at, updated_at " +
+            "grid_id, offset_x, offset_y, created_at, updated_at " +
             "FROM local_timers WHERE profile = ? AND resource_id = ?";
         
         try (ResultSet rs = adapter.executeQuery(sql, profile, resourceId)) {
             if (rs.next()) {
-                return new LocalTimerData(
-                    rs.getInt("id"),
-                    rs.getString("profile"),
-                    rs.getString("resource_id"),
-                    rs.getLong("segment_id"),
-                    rs.getInt("tile_x"),
-                    rs.getInt("tile_y"),
-                    rs.getString("resource_name"),
-                    rs.getString("resource_type"),
-                    rs.getLong("start_time_utc"),
-                    rs.getLong("duration_ms"),
-                    rs.getString("description"),
-                    rs.getTimestamp("created_at", UTC_CALENDAR),
-                    rs.getTimestamp("updated_at", UTC_CALENDAR)
-                );
+                return readRow(rs);
             }
         }
         return null;
+    }
+
+    private static LocalTimerData readRow(ResultSet rs) throws SQLException {
+        long gridRaw = rs.getLong("grid_id");
+        Long gridId = rs.wasNull() ? null : gridRaw;
+        int ox = rs.getInt("offset_x");
+        Integer offsetX = rs.wasNull() ? null : ox;
+        int oy = rs.getInt("offset_y");
+        Integer offsetY = rs.wasNull() ? null : oy;
+        return new LocalTimerData(
+            rs.getInt("id"),
+            rs.getString("profile"),
+            rs.getString("resource_id"),
+            rs.getLong("segment_id"),
+            rs.getInt("tile_x"),
+            rs.getInt("tile_y"),
+            rs.getString("resource_name"),
+            rs.getString("resource_type"),
+            rs.getLong("start_time_utc"),
+            rs.getLong("duration_ms"),
+            rs.getString("description"),
+            gridId, offsetX, offsetY,
+            rs.getTimestamp("created_at", UTC_CALENDAR),
+            rs.getTimestamp("updated_at", UTC_CALENDAR)
+        );
     }
 }

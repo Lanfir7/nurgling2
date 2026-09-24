@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-24-white-player-icon-alarm",
+  "priority": 5,
+  "summary": {
+    "ru": "Оповещение белого игрока на карте больше не звенит само, когда рядом никого нет.",
+    "en": "The white player map alert no longer rings by itself when nobody else is nearby."
+  },
+  "detail": {
+    "ru": "В настройках иконок белый Player — это чужие игроки. Раньше сигнал мог крутиться без остановки из-за вашего персонажа. Теперь он звучит, когда рядом появляется чужой игрок.",
+    "en": "In Icon settings, the white Player mark means other players. It used to keep ringing because your own character was counted. It now sounds when another player actually appears."
+  }
+}

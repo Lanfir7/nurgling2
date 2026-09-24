@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-24-corpse-alarm-wait",
+  "priority": 5,
+  "summary": {
+    "ru": "Трупы больше не звенят все сразу, когда вы появляетесь рядом с ними.",
+    "en": "Corpses no longer all ring at once when you appear next to them."
+  },
+  "detail": {
+    "ru": "После телепорта или входа в мир поза животного ещё не известна, и сигнал уходил на каждый труп. Теперь звук ждёт позу: мёртвое молчит, живое по-прежнему оповещает.",
+    "en": "After a teleport or entering the world, an animal's pose is not known yet, so every corpse used to ring. The sound now waits for the pose: a corpse stays quiet, and a living animal still alerts."
+  }
+}

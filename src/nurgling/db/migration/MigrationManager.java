@@ -21,7 +21,7 @@ public class MigrationManager {
      * and this older client may not understand the new columns/tables; we
      * refuse to sync in that case rather than write incompatible rows.
      */
-    public static final int CLIENT_MAX_SCHEMA_VERSION = 21;
+    public static final int CLIENT_MAX_SCHEMA_VERSION = 22;
 
     /** Version of the migration that creates kin_secrets; optional, see {@link Migration#optional}. */
     public static final int MIGRATION_KIN_SECRETS = 15;
@@ -40,6 +40,9 @@ public class MigrationManager {
 
     /** Adds the DAO columns when an unrelated legacy table already used the local_timers name. */
     public static final int MIGRATION_LOCAL_TIMERS_COLUMNS = 21;
+
+    /** Server grid id so a timer is the same node on every client's map. */
+    public static final int MIGRATION_LOCAL_TIMER_GRID = 22;
 
     /** Group role holding read/write on everything. Villagers are members of it. */
     public static final String ROLE_MEMBER = "nurgling_member";
@@ -912,6 +915,18 @@ public class MigrationManager {
             }
         });
 
+        migrations.add(new Migration(MIGRATION_LOCAL_TIMER_GRID,
+            "Add server grid anchor to local_timers", true) {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!(adapter instanceof nurgling.db.PostgresAdapter) || !adapter.tableExists("local_timers"))
+                    return;
+                addColumnIfMissing(adapter, "local_timers", "grid_id", "BIGINT");
+                addColumnIfMissing(adapter, "local_timers", "offset_x", "INTEGER");
+                addColumnIfMissing(adapter, "local_timers", "offset_y", "INTEGER");
+            }
+        });
+
         return migrations;
     }
 
@@ -1163,6 +1178,9 @@ public class MigrationManager {
                 "start_time_utc BIGINT NOT NULL, " +
                 "duration_ms BIGINT NOT NULL, " +
                 "description VARCHAR(512), " +
+                "grid_id BIGINT, " +
+                "offset_x INTEGER, " +
+                "offset_y INTEGER, " +
                 "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                 "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                 "UNIQUE (profile, resource_id)" +
@@ -1182,6 +1200,9 @@ public class MigrationManager {
             addColumnIfMissing(adapter, "local_timers", "start_time_utc", "BIGINT");
             addColumnIfMissing(adapter, "local_timers", "duration_ms", "BIGINT");
             addColumnIfMissing(adapter, "local_timers", "description", "VARCHAR(512)");
+            addColumnIfMissing(adapter, "local_timers", "grid_id", "BIGINT");
+            addColumnIfMissing(adapter, "local_timers", "offset_x", "INTEGER");
+            addColumnIfMissing(adapter, "local_timers", "offset_y", "INTEGER");
             addColumnIfMissing(adapter, "local_timers", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
             addColumnIfMissing(adapter, "local_timers", "updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
             grantDml(adapter, "local_timers");

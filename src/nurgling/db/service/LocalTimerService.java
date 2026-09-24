@@ -48,14 +48,15 @@ public class LocalTimerService {
      */
     public void upsert(String profile, String resourceId, long segmentId, int tileX, int tileY,
                        String resourceName, String resourceType, long startTimeUtc, long durationMs,
-                       String description) {
+                       String description, Long gridId, Integer offsetX, Integer offsetY) {
         if (!isAvailable()) {
             return;
         }
         try {
             databaseManager.executeOperation(adapter -> {
                 localTimerDao.upsert(adapter, profile, resourceId, segmentId, tileX, tileY,
-                    resourceName, resourceType, startTimeUtc, durationMs, description);
+                    resourceName, resourceType, startTimeUtc, durationMs, description,
+                    gridId, offsetX, offsetY);
                 return null;
             });
         } catch (SQLException e) {

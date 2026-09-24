@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-24-shared-resource-timers",
+  "priority": 4,
+  "summary": {
+    "ru": "Общий таймер ресурса ведёт на ту же точку, что смотрели лупой.",
+    "en": "A shared resource timer leads to the same spot that was checked."
+  },
+  "detail": {
+    "ru": "После осмотра лупой общий таймер открывает ту же жилу, яму или куст в списке таймеров и на карте у всех участников. Старые данные другого клиента не заменяют свежий таймер. Если общей базе требуется обновление, таймеры продолжают сохраняться локально.",
+    "en": "After inspecting a node, its shared timer opens the same vein, pit or bush from the timer list and map for everyone. Older data from another client cannot replace a newer timer. If the shared database needs an update, timers continue to be saved locally."
+  }
+}

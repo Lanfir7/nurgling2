@@ -56,6 +56,28 @@ final class MiniMapIconPolicy {
                 (point.x <= viewport.x + margin) && (point.y <= viewport.y + margin);
     }
 
+    static final String PLAYER_ICON_RES = "gfx/hud/mmap/plo";
+
+    static boolean isPlayerMapIcon(String resName) {
+        return PLAYER_ICON_RES.equals(resName);
+    }
+
+    /** Own character and party members are drawn as party marks, not as gob icons. */
+    static boolean skipPartyGob(long gobId, long playerGobId, boolean inParty) {
+        if ((playerGobId >= 0) && (gobId == playerGobId))
+            return true;
+        return inParty;
+    }
+
+    /**
+     * Until the party list arrives, the local character has no kin group and
+     * matches the white Player icon. Keep those icons out so the alert cannot
+     * re-arm every scan.
+     */
+    static boolean skipUnsyncedPlayerIcon(boolean partyKnown, String iconResName) {
+        return !partyKnown && isPlayerMapIcon(iconResName);
+    }
+
     static boolean shouldPlayIconNotify(boolean onClaim) {
         return ClaimLand.shouldPlayIconNotify(onClaim);
     }

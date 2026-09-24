@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-23-barter-missing-icons",
+  "priority": 4,
+  "summary": {
+    "ru": "Над бартерными стендами видны ранее пропадавшие значки товаров.",
+    "en": "Previously missing item icons now appear above barter stands."
+  },
+  "detail": {
+    "ru": "Без открытия торговли видны значки трав, ягод, грибов, посуды, столового текстиля, лебединого пера, иглы и Frost Flower. Камни показывают огранку и материал, монеты — металл. Для филе, семян, сыра, яиц и семенников используются общие подписи; точный вид и качество смотрите в окне торговли.",
+    "en": "Without opening trade, you can see forage items, tableware, linens, Swan Feather, Garment Needle and Frost Flower. Gemstones show their cut and material, and coins show their metal. Fillets, seeds, cheese, eggs and bollocks use generic labels; open the trading window for the exact variety and quality."
+  }
+}

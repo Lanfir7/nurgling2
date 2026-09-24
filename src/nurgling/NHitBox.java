@@ -133,6 +133,8 @@ public class NHitBox
             put("gfx/kritter/horse/foal", new NHitBox(new Coord2d(-8,-4),new Coord2d(8,4)));
             put("gfx/kritter/horse/horse", new NHitBox(new Coord2d(-8,-4),new Coord2d(8,4)));
             put("gfx/kritter/boar/boar", new NHitBox(new Coord(-10,-4),new Coord(7,4)));
+            // Obstacle extends toward +X. Asymmetric boxes are mirrored for drawing and pathfinding.
+            put("gfx/kritter/bear/polarbear", new NHitBox(new Coord2d(-14.19,-4.48),new Coord2d(9.62,4.48), true));
             put("gfx/kritter/pig/piglet", new NHitBox(new Coord(-6,-4),new Coord(6,4)));
             put("gfx/kritter/pig/sow", new NHitBox(new Coord(-6,-4),new Coord(6,4)));
             put("gfx/kritter/pig/hog", new NHitBox(new Coord(-6,-4),new Coord(6,4)));

@@ -504,7 +504,7 @@ public class NInventory extends Inventory
     public ArrayList<WItem> getItems(NAlias name, QualityType type) throws InterruptedException {
         GetItems gi = new GetItems(this, name, type);
         NUtils.getUI().core.addTask(gi);
-        return gi.getResult();
+        return includingBeltPouches(gi.getResult(), name, 1f);
     }
 
 
@@ -512,14 +512,14 @@ public class NInventory extends Inventory
     {
         GetItems gi = new GetItems(this);
         NUtils.getUI().core.addTask(gi);
-        return gi.getResult();
+        return includingBeltPouches(gi.getResult(), null, 1f);
     }
 
     public ArrayList<WItem> getItems(NAlias name) throws InterruptedException
     {
         GetItems gi = new GetItems(this, name);
         NUtils.getUI().core.addTask(gi);
-        return gi.getResult();
+        return includingBeltPouches(gi.getResult(), name, 1f);
     }
 
     public ArrayList<WItem> getWItems(NAlias name) throws InterruptedException
@@ -535,7 +535,63 @@ public class NInventory extends Inventory
     {
         GetItems gi = new GetItems(this, name, (float)th);
         NUtils.getUI().core.addTask(gi);
-        return gi.getResult();
+        return includingBeltPouches(gi.getResult(), name, (float) th);
+    }
+
+    /**
+     * Contents of belt pouches such as a Poacher's Pouch. The pouches themselves are not included.
+     */
+    public List<WItem> beltPouchContents() {
+        if (ui == null) {
+            return collectBeltPouchContents();
+        }
+        synchronized (ui) {
+            return collectBeltPouchContents();
+        }
+    }
+
+    private List<WItem> collectBeltPouchContents() {
+        return ExtraInvGroupTransfer.externalBagContents(
+                externalBagCandidates(),
+                item -> item.item,
+                NInventory::listedItemName,
+                item -> listedChildren(item != null && item.item != null ? item.item.contents : null),
+                NInventory::listedTransparent);
+    }
+
+    private ArrayList<WItem> includingBeltPouches(ArrayList<WItem> items, NAlias name, float th) {
+        if (!mainInvInstalled || !FreeInventoryItems.includeBeltPouches()) {
+            return items;
+        }
+        List<WItem> extra = beltPouchMatches(name, th);
+        if (extra.isEmpty()) {
+            return items;
+        }
+        return FreeInventoryItems.withBeltPouches(new ArrayList<WItem>(items), extra);
+    }
+
+    private List<WItem> beltPouchMatches(NAlias name, float th) {
+        List<WItem> matched = new ArrayList<WItem>();
+        for (WItem witem : beltPouchContents()) {
+            if (witem == null || witem.item == null || !(witem.item instanceof NGItem)) {
+                continue;
+            }
+            if (!NGItem.validateItem(witem)) {
+                continue;
+            }
+            NGItem ng = (NGItem) witem.item;
+            if (name != null && !NParser.checkName(ng.name(), name)) {
+                continue;
+            }
+            if (th != 1f) {
+                Float quality = ng.quality;
+                if (quality == null || quality < th) {
+                    continue;
+                }
+            }
+            matched.add(witem);
+        }
+        return matched;
     }
 
     public ArrayList<WItem> getItems(String name) throws InterruptedException

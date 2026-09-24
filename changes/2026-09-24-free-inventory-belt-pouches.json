@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-24-free-inventory-belt-pouches",
+  "priority": 4,
+  "summary": {
+    "ru": "«Освободить инвентарь» забирает вещи и из поясных сумок, например из пояса охотника.",
+    "en": "Free Inventory now also empties belt pouches, such as a Poacher's Pouch."
+  },
+  "detail": {
+    "ru": "Бот «Освободить инвентарь» выгружает и выбрасывает по тем же правилам не только рюкзак, но и вещи внутри сумок на поясе, например пояса охотника. Сами сумки остаются надетыми.",
+    "en": "Free Inventory now stores or drops, by the same rules, items inside belt pouches as well as the backpack. A Poacher's Pouch is included. The pouches themselves stay equipped."
+  }
+}
