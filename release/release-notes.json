@@ -150,10 +150,70 @@
     "2026-09-22-zone-arrow-without-window",
     "2026-09-23-barter-loading",
     "2026-09-23-barter-marker",
+    "2026-09-23-barter-missing-icons",
+    "2026-09-23-barter-resource-tooltip",
     "2026-09-23-barter-showcase",
-    "2026-09-23-personal-marker-hints"
+    "2026-09-23-basement-construction-return",
+    "2026-09-23-ice-bear-hitbox",
+    "2026-09-23-personal-marker-hints",
+    "2026-09-24-corpse-alarm-wait",
+    "2026-09-24-free-inventory-belt-pouches",
+    "2026-09-24-shared-resource-timers",
+    "2026-09-24-white-player-icon-alarm"
   ],
   "releases": [
+    {
+      "id": "2.103.214",
+      "date": "2026-09-24",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Строительный бот различает подвал и поверхность при доставке материалов.",
+          "Трупы больше не звенят все сразу, когда вы появляетесь рядом с ними.",
+          "Оповещение белого игрока на карте больше не звенит само, когда рядом никого нет.",
+          "Над бартерными стендами видны ранее пропадавшие значки товаров.",
+          "Рамка ледяного медведя совпадает с тем местом, куда реально нельзя пройти.",
+          "«Освободить инвентарь» забирает вещи и из поясных сумок, например из пояса охотника.",
+          "Общий таймер ресурса ведёт на ту же точку, что смотрели лупой.",
+          "Подсказки предметов в бартерном стенде показывают путь ресурса."
+        ],
+        "en": [
+          "The building bot distinguishes basements from the surface while fetching materials.",
+          "Corpses no longer all ring at once when you appear next to them.",
+          "The white player map alert no longer rings by itself when nobody else is nearby.",
+          "Previously missing item icons now appear above barter stands.",
+          "The ice bear outline now matches where you actually cannot walk.",
+          "Free Inventory now also empties belt pouches, such as a Poacher's Pouch.",
+          "A shared resource timer leads to the same spot that was checked.",
+          "Barter stand item tooltips now show resource paths."
+        ]
+      },
+      "details": {
+        "ru": [
+          "При строительстве в подвале бот повторно выходит за недостающими материалами после первого шкафа, возвращается на нужный этаж перед установкой следующего объекта и сообщает о сбое маршрута вместо ошибочного «NO ITEMS».",
+          "После телепорта или входа в мир поза животного ещё не известна, и сигнал уходил на каждый труп. Теперь звук ждёт позу: мёртвое молчит, живое по-прежнему оповещает.",
+          "В настройках иконок белый Player — это чужие игроки. Раньше сигнал мог крутиться без остановки из-за вашего персонажа. Теперь он звучит, когда рядом появляется чужой игрок.",
+          "Без открытия торговли видны значки трав, ягод, грибов, посуды, столового текстиля, лебединого пера, иглы и Frost Flower. Камни показывают огранку и материал, монеты — металл. Для филе, семян, сыра, яиц и семенников используются общие подписи; точный вид и качество смотрите в окне торговли.",
+          "Граница ледяного медведя больше не сдвинута: сзади по нарисованной рамке можно было пройти, а спереди упор был раньше линии. Включите показ границ объектов, чтобы сверить рамку с медведем.",
+          "Бот «Освободить инвентарь» выгружает и выбрасывает по тем же правилам не только рюкзак, но и вещи внутри сумок на поясе, например пояса охотника. Сами сумки остаются надетыми.",
+          "После осмотра лупой общий таймер открывает ту же жилу, яму или куст в списке таймеров и на карте у всех участников. Старые данные другого клиента не заменяют свежий таймер. Если общей базе требуется обновление, таймеры продолжают сохраняться локально.",
+          "Наведите на иконку товара или оплаты: внизу подробной подсказки указан ресурс предмета, как в инвентаре. Его можно приложить к сообщению о неверной или пропущенной иконке."
+        ],
+        "en": [
+          "During basement construction, the bot can leave again for missing materials after the first cupboard, returns to the correct floor before placing the next object, and reports route failures instead of an incorrect 'NO ITEMS'.",
+          "After a teleport or entering the world, an animal's pose is not known yet, so every corpse used to ring. The sound now waits for the pose: a corpse stays quiet, and a living animal still alerts.",
+          "In Icon settings, the white Player mark means other players. It used to keep ringing because your own character was counted. It now sounds when another player actually appears.",
+          "Without opening trade, you can see forage items, tableware, linens, Swan Feather, Garment Needle and Frost Flower. Gemstones show their cut and material, and coins show their metal. Fillets, seeds, cheese, eggs and bollocks use generic labels; open the trading window for the exact variety and quality.",
+          "The ice bear boundary is no longer shifted along its length. The drawn rear used to be walkable, and the front stopped you before the line. Turn on object boundaries to compare the outline with the bear.",
+          "Free Inventory now stores or drops, by the same rules, items inside belt pouches as well as the backpack. A Poacher's Pouch is included. The pouches themselves stay equipped.",
+          "After inspecting a node, its shared timer opens the same vein, pit or bush from the timer list and map for everyone. Older data from another client cannot replace a newer timer. If the shared database needs an update, timers continue to be saved locally.",
+          "Hover over an offered item or payment icon to see its resource path at the bottom of the detailed tooltip, as in inventory. Include it when reporting an incorrect or missing icon."
+        ]
+      }
+    },
     {
       "id": "2.103.213",
       "date": "2026-09-23",
@@ -1229,38 +1289,6 @@
           "Open a zone's specialisations and type in the search box. The tooltip lists bots that need that tag, or says none use it.",
           "Open the calendar in verbose view: Dewy Lady's Mantle shows remaining real-life time until the event.",
           "Bot utilities gained a dedicated all-study-desks icon. Stockpile, smelter and silk-area transfers stall less when inventory is full."
-        ]
-      }
-    },
-    {
-      "id": "2.103.182",
-      "date": "2026-09-04",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "Появился «Атлас крафта»: справочник рецептов с поиском, зависимостями и бонусами.",
-          "На компасе видны ближайшие животные из настроек значков.",
-          "У печи и плавильни в подсказке видно прогресс и сколько ещё ждать."
-        ],
-        "en": [
-          "Craft Atlas is a recipe reference with search, dependencies and bonuses.",
-          "The compass shows nearby animals from your icon settings.",
-          "Kiln and smelter tooltips show progress and remaining time."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Откройте атлас горячей клавишей или из интерфейса. Ищите рецепты, ингредиенты и бонусы, листайте зависимости и избранное. Кнопка открывает обычное окно крафта и ничего не крафтит сама.",
-          "В настройках качества жизни включите животных на компасе. На полоске появляются те звери, которые отмечены в настройках значков, без открытия карты.",
-          "Наведите на предмет в печи или плавильне — там процент и оставшееся время. Макрос разделки выгружает туши, если есть зона Put. Среднее качество ингредиентов видно под слотами крафта."
-        ],
-        "en": [
-          "Open Craft Atlas from the UI or its hotkey. Search recipes, ingredients and bonuses, follow dependencies and favorites. Open craft opens the normal craft window and never starts crafting by itself.",
-          "Enable nearby animals in quality-of-life compass settings. Beasts marked in icon settings appear on the compass bar without opening the map.",
-          "Hover a kiln or smelter item for percent and remaining time. The butcher macro unloads carcasses when a Put zone exists. Average ingredient quality appears under craft slots."
         ]
       }
     }
