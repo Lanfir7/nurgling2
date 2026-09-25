@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-todo-lists",
+  "priority": 8,
+  "summary": {
+    "ru": "В главном меню появился список дел с личными и общими задачами.",
+    "en": "The main menu now has a To-Do list for personal and shared tasks."
+  },
+  "detail": {
+    "ru": "Откройте «Список дел» в главном меню или Ctrl+J. Задачам можно назначать исполнителя, срочность, повторение и точку на карте; значок показывает число ваших открытых задач. Личные дела хранятся локально, общие синхронизируются через базу деревни, когда она подключена.",
+    "en": "Open To-Do from the main menu or with Ctrl+J. Assign tasks, mark urgency, set repeats and map locations; the button shows your open assignments. Personal tasks stay local, while shared tasks sync through the village database when connected."
+  }
+}

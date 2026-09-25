@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-forager-sightings",
+  "priority": 5,
+  "summary": {
+    "ru": "Собиратель может сообщать о замеченных объектах в Discord или игровой чат, продолжая маршрут.",
+    "en": "Forager can report sightings to Discord or in-game chat while continuing its route."
+  },
+  "detail": {
+    "ru": "В настройках собирателя, в профиле охраны, укажите имена объектов через запятую и выберите Discord или канал чата. О каждом объекте бот сообщает один раз за запуск и продолжает сбор; обычные проверки опасности работают как прежде.",
+    "en": "In Forager settings, add comma-separated object names to a guarding profile and choose Discord or a chat channel. Each object is reported once per run while foraging continues; regular danger checks still apply."
+  }
+}

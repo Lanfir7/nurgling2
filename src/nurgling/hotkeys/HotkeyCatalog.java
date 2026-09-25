@@ -60,6 +60,7 @@ public final class HotkeyCatalog {
         core(registry, binding("treegarden", KeyMatch.forchar('P', KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("baseplanner", KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("storage", KeyMatch.forchar('I', KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
+        core(registry, binding("todo", KeyMatch.forchar('J', KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("opt", KeyMatch.forchar('O', KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("scm-srch", KeyMatch.forchar('Z', KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("screenshot", KeyMatch.forchar('S', KeyMatch.M)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);

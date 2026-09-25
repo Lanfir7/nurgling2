@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-cattle-and-cave-angler",
+  "priority": 3,
+  "summary": {
+    "ru": "Животные в ведомости пронумерованы, а пещерный удильщик получил радиус опасности.",
+    "en": "Cattle roster entries have row numbers, and Cave Anglers have a danger radius."
+  },
+  "detail": {
+    "ru": "В ведомости скота перед каждым животным виден номер строки — так проще сверяться со списком. Пещерный удильщик добавлен в настройки радиуса опасных животных со значением 100; радиус можно изменить там же.",
+    "en": "The cattle roster shows a row number before each animal for easier reference. Cave Anglers are included in dangerous-animal radius settings with a default of 100, which you can adjust there."
+  }
+}

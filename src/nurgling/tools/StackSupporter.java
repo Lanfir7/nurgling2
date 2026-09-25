@@ -54,6 +54,8 @@ public class StackSupporter {
         // Stackable Curiosities defaults to 4; brains stack smaller.
         customStackSizes.put("Small Brain", 3);
         customStackSizes.put("Brain", 2);
+        customStackSizes.put("Aurochs Hair", 3);
+        customStackSizes.put("Peapod", 3);
 
         putAll(3,
                 "Tuber", "Onion", "Beetroot", "Carrot", "Cucumber",

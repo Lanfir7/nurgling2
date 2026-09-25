@@ -307,6 +307,7 @@ public class NCore extends Widget
                             databaseManager = new nurgling.db.DatabaseManager(1);
                             startAreaSync();
                             startPlanningSync();
+                            startTodoSync();
                             startFishSync();
                             startPeerPositionSync();
                         } catch (Exception e) {
@@ -327,6 +328,10 @@ public class NCore extends Widget
         {
             startFishSync();
         }
+        if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager != null && !todoSyncStarted)
+        {
+            startTodoSync();
+        }
         if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager != null && !peerPositionSyncStarted)
         {
             startPeerPositionSync();
@@ -338,6 +343,7 @@ public class NCore extends Widget
                 if (databaseManager != null) {
                     stopAreaSync();
                     stopPlanningSync();
+                    stopTodoSync();
                     stopFishSync();
                     stopPeerPositionSync();
                     databaseManager.shutdown();
@@ -988,6 +994,7 @@ public class NCore extends Widget
 
     private static volatile boolean areaSyncStarted = false;
     private static volatile boolean planningSyncStarted = false;
+    private static volatile boolean todoSyncStarted = false;
     private static volatile boolean fishSyncStarted = false;
     private static volatile boolean routeSyncStarted = false;
     private static volatile boolean peerPositionSyncStarted = false;
@@ -1202,6 +1209,23 @@ public class NCore extends Widget
         fishSyncStarted = false;
     }
 
+    /** Start the shared To-Do polling worker. Session-owned stores perform the actual merge. */
+    private void startTodoSync() {
+        if (todoSyncStarted || databaseManager == null || !databaseManager.isReady()
+            || databaseManager.getTodoService() == null) {
+            return;
+        }
+        databaseManager.getTodoService().startSync(4);
+        todoSyncStarted = true;
+    }
+
+    private void stopTodoSync() {
+        if (databaseManager != null && databaseManager.getTodoService() != null) {
+            databaseManager.getTodoService().stopSync();
+        }
+        todoSyncStarted = false;
+    }
+
     /**
      * Start Base planner DB sync. Pushes the current in-memory tree to DB
      * once (so existing local content survives the toggle), then lets the
@@ -1279,6 +1303,7 @@ public class NCore extends Widget
             try {
                 stopAreaSync();
                 stopPlanningSync();
+                stopTodoSync();
                 if (databaseManager != null) {
                     try {
                         databaseManager.shutdown();
@@ -1291,6 +1316,7 @@ public class NCore extends Widget
                 if (databaseManager.isReady()) {
                     startAreaSync();
                     startPlanningSync();
+                    startTodoSync();
                     return true;
                 }
                 return false;

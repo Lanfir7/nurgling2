@@ -11,6 +11,9 @@ import java.util.List;
 public final class GuardingProfile {
     public boolean waterMode = false;
     public boolean ignoreBats = true;
+    public String sightingPatterns = "";
+    public boolean sightingDiscord = true;
+    public String sightingChatChannel = "";
     public List<GuardEntry> preflightGuards = new ArrayList<>();
     public List<GuardEntry> inflightGuards = new ArrayList<>();
 
@@ -30,6 +33,12 @@ public final class GuardingProfile {
                 inflightGuards.add(new GuardEntry(em));
             }
         }
+        if (map.get("sightingPatterns") instanceof String)
+            sightingPatterns = (String) map.get("sightingPatterns");
+        if (map.get("sightingDiscord") instanceof Boolean)
+            sightingDiscord = (Boolean) map.get("sightingDiscord");
+        if (map.get("sightingChatChannel") instanceof String)
+            sightingChatChannel = (String) map.get("sightingChatChannel");
         reconcileWithRegistry();
     }
 
@@ -59,6 +68,9 @@ public final class GuardingProfile {
             in.put(e.toJson());
         }
         json.put("inflightGuards", in);
+        json.put("sightingPatterns", sightingPatterns);
+        json.put("sightingDiscord", sightingDiscord);
+        json.put("sightingChatChannel", sightingChatChannel);
         return json;
     }
 

@@ -83,6 +83,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	public BlueprintWidget blueprintWidget;
 	public nurgling.widgets.NBasePlannerWidget basePlanner;
     public HelpWnd help;
+    public nurgling.widgets.todo.TodoWindow todoWnd;
     public OptWnd opts;
     public Collection<DraggedItem> hand = new LinkedList<DraggedItem>();
     public WItem vhand;
@@ -1403,6 +1404,18 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	}
     }
 
+    /** Opens or closes the To-Do window, constructing it on first use. */
+    public void toggleTodo() {
+	if(todoWnd == null) {
+	    if(!(this instanceof nurgling.NGameUI) || ((nurgling.NGameUI)this).todoStore == null)
+		return;
+	    todoWnd = add(new nurgling.widgets.todo.TodoWindow((nurgling.NGameUI)this),
+			  new Coord(sz.x / 2 - UI.scale(210), sz.y / 6));
+	    todoWnd.hide();
+	}
+	togglewnd(todoWnd);
+    }
+
     public static class MenuButton extends IButton {
 	MenuButton(String base, KeyBinding gkey, String tooltip) {
 	    super("gfx/hud/" + base, "", "-d", "-h");
@@ -1430,6 +1443,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 	public static final KeyBinding kb_blueprints = KeyBinding.get("treegarden", KeyMatch.forchar('P', KeyMatch.C));
 	public static final KeyBinding kb_baseplanner = KeyBinding.get("baseplanner", KeyMatch.nil);
 	public static final KeyBinding kb_storage = KeyBinding.get("storage", KeyMatch.forchar('I', KeyMatch.C));
+	public static final KeyBinding kb_todo = KeyBinding.get("todo", KeyMatch.forchar('J', KeyMatch.C));
 	public static final KeyBinding kb_opt = KeyBinding.get("opt", KeyMatch.forchar('O', KeyMatch.C));
     public class MainMenu extends Widget {
 	public MainMenu() {
@@ -1448,8 +1462,16 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		prev = add(new MenuCheckBox("rbtn/blueprints/", kb_blueprints, L10n.get("blueprint.manager_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(blueprintWidget)).click(() -> togglewnd(blueprintWidget));
 		prev = add(new MenuCheckBox("rbtn/baseplanner/", kb_baseplanner, "Base planner"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(basePlanner)).click(() -> togglewnd(basePlanner));
 		prev = add(new MenuCheckBox("rbtn/storage/", kb_storage, L10n.get("storage.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(storageItemsWidget)).click(() -> togglewnd(storageItemsWidget));
-		prev = add(new MenuCheckBox("rbtn/encyclopedia/", kb_craftAtlas, L10n.get("craft_atlas.title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(craftAtlas)).click(() -> togglewnd(craftAtlas));
-			add(new ReleaseNotesMenuButton(() -> togglewnd(releaseNotes)), prev.c.x, 0).state(() -> wndstate(releaseNotes));
+			prev = add(new MenuCheckBox("rbtn/encyclopedia/", kb_craftAtlas, L10n.get("craft_atlas.title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(craftAtlas)).click(() -> togglewnd(craftAtlas));
+			prev = add(new MenuCheckBox("rbtn/todo/", kb_todo, "To-Do") {
+			    public void draw(GOut g) {
+				super.draw(g);
+				if(GameUI.this instanceof nurgling.NGameUI && ((nurgling.NGameUI)GameUI.this).todoStore != null)
+				    nurgling.widgets.todo.TodoWindow.drawBadge(g, sz,
+					((nurgling.NGameUI)GameUI.this).todoStore.openAssignedToMe());
+			    }
+			}, prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(todoWnd)).click(GameUI.this::toggleTodo);
+				add(new ReleaseNotesMenuButton(() -> togglewnd(releaseNotes)), prev.c.x, 0).state(() -> wndstate(releaseNotes));
 		pack();
 	}
 

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-cheese-conveyor",
+  "priority": 8,
+  "summary": {
+    "ru": "Сырный конвейер выпускает сыр небольшими партиями по расписанию; калькулятор помогает рассчитать стеллажи.",
+    "en": "Cheese Conveyor makes smaller batches on a schedule, and a calculator helps size the racks."
+  },
+  "detail": {
+    "ru": "В Настройках Nurgling → Боты → Сырный конвейер задайте разовые или непрерывные заказы и темп выпуска. Бот использует зоны творога, пустых подносов, нарезанного сыра и стеллажей. Инструмент «Калькуляторы» показывает, сколько стеллажей и подносов нужно для выбранного темпа.",
+    "en": "In Nurgling Settings → Bots → Cheese Conveyor, set one-time or continuous orders and their rate. The bot uses curd, empty-tray, sliced-cheese and rack areas. The Calculators tool estimates racks and trays for the chosen rate."
+  }
+}

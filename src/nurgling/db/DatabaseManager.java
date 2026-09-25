@@ -36,6 +36,7 @@ public class DatabaseManager {
     private StorageItemService storageItemService;
     private AreaService areaService;
     private nurgling.db.service.PlanningService planningService;
+    private nurgling.db.service.TodoService todoService;
     private AnimalMarkerService animalMarkerService;
     private LocalTimerService localTimerService;
     private CraftRecipeService craftRecipeService;
@@ -448,6 +449,9 @@ public class DatabaseManager {
         this.storageItemService = new StorageItemService(this);
         this.areaService = new AreaService(this);
         this.planningService = new nurgling.db.service.PlanningService(this);
+        /* To-Do rows deliberately reuse the long-lived routes table, so this service needs no
+         * optional migration guard. */
+        this.todoService = new nurgling.db.service.TodoService(this);
         this.animalMarkerService = new AnimalMarkerService(this);
         boolean localTimersOk = tableUsable("local_timers") && localTimerSchemaUsable(adapter);
         this.localTimerService = localTimersOk ? new LocalTimerService(this) : null;
@@ -880,6 +884,11 @@ public class DatabaseManager {
      */
     public nurgling.db.service.PlanningService getPlanningService() {
         return planningService;
+    }
+
+    /** Get the shared To-Do list service. */
+    public nurgling.db.service.TodoService getTodoService() {
+        return todoService;
     }
 
     public AnimalMarkerService getAnimalMarkerService() {

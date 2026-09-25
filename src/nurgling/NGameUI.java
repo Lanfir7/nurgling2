@@ -85,6 +85,7 @@ public class NGameUI extends GameUI
     public final nurgling.tools.StraightPathObstacle.Cache pathObstacles = new nurgling.tools.StraightPathObstacle.Cache();
     public PingService pingService;
     public FishLocationService fishLocationService;
+    public nurgling.todo.TodoStore todoStore;
     public PeerPositionService peerPositionService;
     public FishSearchWindow fishSearchWindow = null;
     public final Map<String, FishLocationDetailsWindow> openFishDetailWindows = new HashMap<>();
@@ -378,6 +379,7 @@ public class NGameUI extends GameUI
         waypointMovementService = new WaypointMovementService(this);
         pingService = new PingService(this);
         fishLocationService = new FishLocationService(this, genus);
+        todoStore = new nurgling.todo.TodoStore(this, genus);
         peerPositionService = new PeerPositionService(this);
         treeLocationService = new TreeLocationService(this, genus);
         prospectingLocationService = new ProspectingLocationService(this, genus);
@@ -547,6 +549,8 @@ public class NGameUI extends GameUI
     @Override
     public void dispose() {
         sharedMarkerClipboardService.dispose();
+        if(todoStore != null)
+            todoStore.flushFile();
         if (heavyWidgetsThread != null) {
             heavyWidgetsThread.interrupt();
             heavyWidgetsThread = null;
@@ -946,6 +950,8 @@ public class NGameUI extends GameUI
     public void tick(double dt)
     {
         super.tick(dt);
+        if(todoStore != null)
+            todoStore.tick();
         Gob player = (map == null) ? null : map.player();
         String pose = (player == null) ? null : player.pose();
         if (player == null || (pose != null && pose.contains("gfx/borka/point")))

@@ -71,6 +71,8 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
     private CheckBox invSlotNumbers;
     private CheckBox invStackOverlay;
     private CheckBox invAutoSplit;
+    private CheckBox invStudyGhosts;
+    private CheckBox curioFinishedSound;
     private TextEntry treeScaleMinThresholdEntry;
     private CheckBox diabloLikeRun;
     private HSlider treeDisplayScaleSlider;
@@ -330,6 +332,8 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         rightPrev = invSlotNumbers = rightColumn.add(new CheckBox(L10n.get("qol.inv_slot_numbers")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = invStackOverlay = rightColumn.add(new CheckBox(L10n.get("qol.inv_stack_overlay")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = invAutoSplit = rightColumn.add(new CheckBox(L10n.get("qol.inv_auto_split")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = invStudyGhosts = rightColumn.add(new CheckBox(L10n.get("qol.inv_study_ghosts")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = curioFinishedSound = rightColumn.add(new CheckBox(L10n.get("qol.curio_finished_sound")), rightPrev.pos("bl").adds(0, 5));
 
         rightPrev = rightColumn.add(new Label("● " + L10n.get("qol.section.debug")), rightPrev.pos("bl").adds(0, 15));
         rightPrev = debug = rightColumn.add(new CheckBox(L10n.get("qol.debug")), rightPrev.pos("bl").adds(0, 5));
@@ -484,6 +488,8 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         invSlotNumbers.a = getBool(NConfig.Key.showInventoryNums);
         invStackOverlay.a = getBool(NConfig.Key.showStackOverlay);
         invAutoSplit.a = getBool(NConfig.Key.autoSplitter);
+        invStudyGhosts.a = getBool(NConfig.Key.showStudyReportGhosts);
+        curioFinishedSound.a = getBool(NConfig.Key.curioFinishedSound);
 
         Object treeScalePref = NConfig.get(NConfig.Key.treeDisplayScale);
         int treeScaleValue = 100;
@@ -787,6 +793,8 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         NConfig.set(NConfig.Key.showStackOverlay, invStackOverlay.a);
         haven.res.ui.tt.stackn.Stack.show = invStackOverlay.a;
         NConfig.set(NConfig.Key.autoSplitter, invAutoSplit.a);
+        NConfig.set(NConfig.Key.showStudyReportGhosts, invStudyGhosts.a);
+        NConfig.set(NConfig.Key.curioFinishedSound, curioFinishedSound.a);
 
         NConfig.needUpdate();
     }

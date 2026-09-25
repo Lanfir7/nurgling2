@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-study-curiosities",
+  "priority": 5,
+  "summary": {
+    "ru": "Пустые ячейки отчёта об изучении напоминают о прежних диковинах; завершение изучения может сопровождаться звуком.",
+    "en": "Empty study slots can show the previous curiosities, and completed studies can play a sound."
+  },
+  "detail": {
+    "ru": "В отчёте об изучении полупрозрачные изображения показывают, какие диковины стояли в освободившихся ячейках. При завершении изучения звучит сигнал. Обе функции можно отдельно выключить в настройках качества жизни.",
+    "en": "Faded images in the study report show which curiosities occupied empty slots. A sound plays when a curiosity finishes. Both options can be turned off separately in Quality of Life settings."
+  }
+}

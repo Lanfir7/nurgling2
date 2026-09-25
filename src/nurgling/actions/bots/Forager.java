@@ -2,6 +2,7 @@ package nurgling.actions.bots;
 
 import haven.*;
 import nurgling.*;
+import nurgling.actions.bots.forager.SightingNotifier;
 import nurgling.actions.*;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
@@ -182,7 +183,7 @@ public class Forager implements Action {
         }
 
         // Runs continuously in the background so a mid-walk threat still triggers the safety action immediately.
-        threatWatcher = startGuardWatcher(gui, guardingProfile, Thread.currentThread());
+        threatWatcher = startGuardWatcher(gui, guardingProfile, SightingNotifier.create(gui, guardingProfile, path.name), Thread.currentThread());
 
         // One-time Put-area audit for Maintain's pickup budget; skipped if the preset ignores Maintain limits.
         maintainAreaStock = preset.ignoreMaintainLimits
@@ -1125,7 +1126,7 @@ public class Forager implements Action {
                 }
             } else if (action.notifyTarget == ForagerAction.NotifyTarget.CHAT) {
                 if (action.chatChannelName != null && !action.chatChannelName.isEmpty()) {
-                    ChatUI.Channel targetChannel = findChatChannelByName(gui, action.chatChannelName);
+                    ChatUI.Channel targetChannel = SightingNotifier.findChatChannel(gui, action.chatChannelName);
                     if (targetChannel != null && targetChannel instanceof ChatUI.EntryChannel) {
                         ((ChatUI.EntryChannel) targetChannel).send(message);
                     }
@@ -1277,7 +1278,7 @@ public class Forager implements Action {
     }
 
     /** Background thread polling in-flight guards independent of the bot thread; records the firing guard and interrupts the bot thread, but doesn't perform its outcome itself. */
-    private Thread startGuardWatcher(NGameUI gui, GuardingProfile profile, Thread botThread) {
+    private Thread startGuardWatcher(NGameUI gui, GuardingProfile profile, SightingNotifier sightings, Thread botThread) {
         List<Guard> guards = buildGuards(profile.inflightGuards);
         GuardContext ctx = new GuardContext(gui, profile.ignoreBats);
         // Bind the calling thread's NUI here too, mirroring BotExecutor.runAsync, so NConfig reads use this session's config.
@@ -1289,6 +1290,8 @@ public class Forager implements Action {
             try {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
+                    if (sightings != null)
+                        sightings.scan();
                     for (Guard guard : guards) {
                         if (guard.trigger.check(ctx)) {
                             // Only interrupt if this watcher actually won the claim - guards
@@ -1332,17 +1335,4 @@ public class Forager implements Action {
         return null;
     }
     
-    private ChatUI.Channel findChatChannelByName(NGameUI gui, String channelName) {
-        if (gui.chat == null) return null;
-        
-        for (Widget w = gui.chat.child; w != null; w = w.next) {
-            if (w instanceof ChatUI.Channel) {
-                ChatUI.Channel chan = (ChatUI.Channel) w;
-                if (chan.name().equalsIgnoreCase(channelName)) {
-                    return chan;
-                }
-            }
-        }
-        return null;
-    }
 }

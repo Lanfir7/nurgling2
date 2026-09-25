@@ -148,6 +148,9 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
     private Dropbox<String> guardingProfileDropbox;
     private CheckBox waterModeCheck;
     private CheckBox ignoreBatsCheck;
+    private TextEntry sightingPatternsEntry;
+    private CheckBox sightingDiscordCheck;
+    private TextEntry sightingChatEntry;
 
     /** One built row's live widgets, keyed by GuardSpec.id in preflightRows/inflightRows - see buildGuardRow(). */
     private static final class GuardRow {
@@ -507,6 +510,17 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
         for (String id : GuardRegistry.inflightIds()) {
             prevGuardRow = buildGuardRow(gsec, prevGuardRow, GuardRegistry.get(id), inflightRows);
         }
+
+        Widget sightingLabel = gsec.add(new Label(L10n.get("forager.settings.notify_on_sight")), prevGuardRow.pos("bl").add(UI.scale(0, 14)));
+        sightingPatternsEntry = gsec.add(new TextEntry(UI.scale(ROW_W), ""), sightingLabel.pos("bl").add(UI.scale(0, 5)));
+        sightingPatternsEntry.settip(L10n.get("forager.settings.notify_on_sight_tip"));
+        Widget sightingRow = gsec.add(new Widget(new Coord(UI.scale(ROW_W), UI.scale(ROW_H))), sightingPatternsEntry.pos("bl").add(UI.scale(0, 4)));
+        sightingDiscordCheck = rowItem(sightingRow, new CheckBox(L10n.get("forager.settings.notify_discord")), UI.scale(0));
+        sightingDiscordCheck.a = true;
+        sightingDiscordCheck.settip(L10n.get("forager.settings.notify_discord_tip"));
+        rowItem(sightingRow, new Label(L10n.get("forager.settings.notify_chat")), UI.scale(160));
+        sightingChatEntry = rowItem(sightingRow, new TextEntry(UI.scale(150), ""), UI.scale(ROUTE_VALUE_X));
+        sightingChatEntry.settip(L10n.get("forager.settings.notify_chat_tip"));
 
         guardingSection.pack();
 
@@ -1018,6 +1032,9 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
 
         waterModeCheck.a = profile.waterMode;
         ignoreBatsCheck.a = profile.ignoreBats;
+        sightingPatternsEntry.settext(profile.sightingPatterns);
+        sightingDiscordCheck.a = profile.sightingDiscord;
+        sightingChatEntry.settext(profile.sightingChatChannel);
 
         applyGuardEntriesToRows(profile.preflightGuards, preflightRows);
         applyGuardEntriesToRows(profile.inflightGuards, inflightRows);
@@ -1043,6 +1060,9 @@ public class ForagerSettingsPanel extends Panel implements AdaptiveSettingsPanel
         if (currentGuardingProfile == null) return;
         currentGuardingProfile.waterMode = waterModeCheck.a;
         currentGuardingProfile.ignoreBats = ignoreBatsCheck.a;
+        currentGuardingProfile.sightingPatterns = sightingPatternsEntry.text().trim();
+        currentGuardingProfile.sightingDiscord = sightingDiscordCheck.a;
+        currentGuardingProfile.sightingChatChannel = sightingChatEntry.text().trim();
         writeRowsToGuardEntries(currentGuardingProfile.preflightGuards, preflightRows);
         writeRowsToGuardEntries(currentGuardingProfile.inflightGuards, inflightRows);
     }

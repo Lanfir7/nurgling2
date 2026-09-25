@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-stacks",
+  "priority": 3,
+  "summary": {
+    "ru": "Автоукладка теперь распознаёт больше диковин и редких предметов.",
+    "en": "Automatic stacking now recognizes more curiosities and rare items."
+  },
+  "detail": {
+    "ru": "При работе со стопками клиент учитывает волосы зубра, гороховые стручки, снежинки, заячий иней и морозный цветок. Для волос зубра и стручков учитывается размер стопки из трёх предметов.",
+    "en": "Stack handling now recognizes Aurochs Hair, Peapods, snowflakes, Rabbit Frost and Frost Flower. Aurochs Hair and Peapods use their three-item stack limit."
+  }
+}

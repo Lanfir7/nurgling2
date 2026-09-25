@@ -123,7 +123,7 @@ public class NConfig
         smokeprop,
         worldexplorerprop,
         questNotified, lpassistent, fishingsettings,
-        serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, shareHearthSecret, autoHearthSecret, sharePosition, showPeerPositions, dbGrantRole, dbStatsOverlay, mapShareMarkers, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, dbHost, dbPort, dbName, dbSsl, dbVillage, simplecrops,
+        serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, shareHearthSecret, autoHearthSecret, sharePosition, showPeerPositions, todoNotify, dbGrantRole, dbStatsOverlay, mapShareMarkers, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, dbHost, dbPort, dbName, dbSsl, dbVillage, simplecrops,
         temsmarktime, exploredAreaEnable, exploredAreaRecord, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         areaRankPresets,  // Map of areaId -> Map of animalType -> presetName
         shortCupboards,
@@ -160,6 +160,9 @@ public class NConfig
         studyDeskLayout,
         studyDeskHideLp,
         studyDeskStockHours,
+        studyReportGhosts,
+        showStudyReportGhosts,
+        curioFinishedSound,
         milestones,          // MilestoneRegistry's persisted gobHash -> {location, destinations[]} map
         milestoneTracking,   // Whether MilestoneTracker passively records signpost/milestone travel
         waypointRetryOnStuck,
@@ -340,6 +343,7 @@ public class NConfig
         prospectMarks,
         // Localization
         language,
+        cheeseRackCalculator,
         // LLM agent
         agentBaseUrl,
         agentApiKey,
@@ -421,6 +425,7 @@ public class NConfig
         conf.put(Key.layoutPreset, NDefaultLayout.Preset.CLASSIC.name());
         conf.put(Key.layoutPresetChosen, false);
         conf.put(Key.discordWebhookUrl, "");
+        conf.put(Key.cheeseRackCalculator, "");
         conf.put(Key.showGrid, false);
         conf.put(Key.showView, false);
         conf.put(Key.showTreeIcons, true);
@@ -467,6 +472,7 @@ public class NConfig
          * are separately switchable in Database settings. */
         conf.put(Key.sharePosition, true);
         conf.put(Key.showPeerPositions, true);
+        conf.put(Key.todoNotify, true);
         conf.put(Key.autoHearthSecret, true);
         conf.put(Key.dbGrantRole, "PUBLIC");
         conf.put(Key.dbStatsOverlay, false);
@@ -542,6 +548,9 @@ public class NConfig
         conf.put(Key.showTerrainName, false);
         conf.put(Key.validateAllCropsBeforeHarvest, false);
         conf.put(Key.studyDeskLayout, "");
+        conf.put(Key.studyReportGhosts, "");
+        conf.put(Key.showStudyReportGhosts, true);
+        conf.put(Key.curioFinishedSound, true);
         conf.put(Key.studyDeskHideLp, false);
         conf.put(Key.studyDeskStockHours, 168);
         conf.put(Key.milestones, "");
@@ -665,6 +674,7 @@ public class NConfig
         arearadprop.add(new NAreaRad("gfx/kritter/woodscorpion/woodscorpion", 30));
         arearadprop.add(new NAreaRad("gfx/kritter/rat/caverat", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/ooze/greenooze", 100));
+        arearadprop.add(new NAreaRad("gfx/kritter/caveangler/caveangler", 100));
         conf.put(Key.animalrad, arearadprop);
 
         // Movement speed setting (0=Crawl, 1=Walk, 2=Run, 3=Sprint)
@@ -1626,6 +1636,7 @@ public class NConfig
                 {"gfx/kritter/woodscorpion/woodscorpion", "30"},
                 {"gfx/kritter/rat/caverat", "100"},
                 {"gfx/kritter/ooze/greenooze", "100"},
+                {"gfx/kritter/caveangler/caveangler", "100"},
             };
             for (String[] entry : newAnimals) {
                 if (!existingNames.contains(entry[0])) {

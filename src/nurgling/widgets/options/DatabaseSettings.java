@@ -75,7 +75,7 @@ public class DatabaseSettings extends Panel {
     private volatile boolean reconnectInProgress = false;
 
     private Label sharingLabel;
-    private CheckBox shareHsCheckbox, shareMapMarksCheckbox, sharePosCheckbox, showPeerPosCheckbox;
+    private CheckBox shareHsCheckbox, shareMapMarksCheckbox, sharePosCheckbox, showPeerPosCheckbox, todoNotifyCheckbox;
     private Button seedFishButton;
     private DbSizeView sizeView;
     private int sizeYVillage;
@@ -84,7 +84,7 @@ public class DatabaseSettings extends Panel {
     private boolean built = false;
 
     private int mode = MODE_OFF;
-    private boolean shareHs, shareMapMarks, sharePos, showPeerPos;
+    private boolean shareHs, shareMapMarks, sharePos, showPeerPos, todoNotify;
     private String sslMode = DbSettings.SSL_PREFER;
     private boolean showAdvanced = false;
     private String villageName = "";
@@ -281,7 +281,16 @@ public class DatabaseSettings extends Panel {
             }
         }, new Coord(UI.scale(20), y));
         showPeerPosCheckbox.tooltip = Text.render(L10n.get("database.show_peer_positions_tip")).tex();
-        y += showPeerPosCheckbox.sz.y + UI.scale(10);
+        y += showPeerPosCheckbox.sz.y + UI.scale(5);
+
+        todoNotifyCheckbox = add(new CheckBox(L10n.get("database.todo_notify")) {
+            public void set(boolean val) {
+                a = val;
+                todoNotify = val;
+            }
+        }, new Coord(UI.scale(20), y));
+        todoNotifyCheckbox.tooltip = Text.render(L10n.get("database.todo_notify_tip")).tex();
+        y += todoNotifyCheckbox.sz.y + UI.scale(10);
 
         reconnectBtn = add(new Button(UI.scale(200), L10n.get("database.reconnect")) {
             @Override
@@ -311,7 +320,7 @@ public class DatabaseSettings extends Panel {
         y += sizeView.sz.y + margin;
 
         for (Widget w : new Widget[]{sharingLabel, shareHsCheckbox, shareMapMarksCheckbox,
-                                     sharePosCheckbox, showPeerPosCheckbox, reconnectBtn, reconnectStatus,
+                                     sharePosCheckbox, showPeerPosCheckbox, todoNotifyCheckbox, reconnectBtn, reconnectStatus,
                                      seedFishButton}) {
             belowBlock.add(w);
             belowBase.add(w.c);
@@ -349,6 +358,8 @@ public class DatabaseSettings extends Panel {
         sharePosCheckbox.a = sharePos;
         showPeerPos = getBool(NConfig.Key.showPeerPositions);
         showPeerPosCheckbox.a = showPeerPos;
+        todoNotify = getBool(NConfig.Key.todoNotify);
+        todoNotifyCheckbox.a = todoNotify;
 
         /* Read through DbSettings rather than off the keys, so a config that still only has the old
          * combined serverNode shows the host and port it is actually reaching - and saving then
@@ -422,6 +433,7 @@ public class DatabaseSettings extends Panel {
         NConfig.set(NConfig.Key.mapShareMarkers, shareMapMarks);
         NConfig.set(NConfig.Key.sharePosition, sharePos);
         NConfig.set(NConfig.Key.showPeerPositions, showPeerPos);
+        NConfig.set(NConfig.Key.todoNotify, todoNotify);
 
         boolean isPostgres = (mode == MODE_VILLAGE);
         NConfig.set(NConfig.Key.postgres, isPostgres);
@@ -750,6 +762,7 @@ public class DatabaseSettings extends Panel {
         shareMapMarksCheckbox.visible = village;
         sharePosCheckbox.visible = village;
         showPeerPosCheckbox.visible = village;
+        todoNotifyCheckbox.visible = village;
         seedFishButton.visible = village;
 
         sizeView.visible = village || sqlite;

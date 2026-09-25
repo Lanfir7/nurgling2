@@ -3201,12 +3201,14 @@ public class VSpec {
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/flotsam\",\"name\":\"Peculiar Flotsam\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/curiousneedle\",\"name\":\"Curious Needle\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/lynxclaws\",\"name\":\"Lynx Claws\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/whirlingsnowflake\",\"name\":\"Whirling Snowflake\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/precioussnowflake\",\"name\":\"Precious Snowflake\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/rabbitfrost\",\"name\":\"Rabbit Frost\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/aurochshair\",\"name\":\"Aurochs Hair\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/frostflower\",\"name\":\"Frost Flower\"}"));
         categories.put("Stackable Curiosities", StackableCurios);
 
         ArrayList<JSONObject> NoneStackableCurio = new ArrayList<>();
-        NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/rabbitfrost\",\"name\":\"Rabbit Frost\"}"));
-        NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/whirlingsnowflake\",\"name\":\"Whirling Snowflake\"}"));
-        NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/precioussnowflake\",\"name\":\"Precious Snowflake\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/ghostapple\",\"name\":\"Ghost Apple\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/sleighbell\",\"name\":\"Sleighbell\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/easteregg0\",\"name\":\"Easter Egg\"}"));
@@ -3217,7 +3219,6 @@ public class VSpec {
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/plushbat\",\"name\":\"Plush Bat\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/itsybitsyhome\",\"name\":\"Itsy Bitsy Weaver\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/horribleknot\",\"name\":\"Horrible Knot\"}"));
-        NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/aurochshair\",\"name\":\"Aurochs Hair\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/commonstarfish\",\"name\":\"Common Starfish\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/cruelsplinter\",\"name\":\"Cruel Splinter\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/goldeneagletalon\",\"name\":\"Golden Eagle Talon\"}"));
