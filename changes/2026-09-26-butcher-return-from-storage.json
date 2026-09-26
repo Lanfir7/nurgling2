@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-butcher-return-from-storage",
+  "priority": 7,
+  "summary": {
+    "ru": "Разделка одной туши возвращает персонажа из зоны хранения к месту работы.",
+    "en": "Butchering a single carcass returns your character from storage to the work site."
+  },
+  "detail": {
+    "ru": "При запуске разделки через макроклавишу бот после раскладки мяса и других продуктов в доме выходит обратно к туше. После последней раскладки он также возвращается к месту разделки.",
+    "en": "When started with the macro key, the butcher returns to the carcass after storing meat and other products inside a house. It also returns to the butchering spot after the final storage trip."
+  }
+}

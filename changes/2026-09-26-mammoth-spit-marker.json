@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-mammoth-spit-marker",
+  "priority": 7,
+  "summary": {
+    "ru": "Плевок мамонта больше не отмечается как животное.",
+    "en": "Mammoth spit is no longer marked as an animal."
+  },
+  "detail": {
+    "ru": "Макрос «Маркеры животных» игнорирует плевок мамонта даже при широкой маске поиска мамонта. Сам мамонт по-прежнему отмечается.",
+    "en": "The Animal Markers macro ignores mammoth spit even with a broad mammoth search pattern. Mammoths themselves are still marked."
+  }
+}

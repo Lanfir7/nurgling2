@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-inspect-object-materials",
+  "priority": 5,
+  "summary": {
+    "ru": "Простой осмотр показывает материалы объекта, если они известны.",
+    "en": "Simple inspect shows an object's materials when available."
+  },
+  "detail": {
+    "ru": "Наведите лупу на постройку или другой объект: под его названием появятся материалы, использованные для его внешнего вида.",
+    "en": "Hover the magnifying glass over a building or other object to see its appearance materials below its name."
+  }
+}

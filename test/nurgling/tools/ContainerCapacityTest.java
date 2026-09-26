@@ -46,6 +46,29 @@ class ContainerCapacityTest {
         assertTrue(container.isFull());
     }
 
+    @Test
+    void tetrisStartsEachPickupFromObservedFrameContents() {
+        Container container = container();
+        container.initattr(Container.Tetris.class);
+        Container.Tetris tetris = container.getattr(Container.Tetris.class);
+        tetris.getRes().put(Container.Tetris.SRC, new short[4][4]);
+        tetris.getRes().put(Container.Tetris.DATA, new short[4][4]);
+        tetris.getRes().put(Container.Tetris.TARGET_COORD,
+                new ArrayList<>(List.of(new Coord(2, 2))));
+        tetris.getRes().put(Container.Tetris.DONE, false);
+        tetris.getRes().put(Container.Tetris.VIRTUAL, false);
+
+        for (int i = 0; i < 4; i++)
+            assertTrue(tetris.tryPlace(new Coord(2, 2)));
+        assertTrue((Boolean) tetris.getRes().get(Container.Tetris.VIRTUAL));
+
+        tetris.resetVirtual();
+
+        assertFalse((Boolean) tetris.getRes().get(Container.Tetris.VIRTUAL));
+        assertTrue(tetris.tryPlace(new Coord(2, 2)));
+        assertEquals(4, tetris.calcNumberFreeCoord(Container.Tetris.SRC, new Coord(2, 2)));
+    }
+
     private static Container container() {
         return new Container(new Gob(null, Coord2d.of(0, 0), 1), "test", null);
     }

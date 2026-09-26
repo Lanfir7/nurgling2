@@ -129,6 +129,17 @@ public class Container implements NContext.ObjectStorage {
             res.put(VIRTUAL, done);
         }
 
+        public void resetVirtual() {
+            short[][] source = (short[][]) res.get(SRC);
+            if (source == null)
+                return;
+            short[][] plan = new short[source.length][];
+            for (int i = 0; i < source.length; i++)
+                plan[i] = source[i].clone();
+            res.put(DATA, plan);
+            res.put(VIRTUAL, res.get(DONE));
+        }
+
         public boolean tryPlace(Coord coord) {
             if (!((Boolean) res.get(DONE)) && !((Boolean) res.get(VIRTUAL)) && placeItem(coord)) {
                 boolean done = true;

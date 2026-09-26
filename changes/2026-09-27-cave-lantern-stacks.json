@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-cave-lantern-stacks",
+  "priority": 7,
+  "summary": {
+    "ru": "Боты складывают Cave Lantern в стаки по четыре.",
+    "en": "Bots stack Cave Lanterns in groups of four."
+  },
+  "detail": {
+    "ru": "При сборе и перекладывании Cave Lantern боты учитывают вместимость стака: четыре предмета в одной ячейке инвентаря.",
+    "en": "When collecting and moving Cave Lanterns, bots account for four items per inventory stack."
+  }
+}

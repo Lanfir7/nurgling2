@@ -74,6 +74,12 @@ class StackSupporterNewItemsTest {
     }
 
     @Test
+    void caveLanternUsesFourItemStack() {
+        assertTrue(VSpec.getCategory("Cave Lantern").contains("Stackable Curiosities"));
+        assertEquals(4, StackSupporter.getFullStackSize("Cave Lantern"));
+    }
+
+    @Test
     void existingLocalCustomStackRulesRemainUnchanged() {
         assertEquals(5, StackSupporter.getFullStackSize("Branch"));
         assertEquals(4, StackSupporter.getFullStackSize("Standing Grass"));

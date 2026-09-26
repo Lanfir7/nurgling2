@@ -29,6 +29,7 @@ public class TakeItemsByTetris implements Action
         Coord target_coord = new Coord(1,1);
         for (Container container: conts) {
             Container.Tetris tetris = container.getattr(Container.Tetris.class);
+            tetris.resetVirtual();
             for (Coord coord : (ArrayList<Coord>) tetris.getRes().get(Container.Tetris.TARGET_COORD)) {
                 target_coord.x = Math.max(target_coord.x, coord.x);
                 target_coord.y = Math.max(target_coord.y, coord.y);

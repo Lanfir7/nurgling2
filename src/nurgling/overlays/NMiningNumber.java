@@ -48,7 +48,11 @@ public class NMiningNumber extends Sprite implements RenderTree.Node
     @Override
     public boolean tick(double dt)
     {
-        return gob!=null && NUtils.getGameUI().map.player()!=null && gob.rc.dist(NUtils.getGameUI().map.player().rc)>500;
+        NGameUI gui = NUtils.getGameUI();
+        if (gob == null || gui == null || gui.map == null)
+            return false;
+        Gob player = gui.map.player();
+        return player != null && gob.rc.dist(player.rc) > 500;
     }
 
 }

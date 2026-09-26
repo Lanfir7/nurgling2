@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-mining-markers-teleport",
+  "priority": 7,
+  "summary": {
+    "ru": "Телепортация больше не останавливает клиент при видимых отметках добычи.",
+    "en": "Teleporting no longer stops the client while mining markers are visible."
+  },
+  "detail": {
+    "ru": "Если на карте видны числовые отметки добычи, можно телепортироваться без зависания клиента при временном исчезновении персонажа с карты.",
+    "en": "When numbered mining markers are visible on the map, teleporting continues normally while your character briefly disappears from the map."
+  }
+}

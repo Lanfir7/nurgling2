@@ -110,7 +110,8 @@ public class ObjectTracker {
     static boolean isLeftoverKritter(String gobName) {
         if (gobName == null) return false;
         String n = gobName.toLowerCase(Locale.ROOT);
-        return n.contains("skull") || n.contains("beef");
+        return n.contains("skull") || n.contains("beef")
+                || n.equals("gfx/kritter/mammoth/mammothglob");
     }
 
     /** True for living kritters that Animal Markers may tag. */

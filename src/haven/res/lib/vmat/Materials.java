@@ -11,18 +11,26 @@ import java.util.function.Consumer;
 public class Materials extends Mapping {
     public static final Map<Integer, Material> empty = Collections.<Integer, Material>emptyMap();
     public final Map<Integer, Material> mats;
+    /** Resource selected by the server for each variable material slot. */
+    public final Map<Integer, Resource> sources;
 
     public static Map<Integer, Material> decode(Resource.Resolver rr, Message sdt) {
+	return(decode(rr, sdt, null));
+    }
+
+    private static Map<Integer, Material> decode(Resource.Resolver rr, Message sdt, Map<Integer, Resource> sources) {
 	Map<Integer, Material> ret = new HashMap<>();
 	int idx = 0;
 	while(!sdt.eom()) {
-	    Indir<Resource> mres = rr.getres(sdt.uint16());
+	    Resource mres = rr.getres(sdt.uint16()).get();
 	    int mid = sdt.int8();
 	    Material.Res mat;
 	    if(mid >= 0)
-		mat = mres.get().layer(Material.Res.class, mid);
+		mat = mres.layer(Material.Res.class, mid);
 	    else
-		mat = mres.get().layer(Material.Res.class);
+		mat = mres.layer(Material.Res.class);
+	    if(sources != null)
+		sources.put(idx, mres);
 	    ret.put(idx++, mat.get());
 	}
 	return(ret);
@@ -44,13 +52,19 @@ public class Materials extends Mapping {
     }
 
     public Materials(Gob gob, Map<Integer, Material> mats) {
+	this(gob, mats, Collections.emptyMap());
+    }
+
+    public Materials(Gob gob, Map<Integer, Material> mats, Map<Integer, Resource> sources) {
 	super(gob);
 	this.mats = mats;
+	this.sources = Collections.unmodifiableMap(new HashMap<>(sources));
     }
 
     public static void parse(Gob gob, Message dat) {
-	Map<Integer, Material> mats = decode(gob.context(Resource.Resolver.class), dat);
-	gob.setattr(new Materials(gob, mats));
+	Map<Integer, Resource> sources = new HashMap<>();
+	Map<Integer, Material> mats = decode(gob.context(Resource.Resolver.class), dat, sources);
+	gob.setattr(new Materials(gob, mats, sources));
 	try {
 	    gob.setattr((GAttrib)Utils.construct(Class.forName("haven.res.lib.vmat.AttrMats").getConstructor(new Class[]{Gob.class, Map.class}), gob, mats));
 	} catch(ClassNotFoundException | NoSuchMethodException | LinkageError e) {

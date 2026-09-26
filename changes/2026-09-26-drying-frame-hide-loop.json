@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-drying-frame-hide-loop",
+  "priority": 7,
+  "summary": {
+    "ru": "Бот для сушилок перестаёт носить по одной шкуре при свободном месте.",
+    "en": "The drying frame bot stops carrying one hide at a time when space remains."
+  },
+  "detail": {
+    "ru": "При раскладке сырых шкур бот заново оценивает свободное место на сушилках перед следующим набором шкур. Это позволяет брать полную подходящую партию, даже если в предыдущем заходе рамы были заполнены лишь частично.",
+    "en": "When placing fresh hides, the bot reassesses drying frame space before fetching the next batch. It can take a full fitting batch when the previous trip filled the frames only partly."
+  }
+}

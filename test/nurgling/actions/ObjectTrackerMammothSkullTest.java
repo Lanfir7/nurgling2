@@ -19,6 +19,15 @@ class ObjectTrackerMammothSkullTest {
     }
 
     @Test
+    void mammothSpitIsNotAnAnimalMarkerEvenWithBroadPattern() {
+        String spit = "gfx/kritter/mammoth/mammothglob";
+        assertTrue(ObjectTracker.matchesTrackedPattern(spit, ".*mammoth.*"));
+        assertTrue(ObjectTracker.isLeftoverKritter(spit));
+        assertFalse(ObjectTracker.isAnimalMarkerGob(spit));
+        assertTrue(ObjectTracker.isAnimalMarkerGob("gfx/kritter/mammoth/mammoth"));
+    }
+
+    @Test
     void orcaBeefIsLeftoverLikeSkulls() {
         assertTrue(ObjectTracker.isLeftoverKritter("gfx/kritter/orca/orcabeef"));
         assertFalse(ObjectTracker.isAnimalMarkerGob("gfx/kritter/orca/orcabeef"));

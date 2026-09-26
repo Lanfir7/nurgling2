@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-gemstone-groups",
+  "priority": 7,
+  "summary": {
+    "ru": "Во ВСПЕК появились группы драгоценных камней по виду и размеру.",
+    "en": "VSpec now groups gemstones by kind and size."
+  },
+  "detail": {
+    "ru": "При выборе предметов для ботов доступны общая группа «Gemstones», группы отдельных видов и размеров со всеми огранками. Жемчуг входит в общую группу. В списке камни показываются с общей иконкой, а точный вид указан в названии.",
+    "en": "When selecting items for bots, use Gemstones for all gems or groups by kind and size across every cut. Pearls appear in the overall group. The list shows a common gem icon and identifies each variant by name."
+  }
+}

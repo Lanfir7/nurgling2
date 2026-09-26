@@ -3,6 +3,7 @@ package nurgling.actions.bots;
 import haven.Coord;
 import haven.Coord2d;
 import haven.Gob;
+import haven.MCache;
 import haven.Pair;
 import haven.Resource;
 import nurgling.NFlowerMenu;
@@ -19,6 +20,7 @@ import nurgling.actions.SelectFlowerAction;
 import nurgling.actions.Validator;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
+import nurgling.areas.NGlobalCoord;
 import nurgling.tasks.NFlowerMenuIsClosed;
 import nurgling.tasks.NTask;
 import nurgling.tasks.NoGob;
@@ -149,9 +151,28 @@ public class Butcher implements Action {
             }
         }
         if (dumpInventory) {
-            new FreeInventory2(new NContext(gui)).run(gui);
+            Results dumped = freeInventory(gui, new NContext(gui), area == null);
+            if (!dumped.IsSuccess())
+                return dumped;
         }
         return Results.SUCCESS();
+    }
+
+    private static Results freeInventory(NGameUI gui, NContext context, boolean returnToCarcass)
+            throws InterruptedException {
+        NGlobalCoord origin = returnToCarcass ? NUtils.bookmarkHere() : null;
+        if (returnToCarcass && origin == null)
+            return Results.ERROR("Cannot remember butchering location");
+        Results dumped = new FreeInventory2(context).run(gui);
+        if (returnToCarcass) {
+            boolean navigated = NUtils.navigateTo(origin);
+            Coord2d target = origin.getCurrentCoord();
+            Gob player = NUtils.player();
+            if (!navigated || target == null || player == null
+                    || player.rc.dist(target) > MCache.tilesz.x * 2)
+                return Results.ERROR("Cannot return to butchering location");
+        }
+        return dumped;
     }
 
     private Results butcherOne(NGameUI gui, Gob gob, NArea area, NContext context, boolean dumpInventory) throws InterruptedException {
@@ -202,7 +223,11 @@ public class Butcher implements Action {
 
                 if (NUtils.getGameUI().getInventory().getNumberFreeCoord(options.get(optForSelect).size) < options.get(optForSelect).num) {
                     if (dumpInventory) {
-                        new FreeInventory2(context).run(gui);
+                        Results dumped = freeInventory(gui, context, area == null);
+                        if (!dumped.IsSuccess())
+                            return dumped;
+                        if (area == null)
+                            gob = followCarcass(gob, lastRc, false);
                     }
                 }
                 if (NUtils.getGameUI().getInventory().getNumberFreeCoord(options.get(optForSelect).size) < options.get(optForSelect).num) {
@@ -241,7 +266,11 @@ public class Butcher implements Action {
                                 NUtils.drop(gui.vhand);
                                 NUtils.addTask(new WaitFreeHand());
                                 if (dumpInventory) {
-                                    new FreeInventory2(context).run(gui);
+                                    Results dumped = freeInventory(gui, context, area == null);
+                                    if (!dumped.IsSuccess())
+                                        return dumped;
+                                    if (area == null)
+                                        gob = followCarcass(gob, lastRc, false);
                                 }
                             }
                             optFound = false;

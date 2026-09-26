@@ -100,8 +100,10 @@ public class ItemTex {
 	return(tex);
     }
 
-	public static BufferedImage create(JSONObject object) {
-		if(object.has("layer"))
+		public static BufferedImage create(JSONObject object) {
+			if(object.has("preview"))
+				return Resource.local().loadwait(object.getString("preview")).layer(Resource.imgc).img;
+			if(object.has("layer"))
 		{
 			LinkedList<Indir<Resource>> layReses = new LinkedList<>();
 			JSONArray jlayer = (JSONArray) object.get("layer");

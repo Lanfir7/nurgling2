@@ -988,6 +988,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         String barterItem = NBarterOfferOverlay.tooltip(glob, c);
         if(barterItem != null)
             return barterItem;
+        if(ttip.isEmpty())
+            oldttip = null;
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastTooltipUpdate < tooltipThrottleTime) {
             if(oldttip!=null)
@@ -1013,6 +1015,9 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                     BufferedImage[] parts = renderInspectField("Gob", gobValue, new Color(128, 128, 255));
                     imgs.add(parts[0]);
                     imgs.add(parts[1]);
+                    String materials = ttip.get("materials");
+                    if(materials != null && !materials.isEmpty())
+                        imgs.add(getInspectValueFoundry().render("Materials: " + materials, new Color(160, 160, 160)).img);
                 }
                 String tileValue = ttip.get("tile");
                 if (tileValue != null && !tileValue.isEmpty()) {
@@ -1146,11 +1151,20 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             protected void hit(Coord pc, Coord2d mc, ClickData inf) {
                 ttip.clear();
                 tlays.clear();
+                oldttip = null;
+                lastTooltipUpdate = 0;
                 // Show resource name if gob exists
                 if (inf != null) {
                     Gob gob = Gob.from(inf.ci);
                     if (gob != null && gob.ngob.name != null) {
                         ttip.put("gob", gob.ngob.name);
+                        try {
+                            java.util.List<String> materials = NInspectMaterials.names(gob);
+                            if(!materials.isEmpty())
+                                ttip.put("materials", String.join(", ", materials));
+                        } catch(Loading ignored) {
+                            // Material data can arrive after the gob itself.
+                        }
                     }
                 }
                 
@@ -1171,6 +1185,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             @Override
             protected void nohit(Coord pc) {
                 ttip.clear();
+                oldttip = null;
+                lastTooltipUpdate = 0;
             }
         }.run();
     }

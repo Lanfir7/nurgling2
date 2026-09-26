@@ -4,6 +4,7 @@ package haven.res.ui.inspect;
 import haven.*;
 import java.util.*;
 import nurgling.NUtils;
+import nurgling.NInspectMaterials;
 
 /* >wdg: LocalInspect */
 @FromResource(name = "ui/inspect", version = 5, override = true)
@@ -54,7 +55,7 @@ public class LocalInspect extends Widget {
         public Object tip() {
             if(ob != null) {
                 SavedInfo info = ob.getattr(SavedInfo.class);
-                return(new ObTip(gobname(ob), (info == null) ? Collections.emptyList() : info.lines));
+                return(new ObTip(gobname(ob), NInspectMaterials.names(ob), (info == null) ? Collections.emptyList() : info.lines));
             }
             if(mc != null) {
                 int tid = ui.sess.glob.map.gettile(mc.floor(MCache.tilesz));
@@ -89,17 +90,23 @@ public class LocalInspect extends Widget {
 
     public static class ObTip implements Indir<Tex> {
         public final String name;
+        public final List<String> materials;
         public final List<String> lines;
         private Tex tex;
         private boolean r = false;
 
-        public ObTip(String name, List<String> lines) {
+        public ObTip(String name, List<String> materials, List<String> lines) {
             this.name = name;
+            this.materials = new ArrayList<>(materials);
             this.lines = lines;
         }
 
+        public ObTip(String name, List<String> lines) {
+            this(name, Collections.emptyList(), lines);
+        }
+
         public boolean equals(ObTip that) {
-            return(Utils.eq(this.name, that.name) && Utils.eq(this.lines, that.lines));
+            return(Utils.eq(this.name, that.name) && Utils.eq(this.materials, that.materials) && Utils.eq(this.lines, that.lines));
         }
 
         public boolean equals(Object that) {
@@ -111,6 +118,17 @@ public class LocalInspect extends Widget {
                 StringBuilder buf = new StringBuilder();
                 if(name != null)
                     buf.append(RichText.Parser.quote(name));
+                if(!materials.isEmpty()) {
+                    if(buf.length() > 0)
+                        buf.append("\n");
+                    for(int i = 0; i < materials.size(); i++) {
+                        if(i > 0)
+                            buf.append("\n");
+                        buf.append("$col[160,160,160]{");
+                        buf.append(RichText.Parser.quote(materials.get(i)));
+                        buf.append("}");
+                    }
+                }
                 if(!lines.isEmpty()) {
                     if(buf.length() > 0)
                         buf.append("\n\n");

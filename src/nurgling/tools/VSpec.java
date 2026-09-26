@@ -3206,7 +3206,9 @@ public class VSpec {
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/rabbitfrost\",\"name\":\"Rabbit Frost\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/aurochshair\",\"name\":\"Aurochs Hair\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/frostflower\",\"name\":\"Frost Flower\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/cavelantern\",\"name\":\"Cave Lantern\"}"));
         categories.put("Stackable Curiosities", StackableCurios);
+        addGemstoneCategories();
 
         ArrayList<JSONObject> NoneStackableCurio = new ArrayList<>();
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/brain-large\",\"name\":\"Big Brain\"}"));
@@ -3409,6 +3411,43 @@ public class VSpec {
         return result;
     }
 
+    private static void addGemstoneCategories() {
+        String resource = "gfx/invobjs/gem/gemstone";
+        String[] kinds = {"Amber", "Amethyst", "Diamond", "Dust Jewel", "Emerald", "Jade",
+                "Moonstone", "Onyx", "Opal", "Red Coral", "Ruby", "Sapphire",
+                "Star Shard", "Sugar Diamond", "Topaz", "Turquoise"};
+        String[] sizes = {"Tiny", "Small", "Fair", "Large", "Grand", "Jotun"};
+        String[] cuts = {"Rough", "Smooth", "Cabochon", "Pear", "Heart", "Brilliant"};
+        ArrayList<JSONObject> all = new ArrayList<>();
+        Map<String, ArrayList<JSONObject>> bySize = new LinkedHashMap<>();
+        for (String size : sizes)
+            bySize.put(size, new ArrayList<>());
+        for (String kind : kinds) {
+            ArrayList<JSONObject> byKind = new ArrayList<>();
+            for (String size : sizes) {
+                for (String cut : cuts) {
+                    String name = size + " " + cut + " " + kind;
+                    JSONObject gem = new JSONObject().put("static", resource)
+                            .put("preview", "mm/gem").put("name", name);
+                    byKind.add(gem);
+                    bySize.get(size).add(gem);
+                    all.add(gem);
+                }
+            }
+            categories.put("Gemstone - " + kind, byKind);
+        }
+        // Pearls are gemstones, but unlike cut gems they have no size/cut variants.
+        String[] pearls = {"Oyster Pearl", "Pink Pearl", "River Pearl"};
+        for (String pearl : pearls) {
+            JSONObject entry = new JSONObject().put("name", pearl).put("preview", "mm/gem");
+            categories.put("Gemstone - " + pearl, new ArrayList<>(Collections.singletonList(entry)));
+            all.add(entry);
+        }
+        for (Map.Entry<String, ArrayList<JSONObject>> size : bySize.entrySet())
+            categories.put("Gemstones - " + size.getKey(), size.getValue());
+        categories.put("Gemstones", all);
+    }
+
     // Reverse index over `categories` (name -> icon path), built lazily on first use since
     // `categories` itself is populated by static initializers earlier in this class - built eagerly
     // here instead, it could run before that population completes. Called every minimap-render
@@ -3569,7 +3608,10 @@ public class VSpec {
                     result.add(entry.getKey());
                     break;
                 }
-                if (!paths.isEmpty() && paths.contains(obj.optString("static", null))) {
+                // All cut gemstones share one resource; it cannot identify their kind or size.
+                String resource = obj.optString("static", null);
+                if (!paths.isEmpty() && !"gfx/invobjs/gem/gemstone".equals(resource)
+                        && paths.contains(resource)) {
                     result.add(entry.getKey());
                     break;
                 }
