@@ -3209,6 +3209,7 @@ public class VSpec {
         categories.put("Stackable Curiosities", StackableCurios);
 
         ArrayList<JSONObject> NoneStackableCurio = new ArrayList<>();
+        NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/brain-large\",\"name\":\"Big Brain\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/ghostapple\",\"name\":\"Ghost Apple\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/sleighbell\",\"name\":\"Sleighbell\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/easteregg0\",\"name\":\"Easter Egg\"}"));
@@ -3485,6 +3486,25 @@ public class VSpec {
             iconPathByName = index;
         }
         return iconPathByName.get(name.toLowerCase());
+    }
+
+    private static HashMap<String, String> nameByStatic;
+
+    /** Display name for an inventory resource path, or null when VSpec has no such icon. */
+    public static String nameForStatic(String path) {
+        if(path == null)
+            return null;
+        if(nameByStatic == null) {
+            HashMap<String, String> index = new HashMap<>();
+            for(ArrayList<JSONObject> entries : categories.values()) {
+                for(JSONObject entry : entries) {
+                    if(entry.has("static") && entry.has("name"))
+                        index.putIfAbsent(entry.getString("static"), entry.getString("name"));
+                }
+            }
+            nameByStatic = index;
+        }
+        return nameByStatic.get(path);
     }
 
     // Reverse index over object: item name -> every gob resource path that produces it.

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-quality-harvest-seed-chest",
+  "priority": 5,
+  "summary": {
+    "ru": "Качественный сбор больше не падает, если в зоне семян нет сундука: бот пишет об этом в консоль и идёт дальше.",
+    "en": "Quality harvest no longer crashes when the seed area has no chest: the bot logs it and continues."
+  },
+  "detail": {
+    "ru": "Если при качественном сборе в зоне семян нет сундука, в консоли появляется сообщение «No container found in seed area!». Сбор не прерывается ошибкой.",
+    "en": "If a quality harvest finds no chest in the seed area, the console shows “No container found in seed area!”. The harvest is not stopped by an error."
+  }
+}

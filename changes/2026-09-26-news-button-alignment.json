@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-news-button-alignment",
+  "priority": 2,
+  "summary": {
+    "ru": "Кнопка «Что нового» в главном меню больше не оставляет пустую ячейку.",
+    "en": "The What's New button no longer leaves an empty slot in the main menu."
+  },
+  "detail": {
+    "ru": "Кнопка «Что нового» теперь находится над энциклопедией, сразу после настроек в верхнем ряду главного меню.",
+    "en": "Find What's New above the encyclopedia, directly after Settings in the main menu's top row."
+  }
+}

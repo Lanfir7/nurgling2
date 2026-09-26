@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-25-unknown-player-safety",
+  "priority": 6,
+  "summary": {
+    "ru": "Авто-телепорт домой и авто-выход на неизвестных и красных игроков снова срабатывают сами.",
+    "en": "Auto hearth and auto logout for unknown and red players trigger on their own again."
+  },
+  "detail": {
+    "ru": "Галочки в Navigation → Safety работают без отдельного сигнала в настройках кина. Защита замечает красного игрока и вне экрана, а неизвестного — сразу после загрузки карты вокруг персонажа.",
+    "en": "The Navigation → Safety options work without a separate kin alarm. Protection detects a red player even off-screen, and an unknown player as soon as the nearby map loads."
+  }
+}

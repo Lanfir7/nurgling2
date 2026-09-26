@@ -110,6 +110,13 @@ public class NAlarmWdg extends Widget
                             
                             // Now that we know the model is loaded, get Buddy info
                             Buddy buddy = gob.getattr(Buddy.class);
+                            // Nameplates fill buddy.b only while the gob is drawn. Resolve the kin
+                            // list directly so an off-screen red player still counts.
+                            if (buddy != null && buddy.b == null) {
+                                NGameUI owner = ownGui();
+                                if (owner != null && owner.buddies != null)
+                                    buddy.b = owner.buddies.find(buddy.id);
+                            }
                             
                             // Determine actual group - use cached if buddy is temporarily null
                             int group = 0;
@@ -147,9 +154,12 @@ public class NAlarmWdg extends Widget
                             NKinProp kinProp = NKinProp.get(group);
                             Color arrowColor = BuddyWnd.gc[group];
                             
-                            // Check if should be in alarm (only WHITE and RED groups)
+                            // Check if should be in alarm (only WHITE and RED groups).
+                            // Navigation safety toggles must fire even when the kin alarm sound is off.
                             boolean isWhiteOrRed = (arrowColor.equals(Color.WHITE) || arrowColor.equals(Color.RED));
-                            boolean shouldAlarm = kinProp.alarm && isWhiteOrRed && !shouldDelayAlarm;
+                            boolean safetyAction = safetyEnabled(NConfig.Key.autoLogoutOnUnknown)
+                                    || safetyEnabled(NConfig.Key.autoHearthOnUnknown);
+                            boolean shouldAlarm = (kinProp.alarm || safetyAction) && isWhiteOrRed && !shouldDelayAlarm;
                             boolean isAlarmed = alarms.contains(id);
                             
                             if (shouldAlarm && !isAlarmed ) {
@@ -308,18 +318,14 @@ public class NAlarmWdg extends Widget
             Coord gc = tc.div(gui.map.glob.map.cmaps);
 
             synchronized (gui.map.glob.map.grids) {
-                // Check if we have exactly 9 grids loaded
-                if (gui.map.glob.map.grids.size() != 9) {
-                    isMapFullyLoaded = false;
-                    return;
-                }
-
-                // Check if all 9 grids are centered around player's grid
-                for (Coord gridCoord : gui.map.glob.map.grids.keySet()) {
-                    Coord pos = gridCoord.sub(gc.sub(1, 1));
-                    if (pos.x < 0 || pos.x >= 3 || pos.y < 0 || pos.y >= 3) {
-                        isMapFullyLoaded = false;
-                        return;
+                // The 3x3 around the player must be present. A wider view keeps extra grids;
+                // requiring exactly 9 left unknown players delayed forever.
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        if (!gui.map.glob.map.grids.containsKey(gc.add(dx, dy))) {
+                            isMapFullyLoaded = false;
+                            return;
+                        }
                     }
                 }
             }
@@ -416,13 +422,13 @@ public class NAlarmWdg extends Widget
         }
 
         String pose = player.pose();
-        if (pose != null && (pose.equals("pointhome") || pose.equals("logout"))) {
+        if (pose != null && (NParser.checkName(pose, "pointhome") || NParser.checkName(pose, "logout"))) {
             // Player is already teleporting or logging out - don't trigger again
             return;
         }
 
-        boolean autoLogout = (Boolean) NConfig.get(NConfig.Key.autoLogoutOnUnknown);
-        boolean autoHearth = (Boolean) NConfig.get(NConfig.Key.autoHearthOnUnknown);
+        boolean autoLogout = safetyEnabled(NConfig.Key.autoLogoutOnUnknown);
+        boolean autoHearth = safetyEnabled(NConfig.Key.autoHearthOnUnknown);
 
         if (autoLogout) {
             // Logout takes priority over hearth
@@ -433,6 +439,10 @@ public class NAlarmWdg extends Widget
             gui.msg("Enemy spotted! Using hearth secret!", Color.WHITE);
             gui.act("travel", "hearth");
         }
+    }
+
+    private static boolean safetyEnabled(NConfig.Key key) {
+        return Boolean.TRUE.equals(NConfig.get(key));
     }
 
     /** The game UI this widget belongs to, independent of the calling thread's binding. */

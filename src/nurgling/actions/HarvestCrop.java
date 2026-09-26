@@ -303,7 +303,6 @@ public class HarvestCrop implements Action {
             }
         } else {
             if(!barrelOnlyIfInventoryFull || gui.getInventory().getFreeSpace() <= 7) {
-                // Find all containers in the seed area
                 ArrayList<Container> containers = new ArrayList<>();
                 for (Gob sm : Finder.findGobs(seed.getRCArea(), new NAlias(new ArrayList<>(NContext.contcaps.keySet())))) {
                     Container cand = new Container(sm, NContext.contcaps.get(sm.ngob.name), null);
@@ -311,8 +310,10 @@ public class HarvestCrop implements Action {
                     containers.add(cand);
                 }
 
-                if (containers.isEmpty())
-                    throw new RuntimeException("No container found in seed area!");
+                if (containers.isEmpty()) {
+                    System.out.println("No container found in seed area!");
+                    return;
+                }
                 Container container = containers.get(0);
 
                 List<WItem> allItems = new ArrayList<>();

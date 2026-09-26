@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-big-brain-category",
+  "priority": 2,
+  "summary": {
+    "ru": "Большой мозг теперь находится в списке диковин.",
+    "en": "Big Brain now appears in the curiosities list."
+  },
+  "detail": {
+    "ru": "При выборе категории предметов можно найти «Большой мозг» по названию и использовать его в настройках, работающих со списком диковин.",
+    "en": "Find Big Brain by name in the item-category picker and use it in settings that rely on the curiosities list."
+  }
+}

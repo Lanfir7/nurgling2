@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-25-belt-coin-pouch",
+  "priority": 5,
+  "summary": {
+    "ru": "Мешочек для монеток с пояса снова открывается без вылета клиента.",
+    "en": "A coin pouch opened from the belt no longer crashes the client."
+  },
+  "detail": {
+    "ru": "Открытие мешочка для монеток с пояса больше не роняет клиент в момент появления окна. Сумка открывается как обычный контейнер.",
+    "en": "Opening a coin pouch from the belt no longer crashes the client when the window appears. The pouch opens like any other container."
+  }
+}

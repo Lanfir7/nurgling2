@@ -219,12 +219,26 @@ public class Window extends Widget implements WindowLayering.Target {
     private int barteravailableheight() {
 	if((ui == null) || (ui.root == null))
 	    return(Integer.MAX_VALUE);
-	int chrome = Math.max(0, sz.y - ca().sz().y);
+	Area content = ca();
+	if(content == null)
+	    return(Integer.MAX_VALUE);
+	int chrome = Math.max(0, sz.y - content.sz().y);
 	return(Math.max(1, ui.root.sz.y - c.y - UI.scale(12) - chrome));
     }
 
     private void layoutbarter() {
 	if(barterLayouting)
+	    return;
+	if(!isbarter()) {
+	    if(barterActive) {
+		barterActive = false;
+		if(barterScroll != null)
+		    barterScroll.hide();
+	    }
+	    barterDirty = false;
+	    return;
+	}
+	if(ca() == null)
 	    return;
 	int available = barteravailableheight();
 	if(!barterDirty && barterActive && (barterAvailableHeight == available))

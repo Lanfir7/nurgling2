@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-25-wound-jar-names",
+  "priority": 4,
+  "summary": {
+    "ru": "В лечении ран экстракт пижмы и другие снадобья в глиняных банках подписаны своим именем.",
+    "en": "Wound treatments now name tansy extract and other clay-jar medicines, not the jar."
+  },
+  "detail": {
+    "ru": "На странице ран снадобья в глиняных банках показываются как экстракт пижмы, ивовый плач, змеиный сок и клей для ран. Раньше у всех стояла подпись Clay Jar.",
+    "en": "On the wounds page, clay-jar medicines are labeled Tansy Extract, Willow Weep, Snake Juice, and Wound Glue. They used to all read Clay Jar."
+  }
+}

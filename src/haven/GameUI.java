@@ -1463,6 +1463,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		prev = add(new MenuCheckBox("rbtn/baseplanner/", kb_baseplanner, "Base planner"), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(basePlanner)).click(() -> togglewnd(basePlanner));
 		prev = add(new MenuCheckBox("rbtn/storage/", kb_storage, L10n.get("storage.window_title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(storageItemsWidget)).click(() -> togglewnd(storageItemsWidget));
 			prev = add(new MenuCheckBox("rbtn/encyclopedia/", kb_craftAtlas, L10n.get("craft_atlas.title")), prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(craftAtlas)).click(() -> togglewnd(craftAtlas));
+			int newsX = prev.c.x;
 			prev = add(new MenuCheckBox("rbtn/todo/", kb_todo, "To-Do") {
 			    public void draw(GOut g) {
 				super.draw(g);
@@ -1471,7 +1472,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 					((nurgling.NGameUI)GameUI.this).todoStore.openAssignedToMe());
 			    }
 			}, prev.pos("ur").add(UI.scale(10),0)).state(() -> wndstate(todoWnd)).click(GameUI.this::toggleTodo);
-				add(new ReleaseNotesMenuButton(() -> togglewnd(releaseNotes)), prev.c.x, 0).state(() -> wndstate(releaseNotes));
+				add(new ReleaseNotesMenuButton(() -> togglewnd(releaseNotes)), newsX, 0).state(() -> wndstate(releaseNotes));
 		pack();
 	}
 

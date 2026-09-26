@@ -14,6 +14,7 @@ import java.awt.image.BufferedImage;
 import static haven.CharWnd.*;
 import static haven.PUtils.*;
 import nurgling.tools.CraftRecipeLookup;
+import nurgling.tools.VSpec;
 import nurgling.tools.WoundTreatments;
 
 public class NWoundBox extends WoundWnd.WoundBox {
@@ -124,7 +125,14 @@ public class NWoundBox extends WoundWnd.WoundBox {
 		if(img != null)
 		    e.icon = convolvedown(img.scaled(), TICON_SZ, iconfilter);
 		Resource.Tooltip tt = res.layer(Resource.tooltip);
-		e.name = (tt != null) ? tt.t : basename(tr.res);
+		String label = (tt != null) ? tt.t : null;
+		/* Clay-jar medicines share the vessel tooltip "Clay Jar". */
+		if((label == null) || "Clay Jar".equals(label)) {
+		    String named = VSpec.nameForStatic(tr.res);
+		    if(named != null)
+			label = named;
+		}
+		e.name = (label != null) ? label : basename(tr.res);
 	    } else {
 		e.name = basename(tr.res);
 	    }
