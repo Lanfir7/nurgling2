@@ -159,9 +159,89 @@
     "2026-09-24-corpse-alarm-wait",
     "2026-09-24-free-inventory-belt-pouches",
     "2026-09-24-shared-resource-timers",
-    "2026-09-24-white-player-icon-alarm"
+    "2026-09-24-white-player-icon-alarm",
+    "2026-09-25-belt-coin-pouch",
+    "2026-09-25-unknown-player-safety",
+    "2026-09-25-wound-jar-names",
+    "2026-09-26-big-brain-category",
+    "2026-09-26-cattle-and-cave-angler",
+    "2026-09-26-cheese-conveyor",
+    "2026-09-26-forager-sightings",
+    "2026-09-26-news-button-alignment",
+    "2026-09-26-quality-harvest-seed-chest",
+    "2026-09-26-stacks",
+    "2026-09-26-study-curiosities",
+    "2026-09-26-todo-lists"
   ],
   "releases": [
+    {
+      "id": "2.103.215",
+      "date": "2026-09-26",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Сырный конвейер выпускает сыр небольшими партиями по расписанию; калькулятор помогает рассчитать стеллажи.",
+          "В главном меню появился список дел с личными и общими задачами.",
+          "Авто-телепорт домой и авто-выход на неизвестных и красных игроков снова срабатывают сами.",
+          "Мешочек для монеток с пояса снова открывается без вылета клиента.",
+          "Собиратель может сообщать о замеченных объектах в Discord или игровой чат, продолжая маршрут.",
+          "Качественный сбор больше не падает, если в зоне семян нет сундука: бот пишет об этом в консоль и идёт дальше.",
+          "Пустые ячейки отчёта об изучении напоминают о прежних диковинах; завершение изучения может сопровождаться звуком.",
+          "В лечении ран экстракт пижмы и другие снадобья в глиняных банках подписаны своим именем.",
+          "Животные в ведомости пронумерованы, а пещерный удильщик получил радиус опасности.",
+          "Автоукладка теперь распознаёт больше диковин и редких предметов.",
+          "Большой мозг теперь находится в списке диковин.",
+          "Кнопка «Что нового» в главном меню больше не оставляет пустую ячейку."
+        ],
+        "en": [
+          "Cheese Conveyor makes smaller batches on a schedule, and a calculator helps size the racks.",
+          "The main menu now has a To-Do list for personal and shared tasks.",
+          "Auto hearth and auto logout for unknown and red players trigger on their own again.",
+          "A coin pouch opened from the belt no longer crashes the client.",
+          "Forager can report sightings to Discord or in-game chat while continuing its route.",
+          "Quality harvest no longer crashes when the seed area has no chest: the bot logs it and continues.",
+          "Empty study slots can show the previous curiosities, and completed studies can play a sound.",
+          "Wound treatments now name tansy extract and other clay-jar medicines, not the jar.",
+          "Cattle roster entries have row numbers, and Cave Anglers have a danger radius.",
+          "Automatic stacking now recognizes more curiosities and rare items.",
+          "Big Brain now appears in the curiosities list.",
+          "The What's New button no longer leaves an empty slot in the main menu."
+        ]
+      },
+      "details": {
+        "ru": [
+          "В Настройках Nurgling → Боты → Сырный конвейер задайте разовые или непрерывные заказы и темп выпуска. Бот использует зоны творога, пустых подносов, нарезанного сыра и стеллажей. Инструмент «Калькуляторы» показывает, сколько стеллажей и подносов нужно для выбранного темпа.",
+          "Откройте «Список дел» в главном меню или Ctrl+J. Задачам можно назначать исполнителя, срочность, повторение и точку на карте; значок показывает число ваших открытых задач. Личные дела хранятся локально, общие синхронизируются через базу деревни, когда она подключена.",
+          "Галочки в Navigation → Safety работают без отдельного сигнала в настройках кина. Защита замечает красного игрока и вне экрана, а неизвестного — сразу после загрузки карты вокруг персонажа.",
+          "Открытие мешочка для монеток с пояса больше не роняет клиент в момент появления окна. Сумка открывается как обычный контейнер.",
+          "В настройках собирателя, в профиле охраны, укажите имена объектов через запятую и выберите Discord или канал чата. О каждом объекте бот сообщает один раз за запуск и продолжает сбор; обычные проверки опасности работают как прежде.",
+          "Если при качественном сборе в зоне семян нет сундука, в консоли появляется сообщение «No container found in seed area!». Сбор не прерывается ошибкой.",
+          "В отчёте об изучении полупрозрачные изображения показывают, какие диковины стояли в освободившихся ячейках. При завершении изучения звучит сигнал. Обе функции можно отдельно выключить в настройках качества жизни.",
+          "На странице ран снадобья в глиняных банках показываются как экстракт пижмы, ивовый плач, змеиный сок и клей для ран. Раньше у всех стояла подпись Clay Jar.",
+          "В ведомости скота перед каждым животным виден номер строки — так проще сверяться со списком. Пещерный удильщик добавлен в настройки радиуса опасных животных со значением 100; радиус можно изменить там же.",
+          "При работе со стопками клиент учитывает волосы зубра, гороховые стручки, снежинки, заячий иней и морозный цветок. Для волос зубра и стручков учитывается размер стопки из трёх предметов.",
+          "При выборе категории предметов можно найти «Большой мозг» по названию и использовать его в настройках, работающих со списком диковин.",
+          "Кнопка «Что нового» теперь находится над энциклопедией, сразу после настроек в верхнем ряду главного меню."
+        ],
+        "en": [
+          "In Nurgling Settings → Bots → Cheese Conveyor, set one-time or continuous orders and their rate. The bot uses curd, empty-tray, sliced-cheese and rack areas. The Calculators tool estimates racks and trays for the chosen rate.",
+          "Open To-Do from the main menu or with Ctrl+J. Assign tasks, mark urgency, set repeats and map locations; the button shows your open assignments. Personal tasks stay local, while shared tasks sync through the village database when connected.",
+          "The Navigation → Safety options work without a separate kin alarm. Protection detects a red player even off-screen, and an unknown player as soon as the nearby map loads.",
+          "Opening a coin pouch from the belt no longer crashes the client when the window appears. The pouch opens like any other container.",
+          "In Forager settings, add comma-separated object names to a guarding profile and choose Discord or a chat channel. Each object is reported once per run while foraging continues; regular danger checks still apply.",
+          "If a quality harvest finds no chest in the seed area, the console shows “No container found in seed area!”. The harvest is not stopped by an error.",
+          "Faded images in the study report show which curiosities occupied empty slots. A sound plays when a curiosity finishes. Both options can be turned off separately in Quality of Life settings.",
+          "On the wounds page, clay-jar medicines are labeled Tansy Extract, Willow Weep, Snake Juice, and Wound Glue. They used to all read Clay Jar.",
+          "The cattle roster shows a row number before each animal for easier reference. Cave Anglers are included in dangerous-animal radius settings with a default of 100, which you can adjust there.",
+          "Stack handling now recognizes Aurochs Hair, Peapods, snowflakes, Rabbit Frost and Frost Flower. Aurochs Hair and Peapods use their three-item stack limit.",
+          "Find Big Brain by name in the item-category picker and use it in settings that rely on the curiosities list.",
+          "Find What's New above the encyclopedia, directly after Settings in the main menu's top row."
+        ]
+      }
+    },
     {
       "id": "2.103.214",
       "date": "2026-09-24",
@@ -1253,42 +1333,6 @@
           "Open Quest Helper: TASKS rows show credo and level progress without dummy group counts.",
           "In the storage window press Clear to drop unavailable items; a count is shown. Bots wait for the map grid after portal travel.",
           "In quality-threshold settings the column is shifted so inputs and add/delete stay inside the list while scrolling."
-        ]
-      }
-    },
-    {
-      "id": "2.103.183",
-      "date": "2026-09-05",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "Бот «Утки» ведёт курятники с утками: отбор, инкубация и разделка.",
-          "Атлас крафта сам собирает материалы из инвентаря и склада под выбранный рецепт.",
-          "В окне специализаций зон есть поиск и подсказка, какие боты их используют."
-        ],
-        "en": [
-          "Duck Manager runs duck coops: breeding, incubating and butchering.",
-          "Craft Atlas can gather materials from inventory and storage for a recipe.",
-          "The zone specialisation window can search and shows which bots use each tag."
-        ]
-      },
-      "details": {
-        "ru": [
-          "В меню ботов откройте Duck Manager. Зоны курятников пометьте специализацией Duck, инкубаторы — Duckling Incubator; нужны вода и месиво. В настройках фермы можно не разделывать уток и не ощипывать селезней.",
-          "В атласе задайте число крафтов, выберите материалы и качество (или AUTO) и нажмите сбор. Берутся предметы из инвентаря и зон склада; нехватку атлас показывает до старта.",
-          "Откройте специализации зоны и введите имя в поиск. Подсказка перечисляет ботов, которым нужна эта метка, или сообщает, что её никто не использует.",
-          "Откройте календарь в подробном виде: для росы на манжетке показано оставшееся реальное время до события.",
-          "В утилитах ботов появилась отдельная иконка «все столы учёбы». Перекладывание со свалок, плавилен и шёлковых зон меньше зависает, когда инвентарь полон."
-        ],
-        "en": [
-          "Open Duck Manager from the bot menu. Mark breeding coops Duck and hatcheries Duckling Incubator; you also need water and swill. Farm settings can skip butchering ducks and skip plucking drakes.",
-          "In Craft Atlas set the craft count, pick materials and quality (or AUTO) and collect. Items come from inventory and storage zones; shortages are listed before it starts.",
-          "Open a zone's specialisations and type in the search box. The tooltip lists bots that need that tag, or says none use it.",
-          "Open the calendar in verbose view: Dewy Lady's Mantle shows remaining real-life time until the event.",
-          "Bot utilities gained a dedicated all-study-desks icon. Stockpile, smelter and silk-area transfers stall less when inventory is full."
         ]
       }
     }
