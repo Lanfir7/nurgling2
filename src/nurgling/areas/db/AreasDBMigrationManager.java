@@ -450,6 +450,19 @@ public class AreasDBMigrationManager {
             }
         });
 
+        migrations.add(new Migration(8, "Store maximum zone quality separately from its name") {
+            @Override
+            public void run(Connection conn, boolean isPostgres) throws SQLException {
+                try (ResultSet columns = conn.getMetaData().getColumns(null, null, "areas", "max_quality")) {
+                    if (columns.next())
+                        return;
+                }
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.executeUpdate("ALTER TABLE areas ADD COLUMN max_quality INTEGER NOT NULL DEFAULT -1");
+                }
+            }
+        });
+
         return migrations;
     }
     

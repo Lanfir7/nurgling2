@@ -2735,8 +2735,14 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             if (quality >= 0) {
                 Coord point = (Coord) args[1];
                 Coord2d world = point.mul(OCache.posres);
-                applyPlantingQuality(world, world, quality);
+                applyPlantingQuality(world, quality);
             }
+            clearPendingPlantingQuality();
+        } else if ("drop".equals(msg) && args.length >= 2 && args[1] instanceof Coord) {
+            NGameUI gui = owningGui();
+            int quality = gui == null ? -1 : PlantQualityArea.roundedMaximum(gui.vhand);
+            if (quality >= 0)
+                applyPlantingQuality(((Coord) args[1]).mul(OCache.posres), quality);
             clearPendingPlantingQuality();
         } else if ("click".equals(msg) || "drop".equals(msg) || "place".equals(msg)) {
             clearPendingPlantingQuality();
@@ -2744,20 +2750,41 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         super.wdgmsg(msg, args);
     }
 
-    private void applyPlantingQuality(Coord2d first, Coord2d second, int quality) {
+    private void applyPlantingQuality(Coord2d point, int quality) {
         if (glob == null || glob.map == null || glob.map.areas == null || quality < 0)
             return;
         List<NArea> affected;
         synchronized (glob.map.areas) {
-            affected = PlantQualityArea.intersectedAreas(glob.map.areas.values(), first, second);
+            affected = PlantQualityArea.containingAreas(glob.map.areas.values(), point);
         }
         applyPlantingQuality(affected, quality);
     }
 
     private void applyPlantingQuality(Iterable<NArea> affected, int quality) {
         for (NArea area : affected) {
-            String updated = PlantQualityArea.withMaximumQuality(area.name, quality);
-            changeAreaName(area.id, updated);
+            if (area.recordQuality(quality))
+                areaQualityChanged(area);
+        }
+    }
+
+    public void resetAreaQuality(int areaId) {
+        if (glob == null || glob.map == null || glob.map.areas == null)
+            return;
+        NArea area = glob.map.areas.get(areaId);
+        if (area != null && area.resetQuality())
+            areaQualityChanged(area);
+    }
+
+    private void areaQualityChanged(NArea area) {
+        NConfig.needAreasUpdate();
+        NGameUI gui = owningGui();
+        if (gui != null && gui.areas != null)
+            gui.areas.updateAreaQuality(area.id);
+        Gob dummy = dummys.get(area.gid);
+        if (dummy != null) {
+            Gob.Overlay overlay = dummy.findol(NAreaLabel.class);
+            if (overlay != null && overlay.spr instanceof NAreaLabel)
+                ((NAreaLabel) overlay.spr).update();
         }
     }
 
@@ -2766,7 +2793,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if (gob == null || gob.ngob == null || !PlantQualityArea.isPlantGobResource(gob.ngob.name)
                 || !Double.isFinite(quality) || quality < 0)
             return;
-        applyPlantingQuality(gob.rc, gob.rc, Math.round((float) quality));
+        applyPlantingQuality(gob.rc, Math.round((float) quality));
     }
 
     void getGob(Coord c) {

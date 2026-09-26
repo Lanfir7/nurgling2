@@ -10,6 +10,9 @@ import nurgling.overlays.NAreaLabel;
 import nurgling.tools.SpecialisationUsage;
 
 import java.awt.*;
+import java.awt.font.GlyphVector;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
@@ -139,10 +142,43 @@ public class Specialisation extends Window
         fuelCauldron,
         fuelFireplace,
         fuelCrucible,
-        fuelTarkiln;
+        fuelTarkiln,
+        showQuality;
     }
 
     private static ArrayList<SpecialisationItem> specialisation = new ArrayList<>();
+
+    static BufferedImage qualitySpecialisationImage() {
+        int size = 32;
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        GlyphVector glyph = new Font(Font.SERIF, Font.BOLD, 28)
+                .createGlyphVector(g.getFontRenderContext(), "Q");
+        Shape letter = glyph.getOutline();
+        Rectangle2D bounds = letter.getBounds2D();
+        Shape face = AffineTransform.getTranslateInstance(
+                (size - bounds.getWidth()) / 2 - bounds.getX() - 1,
+                (size - bounds.getHeight()) / 2 - bounds.getY() - 1)
+                .createTransformedShape(letter);
+        g.setColor(new Color(57, 43, 18, 190));
+        g.fill(AffineTransform.getTranslateInstance(2, 2).createTransformedShape(face));
+        g.setColor(new Color(71, 55, 25));
+        g.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.draw(face);
+        g.setPaint(new GradientPaint(0, 3, new Color(252, 232, 145),
+                0, 29, new Color(164, 111, 35)));
+        g.fill(face);
+        g.setClip(face);
+        g.setStroke(new BasicStroke(1.5f));
+        g.setColor(new Color(255, 255, 217, 175));
+        g.draw(AffineTransform.getTranslateInstance(-1, -1).createTransformedShape(face));
+        g.setColor(new Color(77, 46, 16, 110));
+        g.draw(AffineTransform.getTranslateInstance(1, 1).createTransformedShape(face));
+        g.dispose();
+        return image;
+    }
 
     static {
         specialisation.add(new SpecialisationItem(SpecName.smelter.toString(),"Smelters",Resource.loadsimg("nurgling/categories/smelter")));
@@ -152,6 +188,7 @@ public class Specialisation extends Window
         specialisation.add(new SpecialisationItem(SpecName.swill.toString(),"Swill",Resource.loadsimg("nurgling/categories/swill")));
         specialisation.add(new SpecialisationItem(SpecName.trough.toString(),"Trough for swill",Resource.loadsimg("nurgling/categories/trough")));
         specialisation.add(new SpecialisationItem(SpecName.crop.toString(),"Crop",Resource.loadsimg("nurgling/categories/crop")));
+        specialisation.add(new SpecialisationItem(SpecName.showQuality.toString(), "Show Quality", qualitySpecialisationImage()));
         specialisation.add(new SpecialisationItem(SpecName.cropQ.toString(),"Crop Quality",Resource.loadsimg("nurgling/categories/crop")));
         specialisation.add(new SpecialisationItem(SpecName.seed.toString(),"Seeds of crop",Resource.loadsimg("nurgling/categories/seed")));
         specialisation.add(new SpecialisationItem(SpecName.seedQ.toString(),"Seeds of crop quality",Resource.loadsimg("nurgling/categories/seed")));
@@ -356,7 +393,7 @@ public class Specialisation extends Window
                     if(!isFound)
                     {
                         // Auto-rename area if it starts with "New Area" and this is the first specialisation
-                        if(area.name.startsWith("New Area") && area.spec.isEmpty()) {
+                        if(!NArea.SHOW_QUALITY_SPEC.equals(value) && area.name.startsWith("New Area") && area.spec.isEmpty()) {
                             renameAreaToSpecialisation(area, item.prettyName);
                         }
                         

@@ -339,7 +339,10 @@ public class NArea
 
     public NArea(String name)
     {
-        this.name = name;
+        this.name = PlantQualityArea.withoutLegacyQuality(name);
+        this.maxQuality = PlantQualityArea.legacyQuality(name);
+        if (this.maxQuality >= 0)
+            spec.add(new Specialisation(SHOW_QUALITY_SPEC));
         this.color = generateRandomColor();
     }
     
@@ -366,6 +369,7 @@ public class NArea
      */
     public void updateFrom(NArea other) {
         this.name = other.name;
+        this.maxQuality = other.maxQuality;
         this.path = other.path;
         this.hide = other.hide;
         this.color = other.color;
@@ -422,7 +426,10 @@ public class NArea
 
     public NArea(JSONObject obj)
     {
-        this.name = (String) obj.get("name");
+        String storedName = (String) obj.get("name");
+        this.name = PlantQualityArea.withoutLegacyQuality(storedName);
+        this.maxQuality = Math.max(PlantQualityArea.legacyQuality(storedName),
+                obj.optInt(MAX_QUALITY_JSON, -1));
         this.id = (Integer) obj.get("id");
         if(obj.has("uuid")) {
             this.uuid = obj.getString("uuid");
@@ -477,6 +484,8 @@ public class NArea
                 }
             }
         }
+        if (PlantQualityArea.legacyQuality(storedName) >= 0 && !showsQuality())
+            spec.add(new Specialisation(SHOW_QUALITY_SPEC));
         
         // Загружаем version
         if(obj.has("version")) {
@@ -516,6 +525,33 @@ public class NArea
     }
     public Space space;
     public String name;
+    public static final String SHOW_QUALITY_SPEC = "showQuality";
+    public static final String MAX_QUALITY_JSON = "maxQuality";
+    public int maxQuality = -1;
+
+    public boolean showsQuality() {
+        for (Specialisation specialisation : spec) {
+            if (SHOW_QUALITY_SPEC.equals(specialisation.name))
+                return true;
+        }
+        return false;
+    }
+
+    public boolean recordQuality(int quality) {
+        if (!showsQuality() || quality < 0 || quality <= maxQuality)
+            return false;
+        maxQuality = quality;
+        markDirty(AreaFieldGroup.COSMETIC);
+        return true;
+    }
+
+    public boolean resetQuality() {
+        if (!showsQuality() || maxQuality < 0)
+            return false;
+        maxQuality = -1;
+        markDirty(AreaFieldGroup.COSMETIC);
+        return true;
+    }
     public int id;
     public int version = 1;  // Version for sync - incremented on each update
     public PileFillDirection pileFillDirection = PileFillDirection.LEFT_TO_RIGHT;
@@ -844,6 +880,7 @@ public class NArea
     {
         JSONObject res = new JSONObject();
         res.put("name", name);
+        res.put(MAX_QUALITY_JSON, maxQuality);
         res.put("id", id);
         if (uuid != null) res.put("uuid", uuid);
         res.put("path", path);

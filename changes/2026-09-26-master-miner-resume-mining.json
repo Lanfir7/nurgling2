@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-master-miner-resume-mining",
+  "priority": 4,
+  "summary": {
+    "ru": "После успешной установки подпорки Мастер добычи возвращает курсор копки.",
+    "en": "Master Miner restores the mining cursor after a successful support placement."
+  },
+  "detail": {
+    "ru": "После сбора камней и успешной установки каменной колонны курсор снова переключается на копку, чтобы можно было сразу продолжить работу. При ошибке установки он не переключается.",
+    "en": "After collecting stones and successfully placing the Stone Column, the cursor switches back to mining so you can continue right away. It stays unchanged if placement fails."
+  }
+}

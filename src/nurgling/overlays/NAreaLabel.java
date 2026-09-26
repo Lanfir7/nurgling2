@@ -40,6 +40,12 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
         BufferedImage img = NStyle.openings.render(area.name).img;
         BufferedImage selimg = NStyle.selopenings.render(area.name).img;
         BufferedImage grayimg = NStyle.disabledopenings.render(area.name).img;
+        if (area.showsQuality() && area.maxQuality >= 0) {
+            String quality = "Q" + area.maxQuality;
+            img = stackQuality(img, qualityImage(quality, Color.WHITE));
+            selimg = stackQuality(selimg, qualityImage(quality, Color.GREEN));
+            grayimg = stackQuality(grayimg, qualityImage(quality, Color.GRAY));
+        }
         if(!area.spec.isEmpty()) {
             int iconSize = UI.scale(32);
             BufferedImage first = Specialisation.findSpecialisation(area.spec.get(0).name) == null ? null : Specialisation.findSpecialisation(area.spec.get(0).name).image;
@@ -61,6 +67,23 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
         label = new TexI(img);
         sellabel = new TexI(selimg);
         graylabel = new TexI(grayimg);
+    }
+
+    private static BufferedImage qualityImage(String quality, Color color) {
+        return new PUtils.BlurFurn(
+                new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(11)), 11, color).aa(true),
+                1, 1, new Color(60, 30, 30)).render(quality).img;
+    }
+
+    private static BufferedImage stackQuality(BufferedImage title, BufferedImage quality) {
+        int width = Math.max(title.getWidth(), quality.getWidth());
+        int gap = UI.scale(1);
+        BufferedImage result = TexI.mkbuf(new Coord(width, title.getHeight() + gap + quality.getHeight()));
+        Graphics2D g = result.createGraphics();
+        g.drawImage(title, (width - title.getWidth()) / 2, 0, null);
+        g.drawImage(quality, (width - quality.getWidth()) / 2, title.getHeight() + gap, null);
+        g.dispose();
+        return result;
     }
 
     @Override
@@ -98,7 +121,10 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
             return;
         }
         
-        sc = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
+        Coord projected = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
+        int markerRadius = NStyle.iCropMap.get(NStyle.CropMarkers.BLUE).sz().y / 2;
+        int gap = UI.scale(3);
+        sc = projected.sub(0, label.sz().y / 2 + markerRadius + gap);
         if (label != null)
             if(isSelected)
             {

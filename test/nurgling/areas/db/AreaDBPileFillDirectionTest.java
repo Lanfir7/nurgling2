@@ -18,23 +18,29 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class AreaDBPileFillDirectionTest {
     @Test
-    void migrationDefaultsOldRowsAndStorageRoundTripsDirection() throws Exception {
+    void migrationDefaultsOldRowsAndStorageRoundTripsDirectionAndQuality() throws Exception {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite::memory:")) {
             conn.setAutoCommit(false);
             new AreasDBMigrationManager(conn).runMigrations();
 
             assertEquals("LEFT_TO_RIGHT", columnDefault(conn, "pile_fill_direction"));
+            assertEquals("-1", columnDefault(conn, "max_quality"));
 
             AreaDBStorage storage = new AreaDBStorage(managerFor(conn));
             NArea area = validArea(41, PileFillDirection.RIGHT_TO_LEFT);
+            area.spec.add(new NArea.Specialisation(NArea.SHOW_QUALITY_SPEC));
+            area.recordQuality(145);
             storage.saveArea(area);
             assertEquals(PileFillDirection.RIGHT_TO_LEFT,
                     storage.loadAllAreas().get(41).pileFillDirection);
+            assertEquals(145, storage.loadAllAreas().get(41).maxQuality);
 
             area.pileFillDirection = PileFillDirection.TOP_TO_BOTTOM;
+            area.recordQuality(146);
             storage.saveArea(area);
             assertEquals(PileFillDirection.TOP_TO_BOTTOM,
                     storage.loadAllAreas().get(41).pileFillDirection);
+            assertEquals(146, storage.loadAllAreas().get(41).maxQuality);
 
             area.synced = true;
             storage.saveArea(area);

@@ -28,6 +28,17 @@ class MasterMinerGroundStacksTest {
     }
 
     @Test
+    void onlyTheGenericStoneGroundResourceGetsTheGenericSupportClassification() {
+        assertTrue(MasterMinerGroundStacks.isGenericSupportStone("gfx/terobjs/items/stone"));
+        assertFalse(MasterMinerGroundStacks.isGenericSupportStone("gfx/terobjs/items/granite"));
+        assertFalse(MasterMinerGroundStacks.isGenericSupportStone("gfx/terobjs/items/gems/gemstone"));
+        assertFalse(MasterMinerGroundStacks.isGenericSupportStone("gfx/terobjs/items/seashell"));
+        assertFalse(MasterMinerGroundStacks.isGenericSupportStone("gfx/terobjs/items/stone-decal"));
+        assertFalse(MasterMinerGroundStacks.isGenericSupportStone("gfx/terobjs/plants/stone"));
+        assertFalse(MasterMinerGroundStacks.isGenericSupportStone(null));
+    }
+
+    @Test
     void groupsByResourceAndIgnoresOutOfRadius() {
         List<MasterMinerGroundStacks.Drop> drops = Arrays.asList(
                 drop("gfx/terobjs/items/dolomite", 0, 0),

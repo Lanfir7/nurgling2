@@ -196,7 +196,7 @@ public class AreaService {
         JSONObject json = area.toJson();
         JSONObject data = new JSONObject();
         for (String key : new String[]{"space", "in", "out", "spec",
-                NArea.PILE_FILL_DIRECTION_JSON}) {
+                NArea.PILE_FILL_DIRECTION_JSON, NArea.MAX_QUALITY_JSON}) {
             if (json.has(key)) data.put(key, json.get(key));
         }
         return data;

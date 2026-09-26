@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-master-miner-support-side-branch",
+  "priority": 5,
+  "summary": {
+    "ru": "Мастер добычи ставит каменную колонну сбоку от основного прохода, оставляя его свободным.",
+    "en": "Master Miner places the Stone Column beside the main passage, keeping it clear."
+  },
+  "detail": {
+    "ru": "Кнопка сбора камней в окне Мастера добычи выбирает свободную боковую ячейку рядом с коридором, даже если боковой проход продолжается. Если такой ячейки нет, персонаж может безопасно выкопать одну ячейку для колонны. При опасных условиях установка прекращается.",
+    "en": "The stone collection button in Master Miner uses an open side tile, even when that branch continues. If none is available, your character can safely mine one side tile for the Stone Column. Unsafe conditions stop placement."
+  }
+}

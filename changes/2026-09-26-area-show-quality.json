@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-area-show-quality",
+  "priority": 6,
+  "summary": {
+    "ru": "Качество посадок и размещённых стопок показывается отдельно от названия зоны.",
+    "en": "Planting and placed stack quality appears separately from the area name."
+  },
+  "detail": {
+    "ru": "Добавьте Show Quality в окне зон. После посадки или размещения стопки качество появится под названием зоны как Q145. Дважды щёлкните специализацию в списке выбранной зоны, чтобы сбросить значение.",
+    "en": "Add Show Quality in the Areas window. Planting or placing a stack shows its highest quality below the area name as Q145. Double-click the specialisation in the selected area's list to reset the value."
+  }
+}

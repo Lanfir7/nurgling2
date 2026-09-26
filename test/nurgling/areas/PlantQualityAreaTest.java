@@ -3,8 +3,11 @@ package nurgling.areas;
 import haven.Coord2d;
 import haven.GItem;
 import haven.Pair;
+import haven.WItem;
 import haven.res.ui.stackinv.ItemStack;
 import nurgling.NGItem;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -14,18 +17,37 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PlantQualityAreaTest {
     @Test
-    void appendsRoundedQualityAndOnlyRaisesTrailingSuffix() {
-        assertEquals("Turnips [21]", PlantQualityArea.withMaximumQuality("Turnips", 20.5f));
-        assertEquals("Turnips [21]", PlantQualityArea.withMaximumQuality("Turnips [21]", 20.6f));
-        assertEquals("Turnips [22]", PlantQualityArea.withMaximumQuality("Turnips [21]", 21.5f));
-        assertEquals("Turnips [45] [21]", PlantQualityArea.withMaximumQuality("Turnips [45] [21]", 21f));
+    void recordsOnlyEnabledMaximumWithoutChangingName() {
+        NArea area = new NArea("Turnips");
+        assertFalse(area.recordQuality(21));
+        area.spec.add(new NArea.Specialisation(NArea.SHOW_QUALITY_SPEC));
+        assertTrue(area.recordQuality(21));
+        assertFalse(area.recordQuality(20));
+        assertTrue(area.recordQuality(22));
+        assertEquals("Turnips", area.name);
+        assertEquals(22, area.maxQuality);
+        area.dirtyGroups.clear();
+        assertTrue(area.resetQuality());
+        assertEquals(-1, area.maxQuality);
+        assertTrue(area.showsQuality());
+        assertTrue(area.dirtyGroups.contains(AreaFieldGroup.COSMETIC));
+        assertTrue(area.recordQuality(18));
+        assertEquals(18, area.maxQuality);
+        assertEquals("Turnips", area.name);
     }
 
     @Test
-    void rejectsMissingOrInvalidQuality() {
-        assertNull(PlantQualityArea.withMaximumQuality(null, 20f));
-        assertEquals("Turnips", PlantQualityArea.withMaximumQuality("Turnips", Float.NaN));
-        assertEquals("Turnips", PlantQualityArea.withMaximumQuality("Turnips", -1f));
+    void migratesLegacySuffixAndRoundTripsQuality() {
+        JSONObject stored = new JSONObject().put("name", "Turnips [21]").put("id", 1)
+                .put("space", new JSONArray()).put("spec", new JSONArray());
+        NArea area = new NArea(stored);
+        assertEquals("Turnips", area.name);
+        assertEquals(21, area.maxQuality);
+        assertTrue(area.showsQuality());
+        assertFalse(area.recordQuality(-1));
+        area.color = java.awt.Color.WHITE;
+        assertEquals(21, new NArea(area.toJson()).maxQuality);
+        assertEquals("Beds [A]", PlantQualityArea.withoutLegacyQuality("Beds [A]"));
     }
 
     @Test
@@ -48,6 +70,17 @@ class PlantQualityAreaTest {
     }
 
     @Test
+    void readsPlacedStackQualityWithoutCheckingPlantingMaterial() {
+        NGItem shell = item(10f);
+        ItemStack stack = new ItemStack();
+        stack.wmap.put(item(144.6f), null);
+        stack.wmap.put(item(140f), null);
+        shell.contents = stack;
+
+        assertEquals(145, PlantQualityArea.roundedMaximum(new WItem(shell)));
+    }
+
+    @Test
     void usesHeldQualityOnlyWhenThereIsNoActivatedPlantingQuality() {
         assertEquals(40, PlantQualityArea.pendingOrHeldQuality(-1, 40));
         assertEquals(30, PlantQualityArea.pendingOrHeldQuality(30, 40));
@@ -64,15 +97,15 @@ class PlantQualityAreaTest {
     }
 
     @Test
-    void findsEveryAreaIntersectedByPointOrTileSelection() {
+    void findsOnlyTheAreaContainingTheInteractedPoint() {
         BoxedArea left = boxed(1, 0, 0, 11, 11);
         BoxedArea right = boxed(2, 11, 0, 22, 11);
         BoxedArea elsewhere = boxed(3, 44, 0, 55, 11);
 
-        assertEquals(Arrays.asList(left, right),
-                PlantQualityArea.intersectedAreas(Arrays.asList(left, right, elsewhere), new Coord2d(10, 0), new Coord2d(12, 11)));
         assertEquals(Arrays.asList(left),
-                PlantQualityArea.intersectedAreas(Arrays.asList(left, right, elsewhere), new Coord2d(5, 5), new Coord2d(5, 5)));
+                PlantQualityArea.containingAreas(Arrays.asList(left, right, elsewhere), new Coord2d(5, 5)));
+        assertEquals(Arrays.asList(right),
+                PlantQualityArea.containingAreas(Arrays.asList(left, right, elsewhere), new Coord2d(11, 5)));
     }
 
     @Test

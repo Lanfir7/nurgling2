@@ -59,6 +59,11 @@ public final class MasterMinerGroundStacks {
         return !resPath.contains("/decal") && !resPath.contains("parchment-decal");
     }
 
+    /** Generic loose stone has no Chipper item-name mapping but is valid support stock. */
+    public static boolean isGenericSupportStone(String resPath) {
+        return isGroundItem(resPath) && "gfx/terobjs/items/stone".equals(resPath);
+    }
+
     public static String displayName(String resPath) {
         String slug = lastSegment(resPath).replace('-', ' ').replace('_', ' ');
         if ("quarryquartz".equalsIgnoreCase(slug)) {

@@ -21,6 +21,16 @@ class MasterMinerSupportStoneTest {
     }
 
     @Test
+    void genericStoneResourceIsCollectedButOtherUnknownGroundResourcesAreNot() {
+        assertTrue(MasterMiner.isSupportStoneDrop("gfx/terobjs/items/stone"));
+        assertTrue(MasterMiner.isSupportStoneDrop("gfx/terobjs/items/granite"));
+        assertFalse(MasterMiner.isSupportStoneDrop("gfx/terobjs/items/gems/gemstone"));
+        assertFalse(MasterMiner.isSupportStoneDrop("gfx/terobjs/items/seashell"));
+        assertFalse(MasterMiner.isSupportStoneDrop("gfx/terobjs/items/unknown-rock"));
+        assertFalse(MasterMiner.isSupportStoneDrop("gfx/terobjs/plants/stone"));
+    }
+
+    @Test
     void collectorButtonRequestsThirtyLooseStones() throws Exception {
         String source = Files.readString(Path.of("src/nurgling/widgets/bots/MasterMinerWnd.java"), StandardCharsets.UTF_8);
         assertTrue(source.contains("new MasterMiner.CollectSupportStones(MasterMinerGroundStacks.CLICK_PICKUP_LIMIT)"));

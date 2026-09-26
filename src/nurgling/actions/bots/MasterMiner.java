@@ -686,6 +686,12 @@ public class MasterMiner extends ActionWithFinal {
         return !"Shell".equals(stoneType) && !"Cat Gold".equals(stoneType);
     }
 
+    static boolean isSupportStoneDrop(String resourcePath) {
+        return MasterMinerGroundStacks.isGroundItem(resourcePath)
+                && (MasterMinerGroundStacks.isGenericSupportStone(resourcePath)
+                || isSupportStone(MasterMinerGroundStacks.minedItemName(resourcePath)));
+    }
+
     /** Counts individual support stones, including members of item stacks. */
     public static int supportStoneCount(List<WItem> items) {
         if (items == null) return 0;
@@ -764,23 +770,56 @@ public class MasterMiner extends ActionWithFinal {
         private Results placeStoneColumn(NGameUI gui, Coord2d origin) throws InterruptedException {
             Coord originTile = origin.div(MCache.tilesz).floor();
             Gob returnedMiner = NUtils.player();
-            Coord returnedMinerTile = returnedMiner == null ? null : returnedMiner.rc.div(MCache.tilesz).floor();
-            Coord targetTile = MasterMinerSupportPlacement.chooseAdjacent(originTile, returnedMinerTile,
+            if (returnedMiner == null) return supportError("bot.masterminer.support_no_tile");
+            Coord returnedMinerTile = returnedMiner.rc.div(MCache.tilesz).floor();
+            Coord corridorTile = MasterMinerSupportPlacement.corridorOrigin(originTile, returnedMinerTile,
                     tile -> isOpenCaveTile(gui, tile));
-            if (targetTile == null) {
+            Coord targetTile = MasterMinerSupportPlacement.chooseAdjacent(originTile, returnedMinerTile,
+                    tile -> isOpenCaveTile(gui, tile), tile -> tileResourceName(gui, tile) != null,
+                    tile -> isMineableCaveTile(gui, tile), tile -> true);
+            if (corridorTile == null || targetTile == null) {
                 return supportError("bot.masterminer.support_no_tile");
             }
+            boolean needsMining = !isOpenCaveTile(gui, targetTile);
+            if (needsMining) {
+                if (!isMineableCaveTile(gui, targetTile))
+                    return supportError("bot.masterminer.support_no_tile");
+                Results mined = new TunnelingBot().mineTileIfNeeded(gui, targetTile, true);
+                if (!mined.IsSuccess()) return mined;
+            }
+            if (!isOpenCaveTile(gui, targetTile)
+                    || !MasterMinerSupportPlacement.isSideBranch(corridorTile, targetTile,
+                            tile -> isOpenCaveTile(gui, tile),
+                            tile -> tileResourceName(gui, tile) != null, needsMining))
+                return supportError("bot.masterminer.support_no_tile");
             Coord2d target = tileCenter(targetTile);
-            return TunnelingBot.placeSupport(gui, target, TunnelingDialog.SupportType.STONE_COLUMN);
+            Results placement = TunnelingBot.placeSupport(gui, target, TunnelingDialog.SupportType.STONE_COLUMN);
+            /* SUCCESS includes the idempotent "support already exists" outcome. */
+            if (placement.IsSuccess()) {
+                Gob current = NUtils.player();
+                if (current != null) {
+                    NUtils.mine(current.rc);
+                    NUtils.addTask(new GetCurs("mine"));
+                }
+            }
+            return placement;
         }
 
         private boolean isOpenCaveTile(NGameUI gui, Coord tile) {
-            if (gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) return false;
+            return MasterMinerSupportPlacement.isOpenCaveTileName(tileResourceName(gui, tile));
+        }
+
+        private boolean isMineableCaveTile(NGameUI gui, Coord tile) {
+            return TunnelingBot.isMineableTileName(tileResourceName(gui, tile));
+        }
+
+        private String tileResourceName(NGameUI gui, Coord tile) {
+            if (gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) return null;
             try {
                 Resource resource = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tile));
-                return resource != null && MasterMinerSupportPlacement.isOpenCaveTileName(resource.name);
+                return resource == null ? null : resource.name;
             } catch (Loading ignored) {
-                return false;
+                return null;
             }
         }
 
@@ -802,8 +841,7 @@ public class MasterMiner extends ActionWithFinal {
                     if (gob == null || gob == player || gob instanceof OCache.Virtual || gob.ngob == null)
                         continue;
                     String path = gob.ngob.name;
-                    if (!MasterMinerGroundStacks.isGroundItem(path)
-                            || !isSupportStone(MasterMinerGroundStacks.minedItemName(path)))
+                    if (!isSupportStoneDrop(path))
                         continue;
                     double fromOrigin = gob.rc.dist(origin);
                     double fromPlayer = gob.rc.dist(player.rc);

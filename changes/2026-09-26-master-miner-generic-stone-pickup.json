@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-master-miner-generic-stone-pickup",
+  "priority": 5,
+  "summary": {
+    "ru": "Сбор камней в Мастере добычи теперь подбирает и обычный камень.",
+    "en": "Master Miner’s stone collection now picks up generic stone too."
+  },
+  "detail": {
+    "ru": "Кнопка сбора камней теперь распознаёт обычный камень среди предметов на земле, а также продолжает собирать подходящие виды камня. Самоцветы, ракухи и другие посторонние предметы не добавляются в запас подпорок.",
+    "en": "The stone collection button now recognizes generic stone on the ground while still collecting supported stone types. Gems, shells, and unrelated items are excluded from the support reserve."
+  }
+}

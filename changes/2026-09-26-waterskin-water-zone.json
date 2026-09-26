@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-26-waterskin-water-zone",
+  "priority": 5,
+  "summary": {
+    "ru": "Бот наполнения бурдюков пробует другой источник в зоне воды, если первый не наполнил ёмкость.",
+    "en": "The waterskin filling bot tries another source in the water zone when the first one does not fill a container."
+  },
+  "detail": {
+    "ru": "При запуске бота наполнения бурдюков с выбранной или общей зоной воды он переключается, например, с бочки на колодец, если вода не набралась. Если ни один источник не сработал, бот сообщает об ошибке вместо бесконечного ожидания.",
+    "en": "When filling waterskins from a selected or global water zone, the bot can switch from a barrel to a well if the container stays empty. If every source fails, it reports an error instead of waiting forever."
+  }
+}

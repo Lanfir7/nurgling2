@@ -250,15 +250,20 @@ public class TunnelingBot implements Action {
         return Results.SUCCESS();
     }
 
-    private Results mineTileIfNeeded(NGameUI gui, Coord tilePos) throws InterruptedException {
+    Results mineTileIfNeeded(NGameUI gui, Coord tilePos) throws InterruptedException {
+        return mineTileIfNeeded(gui, tilePos, false);
+    }
+
+    Results mineTileIfNeeded(NGameUI gui, Coord tilePos, boolean requireSupport)
+            throws InterruptedException {
         // Check if tile needs mining
         if (!needsMining(gui, tilePos)) {
             return Results.SUCCESS(); // Already open, skip
         }
 
         // Check for dangerous conditions
-        if (!isSafeToMine(gui, tilePos)) {
-            return Results.ERROR("Unsafe to mine - check support health or loose rocks");
+        if (!isSafeToMine(gui, tilePos, requireSupport)) {
+            return Results.ERROR("Unsafe to mine - check support coverage, health or loose rocks");
         }
 
         // Convert tile to world coordinates (center of tile)
@@ -268,17 +273,25 @@ public class TunnelingBot implements Action {
         PathFinder pf = new PathFinder(NGob.getDummy(worldPos, 0,
                 new NHitBox(new Coord2d(-5.5, -5.5), new Coord2d(5.5, 5.5))), true);
         pf.isHardMode = true;
-        pf.run(gui);
+        Results walked = pf.run(gui);
+        if (!walked.IsSuccess()) return walked;
 
         // Restore resources if needed
-        new RestoreResources().run(gui);
+        Results restored = new RestoreResources().run(gui);
+        if (!restored.IsSuccess()) return restored;
 
         // Mine the tile
         Resource resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
 
         while (needsMining(gui, tilePos)) {
+            if (!isSafeToMine(gui, tilePos, requireSupport)) {
+                return Results.ERROR("Unsafe to mine - check support coverage, health or loose rocks");
+            }
             // Clear any stones that may have fallen during previous mining
             handleBumlings(gui);
+            if (!isSafeToMine(gui, tilePos, requireSupport)) {
+                return Results.ERROR("Unsafe to mine - check support coverage, health or loose rocks");
+            }
 
             NUtils.mine(worldPos);
             gui.map.wdgmsg("sel", tilePos, tilePos, 0);
@@ -315,10 +328,15 @@ public class TunnelingBot implements Action {
         if (res == null) {
             return false;
         }
-        return NParser.checkName(res.name, MINEABLE_TILES);
+        return isMineableTileName(res.name);
     }
 
-    private boolean isSafeToMine(NGameUI gui, Coord tilePos) throws InterruptedException {
+    static boolean isMineableTileName(String name) {
+        return NParser.checkName(name, MINEABLE_TILES);
+    }
+
+    private boolean isSafeToMine(NGameUI gui, Coord tilePos, boolean requireSupport)
+            throws InterruptedException {
         Coord2d worldPos = tileCenter(tilePos);
 
         // Check for loose rocks
@@ -329,11 +347,13 @@ public class TunnelingBot implements Action {
 
         // Check support health
         ArrayList<Gob> supports = Finder.findGobs(ALL_SUPPORTS);
+        boolean covered = false;
         for (Gob support : supports) {
             double dist = support.rc.dist(worldPos);
             int supportRadius = getSupportRadius(support);
 
             if (dist <= supportRadius) {
+                covered = true;
                 GobHealth health = support.getattr(GobHealth.class);
                 if (health != null && health.hp <= 0.25) {
                     return false;
@@ -341,7 +361,7 @@ public class TunnelingBot implements Action {
             }
         }
 
-        return true;
+        return !requireSupport || covered;
     }
 
     private int getSupportRadius(Gob support) {

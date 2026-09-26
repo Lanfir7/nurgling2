@@ -26,20 +26,24 @@ public final class PlantQualityArea {
     private PlantQualityArea() {
     }
 
-    public static String withMaximumQuality(String name, float quality) {
-        if (name == null || !Float.isFinite(quality) || quality < 0)
-            return name;
-        int rounded = Math.round(quality);
+    /** Extract the quality previously stored at the end of a zone name. */
+    public static int legacyQuality(String name) {
+        if (name == null)
+            return -1;
         Matcher suffix = QUALITY_SUFFIX.matcher(name);
         if (!suffix.find())
-            return name + " [" + rounded + "]";
+            return -1;
         try {
-            if (Integer.parseInt(suffix.group(1)) >= rounded)
-                return name;
+            return Integer.parseInt(suffix.group(1));
         } catch (NumberFormatException ignored) {
-            return name;
+            return -1;
         }
-        return name.substring(0, suffix.start()) + " [" + rounded + "]";
+    }
+
+    public static String withoutLegacyQuality(String name) {
+        if (legacyQuality(name) < 0)
+            return name;
+        return QUALITY_SUFFIX.matcher(name).replaceFirst("");
     }
 
     public static int roundedMaximum(Iterable<Float> qualities) {
@@ -97,6 +101,17 @@ public final class PlantQualityArea {
     }
 
     public static int plantingQuality(WItem item) {
+        if (item == null)
+            return -1;
+        Iterable<GItem> members = stackItems(item.item);
+        if (members != null) {
+            List<Float> qualities = new ArrayList<>();
+            for (GItem member : members) {
+                if (member instanceof NGItem && isPlantingMaterial(((NGItem) member).name()))
+                    addQuality(qualities, member);
+            }
+            return roundedMaximum(qualities);
+        }
         return isPlantingMaterial(item) ? roundedMaximum(item) : -1;
     }
 
@@ -128,10 +143,29 @@ public final class PlantQualityArea {
         return false;
     }
 
-    /** Every area whose world rectangle touches the point or selection rectangle. */
+    /** Areas containing a world point. Adjacent rectangles own their shared edge once. */
+    public static List<NArea> containingAreas(Iterable<NArea> areas, Coord2d point) {
+        if (areas == null || point == null)
+            return Collections.emptyList();
+        List<NArea> result = new ArrayList<>();
+        for (NArea area : areas) {
+            if (area == null)
+                continue;
+            Pair<Coord2d, Coord2d> bounds = area.getRCArea();
+            if (bounds != null && bounds.a != null && bounds.b != null
+                    && bounds.a.x <= point.x && point.x < bounds.b.x
+                    && bounds.a.y <= point.y && point.y < bounds.b.y)
+                result.add(area);
+        }
+        return result;
+    }
+
+    /** Every area whose world rectangle overlaps the selection rectangle. */
     public static List<NArea> intersectedAreas(Iterable<NArea> areas, Coord2d first, Coord2d second) {
         if (areas == null || first == null || second == null)
             return Collections.emptyList();
+        if (first.x == second.x && first.y == second.y)
+            return containingAreas(areas, first);
         double minX = Math.min(first.x, second.x);
         double minY = Math.min(first.y, second.y);
         double maxX = Math.max(first.x, second.x);
@@ -143,7 +177,7 @@ public final class PlantQualityArea {
             Pair<Coord2d, Coord2d> bounds = area.getRCArea();
             if (bounds == null || bounds.a == null || bounds.b == null)
                 continue;
-            if (bounds.a.x <= maxX && bounds.b.x >= minX && bounds.a.y <= maxY && bounds.b.y >= minY)
+            if (bounds.a.x < maxX && bounds.b.x > minX && bounds.a.y < maxY && bounds.b.y > minY)
                 result.add(area);
         }
         return result;
@@ -164,7 +198,7 @@ public final class PlantQualityArea {
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 Coord2d center = new Coord2d((x + 0.5) * tileSize.x, (y + 0.5) * tileSize.y);
-                result.addAll(intersectedAreas(source, center, center));
+                result.addAll(containingAreas(source, center));
             }
         }
         return new ArrayList<>(result);

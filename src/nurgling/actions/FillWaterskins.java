@@ -5,9 +5,7 @@ import nurgling.*;
 import nurgling.actions.bots.SelectArea;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
-import nurgling.tasks.HandIsFree;
 import nurgling.tasks.NTask;
-import nurgling.tasks.WaitItemContent;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
@@ -23,6 +21,7 @@ import java.util.ArrayList;
  * - useGlobalZone=true: uses NContext water specialisation area (local then global), errors if not found
  */
 public class FillWaterskins implements Action {
+    private static final long FILL_TIMEOUT_NS = 8_000_000_000L;
 
     protected final boolean useGlobalZone;
 
@@ -50,101 +49,104 @@ public class FillWaterskins implements Action {
             area = insa.getRCArea();
         }
 
-        Gob target = null;
-        if(area!=null)
-        {
-            ArrayList<Gob> targets = Finder.findGobs(area,new NAlias("barrel", "cistern", "well"));
-            for(Gob cand: targets)
-            {
-                if(NParser.isIt(cand,new NAlias("barrel")))
-                {
-                    if(NUtils.barrelHasContent(cand) && NParser.checkName(NUtils.getContentsOfBarrel(cand), "water")) {
-                        target = cand;
-                        break;
-                    }
-                }
-                else {
-                    target = cand;
-                    break;
-                }
-            }
-            if(target==null)
-                return Results.ERROR("No containers with water");
-        }
-        else
-        {
+        if (area == null) {
             return Results.ERROR("no water area");
         }
+        ArrayList<Gob> targets = new ArrayList<>();
+        for (Gob cand : Finder.findGobs(area, new NAlias("barrel", "cistern", "well"))) {
+            if (!NParser.isIt(cand, new NAlias("barrel")) ||
+                    (NUtils.barrelHasContent(cand) && NParser.checkName(NUtils.getContentsOfBarrel(cand), "water")))
+                targets.add(cand);
+        }
+        if (targets.isEmpty())
+            return Results.ERROR("No containers with water");
         WItem wbelt = NUtils.getEquipment().findItem (NEquipory.Slots.BELT.idx);
-        boolean needPf = true;
         if(wbelt!=null)
         {
             if(wbelt.item.contents instanceof NInventory)
             {
                 ArrayList<WItem> witems = ((NInventory) wbelt.item.contents).getItems(new NAlias("Waterskin"));
-                if(!witems.isEmpty())
-                {
-                    needPf = false;
-                    new PathFinder(target).run(gui);
-                }
                 for(WItem item : witems)
                 {
                     NGItem ngItem = ((NGItem)item.item);
                     if(ngItem.content().isEmpty())
                     {
                         NUtils.takeItemToHand(item);
-                        NUtils.activateItem(target);
-                        NUtils.getUI().core.addTask(new WaitItemContent(NUtils.getGameUI().vhand));
+                        boolean filled = fillFromSources(gui, targets);
                         NUtils.transferToBelt();
-                        NUtils.getUI().core.addTask(new HandIsFree(((NInventory) wbelt.item.contents)));
+                        if (!waitForFreeHand(gui))
+                            return Results.ERROR("Could not return waterskin to belt");
+                        if (!filled)
+                            return Results.ERROR("Water source did not fill the waterskin");
                     }
                 }
             }
         }
-        if(needPf)
-            new PathFinder(target).run(gui);
-        refillItemInEquip(gui,NUtils.getEquipment().findItem(NEquipory.Slots.LFOOT.idx),target);
-        refillItemInEquip(gui,NUtils.getEquipment().findItem(NEquipory.Slots.RFOOT.idx),target);
+        if (!refillItemInEquip(gui,NUtils.getEquipment().findItem(NEquipory.Slots.LFOOT.idx),targets) ||
+            !refillItemInEquip(gui,NUtils.getEquipment().findItem(NEquipory.Slots.RFOOT.idx),targets))
+            return Results.ERROR("Water source did not fill the waterskin");
         // Refill buckets in hands
-        refillBucketInHand(gui,NUtils.getEquipment().findItem(NEquipory.Slots.HAND_LEFT.idx),target);
-        refillBucketInHand(gui,NUtils.getEquipment().findItem(NEquipory.Slots.HAND_RIGHT.idx),target);
+        if (!refillBucketInHand(gui,NUtils.getEquipment().findItem(NEquipory.Slots.HAND_LEFT.idx),targets) ||
+            !refillBucketInHand(gui,NUtils.getEquipment().findItem(NEquipory.Slots.HAND_RIGHT.idx),targets))
+            return Results.ERROR("Water source did not fill the bucket");
         return Results.SUCCESS();
     }
 
-    void refillItemInEquip(NGameUI gui, WItem item, Gob target) throws InterruptedException
-    {
-        if(NParser.isIt(target,new NAlias("barrel")))
-        {
-            if(!NUtils.barrelHasContent(target) || !NParser.checkName(NUtils.getContentsOfBarrel(target), "water")) {
-                return;
-            }
+    private boolean fillFromSources(NGameUI gui, ArrayList<Gob> targets) throws InterruptedException {
+        WItem held = gui.vhand;
+        if (held == null)
+            return false;
+        for (Gob target : targets) {
+            if (NParser.isIt(target, new NAlias("barrel")) &&
+                    (!NUtils.barrelHasContent(target) || !NParser.checkName(NUtils.getContentsOfBarrel(target), "water")))
+                continue;
+            if (!new PathFinder(target).run(gui).IsSuccess())
+                continue;
+            NUtils.activateItem(target);
+            if (waitForWater(held))
+                return true;
         }
+        return false;
+    }
+
+    private boolean waitForWater(WItem held) throws InterruptedException {
+        long deadline = System.nanoTime() + FILL_TIMEOUT_NS;
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return !((NGItem) held.item).content().isEmpty() || System.nanoTime() >= deadline;
+            }
+        });
+        return !((NGItem) held.item).content().isEmpty();
+    }
+
+    private boolean waitForFreeHand(NGameUI gui) throws InterruptedException {
+        long deadline = System.nanoTime() + FILL_TIMEOUT_NS;
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return gui.vhand == null || System.nanoTime() >= deadline;
+            }
+        });
+        return gui.vhand == null;
+    }
+
+    boolean refillItemInEquip(NGameUI gui, WItem item, ArrayList<Gob> targets) throws InterruptedException
+    {
         if(item!=null && item.item instanceof NGItem && NParser.checkName(((NGItem)item.item).name(), new NAlias("Waterskin", "Glass Jug"))) {
             NGItem ngItem = ((NGItem) item.item);
             if (ngItem.content().isEmpty()) {
                 NUtils.takeItemToHand(item);
-                NUtils.activateItem(target);
-                NUtils.getUI().core.addTask(new WaitItemContent(NUtils.getGameUI().vhand));
+                boolean filled = fillFromSources(gui, targets);
                 NUtils.getEquipment().wdgmsg("drop", -1);
-                NUtils.addTask(new NTask() {
-                    @Override
-                    public boolean check() {
-                        return NUtils.getGameUI().vhand == null;
-                    }
-                });
+                return waitForFreeHand(gui) && filled;
             }
         }
+        return true;
     }
 
-    void refillBucketInHand(NGameUI gui, WItem item, Gob target) throws InterruptedException
+    boolean refillBucketInHand(NGameUI gui, WItem item, ArrayList<Gob> targets) throws InterruptedException
     {
-        if(target == null) return;
-        if(NParser.isIt(target,new NAlias("barrel")))
-        {
-            if(!NUtils.barrelHasContent(target) || !NParser.checkName(NUtils.getContentsOfBarrel(target), "water")) {
-                return;
-            }
-        }
         if(item!=null && item.item instanceof NGItem && NParser.checkName(((NGItem)item.item).name(), "Bucket")) {
             NGItem ngItem = ((NGItem) item.item);
             // Refill if bucket is empty or has water but not full (not "10l")
@@ -158,17 +160,12 @@ public class FillWaterskins implements Action {
             }
             if (needRefill) {
                 NUtils.takeItemToHand(item);
-                NUtils.activateItem(target);
-                NUtils.getUI().core.addTask(new WaitItemContent(NUtils.getGameUI().vhand));
+                boolean filled = fillFromSources(gui, targets);
                 NUtils.getEquipment().wdgmsg("drop", -1);
-                NUtils.addTask(new NTask() {
-                    @Override
-                    public boolean check() {
-                        return NUtils.getGameUI().vhand == null;
-                    }
-                });
+                return waitForFreeHand(gui) && filled;
             }
         }
+        return true;
     }
 
 

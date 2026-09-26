@@ -16,4 +16,13 @@ class AreaServicePileFillDirectionTest {
         JSONObject data = AreaService.buildDataJson(area);
         assertEquals("RIGHT_TO_LEFT", data.getString(NArea.PILE_FILL_DIRECTION_JSON));
     }
+
+    @Test void serverDataIncludesAreaQuality() {
+        NArea area = new NArea("zone");
+        area.id = 1;
+        area.space = new NArea.Space();
+        area.spec.add(new NArea.Specialisation(NArea.SHOW_QUALITY_SPEC));
+        area.recordQuality(145);
+        assertEquals(145, AreaService.buildDataJson(area).getInt(NArea.MAX_QUALITY_JSON));
+    }
 }

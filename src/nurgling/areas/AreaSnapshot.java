@@ -25,6 +25,7 @@ public class AreaSnapshot {
     public final String name;
     public final String path;
     public final boolean hide;
+    public final int maxQuality;
     public final int colorR, colorG, colorB, colorA;
     public final String spaceJson;     // serialized JSONArray of grid polygons
     public final String inJson;        // serialized jin
@@ -36,11 +37,12 @@ public class AreaSnapshot {
     private AreaSnapshot(String name, String path, boolean hide,
                          int r, int g, int b, int a,
                          String spaceJson, String inJson, String outJson, String specJson,
-                         String pileFillDirection,
+                         String pileFillDirection, int maxQuality,
                          int version) {
         this.name = name == null ? "" : name;
         this.path = path == null ? "" : path;
         this.hide = hide;
+        this.maxQuality = maxQuality;
         this.colorR = r;
         this.colorG = g;
         this.colorB = b;
@@ -68,7 +70,7 @@ public class AreaSnapshot {
         Color c = area.color;
         return new AreaSnapshot(area.name, area.path, area.hide,
             c.getRed(), c.getGreen(), c.getBlue(), c.getAlpha(),
-            space, in, out, spec, pileFillDirection, area.version);
+            space, in, out, spec, pileFillDirection, area.maxQuality, area.version);
     }
 
     /**
@@ -76,12 +78,20 @@ public class AreaSnapshot {
      * areas.data column.
      */
     public static AreaSnapshot of(String name, String path, boolean hide,
+                                   int r, int g, int b, int a,
+                                   String spaceJson, String inJson, String outJson, String specJson,
+                                   String pileFillDirection,
+                                   int version) {
+        return new AreaSnapshot(name, path, hide, r, g, b, a,
+            spaceJson, inJson, outJson, specJson, pileFillDirection, -1, version);
+    }
+
+    public static AreaSnapshot of(String name, String path, boolean hide,
                                   int r, int g, int b, int a,
                                   String spaceJson, String inJson, String outJson, String specJson,
-                                  String pileFillDirection,
-                                  int version) {
+                                  String pileFillDirection, int maxQuality, int version) {
         return new AreaSnapshot(name, path, hide, r, g, b, a,
-            spaceJson, inJson, outJson, specJson, pileFillDirection, version);
+            spaceJson, inJson, outJson, specJson, pileFillDirection, maxQuality, version);
     }
 
     /**
@@ -113,7 +123,9 @@ public class AreaSnapshot {
                 data.has(NArea.PILE_FILL_DIRECTION_JSON)
                         ? data.get(NArea.PILE_FILL_DIRECTION_JSON) : null).name();
         return new AreaSnapshot(name, path, hide, r, g, b, a,
-            space, in, out, spec, direction, version);
+            space, in, out, spec, direction,
+            Math.max(data.optInt(NArea.MAX_QUALITY_JSON, -1),
+                     PlantQualityArea.legacyQuality(name)), version);
     }
 
     /**
@@ -131,7 +143,8 @@ public class AreaSnapshot {
         }
         if (!a.spaceJson.equals(b.spaceJson)) result.add(AreaFieldGroup.GEOMETRY);
         if (!a.name.equals(b.name) || !a.path.equals(b.path)) result.add(AreaFieldGroup.IDENTITY);
-        if (a.hide != b.hide || a.colorR != b.colorR || a.colorG != b.colorG
+        if (a.hide != b.hide || a.maxQuality != b.maxQuality
+            || a.colorR != b.colorR || a.colorG != b.colorG
             || a.colorB != b.colorB || a.colorA != b.colorA) {
             result.add(AreaFieldGroup.COSMETIC);
         }
@@ -162,6 +175,11 @@ public class AreaSnapshot {
 
         AreaSnapshot cosmeticSrc = takeRemoteGroups.contains(AreaFieldGroup.COSMETIC) ? remote : local;
         out.put("hide", cosmeticSrc.hide);
+        // A reset to -1 is deliberate; retain it when the chosen cosmetic side owns the reset.
+        out.put(NArea.MAX_QUALITY_JSON,
+                local.maxQuality < 0 || remote.maxQuality < 0
+                        ? cosmeticSrc.maxQuality
+                        : Math.max(local.maxQuality, remote.maxQuality));
         JSONObject color = new JSONObject();
         color.put("r", cosmeticSrc.colorR);
         color.put("g", cosmeticSrc.colorG);

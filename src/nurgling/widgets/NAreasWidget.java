@@ -300,7 +300,18 @@ public class NAreasWidget extends Window
             for (AreaItem item : items) {
                 if (item != null && item.area != null && item.area.id == areaId) {
                     item.text.settext(newName);
-                    item.settip(newName);
+                    item.settip(buildAreaTip(newName, item.area), true);
+                    break;
+                }
+            }
+        }
+    }
+
+    public void updateAreaQuality(int areaId) {
+        synchronized (items) {
+            for (AreaItem item : items) {
+                if (item != null && item.area != null && item.area.id == areaId) {
+                    item.settip(buildAreaTip(item.area.name, item.area), true);
                     break;
                 }
             }
@@ -504,9 +515,13 @@ public class NAreasWidget extends Window
 
     /** Render an area tooltip including last-edited-by presence info (Phase 5). */
     private static String buildAreaTip(String text, NArea area) {
-        if (area == null || area.lastTouchedBy == null || area.lastTouchedBy.isEmpty()) {
-            return text;
-        }
+        String tip = RichText.Parser.quote(text);
+        if (area == null)
+            return tip;
+        if (area.showsQuality() && area.maxQuality >= 0)
+            tip += "\n$size[10]{Q" + area.maxQuality + "}";
+        if (area.lastTouchedBy == null || area.lastTouchedBy.isEmpty())
+            return tip;
         String when = "recently";
         if (area.lastTouchedAt > 0) {
             long ago = (System.currentTimeMillis() - area.lastTouchedAt) / 1000L;
@@ -515,7 +530,7 @@ public class NAreasWidget extends Window
             else if (ago < 86400) when = (ago / 3600) + "h ago";
             else when = (ago / 86400) + "d ago";
         }
-        return text + "\nLast edited by " + area.lastTouchedBy + " " + when;
+        return tip + "\n" + RichText.Parser.quote("Last edited by " + area.lastTouchedBy + " " + when);
     }
 
     public class AreaItem extends Widget{
@@ -539,7 +554,7 @@ public class NAreasWidget extends Window
         public AreaItem(String text, NArea area){
             this.text = add(new Label(text));
             this.area = area;
-            this.settip(buildAreaTip(text, area));
+            this.settip(buildAreaTip(text, area), true);
             hide = add(new CheckBox(""){
                 @Override
                 public void changed(boolean val) {
@@ -954,8 +969,38 @@ public class NAreasWidget extends Window
     }
 
     public class CurrentSpecialisationList extends SListBox<SpecialisationItem, Widget> {
+        private static final long QUALITY_DOUBLE_CLICK_NS = 500_000_000L;
+        private SpecialisationItem lastQualityRow;
+        private NArea lastQualityArea;
+        private long lastQualityClickAt;
+
         CurrentSpecialisationList(Coord sz) {
             super(sz, UI.scale(24));
+        }
+
+        private void clearQualityClick() {
+            lastQualityRow = null;
+            lastQualityArea = null;
+            lastQualityClickAt = 0;
+        }
+
+        private void qualityRowClicked(SpecialisationItem row) {
+            NArea area = al.sel == null ? null : al.sel.area;
+            if (area == null || !area.spec.contains(row.item)) {
+                clearQualityClick();
+                return;
+            }
+            long now = System.nanoTime();
+            if (lastQualityRow == row && lastQualityArea == area
+                    && now - lastQualityClickAt > 0
+                    && now - lastQualityClickAt <= QUALITY_DOUBLE_CLICK_NS) {
+                clearQualityClick();
+                ((NMapView) NUtils.getGameUI().map).resetAreaQuality(area.id);
+            } else {
+                lastQualityRow = row;
+                lastQualityArea = area;
+                lastQualityClickAt = now;
+            }
         }
 
         @Override
@@ -980,7 +1025,17 @@ public class NAreasWidget extends Window
 
                 @Override
                 public boolean mousedown(MouseDownEvent ev) {
+                    if (ev.b != 1 || !NArea.SHOW_QUALITY_SPEC.equals(item.item.name))
+                        clearQualityClick();
                     return super.mousedown(ev);
+                }
+
+                @Override
+                protected boolean clicked(MouseDownEvent ev) {
+                    boolean handled = super.clicked(ev);
+                    if (ev.b == 1 && NArea.SHOW_QUALITY_SPEC.equals(item.item.name))
+                        qualityRowClicked(item);
+                    return handled;
                 }
 
             });
@@ -1063,6 +1118,8 @@ public class NAreasWidget extends Window
             if(specialisationItem != null) {
                 icon = new TexI(specialisationItem.image);
             }
+            if (NArea.SHOW_QUALITY_SPEC.equals(item.name))
+                settip(get("area.tooltip.show_quality"));
             
             if(SpecialisationData.data.get(item.name)!=null)
             {
@@ -1104,7 +1161,7 @@ public class NAreasWidget extends Window
                                             String newName = prettyName + "(" + option.name + ")";
                                             ((NMapView)NUtils.getGameUI().map).changeAreaName(area.id, newName);
                                             al.sel.text.settext(newName);
-                                            al.sel.settip(newName);
+                                            al.sel.settip(buildAreaTip(newName, area), true);
                                             // Update area label on map
                                             Gob dummy = ((NMapView) NUtils.getGameUI().map).dummys.get(area.gid);
                                             if(dummy != null) {

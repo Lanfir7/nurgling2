@@ -24,6 +24,29 @@ class AreaSnapshotPileFillDirectionTest {
         assertEquals("TOP_TO_BOTTOM", merged.getString(NArea.PILE_FILL_DIRECTION_JSON));
     }
 
+    @Test void qualitySurvivesConcurrentAreaChanges() {
+        NArea localArea = area(PileFillDirection.LEFT_TO_RIGHT);
+        NArea remoteArea = area(PileFillDirection.LEFT_TO_RIGHT);
+        localArea.maxQuality = 145;
+        remoteArea.maxQuality = 140;
+        AreaSnapshot local = AreaSnapshot.of(localArea);
+        AreaSnapshot remote = AreaSnapshot.of(remoteArea);
+        JSONObject merged = AreaSnapshot.buildMergedJson(
+            1, "uuid", local, remote, EnumSet.of(AreaFieldGroup.COSMETIC), 2);
+        assertEquals(145, merged.getInt(NArea.MAX_QUALITY_JSON));
+    }
+
+    @Test void resetQualitySurvivesVersionMerge() {
+        NArea localArea = area(PileFillDirection.LEFT_TO_RIGHT);
+        NArea remoteArea = area(PileFillDirection.LEFT_TO_RIGHT);
+        localArea.maxQuality = -1;
+        remoteArea.maxQuality = 145;
+        JSONObject merged = AreaSnapshot.buildMergedJson(
+            1, "uuid", AreaSnapshot.of(localArea), AreaSnapshot.of(remoteArea),
+            EnumSet.noneOf(AreaFieldGroup.class), 2);
+        assertEquals(-1, merged.getInt(NArea.MAX_QUALITY_JSON));
+    }
+
     private NArea area(PileFillDirection direction) {
         NArea area = new NArea("zone");
         area.id = 7;
