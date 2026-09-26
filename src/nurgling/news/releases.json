@@ -163,17 +163,62 @@
     "2026-09-25-belt-coin-pouch",
     "2026-09-25-unknown-player-safety",
     "2026-09-25-wound-jar-names",
+    "2026-09-26-area-show-quality",
     "2026-09-26-big-brain-category",
     "2026-09-26-cattle-and-cave-angler",
     "2026-09-26-cheese-conveyor",
     "2026-09-26-forager-sightings",
+    "2026-09-26-master-miner-generic-stone-pickup",
+    "2026-09-26-master-miner-resume-mining",
+    "2026-09-26-master-miner-support-side-branch",
     "2026-09-26-news-button-alignment",
     "2026-09-26-quality-harvest-seed-chest",
     "2026-09-26-stacks",
     "2026-09-26-study-curiosities",
-    "2026-09-26-todo-lists"
+    "2026-09-26-todo-lists",
+    "2026-09-26-waterskin-water-zone"
   ],
   "releases": [
+    {
+      "id": "2.103.216",
+      "date": "2026-09-26",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Качество посадок и размещённых стопок показывается отдельно от названия зоны.",
+          "Сбор камней в Мастере добычи теперь подбирает и обычный камень.",
+          "Мастер добычи ставит каменную колонну сбоку от основного прохода, оставляя его свободным.",
+          "Бот наполнения бурдюков пробует другой источник в зоне воды, если первый не наполнил ёмкость.",
+          "После успешной установки подпорки Мастер добычи возвращает курсор копки."
+        ],
+        "en": [
+          "Planting and placed stack quality appears separately from the area name.",
+          "Master Miner’s stone collection now picks up generic stone too.",
+          "Master Miner places the Stone Column beside the main passage, keeping it clear.",
+          "The waterskin filling bot tries another source in the water zone when the first one does not fill a container.",
+          "Master Miner restores the mining cursor after a successful support placement."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Добавьте Show Quality в окне зон. После посадки или размещения стопки качество появится под названием зоны как Q145. Дважды щёлкните специализацию в списке выбранной зоны, чтобы сбросить значение.",
+          "Кнопка сбора камней теперь распознаёт обычный камень среди предметов на земле, а также продолжает собирать подходящие виды камня. Самоцветы, ракухи и другие посторонние предметы не добавляются в запас подпорок.",
+          "Кнопка сбора камней в окне Мастера добычи выбирает свободную боковую ячейку рядом с коридором, даже если боковой проход продолжается. Если такой ячейки нет, персонаж может безопасно выкопать одну ячейку для колонны. При опасных условиях установка прекращается.",
+          "При запуске бота наполнения бурдюков с выбранной или общей зоной воды он переключается, например, с бочки на колодец, если вода не набралась. Если ни один источник не сработал, бот сообщает об ошибке вместо бесконечного ожидания.",
+          "После сбора камней и успешной установки каменной колонны курсор снова переключается на копку, чтобы можно было сразу продолжить работу. При ошибке установки он не переключается."
+        ],
+        "en": [
+          "Add Show Quality in the Areas window. Planting or placing a stack shows its highest quality below the area name as Q145. Double-click the specialisation in the selected area's list to reset the value.",
+          "The stone collection button now recognizes generic stone on the ground while still collecting supported stone types. Gems, shells, and unrelated items are excluded from the support reserve.",
+          "The stone collection button in Master Miner uses an open side tile, even when that branch continues. If none is available, your character can safely mine one side tile for the Stone Column. Unsafe conditions stop placement.",
+          "When filling waterskins from a selected or global water zone, the bot can switch from a barrel to a well if the container stays empty. If every source fails, it reports an error instead of waiting forever.",
+          "After collecting stones and successfully placing the Stone Column, the cursor switches back to mining so you can continue right away. It stays unchanged if placement fails."
+        ]
+      }
+    },
     {
       "id": "2.103.215",
       "date": "2026-09-26",
@@ -1299,40 +1344,6 @@
           "In Craft Atlas, Craft keeps recipes the character knows and In stock keeps products recorded in storage. The normal craft window can open that recipe in the atlas.",
           "Floor tint is always drawn, slightly transparent. The map no longer has overlay toggles — you do not switch it off separately.",
           "Seedbag, Creel and purse no longer take sidebar rows. After the light macro you walk back to the starting spot."
-        ]
-      }
-    },
-    {
-      "id": "2.103.184",
-      "date": "2026-09-06",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "В атласе таблица любопытностей: LP, время, вес, сортировка и растягивание.",
-          "В помощнике квестов у строк TASKS виден прогресс кредо.",
-          "На складе кнопка Clear убирает позиции, которых уже нет в доступе."
-        ],
-        "en": [
-          "Craft Atlas lists curiosities with LP, time, weight, sorting and a resizable table.",
-          "Quest Helper shows credo progress on TASKS rows.",
-          "Storage Clear removes entries that are no longer available."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Откройте раздел Curiosities в атласе: колонки LP, реальное время, умственный вес и LP/час. Таблицу тянут за край, избранное и недавние фильтруются, есть справка поиска. Учитывается качество станка.",
-          "Откройте Quest Helper: у заданий категории TASKS рядом написан прогресс кредо и уровня, без лишних счётчиков групп.",
-          "В окне склада нажмите Clear — исчезнут недоступные предметы, счётчик покажет сколько снято. Боты при переходах через портал дожидаются сетки карты.",
-          "В настройках порогов качества колонка сдвинута так, что поля ввода и кнопки добавить/удалить остаются внутри списка при прокрутке."
-        ],
-        "en": [
-          "Open Curiosities in Craft Atlas for LP, real study time, mental weight and LP/hour. Drag the table edge to resize; filter favorites and recent, and read search help. Workstation quality is included.",
-          "Open Quest Helper: TASKS rows show credo and level progress without dummy group counts.",
-          "In the storage window press Clear to drop unavailable items; a count is shown. Bots wait for the map grid after portal travel.",
-          "In quality-threshold settings the column is shifted so inputs and add/delete stay inside the list while scrolling."
         ]
       }
     }
