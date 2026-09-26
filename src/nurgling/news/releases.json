@@ -165,20 +165,75 @@
     "2026-09-25-wound-jar-names",
     "2026-09-26-area-show-quality",
     "2026-09-26-big-brain-category",
+    "2026-09-26-butcher-return-from-storage",
     "2026-09-26-cattle-and-cave-angler",
     "2026-09-26-cheese-conveyor",
+    "2026-09-26-drying-frame-hide-loop",
     "2026-09-26-forager-sightings",
+    "2026-09-26-mammoth-spit-marker",
     "2026-09-26-master-miner-generic-stone-pickup",
     "2026-09-26-master-miner-resume-mining",
     "2026-09-26-master-miner-support-side-branch",
+    "2026-09-26-mining-markers-teleport",
     "2026-09-26-news-button-alignment",
     "2026-09-26-quality-harvest-seed-chest",
     "2026-09-26-stacks",
     "2026-09-26-study-curiosities",
     "2026-09-26-todo-lists",
-    "2026-09-26-waterskin-water-zone"
+    "2026-09-26-waterskin-water-zone",
+    "2026-09-27-cave-lantern-stacks",
+    "2026-09-27-gemstone-groups",
+    "2026-09-27-inspect-object-materials"
   ],
   "releases": [
+    {
+      "id": "2.103.217",
+      "date": "2026-09-26",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Разделка одной туши возвращает персонажа из зоны хранения к месту работы.",
+          "Бот для сушилок перестаёт носить по одной шкуре при свободном месте.",
+          "Плевок мамонта больше не отмечается как животное.",
+          "Телепортация больше не останавливает клиент при видимых отметках добычи.",
+          "Боты складывают Cave Lantern в стаки по четыре.",
+          "Во ВСПЕК появились группы драгоценных камней по виду и размеру.",
+          "Простой осмотр показывает материалы объекта, если они известны."
+        ],
+        "en": [
+          "Butchering a single carcass returns your character from storage to the work site.",
+          "The drying frame bot stops carrying one hide at a time when space remains.",
+          "Mammoth spit is no longer marked as an animal.",
+          "Teleporting no longer stops the client while mining markers are visible.",
+          "Bots stack Cave Lanterns in groups of four.",
+          "VSpec now groups gemstones by kind and size.",
+          "Simple inspect shows an object's materials when available."
+        ]
+      },
+      "details": {
+        "ru": [
+          "При запуске разделки через макроклавишу бот после раскладки мяса и других продуктов в доме выходит обратно к туше. После последней раскладки он также возвращается к месту разделки.",
+          "При раскладке сырых шкур бот заново оценивает свободное место на сушилках перед следующим набором шкур. Это позволяет брать полную подходящую партию, даже если в предыдущем заходе рамы были заполнены лишь частично.",
+          "Макрос «Маркеры животных» игнорирует плевок мамонта даже при широкой маске поиска мамонта. Сам мамонт по-прежнему отмечается.",
+          "Если на карте видны числовые отметки добычи, можно телепортироваться без зависания клиента при временном исчезновении персонажа с карты.",
+          "При сборе и перекладывании Cave Lantern боты учитывают вместимость стака: четыре предмета в одной ячейке инвентаря.",
+          "При выборе предметов для ботов доступны общая группа «Gemstones», группы отдельных видов и размеров со всеми огранками. Жемчуг входит в общую группу. В списке камни показываются с общей иконкой, а точный вид указан в названии.",
+          "Наведите лупу на постройку или другой объект: под его названием появятся материалы, использованные для его внешнего вида."
+        ],
+        "en": [
+          "When started with the macro key, the butcher returns to the carcass after storing meat and other products inside a house. It also returns to the butchering spot after the final storage trip.",
+          "When placing fresh hides, the bot reassesses drying frame space before fetching the next batch. It can take a full fitting batch when the previous trip filled the frames only partly.",
+          "The Animal Markers macro ignores mammoth spit even with a broad mammoth search pattern. Mammoths themselves are still marked.",
+          "When numbered mining markers are visible on the map, teleporting continues normally while your character briefly disappears from the map.",
+          "When collecting and moving Cave Lanterns, bots account for four items per inventory stack.",
+          "When selecting items for bots, use Gemstones for all gems or groups by kind and size across every cut. Pearls appear in the overall group. The list shows a common gem icon and identifies each variant by name.",
+          "Hover the magnifying glass over a building or other object to see its appearance materials below its name."
+        ]
+      }
+    },
     {
       "id": "2.103.216",
       "date": "2026-09-26",
@@ -1310,40 +1365,6 @@
           "In options open Bug / Suggestion. Describe a bug or idea, snip the screen, optionally add Discord and send. The draft stays until you close the window.",
           "Copy a marker code and share it. On paste the client offers to add the point and route there if that grid is already on your map.",
           "When a quest wants a tree, Quest Helper marks matching biomes so you are not guessing the species across the whole map."
-        ]
-      }
-    },
-    {
-      "id": "2.103.185",
-      "date": "2026-09-06",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "В окне боя приёмы разложены по вкладкам, школу можно переименовать.",
-          "В атласе фильтры «Craft» и «In stock»; текущий рецепт открывается из окна крафта.",
-          "Подсветка пола всегда включена полупрозрачной; переключателей на карте больше нет."
-        ],
-        "en": [
-          "The fight window splits moves into tabs, and a school can be renamed.",
-          "Craft Atlas filters Craft and In stock; the current recipe opens from the craft window.",
-          "The floor overlay stays on at a translucent alpha; map toggles are gone."
-        ]
-      },
-      "details": {
-        "ru": [
-          "В окне боя переключайте все / атаки / защиты / манёвры / движения. Неиспользованный слот школы не переименовывается; у рабочей школы есть команда Rename.",
-          "В атласе кнопки Craft — известные персонажу рецепты, In stock — то, что есть на складе. Из обычного окна крафта можно открыть этот рецепт в атласе.",
-          "Заливка пола рисуется всегда, слегка прозрачная. Кнопок включения на карте нет — отдельно её гасить не нужно.",
-          "Лишние сумки больше не занимают строки сбоку инвентаря. Макрос света после действия возвращает персонажа туда, откуда вы стартовали."
-        ],
-        "en": [
-          "In the fight window switch All, Attacks, Defences, Maneuvers and Moves. An unused school slot cannot be renamed; a used school has Rename.",
-          "In Craft Atlas, Craft keeps recipes the character knows and In stock keeps products recorded in storage. The normal craft window can open that recipe in the atlas.",
-          "Floor tint is always drawn, slightly transparent. The map no longer has overlay toggles — you do not switch it off separately.",
-          "Seedbag, Creel and purse no longer take sidebar rows. After the light macro you walk back to the starting spot."
         ]
       }
     }
