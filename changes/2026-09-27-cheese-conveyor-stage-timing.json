@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-cheese-conveyor-stage-timing",
+  "priority": 6,
+  "summary": {
+    "ru": "В заказах сырного конвейера видны возраст подносов и примерное время до готовности.",
+    "en": "Cheese Conveyor orders now show tray age and approximate time until ready."
+  },
+  "detail": {
+    "ru": "Откройте настройки сырного конвейера и разверните заказ: для каждого этапа показано, сколько времени прошло с размещения старейших подносов и сколько им примерно осталось. Для старых заказов без времени размещения указано, что оно неизвестно. Список заказов также сохраняет правильную ширину после обновления.",
+    "en": "Open Cheese Conveyor settings and expand an order to see when its oldest trays entered each stage and roughly how long they have left. Older orders without placement times show an unknown age. The order list also keeps its proper width when refreshed."
+  }
+}
