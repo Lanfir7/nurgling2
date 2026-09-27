@@ -181,11 +181,71 @@
     "2026-09-26-study-curiosities",
     "2026-09-26-todo-lists",
     "2026-09-26-waterskin-water-zone",
+    "2026-09-27-animated-scene-fps",
     "2026-09-27-cave-lantern-stacks",
+    "2026-09-27-cheese-conveyor-stage-timing",
+    "2026-09-27-clothing-tooltip-summary",
     "2026-09-27-gemstone-groups",
-    "2026-09-27-inspect-object-materials"
+    "2026-09-27-gemstone-zone-sorting",
+    "2026-09-27-inspect-object-materials",
+    "2026-09-27-item-gain-notices",
+    "2026-09-27-location-alert-loading",
+    "2026-09-27-mining-mark-persistence",
+    "2026-09-27-swimming-auto-off"
   ],
   "releases": [
+    {
+      "id": "2.103.218",
+      "date": "2026-09-27",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Уменьшены сильные просадки FPS в сценах с большим количеством анимированных объектов.",
+          "Боты больше не складывают в зону камни другого размера или огранки.",
+          "Убраны ложные звуковые оповещения при смене локации.",
+          "Метки Mining Mastery быстрее сохраняются и сохраняют свои иконки.",
+          "Подсказка одежды показывает общие бонусы, а по Shift — подробности гилдингов.",
+          "Добытые предметы появляются под компасом с иконкой и количеством.",
+          "Плавание может автоматически выключаться через пять минут.",
+          "В заказах сырного конвейера видны возраст подносов и примерное время до готовности."
+        ],
+        "en": [
+          "Reduced severe FPS drops in scenes with many animated objects.",
+          "Bots no longer put gems of a different size or cut into a storage zone.",
+          "Reduced false sound alerts when changing locations.",
+          "Mining Mastery markers save sooner and retain their icons.",
+          "Clothing tooltips show combined bonuses, with gilding details on Shift.",
+          "Newly acquired items appear below the compass with an icon and quantity.",
+          "Swimming can turn off automatically after five minutes.",
+          "Cheese Conveyor orders now show tray age and approximate time until ready."
+        ]
+      },
+      "details": {
+        "ru": [
+          "В насыщенных анимированными объектами местах клиент тратит меньше времени на подготовку кадра. Улучшение действует автоматически при обычной игре.",
+          "При раскладывании камней по зонам бот переносит только выбранный в каталоге вариант камня. Другие размеры и огранки остаются в инвентаре для своих зон.",
+          "После телепортации или входа в дом и пещеру оповещения значков ждут загрузки друзей и данных о привате. Дружественные игроки и животные на привате не вызывают звук.",
+          "Метки, созданные Mining Mastery, записываются на диск сразу после обработки очереди. Иконка, загруженная позже, привязывается к той же метке и остаётся после перезапуска клиента.",
+          "Наведите на одежду, чтобы увидеть сумму её бонусов и бонусов вставленных гилдингов по убыванию. Удерживайте Shift, чтобы увидеть каждый гилдинг отдельно вместе с его качеством.",
+          "При получении предметов появляется короткое плавное уведомление под компасом; одинаковая добыча объединяется в одну строку. В настройках «Удобство» можно изменить положение и непрозрачность фона, отключить показ или открыть пример.",
+          "После включения плавания клиент выключит его через пять минут. Функцию можно включить или выключить в настройках качества жизни рядом с включением плавания при входе.",
+          "Откройте настройки сырного конвейера и разверните заказ: для каждого этапа показано, сколько времени прошло с размещения старейших подносов и сколько им примерно осталось. Для старых заказов без времени размещения указано, что оно неизвестно. Список заказов также сохраняет правильную ширину после обновления."
+        ],
+        "en": [
+          "In areas with many animated objects, the client spends less time preparing each frame. The improvement applies automatically during normal play.",
+          "When sorting gems into storage zones, the bot moves only the variant selected in the catalog. Other sizes and cuts remain in the inventory for their own zones.",
+          "After teleporting or entering a house or cave, icon alerts wait for kin and claim data to load. Friendly players and animals on claimed land do not trigger a sound.",
+          "Mining Mastery markers are written to disk as soon as their queue is processed. An icon loaded later stays attached to the same marker after restarting the client.",
+          "Hover over clothing to see its own bonuses and inserted gilding bonuses combined in descending order. Hold Shift to see each gilding separately with its quality.",
+          "A brief animated notice appears below the compass when you gain items, combining repeated gains into one row. Quality of Life settings let you adjust its position and background opacity, turn it off, or preview it.",
+          "The client turns swimming off five minutes after it is enabled. You can enable or disable this in Quality of Life settings beside the option to swim on login.",
+          "Open Cheese Conveyor settings and expand an order to see when its oldest trays entered each stage and roughly how long they have left. Older orders without placement times show an unknown age. The order list also keeps its proper width when refreshed."
+        ]
+      }
+    },
     {
       "id": "2.103.217",
       "date": "2026-09-26",
@@ -1331,40 +1391,6 @@
         "en": [
           "On the Hotkeys page pick a preset, create your own, copy a code or paste one. Single-item held use and load-all fuel gestures work as before.",
           "In world settings enable object content labels. Icon signs and parchments have their own toggles; sliders set font size, height and background."
-        ]
-      }
-    },
-    {
-      "id": "2.103.186",
-      "date": "2026-09-08",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "В настройках страница Hotkeys: категории, поиск и подсветка конфликтов.",
-          "В опциях «Bug / Suggestion»: форма, вырезка экрана и необязательный Discord.",
-          "Метку карты можно скопировать кодом, вставить из буфера и пойти к ней."
-        ],
-        "en": [
-          "Settings gained a Hotkeys page with categories, search and conflict highlighting.",
-          "Options has Bug / Suggestion: a form, screen snip and optional Discord contact.",
-          "A map marker can be copied as a code, pasted from the clipboard and travelled to."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Откройте Настройки → Hotkeys. Клавиши, кнопки мыши и жесты сгруппированы по окнам, миру, инвентарю, карте, крафту и бою. Можно искать, смотреть только конфликты и сбрасывать категорию.",
-          "В опциях откройте Bug / Suggestion. Опишите ошибку или идею, вырежьте фрагмент экрана, при желании укажите Discord и отправьте. Черновик не теряется, пока вы не закроете окно.",
-          "У метки скопируйте код и передайте другому. При вставке клиент предложит добавить точку и построить путь, если сетка уже есть на вашей карте.",
-          "Когда в квесте нужно дерево, Quest Helper отмечает подходящие биомы, чтобы не искать породу наугад по всей карте."
-        ],
-        "en": [
-          "Open Settings → Hotkeys. Keys, mouse buttons and gestures are grouped by windows, world, inventory, map, crafting and combat. Search, filter conflicts only, or reset a category.",
-          "In options open Bug / Suggestion. Describe a bug or idea, snip the screen, optionally add Discord and send. The draft stays until you close the window.",
-          "Copy a marker code and share it. On paste the client offers to add the point and route there if that grid is already on your map.",
-          "When a quest wants a tree, Quest Helper marks matching biomes so you are not guessing the species across the whole map."
         ]
       }
     }
