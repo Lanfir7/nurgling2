@@ -123,6 +123,12 @@ class WikiReferenceCatalogTest {
     void bundledSnapshotContainsFoodGildingAndIntermediateRecipes() {
         List<CraftAtlasEntry> entries = WikiReferenceCatalog.loadBundled();
         assertTrue(entries.size() >= 700);
+        assertSame(entries, WikiReferenceCatalog.loadBundled());
+        assertThrows(UnsupportedOperationException.class, entries::clear);
+        CraftAtlasEntry sharedPie = find(entries, "Apple Pie");
+        assertThrows(UnsupportedOperationException.class, sharedPie.inputs::clear);
+        assertThrows(UnsupportedOperationException.class, sharedPie.inputs.get(0).options::clear);
+        assertThrows(UnsupportedOperationException.class, sharedPie.requirements::clear);
         assertTrue(has(entries, "Taproot Lacing", "gildings"));
         assertTrue(has(entries, "Apple Pie", "foods"));
         assertTrue(has(entries, "Unbaked Apple Pie", "foods"));

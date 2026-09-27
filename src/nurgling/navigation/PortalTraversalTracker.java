@@ -10,6 +10,7 @@ import nurgling.tools.HomeInteriorRegistry;
 import nurgling.tools.NAlias;
 
 import java.util.*;
+import java.util.function.LongSupplier;
 
 import static nurgling.navigation.ChunkNavConfig.*;
 
@@ -27,7 +28,8 @@ public class PortalTraversalTracker {
     private final ChunkNavRecorder recorder;
     private final ChunkNavManager manager;
     private final HomePortalLearningService homeLearning;
-    private HomePortalLearningService.Pending pendingHomeLearning;
+    private final LongSupplier clock;
+    private PendingTransition pendingTransition;
 
     // State tracking
     private long lastGridId = -1;
@@ -39,14 +41,54 @@ public class PortalTraversalTracker {
     private long lastProcessedTime = 0;
     private static final long DUPLICATE_PREVENTION_MS = 2000; // Ignore same transition within 2 seconds
 
-    // Cached lastActions gob - captured before grid change to preserve the clicked portal info
-    // This works for both manual and automated navigation since the game tracks all clicks
-    private Gob cachedLastActionsGob = null;
-    private Coord cachedLastActionsGobLocalCoord = null;
-    private long cachedLastActionsGobGridId = -1;  // Grid ID of the cached portal (for boundary fix)
+    // Snapshot the clicked portal while its source grid is still loaded.
+    private ClickedPortal clickedPortal;
     private long lastProcessedPortalGobId = -1;  // Gob ID of last processed portal (prevents re-capture)
 
     private static final long CHECK_INTERVAL_MS = 100;
+    private static final long EXIT_SETTLE_MS = 100;
+
+    static final class ClickedPortal {
+        final long gobId;
+        final String name;
+        final String hash;
+        final Coord localCoord;
+        final long gridId;
+        final HomePortalLearningService.Pending homeLearning;
+
+        ClickedPortal(long gobId, String name, String hash, Coord localCoord, long gridId,
+                HomePortalLearningService.Pending homeLearning) {
+            this.gobId = gobId;
+            this.name = name;
+            this.hash = hash;
+            this.localCoord = localCoord == null ? null : new Coord(localCoord.x, localCoord.y);
+            this.gridId = gridId;
+            this.homeLearning = homeLearning;
+        }
+    }
+
+    static final class PendingTransition {
+        final long fromGridId;
+        final long toGridId;
+        final long readyAt;
+        final String expectedExitName;
+        final ClickedPortal entrance;
+        final Coord2d landingPosition;
+        final Coord landingLocalCoord;
+
+        PendingTransition(long fromGridId, long toGridId, long readyAt, String expectedExitName,
+                ClickedPortal entrance, Coord2d landingPosition, Coord landingLocalCoord) {
+            this.fromGridId = fromGridId;
+            this.toGridId = toGridId;
+            this.readyAt = readyAt;
+            this.expectedExitName = expectedExitName;
+            this.entrance = entrance;
+            this.landingPosition = landingPosition == null ? null
+                    : new Coord2d(landingPosition.x, landingPosition.y);
+            this.landingLocalCoord = landingLocalCoord == null ? null
+                    : new Coord(landingLocalCoord.x, landingLocalCoord.y);
+        }
+    }
 
     // Track combined overlay/home-learning state to detect false -> true transitions
     private boolean wasTrackingEnabled = false;
@@ -109,10 +151,16 @@ public class PortalTraversalTracker {
 
     public PortalTraversalTracker(ChunkNavGraph graph, ChunkNavRecorder recorder, ChunkNavManager manager,
             HomePortalLearningService homeLearning) {
+        this(graph, recorder, manager, homeLearning, System::currentTimeMillis);
+    }
+
+    PortalTraversalTracker(ChunkNavGraph graph, ChunkNavRecorder recorder, ChunkNavManager manager,
+            HomePortalLearningService homeLearning, LongSupplier clock) {
         this.graph = graph;
         this.recorder = recorder;
         this.manager = manager;
         this.homeLearning = homeLearning != null ? homeLearning : HomePortalLearningService.disabled();
+        this.clock = clock;
     }
 
     /**
@@ -133,25 +181,24 @@ public class PortalTraversalTracker {
             // Set lastGridId to current grid so we start fresh from current state
             lastGridId = graph.getPlayerChunkId();
         }
+        boolean trackingWasEnabled = wasTrackingEnabled;
         wasTrackingEnabled = trackingEnabled;
 
         if (!trackingEnabled) {
+            if (trackingWasEnabled)
+                reset();
             return;
         }
 
-        long now = System.currentTimeMillis();
+        long now = clock.getAsLong();
         if (now - lastCheckTime < CHECK_INTERVAL_MS) {
             return;
         }
         lastCheckTime = now;
-        try {
-            doCheck();
-        } catch (InterruptedException e) {
-
-        }
+        doCheck(now);
     }
 
-    private void doCheck() throws InterruptedException {
+    private void doCheck(long now) {
         Gob player = NUtils.player();
         if (player == null) return;
 
@@ -160,11 +207,15 @@ public class PortalTraversalTracker {
 
         // Check for grid change
         if (lastGridId != -1 && currentGridId != lastGridId) {
-            onGridChanged(lastGridId, currentGridId, player);
+            onGridChanged(lastGridId, currentGridId, player, now);
         }
 
         // Update tracking state AFTER handling grid change
         lastGridId = currentGridId;
+
+        PendingTransition ready = takeDueTransition(currentGridId);
+        if (ready != null)
+            completeTransition(ready);
 
         // Capture lastActions gob BEFORE grid change (like routes system does)
         // This preserves the clicked portal info even after the grid changes
@@ -174,7 +225,7 @@ public class PortalTraversalTracker {
         if (lastActions != null && lastActions.gob != null && lastActions.gob.ngob != null) {
             String gobName = lastActions.gob.ngob.name;
             // Only capture if it's a portal AND it's not the same one we already processed
-            if (isPortalGob(gobName) && lastActions.gob.id != lastProcessedPortalGobId) {
+            if (isPortalGob(gobName) && !isProcessedPortal(lastActions.gob.id)) {
                 Coord portalCoord = getPortalLocalCoord(lastActions.gob, player);
                 long portalGridId = -1;
 
@@ -224,9 +275,10 @@ public class PortalTraversalTracker {
     /**
      * Called when player's grid ID changes.
      */
-    private void onGridChanged(long fromGridId, long toGridId, Gob player) throws InterruptedException {
+    private void onGridChanged(long fromGridId, long toGridId, Gob player, long now) {
+        // A later grid boundary invalidates the earlier landing, even if it is a duplicate.
+        pendingTransition = null;
         // Check for duplicate grid transition (same transition firing multiple times)
-        long now = System.currentTimeMillis();
         if (fromGridId == lastProcessedFromGridId && toGridId == lastProcessedToGridId &&
             (now - lastProcessedTime) < DUPLICATE_PREVENTION_MS) {
             return;
@@ -238,7 +290,7 @@ public class PortalTraversalTracker {
             lastProcessedFromGridId = fromGridId;
             lastProcessedToGridId = toGridId;
             lastProcessedTime = now;
-            pendingHomeLearning = null;
+            clickedPortal = null;
             return;
         }
 
@@ -247,40 +299,51 @@ public class PortalTraversalTracker {
         lastProcessedToGridId = toGridId;
         lastProcessedTime = now;
 
-        // Brief wait for gobs to load after grid change
-        // This blocks the main thread but is necessary because:
-        // 1. We need exit portal gobs to be loaded to find them
-        // 2. We can't retry on next tick (duplicate prevention would skip)
-        // 3. 100ms is short enough to not noticeably affect gameplay
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-        }
+        // Only known portal pairs need a settle window. Ordinary grid walking returns now.
+        beginTransition(fromGridId, toGridId, player.rc, null);
+    }
 
-        // Portal detection uses cachedLastActionsGob (captured from getLastActions() before grid change)
-        // This works for both manual and automated navigation since the game tracks all clicks
-        // If we know what portal was clicked, search for the SPECIFIC expected exit using getDoorPair()
-        // This prevents phantom portals from proximity matching the wrong portal type
+    boolean beginTransition(long fromGridId, long toGridId, Coord2d landingPosition,
+            Coord landingLocalCoord) {
+        pendingTransition = null;
+        ClickedPortal entrance = clickedPortal;
+        clickedPortal = null;
+        if (entrance == null)
+            return false;
+        String expectedExitName = GateDetector.getDoorPair(entrance.name);
+        if (expectedExitName == null)
+            return false;
+        pendingTransition = new PendingTransition(fromGridId, toGridId,
+                clock.getAsLong() + EXIT_SETTLE_MS, expectedExitName, entrance,
+                landingPosition, landingLocalCoord);
+        return true;
+    }
+
+    PendingTransition takeDueTransition(long currentGridId) {
+        PendingTransition transition = pendingTransition;
+        if (transition == null)
+            return null;
+        if (currentGridId != transition.toGridId) {
+            pendingTransition = null;
+            return null;
+        }
+        if (clock.getAsLong() < transition.readyAt)
+            return null;
+        pendingTransition = null;
+        return transition;
+    }
+
+    private void completeTransition(PendingTransition transition) {
+        // The entrance and landing position are frozen before any later click or movement.
         Gob exitPortal;
-        String expectedExitName = null;
-
-        // Determine the expected exit from what we clicked
-        if (cachedLastActionsGob != null && cachedLastActionsGob.ngob != null) {
-            String clickedName = cachedLastActionsGob.ngob.name;
-            expectedExitName = GateDetector.getDoorPair(clickedName);
-        }
-
-        // If we don't know what exit to look for, we didn't click a known portal - don't record anything
-        if (expectedExitName == null) {
-            pendingHomeLearning = null;
+        try {
+            exitPortal = Finder.findGob(new NAlias(transition.expectedExitName));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return;
         }
 
-        // Search for the specific exit portal we expect
-        exitPortal = Finder.findGob(new NAlias(expectedExitName));
-
         if (exitPortal == null || exitPortal.ngob == null) {
-            pendingHomeLearning = null;
             return;
         }
 
@@ -288,19 +351,20 @@ public class PortalTraversalTracker {
         String exitHash = getPortalHash(exitPortal);
         String entranceName = GateDetector.getDoorPair(exitName);
 
-        // Use PLAYER's current position - this is where we land after exiting, the accessible spot
-        Coord exitLocalCoord = getGobLocalCoord(player);
+        // Resolve the landing position captured at the grid change, not where the player walks later.
+        Coord exitLocalCoord = transition.landingLocalCoord != null
+                ? transition.landingLocalCoord : getLocalCoord(transition.landingPosition);
 
         // Update the destination chunk's layer based on the exit portal
-        updateChunkLayer(toGridId, exitName);
+        updateChunkLayer(transition.toGridId, exitName);
 
         // Update instanceId context for subsequent chunk recordings
-        updateInstanceIdAfterTraversal(toGridId, exitName);
-        confirmHomeLearning(toGridId, exitName);
+        updateInstanceIdAfterTraversal(transition.toGridId, exitName);
+        confirmHomeLearning(transition.entrance.homeLearning, transition.toGridId, exitName);
 
         // Record: entrance portal on its actual grid connects to toGrid
         // We determine entranceGridId first so we can use it for the exit portal's back-connection
-        long entranceGridId = fromGridId;  // Default to player's grid, but prefer portal's actual grid
+        long entranceGridId = transition.fromGridId;  // Default to player's grid, but prefer portal's actual grid
 
         if (entranceName != null) {
             Coord entranceCoord = null;
@@ -309,11 +373,10 @@ public class PortalTraversalTracker {
             // suffix), so prefer the concrete clicked gob name when we can confirm it.
             String entranceGobName = entranceName;
 
-            // Use cached lastActions gob (captured BEFORE grid change, like routes system)
-            // This is the most reliable way because we captured it while the grid was still loaded
-            if (cachedLastActionsGob != null && cachedLastActionsGob.ngob != null &&
-                cachedLastActionsGobLocalCoord != null) {
-                String cachedName = cachedLastActionsGob.ngob.name;
+            // Use the immutable entrance snapshot captured while its grid was loaded.
+            ClickedPortal clicked = transition.entrance;
+            if (clicked.localCoord != null) {
+                String cachedName = clicked.name;
                 // Verify this is the entrance portal we're looking for
                 // Use strict matching: must be exact match OR cachedName must be the building (entranceName)
                 // NOT the reverse (don't match stonemansion-door when looking for stonemansion)
@@ -321,41 +384,37 @@ public class PortalTraversalTracker {
                         (cachedName.equals(entranceName) ||
                                 cachedName.endsWith("/" + getSimpleName(entranceName)) ||
                                 GateDetector.isSameDoor(cachedName, entranceName))) {
-                    entranceCoord = cachedLastActionsGobLocalCoord;
-                    entranceHash = getPortalHash(cachedLastActionsGob);
+                    entranceCoord = clicked.localCoord;
+                    entranceHash = clicked.hash;
                     entranceGobName = cachedName;
                     // Use the portal's actual grid ID (fixes boundary bug)
-                    if (cachedLastActionsGobGridId != -1) {
-                        entranceGridId = cachedLastActionsGobGridId;
+                    if (clicked.gridId != -1) {
+                        entranceGridId = clicked.gridId;
                     }
                 }
             }
 
             if (entranceCoord != null && entranceHash != null) {
-                recordPortalConnection(entranceHash, entranceGobName, entranceGridId, toGridId, entranceCoord);
+                recordPortalConnection(entranceHash, entranceGobName, entranceGridId,
+                        transition.toGridId, entranceCoord);
 
                 // Update entry portal with where we appear in destination
                 updatePortalExitCoord(entranceHash, entranceGridId, exitLocalCoord);
 
                 // Update exit portal with where we came from (enables reverse navigation)
-                updatePortalExitCoord(exitHash, toGridId, entranceCoord);
+                updatePortalExitCoord(exitHash, transition.toGridId, entranceCoord);
             }
         }
 
         // Record: exit portal on toGrid connects back to entrance portal's grid
         // This uses entranceGridId which was determined from the portal's actual location (fixes boundary bug)
-        recordPortalConnection(exitHash, exitName, toGridId, entranceGridId, exitLocalCoord);
-
-        // Mark the cached portal as processed so tick() won't re-capture it
-        if (cachedLastActionsGob != null) {
-            lastProcessedPortalGobId = cachedLastActionsGob.id;
+        recordPortalConnection(exitHash, exitName, transition.toGridId, entranceGridId, exitLocalCoord);
+        if (transition.entrance.gobId != -1) {
+            lastProcessedPortalGobId = transition.entrance.gobId;
+            // A stale LastActions click may have been captured again during the settle window.
+            if (clickedPortal != null && clickedPortal.gobId == lastProcessedPortalGobId)
+                clickedPortal = null;
         }
-
-        // Clear tracking state after use
-        pendingHomeLearning = null;
-        cachedLastActionsGob = null;
-        cachedLastActionsGobLocalCoord = null;
-        cachedLastActionsGobGridId = -1;
     }
 
     /**
@@ -427,9 +486,15 @@ public class PortalTraversalTracker {
      * Get the local tile coordinate of a gob within its grid.
      */
     private Coord getGobLocalCoord(Gob gob) {
+        return gob == null ? null : getLocalCoord(gob.rc);
+    }
+
+    private Coord getLocalCoord(Coord2d worldPosition) {
+        if (worldPosition == null)
+            return null;
         try {
             MCache mcache = NUtils.getGameUI().map.glob.map;
-            Coord tileCoord = gob.rc.floor(MCache.tilesz);
+            Coord tileCoord = worldPosition.floor(MCache.tilesz);
             MCache.Grid grid = mcache.getgridt(tileCoord);
             if (grid != null) {
                 return tileCoord.sub(grid.ul);
@@ -832,46 +897,51 @@ public class PortalTraversalTracker {
         lastProcessedFromGridId = -1;
         lastProcessedToGridId = -1;
         lastProcessedTime = 0;
-        cachedLastActionsGob = null;
-        cachedLastActionsGobLocalCoord = null;
-        cachedLastActionsGobGridId = -1;
+        clickedPortal = null;
+        pendingTransition = null;
         lastProcessedPortalGobId = -1;
-        pendingHomeLearning = null;
+    }
+
+    boolean isProcessedPortal(long gobId) {
+        return gobId == lastProcessedPortalGobId;
     }
 
     HomePortalLearningService.Pending bindLastActionPortal(Gob gob, Coord local, long gridId,
             String resource) {
-        cachedLastActionsGob = gob;
-        cachedLastActionsGobLocalCoord = local;
-        cachedLastActionsGobGridId = gridId;
-        if (local == null || gridId == -1)
-            pendingHomeLearning = null;
-        else
-            pendingHomeLearning = captureHomeLearning(resource);
-        return pendingHomeLearning;
+        HomePortalLearningService.Pending learning = local == null || gridId == -1
+                ? null : captureHomeLearning(gridId, local, resource);
+        rememberClickedPortal(gob == null ? -1 : gob.id, resource,
+                gob == null ? null : getPortalHash(gob), local, gridId, learning);
+        return learning;
     }
 
-    private HomePortalLearningService.Pending captureHomeLearning(String portalResource) {
+    void rememberClickedPortal(long gobId, String resource, String hash, Coord local,
+            long gridId, HomePortalLearningService.Pending learning) {
+        clickedPortal = new ClickedPortal(gobId, resource, hash, local, gridId, learning);
+    }
+
+    private HomePortalLearningService.Pending captureHomeLearning(long gridId, Coord local,
+            String portalResource) {
         long instanceId = manager == null ? ChunkNavManager.SURFACE_INSTANCE : manager.getCurrentInstanceId();
-        return homeLearning.capture(cachedLastActionsGobGridId, cachedLastActionsGobLocalCoord, portalResource,
-                instanceId, layerOf(cachedLastActionsGobGridId));
+        return homeLearning.capture(gridId, local, portalResource, instanceId, layerOf(gridId));
     }
 
-    private void confirmHomeLearning(long toGridId, String exitName) {
-        if (pendingHomeLearning == null || pendingHomeLearning.portalCoord == null
-                || pendingHomeLearning.portalResource == null)
+    private void confirmHomeLearning(HomePortalLearningService.Pending learning,
+            long toGridId, String exitName) {
+        if (learning == null || learning.portalCoord == null
+                || learning.portalResource == null)
             return;
-        String fromLayer = pendingHomeLearning.sourceLayer;
+        String fromLayer = learning.sourceLayer;
         String toLayer = determineLayerFromExitPortal(exitName);
         if (toLayer == null)
             toLayer = "outside";
-        ChunkNavData fromChunk = graph == null ? null : graph.getChunk(pendingHomeLearning.sourceGridId);
+        ChunkNavData fromChunk = graph == null ? null : graph.getChunk(learning.sourceGridId);
         ChunkNavData toChunk = graph == null ? null : graph.getChunk(toGridId);
         if (fromChunk != null && fromChunk.layer != null && !fromChunk.layer.isEmpty())
             fromLayer = fromChunk.layer;
         if (toChunk != null && toChunk.layer != null && !toChunk.layer.isEmpty())
             toLayer = toChunk.layer;
-        long fromInstance = pendingHomeLearning.sourceInstanceId;
+        long fromInstance = learning.sourceInstanceId;
         long toInstance = manager == null ? 0L : manager.getCurrentInstanceId();
         if (toChunk != null && ChunkNavManager.isInteriorInstanceId(toChunk.instanceId))
             toInstance = toChunk.instanceId;
@@ -880,15 +950,15 @@ public class PortalTraversalTracker {
                 && toGridId != -1L)
             toInstance = toGridId;
         HomeInteriorRegistry.PortalIdentity root = new HomeInteriorRegistry.PortalIdentity(
-                pendingHomeLearning.sourceGridId,
-                pendingHomeLearning.portalCoord.x,
-                pendingHomeLearning.portalCoord.y,
-                pendingHomeLearning.portalResource);
+                learning.sourceGridId,
+                learning.portalCoord.x,
+                learning.portalCoord.y,
+                learning.portalResource);
         HomePortalInheritance.Traversal traversal = new HomePortalInheritance.Traversal(
-                pendingHomeLearning.sourceGridId, toGridId, fromInstance, toInstance,
-                fromLayer, toLayer, ChunkPortal.classifyPortal(pendingHomeLearning.portalResource),
+                learning.sourceGridId, toGridId, fromInstance, toInstance,
+                fromLayer, toLayer, ChunkPortal.classifyPortal(learning.portalResource),
                 root, exitName, true, false, System.currentTimeMillis());
-        homeLearning.confirm(pendingHomeLearning, traversal);
+        homeLearning.confirm(learning, traversal);
     }
 
     private String layerOf(long gridId) {

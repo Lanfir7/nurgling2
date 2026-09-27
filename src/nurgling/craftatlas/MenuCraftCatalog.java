@@ -73,14 +73,51 @@ public final class MenuCraftCatalog {
     /** Bundled station keys already loaded with this catalog. Does not rebuild or show Atlas. */
     public Set<String> stationKeys() { return stationKeys; }
 
-    public CraftAtlasSnapshot rebuild() {
-        List<PageRecord> pages = new ArrayList<>();
-        if(menu != null) for(MenuGrid.Pagina page : menu.recipeSnapshot()) {
-            try { pages.add(readPage(page)); }
-            catch(Loading ignored) { }
+    public static final class RebuildResult {
+        public final CraftAtlasSnapshot snapshot;
+        public final boolean incomplete;
+
+        private RebuildResult(CraftAtlasSnapshot snapshot, boolean incomplete) {
+            this.snapshot = snapshot;
+            this.incomplete = incomplete;
         }
-        return fromRecords(menu == null ? 0 : menu.pagseq, pages,
-                store == null ? Collections.<String, CraftAtlasObservation>emptyMap() : store.all(), references);
+    }
+
+    public CraftAtlasSnapshot rebuild() {
+        return rebuildWithStatus().snapshot;
+    }
+
+    public RebuildResult rebuildWithStatus() {
+        List<PageRecord> pages = Collections.emptyList();
+        boolean incomplete = false;
+        if(menu != null) {
+            MenuGrid.RecipeSnapshot recipes = menu.recipeSnapshotWithStatus();
+            PageReadResult read = readPages(recipes.pages);
+            pages = read.pages;
+            incomplete = recipes.incomplete || read.incomplete;
+        }
+        return new RebuildResult(fromRecords(menu == null ? 0 : menu.pagseq, pages,
+                store == null ? Collections.<String, CraftAtlasObservation>emptyMap() : store.all(), references), incomplete);
+    }
+
+    static final class PageReadResult {
+        final List<PageRecord> pages;
+        final boolean incomplete;
+
+        private PageReadResult(List<PageRecord> pages, boolean incomplete) {
+            this.pages = pages;
+            this.incomplete = incomplete;
+        }
+    }
+
+    static PageReadResult readPages(List<MenuGrid.Pagina> recipes) {
+        List<PageRecord> pages = new ArrayList<>();
+        boolean incomplete = false;
+        for(MenuGrid.Pagina page : recipes) {
+            try { pages.add(readPage(page)); }
+            catch(Loading ignored) { incomplete = true; }
+        }
+        return new PageReadResult(pages, incomplete);
     }
 
     public static CraftAtlasSnapshot fromRecords(long revision, List<PageRecord> pages,

@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
 import java.util.function.UnaryOperator;
 
 public final class HomePortalLearningService {
@@ -77,7 +78,7 @@ public final class HomePortalLearningService {
     private final Supplier<String> genus;
     private final RegistryAccess store;
     private final SourceContextSupplier contexts;
-    private final Supplier<Collection<HomeTerritories.Entry>> savedHomes;
+    private final BooleanSupplier hasSavedHomes;
 
     public static HomePortalLearningService disabled() {
         return new HomePortalLearningService(true,
@@ -95,31 +96,30 @@ public final class HomePortalLearningService {
                         return HomePortalInheritance.SourceContext.notHome();
                     }
                 },
-                new Supplier<Collection<HomeTerritories.Entry>>() {
-                    @Override
-                    public Collection<HomeTerritories.Entry> get() {
-                        return Collections.emptyList();
-                    }
-                });
+                () -> false);
     }
 
     public HomePortalLearningService(final ChunkNavManager manager) {
-        this(false, genusOf(manager), CONFIG_STORE, liveContext(manager), homesOf(manager));
+        this(false, genusOf(manager), CONFIG_STORE, liveContext(manager),
+                () -> HomeTerritories.hasSavedHomeForWorld(
+                        NConfig.get(NConfig.Key.homeTerritories),
+                        manager == null ? null : manager.getCurrentGenus()));
     }
 
     public HomePortalLearningService(String genus, RegistryAccess store,
             SourceContextSupplier contexts, Collection<HomeTerritories.Entry> savedHomes) {
-        this(false, constantGenus(genus), store, contexts, constantHomes(savedHomes));
+        this(false, constantGenus(genus), store, contexts,
+                () -> savedHomes != null && !savedHomes.isEmpty());
     }
 
     private HomePortalLearningService(boolean disabled, Supplier<String> genus,
             RegistryAccess store, SourceContextSupplier contexts,
-            Supplier<Collection<HomeTerritories.Entry>> savedHomes) {
+            BooleanSupplier hasSavedHomes) {
         this.disabled = disabled;
         this.genus = genus;
         this.store = store;
         this.contexts = contexts;
-        this.savedHomes = savedHomes;
+        this.hasSavedHomes = hasSavedHomes;
     }
 
     public boolean shouldTrack(boolean chunkOverlayEnabled) {
@@ -127,14 +127,13 @@ public final class HomePortalLearningService {
             return true;
         if (disabled)
             return false;
-        Collection<HomeTerritories.Entry> saved = savedHomes.get();
-        if (saved != null && !saved.isEmpty())
+        if (hasSavedHomes.getAsBoolean())
             return true;
         HomeInteriorRegistry registry = store.load(genus.get());
         if (registry == null)
             return false;
         for (HomeInteriorRegistry.Binding binding : registry.bindings()) {
-            if (binding.manual || binding.active(saved))
+            if (binding.manual || binding.active(Collections.emptyList()))
                 return true;
         }
         return false;
@@ -334,15 +333,4 @@ public final class HomePortalLearningService {
         };
     }
 
-    private static Supplier<Collection<HomeTerritories.Entry>> constantHomes(
-            final Collection<HomeTerritories.Entry> savedHomes) {
-        final Collection<HomeTerritories.Entry> homes = savedHomes == null
-                ? Collections.<HomeTerritories.Entry>emptyList() : savedHomes;
-        return new Supplier<Collection<HomeTerritories.Entry>>() {
-            @Override
-            public Collection<HomeTerritories.Entry> get() {
-                return homes;
-            }
-        };
-    }
 }

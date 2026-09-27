@@ -347,7 +347,18 @@
   </target>
 
   <target name="test" depends="test-compile" description="Run local tests">
+    <!-- Test fixtures construct NConfig and other file-backed settings directly. Give the
+         forked JVM a fresh local-data root so its shutdown hooks cannot write player data. -->
+    <tempfile property="test.userdata" destdir="build" prefix="test-userdata-" createfile="false" />
+    <mkdir dir="${test.userdata}/appdata" />
+    <mkdir dir="${test.userdata}/localappdata" />
+    <mkdir dir="${test.userdata}/home" />
     <java classname="org.junit.platform.console.ConsoleLauncher" fork="true" failonerror="true">
+      <env key="APPDATA" path="${test.userdata}/appdata" />
+      <env key="LOCALAPPDATA" path="${test.userdata}/localappdata" />
+      <env key="USERPROFILE" path="${test.userdata}/home" />
+      <sysproperty key="user.home" value="${test.userdata}/home" />
+      <sysproperty key="java.util.prefs.PreferencesFactory" value="haven.InMemoryPreferencesFactory" />
       <classpath>
         <pathelement path="build/classes" />
         <pathelement path="build/test-classes" />

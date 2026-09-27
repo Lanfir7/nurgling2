@@ -197,6 +197,12 @@ public class RecipeIngredientCache {
         return new HashSet<>(outputCache.getOrDefault(itemName, Collections.emptySet()));
     }
 
+    /** Read only mappings already learned in this process; Atlas must never query the DB in a UI callback. */
+    public static Set<RecipeEntry> peekOutputRecipesForItem(String itemName) {
+        if(itemName == null) return Collections.emptySet();
+        return new HashSet<>(outputCache.getOrDefault(itemName, Collections.emptySet()));
+    }
+
     /**
      * Find all ingredient names for a given recipe (by paginaResource).
      * Scans the inputCache to find items mapped to this recipe.

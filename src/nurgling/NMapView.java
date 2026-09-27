@@ -29,6 +29,7 @@ import nurgling.widgets.options.QuickActions;
 import nurgling.overlays.*;
 import nurgling.overlays.map.*;
 import nurgling.navigation.ChunkNavData;
+import nurgling.navigation.ChunkNavFileStore;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPortal;
 import nurgling.navigation.MilestoneTracker;
@@ -120,12 +121,16 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
      * Initialize profile-aware components with genus
      */
     public void initializeWithGenus(String genus) {
+        initializeWithGenus(genus, null);
+    }
+
+    public void initializeWithGenus(String genus, ChunkNavFileStore.PreparedChunks prepared) {
         // Initialize ChunkNav system for this world
         try {
             if (chunkNavManager == null) {
                 chunkNavManager = new ChunkNavManager();
             }
-            chunkNavManager.initialize(genus);
+            chunkNavManager.initialize(genus, prepared);
         } catch(Exception e) {
             System.err.println("NMapView: Error initializing ChunkNavManager: " + e.getMessage());
         }

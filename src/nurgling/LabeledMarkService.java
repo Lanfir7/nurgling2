@@ -12,6 +12,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -60,6 +63,10 @@ public class LabeledMarkService implements ProfileAwareService {
     private boolean shutdown = false;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private volatile long dataVersion = 0;
+    /** Last snapshot known to have reached this exact file; only read or changed under fileLock. */
+    private long persistedVersion = -1;
+    private String persistedPath;
+    private Map<String, BufferedImage> persistedIcons = Collections.emptyMap();
     private boolean suppressReindex = false;
     
     // Очередь для неблокирующего добавления маркеров (устраняет лаги UI)
@@ -124,8 +131,10 @@ public class LabeledMarkService implements ProfileAwareService {
     public void initializeForProfile(String genus) {
         this.genus = genus;
         NConfig config = ConfigFactory.getConfig(genus);
-        this.dataFile = config.getLabeledMarksPath();
-        load();
+        synchronized (fileLock) {
+            this.dataFile = config.getLabeledMarksPath();
+            loadLabeledMarks();
+        }
     }
 
     @Override
@@ -549,12 +558,54 @@ public class LabeledMarkService implements ProfileAwareService {
     /**
      * Take a consistent copy of the marks to serialize outside the lock.
      */
-    private List<LabeledMinimapMark> snapshot() {
+    private static class Snapshot {
+        final List<LabeledMinimapMark> marks;
+        final long version;
+        final String path;
+
+        Snapshot(List<LabeledMinimapMark> marks, long version, String path) {
+            this.marks = marks;
+            this.version = version;
+            this.path = path;
+        }
+    }
+
+    private static String normalizedPath(String path) {
+        return Path.of(path).toAbsolutePath().normalize().toString();
+    }
+
+    private Snapshot snapshot() {
         lock.readLock().lock();
         try {
-            return new ArrayList<>(labeledMarks.values());
+            return new Snapshot(new ArrayList<>(labeledMarks.values()), dataVersion,
+                normalizedPath(dataFile));
         } finally {
             lock.readLock().unlock();
+        }
+    }
+
+    /** Icon registration is shared across services and does not increment dataVersion. */
+    private Map<String, BufferedImage> currentIcons() {
+        Map<String, BufferedImage> result = new HashMap<>();
+        for (LabeledMinimapMark mark : labeledMarks.values()) {
+            if (!mark.getLocationId().startsWith("animal_"))
+                result.put(mark.resourceType, LabeledMinimapMark.icon(mark.resourceType));
+        }
+        return result;
+    }
+
+    private boolean cleanForDispose() {
+        synchronized (fileLock) {
+            lock.readLock().lock();
+            try {
+                return persistedPath != null && persistedVersion == dataVersion
+                    && persistedPath.equals(normalizedPath(dataFile))
+                    && Files.isRegularFile(Path.of(persistedPath))
+                    && pendingMarks.isEmpty() && pendingMarkIds.isEmpty()
+                    && !processingScheduled.get() && currentIcons().equals(persistedIcons);
+            } finally {
+                lock.readLock().unlock();
+            }
         }
     }
 
@@ -565,11 +616,11 @@ public class LabeledMarkService implements ProfileAwareService {
     private void writeSnapshot() {
         synchronized (fileLock) {
         try {
-            List<LabeledMinimapMark> marks = snapshot();
+            Snapshot snapshot = snapshot();
             JSONObject main = new JSONObject();
             JSONArray jMarks = new JSONArray();
             Set<String> types = new HashSet<>();
-            for (LabeledMinimapMark mark : marks) {
+            for (LabeledMinimapMark mark : snapshot.marks) {
                 if (mark.getLocationId().startsWith("animal_")) continue;
                 jMarks.put(mark.toJson());
                 types.add(mark.resourceType);
@@ -577,10 +628,16 @@ public class LabeledMarkService implements ProfileAwareService {
             /* One icon per resource type instead of one per mark: the old format
              * re-encoded every icon on every save, which grew with the sample count. */
             JSONObject icons = new JSONObject();
+            Map<String, BufferedImage> iconImages = new HashMap<>();
+            boolean iconsComplete = true;
             for (String type : types) {
+                BufferedImage image = LabeledMinimapMark.icon(type);
+                iconImages.put(type, image);
                 String encoded = LabeledMinimapMark.iconBase64(type);
                 if (encoded != null) {
                     icons.put(type, encoded);
+                } else if (image != null) {
+                    iconsComplete = false;
                 }
             }
             main.put("labeledMarks", jMarks);
@@ -588,8 +645,16 @@ public class LabeledMarkService implements ProfileAwareService {
             main.put("version", 2);
             main.put("lastSaved", java.time.Instant.now().toString());
 
-            NFileUtils.writeAtomically(dataFile, main.toString());
+            NFileUtils.writeAtomically(snapshot.path, main.toString());
+            if (iconsComplete) {
+                persistedPath = snapshot.path;
+                persistedVersion = snapshot.version;
+                persistedIcons = iconImages;
+            } else {
+                persistedPath = null;
+            }
         } catch (Exception e) {
+            persistedPath = null;
             System.err.println("Failed to save labeled marks: " + e.getMessage());
         }
         }
@@ -1091,12 +1156,24 @@ public class LabeledMarkService implements ProfileAwareService {
      * Load labeled marks from JSON.
      */
     private void loadLabeledMarks() {
+        synchronized (fileLock) {
         lock.writeLock().lock();
         try {
+            persistedPath = null;
+            persistedVersion = -1;
+            persistedIcons = Collections.emptyMap();
             labeledMarks.clear();
             resourceTypeIndex.clear();
             segmentIndex.clear();
+            // The fallback reader restores a backup in place. Capture the old primary
+            // first so a recovered or newly created file is not mistaken for a clean load.
+            String primaryContent = null;
+            try {
+                primaryContent = Files.readString(Path.of(dataFile), StandardCharsets.UTF_8);
+            } catch (IOException | RuntimeException ignored) {
+            }
             String content = NFileUtils.readWithBackupFallback(dataFile);
+            boolean primaryUnchanged = content != null && content.equals(primaryContent);
             if (content != null && !content.isEmpty()) {
                 try {
                     JSONObject main = new JSONObject(content);
@@ -1113,21 +1190,43 @@ public class LabeledMarkService implements ProfileAwareService {
                     System.out.println("LabeledMarks: loading " + total + " marks (lazy icons)...");
                     long t0 = System.currentTimeMillis();
                     suppressReindex = true;
+                    boolean complete = true;
                     for (int i = 0; i < total; i++) {
                         if (Thread.interrupted()) {
                             System.out.println("LabeledMarks: loading interrupted at " + i + "/" + total);
                             return;
                         }
                         try {
-                            LabeledMinimapMark mark = new LabeledMinimapMark(array.getJSONObject(i));
+                            JSONObject record = array.getJSONObject(i);
+                            LabeledMinimapMark mark = new LabeledMinimapMark(record);
+                            if (!mark.getLocationId().equals(record.getString("locationId"))
+                                || mark.getLocationId().startsWith("animal_")
+                                || labeledMarks.containsKey(mark.getLocationId()))
+                                complete = false;
                             labeledMarks.put(mark.getLocationId(), mark);
                             addMarkToIndexes(mark);
                         } catch (Exception e) {
+                            complete = false;
                             System.err.println("Failed to parse labeled mark: " + e.getMessage());
                         }
                     }
                     suppressReindex = false;
                     System.out.println("LabeledMarks: loaded " + total + " marks in " + (System.currentTimeMillis() - t0) + "ms");
+                    if (primaryUnchanged && complete && main.optInt("version", 0) == 2 && icons != null) {
+                        Map<String, BufferedImage> loadedIcons = currentIcons();
+                        boolean iconsComplete = true;
+                        for (Map.Entry<String, BufferedImage> entry : loadedIcons.entrySet()) {
+                            if (entry.getValue() != null && !icons.has(entry.getKey())) {
+                                iconsComplete = false;
+                                break;
+                            }
+                        }
+                        if (iconsComplete) {
+                            persistedPath = normalizedPath(dataFile);
+                            persistedVersion = dataVersion;
+                            persistedIcons = loadedIcons;
+                        }
+                    }
                 } catch (Exception e) {
                     System.err.println("Failed to parse labeled marks JSON: " + e.getMessage());
                 }
@@ -1136,6 +1235,7 @@ public class LabeledMarkService implements ProfileAwareService {
         } finally {
             suppressReindex = false;
             lock.writeLock().unlock();
+        }
         }
     }
 
@@ -1279,7 +1379,13 @@ public class LabeledMarkService implements ProfileAwareService {
         }
         if (!pendingMarks.isEmpty())
             processPendingMarks();
-        writeSnapshot();
+        boolean writerStopped = writerToJoin == null || !writerToJoin.isAlive();
+        boolean queued;
+        synchronized (writeLock) {
+            queued = saveQueued;
+        }
+        if (!saveExecutor.isTerminated() || !writerStopped || queued || !cleanForDispose())
+            writeSnapshot();
         lock.writeLock().lock();
         try {
             labeledMarks.clear();

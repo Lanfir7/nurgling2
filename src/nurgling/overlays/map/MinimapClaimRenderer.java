@@ -7,6 +7,12 @@ import nurgling.NConfig;
 import nurgling.widgets.NMiniMap;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.function.Supplier;
 
 /**
  * Renders personal claims, village claims, and realm overlays on the minimap.
@@ -18,6 +24,56 @@ public class MinimapClaimRenderer {
     private static final Color CPLOT_COLOR = new Color(0, 255, 0, 60);    // Personal - Green
     private static final Color VLG_COLOR = new Color(255, 128, 255, 60);   // Village - Pink
     private static final Color PROV_COLOR = new Color(255, 0, 255, 60);    // Realm - Magenta
+    // MapFile constructs a fresh Overlay when grid data changes. Zoom-grid masks are filled
+    // before their DataGrid is exposed. Keep only local rectangles here: colors, toggles and
+    // screen coordinates still follow the current frame. Weak keys release unloaded grids.
+    private static final Map<MapFile.Overlay, Geometry> geometryCache = new WeakHashMap<>();
+    private static final OverlayLayerCache<MCache.ResOverlay> overlayLayers = new OverlayLayerCache<>();
+
+    static final class OverlayLayerCache<T> {
+        private final Map<MapFile.Overlay, T> loaded = new WeakHashMap<>();
+
+        T get(MapFile.Overlay overlay, Supplier<T> resolver) {
+            synchronized (loaded) {
+                T cached = loaded.get(overlay);
+                if (cached != null)
+                    return cached;
+            }
+            // Keep absent layers, Loading and errors uncached so resolution can retry.
+            T resolved = resolver.get();
+            if (resolved == null)
+                return null;
+            synchronized (loaded) {
+                T cached = loaded.get(overlay);
+                if (cached != null)
+                    return cached;
+                loaded.put(overlay, resolved);
+            }
+            return resolved;
+        }
+    }
+
+    static final class Rect {
+        final int x, y, width, height;
+
+        Rect(int x, int y, int width, int height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+    }
+
+    private static final class Geometry {
+        final int width, height;
+        final List<Rect> rectangles;
+
+        Geometry(int width, int height, List<Rect> rectangles) {
+            this.width = width;
+            this.height = height;
+            this.rectangles = rectangles;
+        }
+    }
 
     /**
      * Main rendering method called from MiniMap's drawparts()
@@ -77,8 +133,8 @@ public class MinimapClaimRenderer {
                 for (MapFile.Overlay overlay : grid.ols) {
                     try {
                         // Get the overlay resource and its tags
-                        Resource res = overlay.olid.get();
-                        MCache.ResOverlay olinfo = res.flayer(MCache.ResOverlay.class);
+                        MCache.ResOverlay olinfo = overlayLayers.get(overlay,
+                                () -> overlay.olid.get().flayer(MCache.ResOverlay.class));
 
                         if (olinfo == null) {
                             continue;
@@ -125,107 +181,104 @@ public class MinimapClaimRenderer {
             // where cmaps is the grid size (100x100 tiles typically)
             int width = MCache.cmaps.x;
             int height = MCache.cmaps.y;
-            boolean[] mask = overlay.ol;
+            List<Rect> rectangles = rectanglesFor(overlay, width, height);
+            if (rectangles.isEmpty())
+                return;
 
-            if (mask.length != width * height) {
-                return; // Invalid mask size
-            }
+            NMiniMap nmap = map instanceof NMiniMap ? (NMiniMap) map : null;
+            float currentScale = nmap == null ? 1f : nmap.getCurrentScale();
+            int dataLevel = nmap == null ? 0 : nmap.getDataLevelPublic();
+            int levelScale = 1 << dataLevel;
+            int gridTileSize = width * levelScale;
+            Coord viewOffset = map.dloc.tc.div(map.scalef());
 
-            // Track which tiles we've already rendered
-            boolean[] rendered = new boolean[mask.length];
+            for (Rect rect : rectangles) {
+                int x = rect.x, y = rect.y;
+                int rectWidth = rect.width, rectHeight = rect.height;
 
-            // Scan for rectangles to merge
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    int idx = y * width + x;
-
-                    // Skip if not claimed or already rendered
-                    if (!mask[idx] || rendered[idx]) {
-                        continue;
-                    }
-
-                    // Find the width of the rectangle (horizontal extent)
-                    int rectWidth = 0;
-                    while (x + rectWidth < width &&
-                           mask[y * width + (x + rectWidth)] &&
-                           !rendered[y * width + (x + rectWidth)]) {
-                        rectWidth++;
-                    }
-
-                    // Find the height of the rectangle (vertical extent)
-                    int rectHeight = 1;
-                    boolean canExtend = true;
-                    while (canExtend && y + rectHeight < height) {
-                        // Check if this entire row matches the width
-                        for (int dx = 0; dx < rectWidth; dx++) {
-                            int checkIdx = (y + rectHeight) * width + (x + dx);
-                            if (!mask[checkIdx] || rendered[checkIdx]) {
-                                canExtend = false;
-                                break;
-                            }
-                        }
-                        if (canExtend) {
-                            rectHeight++;
-                        }
-                    }
-
-                    // Mark all tiles in this rectangle as rendered
-                    for (int dy = 0; dy < rectHeight; dy++) {
-                        for (int dx = 0; dx < rectWidth; dx++) {
-                            rendered[(y + dy) * width + (x + dx)] = true;
-                        }
-                    }
-
-                    // Convert grid-local coordinates to segment tile coordinates
-                    // disp.sc is the grid coordinate at the current data level
-                    // Each grid represents cmaps * (2^dataLevel) tiles
-                    
-                    // For NMiniMap, we need to use the same coordinate transformation as drawmap()
-                    if (!(map instanceof NMiniMap)) {
-                        // Fallback for base MiniMap (shouldn't happen)
-                        Coord tileUL = disp.sc.mul(MCache.cmaps).add(x, y);
-                        Coord tileBR = disp.sc.mul(MCache.cmaps).add(x + rectWidth, y + rectHeight);
-                        Coord screenUL = UI.scale(tileUL).sub(map.dloc.tc.div(map.scalef())).add(hsz);
-                        Coord screenBR = UI.scale(tileBR).sub(map.dloc.tc.div(map.scalef())).add(hsz);
-                        g.chcolor(fillColor);
-                        g.frect2(screenUL, screenBR);
-                        continue;
-                    }
-                    
-                    NMiniMap nmap = (NMiniMap) map;
-                    
-                    // Get current scale for coordinate transformation
-                    float currentScale = nmap.getCurrentScale();
-                    
-                    // Calculate tile coordinates in the segment
-                    // Grid tiles are at data level, so need to account for that
-                    int dataLevel = nmap.getDataLevelPublic();
-                    int gridTileSize = MCache.cmaps.x * (1 << dataLevel);
-                    
-                    // Tile coordinates in segment (at base level)
-                    Coord tileUL = new Coord(disp.sc.x * gridTileSize + x * (1 << dataLevel),
-                                             disp.sc.y * gridTileSize + y * (1 << dataLevel));
-                    Coord tileBR = new Coord(disp.sc.x * gridTileSize + (x + rectWidth) * (1 << dataLevel),
-                                             disp.sc.y * gridTileSize + (y + rectHeight) * (1 << dataLevel));
-                    
-                    // Convert to screen coordinates using current scale
-                    // Same formula as NMiniMap.drawmap(): UI.scale(tile).mul(currentScale).sub(dloc.tc.div(scalef())).add(hsz)
-                    // Use round for consistent alignment without gaps or overlaps
-                    Coord2d screenULDouble = new Coord2d(UI.scale(tileUL)).mul(currentScale).sub(new Coord2d(map.dloc.tc.div(map.scalef()))).add(new Coord2d(hsz));
-                    Coord2d screenBRDouble = new Coord2d(UI.scale(tileBR)).mul(currentScale).sub(new Coord2d(map.dloc.tc.div(map.scalef()))).add(new Coord2d(hsz));
-                    Coord screenUL = new Coord((int)Math.round(screenULDouble.x), (int)Math.round(screenULDouble.y));
-                    Coord screenBR = new Coord((int)Math.round(screenBRDouble.x), (int)Math.round(screenBRDouble.y));
-
-                    // Draw filled rectangle
+                // disp.sc is the grid coordinate at the current data level.
+                if (nmap == null) {
+                    // Fallback for base MiniMap (shouldn't happen).
+                    Coord tileUL = disp.sc.mul(MCache.cmaps).add(x, y);
+                    Coord tileBR = disp.sc.mul(MCache.cmaps).add(x + rectWidth, y + rectHeight);
+                    Coord screenUL = UI.scale(tileUL).sub(viewOffset).add(hsz);
+                    Coord screenBR = UI.scale(tileBR).sub(viewOffset).add(hsz);
                     g.chcolor(fillColor);
                     g.frect2(screenUL, screenBR);
+                    continue;
                 }
+
+                Coord tileUL = new Coord(disp.sc.x * gridTileSize + x * levelScale,
+                                         disp.sc.y * gridTileSize + y * levelScale);
+                Coord tileBR = new Coord(disp.sc.x * gridTileSize + (x + rectWidth) * levelScale,
+                                         disp.sc.y * gridTileSize + (y + rectHeight) * levelScale);
+
+                // Match NMiniMap.drawmap() and round only after the complete transform.
+                Coord2d screenULDouble = new Coord2d(UI.scale(tileUL)).mul(currentScale).sub(new Coord2d(viewOffset)).add(new Coord2d(hsz));
+                Coord2d screenBRDouble = new Coord2d(UI.scale(tileBR)).mul(currentScale).sub(new Coord2d(viewOffset)).add(new Coord2d(hsz));
+                Coord screenUL = new Coord((int)Math.round(screenULDouble.x), (int)Math.round(screenULDouble.y));
+                Coord screenBR = new Coord((int)Math.round(screenBRDouble.x), (int)Math.round(screenBRDouble.y));
+
+                g.chcolor(fillColor);
+                g.frect2(screenUL, screenBR);
             }
 
             g.chcolor(); // Reset color
         } catch (Exception e) {
             // Silently handle errors
         }
+    }
+
+    static List<Rect> rectanglesFor(MapFile.Overlay overlay, int width, int height) {
+        if (overlay == null || overlay.ol == null || width <= 0 || height <= 0
+                || overlay.ol.length != width * height)
+            return Collections.emptyList();
+        synchronized (geometryCache) {
+            Geometry cached = geometryCache.get(overlay);
+            if (cached != null && cached.width == width && cached.height == height)
+                return cached.rectangles;
+        }
+
+        boolean[] mask = overlay.ol;
+        boolean[] rendered = new boolean[mask.length];
+        List<Rect> rectangles = new ArrayList<>();
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int idx = y * width + x;
+                if (!mask[idx] || rendered[idx])
+                    continue;
+                int rectWidth = 0;
+                while (x + rectWidth < width && mask[y * width + x + rectWidth]
+                        && !rendered[y * width + x + rectWidth])
+                    rectWidth++;
+                int rectHeight = 1;
+                boolean canExtend = true;
+                while (canExtend && y + rectHeight < height) {
+                    for (int dx = 0; dx < rectWidth; dx++) {
+                        int checkIdx = (y + rectHeight) * width + x + dx;
+                        if (!mask[checkIdx] || rendered[checkIdx]) {
+                            canExtend = false;
+                            break;
+                        }
+                    }
+                    if (canExtend)
+                        rectHeight++;
+                }
+                for (int dy = 0; dy < rectHeight; dy++) {
+                    for (int dx = 0; dx < rectWidth; dx++)
+                        rendered[(y + dy) * width + x + dx] = true;
+                }
+                rectangles.add(new Rect(x, y, rectWidth, rectHeight));
+            }
+        }
+        List<Rect> result = Collections.unmodifiableList(rectangles);
+        synchronized (geometryCache) {
+            Geometry cached = geometryCache.get(overlay);
+            if (cached != null && cached.width == width && cached.height == height)
+                return cached.rectangles;
+            geometryCache.put(overlay, new Geometry(width, height, result));
+        }
+        return result;
     }
 
     /**

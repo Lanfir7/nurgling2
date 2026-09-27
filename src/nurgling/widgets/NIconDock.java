@@ -6,6 +6,7 @@ import haven.render.Texture;
 
 import java.awt.image.BufferedImage;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -147,6 +148,64 @@ public class NIconDock {
     /** How many times larger the paint texture is than the button's layout size. */
     static final int HIRES = 4;
 
+    // Only immutable resource images use this shared cache. Textures remain widget-owned.
+    private static final ImageCache resourceImages = new ImageCache(128, 2 * 1024 * 1024);
+
+    static final class ImageCache {
+        private final int maxEntries;
+        private final long maxPixels;
+        private long pixels;
+        private final Map<BufferedImage, ScaledImage> images = new LinkedHashMap<>(16, 0.75f, true);
+
+        ImageCache(int maxEntries, long maxPixels) {
+            this.maxEntries = maxEntries;
+            this.maxPixels = maxPixels;
+        }
+
+        BufferedImage get(BufferedImage src, Coord logical) {
+            if(src == null || logical == null || logical.x <= 0 || logical.y <= 0)
+                return src;
+            int width = logical.x, height = logical.y;
+            synchronized(this) {
+                ScaledImage cached = images.get(src);
+                if(cached != null && cached.matches(width, height)) return cached.image;
+            }
+            // Do not hold a shared lock during rasterization on another session's loader.
+            BufferedImage image = hiRes(src, new Coord(width, height));
+            long size = (long)image.getWidth() * image.getHeight();
+            synchronized(this) {
+                ScaledImage cached = images.get(src);
+                if(cached != null && cached.matches(width, height)) return cached.image;
+                ScaledImage previous = images.remove(src);
+                if(previous != null) pixels -= previous.pixels();
+                if(size <= maxPixels && maxEntries > 0) {
+                    images.put(src, new ScaledImage(width, height, image));
+                    pixels += size;
+                    while(images.size() > maxEntries || pixels > maxPixels) {
+                        java.util.Iterator<ScaledImage> oldest = images.values().iterator();
+                        pixels -= oldest.next().pixels();
+                        oldest.remove();
+                    }
+                }
+                return image;
+            }
+        }
+    }
+
+    private static final class ScaledImage {
+        final int width, height;
+        final BufferedImage image;
+
+        ScaledImage(int width, int height, BufferedImage image) {
+            this.width = width;
+            this.height = height;
+            this.image = image;
+        }
+
+        boolean matches(int width, int height) { return this.width == width && this.height == height; }
+        long pixels() { return (long)image.getWidth() * image.getHeight(); }
+    }
+
     /**
      * Lanczos 4× of `src` for hover. `logical` is the on-screen button size; if the
      * file is already at least that large, it is kept so a 2× asset is not downscaled
@@ -165,11 +224,14 @@ public class NIconDock {
     static Tex hiTex(Resource.Image img) {
         if(img == null)
             return(null);
-        return(hiTex(img.img, img.ssz));
+        return(texture(resourceImages.get(img.img, img.ssz)));
     }
 
     static Tex hiTex(BufferedImage src, Coord logical) {
-        BufferedImage hi = hiRes(src, logical);
+        return texture(hiRes(src, logical));
+    }
+
+    private static Tex texture(BufferedImage hi) {
         if(hi == null)
             return(null);
         /* LINEAR is applied on first draw, so construction does not need a GL context. */

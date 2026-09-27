@@ -12,6 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CraftAtlasSearchTest {
     @Test
+    void normalizationPreservesCompatibilityCaseAndWhitespaceRules() {
+        assertEquals("foo е", CraftAtlasSearch.normalize("\tＦＯＯ  \nЁ "));
+        assertEquals("", CraftAtlasSearch.normalize(null));
+    }
+
+    @Test
     void searchesOnlyByRecipeNameAndBonuses() {
         CraftAtlasEntry axe = CraftAtlasEntry.builder("test-axe", "Тестовый топор")
                 .input(new CraftAtlasEntry.InputSlot(1, false, Arrays.asList(

@@ -872,6 +872,10 @@ public class NConfig
 
     HashMap<Key, Object> conf = new HashMap<>();
     private ConfigWriteState configWriteState = new ConfigWriteState();
+    private volatile java.util.concurrent.locks.ReentrantLock saveLock = new java.util.concurrent.locks.ReentrantLock();
+    private volatile java.util.concurrent.atomic.AtomicBoolean pendingSave = new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile long nextSaveRetryNanos;
+    private volatile boolean loadedForPersistence;
     private boolean isExploredUpd = false;
     private long lastExploredChangeTime = 0;
     private static final long EXPLORED_DEBOUNCE_MS = 5000; // 5 seconds debounce for explored area changes
@@ -892,6 +896,41 @@ public class NConfig
             configWriteState = new ConfigWriteState();
         }
         return configWriteState;
+    }
+
+    private void markDirty() {
+        writeState().markDirty();
+        if (loadedForPersistence)
+            AsyncSaves.register(this);
+    }
+
+    private java.util.concurrent.locks.ReentrantLock saveLock() {
+        // Lightweight tools can allocate this config without invoking its constructor.
+        java.util.concurrent.locks.ReentrantLock lock = saveLock;
+        if (lock == null) {
+            synchronized (this) {
+                if (saveLock == null)
+                    saveLock = new java.util.concurrent.locks.ReentrantLock();
+                lock = saveLock;
+            }
+        }
+        return lock;
+    }
+
+    private java.util.concurrent.atomic.AtomicBoolean pendingSave() {
+        java.util.concurrent.atomic.AtomicBoolean pending = pendingSave;
+        if (pending == null) {
+            synchronized (this) {
+                if (pendingSave == null)
+                    pendingSave = new java.util.concurrent.atomic.AtomicBoolean();
+                pending = pendingSave;
+            }
+        }
+        return pending;
+    }
+
+    long saveClockNanos() {
+        return System.nanoTime();
     }
 
     public boolean isRoutesUpdated() {
@@ -976,8 +1015,13 @@ public class NConfig
         if (cur != null)
         {
             synchronized (cur.conf) {
-                cur.conf.put(key, val);
-                cur.writeState().markDirty();
+                Object previous = cur.conf.get(key);
+                // Values returned by get() can be mutated in place. Only skip equality checks
+                // for the immutable scalar types used by frequently repeated settings updates.
+                if (!sameImmutableScalar(previous, val)) {
+                    cur.conf.put(key, val);
+                    cur.markDirty();
+                }
             }
         }
         // Propagate to all session configs so every session sees the same value
@@ -999,6 +1043,16 @@ public class NConfig
         }
     }
 
+    private static boolean sameImmutableScalar(Object previous, Object next) {
+        return previous != null && next != null && previous.getClass() == next.getClass()
+                && (previous instanceof String || previous instanceof Boolean
+                    || previous instanceof Integer || previous instanceof Long
+                    || previous instanceof Double || previous instanceof Float
+                    || previous instanceof Short || previous instanceof Byte
+                    || previous instanceof Enum<?>)
+                && previous.equals(next);
+    }
+
     /** Atomically updates a structured setting and publishes the same result to every live session. */
     public static Object update(Key key, java.util.function.UnaryOperator<Object> updater)
     {
@@ -1011,7 +1065,7 @@ public class NConfig
                 val = updater.apply(previous);
                 if (val != previous) {
                     cur.conf.put(key, val);
-                    cur.writeState().markDirty();
+                    cur.markDirty();
                 } else {
                     val = previous;
                 }
@@ -1043,7 +1097,7 @@ public class NConfig
         if (resolved != null)
         {
             synchronized (resolved.conf) {
-                resolved.writeState().markDirty();
+                resolved.markDirty();
             }
             String genus = resolved.getGenus();
             if (genus != null && !genus.isEmpty())
@@ -1057,7 +1111,7 @@ public class NConfig
                     }
                     synchronized (profile.conf) {
                         profile.conf.putAll(snapshot);
-                        profile.writeState().markDirty();
+                        profile.markDirty();
                     }
                 }
             }
@@ -1065,7 +1119,7 @@ public class NConfig
         if (current != null)
         {
             synchronized (current.conf) {
-                current.writeState().markDirty();
+                current.markDirty();
             }
         }
     }
@@ -1180,9 +1234,7 @@ public class NConfig
             return new NConfig();
         }
         NConfig cfg = new NConfig(genus);
-        NConfig prev = current;
-        cfg.read();
-        current = prev;
+        cfg.read(false);
         return cfg;
     }
 
@@ -1195,7 +1247,11 @@ public class NConfig
         }
 
         synchronized (profileInstances) {
-            return profileInstances.computeIfAbsent(genus, g -> new NConfig(g));
+            return profileInstances.computeIfAbsent(genus, g -> {
+                NConfig config = new NConfig(g);
+                config.read(false);
+                return config;
+            });
         }
     }
 
@@ -1476,8 +1532,27 @@ public class NConfig
         return new ArrayList<>();
     }
 
-    @SuppressWarnings("unchecked")
     public void read() {
+        read(true);
+    }
+
+    private void read(boolean publishGlobal) {
+        java.util.concurrent.locks.ReentrantLock lock = saveLock();
+        lock.lock();
+        try {
+            loadedForPersistence = false;
+            AsyncSaves.unregister(this);
+            loadedForPersistence = readUnderLock(publishGlobal);
+            if (loadedForPersistence && isUpdated())
+                AsyncSaves.register(this);
+        } finally {
+            AsyncSaves.unregisterIfClean(this);
+            lock.unlock();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean readUnderLock(boolean publishGlobal) {
         // NOTE: do NOT publish `current = this` here. Publishing a half-built
         // instance (constructor defaults only, before the file is parsed) opened
         // a race: a concurrent NConfig.set() from another thread would mark this
@@ -1491,6 +1566,7 @@ public class NConfig
         boolean fileHadHideConf = false;
         boolean fileHadExploredAreaRecord = false;
         boolean hadConfigFile = (content != null && !content.isEmpty());
+        boolean safeToPersist = hadConfigFile || !Files.exists(Paths.get(path));
 
         if (hadConfigFile)
         {
@@ -1500,8 +1576,9 @@ public class NConfig
             } catch (org.json.JSONException e) {
                 System.err.println("[NConfig] Failed to parse config file (corrupt JSON), using defaults: " + path);
                 writeState().initialize(serializeSnapshot(new HashMap<>(conf)));
-                current = this;
-                return;
+                if (publishGlobal)
+                    current = this;
+                return false;
             }
             fileHadHideConf = main.has(Key.hideConf.name());
             fileHadExploredAreaRecord = main.has(Key.exploredAreaRecord.name());
@@ -1586,7 +1663,7 @@ public class NConfig
         // Fog button used to both display and record. Keep recording for those users.
         if (hadConfigFile && !fileHadExploredAreaRecord) {
             conf.put(Key.exploredAreaRecord, ExploredAreaPolicy.migrateRecord(false, null, conf.get(Key.exploredAreaEnable)));
-            writeState().markDirty();
+            markDirty();
         }
 
         if (!conf.containsKey(Key.harvestOverlay)) {
@@ -1618,7 +1695,7 @@ public class NConfig
             if (conf.get(Key.boxLineWidth) instanceof Number)
                 conf.put(Key.hideBoxLineWidth, conf.get(Key.boxLineWidth));
 
-            writeState().markDirty();
+            markDirty();
         }
         conf.remove(Key.hideNature);
 
@@ -1628,7 +1705,7 @@ public class NConfig
             String migrated = NUpdateFeed.migrateBaseUrl(currentUrl);
             if (currentUrl == null || !currentUrl.equals(migrated)) {
                 conf.put(Key.baseurl, migrated);
-                writeState().markDirty();
+                markDirty();
             }
         }
 
@@ -1649,11 +1726,11 @@ public class NConfig
             for (String[] entry : newAnimals) {
                 if (!existingNames.contains(entry[0])) {
                     savedRads.add(new NAreaRad(entry[0], Integer.parseInt(entry[1])));
-                    writeState().markDirty();
+                    markDirty();
                 }
             }
             if (NAreaRad.migrateList(savedRads))
-                writeState().markDirty();
+                markDirty();
         }
 
         conf.put(Key.showCSprite,conf.get(Key.nextshowCSprite));
@@ -1664,7 +1741,9 @@ public class NConfig
 
         // Publish only now that conf is fully populated, so no other thread can
         // observe (and flush) a partially-loaded config as the global current.
-        current = this;
+        if (publishGlobal)
+            current = this;
+        return safeToPersist;
     }
 
     @SuppressWarnings("unchecked")
@@ -1741,17 +1820,17 @@ public class NConfig
         return new JSONObject(prep).toString();
     }
 
-    private String serializeStableSnapshot() {
-        String previous = null;
+    private String serializeStableSnapshot(Map<Key, Object> values) {
+        Map<String, Object> previous = null;
         RuntimeException lastFailure = null;
         for (int attempt = 0; attempt < 5; attempt++) {
             try {
-                String candidate = serializeSnapshot(new HashMap<>(conf));
-                if (previous != null && Objects.equals(
-                        new JSONObject(previous).toMap(), new JSONObject(candidate).toMap())) {
+                String candidate = serializeSnapshot(values);
+                Map<String, Object> parsed = new JSONObject(candidate).toMap();
+                if (previous != null && previous.equals(parsed)) {
                     return candidate;
                 }
-                previous = candidate;
+                previous = parsed;
                 lastFailure = null;
             } catch (RuntimeException e) {
                 // Mutable legacy config values are exposed through get(). If another session is
@@ -1759,31 +1838,211 @@ public class NConfig
                 previous = null;
                 lastFailure = e;
             }
+            // Copy only the key map under conf. Legacy values can be edited in place, so
+            // serialize them off the UI thread and require two equal JSON snapshots.
+            synchronized (conf) {
+                values = new HashMap<>(conf);
+            }
         }
         throw new IllegalStateException("config kept changing while it was being serialized", lastFailure);
     }
 
     public void write()
     {
+        java.util.concurrent.locks.ReentrantLock lock = saveLock();
+        lock.lock();
+        try {
+            // A constructor-only or failed-read config has no trustworthy disk baseline.
+            // Explicit UI saves must obey the same rule as periodic and shutdown saves.
+            if (!loadedForPersistence)
+                return;
+            writeUnderLock();
+            AsyncSaves.unregisterIfClean(this);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Coalesces tick saves; JSON and disk work never run on the UI thread. */
+    public void writeIfUpdated() {
+        if (!loadedForPersistence)
+            return;
+        java.util.concurrent.atomic.AtomicBoolean pending = pendingSave();
+        if (pending.get())
+            return;
+        long retryAt = nextSaveRetryNanos;
+        if (retryAt != 0 && saveClockNanos() - retryAt < 0)
+            return;
+        if (!isUpdated() || !pending.compareAndSet(false, true))
+            return;
+        if (!AsyncSaves.schedule(this))
+            pending.set(false);
+    }
+
+    private void runPendingSave() {
+        try {
+            java.util.concurrent.locks.ReentrantLock lock = saveLock();
+            lock.lock();
+            try {
+                if (loadedForPersistence && isUpdated() && !writeUnderLock())
+                    nextSaveRetryNanos = saveClockNanos()
+                            + java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+            } finally {
+                lock.unlock();
+            }
+        } finally {
+            pendingSave().set(false);
+            AsyncSaves.unregisterIfClean(this);
+        }
+    }
+
+    /** Waits for queued saves and writes changes made while they were running. */
+    static void flushPendingWrites() {
+        AsyncSaves.flush();
+    }
+
+    static void awaitQueuedWrites() {
+        AsyncSaves.await();
+    }
+
+    private boolean writeUnderLock()
+    {
         try
         {
-            // Capture the revision together with a validated, immutable JSON snapshot. Disk I/O
-            // then runs without blocking setting changes.
+            // Capture the revision and key map together. JSON and disk work run without
+            // holding conf, so setting reads on the UI thread can continue.
             String localSnapshot;
             ConfigWriteState.Save save;
+            Map<Key, Object> values;
             synchronized (conf) {
                 save = writeState().begin();
-                localSnapshot = serializeStableSnapshot();
+                values = new HashMap<>(conf);
             }
+            localSnapshot = serializeStableSnapshot(values);
             NConfigPersistence.mergeAndWrite(path, save.baseline, localSnapshot);
             synchronized (conf) {
                 writeState().complete(save, localSnapshot);
             }
+            nextSaveRetryNanos = 0;
+            return true;
         }
         catch (IOException | RuntimeException e)
         {
-            // Don't crash the UI thread — dirty state stays set so we retry next tick
+            // Dirty state stays set so a later tick or exit flush can retry.
             System.err.println("[NConfig] Warning: failed to save config, will retry: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static final class AsyncSaves {
+        private static final Object monitor = new Object();
+        private static final Set<NConfig> instances =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        private static final java.util.concurrent.ExecutorService worker =
+                java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
+                    Thread thread = new Thread(task, "NConfig-save");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        private static boolean stopping;
+
+        static {
+            Runtime.getRuntime().addShutdownHook(new Thread(AsyncSaves::shutdownAndFlush,
+                    "NConfig-save-flush"));
+        }
+
+        static void register(NConfig config) {
+            synchronized (monitor) {
+                instances.add(config);
+            }
+        }
+
+        static void unregister(NConfig config) {
+            synchronized (monitor) {
+                instances.remove(config);
+            }
+        }
+
+        static void unregisterIfClean(NConfig config) {
+            synchronized (config.conf) {
+                if (config.writeState().isDirty())
+                    return;
+                synchronized (monitor) {
+                    instances.remove(config);
+                }
+            }
+        }
+
+        static boolean schedule(NConfig config) {
+            synchronized (monitor) {
+                if (stopping)
+                    return false;
+                instances.add(config);
+                worker.execute(config::runPendingSave);
+                return true;
+            }
+        }
+
+        static void flush() {
+            NConfig[] configs;
+            synchronized (monitor) {
+                if (stopping)
+                    return;
+                configs = instances.toArray(new NConfig[0]);
+            }
+            await();
+            for (NConfig config : configs) {
+                if (config.loadedForPersistence && config.isUpdated())
+                    config.write();
+            }
+        }
+
+        static void await() {
+            java.util.concurrent.Future<?> barrier;
+            synchronized (monitor) {
+                if (stopping)
+                    return;
+                barrier = worker.submit(() -> {});
+            }
+            boolean interrupted = false;
+            while (true) {
+                try {
+                    barrier.get();
+                    break;
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                } catch (java.util.concurrent.ExecutionException e) {
+                    throw new IllegalStateException("config save barrier failed", e);
+                }
+            }
+            if (interrupted)
+                Thread.currentThread().interrupt();
+        }
+
+        private static void shutdownAndFlush() {
+            synchronized (monitor) {
+                stopping = true;
+                worker.shutdown();
+            }
+            boolean interrupted = false;
+            while (true) {
+                try {
+                    if (worker.awaitTermination(1, java.util.concurrent.TimeUnit.DAYS))
+                        break;
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+            NConfig[] configs;
+            synchronized (monitor) {
+                configs = instances.toArray(new NConfig[0]);
+            }
+            for (NConfig config : configs) {
+                if (config.loadedForPersistence && config.isUpdated())
+                    config.write();
+            }
+            if (interrupted)
+                Thread.currentThread().interrupt();
         }
     }
 

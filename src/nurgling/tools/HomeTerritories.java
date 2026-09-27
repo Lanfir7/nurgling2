@@ -385,6 +385,36 @@ public final class HomeTerritories {
         return decode(((Map<?, ?>) stored).get(worldKey(genus)));
     }
 
+    /** Checks saved-home presence without expanding claim tile runs on every navigation tick. */
+    public static boolean hasSavedHomeForWorld(Object stored, String genus) {
+        if (!(stored instanceof Map<?, ?>))
+            return false;
+        Object world = ((Map<?, ?>) stored).get(worldKey(genus));
+        if (!(world instanceof Collection<?>))
+            return false;
+        for (Object item : (Collection<?>) world) {
+            if (!(item instanceof Map<?, ?>))
+                continue;
+            Map<?, ?> values = (Map<?, ?>) item;
+            Object type = values.get("type");
+            Object name = values.get("name");
+            if (!(name instanceof String))
+                continue;
+            boolean claim = "CLAIM".equals(type);
+            if (!claim && !"VILLAGE".equals(type))
+                continue;
+            if (!((String) name).trim().isEmpty())
+                return true;
+            if (claim && values.get("area") instanceof Map<?, ?>) {
+                Map<?, ?> area = (Map<?, ?>) values.get("area");
+                if (decodeTile(area.get("anchor")) != null
+                        && area.get("grids") instanceof Collection<?>)
+                    return true;
+            }
+        }
+        return false;
+    }
+
     private static String worldKey(String genus) {
         return genus == null ? "" : genus;
     }

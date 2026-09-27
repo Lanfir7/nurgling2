@@ -297,6 +297,11 @@ public class CraftAtlasDetails extends Widget {
         requirementDescription = state.requirementDescription;
     }
 
+    /** Refresh DB-enriched ingredient links without changing selection, scroll or material picker. */
+    void refreshLinks() {
+        rebuildRows();
+    }
+
     public static List<DetailRow> buildRows(CraftAtlasEntry entry, Function<String, CraftRecipeGraph.LinkState> links) {
         return buildRows(entry, (resource, name) -> links.apply(resource), 10);
     }

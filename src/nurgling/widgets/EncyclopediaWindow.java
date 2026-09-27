@@ -7,20 +7,46 @@ import nurgling.tools.MarkdownToImageRenderer;
 
 import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class EncyclopediaWindow extends Window {
-    private final EncyclopediaManager manager;
+    private final Supplier<? extends EncyclopediaManager> managerFactory;
+    private EncyclopediaManager manager;
+    private boolean initialized;
     private SListBox<String, Widget> documentList;
     private Widget contentArea;
     private Widget scrollableContent;
     
     public EncyclopediaWindow() {
+        this(EncyclopediaManager::new);
+    }
+
+    EncyclopediaWindow(Supplier<? extends EncyclopediaManager> managerFactory) {
         super(UI.scale(new Coord(800, 600)), L10n.get("encyclopedia.title"));
-        manager = new EncyclopediaManager();
-        
-        setupUI();
-        loadDefaultDocument();
+        this.managerFactory = managerFactory;
+    }
+
+    private void initializeOnFirstShow() {
+        if (initialized)
+            return;
+        if (manager == null)
+            manager = managerFactory.get();
+        try {
+            setupUI();
+            loadDefaultDocument();
+            initialized = true;
+        } catch (RuntimeException e) {
+            // A failed first render can be retried without stacking duplicate panes.
+            if (contentArea != null)
+                contentArea.destroy();
+            if (documentList != null)
+                documentList.destroy();
+            contentArea = null;
+            documentList = null;
+            scrollableContent = null;
+            throw e;
+        }
     }
     
     private void setupUI() {
@@ -96,7 +122,7 @@ public class EncyclopediaWindow extends Window {
         }
     }
     
-    private void loadDocument(String documentKey) {
+    void loadDocument(String documentKey) {
         String content = manager.getDocumentContent(documentKey);
         if (content != null) {
             displayDocument(documentKey, content);
@@ -136,7 +162,7 @@ public class EncyclopediaWindow extends Window {
         }
     }
     
-    private Widget createMarkdownImageWidget(String documentKey, String content, int maxWidth) {
+    Widget createMarkdownImageWidget(String documentKey, String content, int maxWidth) {
         BufferedImage image = MarkdownToImageRenderer.renderMarkdownToImage(content, maxWidth, documentKey);
         
         // Convert to Haven texture and create widget
@@ -152,6 +178,7 @@ public class EncyclopediaWindow extends Window {
 
     @Override
     public void show() {
+        initializeOnFirstShow();
         // Center the window on screen when showing
         if (parent != null) {
             c = new Coord(parent.sz.x / 2 - sz.x / 2, parent.sz.y / 2 - sz.y / 2);

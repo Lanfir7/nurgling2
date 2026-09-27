@@ -38,6 +38,8 @@ import haven.render.gl.GLRender;
 public abstract class UILoop implements Console.Directory {
     public static final Config.Variable<Boolean> dbtext = Config.Variable.propb("haven.dbtext", false);
     public static final Config.Variable<Boolean> profile = Config.Variable.propb("haven.profile", false);
+    public final FrameMetrics metrics = new FrameMetrics(36000);
+    private final java.util.concurrent.atomic.AtomicBoolean exportingMetrics = new java.util.concurrent.atomic.AtomicBoolean();
     public final Windeye wnd;
     public final Thread th;
     public final CPUProfile uprof = new CPUProfile(300), rprof = new CPUProfile(300);
@@ -50,6 +52,7 @@ public abstract class UILoop implements Console.Directory {
     private long frameno = 0;
 
     public UILoop(Windeye wnd) {
+	if(Config.Variable.propb("haven.perf", false).get()) metrics.start();
 	this.wnd = wnd;
 	wnd.drophandler(new Dropper());
 	setenv(wnd.env());
@@ -463,6 +466,12 @@ public abstract class UILoop implements Console.Directory {
 
     protected void framedone(Frame f) {
 	updstats(f);
+	if(f.metricsToken >= 0) {
+	    long end = System.nanoTime();
+	    metrics.record(f.metricsToken, end, (end - f.metricsStart) / 1e6,
+			    f.tickMs, f.drawMs, f.submitMs, f.syncMs, f.limitMs, f.background, f.rendering,
+			    System.currentTimeMillis());
+	}
     }
 
     public static class Frame {
@@ -476,6 +485,9 @@ public abstract class UILoop implements Console.Directory {
 	public GPUProfile.Frame gprof = null;
 	public RenderProfile rprofc = null;
 	public double ttime, ftime, waited;
+	private final long metricsToken, metricsStart;
+	private final boolean background, rendering;
+	private double tickMs, drawMs, submitMs, syncMs, limitMs;
 
 	public Frame(UILoop loop, UI ui, Render out, Frame prev) {
 	    this.loop = loop;
@@ -483,6 +495,10 @@ public abstract class UILoop implements Console.Directory {
 	    this.ui = ui;
 	    this.out = out;
 	    this.prev = prev;
+	    this.metricsToken = loop.metrics.enabled() ? loop.metrics.token() : -1;
+	    this.metricsStart = (metricsToken >= 0) ? System.nanoTime() : 0;
+	    this.background = (metricsToken >= 0) && loop.bgmode();
+	    this.rendering = !renderDisabled;
 	}
 
 	protected void tick() {
@@ -528,7 +544,9 @@ public abstract class UILoop implements Console.Directory {
 	    if((prev != null) && (prev.ftime + fd > now)) {
 		this.ftime = prev.ftime + fd;
 		long nanos = (long)((this.ftime - now) * 1e9);
+		long limitStart = (metricsToken >= 0) ? System.nanoTime() : 0;
 		Thread.sleep(nanos / 1000000, (int)(nanos % 1000000));
+		if(metricsToken >= 0) limitMs += (System.nanoTime() - limitStart) / 1e6;
 		waited += this.ftime - now;
 	    } else {
 		this.ftime = now;
@@ -541,7 +559,9 @@ public abstract class UILoop implements Console.Directory {
 	    if(prev != null) {
 		double then = Utils.rtime();
 		prev.sync.waitfor();
-		waited += Utils.rtime() - then;
+		double elapsed = Utils.rtime() - then;
+		waited += elapsed;
+		if(metricsToken >= 0) syncMs += elapsed * 1000;
 	    }
 	}
 
@@ -556,9 +576,13 @@ public abstract class UILoop implements Console.Directory {
 	    if(!swapsync) out.fence(sync);
 	    if(!tickwait) syncwait();
 	    ttime = Utils.rtime();
+	    long phaseStart = (metricsToken >= 0) ? System.nanoTime() : 0;
 	    tick();
+	    if(metricsToken >= 0) tickMs = (System.nanoTime() - phaseStart) / 1e6;
 	    if(tickwait) syncwait();
+	    if(metricsToken >= 0) phaseStart = System.nanoTime();
 	    display();
+	    if(metricsToken >= 0) drawMs = (System.nanoTime() - phaseStart) / 1e6;
 	    CPUProfile.phase(prof, "aux");
 	    swapbuffers();
 	    if(swapsync) out.fence(sync);
@@ -615,7 +639,9 @@ public abstract class UILoop implements Console.Directory {
 		    Frame curframe = frame(ui, buf, prevframe);
 		    prevframe = null;
 		    curframe.run();
+		    long submitStart = (curframe.metricsToken >= 0) ? System.nanoTime() : 0;
 		    env.submit(buf); buf = null;
+		    if(curframe.metricsToken >= 0) curframe.submitMs = (System.nanoTime() - submitStart) / 1e6;
 		    curframe.fin();
 
 		    framedone(curframe);
@@ -652,6 +678,40 @@ public abstract class UILoop implements Console.Directory {
 	});
 	cmdmap.put("profile", (cons, args) -> {
 	    profile.set(Utils.parsebool(args[1]));
+	});
+	cmdmap.put("perf", (cons, args) -> {
+	    String action = (args.length > 1) ? args[1] : "status";
+	    if(action.equals("start")) {
+		metrics.start();
+		cons.out.println("Frame capture started (last 36000 intervals retained).");
+	    } else if(action.equals("stop")) {
+		metrics.stop();
+		cons.out.println(metrics.snapshot().summary());
+	    } else if(action.equals("status")) {
+		cons.out.println((metrics.enabled() ? "Recording. " : "Stopped. ") + metrics.snapshot().summary());
+	    } else if(action.equals("export")) {
+		if(!exportingMetrics.compareAndSet(false, true)) {
+		    cons.out.println("A frame export is already running.");
+		    return;
+		}
+		final FrameMetrics.Snapshot snapshot = metrics.snapshot();
+		final String filename = (args.length > 2) ? args[2] : "performance-" + System.currentTimeMillis() + ".csv";
+		Thread writer = new Thread(() -> {
+		    try(java.io.Writer out = java.nio.file.Files.newBufferedWriter(java.nio.file.Paths.get(filename),
+			    java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE_NEW)) {
+			snapshot.writeCsv(out);
+			cons.out.println("Frame timings saved: " + filename);
+		    } catch(java.io.IOException | RuntimeException e) {
+			cons.out.println("Frame export failed: " + e.getMessage());
+		    } finally {
+			exportingMetrics.set(false);
+		    }
+		}, "Frame metrics export");
+		writer.setDaemon(true);
+		writer.start();
+	    } else {
+		cons.out.println("Usage: perf start|stop|status|export [new-file.csv]");
+	    }
 	});
 	cmdmap.put("renderer", (cons, args) -> {
 	    cons.out.printf("Toolkit: %s\n", UILoop.this.wnd.toolkit().description());

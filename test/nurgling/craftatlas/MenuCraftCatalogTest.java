@@ -1,5 +1,7 @@
 package nurgling.craftatlas;
 
+import haven.Loading;
+import haven.MenuGrid;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -10,6 +12,16 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MenuCraftCatalogTest {
+    @Test
+    void loadingPageMetadataMarksCatalogIncompleteForVisibleRetry() {
+        MenuGrid.Pagina page = new MenuGrid.Pagina(null, "loading", () -> { throw new Loading("not ready"); });
+
+        MenuCraftCatalog.PageReadResult read = MenuCraftCatalog.readPages(Collections.singletonList(page));
+
+        assertTrue(read.incomplete);
+        assertTrue(read.pages.isEmpty());
+    }
+
     @Test
     void pageGildingMetadataPreservesEquipmentSlotCapacity() {
         CraftAtlasEntry.Gilding gilding = new CraftAtlasEntry.Gilding(0.2, 0.5,

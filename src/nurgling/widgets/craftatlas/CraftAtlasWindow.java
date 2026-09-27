@@ -18,6 +18,7 @@ import nurgling.NWindowDeco;
 import nurgling.NUtils;
 import nurgling.actions.bots.CraftAtlasResourceCollector;
 import nurgling.craftatlas.CraftAtlasController;
+import nurgling.craftatlas.CraftAtlasOutputLookup;
 import nurgling.craftatlas.CraftAtlasEntry;
 import nurgling.craftatlas.CraftAtlasMaterialPlanner;
 import nurgling.craftatlas.CraftAtlasMaterialSource;
@@ -25,6 +26,7 @@ import nurgling.craftatlas.CraftAtlasObservationStore;
 import nurgling.craftatlas.CraftAtlasPreferences;
 import nurgling.craftatlas.CraftAtlasRecipeProbe;
 import nurgling.craftatlas.CraftAtlasSearch;
+import nurgling.craftatlas.CraftAtlasSnapshot;
 import nurgling.craftatlas.CraftExecutionBridge;
 import nurgling.craftatlas.MenuCraftCatalog;
 import nurgling.i18n.L10n;
@@ -50,6 +52,7 @@ public class CraftAtlasWindow extends Window {
     private MenuCraftCatalog catalog;
     private final CraftAtlasObservationStore observationStore;
     private final CraftAtlasController controller;
+    private final CraftAtlasOutputLookup outputLookup = new CraftAtlasOutputLookup();
     private final CraftAtlasPreferences preferences;
     private final CraftAtlasRecipeProbe recipeProbe = new CraftAtlasRecipeProbe();
     private final CraftAtlasController.Listener listener = this::stateChanged;
@@ -68,8 +71,7 @@ public class CraftAtlasWindow extends Window {
     private final Button[] sectionButtons = new Button[CraftAtlasSections.MAIN.size()];
     private final Button[] equipmentButtons = new Button[CraftAtlasSections.EQUIPMENT.size() + 1];
     private String section;
-    private int observedMenuRevision = Integer.MIN_VALUE;
-    private long observedStoreRevision = Long.MIN_VALUE;
+    private final CraftAtlasRefreshGate refreshGate = new CraftAtlasRefreshGate();
     private boolean subscribed;
     private boolean narrowDetails;
     private boolean collectionPreparing;
@@ -100,7 +102,8 @@ public class CraftAtlasWindow extends Window {
             MenuGrid.Pagina page = current == null ? null : current.recipeByResource(resource);
             return page == null ? null : () -> page.button().use(new MenuGrid.Interaction());
         }, System::nanoTime);
-        this.controller = new CraftAtlasController(catalog.rebuild(), bridge);
+        this.controller = new CraftAtlasController(CraftAtlasSnapshot.of(0, Collections.emptyList()),
+                bridge, outputLookup::find);
 
         help = add(new Button(UI.scale(34), "?").action(this::showSearchHelp));
         search = add(new TextEntry(UI.scale(520), "") {
@@ -197,8 +200,8 @@ public class CraftAtlasWindow extends Window {
         if(menu == value) return;
         menu = value;
         catalog = new MenuCraftCatalog(value, observationStore);
-        observedMenuRevision = Integer.MIN_VALUE;
-        refreshCatalog();
+        refreshGate.invalidate();
+        refreshCatalog(visible);
     }
 
     @Override protected void added() {
@@ -210,6 +213,7 @@ public class CraftAtlasWindow extends Window {
     }
 
     @Override public void destroy() {
+        outputLookup.close();
         if(subscribed) { controller.removeListener(listener); subscribed = false; }
         if(searchHelp != null) { searchHelp.reqdestroy(); searchHelp = null; }
         if(qualityWorkshop != null && qualityWorkshop.parent != null) qualityWorkshop.destroy();
@@ -219,7 +223,7 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void show() {
         releaseSearchFocus();
-        refreshCatalog();
+        refreshCatalog(true);
         if(parent != null) {
             Coord maximumOuter = parent.sz.sub(UI.scale(20, 20)).max(Coord.of(1, 1));
             Coord frame = sz.sub(csz());
@@ -235,6 +239,8 @@ public class CraftAtlasWindow extends Window {
 
     @Override public void tick(double dt) {
         super.tick(dt);
+        outputLookup.applyCompleted();
+        if(visible) outputLookup.requestIfNeeded();
         applyPendingStoredItems();
         if(preferences.storageFilter && !storageDatabaseEnabled()) {
             preferences.storageFilter = false;
@@ -246,8 +252,10 @@ public class CraftAtlasWindow extends Window {
                 storedItemsRevision != NGlobalSearchItems.storageRevision())
             requestStoredItems();
         requestRecipeProbe(controller.state().selected);
-        if((menu != null && observedMenuRevision != menu.pagseq) || observedStoreRevision != observationStore.revision())
-            refreshCatalog();
+        refreshCatalog(visible);
+        if(outputLookup.takeVisibleChange(visible)) {
+            if(controller.state().selected != null) details.refreshLinks();
+        }
         if(collectionThread == null)
             details.refreshMaterialsIfDue(System.nanoTime(), NGlobalSearchItems.storageRevision());
         if(collectionThread != null && !collectionThread.isAlive()) {
@@ -256,10 +264,14 @@ public class CraftAtlasWindow extends Window {
         }
     }
 
-    private void refreshCatalog() {
-        observedMenuRevision = menu == null ? 0 : menu.pagseq;
-        observedStoreRevision = observationStore.revision();
-        controller.replaceSnapshot(catalog.rebuild());
+    private void refreshCatalog(boolean visible) {
+        int menuRevision = menu == null ? 0 : menu.pagseq;
+        long storeRevision = observationStore.revision();
+        long now = System.nanoTime();
+        if(!refreshGate.shouldRefresh(visible, menuRevision, storeRevision, now)) return;
+        MenuCraftCatalog.RebuildResult result = catalog.rebuildWithStatus();
+        controller.replaceSnapshot(result.snapshot);
+        refreshGate.completed(menuRevision, storeRevision, result.incomplete, now);
     }
 
     private void selectSection(String value) {

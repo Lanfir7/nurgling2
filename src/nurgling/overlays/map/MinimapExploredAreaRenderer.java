@@ -8,6 +8,7 @@ import nurgling.widgets.NCornerMiniMap;
 import nurgling.widgets.NMiniMap;
 
 import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.awt.image.WritableRaster;
 import java.util.Iterator;
@@ -217,7 +218,11 @@ public class MinimapExploredAreaRenderer {
             raw[o + 2] = b;
             raw[o + 3] = a;
         }
-        return new TexI(PUtils.rasterimg(buf));
+        return cellTexture(PUtils.rasterimg(buf));
+    }
+
+    static TexI cellTexture(BufferedImage image) {
+        return new TexI(image, false).wrapmode(haven.render.Texture.Wrapping.CLAMP);
     }
 
     /** Sets destination pixels covered by one base-grid mask. Far zoom samples the block center. */

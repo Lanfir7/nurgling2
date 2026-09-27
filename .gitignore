@@ -1,4 +1,6 @@
 /build
+/performance-*.csv
+/rtk/
 /steam
 steam_appid.txt
 /local-config.properties

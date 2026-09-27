@@ -82,14 +82,12 @@ public class GobConfigWindow extends Window {
             @Override
             public void tick(double dt) {
                 super.tick(dt);
-                // The picker runs a Swing dialog on its own thread and just assigns `color`,
-                // so polling is the only way to notice the user chose something.
+                // The Swing picker publishes the accepted color for this UI tick to save.
                 if (!color.equals(GobCustomize.settings(GobConfigWindow.this.res).tintColor))
                     GobCustomize.set(GobConfigWindow.this.res, current().withTintColor(color));
             }
         }, prev.pos("bl").adds(12, 4));
         tintColor.color = s.tintColor;
-        tintColor.cb.colorChooser.setColor(s.tintColor);
         prev = tintColor;
 
         /* Search-style marker above the object. */
@@ -205,7 +203,6 @@ public class GobConfigWindow extends Window {
         tint.a = s.tint;
         marker.a = s.marker;
         tintColor.color = s.tintColor;
-        tintColor.cb.colorChooser.setColor(s.tintColor);
         if (minimapIcon != null)
             minimapIcon.a = iconSetting.show;
         if (notifySound != null)

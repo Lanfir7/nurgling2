@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Draws a flat colored circle on the ground under small critters
@@ -101,6 +102,7 @@ public class NCritterCircle extends Sprite {
     );
 
     private static final Set<String> CRITTER_SET = Set.copyOf(CRITTER_PATHS);
+    private static final Pattern RABBIT_PATH = Pattern.compile(".*/(rabbit|bunny)$");
 
     public static final String STOAT_PATH = "gfx/kritter/stoat/stoat";
 
@@ -239,7 +241,7 @@ public class NCritterCircle extends Sprite {
     public static boolean isCritter(String resName) {
         if (resName == null) return false;
         if (CRITTER_SET.contains(resName)) return true;
-        return resName.matches(".*/(rabbit|bunny)$");
+        return isRabbit(resName);
     }
 
     public static boolean hasCircle(String resName) {
@@ -285,7 +287,7 @@ public class NCritterCircle extends Sprite {
 
     public static boolean isRabbit(String resName) {
         if (resName == null) return false;
-        return resName.matches(".*/(rabbit|bunny)$");
+        return RABBIT_PATH.matcher(resName).matches();
     }
 
     /**

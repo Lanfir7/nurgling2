@@ -103,6 +103,36 @@ class CraftAtlasControllerTest {
         assertEquals("paginae/craft/axe", controller.state().selected.recipeResource);
     }
 
+    @Test
+    void sameRevisionSnapshotReplacementRefreshesExactNameIndex() {
+        CraftAtlasEntry first = CraftAtlasEntry.builder("first", "Iron  Axe").build();
+        CraftAtlasEntry duplicate = CraftAtlasEntry.builder("duplicate", " iron\taxe ").build();
+        CraftAtlasController controller = new CraftAtlasController(
+                CraftAtlasSnapshot.of(7, List.of(first)), null);
+
+        assertTrue(controller.hasUniqueExactName("IRON AXE"));
+        controller.replaceSnapshot(CraftAtlasSnapshot.of(7, List.of(first, duplicate)));
+        assertFalse(controller.hasUniqueExactName("IRON AXE"));
+        assertFalse(controller.selectExact(null, "IRON AXE"));
+
+        controller.replaceSnapshot(CraftAtlasSnapshot.of(7, List.of(duplicate)));
+        assertTrue(controller.hasUniqueExactName("IRON AXE"));
+        assertTrue(controller.selectExact(null, "IRON AXE"));
+        assertEquals("duplicate", controller.state().selected.recipeResource);
+    }
+
+    @Test
+    void nameFallbackKeepsSnapshotOrderForAmbiguousProducers() {
+        CraftAtlasEntry later = CraftAtlasEntry.builder("later", " Glue ").build();
+        CraftAtlasEntry earlier = CraftAtlasEntry.builder("earlier", "glue").build();
+        CraftAtlasController controller = new CraftAtlasController(
+                CraftAtlasSnapshot.of(2, List.of(later, earlier)), null);
+
+        assertEquals(CraftRecipeGraph.LinkState.MULTIPLE, controller.linkState("no-output-resource", "GLUE"));
+        controller.openIngredient("no-output-resource", "GLUE");
+        assertEquals(List.of("later", "earlier"), ids(controller.state().choices));
+    }
+
     private CraftAtlasEntry recipe(String id, String output, String input) {
         CraftAtlasEntry.Builder b = CraftAtlasEntry.builder(id, id).output(output).availability(CraftAtlasEntry.Availability.OPEN);
         if(input != null) b.input(new CraftAtlasEntry.InputSlot(1, false, Collections.singletonList(

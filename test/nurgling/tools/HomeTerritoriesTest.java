@@ -15,6 +15,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HomeTerritoriesTest {
     @Test
+    void savedHomePresenceMatchesDecodingAcrossWorldsAndMutableStorage() {
+        ClaimArea area = new ClaimArea(new ClaimArea.Tile(7L, 10, 20),
+                Collections.singletonList(new ClaimArea.Tile(7L, 10, 20)));
+        Map<String, Object> worlds = new LinkedHashMap<>();
+        List<Object> homes = new java.util.ArrayList<>();
+        worlds.put("home", homes);
+        worlds.put("elsewhere", HomeTerritories.encode(Collections.singletonList(
+                new HomeTerritories.Entry(HomeTerritories.Type.VILLAGE, "Moria"))));
+
+        assertFalse(HomeTerritories.hasSavedHomeForWorld(worlds, "home"));
+        assertFalse(HomeTerritories.hasSavedHomeForWorld(worlds, "unknown"));
+        homes.add(Map.of("type", "VILLAGE", "name", "  "));
+        homes.add(Map.of("type", "CLAIM", "name", "", "area", Map.of("anchor", "invalid")));
+        assertFalse(HomeTerritories.hasSavedHomeForWorld(worlds, "home"));
+        assertTrue(HomeTerritories.hasSavedHomeForWorld(worlds, "elsewhere"));
+
+        homes.addAll(HomeTerritories.encode(Collections.singletonList(
+                new HomeTerritories.Entry(HomeTerritories.Type.CLAIM, "", area))));
+        assertEquals(!HomeTerritories.decodeForWorld(worlds, "home").isEmpty(),
+                HomeTerritories.hasSavedHomeForWorld(worlds, "home"));
+        homes.clear();
+        assertFalse(HomeTerritories.hasSavedHomeForWorld(worlds, "home"));
+    }
+
+    @Test
     void persistsClaimGeometryAcrossJsonRoundTrip() {
         ClaimArea area = new ClaimArea(new ClaimArea.Tile(-812345678901L, 10, 20), Arrays.asList(
                 new ClaimArea.Tile(-812345678901L, 10, 20),

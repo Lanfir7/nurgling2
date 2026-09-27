@@ -31,12 +31,15 @@ public final class ClaimArea {
 
         @Override
         public int hashCode() {
-            return Objects.hash(gridId, x, y);
+            int hash = 31 + (int) (gridId ^ (gridId >>> 32));
+            hash = 31 * hash + x;
+            return 31 * hash + y;
         }
     }
 
     public final Tile anchor;
     private final Set<Tile> tiles;
+    private final int hash;
 
     public ClaimArea(Tile anchor, Collection<Tile> tiles) {
         this.anchor = Objects.requireNonNull(anchor);
@@ -45,6 +48,7 @@ public final class ClaimArea {
             copy.addAll(tiles);
         copy.add(anchor);
         this.tiles = Collections.unmodifiableSet(copy);
+        this.hash = 31 * (31 + anchor.hashCode()) + this.tiles.hashCode();
     }
 
     public int size() {
@@ -91,6 +95,6 @@ public final class ClaimArea {
 
     @Override
     public int hashCode() {
-        return Objects.hash(anchor, tiles);
+        return hash;
     }
 }

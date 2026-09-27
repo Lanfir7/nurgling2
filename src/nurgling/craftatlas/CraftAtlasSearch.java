@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 public final class CraftAtlasSearch {
     private static final Pattern NUMBER_FILTER = Pattern.compile(
             "^([\\p{L}\\p{N}_-]+)(>=|<=|=|>|<)([-+]?\\d+(?:[.,]\\d+)?)([\\p{L}]*)$");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Map<String, String> METRIC_ALIASES = metricAliases();
 
     private CraftAtlasSearch() { }
@@ -402,7 +403,8 @@ public final class CraftAtlasSearch {
     }
 
     public static String normalize(String value) {
-        return Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFKC)
-                .toLowerCase(Locale.ROOT).replace('ё', 'е').trim().replaceAll("\\s+", " ");
+        String normalized = Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFKC)
+                .toLowerCase(Locale.ROOT).replace('ё', 'е').trim();
+        return WHITESPACE.matcher(normalized).replaceAll(" ");
     }
 }

@@ -23,6 +23,27 @@ class NCompassTargetCollectorTest {
 
         assertEquals(Collections.singletonList(pointer),
                 NCompassTargetCollector.findPointers(root, nested));
+        assertEquals(Collections.singletonList(pointer),
+                NCompassTargetCollector.findPointers(nested, root));
+    }
+
+    @Test
+    void scansCurrentPointersInOverlappingAndDetachedRoots() {
+        Widget root = new Widget();
+        Widget gui = root.add(new Widget());
+        Pointer inGui = gui.add(new Pointer(null));
+        Widget sibling = root.add(new Widget());
+        Pointer outsideGui = sibling.add(new Pointer(null));
+        Widget detached = new Widget();
+        Pointer detachedPointer = detached.add(new Pointer(null));
+
+        assertEquals(Arrays.asList(inGui, outsideGui, detachedPointer),
+                NCompassTargetCollector.findPointers(gui, root, detached));
+
+        inGui.destroy();
+        Pointer fresh = gui.add(new Pointer(null));
+        assertEquals(Arrays.asList(fresh, outsideGui, detachedPointer),
+                NCompassTargetCollector.findPointers(gui, root, detached));
     }
 
     @Test

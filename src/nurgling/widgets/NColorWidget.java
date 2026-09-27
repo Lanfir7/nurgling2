@@ -3,20 +3,17 @@ package nurgling.widgets;
 import haven.*;
 import haven.Button;
 import haven.Label;
-import haven.render.MixColor;
-
 import javax.swing.*;
 import javax.swing.colorchooser.AbstractColorChooserPanel;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NColorWidget extends Widget
 {
     public NColorButton cb;
     public Label label;
 
-    public Color color = Color.BLACK;
+    public volatile Color color = Color.BLACK;
 
     /** Where the swatch sits when the label is short enough, so rows line up in a column. */
     private static final int SWATCH_X = UI.scale(80);
@@ -33,19 +30,11 @@ public class NColorWidget extends Widget
         pack();
     }
     public class NColorButton extends Button {
-        JColorChooser colorChooser;
+        private final AtomicBoolean opening = new AtomicBoolean();
+
         public NColorButton(){
             super(Inventory.sqsz.x, "");
             sz.y = Inventory.sqsz.y;
-            this.colorChooser = new JColorChooser();
-            final AbstractColorChooserPanel[] panels = colorChooser.getChooserPanels();
-            for (final AbstractColorChooserPanel accp : panels) {
-                if (!accp.getDisplayName().equals("RGB")) {
-                    colorChooser.removeChooserPanel(accp);
-                }
-            }
-            colorChooser.setPreviewPanel(new JPanel());
-            colorChooser.setColor(Color.WHITE);
         }
 
         @Override
@@ -65,26 +54,37 @@ public class NColorWidget extends Widget
 
         @Override
         public void click() {
-
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-
-                    JDialog chooser = JColorChooser.createDialog(null, "SelectColor", true, colorChooser, new AbstractAction() {
-                        @Override
-                        public void actionPerformed(ActionEvent e) {
-                            color = colorChooser.getColor();
-                        }
-                    }, new ActionListener() {
-                        @Override
-                        public void actionPerformed(ActionEvent e) {
-
-                        }
-                    });
-                    chooser.setVisible(true);
+            if (!opening.compareAndSet(false, true))
+                return;
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    JColorChooser chooser = createColorChooser(color);
+                    showColorChooser(chooser, () -> color = chooser.getColor());
+                } finally {
+                    opening.set(false);
                 }
-            }).start();
+            });
+        }
+    }
 
+    /** Created only when the player opens the picker, on the Swing event thread. */
+    protected JColorChooser createColorChooser(Color initial) {
+        JColorChooser chooser = new JColorChooser(initial == null ? Color.WHITE : initial);
+        for (AbstractColorChooserPanel panel : chooser.getChooserPanels()) {
+            if (!"RGB".equals(panel.getDisplayName()))
+                chooser.removeChooserPanel(panel);
+        }
+        chooser.setPreviewPanel(new JPanel());
+        return chooser;
+    }
+
+    protected void showColorChooser(JColorChooser chooser, Runnable accept) {
+        JDialog dialog = JColorChooser.createDialog(null, "SelectColor", true, chooser,
+                event -> accept.run(), event -> {});
+        try {
+            dialog.setVisible(true);
+        } finally {
+            dialog.dispose();
         }
     }
 }

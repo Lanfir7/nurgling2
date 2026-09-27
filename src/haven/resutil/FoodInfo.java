@@ -54,13 +54,14 @@ public class FoodInfo extends ItemInfo.Tip {
 
     public static class Event {
 	public static final Coord imgsz = new Coord(Text.std.height(), Text.std.height());
+	private static final EventImageCache images = new EventImageCache(128, 2L * 1024 * 1024);
 	public final BAttrWnd.FoodMeter.Event ev;
 	public final BufferedImage img;
 	public final double a;
 
 	public Event(Resource res, double a) {
 	    this.ev = res.flayer(BAttrWnd.FoodMeter.Event.class);
-	    this.img = PUtils.convolve(res.flayer(Resource.imgc).img, imgsz, CharWnd.iconfilter);
+	    this.img = images.get(res.flayer(Resource.imgc).img, imgsz);
 	    this.a = a;
 	}
 
@@ -68,6 +69,72 @@ public class FoodInfo extends ItemInfo.Tip {
 		this.ev = ev;
 		this.img = img;
 		this.a = a;
+	}
+    }
+
+    /** Only immutable resource pixels are shared; no texture or event state is cached. */
+    static final class EventImageCache {
+	private final int maxEntries;
+	private final long maxPixels;
+	private long pixels;
+	private final LinkedHashMap<ImageKey, BufferedImage> entries = new LinkedHashMap<>(16, 0.75f, true);
+
+	EventImageCache(int maxEntries, long maxPixels) {
+	    this.maxEntries = maxEntries;
+	    this.maxPixels = maxPixels;
+	}
+
+	BufferedImage get(BufferedImage source, Coord size) {
+	    ImageKey key = new ImageKey(source, size.x, size.y);
+	    synchronized(this) {
+		BufferedImage found = entries.get(key);
+		if(found != null)
+		    return(found);
+	    }
+	    BufferedImage image = PUtils.convolve(source, new Coord(key.width, key.height), CharWnd.iconfilter);
+	    // Include source pixels retained by the identity key in the memory budget.
+	    long cost = key.pixels();
+	    if(maxEntries <= 0 || cost > maxPixels)
+		return(image);
+	    synchronized(this) {
+		BufferedImage found = entries.get(key);
+		if(found != null)
+		    return(found);
+		while(!entries.isEmpty() && (entries.size() >= maxEntries || pixels + cost > maxPixels)) {
+		    Iterator<ImageKey> oldest = entries.keySet().iterator();
+		    pixels -= oldest.next().pixels();
+		    oldest.remove();
+		}
+		entries.put(key, image);
+		pixels += cost;
+	    }
+	    return(image);
+	}
+
+	private static final class ImageKey {
+	    final BufferedImage source;
+	    final int width, height;
+
+	    ImageKey(BufferedImage source, int width, int height) {
+		this.source = source;
+		this.width = width;
+		this.height = height;
+	    }
+
+	    long pixels() {
+		return((long) source.getWidth() * source.getHeight() + (long) width * height);
+	    }
+
+	    public int hashCode() {
+		return((System.identityHashCode(source) * 31 + width) * 31 + height);
+	    }
+
+	    public boolean equals(Object other) {
+		if(!(other instanceof ImageKey))
+		    return(false);
+		ImageKey key = (ImageKey)other;
+		return(source == key.source && width == key.width && height == key.height);
+	    }
 	}
     }
 

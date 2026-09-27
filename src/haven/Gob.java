@@ -626,9 +626,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	if(m != null)
 	    m.move(c);
 	this.rc = c;
-	if(NUtils.playerID()!=-1 && id == NUtils.playerID())  {
-		CheckGridsState.submit();
-	}
+	CheckGridsState.submit(this);
 	this.a = a;
     }
 

@@ -706,11 +706,14 @@ public class MiniMap extends Widget
 	}
 
 	private CachedImage img_c;
+	static TexI mapCellTexture(BufferedImage image) {
+	    return(new TexI(image, false).wrapmode(Texture.Wrapping.CLAMP));
+	}
 	public Tex img() {
 	    if(img_c == null) {
 		img_c = new CachedImage(grid -> {
 			if(grid instanceof MapFile.ZoomGrid) {
-			    return(Defer.later(() -> new TexI(grid.render(sc.mul(cmaps)))));
+			    return(Defer.later(() -> mapCellTexture(grid.render(sc.mul(cmaps)))));
 			} else {
 			    return(Defer.later(new Defer.Callable<Tex>() {
 				    MapFile.View view = new MapFile.View(seg);
@@ -723,7 +726,7 @@ public class MiniMap extends Widget
 						}
 					    }
 					    view.fin();
-					    return(new TexI(MapSource.drawmap(view, Area.sized(sc.mul(cmaps), cmaps))));
+					    return(mapCellTexture(MapSource.drawmap(view, Area.sized(sc.mul(cmaps), cmaps))));
 					}
 				    }
 				}));

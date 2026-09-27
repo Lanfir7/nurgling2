@@ -15,6 +15,20 @@ class NCritterCircleTest {
     private static final String SQUIRREL = "gfx/kritter/squirrel/squirrel";
 
     @Test
+    void rabbitFallbackKeepsFullPathMatchingSemantics() {
+        for (String path : List.of("gfx/kritter/rabbit/rabbit", "custom/bunny", "/rabbit",
+                "rabbit", "bunny", "custom/rabbit-f", "custom/bunny/extra", "custom/Rabbit",
+                "custom\nrabbit/rabbit", "custom/rabbit\n", "")) {
+            boolean rabbit = path.matches(".*/(rabbit|bunny)$");
+            assertEquals(rabbit, NCritterCircle.isRabbit(path), path);
+            assertEquals(NCritterCircle.CRITTER_PATHS.contains(path) || rabbit,
+                    NCritterCircle.isCritter(path), path);
+        }
+        assertFalse(NCritterCircle.isRabbit(null));
+        assertFalse(NCritterCircle.isCritter(null));
+    }
+
+    @Test
     void dumbledoreIsRecognizedAsCatchableCritter() {
         assertTrue(NCritterCircle.isCritter("gfx/kritter/dumbledore/dumbledore"));
     }

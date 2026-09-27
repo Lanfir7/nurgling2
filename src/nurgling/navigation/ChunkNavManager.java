@@ -120,6 +120,10 @@ public class ChunkNavManager {
      * Initialize the navigation system for a specific world.
      */
     public void initialize(String genus) {
+        initialize(genus, null);
+    }
+
+    public void initialize(String genus, ChunkNavFileStore.PreparedChunks prepared) {
         if (genus == null || genus.isEmpty()) {
             return;
         }
@@ -166,7 +170,7 @@ public class ChunkNavManager {
             this.currentInstanceId = SURFACE_INSTANCE;
 
             // Load saved data (with migration if needed)
-            load();
+            load(prepared);
             backfillClaimedHomeInteriors();
 
             this.initialized = true;
@@ -776,6 +780,10 @@ public class ChunkNavManager {
      * Loads from binary chunk files, with migration from old JSON format if needed.
      */
     public void load() {
+        load(null);
+    }
+
+    public void load(ChunkNavFileStore.PreparedChunks prepared) {
         if (currentGenus == null || fileStore == null) {
             return;
         }
@@ -785,13 +793,14 @@ public class ChunkNavManager {
             fileStore.cleanupTempFiles();
 
             // Check if we need to migrate from old JSON format
-            if (fileStore.needsMigration()) {
+            boolean migrating = fileStore.needsMigration();
+            if (migrating) {
                 System.out.println("ChunkNav: Migrating from JSON to binary format...");
                 migrateFromJson();
             }
 
             // Load all chunk files from directory
-            List<ChunkNavData> loadedChunks = fileStore.loadAllChunks();
+            List<ChunkNavData> loadedChunks = fileStore.loadAllChunks(migrating ? null : prepared);
 
             // Add chunks to graph
             for (ChunkNavData chunk : loadedChunks) {

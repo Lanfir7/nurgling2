@@ -13,6 +13,7 @@ import nurgling.craftatlas.CraftAtlasStationQualityUpdate;
 import nurgling.craftatlas.WikiReferenceCatalog;
 import nurgling.i18n.L10n;
 import nurgling.map.SharedMarkerClipboardService;
+import nurgling.navigation.ChunkNavFileStore;
 import nurgling.notifications.DiscordHookObject;
 import nurgling.overlays.QualityOl;
 import nurgling.tools.NAlias;
@@ -50,6 +51,7 @@ import static haven.Inventory.invsq;
 
 public class NGameUI extends GameUI
 {
+    private ChunkNavFileStore.PreparedChunks preparedChunkNav;
     private final SharedMarkerClipboardService sharedMarkerClipboardService;
     private final HearthHomeAutoSaver hearthHomeAutoSaver = new HearthHomeAutoSaver();
     private final LootNoticeController lootNotices = new LootNoticeController(this);
@@ -300,6 +302,16 @@ public class NGameUI extends GameUI
         initWorldSpeedMap();
         Float actualWorldSpeed = WORLD_SPEED_MAP.get(genus);
         worldSpeed = Objects.requireNonNullElse(actualWorldSpeed, DEFAULT_WORLD_SPEED);
+
+        // Widget construction runs before attachment takes the UI lock. Only read
+        // detached chunk files here; the manager and graph are still initialized in attached().
+        if(genus != null && !genus.isEmpty()) {
+            try {
+                preparedChunkNav = new ChunkNavFileStore(genus).prepareChunks();
+            } catch(RuntimeException ignored) {
+                // Keep the ordinary attachment-time load as the fallback.
+            }
+        }
     }
     
     /**
@@ -433,8 +445,10 @@ public class NGameUI extends GameUI
     protected void attached() {
         // Initialize profile-aware components BEFORE calling super.attached()
         // This ensures RouteGraphManager is available when RoutesWidget is created
+        ChunkNavFileStore.PreparedChunks prepared = preparedChunkNav;
+        preparedChunkNav = null;
         if (map instanceof NMapView) {
-            ((NMapView) map).initializeWithGenus(genus);
+            ((NMapView) map).initializeWithGenus(genus, prepared);
         }
 
         // Update NCore to use profile-aware config (now that UI and core are available)
@@ -1267,6 +1281,7 @@ public class NGameUI extends GameUI
         final int start;
         final int size;
         final String name;
+        private final ToolBeltButtonCache customButtons;
         private boolean vertical = false;
         ArrayList<NKeyBinding> beltkeys = new ArrayList<>();
         public NToolBelt(String name, int start, int group, int size) {
@@ -1275,6 +1290,7 @@ public class NGameUI extends GameUI
             this.group = group;
             this.size = size;
             this.name = name;
+            this.customButtons = new ToolBeltButtonCache(size);
             sz = beltc(size - 1).add(INVSZ);
             NToolBeltProp prop = NToolBeltProp.get(name);
             for(KeyBinding kb: prop.getKb())
@@ -1436,6 +1452,7 @@ public class NGameUI extends GameUI
             if(slot < 0) {return null;}
             String path;
             if((path = NToolBeltProp.get(name).custom.get(slot) )== null) {
+                customButtons.remove(slot - start);
                 GameUI.BeltSlot res = null;
                 if (ui != null && belt[slot] != null)
                     res = belt[slot];
@@ -1448,7 +1465,8 @@ public class NGameUI extends GameUI
                     String scenarioName = path.substring("scenario:".length());
                     for(nurgling.scenarios.Scenario scenario : ui.core.scenarioManager.getScenarios().values()) {
                         if(scenario.getName().equals(scenarioName)) {
-                            customObj = new NScenarioButton(scenario);
+                            customObj = cachedButton(slot, path, scenario, scenario.getName(),
+                                    scenario.getCustomIconId(), () -> new NScenarioButton(scenario));
                             break;
                         }
                     }
@@ -1456,9 +1474,11 @@ public class NGameUI extends GameUI
                     String presetId = path.substring("equippreset:".length());
                     nurgling.equipment.EquipmentPreset preset = ui.core.equipmentPresetManager.getPreset(presetId);
                     if(preset != null) {
-                        customObj = new nurgling.widgets.NEquipmentPresetButton(preset);
+                        customObj = cachedButton(slot, path, preset, preset.getName(),
+                                preset.getCustomIconId(), () -> new NEquipmentPresetButton(preset));
                     }
                 } else {
+                    customButtons.remove(slot - start);
                     customObj = botsMenu.find(path);
                 }
 
@@ -1467,11 +1487,28 @@ public class NGameUI extends GameUI
                     return customObj;
                 }
 
+                customButtons.remove(slot - start);
+
                 GameUI.BeltSlot res = null;
                 if (ui != null && belt[slot] != null)
                     res = belt[slot];
                 return res;
             }
+        }
+
+        private IButton cachedButton(int slot, String path, Object source, String title, String iconId,
+                                     java.util.function.Supplier<? extends IButton> create) {
+            CustomIcon icon = iconId == null ? null : CustomIconManager.getInstance().getIcon(iconId);
+            Object images = icon == null ? null : icon.getImages();
+            return customButtons.get(slot - start, source, path, title, iconId, images,
+                    UI.scale(32), UI.scale(12), create);
+        }
+
+        @Override
+        public void dispose() {
+            customButtons.clear();
+            curitem = curtt = null;
+            super.dispose();
         }
 
         private int slot(int i) {return i + start;}

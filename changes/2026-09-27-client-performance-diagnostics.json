@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-client-performance-diagnostics",
+  "priority": 7,
+  "summary": {
+    "ru": "Снижена нагрузка от настроек, миникарты и обработки объектов; добавлена запись задержек кадров для поиска микрофризов.",
+    "en": "Reduced settings, minimap and world-object processing overhead; added frame timing capture to investigate stutters."
+  },
+  "detail": {
+    "ru": "Снижена нагрузка при входе, смене сессий и открытии атласа. Сохранение настроек и подписи зон готовятся в фоне. Ускорены загрузка карты, панели и компас. При закрытии сессии сохранённые метки не переписываются. Скрытые атлас и энциклопедия не готовят страницы; связи рецептов загружаются в фоне. Диагностика: консоль : (Shift+; в английской раскладке), perf start, perf stop, perf export. Запись последних 36000 интервалов кадров по умолчанию выключена.",
+    "en": "Reduced work on login, session changes and opening the Atlas. Settings saves and area labels run in the background. Improved map loading, action bars and compass. Saved map marks are not rewritten on session close. Hidden Atlas and encyclopedia defer content work; recipe links load in the background. Diagnostics: console : (Shift+; on an English keyboard), perf start, perf stop, perf export. Capture keeps 36000 frame intervals and is off by default."
+  }
+}

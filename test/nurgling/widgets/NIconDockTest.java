@@ -12,6 +12,7 @@ import java.awt.image.WritableRaster;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NIconDockTest {
@@ -170,6 +171,41 @@ class NIconDockTest {
         BufferedImage hi = NIconDock.hiRes(src, new Coord(16, 16));
         assertEquals(64, hi.getWidth());
         assertEquals(64, hi.getHeight());
+    }
+
+    @Test
+    void resourceRasterIsReusedWithoutChangingPixelsAndRebuiltForScale() {
+        NIconDock.ImageCache cache = new NIconDock.ImageCache(4, 100000);
+        BufferedImage src = rgba(4, 4);
+        src.setRGB(1, 2, 0xffe04517);
+        BufferedImage first = cache.get(src, new Coord(4, 4));
+        BufferedImage reference = NIconDock.hiRes(src, new Coord(4, 4));
+        for(int y = 0; y < first.getHeight(); y++)
+            for(int x = 0; x < first.getWidth(); x++)
+                assertEquals(reference.getRGB(x, y), first.getRGB(x, y));
+        for(int i = 0; i < 100; i++) assertSame(first, cache.get(src, new Coord(4, 4)));
+        BufferedImage scaled = cache.get(src, new Coord(8, 8));
+        assertNotSame(first, scaled);
+        assertEquals(32, scaled.getWidth());
+        assertSame(scaled, cache.get(src, new Coord(8, 8)));
+        assertNotSame(scaled, cache.get(rgba(4, 4), new Coord(8, 8)));
+    }
+
+    @Test
+    void resourceRasterCacheEvictsByRecencyAndPixelBudget() {
+        NIconDock.ImageCache cache = new NIconDock.ImageCache(2, 10000);
+        BufferedImage a = rgba(2, 2), b = rgba(2, 2), c = rgba(2, 2);
+        Coord size = new Coord(2, 2);
+        BufferedImage first = cache.get(a, size), second = cache.get(b, size);
+        assertSame(first, cache.get(a, size));
+        cache.get(c, size);
+        assertSame(first, cache.get(a, size));
+        assertNotSame(second, cache.get(b, size));
+        NIconDock.ImageCache small = new NIconDock.ImageCache(10, 64);
+        BufferedImage one = small.get(a, size);
+        small.get(b, size);
+        assertNotSame(one, small.get(a, size));
+        assertNotSame(small.get(a, new Coord(4, 4)), small.get(a, new Coord(4, 4)));
     }
 
     private static BufferedImage rgba(int w, int h) {

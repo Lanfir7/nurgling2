@@ -388,17 +388,33 @@ public class MenuGrid extends Widget implements KeyBinding.Bindable {
     }
 
     /** Stable copy for read-only encyclopedia consumers. */
+    public static class RecipeSnapshot {
+        public final List<Pagina> pages;
+        public final boolean incomplete;
+
+        private RecipeSnapshot(List<Pagina> pages, boolean incomplete) {
+            this.pages = Collections.unmodifiableList(pages);
+            this.incomplete = incomplete;
+        }
+    }
+
     public List<Pagina> recipeSnapshot() {
+	return(recipeSnapshotWithStatus().pages);
+    }
+
+    public RecipeSnapshot recipeSnapshotWithStatus() {
 	List<Pagina> result = new ArrayList<>();
+	boolean incomplete = false;
 	synchronized(paginae) {
 	    for(Pagina page : paginae) {
 		try {
 		    if(isCraftAction(page)) result.add(page);
 		} catch(Loading ignored) {
+		    incomplete = true;
 		}
 	    }
 	}
-	return(Collections.unmodifiableList(result));
+	return(new RecipeSnapshot(result, incomplete));
     }
 
     public Pagina recipeByResource(String resource) {

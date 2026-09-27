@@ -30,6 +30,16 @@ public final class WikiReferenceCatalog {
     private WikiReferenceCatalog() { }
 
     public static List<CraftAtlasEntry> loadBundled() {
+        return Bundled.entries;
+    }
+
+    // The packaged reference and all entry values are immutable and world-independent.
+    // Parse once, rather than on every session's hidden Atlas construction.
+    private static final class Bundled {
+        private static final List<CraftAtlasEntry> entries = readBundled();
+    }
+
+    private static List<CraftAtlasEntry> readBundled() {
         InputStream input = WikiReferenceCatalog.class.getResourceAsStream(RESOURCE);
         if(input == null) return Collections.emptyList();
         try(InputStream closeable = input) {

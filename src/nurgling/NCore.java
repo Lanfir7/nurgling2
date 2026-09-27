@@ -426,15 +426,15 @@ public class NCore extends Widget
         super.tick(dt);
         
         // Save global config (UI settings, credentials, etc.)
-        if (NConfig.current != null && NConfig.current.isUpdated())
+        if (NConfig.current != null)
         {
-            NConfig.current.write();
+            NConfig.current.writeIfUpdated();
         }
         
         // Save profile-specific config and data
-        if (config.isUpdated())
+        if (config != NConfig.current)
         {
-            config.write();
+            config.writeIfUpdated();
         }
         // Area-save trigger is now per-session: check THIS session's own MCache
         // dirty flag (not the genus-shared NConfig) so a same-world session can't

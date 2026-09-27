@@ -23,12 +23,10 @@ import nurgling.tools.DefaultAnimalAlarms;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 public final class NCompassTargetCollector {
     private static final Color DATABASE_COLOR = new Color(102, 214, 255);
@@ -244,21 +242,37 @@ public final class NCompassTargetCollector {
 
     static List<Pointer> findPointers(Widget... roots) {
         List<Pointer> pointers = new ArrayList<>();
-        Set<Widget> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        List<Widget> scannedRoots = new ArrayList<>();
         if (roots != null) {
-            for (Widget root : roots)
-                collectPointers(root, visited, pointers);
+            for (Widget root : roots) {
+                if (root == null || coveredByScannedRoot(root, scannedRoots))
+                    continue;
+                collectPointers(root, scannedRoots, pointers);
+                scannedRoots.add(root);
+            }
         }
         return pointers;
     }
 
-    private static void collectPointers(Widget widget, Set<Widget> visited, List<Pointer> pointers) {
-        if (widget == null || !visited.add(widget))
-            return;
+    private static boolean coveredByScannedRoot(Widget root, List<Widget> scannedRoots) {
+        for (Widget ancestor = root; ancestor != null; ancestor = ancestor.parent) {
+            for (Widget scanned : scannedRoots) {
+                if (ancestor == scanned)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static void collectPointers(Widget widget, List<Widget> scannedRoots, List<Pointer> pointers) {
+        for (Widget scanned : scannedRoots) {
+            if (widget == scanned)
+                return;
+        }
         if (widget instanceof Pointer)
             pointers.add((Pointer) widget);
-        for (Widget child : widget.children())
-            collectPointers(child, visited, pointers);
+        for (Widget child = widget.child; child != null; child = child.next)
+            collectPointers(child, scannedRoots, pointers);
     }
 
     static String choosePartyName(String cached, String buddy, String fallback) {

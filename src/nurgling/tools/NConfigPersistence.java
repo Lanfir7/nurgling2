@@ -32,9 +32,9 @@ public final class NConfigPersistence {
     static String mergeChangedKeys(String baselineJson, String localJson, String latestJson) {
         Map<String, Object> baseline = parseObject(baselineJson);
         Map<String, Object> local = parseObject(localJson);
-        Map<String, Object> latest = isObject(latestJson)
-                ? parseObject(latestJson)
-                : new LinkedHashMap<>(baseline);
+        Map<String, Object> latest = tryParseObject(latestJson);
+        if (latest == null)
+            latest = new LinkedHashMap<>(baseline);
         Set<String> keys = new HashSet<>(baseline.keySet());
         keys.addAll(local.keySet());
 
@@ -94,25 +94,29 @@ public final class NConfigPersistence {
             return null;
         }
         String json = new String(raw, StandardCharsets.UTF_8);
-        return isObject(json) ? json : null;
-    }
-
-    private static boolean isObject(String json) {
-        if (json == null || json.isBlank()) {
-            return false;
-        }
+        if (json.isBlank())
+            return null;
         try {
             new JSONObject(json);
-            return true;
+            return json;
         } catch (RuntimeException e) {
-            return false;
+            return null;
+        }
+    }
+
+    private static Map<String, Object> tryParseObject(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return new LinkedHashMap<>(new JSONObject(json).toMap());
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 
     private static Map<String, Object> parseObject(String json) {
-        if (!isObject(json)) {
-            return new LinkedHashMap<>();
-        }
-        return new LinkedHashMap<>(new JSONObject(json).toMap());
+        Map<String, Object> parsed = tryParseObject(json);
+        return parsed != null ? parsed : new LinkedHashMap<>();
     }
 }

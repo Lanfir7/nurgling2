@@ -12,72 +12,157 @@ import nurgling.areas.AreaLabelSync;
 import nurgling.areas.NArea;
 import nurgling.widgets.Specialisation;
 
-import java.awt.*;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
 
-public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2D{
+public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2D {
     private boolean isSelected = false;
+    volatile boolean disposed;
+    boolean requestNeeded = true;
+    private int renderSlots;
+    private final AreaLabelRenderQueue.Mailbox<Images> raster = new AreaLabelRenderQueue.Mailbox<>();
     protected Coord3f pos;
     public TexI label = null;
     public TexI sellabel = null;
     public TexI graylabel = null;
-    protected TexI img = null;
     NArea area;
     public Coord sc;
     boolean forced = false;
     int sizeSpec;
+
     public NAreaLabel(Owner owner, NArea area) {
         super(owner, null);
-        pos = new Coord3f(0,0,2);
+        pos = new Coord3f(0, 0, 2);
         this.area = area;
         sizeSpec = area.spec.size();
         update();
     }
 
-
-    public void update()
-    {
-        BufferedImage img = NStyle.openings.render(area.name).img;
-        BufferedImage selimg = NStyle.selopenings.render(area.name).img;
-        BufferedImage grayimg = NStyle.disabledopenings.render(area.name).img;
-        if (area.showsQuality() && area.maxQuality >= 0) {
-            String quality = "Q" + area.maxQuality;
-            img = stackQuality(img, qualityImage(quality, Color.WHITE));
-            selimg = stackQuality(selimg, qualityImage(quality, Color.GREEN));
-            grayimg = stackQuality(grayimg, qualityImage(quality, Color.GRAY));
+    /** Invalidates a snapshot after name, quality, or specialisation changes. */
+    public synchronized void update() {
+        if (!disposed) {
+            requestNeeded = true;
+            raster.invalidate();
         }
-        if(!area.spec.isEmpty()) {
-            int iconSize = UI.scale(32);
-            BufferedImage first = Specialisation.findSpecialisation(area.spec.get(0).name) == null ? null : Specialisation.findSpecialisation(area.spec.get(0).name).image;
-            BufferedImage ret = TexI.mkbuf(new Coord(iconSize, iconSize));
-            Graphics g = ret.getGraphics();
-            g.drawImage(first, 0, 0, iconSize, iconSize, null);
-            g.dispose();
-            first = ret;
-            if (area.spec.size() > 1) {
+    }
 
-                for (int i = 1; i < area.spec.size(); i++) {
-                    first = ItemInfo.catimgsh(UI.scale(5), first, new Coord(iconSize, iconSize), Specialisation.findSpecialisation(area.spec.get(i).name).image);
-                }
+    static final class Style {
+        final Font font;
+        final Color color;
+        final boolean antialias;
+        final int glowRadius;
+        final int blurRadius;
+        final Color outline;
+
+        Style(Font font, Color color, boolean antialias, int glowRadius, int blurRadius, Color outline) {
+            this.font = font;
+            this.color = color;
+            this.antialias = antialias;
+            this.glowRadius = glowRadius;
+            this.blurRadius = blurRadius;
+            this.outline = outline;
+        }
+
+        BufferedImage render(String text) {
+            // Foundry caches FontMetrics internally, so each worker render gets its own instance.
+            Text.Foundry foundry = new Text.Foundry(font, color).aa(antialias);
+            return new PUtils.BlurFurn(foundry, glowRadius, blurRadius, outline).render(text).img;
+        }
+    }
+
+    static Style snapshotStyle(Text.Furnace source) {
+        PUtils.BlurFurn blur = (PUtils.BlurFurn) source;
+        Text.Foundry foundry = (Text.Foundry) blur.back;
+        return new Style(foundry.font, foundry.defcol, foundry.aa,
+                blur.grad, blur.brad, blur.col);
+    }
+
+    static final class Request {
+        final String name;
+        final String quality;
+        final List<BufferedImage> icons;
+        final Style[] titleStyles;
+        final Font qualityFont;
+        final int iconSize;
+        final int specGap;
+        final int qualityGap;
+
+        Request(String name, String quality, List<BufferedImage> icons, Style[] titleStyles,
+                Font qualityFont, int iconSize, int specGap, int qualityGap) {
+            this.name = name;
+            this.quality = quality;
+            this.icons = List.copyOf(icons);
+            this.titleStyles = titleStyles.clone();
+            this.qualityFont = qualityFont;
+            this.iconSize = iconSize;
+            this.specGap = specGap;
+            this.qualityGap = qualityGap;
+        }
+    }
+
+    private Request snapshot() {
+        List<BufferedImage> icons = new ArrayList<>();
+        for (NArea.Specialisation spec : area.spec) {
+            Specialisation.SpecialisationItem item = Specialisation.findSpecialisation(spec.name);
+            if (item != null && item.image != null)
+                icons.add(item.image); // Resource-loaded icons are never mutated after publication.
+        }
+        String quality = area.showsQuality() && area.maxQuality >= 0
+                ? "Q" + area.maxQuality : null;
+        int fontSize = UI.scale(11);
+        Font qualityFont = Text.sans.deriveFont(Font.BOLD, fontSize)
+                .deriveFont(UI.scale(11f));
+        return new Request(area.name, quality, icons,
+                new Style[] {snapshotStyle(NStyle.openings), snapshotStyle(NStyle.selopenings),
+                        snapshotStyle(NStyle.disabledopenings)}, qualityFont,
+                UI.scale(32), UI.scale(5), UI.scale(1));
+    }
+
+    static final class Images {
+        final BufferedImage normal;
+        final BufferedImage selected;
+        final BufferedImage disabled;
+
+        Images(BufferedImage normal, BufferedImage selected, BufferedImage disabled) {
+            this.normal = normal;
+            this.selected = selected;
+            this.disabled = disabled;
+        }
+    }
+
+    static Images rasterize(Request request) {
+        BufferedImage[] labels = new BufferedImage[3];
+        Color[] qualityColors = {Color.WHITE, Color.GREEN, Color.GRAY};
+        for (int i = 0; i < labels.length; i++) {
+            labels[i] = request.titleStyles[i].render(request.name);
+            if (request.quality != null) {
+                Style qualityStyle = new Style(request.qualityFont, qualityColors[i], true,
+                        1, 1, new Color(60, 30, 30));
+                labels[i] = stackQuality(labels[i], qualityStyle.render(request.quality),
+                        request.qualityGap);
             }
-            img = ItemInfo.catimgsh(UI.scale(5), img, first);
-            selimg = ItemInfo.catimgsh(UI.scale(5), selimg, first);
-            grayimg = ItemInfo.catimgsh(UI.scale(5), grayimg, first);
         }
-        label = new TexI(img);
-        sellabel = new TexI(selimg);
-        graylabel = new TexI(grayimg);
+        if (!request.icons.isEmpty()) {
+            BufferedImage icons = TexI.mkbuf(new Coord(request.iconSize, request.iconSize));
+            Graphics g = icons.getGraphics();
+            g.drawImage(request.icons.get(0), 0, 0, request.iconSize, request.iconSize, null);
+            g.dispose();
+            for (int i = 1; i < request.icons.size(); i++)
+                icons = ItemInfo.catimgsh(request.specGap, icons,
+                        new Coord(request.iconSize, request.iconSize), request.icons.get(i));
+            for (int i = 0; i < labels.length; i++)
+                labels[i] = ItemInfo.catimgsh(request.specGap, labels[i], icons);
+        }
+        return new Images(labels[0], labels[1], labels[2]);
     }
 
-    private static BufferedImage qualityImage(String quality, Color color) {
-        return new PUtils.BlurFurn(
-                new Text.Foundry(Text.sans.deriveFont(Font.BOLD, UI.scale(11)), 11, color).aa(true),
-                1, 1, new Color(60, 30, 30)).render(quality).img;
-    }
-
-    private static BufferedImage stackQuality(BufferedImage title, BufferedImage quality) {
+    private static BufferedImage stackQuality(BufferedImage title, BufferedImage quality, int gap) {
         int width = Math.max(title.getWidth(), quality.getWidth());
-        int gap = UI.scale(1);
         BufferedImage result = TexI.mkbuf(new Coord(width, title.getHeight() + gap + quality.getHeight()));
         Graphics2D g = result.createGraphics();
         g.drawImage(title, (width - title.getWidth()) / 2, 0, null);
@@ -86,66 +171,120 @@ public class NAreaLabel extends Sprite implements RenderTree.Node, PView.Render2
         return result;
     }
 
+    private void installReady() {
+        Images images = raster.take();
+        if (images == null || disposed)
+            return;
+        TexI newNormal = new TexI(images.normal);
+        TexI newSelected = new TexI(images.selected);
+        TexI newDisabled = new TexI(images.disabled);
+        TexI oldNormal = label, oldSelected = sellabel, oldDisabled = graylabel;
+        label = newNormal;
+        sellabel = newSelected;
+        graylabel = newDisabled;
+        requestNeeded = false;
+        if (oldNormal != null) oldNormal.dispose();
+        if (oldSelected != null) oldSelected.dispose();
+        if (oldDisabled != null) oldDisabled.dispose();
+    }
+
+    private void releaseTextures() {
+        TexI oldNormal = label, oldSelected = sellabel, oldDisabled = graylabel;
+        label = sellabel = graylabel = null;
+        if (oldNormal != null) oldNormal.dispose();
+        if (oldSelected != null) oldSelected.dispose();
+        if (oldDisabled != null) oldDisabled.dispose();
+    }
+
+    @Override
+    public synchronized void added(RenderTree.Slot slot) {
+        if (!disposed)
+            renderSlots++;
+    }
+
+    @Override
+    public synchronized void removed(RenderTree.Slot slot) {
+        if (disposed)
+            return;
+        if (renderSlots > 0 && --renderSlots == 0) {
+            raster.invalidate();
+            requestNeeded = true;
+            sc = null;
+            releaseTextures();
+        }
+    }
+
     @Override
     public boolean tick(double dt) {
-        if(NUtils.getGameUI()==null)
+        if (disposed)
+            return true;
+        if (NUtils.getGameUI() == null)
             return false;
-        isSelected =NUtils.getGameUI().areas!=null && NUtils.getGameUI().areas.al.sel != null && NUtils.getGameUI().areas.al.sel.area == area;
+        isSelected = NUtils.getGameUI().areas != null && NUtils.getGameUI().areas.al.sel != null
+                && NUtils.getGameUI().areas.al.sel.area == area;
         if (area.spec.size() != sizeSpec) {
             sizeSpec = area.spec.size();
             update();
         }
-        return NUtils.findGob(((Gob) owner).id) == null;
+        boolean gone = NUtils.findGob(((Gob) owner).id) == null;
+        if (gone)
+            dispose();
+        return gone;
     }
 
     @Override
-    public void draw(GOut g, Pipe state) {
-        // ВАЖНО: Проверяем видимость зоны
-        // Зона должна быть видна если:
-        // 1. Окно редактирования зон открыто ИЛИ включен тоггл "показывать все зоны"
-        // 2. Зона не скрыта локально (hide = false)
-        NGameUI gui = NUtils.getGameUI();
-        boolean areasWindowOpen = gui != null && gui.areas != null && gui.areas.visible();
-        boolean showAllZones = AreaLabelSync.toggleOn(NConfig.get(NConfig.Key.showAllZonesAlways));
-        
-        if (area.hide && !showAllZones) {
-            // Зона скрыта и не включен режим "показывать все"
-            return;
-        }
-        
-        if (!areasWindowOpen && !showAllZones) {
-            return;
-        }
-        if (area.getLoadedRCArea(false) == null) {
+    public synchronized void draw(GOut g, Pipe state) {
+        if (disposed) {
             sc = null;
             return;
         }
-        
+        NGameUI gui = NUtils.getGameUI();
+        boolean areasWindowOpen = gui != null && gui.areas != null && gui.areas.visible();
+        boolean showAllZones = AreaLabelSync.toggleOn(NConfig.get(NConfig.Key.showAllZonesAlways));
+        if ((area.hide && !showAllZones) || (!areasWindowOpen && !showAllZones)
+                || area.getLoadedRCArea(false) == null) {
+            sc = null;
+            return;
+        }
+
+        installReady();
+        if (requestNeeded && raster.canSubmit(System.nanoTime())) {
+            try {
+                Request request = snapshot();
+                raster.submit(() -> rasterize(request), System.nanoTime());
+            } catch (Loading | java.util.ConcurrentModificationException ignored) {
+                // Resource or area data is still arriving; the next visible draw retries.
+            }
+        }
+        TexI visible = isSelected ? sellabel : area.hide ? graylabel : label;
+        if (visible == null) {
+            sc = null;
+            return;
+        }
         Coord projected = Homo3D.obj2view(pos, state, Area.sized(g.sz())).round2();
         int markerRadius = NStyle.iCropMap.get(NStyle.CropMarkers.BLUE).sz().y / 2;
-        int gap = UI.scale(3);
-        sc = projected.sub(0, label.sz().y / 2 + markerRadius + gap);
-        if (label != null)
-            if(isSelected)
-            {
-                g.aimage(sellabel, sc, 0.5, 0.5);
-            }
-            else if(area.hide && graylabel != null)
-            {
-                g.aimage(graylabel, sc, 0.5, 0.5);
-            }
-            else {
-                g.aimage(label, sc, 0.5, 0.5);
-            }
+        sc = projected.sub(0, visible.sz().y / 2 + markerRadius + UI.scale(3));
+        g.aimage(visible, sc, 0.5, 0.5);
     }
 
-    public boolean isect(Coord pc) {
-        if(sc == null || label == null)
+    public synchronized boolean isect(Coord pc) {
+        if (disposed || sc == null || label == null)
             return false;
         NGameUI gui = NUtils.getGameUI();
         if (!AreaLabelSync.labelsClickable(gui != null && gui.areas != null && gui.areas.visible()))
             return false;
         Coord ul = sc.sub(label.sz().div(2));
         return pc.isect(ul, label.sz());
+    }
+
+    @Override
+    public synchronized void dispose() {
+        if (disposed)
+            return;
+        disposed = true;
+        raster.close();
+        sc = null;
+        releaseTextures();
+        super.dispose();
     }
 }
