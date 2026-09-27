@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-item-gain-notices",
+  "priority": 7,
+  "summary": {
+    "ru": "Добытые предметы появляются под компасом с иконкой и количеством.",
+    "en": "Newly acquired items appear below the compass with an icon and quantity."
+  },
+  "detail": {
+    "ru": "При получении предметов появляется короткое плавное уведомление под компасом; одинаковая добыча объединяется в одну строку. В настройках «Удобство» можно изменить положение и непрозрачность фона, отключить показ или открыть пример.",
+    "en": "A brief animated notice appears below the compass when you gain items, combining repeated gains into one row. Quality of Life settings let you adjust its position and background opacity, turn it off, or preview it."
+  }
+}

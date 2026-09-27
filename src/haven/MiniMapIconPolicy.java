@@ -82,6 +82,24 @@ final class MiniMapIconPolicy {
         return ClaimLand.shouldPlayIconNotify(onClaim);
     }
 
+    enum PlayerAlert { WAIT, MUTE, PLAY }
+
+    static PlayerAlert playerAlert(String iconResName, boolean buddyPending,
+                                   Integer group, double ageSeconds) {
+        if (!isPlayerMapIcon(iconResName))
+            return PlayerAlert.PLAY;
+        if (buddyPending)
+            return PlayerAlert.WAIT;
+        if (group != null) {
+            if (group < 0 || group > 7)
+                return PlayerAlert.WAIT;
+            // The kin list uses group 0 for white and 2 for red.
+            return (group == 0 || group == 2)
+                    ? PlayerAlert.PLAY : PlayerAlert.MUTE;
+        }
+        return ageSeconds >= 4.0 ? PlayerAlert.PLAY : PlayerAlert.WAIT;
+    }
+
     static void fireIconNotify(DefaultAnimalAlarms.State alarmState, boolean onClaim,
                                String pose, String iconResName) {
         fireIconNotify(alarmState, () -> onClaim, pose, iconResName);
@@ -92,7 +110,10 @@ final class MiniMapIconPolicy {
         if (alarmState == null || !alarmState.isPending()) {
             return;
         }
-        boolean mute = (onClaim != null) && Boolean.TRUE.equals(onClaim.get());
+        Boolean claim = (onClaim == null) ? null : onClaim.get();
+        if (claim == null)
+            return;
+        boolean mute = claim;
         if (!shouldPlayIconNotify(mute)) {
             alarmState.dropSound();
             return;

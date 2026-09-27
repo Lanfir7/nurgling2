@@ -13,6 +13,7 @@ import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
 import nurgling.tools.StackSupporter;
+import nurgling.tools.VSpec;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -91,6 +92,10 @@ public class TransferToPiles implements Action{
                     allCategoryItemsInCurrentArea);
         }
         return pileMode(th, mixedCategory, allCategoryItemsInCurrentArea);
+    }
+
+    static boolean requiresExactItemTransfer(String exactName) {
+        return exactName != null && VSpec.getCategory(exactName).contains("Gemstones");
     }
 
     static boolean allQualitiesInBand(List<Double> qualities,
@@ -409,6 +414,11 @@ public class TransferToPiles implements Action{
         PileMode mode = pileMode(th, maxQualityExclusive, mixedCategory,
                 thresholdBand && allExactItemsInCurrentBand(gui),
                 allCategoryItemsInCurrentArea);
+        // Gem sizes and cuts share a resource. Server-side bulk transfers may select
+        // another variant even when the selected inventory row has an exact name.
+        if (requiresExactItemTransfer(exactName)) {
+            mode = PileMode.ONE_BY_ONE;
+        }
         boolean accepted = true;
         if (mode == PileMode.ONE_BY_ONE) {
             transferOneByOne(gui, target_size);

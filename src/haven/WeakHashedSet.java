@@ -39,9 +39,9 @@ public class WeakHashedSet<E> extends AbstractSet<E> {
     static class Ref<T> extends WeakReference<T> {
 	final int hash;
 
-	Ref(T ob, ReferenceQueue<T> q) {
+	Ref(T ob, ReferenceQueue<T> q, int hash) {
 	    super(ob, q);
-	    this.hash = ob.hashCode();
+	    this.hash = hash;
 	}
     }
 
@@ -68,20 +68,17 @@ public class WeakHashedSet<E> extends AbstractSet<E> {
 	return((idx + 1) & (tab.length - 1));
     }
 
-    private int hashidx(Ref[] tab, E el) {
-	return(hash.hash(el) & (tab.length - 1));
-    }
-
     @SuppressWarnings("unchecked")
     private int findidx(Ref<E>[] tab, Object e) {
 	E el = (E)e;
-	int idx = hashidx(tab, el);
+	int h = hash.hash(el);
+	int idx = h & (tab.length - 1);
 	while(true) {
 	    Ref<E> cref = tab[idx];
 	    if(cref == null)
 		return(-1);
 	    E cur = cref.get();
-	    if((cur != null) && hash.equal(el, cur))
+	    if((cur != null) && (cref.hash == h) && hash.equal(el, cur))
 		return(idx);
 	    idx = nextidx(tab, idx);
 	}
@@ -167,17 +164,18 @@ public class WeakHashedSet<E> extends AbstractSet<E> {
 	    throw(new NullPointerException());
 	clean();
 	Ref<E>[] tab = this.tab;
-	int idx = hashidx(tab, el);
+	int h = hash.hash(el);
+	int idx = h & (tab.length - 1);
 	while(true) {
 	    Ref<E> cref = tab[idx];
 	    if(cref == null)
 		break;
 	    E cur = cref.get();
-	    if((cur != null) && hash.equal(el, cur))
+	    if((cur != null) && (cref.hash == h) && hash.equal(el, cur))
 		return(false);
 	    idx = nextidx(tab, idx);
 	}
-	tab[idx] = new Ref<>(el, cleanq);
+	tab[idx] = new Ref<>(el, cleanq, h);
 	if(++sz >= (tab.length * loadfac))
 	    resize(tab.length * 2);
 	return(true);

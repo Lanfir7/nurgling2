@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-clothing-tooltip-summary",
+  "priority": 7,
+  "summary": {
+    "ru": "Подсказка одежды показывает общие бонусы, а по Shift — подробности гилдингов.",
+    "en": "Clothing tooltips show combined bonuses, with gilding details on Shift."
+  },
+  "detail": {
+    "ru": "Наведите на одежду, чтобы увидеть сумму её бонусов и бонусов вставленных гилдингов по убыванию. Удерживайте Shift, чтобы увидеть каждый гилдинг отдельно вместе с его качеством.",
+    "en": "Hover over clothing to see its own bonuses and inserted gilding bonuses combined in descending order. Hold Shift to see each gilding separately with its quality."
+  }
+}

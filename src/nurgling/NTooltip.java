@@ -12,6 +12,7 @@ import nurgling.iteminfo.NCuriosity;
 import nurgling.iteminfo.NKilnInfo;
 import nurgling.iteminfo.NSmelterInfo;
 import nurgling.styles.TooltipStyle;
+import nurgling.widgets.EquipmentStatsCollector;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -460,6 +461,10 @@ public class NTooltip {
      * Renders name + quality on one line, then other info, then resource path.
      */
     public static BufferedImage build(List<ItemInfo> info) {
+        return build(info, true);
+    }
+
+    public static BufferedImage build(List<ItemInfo> info, boolean detailedGildings) {
         if (info == null || info.isEmpty()) {
             return null;
         }
@@ -957,7 +962,25 @@ public class NTooltip {
 
         // Render base stats section (non-gilding stats from AttrMod at item level)
         LineResult baseStatsResult = null;
-        if (baseAttrMod != null) {
+        if (!detailedGildings && (islots != null || islotsObj != null)) {
+            EquipmentStatsCollector.Totals totals = EquipmentStatsCollector.collectFromInfoLists(
+                java.util.Collections.singletonList(info));
+            java.util.List<GildingStatData> summary = new java.util.ArrayList<>();
+            java.util.List<java.util.Map.Entry<String, Double>> sorted = new java.util.ArrayList<>(totals.sorted());
+            sorted.sort((a, b) -> {
+                int valueOrder = Double.compare(b.getValue(), a.getValue());
+                return valueOrder != 0 ? valueOrder : a.getKey().compareTo(b.getKey());
+            });
+            for (java.util.Map.Entry<String, Double> entry : sorted) {
+                haven.res.ui.tt.attrmod.Attribute attr = totals.attribute(entry.getKey());
+                if (attr != null && attr.icon() != null) {
+                    String formatted = OverlayAttrModFormat.formatModValue(entry.getValue(),
+                        isPercentageAttribute(attr.getClass()));
+                    summary.add(new GildingStatData(attr.icon(), entry.getKey(), formatted));
+                }
+            }
+            baseStatsResult = renderBaseStatsSection(summary);
+        } else if (baseAttrMod != null) {
             java.util.List<GildingStatData> baseStats = extractStatsFromAttrMod(baseAttrMod);
             if (!baseStats.isEmpty()) {
                 baseStatsResult = renderBaseStatsSection(baseStats);
@@ -979,7 +1002,7 @@ public class NTooltip {
             if (!slottedStats.isEmpty()) {
                 gildingSectionsResult = renderBaseStatsSection(slottedStats);
             }
-        } else if (gildingItems != null && !gildingItems.isEmpty()) {
+        } else if (detailedGildings && gildingItems != null && !gildingItems.isEmpty()) {
             // For ISlots.SItem, extract fields directly
             // For reflection-based access, use reflection extractors
             if (islots != null) {
@@ -2563,6 +2586,18 @@ public class NTooltip {
         int sectionIndex = 0;
         for (T item : items) {
             String name = nameExtractor.apply(item);
+            List<ItemInfo> gildingInfo = infoExtractor.apply(item);
+            if (gildingInfo != null) {
+                for (ItemInfo detail : gildingInfo) {
+                    if (detail instanceof haven.res.ui.tt.q.quality.Quality) {
+                        double quality = ((haven.res.ui.tt.q.quality.Quality) detail).q;
+                        name += " (Q " + (quality == Math.rint(quality)
+                            ? Long.toString(Math.round(quality))
+                            : String.format(java.util.Locale.ROOT, "%.1f", quality)) + ")";
+                        break;
+                    }
+                }
+            }
             Resource res = resExtractor.apply(item);
             GSprite spr = sprExtractor.apply(item);
 

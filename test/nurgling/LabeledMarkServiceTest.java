@@ -1,11 +1,13 @@
 package nurgling;
 
 import haven.Gob;
+import haven.Coord;
 import nurgling.widgets.LabeledMinimapMark;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Method;
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -14,6 +16,36 @@ import static org.junit.jupiter.api.Assertions.*;
 class LabeledMarkServiceTest {
     @TempDir
     Path tempDir;
+
+    @Test
+    void asyncMiningMarkKeepsReturnedIdAndReachesDiskBeforeShutdown() throws Exception {
+        Path file = tempDir.resolve("labeled-marks.json");
+        LabeledMarkService service = new LabeledMarkService(null, "test", file.toString());
+        String id = service.addLabeledMarkAsync("q78", "Lead Glance", 42L,
+            new Coord(11, 12), null, 40);
+        BufferedImage icon = new BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB);
+        service.updateMarkIcon(id, icon); // May arrive before the queued mark is processed.
+
+        long deadline = System.currentTimeMillis() + 5000;
+        while ((!Files.exists(file) || service.getMark(id) == null)
+                && System.currentTimeMillis() < deadline)
+            Thread.sleep(10);
+
+        assertNotNull(service.getMark(id));
+        assertEquals(id, service.getMark(id).getLocationId());
+        assertSame(icon, service.getMark(id).iconImage);
+        assertTrue(Files.readString(file).contains("\"locationId\":\"" + id + "\""));
+
+        BufferedImage laterIcon = new BufferedImage(3, 3, BufferedImage.TYPE_INT_ARGB);
+        service.updateMarkIcon(id, laterIcon);
+        assertSame(laterIcon, service.getMark(id).iconImage);
+        assertEquals(id, service.getMark(id).getLocationId());
+
+        LabeledMarkService restored = new LabeledMarkService(null, "test", file.toString());
+        assertNotNull(restored.getMark(id));
+        restored.dispose();
+        service.dispose();
+    }
 
     @Test
     void repeatedDisposeDoesNotRewriteFinalSnapshot() throws Exception {

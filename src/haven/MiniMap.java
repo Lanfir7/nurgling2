@@ -50,6 +50,7 @@ import nurgling.tools.DefaultAnimalAlarms;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import nurgling.tools.NParser;
+import haven.res.ui.obj.buddy.Buddy;
 import haven.MapFile.TileInfo;
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
@@ -519,8 +520,28 @@ public class MiniMap extends Widget
 	}
 
 	private void fireNotifyIfAlive() {
+	    if(alarmState == null || !alarmState.isPending())
+		return;
+	    // A kin or icon update may replace this marker while its visual pulse remains.
+	    if(gob.getattr(GobIcon.class) != attr) {
+		alarmState.dropSound();
+		return;
+	    }
+	    String resName = iconResName();
+	    Buddy buddy = gob.getattr(Buddy.class);
+	    if(buddy != null && buddy.b == null && ui.gui != null && ui.gui.buddies != null)
+		buddy.b = ui.gui.buddies.find(buddy.id);
+	    MiniMapIconPolicy.PlayerAlert playerAlert = MiniMapIconPolicy.playerAlert(resName,
+		buddy != null && buddy.b == null, buddy == null ? null :
+		(buddy.b == null ? null : buddy.b.group), ui.lasttick - stime);
+	    if(playerAlert == MiniMapIconPolicy.PlayerAlert.WAIT)
+		return;
+	    if(playerAlert == MiniMapIconPolicy.PlayerAlert.MUTE) {
+		alarmState.dropSound();
+		return;
+	    }
 	    MiniMapIconPolicy.fireIconNotify(alarmState,
-		() -> ClaimLand.isOnClaimOrVillage(NUtils.player()), gob.pose(), iconResName());
+		() -> ClaimLand.claimOrVillageStatus(NUtils.player()), gob.pose(), resName);
 	}
 
 	public void playNotification() {

@@ -52,6 +52,7 @@ public class NGameUI extends GameUI
 {
     private final SharedMarkerClipboardService sharedMarkerClipboardService;
     private final HearthHomeAutoSaver hearthHomeAutoSaver = new HearthHomeAutoSaver();
+    private final LootNoticeController lootNotices = new LootNoticeController(this);
     public boolean nomadMod = false;
     public NBotsMenu botsMenu;
     public NAlarmWdg alarmWdg;
@@ -950,6 +951,7 @@ public class NGameUI extends GameUI
     public void tick(double dt)
     {
         super.tick(dt);
+        lootNotices.tick(dt);
         if(todoStore != null)
             todoStore.tick();
         Gob player = (map == null) ? null : map.player();
@@ -993,6 +995,26 @@ public class NGameUI extends GameUI
                 }
             }
         }
+    }
+
+    @Override
+    public void draw(GOut g) {
+        super.draw(g);
+        lootNotices.draw(g, sz);
+    }
+
+    public void previewLootNotices(boolean belowCompass, int xPercent, int yPercent, int backgroundOpacity) {
+        lootNotices.preview(new LootNoticeLayout(belowCompass, xPercent, yPercent, backgroundOpacity));
+    }
+
+    public void updateLootNoticePreview(boolean belowCompass, int xPercent, int yPercent, int backgroundOpacity) {
+        lootNotices.updatePreviewLayout(new LootNoticeLayout(belowCompass, xPercent, yPercent, backgroundOpacity));
+    }
+
+    @Override
+    public void destroy() {
+        lootNotices.dispose();
+        super.destroy();
     }
 
     public void onGameAction(String... args) {

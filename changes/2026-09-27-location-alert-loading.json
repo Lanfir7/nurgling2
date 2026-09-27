@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-location-alert-loading",
+  "priority": 8,
+  "summary": {
+    "ru": "Убраны ложные звуковые оповещения при смене локации.",
+    "en": "Reduced false sound alerts when changing locations."
+  },
+  "detail": {
+    "ru": "После телепортации или входа в дом и пещеру оповещения значков ждут загрузки друзей и данных о привате. Дружественные игроки и животные на привате не вызывают звук.",
+    "en": "After teleporting or entering a house or cave, icon alerts wait for kin and claim data to load. Friendly players and animals on claimed land do not trigger a sound."
+  }
+}

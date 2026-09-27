@@ -94,7 +94,7 @@ public class NWItem extends WItem
         boolean wantRebuild = (nlongtip == null) || ((NGItem) item).needlongtip();
         boolean throttled = (nlongtip != null) && (now - nlastLongtipBuild < NLONGTIP_REBUILD_INTERVAL);
         if (wantRebuild && !throttled) {
-            BufferedImage img = NTooltip.build(info);
+            BufferedImage img = NTooltip.build(info, ui.modshift);
             if (img != null) {
                 nlongtip = new PaddedTip(info, img);
                 ((NGItem) item).consumedLongtip();

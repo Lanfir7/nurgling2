@@ -8,6 +8,7 @@ public class NMenuGridWdg extends Widget
 {
     MenuGrid menuGrid;
     private boolean lastSwimmingState = false;
+    private final SwimmingAutoOffTimer swimmingAutoOff = new SwimmingAutoOffTimer();
     private boolean lastTrackingState = false;
     private boolean lastCrimeState = false;
     private boolean lastAllowVisitingState = false;
@@ -24,6 +25,29 @@ public class NMenuGridWdg extends Widget
         add(menuGrid,dmarg);
         pack();
         return menuGrid;
+    }
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        if (menuGrid == null || !swimmingAutoOff.isDue(
+                Boolean.TRUE.equals(NConfig.get(NConfig.Key.autoDisableSwimming)), System.nanoTime()))
+            return;
+        for (MenuGrid.Pagina pag : menuGrid.paginae) {
+            if (!(pag.res instanceof Session.CachedRes.Ref)
+                    || !"paginae/act/swim".equals(((Session.CachedRes.Ref) pag.res).resnm()))
+                continue;
+            try {
+                MenuGrid.PagButton button = pag.button();
+                if (button instanceof Toggle && ((Toggle) button).a) {
+                    button.use(new MenuGrid.Interaction());
+                    swimmingAutoOff.requested();
+                }
+            } catch (Loading ignored) {
+                // The action is still loading; retry on the next tick.
+            }
+            return;
+        }
     }
 
     @Override
@@ -109,6 +133,7 @@ public class NMenuGridWdg extends Widget
             if (button instanceof Toggle) {
                 Toggle toggle = (Toggle) button;
                 boolean currentState = toggle.a;
+                swimmingAutoOff.onState(currentState, System.nanoTime());
                 
                 if (currentState != lastSwimmingState) {
                     lastSwimmingState = currentState;

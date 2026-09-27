@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-gemstone-zone-sorting",
+  "priority": 8,
+  "summary": {
+    "ru": "Боты больше не складывают в зону камни другого размера или огранки.",
+    "en": "Bots no longer put gems of a different size or cut into a storage zone."
+  },
+  "detail": {
+    "ru": "При раскладывании камней по зонам бот переносит только выбранный в каталоге вариант камня. Другие размеры и огранки остаются в инвентаре для своих зон.",
+    "en": "When sorting gems into storage zones, the bot moves only the variant selected in the catalog. Other sizes and cuts remain in the inventory for their own zones."
+  }
+}

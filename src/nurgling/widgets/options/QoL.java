@@ -29,11 +29,20 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
     private CheckBox tracking;
     private CheckBox crime;
     private CheckBox swimming;
+    private CheckBox autoDisableSwimming;
     private CheckBox openInventoryOnLogin;
     private CheckBox lowMemoryMode;
     private CheckBox autoShowSiegeEngines;
     private CheckBox disableMenugridKeys;
     private CheckBox questNotified;
+    private CheckBox lootNotices;
+    private CheckBox lootBelowCompass;
+    private HSlider lootXSlider;
+    private HSlider lootYSlider;
+    private HSlider lootOpacitySlider;
+    private Label lootXValue;
+    private Label lootYValue;
+    private Label lootOpacityValue;
     private CheckBox lpassistent;
     private CheckBox debug;
     private CheckBox tempmark;
@@ -172,6 +181,7 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         leftPrev = tracking = leftColumn.add(new CheckBox(L10n.get("qol.tracking")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = crime = leftColumn.add(new CheckBox(L10n.get("qol.crime")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = swimming = leftColumn.add(new CheckBox(L10n.get("qol.swimming")), leftPrev.pos("bl").adds(0, 5));
+        leftPrev = autoDisableSwimming = leftColumn.add(new CheckBox(L10n.get("qol.auto_disable_swimming")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = openInventoryOnLogin = leftColumn.add(new CheckBox(L10n.get("qol.open_inventory")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = lowMemoryMode = leftColumn.add(new CheckBox(L10n.get("qol.low_memory")), leftPrev.pos("bl").adds(0, 5));
         leftPrev = autoShowSiegeEngines = leftColumn.add(new CheckBox(L10n.get("qol.auto_show_siege_engines")), leftPrev.pos("bl").adds(0, 5));
@@ -319,6 +329,68 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         rightPrev = diabloLikeRun = rightColumn.add(new CheckBox(L10n.get("qol.diablo_like_run")), rightPrev.pos("bl").adds(-10, 5));
         rightPrev = autoSaveTableware = rightColumn.add(new CheckBox(L10n.get("qol.auto_save_tableware")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = questNotified = rightColumn.add(new CheckBox(L10n.get("qol.quest_notified")), rightPrev.pos("bl").adds(0, 5));
+        rightPrev = lootNotices = rightColumn.add(new CheckBox(L10n.get("qol.loot_notices")), rightPrev.pos("bl").adds(0, 5));
+        int lootBaseX = lootNotices.c.x;
+        rightPrev = lootBelowCompass = rightColumn.add(new CheckBox(L10n.get("qol.loot_below_compass")),
+                rightPrev.pos("bl").adds(0, 3));
+        lootBelowCompass.changed(a -> refreshLootPreview());
+        rightPrev = rightColumn.add(new Label(L10n.get("qol.loot_x")),
+                new Coord(lootBaseX + UI.scale(10), rightPrev.pos("bl").y + UI.scale(3)));
+        lootXValue = new Label("50%");
+        lootXSlider = new HSlider(UI.scale(150), 0, 100, 50) {
+            @Override public void changed() {
+                lootXValue.settext(val + "%");
+                refreshLootPreview();
+            }
+            @Override public boolean mousedown(MouseDownEvent ev) {
+                return lootBelowCompass.a || super.mousedown(ev);
+            }
+            @Override public void draw(GOut g) {
+                if (lootBelowCompass.a) g.chcolor(135, 135, 135, 255);
+                super.draw(g);
+                if (lootBelowCompass.a) g.chcolor();
+            }
+        };
+        rightColumn.addhlp(new Coord(lootBaseX + UI.scale(10), rightPrev.pos("bl").y + UI.scale(2)),
+                UI.scale(5), lootXSlider, lootXValue);
+        rightPrev = lootXSlider;
+        rightPrev = rightColumn.add(new Label(L10n.get("qol.loot_y")),
+                new Coord(lootBaseX + UI.scale(10), rightPrev.pos("bl").y + UI.scale(3)));
+        lootYValue = new Label("12%");
+        lootYSlider = new HSlider(UI.scale(150), 0, 100, 12) {
+            @Override public void changed() {
+                lootYValue.settext(val + "%");
+                refreshLootPreview();
+            }
+            @Override public boolean mousedown(MouseDownEvent ev) {
+                return lootBelowCompass.a || super.mousedown(ev);
+            }
+            @Override public void draw(GOut g) {
+                if (lootBelowCompass.a) g.chcolor(135, 135, 135, 255);
+                super.draw(g);
+                if (lootBelowCompass.a) g.chcolor();
+            }
+        };
+        rightColumn.addhlp(new Coord(lootBaseX + UI.scale(10), rightPrev.pos("bl").y + UI.scale(2)),
+                UI.scale(5), lootYSlider, lootYValue);
+        rightPrev = lootYSlider;
+        rightPrev = rightColumn.add(new Label(L10n.get("qol.loot_opacity")),
+                new Coord(lootBaseX + UI.scale(10), rightPrev.pos("bl").y + UI.scale(3)));
+        lootOpacityValue = new Label("90%");
+        lootOpacitySlider = new HSlider(UI.scale(150), 0, 100, 90) {
+            @Override public void changed() {
+                lootOpacityValue.settext(val + "%");
+                refreshLootPreview();
+            }
+        };
+        rightColumn.addhlp(new Coord(lootBaseX + UI.scale(10), rightPrev.pos("bl").y + UI.scale(2)),
+                UI.scale(5), lootOpacitySlider, lootOpacityValue);
+        rightPrev = lootOpacitySlider;
+        int lootButtonsY = rightPrev.pos("bl").y + UI.scale(4);
+        rightPrev = rightColumn.add(new Button(UI.scale(110), L10n.get("qol.loot_preview"), this::previewLoot),
+                new Coord(lootBaseX, lootButtonsY));
+        rightColumn.add(new Button(UI.scale(110), L10n.get("qol.loot_reset"), this::resetLootControls),
+                new Coord(lootBaseX + UI.scale(115), lootButtonsY));
         rightPrev = lpassistent = rightColumn.add(new CheckBox(L10n.get("qol.lp_assistant")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = disableMenugridKeys = rightColumn.add(new CheckBox(L10n.get("qol.disable_menugrid")), rightPrev.pos("bl").adds(0, 5));
         rightPrev = verboseCal = rightColumn.add(new CheckBox(L10n.get("qol.verbose_cal")), rightPrev.pos("bl").adds(0, 5));
@@ -400,6 +472,29 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         }
     }
 
+    private void previewLoot() {
+        if (NUtils.getGameUI() != null)
+            NUtils.getGameUI().previewLootNotices(lootBelowCompass.a,
+                    lootXSlider.val, lootYSlider.val, lootOpacitySlider.val);
+    }
+
+    private void refreshLootPreview() {
+        if (NUtils.getGameUI() != null)
+            NUtils.getGameUI().updateLootNoticePreview(lootBelowCompass.a,
+                    lootXSlider.val, lootYSlider.val, lootOpacitySlider.val);
+    }
+
+    private void resetLootControls() {
+        lootBelowCompass.a = true;
+        lootXSlider.val = nurgling.LootNoticeLayout.DEFAULT_X;
+        lootYSlider.val = nurgling.LootNoticeLayout.DEFAULT_Y;
+        lootOpacitySlider.val = nurgling.LootNoticeLayout.DEFAULT_BACKGROUND_OPACITY;
+        lootXValue.settext(lootXSlider.val + "%");
+        lootYValue.settext(lootYSlider.val + "%");
+        lootOpacityValue.settext(lootOpacitySlider.val + "%");
+        previewLoot();
+    }
+
     @Override
     public void load() {
         showCropStage.a = getBool(NConfig.Key.showCropStage);
@@ -444,11 +539,20 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         tracking.a = getBool(NConfig.Key.tracking);
         crime.a = getBool(NConfig.Key.crime);
         swimming.a = getBool(NConfig.Key.swimming);
+        autoDisableSwimming.a = getBool(NConfig.Key.autoDisableSwimming);
         openInventoryOnLogin.a = getBool(NConfig.Key.openInventoryOnLogin);
         lowMemoryMode.a = false;
         autoShowSiegeEngines.a = getBool(NConfig.Key.autoShowSiegeEngines);
         disableMenugridKeys.a = getBool(NConfig.Key.disableMenugridKeys);
         questNotified.a = getBool(NConfig.Key.questNotified);
+        lootNotices.a = getBool(NConfig.Key.lootNotices);
+        lootBelowCompass.a = !Boolean.FALSE.equals(NConfig.get(NConfig.Key.lootNoticeBelowCompass));
+        lootXSlider.val = nurgling.LootNoticeLayout.percent(NConfig.get(NConfig.Key.lootNoticeX), 50);
+        lootYSlider.val = nurgling.LootNoticeLayout.percent(NConfig.get(NConfig.Key.lootNoticeY), 12);
+        lootOpacitySlider.val = nurgling.LootNoticeLayout.percent(NConfig.get(NConfig.Key.lootNoticeBackgroundOpacity), 90);
+        lootXValue.settext(lootXSlider.val + "%");
+        lootYValue.settext(lootYSlider.val + "%");
+        lootOpacityValue.settext(lootOpacitySlider.val + "%");
         lpassistent.a = getBool(NConfig.Key.lpassistent);
         debug.a = getBool(NConfig.Key.debug);
         printpfmap.a = getBool(NConfig.Key.printpfmap);
@@ -585,10 +689,16 @@ public class QoL extends Panel implements AdaptiveSettingsPanel {
         NConfig.set(NConfig.Key.tracking, tracking.a);
         NConfig.set(NConfig.Key.crime, crime.a);
         NConfig.set(NConfig.Key.swimming, swimming.a);
+        NConfig.set(NConfig.Key.autoDisableSwimming, autoDisableSwimming.a);
         NConfig.set(NConfig.Key.openInventoryOnLogin, openInventoryOnLogin.a);
         NConfig.set(NConfig.Key.autoShowSiegeEngines, autoShowSiegeEngines.a);
         NConfig.set(NConfig.Key.disableMenugridKeys, disableMenugridKeys.a);
         NConfig.set(NConfig.Key.questNotified, questNotified.a);
+        NConfig.set(NConfig.Key.lootNotices, lootNotices.a);
+        NConfig.set(NConfig.Key.lootNoticeBelowCompass, lootBelowCompass.a);
+        NConfig.set(NConfig.Key.lootNoticeX, lootXSlider.val);
+        NConfig.set(NConfig.Key.lootNoticeY, lootYSlider.val);
+        NConfig.set(NConfig.Key.lootNoticeBackgroundOpacity, lootOpacitySlider.val);
 
         // Handle LP assistant setting change - remove overlays if disabled
         boolean oldLpassistent = getBool(NConfig.Key.lpassistent);

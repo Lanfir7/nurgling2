@@ -42,24 +42,29 @@ public final class ClaimLand {
     }
 
     public static boolean isOnClaimOrVillage(Gob gob) {
+        return Boolean.TRUE.equals(claimOrVillageStatus(gob));
+    }
+
+    /** Null until the player's tile and its overlays are available. */
+    public static Boolean claimOrVillageStatus(Gob gob) {
         if (gob == null || gob.rc == null) {
-            return false;
+            return null;
         }
         NGameUI gui = NUtils.getGameUI();
         if (gui == null || gui.ui == null || gui.ui.sess == null
                 || gui.ui.sess.glob == null || gui.ui.sess.glob.map == null) {
-            return false;
+            return null;
         }
         MCache map = gui.ui.sess.glob.map;
         try {
             Coord tc = gob.rc.floor(MCache.tilesz);
             MCache.Grid g = map.getgridt(tc);
             if (g == null || g.ols == null || g.ol == null) {
-                return false;
+                return null;
             }
             Coord lc = tc.sub(g.ul);
             if (lc.x < 0 || lc.y < 0 || lc.x >= MCache.cmaps.x || lc.y >= MCache.cmaps.y) {
-                return false;
+                return null;
             }
             int tileIndex = lc.x + (lc.y * MCache.cmaps.x);
             int n = Math.min(g.ols.length, g.ol.length);
@@ -77,9 +82,9 @@ public final class ClaimLand {
                 }
             }
         } catch (Loading e) {
-            return false;
+            return null;
         } catch (Exception e) {
-            return false;
+            return null;
         }
         return false;
     }

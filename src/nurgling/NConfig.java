@@ -92,6 +92,7 @@ public class NConfig
         crime,
         tracking,
         swimming,
+        autoDisableSwimming,
         debug,
         claydiggerprop,
         miningol,
@@ -122,7 +123,8 @@ public class NConfig
         animalrad,
         smokeprop,
         worldexplorerprop,
-        questNotified, lpassistent, fishingsettings,
+        questNotified, lootNotices, lootNoticeBelowCompass, lootNoticeX, lootNoticeY,
+        lootNoticeBackgroundOpacity, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, shareHearthSecret, autoHearthSecret, sharePosition, showPeerPositions, todoNotify, dbGrantRole, dbStatsOverlay, mapShareMarkers, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, dbHost, dbPort, dbName, dbSsl, dbVillage, simplecrops,
         temsmarktime, exploredAreaEnable, exploredAreaRecord, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         areaRankPresets,  // Map of areaId -> Map of animalType -> presetName
@@ -439,6 +441,7 @@ public class NConfig
         conf.put(Key.crime, false);
         conf.put(Key.tracking, false);
         conf.put(Key.swimming, false);
+        conf.put(Key.autoDisableSwimming, true);
         conf.put(Key.debug, false);
         conf.put(Key.hidecredo, true);
         conf.put(Key.mutedQuests, new JSONArray());
@@ -462,6 +465,11 @@ public class NConfig
         conf.put(Key.autoSaveTableware, true);
         conf.put(Key.endpoint, "");
         conf.put(Key.questNotified, false);
+        conf.put(Key.lootNotices, true);
+        conf.put(Key.lootNoticeBelowCompass, true);
+        conf.put(Key.lootNoticeX, LootNoticeLayout.DEFAULT_X);
+        conf.put(Key.lootNoticeY, LootNoticeLayout.DEFAULT_Y);
+        conf.put(Key.lootNoticeBackgroundOpacity, LootNoticeLayout.DEFAULT_BACKGROUND_OPACITY);
         conf.put(Key.lpassistent, false);
         conf.put(Key.simplecrops, true);
         conf.put(Key.simpleInspect, false);

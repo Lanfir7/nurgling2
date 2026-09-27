@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-swimming-auto-off",
+  "priority": 7,
+  "summary": {
+    "ru": "Плавание может автоматически выключаться через пять минут.",
+    "en": "Swimming can turn off automatically after five minutes."
+  },
+  "detail": {
+    "ru": "После включения плавания клиент выключит его через пять минут. Функцию можно включить или выключить в настройках качества жизни рядом с включением плавания при входе.",
+    "en": "The client turns swimming off five minutes after it is enabled. You can enable or disable this in Quality of Life settings beside the option to swim on login."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-animated-scene-fps",
+  "priority": 8,
+  "summary": {
+    "ru": "Уменьшены сильные просадки FPS в сценах с большим количеством анимированных объектов.",
+    "en": "Reduced severe FPS drops in scenes with many animated objects."
+  },
+  "detail": {
+    "ru": "В насыщенных анимированными объектами местах клиент тратит меньше времени на подготовку кадра. Улучшение действует автоматически при обычной игре.",
+    "en": "In areas with many animated objects, the client spends less time preparing each frame. The improvement applies automatically during normal play."
+  }
+}

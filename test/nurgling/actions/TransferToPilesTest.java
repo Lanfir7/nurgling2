@@ -63,6 +63,14 @@ class TransferToPilesTest {
     }
 
     @Test
+    void gemstoneVariantsRequireIndividualTransfers() {
+        assertTrue(TransferToPiles.requiresExactItemTransfer("Tiny Smooth Moonstone"));
+        assertTrue(TransferToPiles.requiresExactItemTransfer("Large Brilliant Diamond"));
+        assertFalse(TransferToPiles.requiresExactItemTransfer("Quartz"));
+        assertFalse(TransferToPiles.requiresExactItemTransfer(null));
+    }
+
+    @Test
     void mixedCategoryUsesGobShiftWhenEveryTypeRoutesToThisArea() {
         assertEquals(PileMode.GOB_SHIFT_BULK,
                 TransferToPiles.pileMode(1, true, true));

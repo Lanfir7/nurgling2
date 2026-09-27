@@ -68,6 +68,37 @@ class MiniMapIconNotifyClaimMuteTest {
     }
 
     @Test
+    void missingClaimDataKeepsSoundPendingUntilOverlayArrives() {
+        AtomicInteger played = new AtomicInteger();
+        DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
+
+        MiniMapIconPolicy.fireIconNotify(state, () -> null, "idle", BEAR);
+        assertEquals(0, played.get());
+        assertTrue(state.isPending());
+
+        MiniMapIconPolicy.fireIconNotify(state, () -> true, "idle", BEAR);
+        assertEquals(0, played.get());
+        assertFalse(state.isPending());
+    }
+
+    @Test
+    void playerAlertWaitsForKinAndMutesFriendlyGroups() {
+        String player = MiniMapIconPolicy.PLAYER_ICON_RES;
+        assertEquals(MiniMapIconPolicy.PlayerAlert.WAIT,
+                MiniMapIconPolicy.playerAlert(player, false, null, 1));
+        assertEquals(MiniMapIconPolicy.PlayerAlert.WAIT,
+                MiniMapIconPolicy.playerAlert(player, true, null, 10));
+        assertEquals(MiniMapIconPolicy.PlayerAlert.MUTE,
+                MiniMapIconPolicy.playerAlert(player, false, 1, 1));
+        assertEquals(MiniMapIconPolicy.PlayerAlert.PLAY,
+                MiniMapIconPolicy.playerAlert(player, false, 2, 1));
+        assertEquals(MiniMapIconPolicy.PlayerAlert.PLAY,
+                MiniMapIconPolicy.playerAlert(player, false, null, 5));
+        assertEquals(MiniMapIconPolicy.PlayerAlert.PLAY,
+                MiniMapIconPolicy.playerAlert(BEAR, false, null, 0));
+    }
+
+    @Test
     void unknownPoseThenCorpseNeverPlays() {
         AtomicInteger played = new AtomicInteger();
         DefaultAnimalAlarms.State state = new DefaultAnimalAlarms.State(played::incrementAndGet);
@@ -103,9 +134,9 @@ class MiniMapIconNotifyClaimMuteTest {
         String src = Files.readString(Path.of("src/haven/MiniMap.java"));
         assertTrue(src.contains("MiniMapIconPolicy.fireIconNotify"),
                 "DisplayIcon must mute via MiniMapIconPolicy.fireIconNotify");
-        assertTrue(src.contains("ClaimLand.isOnClaimOrVillage"),
+        assertTrue(src.contains("ClaimLand.claimOrVillageStatus"),
                 "play-time gate must check player claim/village overlay");
-        assertTrue(src.contains("() -> ClaimLand.isOnClaimOrVillage"),
+        assertTrue(src.contains("() -> ClaimLand.claimOrVillageStatus"),
                 "claim overlay lookup must be deferred until a sound is pending");
         assertFalse(src.contains("SettingsWindow"),
                 "must not route preview play through the minimap mute");

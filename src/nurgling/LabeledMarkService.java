@@ -64,6 +64,8 @@ public class LabeledMarkService implements ProfileAwareService {
     
     // Очередь для неблокирующего добавления маркеров (устраняет лаги UI)
     private final ConcurrentLinkedQueue<PendingMark> pendingMarks = new ConcurrentLinkedQueue<>();
+    private final Set<String> pendingMarkIds = ConcurrentHashMap.newKeySet();
+    private final Map<String, BufferedImage> pendingIcons = new ConcurrentHashMap<>();
     private final AtomicBoolean processingScheduled = new AtomicBoolean(false);
     private static final long PROCESS_DELAY_MS = 50; // Минимальная задержка для батчинга
     
@@ -138,7 +140,7 @@ public class LabeledMarkService implements ProfileAwareService {
 
     @Override
     public void save() {
-        writeSnapshot(snapshot());
+        writeSnapshot();
     }
 
     /**
@@ -182,6 +184,7 @@ public class LabeledMarkService implements ProfileAwareService {
         }
         
         // Добавляем в очередь без блокировки (ConcurrentLinkedQueue lock-free)
+        pendingMarkIds.add(locationId);
         pendingMarks.offer(new PendingMark(locationId, label, resourceType, segmentId, tileCoords, gridId, localTileCoords, iconImage, radiusTiles));
         
         // Планируем обработку очереди
@@ -234,12 +237,13 @@ public class LabeledMarkService implements ProfileAwareService {
             }
             suppressReindex = false;
             reindex();
-            // Сохраняем один раз для всего батча
-            scheduleSave();
         } finally {
             suppressReindex = false;
             lock.writeLock().unlock();
         }
+        // This already runs off the UI thread. Finish the disk write before another batch
+        // can run, so a forced restart cannot discard a long queue of visible mining marks.
+        writeSnapshot();
     }
     
     /**
@@ -268,10 +272,13 @@ public class LabeledMarkService implements ProfileAwareService {
         }
         
         // Создаем и добавляем новый маркер с gridId для ChunkNav навигации
-        LabeledMinimapMark mark = new LabeledMinimapMark(pm.label, pm.resourceType, pm.segmentId, pm.tileCoords, 
-                                                         pm.gridId, pm.localTileCoords, pm.iconImage, null);
+        BufferedImage icon = pendingIcons.remove(pm.locationId);
+        if (icon == null) icon = pm.iconImage;
+        LabeledMinimapMark mark = new LabeledMinimapMark(pm.locationId, pm.label, pm.resourceType, pm.segmentId,
+                                                         pm.tileCoords, pm.gridId, pm.localTileCoords, icon, null);
         labeledMarks.put(mark.getLocationId(), mark);
         addMarkToIndexes(mark);
+        pendingMarkIds.remove(pm.locationId);
     }
     
     /**
@@ -473,14 +480,21 @@ public class LabeledMarkService implements ProfileAwareService {
         lock.writeLock().lock();
         try {
             LabeledMinimapMark oldMark = labeledMarks.get(locationId);
-            if (oldMark == null) return;
+            if (oldMark == null) {
+                if (pendingMarkIds.contains(locationId) && iconImage != null)
+                    pendingIcons.put(locationId, iconImage);
+                return;
+            }
             
             // Создаем новый маркер с иконкой
             LabeledMinimapMark newMark = new LabeledMinimapMark(
-                oldMark.label, 
+                locationId,
+                oldMark.label,
                 oldMark.resourceType, 
                 oldMark.segmentId, 
                 oldMark.tileCoords, 
+                oldMark.gridId,
+                oldMark.localTileCoords,
                 iconImage,
                 oldMark.labelColor
             );
@@ -510,11 +524,12 @@ public class LabeledMarkService implements ProfileAwareService {
             }
             
             dataVersion++;
-            scheduleSave();
             reindex();
         } finally {
             lock.writeLock().unlock();
         }
+        // Mining Mastery loads icons on a worker thread; persist the completed mark now.
+        writeSnapshot();
     }
 
     /**
@@ -547,9 +562,10 @@ public class LabeledMarkService implements ProfileAwareService {
      * Serialize and write the given marks. Must not be called while holding a lock:
      * PNG encoding and file I/O here take long enough to stall the render thread.
      */
-    private void writeSnapshot(List<LabeledMinimapMark> marks) {
+    private void writeSnapshot() {
         synchronized (fileLock) {
         try {
+            List<LabeledMinimapMark> marks = snapshot();
             JSONObject main = new JSONObject();
             JSONArray jMarks = new JSONArray();
             Set<String> types = new HashSet<>();
@@ -621,11 +637,9 @@ public class LabeledMarkService implements ProfileAwareService {
                 return;
             }
             long snapVersion;
-            List<LabeledMinimapMark> snap;
             lock.readLock().lock();
             try {
                 snapVersion = dataVersion;
-                snap = new ArrayList<>(labeledMarks.values());
             } finally {
                 lock.readLock().unlock();
             }
@@ -635,7 +649,7 @@ public class LabeledMarkService implements ProfileAwareService {
                 }
                 continue;
             }
-            writeSnapshot(snap);
+            writeSnapshot();
             if (ForageMarkerLogic.rescheduleMarkSave(snapVersion, dataVersion, shutdown) && !closed.get()) {
                 scheduleSave();
             }
@@ -1263,7 +1277,9 @@ public class LabeledMarkService implements ProfileAwareService {
                 Thread.currentThread().interrupt();
             }
         }
-        writeSnapshot(snapshot());
+        if (!pendingMarks.isEmpty())
+            processPendingMarks();
+        writeSnapshot();
         lock.writeLock().lock();
         try {
             labeledMarks.clear();

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-mining-mark-persistence",
+  "priority": 8,
+  "summary": {
+    "ru": "Метки Mining Mastery быстрее сохраняются и сохраняют свои иконки.",
+    "en": "Mining Mastery markers save sooner and retain their icons."
+  },
+  "detail": {
+    "ru": "Метки, созданные Mining Mastery, записываются на диск сразу после обработки очереди. Иконка, загруженная позже, привязывается к той же метке и остаётся после перезапуска клиента.",
+    "en": "Mining Mastery markers are written to disk as soon as their queue is processed. An icon loaded later stays attached to the same marker after restarting the client."
+  }
+}
