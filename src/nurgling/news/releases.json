@@ -184,6 +184,7 @@
     "2026-09-27-animated-scene-fps",
     "2026-09-27-cave-lantern-stacks",
     "2026-09-27-cheese-conveyor-stage-timing",
+    "2026-09-27-client-performance-diagnostics",
     "2026-09-27-clothing-tooltip-summary",
     "2026-09-27-gemstone-groups",
     "2026-09-27-gemstone-zone-sorting",
@@ -194,6 +195,30 @@
     "2026-09-27-swimming-auto-off"
   ],
   "releases": [
+    {
+      "id": "2.103.219",
+      "date": "2026-09-27",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Снижена нагрузка от настроек, миникарты и обработки объектов; добавлена запись задержек кадров для поиска микрофризов."
+        ],
+        "en": [
+          "Reduced settings, minimap and world-object processing overhead; added frame timing capture to investigate stutters."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Снижена нагрузка при входе, смене сессий и открытии атласа. Сохранение настроек и подписи зон готовятся в фоне. Ускорены загрузка карты, панели и компас. При закрытии сессии сохранённые метки не переписываются. Скрытые атлас и энциклопедия не готовят страницы; связи рецептов загружаются в фоне. Диагностика: консоль : (Shift+; в английской раскладке), perf start, perf stop, perf export. Запись последних 36000 интервалов кадров по умолчанию выключена."
+        ],
+        "en": [
+          "Reduced work on login, session changes and opening the Atlas. Settings saves and area labels run in the background. Improved map loading, action bars and compass. Saved map marks are not rewritten on session close. Hidden Atlas and encyclopedia defer content work; recipe links load in the background. Diagnostics: console : (Shift+; on an English keyboard), perf start, perf stop, perf export. Capture keeps 36000 frame intervals and is off by default."
+        ]
+      }
+    },
     {
       "id": "2.103.218",
       "date": "2026-09-27",
@@ -1363,34 +1388,6 @@
           "The Hotkeys page includes Hurricane and Ender presets without internal conflicts. Seed interaction, held-item use and stockpile transfers work again.",
           "The fight-window move list keeps a minimum row height so names and icons stay readable.",
           "Dropdown lists read clearly on a dark background, and labels are not clipped by the item border."
-        ]
-      }
-    },
-    {
-      "id": "2.103.187",
-      "date": "2026-09-08",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "Наборы горячих клавиш: создать, скопировать кодом и вставить чужой пресет.",
-          "Над табличками-знаками и пергаментами видны подписи содержимого."
-        ],
-        "en": [
-          "Hotkey presets: create one, copy a code and paste someone else's layout.",
-          "Icon signs and parchments can show labels of their contents."
-        ]
-      },
-      "details": {
-        "ru": [
-          "На странице Hotkeys выберите пресет, создайте свой, скопируйте код в буфер или вставьте чужой. Жесты «один предмет» и «загрузить всё топливо» снова работают как раньше.",
-          "В настройках мира включите подписи объектов. Отдельно — знаки-иконки и пергаменты; размер шрифта, высоту и фон регулируют ползунки."
-        ],
-        "en": [
-          "On the Hotkeys page pick a preset, create your own, copy a code or paste one. Single-item held use and load-all fuel gestures work as before.",
-          "In world settings enable object content labels. Icon signs and parchments have their own toggles; sliders set font size, height and background."
         ]
       }
     }
