@@ -168,7 +168,7 @@ public class MinimapClaimRenderer {
     }
 
     /**
-     * Renders a single overlay on the minimap using rectangle merging for performance.
+     * Renders a single overlay on the minimap from its cached merged rectangles.
      * The overlay data comes from the persistent MapFile storage.
      */
     private static void renderOverlay(MiniMap map, GOut g,
@@ -192,6 +192,7 @@ public class MinimapClaimRenderer {
             int gridTileSize = width * levelScale;
             Coord viewOffset = map.dloc.tc.div(map.scalef());
 
+            g.chcolor(fillColor);
             for (Rect rect : rectangles) {
                 int x = rect.x, y = rect.y;
                 int rectWidth = rect.width, rectHeight = rect.height;
@@ -203,7 +204,6 @@ public class MinimapClaimRenderer {
                     Coord tileBR = disp.sc.mul(MCache.cmaps).add(x + rectWidth, y + rectHeight);
                     Coord screenUL = UI.scale(tileUL).sub(viewOffset).add(hsz);
                     Coord screenBR = UI.scale(tileBR).sub(viewOffset).add(hsz);
-                    g.chcolor(fillColor);
                     g.frect2(screenUL, screenBR);
                     continue;
                 }
@@ -218,8 +218,6 @@ public class MinimapClaimRenderer {
                 Coord2d screenBRDouble = new Coord2d(UI.scale(tileBR)).mul(currentScale).sub(new Coord2d(viewOffset)).add(new Coord2d(hsz));
                 Coord screenUL = new Coord((int)Math.round(screenULDouble.x), (int)Math.round(screenULDouble.y));
                 Coord screenBR = new Coord((int)Math.round(screenBRDouble.x), (int)Math.round(screenBRDouble.y));
-
-                g.chcolor(fillColor);
                 g.frect2(screenUL, screenBR);
             }
 
@@ -285,7 +283,14 @@ public class MinimapClaimRenderer {
      * Extract color from the overlay's Material (supports different colors for enemy/friendly claims).
      * Falls back to hardcoded tag-based colors if Material extraction fails.
      */
+    /* Material colors per overlay type; the material never changes once
+     * loaded. Draw-thread only. */
+    private static final java.util.Map<MCache.ResOverlay, Color> MATCOLORS = new java.util.WeakHashMap<>();
+
     private static Color extractColorFromMaterial(MCache.ResOverlay olinfo, String tag) {
+        Color cached = MATCOLORS.get(olinfo);
+        if (cached != null)
+            return cached;
         try {
             Material mat = olinfo.mat();
             if (mat != null) {
@@ -294,12 +299,14 @@ public class MinimapClaimRenderer {
                 if (st.get(BaseColor.slot) != null) {
                     FColor bc = st.get(BaseColor.slot).color;
                     // Convert to semi-transparent for minimap (alpha=60)
-                    return new Color(
+                    Color c = new Color(
                         Math.round(bc.r * 255),
                         Math.round(bc.g * 255),
                         Math.round(bc.b * 255),
                         60  // Semi-transparent to avoid obscuring terrain
                     );
+                    MATCOLORS.put(olinfo, c);
+                    return c;
                 }
             }
         } catch (Loading e) {

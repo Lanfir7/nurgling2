@@ -1518,6 +1518,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     protected void oltick()
     {
         super.oltick();
+        NOverlay.gridsById = glob.map.gridsById();
         for(NOverlay ol : nols.values())
             ol.tick();
     }
