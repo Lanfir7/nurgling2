@@ -86,6 +86,7 @@ public class NConfig
         discordNotification,
         discordWebhookUrl,
         showGrid,
+        graphics,
         showView,
         disableWinAnim,
         disableMenugridKeys,

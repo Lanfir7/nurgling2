@@ -104,6 +104,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem(L10n.get("nsettings.item.item_overlays"), new ItemOverlaySettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.navigation"), navigation = new Navigation(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.map_settings"), new MapSettings(), container));
+        general.addChild(new SettingsItem(L10n.get("nsettings.item.graphics"), new GraphicsSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.qol"), qol = new QoL(), container));
         general.addChild(new SettingsItem("QOL Lanfir", new QOLLanfirSettings(), container));
         general.addChild(new SettingsItem("Disable Animations", new DisableGobAnimSettings(), container));
