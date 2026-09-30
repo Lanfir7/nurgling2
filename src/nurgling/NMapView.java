@@ -113,7 +113,6 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         this.simpleRouteManager = new SimpleRouteManager();
         for(int i = 0 ; i < MCache.customolssize; i++)
         toggleol("hareas", true);
-        toggleol("minesup", true);
         basic.add(glob.oc.paths);
     }
 

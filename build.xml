@@ -432,7 +432,12 @@
     <jar destfile="build/nurgling-res.jar" update="true">
       <fileset dir="resources/compiled" />
     </jar>
-    <copy todir="bin/" file="build/nurgling-res.jar" />
+    <condition property="resources.jar.changed">
+      <not>
+        <filesmatch file1="build/nurgling-res.jar" file2="bin/nurgling-res.jar" />
+      </not>
+    </condition>
+    <copy if:set="resources.jar.changed" todir="bin/" file="build/nurgling-res.jar" overwrite="true" />
     <copy todir="bin/" file="etc/json-java.jar" />
     <copy todir="bin/" file="etc/postgresql-42.7.5.jar" />
     <copy todir="bin/" file="etc/sqlite-jdbc-3.49.1.0.jar" />

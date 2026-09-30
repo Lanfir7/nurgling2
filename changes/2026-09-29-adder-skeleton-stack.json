@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-29-adder-skeleton-stack",
+  "priority": 3,
+  "summary": {
+    "ru": "Скелет гадюки складывается по 3, как в игре.",
+    "en": "Adder Skeleton stacks in threes, matching the game."
+  },
+  "detail": {
+    "ru": "Клиент больше не считает скелет гадюки стопкой из 4, как остальной костный материал. Сортировка и перенос складывают его по 3.",
+    "en": "The client no longer treats Adder Skeleton as a stack of 4 like other bone material. Sorting and transfers stack it by 3."
+  }
+}

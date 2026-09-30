@@ -822,12 +822,13 @@ public class NQuestInfo extends Widget
     {
         List<VillageQuestStore.Villager> shown = shownVillagers(p);
         List<Group> out = new ArrayList<>();
-        for(int i = 0; i < TASK_CATS.length; i += 2) {
+        for(int i = 0; i < TASK_CATS.length; i += 3) {
             String name = (String)TASK_CATS[i];
-            Set<QCond.Verb> verbs = new HashSet<>(Arrays.asList((QCond.Verb[])TASK_CATS[i + 1]));
+            String l10nKey = (String)TASK_CATS[i + 1];
+            Set<QCond.Verb> verbs = new HashSet<>(Arrays.asList((QCond.Verb[])TASK_CATS[i + 2]));
             Group g = new Group();
             g.key = "vtask:" + name;
-            g.title = name;
+            g.title = L10n.get(l10nKey);
             g.kind = QuestKind.NPC;
             g.village = true;
             Map<String, Row> byText = new LinkedHashMap<>();

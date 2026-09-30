@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-area-overlay-loading",
+  "priority": 6,
+  "summary": {
+    "ru": "Подсветка сохранённых зон не прерывает игру, пока участки карты загружаются.",
+    "en": "Saved area highlights no longer interrupt play while map sections load."
+  },
+  "detail": {
+    "ru": "Сохранённые зоны на карте и их контуры отображаются после загрузки нужных участков. Если участок временно недоступен, клиент продолжает работу и возвращает подсветку, когда карта появится.",
+    "en": "Saved areas and their outlines appear on the map as their sections load. If a section is temporarily unavailable, the client keeps running and restores the highlight when the map returns."
+  }
+}

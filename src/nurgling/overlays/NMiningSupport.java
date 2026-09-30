@@ -44,6 +44,19 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
         }
     }
 
+    /** A completed coverage mask. End is exclusive for mining-overlay iteration. */
+    public static final class SupportMask {
+        public final Coord begin;
+        public final Coord end;
+        public final boolean[][] data;
+
+        private SupportMask(Coord begin, Coord end, boolean[][] data) {
+            this.begin = begin;
+            this.end = end;
+            this.data = data;
+        }
+    }
+
     public static Spec specFor(String name) {
         if (name == null) {
             return null;
@@ -126,63 +139,75 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
     }
 
     Gob gob;
-    public Coord begin;
-    public Coord end;
+    public volatile Coord begin;
+    public volatile Coord end;
 
-    private boolean [][] data;
+    private volatile SupportMask mask;
 
     public boolean[][] getData()
+    {
+        return getMask().data;
+    }
+
+    public synchronized SupportMask getMask()
     {
         if(isDynamic)
         {
             calcData();
         }
-        return data;
+        return mask;
     }
 
-    void calcData()
+    synchronized void calcData()
     {
         if (rect) {
             // Built tunnel gobs use an anchor one tile behind the vanilla support footprint;
             // placement ghosts already use the footprint's starting tile.
             int forwardShiftTiles = gob.id == -1 ? 0 : 1;
-            Mask mask = computeRect(gob.rc, gob.a, widthTiles, lengthTiles, forwardShiftTiles);
-            begin = mask.begin;
+            Mask rectMask = computeRect(gob.rc, gob.a, widthTiles, lengthTiles, forwardShiftTiles);
             // NMiningOverlay iterates [begin, end) so exclusive end lights the last tunnel tile.
-            end = mask.end.add(1, 1);
-            data = mask.data;
+            publish(new SupportMask(rectMask.begin, rectMask.end.add(1, 1), rectMask.data));
             return;
         }
+        Coord2d center = gob.rc;
+        int radius = r;
         if(isTree)
         {
             TreeScale ts = gob.getattr(TreeScale.class);
             if(ts!=null)
             {
                 float growthScale = ts.originalScale > 0 ? ts.originalScale : ts.scale;
-                this.r = (int) Math.round(baser * (growthScale - 0.1) / 0.9);
+                radius = (int) Math.round(baser * (growthScale - 0.1) / 0.9);
             }
             else
             {
-                this.r = baser;
+                radius = baser;
                 isTree = false;
                 isDynamic = false;
             }
         }
-        Coord a = gob.rc.sub(r, 0).div(MCache.tilesz).round();
-        Coord b = gob.rc.sub(0, r).div(MCache.tilesz).round();
-        Coord c = gob.rc.add(r, 0).div(MCache.tilesz).round();
-        Coord d = gob.rc.add(0, r).div(MCache.tilesz).round();
-        begin = new Coord(a.x,b.y);
-        end = new Coord(c.x,d.y);
-
-        data = new boolean[c.x-a.x+1][d.y-b.y+1];
+        Coord a = center.sub(radius, 0).div(MCache.tilesz).round();
+        Coord b = center.sub(0, radius).div(MCache.tilesz).round();
+        Coord c = center.add(radius, 0).div(MCache.tilesz).round();
+        Coord d = center.add(0, radius).div(MCache.tilesz).round();
+        Coord nextBegin = new Coord(a.x,b.y);
+        Coord nextEnd = new Coord(c.x,d.y);
+        boolean[][] nextData = new boolean[c.x-a.x+1][d.y-b.y+1];
         for(int i = 0; i<=c.x-a.x; i++)
         {
             for (int j = 0; j <= d.y-b.y; j++)
             {
-                data[i][j] = (gob.rc.dist(new Coord2d(i+begin.x,j+begin.y).mul(MCache.tilesz).add(MCache.tilehsz))<r);
+                nextData[i][j] = (center.dist(new Coord2d(i+nextBegin.x,j+nextBegin.y).mul(MCache.tilesz).add(MCache.tilehsz))<radius);
             }
         }
+        this.r = radius;
+        publish(new SupportMask(nextBegin, nextEnd, nextData));
+    }
+
+    private void publish(SupportMask next) {
+        begin = next.begin;
+        end = next.end;
+        mask = next;
     }
 
     public NMiningSupport(Owner owner, int r)

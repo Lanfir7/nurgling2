@@ -33,7 +33,6 @@ import java.util.WeakHashMap;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentHashMap;
@@ -117,8 +116,8 @@ public class MasterMiner extends ActionWithFinal {
 
     private final ItemOrigins<GItem> seen = new ItemOrigins<>();
     private final Map<GItem, GItem> stackHolders = new HashMap<>();
-    /** Holder contents first observed during this run; later leaves are new arrivals themselves. */
-    private final Set<GItem> stackContentsObserved = new HashSet<>();
+    /** Weak keys let discarded holders go; live holders keep their first-contents history. */
+    private final Set<GItem> stackContentsObserved = Collections.newSetFromMap(new WeakHashMap<>());
     private final Map<GItem, Boolean> stackLeafFromFirstContents = new HashMap<>();
     private static final int DROP_CONFIRM_TICKS = 30;
     
@@ -425,6 +424,9 @@ public class MasterMiner extends ActionWithFinal {
                 NUtils.addTask(new WaitTicks(2));
             }
         } finally {
+            stackHolders.clear();
+            stackContentsObserved.clear();
+            stackLeafFromFirstContents.clear();
             processMarkerBatch(gui);
             if (wnd != null) {
                 try { wnd.destroy(); } catch (Exception ignored) {}

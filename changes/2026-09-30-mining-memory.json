@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-mining-memory",
+  "priority": 7,
+  "summary": {
+    "ru": "MiningMaster освобождает старые стопки камней, а VeinMiner выполняет меньше проверок при долгой копке.",
+    "en": "MiningMaster releases old stone stacks, and VeinMiner performs fewer checks during long mining runs."
+  },
+  "detail": {
+    "ru": "При использовании MiningMaster выброшенные стопки больше не удерживаются в памяти до остановки бота. VeinMiner проверяет только ещё не выкопанные соседние клетки и не повторяет проверки уже выбранных целей. Это снижает накопление памяти и лишнюю нагрузку во время длительной разработки жилы. Изменения работают автоматически.",
+    "en": "With MiningMaster, discarded stacks are no longer held in memory until the bot stops. VeinMiner checks only unmined neighbouring tiles and skips repeated checks for already queued targets. This reduces memory retention and unnecessary work during long vein mining runs. The improvements apply automatically."
+  }
+}

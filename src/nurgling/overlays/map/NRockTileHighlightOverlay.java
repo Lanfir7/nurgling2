@@ -93,8 +93,8 @@ public class NRockTileHighlightOverlay extends NOverlay {
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    public void tick(Map<Long, MCache.Grid> gridsById) {
+        super.tick(gridsById);
 
         // Check if feature is enabled in config
         try {

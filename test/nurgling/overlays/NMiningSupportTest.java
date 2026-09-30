@@ -6,6 +6,13 @@ import haven.Gob;
 import haven.res.lib.tree.TreeScale;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -57,6 +64,60 @@ class NMiningSupportTest {
         overlay.getData();
 
         assertEquals(100, overlay.r);
+    }
+
+    @Test
+    void simultaneousTreeMaskReadsAlwaysReturnCompleteCoverage() throws Exception {
+        Gob gob = new Gob(null, Coord2d.of(5.5, 5.5), 1);
+        gob.setattr(new TreeScale(gob, 1.0f));
+        NMiningSupport support = new NMiningSupport(gob, 100);
+        // A radius-100 circle on the 11-unit tile grid has 261 lit centers.
+        assertEquals(261, count(support.getData()));
+        AtomicInteger incomplete = new AtomicInteger();
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService workers = Executors.newFixedThreadPool(8);
+        try {
+            Future<?>[] jobs = new Future<?>[8];
+            for (int i = 0; i < jobs.length; i++) {
+                jobs[i] = workers.submit(() -> {
+                    start.await();
+                    for (int n = 0; n < 500; n++) {
+                        if (count(support.getData()) != 261)
+                            incomplete.incrementAndGet();
+                    }
+                    return null;
+                });
+            }
+            start.countDown();
+            for (Future<?> job : jobs)
+                job.get(30, TimeUnit.SECONDS);
+        } finally {
+            workers.shutdownNow();
+        }
+        assertEquals(0, incomplete.get(), "a cut received a partly populated tree mask");
+    }
+
+    @Test
+    void treeMaskSnapshotKeepsItsBoundsAndPixelsWhenGrowthChanges() {
+        Gob gob = new Gob(null, Coord2d.of(5.5, 5.5), 1);
+        TreeScale growth = new TreeScale(gob, 1.0f);
+        gob.setattr(growth);
+        NMiningSupport support = new NMiningSupport(gob, 100);
+
+        growth.originalScale = 0.55f;
+        NMiningSupport.SupportMask small = support.getMask();
+        assertEquals(new Coord(-4, -4), small.begin);
+        assertEquals(new Coord(5, 5), small.end);
+        assertEquals(69, count(small.data));
+
+        growth.originalScale = 1.0f;
+        NMiningSupport.SupportMask large = support.getMask();
+        assertEquals(new Coord(-9, -9), large.begin);
+        assertEquals(new Coord(10, 10), large.end);
+        assertEquals(261, count(large.data));
+        assertEquals(new Coord(-4, -4), small.begin);
+        assertEquals(new Coord(5, 5), small.end);
+        assertEquals(69, count(small.data));
     }
 
     @Test
@@ -132,8 +193,12 @@ class NMiningSupportTest {
     }
 
     private static int count(NMiningSupport.Mask mask) {
+        return count(mask.data);
+    }
+
+    private static int count(boolean[][] data) {
         int n = 0;
-        for (boolean[] col : mask.data) {
+        for (boolean[] col : data) {
             for (boolean v : col) {
                 if (v) n++;
             }

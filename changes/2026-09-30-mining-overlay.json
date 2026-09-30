@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-mining-overlay",
+  "priority": 7,
+  "summary": {
+    "ru": "Шахтная подсветка учитывает подгруженные подпорки, стабильно показывает зоны больших опор и башенной шляпки и выключается у мини-карты.",
+    "en": "The mine safety overlay updates as supports load, keeps large-support and towercap coverage steady, and turns off from the minimap button."
+  },
+  "detail": {
+    "ru": "Используйте кнопку шахтного оверлея у мини-карты или настройку в разделе удобства. Безопасная зона обновляется при появлении и исчезновении подпорок, не дублируется, не мерцает возле башенной шляпки и правильно отображается на соседних участках карты. Подсветка выбранных пород тоже снова реагирует на изменение настроек.",
+    "en": "Use the mining overlay button by the minimap or its quality-of-life setting. Safe coverage updates when supports appear or disappear, no longer appears twice, stays steady around towercaps, and remains aligned across map sections. Highlighting selected rock types also responds to settings changes again."
+  }
+}

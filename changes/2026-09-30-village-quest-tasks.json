@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-village-quest-tasks",
+  "priority": 8,
+  "summary": {
+    "ru": "Исправлено падение клиента при просмотре деревенских квестов в режиме задач.",
+    "en": "Fixed a client crash when viewing village quests grouped by task."
+  },
+  "detail": {
+    "ru": "Во вкладке деревни трекера квестов снова можно переключаться на группировку по задачам. Общие задания правильно распределяются по категориям, а названия категорий отображаются на выбранном языке.",
+    "en": "In the quest tracker's Village tab, grouping by task works again. Shared objectives appear in the correct categories, with category headings in your selected language."
+  }
+}

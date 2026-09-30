@@ -54,9 +54,18 @@ public class FillContainers2 implements Action
                 } else {
                     context.goToArea(destinationSpec);
                 }
+                NAlias matching = new NAlias(transferedItems);
+                int before = gui.getInventory().getItems(matching).size();
                 TransferToContainer ttc = new TransferToContainer(cont, new NAlias(transferedItems));
-                ttc.run(gui);
-                new CloseTargetContainer(cont).run(gui);
+                Results transferred = ttc.run(gui);
+                Results closed = new CloseTargetContainer(cont).run(gui);
+                if (transferred == null || !transferred.IsSuccess())
+                    return transferred != null ? transferred : Results.FAIL();
+                if (closed == null || !closed.IsSuccess())
+                    return closed != null ? closed : Results.FAIL();
+                if (!FillContainers.shouldContinue(transferred, before,
+                        gui.getInventory().getItems(matching).size(), isReady(cont)))
+                    return Results.FAIL();
             }
 
         }

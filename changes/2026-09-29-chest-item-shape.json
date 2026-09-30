@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-29-chest-item-shape",
+  "priority": 4,
+  "summary": {
+    "ru": "«Освободить инвентарь» подвинет мелкую вещь в сундуке, если крупный предмет не входит в свободные клетки.",
+    "en": "Free Inventory shifts a small item in the chest when a larger item does not fit the free cells."
+  },
+  "detail": {
+    "ru": "Для предметов больше одной клетки бот смотрит не только сколько клеток свободно, но и сложены ли они в нужный прямоугольник. Если нет, он один раз передвигает мелкую вещь внутри сундука, чтобы собрать это место. Когда собрать его нельзя, предмет в этот сундук не отправляется и ошибка размера не появляется.",
+    "en": "For items larger than one cell, Free Inventory checks whether the free cells form the needed rectangle, not only how many are empty. If they do not, it moves one small item inside the chest to make that space. When the space cannot be made, the item is not sent to that chest and no size error appears."
+  }
+}

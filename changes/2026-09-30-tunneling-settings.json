@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-tunneling-settings",
+  "priority": 4,
+  "summary": {
+    "ru": "Туннельный бот снова копает проход в две клетки и запоминает выбранные настройки.",
+    "en": "The tunneling bot again digs a two-tile passage and remembers the settings you pick."
+  },
+  "detail": {
+    "ru": "В окне Tunneling Bot включите x2 Tunnel, чтобы проход шёл двумя клетками рядом с опорой. Сторона прохода, направление, тип опоры, крылья и отклонение в режиме без опор сохраняются для персонажа и подставляются при следующем запуске.",
+    "en": "In Tunneling Bot, turn on x2 Tunnel to dig a two-tile passage beside the supports. Passage side, direction, support type, wings, and the no-support deviation are kept for the character and filled in the next time you start."
+  }
+}

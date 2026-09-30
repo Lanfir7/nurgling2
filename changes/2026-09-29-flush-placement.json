@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-29-flush-placement",
+  "priority": 4,
+  "summary": {
+    "ru": "Перенос нескольких сундуков и стройка ставят их вплотную к уже стоящим.",
+    "en": "Moving several chests, and building, now places them flush against ones already standing."
+  },
+  "detail": {
+    "ru": "Макрос переноса нескольких объектов и превью стройки больше не оставляют щель у сундука, который уже стоит в зоне. Новые встают кромка к кромке, как при обычном переносе сразу.",
+    "en": "The move-several macro and the building preview no longer leave a gap beside a chest already in the zone. New ones sit edge to edge, the same as placing one immediately."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-29-free-inventory-pouch-transfer",
+  "priority": 4,
+  "summary": {
+    "ru": "«Освободить инвентарь» кладёт вещи из поясной сумки в сундук и не зависает, если место не нашлось.",
+    "en": "Free Inventory puts belt-pouch items into the chest and stops instead of hanging when they cannot be stored."
+  },
+  "detail": {
+    "ru": "При освобождении инвентаря вещи из поясной сумки, в том числе из стопки, переносятся в выбранный сундук по одной. Если сундук их не принимает, перенос останавливается: вещь возвращается в сумку, когда это возможно, и бот не сообщает об успехе и не ждёт бесконечно. Боты заполнения сундуков тоже останавливаются при отказе или отсутствии прогресса, вместо бесконечного повтора.",
+    "en": "Free Inventory moves pouch items, including items in a stack, into the chosen chest one at a time. If the chest cannot take an item, the transfer stops, puts it back in the pouch when it can, and does not report success or wait forever. Chest-filling bots also stop on rejection or lack of progress instead of retrying endlessly."
+  }
+}

@@ -16,9 +16,11 @@ public class NTunnelingProp implements JConf {
 
     public int direction = 0;
     public int tunnelSide = 0;
-    public int supportType = 0;
+    /** TunnelingDialog.SupportType.STONE_COLUMN */
+    public int supportType = 2;
     public int wingOption = 0;
     public int wingSide = 0;
+    public int maxLateral = 5;
     public boolean doubleTunnel = false;
     public boolean wingNorth = false;
     public boolean wingSouth = false;
@@ -43,7 +45,9 @@ public class NTunnelingProp implements JConf {
             wingOption = ((Number) values.get("wingOption")).intValue();
         if (values.get("wingSide") != null)
             wingSide = ((Number) values.get("wingSide")).intValue();
-        if (values.get("doubleTunnel") != null)
+        if (values.get("maxLateral") instanceof Number)
+            maxLateral = ((Number) values.get("maxLateral")).intValue();
+        if (values.get("doubleTunnel") instanceof Boolean)
             doubleTunnel = (Boolean) values.get("doubleTunnel");
         if (values.get("wingNorth") != null)
             wingNorth = (Boolean) values.get("wingNorth");
@@ -97,6 +101,7 @@ public class NTunnelingProp implements JConf {
         j.put("supportType", supportType);
         j.put("wingOption", wingOption);
         j.put("wingSide", wingSide);
+        j.put("maxLateral", maxLateral);
         j.put("doubleTunnel", doubleTunnel);
         j.put("wingNorth", wingNorth);
         j.put("wingSouth", wingSouth);

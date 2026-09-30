@@ -13,6 +13,11 @@ import java.util.ArrayList;
 
 public class FillContainers implements Action
 {
+    /** Shared retry decision for the three container-filling loops. */
+    static boolean shouldContinue(Results transfer, int sourceBefore, int sourceAfter, boolean ready) {
+        return transfer != null && transfer.IsSuccess() && (ready || sourceAfter < sourceBefore);
+    }
+
     ArrayList<Container> conts;
     String transferedItems;
     NContext context;
@@ -38,9 +43,18 @@ public class FillContainers implements Action
                 }
                 navigateToTargetContainer(gui, cont);
                 new OpenTargetContainer(cont).run(gui);
+                NAlias matching = new NAlias(transferedItems);
+                int before = gui.getInventory().getItems(matching).size();
                 TransferToContainer ttc = new TransferToContainer(cont, new NAlias(transferedItems));
-                ttc.run(gui);
-                new CloseTargetContainer(cont).run(gui);
+                Results transferred = ttc.run(gui);
+                Results closed = new CloseTargetContainer(cont).run(gui);
+                if (transferred == null || !transferred.IsSuccess())
+                    return transferred != null ? transferred : Results.FAIL();
+                if (closed == null || !closed.IsSuccess())
+                    return closed != null ? closed : Results.FAIL();
+                if (!shouldContinue(transferred, before,
+                        gui.getInventory().getItems(matching).size(), isReady(cont)))
+                    return Results.FAIL();
             }
 
         }

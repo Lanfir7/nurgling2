@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-29-narwhal-hitbox",
+  "priority": 4,
+  "summary": {
+    "ru": "Рамка нарвала совпадает с тушей: с головы больше нельзя зайти в текстуру, с хвоста упор не раньше тела.",
+    "en": "The narwhal outline now follows the body: the head is no longer walkable, and the tail no longer stops you short."
+  },
+  "detail": {
+    "ru": "Граница нарвала была перевёрнута вдоль тела. Спереди персонаж заходил в текстуру и не упирался, сзади упор был раньше туши. Включите показ границ объектов, чтобы сверить рамку с нарвалом.",
+    "en": "The narwhal boundary was flipped along the body. You could walk into the head, and the tail stopped you before the body. Turn on object boundaries to compare the outline with the narwhal."
+  }
+}

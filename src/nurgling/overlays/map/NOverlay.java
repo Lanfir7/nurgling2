@@ -138,7 +138,12 @@ public class NOverlay extends MapView.MapRaster
         }
         Coord t = new Coord();
         Buf buf = new Buf();
-        NArea.VArea space = NUtils.getArea(id).space.space.get(grid_id);
+        NArea area = map.areas.get(id);
+        if (area == null || area.space == null || area.space.space == null)
+            return null;
+        NArea.VArea space = area.space.space.get(grid_id);
+        if (space == null || space.area == null)
+            return null;
         Area curArea = space.area.xl(grid_ul);
         for(t.y = 0; t.y < mm.sz.y; t.y++) {
             for(t.x = 0; t.x < mm.sz.x; t.x++) {
@@ -189,16 +194,16 @@ public class NOverlay extends MapView.MapRaster
         Area a = Area.sized(mm.ul, mm.sz);
 
         Buf buf = new Buf();
-        NArea area = NUtils.getArea(id);
+        NArea area = map.areas.get(id);
         if (area == null || area.space == null || area.space.space == null) {
             return null;
         }
         NArea.VArea space = area.space.space.get(grid_id);
-        if (space == null) {
+        if (space == null || space.area == null) {
             return null;
         }
         Area curArea = space.area.xl(grid_ul);
-        Area fullarea = area.getArea();
+        Area fullarea = area.getArea(map);
         if (fullarea == null) {
             return null;
         }

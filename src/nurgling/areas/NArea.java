@@ -609,24 +609,36 @@ public class NArea
 
     public Area getArea()
     {
-        if (NUtils.getGameUI() == null || NUtils.getGameUI().map == null) {
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || gui.map == null || gui.map.glob == null) {
+            return null;
+        }
+        return getArea(gui.map.glob.map);
+    }
+
+    public Area getArea(MCache map)
+    {
+        if (map == null || space == null || space.space == null) {
             return null;
         }
         Coord begin = null;
         Coord end = null;
-        for (Long id : space.space.keySet())
+        for (Map.Entry<Long, VArea> entry : space.space.entrySet())
         {
-            MCache.Grid grid = NUtils.getGameUI().map.glob.map.findGrid(id);
-            if(grid!=null)
+            VArea part = entry.getValue();
+            if (part == null || part.area == null)
+                continue;
+            MCache.Grid grid = map.findGrid(entry.getKey());
+            if(grid != null)
             {
-                Area area = space.space.get(id).area;
+                Area area = part.area;
                 Coord b = area.ul.add(grid.ul);
                 Coord e = area.br.add(grid.ul);
                 begin = (begin != null) ? new Coord(Math.min(begin.x, b.x), Math.min(begin.y, b.y)) : b;
                 end = (end != null) ? new Coord(Math.max(end.x, e.x), Math.max(end.y, e.y)) : e;
             }
         }
-        return new Area(begin,end);
+        return begin == null ? null : new Area(begin,end);
     }
 
     /**

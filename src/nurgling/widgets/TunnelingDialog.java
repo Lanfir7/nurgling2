@@ -1,6 +1,8 @@
 package nurgling.widgets;
 
 import haven.*;
+import nurgling.NUtils;
+import nurgling.conf.NTunnelingProp;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -119,6 +121,7 @@ public class TunnelingDialog extends Window {
     private boolean wingSouth = savedWingSouth;
     private boolean wingEast = savedWingEast;
     private boolean wingWest = savedWingWest;
+    private boolean doubleTunnel = false;
 
     private int maxLateral = savedMaxLateral;
 
@@ -131,6 +134,7 @@ public class TunnelingDialog extends Window {
     private int[] maxLateralRef = null;
     private boolean[] confirmRef = null;
     private boolean[] cancelRef = null;
+    private boolean[] doubleTunnelRef = null;
 
     // UI Elements
     private IButton btnDirN, btnDirS, btnDirE, btnDirW;
@@ -210,7 +214,8 @@ public class TunnelingDialog extends Window {
     }
 
     public TunnelingDialog() {
-        super(new Coord(560, 620), "Tunneling Bot");
+        super(new Coord(560, 645), "Tunneling Bot");
+        loadFromProp();
         initializeWidgets();
     }
 
@@ -508,7 +513,19 @@ public class TunnelingDialog extends Window {
         tunnelerWidgets.add(selWingSideFirst);
         tunnelerWidgets.add(selWingSideSecond);
 
-        y += btnTunnelLeft.sz.y + 30;
+        y += btnTunnelLeft.sz.y + 20;
+
+        CheckBox doubleTunnelCb = new CheckBox("x2 Tunnel") {
+            @Override
+            public void changed(boolean val) {
+                doubleTunnel = val;
+                updatePreview();
+            }
+        };
+        doubleTunnelCb.a = doubleTunnel;
+        add(doubleTunnelCb, new Coord(leftMargin, y));
+        tunnelerWidgets.add(doubleTunnelCb);
+        y += 30;
 
         // === 4. PREVIEW with border (left) and LEGEND (right) ===
         Label previewLabel = new Label("Preview:");
@@ -750,23 +767,27 @@ public class TunnelingDialog extends Window {
     }
 
     private void selectDirection(Direction dir) {
+        applyDirection(dir, true);
+    }
+
+    private void applyDirection(Direction dir, boolean resetSides) {
         selectedDirection = dir;
 
-        // In minesweeper mode, only update direction selection — skip tunnel/wing UI
         if (selectedSupportType == SupportType.NONE) {
             updateDirectionSelection(dir);
             return;
         }
 
-        TunnelSide[] tunnelSides = dir.isVertical() ? VERTICAL_TUNNEL_SIDES : HORIZONTAL_TUNNEL_SIDES;
-        TunnelSide[] wingSides = dir.isVertical() ? VERTICAL_WING_SIDES : HORIZONTAL_WING_SIDES;
-        selectedTunnelSide = tunnelSides[0];
-        selectedWingSide = wingSides[0];
-
-        wingNorth = false;
-        wingSouth = false;
-        wingEast = false;
-        wingWest = false;
+        if (resetSides) {
+            TunnelSide[] tunnelSides = dir.isVertical() ? VERTICAL_TUNNEL_SIDES : HORIZONTAL_TUNNEL_SIDES;
+            TunnelSide[] wingSides = dir.isVertical() ? VERTICAL_WING_SIDES : HORIZONTAL_WING_SIDES;
+            selectedTunnelSide = tunnelSides[0];
+            selectedWingSide = wingSides[0];
+            wingNorth = false;
+            wingSouth = false;
+            wingEast = false;
+            wingWest = false;
+        }
 
         // Update dynamic labels based on direction
         if (tunnelSideOptionsLabel != null) {
@@ -801,19 +822,14 @@ public class TunnelingDialog extends Window {
             }
         }
 
-        // Update direction selection frames
         updateDirectionSelection(dir);
 
-        // Reset tunnel side selection to first option
-        updateTunnelSideSelection(0);
-
-        // Reset wing side selection to first option
-        updateWingSideSelection(0);
-
-        // Reset wing toggle selections
-        updateWingToggleSelection();
-
-        updatePreview();
+        if (resetSides) {
+            updateTunnelSideSelection(0);
+            updateWingSideSelection(0);
+            updateWingToggleSelection();
+            updatePreview();
+        }
     }
 
     private void selectTunnelSide(int index) {
@@ -850,9 +866,13 @@ public class TunnelingDialog extends Window {
         confirmButton.move(new Coord(leftMargin, btnY));
         cancelButton.move(new Coord(leftMargin + btnWidth + 15, btnY));
         resize(new Coord(560, btnY + confirmButton.sz.y + 20));
-        // Re-apply direction-dependent visibility for tunnel/wing side buttons
         if (!isMinesweeper) {
-            selectDirection(selectedDirection);
+            applyDirection(selectedDirection, false);
+            TunnelSide[] tunnelSides = selectedDirection.isVertical() ? VERTICAL_TUNNEL_SIDES : HORIZONTAL_TUNNEL_SIDES;
+            TunnelSide[] wingSides = selectedDirection.isVertical() ? VERTICAL_WING_SIDES : HORIZONTAL_WING_SIDES;
+            updateTunnelSideSelection(sideIndex(tunnelSides, selectedTunnelSide));
+            updateWingSideSelection(sideIndex(wingSides, selectedWingSide));
+            updateWingToggleSelection();
         }
     }
 
@@ -969,6 +989,7 @@ public class TunnelingDialog extends Window {
         private void drawVerticalPreview(GOut g, Coord offset, int center, int radius) {
             boolean tunnelEast = (selectedTunnelSide == TunnelSide.EAST);
             int tunnelX = tunnelEast ? center + 1 : center - 1;
+            int tunnel2X = tunnelEast ? center + 2 : center - 2;
             int wingYOffset = (selectedWingSide == TunnelSide.NORTH) ? -1 : 1;
 
             int support1Y = center - radius / 2;
@@ -983,6 +1004,8 @@ public class TunnelingDialog extends Window {
             g.chcolor(COLOR_TUNNEL);
             for (int y = support1Y; y <= support2Y; y++) {
                 fillCell(g, offset, tunnelX, y);
+                if (doubleTunnel)
+                    fillCell(g, offset, tunnel2X, y);
             }
 
             // Draw wings
@@ -992,13 +1015,15 @@ public class TunnelingDialog extends Window {
                 int wingY = supY + wingYOffset;
                 if (wingY < 0 || wingY >= GRID_SIZE) continue;
 
+                int wingMinX = doubleTunnel ? Math.min(tunnelX, tunnel2X) : tunnelX;
+                int wingMaxX = doubleTunnel ? Math.max(tunnelX, tunnel2X) : tunnelX;
                 if (wingWest) {
-                    for (int x = tunnelX; x >= Math.max(0, center - radius); x--) {
+                    for (int x = wingMinX; x >= Math.max(0, center - radius); x--) {
                         fillCell(g, offset, x, wingY);
                     }
                 }
                 if (wingEast) {
-                    for (int x = tunnelX; x <= Math.min(GRID_SIZE - 1, center + radius); x++) {
+                    for (int x = wingMaxX; x <= Math.min(GRID_SIZE - 1, center + radius); x++) {
                         fillCell(g, offset, x, wingY);
                     }
                 }
@@ -1015,6 +1040,7 @@ public class TunnelingDialog extends Window {
         private void drawHorizontalPreview(GOut g, Coord offset, int center, int radius) {
             boolean tunnelSouth = (selectedTunnelSide == TunnelSide.SOUTH);
             int tunnelY = tunnelSouth ? center + 1 : center - 1;
+            int tunnel2Y = tunnelSouth ? center + 2 : center - 2;
             int wingXOffset = (selectedWingSide == TunnelSide.WEST) ? -1 : 1;
 
             int support1X = center - radius / 2;
@@ -1029,6 +1055,8 @@ public class TunnelingDialog extends Window {
             g.chcolor(COLOR_TUNNEL);
             for (int x = support1X; x <= support2X; x++) {
                 fillCell(g, offset, x, tunnelY);
+                if (doubleTunnel)
+                    fillCell(g, offset, x, tunnel2Y);
             }
 
             // Draw wings
@@ -1038,13 +1066,15 @@ public class TunnelingDialog extends Window {
                 int wingX = supX + wingXOffset;
                 if (wingX < 0 || wingX >= GRID_SIZE) continue;
 
+                int wingMinY = doubleTunnel ? Math.min(tunnelY, tunnel2Y) : tunnelY;
+                int wingMaxY = doubleTunnel ? Math.max(tunnelY, tunnel2Y) : tunnelY;
                 if (wingNorth) {
-                    for (int y = tunnelY; y >= Math.max(0, center - radius); y--) {
+                    for (int y = wingMinY; y >= Math.max(0, center - radius); y--) {
                         fillCell(g, offset, wingX, y);
                     }
                 }
                 if (wingSouth) {
-                    for (int y = tunnelY; y <= Math.min(GRID_SIZE - 1, center + radius); y++) {
+                    for (int y = wingMaxY; y <= Math.min(GRID_SIZE - 1, center + radius); y++) {
                         fillCell(g, offset, wingX, y);
                     }
                 }
@@ -1106,7 +1136,7 @@ public class TunnelingDialog extends Window {
 
     public void setReferences(int[] directionRef, int[] tunnelSideRef, int[] supportTypeRef,
                               int[] wingOptionRef, int[] wingSideRef, int[] maxLateralRef,
-                              boolean[] confirmRef, boolean[] cancelRef) {
+                              boolean[] confirmRef, boolean[] cancelRef, boolean[] doubleTunnelRef) {
         this.directionRef = directionRef;
         this.tunnelSideRef = tunnelSideRef;
         this.supportTypeRef = supportTypeRef;
@@ -1115,6 +1145,7 @@ public class TunnelingDialog extends Window {
         this.maxLateralRef = maxLateralRef;
         this.confirmRef = confirmRef;
         this.cancelRef = cancelRef;
+        this.doubleTunnelRef = doubleTunnelRef;
     }
 
     private void confirm() {
@@ -1128,6 +1159,7 @@ public class TunnelingDialog extends Window {
         savedWingSouth = wingSouth;
         savedWingEast = wingEast;
         savedWingWest = wingWest;
+        saveToProp();
 
         if (directionRef != null) {
             directionRef[0] = selectedDirection.ordinal();
@@ -1162,7 +1194,56 @@ public class TunnelingDialog extends Window {
         if (confirmRef != null) {
             confirmRef[0] = true;
         }
+        if (doubleTunnelRef != null) {
+            doubleTunnelRef[0] = doubleTunnel;
+        }
         hide();
+    }
+
+    private void loadFromProp() {
+        if (NUtils.getUI() == null)
+            return;
+        NTunnelingProp prop = NTunnelingProp.get(NUtils.getUI().sessInfo);
+        if (prop == null)
+            return;
+        selectedDirection = getDirection(prop.direction);
+        selectedSupportType = getSupportType(prop.supportType);
+        selectedTunnelSide = getTunnelSide(prop.direction, prop.tunnelSide);
+        selectedWingSide = getWingSide(prop.direction, prop.wingSide);
+        wingNorth = prop.wingNorth;
+        wingSouth = prop.wingSouth;
+        wingEast = prop.wingEast;
+        wingWest = prop.wingWest;
+        doubleTunnel = prop.doubleTunnel;
+        maxLateral = prop.maxLateral;
+    }
+
+    private void saveToProp() {
+        if (NUtils.getUI() == null)
+            return;
+        NTunnelingProp prop = NTunnelingProp.get(NUtils.getUI().sessInfo);
+        if (prop == null)
+            return;
+        prop.direction = selectedDirection.ordinal();
+        prop.supportType = selectedSupportType.ordinal();
+        prop.tunnelSide = sideIndex(selectedDirection.isVertical() ? VERTICAL_TUNNEL_SIDES : HORIZONTAL_TUNNEL_SIDES, selectedTunnelSide);
+        prop.wingSide = sideIndex(selectedDirection.isVertical() ? VERTICAL_WING_SIDES : HORIZONTAL_WING_SIDES, selectedWingSide);
+        prop.wingOption = calculateWingOptionIndex();
+        prop.wingNorth = wingNorth;
+        prop.wingSouth = wingSouth;
+        prop.wingEast = wingEast;
+        prop.wingWest = wingWest;
+        prop.doubleTunnel = doubleTunnel;
+        prop.maxLateral = maxLateral;
+        NTunnelingProp.set(prop);
+    }
+
+    private static int sideIndex(TunnelSide[] sides, TunnelSide selected) {
+        for (int i = 0; i < sides.length; i++) {
+            if (sides[i] == selected)
+                return i;
+        }
+        return 0;
     }
 
     private int calculateWingOptionIndex() {

@@ -350,6 +350,11 @@ public class TransferItems2 implements Action
                         return result;
                 }
             }
+            // A shape mismatch may make every chest unavailable while leaving cells free.
+            // Continue through the alternatives above, then report the remaining load.
+            if (!getItemsExactMatch(itemTransfer.itemName, itemTransfer.quality,
+                    itemTransfer.maxQualityExclusive).isEmpty())
+                return Results.FAIL();
         }
         return Results.SUCCESS();
     }

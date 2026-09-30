@@ -612,7 +612,7 @@ public class NConfig
         conf.put(Key.simpleRoutesTrackedObjects, new ArrayList<HashMap<String, Object>>());
         conf.put(Key.syncZoneSync, false);
         conf.put(Key.filltreepotsprop, false);
-        conf.put(Key.tunnelingprop, false);
+        conf.put(Key.tunnelingprop, new ArrayList<NTunnelingProp>());
         conf.put(Key.masterminerprop, new ArrayList<NMasterMinerProp>());
         conf.put(Key.masterminermarkingconfig, false);
         conf.put(Key.miningoverlaymemory, new ArrayList<NMiningOverlayMemory>());
@@ -1508,6 +1508,9 @@ public class NConfig
                                 break;
                             case "NChipperProp":
                                 res.add(new NChipperProp(obj));
+                                break;
+                            case "NTunnelingProp":
+                                res.add(new NTunnelingProp(obj));
                                 break;
                             case "NPrepBProp":
                                 res.add(new NPrepBlocksProp(obj));

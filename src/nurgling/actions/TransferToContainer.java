@@ -103,10 +103,26 @@ public class TransferToContainer implements Action
                                 }
                             }
                             int target_size = Math.min(numberFreeCoord, coorditems.size());
-                            while (Math.min(gui.getInventory(container.cap).getNumberFreeCoord(coord), coorditems.size()) > 0)
+                            int delivered = 0;
+                            while (delivered < target_size && Math.min(gui.getInventory(container.cap).getNumberFreeCoord(coord), coorditems.size()) > 0)
                             {
                                 WItem cand = coorditems.get(0);
-                                transfer(cand, gui.getInventory(container.cap), target_size, needsSorting);
+                                NInventory destination = gui.getInventory(container.cap);
+                                String name = ((NGItem) cand.item).name();
+                                NAlias receiptName = new NAlias(name);
+                                int before = BoundedDestinationWait.count(destination, receiptName);
+                                if (before < 0) return Results.FAIL();
+                                PouchContainerTransfer.Outcome attempt = transferAttempt(cand, destination,
+                                        target_size - delivered, needsSorting);
+                                if (attempt.moved <= 0) {
+                                    if (gui.vhand != null || failOnNoProgress(attempt)) return Results.FAIL();
+                                    break;
+                                }
+                                BoundedDestinationWait wait = new BoundedDestinationWait(destination,
+                                        receiptName, before + attempt.moved);
+                                NUtils.getUI().core.addTask(wait);
+                                if (!wait.reached()) return Results.FAIL();
+                                delivered += attempt.moved;
                                 witems = getMatchingItems(gui);
                                 coorditems = new ArrayList<>();
                                 for (WItem witem : witems)
@@ -173,7 +189,8 @@ public class TransferToContainer implements Action
                     }
 
 
-                    int oldSpace = gui.getInventory(container.cap).getItems(items).size();
+                    int oldSpace = BoundedDestinationWait.count(gui.getInventory(container.cap), items);
+                    if (oldSpace < 0) return Results.FAIL();
                     int transferred = 0;
 
                     while (!availableItems.isEmpty() && transferred < transfer_size)
@@ -188,7 +205,9 @@ public class TransferToContainer implements Action
 
                         // Calculate remaining items we can transfer
                         int remainingToTransfer = transfer_size - transferred;
-                        int itemsTransferred = transfer(currentItem, gui.getInventory(container.cap), remainingToTransfer, needsSorting);
+                        PouchContainerTransfer.Outcome attempt = transferAttempt(currentItem,
+                                gui.getInventory(container.cap), remainingToTransfer, needsSorting);
+                        int itemsTransferred = attempt.moved;
 
                         if (itemsTransferred > 0)
                         {
@@ -198,6 +217,8 @@ public class TransferToContainer implements Action
                         }
                         else
                         {
+                            if (gui.vhand != null || failOnNoProgress(attempt))
+                                return Results.FAIL();
                             break;
                         }
 
@@ -227,7 +248,13 @@ public class TransferToContainer implements Action
                         }
                     }
 
-                    NUtils.getUI().core.addTask(new WaitItems(gui.getInventory(container.cap), items, oldSpace + transferred));
+                    if (transferred > 0)
+                    {
+                        BoundedDestinationWait wait = new BoundedDestinationWait(gui.getInventory(container.cap), items, oldSpace + transferred);
+                        NUtils.getUI().core.addTask(wait);
+                        if (!wait.reached())
+                            return Results.FAIL();
+                    }
                 }
             }
             container.update();
@@ -322,6 +349,91 @@ public class TransferToContainer implements Action
         return true;
     }
 
+    /** A full destination does not confirm that the requested items arrived. */
+    static final class BoundedDestinationWait extends NTask
+    {
+        private final NInventory inventory;
+        private final NAlias name;
+        private final int expected;
+        private boolean received;
+
+        BoundedDestinationWait(NInventory inventory, NAlias name, int expected)
+        {
+            this.inventory = inventory;
+            this.name = name;
+            this.expected = expected;
+            infinite = false;
+            criticalOnTimeout = false;
+            maxCounter = PouchContainerTransfer.DESTINATION_WAIT_TICKS;
+        }
+
+        @Override
+        public boolean check()
+        {
+            int actual = count(inventory, name);
+            return received = actual >= 0 && actual >= expected;
+        }
+
+        /** Each matching leaf is one delivered item, including leaves inside stacks. */
+        static int count(NInventory inventory, NAlias name) {
+            if (inventory == null) return -1;
+            if (inventory.ui == null) return countChildren(inventory.child, name);
+            synchronized (inventory.ui) { return countChildren(inventory.child, name); }
+        }
+
+        private static int countChildren(Widget first, NAlias name) {
+            int count = 0;
+            for (Widget child = first; child != null; child = child.next) {
+                if (!(child instanceof WItem)) continue;
+                WItem item = (WItem) child;
+                if (!NGItem.validateItem(item)) return -1;
+                if (name != null && !NParser.checkName(((NGItem) item.item).name(), name)) continue;
+                if (item.item.contents != null) {
+                    int nested = countChildren(item.item.contents.child, name);
+                    if (nested < 0) return -1;
+                    count += nested;
+                } else {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        boolean reached()
+        {
+            return received;
+        }
+    }
+
+    /** Keep the public int transfer contract for existing callers; the action needs the receipt status. */
+    private static PouchContainerTransfer.Outcome transferAttempt(WItem item, NInventory target,
+                                                                  int limit, boolean sorting) throws InterruptedException {
+        if (!NGItem.validateItem(item)) return PouchContainerTransfer.Outcome.moved(0);
+        NInventory source = PouchContainerTransfer.sourceInventory(item);
+        if (source == target || (item.item.parent instanceof ItemStack && source == null))
+            return PouchContainerTransfer.Outcome.moved(0);
+        if (PouchContainerTransfer.isNestedInventory(source) && source != target)
+            return PouchContainerTransfer.moveOne(
+                    PouchContainerTransfer.live(item, target, ((NGItem) item.item).name()), limit);
+        String name = ((NGItem) item.item).name();
+        boolean merge = StackSupporter.isStackable(target, name)
+                && (target.findNotFullStack(name) != null || target.findNotStack(name) != null);
+        if (!merge) {
+            PouchContainerTransfer.Room room = PouchContainerTransfer.prepareRoom(item, target);
+            if (room == PouchContainerTransfer.Room.NO_ROOM)
+                return PouchContainerTransfer.Outcome.moved(0);
+            if (room == PouchContainerTransfer.Room.FAILED)
+                return PouchContainerTransfer.Outcome.failed(NUtils.getGameUI().vhand != null);
+        }
+        int moved = transfer(item, target, limit, sorting);
+        return moved > 0 ? PouchContainerTransfer.Outcome.moved(moved)
+                : PouchContainerTransfer.Outcome.failed(NUtils.getGameUI().vhand != null);
+    }
+
+    static boolean failOnNoProgress(PouchContainerTransfer.Outcome attempt) {
+        return attempt.failed;
+    }
+
     public static int transfer(WItem item, NInventory targetInv, int transfer_size) throws InterruptedException
     {
         return transfer(item, targetInv, transfer_size, false);
@@ -334,7 +446,14 @@ public class TransferToContainer implements Action
             return 0;
         }
 
+        NInventory sourceInv = PouchContainerTransfer.sourceInventory(item);
+        if ((item.item.parent instanceof ItemStack && sourceInv == null) || sourceInv == targetInv)
+            return 0;
+
         String itemName = ((NGItem) item.item).name();
+        if (PouchContainerTransfer.isNestedInventory(sourceInv))
+            return PouchContainerTransfer.moveOne(
+                    PouchContainerTransfer.live(item, targetInv, itemName), transfer_size).moved;
 
         if (!StackSupporter.isStackable(targetInv, itemName))
         {
@@ -360,16 +479,10 @@ public class TransferToContainer implements Action
             {
                 int id = item.item.wdgid();
                 item.item.wdgmsg("transfer", Coord.z);
-                NUtils.addTask(new NTask()
-                {
-                    int count = 0;
-                    @Override
-                    public boolean check()
-                    {
-                        return NUtils.getUI().getwidget(id)==null || (targetInv.calcFreeSpace() == 0 && count++>200);
-                    }
-                });
-                return 1;
+                PouchContainerTransfer.Confirmation removed = new PouchContainerTransfer.Confirmation(
+                        () -> NUtils.getUI().getwidget(id) == null);
+                NUtils.addTask(removed);
+                return removed.reached ? 1 : 0;
             }
         }
         else

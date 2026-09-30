@@ -57,7 +57,7 @@ public class NMiningOverlay extends NOverlay
     final ArrayList<Long> forAdd = new ArrayList<>();
 
     @Override
-    public void tick()
+    public void tick(Map<Long, MCache.Grid> gridsById)
     {
         ArrayList<Long> snapshot;
         synchronized (curGobs)
@@ -88,14 +88,72 @@ public class NMiningOverlay extends NOverlay
         if (requpdate())
             requestUpdate();
 
-        super.tick();
+        super.tick(gridsById);
     }
 
-    boolean[][] buf2;
+    static final class Coverage {
+        final Coord begin, end; // End is exclusive.
+        final boolean[][] data;
+
+        Coverage(Coord begin, Coord end, boolean[][] data) {
+            this.begin = begin;
+            this.end = end;
+            this.data = data;
+        }
+    }
+
+    /* Each cut builds on a separate worker. Never keep its mask on the overlay
+     * instance: another cut could replace it between makenol and makenolol. */
+    static boolean[][] maskForCut(Coord ul, Coord sz, Collection<Coverage> supports) {
+        boolean[][] mask = new boolean[sz.x + 2][sz.y + 2];
+        for (Coverage support : supports) {
+            if (support.data == null)
+                continue;
+            int x0 = Math.max(0, support.begin.x - ul.x + 1);
+            int x1 = Math.min(sz.x + 2, support.end.x - ul.x + 1);
+            int y0 = Math.max(0, support.begin.y - ul.y + 1);
+            int y1 = Math.min(sz.y + 2, support.end.y - ul.y + 1);
+            for (int x = x0; x < x1; x++) {
+                int sx = x + ul.x - 1 - support.begin.x;
+                if (sx >= support.data.length)
+                    continue;
+                for (int y = y0; y < y1; y++) {
+                    int sy = y + ul.y - 1 - support.begin.y;
+                    if (sy < support.data[sx].length && support.data[sx][sy])
+                        mask[x][y] = true;
+                }
+            }
+        }
+        return mask;
+    }
+
+    private boolean[][] maskForCut(MapMesh mm) {
+        ArrayList<Coverage> supports = new ArrayList<>();
+        if (Boolean.TRUE.equals(NConfig.get(NConfig.Key.miningol))) {
+            ArrayList<Long> snapshot;
+            synchronized (curGobs) {
+                snapshot = new ArrayList<>(curGobs);
+            }
+            for (Long id : snapshot) {
+                Gob g = Finder.findGob(id);
+                if (g == null)
+                    continue;
+                Gob.Overlay overlay = g.findol(NMiningSupport.class);
+                if (overlay == null)
+                    continue;
+                NMiningSupport nms = (NMiningSupport) overlay.spr;
+                NMiningSupport.SupportMask mask = nms.getMask();
+                if (mask != null)
+                    supports.add(new Coverage(mask.begin, mask.end, mask.data));
+            }
+        }
+        return maskForCut(mm.ul, mm.sz, supports);
+    }
 
     public RenderTree.Node makenol(MapMesh mm, Long grid_id, Coord grid_ul)
     {
         mm.olvert();
+        boolean[][] buf2 = maskForCut(mm);
         class Buf implements Tiler.MCons
         {
             short[] fl = new short[16];
@@ -113,38 +171,6 @@ public class NMiningOverlay extends NOverlay
         Buf buf = new Buf();
 //        NArea.VArea space = NUtils.getArea(id).space.space.get(grid_id);
 //        Area curArea = space.area.xl(grid_ul);
-        buf2 = new boolean[mm.sz.x + 2][mm.sz.y + 2];
-        if((Boolean)NConfig.get(NConfig.Key.miningol)) {
-            ArrayList<Long> snapshot;
-            synchronized (curGobs) {
-                snapshot = new ArrayList<>(curGobs);
-            }
-            for (Long id : snapshot) {
-                Gob g = Finder.findGob(id);
-
-                if (g != null && g.findol(NMiningSupport.class) != null) {
-                    NMiningSupport nms = (NMiningSupport) g.findol(NMiningSupport.class).spr;
-                    Coord beg = nms.begin.sub(mm.ul.sub(1, 1));
-                    Coord en = nms.end.sub(mm.ul.sub(1, 1));
-                    boolean[][] data = nms.getData();
-                    if ((beg.x >= 0 && beg.x <= mm.sz.x + 2 ||
-                            en.x >= 0 && en.x <= mm.sz.x + 2) &&
-                            (beg.y >= 0 && beg.y <= mm.sz.y + 2 ||
-                                    en.y >= 0 && en.y <= mm.sz.y + 2)) {
-                        for (t.y = Math.max(beg.y, 0); t.y < Math.min(en.y, mm.sz.y + 2); t.y++) {
-                            for (t.x = Math.max(beg.x, 0); t.x < Math.min(en.x, mm.sz.x + 2); t.x++) {
-                                int dx = t.x - beg.x;
-                                int dy = t.y - beg.y;
-                                if (data.length > dx && data[dx].length > dy && data[dx][dy]) {
-                                    buf2[t.x][t.y] = data[dx][dy];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         for (t.y = 0; t.y < mm.sz.y; t.y++)
         {
             for (t.x = 0; t.x < mm.sz.x; t.x++)
@@ -169,6 +195,7 @@ public class NMiningOverlay extends NOverlay
     public RenderTree.Node makenolol(MapMesh mm, Long grid_id, Coord grid_ul)
     {
         mm.olvert();
+        boolean[][] buf2 = maskForCut(mm);
         class Buf implements Tiler.MCons
         {
             int mask;

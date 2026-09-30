@@ -4,7 +4,9 @@ import haven.Coord;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -19,7 +21,9 @@ public class VeinWorklist {
     private final Set<Long> mined = new HashSet<Long>();
     private final Set<Long> queued = new HashSet<Long>();
     private final List<Coord> queue = new ArrayList<Coord>();
-    private final List<Coord> minedTiles = new ArrayList<Coord>();
+    // Only unmined neighbours can reveal more of the vein. Keeping the boundary
+    // avoids querying every historical tile (and its support) after each stone.
+    private final Map<Long, Coord> boundary = new LinkedHashMap<Long, Coord>();
 
     public VeinWorklist(String type, Coord seed) {
         this(type, seed, true);
@@ -65,11 +69,13 @@ public class VeinWorklist {
         if (visibleType == null || safe == null) {
             return;
         }
-        List<Coord> snapshot = new ArrayList<Coord>(minedTiles);
-        for (Coord m : snapshot) {
-            for (int[] d : NEIGHBORS) {
-                Coord n = new Coord(m.x + d[0], m.y + d[1]);
-                offer(n, visibleType.apply(n), Boolean.TRUE.equals(safe.apply(n)));
+        for (Coord tile : boundary.values()) {
+            if (queued.contains(key(tile))) {
+                continue;
+            }
+            String currentType = visibleType.apply(tile);
+            if (type != null && type.equals(currentType)) {
+                offer(tile, currentType, Boolean.TRUE.equals(safe.apply(tile)));
             }
         }
     }
@@ -97,11 +103,18 @@ public class VeinWorklist {
             return;
         }
         long k = key(tile);
-        mined.add(k);
         queued.remove(k);
         queue.remove(tile);
-        if (!minedTiles.contains(tile)) {
-            minedTiles.add(tile);
+        if (!mined.add(k)) {
+            return;
+        }
+        boundary.remove(k);
+        for (int[] d : NEIGHBORS) {
+            Coord neighbour = new Coord(tile.x + d[0], tile.y + d[1]);
+            long nk = key(neighbour);
+            if (!mined.contains(nk)) {
+                boundary.putIfAbsent(nk, neighbour);
+            }
         }
     }
 
@@ -110,8 +123,9 @@ public class VeinWorklist {
     }
 
     private boolean adjacentToMined(Coord tile) {
-        for (Coord m : minedTiles) {
-            if (Math.max(Math.abs(tile.x - m.x), Math.abs(tile.y - m.y)) == 1) {
+        for (int[] d : NEIGHBORS) {
+            long neighbour = ((long) (tile.x + d[0]) << 32) | ((tile.y + d[1]) & 0xffffffffL);
+            if (mined.contains(neighbour)) {
                 return true;
             }
         }
