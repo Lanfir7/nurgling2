@@ -336,4 +336,3 @@ public class ISmoke extends Sprite implements Rendered, Sprite.CDel, TickList.Ti
 	    autotick(agestep);
     }
 }
-

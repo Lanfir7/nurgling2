@@ -17,7 +17,7 @@ public class Flicker extends Sprite implements TickList.TickNode, TickList.Ticki
     public Pipe.Op pos = null;
     public float min = 0.5f, rt = 0.1f;
     private float s, e, t, a;
-    
+
     float nl() {return((rnd.nextFloat() * (1.0f - min)) + min);}
     float nt() {return(((rnd.nextFloat() - 0.5f) * rt * 0.5f) + rt);}
 
@@ -82,7 +82,7 @@ public class Flicker extends Sprite implements TickList.TickNode, TickList.Ticki
 	f.reset();
 	return(f);
     }
-    
+
     public static float[] cmul(float[] dst, float[] src, float f) {
 	if(dst == null)
 	    dst = new float[src.length];
@@ -131,4 +131,3 @@ public class Flicker extends Sprite implements TickList.TickNode, TickList.Ticki
 	// l.aq = aq / (float)c;
     }
 }
-
