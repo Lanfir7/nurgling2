@@ -310,6 +310,7 @@ public class NCore extends Widget
                             startTodoSync();
                             startFishSync();
                             startPeerPositionSync();
+                            startQuestShareSync();
                         } catch (Exception e) {
                             System.err.println("Failed to initialize DatabaseManager in background: " + e.getMessage());
                             e.printStackTrace();
@@ -336,6 +337,10 @@ public class NCore extends Widget
         {
             startPeerPositionSync();
         }
+        if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager != null && !questShareSyncStarted)
+        {
+            startQuestShareSync();
+        }
 
         if(!(Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager != null)
         {
@@ -346,6 +351,7 @@ public class NCore extends Widget
                     stopTodoSync();
                     stopFishSync();
                     stopPeerPositionSync();
+                    stopQuestShareSync();
                     databaseManager.shutdown();
                     databaseManager = null;
                 }
@@ -998,6 +1004,7 @@ public class NCore extends Widget
     private static volatile boolean fishSyncStarted = false;
     private static volatile boolean routeSyncStarted = false;
     private static volatile boolean peerPositionSyncStarted = false;
+    private static volatile boolean questShareSyncStarted = false;
 
     /**
      * Start periodic area sync from database
@@ -1200,6 +1207,37 @@ public class NCore extends Widget
             databaseManager.getPeerPositionService().stopSync();
         }
         peerPositionSyncStarted = false;
+    }
+
+    /**
+     * Start quest sharing with villagers. Same locking as peer positions: every session ticks this
+     * on its own UI thread against one shared service.
+     */
+    private void startQuestShareSync() {
+        if (questShareSyncStarted || databaseManager == null || !databaseManager.isReady()) {
+            return;
+        }
+        synchronized (dbLock) {
+            if (questShareSyncStarted || databaseManager == null || !databaseManager.isReady()) {
+                return;
+            }
+            nurgling.db.service.QuestShareDbService svc = databaseManager.getQuestShareService();
+            if (svc == null) return;   // optional migration was refused; the tracker has no Village tab
+
+            svc.startSync();
+            questShareSyncStarted = true;
+        }
+    }
+
+    /**
+     * Rows are left in place: a character's quests stay true while the database is off, and the
+     * tracker hides the Village tab by itself once the service is gone.
+     */
+    private void stopQuestShareSync() {
+        if (databaseManager != null && databaseManager.getQuestShareService() != null) {
+            databaseManager.getQuestShareService().stopSync();
+        }
+        questShareSyncStarted = false;
     }
 
     private void stopFishSync() {

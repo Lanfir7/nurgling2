@@ -72,6 +72,25 @@ public class QuestModel
             return leaf();
         }
 
+        /**
+         * Whether {@link #title()} is the real name and not the resource-leaf stand-in used while the
+         * resource is still loading. A loaded resource without a tooltip counts as known: the leaf is
+         * then the final answer.
+         */
+        public boolean titleKnown()
+        {
+            if(stitle != null && !stitle.isEmpty())
+                return true;
+            if(res == null)
+                return false;
+            try {
+                res.get();
+                return true;
+            } catch(Loading l) {
+                return false;
+            }
+        }
+
         /** Last path element of the quest resource, or {@code "#id"} while unresolved. */
         public String leaf()
         {
@@ -156,6 +175,24 @@ public class QuestModel
             this.levelDone = levelDone;
             this.levelTotal = levelTotal;
         }
+    }
+
+    /* login guard for sharing, see settled() */
+    private static final double SETTLE_MIN = 5.0;
+    private static final double SETTLE_MAX = 15.0;
+    private double settleAge = 0;
+    private boolean settled = false;
+
+    /**
+     * Whether the quest list can be trusted to be complete. Right after login the character sheet
+     * can exist with an empty list the server has not filled yet; sharing that would wipe this
+     * character's quests off every villager's screen. Settled once the sheet has existed for
+     * {@link #SETTLE_MIN} seconds and every quest has its objectives, or after {@link #SETTLE_MAX}
+     * seconds regardless. Stays settled for the life of the session.
+     */
+    public boolean settled()
+    {
+        return settled;
     }
 
     public int pursuedCredoId()
@@ -253,11 +290,28 @@ public class QuestModel
             classifyAll(chr.skill);
             pumpConds(dt, chr.quest);
         }
+        if(!settled && chr != null && chr.quest != null && chr.quest.cqst != null) {
+            settleAge += dt;
+            if(settleAge >= SETTLE_MAX || (settleAge >= SETTLE_MIN && inflight < 0 && allCondsLoaded())) {
+                settled = true;
+                // Nothing else may have changed, and the view publishes on a rebuild.
+                dirty = true;
+            }
+        }
         if(!dirty)
             return false;
         rederive();
         dirty = false;
         revision++;
+        return true;
+    }
+
+    private boolean allCondsLoaded()
+    {
+        for(TQuest q : quests.values()) {
+            if(!q.condsLoaded)
+                return false;
+        }
         return true;
     }
 

@@ -21,7 +21,7 @@ public class MigrationManager {
      * and this older client may not understand the new columns/tables; we
      * refuse to sync in that case rather than write incompatible rows.
      */
-    public static final int CLIENT_MAX_SCHEMA_VERSION = 22;
+    public static final int CLIENT_MAX_SCHEMA_VERSION = 23;
 
     /** Version of the migration that creates kin_secrets; optional, see {@link Migration#optional}. */
     public static final int MIGRATION_KIN_SECRETS = 15;
@@ -69,6 +69,9 @@ public class MigrationManager {
             this.version = version;
         }
     }
+
+    /** Version of the migration that creates quest_shares; optional, see {@link Migration#optional}. */
+    public static final int MIGRATION_QUEST_SHARES = 23;
 
     public static class SchemaTooNewException extends SQLException {
         public final int clientVersion;
@@ -924,6 +927,39 @@ public class MigrationManager {
                 addColumnIfMissing(adapter, "local_timers", "grid_id", "BIGINT");
                 addColumnIfMissing(adapter, "local_timers", "offset_x", "INTEGER");
                 addColumnIfMissing(adapter, "local_timers", "offset_y", "INTEGER");
+            }
+        });
+
+        /* Optional: quest_shares backs only the Village tab of the quest tracker. A role without CREATE
+         * on the schema must not lose area, planning and recipe sync over it. */
+        migrations.add(new Migration(MIGRATION_QUEST_SHARES, "Create quest_shares table for villagers' shared quests", true) {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (adapter.tableExists("quest_shares")) {
+                    return;
+                }
+                boolean pg = (adapter instanceof nurgling.db.PostgresAdapter);
+
+                /* Logged, unlike peer_positions: an offline villager's quests are still real, and
+                 * nobody would republish them after a server restart until that villager logs in.
+                 *
+                 * fillfactor 70 and no index on updated_at for the same reason as peer_positions: the
+                 * once-a-minute heartbeat rewrites only updated_at, and leaving room on the page keeps
+                 * that a HOT update. */
+                createTable(adapter, "quest_shares",
+                    "CREATE TABLE quest_shares (" +
+                    "profile VARCHAR(255) NOT NULL, " +
+                    "char_name VARCHAR(255) NOT NULL, " +
+                    /* JSON, see nurgling.widgets.quest.SharedQuests */
+                    "data TEXT NOT NULL, " +
+                    /* Changes with every content write, never with a heartbeat, so readers refetch
+                     * data only when there is something new in it. */
+                    "version INTEGER NOT NULL DEFAULT 1, " +
+                    /* Written from the database's clock, in UTC on PostgreSQL; see QuestShareDao. */
+                    "updated_at TIMESTAMP NOT NULL, " +
+                    "PRIMARY KEY (profile, char_name)" +
+                    ")" + (pg ? " WITH (fillfactor = 70)" : ""));
+                System.out.println("Created quest_shares table");
             }
         });
 

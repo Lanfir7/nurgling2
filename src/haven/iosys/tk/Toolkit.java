@@ -111,6 +111,13 @@ public interface Toolkit {
     }
 
     public static Toolkit instance() {
-	return(prov.instance());
+	RendererPref.apply();
+	try {
+	    return(prov.instance());
+	} catch(Unavailable e) {
+	    if(RendererPref.fallback(e))
+		return(prov.instance());
+	    throw(e);
+	}
     }
 }

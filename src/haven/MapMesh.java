@@ -574,7 +574,15 @@ public class MapMesh implements RenderTree.Node, Disposable {
 	}
 	return(new OLArray(vbuf.finv(), vl));
     }
-    public OLArray olvert = null;
+    public volatile OLArray olvert = null;
+
+    /* Overlay meshes for one cut can build concurrently on Defer threads;
+     * they must all index the same vertex buffer. */
+    public synchronized OLArray olvert() {
+	if(olvert == null)
+	    olvert = makeolvbuf();
+	return(olvert);
+    }
 
     public static class ShallowWrap implements RenderTree.Node, Rendered, Disposable {
 	final Rendered r;
@@ -600,8 +608,7 @@ public class MapMesh implements RenderTree.Node, Disposable {
     }
 
     public RenderTree.Node makeol(MCache.OverlayInfo id) {
-	if(olvert == null)
-	    olvert = makeolvbuf();
+	olvert();
 	class Buf implements Tiler.MCons {
 	    short[] fl = new short[16];
 	    int fn = 0;
@@ -635,8 +642,7 @@ public class MapMesh implements RenderTree.Node, Disposable {
     }
 
     public RenderTree.Node makeolol(MCache.OverlayInfo id) {
-	if(olvert == null)
-	    olvert = makeolvbuf();
+	olvert();
 	class Buf implements Tiler.MCons {
 	    int mask;
 	    short[] fl = new short[16];

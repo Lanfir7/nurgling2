@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-vulkan-graphics",
+  "priority": 6,
+  "summary": {
+    "ru": "Добавлены рендерер Vulkan и настраиваемые эффекты изображения, освещения и окружения.",
+    "en": "Vulkan rendering and configurable image, lighting, and ambient effects are available."
+  },
+  "detail": {
+    "ru": "Выберите Vulkan в настройках видео и перезапустите клиент, затем откройте Настройки → Графика для пресетов и отдельных эффектов: тени, освещение, огонь, дым, вода и погода. Эффекты по умолчанию выключены; при неподдерживаемом Vulkan остаётся обычная графика.",
+    "en": "Choose Vulkan in Video settings and restart the client, then open Settings → Graphics for presets and individual effects such as shadows, lighting, fire, smoke, water, and weather. Effects start off; classic graphics remain available when Vulkan is unsupported."
+  }
+}

@@ -86,6 +86,7 @@ public class NConfig
         discordNotification,
         discordWebhookUrl,
         showGrid,
+        graphics,
         showView,
         disableWinAnim,
         disableMenugridKeys,
@@ -379,7 +380,7 @@ public class NConfig
             this.profileManager = new ProfileManager(genus);
             this.profileManager.ensureProfileExists();
         }
-        conf = new HashMap<>();
+        conf = new ConfMap();
 
         conf.put(Key.vilol, false);
         conf.put(Key.claimol, false);
@@ -870,12 +871,50 @@ public class NConfig
     }
 
 
-    HashMap<Key, Object> conf = new HashMap<>();
+    ConfMap conf = new ConfMap();
     private ConfigWriteState configWriteState = new ConfigWriteState();
     private volatile java.util.concurrent.locks.ReentrantLock saveLock = new java.util.concurrent.locks.ReentrantLock();
     private volatile java.util.concurrent.atomic.AtomicBoolean pendingSave = new java.util.concurrent.atomic.AtomicBoolean();
     private volatile long nextSaveRetryNanos;
     private volatile boolean loadedForPersistence;
+
+    /* Config values are read per gob per frame from parallel tick threads,
+     * so reads must not share a lock (a synchronized HashMap parked frame
+     * threads for 10+ ms). A ConcurrentHashMap gives lock-free reads; it
+     * can't hold nulls, so null values are stored as a sentinel. Writers
+     * still synchronize on the map for their compound updates. */
+    static final class ConfMap extends AbstractMap<Key, Object> {
+        private static final Object NULL = new Object();
+        private final java.util.concurrent.ConcurrentHashMap<Key, Object> m = new java.util.concurrent.ConcurrentHashMap<>();
+
+        private static Object wrap(Object v) {return (v == null) ? NULL : v;}
+        private static Object unwrap(Object v) {return (v == NULL) ? null : v;}
+
+        @Override public Object get(Object key) {return (key == null) ? null : unwrap(m.get(key));}
+        @Override public boolean containsKey(Object key) {return (key != null) && m.containsKey(key);}
+        @Override public Object put(Key key, Object val) {return unwrap(m.put(key, wrap(val)));}
+        @Override public Object remove(Object key) {return (key == null) ? null : unwrap(m.remove(key));}
+        @Override public int size() {return m.size();}
+        @Override public void clear() {m.clear();}
+
+        @Override public Set<Entry<Key, Object>> entrySet() {
+            return new AbstractSet<Entry<Key, Object>>() {
+                public int size() {return m.size();}
+                public Iterator<Entry<Key, Object>> iterator() {
+                    Iterator<Entry<Key, Object>> it = m.entrySet().iterator();
+                    return new Iterator<Entry<Key, Object>>() {
+                        public boolean hasNext() {return it.hasNext();}
+                        public Entry<Key, Object> next() {
+                            Entry<Key, Object> e = it.next();
+                            return new SimpleEntry<>(e.getKey(), unwrap(e.getValue()));
+                        }
+                        public void remove() {it.remove();}
+                    };
+                }
+            };
+        }
+    }
+
     private boolean isExploredUpd = false;
     private long lastExploredChangeTime = 0;
     private static final long EXPLORED_DEBOUNCE_MS = 5000; // 5 seconds debounce for explored area changes
@@ -977,9 +1016,7 @@ public class NConfig
         NConfig cfg = resolveConfig();
         if (cfg == null)
             return null;
-        synchronized (cfg.conf) {
-            return cfg.conf.get(key);
-        }
+        return cfg.conf.get(key);
     }
 
     /** Coerces a config value that may be a Map or a raw JSON String into Map&lt;String,Object&gt;; empty map if neither. */
@@ -1003,9 +1040,7 @@ public class NConfig
     public static Object getGlobal(Key key) {
         NConfig cur = current;
         if (cur == null) return null;
-        synchronized (cur.conf) {
-            return cur.conf.get(key);
-        }
+        return cur.conf.get(key);
     }
 
     public static void set(Key key, Object val)

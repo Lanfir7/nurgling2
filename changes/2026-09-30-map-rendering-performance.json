@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-map-rendering-performance",
+  "priority": 5,
+  "summary": {
+    "ru": "Карта и подсветки объектов должны работать плавнее в насыщенных местах.",
+    "en": "The map and object highlights should feel smoother in busy areas."
+  },
+  "detail": {
+    "ru": "Отрисовка карты и подсветок теперь меньше задерживает игровой кадр при появлении новых объектов и участков. Изменение действует автоматически; искать переключатель не нужно.",
+    "en": "Map and highlight rendering now holds up frames less when new objects and areas appear. This improvement is automatic; there is no setting to enable."
+  }
+}

@@ -224,7 +224,9 @@ class StudyDeskConfigTest {
         NConfig config = (NConfig) unsafe().allocateInstance(NConfig.class);
         Field confField = NConfig.class.getDeclaredField("conf");
         confField.setAccessible(true);
-        confField.set(config, new HashMap<NConfig.Key, Object>());
+        java.lang.reflect.Constructor<?> confConstructor = Class.forName("nurgling.NConfig$ConfMap").getDeclaredConstructor();
+        confConstructor.setAccessible(true);
+        confField.set(config, confConstructor.newInstance());
         return config;
     }
 

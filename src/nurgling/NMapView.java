@@ -356,6 +356,104 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         return isFound;
     }
 
+    private nurgling.render.NPostFX.Manager postfx = null;
+    private nurgling.render.PointShadows pshadows = null;
+
+    /* World positions of the fires near the view (warm point lights),
+     * for heat shimmer. */
+    private java.util.List<Coord3f> fires() {
+        java.util.List<Coord3f> ret = new java.util.ArrayList<>();
+        Coord3f cc;
+        try {
+            cc = getcc().invy();
+        } catch (Loading l) {
+            return (ret);
+        }
+        java.util.List<Object[]> found = new java.util.ArrayList<>();
+        synchronized (lights.ll) {
+            for (haven.render.RenderList.Slot<Light> ls : lights.ll) {
+                if (!(ls.obj() instanceof PosLight))
+                    continue;
+                PosLight pl = (PosLight) ls.obj();
+                if (pl.dif[0] <= pl.dif[2] * 1.4f)
+                    continue;
+                float[] p = haven.render.Homo3D.locxf(ls.state()).mul4(pl.pos);
+                Coord3f pos = Coord3f.of(p[0], p[1], p[2]);
+                float d = pos.dist(cc);
+                if (d < 500)
+                    found.add(new Object[] {pos, d});
+            }
+        }
+        found.sort(java.util.Comparator.comparingDouble(o -> (Float) o[1]));
+        for (Object[] o : found)
+            ret.add((Coord3f) o[0]);
+        return (ret);
+    }
+
+    /* Graphics options: dust, fireflies and blowing leaves around the view. */
+    private nurgling.render.AmbientFX ambient = null;
+    private RenderTree.Slot s_ambient = null;
+
+    private void updambient() {
+        boolean want = nurgling.render.AmbientFX.enabled;
+        if (want && (ambient == null)) {
+            ambient = new nurgling.render.AmbientFX(this);
+            try {
+                s_ambient = basic.add(ambient);
+            } catch (Loading e) {
+                ambient.dispose();
+                ambient = null;
+                s_ambient = null;
+            }
+        } else if (!want && (ambient != null)) {
+            if (s_ambient != null)
+                s_ambient.remove();
+            ambient.dispose();
+            ambient = null;
+            s_ambient = null;
+        }
+    }
+
+    /* Graphics options: shadows from torches, fires and other point lights. */
+    private void updpshadows() {
+        int n = nurgling.render.PointShadows.count;
+        if ((n <= 0) || (instancer == null)) {
+            if (pshadows != null) {
+                basic(nurgling.render.PointShadows.class, null);
+                pshadows.dispose();
+                pshadows = null;
+            }
+            return;
+        }
+        if ((pshadows == null) || (pshadows.master() != instancer)) {
+            if (pshadows != null)
+                pshadows.dispose();
+            pshadows = new nurgling.render.PointShadows(instancer);
+        }
+        Coord3f cc;
+        try {
+            cc = getcc().invy();
+        } catch (Loading l) {
+            return;
+        }
+        /* Render space has y flipped relative to map coordinates. */
+        nurgling.render.PointShadows.Ground ground = (x, y) -> {
+            try {
+                return (glob.map.getcz(x, -y));
+            } catch (Loading l) {
+                return (-1e9f);
+            }
+        };
+        basic(nurgling.render.PointShadows.class, pshadows.update(lights, cc, n, nurgling.render.PointShadows.res, ground));
+    }
+
+    @Override
+    protected void maindraw(haven.render.Render out) {
+        if (pshadows != null)
+            pshadows.draw(out);
+        super.maindraw(out);
+    }
+
     @Override
     public void draw(GOut g) {
         // Initialize overlays only once on first draw (when GameUI is ready)
@@ -364,6 +462,17 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             // getShortWallCapOverlay(); // No longer needed - NCaveTile renders caps directly
             overlaysInitialized = true;
         }
+
+        // Graphics options: keep the post-processing chain in sync with the settings.
+        if (postfx == null)
+            postfx = new nurgling.render.NPostFX.Manager(this, this::basic, () -> {
+                if (back instanceof haven.render.vk.VkDrawList)
+                    ((haven.render.vk.VkDrawList) back).refresh();
+            });
+        postfx.sync(g.out.env());
+        updpshadows();
+        postfx.tick(this, (amblight == null) ? -1 : lights.index(amblight), fires());
+        updambient();
 
         super.draw(g);
         synchronized (dummys) {
@@ -599,6 +708,22 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if(storageTrail != null) {
             storageTrail.shutdown();
             storageTrail = null;
+        }
+        if(s_ambient != null) {
+            s_ambient.remove();
+            s_ambient = null;
+        }
+        if(ambient != null) {
+            ambient.dispose();
+            ambient = null;
+        }
+        if(pshadows != null) {
+            pshadows.dispose();
+            pshadows = null;
+        }
+        if(postfx != null) {
+            postfx.dispose();
+            postfx = null;
         }
         super.dispose();
     }
@@ -1518,8 +1643,9 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     protected void oltick()
     {
         super.oltick();
+        Map<Long, MCache.Grid> gridsById = glob.map.gridsById();
         for(NOverlay ol : nols.values())
-            ol.tick();
+            ol.tick(gridsById);
     }
 
     /**
