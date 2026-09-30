@@ -401,12 +401,14 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             try {
                 s_ambient = basic.add(ambient);
             } catch (Loading e) {
+                ambient.dispose();
                 ambient = null;
                 s_ambient = null;
             }
         } else if (!want && (ambient != null)) {
             if (s_ambient != null)
                 s_ambient.remove();
+            ambient.dispose();
             ambient = null;
             s_ambient = null;
         }
@@ -706,6 +708,22 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if(storageTrail != null) {
             storageTrail.shutdown();
             storageTrail = null;
+        }
+        if(s_ambient != null) {
+            s_ambient.remove();
+            s_ambient = null;
+        }
+        if(ambient != null) {
+            ambient.dispose();
+            ambient = null;
+        }
+        if(pshadows != null) {
+            pshadows.dispose();
+            pshadows = null;
+        }
+        if(postfx != null) {
+            postfx.dispose();
+            postfx = null;
         }
         super.dispose();
     }
@@ -1625,9 +1643,9 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     protected void oltick()
     {
         super.oltick();
-        NOverlay.gridsById = glob.map.gridsById();
+        Map<Long, MCache.Grid> gridsById = glob.map.gridsById();
         for(NOverlay ol : nols.values())
-            ol.tick();
+            ol.tick(gridsById);
     }
 
     /**

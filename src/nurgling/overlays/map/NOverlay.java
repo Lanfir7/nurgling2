@@ -49,15 +49,18 @@ public class NOverlay extends MapView.MapRaster
         this.id = id;
     }
 
-    /* Grids by id, snapshotted once per frame by NMapView.oltick for areaCuts. */
-    public static volatile Map<Long, MCache.Grid> gridsById = Collections.emptyMap();
-
     public void tick() {
+        tick(map.gridsById());
+    }
+
+    /* NMapView snapshots its own session's grids once and shares that snapshot
+     * across the overlays in this view. Never share it between sessions. */
+    public void tick(Map<Long, MCache.Grid> gridsById) {
         super.tick();
         if(area != null && refreshPolicy.shouldRefresh(
                 System.nanoTime(), area.ul.add(area.sz().div(2)), cacheRevision())) {
             if(id >= 0)
-                area = areaCuts(area);
+                area = areaCuts(area, gridsById);
             base.tick();
             outl.tick();
         }
@@ -67,19 +70,18 @@ public class NOverlay extends MapView.MapRaster
      * 5x5 cuts. Ticking only the cuts the area overlaps keeps the per-frame cost from
      * scaling with the number of saved areas. Grid.tick removes every cut outside the
      * returned area, so an area that moves, shrinks or leaves the view is cleaned up. */
-    private Area areaCuts(Area win) {
+    private Area areaCuts(Area win, Map<Long, MCache.Grid> gridsById) {
         NArea narea = map.areas.get(id);
         NArea.Space space = (narea == null) ? null : narea.space;
         if(space == null)
             return(win);
-        Map<Long, MCache.Grid> grids = gridsById;
         Coord ul = null, br = null;
         try {
             for(Map.Entry<Long, NArea.VArea> e : space.space.entrySet()) {
                 Area va = e.getValue().area;
                 if(!va.positive())
                     continue;
-                MCache.Grid g = grids.get(e.getKey());
+                MCache.Grid g = gridsById.get(e.getKey());
                 if(g == null)
                     continue;
                 Coord cul = g.ul.add(va.ul).div(MCache.cutsz);

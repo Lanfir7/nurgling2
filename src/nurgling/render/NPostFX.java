@@ -338,6 +338,20 @@ public class NPostFX {
 	    this.reprog = reprog;
 	}
 
+	public void dispose() {
+	    if(dfx != null) {view.remove(dfx); dfx.dispose(); dfx = null;}
+	    if(bloom != null) {view.remove(bloom); bloom.dispose(); bloom = null;}
+	    if(grade != null) {view.tonemap(null); grade.dispose(); grade = null;}
+	    if(clar != null) {view.remove(clar); clar.dispose(); clar = null;}
+	    if(hist != null) {view.remove(hist); hist.dispose(); hist = null;}
+	    if(tilt != null) {view.remove(tilt); tilt.dispose(); tilt = null;}
+	    if(heat != null) {view.remove(heat); heat.dispose(); heat = null;}
+	    if(shafts != null) {view.remove(shafts); shafts.dispose(); shafts = null;}
+	    if(fxaa != null) {view.remove(fxaa); fxaa.dispose(); fxaa = null;}
+	    if(sharp != null) {view.remove(sharp); sharp.dispose(); sharp = null;}
+	    cur = null;
+	}
+
 	private <T extends PostProcessor> T toggle(T cur, boolean want, java.util.function.Supplier<T> mk) {
 	    if(want && (cur == null)) {
 		cur = mk.get();
