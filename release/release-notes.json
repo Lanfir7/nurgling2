@@ -192,9 +192,104 @@
     "2026-09-27-item-gain-notices",
     "2026-09-27-location-alert-loading",
     "2026-09-27-mining-mark-persistence",
-    "2026-09-27-swimming-auto-off"
+    "2026-09-27-swimming-auto-off",
+    "2026-09-29-adder-skeleton-stack",
+    "2026-09-29-chest-item-shape",
+    "2026-09-29-flush-placement",
+    "2026-09-29-free-inventory-pouch-transfer",
+    "2026-09-29-narwhal-hitbox",
+    "2026-09-30-area-overlay-loading",
+    "2026-09-30-cheese-supplies",
+    "2026-09-30-map-rendering-performance",
+    "2026-09-30-mining-memory",
+    "2026-09-30-mining-overlay",
+    "2026-09-30-tunneling-settings",
+    "2026-09-30-village-quest-tasks",
+    "2026-09-30-village-quests",
+    "2026-09-30-vulkan-graphics",
+    "2026-09-30-zone-object-counts"
   ],
   "releases": [
+    {
+      "id": "2.103.220",
+      "date": "2026-09-30",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Исправлено падение клиента при просмотре деревенских квестов в режиме задач.",
+          "MiningMaster освобождает старые стопки камней, а VeinMiner выполняет меньше проверок при долгой копке.",
+          "Шахтная подсветка учитывает подгруженные подпорки, стабильно показывает зоны больших опор и башенной шляпки и выключается у мини-карты.",
+          "В трекере заданий можно видеть задания других жителей и предметы, которые им нужны.",
+          "Подсветка сохранённых зон не прерывает игру, пока участки карты загружаются.",
+          "Добавлены рендерер Vulkan и настраиваемые эффекты изображения, освещения и окружения.",
+          "Калькулятор сыра теперь показывает, сколько нужно чанов, молока и сычуга.",
+          "Карта и подсветки объектов должны работать плавнее в насыщенных местах.",
+          "«Освободить инвентарь» подвинет мелкую вещь в сундуке, если крупный предмет не входит в свободные клетки.",
+          "Перенос нескольких сундуков и стройка ставят их вплотную к уже стоящим.",
+          "«Освободить инвентарь» кладёт вещи из поясной сумки в сундук и не зависает, если место не нашлось.",
+          "Рамка нарвала совпадает с тушей: с головы больше нельзя зайти в текстуру, с хвоста упор не раньше тела.",
+          "Туннельный бот снова копает проход в две клетки и запоминает выбранные настройки.",
+          "Линейка теперь считает объекты внутри выделенной области.",
+          "Скелет гадюки складывается по 3, как в игре."
+        ],
+        "en": [
+          "Fixed a client crash when viewing village quests grouped by task.",
+          "MiningMaster releases old stone stacks, and VeinMiner performs fewer checks during long mining runs.",
+          "The mine safety overlay updates as supports load, keeps large-support and towercap coverage steady, and turns off from the minimap button.",
+          "The quest tracker can show other villagers' quests and the items they need.",
+          "Saved area highlights no longer interrupt play while map sections load.",
+          "Vulkan rendering and configurable image, lighting, and ambient effects are available.",
+          "The cheese calculator now shows the tubs, milk and rennet your plan needs.",
+          "The map and object highlights should feel smoother in busy areas.",
+          "Free Inventory shifts a small item in the chest when a larger item does not fit the free cells.",
+          "Moving several chests, and building, now places them flush against ones already standing.",
+          "Free Inventory puts belt-pouch items into the chest and stops instead of hanging when they cannot be stored.",
+          "The narwhal outline now follows the body: the head is no longer walkable, and the tail no longer stops you short.",
+          "The tunneling bot again digs a two-tile passage and remembers the settings you pick.",
+          "The ruler now counts objects inside a selected area.",
+          "Adder Skeleton stacks in threes, matching the game."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Во вкладке деревни трекера квестов снова можно переключаться на группировку по задачам. Общие задания правильно распределяются по категориям, а названия категорий отображаются на выбранном языке.",
+          "При использовании MiningMaster выброшенные стопки больше не удерживаются в памяти до остановки бота. VeinMiner проверяет только ещё не выкопанные соседние клетки и не повторяет проверки уже выбранных целей. Это снижает накопление памяти и лишнюю нагрузку во время длительной разработки жилы. Изменения работают автоматически.",
+          "Используйте кнопку шахтного оверлея у мини-карты или настройку в разделе удобства. Безопасная зона обновляется при появлении и исчезновении подпорок, не дублируется, не мерцает возле башенной шляпки и правильно отображается на соседних участках карты. Подсветка выбранных пород тоже снова реагирует на изменение настроек.",
+          "При доступной общей базе откройте вкладку «Деревня» в трекере заданий. Там можно просматривать задания жителей и включить публикацию своих заданий. Нужные жителям предметы отмечаются в инвентаре и подсказках. Начальные обучающие задания в общий список не попадают.",
+          "Сохранённые зоны на карте и их контуры отображаются после загрузки нужных участков. Если участок временно недоступен, клиент продолжает работу и возвращает подсветку, когда карта появится.",
+          "Выберите Vulkan в настройках видео и перезапустите клиент, затем откройте Настройки → Графика для пресетов и отдельных эффектов: тени, освещение, огонь, дым, вода и погода. Эффекты по умолчанию выключены; при неподдерживаемом Vulkan остаётся обычная графика.",
+          "Откройте калькулятор сырных стеллажей. Для каждого вида творога можно увидеть число чанов и расход молока и сычуга в час или в сутки. Расчёт чанов предполагает, что вы опустошаете их не реже раза в 12 часов.",
+          "Отрисовка карты и подсветок теперь меньше задерживает игровой кадр при появлении новых объектов и участков. Изменение действует автоматически; искать переключатель не нужно.",
+          "Для предметов больше одной клетки бот смотрит не только сколько клеток свободно, но и сложены ли они в нужный прямоугольник. Если нет, он один раз передвигает мелкую вещь внутри сундука, чтобы собрать это место. Когда собрать его нельзя, предмет в этот сундук не отправляется и ошибка размера не появляется.",
+          "Макрос переноса нескольких объектов и превью стройки больше не оставляют щель у сундука, который уже стоит в зоне. Новые встают кромка к кромке, как при обычном переносе сразу.",
+          "При освобождении инвентаря вещи из поясной сумки, в том числе из стопки, переносятся в выбранный сундук по одной. Если сундук их не принимает, перенос останавливается: вещь возвращается в сумку, когда это возможно, и бот не сообщает об успехе и не ждёт бесконечно. Боты заполнения сундуков тоже останавливаются при отказе или отсутствии прогресса, вместо бесконечного повтора.",
+          "Граница нарвала была перевёрнута вдоль тела. Спереди персонаж заходил в текстуру и не упирался, сзади упор был раньше туши. Включите показ границ объектов, чтобы сверить рамку с нарвалом.",
+          "В окне Tunneling Bot включите x2 Tunnel, чтобы проход шёл двумя клетками рядом с опорой. Сторона прохода, направление, тип опоры, крылья и отклонение в режиме без опор сохраняются для персонажа и подставляются при следующем запуске.",
+          "Выделите область линейкой: над ней появится общее число объектов, а в окне инструмента — количество по видам. Подсчёт обновляется при изменениях в загруженной области.",
+          "Клиент больше не считает скелет гадюки стопкой из 4, как остальной костный материал. Сортировка и перенос складывают его по 3."
+        ],
+        "en": [
+          "In the quest tracker's Village tab, grouping by task works again. Shared objectives appear in the correct categories, with category headings in your selected language.",
+          "With MiningMaster, discarded stacks are no longer held in memory until the bot stops. VeinMiner checks only unmined neighbouring tiles and skips repeated checks for already queued targets. This reduces memory retention and unnecessary work during long vein mining runs. The improvements apply automatically.",
+          "Use the mining overlay button by the minimap or its quality-of-life setting. Safe coverage updates when supports appear or disappear, no longer appears twice, stays steady around towercaps, and remains aligned across map sections. Highlighting selected rock types also responds to settings changes again.",
+          "When the shared database is available, open the Village tab in the quest tracker to browse villagers' quests and choose whether to share yours. Items they need are marked in your inventory and tooltips. Introductory tutorial quests stay out of the shared list.",
+          "Saved areas and their outlines appear on the map as their sections load. If a section is temporarily unavailable, the client keeps running and restores the highlight when the map returns.",
+          "Choose Vulkan in Video settings and restart the client, then open Settings → Graphics for presets and individual effects such as shadows, lighting, fire, smoke, water, and weather. Effects start off; classic graphics remain available when Vulkan is unsupported.",
+          "Open the cheese rack calculator to see the tubs required for each curd type and the milk and rennet needed per hour or day. The tub estimate assumes you empty them at least once every 12 hours.",
+          "Map and highlight rendering now holds up frames less when new objects and areas appear. This improvement is automatic; there is no setting to enable.",
+          "For items larger than one cell, Free Inventory checks whether the free cells form the needed rectangle, not only how many are empty. If they do not, it moves one small item inside the chest to make that space. When the space cannot be made, the item is not sent to that chest and no size error appears.",
+          "The move-several macro and the building preview no longer leave a gap beside a chest already in the zone. New ones sit edge to edge, the same as placing one immediately.",
+          "Free Inventory moves pouch items, including items in a stack, into the chosen chest one at a time. If the chest cannot take an item, the transfer stops, puts it back in the pouch when it can, and does not report success or wait forever. Chest-filling bots also stop on rejection or lack of progress instead of retrying endlessly.",
+          "The narwhal boundary was flipped along the body. You could walk into the head, and the tail stopped you before the body. Turn on object boundaries to compare the outline with the narwhal.",
+          "In Tunneling Bot, turn on x2 Tunnel to dig a two-tile passage beside the supports. Passage side, direction, support type, wings, and the no-support deviation are kept for the character and filled in the next time you start.",
+          "Select an area with the ruler to see the total object count above it and a breakdown by type in the tool window. Counts refresh as objects in the loaded area change.",
+          "The client no longer treats Adder Skeleton as a stack of 4 like other bone material. Sorting and transfers stack it by 3."
+        ]
+      }
+    },
     {
       "id": "2.103.219",
       "date": "2026-09-27",
@@ -1356,38 +1451,6 @@
         "en": [
           "Open Settings → home setup. When a claim or village is detected, save the current home; area lists collapse so they do not cover the map.",
           "Open the object configuration from the context menu and enable the minimap icon when you want that point visible from above."
-        ]
-      }
-    },
-    {
-      "id": "2.103.188",
-      "date": "2026-09-08",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "Пресеты Hurricane и Ender плюс починенные жесты семян, руки и свалок.",
-          "Строки приёмов в окне боя больше не сжимаются в одну линию.",
-          "Выпадающие списки контрастнее, текст не прячется под рамкой."
-        ],
-        "en": [
-          "Hurricane and Ender presets, with seed, held-item and stockpile gestures restored.",
-          "Fight-window move rows no longer collapse into a single line.",
-          "Dropdowns have stronger contrast, and text no longer hides under the border."
-        ]
-      },
-      "details": {
-        "ru": [
-          "На странице Hotkeys доступны пресеты Hurricane и Ender без внутренних конфликтов. Снова работают взаимодействие с семенами, предмет в руке и перенос со свалок.",
-          "Список приёмов в окне боя держит минимальную высоту строки, так что названия и иконки остаются читаемыми.",
-          "Списки выбора в интерфейсе читаются на тёмном фоне, подписи не обрезаются рамкой пункта."
-        ],
-        "en": [
-          "The Hotkeys page includes Hurricane and Ender presets without internal conflicts. Seed interaction, held-item use and stockpile transfers work again.",
-          "The fight-window move list keeps a minimum row height so names and icons stay readable.",
-          "Dropdown lists read clearly on a dark background, and labels are not clipped by the item border."
         ]
       }
     }
