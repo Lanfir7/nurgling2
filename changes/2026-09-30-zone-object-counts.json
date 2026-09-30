@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-zone-object-counts",
+  "priority": 4,
+  "summary": {
+    "ru": "Линейка теперь считает объекты внутри выделенной области.",
+    "en": "The ruler now counts objects inside a selected area."
+  },
+  "detail": {
+    "ru": "Выделите область линейкой: над ней появится общее число объектов, а в окне инструмента — количество по видам. Подсчёт обновляется при изменениях в загруженной области.",
+    "en": "Select an area with the ruler to see the total object count above it and a breakdown by type in the tool window. Counts refresh as objects in the loaded area change."
+  }
+}

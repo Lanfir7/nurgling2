@@ -943,7 +943,7 @@ public class MigrationManager {
                 /* Logged, unlike peer_positions: an offline villager's quests are still real, and
                  * nobody would republish them after a server restart until that villager logs in.
                  *
-                 * fillfactor 70 and no index on updated_at for the same reason as migration 12: the
+                 * fillfactor 70 and no index on updated_at for the same reason as peer_positions: the
                  * once-a-minute heartbeat rewrites only updated_at, and leaving room on the page keeps
                  * that a HOT update. */
                 createTable(adapter, "quest_shares",

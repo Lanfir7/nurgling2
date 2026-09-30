@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-cheese-supplies",
+  "priority": 5,
+  "summary": {
+    "ru": "Калькулятор сыра теперь показывает, сколько нужно чанов, молока и сычуга.",
+    "en": "The cheese calculator now shows the tubs, milk and rennet your plan needs."
+  },
+  "detail": {
+    "ru": "Откройте калькулятор сырных стеллажей. Для каждого вида творога можно увидеть число чанов и расход молока и сычуга в час или в сутки. Расчёт чанов предполагает, что вы опустошаете их не реже раза в 12 часов.",
+    "en": "Open the cheese rack calculator to see the tubs required for each curd type and the milk and rennet needed per hour or day. The tub estimate assumes you empty them at least once every 12 hours."
+  }
+}

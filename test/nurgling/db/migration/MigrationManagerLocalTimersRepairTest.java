@@ -19,6 +19,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MigrationManagerLocalTimersRepairTest {
     @Test
+    void schemaTwentyTwoCreatesQuestSharesAtFreshVersion() throws Exception {
+        Connection connection = connectionAtSchemaVersion(22);
+        RecordingPostgresAdapter adapter = new RecordingPostgresAdapter(connection);
+
+        Map<Integer, String> skipped = new MigrationManager(connection, adapter).runMigrations();
+
+        assertEquals(23, MigrationManager.MIGRATION_QUEST_SHARES);
+        assertEquals(23, MigrationManager.CLIENT_MAX_SCHEMA_VERSION);
+        assertTrue(skipped.isEmpty());
+        assertTrue(adapter.questSharesExists,
+                "a database already at local timer grid migration must still gain quest sharing");
+    }
+
+    @Test
     void schemaNineteenWithoutLocalTimersIsRepaired() throws Exception {
         Connection connection = connectionAtSchemaVersion(19);
         RecordingPostgresAdapter adapter = new RecordingPostgresAdapter(connection);
@@ -157,6 +171,7 @@ class MigrationManagerLocalTimersRepairTest {
 
     private static final class RecordingPostgresAdapter extends PostgresAdapter {
         private boolean localTimersExists;
+        private boolean questSharesExists;
         private final Set<String> columns = new HashSet<>();
         private final TransactionState transaction;
 
@@ -174,7 +189,8 @@ class MigrationManagerLocalTimersRepairTest {
 
         @Override
         public boolean tableExists(String tableName) {
-            return "local_timers".equals(tableName) && localTimersExists;
+            return ("local_timers".equals(tableName) && localTimersExists)
+                    || ("quest_shares".equals(tableName) && questSharesExists);
         }
 
         @Override
@@ -199,6 +215,8 @@ class MigrationManagerLocalTimersRepairTest {
                         "id", "profile", "resource_id", "segment_id", "tile_x", "tile_y",
                         "resource_name", "resource_type", "start_time_utc", "duration_ms",
                         "description", "created_at", "updated_at"));
+            } else if (sql.startsWith("CREATE TABLE quest_shares")) {
+                questSharesExists = true;
             } else if (sql.startsWith("ALTER TABLE local_timers ADD COLUMN ")) {
                 String rest = sql.substring("ALTER TABLE local_timers ADD COLUMN ".length());
                 columns.add(rest.substring(0, rest.indexOf(' ')));

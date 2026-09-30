@@ -14,6 +14,7 @@ import nurgling.iteminfo.NFoodInfo;
 import nurgling.iteminfo.NKilnInfo;
 import nurgling.iteminfo.NSmelterInfo;
 import nurgling.tools.LpExplorer;
+import nurgling.widgets.NQuestInfo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;

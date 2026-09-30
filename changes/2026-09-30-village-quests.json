@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-village-quests",
+  "priority": 7,
+  "summary": {
+    "ru": "В трекере заданий можно видеть задания других жителей и предметы, которые им нужны.",
+    "en": "The quest tracker can show other villagers' quests and the items they need."
+  },
+  "detail": {
+    "ru": "При доступной общей базе откройте вкладку «Деревня» в трекере заданий. Там можно просматривать задания жителей и включить публикацию своих заданий. Нужные жителям предметы отмечаются в инвентаре и подсказках. Начальные обучающие задания в общий список не попадают.",
+    "en": "When the shared database is available, open the Village tab in the quest tracker to browse villagers' quests and choose whether to share yours. Items they need are marked in your inventory and tooltips. Introductory tutorial quests stay out of the shared list."
+  }
+}

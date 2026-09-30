@@ -787,7 +787,7 @@ public class NQuestInfo extends Widget
                 if(q.readyToTurnIn())
                     g.ready = true;
                 if(!q.quest.loaded) {
-                    Row r = new Row("objectives not loaded yet", false, -1, true, null);
+                    Row r = new Row("objectives not loaded yet", false, -1, true, q.quest.kind, null);
                     r.holders.add(v);
                     g.rows.add(r);
                     continue;
@@ -795,7 +795,7 @@ public class NQuestInfo extends Widget
                 for(QCond c : q.conds) {
                     if(c.verb == QCond.Verb.TELL)
                         continue;
-                    Row r = new Row(c.text, c.ready, -1, false, c);
+                    Row r = new Row(c.text, c.ready, -1, false, q.quest.kind, c);
                     r.holders.add(v);
                     g.rows.add(r);
                 }
@@ -843,7 +843,7 @@ public class NQuestInfo extends Widget
                             continue;
                         Row r = byText.get(c.text);
                         if(r == null)
-                            byText.put(c.text, r = new Row(c.text, false, -1, false, c));
+                            byText.put(c.text, r = new Row(c.text, false, -1, false, q.quest.kind, c));
                         if(!r.holders.contains(v))
                             r.holders.add(v);
                     }
