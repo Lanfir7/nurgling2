@@ -409,6 +409,9 @@
         <pathelement path="build/classes" />
         <pathelement path="build/test-classes" />
         <path refid="client.classpath" />
+        <!-- Compile generated post-processing shaders in tests without a GPU/window. -->
+        <pathelement path="lib/ext/lwjgl-vk/lwjgl-shaderc-${lwjgl-vk.version}-natives-windows.jar" />
+        <pathelement path="lib/ext/lwjgl-vk/lwjgl-shaderc-${lwjgl-vk.version}-natives-linux.jar" />
         <pathelement location="${junit-platform.jar}" />
       </classpath>
       <arg value="execute" />

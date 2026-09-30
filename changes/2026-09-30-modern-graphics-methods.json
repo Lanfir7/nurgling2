@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-modern-graphics-methods",
+  "priority": 7,
+  "summary": {
+    "ru": "Для Vulkan добавлены сглаживание SMAA, адаптивная резкость CAS и затенение HBAO.",
+    "en": "Vulkan gains SMAA anti-aliasing, CAS adaptive sharpening and HBAO shading."
+  },
+  "detail": {
+    "ru": "В «Настройки Nurgling» → «Общие» → «Графика» можно выбрать SMAA 1x для сглаживания краёв, CAS для адаптивной резкости и HBAO для контактного затенения. Прежние методы остаются доступны, а сохранённые настройки не переключаются автоматически. Пресет «Ультра» выбирает новые методы; эффекты работают при активном Vulkan.",
+    "en": "In Nurgling settings → General → Graphics, choose SMAA 1x for edge smoothing, CAS for adaptive sharpening and HBAO for contact shading. Legacy methods remain available and saved settings are not switched automatically. The Ultra preset selects the new methods; effects require the active Vulkan renderer."
+  }
+}

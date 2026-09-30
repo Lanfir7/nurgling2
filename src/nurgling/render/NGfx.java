@@ -19,10 +19,15 @@ public class NGfx {
 	public final boolean vignette;
 	/* Anti-aliasing and sharpening */
 	public final boolean fxaa, sharpen;
+	/* Method selectors keep the legacy enable flags/configuration intact:
+	 * 0 = FXAA / legacy sharpening, 1 = SMAA 1x / CAS. */
+	public final int aamethod, sharpmethod;
 	public final float sharpness;
 	/* Ambient occlusion; aoq is 0 = half resolution, 1 = full */
 	public final boolean ssao;
 	public final int aoq;
+	/* 0 = legacy SSAO, 1 = horizon-based AO. */
+	public final int aomethod;
 	public final float aostrength;
 	/* Bloom */
 	public final boolean bloom;
@@ -56,9 +61,12 @@ public class NGfx {
 	    warmth = f(m, "warmth", 0.1f);
 	    vignette = b(m, "vignette", false);
 	    fxaa = b(m, "fxaa", false);
+	    aamethod = method(m, "aamethod");
 	    sharpen = b(m, "sharpen", false);
+	    sharpmethod = method(m, "sharpmethod");
 	    sharpness = f(m, "sharpness", 0.4f);
 	    ssao = b(m, "ssao", false);
+	    aomethod = method(m, "aomethod");
 	    aoq = i(m, "aoq", 0);
 	    aostrength = f(m, "aostrength", 1.0f);
 	    bloom = b(m, "bloom", false);
@@ -94,7 +102,9 @@ public class NGfx {
 	    m.put("grade", grade); m.put("exposure", exposure); m.put("contrast", contrast);
 	    m.put("saturation", saturation); m.put("warmth", warmth); m.put("vignette", vignette);
 	    m.put("fxaa", fxaa); m.put("sharpen", sharpen); m.put("sharpness", sharpness);
+	    m.put("aamethod", aamethod); m.put("sharpmethod", sharpmethod);
 	    m.put("ssao", ssao); m.put("aoq", aoq); m.put("aostrength", aostrength);
+	    m.put("aomethod", aomethod);
 	    m.put("bloom", bloom); m.put("bloomstrength", bloomstrength);
 	    m.put("softshadow", softshadow); m.put("shadowq", shadowq);
 	    m.put("aniso", aniso); m.put("water", water);
@@ -134,6 +144,11 @@ public class NGfx {
 	    Object v = m.get(k);
 	    return((v instanceof Number) ? ((Number)v).intValue() : def);
 	}
+
+	private static int method(Map<String, Object> m, String key) {
+	    Object value = m.get(key);
+	    return((value instanceof Number) && (((Number)value).doubleValue() == 1.0) ? 1 : 0);
+	}
     }
 
     public enum Preset {
@@ -145,8 +160,11 @@ public class NGfx {
 	    m.put("grade", on);
 	    m.put("vignette", ultra);
 	    m.put("fxaa", on);
+	    m.put("aamethod", ultra ? 1 : 0);
 	    m.put("sharpen", ultra);
+	    m.put("sharpmethod", ultra ? 1 : 0);
 	    m.put("ssao", on);
+	    m.put("aomethod", ultra ? 1 : 0);
 	    m.put("aoq", ultra ? 1 : 0);
 	    m.put("bloom", on);
 	    m.put("softshadow", on);

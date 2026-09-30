@@ -128,7 +128,10 @@ public class ShadowMap extends State {
 	    }
 
 	    public int gstate(int id) {
-		if(State.Slot.byid(id).type == State.Slot.Type.GEOM) {
+		/* Keep object preparation asynchronous in this pass too, without
+		 * inheriting the main pass's other SYS states (targets, viewport). */
+		if((State.Slot.byid(id).type == State.Slot.Type.GEOM) ||
+		   (id == RenderPreparation.slot.id)) {
 		    int ret = bk.state().gstate(id);
 		    if(ret >= 0)
 			return(ret + idx_back);

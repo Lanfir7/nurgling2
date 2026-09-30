@@ -37,6 +37,8 @@ public class ExploredArea {
     private static final int MASK_SIZE = GRID_SIZE * GRID_SIZE;
     private static final AtomicReference<ExecutorService> executorRef = new AtomicReference<>(createExecutor());
     private final Object masksLock = new Object();
+    /** Invalidates publication from a save or reload that began before clear(). */
+    private long clearEpoch;
     private final AtomicBoolean mainSaveQueued = new AtomicBoolean(false);
     private final AtomicBoolean sessionSaveQueued = new AtomicBoolean(false);
     private final AtomicBoolean drainScheduled = new AtomicBoolean(false);
@@ -146,7 +148,10 @@ public class ExploredArea {
                     GridKey key = new GridKey(segmentId, gridCoord);
 
                     // Get or create mask for this grid (main persistent layer)
-                    boolean[] mask = gridMasks.computeIfAbsent(key, k -> new boolean[MASK_SIZE]);
+                    boolean[] mask = gridMasks.get(key);
+                    if (mask == null)
+                        mask = new boolean[MASK_SIZE];
+                    boolean[] updatedMask = mask;
 
                     // Get or create mask for session layer if active
                     boolean[] sessionMask = null;
@@ -168,8 +173,10 @@ public class ExploredArea {
                         for (int x = localULX; x < localBRX; x++) {
                             int idx = x + y * GRID_SIZE;
                             // Update main layer
-                            if (!mask[idx]) {
-                                mask[idx] = true;
+                            if (!updatedMask[idx]) {
+                                if (updatedMask == mask)
+                                    updatedMask = Arrays.copyOf(mask, MASK_SIZE);
+                                updatedMask[idx] = true;
                                 changed = true;
                                 gridChanged = true;
                             }
@@ -181,8 +188,10 @@ public class ExploredArea {
                             }
                         }
                     }
-                    if (gridChanged)
+                    if (gridChanged) {
+                        gridMasks.put(key, updatedMask);
                         markGenerated(gridGen, key);
+                    }
                     if (sessionGridChanged)
                         markGenerated(sessionGen, key);
                 }
@@ -227,7 +236,9 @@ public class ExploredArea {
      * @return boolean[] mask or null if no data
      */
     public GridMask getExploredMaskForGrid(Coord gridCoord, long segmentId, int dataLevel) {
-        return maskOf(gridMasks, gridGen, new GridKey(segmentId, gridCoord));
+        synchronized (masksLock) {
+            return maskOf(gridMasks, gridGen, new GridKey(segmentId, gridCoord));
+        }
     }
 
     /**
@@ -247,6 +258,7 @@ public class ExploredArea {
     public void clear() {
         boolean hadData;
         synchronized (masksLock) {
+            clearEpoch++;
             hadData = !gridMasks.isEmpty();
             if (hadData) {
                 gridMasks.clear();
@@ -314,7 +326,9 @@ public class ExploredArea {
         if (!sessionActive) {
             return null;
         }
-        return maskOf(sessionGridMasks, sessionGen, new GridKey(segmentId, gridCoord));
+        synchronized (masksLock) {
+            return sessionActive ? maskOf(sessionGridMasks, sessionGen, new GridKey(segmentId, gridCoord)) : null;
+        }
     }
     
     /**
@@ -471,9 +485,19 @@ public class ExploredArea {
     }
 
     Map<GridKey, boolean[]> snapshotGridMasks() {
+        return snapshotGridMasks(null);
+    }
+
+    private Map<GridKey, boolean[]> snapshotGridMasks(long[] epoch) {
+        Map<GridKey, boolean[]> references;
         synchronized (masksLock) {
-            return copyMasksLocked(gridMasks);
+            if (epoch != null)
+                epoch[0] = clearEpoch;
+            references = new HashMap<>(gridMasks);
         }
+        // Main masks are immutable after publication; copying them need not hold
+        // the UI's lock for the whole map.
+        return copyMasksLocked(references);
     }
 
     private Map<GridKey, boolean[]> copyMasksLocked(Map<GridKey, boolean[]> source) {
@@ -486,18 +510,18 @@ public class ExploredArea {
     }
 
     public void reloadFromFile() {
-        Map<GridKey, boolean[]> currentData = snapshotGridMasks();
-        Map<GridKey, boolean[]> fromFile = readMasksFromExploredFile();
+        long epoch;
         synchronized (masksLock) {
-            Map<GridKey, boolean[]> live = copyMasksLocked(gridMasks);
-            Map<GridKey, boolean[]> merged = ExploredAreaMerge.merge(fromFile, currentData, MASK_SIZE);
-            merged = ExploredAreaMerge.merge(merged, live, MASK_SIZE);
-            gridMasks.clear();
-            gridMasks.putAll(merged);
-            rebuildGen(gridMasks, gridGen);
+            epoch = clearEpoch;
         }
-        sessionGridMasks.clear();
-        sessionGen.clear();
+        Map<GridKey, boolean[]> fromFile = readMasksFromExploredFile();
+        publishMerged(fromFile, epoch);
+        synchronized (masksLock) {
+            if (clearEpoch != epoch)
+                return;
+            sessionGridMasks.clear();
+            sessionGen.clear();
+        }
         loadSessionFromFile();
         seq++;
     }
@@ -723,39 +747,56 @@ public class ExploredArea {
      * 6. Release lock
      */
     public void mergeAndSaveToFile(String filePath) throws IOException {
-        Map<GridKey, boolean[]> snapshot = snapshotGridMasks();
+        long[] epoch = new long[1];
+        Map<GridKey, boolean[]> snapshot = snapshotGridMasks(epoch);
         byte[] mergedBytes = NFileUtils.updateAtomically(filePath,
                 this::isValidStoredData,
                 (target, primary) -> toJsonFromData(ExploredAreaMerge.merge(readFromBytes(primary), snapshot, MASK_SIZE))
                         .toString().getBytes(StandardCharsets.UTF_8));
-        publishMerged(readFromBytes(mergedBytes));
+        publishMerged(readFromBytes(mergedBytes), epoch[0]);
     }
 
-    private void publishMerged(Map<GridKey, boolean[]> mergedData) {
+    private void publishMerged(Map<GridKey, boolean[]> mergedData, long epoch) {
         boolean anyGrew = false;
-        synchronized (masksLock) {
-            for (Map.Entry<GridKey, boolean[]> entry : mergedData.entrySet()) {
-                GridKey key = entry.getKey();
-                boolean[] mergedMask = entry.getValue();
+        for (Map.Entry<GridKey, boolean[]> entry : mergedData.entrySet()) {
+            GridKey key = entry.getKey();
+            boolean[] mergedMask = entry.getValue();
+            while (true) {
+                synchronized (masksLock) {
+                    if (clearEpoch != epoch)
+                        return;
+                }
                 boolean[] currentMask = gridMasks.get(key);
                 boolean grew = false;
+                boolean[] updatedMask;
                 if (currentMask == null) {
-                    boolean[] copy = Arrays.copyOf(mergedMask, MASK_SIZE);
-                    gridMasks.put(key, copy);
-                    grew = hasAnyExploredTiles(copy);
+                    updatedMask = Arrays.copyOf(mergedMask, MASK_SIZE);
+                    grew = hasAnyExploredTiles(updatedMask);
                 } else {
+                    updatedMask = currentMask;
                     int n = Math.min(MASK_SIZE, mergedMask.length);
                     for (int i = 0; i < n; i++) {
                         if (!currentMask[i] && mergedMask[i]) {
-                            currentMask[i] = true;
+                            if (updatedMask == currentMask)
+                                updatedMask = Arrays.copyOf(currentMask, MASK_SIZE);
+                            updatedMask[i] = true;
                             grew = true;
                         }
                     }
                 }
-                if (grew) {
-                    markGenerated(gridGen, key);
-                    anyGrew = true;
+                synchronized (masksLock) {
+                    if (clearEpoch != epoch)
+                        return;
+                    if (gridMasks.get(key) != currentMask)
+                        continue;
+                    if (currentMask == null || grew)
+                        gridMasks.put(key, updatedMask);
+                    if (grew) {
+                        markGenerated(gridGen, key);
+                        anyGrew = true;
+                    }
                 }
+                break;
             }
         }
         if (anyGrew)

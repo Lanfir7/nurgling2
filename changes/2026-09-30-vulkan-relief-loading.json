@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-vulkan-relief-loading",
+  "priority": 8,
+  "summary": {
+    "ru": "Vulkan больше не падает при подготовке рельефа земли и объектов с включёнными тенями.",
+    "en": "Vulkan no longer crashes while preparing terrain and object relief with shadows enabled."
+  },
+  "detail": {
+    "ru": "При включённом рельефе в «Настройки Nurgling → Общие → Графика» новая текстура сначала отображается без рельефа, пока эффект готовится в фоне. Готовый рельеф появляется автоматически, без перезапуска и повторного переключения настройки.",
+    "en": "With relief enabled under Nurgling settings → General → Graphics, new textures initially appear without relief while the effect is prepared in the background. Finished relief appears automatically, without restarting or toggling the setting again."
+  }
+}

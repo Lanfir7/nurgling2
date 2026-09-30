@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-graphics-settings-scroll",
+  "priority": 7,
+  "summary": {
+    "ru": "Все графические настройки теперь доступны в одной прокручиваемой странице.",
+    "en": "All graphics options are now reachable on one scrollable page."
+  },
+  "detail": {
+    "ru": "Откройте «Настройки Nurgling» → «Общие» → «Графика» и прокрутите страницу вниз: параметры освещения и эффекты больше не скрываются за второй полосой прокрутки. Поиск настроек также приводит к нужному пункту.",
+    "en": "Open Nurgling settings → General → Graphics and scroll down to reach lighting and effects options. They no longer hide behind a second scrollbar, and settings search can bring the selected option into view."
+  }
+}

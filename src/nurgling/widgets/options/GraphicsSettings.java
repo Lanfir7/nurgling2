@@ -23,8 +23,7 @@ public class GraphicsSettings extends Panel {
     public GraphicsSettings() {
 	super();
 	int margin = UI.scale(10);
-	Scrollport scroll = add(new Scrollport(new Coord(UI.scale(560), UI.scale(560))), new Coord(margin, margin));
-	Widget cont = scroll.cont;
+	Widget cont = add(new Widget(), new Coord(margin, margin));
 
 	Widget prev = cont.add(new Label(L10n.get("gfx.title")), Coord.z);
 	prev = cont.add(new Label(L10n.get("gfx.hint")), prev.pos("bl").adds(0, 4));
@@ -72,8 +71,10 @@ public class GraphicsSettings extends Panel {
 
 	/* Image quality */
 	prev = section(cont, prev, "gfx.sec.image");
-	prev = check(cont, prev, "gfx.fxaa", s -> s.fxaa, "fxaa");
+	prev = check(cont, prev, "gfx.antialias", s -> s.fxaa, "fxaa");
+	prev = choice(cont, prev, "gfx.method", new String[] {"FXAA", "SMAA 1x"}, new int[] {0, 1}, s -> s.aamethod, "aamethod");
 	prev = check(cont, prev, "gfx.sharpen", s -> s.sharpen, "sharpen");
+	prev = choice(cont, prev, "gfx.method", new String[] {"gfx.sharp.legacy", "CAS"}, new int[] {0, 1}, s -> s.sharpmethod, "sharpmethod");
 	prev = slider(cont, prev, "gfx.sharpness", 0, 100, s -> s.sharpness, "sharpness", 100);
 	prev = choice(cont, prev, "gfx.aniso", new String[] {"gfx.off", "4x", "8x", "16x"}, new int[] {1, 4, 8, 16}, s -> s.aniso, "aniso");
 	prev = cont.add(new Label(L10n.get("gfx.aniso.note")), prev.pos("bl").adds(15, 2));
@@ -83,6 +84,7 @@ public class GraphicsSettings extends Panel {
 	/* Lighting */
 	prev = section(cont, prev, "gfx.sec.light");
 	prev = check(cont, prev, "gfx.ssao", s -> s.ssao, "ssao");
+	prev = choice(cont, prev, "gfx.method", new String[] {"SSAO", "HBAO"}, new int[] {0, 1}, s -> s.aomethod, "aomethod");
 	prev = choice(cont, prev, "gfx.aoq", new String[] {"gfx.aoq.half", "gfx.aoq.full"}, new int[] {0, 1}, s -> s.aoq, "aoq");
 	prev = slider(cont, prev, "gfx.aostrength", 20, 200, s -> s.aostrength, "aostrength", 100);
 	prev = check(cont, prev, "gfx.relief", s -> s.relief, "relief");
@@ -109,6 +111,7 @@ public class GraphicsSettings extends Panel {
 	prev = check(cont, prev, "gfx.particles", s -> s.particles, "particles");
 	prev = check(cont, prev, "gfx.shafts", s -> s.shafts, "shafts");
 	cont.pack();
+	resize(contentsz().add(margin, margin));
     }
 
     private Widget section(Widget cont, Widget prev, String key) {

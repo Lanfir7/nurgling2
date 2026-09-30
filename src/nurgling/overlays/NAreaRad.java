@@ -186,6 +186,7 @@ public class NAreaRad extends Sprite {
 	public void added(RenderTree.Slot slot) {
 		slots.add(slot);
 		slot.ostate(Pipe.Op.compose(Rendered.postpfx,
+				RenderPreparation.IMMEDIATE,
 				new States.Facecull(States.Facecull.Mode.NONE),
 				Location.goback("gobx")));
 		slot.add(smod, smat);

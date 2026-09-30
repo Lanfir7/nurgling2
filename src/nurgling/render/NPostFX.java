@@ -18,8 +18,8 @@ import static haven.render.sl.Type.*;
  *   bloom                                  -120
  *   tone mapping and grading               -100 (PView.tonemap: HDR to LDR)
  *   clarity                                  5
- *   FXAA                                     10
- *   sharpening                               20
+ *   FXAA or SMAA 1x                          10
+ *   legacy sharpening or CAS                 20
  *   PView's own resampling                  100
  */
 public class NPostFX {
@@ -171,6 +171,7 @@ public class NPostFX {
     public static class DepthFX extends PostProcessor {
 	final PView view;
 	int aoq;
+	int aomethod;
 	float aostr;
 	private Texture2D.Sampler2D aobuf, dsamp;
 	private Texture dtex;
@@ -197,6 +198,7 @@ public class NPostFX {
 		return;
 	    }
 	    if(view.depth != dtex) {
+		releaseDepthSampler();
 		dtex = view.depth;
 		dsamp = new Texture2D.Sampler2D((Texture2D)dtex);
 	    }
@@ -210,15 +212,31 @@ public class NPostFX {
 			aobuf.dispose();
 		    aobuf = mktarget(sz, NumberFormat.UNORM8);
 		}
-		blit(target(g, aobuf), in, new Pass(ao_sh, dsamp, pp[0], pp[1], new float[] {aostr, 7.0f}));
+		if(aomethod == 1)
+		    blit(target(g, aobuf), in, new Pass(Hbao.shader, dsamp, pp[0], pp[1],
+			new float[] {Float.isFinite(aostr) ? Math.max(0, Math.min(2, aostr)) : 1, 7.0f}, (float)aoq));
+		else
+		    blit(target(g, aobuf), in, new Pass(ao_sh, dsamp, pp[0], pp[1], new float[] {aostr, 7.0f}));
 	    }
-	    blit(g, in, new Pass(dc_sh, dsamp, aobuf, pp[0], pp[1]));
+	    blit(g, in, new Pass(aomethod == 1 ? Hbao.composite : dc_sh, dsamp, aobuf, pp[0], pp[1]));
 	}
 
 	public void dispose() {
 	    super.dispose();
-	    if(aobuf != null)
-		aobuf.dispose();
+	    if(aobuf != null) {aobuf.dispose(); aobuf = null;}
+	    releaseDepthSampler();
+	}
+
+	/* Depth belongs to PView: Sampler.dispose() would also dispose that
+	 * borrowed texture. Release only this sampler's backend object. */
+	private void releaseDepthSampler() {
+	    if(dsamp != null) {
+		synchronized(dsamp) {
+		    if(dsamp.ro != null) {dsamp.ro.dispose(); dsamp.ro = null;}
+		}
+		dsamp = null;
+	    }
+	    dtex = null;
 	}
     }
 
@@ -319,7 +337,9 @@ public class NPostFX {
 	private Bloom bloom;
 	private Grade grade;
 	private FXAA fxaa;
+	private Smaa smaa;
 	private Sharpen sharp;
+	private Cas cas;
 	private Clarity clar;
 	private SceneFX.History hist;
 	private SceneFX.TiltShift tilt;
@@ -348,7 +368,9 @@ public class NPostFX {
 	    if(heat != null) {view.remove(heat); heat.dispose(); heat = null;}
 	    if(shafts != null) {view.remove(shafts); shafts.dispose(); shafts = null;}
 	    if(fxaa != null) {view.remove(fxaa); fxaa.dispose(); fxaa = null;}
+	    if(smaa != null) {view.remove(smaa); smaa.dispose(); smaa = null;}
 	    if(sharp != null) {view.remove(sharp); sharp.dispose(); sharp = null;}
+	    if(cas != null) {view.remove(cas); cas.dispose(); cas = null;}
 	    cur = null;
 	}
 
@@ -374,7 +396,7 @@ public class NPostFX {
 	    NGfx.Settings s = NGfx.effective(env);
 	    dfx = toggle(dfx, s.ssao, () -> new DepthFX(view));
 	    if(dfx != null) {
-		dfx.aoq = s.aoq; dfx.aostr = s.aostrength;
+		dfx.aoq = s.aoq; dfx.aostr = s.aostrength; dfx.aomethod = s.aomethod;
 	    }
 	    bloom = toggle(bloom, s.bloom, Bloom::new);
 	    if(bloom != null)
@@ -412,16 +434,24 @@ public class NPostFX {
 	    cur = s;
 	    if(rp)
 		reprog.run();
-	    fxaa = toggle(fxaa, s.fxaa, FXAA::new);
-	    sharp = toggle(sharp, s.sharpen, Sharpen::new);
-	    if(sharp != null)
-		sharp.amount = s.sharpness;
+	    syncImage(s);
 	    ShadowMap.softness = s.softshadow ? ((s.shadowq > 0) ? 2 : 1) : 0;
 	    PointShadows.count = s.plights;
 	    PointShadows.res = (s.plightres > 0) ? 1024 : 512;
 	    /* Applies to textures as they get samplers, i.e. newly
 	     * loaded ones. */
 	    Texture.defanisotropy = (s.aniso > 1) ? s.aniso : 0;
+	}
+
+	/* A single alternative per stage, including when settings change in-game.
+	 * Kept separate so routing and resource disposal can be tested without a GPU. */
+	void syncImage(NGfx.Settings s) {
+	    fxaa = toggle(fxaa, s.fxaa && s.aamethod == 0, FXAA::new);
+	    smaa = toggle(smaa, s.fxaa && s.aamethod == 1, Smaa::new);
+	    sharp = toggle(sharp, s.sharpen && s.sharpmethod == 0, Sharpen::new);
+	    cas = toggle(cas, s.sharpen && s.sharpmethod == 1, Cas::new);
+	    if(sharp != null) sharp.amount = s.sharpness;
+	    if(cas != null) cas.amount = Cas.safeAmount(s.sharpness);
 	}
 
 	private Atmos.Env env = null;

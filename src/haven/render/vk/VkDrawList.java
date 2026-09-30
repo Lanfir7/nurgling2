@@ -51,19 +51,26 @@ public class VkDrawList implements DrawList {
     public final VkEnvironment env;
     public Object desc;
     private final Map<SettingKey, DepSetting> settings = new HashMap<>();
-    private final Map<Slot<? extends Rendered>, DrawSlot> slotmap = new IdentityHashMap<>();
+    private final DeferredRenderSlots<Slot<? extends Rendered>, DrawSlot> slotmap;
     private final Map<Pipe, Object> psettings = new IdentityHashMap<>();
     private final Map<Pipe, Object> orderidx = new IdentityHashMap<>();
     private final TreeSet<DrawSlot> order;
     private boolean disposed = false;
     private static final AtomicLong uniqid = new AtomicLong();
-    /* Slots whose programs should be rebuilt; see refresh(). */
-    private final Set<Slot<? extends Rendered>> stale = new LinkedHashSet<>();
-    private static final int REBUILD_PER_FRAME = 300;
+    private static final int REBUILD_PER_FRAME = 32;
+    private static final long PREPARATION_BUDGET_NS = 2_000_000L;
 
     VkDrawList(VkEnvironment env) {
 	this.env = env;
 	this.order = new TreeSet<>(this::compare);
+	this.slotmap = new DeferredRenderSlots<>(DrawSlot::new, (old, next) -> {
+	    if(old != null) {
+		order.remove(old);
+		old.dispose();
+	    }
+	    if(next != null)
+		order.add(next);
+	});
     }
 
     private int compare(DrawSlot a, DrawSlot b) {
@@ -524,6 +531,7 @@ public class VkDrawList implements DrawList {
 	final long sortid = uniqid.getAndIncrement();
 	final Slot<? extends Rendered> bk;
 	final VkProgram prog;
+	final boolean deferred;
 	final UniformSetting[] unis;
 	TargetSetting tgt;
 	DynSetting dyn;
@@ -552,7 +560,8 @@ public class VkDrawList implements DrawList {
 		shaders[i] = (st[i] == null) ? null : st[i].shader();
 		shash ^= System.identityHashCode(shaders[i]);
 	    }
-	    this.prog = env.getprog(shash, shaders);
+	    this.deferred = RenderPreparation.deferred(bk);
+	    this.prog = deferred ? env.getprogAsync(shash, shaders) : env.getprog(shash, shaders);
 	    prog.lock();
 	    this.unis = new UniformSetting[prog.uniforms.length];
 	    this.uboa = (prog.ubosize > 0) ? new byte[prog.ubosize] : null;
@@ -576,6 +585,11 @@ public class VkDrawList implements DrawList {
 		 * such slots stay in the list but are skipped. */
 		SlotRender g = new SlotRender(this);
 		bk.obj().draw(bst, g);
+		if(deferred && geo != null) {
+		    refresh();
+		    if(!prog.pipelineReady(key))
+			throw new Loading("Vulkan object pipeline is preparing");
+		}
 	    } catch(RuntimeException exc) {
 		this.ordersrc = null;
 		release();
@@ -726,12 +740,13 @@ public class VkDrawList implements DrawList {
 	    throw(new IllegalArgumentException());
 	VkRender g = (VkRender)r;
 	synchronized(this) {
-	    if(!stale.isEmpty())
-		rebuild(REBUILD_PER_FRAME);
+	    slotmap.retry(REBUILD_PER_FRAME, PREPARATION_BUDGET_NS);
 	    for(DrawSlot s : order) {
 		if(s.geo == null)
 		    continue;
 		s.refresh();
+		if(s.deferred && !s.prog.pipelineReady(s.key))
+		    continue;
 		g.draw(s.prog, s.key, s.tgt.val, s.dyn.val, s.tex, s.ubo, s.geo);
 	    }
 	}
@@ -741,57 +756,27 @@ public class VkDrawList implements DrawList {
      * state's shader changed with a graphics option. */
     public void refresh() {
 	synchronized(this) {
-	    stale.addAll(slotmap.keySet());
+	    slotmap.refresh();
 	}
-    }
-
-    private void rebuild(int max) {
-	List<Slot<? extends Rendered>> retry = new ArrayList<>();
-	Iterator<Slot<? extends Rendered>> it = stale.iterator();
-	for(int n = 0; it.hasNext() && (n < max); n++) {
-	    Slot<? extends Rendered> slot = it.next();
-	    it.remove();
-	    if(!slotmap.containsKey(slot))
-		continue;
-	    try {
-		update(slot);
-	    } catch(Loading l) {
-		/* Keep the current slot until what it waits for is loaded. */
-		retry.add(slot);
-	    }
-	}
-	stale.addAll(retry);
     }
 
     public void add(Slot<? extends Rendered> slot) {
 	synchronized(this) {
 	    if(disposed)
 		throw(new IllegalStateException());
-	    DrawSlot dslot = new DrawSlot(slot);
-	    order.add(dslot);
-	    if(slotmap.put(slot, dslot) != null)
-		throw(new AssertionError());
+	    slotmap.add(slot, RenderPreparation.deferred(slot));
 	}
     }
 
     public void remove(Slot<? extends Rendered> slot) {
 	synchronized(this) {
-	    DrawSlot dslot = slotmap.remove(slot);
-	    if(dslot == null)
-		throw(new IllegalStateException(String.format("removing non-present slot (%s)", slot.obj())));
-	    stale.remove(slot);
-	    order.remove(dslot);
-	    dslot.dispose();
+	    slotmap.remove(slot);
 	}
     }
 
     public void update(Slot<? extends Rendered> slot) {
 	synchronized(this) {
-	    DrawSlot dslot = new DrawSlot(slot);
-	    remove(slot);
-	    order.add(dslot);
-	    if(slotmap.put(slot, dslot) != null)
-		throw(new AssertionError());
+	    slotmap.update(slot, RenderPreparation.deferred(slot));
 	}
     }
 
@@ -831,11 +816,7 @@ public class VkDrawList implements DrawList {
     public void dispose() {
 	lck.dispose();
 	synchronized(this) {
-	    for(DrawSlot slot : new ArrayList<>(order))
-		slot.dispose();
-	    order.clear();
 	    slotmap.clear();
-	    stale.clear();
 	    disposed = true;
 	}
     }

@@ -402,7 +402,7 @@ public class VkProgram extends VkObject {
 	return(ctx.symtab.get(sym));
     }
 
-    private VkProgram(VkEnvironment env, ProgramContext ctx) {
+    VkProgram(VkEnvironment env, ProgramContext ctx) {
 	super(env);
 	String rfsrc, rvsrc;
 	{
@@ -523,8 +523,8 @@ public class VkProgram extends VkObject {
 
 	byte[] vspv, fspv;
 	try {
-	    vspv = env.compiler.compile(VkShaderCompiler.VERTEX, vsrc);
-	    fspv = env.compiler.compile(VkShaderCompiler.FRAGMENT, fsrc);
+	    vspv = env.shaderCompiler().compile(VkShaderCompiler.VERTEX, vsrc);
+	    fspv = env.shaderCompiler().compile(VkShaderCompiler.FRAGMENT, fsrc);
 	} catch(VkShaderCompiler.CompileException e) {
 	    System.err.println("Vulkan shader compilation failed. Original GLSL:");
 	    System.err.println("---> Vertex:\n" + rvsrc);
@@ -706,7 +706,8 @@ public class VkProgram extends VkObject {
 	final BlendMode[] blend;
 	final int[] cmask;
 	private final int hash;
-	long pipe = 0;
+	volatile long pipe = 0;
+	PrepareTaskQueue.Job<Long> pending;
 
 	PipeKey(VkProgram prog, VertexKey vk, int topo, int[] cfmt, int dfmt, BlendMode[] blend, int[] cmask) {
 	    this.prog = prog;
@@ -785,10 +786,73 @@ public class VkProgram extends VkObject {
 	VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE,
     };
 
-    /* Render thread only */
+    /* Immediate UI/world/critical draws. No key monitor is held in the driver. */
     long pipeline(PipeKey key) {
 	if(key.pipe != 0)
 	    return(key.pipe);
+	return buildPipeline(key);
+    }
+
+    /** Only a prepared pipeline may enter a deferred scene draw command. */
+    boolean pipelineReady(PipeKey key) {
+	if(key.pipe != 0)
+	    return true;
+	synchronized(key) {
+	    if(key.pipe != 0)
+		return true;
+	    if(key.pending == null) {
+		/* Both GPU destruction and cache eviction must wait for this job. */
+		get();
+		lock();
+		try {
+		    key.pending = env.preparation.submit(() -> {
+			try {return buildPipeline(key);}
+			finally {unlock(); put();}
+		    }, 1);
+		} catch(RuntimeException | Error failure) {
+		    unlock();
+		    put();
+		    throw failure;
+		}
+		if(key.pending == null) {
+		    unlock();
+		    put();
+		    return false;
+		}
+	    }
+	    try {
+		key.pending.get(); // propagate failures, never wait
+		return key.pipe != 0;
+	    } catch(Loading loading) {
+		return false;
+	    }
+	}
+    }
+
+    private long buildPipeline(PipeKey key) {
+	if(key.pipe != 0)
+	    return key.pipe;
+	long created = createPipeline(key);
+	/* A critical immediate draw may have built the same variant in
+	 * parallel. Publish one handle and destroy only the unused duplicate. */
+	long published;
+	boolean duplicate;
+	synchronized(key) {
+	    if(key.pipe == 0) {
+		key.pipe = created;
+		env.npipes.incrementAndGet();
+		duplicate = false;
+	    } else {
+		duplicate = true;
+	    }
+	    published = key.pipe;
+	}
+	if(duplicate)
+	    destroyPipeline(created);
+	return published;
+    }
+
+    long createPipeline(PipeKey key) {
 	VertexKey vk = key.vk;
 	try(MemoryStack st = stackPush()) {
 	    VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(2, st);
@@ -844,10 +908,12 @@ public class VkProgram extends VkObject {
 		.pDynamicState(dyn).layout(layout);
 	    LongBuffer lp = st.mallocLong(1);
 	    VkEnvironment.check(vkCreateGraphicsPipelines(env.dev, env.pipecache, pci, null, lp), "vkCreateGraphicsPipelines");
-	    key.pipe = lp.get(0);
-	    env.npipes.incrementAndGet();
+	    return lp.get(0);
 	}
-	return(key.pipe);
+    }
+
+    void destroyPipeline(long handle) {
+	vkDestroyPipeline(env.dev, handle, null);
     }
 
     public void lock() {locked.incrementAndGet();}
@@ -857,7 +923,7 @@ public class VkProgram extends VkObject {
 	synchronized(pipes) {
 	    for(PipeKey key : pipes.values()) {
 		if(key.pipe != 0) {
-		    vkDestroyPipeline(env.dev, key.pipe, null);
+		    destroyPipeline(key.pipe);
 		    key.pipe = 0;
 		    env.npipes.decrementAndGet();
 		}

@@ -188,6 +188,9 @@ public abstract class PView extends Widget {
 	if(disposed)
 	    return;
 	super.tick(dt);
+	/* Relief uniforms need the same publication state in every 3D view,
+	 * including object previews, not just the main map. */
+	basic(nurgling.render.GroundRelief.CacheState.class, nurgling.render.GroundRelief.poll());
 	GSettings gprefs = gprefs();
 	if(gprefs != this.curprefs) {
 	    this.curprefs = gprefs;

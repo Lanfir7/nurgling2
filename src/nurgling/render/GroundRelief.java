@@ -30,8 +30,8 @@ import static haven.render.sl.Type.*;
  * damage cracks are cut in (CrackTex). Characters, animals and items
  * are left alone, since painted faces and clothing would turn lumpy.
  *
- * Height maps are built on the background loader; materials wait for
- * theirs the same way they wait for their textures. The shaders are
+ * Height maps are built on the background loader; materials use flat
+ * relief until the next frame publishes the finished maps. The shaders are
  * only present while the effects are on; toggling rebuilds the draw
  * lists' programs.
  */
@@ -352,8 +352,40 @@ public class GroundRelief {
 
     private static final Map<TexRender, Defer.Future<Relief>> pending = new WeakHashMap<>();
 
-    /* objs: only world-object textures get a height map. Throws
-     * Loading until the map is built. */
+    /* A non-shader dependency invalidates cached uniform values after
+     * background maps are published, without rebuilding every program. */
+    public static class CacheState extends State {
+	public static final Slot<CacheState> slot = new Slot<>(Slot.Type.DRAW, CacheState.class);
+
+	private CacheState() {}
+	public ShaderMacro shader() {return(null);}
+	public void apply(Pipe p) {p.put(slot, this);}
+    }
+
+    private static CacheState cacheState = new CacheState();
+
+    /* Publish only at a frame boundary, not between the object map and
+     * scale uniform callbacks. done() also reschedules resource Loading. */
+    public static CacheState poll() {
+	synchronized(heights) {
+	    boolean changed = false;
+	    for(Iterator<Map.Entry<TexRender, Defer.Future<Relief>>> i = pending.entrySet().iterator(); i.hasNext();) {
+		Map.Entry<TexRender, Defer.Future<Relief>> entry = i.next();
+		if(!entry.getValue().done())
+		    continue;
+		heights.put(entry.getKey(), entry.getValue().get());
+		i.remove();
+		changed = true;
+	    }
+	    if(changed)
+		cacheState = new CacheState();
+	    return(cacheState);
+	}
+    }
+
+    /* objs: only world-object textures get a height map. This is called
+     * synchronously inside render-tree transactions, so it must not throw
+     * Loading while background relief preparation is still pending. */
     static Relief heightfor(TexRender.TexDraw draw, boolean objs) {
 	if((draw == null) || !(draw.tex instanceof TexL))
 	    return(flatr());
@@ -370,12 +402,8 @@ public class GroundRelief {
 	    Relief ret = heights.get(tex);
 	    if(ret != null)
 		return(ret);
-	}
-	Defer.Future<Relief> f;
-	synchronized(pending) {
-	    f = pending.get(tex);
-	    if(f == null) {
-		pending.put(tex, f = Defer.later(() -> {
+	    if(!pending.containsKey(tex)) {
+		pending.put(tex, Defer.later(() -> {
 			    try {
 				BufferedImage img = tex.fill();
 				return((img == null) ? flatr() : mkheight(img));
@@ -387,15 +415,8 @@ public class GroundRelief {
 			    }
 			}));
 	    }
+	    return(flatr());
 	}
-	Relief ret = f.get();
-	synchronized(heights) {
-	    heights.put(tex, ret);
-	}
-	synchronized(pending) {
-	    pending.remove(tex);
-	}
-	return(ret);
     }
 
     private static final String[] metals = {
@@ -419,9 +440,9 @@ public class GroundRelief {
 	return(metal(((TexL)draw.tex).loadname()) ? 1 : 0);
     }
 
-    static final Uniform uheight = new Uniform(SAMPLER2D, p -> heightfor(p.get(TexRender.TexDraw.slot), false).map, TexRender.TexDraw.slot);
-    static final Uniform uoheight = new Uniform(SAMPLER2D, p -> heightfor(p.get(TexRender.TexDraw.slot), true).map, TexRender.TexDraw.slot);
-    static final Uniform uoscale = new Uniform(FLOAT, p -> heightfor(p.get(TexRender.TexDraw.slot), true).scale, TexRender.TexDraw.slot);
+    static final Uniform uheight = new Uniform(SAMPLER2D, p -> heightfor(p.get(TexRender.TexDraw.slot), false).map, TexRender.TexDraw.slot, CacheState.slot);
+    static final Uniform uoheight = new Uniform(SAMPLER2D, p -> heightfor(p.get(TexRender.TexDraw.slot), true).map, TexRender.TexDraw.slot, CacheState.slot);
+    static final Uniform uoscale = new Uniform(FLOAT, p -> heightfor(p.get(TexRender.TexDraw.slot), true).scale, TexRender.TexDraw.slot, CacheState.slot);
     static final Uniform umetal = new Uniform(FLOAT, p -> metalfor(p.get(TexRender.TexDraw.slot)), TexRender.TexDraw.slot);
 
     private static final Map<Float, ShaderMacro> macros = new HashMap<>();

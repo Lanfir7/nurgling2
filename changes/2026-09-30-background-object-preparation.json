@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-background-object-preparation",
+  "priority": 8,
+  "summary": {
+    "ru": "В Vulkan тяжёлая подготовка графики новых объектов перенесена в фон, отдельно от отрисовки мира.",
+    "en": "Vulkan prepares new object graphics in the background, separately from drawing the world."
+  },
+  "detail": {
+    "ru": "При активном Vulkan новая графика животных, построек и других объектов готовится в фоне и появляется по мере готовности. Работа включена автоматически, в том числе при переходах между локациями. Подготовка моделей не задерживает уже доступные зоны опасности животных; сохранённые настройки графики не меняются. Это уменьшает блокировки от первой подготовки графики, но не отменяет ожидание карты и ресурсов с сервера.",
+    "en": "With Vulkan active, new animal, building and other object graphics are prepared in the background and appear when ready. This is automatic, including location transitions. Model preparation does not delay already available animal danger zones; saved graphics settings stay unchanged. This reduces blocking from first-use graphics preparation, but does not remove waits for map data and server resources."
+  }
+}

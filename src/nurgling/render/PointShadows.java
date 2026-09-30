@@ -230,7 +230,9 @@ public class PointShadows implements Disposable {
 	    }
 
 	    public int gstate(int id) {
-		if(State.Slot.byid(id).type == State.Slot.Type.GEOM) {
+		/* Scheduling belongs to the caster; targets and viewport to this face. */
+		if((State.Slot.byid(id).type == State.Slot.Type.GEOM) ||
+		   (id == RenderPreparation.slot.id)) {
 		    int ret = bk.state().gstate(id);
 		    if(ret >= 0)
 			return(ret + 1);

@@ -79,6 +79,8 @@ public class VkEnvironment implements Environment {
     final long vma, pipecache, messenger;
     final VkDebugUtilsMessengerCallbackEXT msgcb;
     final VkShaderCompiler compiler;
+    private final ThreadLocal<Boolean> backgroundProgram = new ThreadLocal<>();
+    private volatile VkShaderCompiler preparationCompiler;
     public final Caps caps;
     final float linemin, linemax, maxaniso;
     final boolean wideLines, anisotropy, mirrorclamp;
@@ -87,6 +89,8 @@ public class VkEnvironment implements Environment {
     final AtomicInteger npipes = new AtomicInteger();
     /* Device objects (buffers, textures, programs) not yet destroyed. */
     final AtomicInteger live = new AtomicInteger();
+    final PrepareTaskQueue preparation = new PrepareTaskQueue("Vulkan graphics preparation", 128);
+    private volatile boolean preparationClosed;
     final Surface wsys;
     private final Path pipecachefile;
     private Area wnd;
@@ -632,6 +636,9 @@ public class VkEnvironment implements Environment {
 	    cmd.abort();
 	    cmd.dispose();
 	}
+	/* Drain outside renderer/cache locks, before modules or device are freed. */
+	preparationClosed = true;
+	preparation.close();
 	synchronized(exec) {
 	    exec.dispose();
 	}
@@ -649,6 +656,8 @@ public class VkEnvironment implements Environment {
 	}
 	vkDestroyPipelineCache(dev, pipecache, null);
 	compiler.dispose();
+	if(preparationCompiler != null)
+	    preparationCompiler.dispose();
 	/* Resources the client still holds (it normally disposes the
 	 * window only when exiting) keep the device alive; tearing it
 	 * down under them would crash. */
@@ -1042,6 +1051,32 @@ public class VkEnvironment implements Environment {
     }
 
     private final Object pmon = new Object();
+    private final Map<ProgramKey, PrepareTaskQueue.Job<VkProgram>> pendingPrograms = new HashMap<>();
+
+    static final class ProgramKey {
+	final ShaderMacro[] shaders;
+	private final int hash;
+
+	ProgramKey(ShaderMacro[] source) {
+	    int n = source.length;
+	    while(n > 0 && source[n - 1] == null) n--;
+	    shaders = Arrays.copyOf(source, n);
+	    int h = 1;
+	    for(ShaderMacro shader : shaders)
+		h = 31 * h + System.identityHashCode(shader);
+	    hash = h;
+	}
+
+	public int hashCode() {return hash;}
+	public boolean equals(Object other) {
+	    if(!(other instanceof ProgramKey)) return false;
+	    ShaderMacro[] b = ((ProgramKey)other).shaders;
+	    if(shaders.length != b.length) return false;
+	    for(int i = 0; i < shaders.length; i++)
+		if(shaders[i] != b[i]) return false;
+	    return true;
+	}
+    }
     private SavedProg[] ptab = new SavedProg[32];
     private int nprog = 0;
 
@@ -1084,7 +1119,23 @@ public class VkEnvironment implements Environment {
 	ptab = ntab;
     }
 
+    /* shaderc serializes a compiler instance; background model work must not
+     * hold the compiler monitor needed by a new world/UI program. */
+    VkShaderCompiler shaderCompiler() {
+	if(!Boolean.TRUE.equals(backgroundProgram.get()))
+	    return compiler;
+	if(preparationCompiler == null)
+	    preparationCompiler = new VkShaderCompiler();
+	return preparationCompiler;
+    }
+
+    VkProgram buildprog(Collection<ShaderMacro> mods) {
+	return VkProgram.build(this, mods);
+    }
+
     public VkProgram getprog(int hash, ShaderMacro[] shaders) {
+	if(preparationClosed)
+	    throw new IllegalStateException("Vulkan environment is closing");
 	synchronized(pmon) {
 	    SavedProg s = findprog(hash, shaders);
 	    if(s != null) {
@@ -1097,7 +1148,7 @@ public class VkEnvironment implements Environment {
 	    if(shaders[i] != null)
 		mods.add(shaders[i]);
 	}
-	VkProgram prog = VkProgram.build(this, mods);
+	VkProgram prog = buildprog(mods);
 	synchronized(pmon) {
 	    SavedProg s = findprog(hash, shaders);
 	    if(s != null) {
@@ -1116,8 +1167,56 @@ public class VkEnvironment implements Environment {
 	}
     }
 
+    VkProgram getprogAsync(int hash, ShaderMacro[] shaders) {
+	if(preparationClosed)
+	    throw new IllegalStateException("Vulkan environment is closing");
+	ProgramKey key = new ProgramKey(shaders);
+	synchronized(pmon) {
+	    SavedProg saved = findprog(hash, shaders);
+	    if(saved != null) {
+		saved.used = true;
+		pendingPrograms.remove(key);
+		return saved.prog;
+	    }
+	    PrepareTaskQueue.Job<VkProgram> job = pendingPrograms.get(key);
+	    if(job == null) {
+		job = preparation.submit(() -> {
+		    backgroundProgram.set(true);
+		    try {
+			VkProgram result = getprog(hash, key.shaders);
+			/* An abandoned successful request must not pin shader macros or
+			 * an evictable native program outside the real program cache. */
+			synchronized(pmon) {pendingPrograms.remove(key);}
+			return result;
+		    } finally {backgroundProgram.remove();}
+		}, 1);
+		if(job == null)
+		    throw new Loading("Vulkan preparation queue is full");
+		pendingPrograms.put(key, job);
+	    }
+	    try {
+		job.get(); // nonblocking; throws Loading while pending or real failure
+	    } catch(Loading loading) {
+		if(job.done())
+		    pendingPrograms.remove(key); // completed resource wait can retry
+		throw loading;
+	    } catch(RuntimeException | Error failure) {
+		pendingPrograms.remove(key); // report once; allow a fresh later request
+		throw failure;
+	    }
+	    /* A successful job installs into ptab. Do not return its old handle
+	     * if it was evicted while nobody needed the completed request. */
+	    pendingPrograms.remove(key);
+	}
+	return getprogAsync(hash, shaders);
+    }
+
     private void cleanprogs() {
 	synchronized(pmon) {
+	    /* A disappeared object may never poll its failed request. Retire
+	     * completed tickets during ordinary cache maintenance (once a minute),
+	     * while leaving queued/running work available for deduplication. */
+	    pendingPrograms.values().removeIf(job -> job.done());
 	    for(int i = 0; i < ptab.length; i++) {
 		SavedProg c, p;
 		for(c = ptab[i], p = null; c != null; c = c.next) {
@@ -1147,8 +1246,10 @@ public class VkEnvironment implements Environment {
 	    lastpclean = now;
 	}
 	if(now - lastpsave > 300) {
-	    savepipecache();
-	    lastpsave = now;
+	    /* Cache extraction/file IO is not frame-critical either. Ordinary
+	     * pipeline caches synchronize concurrent creation internally. */
+	    if(preparation.submit(() -> {savepipecache(); return null;}, 0) != null)
+		lastpsave = now;
 	}
     }
 

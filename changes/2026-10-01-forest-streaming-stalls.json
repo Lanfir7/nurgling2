@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-01-forest-streaming-stalls",
+  "priority": 8,
+  "summary": {
+    "ru": "Убраны дополнительные блокировки при подготовке теней новых объектов в Vulkan и сохранении исследованной карты.",
+    "en": "Removed additional blocking during Vulkan shadow preparation for new objects and explored-map saving."
+  },
+  "detail": {
+    "ru": "При активном Vulkan тени новых деревьев, животных и построек тоже готовятся через фоновую очередь, включая тени от огня. Сохранение исследованной карты больше не держит общую блокировку на время обработки всех тайлов. Изменения работают автоматически; качество теней и настройки сохранены, новые исследованные участки учитываются при одновременном сохранении.",
+    "en": "With Vulkan active, new tree, animal and building shadows also use background preparation, including fire-light shadows. Explored-map saving no longer holds a shared lock while processing all tiles. Both changes are automatic; shadow quality and settings stay unchanged, and newly explored tiles are preserved during concurrent saving."
+  }
+}

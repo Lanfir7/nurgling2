@@ -784,6 +784,7 @@ public class Gob implements RenderTree.Node, Sprite.Owner, Skeleton.ModOwner, Eq
 	    if(!virtual)
 		buf.prep(new GobClick(Gob.this));
 	    buf.prep(new TickList.Monitor(Gob.this));
+	    buf.prep(RenderPreparation.OBJECT);
 	    obstate(buf);
 	    if(mods != null)
 		buf.prep(mods);

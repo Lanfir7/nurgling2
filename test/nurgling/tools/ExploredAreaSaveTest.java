@@ -8,10 +8,18 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -64,6 +72,124 @@ class ExploredAreaSaveTest {
         explored.updateExploredTiles(Coord.z, Coord.of(2, 2), 3);
 
         assertTrue(Arrays.equals(frozenCopy, frozen));
+    }
+
+    @Test
+    void tileUpdateCanProceedWhileSavePublishesOtherGrids() throws Exception {
+        ExploredArea explored = new ExploredArea(null);
+        explored.updateExploredTiles(Coord.z, Coord.of(1, 1), 3);
+        CountDownLatch atSecondGrid = new CountDownLatch(1);
+        CountDownLatch continuePublication = new CountDownLatch(1);
+        Map<Object, boolean[]> masks = new LinkedHashMap<>();
+        boolean[] first = new boolean[10_000];
+        first[1] = true; // Disk exploration on the same grid.
+        masks.put(gridKey(3, 0, 0), first);
+        boolean[] second = new boolean[10_000];
+        second[0] = true;
+        masks.put(gridKey(3, 1, 0), second);
+
+        FutureTask<Void> publish = new FutureTask<>(() -> {
+            Method method = ExploredArea.class.getDeclaredMethod("publishMerged", Map.class, long.class);
+            method.setAccessible(true);
+            method.invoke(explored, pausingOnSecondEntry(masks, atSecondGrid, continuePublication), 0L);
+            return null;
+        });
+        Thread publisher = new Thread(publish, "test-publish");
+        publisher.start();
+        try {
+            assertTrue(atSecondGrid.await(2, TimeUnit.SECONDS));
+            FutureTask<Void> update = new FutureTask<>(() -> {
+                explored.updateExploredTiles(Coord.of(2, 2), Coord.of(3, 3), 3);
+                return null;
+            });
+            Thread updater = new Thread(update, "test-exploration");
+            updater.start();
+            update.get(1, TimeUnit.SECONDS);
+            assertTrue(explored.getExploredMaskForGrid(Coord.z, 3, 0).mask[2 + 2 * 100]);
+        } finally {
+            continuePublication.countDown();
+            publish.get(2, TimeUnit.SECONDS);
+        }
+        boolean[] combined = explored.getExploredMaskForGrid(Coord.z, 3, 0).mask;
+        assertTrue(combined[0]);
+        assertTrue(combined[1]);
+        assertTrue(combined[2 + 2 * 100]);
+        assertTrue(explored.gridGeneration(1, 0, 3, false) > 0);
+    }
+
+    @Test
+    void clearCanProceedDuringPublicationAndStaleGridsStayCleared() throws Exception {
+        ExploredArea explored = new ExploredArea(null);
+        explored.updateExploredTiles(Coord.z, Coord.of(1, 1), 8);
+        CountDownLatch atSecondGrid = new CountDownLatch(1);
+        CountDownLatch continuePublication = new CountDownLatch(1);
+        Map<Object, boolean[]> masks = new LinkedHashMap<>();
+        boolean[] first = new boolean[10_000];
+        first[1] = true;
+        masks.put(gridKey(8, 0, 0), first);
+        boolean[] second = new boolean[10_000];
+        second[0] = true;
+        masks.put(gridKey(8, 1, 0), second);
+        FutureTask<Void> publish = new FutureTask<>(() -> {
+            Method method = ExploredArea.class.getDeclaredMethod("publishMerged", Map.class, long.class);
+            method.setAccessible(true);
+            method.invoke(explored, pausingOnSecondEntry(masks, atSecondGrid, continuePublication), 0L);
+            return null;
+        });
+        new Thread(publish, "test-publish-before-clear").start();
+        try {
+            assertTrue(atSecondGrid.await(2, TimeUnit.SECONDS));
+            FutureTask<Void> clear = new FutureTask<>(() -> {
+                explored.clear();
+                return null;
+            });
+            new Thread(clear, "test-clear").start();
+            clear.get(1, TimeUnit.SECONDS);
+        } finally {
+            continuePublication.countDown();
+            publish.get(2, TimeUnit.SECONDS);
+        }
+        assertEquals(0, explored.snapshotGridMasks().size());
+        assertEquals(0, explored.gridGeneration(1, 0, 8, false));
+    }
+
+    private static Object gridKey(long segment, int x, int y) throws Exception {
+        Class<?> type = Class.forName("nurgling.tools.ExploredArea$GridKey");
+        Constructor<?> ctor = type.getDeclaredConstructor(long.class, Coord.class);
+        ctor.setAccessible(true);
+        return ctor.newInstance(segment, Coord.of(x, y));
+    }
+
+    private static Map<Object, boolean[]> pausingOnSecondEntry(Map<Object, boolean[]> source,
+            CountDownLatch arrived, CountDownLatch proceed) {
+        return new AbstractMap<Object, boolean[]>() {
+            @Override
+            public Set<Entry<Object, boolean[]>> entrySet() {
+                return new AbstractSet<Entry<Object, boolean[]>>() {
+                    @Override public int size() { return source.size(); }
+                    @Override public Iterator<Entry<Object, boolean[]>> iterator() {
+                        Iterator<Entry<Object, boolean[]>> delegate = source.entrySet().iterator();
+                        return new Iterator<Entry<Object, boolean[]>>() {
+                            int count;
+                            @Override public boolean hasNext() { return delegate.hasNext(); }
+                            @Override public Entry<Object, boolean[]> next() {
+                                if (++count == 2) {
+                                    arrived.countDown();
+                                    try {
+                                        if (!proceed.await(5, TimeUnit.SECONDS))
+                                            throw new AssertionError("publication was not released");
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                        throw new AssertionError(e);
+                                    }
+                                }
+                                return delegate.next();
+                            }
+                        };
+                    }
+                };
+            }
+        };
     }
 
     @Test
