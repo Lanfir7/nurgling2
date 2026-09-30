@@ -199,17 +199,62 @@
     "2026-09-29-free-inventory-pouch-transfer",
     "2026-09-29-narwhal-hitbox",
     "2026-09-30-area-overlay-loading",
+    "2026-09-30-background-object-preparation",
     "2026-09-30-cheese-supplies",
+    "2026-09-30-graphics-settings-scroll",
     "2026-09-30-map-rendering-performance",
     "2026-09-30-mining-memory",
     "2026-09-30-mining-overlay",
+    "2026-09-30-modern-graphics-methods",
     "2026-09-30-tunneling-settings",
     "2026-09-30-village-quest-tasks",
     "2026-09-30-village-quests",
     "2026-09-30-vulkan-graphics",
-    "2026-09-30-zone-object-counts"
+    "2026-09-30-vulkan-relief-loading",
+    "2026-09-30-zone-object-counts",
+    "2026-10-01-forest-streaming-stalls"
   ],
   "releases": [
+    {
+      "id": "2.103.221",
+      "date": "2026-09-30",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "В Vulkan тяжёлая подготовка графики новых объектов перенесена в фон, отдельно от отрисовки мира.",
+          "Vulkan больше не падает при подготовке рельефа земли и объектов с включёнными тенями.",
+          "Убраны дополнительные блокировки при подготовке теней новых объектов в Vulkan и сохранении исследованной карты.",
+          "Все графические настройки теперь доступны в одной прокручиваемой странице.",
+          "Для Vulkan добавлены сглаживание SMAA, адаптивная резкость CAS и затенение HBAO."
+        ],
+        "en": [
+          "Vulkan prepares new object graphics in the background, separately from drawing the world.",
+          "Vulkan no longer crashes while preparing terrain and object relief with shadows enabled.",
+          "Removed additional blocking during Vulkan shadow preparation for new objects and explored-map saving.",
+          "All graphics options are now reachable on one scrollable page.",
+          "Vulkan gains SMAA anti-aliasing, CAS adaptive sharpening and HBAO shading."
+        ]
+      },
+      "details": {
+        "ru": [
+          "При активном Vulkan новая графика животных, построек и других объектов готовится в фоне и появляется по мере готовности. Работа включена автоматически, в том числе при переходах между локациями. Подготовка моделей не задерживает уже доступные зоны опасности животных; сохранённые настройки графики не меняются. Это уменьшает блокировки от первой подготовки графики, но не отменяет ожидание карты и ресурсов с сервера.",
+          "При включённом рельефе в «Настройки Nurgling → Общие → Графика» новая текстура сначала отображается без рельефа, пока эффект готовится в фоне. Готовый рельеф появляется автоматически, без перезапуска и повторного переключения настройки.",
+          "При активном Vulkan тени новых деревьев, животных и построек тоже готовятся через фоновую очередь, включая тени от огня. Сохранение исследованной карты больше не держит общую блокировку на время обработки всех тайлов. Изменения работают автоматически; качество теней и настройки сохранены, новые исследованные участки учитываются при одновременном сохранении.",
+          "Откройте «Настройки Nurgling» → «Общие» → «Графика» и прокрутите страницу вниз: параметры освещения и эффекты больше не скрываются за второй полосой прокрутки. Поиск настроек также приводит к нужному пункту.",
+          "В «Настройки Nurgling» → «Общие» → «Графика» можно выбрать SMAA 1x для сглаживания краёв, CAS для адаптивной резкости и HBAO для контактного затенения. Прежние методы остаются доступны, а сохранённые настройки не переключаются автоматически. Пресет «Ультра» выбирает новые методы; эффекты работают при активном Vulkan."
+        ],
+        "en": [
+          "With Vulkan active, new animal, building and other object graphics are prepared in the background and appear when ready. This is automatic, including location transitions. Model preparation does not delay already available animal danger zones; saved graphics settings stay unchanged. This reduces blocking from first-use graphics preparation, but does not remove waits for map data and server resources.",
+          "With relief enabled under Nurgling settings → General → Graphics, new textures initially appear without relief while the effect is prepared in the background. Finished relief appears automatically, without restarting or toggling the setting again.",
+          "With Vulkan active, new tree, animal and building shadows also use background preparation, including fire-light shadows. Explored-map saving no longer holds a shared lock while processing all tiles. Both changes are automatic; shadow quality and settings stay unchanged, and newly explored tiles are preserved during concurrent saving.",
+          "Open Nurgling settings → General → Graphics and scroll down to reach lighting and effects options. They no longer hide behind a second scrollbar, and settings search can bring the selected option into view.",
+          "In Nurgling settings → General → Graphics, choose SMAA 1x for edge smoothing, CAS for adaptive sharpening and HBAO for contact shading. Legacy methods remain available and saved settings are not switched automatically. The Ultra preset selects the new methods; effects require the active Vulkan renderer."
+        ]
+      }
+    },
     {
       "id": "2.103.220",
       "date": "2026-09-30",
@@ -1423,34 +1468,6 @@
           "In home settings turn on indoor zones. The client learns a home when you take a portal, shows instances in chunk nav and reports inherited status. You can mark or unmark a home by hand.",
           "In the atlas table enable columns for gilding slots, accepted attributes and chance range so you can compare insertions without opening each card.",
           "Home settings include Wipe All Storage Items. After confirm, stored items and container locations are deleted and fill in again as you use chests at home."
-        ]
-      }
-    },
-    {
-      "id": "2.103.189",
-      "date": "2026-09-09",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "В настройках мира можно сохранить текущие домашние территории.",
-          "В настройке объекта можно показать его значок на миникарте."
-        ],
-        "en": [
-          "World settings can save your current home territories.",
-          "Object configuration can show that object's icon on the minimap."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Откройте Настройки → обустройство дома. Если клиент видит претензию или деревню, сохраните текущий дом; список зон сворачивается, чтобы не заслонять карту.",
-          "Откройте настройку объекта (контекстное меню) и включите значок на миникарте, если точку нужно видеть сверху."
-        ],
-        "en": [
-          "Open Settings → home setup. When a claim or village is detected, save the current home; area lists collapse so they do not cover the map.",
-          "Open the object configuration from the context menu and enable the minimap icon when you want that point visible from above."
         ]
       }
     }
