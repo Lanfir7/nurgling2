@@ -212,9 +212,49 @@
     "2026-09-30-vulkan-graphics",
     "2026-09-30-vulkan-relief-loading",
     "2026-09-30-zone-object-counts",
-    "2026-10-01-forest-streaming-stalls"
+    "2026-10-01-forest-streaming-stalls",
+    "2026-10-01-mining-safe-markers",
+    "2026-10-02-carry-flush-gap",
+    "2026-10-02-dream-catcher-carry",
+    "2026-10-02-scheduler-world-load"
   ],
   "releases": [
+    {
+      "id": "2.103.222",
+      "date": "2026-10-01",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Зелёные метки при копке отзываются при появлении пыли; Vein Miner точнее проверяет безопасность перед добычей.",
+          "Автозапуск сценария показывает мир после входа за персонажа.",
+          "«Перенести много» ставит объекты вплотную к уже стоящим хитбоксам.",
+          "Ловцы снов можно массово переносить через «Перенести много»."
+        ],
+        "en": [
+          "Green mining marks are revoked when dust appears; Vein Miner checks safety more accurately before digging.",
+          "A client started by the scheduler shows the world after the character logs in.",
+          "Carry many places objects flush against hitboxes that are already standing.",
+          "Dream catchers can be mass-carried with Carry many."
+        ]
+      },
+      "details": {
+        "ru": [
+          "На карте шахты зелёные кружки теперь сохраняют своё основание: соседний выкопанный тайл без пыли. Позднее предупреждение или смена пещеры отменяет неверные метки. Старые кружки без подтверждения больше не используются. Vein Miner учитывает реальную область опоры, включая молодые грибы, и повторно проверяет безопасность перед каждой попыткой копки.",
+          "Раньше автозапуск входил за персонажа и оставлял чёрный экран мира. Теперь мир дорисовывается, и сценарий может начаться.",
+          "Превью и сама переноска больше не оставляют зазор в один пиксель у ловца снов, стены дома и других объектов в зоне. Новые встают кромка к кромке.",
+          "Ctrl и правый клик по ловцу снов открывают «Перенести много». Выберите зоны откуда и куда — клиент перенесёт такие же ловцы."
+        ],
+        "en": [
+          "Green circles on the mining map now retain their evidence: an adjacent tile mined without dust. Late warnings or a cave change revoke invalid marks. Old circles without evidence are no longer used. Vein Miner respects actual support coverage, including young towercaps, and rechecks safety before every mining attempt.",
+          "Automatic launch used to enter the character and leave the world black. The world now finishes drawing, and the scenario can start.",
+          "The preview and the move itself no longer leave a one-pixel gap beside a dream catcher, a house wall, or other objects in the zone. New ones sit edge to edge.",
+          "Ctrl and right-click a dream catcher to open Carry many. Choose the source and destination zones, and the client moves matching dream catchers."
+        ]
+      }
+    },
     {
       "id": "2.103.221",
       "date": "2026-09-30",
@@ -1436,38 +1476,6 @@
         "en": [
           "Open the calendar: the tooltip says whether rain effects are on. Click to disable or enable them without opening graphics settings.",
           "The inspect window keeps local information more reliably. Quest Helper is steadier about marking trees still required by objectives."
-        ]
-      }
-    },
-    {
-      "id": "2.103.190",
-      "date": "2026-09-10",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "Домашние зоны внутри помещений запоминаются: авто, вручную или выключено.",
-          "В таблице атласа видны слоты, атрибуты и шанс инкрустации.",
-          "Складскую базу дома можно целиком очистить и проиндексировать заново."
-        ],
-        "en": [
-          "Indoor home zones are remembered: auto, manual or inactive.",
-          "The atlas table shows gilding slots, attributes and insertion chance.",
-          "The home storage database can be wiped and indexed again from scratch."
-        ]
-      },
-      "details": {
-        "ru": [
-          "В настройках дома включите внутренние зоны. Клиент учит дом при проходе портала, показывает экземпляры в навигации чанков и отличает унаследованный статус. Можно пометить или снять дом вручную.",
-          "В таблице атласа откройте колонки слотов, принимаемых атрибутов и диапазона шанса инкрустации — удобно сравнивать гильдии не заходя в карточку.",
-          "В настройках дома — Wipe All Storage Items. После подтверждения стираются записанные предметы и контейнеры; они появятся снова, когда вы откроете ящики дома."
-        ],
-        "en": [
-          "In home settings turn on indoor zones. The client learns a home when you take a portal, shows instances in chunk nav and reports inherited status. You can mark or unmark a home by hand.",
-          "In the atlas table enable columns for gilding slots, accepted attributes and chance range so you can compare insertions without opening each card.",
-          "Home settings include Wipe All Storage Items. After confirm, stored items and container locations are deleted and fill in again as you use chests at home."
         ]
       }
     }
