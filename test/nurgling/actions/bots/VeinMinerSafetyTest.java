@@ -1,6 +1,7 @@
 package nurgling.actions.bots;
 
 import haven.Coord;
+import haven.Coord2d;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,6 +22,42 @@ class VeinMinerSafetyTest {
         assertFalse(VeinMiner.supportCovers(new Coord(9, 20), begin, data));
         assertFalse(VeinMiner.supportCovers(null, begin, data));
         assertFalse(VeinMiner.supportCovers(new Coord(10, 20), begin, null));
+    }
+
+    @Test
+    void aCompletedSupportMaskOverridesTheNominalCircle() {
+        Coord2d center = new Coord2d(5.5, 5.5);
+        boolean[][] youngTreeMask = {{true}};
+        assertTrue(VeinMiner.supportCoversOrCircle(new Coord(0, 0),
+                new Coord(0, 0), youngTreeMask, center,
+                "gfx/terobjs/trees/towercap", 1));
+        assertFalse(VeinMiner.supportCoversOrCircle(new Coord(1, 0),
+                new Coord(0, 0), youngTreeMask, center,
+                "gfx/terobjs/trees/towercap", 1));
+        assertFalse(VeinMiner.supportCoversOrCircle(new Coord(1, 0),
+                new Coord(0, 0), youngTreeMask, center,
+                "gfx/terobjs/minebeam", 1));
+    }
+
+    @Test
+    void fallbackOnlyAcceptsBuiltExactStaticSupports() {
+        Coord tile = new Coord(0, 0);
+        Coord2d center = new Coord2d(5.5, 5.5);
+        assertTrue(VeinMiner.supportCoversOrCircle(tile, null, null, center,
+                "gfx/terobjs/minebeam", 1));
+        assertFalse(VeinMiner.supportCoversOrCircle(tile, null, null, center,
+                "gfx/terobjs/minebeam", -1));
+        assertFalse(VeinMiner.supportCoversOrCircle(tile, null, null, center,
+                "gfx/terobjs/trees/towercap", 1));
+        assertFalse(VeinMiner.supportCoversOrCircle(tile, null, null, center,
+                "gfx/terobjs/minebeam-construction", 1));
+    }
+
+    @Test
+    void safeMarkerMustBeOnTheRequestedTile() {
+        assertTrue(VeinMiner.markerMatchesTile(new Coord(0, 0), new Coord2d(5.5, 5.5)));
+        assertFalse(VeinMiner.markerMatchesTile(new Coord(1, 0), new Coord2d(5.5, 5.5)));
+        assertFalse(VeinMiner.markerMatchesTile(new Coord(0, 0), new Coord2d(11, 5.5)));
     }
 
     @Test
@@ -48,6 +85,8 @@ class VeinMinerSafetyTest {
         assertEquals(330, VeinMiner.supportRadiusFor("gfx/terobjs/monumentalcolumn"));
         assertEquals(100, VeinMiner.supportRadiusFor("gfx/terobjs/minesupport"));
         assertEquals(92, VeinMiner.supportRadiusFor("gfx/terobjs/map/naturalminesupport"));
+        assertEquals(-1, VeinMiner.supportRadiusFor("gfx/terobjs/trees/towercap"));
+        assertEquals(-1, VeinMiner.supportRadiusFor("gfx/terobjs/minebeam-construction"));
         assertEquals(-1, VeinMiner.supportRadiusFor("gfx/terobjs/cheeserack"));
         assertEquals(-1, VeinMiner.supportRadiusFor(null));
     }

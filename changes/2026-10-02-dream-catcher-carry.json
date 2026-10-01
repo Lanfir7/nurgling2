@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-02-dream-catcher-carry",
+  "priority": 6,
+  "summary": {
+    "ru": "Ловцы снов можно массово переносить через «Перенести много».",
+    "en": "Dream catchers can be mass-carried with Carry many."
+  },
+  "detail": {
+    "ru": "Ctrl и правый клик по ловцу снов открывают «Перенести много». Выберите зоны откуда и куда — клиент перенесёт такие же ловцы.",
+    "en": "Ctrl and right-click a dream catcher to open Carry many. Choose the source and destination zones, and the client moves matching dream catchers."
+  }
+}

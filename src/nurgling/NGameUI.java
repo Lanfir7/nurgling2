@@ -328,6 +328,9 @@ public class NGameUI extends GameUI
         add(questwdg);
         add(compassWidget = new NCompassWidget(this));
         setCompassVisible(NCompassSettings.showBar());
+        // Scheduled login starts a scenario on the first map tick. The registry
+        // must already exist, or that tick kills the UI thread and the world stays black.
+        add(biw = new BotsInterruptWidget(), Coord.z);
     }
 
     public void setCompassVisible(boolean visible) {
@@ -389,8 +392,6 @@ public class NGameUI extends GameUI
         // Position NImportStrategyDialog relative to areas widget center
         add(importDialog = new NImportStrategyDialog(), new Coord(sz.x/2 - importDialog.sz.x/2, sz.y/2 - importDialog.sz.y/2));
         importDialog.hide();
-        // Session-owned macro registry; controls are drawn beside the session portrait.
-        add(biw = new BotsInterruptWidget(), Coord.z);
         waypointMovementService = new WaypointMovementService(this);
         pingService = new PingService(this);
         fishLocationService = new FishLocationService(this, genus);

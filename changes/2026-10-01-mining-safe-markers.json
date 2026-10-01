@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-01-mining-safe-markers",
+  "priority": 9,
+  "summary": {
+    "ru": "Зелёные метки при копке отзываются при появлении пыли; Vein Miner точнее проверяет безопасность перед добычей.",
+    "en": "Green mining marks are revoked when dust appears; Vein Miner checks safety more accurately before digging."
+  },
+  "detail": {
+    "ru": "На карте шахты зелёные кружки теперь сохраняют своё основание: соседний выкопанный тайл без пыли. Позднее предупреждение или смена пещеры отменяет неверные метки. Старые кружки без подтверждения больше не используются. Vein Miner учитывает реальную область опоры, включая молодые грибы, и повторно проверяет безопасность перед каждой попыткой копки.",
+    "en": "Green circles on the mining map now retain their evidence: an adjacent tile mined without dust. Late warnings or a cave change revoke invalid marks. Old circles without evidence are no longer used. Vein Miner respects actual support coverage, including young towercaps, and rechecks safety before every mining attempt."
+  }
+}

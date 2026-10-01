@@ -2,12 +2,20 @@ package nurgling.overlays;
 
 import haven.*;
 import haven.render.*;
+import nurgling.NGameUI;
+import nurgling.actions.bots.MinesweeperSolver;
+import nurgling.conf.NMiningOverlayMemory;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * Green dot on a tile the minesweeper solver has deduced is safe to mine.
+ * Green dot backed by adjacent mined tiles observed without a cave-in warning.
  */
 public class NMiningSafeOverlay extends Sprite implements RenderTree.Node {
 
@@ -20,6 +28,56 @@ public class NMiningSafeOverlay extends Sprite implements RenderTree.Node {
 
     final Model emod;
     ColorTex ct;
+    private volatile Map<Coord, NMiningOverlayMemory.TileRef> sources = Collections.emptyMap();
+
+    public void setSources(Map<Coord, NMiningOverlayMemory.TileRef> sources) {
+        this.sources = Collections.unmodifiableMap(new HashMap<>(sources));
+    }
+
+    static boolean sourceConfirmed(NMiningOverlayMemory.TileRef saved,
+                                    NMiningOverlayMemory.TileRef current,
+                                    Boolean mineable, boolean warning) {
+        return saved != null && saved.equals(current)
+                && Boolean.FALSE.equals(mineable) && !warning;
+    }
+
+    static boolean dustWarning(String resourceName, Integer number) {
+        // A rounded 0 is still a dust observation, not evidence that no dust appeared.
+        return "gfx/fx/cavewarn".equals(resourceName) || number != null;
+    }
+
+    static boolean warningSprite(Sprite sprite) {
+        return sprite != null && dustWarning(sprite.res == null ? null : sprite.res.name,
+                sprite instanceof NMiningNumber ? ((NMiningNumber) sprite).val : null);
+    }
+
+    /** Revalidate the evidence immediately before automation mines, even between UI ticks. */
+    public boolean isConfirmedSafe(NGameUI gui) {
+        if (gui == null || gui.ui == null || gui.ui.sess == null) return false;
+        Map<Coord, NMiningOverlayMemory.TileRef> snapshot = sources;
+        if (snapshot.isEmpty()) return false;
+        Set<Coord> warnings = new HashSet<>();
+        synchronized (gui.ui.sess.glob.oc) {
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                Coord tile = gob.rc.div(MCache.tilesz).floor();
+                if (!snapshot.containsKey(tile)) continue;
+                for (Gob.Overlay ol : gob.ols) {
+                    if ((!gob.virtual && ol.spr == null)
+                            || warningSprite(ol.spr)) {
+                        warnings.add(tile);
+                    }
+                }
+            }
+        }
+        MinesweeperSolver reader = new MinesweeperSolver(gui);
+        MCache map = gui.ui.sess.glob.map;
+        for (Map.Entry<Coord, NMiningOverlayMemory.TileRef> entry : snapshot.entrySet()) {
+            Coord tile = entry.getKey();
+            if (sourceConfirmed(entry.getValue(), NMiningOverlayMemory.ofWorld(map, tile),
+                    reader.mineableOrUnknown(tile.x, tile.y), warnings.contains(tile))) return true;
+        }
+        return false;
+    }
 
     private static TexI createDotTexture() {
         int size = UI.scale(64);

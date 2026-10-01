@@ -98,6 +98,35 @@ class FinderCandidateOrderTest {
     }
 
     @Test
+    void carryManySitsFlushWhenTheNeighbourEdgeIsJustOffTheIntegerLattice() {
+        NHitBox box = new NHitBox(Coord2d.of(-5, -5), Coord2d.of(5, 5), true);
+        NHitBoxD standing = new NHitBoxD(box.begin, box.end, Coord2d.of(10.01, 5), 0);
+
+        List<Coord2d> placed = Finder.packFlushPlaces(
+                new Pair<>(Coord2d.of(0, 0), Coord2d.of(80, 10)),
+                box, 0, java.util.Collections.singletonList(standing), false, false, 2);
+
+        assertEquals(20.01, placed.get(0).x, 0.001);
+        assertEquals(5.0, placed.get(0).y, 0.001);
+        assertEquals(30.01, placed.get(1).x, 0.001);
+        assertEquals(5.0, placed.get(1).y, 0.001);
+    }
+
+    @Test
+    void carryManySitsFlushAgainstAWallJustOffTheIntegerLattice() {
+        NHitBox item = new NHitBox(Coord2d.of(-5, -5), Coord2d.of(5, 5), true);
+        NHitBox wallBox = new NHitBox(Coord2d.of(-30, -5), Coord2d.of(30, 5), true);
+        NHitBoxD wall = new NHitBoxD(wallBox.begin, wallBox.end, Coord2d.of(30, 5.01), 0);
+
+        List<Coord2d> placed = Finder.packFlushPlaces(
+                new Pair<>(Coord2d.of(0, 0), Coord2d.of(80, 40)),
+                item, 0, java.util.Collections.singletonList(wall), false, false, 1);
+
+        assertEquals(5.0, placed.get(0).x, 0.001);
+        assertEquals(15.01, placed.get(0).y, 0.001);
+    }
+
+    @Test
     void oddSizedPilesStartFullyInsideFarZoneEdges() {
         NHitBox pile = new NHitBox(Coord2d.of(-2.5, -2.5),
                 Coord2d.of(2.5, 2.5), true);

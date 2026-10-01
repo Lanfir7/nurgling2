@@ -5,6 +5,7 @@ import nurgling.GhostAlpha;
 import nurgling.NHitBox;
 import nurgling.NUtils;
 import nurgling.pf.NHitBoxD;
+import nurgling.tools.Finder;
 
 import java.util.*;
 
@@ -114,7 +115,7 @@ public class BuildGhostPreview extends GAttrib {
             positions = calculateGhostPositionsGrid(obstacles, placedBuildings);
         } else {
             // Normal mode: pixel-by-pixel search (tight packing)
-            positions = calculateGhostPositionsNormal(obstacles, placedBuildings);
+            positions = calculateGhostPositionsNormal(obstacles);
         }
         for (Coord2d position : PlacementSweep.order(
                 positions, selectionStart, selectionEnd, placementLimit)) {
@@ -201,63 +202,17 @@ public class BuildGhostPreview extends GAttrib {
     }
     
     /**
-     * Calculate positions in normal mode (tight packing)
+     * Tight packing from the drag corner. Candidates include the real edges of obstacles
+     * already in the zone, so a hitbox that is a fraction off the integer lattice still
+     * sits flush instead of leaving a one-unit gap.
      */
-    private List<Coord2d> calculateGhostPositionsNormal(ArrayList<NHitBoxD> obstacles, ArrayList<NHitBoxD> placedBuildings) {
-        ArrayList<Coord2d> positions = new ArrayList<>();
-        if (placementLimit == 0) return positions;
-        Coord inchMax = area.b.sub(area.a).floor();
-        
-        // Match Finder.getFreePlace() margin calculation: use rotated circumscribed dimensions.
-        NHitBoxD tempBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, Coord2d.of(0), rotationAngle);
-        Coord2d rotatedUL = tempBox.getCircumscribedUL();
-        Coord2d rotatedBR = tempBox.getCircumscribedBR();
-        Coord margin = rotatedBR.sub(rotatedUL).floor(2, 2);
-
-        int minX = margin.x;
-        int maxX = inchMax.x - margin.x;
-        int minY = margin.y;
-        int maxY = inchMax.y - margin.y;
-        int dragStartX = selectionStart != null ? selectionStart.x : 0;
-        int dragEndX = selectionEnd != null ? selectionEnd.x : 1;
-        int dragStartY = selectionStart != null ? selectionStart.y : 0;
-        int dragEndY = selectionEnd != null ? selectionEnd.y : 1;
-
-        // Simulate Finder.getFreePlace() behavior, sweeping from the selected corner.
-        for (int i : PlacementSweep.axis(minX, maxX, dragStartX, dragEndX)) {
-            for (int j : PlacementSweep.axis(minY, maxY, dragStartY, dragEndY)) {
-                Coord2d testPos = area.a.add(i, j);
-                NHitBoxD testBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, rotationAngle);
-
-                // Check collisions with obstacles AND already-placed buildings
-                boolean passed = true;
-
-                for (NHitBoxD obstacle : obstacles) {
-                    if (obstacle.intersects(testBox, false)) {
-                        passed = false;
-                        break;
-                    }
-                }
-
-                if (passed) {
-                    for (NHitBoxD placed : placedBuildings) {
-                        if (placed.intersects(testBox, false)) {
-                            passed = false;
-                            break;
-                        }
-                    }
-                }
-
-                if (passed) {
-                    Coord2d worldPos = new Coord2d(testBox.rc.x, testBox.rc.y);
-                    positions.add(worldPos);
-                    // Add this building to placed list so we don't overlap it
-                    placedBuildings.add(new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, testPos, rotationAngle));
-                    if (positions.size() >= placementLimit) return positions;
-                }
-            }
-        }
-        return positions;
+    private List<Coord2d> calculateGhostPositionsNormal(ArrayList<NHitBoxD> obstacles) {
+        if (placementLimit == 0)
+            return new ArrayList<>();
+        boolean reverseX = selectionStart != null && selectionEnd != null && selectionEnd.x < selectionStart.x;
+        boolean reverseY = selectionStart != null && selectionEnd != null && selectionEnd.y < selectionStart.y;
+        return Finder.packFlushPlaces(area, buildingHitBox, rotationAngle, obstacles,
+                reverseX, reverseY, placementLimit);
     }
 
     /**

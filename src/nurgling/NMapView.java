@@ -1575,13 +1575,15 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             Scenario scenario = NUtils.getUI().core.scenarioManager.getScenarios().getOrDefault(NConfig.botmod.scenarioId, null);
             System.out.println("[NMapView] Scenario lookup: " + (scenario != null ? scenario.getName() : "null") + ", available scenarios: " + NUtils.getUI().core.scenarioManager.getScenarios().keySet());
             if (scenario != null || !(NUtils.getGameUI() == null)) {
-                System.out.println("[NMapView] Starting bot thread, scenario=" + (scenario != null));
-                botsInit = true;
-
                 // Capture UI reference for thread-local binding
                 final NUI boundUI = NUtils.getUI();
                 final NGameUI boundGui = (boundUI != null) ? boundUI.gui : null;
-                if (boundGui == null) return;
+                // biw appears with the session. Starting earlier throws on the UI thread.
+                if (boundGui == null || boundGui.biw == null)
+                    return;
+
+                System.out.println("[NMapView] Starting bot thread, scenario=" + (scenario != null));
+                botsInit = true;
 
                 Thread t;
                 t = new Thread(() -> {

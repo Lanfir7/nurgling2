@@ -15,7 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 import java.util.function.Supplier;
+import java.util.function.LongFunction;
+import java.util.function.LongToIntFunction;
 
 import static haven.MCache.tilesz;
 
@@ -54,6 +57,9 @@ public class MinesweeperDangerMarkers {
     private String memUser;
     private String memChr;
     private final TimedSnapshot<NumberSnapshot> numberSnapshots = newNumberSnapshotCache();
+    private Map<Coord, Long> observedGrids = new HashMap<>();
+    private final Map<Long, NMiningOverlayMemory.TileRef> sessionBlanks = new HashMap<>();
+    private Set<Long> blockedBlanks = Collections.emptySet();
 
     static final class SnapshotUpdate<T> {
         final T value;
@@ -111,21 +117,38 @@ public class MinesweeperDangerMarkers {
         final List<NumberEntry> entries;
         final Set<Long> liveTiles;
         final long fingerprint;
+        final Set<Long> blockedTiles;
+        final Set<Long> warningTiles;
 
-        NumberSnapshot(List<NumberEntry> entries, Set<Long> liveTiles, long fingerprint) {
+        NumberSnapshot(List<NumberEntry> entries, Set<Long> liveTiles, long fingerprint,
+                       Set<Long> blockedTiles, Set<Long> warningTiles) {
             this.entries = entries;
             this.liveTiles = liveTiles;
             this.fingerprint = fingerprint;
+            this.blockedTiles = blockedTiles;
+            this.warningTiles = warningTiles;
         }
 
         static NumberSnapshot capture(NGameUI gui) {
             List<NumberEntry> entries = new ArrayList<>();
             Set<Long> liveTiles = new HashSet<>();
+            Set<Long> blockedTiles = new HashSet<>();
+            Set<Long> warningTiles = new HashSet<>();
             long hash = 0;
             int count = 0;
             synchronized (gui.ui.sess.glob.oc) {
                 for (Gob gob : gui.ui.sess.glob.oc) {
                     for (Gob.Overlay ol : gob.ols) {
+                        if (!gob.virtual && ol.spr == null) {
+                            Coord tile = gob.rc.div(tilesz).floor();
+                            blockedTiles.add(key(tile.x, tile.y));
+                        }
+                        if (NMiningSafeOverlay.warningSprite(ol.spr)) {
+                            Coord tile = gob.rc.div(tilesz).floor();
+                            long k = key(tile.x, tile.y);
+                            warningTiles.add(k);
+                            blockedTiles.add(k);
+                        }
                         if (ol.spr instanceof NMiningNumber) {
                             NMiningNumber number = (NMiningNumber) ol.spr;
                             Coord tile = gob.rc.div(tilesz).floor();
@@ -142,7 +165,7 @@ public class MinesweeperDangerMarkers {
                 }
             }
             long fingerprint = count == 0 ? 0 : hash ^ ((long) count << 32);
-            return new NumberSnapshot(entries, liveTiles, fingerprint);
+            return new NumberSnapshot(entries, liveTiles, fingerprint, blockedTiles, warningTiles);
         }
 
         void applyTo(MinesweeperSolver solver) {
@@ -202,6 +225,74 @@ public class MinesweeperDangerMarkers {
         return position == null ? null : position.div(tilesz).floor();
     }
 
+    static boolean mapContextChanged(Map<Coord, Long> previous, Map<Coord, Long> current) {
+        if (previous.isEmpty()) return false;
+        boolean overlap = false;
+        for (Map.Entry<Coord, Long> entry : previous.entrySet()) {
+            Long id = current.get(entry.getKey());
+            if (id != null) {
+                if (!id.equals(entry.getValue())) return true;
+                overlap = true;
+            }
+        }
+        return !overlap;
+    }
+
+    private boolean updateMapContext(NGameUI gui, Coord playerTile) {
+        MCache map = mapOf(gui);
+        Map<Coord, Long> current = new HashMap<>();
+        Coord grid = playerTile.div(MCache.cmaps);
+        synchronized (map.grids) {
+            for (int x = grid.x - 1; x <= grid.x + 1; x++) {
+                for (int y = grid.y - 1; y <= grid.y + 1; y++) {
+                    Coord coord = Coord.of(x, y);
+                    MCache.Grid loaded = map.grids.get(coord);
+                    if (loaded != null) current.put(coord, loaded.id);
+                }
+            }
+        }
+        if (!current.containsKey(grid) || mapContextChanged(observedGrids, current)) {
+            clear(gui);
+            prevMineable.clear();
+            pendingBlanks.clear();
+            confirmedBlanks.clear();
+            sessionBlanks.clear();
+            blockedBlanks = Collections.emptySet();
+            numberSnapshots.clear();
+            solver = null;
+        }
+        observedGrids = current;
+        return current.containsKey(grid);
+    }
+
+    static void revokeNumberedBlanks(Set<Long> confirmed, MinesweeperSolver solver) {
+        confirmed.removeIf(k -> solver.getNumber(Coord.of(keyX(k), keyY(k))) > 0);
+    }
+
+    static void advanceBlankWaits(Map<Long, Double> pending, Set<Long> confirmed,
+                                  Set<Long> fresh, LongToIntFunction numberAt,
+                                  LongFunction<Boolean> mineableAt, double dt,
+                                  boolean freshNumbers) {
+        Iterator<Map.Entry<Long, Double>> iterator = pending.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Long, Double> entry = iterator.next();
+            long k = entry.getKey();
+            int number = numberAt.applyAsInt(k);
+            if (number > 0) {
+                confirmed.remove(k);
+                iterator.remove();
+                continue;
+            }
+            // dt describes the interval before this tick, not time since a new transition.
+            double age = entry.getValue() + (fresh.contains(k) ? 0 : Math.max(0, dt));
+            entry.setValue(age);
+            if (freshNumbers && age >= DUST_WAIT && Boolean.FALSE.equals(mineableAt.apply(k))) {
+                confirmed.add(k);
+                iterator.remove();
+            }
+        }
+    }
+
     public void tick(double dt) {
         NGameUI gui = NUtils.getGameUI();
         if (gui == null || gui.ui == null || gui.ui.sess == null || gui.map == null) {
@@ -214,12 +305,15 @@ public class MinesweeperDangerMarkers {
         if (playerTile == null) {
             return;
         }
+        if (!updateMapContext(gui, playerTile)) return;
         if (solver == null || solverGui != gui) {
             clear(gui);
             prevMineable.clear();
             pendingBlanks.clear();
             confirmedBlanks.clear();
             galleryNoticeMark = gui.notices.seq();
+            sessionBlanks.clear();
+            blockedBlanks = Collections.emptySet();
             gallerySuppressLeft = 0;
             numberSnapshots.clear();
             solver = new MinesweeperSolver(gui);
@@ -232,11 +326,22 @@ public class MinesweeperDangerMarkers {
         NumberSnapshot snapshot = snapshotUpdate.value;
         if (snapshotUpdate.refreshed) {
             snapshot.applyTo(solver);
+            blockedBlanks = snapshot.blockedTiles;
+            revokeWarnedMemory(gui, snapshot);
+        }
+        if (gui.notices.contains(galleryNoticeMark, "cave gallery")) {
+            NMiningOverlayMemory mem = resolveMemory(gui);
+            if (mem != null) {
+                for (NMiningOverlayMemory.TileRef ref : sessionBlanks.values()) mem.removeBlank(ref);
+            }
+            sessionBlanks.clear();
         }
         boolean galleryBurst = discardGalleryBlankTransitions(
                 gui.notices, galleryNoticeMark, pendingBlanks, confirmedBlanks);
         boolean suppressFreshBlanks = galleryBurst || gallerySuppressLeft > 0;
-        boolean suppressedBurst = observeMinedTiles(playerTile, dt, suppressFreshBlanks);
+        revokeNumberedBlanks(confirmedBlanks, solver);
+        boolean suppressedBurst = observeMinedTiles(playerTile, dt, suppressFreshBlanks,
+                snapshotUpdate.refreshed);
         gallerySuppressLeft = nextGallerySuppress(
                 galleryBurst, suppressedBurst, gallerySuppressLeft, dt, GALLERY_SUPPRESS);
         galleryNoticeMark = gui.notices.seq();
@@ -269,9 +374,12 @@ public class MinesweeperDangerMarkers {
         if (playerTile == null) {
             return;
         }
+        if (!updateMapContext(gui, playerTile)) return;
         NumberSnapshot snapshot = NumberSnapshot.capture(gui);
         restoreNow(gui, snapshot);
         snapshot.applyTo(solver);
+        blockedBlanks = snapshot.blockedTiles;
+        revokeWarnedMemory(gui, snapshot);
         applyMemory(gui, playerTile, snapshot);
         solver.refresh(playerTile, RADIUS);
         applyMemory(gui, playerTile, snapshot);
@@ -299,8 +407,10 @@ public class MinesweeperDangerMarkers {
         persistGreens(gui);
     }
 
-    private boolean observeMinedTiles(Coord playerTile, double dt, boolean suppressFreshBlanks) {
+    private boolean observeMinedTiles(Coord playerTile, double dt, boolean suppressFreshBlanks,
+                                     boolean freshNumbers) {
         boolean suppressedBurst = false;
+        Set<Long> fresh = new HashSet<>();
         for (int x = playerTile.x - MINE_WATCH_RADIUS; x <= playerTile.x + MINE_WATCH_RADIUS; x++) {
             for (int y = playerTile.y - MINE_WATCH_RADIUS; y <= playerTile.y + MINE_WATCH_RADIUS; y++) {
                 Boolean cur = solver.mineableOrUnknown(x, y);
@@ -309,8 +419,9 @@ public class MinesweeperDangerMarkers {
                 }
                 long k = key(x, y);
                 Boolean prev = prevMineable.put(k, cur);
-                if (recordMinedTileTransition(prev, cur, suppressFreshBlanks, k,
+                if (recordMinedTileTransition(prev, cur, suppressFreshBlanks || blockedBlanks.contains(k), k,
                         pendingBlanks, confirmedBlanks)) {
+                    fresh.add(k);
                     continue;
                 }
                 if (suppressFreshBlanks && Boolean.TRUE.equals(prev) && Boolean.FALSE.equals(cur)) {
@@ -319,30 +430,19 @@ public class MinesweeperDangerMarkers {
             }
         }
 
-        Iterator<Map.Entry<Long, Double>> pending = pendingBlanks.entrySet().iterator();
-        while (pending.hasNext()) {
-            Map.Entry<Long, Double> e = pending.next();
-            Coord tile = new Coord(keyX(e.getKey()), keyY(e.getKey()));
-            int number = solver.getNumber(tile);
-            if (number > 0) {
-                confirmedBlanks.remove(e.getKey());
-                pending.remove();
-                continue;
-            }
-            double wait = e.getValue() + dt;
-            if (number == 0 || wait >= DUST_WAIT) {
-                confirmedBlanks.add(e.getKey());
-                pending.remove();
-            } else {
-                e.setValue(wait);
-            }
-        }
+        advanceBlankWaits(pendingBlanks, confirmedBlanks, fresh,
+                k -> solver.getNumber(Coord.of(keyX(k), keyY(k))),
+                k -> blockedBlanks.contains(k) ? null
+                        : solver.mineableOrUnknown(keyX(k), keyY(k)), dt, freshNumbers);
 
         int prune = RADIUS * 2;
         confirmedBlanks.removeIf(k ->
                 Math.abs(keyX(k) - playerTile.x) > prune || Math.abs(keyY(k) - playerTile.y) > prune);
         prevMineable.entrySet().removeIf(e ->
                 Math.abs(keyX(e.getKey()) - playerTile.x) > prune || Math.abs(keyY(e.getKey()) - playerTile.y) > prune);
+        pendingBlanks.keySet().removeIf(k ->
+                Math.abs(keyX(k) - playerTile.x) > prune || Math.abs(keyY(k) - playerTile.y) > prune);
+        sessionBlanks.keySet().removeIf(k -> !confirmedBlanks.contains(k));
         return suppressedBurst;
     }
 
@@ -377,7 +477,7 @@ public class MinesweeperDangerMarkers {
         }
         MCache map = mapOf(gui);
         for (NumberEntry entry : snapshot.entries) {
-            if (entry.virtual) {
+            if (!persistableDustNumber(entry.virtual, entry.value)) {
                 continue;
             }
             NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(map, entry.tile);
@@ -393,13 +493,15 @@ public class MinesweeperDangerMarkers {
             return;
         }
         MCache map = mapOf(gui);
-        Set<Coord> blanks = new HashSet<>();
-        Set<Coord> mineable = new HashSet<>();
-        collectBlankNeighbors(blanks, mineable);
-        for (Coord tile : greenFromFreshBlanks(blanks, mineable)) {
+        for (long k : confirmedBlanks) {
+            Coord tile = Coord.of(keyX(k), keyY(k));
+            if (blockedBlanks.contains(k) || solver.getNumber(tile) > 0
+                    || !Boolean.FALSE.equals(solver.mineableOrUnknown(tile.x, tile.y))) continue;
             NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(map, tile);
             if (ref != null) {
-                mem.putGreen(ref);
+                // Persist the observation, so a late positive number can revoke all its dots.
+                mem.putNumber(ref, 0);
+                sessionBlanks.put(k, ref);
             }
         }
     }
@@ -458,6 +560,8 @@ public class MinesweeperDangerMarkers {
 
     private void collectBlankNeighbors(Set<Coord> blanks, Set<Coord> mineable) {
         for (long k : confirmedBlanks) {
+            if (blockedBlanks.contains(k) || solver.getNumber(Coord.of(keyX(k), keyY(k))) > 0
+                    || !Boolean.FALSE.equals(solver.mineableOrUnknown(keyX(k), keyY(k)))) continue;
             blanks.add(new Coord(keyX(k), keyY(k)));
             int x = keyX(k);
             int y = keyY(k);
@@ -478,10 +582,15 @@ public class MinesweeperDangerMarkers {
         Set<Coord> blanks = new HashSet<>();
         Set<Coord> mineable = new HashSet<>();
         collectBlankNeighbors(blanks, mineable);
-        for (Coord tile : greenFromFreshBlanks(blanks, mineable)) {
+        rememberedBlanks(gui, blanks, mineable, playerTile);
+        Map<Coord, NMiningOverlayMemory.TileRef> blankRefs = new HashMap<>();
+        for (Coord blank : blanks) {
+            NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(mapOf(gui), blank);
+            if (ref != null) blankRefs.put(blank, ref);
+        }
+        for (Coord tile : greenFromFreshBlanks(blankRefs.keySet(), mineable)) {
             wanted.put(key(tile.x, tile.y), Mark.SAFE);
         }
-        rememberedGreens(gui, wanted, playerTile);
 
         for (Map.Entry<Long, Mark> e : wanted.entrySet()) {
             long k = e.getKey();
@@ -496,6 +605,12 @@ public class MinesweeperDangerMarkers {
                 markers.put(k, created);
                 kinds.put(k, kind);
             }
+            Gob marker = markers.get(k);
+            Gob.Overlay safe = marker.findol(NMiningSafeOverlay.class);
+            if (safe != null && safe.spr instanceof NMiningSafeOverlay) {
+                ((NMiningSafeOverlay) safe.spr).setSources(
+                        sourcesFor(Coord.of(keyX(k), keyY(k)), blankRefs));
+            }
         }
         Iterator<Map.Entry<Long, Gob>> it = markers.entrySet().iterator();
         while (it.hasNext()) {
@@ -508,26 +623,65 @@ public class MinesweeperDangerMarkers {
         }
     }
 
-    private void rememberedGreens(NGameUI gui, Map<Long, Mark> wanted, Coord playerTile) {
+    static Map<Coord, NMiningOverlayMemory.TileRef> sourcesFor(
+            Coord target, Map<Coord, NMiningOverlayMemory.TileRef> blanks) {
+        Map<Coord, NMiningOverlayMemory.TileRef> sources = new HashMap<>();
+        for (int[] d : NEIGHBORS) {
+            Coord source = target.add(d[0], d[1]);
+            NMiningOverlayMemory.TileRef ref = blanks.get(source);
+            if (ref != null) sources.put(source, ref);
+        }
+        return sources;
+    }
+
+    static boolean persistableDustNumber(boolean virtual, int value) {
+        // Only a confirmed no-dust transition may persist a zero observation.
+        return !virtual && value > 0;
+    }
+
+    private void revokeWarnedMemory(NGameUI gui, NumberSnapshot snapshot) {
+        revokeWarningSources(snapshot.warningTiles, pendingBlanks, confirmedBlanks);
+        NMiningOverlayMemory mem = resolveMemory(gui);
+        if (mem == null) return;
+        for (long k : snapshot.warningTiles) {
+            NMiningOverlayMemory.TileRef ref = NMiningOverlayMemory.ofWorld(mapOf(gui),
+                    Coord.of(keyX(k), keyY(k)));
+            if (ref != null) mem.removeBlank(ref);
+        }
+    }
+
+    static void revokeWarningSources(Set<Long> warnings, Map<Long, Double> pending,
+                                     Set<Long> confirmed) {
+        pending.keySet().removeAll(warnings);
+        confirmed.removeAll(warnings);
+    }
+
+    private void rememberedBlanks(NGameUI gui, Set<Coord> blanks, Set<Coord> mineable,
+                                  Coord playerTile) {
+        // Legacy independent dots have no evidence to revalidate and are not trusted.
         NMiningOverlayMemory mem = resolveMemory(gui);
         if (mem == null) {
             return;
         }
         MCache map = mapOf(gui);
-        for (NMiningOverlayMemory.TileRef ref : mem.greens()) {
-            Coord tile = NMiningOverlayMemory.toWorld(map, ref);
+        for (Map.Entry<NMiningOverlayMemory.TileRef, Integer> entry : mem.numbers().entrySet()) {
+            if (entry.getValue() != 0) continue;
+            Coord tile = NMiningOverlayMemory.toWorld(map, entry.getKey());
             if (tile == null) {
                 continue;
             }
             if (Math.abs(tile.x - playerTile.x) > RADIUS || Math.abs(tile.y - playerTile.y) > RADIUS) {
                 continue;
             }
-            Boolean mineable = solver.mineableOrUnknown(tile.x, tile.y);
-            if (Boolean.FALSE.equals(mineable)) {
-                mem.removeGreen(ref);
-                continue;
+            if (blockedBlanks.contains(key(tile.x, tile.y)) || solver.getNumber(tile) > 0
+                    || !Boolean.FALSE.equals(solver.mineableOrUnknown(tile.x, tile.y))) continue;
+            blanks.add(tile);
+            for (int[] d : NEIGHBORS) {
+                Coord neighbor = tile.add(d[0], d[1]);
+                if (Boolean.TRUE.equals(solver.mineableOrUnknown(neighbor.x, neighbor.y))) {
+                    mineable.add(neighbor);
+                }
             }
-            wanted.putIfAbsent(key(tile.x, tile.y), Mark.SAFE);
         }
     }
 

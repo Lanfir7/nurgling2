@@ -37,6 +37,7 @@ public final class LiftableCatalog {
             "gfx/terobjs/crate",
             "gfx/terobjs/cupboard",
             "gfx/terobjs/curdingtub",
+            "gfx/terobjs/dreca",
             "gfx/terobjs/exquisitechest",
             "gfx/terobjs/furn/bed-sturdy",
             "gfx/terobjs/furn/cottagetable",

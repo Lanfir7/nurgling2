@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-02-carry-flush-gap",
+  "priority": 6,
+  "summary": {
+    "ru": "«Перенести много» ставит объекты вплотную к уже стоящим хитбоксам.",
+    "en": "Carry many places objects flush against hitboxes that are already standing."
+  },
+  "detail": {
+    "ru": "Превью и сама переноска больше не оставляют зазор в один пиксель у ловца снов, стены дома и других объектов в зоне. Новые встают кромка к кромке.",
+    "en": "The preview and the move itself no longer leave a one-pixel gap beside a dream catcher, a house wall, or other objects in the zone. New ones sit edge to edge."
+  }
+}

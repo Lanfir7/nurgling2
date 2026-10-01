@@ -16,6 +16,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class NMiningOverlayMemoryTest {
 
     @Test
+    void legacyDustZeroIsNotLoadedAsSafeBlankEvidence() {
+        NMiningOverlayMemory original = new NMiningOverlayMemory("alice", "chr1");
+        NMiningOverlayMemory.TileRef blank = new NMiningOverlayMemory.TileRef(7, 3, 4);
+        NMiningOverlayMemory.TileRef numbered = new NMiningOverlayMemory.TileRef(7, 4, 4);
+        original.putNumber(blank, 0);
+        original.putNumber(numbered, 2);
+        JSONObject legacy = original.toJson();
+        legacy.remove("blankEvidenceVersion");
+
+        NMiningOverlayMemory restored = new NMiningOverlayMemory(legacy.toMap());
+
+        assertNull(restored.getNumber(blank));
+        assertEquals(2, restored.getNumber(numbered));
+        assertEquals(1, restored.numberCount());
+    }
+
+    @Test
+    void lateNumberReplacesBlankAndCannotBeRemovedAsGalleryBlank() {
+        NMiningOverlayMemory mem = new NMiningOverlayMemory("alice", "chr1");
+        NMiningOverlayMemory.TileRef source = new NMiningOverlayMemory.TileRef(7, 3, 4);
+        mem.putNumber(source, 0);
+        NMiningOverlayMemory restored = new NMiningOverlayMemory(mem.toJson().toMap());
+        assertEquals(0, restored.getNumber(source));
+
+        restored.putNumber(source, 2);
+        assertFalse(restored.removeBlank(source));
+        assertEquals(2, restored.getNumber(source));
+
+        restored.putNumber(source, 0);
+        assertTrue(restored.removeBlank(source));
+        assertNull(restored.getNumber(source));
+    }
+
+    @Test
     void jsonRoundTripsNumbersAndGreens() {
         NMiningOverlayMemory original = new NMiningOverlayMemory("alice", "chr1");
         NMiningOverlayMemory.TileRef n1 = new NMiningOverlayMemory.TileRef(0x1a2b3c4d5e6f7081L, 10, 20);

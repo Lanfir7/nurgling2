@@ -26,6 +26,7 @@ class LiftableCatalogTest {
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/barrel"));
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/crate"));
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/cupboard"));
+        assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/dreca"));
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/trough"));
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/ttub"));
         assertTrue(LiftableCatalog.isLiftable("gfx/terobjs/cheeserack"));

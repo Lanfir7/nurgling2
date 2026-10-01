@@ -78,11 +78,13 @@ public class NMiningOverlayMemory implements JConf {
     public NMiningOverlayMemory(Map<String, Object> values) {
         this.username = (String) values.get("username");
         this.chrid = (String) values.get("chrid");
-        loadTiles(values.get("numbers"), true);
-        loadTiles(values.get("greens"), false);
+        // Older clients stored rounded dust numbers of 0 here, not no-dust evidence.
+        boolean trustedBlanks = Integer.valueOf(1).equals(intOf(values.get("blankEvidenceVersion")));
+        loadTiles(values.get("numbers"), true, trustedBlanks);
+        loadTiles(values.get("greens"), false, false);
     }
 
-    private void loadTiles(Object raw, boolean asNumbers) {
+    private void loadTiles(Object raw, boolean asNumbers, boolean trustedBlanks) {
         if (!(raw instanceof List<?>)) {
             return;
         }
@@ -98,7 +100,7 @@ public class NMiningOverlayMemory implements JConf {
             }
             if (asNumbers) {
                 Integer v = intOf(row.get("v"));
-                if (v != null) {
+                if (v != null && (v != 0 || trustedBlanks)) {
                     numbers.put(ref, v);
                 }
             } else {
@@ -159,6 +161,14 @@ public class NMiningOverlayMemory implements JConf {
         }
         greens.put(ref, Boolean.TRUE);
         evict(greens, MAX_GREENS);
+        dirty = true;
+        return true;
+    }
+
+    /** Revoke an inferred blank without deleting a later real dust observation. */
+    public boolean removeBlank(TileRef ref) {
+        if (!Integer.valueOf(0).equals(numbers.get(ref))) return false;
+        numbers.remove(ref);
         dirty = true;
         return true;
     }
@@ -232,6 +242,7 @@ public class NMiningOverlayMemory implements JConf {
         j.put("type", "NMiningOverlayMemory");
         j.put("username", username);
         j.put("chrid", chrid);
+        j.put("blankEvidenceVersion", 1);
         JSONArray nums = new JSONArray();
         for (Map.Entry<TileRef, Integer> e : numbers.entrySet()) {
             nums.put(tileToJson(e.getKey(), e.getValue()));

@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.*;
 import nurgling.actions.*;
 import nurgling.overlays.NMiningSafeOverlay;
+import nurgling.overlays.NMiningNumber;
 import nurgling.overlays.NMiningSupport;
 import nurgling.tasks.GetCurs;
 import nurgling.tasks.NTask;
@@ -135,30 +136,34 @@ public class VeinMiner implements Action {
         if (tile == null || gui == null || gui.ui == null || gui.ui.sess == null) {
             return false;
         }
-        Coord2d world = tileCenter(tile);
         synchronized (gui.ui.sess.glob.oc) {
+            // A live cave-in warning takes precedence over a solver marker that has
+            // not yet been refreshed.
             for (Gob gob : gui.ui.sess.glob.oc) {
-                Gob.Overlay supportOl = gob.findol(NMiningSupport.class);
-                if (supportOl != null && supportOl.spr instanceof NMiningSupport) {
-                    NMiningSupport nms = (NMiningSupport) supportOl.spr;
-                    if (supportCovers(tile, nms.begin, nms.getData())) {
-                        return true;
-                    }
-                }
-                int radius = supportRadiusFor(gob.ngob != null ? gob.ngob.name : null);
-                if (radius > 0 && inSupportRadius(tile, gob.rc, radius)) {
-                    return true;
-                }
-                if (gob.ngob != null && gob.ngob.name != null) {
-                    NMiningSupport.Spec spec = NMiningSupport.specFor(gob.ngob.name);
-                    if (spec != null && !spec.isRect() && spec.circleRadius != null
-                            && inSupportRadius(tile, gob.rc, spec.circleRadius)) {
-                        return true;
-                    }
-                }
-                if (gob.rc.dist(world) < tilesz.x) {
+                if (!gob.virtual && markerMatchesTile(tile, gob.rc)) {
                     for (Gob.Overlay ol : gob.ols) {
-                        if (ol.spr instanceof NMiningSafeOverlay) {
+                        if (ol.spr instanceof NMiningNumber && ((NMiningNumber) ol.spr).val > 0) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            for (Gob gob : gui.ui.sess.glob.oc) {
+                if (!gob.virtual && gob.id != -1) {
+                    Gob.Overlay supportOl = gob.findol(NMiningSupport.class);
+                    NMiningSupport.SupportMask mask = supportOl != null
+                            && supportOl.spr instanceof NMiningSupport
+                            ? ((NMiningSupport) supportOl.spr).getMask() : null;
+                    if (supportCoversOrCircle(tile, mask == null ? null : mask.begin,
+                            mask == null ? null : mask.data, gob.rc,
+                            gob.ngob == null ? null : gob.ngob.name, gob.id)) {
+                        return true;
+                    }
+                }
+                if (markerMatchesTile(tile, gob.rc)) {
+                    for (Gob.Overlay ol : gob.ols) {
+                        if (ol.spr instanceof NMiningSafeOverlay
+                                && ((NMiningSafeOverlay) ol.spr).isConfirmedSafe(gui)) {
                             return true;
                         }
                     }
@@ -166,6 +171,22 @@ public class VeinMiner implements Action {
             }
         }
         return false;
+    }
+
+    static boolean markerMatchesTile(Coord tile, Coord2d gobRc) {
+        return tile != null && gobRc != null && tile.equals(gobRc.div(tilesz).floor());
+    }
+
+    static boolean supportCoversOrCircle(Coord tile, Coord begin, boolean[][] data,
+                                         Coord2d gobRc, String name, long gobId) {
+        if (gobId == -1) {
+            return false;
+        }
+        // A completed mask is authoritative, including its uncovered pixels.
+        if (data != null) {
+            return supportCovers(tile, begin, data);
+        }
+        return inSupportRadius(tile, gobRc, supportRadiusFor(name));
     }
 
     public static boolean inSupportRadius(Coord tile, Coord2d gobRc, int radius) {
@@ -176,26 +197,12 @@ public class VeinMiner implements Action {
     }
 
     static int supportRadiusFor(String name) {
-        if (name == null) {
+        if (name == null || "gfx/terobjs/trees/towercap".equals(name)) {
             return -1;
         }
-        String n = name.toLowerCase();
-        if (n.contains("monumentalcolumn")) {
-            return 330;
-        }
-        if (n.contains("minebeam")) {
-            return 150;
-        }
-        if (n.contains("column")) {
-            return 125;
-        }
-        if (n.contains("naturalminesupport")) {
-            return 92;
-        }
-        if (n.contains("ladder") || n.contains("minesupport") || n.contains("towercap")) {
-            return 100;
-        }
-        return -1;
+        NMiningSupport.Spec spec = NMiningSupport.specFor(name);
+        return spec != null && !spec.isRect() && spec.circleRadius != null
+                ? spec.circleRadius : -1;
     }
 
     static boolean seedFinished(String original, String now) {
@@ -304,6 +311,9 @@ public class VeinMiner implements Action {
             Results bum = handleBumlings(gui);
             if (!bum.IsSuccess()) {
                 return bum;
+            }
+            if (!isTargetTile(type, tileName(gui, tilePos)) || !isSafe(gui, tilePos)) {
+                return Results.CYCLE();
             }
             NUtils.mine(worldPos);
             gui.map.wdgmsg("sel", tilePos, tilePos, 0);

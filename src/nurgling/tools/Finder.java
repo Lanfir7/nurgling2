@@ -662,13 +662,12 @@ public class Finder
         List<Coord2d> offsets = orderCandidateOffsets(xs, ys, effectiveDirection);
         for (Coord2d offset : offsets) {
             boolean passed = true;
-            NHitBoxD testGobBox = new NHitBoxD(hitBox.begin, hitBox.end,
-                    area.a.add(offset), angle);
+            Coord2d candidateCenter = area.a.add(offset);
             for ( NHitBoxD significantHitbox : significantGobs )
-                if(significantHitbox.intersects(testGobBox,false))
+                if(blocksPlacement(significantHitbox, hitBox, candidateCenter, angle))
                     passed = false;
             if(passed) {
-                Coord2d candidate = Coord2d.of(testGobBox.rc.x, testGobBox.rc.y);
+                Coord2d candidate = Coord2d.of(candidateCenter.x, candidateCenter.y);
                 candidates.add(candidate);
                 if (firstOnly) {
                     return candidates;
@@ -676,6 +675,108 @@ public class Finder
             }
         }
         return candidates;
+    }
+
+    /**
+     * Pack up to {@code limit} copies so each one sits on the real edge of an obstacle
+     * or a copy already chosen. An integer lattice leaves a gap of almost one unit when
+     * that edge is even slightly off the lattice.
+     */
+    public static ArrayList<Coord2d> packFlushPlaces(Pair<Coord2d, Coord2d> area, NHitBox hitBox,
+                                                      double angle, Collection<NHitBoxD> obstacles,
+                                                      boolean reverseX, boolean reverseY, int limit) {
+        ArrayList<Coord2d> positions = new ArrayList<>();
+        if (area == null || hitBox == null || limit <= 0 || area.a == null || area.b == null)
+            return positions;
+
+        Coord2d areaSize = area.b.sub(area.a);
+        NHitBoxD tempBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
+        Coord2d rotatedUL = tempBox.getCircumscribedUL();
+        Coord2d rotatedBR = tempBox.getCircumscribedBR();
+        double minX = -rotatedUL.x;
+        double maxX = areaSize.x - rotatedBR.x;
+        double minY = -rotatedUL.y;
+        double maxY = areaSize.y - rotatedBR.y;
+
+        ArrayList<NHitBoxD> blocked = new ArrayList<>();
+        if (obstacles != null)
+            blocked.addAll(obstacles);
+        ArrayList<Double> xs = candidateOffsets(minX, maxX, 1);
+        ArrayList<Double> ys = candidateOffsets(minY, maxY, 1);
+        for (NHitBoxD obstacle : blocked)
+            addFlushOffsets(xs, ys, obstacle, area.a, rotatedUL, rotatedBR, minX, maxX, minY, maxY);
+        if (xs.isEmpty() || ys.isEmpty())
+            return positions;
+
+        int xi = reverseX ? xs.size() - 1 : 0;
+        while (xi >= 0 && positions.size() < limit) {
+            double x = xs.get(xi);
+            int yi = reverseY ? ys.size() - 1 : 0;
+            while (yi >= 0 && positions.size() < limit) {
+                double y = ys.get(yi);
+                Coord2d candidateCenter = area.a.add(x, y);
+                boolean passed = true;
+                for (NHitBoxD obstacle : blocked) {
+                    if (blocksPlacement(obstacle, hitBox, candidateCenter, angle)) {
+                        passed = false;
+                        break;
+                    }
+                }
+                if (passed) {
+                    Coord2d placed = candidateCenter;
+                    positions.add(placed);
+                    NHitBoxD placedBox = new NHitBoxD(hitBox.begin, hitBox.end, placed, angle);
+                    blocked.add(placedBox);
+                    addFlushOffsets(xs, ys, placedBox, area.a, rotatedUL, rotatedBR, minX, maxX, minY, maxY);
+                }
+                yi = stepOffset(ys, y, reverseY);
+            }
+            xi = stepOffset(xs, x, reverseX);
+        }
+        return positions;
+    }
+
+    /** Ignores an overlap smaller than floating-point noise so a shared edge still counts as flush. */
+    private static final double PLACEMENT_EDGE_SLOP = 1e-4;
+
+    private static boolean blocksPlacement(NHitBoxD obstacle, NHitBox hitBox, Coord2d center, double angle) {
+        double left = Math.min(hitBox.begin.x, hitBox.end.x);
+        double right = Math.max(hitBox.begin.x, hitBox.end.x);
+        double top = Math.min(hitBox.begin.y, hitBox.end.y);
+        double bottom = Math.max(hitBox.begin.y, hitBox.end.y);
+        double slop = Math.min(PLACEMENT_EDGE_SLOP, Math.min(right - left, bottom - top) / 4.0);
+        Coord2d begin = hitBox.begin;
+        Coord2d end = hitBox.end;
+        if (slop > 0) {
+            begin = Coord2d.of(left + slop, top + slop);
+            end = Coord2d.of(right - slop, bottom - slop);
+        }
+        return obstacle.intersects(new NHitBoxD(begin, end, center, angle), false);
+    }
+
+    private static void addFlushOffsets(List<Double> xs, List<Double> ys, NHitBoxD obstacle,
+                                        Coord2d origin, Coord2d rotatedUL, Coord2d rotatedBR,
+                                        double minX, double maxX, double minY, double maxY) {
+        Coord2d ul = obstacle.getCircumscribedUL();
+        Coord2d br = obstacle.getCircumscribedBR();
+        addCandidateOffset(xs, ul.x - origin.x - rotatedBR.x, minX, maxX);
+        addCandidateOffset(xs, br.x - origin.x - rotatedUL.x, minX, maxX);
+        addCandidateOffset(ys, ul.y - origin.y - rotatedBR.y, minY, maxY);
+        addCandidateOffset(ys, br.y - origin.y - rotatedUL.y, minY, maxY);
+    }
+
+    private static int stepOffset(List<Double> offsets, double current, boolean reverse) {
+        int index = -1;
+        for (int i = 0; i < offsets.size(); i++) {
+            if (offsets.get(i).doubleValue() == current) {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0)
+            return -1;
+        int next = reverse ? index - 1 : index + 1;
+        return (next < 0 || next >= offsets.size()) ? -1 : next;
     }
 
     private static void addCandidateOffset(List<Double> offsets, double value,

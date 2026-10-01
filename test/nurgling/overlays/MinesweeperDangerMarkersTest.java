@@ -3,6 +3,8 @@ package nurgling.overlays;
 import haven.Coord;
 import haven.Coord2d;
 import nurgling.tools.NNoticeLog;
+import nurgling.actions.bots.MinesweeperSolver;
+import nurgling.conf.NMiningOverlayMemory.TileRef;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -19,6 +21,96 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinesweeperDangerMarkersTest {
+
+    @Test
+    void zeroDustCannotBecomeBlankAfterItsEffectDisappears() {
+        Map<Long, Double> pending = new HashMap<>(Map.of(10L, 0.4));
+        Set<Long> confirmed = new HashSet<>(Set.of(20L));
+
+        MinesweeperDangerMarkers.revokeWarningSources(Set.of(10L, 20L), pending, confirmed);
+        MinesweeperDangerMarkers.advanceBlankWaits(pending, confirmed, Set.of(),
+                key -> 0, key -> false, 5.0, true);
+
+        assertTrue(pending.isEmpty());
+        assertTrue(confirmed.isEmpty());
+    }
+
+    @Test
+    void roundedDustZeroNeverBecomesPersistedBlankEvidence() {
+        assertFalse(MinesweeperDangerMarkers.persistableDustNumber(false, 0));
+        assertFalse(MinesweeperDangerMarkers.persistableDustNumber(true, 2));
+        assertTrue(MinesweeperDangerMarkers.persistableDustNumber(false, 2));
+    }
+
+    @Test
+    void lateDustRevokesAlreadyConfirmedBlank() {
+        MinesweeperSolver solver = new MinesweeperSolver(null);
+        Coord blank = Coord.of(5, 5);
+        Set<Long> confirmed = new HashSet<>(Set.of(tileKey(blank)));
+        solver.reveal(blank, 2);
+
+        MinesweeperDangerMarkers.revokeNumberedBlanks(confirmed, solver);
+
+        assertTrue(confirmed.isEmpty());
+        assertTrue(MinesweeperDangerMarkers.greenFromFreshBlanks(Set.of(),
+                Set.of(Coord.of(6, 5))).isEmpty());
+    }
+
+    @Test
+    void newTransitionDoesNotConsumeTimeBeforeItWasObserved() {
+        Map<Long, Double> pending = new HashMap<>();
+        Set<Long> confirmed = new HashSet<>();
+        MinesweeperDangerMarkers.recordMinedTileTransition(
+                true, false, false, 10L, pending, confirmed);
+
+        MinesweeperDangerMarkers.advanceBlankWaits(pending, confirmed, Set.of(10L),
+                key -> -1, key -> false, 5.0, true);
+
+        assertEquals(Map.of(10L, 0.0), pending);
+        assertTrue(confirmed.isEmpty());
+        MinesweeperDangerMarkers.advanceBlankWaits(pending, confirmed, Set.of(),
+                key -> -1, key -> false, 0.8, false);
+        assertTrue(confirmed.isEmpty(), "confirmation must use a fresh number scan");
+        MinesweeperDangerMarkers.advanceBlankWaits(pending, confirmed, Set.of(),
+                key -> 2, key -> false, 0.01, true);
+        assertTrue(confirmed.isEmpty());
+        assertTrue(pending.isEmpty());
+    }
+
+    @Test
+    void unloadedBlankIsNeverConfirmed() {
+        Map<Long, Double> pending = new HashMap<>(Map.of(10L, 0.8));
+        Set<Long> confirmed = new HashSet<>();
+
+        MinesweeperDangerMarkers.advanceBlankWaits(pending, confirmed, Set.of(),
+                key -> -1, key -> null, 0.1, true);
+
+        assertTrue(confirmed.isEmpty());
+    }
+
+    @Test
+    void sameCoordinatesInDifferentCaveResetObservations() {
+        Map<Coord, Long> oldGrids = Map.of(Coord.z, 100L);
+        assertTrue(MinesweeperDangerMarkers.mapContextChanged(oldGrids, Map.of(Coord.z, 200L)));
+        assertFalse(MinesweeperDangerMarkers.mapContextChanged(oldGrids,
+                Map.of(Coord.z, 100L, Coord.of(1, 0), 300L)));
+        assertTrue(MinesweeperDangerMarkers.mapContextChanged(oldGrids, Map.of()));
+    }
+
+    @Test
+    void greenEvidenceContainsOnlyAdjacentBlanks() {
+        Coord target = Coord.of(5, 5);
+        Coord adjacent = Coord.of(4, 4);
+        TileRef source = new TileRef(100, 4, 4);
+        Map<Coord, TileRef> blanks = Map.of(adjacent, source,
+                Coord.of(3, 4), new TileRef(100, 3, 4), target, new TileRef(100, 5, 5));
+
+        assertEquals(Map.of(adjacent, source), MinesweeperDangerMarkers.sourcesFor(target, blanks));
+    }
+
+    private static long tileKey(Coord tile) {
+        return ((long) tile.x << 32) | (tile.y & 0xffffffffL);
+    }
 
     @Test
     void greenOnlyOnMineableNeighborsOfFreshBlank() {
@@ -174,8 +266,8 @@ class MinesweeperDangerMarkersTest {
     void syncDoesNotRegisterSolverDangerTilesAsOverlayMarks() throws Exception {
         String src = Files.readString(Path.of("src/nurgling/overlays/MinesweeperDangerMarkers.java"));
         int syncAt = src.indexOf("private void sync(");
-        int nextAt = src.indexOf("private void rememberedGreens(");
-        assertTrue(syncAt >= 0 && nextAt > syncAt, "sync() must remain immediately before rememberedGreens");
+        int nextAt = src.indexOf("static Map<Coord, NMiningOverlayMemory.TileRef> sourcesFor(");
+        assertTrue(syncAt >= 0 && nextAt > syncAt);
         String sync = src.substring(syncAt, nextAt);
 
         assertFalse(sync.contains("dangerTiles()"),
@@ -187,8 +279,8 @@ class MinesweeperDangerMarkersTest {
                 "green circles from blank-mined neighbors must remain");
         assertTrue(sync.contains("Mark.SAFE"),
                 "SAFE marks must remain in sync");
-        assertTrue(sync.contains("rememberedGreens"),
-                "remembered green persistence path must remain");
+        assertTrue(sync.contains("rememberedBlanks"),
+                "saved blank evidence must restore circles");
         assertTrue(src.contains("NMiningNumber"),
                 "number overlays must remain");
         assertTrue(src.contains("NMiningSafeOverlay"),

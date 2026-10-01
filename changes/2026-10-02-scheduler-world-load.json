@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-02-scheduler-world-load",
+  "priority": 7,
+  "summary": {
+    "ru": "Автозапуск сценария показывает мир после входа за персонажа.",
+    "en": "A client started by the scheduler shows the world after the character logs in."
+  },
+  "detail": {
+    "ru": "Раньше автозапуск входил за персонажа и оставлял чёрный экран мира. Теперь мир дорисовывается, и сценарий может начаться.",
+    "en": "Automatic launch used to enter the character and leave the world black. The world now finishes drawing, and the scenario can start."
+  }
+}
