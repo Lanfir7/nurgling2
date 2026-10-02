@@ -33,19 +33,14 @@ public class WaitForMapLoadNoCoord extends NTask  {
             return false;
         }
 
-        MCache.Grid currentGrid = NUtils.getGameUI().ui.sess.glob.map.getgridt(tc);
-        long currentGridId = currentGrid.id;
-
-        MCache.Grid grid = gui.map.glob.map.findGrid(currentGridId);
-        if (grid != null) {
-            for(MCache.Grid.Cut cut : grid.cuts) {
-                if (!cut.mesh.isReady() || !cut.fo.isReady()) {
-                    return false;
-                }
-            }
-            return true;
+        MCache.Grid grid = gui.map.glob.map.getgridt(tc);
+        /* A grid is 100×100 tiles, but meshes are built only for cuts the camera
+         * actually draws. The cut under the player is the one the world shows. */
+        Coord cc = tc.sub(grid.ul).div(MCache.cutsz);
+        for (MCache.Grid.Cut cut : grid.cuts) {
+            if (cut.cc.equals(cc))
+                return cut.mesh.isReady() && cut.fo.isReady();
         }
-
-        return true;
+        return false;
     }
 }
