@@ -43,7 +43,7 @@ public class ChunkNavData {
 
     // Walkability grid (half-tile resolution, matching NPFMap)
     // Each cell represents 1/4 tile (200x200 grid = 2x2 cells per tile)
-    // Values: 0 = walkable, 1 = partially blocked, 2 = fully blocked
+    // Values: 0 = walkable, 1 = gate opening (click to pass, then click to close), 2 = fully blocked
     public byte[][] walkability = new byte[CELLS_PER_EDGE][CELLS_PER_EDGE];
 
     // Observed grid - tracks which tiles have been visually observed

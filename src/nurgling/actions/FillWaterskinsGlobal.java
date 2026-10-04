@@ -9,5 +9,11 @@ import java.util.Map;
 public class FillWaterskinsGlobal extends FillWaterskins {
 
     public FillWaterskinsGlobal() { super(true); }
-    public FillWaterskinsGlobal(Map<String, Object> settings) { super(true); }
+    public FillWaterskinsGlobal(Map<String, Object> settings) { super(true, emptyPartial(settings)); }
+
+    private static boolean emptyPartial(Map<String, Object> settings) {
+        if (settings == null)
+            return false;
+        return Boolean.TRUE.equals(settings.get("emptyPartial"));
+    }
 }

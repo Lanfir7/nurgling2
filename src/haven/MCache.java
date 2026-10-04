@@ -68,6 +68,8 @@ public class MCache implements MapSource {
     private final Waitable.Queue gridwait = new Waitable.Queue();
     Map<Coord, Request> req = new HashMap<Coord, Request>();
     public Map<Coord, Grid> grids = new HashMap<Coord, Grid>();
+    /* Rendered ordinary overlays can be shared by several MapViews. Guarded by grids. */
+    private final Map<OverlayInfo, Integer> overlayUsers = new HashMap<>();
     public final HashMap<Integer, NArea> areas = new HashMap<>();
     Session sess;
     Set<LocalOverlay> ols = new HashSet<>();
@@ -618,8 +620,27 @@ public class MCache implements MapSource {
 	     * may still reference their vertices. Keys are OverlayInfo (ols)
 	     * or Integer (nols). Guarded by the Cut's monitor. */
 	    private final Map<Object, Defer.Future<RenderTree.Node[]>> olbuild = new HashMap<>();
+	    private final Map<Object, BuildTicket> buildtickets = new HashMap<>();
+	    private int activeBuilds = 0;
+	    private boolean disposed, disposePending;
 	    private final Map<Object, List<RenderTree.Node>> retired = new HashMap<>();
 	    private final List<MapMesh> oldmeshes = new ArrayList<>();
+
+	    private class BuildTicket {
+		boolean cancelled;
+		RenderTree.Node[] result;
+	    }
+
+	    private void disposeNodes(RenderTree.Node[] nodes) {
+		if(nodes != null) {
+		    Set<RenderTree.Node> unique = Collections.newSetFromMap(new IdentityHashMap<>());
+		    Collections.addAll(unique, nodes);
+		    for(RenderTree.Node node : unique) {
+			if(node instanceof Disposable)
+			    ((Disposable)node).dispose();
+		    }
+		}
+	    }
 
 	    private void retire(Object key, RenderTree.Node... nodes) {
 		for(RenderTree.Node n : nodes) {
@@ -630,6 +651,12 @@ public class MCache implements MapSource {
 
 	    private void cancelbuild(Object key) {
 		Defer.Future<RenderTree.Node[]> f = olbuild.remove(key);
+		BuildTicket ticket = buildtickets.remove(key);
+		if(ticket != null) {
+		    ticket.cancelled = true;
+		    disposeNodes(ticket.result);
+		    ticket.result = null;
+		}
 		if(f != null)
 		    f.cancel();
 	    }
@@ -651,7 +678,7 @@ public class MCache implements MapSource {
 		 * can still point at the previous terrain mesh even after one build lands. */
 		boolean oldols = (!ols.isEmpty() || !olols.isEmpty()) && (olmv != meshver);
 		boolean oldnols = (!nols.isEmpty() || !nedgs.isEmpty()) && (nolmv != meshver);
-		if(retired.isEmpty() && olbuild.isEmpty() && !oldols && !oldnols && !oldmeshes.isEmpty()) {
+		if(retired.isEmpty() && olbuild.isEmpty() && activeBuilds == 0 && !oldols && !oldnols && !oldmeshes.isEmpty()) {
 		    for(MapMesh m : oldmeshes)
 			m.dispose();
 		    oldmeshes.clear();
@@ -661,7 +688,7 @@ public class MCache implements MapSource {
 	    synchronized void retiremesh(MapMesh prev) {
 		/* Overlay nodes built on prev stay in ols/nols until the
 		 * getters notice meshver changed; keep it until they're gone. */
-		if(ols.isEmpty() && olols.isEmpty() && nols.isEmpty() && nedgs.isEmpty() && retired.isEmpty() && olbuild.isEmpty())
+		if(ols.isEmpty() && olols.isEmpty() && nols.isEmpty() && nedgs.isEmpty() && retired.isEmpty() && olbuild.isEmpty() && activeBuilds == 0)
 		    prev.dispose();
 		else
 		    oldmeshes.add(prev);
@@ -670,11 +697,51 @@ public class MCache implements MapSource {
 	    /* Returns the finished build for key, starting it if needed;
 	     * throws Loading while it runs. */
 	    private RenderTree.Node[] build(Object key, Defer.Callable<RenderTree.Node[]> task) {
+		if(disposed)
+		    throw(new LoadingMap(MCache.this, gc));
 		Defer.Future<RenderTree.Node[]> f = olbuild.get(key);
-		if(f == null)
-		    olbuild.put(key, f = Defer.later(task));
+		if(f == null) {
+		    BuildTicket ticket = new BuildTicket();
+		    buildtickets.put(key, ticket);
+		    olbuild.put(key, f = Defer.later(() -> {
+			/* Cancellation can race the worker starting. Check under the Cut
+			 * monitor before touching the terrain mesh. */
+			synchronized(Cut.this) {
+			    if(ticket.cancelled)
+				return(null);
+			    activeBuilds++;
+			}
+			RenderTree.Node[] result = null;
+			boolean finishDispose = false;
+			try {
+			    return(result = task.call());
+			} finally {
+			    synchronized(Cut.this) {
+				activeBuilds--;
+				if(ticket.cancelled)
+				    disposeNodes(result);
+				else
+				    ticket.result = result;
+				sweepmeshes();
+				if(disposePending && activeBuilds == 0) {
+				    disposePending = false;
+				    finishDispose = true;
+				}
+			    }
+			    /* Deferred.dispose takes its own monitor before Cut.retiremesh.
+			     * Finish outside the Cut monitor to preserve that lock order. */
+			    if(finishDispose) {
+				mesh.dispose();
+				fo.dispose();
+			    }
+			}
+		    }));
+		}
 		RenderTree.Node[] ret = f.get();
 		olbuild.remove(key);
+		BuildTicket ticket = buildtickets.remove(key);
+		if(ticket != null)
+		    ticket.result = null;
 		return(ret);
 	    }
 
@@ -715,6 +782,22 @@ public class MCache implements MapSource {
 		consume(id);
 	    }
 
+	    /* Called only after the last render slot has detached this overlay's children. */
+	    private synchronized void invalidateOverlay(OverlayInfo id) {
+		cancelbuild(id);
+		Set<RenderTree.Node> old = Collections.newSetFromMap(new IdentityHashMap<>());
+		old.add(ols.remove(id));
+		old.add(olols.remove(id));
+		List<RenderTree.Node> retiredNodes = retired.remove(id);
+		if(retiredNodes != null)
+		    old.addAll(retiredNodes);
+		for(RenderTree.Node node : old) {
+		    if(node instanceof Disposable)
+			((Disposable)node).dispose();
+		}
+		sweepmeshes();
+	    }
+
 	    public Cut(Coord cc) {
 		this.cc = cc;
 		this.mesh = new Deferred<MapMesh>() {
@@ -751,10 +834,13 @@ public class MCache implements MapSource {
 	    }
 
 	    public void dispose() {
+		boolean finishDispose;
 		synchronized(this) {
-		    for(Defer.Future<RenderTree.Node[]> f : olbuild.values())
-			f.cancel();
-		    olbuild.clear();
+		    if(disposed)
+			return;
+		    disposed = true;
+		    for(Object key : new ArrayList<>(olbuild.keySet()))
+			cancelbuild(key);
 		    for(List<RenderTree.Node> l : retired.values()) {
 			for(RenderTree.Node n : l) {
 			    if(n instanceof Disposable)
@@ -762,9 +848,6 @@ public class MCache implements MapSource {
 			}
 		    }
 		    retired.clear();
-		    for(MapMesh m : oldmeshes)
-			m.dispose();
-		    oldmeshes.clear();
 		    for(RenderTree.Node r : ols.values()) {
 			if(r instanceof Disposable)
 			    ((Disposable)r).dispose();
@@ -776,13 +859,22 @@ public class MCache implements MapSource {
 		    }
 		    olols.clear();
 			nolcache.clear();
+		    if(activeBuilds == 0) {
+			sweepmeshes();
+			finishDispose = true;
+		    } else {
+			disposePending = true;
+			finishDispose = false;
+		    }
 	    }
 	    /* Outside the Cut's monitor: a mesh swap takes the Deferred's
 	     * monitor and then this Cut's (retiremesh), so taking them in
 	     * the other order here could deadlock. */
-	    mesh.dispose();
-	    fo.dispose();
-		}
+	    if(finishDispose) {
+		mesh.dispose();
+		fo.dispose();
+	    }
+	    }
 	}
 
 	public Grid(Coord gc) {
@@ -1272,6 +1364,32 @@ public class MCache implements MapSource {
     public MCache(Session sess) {
 	this.sess = sess;
 	init();
+    }
+
+    void retainOverlay(OverlayInfo id) {
+	synchronized(grids) {
+	    overlayUsers.put(id, overlayUsers.getOrDefault(id, 0) + 1);
+	}
+    }
+
+    void releaseOverlay(OverlayInfo id) {
+	synchronized(grids) {
+	    Integer users = overlayUsers.get(id);
+	    if(users == null)
+		return;
+	    if(users > 1) {
+		overlayUsers.put(id, users - 1);
+		return;
+	    }
+	    overlayUsers.remove(id);
+	    /* Only loaded grids have cut caches; never request a missing grid here. */
+	    for(Grid grid : grids.values()) {
+		if(grid != null) {
+		    for(Grid.Cut cut : grid.cuts)
+			cut.invalidateOverlay(id);
+		}
+	    }
+	}
     }
 
     public void ctick(double dt) {

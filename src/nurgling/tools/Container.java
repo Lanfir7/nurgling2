@@ -141,6 +141,8 @@ public class Container implements NContext.ObjectStorage {
         }
 
         public boolean tryPlace(Coord coord) {
+            if (res.get(DATA) == null || res.get(DONE) == null || res.get(VIRTUAL) == null)
+                return false;
             if (!((Boolean) res.get(DONE)) && !((Boolean) res.get(VIRTUAL)) && placeItem(coord)) {
                 boolean done = true;
                 for (Coord cand : (ArrayList<Coord>) res.get(TARGET_COORD))

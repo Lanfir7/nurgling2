@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-04-scenario-settings-fit",
+  "priority": 4,
+  "summary": {
+    "ru": "В настройках сценариев нижняя кнопка и правая панель больше не обрезаются краем окна.",
+    "en": "Scenario settings keep the bottom button and the right-hand panel inside the window."
+  },
+  "detail": {
+    "ru": "Откройте настройки и раздел сценариев. Список, кнопка внизу и подсказки справа помещаются в окно. Длинные подписи «Редактировать» и «Удалить» видны целиком, а список шагов прокручивается на странице.",
+    "en": "Open Settings and choose Scenarios. The list, the button along the bottom, and the hints on the right stay inside the window. The Edit and Delete labels are fully visible, and the step list scrolls within the page."
+  }
+}

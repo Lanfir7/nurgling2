@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-04-text-field-click-focus",
+  "priority": 5,
+  "summary": {
+    "ru": "Открытое окно больше не перехватывает хоткеи пояса: поле ввода ловит клавиши после клика по нему.",
+    "en": "An open window no longer eats belt hotkeys: a text field takes keys after you click it."
+  },
+  "detail": {
+    "ru": "Пока окно просто открыто, например настройки мастерской добычи или окно бота, цифры и буквы с пояса срабатывают как действия. Чтобы ввести значение, нажмите само поле. Окна, которые сразу просят имя, и строка чата по-прежнему готовы к вводу.",
+    "en": "While a window is merely open, such as mining mastery settings or a bot window, belt letters and numbers still run their actions. Click the field itself to type. Name prompts and the chat line still accept typing immediately."
+  }
+}

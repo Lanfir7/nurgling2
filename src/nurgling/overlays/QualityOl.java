@@ -10,11 +10,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class QualityOl extends NObjectTexLabel {
     public static Text.Furnace fnd = new PUtils.BlurFurn(new Text.Foundry(Text.sans.deriveFont(java.awt.Font.BOLD), 16).aa(true), UI.scale(1), UI.scale(1), Color.BLACK);
     private static TexI qIcon = new TexI(Resource.loadsimg("nurgling/hud/quality"));
-    public QualityOl(Gob target, Integer val) {
+    public final double quality;
+
+    public QualityOl(Gob target, double quality) {
         super(target);
-        gob = (Gob) target;
+        gob = target;
         pos = new Coord3f(0,0, 3);
-        this.img = new TexI(fnd.render(String.valueOf(val)).img);
+        this.quality = quality;
+        this.img = new TexI(fnd.render(String.valueOf((int) Math.round(quality))).img);
     }
 
 

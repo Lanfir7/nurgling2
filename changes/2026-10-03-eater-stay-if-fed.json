@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-03-eater-stay-if-fed",
+  "priority": 4,
+  "summary": {
+    "ru": "Бот еды идёт в зону еды только когда энергия ниже 80%.",
+    "en": "The eating bot goes to the food area only when energy is below 80%."
+  },
+  "detail": {
+    "ru": "Шаг «Бот еды» в сценарии больше не бежит к области eat, если персонаж уже сыт. Пока энергия 80% или выше, он остаётся на месте и сразу заканчивает шаг. Ниже этого порога он сначала доедает еду из инвентаря и идёт в зону, только если энергии всё ещё не хватает.",
+    "en": "The Eating bot step in a scenario no longer walks to the eat area when the character is already full. At 80% energy or more it stays put and finishes the step. Below that it finishes food from the inventory first and visits the area only if energy is still short."
+  }
+}

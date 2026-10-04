@@ -1680,7 +1680,7 @@ public class NGameUI extends GameUI
                 if(quality != null) {
                     try {
                         int roundedQuality = Math.round(quality.floatValue());
-                        map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, roundedQuality));
+                        map.clickedGob.gob.addcustomol(new QualityOl(map.clickedGob.gob, quality));
                         // Обновить маркер животного на карте (качество приходит сообщением от сервера, не из sdt)
                         if (map instanceof NMapView) {
                             ((NMapView) map).applyAnimalMarkerQuality(map.clickedGob.gob, roundedQuality);

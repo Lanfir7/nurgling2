@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-03-road-builder",
+  "priority": 6,
+  "summary": {
+    "ru": "Бот может строить дорогу из путевых камней по приблизительному маршруту.",
+    "en": "A bot can build a milestone road along an approximate route."
+  },
+  "detail": {
+    "ru": "В меню ботов, раздел строительства, откройте «Строитель дорог». Нарисуйте маршрут на карте, поставьте первый камень у его начала и выберите дерево или камень. Материалы берутся из инвентаря, а если их не хватает — из зоны стройматериалов. Бот сам сдвигает камни, если прямая линия не проходит.",
+    "en": "In the bot menu, under building, open Road builder. Draw a route on the map, place the first milestone at its start, and choose wood or stone. Materials come from the inventory, then from a construction-materials zone. The bot shifts a stone when a straight line will not fit."
+  }
+}

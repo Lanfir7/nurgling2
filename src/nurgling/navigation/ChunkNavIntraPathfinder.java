@@ -152,7 +152,7 @@ public class ChunkNavIntraPathfinder {
         if (closedSet.contains(neighborPos)) return;
 
         byte walkability = chunk.getWalkability(neighborPos.x, neighborPos.y);
-        if (walkability != 0) return; // Blocked (only 0 is walkable)
+        if (!ChunkNavGates.isTraversable(walkability)) return;
 
         // Half-tile resolution - uniform cost per cell
         float tentativeG = current.g + baseCost;

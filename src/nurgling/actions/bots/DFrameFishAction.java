@@ -74,8 +74,8 @@ public class DFrameFishAction implements Action {
                 }
             });
 
-            // Освобождаем сушилки от готового филе
-            new FreeContainers(containers, dfillet).run(gui);
+            // Освобождаем сушилки от готового филе. Зелёные (пустые) не открываем.
+            new FreeContainers(DryingFrameInspection.withoutEmpty(containers), dfillet).run(gui);
             
             // Основной цикл обработки рыбы
             NContext context = new NContext(gui);
@@ -146,6 +146,8 @@ public class DFrameFishAction implements Action {
      */
     private boolean hasEmptySlots(ArrayList<Container> containers) throws InterruptedException {
         for (Container cont : containers) {
+            if (DryingFrameInspection.visuallyEmpty(Finder.findGob(cont.gobHash)))
+                return true;
             Container.Space space = cont.getattr(Container.Space.class);
             if (space != null) {
                 if (!space.isReady()) {
@@ -191,17 +193,27 @@ public class DFrameFishAction implements Action {
             }
             
             Container.Space space = container.getattr(Container.Space.class);
-            if (!space.isReady()) {
-                space.update();
+            Gob dframe = Finder.findGob(container.gobid);
+            boolean emptyTint = DryingFrameInspection.visuallyEmpty(dframe);
+            if (!emptyTint) {
+                if (!space.isReady()) {
+                    space.update();
+                }
             }
-            
-            Integer freeSpace = (Integer) space.getRes().get(Container.Space.FREESPACE);
-            if (freeSpace != null && freeSpace > 0) {
+
+            Integer freeSpace = emptyTint ? null : (Integer) space.getRes().get(Container.Space.FREESPACE);
+            if (emptyTint || (freeSpace != null && freeSpace > 0)) {
                 // Переносим филе в эту сушилку
-                Gob dframe = Finder.findGob(container.gobid);
                 if (dframe != null && PathFinder.isAvailable(dframe)) {
                     new PathFinder(dframe).run(gui);
                     new OpenTargetContainer(container).run(gui);
+                    if (emptyTint || !space.isReady())
+                        space.update();
+                    freeSpace = (Integer) space.getRes().get(Container.Space.FREESPACE);
+                    if (freeSpace == null || freeSpace <= 0) {
+                        new CloseTargetContainer(container).run(gui);
+                        continue;
+                    }
                     
                     // Переносим филе
                     int toTransfer = Math.min(freeSpace, gui.getInventory().getItems(rfillet).size());

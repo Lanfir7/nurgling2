@@ -50,8 +50,8 @@ public class UnifiedTilePathfinder {
                 int cx = cellX + dx;
                 int cy = cellY + dy;
                 if (cx >= 0 && cx < CELLS_PER_EDGE && cy >= 0 && cy < CELLS_PER_EDGE) {
-                    if (chunk.walkability[cx][cy] == 0) {
-                        return true;  // At least one sub-cell is walkable
+                    if (ChunkNavGates.isTraversable(chunk.walkability[cx][cy])) {
+                        return true;  // At least one sub-cell is walkable or a gate opening
                     }
                 }
             }
@@ -94,16 +94,18 @@ public class UnifiedTilePathfinder {
             int cx = cellX + offset[0];
             int cy = cellY + offset[1];
             if (cx >= 0 && cx < CELLS_PER_EDGE && cy >= 0 && cy < CELLS_PER_EDGE) {
-                if (chunk.walkability[cx][cy] == 0) {
-                    // Count how many of the 8 neighbors are also walkable (higher = safer)
-                    int score = 0;
+                byte walk = chunk.walkability[cx][cy];
+                if (ChunkNavGates.isTraversable(walk)) {
+                    // Prefer open ground over a gate opening. Among equals, prefer the cell
+                    // whose neighbors are also traversable.
+                    int score = walk == ChunkNavGates.WALKABLE ? 100 : 0;
                     for (int dx = -1; dx <= 1; dx++) {
                         for (int dy = -1; dy <= 1; dy++) {
                             if (dx == 0 && dy == 0) continue;
                             int nx = cx + dx;
                             int ny = cy + dy;
                             if (nx >= 0 && nx < CELLS_PER_EDGE && ny >= 0 && ny < CELLS_PER_EDGE) {
-                                if (chunk.walkability[nx][ny] == 0) {
+                                if (ChunkNavGates.isTraversable(chunk.walkability[nx][ny])) {
                                     score++;
                                 }
                             }

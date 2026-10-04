@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-02-hide-home-overlays",
+  "priority": 6,
+  "summary": {
+    "ru": "На домашней земле можно убрать цвет личного клейма и деревни, а подсветку подпорок оставить только по отдельной галочке.",
+    "en": "Home land can drop personal-claim and village colors, and mine-support colors stay only when their own checkbox is on."
+  },
+  "detail": {
+    "ru": "Правый клик по значку личного клейма или деревни у мини-карты открывает «Скрывать оверлей дома». Галочка у клейма убирает цвет личного клейма, галочка у деревни — цвет деревни. Сами кнопки показа остаются включёнными. Правый клик по значку шахты открывает «Показывать на домашней земле»: без этой галочки подсветка подпорок на домашней земле пропадает. Чужие клеймы и мини-карта не меняются.",
+    "en": "Right-click the personal-claim or village button by the minimap and choose Hide overlay at home. The claim checkbox removes personal-claim color, and the village checkbox removes village color, while those buttons stay on. Right-click the mining button for Show on home land: without that checkbox, mine-support colors also leave home land. Other people's claims and the minimap are unchanged."
+  }
+}

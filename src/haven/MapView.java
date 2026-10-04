@@ -46,6 +46,7 @@ import nurgling.overlays.map.NOverlay;
 import nurgling.sessions.SessionContext;
 import nurgling.sessions.SessionManager;
 import nurgling.tools.CheckGridsState;
+import nurgling.tools.MilestoneSiteCheck;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
@@ -948,6 +949,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	final OverlayInfo id;
 	int rc = 0;
 	boolean used;
+	private boolean retained;
 
 	final Grid base = new Grid<RenderTree.Node>() {
 		protected RenderTree.Node getcut(Coord cc) {
@@ -974,11 +976,27 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	}
 
 	public void added(RenderTree.Slot slot) {
+	    /* RenderTree removes partially attached children before calling removed. */
+	    if(this.slot != null)
+		throw(new IllegalStateException("Overlay already attached"));
+	    super.added(slot);
+	    map.retainOverlay(id);
+	    retained = true;
 	    slot.add(base, id.mat());
 	    Material omat = id.omat();
 	    if(omat != null)
 		slot.add(outl, omat);
-	    super.added(slot);
+	}
+
+	public void removed(RenderTree.Slot slot) {
+	    /* A failed duplicate add rolls back its own slot, not this attachment. */
+	    if(this.slot != slot)
+		return;
+	    super.removed(slot);
+	    if(retained) {
+		retained = false;
+		map.releaseOverlay(id);
+	    }
 	}
 
 	public Loading loading() {
@@ -1010,6 +1028,11 @@ public class MapView extends PView implements DTarget, Console.Directory {
     private final Map<String, Integer> oltags = new HashMap<>();
     private final Map<OverlayInfo, Overlay> ols = new HashMap<>();
     {oltags.put("show", 1);}
+
+    /** False hides this ground overlay for the current view without clearing its toggle. */
+    protected boolean displayol(OverlayInfo id) {
+	return(true);
+    }
     protected void oltick() {
 	try {
 	    for(Overlay ol : ols.values())
@@ -1025,6 +1048,8 @@ public class MapView extends PView implements DTarget, Console.Directory {
 			    }
 			}
 		    }
+		    if(vis && !displayol(id))
+			vis = false;
 		    if(vis) {
 			Overlay ol = ols.get(id);
 			if(ol == null) {
@@ -2284,43 +2309,12 @@ public class MapView extends PView implements DTarget, Console.Directory {
     }
 
     private boolean isMilestoneFootprintFlat(nurgling.NHitBox hitBox, Coord2d position, double angle) {
-	Coord2d[] corners = {
-	    hitBox.begin,
-	    Coord2d.of(hitBox.begin.x, hitBox.end.y),
-	    Coord2d.of(hitBox.end.x, hitBox.begin.y),
-	    hitBox.end,
-	    Coord2d.of((hitBox.begin.x + hitBox.end.x) / 2.0, (hitBox.begin.y + hitBox.end.y) / 2.0)
-	};
-	double min = Double.POSITIVE_INFINITY;
-	double max = Double.NEGATIVE_INFINITY;
-	double cos = Math.cos(angle), sin = Math.sin(angle);
-	for(Coord2d corner : corners) {
-	    Coord2d sample = position.add((corner.x * cos) - (corner.y * sin),
-					   (corner.x * sin) + (corner.y * cos));
-	    double z = glob.map.getcz(sample);
-	    min = Math.min(min, z);
-	    max = Math.max(max, z);
-	}
-	return (max - min) <= milestoneFlatnessTolerance;
+	return MilestoneSiteCheck.flat(glob.map, hitBox, position, angle, milestoneFlatnessTolerance);
     }
 
     private boolean milestoneCollides(nurgling.NHitBox hitBox, Coord2d position, double angle, Plob placing) {
-	nurgling.pf.NHitBoxD candidate = new nurgling.pf.NHitBoxD(hitBox.begin, hitBox.end, position, angle);
-	synchronized(glob.oc) {
-	    for(Gob gob : glob.oc) {
-		if((gob == null) || (gob == placing) || (gob == player()) || (gob instanceof OCache.Virtual) ||
-		   (gob.getattr(GhostAlpha.class) != null) || (gob.getattr(Following.class) != null) ||
-		   (gob.attr == null) || gob.attr.isEmpty())
-		    continue;
-		nurgling.NHitBox obstacle = gob.ngob.hitBox;
-		if((obstacle == null) && (gob.ngob.name != null))
-		    obstacle = nurgling.NHitBox.findCustom(gob.ngob.name);
-		if((obstacle != null) && new nurgling.pf.NHitBoxD(obstacle.begin, obstacle.end, gob.rc, gob.a)
-			.intersects(candidate, false))
-		    return true;
-	    }
-	}
-	return false;
+	final Plob ignored = placing;
+	return MilestoneSiteCheck.collides(glob, hitBox, position, angle, gob -> gob == ignored || gob == player());
     }
 
     /**

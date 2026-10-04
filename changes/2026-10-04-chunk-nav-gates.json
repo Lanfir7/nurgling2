@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-04-chunk-nav-gates",
+  "priority": 5,
+  "summary": {
+    "ru": "Чанк-навигация проходит через калитки: открывает их по пути и закрывает за собой.",
+    "en": "Chunk navigation now goes through gates: it opens them on the way and closes them behind you."
+  },
+  "detail": {
+    "ru": "Калитки частокола, жердей, сухой кладки и кирпичных стен больше не записываются как глухая стена. Маршрут идёт через проём. Если калитка закрыта, персонаж открывает её, проходит и, отойдя примерно на шаг, закрывает за собой. Уже открытую калитку не трогает. Двери домов, лестницы и спуски в шахту остаются обычными переходами.",
+    "en": "Palisade, pole, drystone and brick gates are no longer stored as solid walls. The route goes through the opening. If a gate is shut, the character opens it, walks through, and after about a step closes it. A gate that is already open is left open. House doors, stairs and mine entrances stay ordinary passages."
+  }
+}

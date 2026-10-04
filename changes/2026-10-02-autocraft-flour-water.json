@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-02-autocraft-flour-water",
+  "priority": 5,
+  "summary": {
+    "ru": "Автокрафт берёт муку из сундука или бочки по весу и сам наполняет бурдюки, когда вода кончается.",
+    "en": "Autocraft takes flour from a chest or barrel by weight and refills waterskins when the water runs out."
+  },
+  "detail": {
+    "ru": "Рецепты с мукой и водой, например тесто на ветке, теперь идут через автокрафт. Бочку с мукой и бочку с водой бот приносит к костру и крафтит из них. Вода из бурдюков на рецепт не тратится: она остаётся, чтобы пить и не уставать. Мука из сундука берётся по весу.",
+    "en": "Recipes that need flour and water, such as dough on a branch, now run through autocraft. Flour and water barrels are carried to the fire and the craft uses them there. Waterskins are not spent on the recipe, so they stay for drinking. Flour from a chest is taken by weight."
+  }
+}

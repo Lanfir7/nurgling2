@@ -46,6 +46,7 @@ public class NTextArea extends Widget implements ReadLine.Owner {
         this.lineh = fnd.height();
         this.buf = new NReadArea(this, text == null ? "" : text);
         setcanfocus(true);
+        autofocus = false;
     }
 
     /* ------------------------------------------------------------------ text */

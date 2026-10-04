@@ -166,6 +166,8 @@ public class TextEntry extends Widget implements ReadLine.Owner {
 	super(new Coord(w, mext.sz().y));
 	rsettext(deftext);
 	setcanfocus(true);
+	/* Click or an explicit setfocus starts typing. An open window must not eat belt hotkeys. */
+	autofocus = false;
     }
 
     protected void changed() {

@@ -25,8 +25,8 @@ class ButcherDumpInventoryTest {
         assertTrue(src.contains("cand.getRCArea()"), src);
         assertTrue(src.contains("listOf(gob)"), src);
         assertFalse(src.contains("return butcherGobs(gui, listOf(gob), null, false);"), src);
-        assertTrue(src.contains("return butcherGobs(gui, getGobs(insa.getRCArea()), null, false);"), src);
-        assertTrue(src.contains("return butcherGobs(gui, getGobs(zone), zone, true);"), src);
+        assertTrue(src.contains("return butcherGobs(gui, getGobs(insa.getRCArea()), null, false, inspect, useKnife, alwaysKnife, loadout);"), src);
+        assertTrue(src.contains("return butcherGobs(gui, getGobs(zone), zone, true, inspect, useKnife, alwaysKnife, loadout);"), src);
     }
 
     @Test
@@ -50,7 +50,11 @@ class ButcherDumpInventoryTest {
         assertTrue(src.indexOf("NUtils.drop(gui.vhand)") < src.lastIndexOf("freeInventory(gui, context, area == null)"));
         assertTrue(src.contains("NUtils.bookmarkHere()"));
         assertTrue(src.contains("NUtils.navigateTo(origin)"));
-        assertTrue(src.contains("gob = followCarcass(gob, lastRc, false)"));
+        assertTrue(src.contains("gob = continueCarcass(gob, lastRc, false)"));
+        assertTrue(src.contains("private static Gob continueCarcass(Gob gob, Coord2d lastRc, boolean skipSameId)"));
+        assertTrue(src.contains("Gob next = followCarcass(gob, lastRc, skipSameId);"));
+        assertTrue(src.contains("ButcherTarget.adoptCarcass(gob != null, gob != null ? gob.id : 0L, lastRc, next.id, next.rc)"));
+        assertTrue(src.contains("return gob != null ? Finder.findGob(gob.id) : null;"));
         assertFalse(src.contains("Cupboard"), src);
         assertFalse(src.contains("chest"), src);
         assertFalse(src.contains("crate"), src);

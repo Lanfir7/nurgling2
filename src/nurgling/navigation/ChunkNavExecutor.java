@@ -101,6 +101,12 @@ public class ChunkNavExecutor implements Action {
             return Results.FAIL();
         }
 
+        // A zone that is only in view is not the destination yet. Macros that
+        // should stay put already return before starting chunk navigation.
+        if (targetArea != null && targetArea.checkHit(player.rc)) {
+            return Results.SUCCESS();
+        }
+
         if (path.hasDetailedPath()) {
             return followDetailedPath(gui);
         }
@@ -437,19 +443,16 @@ public class ChunkNavExecutor implements Action {
             accessPoint = getPortalAccessPoint(portalGob);
         }
         if (accessPoint != null) {
-            PathFinder accessPf = new PathFinder(accessPoint);
-            Results accessResult = accessPf.run(gui);
+            Results accessResult = walkTo(gui, accessPoint);
             if (!accessResult.IsSuccess()) {
                 // Fall back to direct approach
-                PathFinder directPf = new PathFinder(portalGob);
-                if (!directPf.run(gui).IsSuccess()) {
+                if (!walkTo(gui, portalGob).IsSuccess()) {
                     return null;
                 }
             }
         } else {
             // Non-building portals - walk directly to the gob
-            PathFinder pf = new PathFinder(portalGob);
-            Results walkResult = pf.run(gui);
+            Results walkResult = walkTo(gui, portalGob);
             if (!walkResult.IsSuccess()) {
                 return null;
             }
@@ -755,16 +758,14 @@ public class ChunkNavExecutor implements Action {
                     // For buildings, navigate to door access point instead of gob center
                     Coord2d accessPoint = getPortalAccessPoint(visiblePortal.gob);
                     if (accessPoint != null) {
-                        PathFinder accessPf = new PathFinder(accessPoint);
-                        Results accessResult = accessPf.run(gui);
+                        Results accessResult = walkTo(gui, accessPoint);
                         if (accessResult.IsSuccess()) {
                             return SegmentWalkResult.successWithPortal(visiblePortal.gob);
                         }
                         // Failed to reach access point, continue with coordinate-based walk
                     } else {
                         // Non-building portal - pathfind directly to gob
-                        PathFinder portalPf = new PathFinder(visiblePortal.gob);
-                        Results portalResult = portalPf.run(gui);
+                        Results portalResult = walkTo(gui, visiblePortal.gob);
                         if (portalResult.IsSuccess()) {
                             return SegmentWalkResult.successWithPortal(visiblePortal.gob);
                         }
@@ -799,7 +800,7 @@ public class ChunkNavExecutor implements Action {
                         ChunkPath.TileStep scanStep = segment.steps.get(scanIdx);
                         int scanCellX = scanStep.localCoord.x * CELLS_PER_TILE;
                         int scanCellY = scanStep.localCoord.y * CELLS_PER_TILE;
-                        if (segmentChunk.getWalkability(scanCellX, scanCellY) == 0) {
+                        if (ChunkNavGates.isTraversable(segmentChunk.getWalkability(scanCellX, scanCellY))) {
                             targetIndex = scanIdx;
                             targetStep = scanStep;
                             waypoint = UnifiedTilePathfinder.findWalkableCellWorldCoord(
@@ -816,9 +817,8 @@ public class ChunkNavExecutor implements Action {
                 }
             }
 
-            // Try PathFinder to waypoint (verified walkable)
-            PathFinder pf = new PathFinder(waypoint);
-            Results pfResult = pf.run(gui);
+            // Walk to the waypoint, opening and closing any gate the step crosses
+            Results pfResult = walkTo(gui, waypoint);
 
             if (pfResult.IsSuccess()) {
                 currentStepIndex = targetIndex + 1;
@@ -844,8 +844,7 @@ public class ChunkNavExecutor implements Action {
                 double midDist = player.rc.dist(midWaypoint);
                 if (midDist < tileSize * 1.5) continue;
 
-                PathFinder midPf = new PathFinder(midWaypoint);
-                if (midPf.run(gui).IsSuccess()) {
+                if (walkTo(gui, midWaypoint).IsSuccess()) {
                     currentStepIndex = midIndex + 1;
                     madeProgress = true;
                     break;
@@ -875,7 +874,7 @@ public class ChunkNavExecutor implements Action {
                         break;
                     }
 
-                    if (new PathFinder(singleWaypoint).run(gui).IsSuccess()) {
+                    if (walkTo(gui, singleWaypoint).IsSuccess()) {
                         currentStepIndex = singleIndex + 1;
                         madeProgress = true;
                         break;
@@ -912,8 +911,7 @@ public class ChunkNavExecutor implements Action {
 
             // Try direct path first if configured
             if (config.tryDirectFirst) {
-                PathFinder directPf = new PathFinder(target);
-                Results directResult = directPf.run(gui);
+                Results directResult = walkTo(gui, target);
                 if (directResult.IsSuccess()) {
                     return Results.SUCCESS();
                 }
@@ -924,8 +922,7 @@ public class ChunkNavExecutor implements Action {
             double walkDist = Math.min(stepDistance, distToTarget * 0.5);
             Coord2d intermediateTarget = player.rc.add(direction.mul(walkDist));
 
-            PathFinder stepPf = new PathFinder(intermediateTarget);
-            Results stepResult = stepPf.run(gui);
+            Results stepResult = walkTo(gui, intermediateTarget);
 
             if (!stepResult.IsSuccess()) {
                 // Try shorter step
@@ -934,8 +931,7 @@ public class ChunkNavExecutor implements Action {
                     return Results.FAIL();
                 }
                 intermediateTarget = player.rc.add(direction.mul(walkDist));
-                stepPf = new PathFinder(intermediateTarget);
-                stepResult = stepPf.run(gui);
+                stepResult = walkTo(gui, intermediateTarget);
 
                 if (!stepResult.IsSuccess()) {
                     return Results.FAIL();
@@ -1048,6 +1044,12 @@ public class ChunkNavExecutor implements Action {
         }
         Coord2d playerPos = currentPlayer.rc;
 
+        // The whole zone is already streamed. Leave the corner alone; the caller
+        // paths to the object it actually needs.
+        if (NUtils.loadedAreaFullyVisible(targetArea)) {
+            return Results.SUCCESS();
+        }
+
         List<Coord2d> edgePoints = getAllAreaEdgePoints(areaBounds);
         edgePoints.sort(Comparator.comparingDouble(p -> p.dist(playerPos)));
 
@@ -1095,8 +1097,7 @@ public class ChunkNavExecutor implements Action {
             return Results.SUCCESS();
         }
 
-        PathFinder pf = new PathFinder(target);
-        Results result = pf.run(gui);
+        Results result = walkTo(gui, target);
 
         if (result.IsSuccess()) {
             return result;
@@ -1152,21 +1153,18 @@ public class ChunkNavExecutor implements Action {
             Coord tileCoord = grid.ul.add(localCoord);
             Coord2d worldCoord = tileCoord.mul(MCache.tilesz).add(MCache.tilehsz);
 
-            PathFinder waypointPf = new PathFinder(worldCoord);
-            waypointPf.run(gui);
+            walkTo(gui, worldCoord);
 
             Gob player = gui.map.player();
             if (player != null && player.rc.dist(finalTarget) < MCache.tilesz.x * 15) {
-                PathFinder directPf = new PathFinder(finalTarget);
-                Results directResult = directPf.run(gui);
+                Results directResult = walkTo(gui, finalTarget);
                 if (directResult.IsSuccess()) {
                     return Results.SUCCESS();
                 }
             }
         }
 
-        PathFinder finalPf = new PathFinder(finalTarget);
-        return finalPf.run(gui);
+        return walkTo(gui, finalTarget);
     }
 
     private Results traversePortal(ChunkPortal portal, long gridId, long targetGridId, NGameUI gui) throws InterruptedException {
@@ -1415,6 +1413,93 @@ public class ChunkNavExecutor implements Action {
         points.add(new Coord2d(centerX, areaMax.y + offset));
 
         return points;
+    }
+
+    /** Local walk that opens a gate on the way and shuts it after stepping clear. */
+    private Results walkTo(NGameUI gui, Coord2d target) throws InterruptedException {
+        Results crossed = crossGate(gui, target);
+        if (!crossed.IsSuccess()) return crossed;
+        return new PathFinder(target).run(gui);
+    }
+
+    private Results walkTo(NGameUI gui, Gob target) throws InterruptedException {
+        if (target == null) return Results.FAIL();
+        Results crossed = crossGate(gui, target.rc);
+        if (!crossed.IsSuccess()) return crossed;
+        return new PathFinder(target).run(gui);
+    }
+
+    /**
+     * If the straight step crosses a shut fence gate, click it open, walk clear, and click it shut.
+     * A gate that is already open is left open.
+     * House doors and stairs are not gates and are left to portal traversal.
+     */
+    private Results crossGate(NGameUI gui, Coord2d target) throws InterruptedException {
+        Gob player = gui.map.player();
+        if (player == null || target == null) return Results.FAIL();
+        double tile = MCache.tilesz.x;
+        Gob gate = nearestCrossingGate(gui, player.rc, target, tile * ChunkNavGates.APPROACH_TILES);
+        if (gate == null) return Results.SUCCESS();
+        ChunkNavGates.Pose pose = ChunkNavGates.fromGob(gate);
+        if (pose == null) return Results.SUCCESS();
+
+        if (GateDetector.isDoorOpen(gate)) {
+            return Results.SUCCESS();
+        }
+
+        if (player.rc.dist(gate.rc) > tile * 1.2) {
+            Coord2d near = ChunkNavGates.standOff(pose, player.rc, tile / 2.0);
+            if (!new PathFinder(near).run(gui).IsSuccess()) return Results.FAIL();
+        }
+        NUtils.rclickGob(gate);
+        if (!waitGate(gate, true)) return Results.FAIL();
+
+        player = gui.map.player();
+        if (player == null) return Results.FAIL();
+        Coord2d exit = ChunkNavGates.exitPoint(pose, player.rc, tile);
+        if (!new PathFinder(exit).run(gui).IsSuccess()) return Results.FAIL();
+
+        player = gui.map.player();
+        if (player != null && player.rc.dist(gate.rc) > tile * 1.5) {
+            Coord2d closeAt = ChunkNavGates.standOff(pose, player.rc, tile / 2.0);
+            if (!new PathFinder(closeAt).run(gui).IsSuccess()) return Results.FAIL();
+        }
+        NUtils.rclickGob(gate);
+        if (!waitGate(gate, false)) return Results.FAIL();
+        return Results.SUCCESS();
+    }
+
+    private Gob nearestCrossingGate(NGameUI gui, Coord2d from, Coord2d to, double maxDist) {
+        if (gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) return null;
+        Glob glob = gui.ui.sess.glob;
+        Gob best = null;
+        double bestDist = maxDist;
+        synchronized (glob.oc) {
+            for (Gob gob : glob.oc) {
+                ChunkNavGates.Pose pose = ChunkNavGates.fromGob(gob);
+                if (pose == null) continue;
+                Coord2d cross = ChunkNavGates.crossingPoint(from, to, pose);
+                if (cross == null) continue;
+                double dist = from.dist(cross);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = gob;
+                }
+            }
+        }
+        return best;
+    }
+
+    private boolean waitGate(Gob gate, boolean open) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 5000;
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return System.currentTimeMillis() > deadline
+                        || (gate.ngob != null && GateDetector.isDoorOpen(gate) == open);
+            }
+        });
+        return gate.ngob != null && GateDetector.isDoorOpen(gate) == open;
     }
 
     private static class WaitForExitPortal extends NTask {

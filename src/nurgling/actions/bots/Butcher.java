@@ -4,9 +4,13 @@ import haven.Coord;
 import haven.Coord2d;
 import haven.Gob;
 import haven.MCache;
+import haven.MapView;
 import haven.Pair;
 import haven.Resource;
+import haven.WItem;
+import nurgling.NConfig;
 import nurgling.NFlowerMenu;
+import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.NUtils;
@@ -21,6 +25,8 @@ import nurgling.actions.Validator;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.areas.NGlobalCoord;
+import nurgling.overlays.QualityOl;
+import nurgling.tasks.GetCurs;
 import nurgling.tasks.NFlowerMenuIsClosed;
 import nurgling.tasks.NTask;
 import nurgling.tasks.NoGob;
@@ -29,11 +35,14 @@ import nurgling.tasks.WaitFreeHand;
 import nurgling.tasks.WaitTicks;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.NParser;
 import nurgling.tools.VSpec;
+import nurgling.widgets.NEquipory;
 import nurgling.widgets.Specialisation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 public class Butcher implements Action {
 
@@ -79,13 +88,15 @@ public class Butcher implements Action {
     public Results run(NGameUI gui) throws InterruptedException {
         HandLoadout before = HandLoadout.capture();
         try {
-            Results equipped = new Equip(
-                    VSpec.getNamesInCategory("Sharp Tool"),
-                    new NAlias("Traveller's Sack", "Wanderer's Bindle", "Traveler's Sack"),
-                    NInventory.QualityType.High
-            ).run(gui);
-            if (!equipped.IsSuccess()) {
-                return equipped;
+            boolean useKnife = ButcherKnifePolicy.useKnifeEnabled(NConfig.get(NConfig.Key.butcherUseKnife));
+            boolean alwaysKnife = ButcherKnifePolicy.alwaysKnifeEnabled(NConfig.get(NConfig.Key.butcherKnifeAlways));
+            ButcherKnifePolicy.Loadout loadout = scanTools();
+            boolean inspect = ButcherKnifePolicy.inspectEach(useKnife, alwaysKnife, loadout);
+            if (!inspect) {
+                Results equipped = equipChoice(gui, ButcherKnifePolicy.choose(useKnife, alwaysKnife, loadout, null));
+                if (!equipped.IsSuccess()) {
+                    return equipped;
+                }
             }
 
             NArea.Specialisation kritter_corpse = new NArea.Specialisation(Specialisation.SpecName.deadkritter.toString());
@@ -98,7 +109,8 @@ public class Butcher implements Action {
                     return Results.ERROR("No carcass");
                 }
                 return butcherGobs(gui, listOf(gob), null,
-                        ButcherTarget.dumpInventory(mode, ButcherTarget.hasOutAreas(playerOutAreas(gui))));
+                        ButcherTarget.dumpInventory(mode, ButcherTarget.hasOutAreas(playerOutAreas(gui))),
+                        inspect, useKnife, alwaysKnife, loadout);
             }
 
             if (mode == ButcherTarget.Mode.ZONE) {
@@ -108,20 +120,23 @@ public class Butcher implements Action {
                     return Results.ERROR("No carcass area");
                 }
                 NUtils.navigateToArea(zone);
-                return butcherGobs(gui, getGobs(zone), zone, true);
+                return butcherGobs(gui, getGobs(zone), zone, true, inspect, useKnife, alwaysKnife, loadout);
             }
 
             SelectArea insa = new SelectArea(Resource.loadsimg("baubles/inputArea"));
             if (!insa.run(gui).IsSuccess() || insa.getRCArea() == null) {
                 return Results.ERROR("No area selected");
             }
-            return butcherGobs(gui, getGobs(insa.getRCArea()), null, false);
+            return butcherGobs(gui, getGobs(insa.getRCArea()), null, false, inspect, useKnife, alwaysKnife, loadout);
         } finally {
             HandLoadout.restore(gui, before);
         }
     }
 
-    private Results butcherGobs(NGameUI gui, ArrayList<Gob> gobs, NArea area, boolean dumpInventory) throws InterruptedException {
+    private Results butcherGobs(NGameUI gui, ArrayList<Gob> gobs, NArea area, boolean dumpInventory,
+                                boolean inspect, boolean useKnife, boolean alwaysKnife,
+                                ButcherKnifePolicy.Loadout loadout) throws InterruptedException {
+        HashSet<Long> done = new HashSet<>();
         while (!gobs.isEmpty()) {
             gobs.sort(NUtils.d_comp);
             Gob gob = followCarcass(gobs.get(0), gobs.get(0) != null ? gobs.get(0).rc : null, false);
@@ -130,7 +145,16 @@ public class Butcher implements Action {
                 continue;
             }
             gobs.set(0, gob);
+            if (inspect) {
+                approach(gui, gob);
+                Double quality = inspectCarcass(gui, gob);
+                Results equipped = equipChoice(gui, ButcherKnifePolicy.choose(useKnife, alwaysKnife, loadout, quality));
+                if (!equipped.IsSuccess())
+                    return equipped;
+            }
             NContext context = dumpInventory ? new NContext(gui) : null;
+            done.add(gob.id);
+            Coord2d origin = gob.rc;
             Results one = butcherOne(gui, gob, area, context, dumpInventory);
             if (!one.IsSuccess()) {
                 return one;
@@ -147,6 +171,11 @@ public class Butcher implements Action {
                     } else {
                         gobs.set(i, left);
                     }
+                }
+                if (target != null) {
+                    Gob more = nextPileCarcass(origin, done);
+                    if (more != null)
+                        gobs.add(more);
                 }
             }
         }
@@ -179,7 +208,7 @@ public class Butcher implements Action {
         Coord2d lastRc = gob.rc;
         int emptyMenus = 0;
         while (true) {
-            Gob next = followCarcass(gob, lastRc, emptyMenus > 0);
+            Gob next = continueCarcass(gob, lastRc, emptyMenus > 0);
             if (next != null && gob != null && next.id != gob.id) {
                 emptyMenus = 0;
             }
@@ -227,7 +256,7 @@ public class Butcher implements Action {
                         if (!dumped.IsSuccess())
                             return dumped;
                         if (area == null)
-                            gob = followCarcass(gob, lastRc, false);
+                            gob = continueCarcass(gob, lastRc, false);
                     }
                 }
                 if (NUtils.getGameUI().getInventory().getNumberFreeCoord(options.get(optForSelect).size) < options.get(optForSelect).num) {
@@ -270,7 +299,7 @@ public class Butcher implements Action {
                                     if (!dumped.IsSuccess())
                                         return dumped;
                                     if (area == null)
-                                        gob = followCarcass(gob, lastRc, false);
+                                        gob = continueCarcass(gob, lastRc, false);
                                 }
                             }
                             optFound = false;
@@ -282,7 +311,7 @@ public class Butcher implements Action {
             }
             NUtils.addTask(new WaitTicks(8));
             if (gob != null && Finder.findGob(gob.id) == null) {
-                Gob replaced = followCarcass(gob, lastRc, true);
+                Gob replaced = continueCarcass(gob, lastRc, true);
                 if (replaced != null) {
                     gob = replaced;
                     lastRc = gob.rc;
@@ -301,6 +330,34 @@ public class Butcher implements Action {
         } else {
             new PathFinder(gob).run(gui);
         }
+    }
+
+    /** Same carcass, including a new id after Skin. A different animal nearby is left for the next inspect. */
+    private static Gob continueCarcass(Gob gob, Coord2d lastRc, boolean skipSameId) throws InterruptedException {
+        Gob next = followCarcass(gob, lastRc, skipSameId);
+        if (next != null && ButcherTarget.adoptCarcass(gob != null, gob != null ? gob.id : 0L, lastRc, next.id, next.rc))
+            return next;
+        return gob != null ? Finder.findGob(gob.id) : null;
+    }
+
+    /** Next carcass in a Ctrl+click pile. Already finished bodies are skipped so each new one is inspected. */
+    private static Gob nextPileCarcass(Coord2d origin, HashSet<Long> done) throws InterruptedException {
+        if (origin == null)
+            return null;
+        ArrayList<Gob> nearby = Finder.findGobs(origin, new NAlias("kritter"), new NAlias("knock", "dead"),
+                ButcherTarget.FOLLOW_RADIUS);
+        Gob best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (Gob gob : nearby) {
+            if (gob == null || done.contains(gob.id) || !ButcherTarget.isCarcass(gob))
+                continue;
+            double dist = origin.dist(gob.rc);
+            if (dist < bestDist) {
+                best = gob;
+                bestDist = dist;
+            }
+        }
+        return best;
     }
 
     /** After Skin a horse often respawns with a new gob id at the same spot. */
@@ -365,5 +422,132 @@ public class Butcher implements Action {
             }
         }
         return result;
+    }
+
+    private static final NAlias SACKS = new NAlias("Traveller's Sack", "Wanderer's Bindle", "Traveler's Sack");
+
+    private static Results equipChoice(NGameUI gui, ButcherKnifePolicy.Choice choice) throws InterruptedException {
+        NAlias tool = choice == ButcherKnifePolicy.Choice.KNIFE
+                ? ButcherKnifePolicy.KNIFE
+                : VSpec.getNamesInCategory("Sharp Tool");
+        return new Equip(tool, SACKS, NInventory.QualityType.High).run(gui);
+    }
+
+    private static ButcherKnifePolicy.Loadout scanTools() throws InterruptedException {
+        return ButcherKnifePolicy.Loadout.of(
+                bestQuality(ButcherKnifePolicy.KNIFE),
+                bestOtherQuality(ButcherKnifePolicy.KNIFE));
+    }
+
+    /** Highest sharp tool that is not the cleaver. The cleaver is itself a sharp tool. */
+    private static Double bestOtherQuality(NAlias cleaver) throws InterruptedException {
+        return bestQuality(VSpec.getNamesInCategory("Sharp Tool"), cleaver);
+    }
+
+    private static Double bestQuality(NAlias name) throws InterruptedException {
+        return bestQuality(name, null);
+    }
+
+    private static Double bestQuality(NAlias name, NAlias skip) throws InterruptedException {
+        if (NUtils.getEquipment() == null)
+            return null;
+        double best = Double.NaN;
+        WItem left = NUtils.getEquipment().findItem(NEquipory.Slots.HAND_LEFT.idx);
+        WItem right = NUtils.getEquipment().findItem(NEquipory.Slots.HAND_RIGHT.idx);
+        awaitQuality(left, right);
+        best = maxOf(best, left, name, skip);
+        if (right != left)
+            best = maxOf(best, right, name, skip);
+        WItem belt = NUtils.getEquipment().findItem(NEquipory.Slots.BELT.idx);
+        if (belt != null && belt.item.contents instanceof NInventory) {
+            ArrayList<WItem> items = ((NInventory) belt.item.contents).getItems(name);
+            awaitQuality(items.toArray(new WItem[0]));
+            for (WItem item : items)
+                best = maxOf(best, item, name, skip);
+        }
+        return Double.isNaN(best) ? null : best;
+    }
+
+    private static void awaitQuality(WItem... items) throws InterruptedException {
+        NTask wait = new NTask() {
+            {
+                infinite = false;
+                criticalOnTimeout = false;
+                maxCounter = 40;
+            }
+
+            @Override
+            public boolean check() {
+                for (WItem item : items) {
+                    if (item != null && item.item instanceof NGItem) {
+                        NGItem gi = (NGItem) item.item;
+                        if (gi.name() != null && gi.quality == null)
+                            return false;
+                    }
+                }
+                return true;
+            }
+        };
+        NUtils.addTask(wait);
+    }
+
+    private static double maxOf(double best, WItem item, NAlias name, NAlias skip) {
+        if (item == null || !(item.item instanceof NGItem))
+            return best;
+        NGItem gi = (NGItem) item.item;
+        if (gi.name() == null || !NParser.checkName(gi.name(), name))
+            return best;
+        if (skip != null && NParser.checkName(gi.name(), skip))
+            return best;
+        if (gi.quality == null || gi.quality <= 0)
+            return best;
+        return Double.isNaN(best) ? gi.quality : Math.max(best, gi.quality);
+    }
+
+    private static Double overlayQuality(Gob gob) {
+        if (gob == null)
+            return null;
+        Gob.Overlay ol = gob.findol(QualityOl.class);
+        if (ol == null || !(ol.spr instanceof QualityOl))
+            return null;
+        return ((QualityOl) ol.spr).quality;
+    }
+
+    /** Loupe inspect. An overlay already on the carcass is reused. */
+    private static Double inspectCarcass(NGameUI gui, Gob gob) throws InterruptedException {
+        Double known = overlayQuality(gob);
+        if (known != null)
+            return known;
+        try {
+            gui.ui.rcvr.rcvmsg(NUtils.getUI().getMenuGridId(), "act", "inspect");
+            GetCurs study = new GetCurs("study") {
+                {
+                    infinite = false;
+                    criticalOnTimeout = false;
+                    maxCounter = 80;
+                }
+            };
+            NUtils.addTask(study);
+            if (study.getResult() == null || !NParser.checkName(study.getResult(), "study"))
+                return null;
+            NUtils.clickGob(gob);
+            gui.map.clickedGob = new MapView.ClickedGob(gob, 1);
+            NTask waitOl = new NTask() {
+                {
+                    infinite = false;
+                    criticalOnTimeout = false;
+                    maxCounter = 120;
+                }
+
+                @Override
+                public boolean check() {
+                    return overlayQuality(gob) != null;
+                }
+            };
+            NUtils.addTask(waitOl);
+            return overlayQuality(gob);
+        } finally {
+            NUtils.getDefaultCur();
+        }
     }
 }

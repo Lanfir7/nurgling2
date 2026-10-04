@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-04-skip-empty-drying-frames",
+  "priority": 4,
+  "summary": {
+    "ru": "Сушка рыбы и шкур не открывает пустые зелёные сушилки, чтобы посмотреть, что на них висит.",
+    "en": "Fish and hide drying no longer opens empty green drying frames just to see what is hanging there."
+  },
+  "detail": {
+    "ru": "В макросах «Сушка рыбы» и «Сушка шкур» первый обход сушилок пропускает рамки, которые клиент сейчас красит зелёным: они пустые. Рамки с другой окраской по-прежнему открываются, чтобы снять готовое. Пустые рамки остаются в работе и заполняются, когда бот развешивает новое.",
+    "en": "In the Dry Fish and Drying hides macros, the first pass over drying frames skips racks the client currently tints green, because those are empty. Racks with any other tint are still opened to take down finished goods. Empty racks stay in the job and are filled when the bot hangs new items."
+  }
+}

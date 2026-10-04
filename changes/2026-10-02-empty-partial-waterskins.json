@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-02-empty-partial-waterskins",
+  "priority": 5,
+  "summary": {
+    "ru": "Заполнение бурдюков из зоны воды не идёт к воде, если наполнять нечего, и может сначала опустошить неполные бурдюки и кувшины.",
+    "en": "Filling waterskins from a water zone stays put when nothing needs water, and can empty partial waterskins and jugs first."
+  },
+  "detail": {
+    "ru": "В сценарии у шага Fill Waterskins (Global Zone) появилась галочка «Опустошать не полные бурдюки». С ней макрос перед наполнением опустошает бурдюки с водой меньше трёх литров и стеклянные кувшины меньше пяти литров, а затем наполняет их. Полный кувшин на 5.00 л не трогает. Если наполнять нечего, персонаж к зоне воды не идёт.",
+    "en": "The scenario step Fill Waterskins (Global Zone) has a checkbox, Empty partial waterskins. When it is on, waterskins under three liters and glass jugs under five liters are emptied and then filled. A jug at 5.00 l is left alone. If nothing needs water, the character does not walk to the water zone."
+  }
+}

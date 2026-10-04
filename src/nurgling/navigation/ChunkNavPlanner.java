@@ -50,7 +50,7 @@ public class ChunkNavPlanner {
                 int cx = cellX + dx;
                 int cy = cellY + dy;
                 if (cx >= 0 && cx < CELLS_PER_EDGE && cy >= 0 && cy < CELLS_PER_EDGE) {
-                    if (chunk.walkability[cx][cy] == 0) {
+                    if (ChunkNavGates.isTraversable(chunk.walkability[cx][cy])) {
                         return true;
                     }
                 }
@@ -448,7 +448,7 @@ public class ChunkNavPlanner {
      */
     private boolean isCellWalkable(ChunkNavData chunk, int cellX, int cellY) {
         if (cellX >= 0 && cellX < CELLS_PER_EDGE && cellY >= 0 && cellY < CELLS_PER_EDGE) {
-            return chunk.walkability[cellX][cellY] == 0;
+            return ChunkNavGates.isTraversable(chunk.walkability[cellX][cellY]);
         }
         return false;
     }

@@ -34,6 +34,7 @@ public class ChunkNavVisualizerWindow extends Window {
 
     // Colors
     private static final Color COLOR_WALKABLE = new Color(51, 153, 51);
+    private static final Color COLOR_GATE = new Color(204, 170, 51);
     private static final Color COLOR_BLOCKED = new Color(153, 51, 51);
     private static final Color COLOR_UNOBSERVED = new Color(77, 77, 77);
     private static final Color COLOR_SELECTED = new Color(255, 255, 0);
@@ -627,14 +628,7 @@ public class ChunkNavVisualizerWindow extends Window {
                 boolean obs = chunk.observed[cx][cy];
                 byte walk = chunk.walkability[cx][cy];
 
-                Color color;
-                if (!obs) {
-                    color = COLOR_UNOBSERVED;
-                } else if (walk == 0) {
-                    color = COLOR_WALKABLE;
-                } else {
-                    color = COLOR_BLOCKED;
-                }
+                Color color = walkColor(obs, walk);
                 color = withHomeTint(color, home);
 
                 int px = (int) (cx * cellSize);
@@ -734,14 +728,7 @@ public class ChunkNavVisualizerWindow extends Window {
                 boolean obs = chunk.observed[srcX][srcY];
                 byte walk = chunk.walkability[srcX][srcY];
 
-                Color color;
-                if (!obs) {
-                    color = COLOR_UNOBSERVED;
-                } else if (walk == 0) {
-                    color = COLOR_WALKABLE;
-                } else {
-                    color = COLOR_BLOCKED;
-                }
+                Color color = walkColor(obs, walk);
                 color = withHomeTint(color, home);
 
                 setPixel(buf, imgX, imgY, color);
@@ -936,6 +923,13 @@ public class ChunkNavVisualizerWindow extends Window {
 
     private boolean isActiveHome(ChunkNavData chunk) {
         return ChunkHomePresentation.forChunk(chunk, indoorRegistry, savedHomes).active;
+    }
+
+    private static Color walkColor(boolean observed, byte walkability) {
+        if (!observed) return COLOR_UNOBSERVED;
+        if (walkability == ChunkNavGates.WALKABLE) return COLOR_WALKABLE;
+        if (walkability == ChunkNavGates.GATE) return COLOR_GATE;
+        return COLOR_BLOCKED;
     }
 
     private static Color withHomeTint(Color base, boolean home) {

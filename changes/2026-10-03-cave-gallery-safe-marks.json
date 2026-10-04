@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-03-cave-gallery-safe-marks",
+  "priority": 6,
+  "summary": {
+    "ru": "После сообщения об открытии естественной пещеры зелёные безопасные метки на ней больше не появляются.",
+    "en": "After a natural cave gallery opens, that cave no longer gets green safe marks."
+  },
+  "detail": {
+    "ru": "Метки шахты: если в чате есть «You opened a natural cave gallery», клетки открывшейся пещеры и порода сразу за ней не помечаются зелёным. Раньше конец туннеля иногда считался безопасным, хотя что за породой в новой пещере, ещё неизвестно. Обычные зелёные метки в уже пройденном туннеле остаются.",
+    "en": "Mining marks: when chat shows “You opened a natural cave gallery”, tiles of that cave and the rock just beyond it are not marked green. The end of the tunnel was sometimes treated as safe even though the new cave behind the rock is still unknown. Green marks already earned in the dug tunnel stay."
+  }
+}

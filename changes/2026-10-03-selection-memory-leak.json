@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-03-selection-memory-leak",
+  "priority": 7,
+  "summary": {
+    "ru": "Долгая добыча после выделения области на карте больше не расходует всё больше памяти.",
+    "en": "Long mining sessions after selecting an area on the map no longer consume ever more memory."
+  },
+  "detail": {
+    "ru": "Выделяйте область на карте перед добычей или расчисткой: после завершения выделения игра остаётся отзывчивой и не зависает из-за накопления памяти. Уже открытые окна продолжают работать при локальном запуске обновлённого клиента.",
+    "en": "Select an area on the map before mining or clearing. Once selection ends, the game stays responsive instead of freezing from growing memory use. Already open windows keep working when you launch an updated local client."
+  }
+}

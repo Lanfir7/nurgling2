@@ -257,13 +257,25 @@ public class NContext {
         }
         String areaid = barrels.get(item);
         navigateToAreaIfNeeded(areaid);
+        Gob any = null;
         for(Gob gob: Finder.findGobs(areas.get(areaid), new NAlias("barrel")))
         {
-            if(NUtils.barrelHasContent(gob))
+            if(!NUtils.barrelHasContent(gob))
+                continue;
+            String contents = NUtils.getContentsOfBarrel(gob);
+            if(contents != null && (NParser.checkName(contents, item)
+                    || ("Water".equalsIgnoreCase(item) && NParser.checkName(contents, "water"))))
             {
-                barrelstorage.put(item,new BarrelStorage(new NGlobalCoord(gob.rc), NUtils.getContentsOfBarrel(gob)));
+                barrelstorage.put(item,new BarrelStorage(new NGlobalCoord(gob.rc), contents));
                 return gob;
             }
+            if(any == null)
+                any = gob;
+        }
+        if(any != null && !"Water".equalsIgnoreCase(item))
+        {
+            barrelstorage.put(item,new BarrelStorage(new NGlobalCoord(any.rc), NUtils.getContentsOfBarrel(any)));
+            return any;
         }
         return null;
 
@@ -1027,7 +1039,17 @@ public class NContext {
         return id;
     }
 
+    /** Remember a barrel area for this craft, including a water-source zone that is not an ingredient zone. */
+    public void useBarrelArea(String item, NArea area) {
+        if (item == null || area == null)
+            return;
+        areas.put(String.valueOf(area.id), area);
+        barrels.put(item, String.valueOf(area.id));
+    }
+
     public boolean isInBarrel(String item) {
+        if (barrels.containsKey(item))
+            return true;
         NArea area = findIn(item);
         if (area == null) {
             area = findInGlobal(item);

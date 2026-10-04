@@ -97,6 +97,9 @@ public class NConfig
         debug,
         claydiggerprop,
         miningol,
+        hideHomeClaimOl,
+        hideHomeVillageOl,
+        showHomeMiningOl,
         glimmerHeatmap,
         q_pattern,
         q_range,
@@ -357,7 +360,9 @@ public class NConfig
         agentAutoMode,
         floorOverlayEnable,
         floorOverlayAlpha,
-        floorOverlaySegId
+        floorOverlaySegId,
+        butcherUseKnife,
+        butcherKnifeAlways
     }
 
     public enum BBDisplayMode
@@ -438,6 +443,9 @@ public class NConfig
         conf.put(Key.disableMenugridKeys, false);
         conf.put(Key.baseurl, NUpdateFeed.DEFAULT_BASEURL);
         conf.put(Key.miningol, true);
+        conf.put(Key.hideHomeClaimOl, false);
+        conf.put(Key.hideHomeVillageOl, false);
+        conf.put(Key.showHomeMiningOl, true);
         conf.put(Key.glimmerHeatmap, true);
         conf.put(Key.crime, false);
         conf.put(Key.tracking, false);
@@ -534,6 +542,8 @@ public class NConfig
         conf.put(Key.skipButcherInKFC, false);
         conf.put(Key.skipPluckingCocksInKFC, false);
         conf.put(Key.skipButcherInDuck, false);
+        conf.put(Key.butcherUseKnife, true);
+        conf.put(Key.butcherKnifeAlways, false);
         conf.put(Key.skipPluckingDrakesInDuck, false);
         conf.put(Key.printpfmap, false);
         conf.put(Key.boxLineWidth, 4);

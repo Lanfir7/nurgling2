@@ -651,6 +651,24 @@ public class Build implements Action
         return Results.SUCCESS();
     }
 
+    public boolean refill(NGameUI gui, ArrayList<Ingredient> ingredients) throws InterruptedException
+    {
+        return refillIng(gui, ingredients, context);
+    }
+
+    public String lastRefillFailure()
+    {
+        return refillFailure;
+    }
+
+    public Results finishExisting(NGameUI gui, Coord2d pos) throws InterruptedException
+    {
+        Gob g = Finder.findGob(pos);
+        if (g == null)
+            return Results.ERROR("No construction at " + pos);
+        return finishConstruction(gui, pos, g);
+    }
+
     private boolean refillIng(NGameUI gui, ArrayList<Ingredient> curings, NContext context) throws InterruptedException
     {
         refillFailure = "NO ITEMS";

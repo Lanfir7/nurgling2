@@ -93,6 +93,8 @@ public final class ButcherTarget {
     /** After Skin a horse gob often respawns with a new id; retry empty menus before quitting. */
     public static final int EMPTY_MENU_RETRIES = 3;
     public static final double FOLLOW_RADIUS = 33;
+    /** A skinned carcass comes back on the same spot. The next animal is farther away. */
+    public static final double SAME_CARCASS_RADIUS = 8;
     /** Stay this far from carcass center on horseback so GoTo does not sit on the gob. */
     public static final double MOUNTED_REACH = 20;
     /** Horse will not start a walk pose for shorter clicks; skip GoTo. */
@@ -100,6 +102,29 @@ public final class ButcherTarget {
 
     public static boolean giveUpOnEmptyMenu(int emptyStreak) {
         return emptyStreak >= EMPTY_MENU_RETRIES;
+    }
+
+    /** True when a new gob id is the same carcass respawning, not the next animal. */
+    public static boolean continuesSameCarcass(Coord2d origin, Coord2d arrived) {
+        return continuesSameCarcass(origin, arrived, SAME_CARCASS_RADIUS);
+    }
+
+    public static boolean continuesSameCarcass(Coord2d origin, Coord2d arrived, double radius) {
+        if (origin == null || arrived == null || radius < 0)
+            return false;
+        return origin.dist(arrived) <= radius;
+    }
+
+    /**
+     * Keep cutting only the same body. A missing current gob must not adopt the next animal.
+     * A new id is the same body only when it appears on the same spot after Skin.
+     */
+    public static boolean adoptCarcass(boolean hasCurrent, long currentId, Coord2d origin, long nextId, Coord2d nextRc) {
+        if (nextRc == null)
+            return false;
+        if (hasCurrent && currentId == nextId)
+            return true;
+        return continuesSameCarcass(origin, nextRc);
     }
 
     public static boolean finishedSingle(boolean carcassStillNearby) {

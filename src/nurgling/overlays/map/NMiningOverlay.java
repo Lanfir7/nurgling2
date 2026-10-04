@@ -59,6 +59,12 @@ public class NMiningOverlay extends NOverlay
     @Override
     public void tick(Map<Long, MCache.Grid> gridsById)
     {
+        boolean hide = HomeWorldOverlay.suppressMining(
+                NConfig.get(NConfig.Key.showHomeMiningOl), miningHomeLand());
+        if (hide != hiddenAtHome) {
+            hiddenAtHome = hide;
+            requestUpdate();
+        }
         ArrayList<Long> snapshot;
         synchronized (curGobs)
         {
@@ -127,8 +133,19 @@ public class NMiningOverlay extends NOverlay
         return mask;
     }
 
+    private boolean miningHomeLand() {
+        if (HomeWorldOverlay.showMiningAtHome(NConfig.get(NConfig.Key.showHomeMiningOl)))
+            return false;
+        NGameUI gui = NUtils.getGameUI();
+        if (gui == null || !(gui.map instanceof NMapView))
+            return false;
+        return ((NMapView) gui.map).homeLand();
+    }
+
     private boolean[][] maskForCut(MapMesh mm) {
         ArrayList<Coverage> supports = new ArrayList<>();
+        if (hiddenAtHome)
+            return maskForCut(mm.ul, mm.sz, supports);
         if (Boolean.TRUE.equals(NConfig.get(NConfig.Key.miningol))) {
             ArrayList<Long> snapshot;
             synchronized (curGobs) {
@@ -272,6 +289,7 @@ public class NMiningOverlay extends NOverlay
 
     boolean isVisible = (Boolean)NConfig.get(NConfig.Key.miningol);
     boolean shortWallsEnabled = false;
+    private volatile boolean hiddenAtHome = false;
 
     @Override
     public boolean requpdate()

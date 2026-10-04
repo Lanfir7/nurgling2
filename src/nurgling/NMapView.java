@@ -1640,6 +1640,65 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         }
     }
 
+    private Coord homeLandTile;
+    private boolean homeLand;
+    private boolean homeLandKnown;
+    private long homeLandCheckedAt;
+    private static final long HOME_LAND_REFRESH_NS = 2_000_000_000L;
+
+    /** Saved home claim or village under the player. Indoor homes do not count. */
+    public boolean homeLand() {
+        NGameUI gui = (ui != null && ui.gui instanceof NGameUI) ? (NGameUI) ui.gui : null;
+        Gob player = player();
+        if (gui == null || player == null || player.rc == null) {
+            homeLandKnown = false;
+            return false;
+        }
+        Coord tile = player.rc.div(MCache.tilesz).floor();
+        long now = System.nanoTime();
+        if (homeLandKnown && tile.equals(homeLandTile) && now - homeLandCheckedAt < HOME_LAND_REFRESH_NS)
+            return homeLand;
+        try {
+            HomeLocationResolver.Status status = CurrentHomeTerritories.status(gui);
+            if (status.territoryLoading) {
+                homeLandKnown = false;
+                return homeLand;
+            }
+            homeLandTile = tile;
+            homeLand = status.claimHome || status.villageHome;
+            homeLandKnown = true;
+            homeLandCheckedAt = now;
+        } catch (RuntimeException error) {
+            homeLandKnown = false;
+            return false;
+        }
+        return homeLand;
+    }
+
+    @Override
+    protected boolean displayol(MCache.OverlayInfo id) {
+        if (!HomeWorldOverlay.hidesTerritory(NConfig.get(NConfig.Key.hideHomeClaimOl),
+                NConfig.get(NConfig.Key.hideHomeVillageOl), id.tags()))
+            return true;
+        if (!homeLand())
+            return true;
+        return !HomeWorldOverlay.layerCoversHome(id.tags(), overlayCoversPlayer(id));
+    }
+
+    private boolean overlayCoversPlayer(MCache.OverlayInfo id) {
+        Gob player = player();
+        if (player == null || player.rc == null)
+            return false;
+        Coord tile = player.rc.div(MCache.tilesz).floor();
+        boolean[] present = new boolean[1];
+        try {
+            glob.map.getol(id, Area.sized(tile, Coord.of(1, 1)), present);
+        } catch (Loading loading) {
+            return false;
+        }
+        return present[0];
+    }
+
     @Override
     protected void oltick()
     {

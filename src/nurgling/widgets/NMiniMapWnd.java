@@ -113,6 +113,7 @@ public class NMiniMapWnd extends Widget{
     public ACheckBox fog;
     public ACheckBox natura;
     public ACheckBox minesup;
+    private HomeOverlayMenu homeOverlayMenu;
     ACheckBox map_box;
     Widget toggle_panel;
     public StatusWdg swdg;
@@ -152,13 +153,17 @@ public class NMiniMapWnd extends Widget{
         toggle_panel = new Widget();
         java.util.List<Widget> buttons = new java.util.ArrayList<>();
         
-        ACheckBox first = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/claim", GameUI.kb_claim, L10n.get("minimap.personal_claims"));
+        ACheckBox first = new HomeOverlayButton("nurgling/hud/buttons/toggle_panel/claim", GameUI.kb_claim,
+                L10n.get("minimap.personal_claims"), L10n.get("minimap.hide_home_overlay_tip"),
+                L10n.get("minimap.hide_home_overlay"), NConfig.Key.hideHomeClaimOl, false);
         first.changed(a -> switchStatus("cplot", a));
         first.a = (Boolean) NConfig.get(NConfig.Key.claimol);
         switchStatus("cplot", first.a);
         buttons.add(first);
 
-        ACheckBox vilol = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/vil", GameUI.kb_vil, L10n.get("minimap.village_claims"));
+        ACheckBox vilol = new HomeOverlayButton("nurgling/hud/buttons/toggle_panel/vil", GameUI.kb_vil,
+                L10n.get("minimap.village_claims"), L10n.get("minimap.hide_home_village_tip"),
+                L10n.get("minimap.hide_home_overlay"), NConfig.Key.hideHomeVillageOl, false);
         vilol.changed(a -> switchStatus("vlg", a));
         vilol.a = (Boolean) NConfig.get(NConfig.Key.vilol);
         switchStatus("vlg", vilol.a);
@@ -202,7 +207,9 @@ public class NMiniMapWnd extends Widget{
         grid.a = (Boolean) NConfig.get(NConfig.Key.showGrid);
         buttons.add(grid);
 
-        minesup = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/minesup", kb_minesup, L10n.get("minimap.mining_overlay"));
+        minesup = new HomeOverlayButton("nurgling/hud/buttons/toggle_panel/minesup", kb_minesup,
+                L10n.get("minimap.mining_overlay"), L10n.get("minimap.show_home_mining_tip"),
+                L10n.get("minimap.show_home_mining"), NConfig.Key.showHomeMiningOl, true);
         minesup.changed(a -> switchStatus("miningol", a));
         minesup.a = (Boolean) NConfig.get(NConfig.Key.miningol);
         buttons.add(minesup);
@@ -693,5 +700,47 @@ public class NMiniMapWnd extends Widget{
         
         map_box.move(new Coord(miniMap.sz.x-(map_box.sz.x), 0));
         toggle_panel.move(new Coord(0, miniMap.sz.y-(toggle_panel.sz.y)));
+    }
+
+    private void openHomeOverlayMenu(String label, NConfig.Key option, boolean checkedWhenMissing) {
+        if (homeOverlayMenu != null) {
+            ui.destroy(homeOverlayMenu);
+            homeOverlayMenu = null;
+        }
+        Object raw = NConfig.get(option);
+        boolean checked = raw == null ? checkedWhenMissing : Boolean.TRUE.equals(raw);
+        homeOverlayMenu = new HomeOverlayMenu(label, checked, value -> NConfig.set(option, value)) {
+            @Override
+            public void destroy() {
+                if (homeOverlayMenu == this)
+                    homeOverlayMenu = null;
+                super.destroy();
+            }
+        };
+        ui.root.add(homeOverlayMenu, ui.mc);
+    }
+
+    private final class HomeOverlayButton extends NMenuCheckBox {
+        private final String menuLabel;
+        private final NConfig.Key option;
+        private final boolean checkedWhenMissing;
+
+        private HomeOverlayButton(String base, KeyBinding gkey, String tooltip, String tip,
+                                  String menuLabel, NConfig.Key option, boolean checkedWhenMissing) {
+            super(base, gkey, tooltip);
+            this.menuLabel = menuLabel;
+            this.option = option;
+            this.checkedWhenMissing = checkedWhenMissing;
+            settip(tooltip + "\n" + tip);
+        }
+
+        @Override
+        public boolean mousedown(MouseDownEvent ev) {
+            if (ev.b == 3 && checkhit(ev.c)) {
+                openHomeOverlayMenu(menuLabel, option, checkedWhenMissing);
+                return true;
+            }
+            return super.mousedown(ev);
+        }
     }
 }

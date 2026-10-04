@@ -135,6 +135,7 @@ public class NSettingsWindow extends Widget {
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.auto_drop"), new Dropper(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.eating_bot"), new Eater(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.farming"), new FarmingSettingsPanel(), container));
+        bots.addChild(new SettingsItem(L10n.get("nsettings.item.butcher"), new ButcherSettingsPanel(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.cheese_orders"), new CheeseOrdersPanel(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.cheese_conveyor"), new CheeseConveyorPanel(), container));
         bots.addChild(new SettingsItem(L10n.get("nsettings.item.pickling"), new PicklingSettings(), container));

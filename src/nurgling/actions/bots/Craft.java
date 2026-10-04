@@ -111,6 +111,12 @@ public class Craft implements Action {
             if (s.ing != null && s.ing.isIgnored) {
                 continue;
             }
+            // Recipe water comes from a barrel at the fire. Waterskins stay for drinking.
+            if (isWaterSpec(s)) {
+                if (!attachWaterBarrel(ncontext, ingredientKey(s)))
+                    return Results.ERROR("No water barrel. Waterskins are kept for drinking.");
+                continue;
+            }
 
             // Determine the item name: if useCategory is set, use category name; otherwise use specific item
             String itemName;
@@ -220,19 +226,16 @@ public class Craft implements Action {
                 continue;
             }
             
-            String item = s.ing == null ? s.name : s.ing.name;
-            if (ncontext.isInBarrel(item)) {
-                if (ncontext.workstation == null) {
-                    NArea barrelwa = ncontext.getSpecArea(Specialisation.SpecName.barrelworkarea);
-                    if (barrelwa == null)
-                        return Results.ERROR("Not found area for work with barrels!");
-                    else
-                        ncontext.bwaused = true;
-                }
-                else
-                {
-                    ncontext.bwaused = true;
-                }
+            String item = ingredientKey(s);
+            if (item == null || !ncontext.isInBarrel(item))
+                continue;
+            if (ncontext.workstation == null) {
+                NArea barrelwa = ncontext.getSpecArea(Specialisation.SpecName.barrelworkarea);
+                if (barrelwa == null)
+                    return Results.ERROR("Not found area for work with barrels!");
+                ncontext.bwaused = true;
+            } else {
+                ncontext.bwaused = true;
             }
         }
 
@@ -262,8 +265,8 @@ public class Craft implements Action {
                 continue;
             }
             
-            String item = s.ing == null ? s.name : s.ing.name;
-            if (ncontext.isInBarrel(item)) {
+            String item = ingredientKey(s);
+            if (item != null && ncontext.isInBarrel(item)) {
                 new ReturnBarrelFromWorkArea(ncontext, item).run(gui);
             }
         }
@@ -331,38 +334,29 @@ public class Craft implements Action {
             if (subCraftedItems.contains(item)) {
                 continue;
             }
+            if (isWaterSpec(s) && !ncontext.isInBarrel(item)) {
+                continue;
+            }
 
             if (ncontext.isInBarrel(item) && ncontext.getPlacedBarrelHash(item) == null) {
-                if(ncontext.workstation == null) {
-                    new TransferBarrelInWorkArea(ncontext, item).run(gui);
-                }
-                else {
-                    new TransferBarrelToWorkstation(ncontext, item).run(gui);
-                }
-            } else if (!prefilled) {
-                int needed = s.count * for_craft;
-                try {
-                    int have = 0;
-                    if (VSpec.categories.containsKey(item)) {
-                        ArrayList<org.json.JSONObject> members = VSpec.categories.get(item);
-                        if (members != null) {
-                            for (org.json.JSONObject m : members) {
-                                String mName = m.optString("name");
-                                if (mName != null) {
-                                    for (WItem wi : NUtils.getGameUI().getInventory().getItems(new NAlias(mName)))
-                                        have += getActualItemCount(wi);
-                                }
-                            }
-                        }
-                    } else {
-                        for (WItem wi : NUtils.getGameUI().getInventory().getItems(new NAlias(item)))
-                            have += getActualItemCount(wi);
+                Results moved = ncontext.workstation == null
+                        ? new TransferBarrelInWorkArea(ncontext, item).run(gui)
+                        : new TransferBarrelToWorkstation(ncontext, item).run(gui);
+                if (!moved.IsSuccess())
+                    return Results.ERROR("Failed to bring barrel: " + item);
+            } else if (!prefilled && !ncontext.isInBarrel(item)) {
+                if (isMeasuredSpec(s)) {
+                    Results pulled = pullMeasuredFromStorage(ncontext, gui, item, s.count * for_craft);
+                    if (!pulled.IsSuccess()) {
+                        return pulled;
                     }
-                    needed -= have;
-                } catch (Exception ignored) {}
-                if (needed > 0) {
-                    if (!new TakeItems2(ncontext, item, needed).run(gui).IsSuccess()) {
-                        return Results.ERROR("Failed to take items: " + item);
+                } else {
+                    int needed = s.count * for_craft;
+                    needed -= heldHundredths(item);
+                    if (needed > 0) {
+                        if (!new TakeItems2(ncontext, item, needed).run(gui).IsSuccess()) {
+                            return Results.ERROR("Failed to take items: " + item);
+                        }
                     }
                 }
             }
@@ -891,6 +885,7 @@ public class Craft implements Action {
         for (NMakewindow.Spec s : mwnd.inputs) {
             if (!s.isLocalZone) continue;
             if (s.ing != null && s.ing.isIgnored) continue;
+            if (isWaterSpec(s)) continue;
 
             String itemName = getEffectiveItemName(s);
             if (itemName == null) continue;
@@ -951,6 +946,7 @@ public class Craft implements Action {
         for (NMakewindow.Spec s : mwnd.inputs) {
             if (s.selectedZone != null || s.isLocalZone || s.isSubCraft) continue;
             if (s.ing != null && s.ing.isIgnored) continue;
+            if (isWaterSpec(s)) continue;
 
             String itemName = getEffectiveItemName(s);
             if (itemName == null) continue;
@@ -1366,6 +1362,14 @@ public class Craft implements Action {
             if (ncontext.isInBarrel(itemName)) {
                 continue;
             }
+            if (isWaterSpec(s)) {
+                continue;
+            }
+            if (isMeasuredSpec(s)) {
+                int stackSize = Math.max(1, StackSupporter.getFullStackSize(itemName));
+                totalSlots += MeasuredCraft.slotsFor((long) s.count * numCrafts, stackSize);
+                continue;
+            }
             
             int itemsNeeded = s.count * numCrafts;
             int stackSize = StackSupporter.getFullStackSize(itemName);
@@ -1429,6 +1433,91 @@ public class Craft implements Action {
         }
         
         return result;
+    }
+
+    private boolean isWaterSpec(NMakewindow.Spec s) {
+        if (MeasuredCraft.isWater(s.name))
+            return true;
+        if (s.ing != null && MeasuredCraft.isWater(s.ing.name))
+            return true;
+        return MeasuredCraft.isWater(ingredientKey(s));
+    }
+
+    /** Weight or volume on the slot (flour, water, honey) is hundredths, not a stack count. */
+    private boolean isMeasuredSpec(NMakewindow.Spec s) {
+        try {
+            for (ItemInfo inf : s.info()) {
+                if (inf instanceof CustomName && ((CustomName) inf).count > 0)
+                    return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return MeasuredCraft.pricedByWeight(ingredientKey(s));
+    }
+
+    private String ingredientKey(NMakewindow.Spec s) {
+        if (s.useCategory && s.categories && s.name != null && VSpec.categories.containsKey(s.name))
+            return s.name;
+        if (s.ing != null)
+            return s.ing.name;
+        return s.name;
+    }
+
+    private int heldHundredths(String item) throws InterruptedException {
+        int have = 0;
+        NInventory inv = NUtils.getGameUI().getInventory();
+        if (VSpec.categories.containsKey(item)) {
+            ArrayList<org.json.JSONObject> members = VSpec.categories.get(item);
+            if (members != null) {
+                for (org.json.JSONObject member : members) {
+                    String memberName = member.optString("name");
+                    if (memberName != null) {
+                        for (WItem wi : inv.getItems(new NAlias(memberName)))
+                            have += getActualItemCount(wi);
+                    }
+                }
+            }
+        } else {
+            for (WItem wi : inv.getItems(new NAlias(item)))
+                have += getActualItemCount(wi);
+        }
+        return have;
+    }
+
+    private Results pullMeasuredFromStorage(NContext ncontext, NGameUI gui, String item, int need) throws InterruptedException {
+        int guard = 0;
+        while (heldHundredths(item) < need) {
+            if (++guard > 48)
+                return Results.ERROR("Not enough " + item);
+            int before = heldHundredths(item);
+            Results took = new TakeItems2(ncontext, item, 1).run(gui);
+            if (!took.IsSuccess() || heldHundredths(item) <= before)
+                return Results.ERROR("Failed to take items: " + item);
+        }
+        return Results.SUCCESS();
+    }
+
+    /** Barrel of water from the ingredient zone, or a barrel in the water area. */
+    private boolean attachWaterBarrel(NContext ncontext, String name) {
+        if (name == null || name.isEmpty())
+            name = "Water";
+        NArea ingredient = NContext.findIn(name);
+        if (ingredient == null)
+            ingredient = NContext.findInGlobal(name);
+        if (ingredient != null) {
+            NArea.Ingredient input = ingredient.getInput(name);
+            if (input != null && input.type == NArea.Ingredient.Type.BARREL) {
+                ncontext.useBarrelArea(name, ingredient);
+                return true;
+            }
+        }
+        NArea source = NContext.findSpec("water");
+        if (source == null)
+            source = NContext.findSpecGlobal("water");
+        if (source == null)
+            return false;
+        ncontext.useBarrelArea(name, source);
+        return true;
     }
 
 }

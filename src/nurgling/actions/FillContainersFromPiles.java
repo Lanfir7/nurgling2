@@ -241,12 +241,14 @@ public class FillContainersFromPiles implements Action {
                         Container.Tetris tetr;
                         if ((tetr = cont.getattr(Container.Tetris.class)) != null) {
                             ArrayList<WItem> witems = gui.getInventory().getItems(transferedItems);
-                            boolean hole = false;
-                            for (WItem witem : witems)
-                                if (tetr.calcNumberFreeCoord(Container.Tetris.SRC, witem.item.spr.sz().div(UI.scale(32)).swapXY()) > 0) {
-                                    hole = true;
-                                    break;
-                                }
+                            boolean hole = tetr.getRes().get(Container.Tetris.SRC) == null;
+                            if (!hole) {
+                                for (WItem witem : witems)
+                                    if (tetr.calcNumberFreeCoord(Container.Tetris.SRC, witem.item.spr.sz().div(UI.scale(32)).swapXY()) > 0) {
+                                        hole = true;
+                                        break;
+                                    }
+                            }
                             if (!hole) {
                                 break;
                             }

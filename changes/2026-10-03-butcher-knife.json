@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-03-butcher-knife",
+  "priority": 5,
+  "summary": {
+    "ru": "Разделка берёт секач мясника для туш не выше его качества и осматривает тушу лупой, если секач не самый лучший.",
+    "en": "Butchering uses the butcher's cleaver on carcasses at or below its quality and inspects them when the cleaver is not the best tool."
+  },
+  "detail": {
+    "ru": "Если секач мясника есть на поясе или в руках и он хуже другого острого инструмента, бот осматривает каждую тушу лупой. Тушу не выше качества секача разделывает секачом, более качественную — лучшим инструментом. Когда секач самый качественный или он один, осмотра нет. Настройки: Боты, пункт Разделка. Там можно выключить секач или всегда разделывать им, даже если туша качественнее.",
+    "en": "When a butcher's cleaver is on the belt or in a hand and another sharp tool is better, each carcass is inspected with the loupe. A carcass at or below the cleaver quality is cut with the cleaver, and a higher one with the better tool. If the cleaver is the best tool, or the only one, nothing is inspected. The toggles are in Settings, Bots, Butchering: turn the cleaver off, or always cut with it even when the carcass is higher quality."
+  }
+}

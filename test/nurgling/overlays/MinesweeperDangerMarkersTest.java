@@ -296,4 +296,35 @@ class MinesweeperDangerMarkersTest {
         assertTrue(tick.contains("gallerySuppressLeft"),
                 "gallery suppress remaining time must be latched");
     }
+
+    @Test
+    void openedGalleryBlocksGreenOnTheCaveAndItsBorder() {
+        long floor = ((long) 5 << 32) | 5L;
+        Set<Long> blocked = MinesweeperDangerMarkers.galleryBlockedTiles(Set.of(floor));
+
+        assertTrue(blocked.contains(floor));
+        assertTrue(blocked.contains(((long) 6 << 32) | 5L));
+        assertTrue(blocked.contains(((long) 4 << 32) | 4L));
+        assertFalse(blocked.contains(((long) 7 << 32) | 5L));
+
+        Set<Coord> mineable = new HashSet<>();
+        mineable.add(new Coord(6, 5));
+        mineable.add(new Coord(5, 6));
+        Set<Coord> green = MinesweeperDangerMarkers.greenFromFreshBlanks(
+                Set.of(new Coord(5, 5)), mineable, Set.of(((long) 6 << 32) | 5L));
+
+        assertEquals(Set.of(new Coord(5, 6)), green);
+    }
+
+    @Test
+    void galleryFlipsOlderThanLookbackAreDropped() {
+        Map<Long, Double> flips = new HashMap<>();
+        MinesweeperDangerMarkers.rememberFlip(flips, 1L);
+        MinesweeperDangerMarkers.ageFlips(flips, 3.0, 8.0);
+        MinesweeperDangerMarkers.rememberFlip(flips, 2L);
+        MinesweeperDangerMarkers.ageFlips(flips, 6.0, 8.0);
+
+        assertEquals(Set.of(2L), MinesweeperDangerMarkers.flipsNotOlderThan(flips, 8.0));
+        assertFalse(flips.containsKey(1L));
+    }
 }

@@ -667,7 +667,7 @@ public class Widget {
 
     public void newfocusable(Widget w) {
 	if(focusctl) {
-	    if(focused == null)
+	    if((focused == null) && w.autofocus)
 		setfocus(w);
 	} else {
 	    if(parent != null)

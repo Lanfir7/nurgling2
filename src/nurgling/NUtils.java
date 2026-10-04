@@ -978,11 +978,14 @@ public class NUtils
      * chooses a drop cell for a liftable, or when navigating specifically to
      * reload the area's gobs. A half-loaded area yields stale occupancy and the
      * object would be dropped onto an as-yet-invisible one; walking onto a corner
-     * forces the grids to load. The walk is skipped when already inside the area.
+     * forces the grids to load. The walk is skipped when already inside the area,
+     * and also when every part of the zone is already inside the gob window:
+     * the caller can path straight to the object.
      */
     public static boolean navigateToArea(NArea area, boolean ensurePresence) throws InterruptedException
     {
         if (area == null) return false;
+        if (loadedAreaFullyVisible(area)) return true;
 
         if (nurgling.navigation.AreaNavigationHelper.isAreaReachableByLocalPF(area)) {
             if (ensurePresence) {
@@ -1072,6 +1075,7 @@ public class NUtils
     {
         NArea area = NContext.findSpecGlobal(string.toString());
         if (area == null) return false;
+        if (loadedAreaFullyVisible(area)) return true;
 
         // Check if any corner of the area is reachable via local pathfinding.
         // If yes, walk onto a corner so callers can rely on the player actually
@@ -1105,6 +1109,18 @@ public class NUtils
             }
         }
         return false;
+    }
+
+    /**
+     * Every loaded part of the zone sits inside the gob-stream window, so walking
+     * to a corner would only delay the real target. A missing grid means some
+     * part is not on the current map yet and still needs an approach.
+     */
+    public static boolean loadedAreaFullyVisible(NArea area) {
+        Gob player = player();
+        if (area == null || player == null || player.rc == null)
+            return false;
+        return nurgling.pf.Utils.areaFullyInVisibleArea(area.getLoadedRCArea(true), player.rc);
     }
 
     public static String getDataFile(String... pathElements){

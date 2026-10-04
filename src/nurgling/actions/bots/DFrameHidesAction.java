@@ -80,7 +80,11 @@ public class DFrameHidesAction implements Action {
             });
 
 
-            new FreeContainers(containers, new NAlias(new ArrayList<>(Arrays.asList("Fur", "Hide", "Scale", "Tail", "skin", "hide")), new ArrayList<>(Arrays.asList("Fresh", "Raw")))).run(gui);
+            new FreeContainers(DryingFrameInspection.withoutEmpty(containers), new NAlias(new ArrayList<>(Arrays.asList("Fur", "Hide", "Scale", "Tail", "skin", "hide")), new ArrayList<>(Arrays.asList("Fresh", "Raw")))).run(gui);
+            for (Container container : containers) {
+                if (DryingFrameInspection.visuallyEmpty(Finder.findGob(container.gobHash)))
+                    noteUnopenedEmpty(container);
+            }
             NArea rawhidesArea = context.goToArea(Specialisation.SpecName.rawhides);
             new FillContainersFromPiles(containers, rawhidesArea.getRCArea(), raw).run(gui);
             new TransferToPiles(rawhidesArea.getRCArea(), new NAlias("Fresh")).run(gui);
@@ -88,5 +92,19 @@ public class DFrameHidesAction implements Action {
             return Results.SUCCESS();
         }
         return Results.FAIL();
+    }
+
+    /** Green frames were not opened. Mark them as having room so the fill pass still hangs hides on them. */
+    private static void noteUnopenedEmpty(Container container) {
+        Container.Space space = container.getattr(Container.Space.class);
+        if (space != null && !space.isReady()) {
+            space.getRes().put(Container.Space.FREESPACE, 1);
+            space.getRes().put(Container.Space.MAXSPACE, 1);
+        }
+        Container.Tetris tetris = container.getattr(Container.Tetris.class);
+        if (tetris != null && tetris.getRes().get(Container.Tetris.DONE) == null) {
+            tetris.getRes().put(Container.Tetris.DONE, Boolean.FALSE);
+            tetris.getRes().put(Container.Tetris.VIRTUAL, Boolean.FALSE);
+        }
     }
 }

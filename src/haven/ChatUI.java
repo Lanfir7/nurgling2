@@ -936,6 +936,7 @@ public class ChatUI extends Widget
 		    }
 		};
 	    add(this.in);
+	    setfocus(this.in);
 	}
 
 	public int ih() {

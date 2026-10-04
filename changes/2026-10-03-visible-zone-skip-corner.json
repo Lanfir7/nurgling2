@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-03-visible-zone-skip-corner",
+  "priority": 5,
+  "summary": {
+    "ru": "Если зона целиком уже видна, бот идёт сразу к предмету, а не в угол зоны.",
+    "en": "When a zone is already fully in view, bots walk straight to the object instead of the zone corner."
+  },
+  "detail": {
+    "ru": "Макросы, которые работают с зоной, больше не заходят в её угол, если все части зоны уже в зоне видимости. Персонаж сразу идёт к нужному предмету. Команда «Идти к зоне» по-прежнему доводит до самой зоны, даже если она уже видна. Если часть зоны ещё не видна, бот подходит ближе, чтобы она прогрузилась.",
+    "en": "Zone macros no longer detour to a corner when every part of the zone is already in view. The character walks straight to the object. Navigate to zone still walks you to the zone itself, even when you can already see it. If part of the zone is still outside view, the bot still steps closer so that part can load."
+  }
+}

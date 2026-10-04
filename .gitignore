@@ -1,4 +1,5 @@
 /build
+/.client-runtimes/
 /performance-*.csv
 /rtk/
 /steam

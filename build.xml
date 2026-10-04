@@ -190,7 +190,7 @@
         </unjar>
     </target>
 
-  <target name="hafen-client" depends="build-env, extlib/jogl, extlib/lwjgl-gl, extlib/lwjgl-vk, extlib/steamworks, resources">
+  <target name="hafen-client" depends="fresh-client-classes, extlib/jogl, extlib/lwjgl-gl, extlib/lwjgl-vk, extlib/steamworks, resources">
     <condition property="explicit-annotations">
       <javaversion atleast="21" />
     </condition>
@@ -247,6 +247,14 @@
           tofile="build/classes/nurgling/news/releases.json" overwrite="true" />
   </target>
 
+  <!-- Incremental javac does not necessarily rebuild callers after an API
+       rollback. Never package stale caller bytecode into a new client. -->
+  <target name="fresh-client-classes" depends="build-env">
+    <delete>
+      <fileset dir="build/classes" includes="**/*.class" />
+    </delete>
+  </target>
+
   <target name="jar" depends="hafen-client, buildinfo, lib-classes, package-client-news">
     <delete file="build/hafen.jar" failonerror="false" />
     <jar destfile="build/hafen.jar">
@@ -288,11 +296,27 @@
     <copy file="local-config.properties" tofile="build/haven-config.properties" failonerror="false" quiet="true" />
   </target>
 
+  <macrodef name="check-client-runtime">
+    <sequential>
+      <exec executable="python" failonerror="true">
+        <arg value="tools/check_client_runtime.py" />
+        <arg path="bin" />
+      </exec>
+    </sequential>
+  </macrodef>
+
+  <target name="check-installed-runtime" description="Protect JARs used by running clients">
+    <check-client-runtime />
+  </target>
+
   <target name="bin" depends="jar, extlib/jogl-arm, extlib/lwjgl-gl, extlib/steamworks, res-jar">
+    <!-- Check after compilation/downloads, immediately before any installed file changes. -->
+    <check-client-runtime />
     <mkdir dir="bin" />
     <copy todir="bin">
       <fileset dir="build">
 	<include name="hafen.jar" />
+	<include name="nurgling-res.jar" />
       </fileset>
       <fileset dir="lib/ext">
 	<include name="hafen-res.jar" />
@@ -323,14 +347,45 @@
   <target name="run-with-news" depends="prepare-release-notes, run"
           description="Run locally with prepared player release notes" />
 
-  <target name="run" depends="bin">
+  <!-- Each JVM gets a complete private runtime, outside build/ so ant clean
+       cannot remove classes/dependencies which have not been loaded yet. -->
+  <target name="runtime" depends="jar, opt/panama, extlib/jogl-arm, extlib/lwjgl-gl, extlib/steamworks, res-jar"
+          description="Prepare a separate complete runtime without changing installed clients">
+    <mkdir dir=".client-runtimes" />
+    <tempfile property="run.runtime" destdir=".client-runtimes" prefix="client-" createfile="false" />
+    <fail message="A client runtime must be new; refusing to overwrite ${run.runtime}">
+      <condition><available file="${run.runtime}" /></condition>
+    </fail>
+    <mkdir dir="${run.runtime}" />
+    <!-- Existing installations can supply the base resources when the local
+         download cache is empty. Prefer the download cache explicitly. -->
+    <copy todir="${run.runtime}">
+      <fileset dir="bin" includes="builtin-res.jar,hafen-res.jar" erroronmissingdir="false" />
+    </copy>
+    <copy todir="${run.runtime}" overwrite="true">
+      <fileset dir="lib/ext" includes="builtin-res.jar,hafen-res.jar" />
+    </copy>
+    <copy todir="${run.runtime}">
+      <fileset dir="build" includes="hafen.jar,nurgling-res.jar,hafen-panama.jar" />
+      <fileset dir="lib/ext/jogl" includes="*.jar" />
+      <fileset dir="lib/ext/lwjgl" includes="*.jar" />
+      <fileset dir="lib/ext/lwjgl-vk" includes="*.jar" />
+      <fileset dir="lib/ext/steamworks" includes="*.jar" />
+      <fileset dir="etc" includes="json-java.jar,postgresql-42.7.5.jar,sqlite-jdbc-3.49.1.0.jar" />
+    </copy>
+    <copy file="etc/ansgar-config.properties" tofile="${run.runtime}/haven-config.properties" />
+    <copy file="local-feedback.properties" tofile="${run.runtime}/feedback.properties" failonerror="false" quiet="true" />
+    <echo message="Client runtime: ${run.runtime}" />
+  </target>
+
+  <target name="run" depends="runtime">
     <condition property="jogl-exports">
       <javaversion atleast="16" />
     </condition>
     <condition property="jogl-access">
       <javaversion atleast="24" />
     </condition>
-    <java jar="bin/hafen.jar" fork="true">
+    <java jar="${run.runtime}/hafen.jar" fork="true">
       <sysproperty key="sun.java2d.uiScale.enabled" value="false" />
       <sysproperty key="java.net.preferIPv6Addresses" value="system" />
       <!-- Memory settings -->
@@ -350,6 +405,8 @@
       <jvmarg if:set="jogl-access" value="--enable-native-access=ALL-UNNAMED" />
       <!-- <sysproperty key="haven.renderer" value="lwjgl" /> -->
     </java>
+    <!-- The forked JVM has exited; leave other clients' private copies intact. -->
+    <delete dir="${run.runtime}" />
   </target>
 
   <target name="test-env">
@@ -423,6 +480,7 @@
   </target>
 
   <target name="clean">
+    <check-client-runtime />
     <delete dir="build" />
     <delete dir="lib/ext" />
     <delete dir="bin" />
@@ -435,15 +493,8 @@
     <jar destfile="build/nurgling-res.jar" update="true">
       <fileset dir="resources/compiled" />
     </jar>
-    <condition property="resources.jar.changed">
-      <not>
-        <filesmatch file1="build/nurgling-res.jar" file2="bin/nurgling-res.jar" />
-      </not>
-    </condition>
-    <copy if:set="resources.jar.changed" todir="bin/" file="build/nurgling-res.jar" overwrite="true" />
-    <copy todir="bin/" file="etc/json-java.jar" />
-    <copy todir="bin/" file="etc/postgresql-42.7.5.jar" />
-    <copy todir="bin/" file="etc/sqlite-jdbc-3.49.1.0.jar" />
+    <!-- Compilation must never mutate the installed runtime. bin/runtime copy
+         these artifacts only after choosing a safe destination. -->
   </target>
 
   <target name="pre-release" depends="bin, extlib/jogl-macos">

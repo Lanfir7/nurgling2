@@ -53,7 +53,6 @@ public class ChunkNavRecorder {
         final NHitBox hitBox;
         final String name;
         final boolean isFollowing;
-        final long modelAttribute;  // For gate open/closed detection
 
         GobSnapshot(Gob gob) {
             this.id = gob.id;
@@ -62,7 +61,6 @@ public class ChunkNavRecorder {
             this.hitBox = (gob.ngob != null) ? gob.ngob.hitBox : null;
             this.name = (gob.ngob != null) ? gob.ngob.name : null;
             this.isFollowing = gob.getattr(Following.class) != null;
-            this.modelAttribute = (gob.ngob != null) ? gob.ngob.getModelAttribute() : -1L;
         }
     }
 
@@ -162,8 +160,8 @@ public class ChunkNavRecorder {
         Coord playerCell = getPlayerCell();
         if (playerCell == null) return;
 
-        // Build set of cells blocked by gobs (only includes visible gobs)
-        Set<Long> gobBlockedCells = getGobBlockedCells(grid);
+        // Build sets of cells blocked by gobs and cells that are gate openings
+        GobMarks gobMarks = collectGobMarks(grid);
 
         // Grid origin in cell coordinates
         Coord gridCellOrigin = new Coord(grid.ul.x * CELLS_PER_TILE, grid.ul.y * CELLS_PER_TILE);
@@ -188,19 +186,13 @@ public class ChunkNavRecorder {
 
                 // Check gobs
                 long cellKey = ((long) cx << 32) | (cy & 0xFFFFFFFFL);
-                boolean gobBlocked = gobBlockedCells.contains(cellKey);
+                boolean gobBlocked = gobMarks.blocked.contains(cellKey);
+                boolean gateCell = gobMarks.gates.contains(cellKey);
 
                 // Mark cell as observed (uses setObserved for section count tracking)
                 chunk.setObserved(cx, cy, true);
 
-                // Record what we observe
-                if (terrainBlocked) {
-                    chunk.walkability[cx][cy] = 2;  // Blocked by terrain
-                } else if (gobBlocked) {
-                    chunk.walkability[cx][cy] = 2;  // Blocked by gob
-                } else {
-                    chunk.walkability[cx][cy] = 0;  // Walkable
-                }
+                chunk.walkability[cx][cy] = ChunkNavGates.classify(terrainBlocked, gobBlocked, gateCell);
             }
         }
     }
@@ -286,8 +278,7 @@ public class ChunkNavRecorder {
         Coord playerCell = getPlayerCell();
         if (playerCell == null) return;
 
-        // Build set of cells blocked by gobs
-        Set<Long> gobBlockedCells = getGobBlockedCells(grid);
+        GobMarks gobMarks = collectGobMarks(grid);
 
         // Grid origin in cell coordinates
         Coord gridCellOrigin = new Coord(grid.ul.x * CELLS_PER_TILE, grid.ul.y * CELLS_PER_TILE);
@@ -315,16 +306,10 @@ public class ChunkNavRecorder {
 
                 // Check gob hitboxes (using local cell coordinates)
                 long cellKey = ((long) cx << 32) | (cy & 0xFFFFFFFFL);
-                boolean gobBlocked = gobBlockedCells.contains(cellKey);
+                boolean gobBlocked = gobMarks.blocked.contains(cellKey);
+                boolean gateCell = gobMarks.gates.contains(cellKey);
 
-                // Classify cell: 0 = walkable, 2 = blocked
-                if (terrainBlocked) {
-                    chunk.walkability[cx][cy] = 2;  // Blocked
-                } else if (gobBlocked) {
-                    chunk.walkability[cx][cy] = 2;  // Blocked
-                } else {
-                    chunk.walkability[cx][cy] = 0;  // Walkable
-                }
+                chunk.walkability[cx][cy] = ChunkNavGates.classify(terrainBlocked, gobBlocked, gateCell);
             }
         }
     }
@@ -336,36 +321,44 @@ public class ChunkNavRecorder {
         try {
             if (Ridges.brokenp(mcache, tileCoord)) return true;
 
-            String tileName = mcache.tilesetname(mcache.gettile(tileCoord));
-            if (tileName == null) return true;  // Unknown tile = blocked (safer default)
-
-            // Check whitelist first - explicitly walkable tiles
-            for (String walkable : WALKABLE_CAVE_TILES) {
-                if (tileName.startsWith(walkable) || tileName.equals(walkable)) {
-                    return false;  // Explicitly walkable
-                }
-            }
-
-            // Then check blacklist - blocked tiles
-            for (String blocked : BLOCKED_TILES) {
-                if (tileName.startsWith(blocked) || tileName.equals(blocked)) {
-                    return true;
-                }
-            }
-            return false;
+            return isBlockedTileName(mcache.tilesetname(mcache.gettile(tileCoord)));
         } catch (Exception e) {
             return true; // Tile not loaded = blocked (safer default)
         }
     }
 
+    public static boolean isBlockedTileName(String tileName) {
+        if (tileName == null) return true;  // Unknown tile = blocked (safer default)
+
+        // Check whitelist first - explicitly walkable tiles
+        for (String walkable : WALKABLE_CAVE_TILES) {
+            if (tileName.startsWith(walkable) || tileName.equals(walkable)) {
+                return false;  // Explicitly walkable
+            }
+        }
+
+        // Then check blacklist - blocked tiles
+        for (String blocked : BLOCKED_TILES) {
+            if (tileName.startsWith(blocked) || tileName.equals(blocked)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Cells a gob covers: solid obstacles, and gate openings that stay clickable. */
+    private static final class GobMarks {
+        final Set<Long> blocked = new HashSet<>();
+        final Set<Long> gates = new HashSet<>();
+    }
+
     /**
-     * Get set of all cells blocked by gobs in this grid.
-     * Returns cell keys as (localX << 32) | localY for efficient lookup.
-     * Uses half-tile (cell) resolution matching NPFMap for precise hitbox projection.
-     * Uses intersection testing for accurate rotated hitbox handling.
+     * Cells covered by gobs in this grid.
+     * Cell keys pack local X and Y into one long.
+     * Gate openings are recorded separately so a closed gate is not stored as a wall.
      */
-    private Set<Long> getGobBlockedCells(MCache.Grid grid) {
-        Set<Long> blockedCells = new HashSet<>();
+    private GobMarks collectGobMarks(MCache.Grid grid) {
+        GobMarks marks = new GobMarks();
 
         try {
             // Use thread-local glob if available (for background recording threads),
@@ -374,7 +367,7 @@ public class ChunkNavRecorder {
             if (glob == null) {
                 NGameUI gui = NUtils.getGameUI();
                 if (gui == null || gui.ui == null || gui.ui.sess == null) {
-                    return blockedCells;
+                    return marks;
                 }
                 glob = gui.ui.sess.glob;
             }
@@ -404,9 +397,10 @@ public class ChunkNavRecorder {
                 // Skip player
                 if (snap.id == playerId) continue;
 
-                // Skip portals - doors, cellars, stairs should be passable
-                // Gates are only passable when open
-                if (isPassableGob(snap)) continue;
+                // Doors, stairs and cave mouths stay ordinary passages.
+                // Gates are marked as openings even when shut, so the route can cross them.
+                boolean gate = GateDetector.isGateName(snap.name);
+                if (!gate && isPassableGob(snap)) continue;
 
                 // Quick bounds check - skip gobs clearly outside this grid
                 if (snap.rc.x < gridWorldUL.x - 50 || snap.rc.x > gridWorldBR.x + 50 ||
@@ -422,6 +416,17 @@ public class ChunkNavRecorder {
                 // Get circumscribed bounding box (axis-aligned after rotation)
                 Coord2d hitUL = worldHitBox.getCircumscribedUL();
                 Coord2d hitBR = worldHitBox.getCircumscribedBR();
+                if (gate) {
+                    // Keep a tile of approach on both sides. A wall box often covers that mouth.
+                    double width = Math.abs(snap.hitBox.end.x - snap.hitBox.begin.x);
+                    double height = Math.abs(snap.hitBox.end.y - snap.hitBox.begin.y);
+                    Coord2d through = (width <= height ? new Coord2d(1, 0) : new Coord2d(0, 1)).rot(snap.angle);
+                    double pad = MCache.tilesz.x;
+                    double padX = Math.abs(through.x) * pad;
+                    double padY = Math.abs(through.y) * pad;
+                    hitUL = new Coord2d(hitUL.x - padX, hitUL.y - padY);
+                    hitBR = new Coord2d(hitBR.x + padX, hitBR.y + padY);
+                }
 
                 // Convert to cell coordinates - use floor for UL and ceil for BR
                 // to ensure we include ALL cells that the hitbox touches, even partially
@@ -459,7 +464,8 @@ public class ChunkNavRecorder {
                             if (localX >= 0 && localX < CELLS_PER_EDGE &&
                                 localY >= 0 && localY < CELLS_PER_EDGE) {
                                 long cellKey = ((long) localX << 32) | (localY & 0xFFFFFFFFL);
-                                blockedCells.add(cellKey);
+                                if (gate) marks.gates.add(cellKey);
+                                else marks.blocked.add(cellKey);
                             }
                         }
                     }
@@ -469,13 +475,13 @@ public class ChunkNavRecorder {
             // Silently handle exceptions during gob iteration
         }
 
-        return blockedCells;
+        return marks;
     }
 
     /**
      * Check if a gob should be considered passable (not blocking).
      * Only includes specific portal gobs that are traversable, NOT buildings themselves.
-     * Gates are only passable when they are open.
+     * Gates are not included: their cells are gate openings, not empty ground.
      */
     private boolean isPassableGob(Gob gob) {
         if (gob == null || gob.ngob == null || gob.ngob.name == null) return false;
@@ -494,9 +500,6 @@ public class ChunkNavRecorder {
 
         // Natural cave mouths - the passage itself, not a wall
         if (lower.contains("/cavein") || lower.contains("/caveout")) return true;
-
-        // Keep navigation's gate recognition in the same registry PathFinder and route bots use.
-        if (GateDetector.isGateName(lower)) return GateDetector.isDoorOpen(gob);
 
         // Mine holes
         return lower.contains("/minehole");
@@ -522,13 +525,6 @@ public class ChunkNavRecorder {
 
         // Natural cave mouths - the passage itself, not a wall
         if (lower.contains("/cavein") || lower.contains("/caveout")) return true;
-
-        // Gates - only passable when OPEN (modelAttribute == 1)
-        if (lower.contains("/polegate") || lower.contains("/polebiggate") ||
-            lower.contains("/palisadegate") || lower.contains("/palisadebiggate") ||
-            lower.contains("/drystonewallgate") || lower.contains("/drystonewallbiggate")) {
-            return snap.modelAttribute == 1L;  // 1 = open
-        }
 
         // Mine holes
         return lower.contains("/minehole");

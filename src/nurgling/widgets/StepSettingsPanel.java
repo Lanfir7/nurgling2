@@ -26,25 +26,17 @@ public class StepSettingsPanel extends Widget {
 
     public void setStep(BotStep step) {
         this.step = step;
+        Coord keep = sz;
         clearChildren(this);
         updatePanel();
-        pack();
+        resize(keep);
     }
 
     private void updatePanel() {
         if (step == null) {
-            String[] lines = {
-                    "Select a step to view settings.",
-                    "",
-                    "Steps marked with ✪ have ",
-                    "additional settings that ",
-                    "can be changed."
-            };
-            int y = UI.scale(10);
-            for (String line : lines) {
-                add(new Label(line), new Coord(UI.scale(8), y));
-                y += UI.scale(18);
-            }
+            int wrap = Math.max(1, sz.x - UI.scale(16));
+            add(new Label("Select a step to view settings. Steps marked with ✪ have additional settings that can be changed.", wrap),
+                    new Coord(UI.scale(8), UI.scale(10)));
             return;
         }
 
@@ -78,7 +70,7 @@ public class StepSettingsPanel extends Widget {
             }
 
             NDropbox<NArea> areaDropdown = new NDropbox<NArea>(
-                    UI.scale(160),
+                    controlWidth(),
                     Math.min(areaList.size(), 10),
                     UI.scale(22)
             ) {
@@ -134,7 +126,7 @@ public class StepSettingsPanel extends Widget {
 
                 final List<String> finalPresetNames = presetNames;
                 NDropbox<String> presetDropdown = new NDropbox<String>(
-                        UI.scale(160),
+                        controlWidth(),
                         Math.min(presetNames.size(), 10),
                         UI.scale(22)
                 ) {
@@ -173,7 +165,7 @@ public class StepSettingsPanel extends Widget {
             String selectedMode = gateModes.contains(currentMode) ? currentMode : "open";
 
             NDropbox<String> gateDropdown = new NDropbox<String>(
-                    UI.scale(160),
+                    controlWidth(),
                     gateModes.size(),
                     UI.scale(22)
             ) {
@@ -205,7 +197,7 @@ public class StepSettingsPanel extends Widget {
 
             int selectedSpeed = SetSpeedBot.normalizedSpeed(step.getSetting("speed"));
             NDropbox<Integer> speedDropdown = new NDropbox<Integer>(
-                    UI.scale(160),
+                    controlWidth(),
                     SetSpeedBot.SPEED_KEYS.length,
                     UI.scale(22)
             ) {
@@ -254,7 +246,7 @@ public class StepSettingsPanel extends Widget {
 
                 final List<EquipmentPreset> finalPresetList = presetList;
                 Dropbox<EquipmentPreset> presetDropdown = new Dropbox<EquipmentPreset>(
-                        UI.scale(160),
+                        controlWidth(),
                         Math.min(presetList.size(), 10),
                         UI.scale(22)
                 ) {
@@ -349,7 +341,7 @@ public class StepSettingsPanel extends Widget {
 
                 final List<CraftPreset> finalPresetList = presetList;
                 NDropbox<CraftPreset> presetDropdown = new NDropbox<CraftPreset>(
-                        UI.scale(160),
+                        controlWidth(),
                         Math.min(presetList.size(), 10),
                         UI.scale(22)
                 ) {
@@ -441,7 +433,7 @@ public class StepSettingsPanel extends Widget {
 
                 final List<CraftPreset> finalPresetList = presetList;
                 NDropbox<CraftPreset> presetDropdown = new NDropbox<CraftPreset>(
-                        UI.scale(160),
+                        controlWidth(),
                         Math.min(presetList.size(), 10),
                         UI.scale(22)
                 ) {
@@ -526,7 +518,7 @@ public class StepSettingsPanel extends Widget {
             String selectedMode = fillAll ? "All" : "Just Owned";
 
             NDropbox<String> modeDropdown = new NDropbox<String>(
-                    UI.scale(160),
+                    controlWidth(),
                     modes.size(),
                     UI.scale(22)
             ) {
@@ -550,6 +542,21 @@ public class StepSettingsPanel extends Widget {
 
             add(modeDropdown, new Coord(UI.scale(8), y));
             y += UI.scale(40);
+        }
+        if (desc.id.equals("filwaterzone")) {
+            hasAnySetting = true;
+            Object current = step.getSetting("emptyPartial");
+            boolean emptyPartial = Boolean.TRUE.equals(current);
+            step.setSetting("emptyPartial", emptyPartial);
+            CheckBox emptyPartialBox = new CheckBox(L10n.get("scenario.filwater.empty_partial")) {
+                @Override
+                public void changed(boolean val) {
+                    step.setSetting("emptyPartial", val);
+                }
+            };
+            emptyPartialBox.a = emptyPartial;
+            add(emptyPartialBox, new Coord(UI.scale(8), y));
+            y += UI.scale(28);
         }
         if (desc.id.equals("apply_tansy")) {
             hasAnySetting = true;
@@ -589,6 +596,10 @@ public class StepSettingsPanel extends Widget {
         if (!hasAnySetting) {
             add(new Label("No settings for this step."), new Coord(UI.scale(8), y));
         }
+    }
+
+    private int controlWidth() {
+        return Math.max(UI.scale(80), sz.x - UI.scale(16));
     }
 
     private void clearChildren(Widget parent) {
@@ -660,7 +671,7 @@ public class StepSettingsPanel extends Widget {
 
         final List<NArea> finalAreaList = filteredAreas;
         NDropbox<NArea> areaDropdown = new NDropbox<NArea>(
-                UI.scale(160),
+                controlWidth(),
                 Math.min(filteredAreas.size(), 10),
                 UI.scale(22)
         ) {

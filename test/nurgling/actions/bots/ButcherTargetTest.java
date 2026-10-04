@@ -42,6 +42,21 @@ class ButcherTargetTest {
     }
 
     @Test
+    void goneCarcassDoesNotAdoptTheNextAnimal() {
+        assertFalse(ButcherTarget.adoptCarcass(false, 0L, new Coord2d(0, 0), 2L, new Coord2d(20, 0)));
+        assertTrue(ButcherTarget.adoptCarcass(false, 0L, new Coord2d(0, 0), 2L, new Coord2d(2, 0)));
+        assertTrue(ButcherTarget.adoptCarcass(true, 1L, new Coord2d(0, 0), 1L, new Coord2d(20, 0)));
+        assertFalse(ButcherTarget.adoptCarcass(true, 1L, new Coord2d(0, 0), 2L, new Coord2d(20, 0)));
+    }
+
+    @Test
+    void skinnedBodyOnTheSameSpotContinuesButTheNextAnimalDoesNot() {
+        assertTrue(ButcherTarget.continuesSameCarcass(new Coord2d(0, 0), new Coord2d(2, 0)));
+        assertFalse(ButcherTarget.continuesSameCarcass(new Coord2d(0, 0), new Coord2d(20, 0)));
+        assertFalse(ButcherTarget.continuesSameCarcass(null, new Coord2d(0, 0)));
+    }
+
+    @Test
     void emptyFlowerMenuRetriesWhileCarcassMayHaveNewId() {
         assertFalse(ButcherTarget.giveUpOnEmptyMenu(0));
         assertFalse(ButcherTarget.giveUpOnEmptyMenu(ButcherTarget.EMPTY_MENU_RETRIES - 1));

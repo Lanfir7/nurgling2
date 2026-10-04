@@ -11,6 +11,7 @@ import nurgling.actions.bots.registry.BotDescriptor;
 import nurgling.actions.bots.registry.BotRegistry;
 import nurgling.scenarios.*;
 import nurgling.sessions.BotExecutor;
+import nurgling.widgets.AdaptiveSettingsPanel;
 import nurgling.widgets.CustomIcon;
 import nurgling.widgets.CustomIconManager;
 import nurgling.widgets.NScenarioButton;
@@ -20,12 +21,13 @@ import nurgling.widgets.StepSettingsPanel;
 
 import nurgling.i18n.L10n;
 
+import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class ScenarioPanel extends Panel {
+public class ScenarioPanel extends Panel implements AdaptiveSettingsPanel {
     private ScenarioManager manager;
     private final int margin = UI.scale(10);
 
@@ -46,19 +48,18 @@ public class ScenarioPanel extends Panel {
     private Scenario editingScenario = null;
 
     private ScenarioBotSelectionDialog stepDialog = null;
+    private Button addScenarioBtn;
+    private Button addStepBtn;
 
 
     public ScenarioPanel() {
         super("");
 
-        int btnWidth = UI.scale(120);
-        int btnHeight = UI.scale(28);
-        int titleY = UI.scale(40);
-
+        int btnWidth = buttonWidth(L10n.get("scenarios.add"));
         int contentWidth = sz.x - margin * 2;
-        int contentHeight = sz.y - titleY;
-        int slistHeight = UI.scale(400);
-        int editorListHeight = UI.scale(380);
+        int contentHeight = sz.y - UI.scale(40);
+        int slistHeight = UI.scale(120);
+        int editorListHeight = UI.scale(120);
 
         listPanel = add(new Widget(new Coord(contentWidth, contentHeight)), new Coord(margin, margin));
         listPanel.add(new Label(L10n.get("scenarios.title")), new Coord(0, 0));
@@ -117,11 +118,9 @@ public class ScenarioPanel extends Panel {
                 new Coord(margin, margin + UI.scale(32))
         );
 
-        int bottomY = contentHeight - margin - btnHeight;
-
-        listPanel.add(
+        addScenarioBtn = listPanel.add(
                 new Button(btnWidth, L10n.get("scenarios.add"), this::addScenario),
-                new Coord((contentWidth - btnWidth) / 2, bottomY - btnHeight - UI.scale(8))
+                Coord.z
         );
 
         editorPanel = add(new Widget(new Coord(contentWidth, contentHeight)), new Coord(margin, margin));
@@ -197,7 +196,7 @@ public class ScenarioPanel extends Panel {
                             }
 
                             // Mark ✪ for bots that have settings
-                            boolean hasSettings = desc != null && ("goto_area".equals(desc.id) || "forager".equals(desc.id));
+                            boolean hasSettings = desc != null && ("goto_area".equals(desc.id) || "forager".equals(desc.id) || "filwaterzone".equals(desc.id));
                             String marker = hasSettings ? " ✪" : "";
                             Label label = new Label(botId + marker);
 
@@ -285,17 +284,72 @@ public class ScenarioPanel extends Panel {
                 new Coord(margin + stepPanelWidth + colSpacing, y)
         );
 
-        y += UI.scale(270) + UI.scale(10);
-
-        editorPanel.add(
-                new Button(btnWidth, L10n.get("scenarios.add_step"), this::showBotSelectDialog),
-                new Coord((contentWidth - btnWidth) / 2, bottomY - btnHeight - UI.scale(8))
+        addStepBtn = editorPanel.add(
+                new Button(buttonWidth(L10n.get("scenarios.add_step")), L10n.get("scenarios.add_step"), this::showBotSelectDialog),
+                Coord.z
         );
 
-        editorPanel.pack();
-        pack();
-
+        layoutTo(sz);
         showListPanel();
+    }
+
+    @Override
+    public void fitToWidth(int width, int columns) {
+        layoutTo(Coord.of(width, sz.y));
+    }
+
+    @Override
+    public void fitToViewport(Coord viewport, int columns) {
+        layoutTo(viewport);
+    }
+
+    @Override
+    public boolean ownsVerticalScroll() {
+        return true;
+    }
+
+    private void layoutTo(Coord viewport) {
+        resize(Coord.of(Math.max(1, viewport.x), Math.max(1, viewport.y)));
+        int innerW = Math.max(1, sz.x - margin * 2);
+        int innerH = Math.max(1, sz.y - margin * 2);
+        listPanel.move(Coord.of(margin, margin));
+        listPanel.resize(Coord.of(innerW, innerH));
+        editorPanel.move(Coord.of(margin, margin));
+        editorPanel.resize(Coord.of(innerW, innerH));
+
+        int bottomY = innerH - addScenarioBtn.sz.y;
+        addScenarioBtn.move(Coord.of(Math.max(0, (innerW - addScenarioBtn.sz.x) / 2), bottomY));
+        addStepBtn.move(Coord.of(Math.max(0, (innerW - addStepBtn.sz.x) / 2), bottomY));
+
+        int listTop = margin + UI.scale(32);
+        int listH = Math.max(UI.scale(64), bottomY - UI.scale(8) - listTop);
+        scenarioList.resize(Coord.of(Math.max(1, innerW - margin * 2), listH));
+        scenarioList.reset();
+
+        scenarioNameEntry.resize(Math.max(UI.scale(40), innerW - margin * 2));
+
+        int colSpacing = UI.scale(12);
+        int usable = Math.max(1, innerW - margin * 2 - colSpacing);
+        int settingsW = Math.min(Math.max(UI.scale(200), usable / 3), usable);
+        int stepW = usable - settingsW;
+        if(stepW < UI.scale(120)) {
+            stepW = Math.max(1, Math.min(UI.scale(160), usable / 2));
+            settingsW = Math.max(1, usable - stepW);
+        }
+        int stepTop = stepList.c.y;
+        int stepH = Math.max(UI.scale(64), bottomY - UI.scale(8) - stepTop);
+        stepList.resize(Coord.of(stepW, stepH));
+        stepList.reset();
+        boolean widthChanged = stepSettingsPanel.sz.x != settingsW;
+        stepSettingsPanel.move(Coord.of(margin + stepW + colSpacing, stepTop));
+        stepSettingsPanel.resize(Coord.of(settingsW, stepH));
+        if(widthChanged)
+            stepSettingsPanel.setStep(selectedStep);
+    }
+
+    private static int buttonWidth(String text) {
+        Text.Foundry foundry = new Text.Foundry(Text.serif.deriveFont(Font.BOLD, UI.scale(12f))).aa(true);
+        return Math.max(UI.scale(48), foundry.render(text).sz().x + UI.scale(28));
     }
 
     @Override
@@ -450,9 +504,10 @@ public class ScenarioPanel extends Panel {
             
             Label label = new Label(scenario.getName());
 
-            int btnW = UI.scale(60);
             int btnS = UI.scale(8);
             int rightPad = UI.scale(10);
+            int editW = buttonWidth(L10n.get("scenarios.btn_edit"));
+            int deleteW = buttonWidth(L10n.get("scenarios.btn_delete"));
             int scenarioBtnSize = UI.scale(32); // Actual size of scenario button icons
             int scenarioBtnSpacing = UI.scale(12); // More horizontal spacing between button and text
 
@@ -460,17 +515,16 @@ public class ScenarioPanel extends Panel {
             scenarioBtn = new NScenarioButton(scenario);
             add(scenarioBtn, new Coord(margin, (sz.y - scenarioBtnSize) / 2));
 
-            int runBtnX = sz.x - rightPad - btnW * 3 - btnS * 2;
-            int editBtnX = sz.x - rightPad - btnW * 2 - btnS;
-            int deleteBtnX = sz.x - rightPad - btnW;
+            int deleteBtnX = Math.max(0, sz.x - rightPad - deleteW);
+            int editBtnX = Math.max(0, deleteBtnX - btnS - editW);
 
             // Adjust label position to account for scenario button with more spacing
             int labelX = margin + scenarioBtnSize + scenarioBtnSpacing;
 
             add(label, new Coord(labelX, (sz.y - label.sz.y) / 2));
             int itemBtnHeight = UI.scale(28);
-            add(new Button(btnW, L10n.get("scenarios.btn_edit"), () -> editScenario(scenario)), new Coord(editBtnX, (sz.y - itemBtnHeight) / 2));
-            add(new Button(btnW, L10n.get("scenarios.btn_delete"), () -> deleteScenario(scenario)), new Coord(deleteBtnX, (sz.y - itemBtnHeight) / 2));
+            add(new Button(editW, L10n.get("scenarios.btn_edit"), () -> editScenario(scenario)), new Coord(editBtnX, (sz.y - itemBtnHeight) / 2));
+            add(new Button(deleteW, L10n.get("scenarios.btn_delete"), () -> deleteScenario(scenario)), new Coord(deleteBtnX, (sz.y - itemBtnHeight) / 2));
         }
         
         @Override
